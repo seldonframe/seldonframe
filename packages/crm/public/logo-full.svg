@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="420" height="88" viewBox="0 0 420 88" fill="none" role="img" aria-label="SeldonFrame wordmark lockup" style="color:#0F172A">
+  <g>
+    <rect x="0" y="0" width="34" height="16" rx="3" fill="#4DB6AC"/>
+    <rect x="36" y="0" width="34" height="16" rx="3" fill="#00897B"/>
+
+    <rect x="0" y="18" width="34" height="16" rx="3" fill="#00796B"/>
+
+    <rect x="0" y="36" width="34" height="16" rx="3" fill="#00897B"/>
+    <rect x="36" y="36" width="34" height="16" rx="3" fill="#00796B"/>
+
+    <rect x="36" y="54" width="34" height="16" rx="3" fill="#00695C"/>
+
+    <rect x="0" y="72" width="34" height="16" rx="3" fill="#00796B"/>
+    <rect x="36" y="72" width="34" height="16" rx="3" fill="#004D40"/>
+  </g>
+
+  <text x="86" y="44" dominant-baseline="middle" font-family="'General Sans', 'Inter', 'Segoe UI', sans-serif" font-size="48" font-weight="600" letter-spacing="-0.02em">
+    <tspan fill="#00796B">Seldon</tspan><tspan fill="currentColor">Frame</tspan>
+  </text>
+</svg>

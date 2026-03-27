@@ -1,0 +1,30 @@
+SeldonFrame coding rules
+
+Execution model
+- Complete one planned step at a time.
+- After each step: run `pnpm build` and stop for confirmation.
+- Do not batch future roadmap steps.
+
+Code style
+- Keep edits focused and minimal.
+- Match existing file patterns and naming.
+- Prefer typed utilities over ad hoc inline logic.
+
+Monorepo boundaries
+- `@seldonframe/core`: shared primitives only.
+- `@seldonframe/crm`: product behavior and UI wiring.
+- `@seldonframe/payments`: payment-specific logic.
+
+Safety
+- No destructive git commands.
+- No hardcoded credentials.
+- No logging of secrets.
+- Respect demo read-only guards on write paths.
+
+Platform constraints
+- Next.js 16 conventions may differ from legacy patterns.
+- Read docs in `node_modules/next/dist/docs/` before changing framework behavior.
+
+Verification
+- Build from root: `pnpm build`.
+- If build fails, fix only errors introduced by the current step.

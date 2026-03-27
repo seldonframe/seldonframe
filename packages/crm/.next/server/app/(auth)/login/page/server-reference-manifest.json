@@ -1,0 +1,17 @@
+{
+  "node": {
+    "60db4b12d01e80fa022dda06f08a34c75c92488320": {
+      "workers": {
+        "app/(auth)/login/page": {
+          "moduleId": 31275,
+          "async": false,
+          "exportedName": "loginAction",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/app/(auth)/login/actions.ts"
+        }
+      },
+      "exportedName": "loginAction",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/app/(auth)/login/actions.ts"
+    }
+  },
+  "edge": {}
+}

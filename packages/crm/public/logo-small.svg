@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="none" role="img" aria-label="SeldonFrame small mark">
+  <rect x="0" y="0" width="15" height="5" rx="1.5" fill="#4DB6AC"/>
+  <rect x="16" y="0" width="15" height="5" rx="1.5" fill="#00897B"/>
+
+  <rect x="0" y="6" width="15" height="5" rx="1.5" fill="#00796B"/>
+
+  <rect x="0" y="12" width="15" height="5" rx="1.5" fill="#00897B"/>
+  <rect x="16" y="12" width="15" height="5" rx="1.5" fill="#00796B"/>
+
+  <rect x="16" y="18" width="15" height="5" rx="1.5" fill="#00695C"/>
+
+  <rect x="0" y="24" width="15" height="5" rx="1.5" fill="#00796B"/>
+  <rect x="16" y="24" width="15" height="5" rx="1.5" fill="#004D40"/>
+</svg>

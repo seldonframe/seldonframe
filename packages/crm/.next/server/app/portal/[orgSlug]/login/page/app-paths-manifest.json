@@ -1,0 +1,3 @@
+{
+  "/portal/[orgSlug]/login/page": "app/portal/[orgSlug]/login/page.js"
+}

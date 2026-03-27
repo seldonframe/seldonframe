@@ -1,0 +1,41 @@
+{
+  "node": {
+    "40b4f419486f8137c0ccfe92741fda80fabb40f426": {
+      "workers": {
+        "app/(dashboard)/hub/page": {
+          "moduleId": 66132,
+          "async": false,
+          "exportedName": "generateSoulPreviewAction",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/soul/actions.ts"
+        }
+      },
+      "exportedName": "generateSoulPreviewAction",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/soul/actions.ts"
+    },
+    "409522705bbb2b4a0beff5e2ea9d9dcf179b35165b": {
+      "workers": {
+        "app/(dashboard)/hub/page": {
+          "moduleId": 66132,
+          "async": false,
+          "exportedName": "saveSoulAction",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/soul/actions.ts"
+        }
+      },
+      "exportedName": "saveSoulAction",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/soul/actions.ts"
+    },
+    "4067220b60eac8a8437dd8622ad66022bbf18e14d1": {
+      "workers": {
+        "app/(dashboard)/hub/page": {
+          "moduleId": 66132,
+          "async": false,
+          "exportedName": "generateSoulFromNarrative",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/ai/actions.ts"
+        }
+      },
+      "exportedName": "generateSoulFromNarrative",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/ai/actions.ts"
+    }
+  },
+  "edge": {}
+}

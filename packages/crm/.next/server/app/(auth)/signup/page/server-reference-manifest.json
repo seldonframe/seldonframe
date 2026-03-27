@@ -1,0 +1,17 @@
+{
+  "node": {
+    "6050ba09c0ac852261b81f9996717c9ec1849a54e1": {
+      "workers": {
+        "app/(auth)/signup/page": {
+          "moduleId": 18831,
+          "async": false,
+          "exportedName": "signupAction",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/auth/actions.ts"
+        }
+      },
+      "exportedName": "signupAction",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/auth/actions.ts"
+    }
+  },
+  "edge": {}
+}

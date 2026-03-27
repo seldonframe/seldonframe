@@ -1,0 +1,17 @@
+{
+  "node": {
+    "40666476af39064e139d778aebb7df1b355f0f99e5": {
+      "workers": {
+        "app/login/page": {
+          "moduleId": 54582,
+          "async": false,
+          "exportedName": "loginProAction",
+          "filename": "CascadeProjects/Seldon Frame/apps/pro/src/lib/auth/actions.ts"
+        }
+      },
+      "exportedName": "loginProAction",
+      "filename": "CascadeProjects/Seldon Frame/apps/pro/src/lib/auth/actions.ts"
+    }
+  },
+  "edge": {}
+}

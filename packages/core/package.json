@@ -1,0 +1,29 @@
+{
+  "name": "@seldonframe/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./soul": "./src/soul/index.ts",
+    "./auth": "./src/auth/index.ts",
+    "./db": "./src/db/index.ts",
+    "./events": "./src/events/index.ts",
+    "./config": "./src/config/index.ts",
+    "./integrations": "./src/integrations/index.ts",
+    "./telemetry": "./src/telemetry/index.ts",
+    "./virality": "./src/virality/index.ts"
+  },
+  "dependencies": {
+    "react": "19.2.4",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "typescript": "^5"
+  }
+}

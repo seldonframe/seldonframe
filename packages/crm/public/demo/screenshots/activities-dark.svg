@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
+  <rect width="1200" height="675" fill="#0f172a"/>
+  <rect x="0" y="0" width="220" height="675" fill="#1e293b"/>
+  <rect x="252" y="28" width="280" height="34" rx="8" fill="#334155"/>
+  <rect x="252" y="84" width="920" height="540" rx="10" fill="#111827" stroke="#334155"/>
+  <rect x="286" y="124" width="852" height="56" rx="8" fill="#1f2937"/>
+  <rect x="286" y="196" width="852" height="56" rx="8" fill="#1f2937"/>
+  <rect x="286" y="268" width="852" height="56" rx="8" fill="#1f2937"/>
+  <text x="600" y="360" text-anchor="middle" font-family="system-ui,sans-serif" font-size="20" fill="#64748b">Activities — Screenshot Placeholder (Dark)</text>
+</svg>

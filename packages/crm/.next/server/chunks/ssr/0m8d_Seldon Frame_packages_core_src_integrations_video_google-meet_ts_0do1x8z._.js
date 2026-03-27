@@ -1,0 +1,3 @@
+module.exports=[30184,a=>{"use strict";var b=a.i(44137);let c=null;a.s(["googleMeetAdapter",0,{name:"google-meet",isConfigured:()=>(0,b.hasEnv)("GOOGLE_CLIENT_ID","GOOGLE_CLIENT_SECRET"),initialize(a){c=a},async healthCheck(){return(0,b.simpleHealthCheck)(!!c||this.isConfigured())}}])}];
+
+//# sourceMappingURL=0m8d_Seldon%20Frame_packages_core_src_integrations_video_google-meet_ts_0do1x8z._.js.map

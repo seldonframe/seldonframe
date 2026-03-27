@@ -1,0 +1,41 @@
+{
+  "node": {
+    "002f5c82b0cb83530c473d527e3d89c9bb493a932c": {
+      "workers": {
+        "app/(dashboard)/activities/page": {
+          "moduleId": 43165,
+          "async": false,
+          "exportedName": "listActivities",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/activities/actions.ts"
+        }
+      },
+      "exportedName": "listActivities",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/activities/actions.ts"
+    },
+    "40c3cdeb00ffd73ed6d0a9b6d20389b3a19b2d29b8": {
+      "workers": {
+        "app/(dashboard)/activities/page": {
+          "moduleId": 43165,
+          "async": false,
+          "exportedName": "completeTaskAction",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/activities/actions.ts"
+        }
+      },
+      "exportedName": "completeTaskAction",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/activities/actions.ts"
+    },
+    "40e1917a460c6e0a9d5dffedff50e0bbff220d8b9e": {
+      "workers": {
+        "app/(dashboard)/activities/page": {
+          "moduleId": 43165,
+          "async": false,
+          "exportedName": "createActivityAction",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/activities/actions.ts"
+        }
+      },
+      "exportedName": "createActivityAction",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/activities/actions.ts"
+    }
+  },
+  "edge": {}
+}

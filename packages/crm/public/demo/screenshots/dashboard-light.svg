@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
+  <rect width="1200" height="675" fill="#f8fafc"/>
+  <rect x="0" y="0" width="220" height="675" fill="#f1f5f9"/>
+  <rect x="16" y="16" width="188" height="36" rx="6" fill="#e2e8f0"/>
+  <rect x="16" y="68" width="188" height="28" rx="4" fill="#e2e8f0"/>
+  <rect x="16" y="104" width="188" height="28" rx="4" fill="#ddd6fe"/>
+  <rect x="16" y="140" width="188" height="28" rx="4" fill="#e2e8f0"/>
+  <rect x="16" y="176" width="188" height="28" rx="4" fill="#e2e8f0"/>
+  <rect x="16" y="212" width="188" height="28" rx="4" fill="#e2e8f0"/>
+  <rect x="252" y="24" width="200" height="32" rx="6" fill="#e2e8f0"/>
+  <rect x="252" y="80" width="220" height="120" rx="8" fill="#fff" stroke="#e2e8f0"/>
+  <rect x="492" y="80" width="220" height="120" rx="8" fill="#fff" stroke="#e2e8f0"/>
+  <rect x="732" y="80" width="220" height="120" rx="8" fill="#fff" stroke="#e2e8f0"/>
+  <rect x="972" y="80" width="200" height="120" rx="8" fill="#fff" stroke="#e2e8f0"/>
+  <rect x="252" y="224" width="920" height="280" rx="8" fill="#fff" stroke="#e2e8f0"/>
+  <rect x="252" y="528" width="448" height="120" rx="8" fill="#fff" stroke="#e2e8f0"/>
+  <rect x="724" y="528" width="448" height="120" rx="8" fill="#fff" stroke="#e2e8f0"/>
+  <text x="600" y="380" text-anchor="middle" font-family="system-ui,sans-serif" font-size="18" fill="#94a3b8">Dashboard — Screenshot Placeholder (Light)</text>
+</svg>

@@ -1,0 +1,41 @@
+{
+  "node": {
+    "003394cd744240a1ded1ccaf7b983d9b8f657e8165": {
+      "workers": {
+        "app/(dashboard)/forms/page": {
+          "moduleId": 74001,
+          "async": false,
+          "exportedName": "createSuggestedFormAction",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/forms/actions.ts"
+        }
+      },
+      "exportedName": "createSuggestedFormAction",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/forms/actions.ts"
+    },
+    "00390f8d768ebad84c9fdc3757170a9d6114061492": {
+      "workers": {
+        "app/(dashboard)/forms/page": {
+          "moduleId": 74001,
+          "async": false,
+          "exportedName": "listForms",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/forms/actions.ts"
+        }
+      },
+      "exportedName": "listForms",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/forms/actions.ts"
+    },
+    "40200020dddb90bce656c54a42b2041aa42a232de8": {
+      "workers": {
+        "app/(dashboard)/forms/page": {
+          "moduleId": 74001,
+          "async": false,
+          "exportedName": "submitPublicIntakeAction",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/forms/actions.ts"
+        }
+      },
+      "exportedName": "submitPublicIntakeAction",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/forms/actions.ts"
+    }
+  },
+  "edge": {}
+}

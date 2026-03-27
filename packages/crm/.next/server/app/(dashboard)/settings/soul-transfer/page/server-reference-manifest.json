@@ -1,0 +1,29 @@
+{
+  "node": {
+    "00fdb38b709d1f3372bc0d86c81bab4cedb8bf2cd3": {
+      "workers": {
+        "app/(dashboard)/settings/soul-transfer/page": {
+          "moduleId": 72058,
+          "async": false,
+          "exportedName": "exportSoulAction",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/soul/export-actions.ts"
+        }
+      },
+      "exportedName": "exportSoulAction",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/soul/export-actions.ts"
+    },
+    "40537d0354b9815baa5d9543de321533f39b677711": {
+      "workers": {
+        "app/(dashboard)/settings/soul-transfer/page": {
+          "moduleId": 72058,
+          "async": false,
+          "exportedName": "importSoulAction",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/soul/export-actions.ts"
+        }
+      },
+      "exportedName": "importSoulAction",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/soul/export-actions.ts"
+    }
+  },
+  "edge": {}
+}

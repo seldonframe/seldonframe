@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
+  <rect width="1200" height="675" fill="#f8fafc"/>
+  <rect x="0" y="0" width="220" height="675" fill="#f1f5f9"/>
+  <rect x="252" y="24" width="120" height="32" rx="6" fill="#e2e8f0"/>
+  <rect x="252" y="72" width="920" height="40" rx="6" fill="#fff" stroke="#e2e8f0"/>
+  <rect x="252" y="128" width="920" height="36" fill="#f1f5f9"/>
+  <rect x="252" y="164" width="920" height="48" fill="#fff" stroke="#f1f5f9" stroke-width="0.5"/>
+  <rect x="252" y="212" width="920" height="48" fill="#fafafa" stroke="#f1f5f9" stroke-width="0.5"/>
+  <rect x="252" y="260" width="920" height="48" fill="#fff" stroke="#f1f5f9" stroke-width="0.5"/>
+  <rect x="252" y="308" width="920" height="48" fill="#fafafa" stroke="#f1f5f9" stroke-width="0.5"/>
+  <rect x="252" y="356" width="920" height="48" fill="#fff" stroke="#f1f5f9" stroke-width="0.5"/>
+  <rect x="700" y="172" width="60" height="20" rx="4" fill="#ddd6fe"/>
+  <rect x="700" y="220" width="80" height="20" rx="4" fill="#c4b5fd"/>
+  <rect x="700" y="268" width="70" height="20" rx="4" fill="#bbf7d0"/>
+  <rect x="700" y="316" width="50" height="20" rx="4" fill="#fde68a"/>
+  <rect x="700" y="364" width="90" height="20" rx="4" fill="#bbf7d0"/>
+  <text x="600" y="480" text-anchor="middle" font-family="system-ui,sans-serif" font-size="18" fill="#94a3b8">Deals — Screenshot Placeholder (Light)</text>
+</svg>

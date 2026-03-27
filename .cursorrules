@@ -1,0 +1,24 @@
+You are working in the SeldonFrame Turborepo.
+
+Core workflow:
+1. Understand the requested step from the migration plan.
+2. Make minimal, surgical changes for that step only.
+3. Run `pnpm build` at repo root.
+4. Stop and wait for user confirmation before next step.
+
+Repository rules:
+- Monorepo: `packages/crm`, `packages/core`, `packages/payments`.
+- Prefer shared code in `@seldonframe/core`.
+- Keep strict TypeScript compatibility.
+- Do not introduce queue infrastructure (Redis/Bull/BullMQ).
+- Do not create per-tenant databases or deployments.
+- Never expose secrets in client code.
+
+Data and architecture constraints:
+- Maintain multi-tenant scoping with `orgId`.
+- Keep event contracts typed.
+- Keep telemetry opt-in and configurable.
+- Keep virality branding removable via explicit configuration only.
+
+Next.js note:
+- This repo uses Next.js 16; verify behavior against `node_modules/next/dist/docs/` before framework-level changes.

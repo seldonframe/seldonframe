@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
+  <rect width="1200" height="675" fill="#f8fafc"/>
+  <rect x="0" y="0" width="220" height="675" fill="#f1f5f9"/>
+  <rect x="252" y="28" width="140" height="34" rx="8" fill="#e2e8f0"/>
+  <rect x="252" y="84" width="920" height="540" rx="10" fill="#ffffff" stroke="#e2e8f0"/>
+  <rect x="286" y="124" width="260" height="220" rx="8" fill="#f8fafc"/>
+  <rect x="562" y="124" width="260" height="220" rx="8" fill="#eef2ff"/>
+  <rect x="838" y="124" width="300" height="220" rx="8" fill="#f0fdf4"/>
+  <rect x="286" y="360" width="852" height="224" rx="8" fill="#f8fafc"/>
+  <text x="600" y="475" text-anchor="middle" font-family="system-ui,sans-serif" font-size="20" fill="#94a3b8">Hub — Screenshot Placeholder (Light)</text>
+</svg>

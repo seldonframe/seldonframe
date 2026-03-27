@@ -1,0 +1,10 @@
+{
+  "pages": {},
+  "app": {
+    "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/book/[orgSlug]/[bookingSlug]/page": [
+      "static/media/b8b552e8609c5636-s.p.0vinx1niofu4y.woff2"
+    ]
+  },
+  "appUsingSizeAdjust": true,
+  "pagesUsingSizeAdjust": false
+}

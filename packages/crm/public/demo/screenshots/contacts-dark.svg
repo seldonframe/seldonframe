@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
+  <rect width="1200" height="675" fill="#0f172a"/>
+  <rect x="0" y="0" width="220" height="675" fill="#1e293b"/>
+  <rect x="252" y="24" width="160" height="32" rx="6" fill="#334155"/>
+  <rect x="252" y="72" width="920" height="40" rx="6" fill="#1e293b" stroke="#334155"/>
+  <rect x="252" y="128" width="920" height="36" rx="0" fill="#1e293b"/>
+  <rect x="252" y="164" width="920" height="48" fill="#0f172a" stroke="#1e293b" stroke-width="0.5"/>
+  <rect x="252" y="212" width="920" height="48" fill="#1e293b" stroke="#1e293b" stroke-width="0.5"/>
+  <rect x="252" y="260" width="920" height="48" fill="#0f172a" stroke="#1e293b" stroke-width="0.5"/>
+  <rect x="252" y="308" width="920" height="48" fill="#1e293b" stroke="#1e293b" stroke-width="0.5"/>
+  <rect x="252" y="356" width="920" height="48" fill="#0f172a" stroke="#1e293b" stroke-width="0.5"/>
+  <rect x="252" y="404" width="920" height="48" fill="#1e293b" stroke="#1e293b" stroke-width="0.5"/>
+  <rect x="252" y="452" width="920" height="48" fill="#0f172a" stroke="#1e293b" stroke-width="0.5"/>
+  <rect x="252" y="500" width="920" height="48" fill="#1e293b" stroke="#1e293b" stroke-width="0.5"/>
+  <circle cx="280" cy="188" r="14" fill="#4c1d95"/>
+  <circle cx="280" cy="236" r="14" fill="#4c1d95"/>
+  <circle cx="280" cy="284" r="14" fill="#4c1d95"/>
+  <circle cx="280" cy="332" r="14" fill="#4c1d95"/>
+  <circle cx="280" cy="380" r="14" fill="#166534"/>
+  <circle cx="280" cy="428" r="14" fill="#166534"/>
+  <circle cx="280" cy="476" r="14" fill="#854d0e"/>
+  <circle cx="280" cy="524" r="14" fill="#334155"/>
+  <text x="600" y="620" text-anchor="middle" font-family="system-ui,sans-serif" font-size="18" fill="#64748b">Contacts — Screenshot Placeholder (Dark)</text>
+</svg>

@@ -1,0 +1,116 @@
+{
+  "version": 1,
+  "generatedForStep": 19,
+  "description": "Demo placeholder assets for screenshots and GIFs across all CRM blocks.",
+  "themes": ["light", "dark"],
+  "blocks": [
+    {
+      "key": "dashboard",
+      "screenshots": {
+        "light": "/demo/screenshots/dashboard-light.svg",
+        "dark": "/demo/screenshots/dashboard-dark.svg"
+      },
+      "gif": "/demo/gifs/dashboard.gif"
+    },
+    {
+      "key": "contacts",
+      "screenshots": {
+        "light": "/demo/screenshots/contacts-light.svg",
+        "dark": "/demo/screenshots/contacts-dark.svg"
+      },
+      "gif": "/demo/gifs/contacts.gif"
+    },
+    {
+      "key": "deals",
+      "screenshots": {
+        "light": "/demo/screenshots/deals-light.svg",
+        "dark": "/demo/screenshots/deals-dark.svg"
+      },
+      "gif": "/demo/gifs/deals.gif"
+    },
+    {
+      "key": "pipeline",
+      "screenshots": {
+        "light": "/demo/screenshots/pipeline-light.svg",
+        "dark": "/demo/screenshots/pipeline-dark.svg"
+      },
+      "gif": "/demo/gifs/pipeline.gif"
+    },
+    {
+      "key": "activities",
+      "screenshots": {
+        "light": "/demo/screenshots/activities-light.svg",
+        "dark": "/demo/screenshots/activities-dark.svg"
+      },
+      "gif": "/demo/gifs/activities.gif"
+    },
+    {
+      "key": "bookings",
+      "screenshots": {
+        "light": "/demo/screenshots/bookings-light.svg",
+        "dark": "/demo/screenshots/bookings-dark.svg"
+      },
+      "gif": "/demo/gifs/bookings.gif"
+    },
+    {
+      "key": "emails",
+      "screenshots": {
+        "light": "/demo/screenshots/emails-light.svg",
+        "dark": "/demo/screenshots/emails-dark.svg"
+      },
+      "gif": "/demo/gifs/emails.gif"
+    },
+    {
+      "key": "landing-pages",
+      "screenshots": {
+        "light": "/demo/screenshots/landing-pages-light.svg",
+        "dark": "/demo/screenshots/landing-pages-dark.svg"
+      },
+      "gif": "/demo/gifs/landing-pages.gif"
+    },
+    {
+      "key": "intake-forms",
+      "screenshots": {
+        "light": "/demo/screenshots/intake-forms-light.svg",
+        "dark": "/demo/screenshots/intake-forms-dark.svg"
+      },
+      "gif": "/demo/gifs/intake-forms.gif"
+    },
+    {
+      "key": "portal",
+      "screenshots": {
+        "light": "/demo/screenshots/portal-light.svg",
+        "dark": "/demo/screenshots/portal-dark.svg"
+      },
+      "gif": "/demo/gifs/portal.gif"
+    },
+    {
+      "key": "hub",
+      "screenshots": {
+        "light": "/demo/screenshots/hub-light.svg",
+        "dark": "/demo/screenshots/hub-dark.svg"
+      },
+      "gif": "/demo/gifs/hub.gif"
+    },
+    {
+      "key": "soul-wizard",
+      "screenshots": {
+        "light": "/demo/screenshots/soul-wizard-light.svg",
+        "dark": "/demo/screenshots/soul-wizard-dark.svg"
+      },
+      "gif": "/demo/gifs/soul-wizard.gif"
+    },
+    {
+      "key": "ai-customization",
+      "screenshots": {
+        "light": "/demo/screenshots/ai-customization-light.svg",
+        "dark": "/demo/screenshots/ai-customization-dark.svg"
+      },
+      "gif": "/demo/gifs/ai-customization.gif"
+    }
+  ],
+  "legacy": {
+    "heroImage": "/demo/hero.png",
+    "soulSetupGif": "/demo/soul-setup.gif"
+  }
+}

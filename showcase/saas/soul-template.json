@@ -1,1 +1,83 @@
-{"businessName":"Orbit Analytics","businessDescription":"Product analytics SaaS","industry":"saas","offerType":"subscriptions","entityLabels":{"contact":{"singular":"Account","plural":"Accounts"},"deal":{"singular":"Subscription","plural":"Subscriptions"},"activity":{"singular":"Usage Event","plural":"Usage Events"},"pipeline":{"singular":"Growth Pipeline","plural":"Growth Pipelines"},"intakeForm":{"singular":"Trial Form","plural":"Trial Forms"}},"pipeline":{"name":"Growth Pipeline","stages":[{"name":"Trial","color":"#6366f1","probability":10},{"name":"Activated","color":"#8b5cf6","probability":35},{"name":"Converted","color":"#22c55e","probability":100},{"name":"Expansion","color":"#16a34a","probability":85},{"name":"Churn Risk","color":"#ef4444","probability":20}]},"suggestedFields":{"contact":[{"key":"plan","label":"Plan","type":"text"}],"deal":[{"key":"mrr","label":"MRR","type":"number"}]},"contactStatuses":[{"value":"trial","label":"Trial","color":"#6366f1"}],"voice":{"style":"professional","vocabulary":["activation","retention"],"avoidWords":["cheap"],"samplePhrases":["Let’s improve activation this week."]},"priorities":["revenue tracking","client retention"],"aiContext":"Orbit Analytics optimizes trial-to-paid conversion and expansion MRR.","suggestedIntakeForm":{"name":"Trial Signup","fields":[{"key":"email","label":"Work Email","type":"email","required":true}]},"branding":{"primaryColor":"238 83% 67%","accentColor":"173 80% 40%","mood":"corporate"},"rawInput":{"processDescription":"Trial, activate, convert","painPoint":"activation dropoff","clientDescription":"SaaS product teams"}}
+{
+  "businessName": "Orbit Analytics",
+  "businessDescription": "Product analytics SaaS",
+  "industry": "saas",
+  "offerType": "subscriptions",
+  "entityLabels": {
+    "contact": { "singular": "Account", "plural": "Accounts" },
+    "deal": { "singular": "Subscription", "plural": "Subscriptions" },
+    "activity": { "singular": "Usage Event", "plural": "Usage Events" },
+    "pipeline": { "singular": "Growth Pipeline", "plural": "Growth Pipelines" },
+    "intakeForm": { "singular": "Trial Form", "plural": "Trial Forms" }
+  },
+  "pipeline": {
+    "name": "Growth Pipeline",
+    "stages": [
+      { "name": "Trial", "color": "#6366f1", "probability": 10 },
+      { "name": "Activated", "color": "#8b5cf6", "probability": 35 },
+      { "name": "Converted", "color": "#22c55e", "probability": 100 },
+      { "name": "Expansion", "color": "#16a34a", "probability": 85 },
+      { "name": "Churn Risk", "color": "#ef4444", "probability": 20 }
+    ]
+  },
+  "suggestedFields": {
+    "contact": [{ "key": "plan", "label": "Plan", "type": "text" }],
+    "deal": [{ "key": "mrr", "label": "MRR", "type": "number" }]
+  },
+  "contactStatuses": [{ "value": "trial", "label": "Trial", "color": "#6366f1" }],
+  "voice": {
+    "style": "professional",
+    "vocabulary": ["activation", "retention"],
+    "avoidWords": ["cheap"],
+    "samplePhrases": ["Let's improve activation this week."]
+  },
+  "priorities": ["revenue tracking", "client retention"],
+  "aiContext": "Orbit Analytics optimizes trial-to-paid conversion and expansion MRR.",
+  "suggestedIntakeForm": {
+    "name": "Trial Signup",
+    "fields": [{ "key": "email", "label": "Work Email", "type": "email", "required": true }]
+  },
+  "branding": { "primaryColor": "238 83% 67%", "accentColor": "173 80% 40%", "mood": "corporate" },
+  "rawInput": { "processDescription": "Trial, activate, convert", "painPoint": "activation dropoff", "clientDescription": "SaaS product teams" },
+  "blockDefaults": {
+    "booking": {
+      "enabled": true,
+      "defaultDurationMinutes": 30,
+      "preferredProvider": "google-meet",
+      "bookingPageHeadline": "Book a Demo",
+      "bookingPageDescription": "See Orbit Analytics in action with a personalized walkthrough.",
+      "bufferMinutes": 10,
+      "allowWeekends": false
+    },
+    "landing": {
+      "enabled": true,
+      "defaultSections": [
+        { "type": "hero", "title": "Product Analytics That Drive Growth" },
+        { "type": "features", "title": "Key Capabilities" },
+        { "type": "pricing", "title": "Plans & Pricing" },
+        { "type": "cta", "title": "Start Free Trial" }
+      ],
+      "defaultCtaLabel": "Start Free Trial",
+      "defaultCtaTarget": "intake",
+      "heroHeadline": "Understand Your Users, Grow Your Revenue",
+      "heroSubheadline": "Real-time product analytics for modern SaaS teams."
+    },
+    "email": {
+      "enabled": true,
+      "preferredProvider": "resend",
+      "defaultFromName": "Orbit Analytics",
+      "defaultSubjectPrefix": "[Orbit]",
+      "welcomeTemplateSubject": "Welcome to Orbit — your trial is live",
+      "welcomeTemplateBody": "Hi {{firstName}}, your Orbit Analytics trial is active. Here are three things to try in your first 10 minutes.",
+      "followUpDelayHours": 6
+    },
+    "portal": {
+      "enabled": true,
+      "welcomeMessage": "Welcome to your account portal. Manage your subscription, view usage reports, and contact support.",
+      "enableMessaging": true,
+      "enableResources": true,
+      "enableInvoices": true,
+      "resourceCategories": ["Usage Reports", "API Docs", "Invoices", "Onboarding Guides"]
+    }
+  }
+}

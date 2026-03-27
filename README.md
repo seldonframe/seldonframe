@@ -25,17 +25,32 @@ Most OSS CRMs are finished products. Seldon Frame is a framework-first base you 
 - Public intake forms + webhook-ready submission flow
 - Demo read-only mode for safe live previews (`NEXT_PUBLIC_DEMO_READONLY=true`)
 
-## Feature Highlights
+## Ecosystem at a Glance
 
-| Area | What you get |
+| Package | Role |
 | --- | --- |
-| Soul System | `/setup` wizard + generated organizational profile (`organizations.soul`) |
-| Contacts | Tenant-scoped contact management + timeline context |
-| Deals | Kanban and list views with drag-and-drop stage movement |
-| Activities | Quick logging and task completion flows |
-| Intake Forms | Internal builder + public form route + submission storage |
-| API | `/api/v1` routes with API key guard, org scoping, and rate limiting |
-| Demo Mode | UI toasts + API 403 guard for all write operations |
+| `@seldonframe/crm` | Product app (UI, routes, server actions, domain modules) |
+| `@seldonframe/core` | Shared primitives (event bus, telemetry, integrations, virality helpers) |
+| `@seldonframe/payments` | Payment utilities and payment-domain logic |
+
+## All Blocks (Current)
+
+| Block | Included in OSS | Notes |
+| --- | --- | --- |
+| Hub | Yes | Unified command center and module entrypoint |
+| Soul Wizard | Yes | `/setup` onboarding that writes `organizations.soul` |
+| AI Customization | Yes | Claude/OpenAI adapters when configured; safe fallback otherwise |
+| Dashboard | Yes | KPI cards and pipeline snapshots |
+| Contacts | Yes | Tenant-scoped records, status, scoring, tags |
+| Deals | Yes | List + stage movement with probability updates |
+| Activities | Yes | Session/call/task tracking and completion flow |
+| Bookings | Yes | Scheduling, status updates, provider resolution |
+| Emails | Yes | Send + open/click tracking across providers |
+| Landing Pages | Yes | Builder, publish flow, conversion events |
+| Intake Forms | Yes | Builder + public submissions + webhook-ready workflow |
+| Portal | Yes | Access code auth, messaging, resources |
+| API/Webhooks | Yes | `/api/v1` with key guard, org scoping, rate limiting |
+| Demo Mode | Yes | UI and API write guards via `NEXT_PUBLIC_DEMO_READONLY=true` |
 
 ## Showcase Packs
 
@@ -51,14 +66,56 @@ Use these ready-to-fork niche presets:
 
 See `showcase/README.md` for usage details.
 
+## Integrations
+
+Seldon Frame uses a typed adapter system in `packages/core/src/integrations`.
+
+| Tier | Integrations |
+| --- | --- |
+| Tier 1 (bundled) | Stripe, Resend, SendGrid, Postmark, Google Calendar, Microsoft Graph, Claude |
+| Tier 2 (lazy-loaded by env) | Twilio, Google Meet, Zoom, UploadThing, S3/R2, Plausible, PostHog, OpenAI |
+
+Integration adapters expose:
+- `isConfigured()` for env readiness
+- `initialize(config)` for runtime setup
+- `healthCheck()` for operational status
+
 ## AI Capabilities
 
 | Capability | Behavior |
 | --- | --- |
-| Soul generation | Uses Anthropic when configured; falls back to deterministic templates |
-| Brand voice scaffolding | Produces consistent labels, priorities, and tone rules |
-| Suggested intake form | Generates business-specific field structures |
-| Safe defaults | App remains usable without `ANTHROPIC_API_KEY` |
+| Soul generation | Uses Anthropic when configured; deterministic templates otherwise |
+| Brand voice scaffolding | Generates labels, priorities, messaging style, and constraints |
+| Suggested intake form | Produces business-specific form fields |
+| Safe defaults | App remains usable without AI API keys |
+
+## SeldonFrame Pro
+
+SeldonFrame Pro is the commercial layer planned on top of OSS.
+
+Planned Pro surfaces:
+- Managed deployment controls and team governance
+- Premium starter packs and advanced templates
+- Enterprise auth/integration presets and support workflows
+- Operational tooling for agencies shipping many client instances
+
+## SeldonFrame Cloud Waitlist
+
+SeldonFrame Cloud is planned as a hosted experience for teams that want managed infra.
+
+Join the waitlist by opening a GitHub Discussion with title prefix `Cloud Waitlist` and your use case:
+- `https://github.com/seldonframe/crm/discussions`
+
+## Vibe Coder Playbook
+
+For builders shipping fast with AI coding tools:
+
+1. Pick a niche from `showcase/` and copy `framework.config.ts`.
+2. Import matching `soul-template.json` into your org.
+3. Run seed data (`pnpm db:seed-demo` or niche `seed.sql`).
+4. Keep `orgId` scoping intact in every query/mutation.
+5. Extend via `@seldonframe/core` before adding app-local duplicates.
+6. Finish every milestone with `pnpm build`.
 
 ## Tech Stack
 

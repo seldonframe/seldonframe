@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
+  <rect width="1200" height="675" fill="#f8fafc"/>
+  <rect x="0" y="0" width="220" height="675" fill="#f1f5f9"/>
+  <rect x="252" y="24" width="140" height="32" rx="6" fill="#e2e8f0"/>
+  <rect x="252" y="80" width="170" height="28" rx="4" fill="#6366f1" opacity="0.15"/>
+  <rect x="440" y="80" width="170" height="28" rx="4" fill="#8b5cf6" opacity="0.15"/>
+  <rect x="628" y="80" width="170" height="28" rx="4" fill="#a855f7" opacity="0.15"/>
+  <rect x="816" y="80" width="170" height="28" rx="4" fill="#22c55e" opacity="0.15"/>
+  <rect x="1004" y="80" width="170" height="28" rx="4" fill="#16a34a" opacity="0.15"/>
+  <rect x="252" y="120" width="170" height="100" rx="6" fill="#fff" stroke="#e2e8f0"/>
+  <rect x="252" y="228" width="170" height="100" rx="6" fill="#fff" stroke="#e2e8f0"/>
+  <rect x="440" y="120" width="170" height="100" rx="6" fill="#fff" stroke="#e2e8f0"/>
+  <rect x="440" y="228" width="170" height="100" rx="6" fill="#fff" stroke="#e2e8f0"/>
+  <rect x="440" y="336" width="170" height="100" rx="6" fill="#fff" stroke="#e2e8f0"/>
+  <rect x="628" y="120" width="170" height="100" rx="6" fill="#fff" stroke="#e2e8f0"/>
+  <rect x="816" y="120" width="170" height="100" rx="6" fill="#fff" stroke="#e2e8f0"/>
+  <rect x="816" y="228" width="170" height="100" rx="6" fill="#fff" stroke="#e2e8f0"/>
+  <rect x="1004" y="120" width="170" height="100" rx="6" fill="#fff" stroke="#e2e8f0"/>
+  <text x="600" y="560" text-anchor="middle" font-family="system-ui,sans-serif" font-size="18" fill="#94a3b8">Pipeline (Kanban) — Screenshot Placeholder (Light)</text>
+</svg>

@@ -1,0 +1,53 @@
+{
+  "node": {
+    "403c1c7cda09eed7bf5d779561a395fd4bcc6393a8": {
+      "workers": {
+        "app/(dashboard)/deals/page": {
+          "moduleId": 17433,
+          "async": false,
+          "exportedName": "createDealAction",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/deals/actions.ts"
+        }
+      },
+      "exportedName": "createDealAction",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/deals/actions.ts"
+    },
+    "700c5d97b28741526f87a81ad4b684194231474182": {
+      "workers": {
+        "app/(dashboard)/deals/page": {
+          "moduleId": 17433,
+          "async": false,
+          "exportedName": "moveDealStageAction",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/deals/actions.ts"
+        }
+      },
+      "exportedName": "moveDealStageAction",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/deals/actions.ts"
+    },
+    "005829b8f4f4873aab665758c8d9f4f99ed8f73a3b": {
+      "workers": {
+        "app/(dashboard)/deals/page": {
+          "moduleId": 17433,
+          "async": false,
+          "exportedName": "listDeals",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/deals/actions.ts"
+        }
+      },
+      "exportedName": "listDeals",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/deals/actions.ts"
+    },
+    "00f53ae090f617b8a00f21bb10e0d15f06d593dd51": {
+      "workers": {
+        "app/(dashboard)/deals/page": {
+          "moduleId": 17433,
+          "async": false,
+          "exportedName": "getDefaultPipeline",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/deals/actions.ts"
+        }
+      },
+      "exportedName": "getDefaultPipeline",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/deals/actions.ts"
+    }
+  },
+  "edge": {}
+}

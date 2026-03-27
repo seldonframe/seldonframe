@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
+  <rect width="1200" height="675" fill="#f8fafc"/>
+  <rect x="0" y="0" width="1200" height="675" fill="#eef2ff"/>
+  <rect x="180" y="48" width="840" height="579" rx="14" fill="#ffffff" stroke="#c7d2fe"/>
+  <rect x="220" y="96" width="760" height="12" rx="6" fill="#e2e8f0"/>
+  <rect x="220" y="140" width="520" height="40" rx="8" fill="#f8fafc"/>
+  <rect x="220" y="196" width="760" height="86" rx="8" fill="#f8fafc"/>
+  <rect x="220" y="298" width="760" height="86" rx="8" fill="#f8fafc"/>
+  <rect x="220" y="400" width="760" height="86" rx="8" fill="#f8fafc"/>
+  <text x="600" y="560" text-anchor="middle" font-family="system-ui,sans-serif" font-size="20" fill="#94a3b8">Soul Wizard — Screenshot Placeholder (Light)</text>
+</svg>

@@ -1,0 +1,11 @@
+{
+  "/_global-error/page": "app/_global-error/page.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/billing/page": "app/billing/page.js",
+  "/dashboard/automation/page": "app/dashboard/automation/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/login/page": "app/login/page.js",
+  "/onboarding/soul/page": "app/onboarding/soul/page.js",
+  "/page": "app/page.js",
+  "/signup/page": "app/signup/page.js"
+}

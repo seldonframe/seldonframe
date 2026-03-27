@@ -27,6 +27,45 @@ const config: FrameworkConfig = {
   features: { deals: true, intakeForms: true, aiFeatures: true, soulSystem: true, import: true, export: true, webhooks: true, api: true },
   contactStatuses: ["inquiry", "prospect", "active_client", "past_client"],
   activityTypes: ["session", "note", "task", "email"],
+  booking: {
+    enabled: true,
+    defaultDurationMinutes: 60,
+    preferredProvider: "zoom",
+    bookingPageHeadline: "Book a Discovery Session",
+    bookingPageDescription: "Schedule a free 60-minute coaching consultation.",
+    bufferMinutes: 15,
+    allowWeekends: false,
+  },
+  landing: {
+    enabled: true,
+    defaultSections: [
+      { type: "hero", title: "Transform Your Leadership" },
+      { type: "benefits", title: "What You'll Gain" },
+      { type: "testimonials", title: "Client Stories" },
+      { type: "cta", title: "Start Your Journey" },
+    ],
+    defaultCtaLabel: "Book a Free Session",
+    defaultCtaTarget: "booking",
+    heroHeadline: "Executive Coaching for Founders",
+    heroSubheadline: "Structured accountability that drives results.",
+  },
+  email: {
+    enabled: true,
+    preferredProvider: "resend",
+    defaultFromName: "CoachCRM",
+    defaultSubjectPrefix: "",
+    welcomeTemplateSubject: "Welcome — let's map your goals",
+    welcomeTemplateBody: "Hi {{firstName}}, thanks for reaching out. I'd love to learn more about your goals and see how we can work together.",
+    followUpDelayHours: 24,
+  },
+  portal: {
+    enabled: true,
+    welcomeMessage: "Welcome to your coaching portal. Here you'll find session notes, resources, and a direct line to your coach.",
+    enableMessaging: true,
+    enableResources: true,
+    enableInvoices: true,
+    resourceCategories: ["Session Notes", "Worksheets", "Recordings", "Invoices"],
+  },
 };
 
 export default config;

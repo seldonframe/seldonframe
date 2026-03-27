@@ -1,0 +1,3 @@
+{
+  "/portal/[orgSlug]/(client)/messages/page": "app/portal/[orgSlug]/(client)/messages/page.js"
+}

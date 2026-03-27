@@ -1,0 +1,17 @@
+{
+  "node": {
+    "405f7a9a0f733d06637682b695282622e3df3b7202": {
+      "workers": {
+        "app/book/[orgSlug]/[bookingSlug]/page": {
+          "moduleId": 92735,
+          "async": false,
+          "exportedName": "submitPublicBookingAction",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/bookings/actions.ts"
+        }
+      },
+      "exportedName": "submitPublicBookingAction",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/bookings/actions.ts"
+    }
+  },
+  "edge": {}
+}

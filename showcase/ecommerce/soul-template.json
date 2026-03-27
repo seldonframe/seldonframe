@@ -1,1 +1,83 @@
-{"businessName":"Luma Goods","businessDescription":"DTC skincare brand","industry":"ecommerce","offerType":"products","entityLabels":{"contact":{"singular":"Customer","plural":"Customers"},"deal":{"singular":"Order Opportunity","plural":"Order Opportunities"},"activity":{"singular":"Interaction","plural":"Interactions"},"pipeline":{"singular":"Revenue Pipeline","plural":"Revenue Pipelines"},"intakeForm":{"singular":"Support Form","plural":"Support Forms"}},"pipeline":{"name":"Revenue Pipeline","stages":[{"name":"Lead","color":"#0ea5e9","probability":10},{"name":"Engaged","color":"#14b8a6","probability":35},{"name":"Abandoned Cart","color":"#f59e0b","probability":50},{"name":"Converted","color":"#22c55e","probability":100},{"name":"Churn Risk","color":"#ef4444","probability":25}]},"suggestedFields":{"contact":[{"key":"lifetime_value","label":"Lifetime Value","type":"number"}],"deal":[{"key":"aov","label":"AOV","type":"number"}]},"contactStatuses":[{"value":"repeat","label":"Repeat","color":"#22c55e"}],"voice":{"style":"friendly-professional","vocabulary":["restock","routine"],"avoidWords":["cheap"],"samplePhrases":["Here’s your personalized product match."]},"priorities":["client retention","revenue tracking"],"aiContext":"Luma Goods focuses on retention and repeat order growth for skincare shoppers.","suggestedIntakeForm":{"name":"Customer Support","fields":[{"key":"email","label":"Email","type":"email","required":true}]},"branding":{"primaryColor":"164 74% 42%","accentColor":"35 91% 54%","mood":"minimal"},"rawInput":{"processDescription":"Acquire, convert, retain","painPoint":"churn","clientDescription":"online shoppers"}}
+{
+  "businessName": "Luma Goods",
+  "businessDescription": "DTC skincare brand",
+  "industry": "ecommerce",
+  "offerType": "products",
+  "entityLabels": {
+    "contact": { "singular": "Customer", "plural": "Customers" },
+    "deal": { "singular": "Order Opportunity", "plural": "Order Opportunities" },
+    "activity": { "singular": "Interaction", "plural": "Interactions" },
+    "pipeline": { "singular": "Revenue Pipeline", "plural": "Revenue Pipelines" },
+    "intakeForm": { "singular": "Support Form", "plural": "Support Forms" }
+  },
+  "pipeline": {
+    "name": "Revenue Pipeline",
+    "stages": [
+      { "name": "Lead", "color": "#0ea5e9", "probability": 10 },
+      { "name": "Engaged", "color": "#14b8a6", "probability": 35 },
+      { "name": "Abandoned Cart", "color": "#f59e0b", "probability": 50 },
+      { "name": "Converted", "color": "#22c55e", "probability": 100 },
+      { "name": "Churn Risk", "color": "#ef4444", "probability": 25 }
+    ]
+  },
+  "suggestedFields": {
+    "contact": [{ "key": "lifetime_value", "label": "Lifetime Value", "type": "number" }],
+    "deal": [{ "key": "aov", "label": "AOV", "type": "number" }]
+  },
+  "contactStatuses": [{ "value": "repeat", "label": "Repeat", "color": "#22c55e" }],
+  "voice": {
+    "style": "friendly-professional",
+    "vocabulary": ["restock", "routine"],
+    "avoidWords": ["cheap"],
+    "samplePhrases": ["Here's your personalized product match."]
+  },
+  "priorities": ["client retention", "revenue tracking"],
+  "aiContext": "Luma Goods focuses on retention and repeat order growth for skincare shoppers.",
+  "suggestedIntakeForm": {
+    "name": "Customer Support",
+    "fields": [{ "key": "email", "label": "Email", "type": "email", "required": true }]
+  },
+  "branding": { "primaryColor": "164 74% 42%", "accentColor": "35 91% 54%", "mood": "minimal" },
+  "rawInput": { "processDescription": "Acquire, convert, retain", "painPoint": "churn", "clientDescription": "online shoppers" },
+  "blockDefaults": {
+    "booking": {
+      "enabled": false,
+      "defaultDurationMinutes": 30,
+      "preferredProvider": "manual",
+      "bookingPageHeadline": "Book a Consultation",
+      "bookingPageDescription": "Schedule a one-on-one product consultation.",
+      "bufferMinutes": 5,
+      "allowWeekends": true
+    },
+    "landing": {
+      "enabled": true,
+      "defaultSections": [
+        { "type": "hero", "title": "Clean Beauty, Delivered" },
+        { "type": "featured-products", "title": "Best Sellers" },
+        { "type": "reviews", "title": "Customer Reviews" },
+        { "type": "cta", "title": "Shop Now" }
+      ],
+      "defaultCtaLabel": "Shop Now",
+      "defaultCtaTarget": "external",
+      "heroHeadline": "Premium Skincare, Simplified",
+      "heroSubheadline": "Curated routines for every skin type."
+    },
+    "email": {
+      "enabled": true,
+      "preferredProvider": "resend",
+      "defaultFromName": "Luma Goods",
+      "defaultSubjectPrefix": "",
+      "welcomeTemplateSubject": "Welcome to Luma Goods!",
+      "welcomeTemplateBody": "Hi {{firstName}}, thanks for joining! Here's 10% off your first order. Use code WELCOME10 at checkout.",
+      "followUpDelayHours": 48
+    },
+    "portal": {
+      "enabled": true,
+      "welcomeMessage": "Welcome to your customer portal. Track orders, view past purchases, and reach our support team.",
+      "enableMessaging": true,
+      "enableResources": false,
+      "enableInvoices": true,
+      "resourceCategories": ["Order History", "Invoices"]
+    }
+  }
+}

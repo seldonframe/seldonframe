@@ -1,0 +1,101 @@
+{
+  "node": {
+    "0092a851c74a49443a141479aff015b6911976f67c": {
+      "workers": {
+        "app/(dashboard)/landing/page": {
+          "moduleId": 31907,
+          "async": false,
+          "exportedName": "listLandingPages",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/landing/actions.ts"
+        }
+      },
+      "exportedName": "listLandingPages",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/landing/actions.ts"
+    },
+    "40991b30df20f8ff6e0283dc1b674cb975f123652f": {
+      "workers": {
+        "app/(dashboard)/landing/page": {
+          "moduleId": 31907,
+          "async": false,
+          "exportedName": "createLandingPageAction",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/landing/actions.ts"
+        }
+      },
+      "exportedName": "createLandingPageAction",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/landing/actions.ts"
+    },
+    "409b65f5c1e5a1b17a444082595ce5c0efd160bcc0": {
+      "workers": {
+        "app/(dashboard)/landing/page": {
+          "moduleId": 31907,
+          "async": false,
+          "exportedName": "submitLandingLeadAction",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/landing/actions.ts"
+        }
+      },
+      "exportedName": "submitLandingLeadAction",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/landing/actions.ts"
+    },
+    "40c98076ded6f7702868d96e29e7931c069e6054e1": {
+      "workers": {
+        "app/(dashboard)/landing/page": {
+          "moduleId": 31907,
+          "async": false,
+          "exportedName": "getLandingPageById",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/landing/actions.ts"
+        }
+      },
+      "exportedName": "getLandingPageById",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/landing/actions.ts"
+    },
+    "40e5cac70c6cd7d18173c4297ff41ef78d83bfa8d8": {
+      "workers": {
+        "app/(dashboard)/landing/page": {
+          "moduleId": 31907,
+          "async": false,
+          "exportedName": "trackLandingVisitAction",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/landing/actions.ts"
+        }
+      },
+      "exportedName": "trackLandingVisitAction",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/landing/actions.ts"
+    },
+    "602a05903ac16e78eabeec8d2ff6cb04a7d7739fe4": {
+      "workers": {
+        "app/(dashboard)/landing/page": {
+          "moduleId": 31907,
+          "async": false,
+          "exportedName": "getPublicLandingPage",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/landing/actions.ts"
+        }
+      },
+      "exportedName": "getPublicLandingPage",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/landing/actions.ts"
+    },
+    "602cba26ec2daffa5f1b086a574bdf7f4043b4fe0e": {
+      "workers": {
+        "app/(dashboard)/landing/page": {
+          "moduleId": 31907,
+          "async": false,
+          "exportedName": "publishLandingPageAction",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/landing/actions.ts"
+        }
+      },
+      "exportedName": "publishLandingPageAction",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/landing/actions.ts"
+    },
+    "6050d3bd57ed49dcf8919d2f451118976cb6a997dc": {
+      "workers": {
+        "app/(dashboard)/landing/page": {
+          "moduleId": 31907,
+          "async": false,
+          "exportedName": "updateLandingSectionsAction",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/landing/actions.ts"
+        }
+      },
+      "exportedName": "updateLandingSectionsAction",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/landing/actions.ts"
+    }
+  },
+  "edge": {}
+}

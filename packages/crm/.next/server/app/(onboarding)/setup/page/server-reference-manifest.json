@@ -1,0 +1,29 @@
+{
+  "node": {
+    "40b4f419486f8137c0ccfe92741fda80fabb40f426": {
+      "workers": {
+        "app/(onboarding)/setup/page": {
+          "moduleId": 16883,
+          "async": false,
+          "exportedName": "generateSoulPreviewAction",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/soul/actions.ts"
+        }
+      },
+      "exportedName": "generateSoulPreviewAction",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/soul/actions.ts"
+    },
+    "409522705bbb2b4a0beff5e2ea9d9dcf179b35165b": {
+      "workers": {
+        "app/(onboarding)/setup/page": {
+          "moduleId": 16883,
+          "async": false,
+          "exportedName": "saveSoulAction",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/soul/actions.ts"
+        }
+      },
+      "exportedName": "saveSoulAction",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/soul/actions.ts"
+    }
+  },
+  "edge": {}
+}
