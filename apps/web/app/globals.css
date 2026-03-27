@@ -1,10 +1,23 @@
 @import url("https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap");
 @import "tailwindcss";
-@import "../../../packages/crm/src/styles/design-tokens.css";
 
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  --background: 218 33% 7%;
+  --foreground: 210 40% 96%;
+  --card: 218 30% 11%;
+  --primary: 174 88% 42%;
+  --primary-foreground: 0 0% 100%;
+  --muted: 216 21% 16%;
+  --muted-foreground: 211 16% 67%;
+  --border: 216 20% 22%;
+  --ring: 174 88% 42%;
+
+  --color-primary: var(--primary);
+  --color-surface-raised: var(--muted);
+  --color-text-secondary: 210 18% 74%;
+
   --font-sans-stack: "General Sans", -apple-system, BlinkMacSystemFont, sans-serif;
   --web-section-gap-desktop: 120px;
   --web-section-gap-mobile: 80px;
