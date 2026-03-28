@@ -51,6 +51,8 @@ export function PublicBookingForm({
 
   const [selectedDate, setSelectedDate] = useState<string>(dateOptions[0]?.value ?? "");
 
+  const timezone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC", []);
+
   useEffect(() => {
     if (!selectedDate) {
       return;
@@ -140,6 +142,7 @@ export function PublicBookingForm({
 
         <div>
           <label htmlFor="booking-slot" className="text-label text-[hsl(var(--color-text-secondary))]">Time slot</label>
+          <p className="mt-1 text-xs text-[hsl(var(--color-text-muted))]">Times shown in {timezone}</p>
           <select
             id="booking-slot"
             className="crm-input mt-1 h-10 w-full px-3"
@@ -156,6 +159,8 @@ export function PublicBookingForm({
           </select>
         </div>
       </div>
+
+      <input type="hidden" name="timezone" value={timezone} />
 
       <textarea className="crm-input min-h-20 w-full p-3" name="notes" placeholder="Anything we should know before the call?" />
 

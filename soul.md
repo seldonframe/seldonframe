@@ -1,23 +1,75 @@
 # Soul System
 
-The Soul is this framework's self-configuring identity layer.
+The Soul is SeldonFrame's identity/configuration layer stored per organization.
 
-When your client first logs in, they answer 5 simple questions about their business.
-The framework then reshapes itself - labels, pipeline, fields, dashboard, AI behavior,
-branding, and tone - to match who they are and how they work.
+At onboarding, each org defines business context, vocabulary, labels, workflow, and priorities.
+The CRM then adapts labels, suggested fields, messaging voice, and default process behavior
+without code changes.
 
-No code changes. No config files. Just a conversation.
+## Current Wizard Flow (8 steps)
 
-## How it works
-- Onboarding wizard captures business identity
-- Claude (or rule-based fallback) generates a complete CRM configuration
-- Every component reads from the soul to personalize the experience
-- AI features use the soul as context for drafting, scoring, and categorizing
+The current `SoulWizard` in `packages/crm/src/components/soul/soul-wizard.tsx` runs:
 
-## For developers
-The soul is stored in `organizations.soul` (jsonb). Access it via the `useSoul()` hook
-or `getSoul()` server helper. See `src/lib/soul/` for templates and generation logic.
+1. Business name
+2. Industry/practice type
+3. Business description
+4. Client label + ideal client description
+5. Process mapping / pipeline stages
+6. Voice + communication style
+7. Priorities
+8. Reveal + save generated Soul config
 
-## Why this matters
-Your client doesn't get "a CRM." They get THEIR CRM - configured for their business,
-their language, their process, their voice. In 5 minutes. Without touching code.
+## Current Blocks Driven by Soul
+
+Soul labels and/or suggested config currently shape:
+
+- Dashboard labels and messaging
+- Contacts labels and suggested custom fields
+- Deals/pipeline naming and stages
+- Activities naming
+- Bookings copy defaults and booking experience context
+- Emails tone context and template defaults
+- Forms/intake terminology
+- Landing page/portal messaging surfaces tied to org identity
+
+Primary dashboard module routes include:
+`/dashboard`, `/contacts`, `/deals`, `/bookings`, `/landing`, `/emails`, `/forms`, `/settings`
+(plus `/hub` route as deep-link utility surface).
+
+## Current Integration State
+
+Soul generation supports:
+
+- AI-assisted generation via Anthropic when configured
+- Deterministic fallback generation when AI keys are absent
+
+Operational integrations now include:
+
+- Booking provider resolution in CRM (`zoom`, `google-meet`, `google-calendar`, `microsoft-graph`, fallback `manual`)
+- Google Calendar booking sync flows in CRM, gated by Google OAuth/env availability
+
+## Current Data Model
+
+Soul is stored in `organizations.soul` (`jsonb`) and includes (see `packages/crm/src/lib/soul/types.ts`):
+
+- `entityLabels` (`contact`, `deal`, `activity`, `pipeline`, `intakeForm`)
+- `pipeline` (name + stages)
+- `suggestedFields` (`contact`, `deal`)
+- `contactStatuses`
+- `voice` (style/vocabulary/avoid words/sample phrases)
+- `priorities`
+- `aiContext`
+- `suggestedIntakeForm`
+- `branding`
+- `rawInput`
+
+Related runtime usage:
+
+- Server access: `getSoul()` (`packages/crm/src/lib/soul/server.ts`)
+- Client context: `SoulProvider` + soul-aware label helpers (`packages/crm/src/lib/soul/labels.ts`)
+
+## Developer Notes
+
+- Keep Soul backward compatible; new fields should be additive.
+- Preserve `orgId` scoping for all soul-derived behavior.
+- Prefer Soul-driven labels over hardcoded entity names in UI copy.

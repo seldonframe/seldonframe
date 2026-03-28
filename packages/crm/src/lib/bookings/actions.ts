@@ -8,6 +8,11 @@ import { assertWritable } from "@/lib/demo/server";
 import { emitSeldonEvent } from "@/lib/events/bus";
 import { createBookingCheckoutSession } from "@/lib/payments/actions";
 import { recordBookingOutcomeLearning } from "@/lib/soul/learning";
+import {
+  deleteGoogleCalendarBookingEvent,
+  reconcileGoogleCalendarBookings,
+  syncBookingWithGoogleCalendar,
+} from "./google-calendar-sync";
 import { buildMeetingUrl, resolveBookingProvider } from "./providers";
 
 function deriveEndsAt(startsAt: Date, durationMinutes: number) {
@@ -29,7 +34,21 @@ type AppointmentTypeMeta = {
   description?: string;
   confirmationMessage?: string;
   price?: number;
+  bufferBeforeMinutes?: number;
+  bufferAfterMinutes?: number;
+  maxBookingsPerDay?: number;
+  availability?: Partial<Record<AvailabilityDayKey, AvailabilityDaySettings>>;
 };
+
+type AvailabilityDayKey = "sunday" | "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday";
+
+type AvailabilityDaySettings = {
+  enabled: boolean;
+  start: string;
+  end: string;
+};
+
+type AvailabilitySchedule = Record<AvailabilityDayKey, AvailabilityDaySettings>;
 
 type PublicBookingContext = {
   orgId: string;
@@ -39,7 +58,144 @@ type PublicBookingContext = {
   durationMinutes: number;
   confirmationMessage: string;
   price: number;
+  availability: AvailabilitySchedule;
+  bufferBeforeMinutes: number;
+  bufferAfterMinutes: number;
+  maxBookingsPerDay: number;
 };
+
+const weekdayKeys: AvailabilityDayKey[] = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+
+const weekdayByIndex: Record<number, AvailabilityDayKey> = {
+  0: "sunday",
+  1: "monday",
+  2: "tuesday",
+  3: "wednesday",
+  4: "thursday",
+  5: "friday",
+  6: "saturday",
+};
+
+function defaultAvailabilitySchedule(): AvailabilitySchedule {
+  return {
+    sunday: { enabled: false, start: "09:00", end: "17:00" },
+    monday: { enabled: true, start: "09:00", end: "17:00" },
+    tuesday: { enabled: true, start: "09:00", end: "17:00" },
+    wednesday: { enabled: true, start: "09:00", end: "17:00" },
+    thursday: { enabled: true, start: "09:00", end: "17:00" },
+    friday: { enabled: true, start: "09:00", end: "17:00" },
+    saturday: { enabled: false, start: "09:00", end: "17:00" },
+  };
+}
+
+function normalizeTimeValue(value: unknown, fallback: string) {
+  if (typeof value !== "string") {
+    return fallback;
+  }
+
+  const trimmed = value.trim();
+
+  if (!/^([01]\d|2[0-3]):([0-5]\d)$/.test(trimmed)) {
+    return fallback;
+  }
+
+  return trimmed;
+}
+
+function toMinutes(value: string) {
+  const [hours, minutes] = value.split(":").map(Number);
+  return hours * 60 + minutes;
+}
+
+function normalizeAvailability(raw: unknown): AvailabilitySchedule {
+  const defaults = defaultAvailabilitySchedule();
+  const source = typeof raw === "object" && raw ? (raw as Record<string, unknown>) : {};
+
+  const normalized = weekdayKeys.reduce((acc, dayKey) => {
+    const dayDefaults = defaults[dayKey];
+    const daySource = source[dayKey] as Record<string, unknown> | undefined;
+    const start = normalizeTimeValue(daySource?.start, dayDefaults.start);
+    const end = normalizeTimeValue(daySource?.end, dayDefaults.end);
+    const enabled = typeof daySource?.enabled === "boolean" ? daySource.enabled : dayDefaults.enabled;
+
+    acc[dayKey] = toMinutes(start) < toMinutes(end) ? { enabled, start, end } : dayDefaults;
+    return acc;
+  }, {} as AvailabilitySchedule);
+
+  return normalized;
+}
+
+function resolveBufferMinutes(raw: unknown) {
+  const value = Number(raw);
+
+  if (!Number.isFinite(value) || value < 0) {
+    return 0;
+  }
+
+  return Math.min(120, Math.round(value));
+}
+
+function resolveMaxBookingsPerDay(raw: unknown) {
+  const value = Number(raw);
+
+  if (!Number.isFinite(value) || value <= 0) {
+    return 0;
+  }
+
+  return Math.min(50, Math.round(value));
+}
+
+function parseCheckedValue(value: FormDataEntryValue | null) {
+  if (value == null) {
+    return null;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.toLowerCase();
+    return normalized === "true" || normalized === "1" || normalized === "on";
+  }
+
+  return true;
+}
+
+function parseAvailabilityFromForm(formData: FormData) {
+  const defaults = defaultAvailabilitySchedule();
+  let hasAnyField = false;
+
+  const parsed = weekdayKeys.reduce((acc, dayKey) => {
+    const enabledField =
+      formData.get(`availability.${dayKey}.enabled`) ??
+      formData.get(`availability[${dayKey}][enabled]`) ??
+      formData.get(`availability_${dayKey}_enabled`);
+    const startField =
+      formData.get(`availability.${dayKey}.start`) ??
+      formData.get(`availability[${dayKey}][start]`) ??
+      formData.get(`availability_${dayKey}_start`);
+    const endField =
+      formData.get(`availability.${dayKey}.end`) ??
+      formData.get(`availability[${dayKey}][end]`) ??
+      formData.get(`availability_${dayKey}_end`);
+
+    if (enabledField != null || startField != null || endField != null) {
+      hasAnyField = true;
+    }
+
+    const fallback = defaults[dayKey];
+    const enabled = parseCheckedValue(enabledField);
+    const start = normalizeTimeValue(startField, fallback.start);
+    const end = normalizeTimeValue(endField, fallback.end);
+
+    acc[dayKey] = {
+      enabled: enabled == null ? fallback.enabled : enabled,
+      start,
+      end,
+    };
+
+    return acc;
+  }, {} as AvailabilitySchedule);
+
+  return hasAnyField ? normalizeAvailability(parsed) : defaults;
+}
 
 function resolveDuration(duration: number | undefined) {
   if (duration == null || !Number.isFinite(duration)) {
@@ -90,6 +246,10 @@ async function resolvePublicBookingContext(orgSlug: string, bookingSlug: string)
   const metadata = (template?.metadata as AppointmentTypeMeta | null) ?? null;
   const confirmationMessage = metadata?.confirmationMessage || normalizeVoiceConfirmation(org.soul);
   const durationMinutes = resolveDuration(metadata?.durationMinutes);
+  const availability = normalizeAvailability(metadata?.availability);
+  const bufferBeforeMinutes = resolveBufferMinutes(metadata?.bufferBeforeMinutes);
+  const bufferAfterMinutes = resolveBufferMinutes(metadata?.bufferAfterMinutes);
+  const maxBookingsPerDay = resolveMaxBookingsPerDay(metadata?.maxBookingsPerDay);
 
   return {
     orgId: org.id,
@@ -99,6 +259,10 @@ async function resolvePublicBookingContext(orgSlug: string, bookingSlug: string)
     durationMinutes,
     confirmationMessage,
     price: Number.isFinite(metadata?.price) ? Number(metadata?.price) : 0,
+    availability,
+    bufferBeforeMinutes,
+    bufferAfterMinutes,
+    maxBookingsPerDay,
   };
 }
 
@@ -155,6 +319,20 @@ export async function listPublicBookingSlotsAction({
   const dayEnd = new Date(dayStart);
   dayEnd.setDate(dayEnd.getDate() + 1);
 
+  const weekdayKey = weekdayByIndex[requestedDay.getDay()];
+  const dayAvailability = context.availability[weekdayKey];
+
+  if (!dayAvailability?.enabled) {
+    return { slots: [] as string[], durationMinutes: context.durationMinutes };
+  }
+
+  const workdayStartMinutes = toMinutes(dayAvailability.start);
+  const workdayEndMinutes = toMinutes(dayAvailability.end);
+
+  if (workdayStartMinutes >= workdayEndMinutes) {
+    return { slots: [] as string[], durationMinutes: context.durationMinutes };
+  }
+
   const bookedRows = await db
     .select({ startsAt: bookings.startsAt, endsAt: bookings.endsAt })
     .from(bookings)
@@ -169,17 +347,24 @@ export async function listPublicBookingSlotsAction({
       )
     );
 
+  if (context.maxBookingsPerDay > 0 && bookedRows.length >= context.maxBookingsPerDay) {
+    return { slots: [] as string[], durationMinutes: context.durationMinutes };
+  }
+
   const slots: string[] = [];
   const slotStepMinutes = context.durationMinutes >= 60 ? 60 : 30;
 
-  for (let hour = 9; hour < 17; hour += 1) {
-    for (let minute = 0; minute < 60; minute += slotStepMinutes) {
+  for (let minuteOffset = workdayStartMinutes; minuteOffset < workdayEndMinutes; minuteOffset += slotStepMinutes) {
+    const hour = Math.floor(minuteOffset / 60);
+    const minute = minuteOffset % 60;
       const slotStart = new Date(requestedDay);
       slotStart.setHours(hour, minute, 0, 0);
 
       const slotEnd = deriveEndsAt(slotStart, context.durationMinutes);
 
-      if (slotEnd.getHours() > 17 || (slotEnd.getHours() === 17 && slotEnd.getMinutes() > 0)) {
+      const slotEndMinutes = slotEnd.getHours() * 60 + slotEnd.getMinutes();
+
+      if (slotEndMinutes > workdayEndMinutes) {
         continue;
       }
 
@@ -190,13 +375,14 @@ export async function listPublicBookingSlotsAction({
       const overlaps = bookedRows.some((row) => {
         const bookedStart = new Date(row.startsAt);
         const bookedEnd = new Date(row.endsAt);
-        return slotStart < bookedEnd && slotEnd > bookedStart;
+        const blockedStart = new Date(bookedStart.getTime() - context.bufferBeforeMinutes * 60_000);
+        const blockedEnd = new Date(bookedEnd.getTime() + context.bufferAfterMinutes * 60_000);
+        return slotStart < blockedEnd && slotEnd > blockedStart;
       });
 
       if (!overlaps) {
         slots.push(toDateTimeLocalValue(slotStart));
       }
-    }
   }
 
   return {
@@ -221,6 +407,10 @@ export async function createAppointmentTypeAction(formData: FormData) {
   const price = Math.max(0, Number(formData.get("price") ?? 0));
   const slugInput = String(formData.get("slug") ?? name);
   const bookingSlug = toBookingSlug(slugInput || "consultation") || "consultation";
+  const availability = parseAvailabilityFromForm(formData);
+  const bufferBeforeMinutes = resolveBufferMinutes(formData.get("bufferBeforeMinutes"));
+  const bufferAfterMinutes = resolveBufferMinutes(formData.get("bufferAfterMinutes"));
+  const maxBookingsPerDay = resolveMaxBookingsPerDay(formData.get("maxBookingsPerDay"));
 
   const now = new Date();
 
@@ -241,6 +431,10 @@ export async function createAppointmentTypeAction(formData: FormData) {
       durationMinutes: duration,
       description,
       price,
+      availability: normalizeAvailability(availability),
+      bufferBeforeMinutes: bufferBeforeMinutes,
+      bufferAfterMinutes: bufferAfterMinutes,
+      maxBookingsPerDay: maxBookingsPerDay,
     },
   });
 }
@@ -272,11 +466,22 @@ export async function listBookings() {
     return [];
   }
 
-  return db
+  const rows = await db
     .select()
     .from(bookings)
     .where(and(eq(bookings.orgId, orgId), ne(bookings.status, "template")))
     .orderBy(asc(bookings.startsAt));
+
+  await reconcileGoogleCalendarBookings(
+    rows.map((row) => ({
+      bookingId: row.id,
+      status: row.status,
+      userId: row.userId,
+      externalEventId: row.externalEventId,
+    }))
+  );
+
+  return rows;
 }
 
 export async function createBookingAction(formData: FormData) {
@@ -338,12 +543,30 @@ export async function createBookingAction(formData: FormData) {
     throw new Error("Could not create booking");
   }
 
-  const meetingUrl = buildMeetingUrl(provider, created.id);
+  const fallbackMeetingUrl = buildMeetingUrl(provider, created.id);
+  let externalEventId: string | null = fallbackMeetingUrl ? created.id : null;
+  let meetingUrl: string | null = fallbackMeetingUrl;
 
-  if (meetingUrl) {
+  if (provider === "google-calendar") {
+    const googleSynced = await syncBookingWithGoogleCalendar({
+      bookingId: created.id,
+      userId: user.id,
+      title: String(formData.get("title") ?? "Consultation"),
+      notes: String(formData.get("notes") ?? "") || null,
+      startsAt,
+      endsAt: deriveEndsAt(startsAt, Number.isFinite(durationMinutes) ? durationMinutes : 30),
+    });
+
+    if (googleSynced.externalEventId || googleSynced.meetingUrl) {
+      externalEventId = googleSynced.externalEventId;
+      meetingUrl = googleSynced.meetingUrl;
+    }
+  }
+
+  if (meetingUrl || externalEventId) {
     await db
       .update(bookings)
-      .set({ meetingUrl, externalEventId: created.id, updatedAt: new Date() })
+      .set({ meetingUrl, externalEventId, updatedAt: new Date() })
       .where(and(eq(bookings.orgId, orgId), eq(bookings.id, created.id)));
   }
 
@@ -370,7 +593,28 @@ export async function completeBookingAction(bookingId: string) {
     .update(bookings)
     .set({ status: "completed", completedAt: new Date(), updatedAt: new Date() })
     .where(and(eq(bookings.orgId, orgId), eq(bookings.id, bookingId)))
-    .returning({ id: bookings.id, contactId: bookings.contactId, startsAt: bookings.startsAt });
+    .returning({
+      id: bookings.id,
+      contactId: bookings.contactId,
+      startsAt: bookings.startsAt,
+      title: bookings.title,
+      notes: bookings.notes,
+      endsAt: bookings.endsAt,
+      userId: bookings.userId,
+      externalEventId: bookings.externalEventId,
+    });
+
+  if (row) {
+    await syncBookingWithGoogleCalendar({
+      bookingId: row.id,
+      userId: row.userId,
+      title: row.title,
+      notes: row.notes,
+      startsAt: row.startsAt,
+      endsAt: row.endsAt,
+      externalEventId: row.externalEventId,
+    });
+  }
 
   if (row?.contactId) {
     await emitSeldonEvent("booking.completed", {
@@ -401,7 +645,14 @@ export async function cancelBookingAction(bookingId: string) {
     .update(bookings)
     .set({ status: "cancelled", cancelledAt: new Date(), updatedAt: new Date() })
     .where(and(eq(bookings.orgId, orgId), eq(bookings.id, bookingId)))
-    .returning({ id: bookings.id, contactId: bookings.contactId });
+    .returning({ id: bookings.id, contactId: bookings.contactId, userId: bookings.userId, externalEventId: bookings.externalEventId });
+
+  if (row) {
+    await deleteGoogleCalendarBookingEvent({
+      userId: row.userId,
+      externalEventId: row.externalEventId,
+    });
+  }
 
   if (row?.contactId) {
     await emitSeldonEvent("booking.cancelled", {
@@ -424,7 +675,28 @@ export async function markBookingNoShowAction(bookingId: string) {
     .update(bookings)
     .set({ status: "no_show", updatedAt: new Date() })
     .where(and(eq(bookings.orgId, orgId), eq(bookings.id, bookingId)))
-    .returning({ id: bookings.id, contactId: bookings.contactId, startsAt: bookings.startsAt });
+    .returning({
+      id: bookings.id,
+      contactId: bookings.contactId,
+      startsAt: bookings.startsAt,
+      title: bookings.title,
+      notes: bookings.notes,
+      endsAt: bookings.endsAt,
+      userId: bookings.userId,
+      externalEventId: bookings.externalEventId,
+    });
+
+  if (row) {
+    await syncBookingWithGoogleCalendar({
+      bookingId: row.id,
+      userId: row.userId,
+      title: row.title,
+      notes: row.notes,
+      startsAt: row.startsAt,
+      endsAt: row.endsAt,
+      externalEventId: row.externalEventId,
+    });
+  }
 
   if (row?.contactId) {
     await emitSeldonEvent("booking.no_show", {
@@ -498,6 +770,17 @@ export async function submitPublicBookingAction({
     throw new Error("Invalid start time");
   }
 
+  const bookingDate = toDateTimeLocalValue(bookingStart).slice(0, 10);
+  const availableSlots = await listPublicBookingSlotsAction({
+    orgSlug,
+    bookingSlug,
+    date: bookingDate,
+  });
+
+  if (!availableSlots.slots.includes(toDateTimeLocalValue(bookingStart))) {
+    throw new Error("Selected slot is no longer available");
+  }
+
   const provider = await resolveBookingProvider(null);
 
   const [createdBooking] = await db
@@ -542,11 +825,44 @@ export async function submitPublicBookingAction({
       };
     }
 
-    const meetingUrl = buildMeetingUrl(provider, createdBooking.id);
-    if (meetingUrl) {
+    const [bookingRow] = await db
+      .select({
+        id: bookings.id,
+        title: bookings.title,
+        notes: bookings.notes,
+        startsAt: bookings.startsAt,
+        endsAt: bookings.endsAt,
+        userId: bookings.userId,
+        provider: bookings.provider,
+      })
+      .from(bookings)
+      .where(and(eq(bookings.orgId, bookingContext.orgId), eq(bookings.id, createdBooking.id)))
+      .limit(1);
+
+    const fallbackMeetingUrl = buildMeetingUrl(provider, createdBooking.id);
+    let externalEventId: string | null = fallbackMeetingUrl ? createdBooking.id : null;
+    let meetingUrl: string | null = fallbackMeetingUrl;
+
+    if (bookingRow?.provider === "google-calendar") {
+      const googleSynced = await syncBookingWithGoogleCalendar({
+        bookingId: bookingRow.id,
+        userId: bookingRow.userId,
+        title: bookingRow.title,
+        notes: bookingRow.notes,
+        startsAt: bookingRow.startsAt,
+        endsAt: bookingRow.endsAt,
+      });
+
+      if (googleSynced.externalEventId || googleSynced.meetingUrl) {
+        externalEventId = googleSynced.externalEventId;
+        meetingUrl = googleSynced.meetingUrl;
+      }
+    }
+
+    if (meetingUrl || externalEventId) {
       await db
         .update(bookings)
-        .set({ meetingUrl, externalEventId: createdBooking.id, updatedAt: new Date() })
+        .set({ meetingUrl, externalEventId, updatedAt: new Date() })
         .where(and(eq(bookings.orgId, bookingContext.orgId), eq(bookings.id, createdBooking.id)));
     }
 

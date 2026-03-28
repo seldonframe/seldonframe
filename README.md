@@ -27,24 +27,27 @@ Most OSS CRMs are finished products. Seldon Frame is a framework-first base you 
 
 ## Ecosystem at a Glance
 
-| Package | Role |
+| Workspace | Role |
 | --- | --- |
-| `@seldonframe/crm` | Product app (UI, routes, server actions, domain modules) |
-| `@seldonframe/core` | Shared primitives (event bus, telemetry, integrations, virality helpers) |
-| `@seldonframe/payments` | Payment utilities and payment-domain logic |
+| `packages/crm` (`@seldonframe/crm`) | Product app (UI, routes, server actions, domain modules) |
+| `packages/core` (`@seldonframe/core`) | Shared primitives (event bus, telemetry, integrations, virality helpers) |
+| `packages/payments` (`@seldonframe/payments`) | Payment utilities and payment-domain logic |
+| `apps/web` | Marketing/web app workspace |
+| `apps/cloud` | Cloud app workspace |
+| `apps/pro` | Pro app workspace |
 
 ## All Blocks (Current)
 
 | Block | Included in OSS | Notes |
 | --- | --- | --- |
-| Hub | Yes | Unified command center and module entrypoint |
+| Hub | Yes | Deep-link utility route and system tools surface |
 | Soul Wizard | Yes | `/setup` onboarding that writes `organizations.soul` |
-| AI Customization | Yes | Claude-backed generation when configured; safe fallback otherwise |
+| AI Customization | Yes | Claude-backed Soul generation when configured; safe fallback otherwise |
 | Dashboard | Yes | KPI cards and pipeline snapshots |
-| Contacts | Yes | Tenant-scoped records, status, scoring, tags |
+| Contacts | Yes | Tenant-scoped records, status/scoring/tags, inline table editing |
 | Deals | Yes | List + stage movement with probability updates |
 | Activities | Yes | Session/call/task tracking and completion flow |
-| Bookings | Yes | Scheduling, status updates, provider resolution |
+| Bookings | Yes | Scheduling, availability by weekday, buffers, max/day, timezone-aware public booking, provider sync |
 | Emails | Yes | Send + open/click tracking across providers |
 | Landing Pages | Yes | Builder, publish flow, conversion events |
 | Intake Forms | Yes | Public submissions + webhook-ready workflow |
@@ -79,6 +82,10 @@ Integration adapters expose:
 - `isConfigured()` for env readiness
 - `initialize(config)` for runtime setup
 - `healthCheck()` for operational status
+
+CRM booking integration behavior (current):
+- Provider resolution supports `zoom`, `google-meet`, `google-calendar`, `microsoft-graph`, fallback `manual`
+- Google Calendar sync is active in CRM booking flows when Google OAuth/env are configured
 
 ## AI Capabilities
 
@@ -133,7 +140,7 @@ For builders shipping fast with AI coding tools:
 
 ```bash
 pnpm install
-cp .env.example packages/crm/.env.local
+cp .env.example .env.local
 pnpm db:generate
 pnpm db:migrate
 pnpm dev:crm
@@ -169,12 +176,18 @@ Detailed notes: `CUSTOMIZATION.md`.
 
 ## Architecture
 
-- App routes: `packages/crm/src/app/(dashboard)` and `packages/crm/src/app/(auth)`
+- App routes: `packages/crm/src/app/(dashboard)`, `packages/crm/src/app/(auth)`, `packages/crm/src/app/(onboarding)`
 - API layer: `packages/crm/src/app/api/v1`
 - Domain actions: `packages/crm/src/lib/*/actions.ts`
 - Tenant-aware schema: `packages/crm/src/db/schema`
 - Runtime personalization: `packages/crm/src/lib/soul` + `packages/crm/src/components/soul`
 - Demo protections: `packages/crm/src/lib/demo` + `packages/crm/src/components/shared/demo-toast-provider.tsx`
+
+Recent CRM UI capabilities:
+- Split contact detail layout with right-side activity timeline
+- Inline contacts table cell editing
+- Deep command palette search across navigation + contacts + deals + pages + recent activity
+- Booking availability schedule (working hours/day), buffers, max bookings/day, and public timezone display
 
 ## Contributing
 

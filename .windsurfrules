@@ -5,15 +5,45 @@ Execution model
 - After each step: run `pnpm build` and stop for confirmation.
 - Do not batch future roadmap steps.
 
-Code style
-- Keep edits focused and minimal.
-- Match existing file patterns and naming.
-- Prefer typed utilities over ad hoc inline logic.
+Current monorepo layout
+- Apps: `apps/web`, `apps/cloud`, `apps/pro`
+- Packages: `packages/core`, `packages/crm`, `packages/payments`
 
-Monorepo boundaries
-- `@seldonframe/core`: shared primitives only.
-- `@seldonframe/crm`: product behavior and UI wiring.
-- `@seldonframe/payments`: payment-specific logic.
+Package boundaries
+- `@seldonframe/core`: shared primitives only (integrations, events, telemetry, virality)
+- `@seldonframe/crm`: product behavior, routes, server actions, UI composition
+- `@seldonframe/payments`: payment-specific logic
+
+Current key paths
+- CRM routes: `packages/crm/src/app/(dashboard)`
+- CRM API: `packages/crm/src/app/api/v1`
+- Domain actions: `packages/crm/src/lib/*/actions.ts`
+- Schema: `packages/crm/src/db/schema`
+- Soul: `packages/crm/src/lib/soul`, `packages/crm/src/components/soul`
+- Layout shell: `packages/crm/src/components/layout`
+
+Current design system
+- Glass cards: `glass-card`
+- Premium typography hierarchy (`text-page-title`, card/section title tokens)
+- Sidebar glow/active state styling in `packages/crm/src/styles/components/overrides.css`
+
+Recent CRM components/features
+- Inline contacts table editing:
+  - `packages/crm/src/components/contacts/contacts-inline-table.tsx`
+  - `packages/crm/src/lib/contacts/actions.ts` (`updateContactFieldAction`)
+- Split contact detail layout + inline custom field formatting:
+  - `packages/crm/src/app/(dashboard)/contacts/[id]/page.tsx`
+- Deep command palette search:
+  - `packages/crm/src/components/layout/command-palette.tsx`
+  - `packages/crm/src/app/(dashboard)/layout.tsx`
+- Booking availability/timezone/calendar sync:
+  - `packages/crm/src/components/bookings/bookings-page-content.tsx`
+  - `packages/crm/src/components/bookings/public-booking-form.tsx`
+  - `packages/crm/src/lib/bookings/actions.ts`
+  - `packages/crm/src/lib/bookings/google-calendar-sync.ts`
+
+UI skill location
+- Local clone: `ui-ux-pro-max-skill/`
 
 Safety
 - No destructive git commands.

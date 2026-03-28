@@ -6,7 +6,20 @@ type AppointmentTypeMeta = {
   durationMinutes?: number;
   description?: string;
   price?: number;
+  bufferBeforeMinutes?: number;
+  bufferAfterMinutes?: number;
+  maxBookingsPerDay?: number;
 };
+
+const availabilityDefaults = [
+  { key: "monday", label: "Mon", enabled: true },
+  { key: "tuesday", label: "Tue", enabled: true },
+  { key: "wednesday", label: "Wed", enabled: true },
+  { key: "thursday", label: "Thu", enabled: true },
+  { key: "friday", label: "Fri", enabled: true },
+  { key: "saturday", label: "Sat", enabled: false },
+  { key: "sunday", label: "Sun", enabled: false },
+] as const;
 
 type AppointmentTypeRow = {
   id: string;
@@ -126,6 +139,10 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
 
                   <p className="text-sm text-white/70">{metadata?.description || "No description added."}</p>
                   <p className="mt-2 text-sm font-semibold text-white">${Number(metadata?.price ?? 0).toFixed(2)}</p>
+                  <p className="mt-1 text-xs text-white/45">
+                    Buffer {metadata?.bufferBeforeMinutes ?? 0}m before / {metadata?.bufferAfterMinutes ?? 0}m after
+                    {metadata?.maxBookingsPerDay ? ` • Max ${metadata.maxBookingsPerDay}/day` : ""}
+                  </p>
 
                   <div className="mt-4 rounded-lg border border-white/10 bg-black/10 p-3">
                     <p className="text-xs uppercase tracking-wider text-white/45">Public URL</p>
@@ -242,6 +259,67 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
               <div>
                 <label htmlFor="appointment-description" className="mb-1 block text-sm text-white/75">Description</label>
                 <input id="appointment-description" className="crm-input h-10 w-full px-3" name="description" placeholder="Initial planning session" />
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <div>
+                  <label htmlFor="appointment-buffer-before" className="mb-1 block text-sm text-white/75">Buffer before (min)</label>
+                  <input
+                    id="appointment-buffer-before"
+                    className="crm-input h-10 w-full px-3"
+                    name="bufferBeforeMinutes"
+                    type="number"
+                    min={0}
+                    max={120}
+                    defaultValue="0"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="appointment-buffer-after" className="mb-1 block text-sm text-white/75">Buffer after (min)</label>
+                  <input
+                    id="appointment-buffer-after"
+                    className="crm-input h-10 w-full px-3"
+                    name="bufferAfterMinutes"
+                    type="number"
+                    min={0}
+                    max={120}
+                    defaultValue="0"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="appointment-max-per-day" className="mb-1 block text-sm text-white/75">Max bookings per day (0 = unlimited)</label>
+                <input
+                  id="appointment-max-per-day"
+                  className="crm-input h-10 w-full px-3"
+                  name="maxBookingsPerDay"
+                  type="number"
+                  min={0}
+                  max={50}
+                  defaultValue="0"
+                />
+              </div>
+
+              <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                <p className="mb-3 text-sm font-medium text-white/85">Working hours</p>
+                <div className="space-y-2">
+                  {availabilityDefaults.map((day) => (
+                    <div key={day.key} className="grid grid-cols-[56px_1fr_1fr_1fr] items-center gap-2">
+                      <span className="text-xs text-white/60">{day.label}</span>
+                      <select
+                        className="crm-input h-9 w-full px-2 text-xs"
+                        name={`availability.${day.key}.enabled`}
+                        defaultValue={day.enabled ? "true" : "false"}
+                      >
+                        <option value="true">On</option>
+                        <option value="false">Off</option>
+                      </select>
+                      <input className="crm-input h-9 w-full px-2 text-xs" type="time" name={`availability.${day.key}.start`} defaultValue="09:00" />
+                      <input className="crm-input h-9 w-full px-2 text-xs" type="time" name={`availability.${day.key}.end`} defaultValue="17:00" />
+                    </div>
+                  ))}
+                </div>
               </div>
 
               <div>

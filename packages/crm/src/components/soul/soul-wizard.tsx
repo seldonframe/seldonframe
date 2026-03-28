@@ -509,8 +509,8 @@ type RevealStepProps = {
 
 function RevealStep({ businessName, contactPlural, stages, industry, communicationStyle, priorities, previewSoul, error }: RevealStepProps) {
   return (
-    <div className="mx-auto w-full max-w-5xl rounded-2xl border border-white/15 bg-slate-900/70 p-6 shadow-xl shadow-black/30 md:p-10">
-      <h2 className="text-3xl font-semibold text-white">Here&apos;s your system</h2>
+    <div className="w-full px-2 md:px-0">
+      <h2 className="text-center text-3xl font-semibold text-white md:text-left">Here&apos;s your system</h2>
 
       <div className="mt-6 grid gap-4 rounded-2xl border border-white/10 bg-slate-950/80 p-4 md:hidden">
         <aside className="rounded-xl border border-white/10 bg-slate-900 p-4">
@@ -534,7 +534,7 @@ function RevealStep({ businessName, contactPlural, stages, industry, communicati
         </div>
       </div>
 
-      <div className="mt-6 hidden gap-4 rounded-2xl border border-white/10 bg-slate-950/80 p-4 md:grid md:grid-cols-[0.28fr,0.72fr]">
+      <div className="mt-6 hidden gap-4 rounded-2xl border border-white/10 bg-slate-950/80 p-5 md:grid md:grid-cols-[0.28fr,0.72fr]">
         <aside className="rounded-xl border border-white/10 bg-slate-900 p-4">
           <p className="text-sm font-semibold text-white">{businessName || "Your Business"}</p>
           <ul className="mt-3 space-y-2 text-sm text-slate-200">
@@ -780,7 +780,7 @@ export function SoulWizard({ completionRedirect = "/dashboard" }: { completionRe
         }}
       />
 
-      <div className="relative z-10 mx-auto w-full max-w-4xl">
+      <div className={`relative z-10 mx-auto w-full ${stepIndex === 7 ? "max-w-6xl" : "max-w-4xl"}`}>
         <div className="mx-auto mb-8 max-w-3xl">
           <div className="mb-3 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
             <div className="h-full rounded-full bg-teal-400 transition-all duration-300" style={{ width: `${progressPercent}%` }} />
@@ -897,7 +897,7 @@ export function SoulWizard({ completionRedirect = "/dashboard" }: { completionRe
           />
         ) : null}
 
-        <div className="mx-auto mt-6 flex w-full max-w-5xl justify-between gap-3">
+        <div className={`mx-auto mt-6 flex w-full ${stepIndex === 7 ? "max-w-6xl" : "max-w-5xl"} justify-between gap-3`}>
           <button type="button" className="crm-button-secondary h-10 px-4" onClick={goBack} disabled={stepIndex === 0 || pending}>
             Back
           </button>

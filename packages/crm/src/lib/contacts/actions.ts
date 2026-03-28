@@ -98,3 +98,72 @@ export async function createContactAction(formData: FormData) {
     source,
   });
 }
+
+const editableContactFields = new Set(["firstName", "lastName", "email", "status"]);
+
+export async function updateContactFieldAction({
+  contactId,
+  field,
+  value,
+}: {
+  contactId: string;
+  field: string;
+  value: string;
+}) {
+  assertWritable();
+
+  const orgId = await getOrgId();
+
+  if (!orgId) {
+    throw new Error("Unauthorized");
+  }
+
+  if (!editableContactFields.has(field)) {
+    throw new Error("Field is not editable");
+  }
+
+  const normalizedValue = value.trim();
+
+  if (field === "firstName" && normalizedValue.length === 0) {
+    throw new Error("First name is required");
+  }
+
+  if (field === "email" && normalizedValue.length > 0 && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedValue)) {
+    throw new Error("Invalid email");
+  }
+
+  const updates: Partial<{
+    firstName: string;
+    lastName: string | null;
+    email: string | null;
+    status: string;
+    updatedAt: Date;
+  }> = {
+    updatedAt: new Date(),
+  };
+
+  if (field === "firstName") {
+    updates.firstName = normalizedValue;
+  } else if (field === "lastName") {
+    updates.lastName = normalizedValue || null;
+  } else if (field === "email") {
+    updates.email = normalizedValue || null;
+  } else if (field === "status") {
+    updates.status = normalizedValue || "lead";
+  }
+
+  await db
+    .update(contacts)
+    .set(updates)
+    .where(and(eq(contacts.orgId, orgId), eq(contacts.id, contactId)));
+
+  if (field === "status") {
+    await inferClientLifecycleFromStatus({
+      orgId,
+      status: updates.status ?? "lead",
+      source: "inline_edit",
+    });
+  }
+
+  return { success: true };
+}

@@ -5,15 +5,13 @@ import { Command } from "cmdk";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 
-const items = [
-  { label: "Dashboard", href: "/dashboard" },
-  { label: "Contacts", href: "/contacts" },
-  { label: "Deals", href: "/deals" },
-  { label: "Activities", href: "/activities" },
-  { label: "Settings", href: "/settings" },
-];
+export type CommandPaletteItem = {
+  label: string;
+  href: string;
+  group?: string;
+};
 
-export function CommandPalette() {
+export function CommandPalette({ items }: { items: CommandPaletteItem[] }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
 
@@ -69,18 +67,90 @@ export function CommandPalette() {
               <Command.Input className="crm-input mb-2 h-11 w-full px-3 text-[18px]" placeholder="Type a command or search..." />
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }}>
                 <Command.List>
-                  {items.map((item) => (
-                    <Command.Item
-                      key={item.href}
-                      className="cursor-pointer rounded-md px-3 py-2 text-sm transition-colors data-[selected=true]:bg-[hsl(var(--muted))]"
-                      onSelect={() => {
-                        router.push(item.href);
-                        setOpen(false);
-                      }}
-                    >
-                      {item.label}
-                    </Command.Item>
-                  ))}
+                  <Command.Group heading="Navigate">
+                    {items
+                      .filter((item) => item.group === "Navigate")
+                      .map((item) => (
+                        <Command.Item
+                          key={`${item.group}-${item.href}`}
+                          className="cursor-pointer rounded-md px-3 py-2 text-sm transition-colors data-[selected=true]:bg-[hsl(var(--muted))]"
+                          onSelect={() => {
+                            router.push(item.href);
+                            setOpen(false);
+                          }}
+                        >
+                          {item.label}
+                        </Command.Item>
+                      ))}
+                  </Command.Group>
+
+                  <Command.Group heading="Contacts">
+                    {items
+                      .filter((item) => item.group === "Contacts")
+                      .map((item) => (
+                        <Command.Item
+                          key={`${item.group}-${item.href}`}
+                          className="cursor-pointer rounded-md px-3 py-2 text-sm transition-colors data-[selected=true]:bg-[hsl(var(--muted))]"
+                          onSelect={() => {
+                            router.push(item.href);
+                            setOpen(false);
+                          }}
+                        >
+                          {item.label}
+                        </Command.Item>
+                      ))}
+                  </Command.Group>
+
+                  <Command.Group heading="Deals">
+                    {items
+                      .filter((item) => item.group === "Deals")
+                      .map((item) => (
+                        <Command.Item
+                          key={`${item.group}-${item.href}`}
+                          className="cursor-pointer rounded-md px-3 py-2 text-sm transition-colors data-[selected=true]:bg-[hsl(var(--muted))]"
+                          onSelect={() => {
+                            router.push(item.href);
+                            setOpen(false);
+                          }}
+                        >
+                          {item.label}
+                        </Command.Item>
+                      ))}
+                  </Command.Group>
+
+                  <Command.Group heading="Pages">
+                    {items
+                      .filter((item) => item.group === "Pages")
+                      .map((item) => (
+                        <Command.Item
+                          key={`${item.group}-${item.href}`}
+                          className="cursor-pointer rounded-md px-3 py-2 text-sm transition-colors data-[selected=true]:bg-[hsl(var(--muted))]"
+                          onSelect={() => {
+                            router.push(item.href);
+                            setOpen(false);
+                          }}
+                        >
+                          {item.label}
+                        </Command.Item>
+                      ))}
+                  </Command.Group>
+
+                  <Command.Group heading="Recent Activity">
+                    {items
+                      .filter((item) => item.group === "Recent Activity")
+                      .map((item) => (
+                        <Command.Item
+                          key={`${item.group}-${item.href}`}
+                          className="cursor-pointer rounded-md px-3 py-2 text-sm transition-colors data-[selected=true]:bg-[hsl(var(--muted))]"
+                          onSelect={() => {
+                            router.push(item.href);
+                            setOpen(false);
+                          }}
+                        >
+                          {item.label}
+                        </Command.Item>
+                      ))}
+                  </Command.Group>
                 </Command.List>
               </motion.div>
             </Command>

@@ -7,6 +7,9 @@ import { CommandPalette } from "@/components/layout/command-palette";
 import { DemoBanner } from "@/components/layout/demo-banner";
 import { DashboardTopbar } from "@/components/layout/dashboard-topbar";
 import { registerCrmEventListeners } from "@/lib/events/listeners";
+import { db } from "@/db";
+import { activities, contacts, deals, landingPages } from "@/db/schema";
+import { desc, eq } from "drizzle-orm";
 
 export default async function DashboardLayout({
   children,
@@ -19,6 +22,67 @@ export default async function DashboardLayout({
   const soul = await getSoul();
   const user = session.user;
   const avatarFallback = user?.name?.trim()?.charAt(0)?.toUpperCase() || user?.email?.charAt(0)?.toUpperCase() || "U";
+
+  const orgId = user?.orgId;
+
+  const [contactHits, dealHits, pageHits, activityHits] = orgId
+    ? await Promise.all([
+        db
+          .select({ id: contacts.id, firstName: contacts.firstName, lastName: contacts.lastName })
+          .from(contacts)
+          .where(eq(contacts.orgId, orgId))
+          .orderBy(desc(contacts.createdAt))
+          .limit(8),
+        db
+          .select({ id: deals.id, title: deals.title })
+          .from(deals)
+          .where(eq(deals.orgId, orgId))
+          .orderBy(desc(deals.createdAt))
+          .limit(8),
+        db
+          .select({ id: landingPages.id, title: landingPages.title })
+          .from(landingPages)
+          .where(eq(landingPages.orgId, orgId))
+          .orderBy(desc(landingPages.updatedAt))
+          .limit(8),
+        db
+          .select({ id: activities.id, subject: activities.subject, contactId: activities.contactId, dealId: activities.dealId })
+          .from(activities)
+          .where(eq(activities.orgId, orgId))
+          .orderBy(desc(activities.createdAt))
+          .limit(8),
+      ])
+    : [[], [], [], []];
+
+  const paletteItems = [
+    { label: "Dashboard", href: "/dashboard", group: "Navigate" },
+    { label: "Contacts", href: "/contacts", group: "Navigate" },
+    { label: "Deals", href: "/deals", group: "Navigate" },
+    { label: "Pages", href: "/landing", group: "Navigate" },
+    { label: "Bookings", href: "/bookings", group: "Navigate" },
+    { label: "Email", href: "/emails", group: "Navigate" },
+    { label: "Settings", href: "/settings", group: "Navigate" },
+    ...contactHits.map((row) => ({
+      label: `${row.firstName} ${row.lastName ?? ""}`.trim(),
+      href: `/contacts/${row.id}`,
+      group: "Contacts",
+    })),
+    ...dealHits.map((row) => ({
+      label: row.title,
+      href: `/deals/${row.id}`,
+      group: "Deals",
+    })),
+    ...pageHits.map((row) => ({
+      label: row.title,
+      href: `/landing/${row.id}`,
+      group: "Pages",
+    })),
+    ...activityHits.map((row) => ({
+      label: row.subject || "Untitled activity",
+      href: row.contactId ? `/contacts/${row.contactId}` : row.dealId ? `/deals/${row.dealId}` : "/dashboard",
+      group: "Recent Activity",
+    })),
+  ];
 
   const bodyStyle = soul?.branding
     ? ({
@@ -41,7 +105,7 @@ export default async function DashboardLayout({
             {children}
           </div>
         </div>
-        <CommandPalette />
+        <CommandPalette items={paletteItems} />
       </div>
     </SoulProvider>
   );
