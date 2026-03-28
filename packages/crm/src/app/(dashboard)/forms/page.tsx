@@ -7,7 +7,7 @@ export default async function FormsPage() {
 
   return (
     <section className="space-y-4">
-      <h1 className="text-2xl font-semibold">{labels.intakeForm.plural}</h1>
+      <h1 className="text-3xl font-light tracking-tight">{labels.intakeForm.plural}</h1>
 
       <div className="crm-card overflow-hidden">
         <table className="w-full text-sm">

@@ -18,7 +18,7 @@ export default async function PublicBookingPage({
   return (
     <main className="crm-page flex items-center justify-center">
       <div className="w-full max-w-xl space-y-4">
-        <h1 className="text-2xl font-semibold">{bookingContext.appointmentName}</h1>
+        <h1 className="text-3xl font-light tracking-tight">{bookingContext.appointmentName}</h1>
         <p className="text-label text-[hsl(var(--color-text-secondary))]">{bookingContext.appointmentDescription}</p>
         <PublicBookingForm
           orgSlug={orgSlug}

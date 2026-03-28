@@ -9,7 +9,7 @@ export default async function SettingsTeamPage() {
 
   return (
     <section className="space-y-4">
-      <h1 className="text-2xl font-semibold">Team</h1>
+      <h1 className="text-3xl font-light tracking-tight">Team</h1>
       <div className="crm-card overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-[hsl(var(--color-surface-raised))] text-left">

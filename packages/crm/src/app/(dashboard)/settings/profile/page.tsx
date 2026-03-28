@@ -5,7 +5,7 @@ export default async function SettingsProfilePage() {
 
   return (
     <section className="space-y-4">
-      <h1 className="text-2xl font-semibold">Business Profile</h1>
+      <h1 className="text-3xl font-light tracking-tight">Business Profile</h1>
       <div className="crm-card p-4">
         <p className="text-sm">Business: {soul?.businessName ?? "Not set"}</p>
         <p className="text-sm">Industry: {soul?.industry ?? "Not set"}</p>

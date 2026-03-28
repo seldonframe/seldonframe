@@ -93,7 +93,7 @@ function NodeCard({ node }: { node: FlowNode }) {
   const accent = node.kind === "trigger" ? "text-indigo-600" : node.kind === "condition" ? "text-amber-600" : "text-emerald-600";
 
   return (
-    <article ref={setNodeRef} style={style} className="crm-table-row rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-3">
+    <article ref={setNodeRef} style={style} className="crm-table-row glass-card rounded-lg p-3">
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className={`text-xs font-semibold uppercase tracking-[0.08em] ${accent}`}>{node.kind}</p>

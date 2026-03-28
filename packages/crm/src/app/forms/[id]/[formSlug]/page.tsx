@@ -35,7 +35,7 @@ export default async function PublicIntakePage({
   return (
     <main className="crm-page flex items-center justify-center">
       <div className="w-full max-w-xl space-y-4">
-        <h1 className="text-2xl font-semibold">{form.name}</h1>
+        <h1 className="text-3xl font-light tracking-tight">{form.name}</h1>
         <PublicForm
           orgSlug={orgSlug}
           formSlug={formSlug}

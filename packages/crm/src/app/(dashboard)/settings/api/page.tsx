@@ -9,7 +9,7 @@ export default async function SettingsApiPage() {
 
   return (
     <section className="space-y-4">
-      <h1 className="text-2xl font-semibold">API Keys</h1>
+      <h1 className="text-3xl font-light tracking-tight">API Keys</h1>
       <div className="crm-card p-4">
         {rows.length === 0 ? (
           <p className="text-sm text-[hsl(var(--color-text-secondary))]">No API keys generated yet.</p>

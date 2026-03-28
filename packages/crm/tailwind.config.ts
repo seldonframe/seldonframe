@@ -25,6 +25,8 @@ const config: Config = {
         "card-hover": "var(--shadow-card-hover)",
         dropdown: "var(--shadow-dropdown)",
         modal: "var(--shadow-modal)",
+        "glass-teal": "0 0 25px -5px rgba(0, 121, 107, 0.4)",
+        "glass-white": "0 8px 32px 0 rgba(0, 0, 0, 0.37)",
       },
       transitionTimingFunction: {
         premium: "cubic-bezier(0.22, 1, 0.36, 1)",

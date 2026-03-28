@@ -31,7 +31,9 @@ export default async function DashboardLayout({
 
   return (
     <SoulProvider soul={soul}>
-      <div className="crm-page !px-8 !pb-8 !pt-6" data-soul-primary style={bodyStyle}>
+      <div className="crm-page relative !px-8 !pb-8 !pt-6" data-soul-primary style={bodyStyle}>
+        <div className="pointer-events-none fixed -left-24 -top-24 h-96 w-96 rounded-full bg-[hsl(var(--primary)/0.1)] blur-[120px]" />
+        <div className="pointer-events-none fixed right-0 top-1/3 h-72 w-72 rounded-full bg-[hsl(var(--primary)/0.06)] blur-[140px]" />
         <div className="animate-page-enter flex flex-col gap-6 md:flex-row">
           <Sidebar />
           <div className="flex-1 space-y-4">

@@ -24,7 +24,7 @@ export default async function FormDetailPage({ params }: { params: Promise<{ id:
 
   return (
     <section className="space-y-4">
-      <h1 className="text-2xl font-semibold">{form.name}</h1>
+      <h1 className="text-3xl font-light tracking-tight">{form.name}</h1>
       <div className="crm-card p-4">
         <p className="text-sm">Slug: {form.slug}</p>
         <p className="mt-2 text-sm">Fields: {Array.isArray(form.fields) ? form.fields.length : 0}</p>

@@ -22,8 +22,8 @@ export function Sidebar() {
   ];
 
   return (
-    <aside className="crm-sidebar flex w-full flex-col border-r border-[hsl(var(--border))] pr-6 md:w-[248px]">
-      <div className="mb-8 px-2 py-3">
+    <aside className="crm-sidebar flex w-full flex-col border-r border-[hsl(var(--border))] pr-6 md:w-[220px]">
+      <div className="mb-8 px-2 py-4">
         <Image src="/logo-full.svg" alt="SeldonFrame" width={172} height={32} className="h-8 w-auto" priority />
       </div>
       <SidebarNav nav={nav} />

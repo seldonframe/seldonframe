@@ -39,8 +39,8 @@ export function SidebarNav({ nav }: { nav: NavItem[] }) {
             data-active={active}
             className="crm-sidebar-link flex items-center gap-2.5 px-3 py-2.5 text-label"
           >
-            <Icon className="h-4 w-4 shrink-0" />
-            <span>{item.label}</span>
+            <Icon className="crm-sidebar-icon h-4 w-4 shrink-0" />
+            <span className="crm-sidebar-text">{item.label}</span>
           </Link>
         );
       })}

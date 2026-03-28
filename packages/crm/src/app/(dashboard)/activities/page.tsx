@@ -10,7 +10,7 @@ export default async function ActivitiesPage() {
   return (
     <section className="space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold">{labels.activity.plural}</h1>
+        <h1 className="text-3xl font-light tracking-tight">{labels.activity.plural}</h1>
         <p className="text-sm text-[hsl(var(--color-text-secondary))]">Track tasks and touchpoints in one timeline.</p>
       </div>
 
