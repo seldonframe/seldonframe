@@ -142,10 +142,10 @@ function getPlural(value: string) {
 function BusinessNameStep({ businessName, onChange }: { businessName: string; onChange: (value: string) => void }) {
   return (
     <div className="mx-auto w-full max-w-3xl rounded-2xl border border-white/15 bg-slate-900/70 p-6 shadow-xl shadow-black/30 md:p-10">
-      <h1 className="text-center text-3xl font-semibold text-white">What&apos;s your business called?</h1>
+      <h1 className="text-center text-3xl font-semibold text-foreground">What&apos;s your business called?</h1>
       <input
         autoFocus
-        className="mt-8 h-14 w-full rounded-xl border border-white/20 bg-slate-950/70 px-5 text-center text-xl text-white outline-none transition focus:border-teal-300"
+        className="mt-8 h-14 w-full rounded-xl border border-white/20 bg-slate-950/70 px-5 text-center text-xl text-foreground outline-none transition focus:border-teal-300"
         value={businessName}
         onChange={(event) => onChange(event.target.value)}
         placeholder="Your business name"
@@ -154,7 +154,7 @@ function BusinessNameStep({ businessName, onChange }: { businessName: string; on
 
       <div className="mt-8 rounded-xl border border-white/10 bg-slate-950/80 p-4">
         <p className="text-xs uppercase tracking-[0.08em] text-slate-400">Live preview</p>
-        <p className="mt-2 text-lg font-semibold text-white">{businessName || "Your Business"}</p>
+        <p className="mt-2 text-lg font-semibold text-foreground">{businessName || "Your Business"}</p>
         <p className="mt-1 text-sm text-slate-300">Dashboard • Bookings • Inbox</p>
       </div>
     </div>
@@ -172,7 +172,7 @@ type IndustryStepProps = {
 function IndustryStep({ selectedIndustry, customIndustry, industryFeedback, onIndustrySelect, onCustomIndustryChange }: IndustryStepProps) {
   return (
     <div className="mx-auto w-full max-w-3xl rounded-2xl border border-white/15 bg-slate-900/70 p-6 shadow-xl shadow-black/30 md:p-8">
-      <h2 className="text-center text-3xl font-semibold text-white">What best describes your practice?</h2>
+      <h2 className="text-center text-3xl font-semibold text-foreground">What best describes your practice?</h2>
       <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-2">
         {industries.map((industry) => {
           const active = selectedIndustry === industry.value;
@@ -187,7 +187,7 @@ function IndustryStep({ selectedIndustry, customIndustry, industryFeedback, onIn
               }`}
             >
               <p className="text-lg">{industry.icon}</p>
-              <p className="mt-2 font-medium text-white">{industry.title}</p>
+              <p className="mt-2 font-medium text-foreground">{industry.title}</p>
               <p className="text-sm text-slate-300">{industry.subtitle}</p>
             </button>
           );
@@ -196,7 +196,7 @@ function IndustryStep({ selectedIndustry, customIndustry, industryFeedback, onIn
 
       {selectedIndustry === "custom" ? (
         <input
-          className="mt-4 h-12 w-full rounded-xl border border-white/20 bg-slate-950/70 px-4 text-white outline-none focus:border-teal-300"
+          className="mt-4 h-12 w-full rounded-xl border border-white/20 bg-slate-950/70 px-4 text-foreground outline-none focus:border-teal-300"
           value={customIndustry}
           onChange={(event) => onCustomIndustryChange(event.target.value)}
           placeholder="Describe your practice"
@@ -218,10 +218,10 @@ function IndustryStep({ selectedIndustry, customIndustry, industryFeedback, onIn
 function DescriptionStep({ description, onChange }: { description: string; onChange: (value: string) => void }) {
   return (
     <div className="mx-auto w-full max-w-3xl rounded-2xl border border-white/15 bg-slate-900/70 p-6 shadow-xl shadow-black/30 md:p-10">
-      <h2 className="text-center text-3xl font-semibold text-white">In one or two sentences, what do you help people with?</h2>
+      <h2 className="text-center text-3xl font-semibold text-foreground">In one or two sentences, what do you help people with?</h2>
       <textarea
         autoFocus
-        className="mt-6 min-h-32 w-full rounded-xl border border-white/20 bg-slate-950/70 p-4 text-white outline-none focus:border-teal-300"
+        className="mt-6 min-h-32 w-full rounded-xl border border-white/20 bg-slate-950/70 p-4 text-foreground outline-none focus:border-teal-300"
         value={description}
         maxLength={280}
         onChange={(event) => onChange(event.target.value)}
@@ -257,7 +257,7 @@ function ClientsStep({
   return (
     <div className="mx-auto grid w-full max-w-4xl gap-6 rounded-2xl border border-white/15 bg-slate-900/70 p-6 shadow-xl shadow-black/30 md:grid-cols-[1.1fr,0.9fr] md:p-8">
       <div>
-        <h2 className="text-3xl font-semibold text-white">Who are your clients?</h2>
+        <h2 className="text-3xl font-semibold text-foreground">Who are your clients?</h2>
 
         <p className="mt-6 text-sm font-medium text-slate-200">What do you call the people you work with?</p>
         <div className="mt-3 flex flex-wrap gap-2">
@@ -270,7 +270,7 @@ function ClientsStep({
                 type="button"
                 onClick={() => onClientLabelSelect(label)}
                 className={`rounded-full border px-4 py-2 text-sm transition ${
-                  active ? "border-teal-300 bg-teal-500/15 text-white" : "border-white/20 text-slate-200 hover:border-white/40"
+                  active ? "border-teal-300 bg-teal-500/15 text-foreground" : "border-white/20 text-slate-200 hover:border-white/40"
                 }`}
               >
                 {label}
@@ -280,7 +280,7 @@ function ClientsStep({
         </div>
 
         <input
-          className="mt-3 h-11 w-full rounded-xl border border-white/20 bg-slate-950/70 px-4 text-white outline-none focus:border-teal-300"
+          className="mt-3 h-11 w-full rounded-xl border border-white/20 bg-slate-950/70 px-4 text-foreground outline-none focus:border-teal-300"
           value={customClientLabel}
           onChange={(event) => onCustomClientLabelChange(event.target.value)}
           placeholder="Custom label (optional)"
@@ -288,7 +288,7 @@ function ClientsStep({
 
         <p className="mt-6 text-sm font-medium text-slate-200">Who&apos;s your ideal client?</p>
         <textarea
-          className="mt-3 min-h-28 w-full rounded-xl border border-white/20 bg-slate-950/70 p-4 text-white outline-none focus:border-teal-300"
+          className="mt-3 min-h-28 w-full rounded-xl border border-white/20 bg-slate-950/70 p-4 text-foreground outline-none focus:border-teal-300"
           value={clientDescription}
           onChange={(event) => onClientDescriptionChange(event.target.value)}
           placeholder="e.g., Coaches earning between $5,000 and $25,000 per month who want to scale using social media"
@@ -298,7 +298,7 @@ function ClientsStep({
       <aside className="rounded-xl border border-white/15 bg-slate-950/80 p-4">
         <p className="text-xs uppercase tracking-[0.08em] text-slate-400">Mini CRM preview</p>
         <ul className="mt-4 space-y-2 text-sm text-slate-200">
-          <li className="rounded-lg bg-slate-900 px-3 py-2 text-white">{contactPlural}</li>
+          <li className="rounded-lg bg-slate-900 px-3 py-2 text-foreground">{contactPlural}</li>
           <li className="rounded-lg bg-slate-900 px-3 py-2">Pipeline</li>
           <li className="rounded-lg bg-slate-900 px-3 py-2">Bookings</li>
           <li className="rounded-lg bg-slate-900 px-3 py-2">Inbox</li>
@@ -336,7 +336,7 @@ function ProcessStep({
   return (
     <div className="mx-auto grid w-full max-w-4xl gap-6 rounded-2xl border border-white/15 bg-slate-900/70 p-6 shadow-xl shadow-black/30 md:grid-cols-[1.1fr,0.9fr] md:p-8">
       <div>
-        <h2 className="text-3xl font-semibold text-white">How do clients move through your business?</h2>
+        <h2 className="text-3xl font-semibold text-foreground">How do clients move through your business?</h2>
         <div className="mt-6 overflow-x-auto pb-1">
           <div className="flex min-w-max items-center gap-2">
             {stages.map((stage, index) => (
@@ -354,7 +354,7 @@ function ProcessStep({
                   className="flex cursor-grab items-center gap-2 rounded-full border border-teal-200/40 bg-teal-500/20 px-3 py-2 active:cursor-grabbing"
                 >
                   <input
-                    className="w-28 bg-transparent text-sm text-white outline-none"
+                    className="w-28 bg-transparent text-sm text-foreground outline-none"
                     value={stage}
                     onChange={(event) => onStageChange(index, event.target.value)}
                   />
@@ -368,13 +368,13 @@ function ProcessStep({
           </div>
         </div>
 
-        <button type="button" className="mt-4 rounded-full border border-white/20 px-4 py-2 text-sm text-white" onClick={onAddStage}>
+        <button type="button" className="mt-4 rounded-full border border-white/20 px-4 py-2 text-sm text-foreground" onClick={onAddStage}>
           + Add stage
         </button>
 
         <p className="mt-6 text-sm text-slate-300">Or describe your process and we&apos;ll build it for you.</p>
         <textarea
-          className="mt-3 min-h-28 w-full rounded-xl border border-white/20 bg-slate-950/70 p-4 text-white outline-none focus:border-teal-300"
+          className="mt-3 min-h-28 w-full rounded-xl border border-white/20 bg-slate-950/70 p-4 text-foreground outline-none focus:border-teal-300"
           value={processDescription}
           onChange={(event) => onProcessDescriptionChange(event.target.value)}
           placeholder="Inquiry -> Discovery call -> Proposal -> Won"
@@ -386,7 +386,7 @@ function ProcessStep({
         <div className="mt-4 grid grid-cols-2 gap-2">
           {stages.map((stage, index) => (
             <motion.div key={`${stage}-${index}`} layout className="rounded-lg border border-white/10 bg-slate-900 p-3">
-              <p className="text-sm font-medium text-white">{stage}</p>
+              <p className="text-sm font-medium text-foreground">{stage}</p>
               <p className="mt-1 text-xs text-slate-400">0 items</p>
             </motion.div>
           ))}
@@ -419,7 +419,7 @@ function VoiceStep({
 }: VoiceStepProps) {
   return (
     <div className="mx-auto w-full max-w-4xl rounded-2xl border border-white/15 bg-slate-900/70 p-6 shadow-xl shadow-black/30 md:p-8">
-      <h2 className="text-3xl font-semibold text-white">Pick the tone that sounds most like you</h2>
+      <h2 className="text-3xl font-semibold text-foreground">Pick the tone that sounds most like you</h2>
       <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-2">
         {toneOptions.map((tone) => {
           const active = communicationStyle === tone.value;
@@ -434,7 +434,7 @@ function VoiceStep({
               }`}
             >
               <p className="text-lg">{tone.icon}</p>
-              <p className="mt-2 font-medium text-white">{tone.title}</p>
+              <p className="mt-2 font-medium text-foreground">{tone.title}</p>
               <p className="text-sm text-slate-300">{tone.subtitle}</p>
               <p className="mt-3 rounded-lg border border-white/10 bg-slate-900 p-3 text-sm text-slate-200">{tone.preview}</p>
             </button>
@@ -449,13 +449,13 @@ function VoiceStep({
       {showVoiceDetails ? (
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           <input
-            className="h-11 rounded-xl border border-white/20 bg-slate-950/70 px-4 text-white outline-none focus:border-teal-300"
+            className="h-11 rounded-xl border border-white/20 bg-slate-950/70 px-4 text-foreground outline-none focus:border-teal-300"
             value={vocabulary.join(", ")}
             onChange={(event) => onVocabularyChange(event.target.value)}
             placeholder="Words you like to use"
           />
           <input
-            className="h-11 rounded-xl border border-white/20 bg-slate-950/70 px-4 text-white outline-none focus:border-teal-300"
+            className="h-11 rounded-xl border border-white/20 bg-slate-950/70 px-4 text-foreground outline-none focus:border-teal-300"
             value={avoidWords.join(", ")}
             onChange={(event) => onAvoidWordsChange(event.target.value)}
             placeholder="Words to avoid"
@@ -469,7 +469,7 @@ function VoiceStep({
 function PrioritiesStep({ priorities, onTogglePriority }: { priorities: string[]; onTogglePriority: (value: string) => void }) {
   return (
     <div className="mx-auto w-full max-w-4xl rounded-2xl border border-white/15 bg-slate-900/70 p-6 shadow-xl shadow-black/30 md:p-8">
-      <h2 className="text-3xl font-semibold text-white">What should your dashboard focus on first?</h2>
+      <h2 className="text-3xl font-semibold text-foreground">What should your dashboard focus on first?</h2>
       <p className="mt-2 text-sm text-slate-300">Pick up to three priorities.</p>
 
       <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -486,7 +486,7 @@ function PrioritiesStep({ priorities, onTogglePriority }: { priorities: string[]
               }`}
             >
               <p className="text-lg">{priority.icon}</p>
-              <p className="mt-2 font-medium text-white">{priority.title}</p>
+              <p className="mt-2 font-medium text-foreground">{priority.title}</p>
               <p className="text-sm text-slate-300">{priority.subtitle}</p>
             </button>
           );
@@ -510,11 +510,11 @@ type RevealStepProps = {
 function RevealStep({ businessName, contactPlural, stages, industry, communicationStyle, priorities, previewSoul, error }: RevealStepProps) {
   return (
     <div className="w-full px-2 md:px-0">
-      <h2 className="text-center text-3xl font-semibold text-white md:text-left">Here&apos;s your system</h2>
+      <h2 className="text-center text-3xl font-semibold text-foreground md:text-left">Here&apos;s your system</h2>
 
       <div className="mt-6 grid gap-4 rounded-2xl border border-white/10 bg-slate-950/80 p-4 md:hidden">
         <aside className="rounded-xl border border-white/10 bg-slate-900 p-4">
-          <p className="text-sm font-semibold text-white">{businessName || "Your Business"}</p>
+          <p className="text-sm font-semibold text-foreground">{businessName || "Your Business"}</p>
           <ul className="mt-3 space-y-2 text-sm text-slate-200">
             <li>{contactPlural}</li>
             <li>Pipeline</li>
@@ -523,10 +523,10 @@ function RevealStep({ businessName, contactPlural, stages, industry, communicati
         </aside>
 
         <div className="rounded-xl border border-white/10 bg-slate-900 p-4">
-          <p className="text-sm font-medium text-white">Pipeline stages</p>
+          <p className="text-sm font-medium text-foreground">Pipeline stages</p>
           <div className="mt-3 flex flex-wrap gap-2">
             {stages.map((stage) => (
-              <span key={stage} className="rounded-full border border-teal-200/40 bg-teal-500/20 px-3 py-1 text-xs text-white">
+              <span key={stage} className="rounded-full border border-teal-200/40 bg-teal-500/20 px-3 py-1 text-xs text-foreground">
                 {stage}
               </span>
             ))}
@@ -536,7 +536,7 @@ function RevealStep({ businessName, contactPlural, stages, industry, communicati
 
       <div className="mt-6 hidden gap-4 rounded-2xl border border-white/10 bg-slate-950/80 p-5 md:grid md:grid-cols-[0.28fr,0.72fr]">
         <aside className="rounded-xl border border-white/10 bg-slate-900 p-4">
-          <p className="text-sm font-semibold text-white">{businessName || "Your Business"}</p>
+          <p className="text-sm font-semibold text-foreground">{businessName || "Your Business"}</p>
           <ul className="mt-3 space-y-2 text-sm text-slate-200">
             <li>{contactPlural}</li>
             <li>Pipeline</li>
@@ -548,14 +548,14 @@ function RevealStep({ businessName, contactPlural, stages, industry, communicati
         <div className="grid gap-3">
           <div className="rounded-xl border border-white/10 bg-slate-900 p-4">
             <p className="text-sm text-slate-300">Good morning</p>
-            <p className="text-xl font-semibold text-white">{businessName || "Founder"}</p>
+            <p className="text-xl font-semibold text-foreground">{businessName || "Founder"}</p>
           </div>
 
           <div className="rounded-xl border border-white/10 bg-slate-900 p-4">
-            <p className="text-sm font-medium text-white">Pipeline preview</p>
+            <p className="text-sm font-medium text-foreground">Pipeline preview</p>
             <div className="mt-3 flex flex-wrap gap-2">
               {stages.map((stage) => (
-                <span key={stage} className="rounded-full border border-teal-200/40 bg-teal-500/20 px-3 py-1 text-xs text-white">
+                <span key={stage} className="rounded-full border border-teal-200/40 bg-teal-500/20 px-3 py-1 text-xs text-foreground">
                   {stage}
                 </span>
               ))}

@@ -148,7 +148,12 @@ export function EmailPageContent({
 
       {showCreate ? (
         <div className="fixed inset-0 z-50 flex">
-          <button type="button" aria-label="Close panel" className="h-full flex-1 bg-black/50" onClick={() => setShowCreate(false)} />
+          <button
+            type="button"
+            aria-label="Close panel"
+            className="h-full flex-1 bg-[hsl(var(--muted-foreground)/0.45)]"
+            onClick={() => setShowCreate(false)}
+          />
           <aside className="h-full w-full max-w-md border-l border-[hsl(var(--border))] bg-[hsl(var(--background))] p-6 shadow-2xl">
             <div className="mb-5 flex items-center justify-between">
               <h2 className="text-xl font-medium text-foreground">New email template</h2>

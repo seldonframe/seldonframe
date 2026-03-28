@@ -28,8 +28,8 @@ function RevenueTooltip({ active, payload }: { active?: boolean; payload?: Toolt
 
   return (
     <div className="glass-card rounded-xl p-3">
-      <p className="text-xs uppercase tracking-widest text-white/40">{current.payload.label}</p>
-      <p className="mt-1 text-lg font-semibold text-white">${Math.round(Number(current.value)).toLocaleString()}</p>
+      <p className="text-xs uppercase tracking-widest text-[hsl(var(--muted-foreground)/0.8)]">{current.payload.label}</p>
+      <p className="mt-1 text-lg font-semibold text-foreground">${Math.round(Number(current.value)).toLocaleString()}</p>
     </div>
   );
 }
@@ -56,8 +56,8 @@ export function RevenueChartCard({ title, data, ranges }: RevenueChartCardProps)
   return (
     <article className="glass-card rounded-2xl p-6">
       <div className="mb-4 flex items-center justify-between gap-3">
-        <h3 className="text-sm font-medium uppercase tracking-widest text-white/50">{title}</h3>
-        <div className="flex items-center gap-2 text-xs text-white/50">
+        <h3 className="text-sm font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">{title}</h3>
+        <div className="flex items-center gap-2 text-xs text-[hsl(var(--muted-foreground))]">
           {ranges.map((range) => {
             const active = activeRange === range;
             return (
@@ -65,7 +65,7 @@ export function RevenueChartCard({ title, data, ranges }: RevenueChartCardProps)
                 key={range}
                 type="button"
                 onClick={() => setActiveRange(range)}
-                className={`relative pb-1 transition ${active ? "text-primary" : "hover:text-white/80"}`}
+                className={`relative pb-1 transition ${active ? "text-primary" : "hover:text-foreground"}`}
               >
                 {range}
                 <span

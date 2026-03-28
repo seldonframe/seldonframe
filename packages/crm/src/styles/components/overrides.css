@@ -177,16 +177,10 @@
 
   .crm-sidebar {
     width: 220px;
-    border: 1px solid hsl(var(--border));
-    border-right-color: hsl(var(--border));
     border-radius: 12px;
-    background: hsl(var(--card));
+    background: hsl(var(--background));
     padding: 18px 12px;
     transition: width var(--transition-slow);
-  }
-
-  .dark .crm-sidebar {
-    background: linear-gradient(180deg, hsl(218 37% 10%), hsl(218 31% 8%));
   }
 
   .crm-sidebar-link {
@@ -221,7 +215,7 @@
   }
 
   .crm-sidebar-link[data-active="true"] {
-    background: hsl(var(--primary) / 0.09);
+    background: hsl(var(--primary) / 0.05);
     box-shadow: inset 3px 0 0 hsl(var(--primary));
     color: hsl(var(--foreground));
   }
