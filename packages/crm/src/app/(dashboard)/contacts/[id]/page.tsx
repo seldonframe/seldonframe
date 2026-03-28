@@ -84,7 +84,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
         <div className="space-y-4">
           <div className="glass-card rounded-2xl p-5">
             <p className="text-[11px] uppercase tracking-[0.08em] text-[hsl(var(--color-text-muted))]">Contact profile</p>
-            <div className="mt-3 grid gap-2 text-sm text-white/85">
+            <div className="mt-3 grid gap-2 text-sm text-foreground">
               <p>Email: {row.email ?? "—"}</p>
               <p>
                 Status: <span className="crm-badge">{row.status}</span>
@@ -106,7 +106,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
                   if (field.type === "url" && formatted !== "—") {
                     return (
                       <div key={field.key} className="grid grid-cols-[160px_1fr] gap-3 text-sm">
-                        <p className="text-white/55">{field.label}</p>
+                        <p className="text-[hsl(var(--muted-foreground))]">{field.label}</p>
                         <a href={String(rawValue)} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
                           {String(rawValue)}
                         </a>
@@ -117,7 +117,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
                   if (field.type === "email" && formatted !== "—") {
                     return (
                       <div key={field.key} className="grid grid-cols-[160px_1fr] gap-3 text-sm">
-                        <p className="text-white/55">{field.label}</p>
+                        <p className="text-[hsl(var(--muted-foreground))]">{field.label}</p>
                         <a href={`mailto:${String(rawValue)}`} className="text-primary hover:underline">
                           {String(rawValue)}
                         </a>
@@ -128,7 +128,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
                   if (field.type === "phone" && formatted !== "—") {
                     return (
                       <div key={field.key} className="grid grid-cols-[160px_1fr] gap-3 text-sm">
-                        <p className="text-white/55">{field.label}</p>
+                        <p className="text-[hsl(var(--muted-foreground))]">{field.label}</p>
                         <a href={`tel:${String(rawValue)}`} className="text-primary hover:underline">
                           {String(rawValue)}
                         </a>
@@ -138,8 +138,8 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
 
                   return (
                     <div key={field.key} className="grid grid-cols-[160px_1fr] gap-3 text-sm">
-                      <p className="text-white/55">{field.label}</p>
-                      <p className="text-white/85">{formatted}</p>
+                      <p className="text-[hsl(var(--muted-foreground))]">{field.label}</p>
+                      <p className="text-foreground">{formatted}</p>
                     </div>
                   );
                 })}

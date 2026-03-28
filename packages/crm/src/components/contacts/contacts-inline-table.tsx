@@ -120,7 +120,7 @@ export function ContactsInlineTable({ rows }: { rows: ContactRow[] }) {
                         disabled={pending}
                       />
                     ) : (
-                      <button type="button" className="rounded px-1 text-white/90 hover:bg-white/10" onClick={() => beginEdit(row, "firstName")}>
+                      <button type="button" className="rounded px-1 text-foreground hover:bg-[hsl(var(--muted)/0.45)]" onClick={() => beginEdit(row, "firstName")}>
                         {row.firstName}
                       </button>
                     )}
@@ -145,7 +145,7 @@ export function ContactsInlineTable({ rows }: { rows: ContactRow[] }) {
                         disabled={pending}
                       />
                     ) : (
-                      <button type="button" className="rounded px-1 text-white/70 hover:bg-white/10" onClick={() => beginEdit(row, "lastName")}>
+                      <button type="button" className="rounded px-1 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted)/0.45)]" onClick={() => beginEdit(row, "lastName")}>
                         {row.lastName ?? "—"}
                       </button>
                     )}
@@ -177,7 +177,7 @@ export function ContactsInlineTable({ rows }: { rows: ContactRow[] }) {
                       disabled={pending}
                     />
                   ) : (
-                    <button type="button" className="w-full rounded px-1 text-left text-white/80 hover:bg-white/10" onClick={() => beginEdit(row, "email")}>
+                    <button type="button" className="w-full rounded px-1 text-left text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted)/0.45)]" onClick={() => beginEdit(row, "email")}>
                       {row.email ?? "—"}
                     </button>
                   )}
@@ -198,7 +198,7 @@ export function ContactsInlineTable({ rows }: { rows: ContactRow[] }) {
                       <option value="inactive">Inactive</option>
                     </select>
                   ) : (
-                    <button type="button" className="rounded-full bg-white/10 px-2 py-1 text-xs text-white/80 hover:bg-white/15" onClick={() => beginEdit(row, "status")}>
+                    <button type="button" className="rounded-full bg-[hsl(var(--muted)/0.5)] px-2 py-1 text-xs text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted)/0.7)]" onClick={() => beginEdit(row, "status")}>
                       {row.status}
                     </button>
                   )}

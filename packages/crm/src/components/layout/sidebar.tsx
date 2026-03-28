@@ -28,10 +28,10 @@ export function Sidebar() {
       <div className="mt-auto px-2 pb-2 pt-8">
         <button
           type="button"
-          className="w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.35)] px-3 py-2 text-left text-xs font-medium text-[hsl(var(--color-text-secondary))]"
+          className="w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.35)] px-3 py-2 text-left text-xs font-medium text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--muted)/0.5)] hover:text-foreground"
           onClick={() => window.dispatchEvent(new CustomEvent("crm:command-palette-toggle", { detail: { open: true } }))}
         >
-          Command Palette <span className="float-right rounded border border-[hsl(var(--border))] px-1.5 py-0.5 text-[10px]">⌘K</span>
+          Command Palette <span className="float-right rounded border border-[hsl(var(--border))] px-1.5 py-0.5 text-[10px] text-[hsl(var(--muted-foreground))]">⌘K</span>
         </button>
       </div>
     </aside>

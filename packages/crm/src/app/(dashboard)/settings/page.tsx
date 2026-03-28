@@ -28,7 +28,7 @@ export default async function SettingsPage() {
                 <span className="rounded-full bg-primary/10 px-2 py-1 text-xs text-primary">{section.status}</span>
               ) : null}
             </div>
-            <p className="mt-1 text-sm text-white/60">{section.description}</p>
+            <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">{section.description}</p>
           </Link>
         ))}
       </div>

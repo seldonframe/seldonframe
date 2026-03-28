@@ -180,44 +180,48 @@
     border: 1px solid hsl(var(--border));
     border-right-color: hsl(var(--border));
     border-radius: 12px;
-    background: linear-gradient(180deg, hsl(218 37% 10%), hsl(218 31% 8%));
+    background: hsl(var(--card));
     padding: 18px 12px;
     transition: width var(--transition-slow);
+  }
+
+  .dark .crm-sidebar {
+    background: linear-gradient(180deg, hsl(218 37% 10%), hsl(218 31% 8%));
   }
 
   .crm-sidebar-link {
     position: relative;
     border-radius: 8px;
     background: transparent;
-    color: hsl(var(--foreground) / 0.6);
+    color: hsl(var(--muted-foreground));
     transition: all var(--transition-fast);
   }
 
   .crm-sidebar-icon {
-    color: hsl(var(--foreground) / 0.4);
+    color: hsl(var(--muted-foreground));
     transition: color var(--transition-fast);
   }
 
   .crm-sidebar-text {
-    color: hsl(var(--foreground) / 0.6);
+    color: hsl(var(--muted-foreground));
     transition: color var(--transition-fast);
   }
 
   .crm-sidebar-link:hover {
-    background: transparent;
-    color: hsl(var(--foreground) / 0.8);
+    background: hsl(var(--muted) / 0.45);
+    color: hsl(var(--foreground));
   }
 
   .crm-sidebar-link:hover .crm-sidebar-icon {
-    color: hsl(var(--foreground) / 0.8);
+    color: hsl(var(--foreground));
   }
 
   .crm-sidebar-link:hover .crm-sidebar-text {
-    color: hsl(var(--foreground) / 0.8);
+    color: hsl(var(--foreground));
   }
 
   .crm-sidebar-link[data-active="true"] {
-    background: transparent;
+    background: hsl(var(--primary) / 0.09);
     box-shadow: inset 3px 0 0 hsl(var(--primary));
     color: hsl(var(--foreground));
   }
@@ -245,7 +249,7 @@
     width: 36px;
     border-radius: 10px;
     border: 1px solid hsl(var(--color-border));
-    background: hsl(var(--color-surface-raised));
+    background: hsl(var(--card));
     color: hsl(var(--color-text-secondary));
     transition: background-color var(--transition-fast), color var(--transition-fast);
   }

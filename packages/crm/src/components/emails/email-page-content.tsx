@@ -35,7 +35,7 @@ function statusBadge(status: string) {
     return "bg-red-500/10 text-red-300";
   }
 
-  return "bg-white/10 text-white/60";
+  return "bg-[hsl(var(--muted)/0.5)] text-[hsl(var(--muted-foreground))]";
 }
 
 export function EmailPageContent({
@@ -58,12 +58,12 @@ export function EmailPageContent({
 
   return (
     <>
-      <div className="flex gap-1 rounded-lg border border-white/10 bg-white/5 p-1">
+      <div className="flex gap-1 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.35)] p-1">
         {tabs.map((tab) => (
           <button
             key={tab.key}
             type="button"
-            className={`rounded-md px-4 py-2 text-sm transition ${activeTab === tab.key ? "bg-primary/15 text-primary" : "text-white/60 hover:text-white/80"}`}
+            className={`rounded-md px-4 py-2 text-sm transition ${activeTab === tab.key ? "bg-primary/15 text-primary" : "text-[hsl(var(--muted-foreground))] hover:text-foreground"}`}
             onClick={() => setActiveTab(tab.key)}
           >
             {tab.label}
@@ -74,7 +74,7 @@ export function EmailPageContent({
       {activeTab === "templates" ? (
         <section className="space-y-4">
           <div className="flex items-end justify-between gap-3">
-            <p className="text-sm text-white/60">{templates.length} template{templates.length !== 1 ? "s" : ""}</p>
+            <p className="text-sm text-[hsl(var(--muted-foreground))]">{templates.length} template{templates.length !== 1 ? "s" : ""}</p>
             <button type="button" className="crm-button-primary h-10 px-6" onClick={() => setShowCreate(true)}>
               Create Template
             </button>
@@ -83,8 +83,8 @@ export function EmailPageContent({
           {templates.length === 0 ? (
             <article className="glass-card flex min-h-52 flex-col items-center justify-center rounded-2xl p-8 text-center">
               <p className="text-3xl">✉️</p>
-              <p className="mt-3 text-lg font-medium text-white">Create your first email template</p>
-              <p className="mt-1 text-sm text-white/60">Templates let you send consistent, personalized emails.</p>
+              <p className="mt-3 text-lg font-medium text-foreground">Create your first email template</p>
+              <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">Templates let you send consistent, personalized emails.</p>
               <button type="button" className="crm-button-primary mt-5 h-10 px-6" onClick={() => setShowCreate(true)}>
                 Create Template
               </button>
@@ -94,10 +94,10 @@ export function EmailPageContent({
               {templates.map((tpl) => (
                 <article key={tpl.id} className="glass-card rounded-2xl p-5">
                   <div className="mb-2 flex items-start justify-between gap-2">
-                    <h3 className="text-base font-medium text-white">{tpl.name}</h3>
+                    <h3 className="text-base font-medium text-foreground">{tpl.name}</h3>
                     <span className="rounded-full bg-primary/10 px-2 py-1 text-xs text-primary">{tpl.tag || "general"}</span>
                   </div>
-                  <p className="text-sm text-white/60">{tpl.subject}</p>
+                  <p className="text-sm text-[hsl(var(--muted-foreground))]">{tpl.subject}</p>
                   <div className="mt-4 flex gap-2">
                     <button type="button" className="crm-button-secondary h-9 px-4 text-xs">Edit</button>
                     <button type="button" className="crm-button-ghost h-9 px-4 text-xs">Duplicate</button>
@@ -112,12 +112,12 @@ export function EmailPageContent({
       {activeTab === "sent" ? (
         <section className="space-y-4">
           {sent.length === 0 ? (
-            <article className="glass-card rounded-2xl p-6 text-sm text-white/60">No sent emails yet.</article>
+            <article className="glass-card rounded-2xl p-6 text-sm text-[hsl(var(--muted-foreground))]">No sent emails yet.</article>
           ) : (
             <article className="glass-card overflow-hidden rounded-2xl">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-left text-xs font-medium uppercase tracking-wider text-white/40">
+                  <tr className="text-left text-xs font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
                     <th className="px-4 py-3">To</th>
                     <th className="px-4 py-3">Subject</th>
                     <th className="px-4 py-3">Status</th>
@@ -127,14 +127,14 @@ export function EmailPageContent({
                 </thead>
                 <tbody>
                   {sent.map((row) => (
-                    <tr key={row.id} className="border-t border-white/5 hover:bg-white/5">
-                      <td className="px-4 py-3 text-white/80">{row.toEmail}</td>
-                      <td className="px-4 py-3 text-white/70">{row.subject}</td>
+                    <tr key={row.id} className="border-t border-[hsl(var(--border))] hover:bg-[hsl(var(--muted)/0.35)]">
+                      <td className="px-4 py-3 text-foreground">{row.toEmail}</td>
+                      <td className="px-4 py-3 text-[hsl(var(--muted-foreground))]">{row.subject}</td>
                       <td className="px-4 py-3">
                         <span className={`rounded-full px-2 py-1 text-xs ${statusBadge(row.status)}`}>{row.status}</span>
                       </td>
-                      <td className="px-4 py-3 text-white/60">{row.provider}</td>
-                      <td className="px-4 py-3 text-white/50">
+                      <td className="px-4 py-3 text-[hsl(var(--muted-foreground))]">{row.provider}</td>
+                      <td className="px-4 py-3 text-[hsl(var(--muted-foreground))]">
                         {row.sentAt ? new Date(row.sentAt).toLocaleDateString([], { month: "short", day: "numeric" }) : "—"}
                       </td>
                     </tr>
@@ -149,9 +149,9 @@ export function EmailPageContent({
       {showCreate ? (
         <div className="fixed inset-0 z-50 flex">
           <button type="button" aria-label="Close panel" className="h-full flex-1 bg-black/50" onClick={() => setShowCreate(false)} />
-          <aside className="h-full w-full max-w-md border-l border-white/10 bg-[hsl(var(--background))] p-6 shadow-2xl">
+          <aside className="h-full w-full max-w-md border-l border-[hsl(var(--border))] bg-[hsl(var(--background))] p-6 shadow-2xl">
             <div className="mb-5 flex items-center justify-between">
-              <h2 className="text-xl font-medium text-white">New email template</h2>
+              <h2 className="text-xl font-medium text-foreground">New email template</h2>
               <button type="button" className="crm-button-ghost h-9 px-4" onClick={() => setShowCreate(false)}>Close</button>
             </div>
 
@@ -165,19 +165,19 @@ export function EmailPageContent({
               className="space-y-4"
             >
               <div>
-                <label htmlFor="tpl-name" className="mb-1 block text-sm text-white/75">Template name</label>
+                <label htmlFor="tpl-name" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Template name</label>
                 <input id="tpl-name" className="crm-input h-10 w-full px-3" name="name" placeholder="Welcome Email" required />
               </div>
               <div>
-                <label htmlFor="tpl-tag" className="mb-1 block text-sm text-white/75">Tag</label>
+                <label htmlFor="tpl-tag" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Tag</label>
                 <input id="tpl-tag" className="crm-input h-10 w-full px-3" name="tag" placeholder="welcome" defaultValue="general" />
               </div>
               <div>
-                <label htmlFor="tpl-subject" className="mb-1 block text-sm text-white/75">Subject</label>
+                <label htmlFor="tpl-subject" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Subject</label>
                 <input id="tpl-subject" className="crm-input h-10 w-full px-3" name="subject" placeholder="Welcome to {{businessName}}" required />
               </div>
               <div>
-                <label htmlFor="tpl-body" className="mb-1 block text-sm text-white/75">Body</label>
+                <label htmlFor="tpl-body" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Body</label>
                 <textarea id="tpl-body" className="crm-input min-h-32 w-full p-3" name="body" placeholder="Hi {{firstName}}," required />
               </div>
               <div className="pt-2">

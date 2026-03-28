@@ -31,7 +31,7 @@ export default async function HubPage() {
         {blockLinks.map((block) => (
           <Link key={block.href} href={block.href} className="glass-card block rounded-2xl p-5 transition hover:border-primary/20">
             <p className="text-card-title">{block.title}</p>
-            <p className="mt-1 text-sm text-white/60">{block.subtitle}</p>
+            <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">{block.subtitle}</p>
           </Link>
         ))}
       </div>

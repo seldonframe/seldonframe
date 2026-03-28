@@ -101,7 +101,7 @@ export default async function DashboardLayout({
           <Sidebar />
           <div className="flex-1 space-y-4">
             <DemoBanner />
-            <DashboardTopbar userName={user?.name || "Account"} avatarFallback={avatarFallback} />
+            <DashboardTopbar userName={user?.name || "Account"} userEmail={user?.email || ""} avatarFallback={avatarFallback} />
             {children}
           </div>
         </div>

@@ -32,7 +32,7 @@ function statusBadge(status: string) {
   }
 
   if (status === "draft") {
-    return "bg-white/10 text-white/60";
+    return "bg-[hsl(var(--muted)/0.5)] text-[hsl(var(--muted-foreground))]";
   }
 
   return "bg-amber-500/10 text-amber-300";
@@ -49,7 +49,7 @@ export function LandingPagesContent({
   const [pending, startTransition] = useTransition();
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  function handleTemplateClick(_templateKey: string) {
+  function handleTemplateClick() {
     setShowCreate(true);
   }
 
@@ -64,8 +64,8 @@ export function LandingPagesContent({
       <div className="space-y-6">
         <div className="text-center">
           <p className="text-3xl">🚀</p>
-          <h2 className="mt-3 text-xl font-medium text-white">Create your first landing page</h2>
-          <p className="mt-1 text-sm text-white/60">Choose a template to get started.</p>
+          <h2 className="mt-3 text-xl font-medium text-foreground">Create your first landing page</h2>
+          <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">Choose a template to get started.</p>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -74,13 +74,13 @@ export function LandingPagesContent({
               key={tpl.key}
               type="button"
               className="glass-card rounded-2xl p-5 text-left transition hover:border-primary/30"
-              onClick={() => handleTemplateClick(tpl.key)}
+              onClick={() => handleTemplateClick()}
             >
               <div className="mb-3 inline-flex rounded-lg border border-primary/30 p-2 text-primary">
                 {tpl.icon}
               </div>
-              <p className="text-base font-medium text-white">{tpl.title}</p>
-              <p className="mt-1 text-sm text-white/60">{tpl.description}</p>
+              <p className="text-base font-medium text-foreground">{tpl.title}</p>
+              <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">{tpl.description}</p>
             </button>
           ))}
         </div>
@@ -91,7 +91,7 @@ export function LandingPagesContent({
   return (
     <div className="space-y-4">
       <div className="flex items-end justify-between gap-3">
-        <p className="text-sm text-white/60">{pages.length} page{pages.length !== 1 ? "s" : ""}</p>
+        <p className="text-sm text-[hsl(var(--muted-foreground))]">{pages.length} page{pages.length !== 1 ? "s" : ""}</p>
         <button type="button" className="crm-button-primary h-10 px-6" onClick={() => setShowCreate(true)}>
           Create Page
         </button>
@@ -102,11 +102,11 @@ export function LandingPagesContent({
           {pages.map((page) => (
             <article key={page.id} className="glass-card rounded-2xl p-5">
               <div className="mb-3 flex items-start justify-between gap-2">
-                <h3 className="text-base font-medium text-white">{page.title}</h3>
+                <h3 className="text-base font-medium text-foreground">{page.title}</h3>
                 <span className={`rounded-full px-2 py-1 text-xs ${statusBadge(page.status)}`}>{page.status}</span>
               </div>
 
-              <p className="text-xs text-white/45">
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">
                 Last edited {new Date(page.updatedAt).toLocaleDateString([], { month: "short", day: "numeric" })}
               </p>
 
@@ -136,9 +136,9 @@ export function LandingPagesContent({
       {showCreate ? (
         <div className="fixed inset-0 z-50 flex">
           <button type="button" aria-label="Close panel" className="h-full flex-1 bg-black/50" onClick={() => setShowCreate(false)} />
-          <aside className="h-full w-full max-w-md border-l border-white/10 bg-[hsl(var(--background))] p-6 shadow-2xl">
+          <aside className="h-full w-full max-w-md border-l border-[hsl(var(--border))] bg-[hsl(var(--background))] p-6 shadow-2xl">
             <div className="mb-5 flex items-center justify-between">
-              <h2 className="text-xl font-medium text-white">New landing page</h2>
+              <h2 className="text-xl font-medium text-foreground">New landing page</h2>
               <button type="button" className="crm-button-ghost h-9 px-4" onClick={() => setShowCreate(false)}>
                 Close
               </button>
@@ -154,12 +154,12 @@ export function LandingPagesContent({
               className="space-y-4"
             >
               <div>
-                <label htmlFor="lp-title" className="mb-1 block text-sm text-white/75">Page title</label>
+                <label htmlFor="lp-title" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Page title</label>
                 <input id="lp-title" className="crm-input h-10 w-full px-3" name="title" placeholder="My Landing Page" required />
               </div>
 
               <div>
-                <label htmlFor="lp-slug" className="mb-1 block text-sm text-white/75">URL slug</label>
+                <label htmlFor="lp-slug" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">URL slug</label>
                 <input id="lp-slug" className="crm-input h-10 w-full px-3" name="slug" placeholder="my-landing-page" required />
               </div>
 

@@ -72,9 +72,9 @@ function StatCard({ label, value, icon, trendPoints }: { label: string; value: s
       <div className="mb-4 flex items-center justify-between">
         <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[hsl(var(--primary)/0.12)] text-primary">{icon}</span>
       </div>
-      <p className="text-xs font-medium uppercase tracking-widest text-white/40">{label}</p>
+      <p className="text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">{label}</p>
       <div className="mt-2 flex items-end justify-between gap-3">
-        <p className="text-3xl font-semibold text-white">{value}</p>
+        <p className="text-3xl font-semibold text-foreground">{value}</p>
         <Sparkline points={trendPoints} />
       </div>
     </article>
@@ -216,11 +216,11 @@ export default async function DashboardPage() {
   return (
     <section className="animate-page-enter space-y-6">
       <header className="space-y-2">
-        <h1 className="text-3xl font-light tracking-tight text-white">
+        <h1 className="text-3xl font-light tracking-tight text-foreground">
           Good {timeOfDay()}, <span className="font-semibold">{firstName}</span>
         </h1>
-        <p className="text-sm text-white/55">{formatLongDate(today)}</p>
-        <p className="text-sm text-white/40">
+        <p className="text-sm text-[hsl(var(--muted-foreground))]">{formatLongDate(today)}</p>
+        <p className="text-sm text-[hsl(var(--muted-foreground))]">
           <span className="text-primary">{sessionsToday}</span> sessions today · <span className="text-primary">{followUpsDue}</span> follow-ups due · <span className="text-primary">{newClientsThisWeek}</span> new {contactLabelPlural.toLowerCase()} this week
         </p>
       </header>
@@ -230,13 +230,13 @@ export default async function DashboardPage() {
           <article className="glass-card rounded-2xl border-l-2 border-l-primary p-6 lg:col-span-7">
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <p className="text-xs font-medium uppercase tracking-widest text-white/50">Getting Started</p>
-                <h2 className="mt-1 text-2xl font-light tracking-tight text-white">Let&apos;s set up your practice</h2>
+                <p className="text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">Getting Started</p>
+                <h2 className="mt-1 text-2xl font-light tracking-tight text-foreground">Let&apos;s set up your practice</h2>
               </div>
-              <p className="text-sm text-white/70">{completedChecklistCount} of 5 steps complete</p>
+              <p className="text-sm text-[hsl(var(--muted-foreground))]">{completedChecklistCount} of 5 steps complete</p>
             </div>
 
-            <div className="mb-5 h-1.5 overflow-hidden rounded-full bg-white/10">
+            <div className="mb-5 h-1.5 overflow-hidden rounded-full bg-[hsl(var(--muted)/0.5)]">
               <div className="h-full rounded-full bg-primary shadow-glass-teal" style={{ width: `${(completedChecklistCount / 5) * 100}%` }} />
             </div>
 
@@ -252,14 +252,14 @@ export default async function DashboardPage() {
                   <Link
                     href={item.href}
                     className={`flex items-center justify-between rounded-xl border p-4 transition ${
-                      item.done ? "border-primary/25 bg-primary/10" : "border-white/10 bg-white/2 hover:border-white/20"
+                      item.done ? "border-primary/25 bg-primary/10" : "border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.15)] hover:border-[hsl(var(--border))]"
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      {item.done ? <CheckCircle2 className="h-4 w-4 text-primary" /> : <Circle className="h-4 w-4 text-white/50" />}
-                      <span className={`text-sm ${item.done ? "text-white/55 line-through" : "text-white/85"}`}>{item.label}</span>
+                      {item.done ? <CheckCircle2 className="h-4 w-4 text-primary" /> : <Circle className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />}
+                      <span className={`text-sm ${item.done ? "text-[hsl(var(--muted-foreground))] line-through" : "text-foreground"}`}>{item.label}</span>
                     </div>
-                    {!item.done ? <ArrowRight className="h-4 w-4 text-white/60" /> : null}
+                    {!item.done ? <ArrowRight className="h-4 w-4 text-[hsl(var(--muted-foreground))]" /> : null}
                   </Link>
                 </li>
               ))}
@@ -268,36 +268,36 @@ export default async function DashboardPage() {
 
           <div className="space-y-4 lg:col-span-5">
             <article className="glass-card rounded-2xl p-6">
-              <p className="text-xs font-medium uppercase tracking-widest text-white/50">Quick Actions</p>
+              <p className="text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">Quick Actions</p>
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                <Link href="/contacts" className="glass-card rounded-xl p-4 text-sm text-white/90 hover:text-white">
+                <Link href="/contacts" className="glass-card rounded-xl p-4 text-sm text-foreground hover:text-foreground">
                   Add {contactLabelSingular}
                 </Link>
-                <Link href="/deals" className="glass-card rounded-xl p-4 text-sm text-white/90 hover:text-white">
+                <Link href="/deals" className="glass-card rounded-xl p-4 text-sm text-foreground hover:text-foreground">
                   Create {dealLabelSingular}
                 </Link>
-                <Link href="/bookings" className="glass-card rounded-xl p-4 text-sm text-white/90 hover:text-white">
+                <Link href="/bookings" className="glass-card rounded-xl p-4 text-sm text-foreground hover:text-foreground">
                   Share Booking Page
                 </Link>
               </div>
             </article>
 
             <article className="glass-card rounded-2xl p-6">
-              <p className="mb-3 text-xs font-medium uppercase tracking-widest text-white/50">Recent Activity</p>
+              <p className="mb-3 text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">Recent Activity</p>
               {activityRows.length === 0 ? (
-                <p className="text-sm text-white/35">Activities will appear here as you work</p>
+                <p className="text-sm text-[hsl(var(--muted-foreground))]">Activities will appear here as you work</p>
               ) : (
                 <ul className="space-y-2">
                   {activityRows.slice(0, 5).map((item) => {
                     const linkedContact = item.contactId ? contactById.get(item.contactId) : null;
                     const name = linkedContact ? `${linkedContact.firstName} ${linkedContact.lastName ?? ""}`.trim() : contactLabelSingular;
                     return (
-                      <li key={item.id} className="flex items-center justify-between gap-3 rounded-lg border border-white/10 px-3 py-2">
+                      <li key={item.id} className="flex items-center justify-between gap-3 rounded-lg border border-[hsl(var(--border))] px-3 py-2">
                         <div className="min-w-0">
-                          <p className="truncate text-sm text-white/85">{item.subject ?? `${item.type} activity`}</p>
-                          <p className="truncate text-xs text-white/45">{name}</p>
+                          <p className="truncate text-sm text-foreground">{item.subject ?? `${item.type} activity`}</p>
+                          <p className="truncate text-xs text-[hsl(var(--muted-foreground))]">{name}</p>
                         </div>
-                        <span className="text-xs text-white/45">{new Date(item.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>
+                        <span className="text-xs text-[hsl(var(--muted-foreground))]">{new Date(item.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>
                       </li>
                     );
                   })}
@@ -348,7 +348,7 @@ export default async function DashboardPage() {
               {opportunityRows.length > 0 ? (
                 <article className="glass-card rounded-2xl p-6">
                   <div className="mb-4 flex items-center justify-between">
-                    <p className="text-xs font-medium uppercase tracking-widest text-white/50">Top Opportunities</p>
+                    <p className="text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">Top Opportunities</p>
                     <Link href="/deals" className="text-sm text-primary hover:underline">
                       View All →
                     </Link>
@@ -356,7 +356,7 @@ export default async function DashboardPage() {
 
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="text-left text-xs font-medium uppercase tracking-wider text-white/40">
+                      <tr className="text-left text-xs font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
                         <th className="py-2">Contact</th>
                         <th className="py-2">Value</th>
                         <th className="py-2">Stage</th>
@@ -366,15 +366,15 @@ export default async function DashboardPage() {
                       {opportunityRows.map((row) => {
                         const contactName = row.contact ? `${row.contact.firstName} ${row.contact.lastName ?? ""}`.trim() : row.title;
                         return (
-                          <tr key={row.id} className="group min-h-[52px] hover:bg-white/5">
-                            <td className="py-3 text-sm text-white/80">
+                          <tr key={row.id} className="group min-h-[52px] hover:bg-[hsl(var(--muted)/0.35)]">
+                            <td className="py-3 text-sm text-foreground">
                               <Link href={`/deals/${row.id}`} className="hover:text-primary">
                                 {contactName}
                               </Link>
                             </td>
-                            <td className="py-3 text-sm text-white/80">${row.value.toLocaleString()}</td>
+                            <td className="py-3 text-sm text-foreground">${row.value.toLocaleString()}</td>
                             <td className="py-3">
-                              <span className="inline-flex rounded-md border border-white/10 px-2 py-1 text-xs text-white/70">{row.stage}</span>
+                              <span className="inline-flex rounded-md border border-[hsl(var(--border))] px-2 py-1 text-xs text-[hsl(var(--muted-foreground))]">{row.stage}</span>
                             </td>
                           </tr>
                         );
@@ -386,20 +386,20 @@ export default async function DashboardPage() {
 
               {upcomingSessionRows.length > 0 ? (
                 <article className="glass-card rounded-2xl p-6">
-                  <p className="mb-4 text-xs font-medium uppercase tracking-widest text-white/50">Upcoming Sessions</p>
+                  <p className="mb-4 text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">Upcoming Sessions</p>
                   <ul className="space-y-3">
                     {upcomingSessionRows.map((booking) => {
                       const linkedContact = booking.contactId ? contactById.get(booking.contactId) : null;
                       const person = linkedContact ? `${linkedContact.firstName} ${linkedContact.lastName ?? ""}`.trim() : contactLabelSingular;
                       const startsAt = new Date(booking.startsAt);
                       return (
-                        <li key={booking.id} className="rounded-xl border border-white/10 p-3 hover:bg-white/5">
-                          <p className="flex items-center gap-2 text-sm text-white">
+                        <li key={booking.id} className="rounded-xl border border-[hsl(var(--border))] p-3 hover:bg-[hsl(var(--muted)/0.35)]">
+                          <p className="flex items-center gap-2 text-sm text-foreground">
                             <Clock3 className="h-4 w-4 text-primary" />
                             <span className="text-primary">{startsAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>
-                            <span className="text-white/60">· {person}</span>
+                            <span className="text-[hsl(var(--muted-foreground))]">· {person}</span>
                           </p>
-                          <p className="mt-1 text-xs text-white/50">{startsAt.toLocaleDateString([], { month: "short", day: "numeric" })} · {booking.title}</p>
+                          <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{startsAt.toLocaleDateString([], { month: "short", day: "numeric" })} · {booking.title}</p>
                         </li>
                       );
                     })}

@@ -65,7 +65,7 @@ function statusClass(status: string) {
     return "bg-amber-500/10 text-amber-300";
   }
 
-  return "bg-white/10 text-white/60";
+  return "bg-[hsl(var(--muted)/0.5)] text-[hsl(var(--muted-foreground))]";
 }
 
 function formatDateGroupLabel(value: Date) {
@@ -107,8 +107,8 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
       <section className="space-y-4">
         <div className="flex items-end justify-between gap-3">
           <div>
-            <p className="text-xs font-medium uppercase tracking-widest text-white/50">Appointment Types</p>
-            <p className="mt-1 text-sm text-white/70">Share the link and let {labels.contact.plural.toLowerCase()} book with you.</p>
+            <p className="text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">Appointment Types</p>
+            <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">Share the link and let {labels.contact.plural.toLowerCase()} book with you.</p>
           </div>
           <button type="button" className="crm-button-primary h-10 px-6" onClick={() => setIsPanelOpen(true)}>
             Create Type
@@ -118,8 +118,8 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
         {bookingTypes.length === 0 ? (
           <article className="glass-card flex min-h-52 flex-col items-center justify-center rounded-2xl p-8 text-center">
             <p className="text-3xl">📅</p>
-            <p className="mt-3 text-lg font-medium text-white">Create your first appointment type</p>
-            <p className="mt-1 text-sm text-white/60">Share the link and let {labels.contact.plural.toLowerCase()} book with you.</p>
+            <p className="mt-3 text-lg font-medium text-foreground">Create your first appointment type</p>
+            <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">Share the link and let {labels.contact.plural.toLowerCase()} book with you.</p>
             <button type="button" className="crm-button-primary mt-5 h-10 px-6" onClick={() => setIsPanelOpen(true)}>
               Create Type
             </button>
@@ -133,20 +133,20 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
               return (
                 <article key={row.id} className="glass-card rounded-2xl p-5">
                   <div className="mb-3 flex items-start justify-between gap-2">
-                    <h3 className="text-base font-medium text-white">{row.title}</h3>
-                    <span className="rounded-full bg-white/10 px-2 py-1 text-xs text-white/70">{metadata?.durationMinutes ?? 30} min</span>
+                    <h3 className="text-base font-medium text-foreground">{row.title}</h3>
+                    <span className="rounded-full bg-[hsl(var(--muted)/0.5)] px-2 py-1 text-xs text-[hsl(var(--muted-foreground))]">{metadata?.durationMinutes ?? 30} min</span>
                   </div>
 
-                  <p className="text-sm text-white/70">{metadata?.description || "No description added."}</p>
-                  <p className="mt-2 text-sm font-semibold text-white">${Number(metadata?.price ?? 0).toFixed(2)}</p>
-                  <p className="mt-1 text-xs text-white/45">
+                  <p className="text-sm text-[hsl(var(--muted-foreground))]">{metadata?.description || "No description added."}</p>
+                  <p className="mt-2 text-sm font-semibold text-foreground">${Number(metadata?.price ?? 0).toFixed(2)}</p>
+                  <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
                     Buffer {metadata?.bufferBeforeMinutes ?? 0}m before / {metadata?.bufferAfterMinutes ?? 0}m after
                     {metadata?.maxBookingsPerDay ? ` • Max ${metadata.maxBookingsPerDay}/day` : ""}
                   </p>
 
-                  <div className="mt-4 rounded-lg border border-white/10 bg-black/10 p-3">
-                    <p className="text-xs uppercase tracking-wider text-white/45">Public URL</p>
-                    <p className="mt-1 truncate text-sm text-white/80">{publicUrl || "Set org slug to enable"}</p>
+                  <div className="mt-4 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] p-3">
+                    <p className="text-xs uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Public URL</p>
+                    <p className="mt-1 truncate text-sm text-[hsl(var(--foreground))]">{publicUrl || "Set org slug to enable"}</p>
                     <div className="mt-3 flex gap-2">
                       <button
                         type="button"
@@ -182,17 +182,17 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
 
       <section className="space-y-4">
         <div>
-          <p className="text-xs font-medium uppercase tracking-widest text-white/50">Upcoming {labels.activity.plural}</p>
+          <p className="text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">Upcoming {labels.activity.plural}</p>
         </div>
 
         {upcomingGrouped.length === 0 ? (
-          <article className="glass-card rounded-2xl p-6 text-sm text-white/60">No upcoming {labels.activity.plural.toLowerCase()} yet.</article>
+          <article className="glass-card rounded-2xl p-6 text-sm text-[hsl(var(--muted-foreground))]">No upcoming {labels.activity.plural.toLowerCase()} yet.</article>
         ) : (
           <article className="glass-card rounded-2xl p-4">
             <div className="space-y-4">
               {upcomingGrouped.map((group) => (
                 <div key={group.key}>
-                  <p className="mb-2 text-xs font-medium uppercase tracking-wider text-white/45">{group.label}</p>
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">{group.label}</p>
                   <ul className="space-y-2">
                     {group.rows.map((row) => {
                       const startsAt = new Date(row.startsAt);
@@ -200,10 +200,10 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
                       const person = linkedContact ? `${linkedContact.firstName} ${linkedContact.lastName ?? ""}`.trim() : labels.contact.singular;
 
                       return (
-                        <li key={row.id} className="flex items-center justify-between gap-3 rounded-lg border border-white/10 px-3 py-3 hover:bg-white/5">
+                        <li key={row.id} className="flex items-center justify-between gap-3 rounded-lg border border-[hsl(var(--border))] px-3 py-3 hover:bg-[hsl(var(--muted)/0.35)]">
                           <div className="min-w-0">
-                            <p className="text-sm text-white/85">{row.title}</p>
-                            <p className="text-xs text-white/45">{person}</p>
+                            <p className="text-sm text-foreground">{row.title}</p>
+                            <p className="text-xs text-[hsl(var(--muted-foreground))]">{person}</p>
                           </div>
                           <div className="flex items-center gap-3">
                             <p className="text-sm text-primary">{startsAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</p>
@@ -223,9 +223,9 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
       {isPanelOpen ? (
         <div className="fixed inset-0 z-50 flex">
           <button type="button" aria-label="Close panel" className="h-full flex-1 bg-black/50" onClick={() => setIsPanelOpen(false)} />
-          <aside className="h-full w-full max-w-md border-l border-white/10 bg-[hsl(var(--background))] p-6 shadow-2xl">
+          <aside className="h-full w-full max-w-md border-l border-[hsl(var(--border))] bg-[hsl(var(--background))] p-6 shadow-2xl">
             <div className="mb-5 flex items-center justify-between">
-              <h2 className="text-xl font-medium text-white">Create appointment type</h2>
+              <h2 className="text-xl font-medium text-foreground">Create appointment type</h2>
               <button type="button" className="crm-button-ghost h-9 px-4" onClick={() => setIsPanelOpen(false)}>
                 Close
               </button>
@@ -239,12 +239,12 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
               className="space-y-4"
             >
               <div>
-                <label htmlFor="appointment-name" className="mb-1 block text-sm text-white/75">Appointment name</label>
+                <label htmlFor="appointment-name" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Appointment name</label>
                 <input id="appointment-name" className="crm-input h-10 w-full px-3" name="name" placeholder="Strategy Call" required />
               </div>
 
               <div>
-                <label htmlFor="appointment-duration" className="mb-1 block text-sm text-white/75">Duration</label>
+                <label htmlFor="appointment-duration" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Duration</label>
                 <select id="appointment-duration" className="crm-input h-10 w-full px-3" name="durationMinutes" defaultValue="30">
                   <option value="30">30 min</option>
                   <option value="60">60 min</option>
@@ -252,18 +252,18 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
               </div>
 
               <div>
-                <label htmlFor="appointment-price" className="mb-1 block text-sm text-white/75">Price</label>
+                <label htmlFor="appointment-price" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Price</label>
                 <input id="appointment-price" className="crm-input h-10 w-full px-3" name="price" type="number" min={0} step="0.01" defaultValue="0" />
               </div>
 
               <div>
-                <label htmlFor="appointment-description" className="mb-1 block text-sm text-white/75">Description</label>
+                <label htmlFor="appointment-description" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Description</label>
                 <input id="appointment-description" className="crm-input h-10 w-full px-3" name="description" placeholder="Initial planning session" />
               </div>
 
               <div className="grid gap-3 md:grid-cols-2">
                 <div>
-                  <label htmlFor="appointment-buffer-before" className="mb-1 block text-sm text-white/75">Buffer before (min)</label>
+                  <label htmlFor="appointment-buffer-before" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Buffer before (min)</label>
                   <input
                     id="appointment-buffer-before"
                     className="crm-input h-10 w-full px-3"
@@ -275,7 +275,7 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
                   />
                 </div>
                 <div>
-                  <label htmlFor="appointment-buffer-after" className="mb-1 block text-sm text-white/75">Buffer after (min)</label>
+                  <label htmlFor="appointment-buffer-after" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Buffer after (min)</label>
                   <input
                     id="appointment-buffer-after"
                     className="crm-input h-10 w-full px-3"
@@ -289,7 +289,7 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
               </div>
 
               <div>
-                <label htmlFor="appointment-max-per-day" className="mb-1 block text-sm text-white/75">Max bookings per day (0 = unlimited)</label>
+                <label htmlFor="appointment-max-per-day" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Max bookings per day (0 = unlimited)</label>
                 <input
                   id="appointment-max-per-day"
                   className="crm-input h-10 w-full px-3"
@@ -301,12 +301,12 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
                 />
               </div>
 
-              <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                <p className="mb-3 text-sm font-medium text-white/85">Working hours</p>
+              <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.25)] p-3">
+                <p className="mb-3 text-sm font-medium text-foreground">Working hours</p>
                 <div className="space-y-2">
                   {availabilityDefaults.map((day) => (
                     <div key={day.key} className="grid grid-cols-[56px_1fr_1fr_1fr] items-center gap-2">
-                      <span className="text-xs text-white/60">{day.label}</span>
+                      <span className="text-xs text-[hsl(var(--muted-foreground))]">{day.label}</span>
                       <select
                         className="crm-input h-9 w-full px-2 text-xs"
                         name={`availability.${day.key}.enabled`}
@@ -323,7 +323,7 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
               </div>
 
               <div>
-                <label htmlFor="appointment-slug" className="mb-1 block text-sm text-white/75">Public slug</label>
+                <label htmlFor="appointment-slug" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Public slug</label>
                 <input id="appointment-slug" className="crm-input h-10 w-full px-3" name="slug" placeholder="strategy-call" required />
               </div>
 

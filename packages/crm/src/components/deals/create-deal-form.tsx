@@ -34,15 +34,15 @@ export function CreateDealForm({ contacts }: { contacts: Array<{ id: string; fir
       }}
     >
       <div>
-        <label htmlFor="df-title" className="mb-1 block text-sm text-white/75">Title</label>
+        <label htmlFor="df-title" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Title</label>
         <input id="df-title" className="crm-input h-10 w-full px-3" name="title" placeholder="Deal title" required />
       </div>
       <div>
-        <label htmlFor="df-value" className="mb-1 block text-sm text-white/75">Value</label>
+        <label htmlFor="df-value" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Value</label>
         <input id="df-value" className="crm-input h-10 w-full px-3" name="value" type="number" placeholder="0" defaultValue="0" />
       </div>
       <div className="min-w-0">
-        <label htmlFor="df-contact" className="mb-1 block text-sm text-white/75">Contact</label>
+        <label htmlFor="df-contact" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Contact</label>
         <select id="df-contact" name="contactId" className="crm-input h-10 w-full truncate px-3" required>
           <option value="">Select contact</option>
           {contacts.map((contact) => (

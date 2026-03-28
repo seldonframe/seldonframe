@@ -54,7 +54,7 @@ export function SignupForm() {
         <input id="password" name="password" type="password" required className="crm-input h-10 w-full px-3" />
       </div>
 
-      {state.error ? <p className="text-sm text-red-600">{state.error}</p> : null}
+      {state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
 
       <button type="submit" disabled={pending} className="crm-button-primary h-10 w-full px-4">
         {pending ? "Creating account..." : "Create account"}

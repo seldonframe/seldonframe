@@ -17,8 +17,8 @@ export default async function FormsPage() {
       {forms.length === 0 ? (
         <article className="glass-card flex min-h-52 flex-col items-center justify-center rounded-2xl p-8 text-center">
           <p className="text-3xl">📝</p>
-          <p className="mt-3 text-lg font-medium text-white">Create your first intake form</p>
-          <p className="mt-1 text-sm text-white/60">
+          <p className="mt-3 text-lg font-medium text-foreground">Create your first intake form</p>
+          <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">
             Submissions become {labels.contact.plural.toLowerCase()} in your CRM automatically.
           </p>
           <form action={createSuggestedFormAction}>
@@ -31,8 +31,8 @@ export default async function FormsPage() {
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {forms.map((form) => (
             <article key={form.id} className="glass-card rounded-2xl p-5">
-              <h3 className="text-base font-medium text-white">{form.name}</h3>
-              <p className="mt-1 text-sm text-white/50">/{form.slug}</p>
+              <h3 className="text-base font-medium text-foreground">{form.name}</h3>
+              <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">/{form.slug}</p>
               <div className="mt-4 flex gap-2">
                 <Link href={`/forms/${form.id}`} className="crm-button-primary h-9 px-4 text-xs">
                   Edit

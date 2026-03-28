@@ -34,19 +34,19 @@ export function CreateContactForm() {
       }}
     >
       <div>
-        <label htmlFor="cf-first" className="mb-1 block text-sm text-white/75">First name</label>
+        <label htmlFor="cf-first" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">First name</label>
         <input id="cf-first" className="crm-input h-10 w-full px-3" name="firstName" placeholder="Jane" required />
       </div>
       <div>
-        <label htmlFor="cf-last" className="mb-1 block text-sm text-white/75">Last name</label>
+        <label htmlFor="cf-last" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Last name</label>
         <input id="cf-last" className="crm-input h-10 w-full px-3" name="lastName" placeholder="Doe" />
       </div>
       <div>
-        <label htmlFor="cf-email" className="mb-1 block text-sm text-white/75">Email</label>
+        <label htmlFor="cf-email" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Email</label>
         <input id="cf-email" className="crm-input h-10 w-full px-3" name="email" type="email" placeholder="jane@example.com" />
       </div>
       <div>
-        <label htmlFor="cf-status" className="mb-1 block text-sm text-white/75">Status</label>
+        <label htmlFor="cf-status" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Status</label>
         <select id="cf-status" className="crm-input h-10 w-full px-3" name="status" defaultValue="lead">
           <option value="lead">Lead</option>
           <option value="customer">Customer</option>
