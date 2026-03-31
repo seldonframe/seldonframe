@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
   activities,
@@ -154,6 +155,8 @@ async function seedDemo() {
     .returning();
 
   if (!owner) throw new Error("Failed to create owner");
+
+  await db.update(organizations).set({ ownerId: owner.id }).where(eq(organizations.id, org.id));
 
   // ── Pipeline ──
   const [pipeline] = await db

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
+import { enforcePlanGate } from "@/middleware/plan-gate";
 
-const protectedPrefixes = ["/hub", "/dashboard", "/contacts", "/deals", "/activities", "/forms", "/settings", "/api/v1"];
+const protectedPrefixes = ["/hub", "/dashboard", "/orgs", "/contacts", "/deals", "/activities", "/forms", "/settings", "/api/v1"];
 const publicPrefixes = ["/api/v1", "/api/auth"];
 
 function isProtectedPath(pathname: string) {
@@ -23,7 +24,14 @@ function isPublicPath(pathname: string) {
 export const proxy = auth((request) => {
   const pathname = request.nextUrl.pathname;
   const isAuthenticated = Boolean(request.auth?.user);
-  const isSoulCompleted = Boolean((request.auth?.user as { soulCompleted?: boolean } | undefined)?.soulCompleted);
+  const user = request.auth?.user as {
+    orgId?: string;
+    soulCompleted?: boolean;
+    planId?: string | null;
+    subscriptionStatus?: "trialing" | "active" | "past_due" | "canceled" | "unpaid";
+    trialEndsAt?: string | null;
+  } | undefined;
+  const isSoulCompleted = Boolean(user?.soulCompleted);
 
   if ((pathname === "/login" || pathname === "/signup") && isAuthenticated) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
@@ -45,16 +53,34 @@ export const proxy = auth((request) => {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
+  const planGate = enforcePlanGate({
+    request,
+    pathname,
+    user: {
+      planId: user?.planId,
+      subscriptionStatus: user?.subscriptionStatus,
+      trialEndsAt: user?.trialEndsAt,
+    },
+    isAuthenticated,
+  });
+
+  if (planGate.response) {
+    return planGate.response;
+  }
+
   if (!isAuthenticated) {
     return NextResponse.next();
   }
 
-  const orgId = (request.auth?.user as { orgId?: string } | undefined)?.orgId;
+  const orgId = request.cookies.get("sf_active_org_id")?.value || user?.orgId;
   const headers = new Headers(request.headers);
 
   if (orgId) {
     headers.set("x-org-id", orgId);
   }
+
+  headers.set("x-billing-status", planGate.billingStatus);
+  headers.set("x-billing-readonly", planGate.readOnly ? "1" : "0");
 
   return NextResponse.next({
     request: {
@@ -67,7 +93,9 @@ export const config = {
   matcher: [
     "/login",
     "/signup",
+    "/pricing",
     "/setup",
+    "/orgs/:path*",
     "/hub/:path*",
     "/dashboard/:path*",
     "/contacts/:path*",

@@ -73,13 +73,20 @@ export async function signupAction(_: AuthActionState, formData: FormData): Prom
     return { error: "Could not create organization." };
   }
 
-  await db.insert(users).values({
-    orgId: org.id,
-    name: parsed.data.name,
-    email: parsed.data.email,
-    role: "owner",
-    passwordHash,
-  });
+  const [owner] = await db
+    .insert(users)
+    .values({
+      orgId: org.id,
+      name: parsed.data.name,
+      email: parsed.data.email,
+      role: "owner",
+      passwordHash,
+    })
+    .returning({ id: users.id });
+
+  if (owner?.id) {
+    await db.update(organizations).set({ ownerId: owner.id }).where(eq(organizations.id, org.id));
+  }
 
   await signIn("credentials", {
     email: parsed.data.email,

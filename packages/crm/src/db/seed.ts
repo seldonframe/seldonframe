@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { organizations, pipelines, users } from "@/db/schema";
 
@@ -27,6 +28,10 @@ async function seed() {
       passwordHash: "seed-password-hash",
     })
     .returning();
+
+  if (owner?.id) {
+    await db.update(organizations).set({ ownerId: owner.id }).where(eq(organizations.id, org.id));
+  }
 
   await db.insert(pipelines).values({
     orgId: org.id,

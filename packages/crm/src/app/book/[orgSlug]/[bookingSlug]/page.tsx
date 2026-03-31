@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { PoweredByBadge } from "@seldonframe/core/virality";
 import { PublicBookingForm } from "@/components/bookings/public-booking-form";
+import { shouldShowPoweredByBadgeForOrg } from "@/lib/billing/public";
 import { getPublicBookingContext } from "@/lib/bookings/actions";
 
 export default async function PublicBookingPage({
@@ -15,6 +16,8 @@ export default async function PublicBookingPage({
     notFound();
   }
 
+  const showBadge = await shouldShowPoweredByBadgeForOrg(bookingContext.orgId);
+
   return (
     <main className="crm-page flex items-center justify-center">
       <div className="w-full max-w-xl space-y-4">
@@ -27,9 +30,11 @@ export default async function PublicBookingPage({
           confirmationFallback={bookingContext.confirmationMessage}
           price={bookingContext.price}
         />
-        <div className="flex justify-center pt-2">
-          <PoweredByBadge />
-        </div>
+        {showBadge ? (
+          <div className="flex justify-center pt-2">
+            <PoweredByBadge />
+          </div>
+        ) : null}
       </div>
     </main>
   );

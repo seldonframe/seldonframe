@@ -1,5 +1,9 @@
 import { auth } from "@/auth";
+import { and, eq, or } from "drizzle-orm";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { db } from "@/db";
+import { organizations } from "@/db/schema";
 
 export async function getCurrentUser() {
   const session = await auth();
@@ -8,7 +12,29 @@ export async function getCurrentUser() {
 
 export async function getOrgId() {
   const user = await getCurrentUser();
-  return user?.orgId ?? null;
+
+  if (!user?.id) {
+    return null;
+  }
+
+  const cookieStore = await cookies();
+  const activeOrgId = cookieStore.get("sf_active_org_id")?.value;
+
+  if (!activeOrgId) {
+    return user.orgId ?? null;
+  }
+
+  if (activeOrgId === user.orgId) {
+    return activeOrgId;
+  }
+
+  const [managedOrg] = await db
+    .select({ id: organizations.id })
+    .from(organizations)
+    .where(and(eq(organizations.id, activeOrgId), or(eq(organizations.ownerId, user.id), eq(organizations.parentUserId, user.id))))
+    .limit(1);
+
+  return managedOrg?.id ?? user.orgId ?? null;
 }
 
 export async function requireAuth() {

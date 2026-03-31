@@ -2,7 +2,7 @@ import { and, asc, desc, eq } from "drizzle-orm";
 import Link from "next/link";
 import { ArrowRight, CheckCircle2, Circle, Clock3, DollarSign, Users, Zap } from "lucide-react";
 import { db } from "@/db";
-import { activities, bookings, emails, landingPages, metricsSnapshots, organizations, paymentRecords } from "@/db/schema";
+import { activities, bookings, emails, intakeForms, landingPages, metricsSnapshots, organizations, paymentRecords, pipelines } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth/helpers";
 import { listBookings } from "@/lib/bookings/actions";
 import { listContacts } from "@/lib/contacts/actions";
@@ -89,7 +89,7 @@ export default async function DashboardPage() {
     return null;
   }
 
-  const [snapshotRowsRaw, activityRows, appointmentTypeRows, landingRows, sentEmailRows, paymentRows, orgRow] = await Promise.all([
+  const [snapshotRowsRaw, activityRows, appointmentTypeRows, landingRows, sentEmailRows, paymentRows, intakeFormRows, defaultPipeline, orgRow] = await Promise.all([
     db.select().from(metricsSnapshots).where(eq(metricsSnapshots.orgId, orgId)).orderBy(asc(metricsSnapshots.date)).limit(180),
     db.select().from(activities).where(eq(activities.orgId, orgId)).orderBy(desc(activities.createdAt)).limit(20),
     db
@@ -114,7 +114,18 @@ export default async function DashboardPage() {
       .from(paymentRecords)
       .where(eq(paymentRecords.orgId, orgId)),
     db
-      .select({ createdAt: organizations.createdAt })
+      .select({ id: intakeForms.id })
+      .from(intakeForms)
+      .where(eq(intakeForms.orgId, orgId))
+      .limit(10),
+    db
+      .select({ id: pipelines.id })
+      .from(pipelines)
+      .where(and(eq(pipelines.orgId, orgId), eq(pipelines.isDefault, true)))
+      .limit(1)
+      .then((rows) => rows[0] ?? null),
+    db
+      .select({ createdAt: organizations.createdAt, soulId: organizations.soulId, soulContentGenerated: organizations.soulContentGenerated })
       .from(organizations)
       .where(eq(organizations.id, orgId))
       .limit(1)
@@ -126,17 +137,22 @@ export default async function DashboardPage() {
   const contactLabelSingular = soul?.entityLabels?.contact?.singular || "Contact";
   const contactLabelPlural = soul?.entityLabels?.contact?.plural || "Contacts";
   const dealLabelSingular = soul?.entityLabels?.deal?.singular || "Deal";
+  const setupComplete = Boolean(orgRow?.soulId) || Number(orgRow?.soulContentGenerated ?? 0) > 0;
 
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   const isNewUser = (orgRow ? new Date(orgRow.createdAt) >= sevenDaysAgo : false) || contactRows.length < 5;
-  const completedChecklistCount = [
-    contactRows.length > 0,
-    dealRows.length > 0,
-    appointmentTypeRows.length > 0,
-    landingRows.length > 0,
-    sentEmailRows.length > 0,
-  ].filter(Boolean).length;
+  const setupGuideItems = [
+    { href: "/setup", label: "Complete Setup Wizard", done: setupComplete },
+    { href: "/deals", label: "Review Generated Pipeline", done: setupComplete && Boolean(defaultPipeline) },
+    { href: "/landing", label: "Review Generated Landing Page", done: setupComplete && landingRows.length > 0 },
+    { href: "/bookings", label: "Review Generated Booking Type", done: setupComplete && appointmentTypeRows.length > 0 },
+    { href: "/forms", label: "Review Generated Intake Form", done: setupComplete && intakeFormRows.length > 0 },
+    { href: "/settings", label: "Connect Email", done: sentEmailRows.length > 0 },
+    { href: "/contacts", label: `Create First ${contactLabelSingular}`, done: contactRows.length > 0 },
+    { href: "/deals", label: `Create First ${dealLabelSingular}`, done: dealRows.length > 0 },
+  ];
+  const completedChecklistCount = setupGuideItems.filter((item) => item.done).length;
 
   const today = new Date();
   const startOfToday = new Date(today);
@@ -168,6 +184,12 @@ export default async function DashboardPage() {
   const newClientsThisWeek = contactRows.filter((row) => new Date(row.createdAt) >= weekThreshold).length;
 
   const firstName = user?.name?.split(" ").filter(Boolean)[0] || "there";
+  const trialEndsAt = user?.trialEndsAt ? new Date(user.trialEndsAt) : null;
+  const isTrialing = user?.subscriptionStatus === "trialing";
+  const trialDaysRemaining =
+    isTrialing && trialEndsAt && Number.isFinite(trialEndsAt.getTime())
+      ? Math.max(0, Math.ceil((trialEndsAt.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)))
+      : null;
 
   const weeklyRevenueRows = snapshotRows.slice(-12).map((row) => {
     return {
@@ -215,6 +237,12 @@ export default async function DashboardPage() {
 
   return (
     <section className="animate-page-enter space-y-6">
+      {typeof trialDaysRemaining === "number" ? (
+        <div className="rounded-xl border border-primary/30 bg-primary/10 px-4 py-3 text-sm text-primary">
+          Trial: {trialDaysRemaining} day{trialDaysRemaining === 1 ? "" : "s"} remaining. Your plan activates on {formatLongDate(trialEndsAt!)}.
+        </div>
+      ) : null}
+
       <header className="space-y-2">
         <h1 className="text-3xl font-light tracking-tight text-foreground">
           Good {timeOfDay()}, <span className="font-semibold">{firstName}</span>
@@ -230,24 +258,18 @@ export default async function DashboardPage() {
           <article className="glass-card rounded-2xl border-l-2 border-l-primary p-6 lg:col-span-7">
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <p className="text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">Getting Started</p>
-                <h2 className="mt-1 text-2xl font-light tracking-tight text-foreground">Let&apos;s set up your practice</h2>
+                <p className="text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">Setup Guide</p>
+                <h2 className="mt-1 text-2xl font-light tracking-tight text-foreground">Launch your CRM with confidence</h2>
               </div>
-              <p className="text-sm text-[hsl(var(--muted-foreground))]">{completedChecklistCount} of 5 steps complete</p>
+              <p className="text-sm text-[hsl(var(--muted-foreground))]">{completedChecklistCount} of {setupGuideItems.length} steps complete</p>
             </div>
 
             <div className="mb-5 h-1.5 overflow-hidden rounded-full bg-[hsl(var(--muted)/0.5)]">
-              <div className="h-full rounded-full bg-primary shadow-glass-teal" style={{ width: `${(completedChecklistCount / 5) * 100}%` }} />
+              <div className="h-full rounded-full bg-primary shadow-glass-teal" style={{ width: `${(completedChecklistCount / setupGuideItems.length) * 100}%` }} />
             </div>
 
             <ul className="space-y-3">
-              {[
-                { href: "/contacts", label: `Add your first ${contactLabelSingular}`, done: contactRows.length > 0 },
-                { href: "/deals", label: `Create your first ${dealLabelSingular}`, done: dealRows.length > 0 },
-                { href: "/bookings", label: "Set up your Booking page", done: appointmentTypeRows.length > 0 },
-                { href: "/landing", label: "Create a Landing page", done: landingRows.length > 0 },
-                { href: "/emails", label: "Send your first email", done: sentEmailRows.length > 0 },
-              ].map((item) => (
+              {setupGuideItems.map((item) => (
                 <li key={item.label}>
                   <Link
                     href={item.href}

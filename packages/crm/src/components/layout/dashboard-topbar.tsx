@@ -11,6 +11,7 @@ import { useLabels } from "@/lib/hooks/use-labels";
 
 const staticTitleMap: Record<string, string> = {
   "/dashboard": "Dashboard",
+  "/orgs": "Organizations",
   "/bookings": "Booking",
   "/landing": "Landing Pages",
   "/emails": "Email",
@@ -67,6 +68,14 @@ function getTitle(pathname: string, labels: ReturnType<typeof useLabels>) {
 
   if (pathname === "/settings/payments") {
     return "Payments";
+  }
+
+  if (pathname === "/settings/billing") {
+    return "Billing";
+  }
+
+  if (pathname === "/settings/integrations/kit") {
+    return "Kit Integration";
   }
 
   if (pathname === "/settings/soul-transfer") {

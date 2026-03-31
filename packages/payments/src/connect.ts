@@ -1,3 +1,5 @@
+import { stripeConnectTokenResponseSchema } from "./types";
+
 const STRIPE_CONNECT_AUTHORIZE_URL = "https://connect.stripe.com/oauth/authorize";
 
 export function buildStripeConnectUrl({ state, redirectUri }: { state: string; redirectUri: string }) {
@@ -15,4 +17,25 @@ export function buildStripeConnectUrl({ state, redirectUri }: { state: string; r
   });
 
   return `${STRIPE_CONNECT_AUTHORIZE_URL}?${params.toString()}`;
+}
+
+export async function exchangeStripeConnectCode(params: { code: string; secretKey: string }) {
+  const response = await fetch("https://connect.stripe.com/oauth/token", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${params.secretKey}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "authorization_code",
+      code: params.code,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error("Stripe Connect token exchange failed");
+  }
+
+  const payload = await response.json();
+  return stripeConnectTokenResponseSchema.parse(payload);
 }

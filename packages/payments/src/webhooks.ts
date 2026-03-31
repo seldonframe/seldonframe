@@ -2,8 +2,20 @@ import Stripe from "stripe";
 import { getStripeClient } from "./stripe-client";
 
 export function verifyStripeWebhook({ payload, signature }: { payload: string | Buffer; signature: string }) {
-  const stripe = getStripeClient();
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  return verifyStripeWebhookWithSecret({ payload, signature, webhookSecret });
+}
+
+export function verifyStripeWebhookWithSecret({
+  payload,
+  signature,
+  webhookSecret,
+}: {
+  payload: string | Buffer;
+  signature: string;
+  webhookSecret: string | undefined;
+}) {
+  const stripe = getStripeClient();
 
   if (!stripe || !webhookSecret) {
     throw new Error("Stripe webhook verification is not configured.");
@@ -14,6 +26,8 @@ export function verifyStripeWebhook({ payload, signature }: { payload: string | 
 
 export function mapStripeEvent(event: Stripe.Event) {
   switch (event.type) {
+    case "checkout.session.completed":
+      return { type: "checkout.completed", event } as const;
     case "payment_intent.succeeded":
       return { type: "payment.completed", event } as const;
     case "payment_intent.payment_failed":

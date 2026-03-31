@@ -6,6 +6,7 @@ import { contacts, landingPages, organizations } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
 import { assertWritable } from "@/lib/demo/server";
 import { emitSeldonEvent } from "@/lib/events/bus";
+import { sectionsToHTML } from "@/lib/landing/section-to-html";
 import { assertLandingPageLimit } from "@/lib/tier/limits";
 import { dispatchWebhook } from "@/lib/utils/webhooks";
 import { defaultLandingSections, type LandingSection } from "./types";
@@ -42,7 +43,16 @@ export async function getLandingPageById(id: string) {
     .where(and(eq(landingPages.orgId, orgId), eq(landingPages.id, id)))
     .limit(1);
 
-  return page ?? null;
+  if (!page) {
+    return null;
+  }
+
+  const [org] = await db.select({ slug: organizations.slug }).from(organizations).where(eq(organizations.id, orgId)).limit(1);
+
+  return {
+    ...page,
+    orgSlug: org?.slug ?? "",
+  };
 }
 
 export async function createLandingPageAction(formData: FormData) {
@@ -57,19 +67,43 @@ export async function createLandingPageAction(formData: FormData) {
   const title = String(formData.get("title") ?? "New Landing Page");
   const slugInput = String(formData.get("slug") ?? title);
   const slug = toSlug(slugInput || "landing-page");
+  const mode = String(formData.get("mode") ?? "soul-template");
+  const template = String(formData.get("template") ?? "lead-capture");
 
   await assertLandingPageLimit(orgId);
+
+  const sections = defaultLandingSections();
+  const initial = sectionsToHTML(sections);
 
   await db.insert(landingPages).values({
     orgId,
     title,
     slug,
     status: "draft",
-    sections: defaultLandingSections() as unknown as Record<string, unknown>[],
+    source: mode === "scratch" ? "scratch" : mode === "template" ? "template" : "soul",
+    sections: sections as unknown as Record<string, unknown>[],
+    contentHtml: mode === "scratch" ? null : initial.html,
+    contentCss: mode === "scratch" ? null : initial.css,
+    settings: {
+      mode,
+      template,
+    },
   });
 }
 
-export async function updateLandingSectionsAction(pageId: string, sectionsJson: string) {
+export async function updateLandingEditorAction({
+  pageId,
+  html,
+  css,
+  editorData,
+  sections,
+}: {
+  pageId: string;
+  html: string;
+  css: string;
+  editorData: Record<string, unknown>;
+  sections?: LandingSection[];
+}) {
   assertWritable();
 
   const orgId = await getOrgId();
@@ -78,12 +112,56 @@ export async function updateLandingSectionsAction(pageId: string, sectionsJson: 
     throw new Error("Unauthorized");
   }
 
-  const parsed = JSON.parse(sectionsJson) as LandingSection[];
+  await db
+    .update(landingPages)
+    .set({
+      contentHtml: html,
+      contentCss: css,
+      editorData,
+      ...(sections ? { sections: sections as unknown as Record<string, unknown>[] } : {}),
+      updatedAt: new Date(),
+    })
+    .where(and(eq(landingPages.orgId, orgId), eq(landingPages.id, pageId)));
+}
+
+export async function updateLandingPageSettingsAction({
+  pageId,
+  title,
+  slug,
+  seoDescription,
+}: {
+  pageId: string;
+  title: string;
+  slug: string;
+  seoDescription?: string;
+}) {
+  assertWritable();
+
+  const orgId = await getOrgId();
+
+  if (!orgId) {
+    throw new Error("Unauthorized");
+  }
+
+  const [page] = await db
+    .select({ seo: landingPages.seo })
+    .from(landingPages)
+    .where(and(eq(landingPages.orgId, orgId), eq(landingPages.id, pageId)))
+    .limit(1);
+
+  if (!page) {
+    throw new Error("Landing page not found");
+  }
 
   await db
     .update(landingPages)
     .set({
-      sections: parsed as unknown as Record<string, unknown>[],
+      title,
+      slug: toSlug(slug || title),
+      seo: {
+        ...(page.seo ?? {}),
+        description: seoDescription ?? "",
+      },
       updatedAt: new Date(),
     })
     .where(and(eq(landingPages.orgId, orgId), eq(landingPages.id, pageId)));
@@ -108,7 +186,11 @@ export async function publishLandingPageAction(pageId: string, published: boolea
 }
 
 export async function getPublicLandingPage(orgSlug: string, slug: string) {
-  const [org] = await db.select({ id: organizations.id }).from(organizations).where(eq(organizations.slug, orgSlug)).limit(1);
+  const [org] = await db
+    .select({ id: organizations.id, name: organizations.name, settings: organizations.settings })
+    .from(organizations)
+    .where(eq(organizations.slug, orgSlug))
+    .limit(1);
 
   if (!org) {
     return null;
@@ -124,7 +206,7 @@ export async function getPublicLandingPage(orgSlug: string, slug: string) {
     return null;
   }
 
-  return { orgId: org.id, page };
+  return { orgId: org.id, orgName: org.name, orgSettings: org.settings, page };
 }
 
 export async function trackLandingVisitAction({ pageId, visitorId }: { pageId: string; visitorId: string }) {

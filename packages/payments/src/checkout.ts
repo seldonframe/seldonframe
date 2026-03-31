@@ -28,7 +28,7 @@ export async function createCheckoutSession(input: CreateCheckoutSessionInput) {
     ],
     metadata: {
       orgId: payload.orgId,
-      contactId: payload.contactId,
+      contactId: payload.contactId ?? "",
       sourceBlock: payload.sourceBlock,
       sourceId: payload.sourceId ?? "",
       ...(payload.metadata ?? {}),

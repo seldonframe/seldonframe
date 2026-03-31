@@ -13,6 +13,8 @@ export default async function SettingsPage() {
     { href: "/settings/webhooks", title: "Webhooks", description: "Connect external services and automations", status: null },
     { href: "/settings/api", title: "API Keys", description: "Generate keys for programmatic access", status: null },
     { href: "/settings/payments", title: "Payments", description: "Connect Stripe to accept payments", status: stripeStatus ? "Connected ✓" : null },
+    { href: "/settings/billing", title: "Billing", description: "Manage plan, trial, and subscription portal", status: null },
+    { href: "/settings/integrations", title: "Integrations", description: "Connect Twilio, Resend, Kit, and Google", status: null },
     { href: "/settings/soul-transfer", title: "Soul Export / Import", description: "Download or upload your system configuration", status: null },
   ] as const;
 

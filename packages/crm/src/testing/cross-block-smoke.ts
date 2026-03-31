@@ -51,6 +51,8 @@ async function ensureOrgAndOwner() {
     throw new Error("Failed to create smoke owner");
   }
 
+  await db.update(organizations).set({ ownerId: owner.id }).where(eq(organizations.id, org.id));
+
   return {
     orgId: org.id,
     orgSlug: org.slug,

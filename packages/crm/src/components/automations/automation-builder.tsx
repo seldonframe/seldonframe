@@ -16,7 +16,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import type { EventType } from "@seldonframe/core/events";
+import { BUILT_IN_EVENT_TYPE_SUGGESTIONS, isValidEventType } from "@/lib/events/event-types";
 
 type NodeKind = "trigger" | "condition" | "action";
 
@@ -26,29 +26,7 @@ type FlowNode = {
   value: string;
 };
 
-const triggerOptions: EventType[] = [
-  "contact.created",
-  "contact.updated",
-  "deal.stage_changed",
-  "form.submitted",
-  "booking.created",
-  "booking.completed",
-  "booking.cancelled",
-  "booking.no_show",
-  "email.sent",
-  "email.opened",
-  "email.clicked",
-  "landing.visited",
-  "landing.converted",
-  "payment.completed",
-  "payment.failed",
-  "subscription.created",
-  "subscription.cancelled",
-  "invoice.created",
-  "portal.login",
-  "portal.message_sent",
-  "portal.resource_viewed",
-];
+const triggerOptions = [...BUILT_IN_EVENT_TYPE_SUGGESTIONS];
 
 const conditionOptions = [
   "Contact field matches",
@@ -114,6 +92,8 @@ function NodeCard({ node }: { node: FlowNode }) {
 
 export function AutomationBuilder() {
   const [name, setName] = useState("New Automation");
+  const [triggerInput, setTriggerInput] = useState("form.submitted");
+  const [triggerError, setTriggerError] = useState<string | null>(null);
   const [nodes, setNodes] = useState<FlowNode[]>([
     { id: "node-trigger", kind: "trigger", value: "form.submitted" },
     { id: "node-condition", kind: "condition", value: "Contact field matches" },
@@ -143,6 +123,18 @@ export function AutomationBuilder() {
 
   function addNode(kind: NodeKind, value: string) {
     setNodes((current) => [...current, { id: `${kind}-${Date.now()}-${Math.random()}`, kind, value }]);
+  }
+
+  function addTriggerNode() {
+    const value = triggerInput.trim();
+
+    if (!isValidEventType(value)) {
+      setTriggerError("Trigger must use lowercase entity.action format.");
+      return;
+    }
+
+    setTriggerError(null);
+    addNode("trigger", value);
   }
 
   function saveTemplate() {
@@ -177,6 +169,31 @@ export function AutomationBuilder() {
 
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.08em] text-indigo-600">Triggers</p>
+            <div className="mt-2 space-y-2">
+              <div className="flex gap-2">
+                <input
+                  value={triggerInput}
+                  onChange={(event) => {
+                    setTriggerInput(event.target.value);
+                    if (triggerError) {
+                      setTriggerError(null);
+                    }
+                  }}
+                  list="automation-trigger-suggestions"
+                  className="crm-input h-8 w-full px-2 text-xs"
+                  placeholder="course.enrolled"
+                />
+                <button type="button" onClick={addTriggerNode} className="rounded border px-2 py-1 text-xs">
+                  Add
+                </button>
+              </div>
+              <datalist id="automation-trigger-suggestions">
+                {triggerOptions.map((item) => (
+                  <option key={item} value={item} />
+                ))}
+              </datalist>
+              {triggerError ? <p className="text-xs text-red-300">{triggerError}</p> : null}
+            </div>
             <div className="mt-2 flex flex-wrap gap-2">
               {triggerOptions.map((item) => (
                 <button key={item} type="button" onClick={() => addNode("trigger", item)} className="rounded border px-2 py-1 text-xs">

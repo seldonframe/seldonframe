@@ -24,6 +24,7 @@ export default async function EmailsPage() {
           name: t.name,
           subject: t.subject,
           tag: t.tag,
+          triggerEvent: t.triggerEvent ?? null,
         }))}
         sent={rows.map((r) => ({
           id: r.id,

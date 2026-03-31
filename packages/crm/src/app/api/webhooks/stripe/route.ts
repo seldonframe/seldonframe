@@ -1,63 +1,44 @@
-import { createHmac, timingSafeEqual } from "crypto";
 import { NextResponse } from "next/server";
+import { mapStripeEvent, verifyStripeWebhook } from "@seldonframe/payments";
 import { handleStripeCheckoutCompleted } from "@/lib/payments/actions";
 
-function verifyStripeSignature(payload: string, signatureHeader: string, secret: string) {
-  const elements = signatureHeader.split(",");
-  const timestamp = elements.find((part) => part.startsWith("t="))?.replace("t=", "");
-  const v1 = elements.find((part) => part.startsWith("v1="))?.replace("v1=", "");
-
-  if (!timestamp || !v1) {
-    return false;
-  }
-
-  const signedPayload = `${timestamp}.${payload}`;
-  const expected = createHmac("sha256", secret).update(signedPayload, "utf8").digest("hex");
-
-  const expectedBuffer = Buffer.from(expected, "hex");
-  const signatureBuffer = Buffer.from(v1, "hex");
-
-  if (expectedBuffer.length !== signatureBuffer.length) {
-    return false;
-  }
-
-  return timingSafeEqual(expectedBuffer, signatureBuffer);
-}
-
 export async function POST(request: Request) {
-  const secret = process.env.STRIPE_WEBHOOK_SECRET;
   const signature = request.headers.get("stripe-signature");
 
-  if (!secret || !signature) {
+  if (!signature) {
     return NextResponse.json({ error: "Webhook not configured" }, { status: 400 });
   }
 
   const payload = await request.text();
+  let event: ReturnType<typeof verifyStripeWebhook>;
 
-  if (!verifyStripeSignature(payload, signature, secret)) {
-    return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
+  try {
+    event = verifyStripeWebhook({ payload, signature });
+  } catch {
+    return NextResponse.json({ error: "Invalid webhook signature" }, { status: 400 });
   }
 
-  const event = JSON.parse(payload) as {
-    type?: string;
-    data?: {
-      object?: {
-        id?: string;
-        metadata?: Record<string, string>;
-        amount_total?: number;
-        currency?: string;
-        payment_intent?: string | null;
-      };
-    };
-  };
+  const mapped = mapStripeEvent(event);
 
-  if (event.type === "checkout.session.completed" && event.data?.object?.id) {
+  if (mapped.type === "checkout.completed") {
+    const object = mapped.event.data.object as {
+      id?: string;
+      metadata?: Record<string, string> | null;
+      amount_total?: number | null;
+      currency?: string | null;
+      payment_intent?: string | null | { id?: string };
+    };
+
+    if (!object.id) {
+      return NextResponse.json({ ok: true });
+    }
+
     await handleStripeCheckoutCompleted({
-      id: event.data.object.id,
-      metadata: event.data.object.metadata,
-      amount_total: event.data.object.amount_total,
-      currency: event.data.object.currency,
-      payment_intent: event.data.object.payment_intent ?? null,
+      id: object.id,
+      metadata: object.metadata,
+      amount_total: object.amount_total,
+      currency: object.currency,
+      payment_intent: typeof object.payment_intent === "string" ? object.payment_intent : null,
     });
   }
 

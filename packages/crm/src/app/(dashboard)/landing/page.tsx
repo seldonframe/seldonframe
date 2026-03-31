@@ -1,9 +1,15 @@
 import { createLandingPageAction, listLandingPages } from "@/lib/landing/actions";
 import { getLabels } from "@/lib/soul/labels";
 import { LandingPagesContent } from "@/components/landing/landing-pages-content";
+import { getOrgId } from "@/lib/auth/helpers";
+import { db } from "@/db";
+import { organizations } from "@/db/schema";
+import { eq } from "drizzle-orm";
 
 export default async function LandingPagesDashboard() {
-  const [labels, pages] = await Promise.all([getLabels(), listLandingPages()]);
+  const [labels, pages, orgId] = await Promise.all([getLabels(), listLandingPages(), getOrgId()]);
+  const [org] = orgId ? await db.select({ slug: organizations.slug }).from(organizations).where(eq(organizations.id, orgId)).limit(1) : [null];
+  const orgSlug = org?.slug ?? "";
 
   return (
     <section className="animate-page-enter space-y-4">
@@ -22,6 +28,7 @@ export default async function LandingPagesDashboard() {
           status: p.status,
           updatedAt: p.updatedAt.toISOString(),
         }))}
+        orgSlug={orgSlug}
         createAction={createLandingPageAction}
       />
     </section>

@@ -6,6 +6,7 @@ import { activities, contacts, emails, organizations, users } from "@/db/schema"
 import { getCurrentUser, getOrgId } from "@/lib/auth/helpers";
 import { assertWritable } from "@/lib/demo/server";
 import { emitSeldonEvent } from "@/lib/events/bus";
+import { isValidEventType } from "@/lib/events/event-types";
 import { recordEmailOpenedLearning, recordEmailSentLearning } from "@/lib/soul/learning";
 import { assertEmailSendLimit, incrementEmailSendUsage } from "@/lib/tier/limits";
 import { dispatchWebhook } from "@/lib/utils/webhooks";
@@ -18,6 +19,7 @@ type EmailTemplate = {
   subject: string;
   body: string;
   tag: string;
+  triggerEvent?: string;
   createdAt: string;
 };
 
@@ -36,8 +38,20 @@ function extractEmailTemplates(settings: unknown): EmailTemplate[] {
       return false;
     }
 
+    if (item.triggerEvent != null && typeof item.triggerEvent !== "string") {
+      return false;
+    }
+
     return typeof item.id === "string" && typeof item.name === "string" && typeof item.subject === "string" && typeof item.body === "string";
   });
+}
+
+function renderTemplateWithContact(template: EmailTemplate, contactFirstName: string | null) {
+  const safeName = contactFirstName || "there";
+  return {
+    subject: template.subject.replaceAll("{{firstName}}", safeName),
+    body: template.body.replaceAll("{{firstName}}", safeName),
+  };
 }
 
 function buildTrackingPixel(emailId: string) {
@@ -253,9 +267,15 @@ export async function createEmailTemplateAction(formData: FormData) {
   const subject = String(formData.get("subject") ?? "").trim();
   const body = String(formData.get("body") ?? "").trim();
   const tag = String(formData.get("tag") ?? "general").trim().toLowerCase() || "general";
+  const triggerEventRaw = String(formData.get("triggerEvent") ?? "").trim();
+  const triggerEvent = triggerEventRaw ? triggerEventRaw.toLowerCase() : "";
 
   if (!name || !subject || !body) {
     throw new Error("Template name, subject, and body are required");
+  }
+
+  if (triggerEvent && !isValidEventType(triggerEvent)) {
+    throw new Error("Trigger event must use lowercase entity.action format");
   }
 
   const [org] = await db.select({ settings: organizations.settings }).from(organizations).where(eq(organizations.id, orgId)).limit(1);
@@ -267,6 +287,7 @@ export async function createEmailTemplateAction(formData: FormData) {
     subject,
     body,
     tag,
+    triggerEvent: triggerEvent || undefined,
     createdAt: new Date().toISOString(),
   };
 
@@ -318,16 +339,15 @@ export async function sendEmailTemplateToContactAction({
     throw new Error("Template not found");
   }
 
-  const subject = template.subject.replaceAll("{{firstName}}", contact.firstName || "there");
-  const body = template.body.replaceAll("{{firstName}}", contact.firstName || "there");
+  const renderedTemplate = renderTemplateWithContact(template, contact.firstName);
 
   await sendEmailForOrg({
     orgId,
     userId: user.id,
     contactId: contact.id,
     toEmail: contact.email,
-    subject,
-    body,
+    subject: renderedTemplate.subject,
+    body: renderedTemplate.body,
     providerOverride: "resend",
     metadata: {
       source: "contact-detail-template",
@@ -385,16 +405,15 @@ export async function sendWelcomeEmailForContact(contactId: string) {
     return;
   }
 
-  const subject = welcomeTemplate.subject.replaceAll("{{firstName}}", contact.firstName || "there");
-  const body = welcomeTemplate.body.replaceAll("{{firstName}}", contact.firstName || "there");
+  const renderedTemplate = renderTemplateWithContact(welcomeTemplate, contact.firstName);
 
   await sendEmailForOrg({
     orgId: contact.orgId,
     userId: ownerUserId,
     contactId: contact.id,
     toEmail: contact.email,
-    subject,
-    body,
+    subject: renderedTemplate.subject,
+    body: renderedTemplate.body,
     providerOverride: "resend",
     metadata: {
       source: "welcome-automation",
@@ -402,6 +421,69 @@ export async function sendWelcomeEmailForContact(contactId: string) {
       templateTag: welcomeTemplate.tag,
     },
   });
+}
+
+export async function sendTriggeredEmailsForContactEvent(params: { eventType: string; contactId: string }) {
+  if (!isValidEventType(params.eventType)) {
+    return;
+  }
+
+  const normalizedEventType = params.eventType.toLowerCase();
+
+  const [contact] = await db
+    .select({
+      id: contacts.id,
+      orgId: contacts.orgId,
+      email: contacts.email,
+      firstName: contacts.firstName,
+    })
+    .from(contacts)
+    .where(eq(contacts.id, params.contactId))
+    .limit(1);
+
+  if (!contact?.email) {
+    return;
+  }
+
+  const [org] = await db
+    .select({ settings: organizations.settings })
+    .from(organizations)
+    .where(eq(organizations.id, contact.orgId))
+    .limit(1);
+
+  const matchingTemplates = extractEmailTemplates(org?.settings).filter(
+    (template) => (template.triggerEvent || "").toLowerCase() === normalizedEventType
+  );
+
+  if (matchingTemplates.length === 0) {
+    return;
+  }
+
+  const ownerUserId = await getOrgOwnerUserId(contact.orgId);
+
+  if (!ownerUserId) {
+    return;
+  }
+
+  for (const template of matchingTemplates) {
+    const renderedTemplate = renderTemplateWithContact(template, contact.firstName);
+
+    await sendEmailForOrg({
+      orgId: contact.orgId,
+      userId: ownerUserId,
+      contactId: contact.id,
+      toEmail: contact.email,
+      subject: renderedTemplate.subject,
+      body: renderedTemplate.body,
+      providerOverride: "resend",
+      metadata: {
+        source: "event-trigger-template",
+        templateId: template.id,
+        templateTag: template.tag,
+        triggerEvent: normalizedEventType,
+      },
+    });
+  }
 }
 
 export async function sendEmailAction(formData: FormData) {

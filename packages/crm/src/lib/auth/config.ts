@@ -8,6 +8,21 @@ import { organizations, users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 
+const BILLING_STATUSES = ["trialing", "active", "past_due", "canceled", "unpaid"] as const;
+const BILLING_PERIODS = ["monthly", "yearly"] as const;
+
+function normalizeBillingStatus(value: string | null | undefined): (typeof BILLING_STATUSES)[number] {
+  return BILLING_STATUSES.includes(value as (typeof BILLING_STATUSES)[number])
+    ? (value as (typeof BILLING_STATUSES)[number])
+    : "trialing";
+}
+
+function normalizeBillingPeriod(value: string | null | undefined): (typeof BILLING_PERIODS)[number] {
+  return BILLING_PERIODS.includes(value as (typeof BILLING_PERIODS)[number])
+    ? (value as (typeof BILLING_PERIODS)[number])
+    : "monthly";
+}
+
 const credentialsSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
@@ -73,6 +88,10 @@ export const authConfig = {
           image: user.avatarUrl,
           orgId: user.orgId,
           role: user.role,
+          planId: user.planId,
+          subscriptionStatus: normalizeBillingStatus(user.subscriptionStatus),
+          billingPeriod: normalizeBillingPeriod(user.billingPeriod),
+          trialEndsAt: user.trialEndsAt?.toISOString() ?? null,
         };
       },
     }),
@@ -90,6 +109,10 @@ export const authConfig = {
         if (dbUser) {
           token.orgId = dbUser.orgId;
           token.role = dbUser.role;
+          token.planId = dbUser.planId;
+          token.subscriptionStatus = normalizeBillingStatus(dbUser.subscriptionStatus);
+          token.billingPeriod = normalizeBillingPeriod(dbUser.billingPeriod);
+          token.trialEndsAt = dbUser.trialEndsAt?.toISOString() ?? null;
 
           const [org] = await db.select().from(organizations).where(eq(organizations.id, dbUser.orgId)).limit(1);
           token.soulCompleted = Boolean(org?.soulCompletedAt);
@@ -104,6 +127,11 @@ export const authConfig = {
         session.user.orgId = (token.orgId as string | undefined) ?? "";
         session.user.role = (token.role as string | undefined) ?? "member";
         session.user.soulCompleted = Boolean(token.soulCompleted);
+        session.user.planId = (token.planId as string | undefined) ?? null;
+        session.user.subscriptionStatus =
+          (token.subscriptionStatus as "trialing" | "active" | "past_due" | "canceled" | "unpaid" | undefined) ?? "trialing";
+        session.user.billingPeriod = (token.billingPeriod as "monthly" | "yearly" | undefined) ?? "monthly";
+        session.user.trialEndsAt = (token.trialEndsAt as string | undefined) ?? null;
       }
 
       return session;

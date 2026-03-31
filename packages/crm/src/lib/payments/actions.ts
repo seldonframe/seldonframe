@@ -2,33 +2,14 @@
 
 import { and, desc, eq, sql } from "drizzle-orm";
 import { redirect } from "next/navigation";
+import { buildStripeConnectUrl, createCheckoutSession, exchangeStripeConnectCode } from "@seldonframe/payments";
 import { db } from "@/db";
 import { activities, bookings, paymentRecords, stripeConnections, users } from "@/db/schema";
 import { getCurrentUser, getOrgId } from "@/lib/auth/helpers";
 import { emitSeldonEvent } from "@/lib/events/bus";
 
-const STRIPE_CONNECT_AUTHORIZE_URL = "https://connect.stripe.com/oauth/authorize";
-
 function getAppBaseUrl() {
   return process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-}
-
-function buildStripeConnectAuthorizeUrl({ state, redirectUri }: { state: string; redirectUri: string }) {
-  const clientId = process.env.STRIPE_CONNECT_CLIENT_ID;
-
-  if (!clientId) {
-    throw new Error("Stripe Connect is not configured.");
-  }
-
-  const params = new URLSearchParams({
-    response_type: "code",
-    client_id: clientId,
-    scope: "read_write",
-    state,
-    redirect_uri: redirectUri,
-  });
-
-  return `${STRIPE_CONNECT_AUTHORIZE_URL}?${params.toString()}`;
 }
 
 export async function startStripeConnectAction() {
@@ -41,7 +22,7 @@ export async function startStripeConnectAction() {
 
   const state = `${orgId}:${Date.now()}`;
   const redirectUri = `${getAppBaseUrl()}/api/stripe/connect/callback`;
-  const connectUrl = buildStripeConnectAuthorizeUrl({ state, redirectUri });
+  const connectUrl = buildStripeConnectUrl({ state, redirectUri });
 
   redirect(connectUrl);
 }
@@ -59,31 +40,7 @@ export async function completeStripeConnectFromCode({ code, state }: { code: str
     throw new Error("Stripe secret key is not configured");
   }
 
-  const response = await fetch("https://connect.stripe.com/oauth/token", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${secretKey}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: new URLSearchParams({
-      grant_type: "authorization_code",
-      code,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error("Stripe Connect token exchange failed");
-  }
-
-  const payload = (await response.json()) as {
-    stripe_user_id?: string;
-    access_token?: string;
-    stripe_publishable_key?: string;
-  };
-
-  if (!payload.stripe_user_id) {
-    throw new Error("Stripe account id missing in callback payload");
-  }
+  const payload = await exchangeStripeConnectCode({ code, secretKey });
 
   await db.insert(stripeConnections).values({
     orgId,
@@ -134,39 +91,20 @@ export async function createBookingCheckoutSession(params: {
     throw new Error("Stripe secret key is not configured");
   }
 
-  const body = new URLSearchParams({
-    mode: "payment",
-    success_url: successUrl,
-    cancel_url: cancelUrl,
-    customer_email: params.customerEmail,
-    "line_items[0][quantity]": "1",
-    "line_items[0][price_data][currency]": (params.currency ?? "USD").toLowerCase(),
-    "line_items[0][price_data][unit_amount]": String(Math.round(params.amount * 100)),
-    "line_items[0][price_data][product_data][name]": "booking payment",
-    "metadata[bookingId]": params.bookingId,
-    "metadata[orgId]": params.orgId,
-    "metadata[contactId]": params.contactId ?? "",
-    "metadata[sourceBlock]": "booking",
-    "metadata[sourceId]": params.bookingId,
-  });
-
-  const response = await fetch("https://api.stripe.com/v1/checkout/sessions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${secretKey}`,
-      "Content-Type": "application/x-www-form-urlencoded",
+  const session = await createCheckoutSession({
+    orgId: params.orgId,
+    contactId: params.contactId,
+    amount: params.amount,
+    currency: params.currency ?? "USD",
+    sourceBlock: "booking",
+    sourceId: params.bookingId,
+    successUrl,
+    cancelUrl,
+    customerEmail: params.customerEmail,
+    metadata: {
+      bookingId: params.bookingId,
     },
-    body,
   });
-
-  if (!response.ok) {
-    throw new Error("Stripe checkout session creation failed");
-  }
-
-  const session = (await response.json()) as {
-    id: string;
-    url: string | null;
-  };
 
   return {
     sessionId: session.id,

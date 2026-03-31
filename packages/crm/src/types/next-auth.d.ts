@@ -7,6 +7,10 @@ declare module "next-auth" {
       orgId: string;
       role: string;
       soulCompleted?: boolean;
+      planId?: string | null;
+      subscriptionStatus?: "trialing" | "active" | "past_due" | "canceled" | "unpaid";
+      billingPeriod?: "monthly" | "yearly";
+      trialEndsAt?: string | null;
       name?: string | null;
       email?: string | null;
       image?: string | null;
@@ -17,6 +21,10 @@ declare module "next-auth" {
     orgId?: string;
     role?: string;
     soulCompleted?: boolean;
+    planId?: string | null;
+    subscriptionStatus?: "trialing" | "active" | "past_due" | "canceled" | "unpaid";
+    billingPeriod?: "monthly" | "yearly";
+    trialEndsAt?: string | null;
   }
 }
 
@@ -25,5 +33,9 @@ declare module "next-auth/jwt" {
     orgId?: string;
     role?: string;
     soulCompleted?: boolean;
+    planId?: string | null;
+    subscriptionStatus?: "trialing" | "active" | "past_due" | "canceled" | "unpaid";
+    billingPeriod?: "monthly" | "yearly";
+    trialEndsAt?: string | null;
   }
 }

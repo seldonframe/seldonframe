@@ -1,7 +1,8 @@
 import { getSeldonEventBus } from "@seldonframe/core/events";
 import { getCoreRuntimeConfig } from "@seldonframe/core/config";
 import { configureTelemetry, trackTelemetryEvent } from "@seldonframe/core/telemetry";
-import { sendWelcomeEmailForContact } from "@/lib/emails/actions";
+import { sendTriggeredEmailsForContactEvent, sendWelcomeEmailForContact } from "@/lib/emails/actions";
+import { syncKitForContactEvent } from "@/lib/integrations/kit/actions";
 
 let listenersRegistered = false;
 
@@ -14,10 +15,24 @@ export function registerCrmEventListeners() {
   const runtimeConfig = getCoreRuntimeConfig();
   configureTelemetry(runtimeConfig.telemetry);
 
+  bus.onAny(async (event) => {
+    const maybeContactId = (event.data as Record<string, unknown> | null)?.contactId;
+
+    if (typeof maybeContactId !== "string" || !maybeContactId) {
+      return;
+    }
+
+    await sendTriggeredEmailsForContactEvent({
+      eventType: event.type,
+      contactId: maybeContactId,
+    });
+  });
+
   bus.on("contact.created", async (event) => {
     console.log(JSON.stringify({ action: "event.contact.created", ...event }));
 
     await sendWelcomeEmailForContact(event.data.contactId);
+    await syncKitForContactEvent({ eventType: "contact.created", contactId: event.data.contactId });
 
     trackTelemetryEvent("churn_signal", {
       industry: "unknown",
@@ -67,6 +82,8 @@ export function registerCrmEventListeners() {
       no_show_rate: 0,
       conversion_rate: 1,
     });
+
+    await syncKitForContactEvent({ eventType: "booking.completed", contactId: event.data.contactId });
   });
 
   bus.on("booking.cancelled", async (event) => {

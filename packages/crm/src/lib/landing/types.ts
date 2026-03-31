@@ -1,53 +1,49 @@
-export type LandingSectionType =
-  | "hero"
-  | "social_proof"
-  | "features"
-  | "benefits"
-  | "testimonials"
-  | "pricing"
-  | "faq"
-  | "cta"
-  | "form"
-  | "booking"
-  | "custom_html";
+import type { LandingPageSection } from "@/components/landing/sections/types";
 
-export type LandingSection = {
-  id: string;
-  type: LandingSectionType;
-  title?: string;
-  subtitle?: string;
-  body?: string;
-  items?: string[];
-  ctaLabel?: string;
-  ctaHref?: string;
-  formSlug?: string;
-  bookingSlug?: string;
-  html?: string;
-};
+export type LandingSection = LandingPageSection;
 
 export function defaultLandingSections(): LandingSection[] {
   return [
     {
-      id: "hero-1",
       type: "hero",
-      title: "Transform your workflow",
-      subtitle: "Book a strategy call and start scaling faster.",
-      ctaLabel: "Get Started",
-      ctaHref: "#lead-form",
+      order: 1,
+      content: {
+        kicker: "Built with SeldonFrame",
+        headline: "Launch your next landing page in minutes",
+        subheadline: "Start from a high-converting structure, then customize everything visually.",
+        ctaText: "Get Started",
+        ctaLink: "#cta",
+      },
     },
     {
-      id: "form-1",
-      type: "form",
-      title: "Get in touch",
-      subtitle: "Leave your details and we will reach out.",
-      formSlug: "default-intake",
+      type: "benefits",
+      order: 2,
+      content: {
+        headline: "Why this page works",
+        benefits: [
+          { icon: "⚡", title: "Fast Setup", description: "Start from prebuilt sections and publish quickly." },
+          { icon: "🧩", title: "Modular", description: "Mix and match section blocks without writing code." },
+          { icon: "📈", title: "Conversion-first", description: "Designed for clear offers and strong call-to-action flow." },
+        ],
+      },
     },
     {
-      id: "cta-1",
       type: "cta",
-      title: "Ready to move faster?",
-      ctaLabel: "Book now",
-      ctaHref: "#lead-form",
+      order: 3,
+      content: {
+        headline: "Ready to publish?",
+        body: "Save your page, preview it, and go live when you are ready.",
+        ctaText: "Publish Page",
+        ctaLink: "#",
+      },
+    },
+    {
+      type: "footer",
+      order: 4,
+      content: {
+        businessName: "Your Business",
+        description: "Powered by SeldonFrame",
+      },
     },
   ];
 }

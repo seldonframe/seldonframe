@@ -8,7 +8,7 @@ export type SubscriptionStatus = z.infer<typeof subscriptionStatusSchema>;
 
 export const createCheckoutSessionInputSchema = z.object({
   orgId: z.string().uuid(),
-  contactId: z.string().uuid(),
+  contactId: z.string().uuid().optional().nullable(),
   amount: z.number().positive(),
   currency: z.string().min(3).max(3).default("USD"),
   sourceBlock: z.enum(["booking", "landing", "manual"]),
@@ -28,3 +28,11 @@ export const stripeWebhookEventSchema = z.object({
 });
 
 export type StripeWebhookEvent = z.infer<typeof stripeWebhookEventSchema>;
+
+export const stripeConnectTokenResponseSchema = z.object({
+  stripe_user_id: z.string(),
+  access_token: z.string().optional(),
+  stripe_publishable_key: z.string().optional(),
+});
+
+export type StripeConnectTokenResponse = z.infer<typeof stripeConnectTokenResponseSchema>;

@@ -21,8 +21,11 @@ export type SeldonEvent =
   | { type: "portal.message_sent"; data: { contactId: string; messageId: string } }
   | { type: "portal.resource_viewed"; data: { contactId: string; resourceId: string } };
 
-export type EventType = SeldonEvent["type"];
-export type EventPayload<T extends EventType> = Extract<SeldonEvent, { type: T }>["data"];
+export type BuiltInEventType = SeldonEvent["type"];
+export type EventType = BuiltInEventType | `${string}.${string}`;
+export type EventPayload<T extends EventType> = T extends BuiltInEventType
+  ? Extract<SeldonEvent, { type: T }>["data"]
+  : Record<string, unknown>;
 
 export type EventEnvelope<T extends EventType = EventType> = {
   type: T;
@@ -38,19 +41,25 @@ export interface SeldonEventBus {
   on<T extends EventType>(type: T, handler: EventHandler<T>): () => void;
   once<T extends EventType>(type: T, handler: EventHandler<T>): () => void;
   off<T extends EventType>(type: T, handler: EventHandler<T>): void;
+  onAny(handler: EventHandler<EventType>): () => void;
+  offAny(handler: EventHandler<EventType>): void;
 }
 
 export class InMemorySeldonEventBus implements SeldonEventBus {
   private readonly handlers = new Map<EventType, Set<AnyHandler>>();
+  private readonly anyHandlers = new Set<AnyHandler>();
 
   async emit<T extends EventType>(type: T, data: EventPayload<T>) {
-    const listeners = this.handlers.get(type);
-    if (!listeners || listeners.size === 0) {
+    const listeners = this.handlers.get(type) ?? new Set<AnyHandler>();
+
+    if (listeners.size === 0 && this.anyHandlers.size === 0) {
       return;
     }
 
     const event: EventEnvelope<T> = { type, data, createdAt: new Date() };
-    await Promise.allSettled([...listeners].map((handler) => handler(event as unknown as EventEnvelope<EventType>)));
+    await Promise.allSettled(
+      [...listeners, ...this.anyHandlers].map((handler) => handler(event as unknown as EventEnvelope<EventType>))
+    );
   }
 
   on<T extends EventType>(type: T, handler: EventHandler<T>) {
@@ -79,6 +88,15 @@ export class InMemorySeldonEventBus implements SeldonEventBus {
     if (listeners.size === 0) {
       this.handlers.delete(type);
     }
+  }
+
+  onAny(handler: EventHandler<EventType>) {
+    this.anyHandlers.add(handler as unknown as AnyHandler);
+    return () => this.offAny(handler);
+  }
+
+  offAny(handler: EventHandler<EventType>) {
+    this.anyHandlers.delete(handler as unknown as AnyHandler);
   }
 }
 

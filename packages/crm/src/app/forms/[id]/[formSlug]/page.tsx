@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { intakeForms, organizations } from "@/db/schema";
 import { PublicForm } from "@/components/forms/public-form";
 import { PoweredByBadge } from "@seldonframe/core/virality";
+import { shouldShowPoweredByBadgeForOrg } from "@/lib/billing/public";
 
 export default async function PublicIntakePage({
   params,
@@ -32,6 +33,8 @@ export default async function PublicIntakePage({
     notFound();
   }
 
+  const showBadge = await shouldShowPoweredByBadgeForOrg(org.id);
+
   return (
     <main className="crm-page flex items-center justify-center">
       <div className="w-full max-w-xl space-y-4">
@@ -41,9 +44,11 @@ export default async function PublicIntakePage({
           formSlug={formSlug}
           fields={Array.isArray(form.fields) ? (form.fields as Array<{ key: string; label: string; type: string; required: boolean; options?: string[] }>) : []}
         />
-        <div className="flex justify-center pt-2">
-          <PoweredByBadge />
-        </div>
+        {showBadge ? (
+          <div className="flex justify-center pt-2">
+            <PoweredByBadge />
+          </div>
+        ) : null}
       </div>
     </main>
   );

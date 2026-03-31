@@ -14,7 +14,7 @@ export function SignupForm() {
 
   useEffect(() => {
     if (state.success) {
-      router.push("/");
+      router.push("/pricing");
     }
   }, [router, state.success]);
 

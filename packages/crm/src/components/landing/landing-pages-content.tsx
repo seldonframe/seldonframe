@@ -40,9 +40,11 @@ function statusBadge(status: string) {
 
 export function LandingPagesContent({
   pages,
+  orgSlug,
   createAction,
 }: {
   pages: PageRow[];
+  orgSlug: string;
   createAction: (formData: FormData) => Promise<void>;
 }) {
   const [showCreate, setShowCreate] = useState(false);
@@ -54,7 +56,7 @@ export function LandingPagesContent({
   }
 
   function handleCopy(slug: string, id: string) {
-    navigator.clipboard.writeText(`/p/${slug}`);
+    navigator.clipboard.writeText(`/l/${orgSlug}/${slug}`);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 1200);
   }
@@ -123,7 +125,7 @@ export function LandingPagesContent({
                   {copiedId === page.id ? "Copied" : "URL"}
                 </button>
                 {page.status === "published" ? (
-                  <Link href={`/p/${page.slug}`} target="_blank" rel="noopener noreferrer" className="crm-button-ghost h-9 px-4 text-xs">
+                  <Link href={`/l/${orgSlug}/${page.slug}`} target="_blank" rel="noopener noreferrer" className="crm-button-ghost h-9 px-4 text-xs">
                     <ExternalLink className="mr-1 inline h-3 w-3" /> View
                   </Link>
                 ) : null}
@@ -166,6 +168,27 @@ export function LandingPagesContent({
               <div>
                 <label htmlFor="lp-slug" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">URL slug</label>
                 <input id="lp-slug" className="crm-input h-10 w-full px-3" name="slug" placeholder="my-landing-page" required />
+              </div>
+
+              <div>
+                <label htmlFor="lp-mode" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Start mode</label>
+                <select id="lp-mode" className="crm-input h-10 w-full px-3" name="mode" defaultValue="soul-template">
+                  <option value="soul-template">From Soul Template</option>
+                  <option value="template">Start from Template</option>
+                  <option value="scratch">Start from Scratch</option>
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="lp-template" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Template preset</label>
+                <select id="lp-template" className="crm-input h-10 w-full px-3" name="template" defaultValue="lead-capture">
+                  <option value="lead-capture">Lead Capture</option>
+                  <option value="service-overview">Service Overview</option>
+                  <option value="booking-page">Booking Page</option>
+                  <option value="about-page">About Page</option>
+                  <option value="contact-page">Contact Page</option>
+                  <option value="blank">Blank Page</option>
+                </select>
               </div>
 
               <div className="pt-2">
