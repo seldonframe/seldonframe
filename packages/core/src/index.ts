@@ -6,3 +6,4 @@ export * from "./config";
 export * from "./integrations";
 export * from "./telemetry";
 export * from "./virality";
+export * from "./blocks";
