@@ -1,6 +1,6 @@
 import { eq, or } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { verifyStripeWebhookWithSecret } from "@seldonframe/payments";
+import { verifyStripeWebhook } from "@seldonframe/payments";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { getPlanByStripePriceId } from "@/lib/billing/plans";
@@ -61,17 +61,19 @@ async function updateUserBillingByIdentifiers(params: {
 
 export async function POST(request: Request) {
   const signature = request.headers.get("stripe-signature");
-  const webhookSecret = process.env.STRIPE_BILLING_WEBHOOK_SECRET;
 
-  if (!signature || !webhookSecret) {
+  if (!signature || !process.env.STRIPE_BILLING_WEBHOOK_SECRET) {
     return NextResponse.json({ error: "Billing webhook not configured" }, { status: 400 });
   }
 
   const payload = await request.text();
-  let event: ReturnType<typeof verifyStripeWebhookWithSecret>;
+  let event: ReturnType<typeof verifyStripeWebhook>;
 
   try {
-    event = verifyStripeWebhookWithSecret({ payload, signature, webhookSecret });
+    const previousSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    process.env.STRIPE_WEBHOOK_SECRET = process.env.STRIPE_BILLING_WEBHOOK_SECRET;
+    event = verifyStripeWebhook({ payload, signature });
+    process.env.STRIPE_WEBHOOK_SECRET = previousSecret;
   } catch {
     return NextResponse.json({ error: "Invalid webhook signature" }, { status: 400 });
   }
