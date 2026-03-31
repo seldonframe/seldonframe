@@ -1,4 +1,5 @@
 import { requireAuth } from "@/lib/auth/helpers";
+import { getOrgId } from "@/lib/auth/helpers";
 import { SoulProvider } from "@/components/soul/soul-provider";
 import { getSoul } from "@/lib/soul/server";
 import { adjustBrightness } from "@/lib/utils/colors";
@@ -7,9 +8,12 @@ import { CommandPalette } from "@/components/layout/command-palette";
 import { DemoBanner } from "@/components/layout/demo-banner";
 import { DashboardTopbar } from "@/components/layout/dashboard-topbar";
 import { registerCrmEventListeners } from "@/lib/events/listeners";
+import { getAllBlocksForOrg } from "@/lib/blocks/registry";
+import { canSeldonIt, resolvePlanFromPlanId } from "@/lib/billing/entitlements";
 import { db } from "@/db";
-import { activities, contacts, deals, landingPages } from "@/db/schema";
+import { activities, contacts, deals, landingPages, organizations } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
+import Link from "next/link";
 
 export default async function DashboardLayout({
   children,
@@ -23,7 +27,16 @@ export default async function DashboardLayout({
   const user = session.user;
   const avatarFallback = user?.name?.trim()?.charAt(0)?.toUpperCase() || user?.email?.charAt(0)?.toUpperCase() || "U";
 
-  const orgId = user?.orgId;
+  const orgId = await getOrgId();
+  const blocks = orgId ? await getAllBlocksForOrg(orgId) : [];
+  const plan = resolvePlanFromPlanId(user?.planId ?? null);
+  const canAccessSeldon = canSeldonIt(plan);
+
+  const [activeOrg] = orgId
+    ? await db.select({ id: organizations.id, name: organizations.name }).from(organizations).where(eq(organizations.id, orgId)).limit(1)
+    : [null];
+
+  const isSwitchedOrg = Boolean(orgId && user?.orgId && orgId !== user.orgId);
 
   const [contactHits, dealHits, pageHits, activityHits] = orgId
     ? await Promise.all([
@@ -56,6 +69,8 @@ export default async function DashboardLayout({
 
   const paletteItems = [
     { label: "Dashboard", href: "/dashboard", group: "Navigate" },
+    { label: "Seldon It", href: canAccessSeldon ? "/seldon" : "/settings/billing", group: "Navigate" as const },
+    ...(user?.planId?.startsWith("pro-") ? [{ label: "Organizations", href: "/orgs", group: "Navigate" as const }] : []),
     { label: "Contacts", href: "/contacts", group: "Navigate" },
     { label: "Deals", href: "/deals", group: "Navigate" },
     { label: "Pages", href: "/landing", group: "Navigate" },
@@ -94,13 +109,18 @@ export default async function DashboardLayout({
 
   return (
     <SoulProvider soul={soul}>
-      <div className="crm-page relative !px-8 !pb-8 !pt-6" data-soul-primary style={bodyStyle}>
+      <div className="crm-page relative px-8! pb-8! pt-6!" data-soul-primary style={bodyStyle}>
         <div className="pointer-events-none fixed -left-24 -top-24 h-96 w-96 rounded-full bg-[hsl(var(--primary)/0.1)] blur-[120px]" />
         <div className="pointer-events-none fixed right-0 top-1/3 h-72 w-72 rounded-full bg-[hsl(var(--primary)/0.06)] blur-[140px]" />
         <div className="animate-page-enter flex flex-col gap-6 md:flex-row">
-          <Sidebar />
+          <Sidebar blocks={blocks} canAccessSeldon={canAccessSeldon} />
           <div className="flex-1 space-y-4">
             <DemoBanner />
+            {isSwitchedOrg && activeOrg ? (
+              <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.22)] px-3 py-2 text-sm text-[hsl(var(--muted-foreground))]">
+                <span className="text-foreground">{activeOrg.name}</span> active · <Link href="/orgs" className="text-primary underline underline-offset-4">Back to all organizations</Link>
+              </div>
+            ) : null}
             <DashboardTopbar userName={user?.name || "Account"} userEmail={user?.email || ""} avatarFallback={avatarFallback} />
             {children}
           </div>

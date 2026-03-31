@@ -1,23 +1,60 @@
 "use client";
 
 import Image from "next/image";
+import type { BlockManifest } from "@seldonframe/core/blocks";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { useLabels } from "@/lib/hooks/use-labels";
 
-export function Sidebar() {
+const fallbackNav = [
+  { href: "/dashboard", label: "Dashboard", icon: "dashboard" },
+  { href: "/seldon", label: "Seldon It", icon: "sparkles" },
+  { href: "/contacts", label: "Contacts", icon: "contacts" },
+  { href: "/deals", label: "Deals", icon: "deals" },
+  { href: "/bookings", label: "Booking", icon: "booking" },
+  { href: "/landing", label: "Pages", icon: "pages" },
+  { href: "/emails", label: "Email", icon: "email" },
+  { href: "/forms", label: "Forms", icon: "forms" },
+  { href: "/automations", label: "Automations", icon: "automations" },
+  { href: "/settings", label: "Settings", icon: "settings" },
+];
+
+export function Sidebar({ blocks, canAccessSeldon }: { blocks: BlockManifest[]; canAccessSeldon: boolean }) {
   const labels = useLabels();
 
+  const blockNav = blocks.length
+    ? [...blocks].sort((a, b) => a.nav.order - b.nav.order).map((block) => {
+        const label =
+          block.id === "contacts"
+            ? labels.contact.plural
+            : block.id === "deals"
+              ? labels.deal.plural
+              : block.id === "forms"
+                ? labels.intakeForm.plural
+                : block.nav.label;
+
+        return {
+          href: block.nav.href,
+          label,
+          icon: block.nav.icon || block.icon || "Puzzle",
+          order: block.nav.order,
+        };
+      })
+    : fallbackNav.map((item, idx) => ({ ...item, order: idx * 10 + 10 }));
+
+  const filteredBlockNav = blockNav.filter((item) => item.href !== "/seldon");
+
   const nav = [
-    { href: "/dashboard", label: "Dashboard", icon: "dashboard" as const },
-    { href: "/contacts", label: labels.contact.plural, icon: "contacts" as const },
-    { href: "/deals", label: labels.deal.plural, icon: "deals" as const },
-    { href: "/bookings", label: "Booking", icon: "booking" as const },
-    { href: "/landing", label: "Pages", icon: "pages" as const },
-    { href: "/emails", label: "Email", icon: "email" as const },
-    { href: "/forms", label: labels.intakeForm.plural, icon: "forms" as const },
-    { href: "/automations", label: "Automations", icon: "automations" as const },
-    { href: "/settings", label: "Settings", icon: "settings" as const },
-  ];
+    ...filteredBlockNav,
+    {
+      href: canAccessSeldon ? "/seldon" : "/settings/billing",
+      label: "Seldon It",
+      icon: "sparkles",
+      order: 15,
+      disabled: !canAccessSeldon,
+      tooltip: canAccessSeldon ? undefined : "Upgrade to Cloud Pro to Seldon custom blocks",
+      upgrade: !canAccessSeldon,
+    },
+  ].sort((a, b) => a.order - b.order);
 
   return (
     <aside className="crm-sidebar flex w-full flex-col border-r border-[hsl(var(--border))] pr-6 md:w-[220px]">
