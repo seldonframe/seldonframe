@@ -69,7 +69,19 @@ export const authConfig = {
           return null;
         }
 
-        const [user] = await db.select().from(users).where(eq(users.email, parsed.data.email)).limit(1);
+        const [user] = await db
+          .select({
+            id: users.id,
+            name: users.name,
+            email: users.email,
+            avatarUrl: users.avatarUrl,
+            orgId: users.orgId,
+            role: users.role,
+            passwordHash: users.passwordHash,
+          })
+          .from(users)
+          .where(eq(users.email, parsed.data.email))
+          .limit(1);
 
         if (!user || !user.passwordHash) {
           return null;
@@ -88,10 +100,10 @@ export const authConfig = {
           image: user.avatarUrl,
           orgId: user.orgId,
           role: user.role,
-          planId: user.planId,
-          subscriptionStatus: normalizeBillingStatus(user.subscriptionStatus),
-          billingPeriod: normalizeBillingPeriod(user.billingPeriod),
-          trialEndsAt: user.trialEndsAt?.toISOString() ?? null,
+          planId: null,
+          subscriptionStatus: "trialing" as const,
+          billingPeriod: "monthly" as const,
+          trialEndsAt: null,
         };
       },
     }),
@@ -104,15 +116,23 @@ export const authConfig = {
       }
 
       if (token.sub) {
-        const [dbUser] = await db.select().from(users).where(eq(users.id, token.sub)).limit(1);
+        const [dbUser] = await db
+          .select({
+            id: users.id,
+            orgId: users.orgId,
+            role: users.role,
+          })
+          .from(users)
+          .where(eq(users.id, token.sub))
+          .limit(1);
 
         if (dbUser) {
           token.orgId = dbUser.orgId;
           token.role = dbUser.role;
-          token.planId = dbUser.planId;
-          token.subscriptionStatus = normalizeBillingStatus(dbUser.subscriptionStatus);
-          token.billingPeriod = normalizeBillingPeriod(dbUser.billingPeriod);
-          token.trialEndsAt = dbUser.trialEndsAt?.toISOString() ?? null;
+          token.planId = (token.planId as string | undefined) ?? null;
+          token.subscriptionStatus = normalizeBillingStatus(token.subscriptionStatus as string | null | undefined);
+          token.billingPeriod = normalizeBillingPeriod(token.billingPeriod as string | null | undefined);
+          token.trialEndsAt = (token.trialEndsAt as string | undefined) ?? null;
 
           const [org] = await db.select().from(organizations).where(eq(organizations.id, dbUser.orgId)).limit(1);
           token.soulCompleted = Boolean(org?.soulCompletedAt);
