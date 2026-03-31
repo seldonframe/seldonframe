@@ -8,6 +8,7 @@ import { getCurrentUser, getOrgId } from "@/lib/auth/helpers";
 import { canSeldonIt, resolvePlanFromPlanId } from "@/lib/billing/entitlements";
 import { assertWritable } from "@/lib/demo/server";
 import { blockMdToCode, decideMigrationExecution, planBlockMds } from "@/lib/ai/generate-block";
+import { getAIClient, recordSeldonUsage } from "@/lib/ai/client";
 import { enableBlockForOrg } from "@/lib/marketplace/actions";
 import type { OrganizationIntegrations } from "@/db/schema";
 
@@ -308,6 +309,22 @@ export async function runSeldonItAction(_prev: SeldonRunState, formData: FormDat
 
     revalidatePath("/seldon");
     revalidatePath("/marketplace");
+
+    try {
+      const resolution = await getAIClient({ orgId, userId: user.id });
+
+      for (const result of results) {
+        await recordSeldonUsage({
+          orgId,
+          userId: user.id,
+          blockId: result.blockId,
+          mode: resolution.mode,
+          model: "claude-sonnet",
+        });
+      }
+    } catch {
+      // Usage recording is non-critical; do not fail the run.
+    }
 
     const hasReview = results.some((entry) => entry.installMode === "review");
 

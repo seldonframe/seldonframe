@@ -12,6 +12,7 @@ type ContactRow = {
   lastName: string | null;
   email: string | null;
   status: string;
+  badges?: string[];
 };
 
 type EditableField = "firstName" | "lastName" | "email" | "status";
@@ -154,6 +155,15 @@ export function ContactsInlineTable({ rows }: { rows: ContactRow[] }) {
                       Open
                     </Link>
                   </div>
+                  {row.badges && row.badges.length > 0 ? (
+                    <div className="mt-2 flex flex-wrap items-center gap-1">
+                      {row.badges.map((badge) => (
+                        <span key={badge} className="rounded-full border border-primary/25 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                          {badge}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
                 </td>
 
                 <td className="px-3 py-3">

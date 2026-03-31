@@ -8,6 +8,7 @@ import { listBookings } from "@/lib/bookings/actions";
 import { listContacts } from "@/lib/contacts/actions";
 import { listDeals } from "@/lib/deals/actions";
 import { getSoul } from "@/lib/soul/server";
+import { skipSoulDeepenerAction } from "@/lib/soul/actions";
 import { RevenueChartCard } from "@/components/dashboard/widgets/revenue-chart-card";
 
 function toUtcDate(value: string | Date) {
@@ -82,6 +83,12 @@ function StatCard({ label, value, icon, trendPoints }: { label: string; value: s
 }
 
 export default async function DashboardPage() {
+  async function skipDeepSetupFormAction() {
+    "use server";
+
+    await skipSoulDeepenerAction();
+  }
+
   const [user, contactRows, dealRows, bookingRows, soul] = await Promise.all([getCurrentUser(), listContacts(), listDeals(), listBookings(), getSoul()]);
   const orgId = user?.orgId;
 
@@ -110,7 +117,7 @@ export default async function DashboardPage() {
       .where(and(eq(emails.orgId, orgId), eq(emails.status, "sent")))
       .limit(10),
     db
-      .select({ amount: paymentRecords.amount })
+      .select({ amount: paymentRecords.amount, createdAt: paymentRecords.createdAt })
       .from(paymentRecords)
       .where(eq(paymentRecords.orgId, orgId)),
     db
@@ -138,6 +145,7 @@ export default async function DashboardPage() {
   const contactLabelPlural = soul?.entityLabels?.contact?.plural || "Contacts";
   const dealLabelSingular = soul?.entityLabels?.deal?.singular || "Deal";
   const setupComplete = Boolean(orgRow?.soulId) || Number(orgRow?.soulContentGenerated ?? 0) > 0;
+  const deepSetupPending = setupComplete && !soul?.deepSetup?.completedAt && !soul?.deepSetup?.skippedAt;
 
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
@@ -153,8 +161,8 @@ export default async function DashboardPage() {
     { href: "/deals", label: `Create First ${dealLabelSingular}`, done: dealRows.length > 0 },
   ];
   const completedChecklistCount = setupGuideItems.filter((item) => item.done).length;
-
   const today = new Date();
+  const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
   const startOfToday = new Date(today);
   startOfToday.setHours(0, 0, 0, 0);
   const startOfTomorrow = new Date(startOfToday);
@@ -209,6 +217,14 @@ export default async function DashboardPage() {
   });
   const winRate = closedDeals.length > 0 ? (wonDeals.length / closedDeals.length) * 100 : 0;
   const revenueTotal = paymentRows.reduce((sum, row) => sum + Number(row.amount), 0);
+  const monthlyNewClients = contactRows.filter((row) => new Date(row.createdAt) >= startOfMonth).length;
+  const monthlyRevenue = paymentRows
+    .filter((row) => new Date(row.createdAt) >= startOfMonth)
+    .reduce((sum, row) => sum + Number(row.amount), 0);
+
+  const goalMetrics = soul?.goals?.monthly ?? [];
+  const newClientsGoal = goalMetrics.find((goal) => /new\s*(clients?|contacts?|members?)/i.test(goal.metric));
+  const revenueGoal = goalMetrics.find((goal) => /revenue|sales|income|arr|mrr/i.test(goal.metric));
 
   const pipelineTrend = snapshotRows.slice(-7).map((row) => Number(row.pipelineValue));
   const winRateTrend = snapshotRows.slice(-7).map((row) => Number(row.winRate) * 100);
@@ -243,6 +259,26 @@ export default async function DashboardPage() {
         </div>
       ) : null}
 
+      {deepSetupPending ? (
+        <article className="glass-card rounded-2xl border-l-2 border-l-primary p-6">
+          <p className="text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">Optional Deep Setup</p>
+          <h2 className="mt-2 text-xl font-semibold text-foreground">Your business is set up. Want to unlock automations?</h2>
+          <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
+            Tell us how your client journey works and we&apos;ll translate it into a deeper soul profile.
+          </p>
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <Link href="/dashboard/soul-deepener" className="crm-button-primary h-10 px-4">
+              Set Up Automations
+            </Link>
+            <form action={skipDeepSetupFormAction}>
+              <button type="submit" className="crm-button-secondary h-10 px-4">
+                Maybe Later
+              </button>
+            </form>
+          </div>
+        </article>
+      ) : null}
+
       <header className="space-y-2">
         <h1 className="text-3xl font-light tracking-tight text-foreground">
           Good {timeOfDay()}, <span className="font-semibold">{firstName}</span>
@@ -252,6 +288,28 @@ export default async function DashboardPage() {
           <span className="text-primary">{sessionsToday}</span> sessions today · <span className="text-primary">{followUpsDue}</span> follow-ups due · <span className="text-primary">{newClientsThisWeek}</span> new {contactLabelPlural.toLowerCase()} this week
         </p>
       </header>
+
+      {newClientsGoal || revenueGoal ? (
+        <div className="grid gap-3 md:grid-cols-2">
+          {newClientsGoal ? (
+            <article className="glass-card rounded-2xl p-4">
+              <p className="text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">Goal Progress</p>
+              <p className="mt-2 text-base text-foreground">
+                {monthlyNewClients} of {newClientsGoal.target} new {contactLabelPlural.toLowerCase()} this month
+              </p>
+            </article>
+          ) : null}
+
+          {revenueGoal ? (
+            <article className="glass-card rounded-2xl p-4">
+              <p className="text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">Revenue Goal</p>
+              <p className="mt-2 text-base text-foreground">
+                Revenue: {formatCurrency(monthlyRevenue)} of {formatCurrency(revenueGoal.target)} target
+              </p>
+            </article>
+          ) : null}
+        </div>
+      ) : null}
 
       {isNewUser ? (
         <div className="grid gap-4 lg:grid-cols-12">

@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { organizations } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
+import type { OrgSoul } from "@/lib/soul/types";
 import { exportSoulConfig, importSoulConfig } from "@seldonframe/core/virality";
 import { assertWritable } from "@/lib/demo/server";
 
@@ -24,7 +25,7 @@ export async function exportSoulAction() {
     throw new Error("Soul not configured");
   }
 
-  return exportSoulConfig(orgId, org.soul as Record<string, unknown>);
+  return exportSoulConfig(orgId, org.soul as unknown as Record<string, unknown>);
 }
 
 export async function importSoulAction(jsonString: string) {
@@ -41,7 +42,7 @@ export async function importSoulAction(jsonString: string) {
   await db
     .update(organizations)
     .set({
-      soul: parsed.soul as Record<string, unknown>,
+      soul: parsed.soul as unknown as OrgSoul,
       updatedAt: new Date(),
     })
     .where(eq(organizations.id, orgId));

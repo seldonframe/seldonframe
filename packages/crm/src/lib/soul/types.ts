@@ -16,6 +16,53 @@ export type SoulLabel = {
   plural: string;
 };
 
+export type SoulJourneyStage = {
+  name: string;
+  duration?: string;
+  goal?: string;
+  autoActions?: string[];
+  ongoing?: boolean;
+};
+
+export type SoulClientSegment = {
+  name: string;
+  needs?: string;
+  risk?: string;
+  opportunity?: string;
+};
+
+export type SoulKeyMoment = {
+  trigger: string;
+  importance: "critical" | "high" | "medium";
+  action: string;
+};
+
+export type SoulGoalMetric = {
+  metric: string;
+  target: number;
+};
+
+export type SoulService = {
+  name: string;
+  duration?: string;
+  price?: number;
+  description?: string;
+};
+
+export type SoulDeepSetupResponse = {
+  field: string;
+  question: string;
+  response: string;
+  answeredAt: string;
+};
+
+export type SoulDeepSetup = {
+  askedFields?: string[];
+  responses?: SoulDeepSetupResponse[];
+  completedAt?: string;
+  skippedAt?: string;
+};
+
 export interface OrgSoul {
   businessName: string;
   businessDescription: string;
@@ -59,6 +106,32 @@ export interface OrgSoul {
     painPoint: string;
     clientDescription: string;
   };
+
+  journey?: {
+    stages: SoulJourneyStage[];
+  };
+  clientIntelligence?: {
+    segments?: SoulClientSegment[];
+    keyMoments?: SoulKeyMoment[];
+  };
+  goals?: {
+    monthly?: SoulGoalMetric[];
+    dashboardFocus?: {
+      primary?: string;
+      secondary?: string;
+      tertiary?: string;
+    };
+  };
+  ecosystem?: {
+    referralSources?: Array<{
+      name: string;
+      relationship?: string;
+    }>;
+    differentiators?: string[];
+    competitors?: string[];
+  };
+  services?: SoulService[];
+  deepSetup?: SoulDeepSetup;
 }
 
 export type SoulWizardInput = {

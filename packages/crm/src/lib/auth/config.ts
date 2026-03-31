@@ -134,8 +134,12 @@ export const authConfig = {
           token.billingPeriod = normalizeBillingPeriod(token.billingPeriod as string | null | undefined);
           token.trialEndsAt = (token.trialEndsAt as string | undefined) ?? null;
 
-          const [org] = await db.select().from(organizations).where(eq(organizations.id, dbUser.orgId)).limit(1);
-          token.soulCompleted = Boolean(org?.soulCompletedAt);
+          const [org] = await db
+            .select({ id: organizations.id })
+            .from(organizations)
+            .where(eq(organizations.id, dbUser.orgId))
+            .limit(1);
+          token.soulCompleted = Boolean(org?.id);
         }
       }
 

@@ -5,6 +5,7 @@ import { buildSoulVariables, interpolateDeep, loadSoulPackage } from "@seldonfra
 import { db } from "@/db";
 import { bookings, intakeForms, landingPages, organizations, pipelines } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
+import type { OrgSoul } from "@/lib/soul/types";
 import { assertWritable } from "@/lib/demo/server";
 
 type InstallSoulInput = {
@@ -294,14 +295,14 @@ export async function installSoul(input: InstallSoulInput) {
   };
 
   const orgUpdateValues: {
-    soul: Record<string, unknown>;
+    soul: OrgSoul;
     soulId: string;
     soulContentGenerated: number;
     settings: Record<string, unknown>;
     updatedAt: Date;
     soulCompletedAt?: Date;
   } = {
-    soul: interpolatedSoul as Record<string, unknown>,
+    soul: interpolatedSoul as unknown as OrgSoul,
     soulId: input.soulId,
     soulContentGenerated: 1,
     settings: nextSettings,

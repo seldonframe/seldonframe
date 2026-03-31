@@ -5,15 +5,17 @@ import { organizations } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth/helpers";
 import { listContacts } from "@/lib/contacts/actions";
 import { getLabels } from "@/lib/soul/labels";
+import { getSoul } from "@/lib/soul/server";
 import { BookingsPageContent } from "@/components/bookings/bookings-page-content";
 
 export default async function BookingsPage() {
-  const [user, labels, bookingTypes, bookings, contacts] = await Promise.all([
+  const [user, labels, bookingTypes, bookings, contacts, soul] = await Promise.all([
     getCurrentUser(),
     getLabels(),
     listAppointmentTypes(),
     listBookings(),
     listContacts(),
+    getSoul(),
   ]);
 
   let orgSlug = "";
@@ -50,6 +52,7 @@ export default async function BookingsPage() {
           firstName: row.firstName,
           lastName: row.lastName,
         }))}
+        suggestedServices={soul?.services ?? []}
         orgSlug={orgSlug}
         createAppointmentTypeAction={createAppointmentTypeAction}
       />

@@ -2,6 +2,13 @@
 
 import { useMemo, useState, useTransition } from "react";
 
+type SuggestedService = {
+  name: string;
+  duration?: string;
+  price?: number;
+  description?: string;
+};
+
 type AppointmentTypeMeta = {
   durationMinutes?: number;
   description?: string;
@@ -50,6 +57,7 @@ type BookingsPageContentProps = {
   bookingTypes: AppointmentTypeRow[];
   bookings: BookingRow[];
   contacts: ContactRow[];
+  suggestedServices: SuggestedService[];
   orgSlug: string;
   createAppointmentTypeAction: (formData: FormData) => Promise<void>;
 };
@@ -72,10 +80,15 @@ function formatDateGroupLabel(value: Date) {
   return new Intl.DateTimeFormat("en-US", { weekday: "long", month: "short", day: "numeric" }).format(value);
 }
 
-export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, orgSlug, createAppointmentTypeAction }: BookingsPageContentProps) {
+export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, suggestedServices, orgSlug, createAppointmentTypeAction }: BookingsPageContentProps) {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [draftName, setDraftName] = useState("");
+  const [draftDuration, setDraftDuration] = useState("30");
+  const [draftPrice, setDraftPrice] = useState("0");
+  const [draftDescription, setDraftDescription] = useState("");
+  const [draftSlug, setDraftSlug] = useState("");
 
   const contactsById = useMemo(() => new Map(contacts.map((contact) => [contact.id, contact])), [contacts]);
 
@@ -101,6 +114,36 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
       rows,
     }));
   }, [bookings]);
+
+  function toDurationOption(value: string | undefined) {
+    if (!value) {
+      return "30";
+    }
+
+    const parsed = Number.parseInt(value.replace(/[^\d]/g, ""), 10);
+    if (!Number.isFinite(parsed)) {
+      return "30";
+    }
+
+    return parsed >= 60 ? "60" : "30";
+  }
+
+  function toSlug(value: string) {
+    return value
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\s-]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-");
+  }
+
+  function applySuggestedService(service: SuggestedService) {
+    setDraftName(service.name);
+    setDraftDescription(service.description ?? "");
+    setDraftDuration(toDurationOption(service.duration));
+    setDraftPrice(String(Number.isFinite(service.price) ? Number(service.price) : 0));
+    setDraftSlug(toSlug(service.name));
+  }
 
   return (
     <>
@@ -243,14 +286,46 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
               }}
               className="space-y-4"
             >
+              {suggestedServices.length > 0 ? (
+                <div>
+                  <p className="mb-2 text-sm text-[hsl(var(--muted-foreground))]">From your soul services</p>
+                  <div className="flex flex-wrap gap-2">
+                    {suggestedServices.slice(0, 4).map((service) => (
+                      <button
+                        key={service.name}
+                        type="button"
+                        className="crm-button-secondary h-8 px-3 text-xs"
+                        onClick={() => applySuggestedService(service)}
+                      >
+                        {service.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
               <div>
                 <label htmlFor="appointment-name" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Appointment name</label>
-                <input id="appointment-name" className="crm-input h-10 w-full px-3" name="name" placeholder="Strategy Call" required />
+                <input
+                  id="appointment-name"
+                  className="crm-input h-10 w-full px-3"
+                  name="name"
+                  placeholder="Strategy Call"
+                  required
+                  value={draftName}
+                  onChange={(event) => setDraftName(event.target.value)}
+                />
               </div>
 
               <div>
                 <label htmlFor="appointment-duration" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Duration</label>
-                <select id="appointment-duration" className="crm-input h-10 w-full px-3" name="durationMinutes" defaultValue="30">
+                <select
+                  id="appointment-duration"
+                  className="crm-input h-10 w-full px-3"
+                  name="durationMinutes"
+                  value={draftDuration}
+                  onChange={(event) => setDraftDuration(event.target.value)}
+                >
                   <option value="30">30 min</option>
                   <option value="60">60 min</option>
                 </select>
@@ -258,12 +333,28 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
 
               <div>
                 <label htmlFor="appointment-price" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Price</label>
-                <input id="appointment-price" className="crm-input h-10 w-full px-3" name="price" type="number" min={0} step="0.01" defaultValue="0" />
+                <input
+                  id="appointment-price"
+                  className="crm-input h-10 w-full px-3"
+                  name="price"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={draftPrice}
+                  onChange={(event) => setDraftPrice(event.target.value)}
+                />
               </div>
 
               <div>
                 <label htmlFor="appointment-description" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Description</label>
-                <input id="appointment-description" className="crm-input h-10 w-full px-3" name="description" placeholder="Initial planning session" />
+                <input
+                  id="appointment-description"
+                  className="crm-input h-10 w-full px-3"
+                  name="description"
+                  placeholder="Initial planning session"
+                  value={draftDescription}
+                  onChange={(event) => setDraftDescription(event.target.value)}
+                />
               </div>
 
               <div className="grid gap-3 md:grid-cols-2">
@@ -329,7 +420,15 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
 
               <div>
                 <label htmlFor="appointment-slug" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Public slug</label>
-                <input id="appointment-slug" className="crm-input h-10 w-full px-3" name="slug" placeholder="strategy-call" required />
+                <input
+                  id="appointment-slug"
+                  className="crm-input h-10 w-full px-3"
+                  name="slug"
+                  placeholder="strategy-call"
+                  required
+                  value={draftSlug}
+                  onChange={(event) => setDraftSlug(event.target.value)}
+                />
               </div>
 
               <div className="pt-2">

@@ -17,3 +17,4 @@ export * from "./webhooks";
 export * from "./api-keys";
 export * from "./payments";
 export * from "./marketplace";
+export * from "./seldon-usage";

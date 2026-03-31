@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import { pgTable, text, timestamp, uuid, jsonb, integer } from "drizzle-orm/pg-core";
 import type { SoulLearning } from "@seldonframe/core/soul";
+import type { OrgSoul } from "@/lib/soul/types";
 
 export type OrganizationIntegrations = {
   twilio?: {
@@ -33,7 +34,7 @@ export const organizations = pgTable("organizations", {
   ownerId: text("owner_id").notNull().default(""),
   parentUserId: text("parent_user_id"),
   settings: jsonb("settings").$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
-  soul: jsonb("soul").$type<Record<string, unknown> | null>().default(null),
+  soul: jsonb("soul").$type<OrgSoul | null>().default(null),
   soulId: text("soul_id"),
   soulContentGenerated: integer("soul_content_generated").notNull().default(0),
   soulLearning: jsonb("soul_learning").$type<SoulLearning>().notNull().default(sql`'{}'::jsonb`),

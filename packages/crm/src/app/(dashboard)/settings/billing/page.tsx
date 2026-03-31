@@ -3,6 +3,8 @@ import { auth } from "@/auth";
 import { createBillingPortalSessionAction } from "@/lib/billing/actions";
 import { listManagedOrganizations } from "@/lib/billing/orgs";
 import { getPlan, getProPlans } from "@/lib/billing/plans";
+import { getSeldonUsageStats } from "@/lib/ai/client";
+import { getOrgId } from "@/lib/auth/helpers";
 
 function formatDate(value: string | null | undefined) {
   if (!value) {
@@ -30,6 +32,8 @@ export default async function BillingSettingsPage() {
   const status = session.user.subscriptionStatus ?? "trialing";
   const managedOrgs = plan?.type === "pro" ? await listManagedOrganizations() : [];
   const nextProTier = plan?.type === "pro" ? getProPlans().find((entry) => entry.limits.maxOrgs > plan.limits.maxOrgs) : null;
+  const orgId = await getOrgId();
+  const usageStats = orgId ? await getSeldonUsageStats({ orgId, userId: session.user.id }) : null;
 
   return (
     <section className="animate-page-enter space-y-4">
@@ -69,6 +73,53 @@ export default async function BillingSettingsPage() {
           </Link>
         </div>
       </div>
+
+      {usageStats ? (
+        <div className="glass-card space-y-4 rounded-2xl p-5">
+          <h2 className="text-section-title">Seldon AI Usage</h2>
+          <div className="grid gap-2 md:grid-cols-3">
+            <div>
+              <p className="text-xs uppercase tracking-[0.08em] text-[hsl(var(--muted-foreground))]">
+                Included runs
+              </p>
+              <p className="text-lg font-semibold text-foreground">
+                {usageStats.includedUsed}{Number.isFinite(usageStats.includedLimit) ? ` / ${usageStats.includedLimit}` : " / ∞"}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-[0.08em] text-[hsl(var(--muted-foreground))]">
+                Metered runs
+              </p>
+              <p className="text-lg font-semibold text-foreground">{usageStats.meteredUsed}</p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-[0.08em] text-[hsl(var(--muted-foreground))]">
+                BYOK runs
+              </p>
+              <p className="text-lg font-semibold text-foreground">{usageStats.byokUsed}</p>
+            </div>
+          </div>
+          {Number.isFinite(usageStats.includedLimit) && usageStats.includedLimit > 0 ? (
+            <div className="space-y-1">
+              <div className="h-2 w-full overflow-hidden rounded-full bg-[hsl(var(--border))]">
+                <div
+                  className="h-full rounded-full bg-[hsl(var(--primary))]"
+                  style={{ width: `${Math.min(100, (usageStats.includedUsed / usageStats.includedLimit) * 100)}%` }}
+                />
+              </div>
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                {usageStats.totalThisMonth} total this month
+                {usageStats.mode === "metered" ? " · You have exceeded your included quota" : ""}
+              </p>
+            </div>
+          ) : null}
+          <div className="flex gap-2">
+            <Link href="/settings/integrations" className="crm-button-secondary inline-flex h-10 items-center px-4">
+              Add Your Own API Key
+            </Link>
+          </div>
+        </div>
+      ) : null}
 
       {plan?.type === "pro" ? (
         <div className="glass-card space-y-4 rounded-2xl p-5">

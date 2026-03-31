@@ -1,5 +1,6 @@
 import { listContacts } from "@/lib/contacts/actions";
 import { getLabels } from "@/lib/soul/labels";
+import { getSoul } from "@/lib/soul/server";
 import { EmptyState } from "@/components/shared/empty-state";
 import { CreateContactForm } from "@/components/contacts/create-contact-form";
 import { ContactsInlineTable } from "@/components/contacts/contacts-inline-table";
@@ -22,14 +23,46 @@ export default async function ContactsPage({
   const status = (params.status ?? "all").trim() || "all";
   const sort = params.sort ?? "recent";
 
-  const [labels, rows] = await Promise.all([
+  const [labels, rows, soul] = await Promise.all([
     getLabels(),
     listContacts({
       search: search || undefined,
       status,
       sort,
     }),
+    getSoul(),
   ]);
+
+  const now = new Date();
+  const nowMs = now.getTime();
+  const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+  const fourteenDaysMs = 14 * 24 * 60 * 60 * 1000;
+  const hasFollowUpSignals =
+    soul?.journey?.stages?.some((stage) =>
+      stage.autoActions?.some((action) => /follow.?up|check.?in|re-?engage|attention/i.test(action))
+    ) ?? false;
+
+  const rowsWithBadges = rows.map((row) => {
+    const createdAtRaw = (row as { createdAt?: Date | string }).createdAt;
+    const updatedAtRaw = (row as { updatedAt?: Date | string }).updatedAt;
+    const createdAtMs = createdAtRaw ? new Date(createdAtRaw).getTime() : Number.NaN;
+    const updatedAtMs = updatedAtRaw ? new Date(updatedAtRaw).getTime() : Number.NaN;
+
+    const badges: string[] = [];
+
+    if (Number.isFinite(createdAtMs) && nowMs - createdAtMs <= thirtyDaysMs) {
+      badges.push("New");
+    }
+
+    if (hasFollowUpSignals && Number.isFinite(updatedAtMs) && nowMs - updatedAtMs >= fourteenDaysMs) {
+      badges.push("Needs attention");
+    }
+
+    return {
+      ...row,
+      badges,
+    };
+  });
 
   return (
     <section className="animate-page-enter space-y-4">
@@ -86,7 +119,7 @@ export default async function ContactsPage({
           ctaHref="#"
         />
       ) : (
-        <ContactsInlineTable rows={rows} />
+        <ContactsInlineTable rows={rowsWithBadges} />
       )}
     </section>
   );
