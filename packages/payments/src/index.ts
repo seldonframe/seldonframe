@@ -3,4 +3,4 @@ export * from "./schema";
 export * from "./stripe-client";
 export * from "./connect";
 export * from "./checkout";
-export * from "./webhooks";
+export { mapStripeEvent, verifyStripeWebhook, verifyStripeWebhookWithSecret } from "./webhooks";
