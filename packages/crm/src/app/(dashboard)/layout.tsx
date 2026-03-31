@@ -11,7 +11,7 @@ import { registerCrmEventListeners } from "@/lib/events/listeners";
 import { getAllBlocksForOrg } from "@/lib/blocks/registry";
 import { canSeldonIt, resolvePlanFromPlanId } from "@/lib/billing/entitlements";
 import { db } from "@/db";
-import { activities, contacts, deals, landingPages, organizations } from "@/db/schema";
+import { activities, contacts, deals, landingPages, organizations, users } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
 import Link from "next/link";
 
@@ -29,7 +29,10 @@ export default async function DashboardLayout({
 
   const orgId = await getOrgId();
   const blocks = orgId ? await getAllBlocksForOrg(orgId) : [];
-  const plan = resolvePlanFromPlanId(user?.planId ?? null);
+  const [dbUserForPlan] = user?.id
+    ? await db.select({ planId: users.planId }).from(users).where(eq(users.id, user.id)).limit(1)
+    : [null];
+  const plan = resolvePlanFromPlanId(dbUserForPlan?.planId ?? null);
   const canAccessSeldon = canSeldonIt(plan);
 
   const [activeOrg] = orgId
