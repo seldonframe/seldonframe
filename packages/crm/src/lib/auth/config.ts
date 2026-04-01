@@ -1,12 +1,9 @@
 import type { NextAuthConfig } from "next-auth";
-import Credentials from "next-auth/providers/credentials";
-import GitHub from "next-auth/providers/github";
 import Google from "next-auth/providers/google";
-import { z } from "zod";
+import Resend from "next-auth/providers/resend";
 import { db } from "@/db";
 import { organizations, users } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import bcrypt from "bcryptjs";
 
 const BILLING_STATUSES = ["trialing", "active", "past_due", "canceled", "unpaid"] as const;
 const BILLING_PERIODS = ["monthly", "yearly"] as const;
@@ -23,15 +20,10 @@ function normalizeBillingPeriod(value: string | null | undefined): (typeof BILLI
     : "monthly";
 }
 
-const credentialsSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8),
-});
-
-const oauthProviders = [];
+const authProviders = [];
 
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-  oauthProviders.push(
+  authProviders.push(
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
@@ -39,75 +31,26 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   );
 }
 
-if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
-  oauthProviders.push(
-    GitHub({
-      clientId: process.env.GITHUB_CLIENT_ID,
-      clientSecret: process.env.GITHUB_CLIENT_SECRET,
+const resendApiKey = process.env.AUTH_RESEND_KEY ?? process.env.RESEND_API_KEY;
+
+if (resendApiKey) {
+  authProviders.push(
+    Resend({
+      apiKey: resendApiKey,
+      from: process.env.AUTH_RESEND_FROM ?? process.env.DEFAULT_FROM_EMAIL ?? "hello@seldonframe.local",
     })
   );
 }
 
 export const authConfig = {
   pages: {
-    signIn: "/login",
+    signIn: "/signup",
+    verifyRequest: "/login",
   },
   session: {
     strategy: "jwt",
   },
-  providers: [
-    ...oauthProviders,
-    Credentials({
-      credentials: {
-        email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" },
-      },
-      authorize: async (credentials) => {
-        const parsed = credentialsSchema.safeParse(credentials);
-
-        if (!parsed.success) {
-          return null;
-        }
-
-        const [user] = await db
-          .select({
-            id: users.id,
-            name: users.name,
-            email: users.email,
-            avatarUrl: users.avatarUrl,
-            orgId: users.orgId,
-            role: users.role,
-            passwordHash: users.passwordHash,
-          })
-          .from(users)
-          .where(eq(users.email, parsed.data.email))
-          .limit(1);
-
-        if (!user || !user.passwordHash) {
-          return null;
-        }
-
-        const isValidPassword = await bcrypt.compare(parsed.data.password, user.passwordHash);
-
-        if (!isValidPassword) {
-          return null;
-        }
-
-        return {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          image: user.avatarUrl,
-          orgId: user.orgId,
-          role: user.role,
-          planId: null,
-          subscriptionStatus: "trialing" as const,
-          billingPeriod: "monthly" as const,
-          trialEndsAt: null,
-        };
-      },
-    }),
-  ],
+  providers: authProviders,
   callbacks: {
     jwt: async ({ token, user }) => {
       if (user) {
@@ -121,6 +64,10 @@ export const authConfig = {
             id: users.id,
             orgId: users.orgId,
             role: users.role,
+            planId: users.planId,
+            subscriptionStatus: users.subscriptionStatus,
+            billingPeriod: users.billingPeriod,
+            trialEndsAt: users.trialEndsAt,
           })
           .from(users)
           .where(eq(users.id, token.sub))
@@ -129,17 +76,17 @@ export const authConfig = {
         if (dbUser) {
           token.orgId = dbUser.orgId;
           token.role = dbUser.role;
-          token.planId = (token.planId as string | undefined) ?? null;
-          token.subscriptionStatus = normalizeBillingStatus(token.subscriptionStatus as string | null | undefined);
-          token.billingPeriod = normalizeBillingPeriod(token.billingPeriod as string | null | undefined);
-          token.trialEndsAt = (token.trialEndsAt as string | undefined) ?? null;
+          token.planId = dbUser.planId ?? null;
+          token.subscriptionStatus = normalizeBillingStatus(dbUser.subscriptionStatus);
+          token.billingPeriod = normalizeBillingPeriod(dbUser.billingPeriod);
+          token.trialEndsAt = dbUser.trialEndsAt ? dbUser.trialEndsAt.toISOString() : null;
 
           const [org] = await db
-            .select({ id: organizations.id })
+            .select({ id: organizations.id, soulCompletedAt: organizations.soulCompletedAt })
             .from(organizations)
             .where(eq(organizations.id, dbUser.orgId))
             .limit(1);
-          token.soulCompleted = Boolean(org?.id);
+          token.soulCompleted = Boolean(org?.soulCompletedAt);
         }
       }
 
