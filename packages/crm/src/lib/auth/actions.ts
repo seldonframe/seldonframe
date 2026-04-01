@@ -112,7 +112,15 @@ export async function signupAction(_: AuthActionState, formData: FormData): Prom
       .returning({ id: users.id });
 
     if (owner?.id) {
-      await db.update(organizations).set({ ownerId: owner.id }).where(eq(organizations.id, org.id));
+      try {
+        await db.update(organizations).set({ ownerId: owner.id }).where(eq(organizations.id, org.id));
+      } catch (error) {
+        const code = (error as { code?: string } | null)?.code;
+
+        if (code !== "42703") {
+          throw error;
+        }
+      }
     }
 
     try {
