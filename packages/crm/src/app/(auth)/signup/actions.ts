@@ -29,6 +29,11 @@ function resolveInboxUrl(email: string) {
   return null;
 }
 
+function isRedirectControlFlowError(error: unknown) {
+  const digest = (error as { digest?: string } | null)?.digest;
+  return typeof digest === "string" && digest.startsWith("NEXT_REDIRECT");
+}
+
 export async function signInWithGoogleAction() {
   assertWritable();
 
@@ -64,7 +69,15 @@ export async function sendMagicLinkAction(_: MagicLinkActionState, formData: For
       email,
       inboxUrl: resolveInboxUrl(email) ?? undefined,
     };
-  } catch {
+  } catch (error) {
+    if (isRedirectControlFlowError(error)) {
+      return {
+        sent: true,
+        email,
+        inboxUrl: resolveInboxUrl(email) ?? undefined,
+      };
+    }
+
     return { error: "Could not send magic link right now. Please try again." };
   }
 }
