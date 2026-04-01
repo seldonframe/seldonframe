@@ -19,7 +19,8 @@ export function Footer() {
             <a className="block hover:text-foreground" href="https://x.com">X / Twitter</a>
             <a className="block hover:text-foreground" href="https://github.com/seldonframe/crm/releases">Changelog</a>
             <a className="block hover:text-foreground" href="https://github.com/seldonframe/crm/blob/main/LICENSE">License (MIT)</a>
-            <span className="block">Privacy</span>
+            <a className="block hover:text-foreground" href="/policy">Privacy Policy</a>
+            <a className="block hover:text-foreground" href="/terms-of-service">Terms of Service</a>
           </div>
         </div>
         <div className="section-divider my-8" />
