@@ -39,13 +39,32 @@ async function createOrganizationWithUniqueSlug(orgName: string) {
     const slug = `${baseSlug}-${suffix}`;
 
     try {
-      const [org] = await db
-        .insert(organizations)
-        .values({
-          name: orgName,
-          slug,
-        })
-        .returning();
+      let org: (typeof organizations.$inferSelect) | undefined;
+
+      try {
+        [org] = await db
+          .insert(organizations)
+          .values({
+            name: orgName,
+            slug,
+            ownerId: "",
+          })
+          .returning();
+      } catch (error) {
+        const code = (error as { code?: string } | null)?.code;
+
+        if (code !== "42703") {
+          throw error;
+        }
+
+        [org] = await db
+          .insert(organizations)
+          .values({
+            name: orgName,
+            slug,
+          })
+          .returning();
+      }
 
       if (org) {
         return org;
