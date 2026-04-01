@@ -104,6 +104,5 @@ export const config = {
     "/forms/:path*",
     "/settings/:path*",
     "/api/v1/:path*",
-    "/api/auth/:path*",
   ],
 };
