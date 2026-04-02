@@ -5,7 +5,7 @@ import * as schema from "./schema";
 const databaseUrl = (
   process.env.DATABASE_URL ??
   "postgresql://user:pass@localhost:5432/seldon_frame?sslmode=require"
-).trim();
+).replace(/\\r\\n$/g, "").trim();
 
 const sql = neon(databaseUrl);
 

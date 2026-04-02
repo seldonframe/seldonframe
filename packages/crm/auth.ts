@@ -185,7 +185,7 @@ const adapter = {
 export const { handlers, signIn, signOut, auth } = NextAuth({
   debug: true,
   trustHost: true,
-  secret: process.env.AUTH_SECRET?.trim(),
+  secret: process.env.AUTH_SECRET?.replace(/\\r\\n$/g, "").trim(),
   adapter,
   ...authConfig,
 });
