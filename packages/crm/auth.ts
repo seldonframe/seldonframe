@@ -6,6 +6,11 @@ import { db } from "@/db";
 import { organizations, users } from "@/db/schema";
 import { authConfig } from "@/lib/auth/config";
 
+// Sanitize env vars — Vercel stored them with trailing CR+LF bytes
+if (process.env.AUTH_SECRET) process.env.AUTH_SECRET = process.env.AUTH_SECRET.trim();
+if (process.env.NEXTAUTH_SECRET) process.env.NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET.trim();
+if (process.env.DATABASE_URL) process.env.DATABASE_URL = process.env.DATABASE_URL.trim();
+
 function slugify(input: string) {
   return input
     .toLowerCase()
@@ -185,7 +190,6 @@ const adapter = {
 export const { handlers, signIn, signOut, auth } = NextAuth({
   debug: true,
   trustHost: true,
-  secret: process.env.AUTH_SECRET?.replace(/\\r\\n$/g, "").trim(),
   adapter,
   ...authConfig,
 });
