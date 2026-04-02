@@ -1,5 +1,5 @@
 import type { NextAuthConfig } from "next-auth";
-import Google from "next-auth/providers/google";
+import type { OAuthConfig } from "next-auth/providers";
 import Resend from "next-auth/providers/resend";
 import { db } from "@/db";
 import { organizations, users } from "@/db/schema";
@@ -7,6 +7,13 @@ import { eq } from "drizzle-orm";
 
 const BILLING_STATUSES = ["trialing", "active", "past_due", "canceled", "unpaid"] as const;
 const BILLING_PERIODS = ["monthly", "yearly"] as const;
+
+interface GoogleProfile {
+  sub: string;
+  name: string;
+  email: string;
+  picture: string;
+}
 
 function normalizeBillingStatus(value: string | null | undefined): (typeof BILLING_STATUSES)[number] {
   return BILLING_STATUSES.includes(value as (typeof BILLING_STATUSES)[number])
@@ -23,12 +30,28 @@ function normalizeBillingPeriod(value: string | null | undefined): (typeof BILLI
 const authProviders: NextAuthConfig["providers"] = [];
 
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-  authProviders.push(
-    Google({
-      clientId: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    })
-  );
+  authProviders.push({
+    id: "google",
+    name: "Google",
+    type: "oauth",
+    authorization: {
+      url: "https://accounts.google.com/o/oauth2/v2/auth",
+      params: { scope: "openid profile email" },
+    },
+    token: "https://oauth2.googleapis.com/token",
+    userinfo: "https://openidconnect.googleapis.com/v1/userinfo",
+    clientId: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    checks: ["pkce"],
+    profile(profile: GoogleProfile) {
+      return {
+        id: profile.sub,
+        name: profile.name,
+        email: profile.email,
+        image: profile.picture,
+      };
+    },
+  } satisfies OAuthConfig<GoogleProfile>);
 }
 
 const resendApiKey = process.env.AUTH_RESEND_KEY ?? process.env.RESEND_API_KEY;
