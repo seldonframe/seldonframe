@@ -3,18 +3,20 @@ import { NextResponse } from "next/server";
 
 async function subscribeViaKit(email: string) {
   const formId = process.env.KIT_FORM_ID;
-  const apiKey = process.env.KIT_API_KEY;
+  const apiToken = process.env.KIT_API_KEY;
 
-  if (!formId || !apiKey) {
+  if (!formId || !apiToken) {
     return false;
   }
 
-  const response = await fetch(`https://api.convertkit.com/v3/forms/${formId}/subscribe`, {
+  const response = await fetch(`https://api.kit.com/v4/forms/${formId}/subscribers`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiToken}`,
+    },
     body: JSON.stringify({
-      api_key: apiKey,
-      email,
+      email_address: email,
     }),
   });
 

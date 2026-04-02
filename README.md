@@ -36,24 +36,37 @@ Most OSS CRMs are finished products. Seldon Frame is a framework-first base you 
 | `apps/cloud` | Cloud app workspace |
 | `apps/pro` | Pro app workspace |
 
-## All Blocks (Current)
+## Blocks
 
-| Block | Included in OSS | Notes |
-| --- | --- | --- |
-| Hub | Yes | Deep-link utility route and system tools surface |
-| Soul Wizard | Yes | `/setup` onboarding that writes `organizations.soul` |
-| AI Customization | Yes | Claude-backed Soul generation when configured; safe fallback otherwise |
-| Dashboard | Yes | KPI cards and pipeline snapshots |
-| Contacts | Yes | Tenant-scoped records, status/scoring/tags, inline table editing |
-| Deals | Yes | List + stage movement with probability updates |
-| Activities | Yes | Session/call/task tracking and completion flow |
-| Bookings | Yes | Scheduling, availability by weekday, buffers, max/day, timezone-aware public booking, provider sync |
-| Emails | Yes | Send + open/click tracking across providers |
-| Landing Pages | Yes | Builder, publish flow, conversion events |
-| Intake Forms | Yes | Public submissions + webhook-ready workflow |
-| Portal | Yes | Access code auth, messaging, resources |
-| API/Webhooks | Yes | `/api/v1` with key guard, org scoping, rate limiting |
-| Demo Mode | Yes | UI and API write guards via `NEXT_PUBLIC_DEMO_READONLY=true` |
+SeldonFrame is built as modular blocks. Each block can be enabled or disabled independently.
+
+### Built-in Blocks
+
+| Block | Description |
+| --- | --- |
+| CRM | Contacts, deals, and pipeline workflows |
+| Booking | Scheduling with public booking pages |
+| Landing Pages | Visual page builder and publishing |
+| Email | Templates and outbound email workflows |
+| Forms | Intake forms that create contacts |
+| Payments | Stripe Connect payment flows |
+| Automations | Trigger → condition → action workflows |
+
+### Block Marketplace
+
+Cloud Pro and Pro users can install additional blocks from the marketplace. Blocks are defined by universal BLOCK.md specs and generated to match host codebase patterns.
+
+Browse available blocks: marketplace (native, in-app)
+
+### Build a Block
+
+Anyone can create a BLOCK.md, a universal spec that describes block behavior.
+
+- Read the [`BLOCK.md Specification`](./BLOCK_MD_SPEC.md)
+- See [`example BLOCK.md files`](./blocks/examples/)
+- Read how souls and blocks relate in [`SOUL_SPEC.md`](./SOUL_SPEC.md)
+
+Blocks are the capability layer; soul is the identity layer that personalizes every installed block.
 
 ## Showcase Packs
 

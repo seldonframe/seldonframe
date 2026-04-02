@@ -1,0 +1,178 @@
+{
+  "id": "coach",
+  "name": "High-Ticket Coach",
+  "identity": {
+    "headline": "{{businessName}} helps {{clientDescription}} get measurable results without burnout.",
+    "positioning": "Premium coaching practice",
+    "voice": "Confident, practical, warm",
+    "corePromise": "Move from inconsistency to predictable growth with a clear weekly execution system."
+  },
+  "entityLabels": {
+    "contact": { "singular": "{{contactSingular}}", "plural": "{{contactPlural}}" },
+    "deal": { "singular": "Engagement", "plural": "Engagements" },
+    "activity": { "singular": "Touchpoint", "plural": "Touchpoints" },
+    "pipeline": { "singular": "Client Journey", "plural": "Client Journeys" }
+  },
+  "pipeline": {
+    "name": "Enrollment Pipeline",
+    "stages": [
+      { "name": "New Inquiry", "probability": 10, "color": "#14b8a6" },
+      { "name": "Qualified", "probability": 30, "color": "#3b82f6" },
+      { "name": "Strategy Call", "probability": 55, "color": "#8b5cf6" },
+      { "name": "Proposal Sent", "probability": 75, "color": "#f59e0b" },
+      { "name": "Enrolled", "probability": 100, "color": "#22c55e" }
+    ]
+  },
+  "customFields": {
+    "contact": [
+      { "key": "niche", "label": "Niche", "type": "text" },
+      { "key": "monthly_revenue", "label": "Monthly Revenue", "type": "number" },
+      { "key": "primary_goal", "label": "Primary Goal", "type": "textarea" },
+      { "key": "urgency_level", "label": "Urgency", "type": "select", "options": ["Low", "Medium", "High"] }
+    ],
+    "deal": [
+      { "key": "program_fit", "label": "Program Fit Score", "type": "number" },
+      { "key": "decision_timeline", "label": "Decision Timeline", "type": "text" },
+      { "key": "main_objection", "label": "Main Objection", "type": "textarea" }
+    ]
+  },
+  "bookingTypes": [
+    {
+      "title": "Clarity Call",
+      "slug": "clarity-call",
+      "description": "A focused call to diagnose bottlenecks and map your next best moves.",
+      "durationMinutes": 45,
+      "price": 0,
+      "bufferBeforeMinutes": 15,
+      "bufferAfterMinutes": 15,
+      "maxBookingsPerDay": 4
+    },
+    {
+      "title": "Momentum Intensive",
+      "slug": "momentum-intensive",
+      "description": "A paid deep-dive session to build your 90-day client growth roadmap.",
+      "durationMinutes": 90,
+      "price": 497,
+      "bufferBeforeMinutes": 20,
+      "bufferAfterMinutes": 20,
+      "maxBookingsPerDay": 2
+    }
+  ],
+  "intakeForm": {
+    "name": "Coaching Application",
+    "slug": "coaching-application",
+    "fields": [
+      { "key": "full_name", "label": "Full Name", "type": "text", "required": true },
+      { "key": "email", "label": "Email", "type": "email", "required": true },
+      { "key": "business_model", "label": "What do you currently sell?", "type": "textarea", "required": true },
+      { "key": "revenue_range", "label": "Current monthly revenue", "type": "select", "required": true, "options": ["< $5k", "$5k-$15k", "$15k-$30k", "$30k+"] },
+      { "key": "goal_90_days", "label": "Your #1 goal in the next 90 days", "type": "textarea", "required": true },
+      { "key": "biggest_block", "label": "What is currently blocking you?", "type": "textarea", "required": true }
+    ]
+  },
+  "emailTemplates": [
+    {
+      "key": "lead-welcome",
+      "name": "Lead Welcome",
+      "subject": "Welcome to {{businessName}} — here’s your next step",
+      "bodyText": "Hey {{contactSingular}},\n\nGreat to connect. I reviewed what you shared and I can already see two quick wins you can apply this week.\n\nUse this link to book your Clarity Call: {{bookingLink}}\n\nBring your current offer, pricing, and one bottleneck you want solved first.\n\nTalk soon,\n{{businessName}}"
+    },
+    {
+      "key": "call-followup",
+      "name": "Strategy Call Follow-up",
+      "subject": "Your action plan from today",
+      "bodyText": "Hi {{contactSingular}},\n\nExcellent conversation today. Your highest-leverage focus is:\n1) Clarify your offer promise\n2) Improve your conversion sequence\n3) Tighten weekly execution cadence\n\nIf you want support implementing this with accountability, reply with 'READY' and I’ll send next steps.\n\n— {{businessName}}"
+    },
+    {
+      "key": "proposal-reminder",
+      "name": "Proposal Reminder",
+      "subject": "Quick check-in on your proposal",
+      "bodyText": "Hey {{contactSingular}},\n\nQuick nudge in case this slipped down your inbox.\n\nIf now is the right time, I can onboard you this week and we’ll start with a focused 30-day sprint.\n\nWant me to hold your spot?\n\n— {{businessName}}"
+    }
+  ],
+  "proposalTemplate": {
+    "title": "{{businessName}} Coaching Proposal",
+    "sections": [
+      { "heading": "Desired Outcome", "body": "Help {{contactSingular}} achieve {{primaryOutcome}} within 90 days through weekly implementation support." },
+      { "heading": "Scope", "body": "Weekly coaching sessions, asynchronous support, offer and messaging refinement, funnel feedback, and KPI tracking." },
+      { "heading": "Investment", "body": "Program investment: {{investmentAmount}}. Payment plan available." },
+      { "heading": "Guarantee", "body": "If you complete agreed action items for 30 days and see no measurable momentum, we extend support at no extra cost." }
+    ]
+  },
+  "landingPageVariants": [
+    {
+      "title": "Coach Main Page",
+      "slug": "home",
+      "sections": [
+        {
+          "type": "hero",
+          "order": 1,
+          "content": {
+            "kicker": "For driven founders and experts",
+            "headline": "Turn your expertise into consistent premium clients",
+            "subheadline": "{{businessName}} helps {{clientDescription}} build a repeatable client acquisition system without content burnout.",
+            "ctaText": "Book a Clarity Call",
+            "ctaLink": "/book/{{orgSlug}}/clarity-call"
+          }
+        },
+        {
+          "type": "benefits",
+          "order": 2,
+          "content": {
+            "headline": "What changes in the first 30 days",
+            "benefits": [
+              { "icon": "🎯", "title": "Offer Clarity", "description": "Position your offer so ideal clients immediately understand the value." },
+              { "icon": "⚙️", "title": "Simple Systems", "description": "Run your weekly pipeline with clear next steps and fewer dropped leads." },
+              { "icon": "📈", "title": "Conversion Lift", "description": "Improve your call-to-close process with a practical enrollment framework." }
+            ]
+          }
+        },
+        {
+          "type": "process",
+          "order": 3,
+          "content": {
+            "headline": "How we work together",
+            "steps": [
+              { "number": 1, "title": "Diagnose", "description": "Audit your current offer, pipeline, and conversion points." },
+              { "number": 2, "title": "Design", "description": "Build your 90-day strategy and weekly execution scoreboard." },
+              { "number": 3, "title": "Execute", "description": "Implement with accountability until results are measurable." }
+            ]
+          }
+        },
+        {
+          "type": "testimonials",
+          "order": 4,
+          "content": {
+            "headline": "Client outcomes",
+            "testimonials": [
+              { "quote": "In six weeks, we doubled qualified calls and finally had a predictable sales rhythm.", "author": "Amira K.", "role": "Leadership Coach" },
+              { "quote": "The pipeline system alone paid for itself in month one.", "author": "Jason R.", "role": "Consulting Founder" }
+            ]
+          }
+        },
+        {
+          "type": "faq",
+          "order": 5,
+          "content": {
+            "headline": "Questions before we start",
+            "faqs": [
+              { "question": "Is this for beginners?", "answer": "This is best for experts with an offer who want stronger consistency and conversion." },
+              { "question": "How quickly will I see progress?", "answer": "Most clients see clearer positioning and better pipeline control in the first 2-4 weeks." },
+              { "question": "Do you provide copy and scripts?", "answer": "Yes. You get practical scripts and messaging frameworks customized to your offer." }
+            ]
+          }
+        },
+        {
+          "type": "cta",
+          "order": 6,
+          "content": {
+            "headline": "Ready to simplify growth?",
+            "body": "Book a call and leave with an actionable plan, whether we work together or not.",
+            "ctaText": "Reserve your Clarity Call",
+            "ctaLink": "/book/{{orgSlug}}/clarity-call"
+          }
+        }
+      ]
+    }
+  ]
+}

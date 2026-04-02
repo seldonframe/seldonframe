@@ -1,0 +1,167 @@
+{
+  "id": "therapist",
+  "name": "Private Practice Therapist",
+  "identity": {
+    "headline": "Compassionate, evidence-based therapy for {{clientDescription}}.",
+    "positioning": "Modern private practice",
+    "voice": "Grounded, calm, trustworthy",
+    "corePromise": "Provide a safe, structured path toward relief, resilience, and long-term emotional health."
+  },
+  "entityLabels": {
+    "contact": { "singular": "{{contactSingular}}", "plural": "{{contactPlural}}" },
+    "deal": { "singular": "Care Plan", "plural": "Care Plans" },
+    "activity": { "singular": "Session", "plural": "Sessions" },
+    "pipeline": { "singular": "Care Journey", "plural": "Care Journeys" }
+  },
+  "pipeline": {
+    "name": "Care Intake Pipeline",
+    "stages": [
+      { "name": "Inquiry", "probability": 20, "color": "#14b8a6" },
+      { "name": "Consult Scheduled", "probability": 40, "color": "#3b82f6" },
+      { "name": "Assessment Completed", "probability": 60, "color": "#8b5cf6" },
+      { "name": "Care Plan Sent", "probability": 80, "color": "#f59e0b" },
+      { "name": "Active Client", "probability": 100, "color": "#22c55e" }
+    ]
+  },
+  "customFields": {
+    "contact": [
+      { "key": "presenting_concern", "label": "Presenting Concern", "type": "textarea" },
+      { "key": "preferred_modality", "label": "Preferred Modality", "type": "select", "options": ["In-person", "Telehealth", "Either"] },
+      { "key": "session_preference", "label": "Session Preference", "type": "select", "options": ["Weekly", "Biweekly", "Flexible"] },
+      { "key": "insurance_provider", "label": "Insurance Provider", "type": "text" }
+    ],
+    "deal": [
+      { "key": "acuity_level", "label": "Acuity Level", "type": "select", "options": ["Low", "Moderate", "High"] },
+      { "key": "recommended_frequency", "label": "Recommended Frequency", "type": "text" },
+      { "key": "safety_notes", "label": "Safety Notes", "type": "textarea" }
+    ]
+  },
+  "bookingTypes": [
+    {
+      "title": "Consultation Call",
+      "slug": "consultation-call",
+      "description": "A short consultation to discuss fit, goals, and next steps.",
+      "durationMinutes": 20,
+      "price": 0,
+      "bufferBeforeMinutes": 10,
+      "bufferAfterMinutes": 10,
+      "maxBookingsPerDay": 6
+    },
+    {
+      "title": "Initial Assessment Session",
+      "slug": "initial-assessment",
+      "description": "Comprehensive intake session to build your personalized care plan.",
+      "durationMinutes": 75,
+      "price": 220,
+      "bufferBeforeMinutes": 15,
+      "bufferAfterMinutes": 15,
+      "maxBookingsPerDay": 3
+    }
+  ],
+  "intakeForm": {
+    "name": "Therapy Intake",
+    "slug": "therapy-intake",
+    "fields": [
+      { "key": "full_name", "label": "Full Name", "type": "text", "required": true },
+      { "key": "email", "label": "Email", "type": "email", "required": true },
+      { "key": "phone", "label": "Phone", "type": "text", "required": true },
+      { "key": "primary_concern", "label": "What brings you in right now?", "type": "textarea", "required": true },
+      { "key": "goals", "label": "What would progress look like for you?", "type": "textarea", "required": true },
+      { "key": "availability", "label": "General availability", "type": "text", "required": true }
+    ]
+  },
+  "emailTemplates": [
+    {
+      "key": "intake-received",
+      "name": "Intake Received",
+      "subject": "We received your intake — here’s what happens next",
+      "bodyText": "Hi {{contactSingular}},\n\nThank you for sharing your information with {{businessName}}.\n\nYour responses were received, and we’ll review them carefully before your first session.\n\nIf you haven’t booked yet, you can choose a time here: {{bookingLink}}\n\nWarmly,\n{{businessName}}"
+    },
+    {
+      "key": "session-reminder",
+      "name": "Session Reminder",
+      "subject": "Reminder: your upcoming session",
+      "bodyText": "Hi {{contactSingular}},\n\nA gentle reminder that your session is scheduled for {{sessionDate}} at {{sessionTime}}.\n\nIf you need to reschedule, please use your booking link at least 24 hours in advance.\n\nSee you soon,\n{{businessName}}"
+    },
+    {
+      "key": "care-plan-followup",
+      "name": "Care Plan Follow-up",
+      "subject": "Your personalized care plan",
+      "bodyText": "Hi {{contactSingular}},\n\nThank you for your openness in session. Based on what we discussed, I prepared a care plan with practical next steps and session cadence recommendations.\n\nReply with any questions and we can adjust together.\n\nWarmly,\n{{businessName}}"
+    }
+  ],
+  "proposalTemplate": {
+    "title": "{{businessName}} Care Plan",
+    "sections": [
+      { "heading": "Current Challenges", "body": "Summary of presenting concerns and current stress patterns from intake and assessment." },
+      { "heading": "Therapeutic Goals", "body": "Clear, measurable goals we will track together over the next 8-12 weeks." },
+      { "heading": "Care Structure", "body": "Recommended frequency, modality, and therapeutic approach tailored to your needs." },
+      { "heading": "Investment", "body": "Session fee: {{sessionFee}}. Superbill and payment options available." }
+    ]
+  },
+  "landingPageVariants": [
+    {
+      "title": "Therapist Main Page",
+      "slug": "home",
+      "sections": [
+        {
+          "type": "hero",
+          "order": 1,
+          "content": {
+            "kicker": "Therapy for real life",
+            "headline": "Feel more grounded, clear, and emotionally supported",
+            "subheadline": "{{businessName}} provides compassionate care for {{clientDescription}} through practical, evidence-based therapy.",
+            "ctaText": "Book a Consultation",
+            "ctaLink": "/book/{{orgSlug}}/consultation-call"
+          }
+        },
+        {
+          "type": "whoitsfor",
+          "order": 2,
+          "content": {
+            "headline": "Who this is for",
+            "personas": [
+              { "name": "Anxious professionals", "description": "You’re high-functioning on the outside but exhausted internally." },
+              { "name": "Relationship strain", "description": "You want healthier communication, boundaries, and emotional connection." },
+              { "name": "Life transition support", "description": "You’re navigating change and need stable guidance and tools." }
+            ]
+          }
+        },
+        {
+          "type": "benefits",
+          "order": 3,
+          "content": {
+            "headline": "What therapy can help you build",
+            "benefits": [
+              { "icon": "🧭", "title": "Emotional Clarity", "description": "Understand patterns and respond with intention instead of reactivity." },
+              { "icon": "🛠️", "title": "Practical Tools", "description": "Leave sessions with concrete strategies you can use the same week." },
+              { "icon": "🌱", "title": "Sustainable Change", "description": "Create habits and boundaries that support long-term mental wellness." }
+            ]
+          }
+        },
+        {
+          "type": "faq",
+          "order": 4,
+          "content": {
+            "headline": "Common questions",
+            "faqs": [
+              { "question": "Do you offer virtual sessions?", "answer": "Yes, secure telehealth sessions are available for clients who prefer remote care." },
+              { "question": "How often do we meet?", "answer": "Most clients begin weekly, then taper as stability and progress increase." },
+              { "question": "What if I’m unsure therapy is right for me?", "answer": "That’s exactly what the consultation call is for — to assess fit and answer your questions." }
+            ]
+          }
+        },
+        {
+          "type": "cta",
+          "order": 5,
+          "content": {
+            "headline": "Take the first step, gently",
+            "body": "Book a consultation to talk through what support could look like for you.",
+            "ctaText": "Schedule Consultation",
+            "ctaLink": "/book/{{orgSlug}}/consultation-call"
+          }
+        }
+      ]
+    }
+  ]
+}
