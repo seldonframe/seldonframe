@@ -1,5 +1,5 @@
 import type { NextAuthConfig } from "next-auth";
-import type { OAuthConfig } from "next-auth/providers";
+import Google from "next-auth/providers/google";
 import Resend from "next-auth/providers/resend";
 import { db } from "@/db";
 import { organizations, users } from "@/db/schema";
@@ -20,38 +20,15 @@ function normalizeBillingPeriod(value: string | null | undefined): (typeof BILLI
     : "monthly";
 }
 
-interface GoogleProfile {
-  sub: string;
-  name: string;
-  email: string;
-  picture: string;
-  email_verified: boolean;
-}
-
 const authProviders: NextAuthConfig["providers"] = [];
 
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-  authProviders.push({
-    id: "google",
-    name: "Google",
-    type: "oauth",
-    authorization: {
-      url: "https://accounts.google.com/o/oauth2/v2/auth",
-      params: { scope: "openid email profile" },
-    },
-    token: "https://oauth2.googleapis.com/token",
-    userinfo: "https://openidconnect.googleapis.com/v1/userinfo",
-    clientId: process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    profile(profile: GoogleProfile) {
-      return {
-        id: profile.sub,
-        name: profile.name,
-        email: profile.email,
-        image: profile.picture,
-      };
-    },
-  } satisfies OAuthConfig<GoogleProfile>);
+  authProviders.push(
+    Google({
+      clientId: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    })
+  );
 }
 
 const resendApiKey = process.env.AUTH_RESEND_KEY ?? process.env.RESEND_API_KEY;
