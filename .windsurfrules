@@ -58,3 +58,30 @@ Platform constraints
 Verification
 - Build from root: `pnpm build`.
 - If build fails, fix only errors introduced by the current step.
+
+## Block Architecture
+
+SeldonFrame has two types of blocks:
+
+### Built-in blocks
+- Located in `packages/crm/src/app/(dashboard)/[blockName]/`
+- Follow these patterns:
+  - Schema in `packages/crm/src/db/schema.ts`
+  - Server actions in `packages/crm/src/lib/[blockName]/actions.ts`
+  - Page components in `packages/crm/src/app/(dashboard)/[blockName]/page.tsx`
+  - Detail pages in `packages/crm/src/app/(dashboard)/[blockName]/[id]/page.tsx`
+  - Public pages in `packages/crm/src/app/[publicRoute]/page.tsx`
+
+### Marketplace blocks
+- Defined by BLOCK.md specs (see `BLOCK_MD_SPEC.md`)
+- When implementing a BLOCK.md:
+  - Create schema following existing Drizzle patterns (`orgId` on every table, UUID primary keys)
+  - Create server actions following existing patterns (`"use server"`, `revalidatePath`)
+  - Create pages following existing patterns (`useSoulLabels()`, `glass-card`)
+  - Emit events using `emitEvent()` from `@seldonframe/core`
+  - Read soul via `getSoul(orgId)` or `useSoulLabels()`
+  - Map BLOCK.md `Person` to contacts (`contactId` FK)
+  - Map BLOCK.md `Identity` to soul config
+  - Map BLOCK.md `Payments` to Stripe Connect (`org.stripeAccountId`)
+  - Map BLOCK.md `Email` to existing email actions
+  - Register in built-in registry or marketplace tables based on block type

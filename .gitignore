@@ -15,6 +15,7 @@
 
 # next.js
 /.next/
+**/.next/
 /out/
 
 # production
@@ -43,6 +44,7 @@ next-env.d.ts
 # required root ignores
 node_modules/
 .next/
+ui-ux-pro-max-skill/
 .env
 .env.local
 .env.*.local
