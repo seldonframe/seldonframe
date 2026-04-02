@@ -138,52 +138,62 @@ const adapter = {
     image?: string | null;
     emailVerified?: Date | null;
   }) {
-    const email = data.email?.trim().toLowerCase();
-
-    if (!email) {
-      throw new Error("OAuth account is missing an email address.");
-    }
-
-    const defaultName = data.name?.trim() || email.split("@")[0] || "Owner";
-    const org = await createOrganizationForUser({ name: `${defaultName}'s Workspace` });
-
-    if (!org) {
-      throw new Error("Could not create organization for new account.");
-    }
-
-    const [created] = await db
-      .insert(users)
-      .values({
-        orgId: org.id,
-        role: "owner",
-        name: defaultName,
-        email,
-        avatarUrl: data.image ?? null,
-        emailVerified: data.emailVerified ?? null,
-      })
-      .returning({
-        id: users.id,
-        name: users.name,
-        email: users.email,
-        emailVerified: users.emailVerified,
-        image: users.avatarUrl,
-      });
-
-    if (!created) {
-      throw new Error("Could not create user for new account.");
-    }
-
     try {
-      await db.update(organizations).set({ ownerId: created.id }).where(eq(organizations.id, org.id));
-    } catch (error) {
-      const code = (error as { code?: string } | null)?.code;
+      console.log("[auth][adapter] createUser called for:", data.email);
+      const email = data.email?.trim().toLowerCase();
 
-      if (code !== "42703") {
-        throw error;
+      if (!email) {
+        throw new Error("OAuth account is missing an email address.");
       }
-    }
 
-    return created;
+      const defaultName = data.name?.trim() || email.split("@")[0] || "Owner";
+      console.log("[auth][adapter] creating org for:", defaultName);
+      const org = await createOrganizationForUser({ name: `${defaultName}'s Workspace` });
+
+      if (!org) {
+        throw new Error("Could not create organization for new account.");
+      }
+
+      console.log("[auth][adapter] org created:", org.id, "inserting user");
+      const [created] = await db
+        .insert(users)
+        .values({
+          orgId: org.id,
+          role: "owner",
+          name: defaultName,
+          email,
+          avatarUrl: data.image ?? null,
+          emailVerified: data.emailVerified ?? null,
+        })
+        .returning({
+          id: users.id,
+          name: users.name,
+          email: users.email,
+          emailVerified: users.emailVerified,
+          image: users.avatarUrl,
+        });
+
+      if (!created) {
+        throw new Error("Could not create user for new account.");
+      }
+
+      console.log("[auth][adapter] user created:", created.id);
+
+      try {
+        await db.update(organizations).set({ ownerId: created.id }).where(eq(organizations.id, org.id));
+      } catch (error) {
+        const code = (error as { code?: string } | null)?.code;
+
+        if (code !== "42703") {
+          throw error;
+        }
+      }
+
+      return created;
+    } catch (err) {
+      console.error("[auth][adapter] createUser FAILED:", err);
+      throw err;
+    }
   },
 };
 

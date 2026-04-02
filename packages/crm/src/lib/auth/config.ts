@@ -53,44 +53,50 @@ export const authConfig = {
   providers: authProviders,
   callbacks: {
     jwt: async ({ token, user }) => {
-      if (user) {
-        token.orgId = (user as { orgId?: string }).orgId;
-        token.role = (user as { role?: string }).role;
-      }
-
-      if (token.sub) {
-        const [dbUser] = await db
-          .select({
-            id: users.id,
-            orgId: users.orgId,
-            role: users.role,
-            planId: users.planId,
-            subscriptionStatus: users.subscriptionStatus,
-            billingPeriod: users.billingPeriod,
-            trialEndsAt: users.trialEndsAt,
-          })
-          .from(users)
-          .where(eq(users.id, token.sub))
-          .limit(1);
-
-        if (dbUser) {
-          token.orgId = dbUser.orgId;
-          token.role = dbUser.role;
-          token.planId = dbUser.planId ?? null;
-          token.subscriptionStatus = normalizeBillingStatus(dbUser.subscriptionStatus);
-          token.billingPeriod = normalizeBillingPeriod(dbUser.billingPeriod);
-          token.trialEndsAt = dbUser.trialEndsAt ? dbUser.trialEndsAt.toISOString() : null;
-
-          const [org] = await db
-            .select({ id: organizations.id, soulCompletedAt: organizations.soulCompletedAt })
-            .from(organizations)
-            .where(eq(organizations.id, dbUser.orgId))
-            .limit(1);
-          token.soulCompleted = Boolean(org?.soulCompletedAt);
+      try {
+        if (user) {
+          console.log("[auth][jwt] user present in token, sub:", token.sub);
+          token.orgId = (user as { orgId?: string }).orgId;
+          token.role = (user as { role?: string }).role;
         }
-      }
 
-      return token;
+        if (token.sub) {
+          const [dbUser] = await db
+            .select({
+              id: users.id,
+              orgId: users.orgId,
+              role: users.role,
+              planId: users.planId,
+              subscriptionStatus: users.subscriptionStatus,
+              billingPeriod: users.billingPeriod,
+              trialEndsAt: users.trialEndsAt,
+            })
+            .from(users)
+            .where(eq(users.id, token.sub))
+            .limit(1);
+
+          if (dbUser) {
+            token.orgId = dbUser.orgId;
+            token.role = dbUser.role;
+            token.planId = dbUser.planId ?? null;
+            token.subscriptionStatus = normalizeBillingStatus(dbUser.subscriptionStatus);
+            token.billingPeriod = normalizeBillingPeriod(dbUser.billingPeriod);
+            token.trialEndsAt = dbUser.trialEndsAt ? dbUser.trialEndsAt.toISOString() : null;
+
+            const [org] = await db
+              .select({ id: organizations.id, soulCompletedAt: organizations.soulCompletedAt })
+              .from(organizations)
+              .where(eq(organizations.id, dbUser.orgId))
+              .limit(1);
+            token.soulCompleted = Boolean(org?.soulCompletedAt);
+          }
+        }
+
+        return token;
+      } catch (err) {
+        console.error("[auth][jwt] callback FAILED:", err);
+        throw err;
+      }
     },
     session: async ({ session, token }) => {
       if (session.user) {
