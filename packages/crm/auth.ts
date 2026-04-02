@@ -200,6 +200,17 @@ const adapter = {
 export const { handlers, signIn, signOut, auth } = NextAuth({
   debug: true,
   trustHost: true,
+  logger: {
+    error(code, ...message) {
+      console.error("[auth][logger][error]", code, ...message);
+    },
+    warn(code, ...message) {
+      console.warn("[auth][logger][warn]", code, ...message);
+    },
+    debug(code, ...message) {
+      console.log("[auth][logger][debug]", code, ...message);
+    },
+  },
   adapter,
   ...authConfig,
 });
