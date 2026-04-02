@@ -2,9 +2,10 @@ import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
 import * as schema from "./schema";
 
-const databaseUrl =
+const databaseUrl = (
   process.env.DATABASE_URL ??
-  "postgresql://user:pass@localhost:5432/seldon_frame?sslmode=require";
+  "postgresql://user:pass@localhost:5432/seldon_frame?sslmode=require"
+).trim();
 
 const sql = neon(databaseUrl);
 
