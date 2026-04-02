@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useEffect } from "react";
-import { signIn } from "next-auth/react";
+import { useActionState, useEffect, useState } from "react";
 import { sendMagicLinkAction } from "./actions";
 import { DEMO_BLOCK_MESSAGE } from "@/lib/demo/constants";
 import { useDemoToast } from "@/components/shared/demo-toast-provider";
@@ -10,6 +9,45 @@ import { useDemoToast } from "@/components/shared/demo-toast-provider";
 export function SignupForm() {
   const { showDemoToast } = useDemoToast();
   const [state, action, pending] = useActionState(sendMagicLinkAction, {});
+  const [googlePending, setGooglePending] = useState(false);
+
+  const handleGoogleSignIn = async () => {
+    try {
+      setGooglePending(true);
+      const response = await fetch("/api/auth/csrf", { cache: "no-store" });
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch CSRF token");
+      }
+
+      const data = (await response.json()) as { csrfToken?: string };
+
+      if (!data.csrfToken) {
+        throw new Error("Missing CSRF token");
+      }
+
+      const form = document.createElement("form");
+      form.method = "POST";
+      form.action = "/api/auth/signin/google";
+
+      const csrfInput = document.createElement("input");
+      csrfInput.type = "hidden";
+      csrfInput.name = "csrfToken";
+      csrfInput.value = data.csrfToken;
+
+      const callbackInput = document.createElement("input");
+      callbackInput.type = "hidden";
+      callbackInput.name = "callbackUrl";
+      callbackInput.value = "/";
+
+      form.appendChild(csrfInput);
+      form.appendChild(callbackInput);
+      document.body.appendChild(form);
+      form.submit();
+    } catch {
+      setGooglePending(false);
+    }
+  };
 
   useEffect(() => {
     if (state.error === DEMO_BLOCK_MESSAGE) {
@@ -21,10 +59,11 @@ export function SignupForm() {
     <div className="space-y-5 text-foreground">
       <button
         type="button"
+        disabled={googlePending}
         className="crm-button-primary h-11 w-full px-4 text-base"
-        onClick={() => signIn("google", { callbackUrl: "/" })}
+        onClick={handleGoogleSignIn}
       >
-        Sign in with Google
+        {googlePending ? "Redirecting to Google..." : "Sign in with Google"}
       </button>
 
       <div className="relative flex items-center justify-center py-1">
