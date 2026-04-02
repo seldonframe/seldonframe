@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useActionState, useEffect } from "react";
-import { sendMagicLinkAction, signInWithGoogleAction } from "./actions";
+import { signIn } from "next-auth/react";
+import { sendMagicLinkAction } from "./actions";
 import { DEMO_BLOCK_MESSAGE } from "@/lib/demo/constants";
 import { useDemoToast } from "@/components/shared/demo-toast-provider";
 
@@ -18,11 +19,13 @@ export function SignupForm() {
 
   return (
     <div className="space-y-5 text-foreground">
-      <form action={signInWithGoogleAction}>
-        <button type="submit" className="crm-button-primary h-11 w-full px-4 text-base">
-          Sign in with Google
-        </button>
-      </form>
+      <button
+        type="button"
+        className="crm-button-primary h-11 w-full px-4 text-base"
+        onClick={() => signIn("google", { callbackUrl: "/" })}
+      >
+        Sign in with Google
+      </button>
 
       <div className="relative flex items-center justify-center py-1">
         <span className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-[hsl(var(--border))]" />
