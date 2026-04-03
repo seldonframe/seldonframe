@@ -1,5 +1,5 @@
 import type { NextAuthConfig } from "next-auth";
-import type { OAuthConfig } from "next-auth/providers";
+import Google from "next-auth/providers/google";
 import Resend from "next-auth/providers/resend";
 import { db } from "@/db";
 import { organizations, users } from "@/db/schema";
@@ -7,13 +7,10 @@ import { eq } from "drizzle-orm";
 
 const BILLING_STATUSES = ["trialing", "active", "past_due", "canceled", "unpaid"] as const;
 const BILLING_PERIODS = ["monthly", "yearly"] as const;
-
-interface GoogleProfile {
-  sub: string;
-  name: string;
-  email: string;
-  picture: string;
-}
+const googleClientId = process.env.GOOGLE_CLIENT_ID?.trim();
+const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
+const resendApiKey = (process.env.AUTH_RESEND_KEY ?? process.env.RESEND_API_KEY)?.trim();
+const resendFrom = (process.env.AUTH_RESEND_FROM ?? process.env.DEFAULT_FROM_EMAIL ?? "hello@seldonframe.local").trim();
 
 function normalizeBillingStatus(value: string | null | undefined): (typeof BILLING_STATUSES)[number] {
   return BILLING_STATUSES.includes(value as (typeof BILLING_STATUSES)[number])
@@ -29,39 +26,20 @@ function normalizeBillingPeriod(value: string | null | undefined): (typeof BILLI
 
 const authProviders: NextAuthConfig["providers"] = [];
 
-if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-  authProviders.push({
-    id: "google",
-    name: "Google",
-    type: "oauth",
-    issuer: "https://accounts.google.com",
-    authorization: {
-      url: "https://accounts.google.com/o/oauth2/v2/auth",
-      params: { scope: "openid profile email" },
-    },
-    token: "https://oauth2.googleapis.com/token",
-    userinfo: "https://openidconnect.googleapis.com/v1/userinfo",
-    clientId: process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    checks: ["pkce", "state"],
-    profile(profile: GoogleProfile) {
-      return {
-        id: profile.sub,
-        name: profile.name,
-        email: profile.email,
-        image: profile.picture,
-      };
-    },
-  } satisfies OAuthConfig<GoogleProfile>);
+if (googleClientId && googleClientSecret) {
+  authProviders.push(
+    Google({
+      clientId: googleClientId,
+      clientSecret: googleClientSecret,
+    })
+  );
 }
-
-const resendApiKey = process.env.AUTH_RESEND_KEY ?? process.env.RESEND_API_KEY;
 
 if (resendApiKey) {
   authProviders.push(
     Resend({
       apiKey: resendApiKey,
-      from: process.env.AUTH_RESEND_FROM ?? process.env.DEFAULT_FROM_EMAIL ?? "hello@seldonframe.local",
+      from: resendFrom,
     })
   );
 }

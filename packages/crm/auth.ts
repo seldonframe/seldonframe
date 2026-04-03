@@ -10,6 +10,10 @@ import { authConfig } from "@/lib/auth/config";
 if (process.env.AUTH_SECRET) process.env.AUTH_SECRET = process.env.AUTH_SECRET.trim();
 if (process.env.NEXTAUTH_SECRET) process.env.NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET.trim();
 if (process.env.DATABASE_URL) process.env.DATABASE_URL = process.env.DATABASE_URL.trim();
+if (process.env.NEXTAUTH_URL) process.env.NEXTAUTH_URL = process.env.NEXTAUTH_URL.trim();
+if (process.env.AUTH_URL) process.env.AUTH_URL = process.env.AUTH_URL.trim();
+if (process.env.GOOGLE_CLIENT_ID) process.env.GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID.trim();
+if (process.env.GOOGLE_CLIENT_SECRET) process.env.GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET.trim();
 
 function slugify(input: string) {
   return input
@@ -30,32 +34,13 @@ async function createOrganizationForUser(params: { name: string }) {
     const slug = `${baseSlug}-${suffix}`;
 
     try {
-      let org: (typeof organizations.$inferSelect) | undefined;
-
-      try {
-        [org] = await db
-          .insert(organizations)
-          .values({
-            name: params.name,
-            slug,
-            ownerId: "",
-          })
-          .returning();
-      } catch (error) {
-        const code = (error as { code?: string } | null)?.code;
-
-        if (code !== "42703") {
-          throw error;
-        }
-
-        [org] = await db
-          .insert(organizations)
-          .values({
-            name: params.name,
-            slug,
-          })
-          .returning();
-      }
+      const [org] = await db
+        .insert(organizations)
+        .values({
+          name: params.name,
+          slug,
+        })
+        .returning();
 
       if (org) {
         return org;

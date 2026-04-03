@@ -18,7 +18,7 @@ function ServiceBadge({ label, connected }: { label: string; connected: boolean 
     <span
       className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs ${
         connected
-          ? "border border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+          ? "border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
           : "border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.25)] text-[hsl(var(--muted-foreground))]"
       }`}
     >
@@ -177,9 +177,9 @@ export function SeldonPageClient({ allowed, services, history }: { allowed: bool
                   <span
                     className={`rounded-full px-2 py-1 text-xs ${
                       item.status === "Active"
-                        ? "bg-emerald-500/10 text-emerald-300"
+                        ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
                         : item.status === "Review"
-                          ? "bg-amber-500/10 text-amber-300"
+                          ? "bg-amber-500/10 text-amber-700 dark:text-amber-300"
                           : "bg-[hsl(var(--muted)/0.3)] text-[hsl(var(--muted-foreground))]"
                     }`}
                   >

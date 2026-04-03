@@ -149,8 +149,6 @@
 
 .glass-card {
   background: hsl(var(--color-surface-overlay) / 0.75);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
   border: 1px solid hsl(var(--color-border) / 0.6);
   border-radius: 0.75rem;
   box-shadow: var(--shadow-card);
@@ -162,10 +160,8 @@
   box-shadow: var(--shadow-card-hover);
 }
 
-@supports not (backdrop-filter: blur(12px)) {
-  .glass-card {
-    background: hsl(var(--card));
-  }
+.glass-card {
+  background: hsl(var(--card));
 }
 
 @keyframes page-enter {

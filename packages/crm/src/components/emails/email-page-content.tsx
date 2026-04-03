@@ -30,11 +30,11 @@ function statusBadge(status: string) {
   }
 
   if (s === "queued" || s === "pending") {
-    return "bg-amber-500/10 text-amber-300";
+    return "bg-amber-500/10 text-amber-700 dark:text-amber-300";
   }
 
   if (s === "failed" || s === "bounced") {
-    return "bg-red-500/10 text-red-300";
+    return "bg-red-500/10 text-red-700 dark:text-red-300";
   }
 
   return "bg-[hsl(var(--muted)/0.5)] text-[hsl(var(--muted-foreground))]";
@@ -225,7 +225,7 @@ export function EmailPageContent({
                   ))}
                 </datalist>
                 <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">Uses lowercase entity.action format. Leave blank for manual sends only.</p>
-                {triggerEventError ? <p className="mt-1 text-xs text-red-300">{triggerEventError}</p> : null}
+                {triggerEventError ? <p className="mt-1 text-xs text-red-700 dark:text-red-300">{triggerEventError}</p> : null}
               </div>
               <div className="pt-2">
                 <button type="submit" className="crm-button-primary h-10 px-6" disabled={pending}>

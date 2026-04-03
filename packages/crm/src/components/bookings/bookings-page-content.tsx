@@ -70,7 +70,7 @@ function statusClass(status: string) {
   }
 
   if (normalized.includes("pending") || normalized.includes("no_show")) {
-    return "bg-amber-500/10 text-amber-300";
+    return "bg-amber-500/10 text-amber-700 dark:text-amber-300";
   }
 
   return "bg-[hsl(var(--muted)/0.5)] text-[hsl(var(--muted-foreground))]";
@@ -211,7 +211,7 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
                       <button type="button" className="crm-button-ghost h-9 px-4 text-xs">
                         Edit
                       </button>
-                      <button type="button" className="crm-button-ghost h-9 px-4 text-xs text-amber-200 hover:text-amber-100">
+                      <button type="button" className="crm-button-ghost h-9 px-4 text-xs text-amber-700 hover:text-amber-800 dark:text-amber-300 dark:hover:text-amber-200">
                         Delete
                       </button>
                     </div>

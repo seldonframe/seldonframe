@@ -35,7 +35,7 @@ function statusBadge(status: string) {
     return "bg-[hsl(var(--muted)/0.5)] text-[hsl(var(--muted-foreground))]";
   }
 
-  return "bg-amber-500/10 text-amber-300";
+  return "bg-amber-500/10 text-amber-700 dark:text-amber-300";
 }
 
 export function LandingPagesContent({

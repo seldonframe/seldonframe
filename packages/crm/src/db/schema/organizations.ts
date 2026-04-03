@@ -31,7 +31,7 @@ export const organizations = pgTable("organizations", {
     .primaryKey(),
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
-  ownerId: text("owner_id").notNull().default(""),
+  ownerId: uuid("owner_id"),
   parentUserId: uuid("parent_user_id"),
   settings: jsonb("settings").$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
   soul: jsonb("soul").$type<OrgSoul | null>().default(null),
