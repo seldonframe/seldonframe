@@ -33,6 +33,16 @@ type SetupSoulOption = {
   };
 };
 
+function normalizePreviewContactPlural(value: unknown) {
+  const text = String(value ?? "").trim();
+
+  if (!text || /\{\{.*\}\}/.test(text)) {
+    return "Contacts";
+  }
+
+  return text;
+}
+
 export default async function SetupPage() {
   const session = await auth();
 
@@ -46,7 +56,10 @@ export default async function SetupPage() {
   for (const summary of summaries) {
     const pkg = await loadSoulPackage(summary.id);
     const config = pkg.config as {
-      identity?: { defaultBusinessName?: string };
+      identity?: {
+        defaultBusinessName?: string;
+        entityLabels?: { contact?: { plural?: string } };
+      };
       entityLabels?: { contact?: { plural?: string } };
       pipeline?: { stages?: Array<{ name?: string } | string> };
       bookingTypes?: Array<{ title?: string; durationMinutes?: number }>;
@@ -83,7 +96,7 @@ export default async function SetupPage() {
         };
       }),
       preview: {
-        contactPlural: String(config.entityLabels?.contact?.plural ?? "Contacts"),
+        contactPlural: normalizePreviewContactPlural(config.identity?.entityLabels?.contact?.plural ?? config.entityLabels?.contact?.plural),
         stages: Array.isArray(config.pipeline?.stages)
           ? config.pipeline.stages
               .map((stage) => (typeof stage === "string" ? stage : String(stage?.name ?? "")))

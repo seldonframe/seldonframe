@@ -57,7 +57,7 @@ export function Sidebar({ blocks, canAccessSeldon }: { blocks: BlockManifest[]; 
   ].sort((a, b) => a.order - b.order);
 
   return (
-    <aside className="crm-sidebar flex w-full flex-col border-r border-[hsl(var(--border))] pr-6 md:w-[220px]">
+    <aside className="crm-sidebar glass-card flex w-full flex-col border border-[hsl(var(--border))] pr-6 md:w-[220px]">
       <div className="mb-8 px-2 py-4">
         <Image src="/logo-full.svg" alt="SeldonFrame" width={172} height={32} className="h-8 w-auto" priority />
       </div>
@@ -65,7 +65,7 @@ export function Sidebar({ blocks, canAccessSeldon }: { blocks: BlockManifest[]; 
       <div className="mt-auto px-2 pb-2 pt-8">
         <button
           type="button"
-          className="w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.35)] px-3 py-2 text-left text-xs font-medium text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--muted)/0.5)] hover:text-foreground"
+          className="crm-topbar-input h-9 w-full rounded-md px-3 text-left text-xs font-medium text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--muted)/0.6)] hover:text-foreground"
           onClick={() => window.dispatchEvent(new CustomEvent("crm:command-palette-toggle", { detail: { open: true } }))}
         >
           Command Palette <span className="float-right rounded border border-[hsl(var(--border))] px-1.5 py-0.5 text-[10px] text-[hsl(var(--muted-foreground))]">⌘K</span>

@@ -142,7 +142,7 @@ export function DashboardTopbar({
   }, [menuOpen]);
 
   return (
-    <header className="flex flex-wrap items-center gap-3 rounded-2xl border-b border-[hsl(var(--border))] bg-background/80 p-4 backdrop-blur-xl lg:flex-nowrap">
+    <header className="glass-card flex flex-wrap items-center gap-3 rounded-xl border border-[hsl(var(--border))] p-4 lg:flex-nowrap">
       <div className="min-w-[140px]">
         <p className="text-card-title text-foreground">{title}</p>
       </div>
@@ -172,7 +172,7 @@ export function DashboardTopbar({
 
         <button
           type="button"
-          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--muted)/0.45)] hover:text-foreground"
+          className="crm-topbar-icon-btn"
           aria-label="Toggle theme"
           onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
         >
@@ -188,7 +188,7 @@ export function DashboardTopbar({
           <button
             type="button"
             onClick={() => setMenuOpen((current) => !current)}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--color-surface-raised))] text-xs font-semibold text-foreground"
+            className="crm-topbar-icon-btn h-9 w-9 rounded-md text-xs font-semibold"
             aria-haspopup="menu"
             aria-expanded={menuOpen}
             aria-label="User menu"

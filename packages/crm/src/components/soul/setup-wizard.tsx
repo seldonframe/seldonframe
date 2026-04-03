@@ -2,7 +2,6 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, CheckCircle2, Circle, Sparkles } from "lucide-react";
 import { installSoul } from "@/lib/soul/install";
@@ -211,7 +210,16 @@ export function SetupWizard({ souls }: { souls: SetupSoulOption[] }) {
                     }`}
                   >
                     <div className="overflow-hidden rounded-lg border border-[hsl(var(--border))]">
-                      <Image src={item.previewImageUrl} alt={item.name} width={640} height={256} className="h-32 w-full object-cover" />
+                      <img
+                        src={item.previewImageUrl}
+                        alt={item.name}
+                        className="h-32 w-full object-cover"
+                        loading="lazy"
+                        onError={(event) => {
+                          event.currentTarget.onerror = null;
+                          event.currentTarget.src = "/logo.svg";
+                        }}
+                      />
                     </div>
                     <p className="mt-3 text-base font-medium text-foreground">{item.name}</p>
                     <p className="text-sm text-[hsl(var(--muted-foreground))]">{item.description || "Niche-ready business system"}</p>
@@ -223,7 +231,15 @@ export function SetupWizard({ souls }: { souls: SetupSoulOption[] }) {
               })}
             </div>
             <p className="text-sm text-[hsl(var(--muted-foreground))]">
-              If none fit, <button type="button" className="underline underline-offset-4" onClick={() => router.push("/dashboard")}>start from scratch</button>.
+              If none fit, {" "}
+              <Link
+                href="/dashboard"
+                className="pointer-events-auto relative z-10 inline-flex underline underline-offset-4"
+                onClick={(event) => event.stopPropagation()}
+              >
+                start from scratch
+              </Link>
+              .
             </p>
           </div>
         ) : null}
