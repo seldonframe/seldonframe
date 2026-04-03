@@ -6,6 +6,16 @@ import { updateContactFieldAction } from "@/lib/contacts/actions";
 import { isDemoBlockedError, isDemoReadonlyClient } from "@/lib/demo/client";
 import { useDemoToast } from "@/components/shared/demo-toast-provider";
 
+/*
+Square UI Leads class references (from template source):
+- Table wrapper: "bg-card text-card-foreground rounded-xl border"
+- Header row: "bg-muted/50"
+- Table row behavior: "hover:bg-muted/50 data-[state=selected]:bg-muted border-b transition-colors"
+- Table head cell: "text-foreground h-10 px-2 text-left align-middle font-medium whitespace-nowrap"
+- Table body cell: "p-2 align-middle whitespace-nowrap"
+- Badge base: "h-5 gap-1 rounded-4xl ... inline-flex items-center justify-center w-fit whitespace-nowrap"
+*/
+
 type ContactRow = {
   id: string;
   firstName: string;
@@ -81,16 +91,16 @@ export function ContactsInlineTable({ rows }: { rows: ContactRow[] }) {
   }
 
   return (
-    <div className="rounded-xl border bg-card overflow-hidden">
+    <div className="bg-card text-card-foreground rounded-xl border">
       <table className="w-full text-sm">
-        <thead className="bg-muted/50 text-left text-label">
-          <tr>
-            <th className="px-3 py-3">Name</th>
-            <th className="px-3 py-3">Email</th>
-            <th className="px-3 py-3">Status</th>
+        <thead className="[&_tr]:border-b">
+          <tr className="bg-muted/50">
+            <th className="text-foreground h-10 px-2 text-left align-middle font-medium whitespace-nowrap">Name</th>
+            <th className="text-foreground h-10 px-2 text-left align-middle font-medium whitespace-nowrap">Email</th>
+            <th className="text-foreground h-10 px-2 text-left align-middle font-medium whitespace-nowrap">Status</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody className="[&_tr:last-child]:border-0">
           {tableRows.map((row) => {
             const isEditingFirst = editing && cellKey(editing.contactId, editing.field) === cellKey(row.id, "firstName");
             const isEditingLast = editing && cellKey(editing.contactId, editing.field) === cellKey(row.id, "lastName");
@@ -98,8 +108,8 @@ export function ContactsInlineTable({ rows }: { rows: ContactRow[] }) {
             const isEditingStatus = editing && cellKey(editing.contactId, editing.field) === cellKey(row.id, "status");
 
             return (
-              <tr key={row.id} className="crm-table-row hover:bg-[hsl(var(--muted)/0.35)]">
-                <td className="px-3 py-3">
+              <tr key={row.id} className="hover:bg-muted/50 data-[state=selected]:bg-muted border-b transition-colors">
+                <td className="p-2 align-middle whitespace-nowrap">
                   <div className="flex items-center gap-2">
                     {isEditingFirst ? (
                       <input
@@ -158,7 +168,7 @@ export function ContactsInlineTable({ rows }: { rows: ContactRow[] }) {
                   {row.badges && row.badges.length > 0 ? (
                     <div className="mt-2 flex flex-wrap items-center gap-1">
                       {row.badges.map((badge) => (
-                        <span key={badge} className="rounded-full border border-primary/25 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                        <span key={badge} className="h-5 gap-1 rounded-4xl border border-primary/25 bg-primary/10 px-2 py-0.5 text-[10px] font-medium inline-flex items-center justify-center w-fit whitespace-nowrap shrink-0 text-primary">
                           {badge}
                         </span>
                       ))}
@@ -166,7 +176,7 @@ export function ContactsInlineTable({ rows }: { rows: ContactRow[] }) {
                   ) : null}
                 </td>
 
-                <td className="px-3 py-3">
+                <td className="p-2 align-middle whitespace-nowrap">
                   {isEditingEmail ? (
                     <input
                       className="crm-input h-8 w-full px-2"
@@ -193,7 +203,7 @@ export function ContactsInlineTable({ rows }: { rows: ContactRow[] }) {
                   )}
                 </td>
 
-                <td className="px-3 py-3">
+                <td className="p-2 align-middle whitespace-nowrap">
                   {isEditingStatus ? (
                     <select
                       className="crm-input h-8 px-2"
@@ -208,7 +218,7 @@ export function ContactsInlineTable({ rows }: { rows: ContactRow[] }) {
                       <option value="inactive">Inactive</option>
                     </select>
                   ) : (
-                    <button type="button" className="rounded-full bg-[hsl(var(--muted)/0.5)] px-2 py-1 text-xs text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted)/0.7)]" onClick={() => beginEdit(row, "status")}>
+                    <button type="button" className="h-5 gap-1 rounded-4xl border border-border px-2 py-0.5 text-xs font-medium inline-flex items-center justify-center w-fit whitespace-nowrap shrink-0 bg-secondary text-secondary-foreground" onClick={() => beginEdit(row, "status")}>
                       {row.status}
                     </button>
                   )}

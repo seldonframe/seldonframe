@@ -188,7 +188,7 @@
     display: flex;
     align-items: center;
     gap: 0.625rem;
-    min-height: 2.25rem;
+    min-height: 2.75rem;
     border-radius: 0.5rem;
     background: transparent;
     color: hsl(var(--muted-foreground));
@@ -245,7 +245,7 @@
     border-radius: 0.5rem;
     background: hsl(var(--card));
     color: hsl(var(--foreground));
-    min-height: 2.25rem;
+    min-height: 2.75rem;
   }
 
   @media (min-width: 640px) {
@@ -258,8 +258,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    height: 2.25rem;
-    width: 2.25rem;
+    height: 2.75rem;
+    width: 2.75rem;
     border-radius: 0.5rem;
     border: 1px solid hsl(var(--color-border));
     background: hsl(var(--card));

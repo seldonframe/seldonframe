@@ -44,7 +44,7 @@ function isActivePath(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function SidebarNav({ nav }: { nav: NavItem[] }) {
+export function SidebarNav({ nav, onNavigate }: { nav: NavItem[]; onNavigate?: () => void }) {
   const pathname = usePathname();
 
   return (
@@ -63,6 +63,11 @@ export function SidebarNav({ nav }: { nav: NavItem[] }) {
             data-active={item.disabled ? false : active}
             className={className}
             title={item.tooltip}
+            onClick={() => {
+              if (!item.disabled) {
+                onNavigate?.();
+              }
+            }}
           >
             <Icon className="crm-sidebar-icon h-4 w-4 shrink-0" />
             <span className="crm-sidebar-text flex-1">{item.label}</span>

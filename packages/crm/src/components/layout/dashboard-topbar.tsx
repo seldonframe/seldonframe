@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { Bell, Command, Moon, Search, Sun } from "lucide-react";
+import { Bell, Command, Menu, Moon, Search, Sun } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { useTheme } from "next-themes";
 import { usePathname } from "next/navigation";
@@ -142,9 +142,17 @@ export function DashboardTopbar({
   }, [menuOpen]);
 
   return (
-    <header className="sticky top-0 z-10 flex w-full items-center gap-2 border-b border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-3 sm:gap-3 sm:px-6 sm:py-4">
-      <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
-        <p className="truncate text-base font-medium text-foreground sm:text-lg">{title}</p>
+    <header className="sticky top-0 z-10 flex w-full items-center gap-1.5 border-b border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-3 sm:gap-3 sm:px-6 sm:py-4">
+      <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-3">
+        <button
+          type="button"
+          className="crm-topbar-icon-btn flex h-11 w-11 items-center justify-center md:hidden"
+          aria-label="Open navigation menu"
+          onClick={() => window.dispatchEvent(new CustomEvent("crm:mobile-sidebar-open"))}
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+        <p className="truncate text-sm font-medium text-foreground sm:text-lg">{title}</p>
       </div>
 
       <button
@@ -158,7 +166,7 @@ export function DashboardTopbar({
         </span>
       </button>
 
-      <div className="ml-auto flex items-center gap-2">
+      <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
         <label className="crm-topbar-input relative hidden h-9 items-center gap-2 px-3 lg:flex">
           <Search className="h-4 w-4 text-[hsl(var(--color-text-secondary))]" />
           <input
@@ -168,7 +176,9 @@ export function DashboardTopbar({
           />
         </label>
 
-        <DensityToggle />
+        <div className="hidden sm:block">
+          <DensityToggle />
+        </div>
 
         <button type="button" className="crm-topbar-icon-btn" aria-label="Toggle theme" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
           {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
@@ -192,7 +202,7 @@ export function DashboardTopbar({
           </button>
 
           {menuOpen ? (
-            <div className="glass-card absolute right-0 z-30 mt-2 w-64 rounded-xl p-2 shadow-dropdown" role="menu">
+            <div className="glass-card absolute right-0 z-30 mt-2 w-56 rounded-xl p-2 shadow-dropdown sm:w-64" role="menu">
               <div className="px-2 py-2">
                 <p className="truncate text-sm font-medium text-foreground">{userName}</p>
                 <p className="truncate text-xs text-[hsl(var(--muted-foreground))]">{userEmail}</p>

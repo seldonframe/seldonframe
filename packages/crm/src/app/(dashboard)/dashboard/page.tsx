@@ -286,10 +286,10 @@ export default async function DashboardPage() {
 
       <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 sm:gap-6">
         <div className="space-y-2 sm:space-y-5">
-          <h1 className="text-lg sm:text-[22px] font-semibold leading-relaxed text-foreground">
+          <h1 className="text-base sm:text-[22px] font-semibold leading-snug sm:leading-relaxed text-foreground">
             Good {timeOfDay()}, {firstName}
           </h1>
-          <p className="text-sm sm:text-base text-muted-foreground">
+          <p className="text-xs sm:text-base text-muted-foreground">
             Today: <span className="text-foreground font-medium">{sessionsToday} sessions</span>,{" "}
             <span className="text-foreground font-medium">{followUpsDue} follow-ups due</span>
           </p>
@@ -357,14 +357,14 @@ export default async function DashboardPage() {
           <div className="space-y-4 lg:col-span-5">
             <article className="rounded-xl border bg-card p-4 sm:p-6">
               <p className="text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">Quick Actions</p>
-              <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                <Link href="/contacts" className="rounded-lg border bg-background p-4 text-sm text-foreground transition hover:bg-muted/50">
+              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
+                <Link href="/contacts" className="rounded-lg border bg-background p-4 text-sm text-foreground transition hover:bg-muted/50 min-h-11">
                   Add {contactLabelSingular}
                 </Link>
-                <Link href="/deals" className="rounded-lg border bg-background p-4 text-sm text-foreground transition hover:bg-muted/50">
+                <Link href="/deals" className="rounded-lg border bg-background p-4 text-sm text-foreground transition hover:bg-muted/50 min-h-11">
                   Create {dealLabelSingular}
                 </Link>
-                <Link href="/bookings" className="rounded-lg border bg-background p-4 text-sm text-foreground transition hover:bg-muted/50">
+                <Link href="/bookings" className="rounded-lg border bg-background p-4 text-sm text-foreground transition hover:bg-muted/50 min-h-11">
                   Share Booking Page
                 </Link>
               </div>
@@ -396,7 +396,7 @@ export default async function DashboardPage() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 p-3 sm:p-4 lg:p-6 rounded-xl border bg-card">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 p-3 sm:p-4 lg:p-6 rounded-xl border bg-card">
             <StatCard
               label={`Total ${contactLabelPlural}`}
               value={contactRows.length.toLocaleString()}
@@ -446,9 +446,9 @@ export default async function DashboardPage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="bg-muted/50 text-left text-xs font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
-                        <th className="py-2 px-3">Contact</th>
-                        <th className="py-2 px-3">Value</th>
-                        <th className="py-2 px-3">Stage</th>
+                        <th className="py-2 px-3 whitespace-nowrap">Contact</th>
+                        <th className="py-2 px-3 whitespace-nowrap">Value</th>
+                        <th className="py-2 px-3 whitespace-nowrap">Stage</th>
                       </tr>
                     </thead>
                     <tbody>

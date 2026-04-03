@@ -99,16 +99,16 @@ export function SeldonPageClient({ allowed, services, history }: { allowed: bool
   return (
     <section className="animate-page-enter space-y-4 sm:space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-lg sm:text-[22px] font-semibold leading-relaxed text-foreground">Seldon It Into Existence</h1>
-          <p className="text-sm sm:text-base text-muted-foreground">Describe what you need. Your business context does the rest.</p>
+        <div className="min-w-0">
+          <h1 className="text-base sm:text-[22px] font-semibold leading-snug sm:leading-relaxed text-foreground">Seldon It Into Existence</h1>
+          <p className="text-xs sm:text-base text-muted-foreground">Describe what you need. Your business context does the rest.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <ServiceBadge label="Stripe" connected={services.stripe} />
           <ServiceBadge label="Resend" connected={services.resend} />
           <ServiceBadge label="Twilio" connected={services.twilio} />
           <ServiceBadge label="Kit" connected={services.kit} />
-          <Link href="/settings/integrations" className="inline-flex items-center rounded-full border border-[hsl(var(--border))] px-2.5 py-1 text-xs text-[hsl(var(--muted-foreground))]">
+          <Link href="/settings/integrations" className="inline-flex min-h-11 items-center rounded-full border border-[hsl(var(--border))] px-2.5 py-1 text-xs text-[hsl(var(--muted-foreground))]">
             Connect more
           </Link>
         </div>
