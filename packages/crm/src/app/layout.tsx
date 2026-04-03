@@ -15,11 +15,12 @@ export const metadata: Metadata = {
   description: "Open source CRM framework scaffold",
   icons: {
     icon: [
+      { url: "/logo.svg", type: "image/svg+xml" },
       { url: "/favicon.svg", type: "image/svg+xml" },
       { url: "/favicon.ico", type: "image/x-icon" },
     ],
-    shortcut: "/favicon.svg",
-    apple: "/logo-small.svg",
+    shortcut: "/logo.svg",
+    apple: "/logo.svg",
   },
 };
 

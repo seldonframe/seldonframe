@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import {
   Brain,
@@ -32,12 +33,7 @@ export default function PublicHomePage() {
       <header className="sticky top-0 z-20 border-b bg-background/80 backdrop-blur-md">
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-4">
           <Link href="/" className="flex items-center gap-3">
-            <span className="grid h-8 w-8 grid-cols-2 gap-0.5 rounded-md bg-[#142E22] p-1.5">
-              <span className="rounded-sm bg-[#E8E1D5]" />
-              <span className="rounded-sm bg-[#8A9A8F]" />
-              <span className="rounded-sm bg-[#F59E0B]" />
-              <span className="rounded-sm bg-[#E8E1D5]" />
-            </span>
+            <Image src="/logo.svg" alt="SeldonFrame" width={28} height={36} className="h-9 w-auto" priority />
             <span className="text-base font-semibold">SeldonFrame</span>
           </Link>
           <nav className="hidden items-center gap-6 text-sm text-muted-foreground md:flex">
