@@ -85,7 +85,7 @@ export function EmailPageContent({
           </div>
 
           {templates.length === 0 ? (
-            <article className="glass-card flex min-h-52 flex-col items-center justify-center rounded-2xl p-8 text-center">
+            <article className="rounded-xl border bg-card flex min-h-52 flex-col items-center justify-center p-8 text-center">
               <p className="text-3xl">✉️</p>
               <p className="mt-3 text-lg font-medium text-foreground">Create your first email template</p>
               <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">Templates let you send consistent, personalized emails.</p>
@@ -96,7 +96,7 @@ export function EmailPageContent({
           ) : (
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {templates.map((tpl) => (
-                <article key={tpl.id} className="glass-card rounded-2xl p-5">
+                <article key={tpl.id} className="rounded-xl border bg-card p-5">
                   <div className="mb-2 flex items-start justify-between gap-2">
                     <h3 className="text-base font-medium text-foreground">{tpl.name}</h3>
                     <span className="rounded-full bg-primary/10 px-2 py-1 text-xs text-primary">{tpl.tag || "general"}</span>
@@ -121,12 +121,12 @@ export function EmailPageContent({
       {activeTab === "sent" ? (
         <section className="space-y-4">
           {sent.length === 0 ? (
-            <article className="glass-card rounded-2xl p-6 text-sm text-[hsl(var(--muted-foreground))]">No sent emails yet.</article>
+            <article className="rounded-xl border bg-card p-6 text-sm text-[hsl(var(--muted-foreground))]">No sent emails yet.</article>
           ) : (
-            <article className="glass-card overflow-hidden rounded-2xl">
+            <article className="rounded-xl border bg-card overflow-hidden">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-left text-xs font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                  <tr className="bg-muted/50 text-left text-xs font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
                     <th className="px-4 py-3">To</th>
                     <th className="px-4 py-3">Subject</th>
                     <th className="px-4 py-3">Status</th>
@@ -189,15 +189,15 @@ export function EmailPageContent({
             >
               <div>
                 <label htmlFor="tpl-name" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Template name</label>
-                <input id="tpl-name" className="crm-input h-10 w-full px-3" name="name" placeholder="Welcome Email" required />
+                <input id="tpl-name" className="crm-input h-9 w-full px-3" name="name" placeholder="Welcome Email" required />
               </div>
               <div>
                 <label htmlFor="tpl-tag" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Tag</label>
-                <input id="tpl-tag" className="crm-input h-10 w-full px-3" name="tag" placeholder="welcome" defaultValue="general" />
+                <input id="tpl-tag" className="crm-input h-9 w-full px-3" name="tag" placeholder="welcome" defaultValue="general" />
               </div>
               <div>
                 <label htmlFor="tpl-subject" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Subject</label>
-                <input id="tpl-subject" className="crm-input h-10 w-full px-3" name="subject" placeholder="Welcome to {{businessName}}" required />
+                <input id="tpl-subject" className="crm-input h-9 w-full px-3" name="subject" placeholder="Welcome to {{businessName}}" required />
               </div>
               <div>
                 <label htmlFor="tpl-body" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Body</label>
@@ -207,7 +207,7 @@ export function EmailPageContent({
                 <label htmlFor="tpl-trigger-event" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Trigger event (optional)</label>
                 <input
                   id="tpl-trigger-event"
-                  className="crm-input h-10 w-full px-3"
+                  className="crm-input h-9 w-full px-3"
                   name="triggerEvent"
                   value={triggerEventInput}
                   onChange={(event) => {

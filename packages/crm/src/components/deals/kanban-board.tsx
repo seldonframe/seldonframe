@@ -39,13 +39,13 @@ function DraggableDealCard({ deal, active }: { deal: Deal; active: boolean }) {
       transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
       whileHover={{ y: -2, boxShadow: "var(--shadow-card-hover)" }}
       whileTap={{ y: -3, boxShadow: "var(--shadow-card-hover)" }}
-      className="rounded-[10px] border border-[hsl(var(--border))] bg-[hsl(var(--color-surface-raised)/0.55)] p-3 transition-all"
+      className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-3 transition-all"
       data-active={active}
       {...attributes}
       {...listeners}
     >
-      <p className="text-label">{deal.title}</p>
-      <p className="mt-1 text-data text-[hsl(var(--color-text-secondary))]">${Number(deal.value).toLocaleString()}</p>
+      <p className="text-sm font-medium text-foreground">{deal.title}</p>
+      <p className="mt-1 text-xs text-[hsl(var(--color-text-secondary))]">${Number(deal.value).toLocaleString()}</p>
     </motion.div>
   );
 }
@@ -66,7 +66,7 @@ function DroppableStageColumn({
   return (
     <div
       ref={setNodeRef}
-      className={`crm-card p-3 ${hoverStage === stage.name ? "border-dashed border-primary bg-[hsl(var(--primary)/0.18)]" : ""}`}
+      className={`rounded-xl border bg-card p-3 ${hoverStage === stage.name ? "border-dashed border-primary bg-[hsl(var(--primary)/0.12)]" : ""}`}
       id={stage.name}
     >
       <div className="mb-3 flex items-center gap-2">
@@ -163,7 +163,7 @@ export function KanbanBoard({ stages, deals }: { stages: Stage[]; deals: Deal[] 
 
   return (
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd} onDragCancel={handleDragCancel}>
-      <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-5">
+      <div className="grid gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-5">
         {grouped.map(({ stage, deals: stageDeals }) => (
           <DroppableStageColumn
             key={stage.name}

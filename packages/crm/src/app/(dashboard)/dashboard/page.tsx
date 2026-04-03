@@ -69,13 +69,18 @@ function Sparkline({ points }: { points: number[] }) {
 
 function StatCard({ label, value, icon, trendPoints }: { label: string; value: string; icon: React.ReactNode; trendPoints: number[] }) {
   return (
-    <article className="glass-card rounded-2xl p-6">
-      <div className="mb-4 flex items-center justify-between">
-        <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[hsl(var(--primary)/0.12)] text-primary">{icon}</span>
+    <article className="flex items-start">
+      <div className="flex-1 space-y-2 sm:space-y-4 lg:space-y-6">
+        <div className="flex items-center gap-1 sm:gap-1.5 text-muted-foreground">
+          <span className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--muted)/0.6)] text-primary">{icon}</span>
+          <span className="text-[10px] sm:text-xs lg:text-sm font-medium truncate">{label}</span>
+        </div>
+        <p className="text-lg sm:text-xl lg:text-[28px] font-semibold leading-tight tracking-tight text-foreground">{value}</p>
+        <div className="flex items-center gap-2 text-[10px] sm:text-xs text-[hsl(var(--muted-foreground))]">
+          <span>vs Last Month</span>
+        </div>
       </div>
-      <p className="text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">{label}</p>
-      <div className="mt-2 flex items-end justify-between gap-3">
-        <p className="text-3xl font-semibold text-foreground">{value}</p>
+      <div className="ml-3 sm:ml-4 flex items-end pb-1">
         <Sparkline points={trendPoints} />
       </div>
     </article>
@@ -279,14 +284,17 @@ export default async function DashboardPage() {
         </article>
       ) : null}
 
-      <header className="space-y-2">
-        <h1 className="text-3xl font-light tracking-tight text-foreground">
-          Good {timeOfDay()}, <span className="font-semibold">{firstName}</span>
-        </h1>
-        <p className="text-sm text-[hsl(var(--muted-foreground))]">{formatLongDate(today)}</p>
-        <p className="text-sm text-[hsl(var(--muted-foreground))]">
-          <span className="text-primary">{sessionsToday}</span> sessions today · <span className="text-primary">{followUpsDue}</span> follow-ups due · <span className="text-primary">{newClientsThisWeek}</span> new {contactLabelPlural.toLowerCase()} this week
-        </p>
+      <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 sm:gap-6">
+        <div className="space-y-2 sm:space-y-5">
+          <h1 className="text-lg sm:text-[22px] font-semibold leading-relaxed text-foreground">
+            Good {timeOfDay()}, {firstName}
+          </h1>
+          <p className="text-sm sm:text-base text-muted-foreground">
+            Today: <span className="text-foreground font-medium">{sessionsToday} sessions</span>,{" "}
+            <span className="text-foreground font-medium">{followUpsDue} follow-ups due</span>
+          </p>
+          <p className="text-xs text-muted-foreground">{formatLongDate(today)} · {newClientsThisWeek} new {contactLabelPlural.toLowerCase()} this week</p>
+        </div>
       </header>
 
       {newClientsGoal || revenueGoal ? (
@@ -347,16 +355,16 @@ export default async function DashboardPage() {
           </article>
 
           <div className="space-y-4 lg:col-span-5">
-            <article className="glass-card rounded-2xl p-6">
+            <article className="rounded-xl border bg-card p-4 sm:p-6">
               <p className="text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">Quick Actions</p>
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                <Link href="/contacts" className="glass-card rounded-xl p-4 text-sm text-foreground hover:text-foreground">
+                <Link href="/contacts" className="rounded-lg border bg-background p-4 text-sm text-foreground transition hover:bg-muted/50">
                   Add {contactLabelSingular}
                 </Link>
-                <Link href="/deals" className="glass-card rounded-xl p-4 text-sm text-foreground hover:text-foreground">
+                <Link href="/deals" className="rounded-lg border bg-background p-4 text-sm text-foreground transition hover:bg-muted/50">
                   Create {dealLabelSingular}
                 </Link>
-                <Link href="/bookings" className="glass-card rounded-xl p-4 text-sm text-foreground hover:text-foreground">
+                <Link href="/bookings" className="rounded-lg border bg-background p-4 text-sm text-foreground transition hover:bg-muted/50">
                   Share Booking Page
                 </Link>
               </div>
@@ -388,7 +396,7 @@ export default async function DashboardPage() {
         </div>
       ) : (
         <>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 p-3 sm:p-4 lg:p-6 rounded-xl border bg-card">
             <StatCard
               label={`Total ${contactLabelPlural}`}
               value={contactRows.length.toLocaleString()}
@@ -426,34 +434,35 @@ export default async function DashboardPage() {
           {opportunityRows.length > 0 || upcomingSessionRows.length > 0 ? (
             <div className="grid gap-4 xl:grid-cols-2">
               {opportunityRows.length > 0 ? (
-                <article className="glass-card rounded-2xl p-6">
+                <article className="rounded-xl border bg-card">
                   <div className="mb-4 flex items-center justify-between">
-                    <p className="text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">Top Opportunities</p>
-                    <Link href="/deals" className="text-sm text-primary hover:underline">
+                    <p className="px-4 pt-4 text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))] sm:px-6 sm:pt-6">Top Opportunities</p>
+                    <Link href="/deals" className="px-4 pt-4 text-sm text-primary hover:underline sm:px-6 sm:pt-6">
                       View All →
                     </Link>
                   </div>
 
+                  <div className="px-3 pb-3 sm:px-6 sm:pb-4 overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="text-left text-xs font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
-                        <th className="py-2">Contact</th>
-                        <th className="py-2">Value</th>
-                        <th className="py-2">Stage</th>
+                      <tr className="bg-muted/50 text-left text-xs font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                        <th className="py-2 px-3">Contact</th>
+                        <th className="py-2 px-3">Value</th>
+                        <th className="py-2 px-3">Stage</th>
                       </tr>
                     </thead>
                     <tbody>
                       {opportunityRows.map((row) => {
                         const contactName = row.contact ? `${row.contact.firstName} ${row.contact.lastName ?? ""}`.trim() : row.title;
                         return (
-                          <tr key={row.id} className="group min-h-[52px] hover:bg-[hsl(var(--muted)/0.35)]">
-                            <td className="py-3 text-sm text-foreground">
+                          <tr key={row.id} className="group hover:bg-[hsl(var(--muted)/0.35)]">
+                            <td className="py-3 px-3 text-sm text-foreground">
                               <Link href={`/deals/${row.id}`} className="hover:text-primary">
                                 {contactName}
                               </Link>
                             </td>
-                            <td className="py-3 text-sm text-foreground">${row.value.toLocaleString()}</td>
-                            <td className="py-3">
+                            <td className="py-3 px-3 text-sm text-foreground">${row.value.toLocaleString()}</td>
+                            <td className="py-3 px-3">
                               <span className="inline-flex rounded-md border border-[hsl(var(--border))] px-2 py-1 text-xs text-[hsl(var(--muted-foreground))]">{row.stage}</span>
                             </td>
                           </tr>
@@ -461,6 +470,7 @@ export default async function DashboardPage() {
                       })}
                     </tbody>
                   </table>
+                  </div>
                 </article>
               ) : null}
 

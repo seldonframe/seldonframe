@@ -71,7 +71,7 @@ function NodeCard({ node }: { node: FlowNode }) {
   const accent = node.kind === "trigger" ? "text-indigo-600" : node.kind === "condition" ? "text-amber-600" : "text-emerald-600";
 
   return (
-    <article ref={setNodeRef} style={style} className="crm-table-row glass-card rounded-lg p-3">
+    <article ref={setNodeRef} style={style} className="crm-table-row rounded-lg border bg-card p-3">
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className={`text-xs font-semibold uppercase tracking-[0.08em] ${accent}`}>{node.kind}</p>
@@ -143,7 +143,7 @@ export function AutomationBuilder() {
 
   return (
     <section className="space-y-4">
-      <div className="crm-card grid gap-3 p-4 md:grid-cols-[1fr_auto_auto] md:items-end">
+      <div className="rounded-xl border bg-card grid gap-3 p-4 md:grid-cols-[1fr_auto_auto] md:items-end">
         <div>
           <label className="text-label text-[hsl(var(--color-text-secondary))]" htmlFor="automation-name">
             Automation Name
@@ -152,19 +152,19 @@ export function AutomationBuilder() {
             id="automation-name"
             value={name}
             onChange={(event) => setName(event.target.value)}
-            className="crm-input mt-1 h-10 w-full px-3"
+            className="crm-input mt-1 h-9 w-full px-3"
           />
         </div>
-        <button type="button" className="crm-button-primary h-10 px-4" onClick={saveTemplate}>
+        <button type="button" className="crm-button-primary h-9 px-4" onClick={saveTemplate}>
           Save Template
         </button>
-        <button type="button" className="h-10 rounded-md border border-[hsl(var(--border))] px-4 text-sm font-medium">
+        <button type="button" className="h-9 rounded-md border border-[hsl(var(--border))] px-4 text-sm font-medium">
           Run Test
         </button>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[320px_1fr_340px]">
-        <aside className="crm-card space-y-4">
+        <aside className="rounded-xl border bg-card p-4 space-y-4">
           <h3 className="text-card-title">Node Library</h3>
 
           <div>
@@ -226,7 +226,7 @@ export function AutomationBuilder() {
           </div>
         </aside>
 
-        <div className="crm-card">
+        <div className="rounded-xl border bg-card p-4">
           <h3 className="mb-3 text-card-title">Visual Flow Builder</h3>
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <SortableContext items={ids} strategy={verticalListSortingStrategy}>
@@ -240,7 +240,7 @@ export function AutomationBuilder() {
         </div>
 
         <aside className="space-y-4">
-          <article className="crm-card">
+          <article className="rounded-xl border bg-card p-4">
             <h3 className="text-card-title">Templates</h3>
             <ul className="mt-3 space-y-2">
               {templateOptions.map((template) => (
@@ -251,7 +251,7 @@ export function AutomationBuilder() {
             </ul>
           </article>
 
-          <article className="crm-card">
+          <article className="rounded-xl border bg-card p-4">
             <h3 className="text-card-title">Automation Run History</h3>
             <ul className="mt-3 space-y-2">
               {sampleRunHistory.map((run) => (

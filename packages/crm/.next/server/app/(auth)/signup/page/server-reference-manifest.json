@@ -1,16 +1,16 @@
 {
   "node": {
-    "6050ba09c0ac852261b81f9996717c9ec1849a54e1": {
+    "60ee01fdf847f34099b3c795230ad07cc44bd328d7": {
       "workers": {
         "app/(auth)/signup/page": {
-          "moduleId": 18831,
+          "moduleId": 532626,
           "async": false,
-          "exportedName": "signupAction",
-          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/auth/actions.ts"
+          "exportedName": "sendMagicLinkAction",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/app/(auth)/signup/actions.ts"
         }
       },
-      "exportedName": "signupAction",
-      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/auth/actions.ts"
+      "exportedName": "sendMagicLinkAction",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/app/(auth)/signup/actions.ts"
     }
   },
   "edge": {}

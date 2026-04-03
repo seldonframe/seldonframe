@@ -159,7 +159,7 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
         </div>
 
         {bookingTypes.length === 0 ? (
-          <article className="glass-card flex min-h-52 flex-col items-center justify-center rounded-2xl p-8 text-center">
+          <article className="rounded-xl border bg-card flex min-h-52 flex-col items-center justify-center p-8 text-center">
             <p className="text-3xl">📅</p>
             <p className="mt-3 text-lg font-medium text-foreground">Create your first appointment type</p>
             <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">Share the link and let {labels.contact.plural.toLowerCase()} book with you.</p>
@@ -174,7 +174,7 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
               const publicUrl = orgSlug ? `/book/${orgSlug}/${row.bookingSlug}` : "";
 
               return (
-                <article key={row.id} className="glass-card rounded-2xl p-5">
+                <article key={row.id} className="rounded-xl border bg-card p-5">
                   <div className="mb-3 flex items-start justify-between gap-2">
                     <h3 className="text-base font-medium text-foreground">{row.title}</h3>
                     <span className="rounded-full bg-[hsl(var(--muted)/0.5)] px-2 py-1 text-xs text-[hsl(var(--muted-foreground))]">{metadata?.durationMinutes ?? 30} min</span>
@@ -229,9 +229,9 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
         </div>
 
         {upcomingGrouped.length === 0 ? (
-          <article className="glass-card rounded-2xl p-6 text-sm text-[hsl(var(--muted-foreground))]">No upcoming {labels.activity.plural.toLowerCase()} yet.</article>
+          <article className="rounded-xl border bg-card p-6 text-sm text-[hsl(var(--muted-foreground))]">No upcoming {labels.activity.plural.toLowerCase()} yet.</article>
         ) : (
-          <article className="glass-card rounded-2xl p-4">
+          <article className="rounded-xl border bg-card p-4 sm:p-6">
             <div className="space-y-4">
               {upcomingGrouped.map((group) => (
                 <div key={group.key}>
@@ -308,7 +308,7 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
                 <label htmlFor="appointment-name" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Appointment name</label>
                 <input
                   id="appointment-name"
-                  className="crm-input h-10 w-full px-3"
+                  className="crm-input h-9 w-full px-3"
                   name="name"
                   placeholder="Strategy Call"
                   required
@@ -321,7 +321,7 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
                 <label htmlFor="appointment-duration" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Duration</label>
                 <select
                   id="appointment-duration"
-                  className="crm-input h-10 w-full px-3"
+                  className="crm-input h-9 w-full px-3"
                   name="durationMinutes"
                   value={draftDuration}
                   onChange={(event) => setDraftDuration(event.target.value)}
@@ -335,7 +335,7 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
                 <label htmlFor="appointment-price" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Price</label>
                 <input
                   id="appointment-price"
-                  className="crm-input h-10 w-full px-3"
+                  className="crm-input h-9 w-full px-3"
                   name="price"
                   type="number"
                   min={0}
@@ -349,7 +349,7 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
                 <label htmlFor="appointment-description" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Description</label>
                 <input
                   id="appointment-description"
-                  className="crm-input h-10 w-full px-3"
+                  className="crm-input h-9 w-full px-3"
                   name="description"
                   placeholder="Initial planning session"
                   value={draftDescription}
@@ -362,7 +362,7 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
                   <label htmlFor="appointment-buffer-before" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Buffer before (min)</label>
                   <input
                     id="appointment-buffer-before"
-                    className="crm-input h-10 w-full px-3"
+                    className="crm-input h-9 w-full px-3"
                     name="bufferBeforeMinutes"
                     type="number"
                     min={0}
@@ -422,7 +422,7 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
                 <label htmlFor="appointment-slug" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Public slug</label>
                 <input
                   id="appointment-slug"
-                  className="crm-input h-10 w-full px-3"
+                  className="crm-input h-9 w-full px-3"
                   name="slug"
                   placeholder="strategy-call"
                   required

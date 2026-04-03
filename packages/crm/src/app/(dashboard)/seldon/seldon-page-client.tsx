@@ -97,11 +97,11 @@ export function SeldonPageClient({ allowed, services, history }: { allowed: bool
   }, [pending]);
 
   return (
-    <section className="animate-page-enter space-y-5">
+    <section className="animate-page-enter space-y-4 sm:space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-page-title">Seldon It Into Existence</h1>
-          <p className="text-label text-[hsl(var(--color-text-secondary))]">Describe what you need. Your business context does the rest.</p>
+          <h1 className="text-lg sm:text-[22px] font-semibold leading-relaxed text-foreground">Seldon It Into Existence</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">Describe what you need. Your business context does the rest.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <ServiceBadge label="Stripe" connected={services.stripe} />
@@ -115,7 +115,7 @@ export function SeldonPageClient({ allowed, services, history }: { allowed: bool
       </div>
 
       {!allowed ? (
-        <article className="glass-card rounded-2xl p-6">
+        <article className="rounded-xl border bg-card p-6">
           <h2 className="text-card-title">Upgrade required</h2>
           <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">Upgrade to Cloud Pro to Seldon custom blocks.</p>
           <Link href="/settings/billing" className="crm-button-primary mt-4 inline-flex h-10 items-center px-4">
@@ -123,7 +123,7 @@ export function SeldonPageClient({ allowed, services, history }: { allowed: bool
           </Link>
         </article>
       ) : (
-        <div className="glass-card space-y-4 rounded-2xl p-6">
+        <div className="rounded-xl border bg-card space-y-4 p-4 sm:p-6">
           <form
             action={action}
             className="space-y-3"
@@ -141,7 +141,7 @@ export function SeldonPageClient({ allowed, services, history }: { allowed: bool
               placeholder={`Describe what you want to build...\n\nExamples:\n• Send a follow-up SMS if a lead doesn't book within 48 hours\n• Track referrals and automatically thank the referrer\n• A review request system that asks clients for Google reviews after appointments\n• A client portal where clients can see upcoming sessions and invoices`}
               required
             />
-            <button type="submit" disabled={pending} className="crm-button-primary h-11 px-6">
+            <button type="submit" disabled={pending} className="crm-button-primary h-9 px-6">
               {pending ? "Seldoning..." : "Seldon It"}
             </button>
           </form>
@@ -161,14 +161,14 @@ export function SeldonPageClient({ allowed, services, history }: { allowed: bool
         </div>
       )}
 
-      <section className="glass-card rounded-2xl p-6">
+      <section className="rounded-xl border bg-card p-4 sm:p-6">
         <h2 className="text-card-title">Seldon History</h2>
         {history.length === 0 ? (
           <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">No Seldoned blocks yet. Build your first one above.</p>
         ) : (
           <div className="mt-3 space-y-2">
             {history.map((item) => (
-              <article key={item.blockId} className="rounded-xl border border-[hsl(var(--border))] px-3 py-3">
+              <article key={item.blockId} className="rounded-xl border border-[hsl(var(--border))] px-3 py-3 bg-background">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <p className="font-medium text-foreground">{item.blockName}</p>
@@ -211,7 +211,7 @@ export function SeldonPageClient({ allowed, services, history }: { allowed: bool
 
       {selectedResult ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="glass-card w-full max-w-3xl rounded-2xl p-4">
+          <div className="w-full max-w-3xl rounded-xl border bg-card p-4">
             <div className="mb-2 flex items-center justify-between">
               <h3 className="text-card-title">{selectedResult.blockName} BLOCK.md</h3>
               <button type="button" className="crm-button-secondary h-9 px-3" onClick={() => setSelectedResult(null)}>

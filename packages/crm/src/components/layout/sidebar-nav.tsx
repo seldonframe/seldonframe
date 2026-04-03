@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Briefcase, Calendar, FileText, Layout, LayoutDashboard, Mail, Puzzle, Settings, Sparkles, Users, Zap } from "lucide-react";
+import { Briefcase, Calendar, ChevronRight, FileText, Layout, LayoutDashboard, Mail, Puzzle, Settings, Sparkles, Users, Zap } from "lucide-react";
 
 type NavItem = {
   href: string;
@@ -66,6 +66,7 @@ export function SidebarNav({ nav }: { nav: NavItem[] }) {
           >
             <Icon className="crm-sidebar-icon h-4 w-4 shrink-0" />
             <span className="crm-sidebar-text flex-1">{item.label}</span>
+            {active && !item.disabled ? <ChevronRight className="h-4 w-4 text-[hsl(var(--muted-foreground))]/70" /> : null}
             {item.upgrade ? (
               <span className="rounded border border-[hsl(var(--border))] px-1.5 py-0.5 text-[10px] uppercase tracking-[0.06em] text-[hsl(var(--muted-foreground))]">
                 Upgrade

@@ -9,6 +9,9 @@
     "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/(dashboard)/activities/page": [
       "static/media/b8b552e8609c5636-s.p.0vinx1niofu4y.woff2"
     ],
+    "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/(dashboard)/admin/blocks/review/page": [
+      "static/media/b8b552e8609c5636-s.p.0vinx1niofu4y.woff2"
+    ],
     "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/(dashboard)/automations/page": [
       "static/media/b8b552e8609c5636-s.p.0vinx1niofu4y.woff2"
     ],
@@ -22,6 +25,9 @@
       "static/media/b8b552e8609c5636-s.p.0vinx1niofu4y.woff2"
     ],
     "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/(dashboard)/dashboard/page": [
+      "static/media/b8b552e8609c5636-s.p.0vinx1niofu4y.woff2"
+    ],
+    "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/(dashboard)/dashboard/soul-deepener/page": [
       "static/media/b8b552e8609c5636-s.p.0vinx1niofu4y.woff2"
     ],
     "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/(dashboard)/deals/[id]/page": [
@@ -48,10 +54,34 @@
     "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/(dashboard)/landing/page": [
       "static/media/b8b552e8609c5636-s.p.0vinx1niofu4y.woff2"
     ],
+    "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/(dashboard)/marketplace/[blockId]/page": [
+      "static/media/b8b552e8609c5636-s.p.0vinx1niofu4y.woff2"
+    ],
+    "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/(dashboard)/marketplace/page": [
+      "static/media/b8b552e8609c5636-s.p.0vinx1niofu4y.woff2"
+    ],
+    "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/(dashboard)/marketplace/review/[blockId]/page": [
+      "static/media/b8b552e8609c5636-s.p.0vinx1niofu4y.woff2"
+    ],
+    "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/(dashboard)/marketplace/submit/page": [
+      "static/media/b8b552e8609c5636-s.p.0vinx1niofu4y.woff2"
+    ],
+    "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/(dashboard)/seldon/page": [
+      "static/media/b8b552e8609c5636-s.p.0vinx1niofu4y.woff2"
+    ],
     "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/(dashboard)/settings/api/page": [
       "static/media/b8b552e8609c5636-s.p.0vinx1niofu4y.woff2"
     ],
+    "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/(dashboard)/settings/billing/page": [
+      "static/media/b8b552e8609c5636-s.p.0vinx1niofu4y.woff2"
+    ],
     "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/(dashboard)/settings/fields/page": [
+      "static/media/b8b552e8609c5636-s.p.0vinx1niofu4y.woff2"
+    ],
+    "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/(dashboard)/settings/integrations/kit/page": [
+      "static/media/b8b552e8609c5636-s.p.0vinx1niofu4y.woff2"
+    ],
+    "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/(dashboard)/settings/integrations/page": [
       "static/media/b8b552e8609c5636-s.p.0vinx1niofu4y.woff2"
     ],
     "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/(dashboard)/settings/page": [
@@ -78,6 +108,9 @@
     "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/(onboarding)/setup/page": [
       "static/media/b8b552e8609c5636-s.p.0vinx1niofu4y.woff2"
     ],
+    "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/(public)/page": [
+      "static/media/b8b552e8609c5636-s.p.0vinx1niofu4y.woff2"
+    ],
     "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/_not-found/page": [
       "static/media/b8b552e8609c5636-s.p.0vinx1niofu4y.woff2"
     ],
@@ -88,6 +121,9 @@
       "static/media/b8b552e8609c5636-s.p.0vinx1niofu4y.woff2"
     ],
     "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/l/[orgSlug]/[slug]/page": [
+      "static/media/b8b552e8609c5636-s.p.0vinx1niofu4y.woff2"
+    ],
+    "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/orgs/page": [
       "static/media/b8b552e8609c5636-s.p.0vinx1niofu4y.woff2"
     ],
     "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/p/[orgSlug]/[slug]/page": [
@@ -106,6 +142,15 @@
       "static/media/b8b552e8609c5636-s.p.0vinx1niofu4y.woff2"
     ],
     "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/portal/[orgSlug]/login/page": [
+      "static/media/b8b552e8609c5636-s.p.0vinx1niofu4y.woff2"
+    ],
+    "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/pricing/page": [
+      "static/media/b8b552e8609c5636-s.p.0vinx1niofu4y.woff2"
+    ],
+    "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/privacy/page": [
+      "static/media/b8b552e8609c5636-s.p.0vinx1niofu4y.woff2"
+    ],
+    "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/terms/page": [
       "static/media/b8b552e8609c5636-s.p.0vinx1niofu4y.woff2"
     ]
   },

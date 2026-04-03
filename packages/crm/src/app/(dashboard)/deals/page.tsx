@@ -40,29 +40,29 @@ export default async function DealsPage({
   const winRate = dealRows.length ? Math.round((wonCount / dealRows.length) * 100) : 0;
 
   return (
-    <section className="animate-page-enter space-y-4">
+    <section className="animate-page-enter space-y-4 sm:space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-page-title">{labels.deal.plural}</h1>
-          <p className="text-label text-[hsl(var(--color-text-secondary))]">Track and move {labels.deal.plural.toLowerCase()} through your pipeline.</p>
+          <h1 className="text-lg sm:text-[22px] font-semibold leading-relaxed text-foreground">{labels.deal.plural}</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">Track and move {labels.deal.plural.toLowerCase()} through your pipeline.</p>
         </div>
 
         <div className="flex items-center gap-2 text-label">
-          <Link href="/deals?view=kanban" className="crm-button-secondary px-3 py-2">Kanban</Link>
-          <Link href="/deals?view=list" className="crm-button-secondary px-3 py-2">List</Link>
+          <Link href="/deals?view=kanban" className="crm-button-secondary h-9 px-3">Kanban</Link>
+          <Link href="/deals?view=list" className="crm-button-secondary h-9 px-3">List</Link>
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-3">
-        <div className="crm-card">
+      <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-3 p-3 sm:p-4 rounded-xl border bg-card">
+        <div className="space-y-1">
           <p className="text-tiny text-[hsl(var(--color-text-muted))]">Total pipeline value</p>
           <p className="mt-1 text-data text-[18px]">{compactCurrency(totalValue)}</p>
         </div>
-        <div className="crm-card">
+        <div className="space-y-1">
           <p className="text-tiny text-[hsl(var(--color-text-muted))]">Active {labels.deal.plural.toLowerCase()}</p>
           <p className="mt-1 text-section-title">{dealRows.length}</p>
         </div>
-        <div className="crm-card">
+        <div className="space-y-1">
           <p className="text-tiny text-[hsl(var(--color-text-muted))]">Win rate</p>
           <p className="mt-1 text-section-title">{winRate}%</p>
         </div>
@@ -78,9 +78,9 @@ export default async function DealsPage({
           ctaHref="#"
         />
       ) : view === "list" ? (
-        <div className="crm-card overflow-hidden">
+        <div className="rounded-xl border bg-card overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-[hsl(var(--color-surface-raised))] text-left text-label">
+            <thead className="bg-muted/50 text-left text-label">
               <tr>
                 <th className="px-3 py-3">Title</th>
                 <th className="px-3 py-3">Stage</th>
@@ -89,7 +89,7 @@ export default async function DealsPage({
             </thead>
             <tbody>
               {dealRows.map((deal) => (
-                <tr key={deal.id} className="crm-table-row">
+                <tr key={deal.id} className="crm-table-row hover:bg-[hsl(var(--muted)/0.35)]">
                   <td className="px-3 py-3"><Link href={`/deals/${deal.id}`} className="font-medium text-primary underline-offset-4 hover:underline">{deal.title}</Link></td>
                   <td className="px-3 py-3"><span className="crm-badge">{deal.stage}</span></td>
                   <td className="px-3 py-3 text-data">{compactCurrency(Number(deal.value))}</td>

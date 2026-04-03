@@ -207,109 +207,155 @@ export function SoulDeepener({ existingResponses = [] }: SoulDeepenerProps) {
   }
 
   return (
-    <section className="mx-auto w-full max-w-4xl space-y-4">
-      <article className="glass-card rounded-2xl p-6 md:p-8">
-        <div className="mb-6 flex items-center justify-between gap-3">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">Soul Deep Setup</p>
-            <h1 className="mt-1 text-2xl font-semibold text-foreground">Set up automations in a conversation</h1>
+    <section className="mx-auto w-full max-w-3xl space-y-4">
+      <div className="rounded-xl border bg-card overflow-hidden">
+        <div className="flex items-center justify-between gap-3 border-b border-border px-6 py-4">
+          <div className="space-y-1">
+            <h1 className="text-lg font-semibold tracking-tight text-foreground">Soul Deep Setup</h1>
+            <p className="text-xs text-muted-foreground">Set up automations in a conversation</p>
           </div>
-          <p className="text-sm text-[hsl(var(--muted-foreground))]">
-            {Math.min(answeredCount, totalCount)} of {totalCount} questions answered
-          </p>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <div className="h-1.5 w-24 overflow-hidden rounded-full bg-muted">
+                <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${(Math.min(answeredCount, totalCount) / totalCount) * 100}%` }} />
+              </div>
+              <span className="text-xs font-medium text-muted-foreground">{Math.min(answeredCount, totalCount)}/{totalCount}</span>
+            </div>
+            <button type="button" className="crm-button-secondary h-8 px-3 text-xs" onClick={onSkip} disabled={pending}>
+              Skip for now
+            </button>
+          </div>
         </div>
 
-        <div className="mb-6 h-1.5 overflow-hidden rounded-full bg-[hsl(var(--muted)/0.5)]">
-          <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${(Math.min(answeredCount, totalCount) / totalCount) * 100}%` }} />
-        </div>
+        <div className="flex flex-col">
+          <div className="flex-1 overflow-y-auto px-6 py-6">
+            <div className="space-y-6">
+              <div className="flex gap-4 justify-start">
+                <div className="shrink-0">
+                  <div className="size-8 rounded-full bg-secondary flex items-center justify-center text-xs font-bold text-primary">SF</div>
+                </div>
+                <div className="rounded-2xl px-4 py-3 max-w-[80%] bg-secondary">
+                  <p className="text-sm leading-relaxed">Your business is set up. Want to unlock automations? Tell me how your client journey works and I&apos;ll handle the rest.</p>
+                </div>
+              </div>
 
-        <div className="space-y-4 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.15)] p-4">
-          <div className="flex items-start gap-3">
-            <div className="mt-1 flex h-8 w-8 items-center justify-center rounded-full bg-primary/20 text-xs font-semibold text-primary">SF</div>
-            <div className="max-w-[85%] rounded-xl border border-primary/20 bg-primary/10 px-3 py-2 text-sm text-foreground">
-              Your business is set up. Want to unlock automations? Tell me how your client journey works and I&apos;ll handle the rest.
+              {responses.map((item) => {
+                const question = deepenerQuestions.find((candidate) => candidate.field === item.field);
+                return (
+                  <div key={item.field} className="space-y-4">
+                    <div className="flex gap-4 justify-start">
+                      <div className="shrink-0">
+                        <div className="size-8 rounded-full bg-secondary flex items-center justify-center text-xs font-bold text-primary">SF</div>
+                      </div>
+                      <div className="rounded-2xl px-4 py-3 max-w-[80%] bg-secondary">
+                        <p className="text-sm leading-relaxed">{question?.question ?? item.question}</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-4 justify-end">
+                      <div className="rounded-2xl px-4 py-3 max-w-[80%] bg-primary text-primary-foreground">
+                        <p className="text-sm leading-relaxed">{item.response}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {confirmingField ? (
+                <div className="flex gap-4 justify-start">
+                  <div className="shrink-0">
+                    <div className="size-8 rounded-full bg-secondary flex items-center justify-center text-xs font-bold text-primary">SF</div>
+                  </div>
+                  <div className="rounded-2xl px-4 py-3 max-w-[80%] bg-secondary space-y-3">
+                    <p className="text-sm leading-relaxed">Here&apos;s what I understood from that answer. Does this look right?</p>
+                    <div className="flex items-center gap-2">
+                      <button type="button" className="crm-button-primary h-8 px-3 text-xs" onClick={onLooksGood} disabled={pending}>
+                        Looks good
+                      </button>
+                      <button type="button" className="crm-button-secondary h-8 px-3 text-xs" onClick={onAdjustLastResponse} disabled={pending}>
+                        Let me adjust
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              {!confirmingField && nextQuestion ? (
+                <div className="flex gap-4 justify-start">
+                  <div className="shrink-0">
+                    <div className="size-8 rounded-full bg-secondary flex items-center justify-center text-xs font-bold text-primary">SF</div>
+                  </div>
+                  <div className="rounded-2xl px-4 py-3 max-w-[80%] bg-secondary">
+                    <p className="text-sm leading-relaxed">
+                      {nextQuestion.question}
+                      {nextQuestion.optional ? <span className="ml-1.5 text-xs text-muted-foreground">(optional)</span> : null}
+                    </p>
+                  </div>
+                </div>
+              ) : null}
+
+              {isFinished ? (
+                <div className="space-y-4">
+                  <div className="flex gap-4 justify-start">
+                    <div className="shrink-0">
+                      <div className="size-8 rounded-full bg-secondary flex items-center justify-center text-xs font-bold text-primary">SF</div>
+                    </div>
+                    <div className="rounded-2xl px-4 py-3 max-w-[80%] bg-secondary space-y-3">
+                      <p className="text-sm font-medium leading-relaxed">Your automations are configured</p>
+                      <p className="text-xs text-muted-foreground">Here&apos;s what will happen automatically:</p>
+                    </div>
+                  </div>
+                  <div className="ml-12 space-y-2">
+                    {automationSummary.map((item) => (
+                      <div key={item.field} className="rounded-xl border bg-card p-3 text-sm text-foreground">
+                        {item.response}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="ml-12">
+                    <button type="button" className="crm-button-primary h-9 px-5" onClick={onFinish} disabled={pending}>
+                      {pending ? "Finishing..." : "Finish deep setup"}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
-
-          {responses.map((item) => {
-            const question = deepenerQuestions.find((candidate) => candidate.field === item.field);
-            return (
-              <div key={item.field} className="space-y-2">
-                <div className="flex items-start gap-3">
-                  <div className="mt-1 flex h-8 w-8 items-center justify-center rounded-full bg-primary/20 text-xs font-semibold text-primary">SF</div>
-                  <div className="max-w-[85%] rounded-xl border border-primary/20 bg-primary/10 px-3 py-2 text-sm text-foreground">{question?.question ?? item.question}</div>
-                </div>
-                <div className="flex justify-end">
-                  <div className="max-w-[85%] rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm text-foreground">{item.response}</div>
-                </div>
-              </div>
-            );
-          })}
-
-          {confirmingField ? (
-            <div className="rounded-xl border border-primary/30 bg-primary/10 p-3">
-              <p className="text-sm text-foreground">Here&apos;s what I understood from that answer. Does this look right?</p>
-              <div className="mt-3 flex items-center gap-2">
-                <button type="button" className="crm-button-primary h-9 px-3 text-sm" onClick={onLooksGood} disabled={pending}>
-                  Looks good
-                </button>
-                <button type="button" className="crm-button-secondary h-9 px-3 text-sm" onClick={onAdjustLastResponse} disabled={pending}>
-                  Let me adjust
-                </button>
-              </div>
-            </div>
-          ) : null}
 
           {!confirmingField && nextQuestion ? (
-            <div className="space-y-3">
-              <div className="flex items-start gap-3">
-                <div className="mt-1 flex h-8 w-8 items-center justify-center rounded-full bg-primary/20 text-xs font-semibold text-primary">SF</div>
-                <div className="max-w-[85%] rounded-xl border border-primary/20 bg-primary/10 px-3 py-2 text-sm text-foreground">
-                  {nextQuestion.question}
-                  {nextQuestion.optional ? <span className="ml-2 text-xs text-[hsl(var(--muted-foreground))]">(optional)</span> : null}
+            <div className="border-t border-border px-6 py-4">
+              <div className="rounded-2xl border border-border bg-secondary p-1">
+                <div className="rounded-xl border border-transparent bg-card">
+                  <input
+                    className="crm-input h-10 w-full border-0 bg-transparent px-4 text-sm placeholder:text-muted-foreground/60 focus-visible:ring-0"
+                    value={input}
+                    onChange={(event) => setInput(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" && !event.shiftKey) {
+                        event.preventDefault();
+                        onSubmitResponse();
+                      }
+                    }}
+                    placeholder="Type your answer..."
+                    disabled={pending}
+                  />
+                  <div className="flex items-center justify-end px-4 py-2 border-t border-border/50">
+                    <button
+                      type="button"
+                      className="crm-button-primary h-7 px-4 text-xs"
+                      onClick={onSubmitResponse}
+                      disabled={pending || input.trim().length === 0}
+                    >
+                      {pending ? "Saving..." : "Send"}
+                    </button>
+                  </div>
                 </div>
               </div>
-              <div className="flex gap-2">
-                <input
-                  className="crm-input h-11 flex-1 px-3"
-                  value={input}
-                  onChange={(event) => setInput(event.target.value)}
-                  placeholder="Type your answer"
-                  disabled={pending}
-                />
-                <button type="button" className="crm-button-primary h-11 px-4" onClick={onSubmitResponse} disabled={pending || input.trim().length === 0}>
-                  {pending ? "Saving..." : "Send"}
-                </button>
-              </div>
-            </div>
-          ) : null}
-
-          {isFinished ? (
-            <div className="space-y-3 rounded-xl border border-primary/30 bg-primary/10 p-4">
-              <h2 className="text-base font-semibold text-foreground">Your automations are configured</h2>
-              <p className="text-sm text-[hsl(var(--muted-foreground))]">Here&apos;s what will happen automatically:</p>
-              <ul className="space-y-2">
-                {automationSummary.map((item) => (
-                  <li key={item.field} className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm text-foreground">
-                    {item.response}
-                  </li>
-                ))}
-              </ul>
-              <button type="button" className="crm-button-primary h-10 px-4" onClick={onFinish} disabled={pending}>
-                {pending ? "Finishing..." : "Finish deep setup"}
-              </button>
             </div>
           ) : null}
         </div>
 
-        {error ? <p className="mt-4 text-sm text-red-500">{error}</p> : null}
-
-        <div className="mt-6 flex justify-end">
-          <button type="button" className="crm-button-secondary h-10 px-4" onClick={onSkip} disabled={pending}>
-            I&apos;ll do this later
-          </button>
-        </div>
-      </article>
+        {error ? <p className="px-6 pb-4 text-sm text-red-500">{error}</p> : null}
+      </div>
     </section>
   );
 }

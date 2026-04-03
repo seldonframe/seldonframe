@@ -122,6 +122,22 @@
       "namedRegex": "^/landing/(?<nxtPid>[^/]+?)(?:/)?$"
     },
     {
+      "page": "/marketplace/review/[blockId]",
+      "regex": "^/marketplace/review/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPblockId": "nxtPblockId"
+      },
+      "namedRegex": "^/marketplace/review/(?<nxtPblockId>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/marketplace/[blockId]",
+      "regex": "^/marketplace/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPblockId": "nxtPblockId"
+      },
+      "namedRegex": "^/marketplace/(?<nxtPblockId>[^/]+?)(?:/)?$"
+    },
+    {
       "page": "/p/[orgSlug]/[slug]",
       "regex": "^/p/([^/]+?)/([^/]+?)(?:/)?$",
       "routeKeys": {
@@ -189,6 +205,30 @@
       "namedRegex": "^/activities(?:/)?$"
     },
     {
+      "page": "/admin/blocks/review",
+      "regex": "^/admin/blocks/review(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin/blocks/review(?:/)?$"
+    },
+    {
+      "page": "/api/auth/debug",
+      "regex": "^/api/auth/debug(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/auth/debug(?:/)?$"
+    },
+    {
+      "page": "/api/auth-debug",
+      "regex": "^/api/auth\\-debug(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/auth\\-debug(?:/)?$"
+    },
+    {
+      "page": "/api/cron/automations",
+      "regex": "^/api/cron/automations(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/cron/automations(?:/)?$"
+    },
+    {
       "page": "/api/cron/metrics-snapshot",
       "regex": "^/api/cron/metrics\\-snapshot(?:/)?$",
       "routeKeys": {},
@@ -237,6 +277,12 @@
       "namedRegex": "^/api/webhooks/stripe(?:/)?$"
     },
     {
+      "page": "/api/webhooks/stripe-billing",
+      "regex": "^/api/webhooks/stripe\\-billing(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/webhooks/stripe\\-billing(?:/)?$"
+    },
+    {
       "page": "/automations",
       "regex": "^/automations(?:/)?$",
       "routeKeys": {},
@@ -259,6 +305,12 @@
       "regex": "^/dashboard(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/dashboard(?:/)?$"
+    },
+    {
+      "page": "/dashboard/soul-deepener",
+      "regex": "^/dashboard/soul\\-deepener(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/dashboard/soul\\-deepener(?:/)?$"
     },
     {
       "page": "/deals",
@@ -309,6 +361,42 @@
       "namedRegex": "^/manifest\\.webmanifest(?:/)?$"
     },
     {
+      "page": "/marketplace",
+      "regex": "^/marketplace(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/marketplace(?:/)?$"
+    },
+    {
+      "page": "/marketplace/submit",
+      "regex": "^/marketplace/submit(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/marketplace/submit(?:/)?$"
+    },
+    {
+      "page": "/orgs",
+      "regex": "^/orgs(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/orgs(?:/)?$"
+    },
+    {
+      "page": "/pricing",
+      "regex": "^/pricing(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/pricing(?:/)?$"
+    },
+    {
+      "page": "/privacy",
+      "regex": "^/privacy(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/privacy(?:/)?$"
+    },
+    {
+      "page": "/seldon",
+      "regex": "^/seldon(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/seldon(?:/)?$"
+    },
+    {
       "page": "/settings",
       "regex": "^/settings(?:/)?$",
       "routeKeys": {},
@@ -321,10 +409,28 @@
       "namedRegex": "^/settings/api(?:/)?$"
     },
     {
+      "page": "/settings/billing",
+      "regex": "^/settings/billing(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/settings/billing(?:/)?$"
+    },
+    {
       "page": "/settings/fields",
       "regex": "^/settings/fields(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/settings/fields(?:/)?$"
+    },
+    {
+      "page": "/settings/integrations",
+      "regex": "^/settings/integrations(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/settings/integrations(?:/)?$"
+    },
+    {
+      "page": "/settings/integrations/kit",
+      "regex": "^/settings/integrations/kit(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/settings/integrations/kit(?:/)?$"
     },
     {
       "page": "/settings/payments",
@@ -373,6 +479,12 @@
       "regex": "^/signup(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/signup(?:/)?$"
+    },
+    {
+      "page": "/terms",
+      "regex": "^/terms(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/terms(?:/)?$"
     }
   ],
   "dataRoutes": [],

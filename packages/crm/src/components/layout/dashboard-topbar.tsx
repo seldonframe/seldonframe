@@ -142,14 +142,14 @@ export function DashboardTopbar({
   }, [menuOpen]);
 
   return (
-    <header className="glass-card flex flex-wrap items-center gap-3 rounded-xl border border-[hsl(var(--border))] p-4 lg:flex-nowrap">
-      <div className="min-w-[140px]">
-        <p className="text-card-title text-foreground">{title}</p>
+    <header className="sticky top-0 z-10 flex w-full items-center gap-2 border-b border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-3 sm:gap-3 sm:px-6 sm:py-4">
+      <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+        <p className="truncate text-base font-medium text-foreground sm:text-lg">{title}</p>
       </div>
 
       <button
         type="button"
-        className="crm-topbar-input mx-auto hidden h-10 max-w-[320px] flex-1 items-center justify-between gap-3 px-3 text-left lg:flex"
+        className="crm-topbar-input mx-auto hidden h-9 max-w-[320px] flex-1 items-center justify-between gap-3 px-3 text-left lg:flex"
         onClick={() => window.dispatchEvent(new CustomEvent("crm:command-palette-toggle", { detail: { open: true } }))}
       >
         <span className="text-sm text-[hsl(var(--color-text-secondary))]">Command Palette</span>
@@ -159,7 +159,7 @@ export function DashboardTopbar({
       </button>
 
       <div className="ml-auto flex items-center gap-2">
-        <label className="crm-topbar-input hidden h-10 items-center gap-2 px-3 lg:flex">
+        <label className="crm-topbar-input relative hidden h-9 items-center gap-2 px-3 lg:flex">
           <Search className="h-4 w-4 text-[hsl(var(--color-text-secondary))]" />
           <input
             aria-label="Search"
@@ -170,18 +170,13 @@ export function DashboardTopbar({
 
         <DensityToggle />
 
-        <button
-          type="button"
-          className="crm-topbar-icon-btn"
-          aria-label="Toggle theme"
-          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-        >
+        <button type="button" className="crm-topbar-icon-btn" aria-label="Toggle theme" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
           {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </button>
 
         <button type="button" className="crm-topbar-icon-btn relative" aria-label="Notifications">
           <Bell className="h-4 w-4" />
-          <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-red-500" />
+          <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-[hsl(var(--card))] bg-rose-500" />
         </button>
 
         <div className="relative" ref={menuRef}>

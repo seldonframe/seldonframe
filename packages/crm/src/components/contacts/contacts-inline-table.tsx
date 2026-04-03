@@ -81,9 +81,9 @@ export function ContactsInlineTable({ rows }: { rows: ContactRow[] }) {
   }
 
   return (
-    <div className="crm-card overflow-hidden">
+    <div className="rounded-xl border bg-card overflow-hidden">
       <table className="w-full text-sm">
-        <thead className="bg-[hsl(var(--color-surface-raised))] text-left text-label">
+        <thead className="bg-muted/50 text-left text-label">
           <tr>
             <th className="px-3 py-3">Name</th>
             <th className="px-3 py-3">Email</th>
@@ -98,7 +98,7 @@ export function ContactsInlineTable({ rows }: { rows: ContactRow[] }) {
             const isEditingStatus = editing && cellKey(editing.contactId, editing.field) === cellKey(row.id, "status");
 
             return (
-              <tr key={row.id} className="crm-table-row">
+              <tr key={row.id} className="crm-table-row hover:bg-[hsl(var(--muted)/0.35)]">
                 <td className="px-3 py-3">
                   <div className="flex items-center gap-2">
                     {isEditingFirst ? (
@@ -151,7 +151,7 @@ export function ContactsInlineTable({ rows }: { rows: ContactRow[] }) {
                       </button>
                     )}
 
-                    <Link href={`/contacts/${row.id}`} className="text-xs text-primary/80 hover:underline">
+                    <Link href={`/contacts/${row.id}`} className="text-xs text-primary hover:underline">
                       Open
                     </Link>
                   </div>

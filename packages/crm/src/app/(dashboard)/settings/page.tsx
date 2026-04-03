@@ -19,11 +19,13 @@ export default async function SettingsPage() {
   ] as const;
 
   return (
-    <section className="animate-page-enter space-y-4">
-      <h1 className="text-page-title">Settings</h1>
-      <div className="grid gap-3 md:grid-cols-2">
+    <section className="animate-page-enter space-y-4 sm:space-y-6">
+      <div className="space-y-2 sm:space-y-3">
+        <h1 className="text-lg sm:text-[22px] font-semibold leading-relaxed text-foreground">Settings</h1>
+      </div>
+      <div className="grid gap-3 sm:gap-4 md:grid-cols-2">
         {sections.map((section) => (
-          <Link key={section.href} href={section.href} className="glass-card block rounded-2xl p-5 transition hover:border-primary/20">
+          <Link key={section.href} href={section.href} className="rounded-xl border bg-card block p-5 transition hover:border-primary/20">
             <div className="flex items-start justify-between gap-2">
               <p className="text-card-title">{section.title}</p>
               {section.status ? (

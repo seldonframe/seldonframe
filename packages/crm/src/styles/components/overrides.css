@@ -177,18 +177,30 @@
 
   .crm-sidebar {
     width: 220px;
-    border-radius: 12px;
-    background: hsl(var(--background));
-    padding: 18px 12px;
+    border-radius: 0.5rem;
+    background: hsl(var(--card));
+    padding: 0.75rem;
     transition: width var(--transition-slow);
   }
 
   .crm-sidebar-link {
     position: relative;
-    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    min-height: 2.25rem;
+    border-radius: 0.5rem;
     background: transparent;
     color: hsl(var(--muted-foreground));
+    font-size: 0.875rem;
+    line-height: 1.25rem;
     transition: all var(--transition-fast);
+  }
+
+  @media (min-width: 640px) {
+    .crm-sidebar-link {
+      min-height: 2.375rem;
+    }
   }
 
   .crm-sidebar-icon {
@@ -215,8 +227,8 @@
   }
 
   .crm-sidebar-link[data-active="true"] {
-    background: hsl(var(--primary) / 0.05);
-    box-shadow: inset 3px 0 0 hsl(var(--primary));
+    background: hsl(var(--muted));
+    box-shadow: none;
     color: hsl(var(--foreground));
   }
 
@@ -230,22 +242,36 @@
 
   .crm-topbar-input {
     border: 1px solid hsl(var(--color-border));
-    border-radius: 10px;
-    background: hsl(var(--color-surface-raised));
+    border-radius: 0.5rem;
+    background: hsl(var(--card));
     color: hsl(var(--foreground));
+    min-height: 2.25rem;
+  }
+
+  @media (min-width: 640px) {
+    .crm-topbar-input {
+      min-height: 2.375rem;
+    }
   }
 
   .crm-topbar-icon-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    height: 36px;
-    width: 36px;
-    border-radius: 10px;
+    height: 2.25rem;
+    width: 2.25rem;
+    border-radius: 0.5rem;
     border: 1px solid hsl(var(--color-border));
     background: hsl(var(--card));
     color: hsl(var(--color-text-secondary));
     transition: background-color var(--transition-fast), color var(--transition-fast);
+  }
+
+  @media (min-width: 640px) {
+    .crm-topbar-icon-btn {
+      height: 2.375rem;
+      width: 2.375rem;
+    }
   }
 
   .crm-topbar-icon-btn:hover {

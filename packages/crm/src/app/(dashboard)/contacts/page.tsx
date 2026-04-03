@@ -65,27 +65,27 @@ export default async function ContactsPage({
   });
 
   return (
-    <section className="animate-page-enter space-y-4">
-      <div>
-        <h1 className="text-page-title">{labels.contact.plural}</h1>
-        <p className="text-label text-[hsl(var(--color-text-secondary))]">Manage and segment your {labels.contact.plural.toLowerCase()}.</p>
+    <section className="animate-page-enter space-y-4 sm:space-y-6">
+      <div className="space-y-2 sm:space-y-3">
+        <h1 className="text-lg sm:text-[22px] font-semibold leading-relaxed text-foreground">{labels.contact.plural}</h1>
+        <p className="text-sm sm:text-base text-muted-foreground">Manage and segment your {labels.contact.plural.toLowerCase()}.</p>
       </div>
 
       <CreateContactForm />
 
-      <form method="get" className="crm-card grid gap-3 p-4 md:grid-cols-[1fr_220px_220px_auto] md:items-end">
+      <form method="get" className="rounded-xl border bg-card p-3 sm:p-4 md:grid md:grid-cols-[1fr_200px_200px_auto] md:items-end md:gap-3">
         <div>
-          <label htmlFor="contact-search" className="text-label text-[hsl(var(--color-text-secondary))]">
+          <label htmlFor="contact-search" className="text-xs sm:text-sm font-medium text-muted-foreground">
             Search {labels.contact.plural}
           </label>
-          <input id="contact-search" name="search" defaultValue={search} className="crm-input mt-1 h-10 w-full px-3" placeholder="Name, email, company" />
+          <input id="contact-search" name="search" defaultValue={search} className="crm-input mt-1 h-9 w-full px-3" placeholder="Name, email, company" />
         </div>
 
         <div>
-          <label htmlFor="contact-status" className="text-label text-[hsl(var(--color-text-secondary))]">
+          <label htmlFor="contact-status" className="text-xs sm:text-sm font-medium text-muted-foreground">
             Status
           </label>
-          <select id="contact-status" name="status" defaultValue={status} className="crm-input mt-1 h-10 w-full px-3">
+          <select id="contact-status" name="status" defaultValue={status} className="crm-input mt-1 h-9 w-full px-3">
             <option value="all">All</option>
             <option value="lead">Lead</option>
             <option value="customer">Customer</option>
@@ -94,10 +94,10 @@ export default async function ContactsPage({
         </div>
 
         <div>
-          <label htmlFor="contact-sort" className="text-label text-[hsl(var(--color-text-secondary))]">
+          <label htmlFor="contact-sort" className="text-xs sm:text-sm font-medium text-muted-foreground">
             Sort
           </label>
-          <select id="contact-sort" name="sort" defaultValue={sort} className="crm-input mt-1 h-10 w-full px-3">
+          <select id="contact-sort" name="sort" defaultValue={sort} className="crm-input mt-1 h-9 w-full px-3">
             {sortOptions.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
@@ -106,7 +106,7 @@ export default async function ContactsPage({
           </select>
         </div>
 
-        <button type="submit" className="crm-button-primary h-10 px-4">
+        <button type="submit" className="crm-button-primary h-9 px-4 md:self-end">
           Apply
         </button>
       </form>

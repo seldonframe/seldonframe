@@ -75,7 +75,7 @@ export function LandingPagesContent({
             <button
               key={tpl.key}
               type="button"
-              className="glass-card rounded-2xl p-5 text-left transition hover:border-primary/30"
+              className="rounded-xl border bg-card p-5 text-left transition hover:border-primary/30"
               onClick={() => handleTemplateClick()}
             >
               <div className="mb-3 inline-flex rounded-lg border border-primary/30 p-2 text-primary">
@@ -94,7 +94,7 @@ export function LandingPagesContent({
     <div className="space-y-4">
       <div className="flex items-end justify-between gap-3">
         <p className="text-sm text-[hsl(var(--muted-foreground))]">{pages.length} page{pages.length !== 1 ? "s" : ""}</p>
-        <button type="button" className="crm-button-primary h-10 px-6" onClick={() => setShowCreate(true)}>
+        <button type="button" className="crm-button-primary h-9 px-6" onClick={() => setShowCreate(true)}>
           Create Page
         </button>
       </div>
@@ -102,7 +102,7 @@ export function LandingPagesContent({
       {pages.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {pages.map((page) => (
-            <article key={page.id} className="glass-card rounded-2xl p-5">
+            <article key={page.id} className="rounded-xl border bg-card p-5">
               <div className="mb-3 flex items-start justify-between gap-2">
                 <h3 className="text-base font-medium text-foreground">{page.title}</h3>
                 <span className={`rounded-full px-2 py-1 text-xs ${statusBadge(page.status)}`}>{page.status}</span>
@@ -162,17 +162,17 @@ export function LandingPagesContent({
             >
               <div>
                 <label htmlFor="lp-title" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Page title</label>
-                <input id="lp-title" className="crm-input h-10 w-full px-3" name="title" placeholder="My Landing Page" required />
+                <input id="lp-title" className="crm-input h-9 w-full px-3" name="title" placeholder="My Landing Page" required />
               </div>
 
               <div>
                 <label htmlFor="lp-slug" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">URL slug</label>
-                <input id="lp-slug" className="crm-input h-10 w-full px-3" name="slug" placeholder="my-landing-page" required />
+                <input id="lp-slug" className="crm-input h-9 w-full px-3" name="slug" placeholder="my-landing-page" required />
               </div>
 
               <div>
                 <label htmlFor="lp-mode" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Start mode</label>
-                <select id="lp-mode" className="crm-input h-10 w-full px-3" name="mode" defaultValue="soul-template">
+                <select id="lp-mode" className="crm-input h-9 w-full px-3" name="mode" defaultValue="soul-template">
                   <option value="soul-template">From Soul Template</option>
                   <option value="template">Start from Template</option>
                   <option value="scratch">Start from Scratch</option>
@@ -181,7 +181,7 @@ export function LandingPagesContent({
 
               <div>
                 <label htmlFor="lp-template" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Template preset</label>
-                <select id="lp-template" className="crm-input h-10 w-full px-3" name="template" defaultValue="lead-capture">
+                <select id="lp-template" className="crm-input h-9 w-full px-3" name="template" defaultValue="lead-capture">
                   <option value="lead-capture">Lead Capture</option>
                   <option value="service-overview">Service Overview</option>
                   <option value="booking-page">Booking Page</option>
@@ -192,7 +192,7 @@ export function LandingPagesContent({
               </div>
 
               <div className="pt-2">
-                <button type="submit" className="crm-button-primary h-10 px-6" disabled={pending}>
+                <button type="submit" className="crm-button-primary h-9 px-6" disabled={pending}>
                   {pending ? "Creating..." : "Create Page"}
                 </button>
               </div>
