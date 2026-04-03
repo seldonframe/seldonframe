@@ -34,6 +34,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
     id: "google",
     name: "Google",
     type: "oauth",
+    issuer: "https://accounts.google.com",
     authorization: {
       url: "https://accounts.google.com/o/oauth2/v2/auth",
       params: { scope: "openid profile email" },
@@ -42,7 +43,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
     userinfo: "https://openidconnect.googleapis.com/v1/userinfo",
     clientId: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    checks: ["pkce"],
+    checks: ["pkce", "state"],
     profile(profile: GoogleProfile) {
       return {
         id: profile.sub,
