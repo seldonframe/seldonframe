@@ -32,7 +32,7 @@ export const organizations = pgTable("organizations", {
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
   ownerId: text("owner_id").notNull().default(""),
-  parentUserId: text("parent_user_id"),
+  parentUserId: uuid("parent_user_id"),
   settings: jsonb("settings").$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
   soul: jsonb("soul").$type<OrgSoul | null>().default(null),
   soulId: text("soul_id"),
