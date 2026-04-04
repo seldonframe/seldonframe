@@ -18,11 +18,7 @@ export const metadata: Metadata = {
   title: "Seldon Frame",
   description: "Open source CRM framework scaffold",
   icons: {
-    icon: [
-      { url: "/logo.svg", type: "image/svg+xml" },
-      { url: "/favicon.svg", type: "image/svg+xml" },
-      { url: "/favicon.ico", type: "image/x-icon" },
-    ],
+    icon: [{ url: "/logo.svg", type: "image/svg+xml" }],
     shortcut: "/logo.svg",
     apple: "/logo.svg",
   },

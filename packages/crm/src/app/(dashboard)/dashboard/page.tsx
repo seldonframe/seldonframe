@@ -220,17 +220,20 @@ export default async function DashboardPage() {
     { name: "Emails", count: activityRows.filter((row) => row.type === "email").length, color: "#6e3ff3" },
     { name: "Meetings", count: activityRows.filter((row) => row.type === "meeting").length, color: "#375dfb" },
     { name: "Tasks", count: activityRows.filter((row) => row.type === "task").length, color: "#e255f2" },
-  ].map((row) => ({ ...row, count: row.count || 1 }));
+  ];
 
   const totalLeadSources = leadSourceBuckets.reduce((sum, row) => sum + row.count, 0);
   let donutOffset = 0;
-  const donutStops = leadSourceBuckets
-    .map((row) => {
-      const start = donutOffset;
-      donutOffset += (row.count / totalLeadSources) * 100;
-      return `${row.color} ${start.toFixed(2)}% ${donutOffset.toFixed(2)}%`;
-    })
-    .join(", ");
+  const donutStops =
+    totalLeadSources > 0
+      ? leadSourceBuckets
+          .map((row) => {
+            const start = donutOffset;
+            donutOffset += (row.count / totalLeadSources) * 100;
+            return `${row.color} ${start.toFixed(2)}% ${donutOffset.toFixed(2)}%`;
+          })
+          .join(", ")
+      : "hsl(var(--muted)) 0% 100%";
 
   const stats = [
     {
@@ -506,8 +509,13 @@ export default async function DashboardPage() {
             <tbody>
               {opportunityRows.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="py-8 text-center text-sm text-muted-foreground">
-                    No active deals yet.
+                  <td colSpan={4} className="py-8 text-center">
+                    <div className="mx-auto flex max-w-sm flex-col items-center gap-3">
+                      <p className="text-sm text-muted-foreground">No active deals yet.</p>
+                      <Link href="/deals" className="inline-flex h-9 items-center gap-2 rounded-md bg-foreground px-3 text-sm text-background transition-colors hover:bg-foreground/90">
+                        Create your first engagement
+                      </Link>
+                    </div>
                   </td>
                 </tr>
               ) : (

@@ -20,9 +20,10 @@ import { useLabels } from "@/lib/hooks/use-labels";
 
 const staticTitleMap: Record<string, string> = {
   "/dashboard": "Dashboard",
+  "/seldon": "Seldon It",
   "/orgs": "Organizations",
   "/bookings": "Booking",
-  "/landing": "Landing Pages",
+  "/landing": "Pages",
   "/emails": "Email",
   "/automations": "Automations",
   "/hub": "Hub",
@@ -36,15 +37,15 @@ function getTitle(pathname: string, labels: ReturnType<typeof useLabels>) {
   }
 
   if (pathname === "/deals") {
-    return labels.deal.plural;
+    return "Engagements";
   }
 
   if (pathname === "/bookings") {
-    return `${labels.activity.plural} · Booking`;
+    return "Booking";
   }
 
   if (pathname === "/forms") {
-    return labels.intakeForm.plural;
+    return "Intake Forms";
   }
 
   if (pathname === "/activities") {
@@ -100,11 +101,11 @@ function getTitle(pathname: string, labels: ReturnType<typeof useLabels>) {
   }
 
   if (pathname.startsWith("/forms/")) {
-    return labels.intakeForm.singular;
+    return "Intake Forms";
   }
 
   if (pathname.startsWith("/landing/")) {
-    return "Landing Page";
+    return "Pages";
   }
 
   if (pathname.startsWith("/settings/")) {
@@ -186,7 +187,6 @@ export function DashboardTopbar({
 
         <button type="button" className="crm-topbar-icon-btn relative" aria-label="Notifications">
           <Bell className="h-4 w-4" />
-          <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-[hsl(var(--card))] bg-rose-500" />
         </button>
 
         <div className="relative" ref={menuRef}>

@@ -3,6 +3,17 @@
 import { useMemo, useState } from "react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 
+/*
+  Square UI class reference (source of truth):
+  - templates/dashboard-2/components/dashboard/revenue-flow-chart.tsx
+    - shell: "flex-1 flex flex-col gap-4 sm:gap-6 p-4 sm:p-6 rounded-xl border bg-card min-w-0"
+    - header row: "flex flex-wrap items-center gap-2 sm:gap-4"
+    - title: "text-sm sm:text-base font-medium"
+    - chart wrap: "flex-1 h-[180px] sm:h-[200px] lg:h-[240px] min-w-0"
+  - templates/dashboard-2/components/dashboard/revenue-flow-chart.tsx (tooltip)
+    - "bg-popover border border-border rounded-lg p-2 sm:p-3 shadow-lg"
+*/
+
 type RevenuePoint = {
   label: string;
   value: number;
@@ -27,9 +38,9 @@ function RevenueTooltip({ active, payload }: { active?: boolean; payload?: Toolt
   const current = payload[0];
 
   return (
-    <div className="glass-card rounded-xl p-3">
-      <p className="text-xs uppercase tracking-widest text-[hsl(var(--muted-foreground)/0.8)]">{current.payload.label}</p>
-      <p className="mt-1 text-lg font-semibold text-foreground">${Math.round(Number(current.value)).toLocaleString()}</p>
+    <div className="bg-popover border border-border rounded-lg p-2 sm:p-3 shadow-lg">
+      <p className="text-xs sm:text-sm font-medium text-foreground mb-1.5 sm:mb-2">{current.payload.label}</p>
+      <p className="text-[10px] sm:text-sm text-muted-foreground">${Math.round(Number(current.value)).toLocaleString()}</p>
     </div>
   );
 }
@@ -54,10 +65,10 @@ export function RevenueChartCard({ title, data, ranges }: RevenueChartCardProps)
   }
 
   return (
-    <article className="glass-card rounded-2xl p-6">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <h3 className="text-sm font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">{title}</h3>
-        <div className="flex items-center gap-2 text-xs text-[hsl(var(--muted-foreground))]">
+    <article className="flex-1 flex flex-col gap-4 sm:gap-6 p-4 sm:p-6 rounded-xl border bg-card min-w-0">
+      <div className="flex flex-wrap items-center gap-2 sm:gap-4">
+        <h3 className="text-sm sm:text-base font-medium">{title}</h3>
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs sm:text-sm text-muted-foreground">
           {ranges.map((range) => {
             const active = activeRange === range;
             return (
@@ -79,7 +90,7 @@ export function RevenueChartCard({ title, data, ranges }: RevenueChartCardProps)
         </div>
       </div>
 
-      <div className="h-[300px] w-full">
+      <div className="flex-1 h-[180px] sm:h-[200px] lg:h-[240px] min-w-0">
         <ResponsiveContainer>
           <AreaChart data={filteredData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
             <defs>
@@ -93,10 +104,10 @@ export function RevenueChartCard({ title, data, ranges }: RevenueChartCardProps)
               dataKey="label"
               axisLine={false}
               tickLine={false}
-              tick={{ fill: "rgba(255,255,255,0.3)", fontSize: 10 }}
+              tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }}
               dy={10}
             />
-            <Tooltip cursor={{ stroke: "rgba(255,255,255,0.08)", strokeWidth: 1 }} content={<RevenueTooltip />} />
+            <Tooltip cursor={{ stroke: "hsl(var(--muted-foreground))", strokeWidth: 1 }} content={<RevenueTooltip />} />
             <Area
               type="monotone"
               dataKey="value"
@@ -109,7 +120,6 @@ export function RevenueChartCard({ title, data, ranges }: RevenueChartCardProps)
           </AreaChart>
         </ResponsiveContainer>
       </div>
-      <div className="mt-2 h-px w-full bg-white/10" />
     </article>
   );
 }

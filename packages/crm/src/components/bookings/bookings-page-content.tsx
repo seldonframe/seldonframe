@@ -132,6 +132,8 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
   const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [weekOffset, setWeekOffset] = useState(0);
+  const [showFilterMenu, setShowFilterMenu] = useState(false);
+  const [showFilterNotice, setShowFilterNotice] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [draftName, setDraftName] = useState("");
   const [draftDuration, setDraftDuration] = useState("30");
@@ -262,10 +264,42 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
 
             <div className="ml-auto" />
 
-            <button type="button" className="inline-flex h-8 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground">
-              <SlidersHorizontal className="size-4" />
-              <span className="hidden sm:inline text-xs">Filter</span>
-            </button>
+            <div className="relative">
+              <button
+                type="button"
+                className="inline-flex h-8 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground"
+                onClick={() => setShowFilterMenu((current) => !current)}
+              >
+                <SlidersHorizontal className="size-4" />
+                <span className="hidden sm:inline text-xs">Filter</span>
+              </button>
+              {showFilterMenu ? (
+                <div className="absolute right-0 top-10 z-20 min-w-[170px] rounded-md border border-border bg-card shadow-sm">
+                  <button
+                    type="button"
+                    className="block w-full px-3 py-2 text-left text-sm text-foreground hover:bg-accent"
+                    onClick={() => {
+                      setShowFilterMenu(false);
+                      setShowFilterNotice(true);
+                      window.setTimeout(() => setShowFilterNotice(false), 2200);
+                    }}
+                  >
+                    Scheduled only
+                  </button>
+                  <button
+                    type="button"
+                    className="block w-full px-3 py-2 text-left text-sm text-foreground hover:bg-accent"
+                    onClick={() => {
+                      setShowFilterMenu(false);
+                      setShowFilterNotice(true);
+                      window.setTimeout(() => setShowFilterNotice(false), 2200);
+                    }}
+                  >
+                    Completed only
+                  </button>
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
 
@@ -618,6 +652,10 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
             </form>
           </aside>
         </div>
+      ) : null}
+
+      {showFilterNotice ? (
+        <div className="fixed bottom-4 right-4 z-[70] rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground shadow-sm">Coming soon</div>
       ) : null}
     </>
   );

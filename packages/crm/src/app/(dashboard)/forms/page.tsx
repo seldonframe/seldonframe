@@ -1,7 +1,12 @@
 import Link from "next/link";
 import { CheckCircle2, FileText, Eye, ListTodo } from "lucide-react";
-import { createSuggestedFormAction, listForms } from "@/lib/forms/actions";
+import { listForms } from "@/lib/forms/actions";
 import { getLabels } from "@/lib/soul/labels";
+import { getOrgId } from "@/lib/auth/helpers";
+import { db } from "@/db";
+import { organizations } from "@/db/schema";
+import { eq } from "drizzle-orm";
+import { FormsPageActions } from "@/components/forms/forms-page-actions";
 
 /*
   Square UI class reference (source of truth):
@@ -13,7 +18,9 @@ import { getLabels } from "@/lib/soul/labels";
 */
 
 export default async function FormsPage() {
-  const [labels, forms] = await Promise.all([getLabels(), listForms()]);
+  const [labels, forms, orgId] = await Promise.all([getLabels(), listForms(), getOrgId()]);
+  const [org] = orgId ? await db.select({ slug: organizations.slug }).from(organizations).where(eq(organizations.id, orgId)).limit(1) : [null];
+  const orgSlug = org?.slug ?? "";
 
   const stats = [
     {
@@ -51,11 +58,7 @@ export default async function FormsPage() {
             Submissions become {labels.contact.plural.toLowerCase()} in your CRM automatically.
           </p>
         </div>
-        <form action={createSuggestedFormAction}>
-          <button type="submit" className="crm-button-primary h-9 px-6">
-            Create Form
-          </button>
-        </form>
+        <FormsPageActions />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -85,6 +88,9 @@ export default async function FormsPage() {
             <p className="text-sm text-muted-foreground max-w-xs">
               Submissions become {labels.contact.plural.toLowerCase()} in your CRM automatically.
             </p>
+            <div className="mt-5">
+              <FormsPageActions />
+            </div>
           </div>
         </article>
       ) : (
@@ -112,10 +118,10 @@ export default async function FormsPage() {
                 </span>
                 <span className="hidden sm:block text-sm text-muted-foreground">0</span>
                 <div className="hidden sm:flex items-center gap-2">
-                  <Link href={`/forms/${form.id}`} className="crm-button-primary h-9 px-4 text-xs">
+                  <Link href={`/forms/${form.id}/edit`} className="crm-button-primary h-9 px-4 text-xs">
                     Edit
                   </Link>
-                  <Link href={`/forms/${form.id}`} className="crm-button-secondary h-9 px-4 text-xs">
+                  <Link href={`/forms/${orgSlug}/${form.slug}`} target="_blank" rel="noopener noreferrer" className="crm-button-secondary h-9 px-4 text-xs">
                     Preview
                   </Link>
                 </div>

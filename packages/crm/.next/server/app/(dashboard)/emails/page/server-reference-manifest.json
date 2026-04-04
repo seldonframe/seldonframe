@@ -3,7 +3,7 @@
     "00879f4fe5f6166e8f6cfbc144add6ee11c961458c": {
       "workers": {
         "app/(dashboard)/emails/page": {
-          "moduleId": 962960,
+          "moduleId": 62960,
           "async": false,
           "exportedName": "listEmails",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/emails/actions.ts"
@@ -15,7 +15,7 @@
     "00e1a2270c87557eb777d44fd4164cc58154f27223": {
       "workers": {
         "app/(dashboard)/emails/page": {
-          "moduleId": 962960,
+          "moduleId": 62960,
           "async": false,
           "exportedName": "listEmailTemplates",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/emails/actions.ts"
@@ -27,7 +27,7 @@
     "401ba4c50e2561614f9dcbd8018b97e991196982dd": {
       "workers": {
         "app/(dashboard)/emails/page": {
-          "moduleId": 962960,
+          "moduleId": 62960,
           "async": false,
           "exportedName": "sendEmailAction",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/emails/actions.ts"
@@ -39,7 +39,7 @@
     "402bc13d01baf976bc855b1b1a97c29413ec6eab67": {
       "workers": {
         "app/(dashboard)/emails/page": {
-          "moduleId": 962960,
+          "moduleId": 62960,
           "async": false,
           "exportedName": "sendEmailTemplateToContactAction",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/emails/actions.ts"
@@ -51,7 +51,7 @@
     "403299e8221ff1d1ed4e4027ced4e736f20d6a8b91": {
       "workers": {
         "app/(dashboard)/emails/page": {
-          "moduleId": 962960,
+          "moduleId": 62960,
           "async": false,
           "exportedName": "sendWelcomeEmailForContact",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/emails/actions.ts"
@@ -63,7 +63,7 @@
     "406a07a7744d1b5dc30bf64b3cacd61bf67dd0169a": {
       "workers": {
         "app/(dashboard)/emails/page": {
-          "moduleId": 962960,
+          "moduleId": 62960,
           "async": false,
           "exportedName": "markEmailOpenedByPixelAction",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/emails/actions.ts"
@@ -75,7 +75,7 @@
     "407b6c6c3a6b7c1fd77065478ee36ebfa4593c8b63": {
       "workers": {
         "app/(dashboard)/emails/page": {
-          "moduleId": 962960,
+          "moduleId": 62960,
           "async": false,
           "exportedName": "createEmailTemplateAction",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/emails/actions.ts"
@@ -87,7 +87,7 @@
     "40b4cbcad6474c2323f19c05631d18493540d8d1b0": {
       "workers": {
         "app/(dashboard)/emails/page": {
-          "moduleId": 962960,
+          "moduleId": 62960,
           "async": false,
           "exportedName": "markEmailOpenedAction",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/emails/actions.ts"
@@ -99,7 +99,7 @@
     "40bfc99e31deff714fac80575ef77178e2b2cc0a12": {
       "workers": {
         "app/(dashboard)/emails/page": {
-          "moduleId": 962960,
+          "moduleId": 62960,
           "async": false,
           "exportedName": "sendTriggeredEmailsForContactEvent",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/emails/actions.ts"
@@ -111,7 +111,7 @@
     "40f82872556e2113b40baed41bac14a667eccac9dc": {
       "workers": {
         "app/(dashboard)/emails/page": {
-          "moduleId": 962960,
+          "moduleId": 62960,
           "async": false,
           "exportedName": "sendEmailTemplateToContactFormAction",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/emails/actions.ts"
@@ -123,7 +123,7 @@
     "601849675816cc3f8dab9ef40e5c9bacf735eacc89": {
       "workers": {
         "app/(dashboard)/emails/page": {
-          "moduleId": 962960,
+          "moduleId": 62960,
           "async": false,
           "exportedName": "markEmailClickedAction",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/emails/actions.ts"
@@ -135,7 +135,7 @@
     "00b66343f1d2e67ccfd014c5c217ac785074f30d38": {
       "workers": {
         "app/(dashboard)/emails/page": {
-          "moduleId": 962960,
+          "moduleId": 62960,
           "async": false,
           "exportedName": "getKitIntegrationSettings",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/integrations/kit/actions.ts"
@@ -147,7 +147,7 @@
     "40308e3c846fa1a3a0ce6671c7372546bf2b3d77a6": {
       "workers": {
         "app/(dashboard)/emails/page": {
-          "moduleId": 962960,
+          "moduleId": 62960,
           "async": false,
           "exportedName": "testKitConnectionAction",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/integrations/kit/actions.ts"
@@ -159,7 +159,7 @@
     "4087ec420483216579db582470ce28bdff7667594e": {
       "workers": {
         "app/(dashboard)/emails/page": {
-          "moduleId": 962960,
+          "moduleId": 62960,
           "async": false,
           "exportedName": "syncKitForContactEvent",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/integrations/kit/actions.ts"
@@ -171,7 +171,7 @@
     "409cbcf65c45b7b42a430484d0adf9f14dc4ba66b8": {
       "workers": {
         "app/(dashboard)/emails/page": {
-          "moduleId": 962960,
+          "moduleId": 62960,
           "async": false,
           "exportedName": "saveKitIntegrationAction",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/integrations/kit/actions.ts"

@@ -27,7 +27,7 @@ export default function MarketplaceSubmitPage() {
           const result = await generateBlockForReviewAction(formData);
           redirect(`/marketplace/review/${result.blockId}`);
         }}
-        className="glass-card grid gap-4 rounded-2xl p-6"
+        className="grid gap-4 rounded-xl border bg-card p-6"
       >
         <div className="grid gap-3 md:grid-cols-2">
           <div>

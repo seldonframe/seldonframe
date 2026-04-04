@@ -200,7 +200,17 @@ export default async function DealsPage({
             <tbody>
               {filteredDeals.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="h-20 px-3 text-center text-sm text-muted-foreground">No deals found.</td>
+                  <td colSpan={6} className="px-3 py-12 text-center">
+                    <div className="mx-auto flex max-w-sm flex-col items-center gap-3">
+                      <div className="size-12 rounded-xl bg-muted flex items-center justify-center">
+                        <Building2 className="size-6 text-muted-foreground" />
+                      </div>
+                      <p className="text-sm text-muted-foreground">No deals found.</p>
+                      <Link href="/deals" className="inline-flex h-9 items-center gap-2 rounded-md bg-foreground px-3 text-sm text-background transition-colors hover:bg-foreground/90">
+                        Create your first engagement
+                      </Link>
+                    </div>
+                  </td>
                 </tr>
               ) : (
                 filteredDeals

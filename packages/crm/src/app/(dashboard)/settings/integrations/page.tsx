@@ -7,6 +7,15 @@ import {
   updateIntegrationAction,
 } from "@/lib/integrations/actions";
 
+/*
+  Square UI class reference (source of truth):
+  - templates/dashboard-2/components/dashboard/welcome-section.tsx
+    - title: "text-lg sm:text-[22px] font-semibold leading-relaxed"
+    - helper copy: "text-sm sm:text-base text-muted-foreground"
+  - templates/dashboard-2/components/dashboard/deals-table.tsx
+    - card/list shell: "rounded-xl border bg-card"
+*/
+
 function statusLabel(connected: boolean) {
   return connected ? "Connected ✓" : "Not connected";
 }
@@ -29,11 +38,11 @@ export default async function IntegrationsSettingsPage({
   const kitTestMessage = params.kitTest === "1" ? "Kit connection successful" : params.kitTest === "0" ? "Kit connection failed" : null;
 
   return (
-    <section className="animate-page-enter space-y-5">
+    <section className="animate-page-enter space-y-4 sm:space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-page-title">Integrations</h1>
-          <p className="text-label text-[hsl(var(--color-text-secondary))]">Connect external services for SMS, email, and automation.</p>
+          <h1 className="text-lg sm:text-[22px] font-semibold leading-relaxed text-foreground">Integrations</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">Connect external services for SMS, email, and automation.</p>
         </div>
       </div>
 
@@ -43,10 +52,10 @@ export default async function IntegrationsSettingsPage({
       {kitTestMessage ? <p className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary">{kitTestMessage}</p> : null}
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <article className="glass-card rounded-2xl p-5">
+        <article className="rounded-xl border bg-card p-5">
           <div className="flex items-center justify-between">
             <h2 className="text-card-title">Twilio (SMS)</h2>
-            <span className="rounded-full border border-[hsl(var(--border))] px-2 py-1 text-xs text-[hsl(var(--muted-foreground))]">{statusLabel(settings.twilio.connected)}</span>
+            <span className="rounded-full border border-border px-2 py-1 text-xs text-muted-foreground">{statusLabel(settings.twilio.connected)}</span>
           </div>
           <form action={updateIntegrationAction} className="mt-4 grid gap-3">
             <input type="hidden" name="service" value="twilio" />
@@ -85,10 +94,10 @@ export default async function IntegrationsSettingsPage({
           </form>
         </article>
 
-        <article className="glass-card rounded-2xl p-5">
+        <article className="rounded-xl border bg-card p-5">
           <div className="flex items-center justify-between">
             <h2 className="text-card-title">Resend (Email)</h2>
-            <span className="rounded-full border border-[hsl(var(--border))] px-2 py-1 text-xs text-[hsl(var(--muted-foreground))]">{statusLabel(settings.resend.connected)}</span>
+            <span className="rounded-full border border-border px-2 py-1 text-xs text-muted-foreground">{statusLabel(settings.resend.connected)}</span>
           </div>
           <form action={updateIntegrationAction} className="mt-4 grid gap-3">
             <input type="hidden" name="service" value="resend" />
@@ -127,10 +136,10 @@ export default async function IntegrationsSettingsPage({
           </form>
         </article>
 
-        <article className="glass-card rounded-2xl p-5">
+        <article className="rounded-xl border bg-card p-5">
           <div className="flex items-center justify-between">
             <h2 className="text-card-title">Kit / ConvertKit</h2>
-            <span className="rounded-full border border-[hsl(var(--border))] px-2 py-1 text-xs text-[hsl(var(--muted-foreground))]">{statusLabel(settings.kit.connected)}</span>
+            <span className="rounded-full border border-border px-2 py-1 text-xs text-muted-foreground">{statusLabel(settings.kit.connected)}</span>
           </div>
           <form action={updateIntegrationAction} className="mt-4 grid gap-3">
             <input type="hidden" name="service" value="kit" />
@@ -157,14 +166,14 @@ export default async function IntegrationsSettingsPage({
           </form>
         </article>
 
-        <article className="glass-card rounded-2xl p-5">
+        <article className="rounded-xl border bg-card p-5">
           <div className="flex items-center justify-between">
             <h2 className="text-card-title">Google Calendar</h2>
-            <span className="rounded-full border border-[hsl(var(--border))] px-2 py-1 text-xs text-[hsl(var(--muted-foreground))]">
+            <span className="rounded-full border border-border px-2 py-1 text-xs text-muted-foreground">
               {settings.google.calendarConnected ? "Connected ✓" : "Not connected"}
             </span>
           </div>
-          <p className="mt-4 text-sm text-[hsl(var(--muted-foreground))]">
+          <p className="mt-4 text-sm text-muted-foreground">
             Connect Google to sync booking availability and calendar events.
           </p>
           <div className="mt-4 flex flex-wrap gap-2">

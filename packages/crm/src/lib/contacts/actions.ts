@@ -1,6 +1,6 @@
 "use server";
 
-import { and, asc, desc, eq, ilike, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, or } from "drizzle-orm";
 import { db } from "@/db";
 import { contacts } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
@@ -14,6 +14,7 @@ type ContactListOptions = {
   search?: string;
   status?: string;
   sort?: ContactListSort;
+  createdAfter?: Date;
 };
 
 export async function listContacts(options?: ContactListOptions) {
@@ -26,6 +27,7 @@ export async function listContacts(options?: ContactListOptions) {
   const search = options?.search?.trim();
   const status = options?.status?.trim();
   const sort = options?.sort ?? "recent";
+  const createdAfter = options?.createdAfter;
 
   const conditions = [eq(contacts.orgId, orgId)];
 
@@ -44,6 +46,10 @@ export async function listContacts(options?: ContactListOptions) {
 
   if (status && status !== "all") {
     conditions.push(eq(contacts.status, status));
+  }
+
+  if (createdAfter) {
+    conditions.push(gte(contacts.createdAt, createdAfter));
   }
 
   const whereClause = conditions.length > 1 ? and(...conditions) : conditions[0];
@@ -75,6 +81,7 @@ export async function createContactAction(formData: FormData) {
 
   const status = String(formData.get("status") ?? "lead");
   const source = String(formData.get("source") ?? "manual");
+  const notes = String(formData.get("notes") ?? "").trim();
 
   const [createdContact] = await db
     .insert(contacts)
@@ -83,8 +90,10 @@ export async function createContactAction(formData: FormData) {
       firstName: String(formData.get("firstName") ?? ""),
       lastName: String(formData.get("lastName") ?? ""),
       email: String(formData.get("email") ?? ""),
+      phone: String(formData.get("phone") ?? ""),
       status,
       source,
+      customFields: notes ? { notes } : {},
     })
     .returning({ id: contacts.id });
 
@@ -97,6 +106,8 @@ export async function createContactAction(formData: FormData) {
     status,
     source,
   });
+
+  return { id: createdContact?.id ?? null };
 }
 
 const editableContactFields = new Set(["firstName", "lastName", "email", "status"]);

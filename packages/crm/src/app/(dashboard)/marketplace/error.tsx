@@ -9,7 +9,7 @@ export default function MarketplaceError({
 }) {
   return (
     <section className="animate-page-enter space-y-4">
-      <article className="glass-card rounded-2xl p-6">
+      <article className="rounded-xl border bg-card p-6">
         <h1 className="text-page-title">Marketplace unavailable</h1>
         <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
           We couldn&apos;t load marketplace data right now. Please try again.

@@ -2,7 +2,8 @@ import { listContacts } from "@/lib/contacts/actions";
 import { getLabels } from "@/lib/soul/labels";
 import { getSoul } from "@/lib/soul/server";
 import Link from "next/link";
-import { ChevronDown, FileInput, Filter, Plus, Search, Users, UserCheck, BellRing, CircleDot } from "lucide-react";
+import { Filter, Search, Users, UserCheck, BellRing, CircleDot } from "lucide-react";
+import { ContactsPageActions } from "@/components/contacts/contacts-page-actions";
 
 /*
 Square UI Leads class references (from template source):
@@ -25,12 +26,29 @@ const sortOptions = [
 export default async function ContactsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; status?: string; sort?: "recent" | "name_asc" | "name_desc" | "score_desc" | "score_asc" }>;
+  searchParams: Promise<{ search?: string; status?: string; sort?: "recent" | "name_asc" | "name_desc" | "score_desc" | "score_asc"; dateRange?: "all" | "month" | "week" | "today" }>;
 }) {
   const params = await searchParams;
   const search = (params.search ?? "").trim();
   const status = (params.status ?? "all").trim() || "all";
   const sort = params.sort ?? "recent";
+  const dateRange = params.dateRange ?? "all";
+
+  const now = new Date();
+  let createdAfter: Date | undefined;
+
+  if (dateRange === "month") {
+    createdAfter = new Date(now.getFullYear(), now.getMonth(), 1);
+  } else if (dateRange === "week") {
+    const day = now.getDay();
+    const daysFromMonday = day === 0 ? 6 : day - 1;
+    createdAfter = new Date(now);
+    createdAfter.setDate(now.getDate() - daysFromMonday);
+    createdAfter.setHours(0, 0, 0, 0);
+  } else if (dateRange === "today") {
+    createdAfter = new Date(now);
+    createdAfter.setHours(0, 0, 0, 0);
+  }
 
   const [labels, rows, soul] = await Promise.all([
     getLabels(),
@@ -38,11 +56,11 @@ export default async function ContactsPage({
       search: search || undefined,
       status,
       sort,
+      createdAfter,
     }),
     getSoul(),
   ]);
 
-  const now = new Date();
   const nowMs = now.getTime();
   const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
   const fourteenDaysMs = 14 * 24 * 60 * 60 * 1000;
@@ -101,21 +119,7 @@ export default async function ContactsPage({
   return (
     <main className="animate-page-enter flex-1 overflow-auto p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6 bg-background w-full">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-        <button type="button" className="inline-flex h-10 items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground">
-          <span>All Time</span>
-          <ChevronDown className="size-4 text-muted-foreground" />
-        </button>
-
-        <div className="flex items-center gap-2 sm:gap-3">
-          <button type="button" className="inline-flex h-10 items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground">
-            <span>Import/Export</span>
-            <ChevronDown className="size-4 text-muted-foreground" />
-          </button>
-          <Link href="/contacts/new" className="inline-flex h-10 items-center gap-2 rounded-md bg-foreground px-3 py-2 text-sm text-background transition-colors hover:bg-foreground/90">
-            <Plus className="size-4" />
-            <span>Create New</span>
-          </Link>
-        </div>
+        <ContactsPageActions search={search} status={status} sort={sort} dateRange={dateRange} />
       </div>
 
       <div className="bg-card text-card-foreground rounded-xl border">
@@ -152,6 +156,7 @@ export default async function ContactsPage({
       </div>
 
       <form method="get" className="bg-card text-card-foreground rounded-xl border">
+        <input type="hidden" name="dateRange" value={dateRange} />
         <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between py-3 sm:py-5 px-3 sm:px-5">
           <div className="relative flex-1 sm:flex-none">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
@@ -181,10 +186,7 @@ export default async function ContactsPage({
               <span>Apply</span>
             </button>
 
-            <button type="button" className="inline-flex h-9 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground">
-              <FileInput className="size-4" />
-              <span className="hidden sm:inline">Import</span>
-            </button>
+            <ContactsPageActions search={search} status={status} sort={sort} dateRange={dateRange} mode="table-import" />
           </div>
         </div>
       </form>
@@ -205,7 +207,17 @@ export default async function ContactsPage({
             <tbody>
               {rowsForTable.length === 0 ? (
                 <tr className="border-b">
-                  <td colSpan={6} className="h-20 px-2 text-center text-sm text-muted-foreground">No contacts found.</td>
+                  <td colSpan={6} className="px-2 py-12 text-center">
+                    <div className="mx-auto flex max-w-sm flex-col items-center gap-3">
+                      <div className="size-12 rounded-xl bg-muted flex items-center justify-center">
+                        <Users className="size-6 text-muted-foreground" />
+                      </div>
+                      <p className="text-sm text-muted-foreground">No contacts found.</p>
+                      <Link href="/contacts/new" className="inline-flex h-9 items-center gap-2 rounded-md bg-foreground px-3 text-sm text-background transition-colors hover:bg-foreground/90">
+                        Add your first contact
+                      </Link>
+                    </div>
+                  </td>
                 </tr>
               ) : (
                 rowsForTable.map((row) => (

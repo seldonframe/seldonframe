@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { Mail } from "lucide-react";
 import { BUILT_IN_EVENT_TYPE_SUGGESTIONS, isValidEventType } from "@/lib/events/event-types";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 
 /*
   Square UI class reference (source of truth):
@@ -191,87 +192,83 @@ export function EmailPageContent({
         </section>
       ) : null}
 
-      {showCreate ? (
-        <div className="fixed inset-0 z-50 flex">
-          <button
-            type="button"
-            aria-label="Close panel"
-            className="h-full flex-1 bg-[hsl(var(--muted-foreground)/0.45)]"
-            onClick={() => setShowCreate(false)}
-          />
-          <aside className="h-full w-full max-w-md border-l border-border bg-[hsl(var(--background))] p-6 shadow-2xl">
-            <div className="mb-5 flex items-center justify-between">
-              <h2 className="text-xl font-medium text-foreground">New email template</h2>
-              <button type="button" className="crm-button-ghost h-9 px-4" onClick={() => setShowCreate(false)}>Close</button>
+      <Sheet open={showCreate} onOpenChange={setShowCreate}>
+        <SheetContent side="right" className="h-full w-full max-w-none border-0 bg-background p-0">
+          <div className="h-full overflow-auto p-6">
+            <div className="mx-auto w-full max-w-3xl space-y-6">
+              <div className="mb-5 flex items-center justify-between">
+                <h2 className="text-xl font-medium text-foreground">New email template</h2>
+                <button type="button" className="crm-button-ghost h-9 px-4" onClick={() => setShowCreate(false)}>Close</button>
+              </div>
+
+              <form
+                action={async (formData) => {
+                  const triggerEvent = String(formData.get("triggerEvent") ?? "").trim().toLowerCase();
+
+                  if (triggerEvent && !isValidEventType(triggerEvent)) {
+                    setTriggerEventError("Trigger must use lowercase entity.action format.");
+                    return;
+                  }
+
+                  setTriggerEventError(null);
+                  startTransition(async () => {
+                    await createTemplateAction(formData);
+                    setShowCreate(false);
+                    setTriggerEventInput("");
+                  });
+                }}
+                className="space-y-4"
+              >
+                <div>
+                  <label htmlFor="tpl-name" className="mb-1 block text-sm text-muted-foreground">Template name</label>
+                  <input id="tpl-name" className="crm-input h-9 w-full px-3" name="name" placeholder="Welcome Email" required />
+                </div>
+                <div>
+                  <label htmlFor="tpl-tag" className="mb-1 block text-sm text-muted-foreground">Tag</label>
+                  <input id="tpl-tag" className="crm-input h-9 w-full px-3" name="tag" placeholder="welcome" defaultValue="general" />
+                </div>
+                <div>
+                  <label htmlFor="tpl-subject" className="mb-1 block text-sm text-muted-foreground">Subject</label>
+                  <input id="tpl-subject" className="crm-input h-9 w-full px-3" name="subject" placeholder="Welcome to {{businessName}}" required />
+                </div>
+                <div>
+                  <label htmlFor="tpl-body" className="mb-1 block text-sm text-muted-foreground">Body</label>
+                  <textarea id="tpl-body" className="crm-input min-h-32 w-full p-3" name="body" placeholder="Hi {{firstName}}," required />
+                </div>
+                <div>
+                  <label htmlFor="tpl-trigger-event" className="mb-1 block text-sm text-muted-foreground">Trigger event (optional)</label>
+                  <input
+                    id="tpl-trigger-event"
+                    className="crm-input h-9 w-full px-3"
+                    name="triggerEvent"
+                    value={triggerEventInput}
+                    onChange={(event) => {
+                      setTriggerEventInput(event.target.value);
+                      if (triggerEventError) {
+                        setTriggerEventError(null);
+                      }
+                    }}
+                    list="email-template-trigger-suggestions"
+                    placeholder="course.enrolled"
+                  />
+                  <datalist id="email-template-trigger-suggestions">
+                    {BUILT_IN_EVENT_TYPE_SUGGESTIONS.map((eventType) => (
+                      <option key={eventType} value={eventType} />
+                    ))}
+                  </datalist>
+                  <p className="mt-1 text-xs text-muted-foreground">Uses lowercase entity.action format. Leave blank for manual sends only.</p>
+                  {triggerEventError ? <p className="mt-1 text-xs text-red-700 dark:text-red-300">{triggerEventError}</p> : null}
+                </div>
+                <div className="pt-2">
+                  <button type="submit" className="crm-button-primary h-10 px-6" disabled={pending}>
+                    {pending ? "Saving..." : "Save Template"}
+                  </button>
+                </div>
+              </form>
             </div>
-
-            <form
-              action={async (formData) => {
-                const triggerEvent = String(formData.get("triggerEvent") ?? "").trim().toLowerCase();
-
-                if (triggerEvent && !isValidEventType(triggerEvent)) {
-                  setTriggerEventError("Trigger must use lowercase entity.action format.");
-                  return;
-                }
-
-                setTriggerEventError(null);
-                startTransition(async () => {
-                  await createTemplateAction(formData);
-                  setShowCreate(false);
-                  setTriggerEventInput("");
-                });
-              }}
-              className="space-y-4"
-            >
-              <div>
-                <label htmlFor="tpl-name" className="mb-1 block text-sm text-muted-foreground">Template name</label>
-                <input id="tpl-name" className="crm-input h-9 w-full px-3" name="name" placeholder="Welcome Email" required />
-              </div>
-              <div>
-                <label htmlFor="tpl-tag" className="mb-1 block text-sm text-muted-foreground">Tag</label>
-                <input id="tpl-tag" className="crm-input h-9 w-full px-3" name="tag" placeholder="welcome" defaultValue="general" />
-              </div>
-              <div>
-                <label htmlFor="tpl-subject" className="mb-1 block text-sm text-muted-foreground">Subject</label>
-                <input id="tpl-subject" className="crm-input h-9 w-full px-3" name="subject" placeholder="Welcome to {{businessName}}" required />
-              </div>
-              <div>
-                <label htmlFor="tpl-body" className="mb-1 block text-sm text-muted-foreground">Body</label>
-                <textarea id="tpl-body" className="crm-input min-h-32 w-full p-3" name="body" placeholder="Hi {{firstName}}," required />
-              </div>
-              <div>
-                <label htmlFor="tpl-trigger-event" className="mb-1 block text-sm text-muted-foreground">Trigger event (optional)</label>
-                <input
-                  id="tpl-trigger-event"
-                  className="crm-input h-9 w-full px-3"
-                  name="triggerEvent"
-                  value={triggerEventInput}
-                  onChange={(event) => {
-                    setTriggerEventInput(event.target.value);
-                    if (triggerEventError) {
-                      setTriggerEventError(null);
-                    }
-                  }}
-                  list="email-template-trigger-suggestions"
-                  placeholder="course.enrolled"
-                />
-                <datalist id="email-template-trigger-suggestions">
-                  {BUILT_IN_EVENT_TYPE_SUGGESTIONS.map((eventType) => (
-                    <option key={eventType} value={eventType} />
-                  ))}
-                </datalist>
-                <p className="mt-1 text-xs text-muted-foreground">Uses lowercase entity.action format. Leave blank for manual sends only.</p>
-                {triggerEventError ? <p className="mt-1 text-xs text-red-700 dark:text-red-300">{triggerEventError}</p> : null}
-              </div>
-              <div className="pt-2">
-                <button type="submit" className="crm-button-primary h-10 px-6" disabled={pending}>
-                  {pending ? "Saving..." : "Save Template"}
-                </button>
-              </div>
-            </form>
-          </aside>
-        </div>
-      ) : null}
+          </div>
+        </SheetContent>
+      </Sheet>
     </>
   );
 }

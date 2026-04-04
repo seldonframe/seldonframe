@@ -1,5 +1,14 @@
 import { getKitIntegrationSettings, saveKitIntegrationAction, testKitConnectionAction } from "@/lib/integrations/kit/actions";
 
+/*
+  Square UI class reference (source of truth):
+  - templates/dashboard-2/components/dashboard/welcome-section.tsx
+    - title: "text-lg sm:text-[22px] font-semibold leading-relaxed"
+    - helper text: "text-sm sm:text-base text-muted-foreground"
+  - templates/dashboard-2/components/dashboard/deals-table.tsx
+    - card/list shell: "rounded-xl border bg-card"
+*/
+
 export default async function KitIntegrationPage({
   searchParams,
 }: {
@@ -12,21 +21,21 @@ export default async function KitIntegrationPage({
   const saved = params.saved === "1" ? "Settings saved" : null;
 
   return (
-    <section className="animate-page-enter space-y-4">
+    <section className="animate-page-enter space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-page-title">Kit Integration</h1>
-        <p className="text-label text-[hsl(var(--color-text-secondary))]">Sync subscribers and trigger automations from CRM events.</p>
+        <h1 className="text-lg sm:text-[22px] font-semibold leading-relaxed text-foreground">Kit Integration</h1>
+        <p className="text-sm sm:text-base text-muted-foreground">Sync subscribers and trigger automations from CRM events.</p>
       </div>
 
       {saved ? <p className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">{saved}</p> : null}
       {tested ? <p className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary">{tested}</p> : null}
 
-      <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.2)] px-3 py-2 text-xs text-[hsl(var(--muted-foreground))]">
+      <div className="rounded-md border border-border bg-[hsl(var(--muted)/0.2)] px-3 py-2 text-xs text-[hsl(var(--muted-foreground))]">
         API Version: {settings?.version ?? "v4"} · Token stored encrypted at rest
         {settings?.apiTokenHint ? ` (${settings.apiTokenHint})` : ""}
       </div>
 
-      <div className="glass-card rounded-2xl p-5">
+      <div className="rounded-xl border bg-card p-5">
         <form action={saveKitIntegrationAction} className="grid gap-3 md:grid-cols-2">
           <div className="space-y-1 md:col-span-2">
             <label htmlFor="apiKey" className="text-label">

@@ -9,5 +9,5 @@ R.c("server/chunks/ssr/07s-_next_dist_0bpxxqh._.js")
 R.c("server/chunks/ssr/07s-_next_dist_0q0_6n1._.js")
 R.c("server/chunks/ssr/07s-_next_dist_client_components_builtin_global-error_09.yc82.js")
 R.c("server/chunks/ssr/0nxh_packages_crm__next-internal_server_app__global-error_page_actions_00dgrd6.js")
-R.m(851126)
-module.exports=R.m(851126).exports
+R.m(51126)
+module.exports=R.m(51126).exports

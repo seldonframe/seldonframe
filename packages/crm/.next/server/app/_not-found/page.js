@@ -7,10 +7,10 @@ R.c("server/chunks/ssr/[root-of-the-server]__01woy6_._.js")
 R.c("server/chunks/ssr/07s-_next_dist_compiled_@opentelemetry_api_index_0_s33y6.js")
 R.c("server/chunks/ssr/07s-_next_dist_0bpxxqh._.js")
 R.c("server/chunks/ssr/07s-_next_dist_0q0_6n1._.js")
-R.c("server/chunks/ssr/[root-of-the-server]__12vnl1f._.js")
+R.c("server/chunks/ssr/[root-of-the-server]__0ptgcjf._.js")
 R.c("server/chunks/ssr/07s-_next_dist_client_components_0ofrauc._.js")
 R.c("server/chunks/ssr/07s-_next_dist_client_components_builtin_forbidden_0m9co9v.js")
 R.c("server/chunks/ssr/07s-_next_dist_client_components_builtin_unauthorized_0p99-~g.js")
 R.c("server/chunks/ssr/0nxh_packages_crm__next-internal_server_app__not-found_page_actions_0sbzdsn.js")
-R.m(56881)
-module.exports=R.m(56881).exports
+R.m(56982)
+module.exports=R.m(56982).exports

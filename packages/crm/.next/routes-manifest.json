@@ -96,6 +96,14 @@
       "namedRegex": "^/forms/(?<nxtPid>[^/]+?)(?:/)?$"
     },
     {
+      "page": "/forms/[id]/edit",
+      "regex": "^/forms/([^/]+?)/edit(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/forms/(?<nxtPid>[^/]+?)/edit(?:/)?$"
+    },
+    {
       "page": "/forms/[id]/[formSlug]",
       "regex": "^/forms/([^/]+?)/([^/]+?)(?:/)?$",
       "routeKeys": {
@@ -299,6 +307,18 @@
       "regex": "^/contacts(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/contacts(?:/)?$"
+    },
+    {
+      "page": "/contacts/export",
+      "regex": "^/contacts/export(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/contacts/export(?:/)?$"
+    },
+    {
+      "page": "/contacts/new",
+      "regex": "^/contacts/new(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/contacts/new(?:/)?$"
     },
     {
       "page": "/dashboard",

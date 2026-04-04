@@ -19,26 +19,26 @@ export default async function MarketplaceReviewPage({ params }: { params: Promis
         <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">{block.generationStatus}</span>
       </div>
 
-      <article className="glass-card rounded-2xl p-5">
+      <article className="rounded-xl border bg-card p-5">
         <h2 className="text-card-title">Preview</h2>
         <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
           Open the temporary preview route for this block in your org:
         </p>
-        <Link href={`/${block.blockId}`} className="mt-3 inline-flex rounded-md border border-[hsl(var(--border))] px-3 py-2 text-sm">
+        <Link href={`/${block.blockId}`} className="mt-3 inline-flex rounded-md border border-border px-3 py-2 text-sm">
           /{block.blockId}
         </Link>
       </article>
 
-      <article className="glass-card rounded-2xl p-5">
+      <article className="rounded-xl border bg-card p-5">
         <h2 className="text-card-title">Generated files</h2>
         {files.length === 0 ? (
           <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">No generated files yet.</p>
         ) : (
           <ul className="mt-3 space-y-2 text-sm">
-            {files.map((file) => {
+            {files.map((file, index) => {
               const item = file as { path?: string };
               return (
-                <li key={item.path || Math.random()} className="rounded border border-[hsl(var(--border))] px-3 py-2 font-mono text-xs">
+                <li key={item.path || `generated-file-${index}`} className="rounded border border-border px-3 py-2 font-mono text-xs">
                   {item.path || "unknown-file"}
                 </li>
               );
@@ -64,7 +64,7 @@ export default async function MarketplaceReviewPage({ params }: { params: Promis
             className="crm-input min-h-20 w-full p-3 text-sm"
             placeholder="What should change before resubmission?"
           />
-          <button type="submit" className="h-10 rounded-md border border-[hsl(var(--border))] px-4 text-sm">
+          <button type="submit" className="crm-button-secondary h-10 px-4 text-sm">
             Request Changes
           </button>
         </form>

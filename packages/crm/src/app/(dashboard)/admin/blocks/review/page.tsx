@@ -13,14 +13,14 @@ export default async function AdminBlockReviewPage() {
       </div>
 
       {queue.length === 0 ? (
-        <article className="glass-card rounded-2xl p-6 text-sm text-[hsl(var(--muted-foreground))]">No blocks awaiting admin merge.</article>
+        <article className="rounded-xl border bg-card p-6 text-sm text-[hsl(var(--muted-foreground))]">No blocks awaiting admin merge.</article>
       ) : (
         <div className="space-y-3">
           {queue.map((item) => {
             const files = Array.isArray(item.files) ? item.files : [];
 
             return (
-              <article key={item.blockId} className="glass-card rounded-2xl p-5">
+              <article key={item.blockId} className="rounded-xl border bg-card p-5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <h2 className="text-card-title">{item.name}</h2>
@@ -34,10 +34,10 @@ export default async function AdminBlockReviewPage() {
                 <div className="mt-3">
                   <p className="text-xs uppercase tracking-[0.08em] text-[hsl(var(--muted-foreground))]">Generated files</p>
                   <ul className="mt-2 space-y-2">
-                    {files.map((file) => {
+                    {files.map((file, index) => {
                       const entry = file as { path?: string };
                       return (
-                        <li key={entry.path || Math.random()} className="rounded border border-[hsl(var(--border))] px-3 py-2 font-mono text-xs">
+                        <li key={entry.path || `generated-file-${index}`} className="rounded border border-border px-3 py-2 font-mono text-xs">
                           {entry.path || "unknown-file"}
                         </li>
                       );

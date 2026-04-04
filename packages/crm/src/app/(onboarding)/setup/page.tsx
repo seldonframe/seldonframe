@@ -3,6 +3,12 @@ import { redirect } from "next/navigation";
 import { SetupWizard } from "@/components/soul/setup-wizard";
 import { listAvailableSouls, loadSoulPackage } from "@seldonframe/core/soul";
 
+/*
+  Square UI class reference (source of truth):
+  - templates/dashboard-2/components/dashboard/content.tsx
+    - content shell: "flex-1 overflow-auto p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6 bg-background w-full"
+*/
+
 type SetupSoulOption = {
   id: string;
   name: string;
@@ -112,7 +118,7 @@ export default async function SetupPage() {
   }
 
   return (
-    <main className="crm-page animate-page-enter px-4 py-6 md:px-8">
+    <main className="animate-page-enter flex-1 overflow-auto p-3 sm:p-4 md:p-6 bg-background w-full">
       <SetupWizard souls={souls} />
     </main>
   );

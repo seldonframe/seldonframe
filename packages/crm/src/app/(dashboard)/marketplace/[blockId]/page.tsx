@@ -35,7 +35,7 @@ export default async function MarketplaceBlockDetailPage({ params, searchParams 
         </div>
       </div>
 
-      <article className="glass-card rounded-2xl p-5">
+      <article className="rounded-xl border bg-card p-5">
         <h2 className="text-card-title">Details</h2>
         <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">{block.longDescription || block.description}</p>
         <div className="mt-4 grid gap-2 text-sm text-[hsl(var(--muted-foreground))]">
@@ -44,7 +44,7 @@ export default async function MarketplaceBlockDetailPage({ params, searchParams 
         </div>
       </article>
 
-      <article className="glass-card rounded-2xl p-5">
+      <article className="rounded-xl border bg-card p-5">
         <h2 className="text-card-title">Install</h2>
         <form
           action={async (formData) => {
@@ -64,7 +64,7 @@ export default async function MarketplaceBlockDetailPage({ params, searchParams 
         </form>
       </article>
 
-      <article className="glass-card rounded-2xl p-5">
+      <article className="rounded-xl border bg-card p-5">
         <h2 className="text-card-title">Reviews</h2>
         <form action={submitBlockRatingAction} className="mt-3 grid gap-3">
           <input type="hidden" name="blockId" value={blockId} />
@@ -76,7 +76,7 @@ export default async function MarketplaceBlockDetailPage({ params, searchParams 
             Review
             <textarea name="review" className="crm-input mt-1 min-h-20 w-full p-3" placeholder="Optional" />
           </label>
-          <button type="submit" className="h-10 rounded-md border border-[hsl(var(--border))] px-4 text-sm" disabled={!details.canRateNow}>
+          <button type="submit" className="crm-button-secondary h-10 px-4 text-sm" disabled={!details.canRateNow}>
             {details.canRateNow ? "Submit Review" : "Available after 7 days"}
           </button>
         </form>
@@ -86,7 +86,7 @@ export default async function MarketplaceBlockDetailPage({ params, searchParams 
         ) : (
           <ul className="mt-4 space-y-2 text-sm">
             {details.ratings.map((rating) => (
-              <li key={rating.id} className="rounded border border-[hsl(var(--border))] px-3 py-2">
+              <li key={rating.id} className="rounded border border-border px-3 py-2">
                 <p className="font-medium text-foreground">★ {rating.rating}</p>
                 <p className="text-[hsl(var(--muted-foreground))]">{rating.review || "No written review"}</p>
               </li>

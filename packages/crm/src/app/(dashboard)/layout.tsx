@@ -119,7 +119,7 @@ export default async function DashboardLayout({
     <SoulProvider soul={soul}>
       <div className="h-svh w-full overflow-hidden lg:p-2">
         <div className="bg-background lg:rounded-md lg:border flex h-full w-full flex-col items-center justify-start overflow-hidden">
-          <div className="animate-page-enter flex h-full w-full flex-col md:flex-row">
+          <div className="animate-page-enter flex h-full w-full flex-col md:flex-row" style={{ minHeight: 0 }}>
             <Sidebar
               blocks={blocks}
               canAccessSeldon={canAccessSeldon}
@@ -129,7 +129,7 @@ export default async function DashboardLayout({
               userEmail={user?.email || ""}
               avatarFallback={avatarFallback}
             />
-            <div className="min-w-0 flex-1 space-y-3 sm:space-y-4">
+            <div className="min-w-0 flex-1 space-y-3 sm:space-y-4" style={{ minHeight: 0, overflowY: "auto" }}>
               <DemoBanner />
               {isSwitchedOrg && activeOrg ? (
                 <div className="rounded-xl border border-border bg-[hsl(var(--muted)/0.22)] px-3 py-2 text-sm text-[hsl(var(--muted-foreground))]">

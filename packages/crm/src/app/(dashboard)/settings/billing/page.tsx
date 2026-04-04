@@ -6,6 +6,15 @@ import { getPlan, getProPlans } from "@/lib/billing/plans";
 import { getSeldonUsageStats } from "@/lib/ai/client";
 import { getOrgId } from "@/lib/auth/helpers";
 
+/*
+  Square UI class reference (source of truth):
+  - templates/dashboard-2/components/dashboard/welcome-section.tsx
+    - title: "text-lg sm:text-[22px] font-semibold leading-relaxed"
+    - helper text: "text-sm sm:text-base text-muted-foreground"
+  - templates/dashboard-2/components/dashboard/deals-table.tsx
+    - card/list shell: "rounded-xl border bg-card"
+*/
+
 function formatDate(value: string | null | undefined) {
   if (!value) {
     return "Not set";
@@ -36,13 +45,13 @@ export default async function BillingSettingsPage() {
   const usageStats = orgId ? await getSeldonUsageStats({ orgId, userId: session.user.id }) : null;
 
   return (
-    <section className="animate-page-enter space-y-4">
+    <section className="animate-page-enter space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-page-title">Billing</h1>
-        <p className="text-label text-[hsl(var(--color-text-secondary))]">Manage your plan and subscription details.</p>
+        <h1 className="text-lg sm:text-[22px] font-semibold leading-relaxed text-foreground">Billing</h1>
+        <p className="text-sm sm:text-base text-muted-foreground">Manage your plan and subscription details.</p>
       </div>
 
-      <div className="glass-card space-y-4 rounded-2xl p-5">
+      <div className="rounded-xl border bg-card space-y-4 p-5">
         <div className="grid gap-2 md:grid-cols-2">
           <div>
             <p className="text-xs uppercase tracking-[0.08em] text-[hsl(var(--muted-foreground))]">Current plan</p>
@@ -75,7 +84,7 @@ export default async function BillingSettingsPage() {
       </div>
 
       {usageStats ? (
-        <div className="glass-card space-y-4 rounded-2xl p-5">
+        <div className="rounded-xl border bg-card space-y-4 p-5">
           <h2 className="text-section-title">Seldon AI Usage</h2>
           <div className="grid gap-2 md:grid-cols-3">
             <div>
@@ -122,7 +131,7 @@ export default async function BillingSettingsPage() {
       ) : null}
 
       {plan?.type === "pro" ? (
-        <div className="glass-card space-y-4 rounded-2xl p-5">
+        <div className="rounded-xl border bg-card space-y-4 p-5">
           <div className="flex items-center justify-between gap-2">
             <h2 className="text-section-title">Client Organizations</h2>
             <p className="text-sm text-[hsl(var(--muted-foreground))]">
@@ -132,7 +141,7 @@ export default async function BillingSettingsPage() {
 
           <ul className="space-y-2 text-sm text-[hsl(var(--muted-foreground))]">
             {managedOrgs.map((org) => (
-              <li key={org.id} className="flex items-center justify-between rounded-lg border border-[hsl(var(--border))] px-3 py-2">
+              <li key={org.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
                 <span className="text-foreground">{org.name}</span>
                 <span>/{org.slug}</span>
               </li>

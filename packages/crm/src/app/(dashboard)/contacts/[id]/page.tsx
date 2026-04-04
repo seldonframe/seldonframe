@@ -82,7 +82,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-4">
-          <div className="glass-card rounded-2xl p-5">
+          <div className="rounded-xl border bg-card p-5">
             <p className="text-[11px] uppercase tracking-[0.08em] text-[hsl(var(--color-text-muted))]">Contact profile</p>
             <div className="mt-3 grid gap-2 text-sm text-foreground">
               <p>Email: {row.email ?? "—"}</p>
@@ -96,7 +96,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
           </div>
 
           {suggestedFields.length > 0 ? (
-            <div className="glass-card rounded-2xl p-5">
+            <div className="rounded-xl border bg-card p-5">
               <h2 className="text-card-title">Custom Fields</h2>
               <div className="mt-3 grid gap-2">
                 {suggestedFields.map((field) => {
@@ -147,7 +147,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
             </div>
           ) : null}
 
-          <form action={sendEmailTemplateToContactFormAction} className="glass-card grid gap-3 rounded-2xl p-5 md:grid-cols-[1fr_auto] md:items-end">
+          <form action={sendEmailTemplateToContactFormAction} className="grid gap-3 rounded-xl border bg-card p-5 md:grid-cols-[1fr_auto] md:items-end">
             <input type="hidden" name="contactId" value={row.id} />
             <div>
               <label htmlFor="templateId" className="text-label text-[hsl(var(--color-text-secondary))]">Send Email Template</label>
@@ -169,7 +169,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
         </div>
 
         {timeline.length > 0 ? (
-          <div className="glass-card h-fit rounded-2xl p-5">
+          <div className="h-fit rounded-xl border bg-card p-5">
             <h2 className="mb-3 text-card-title">Activity Timeline</h2>
             <ul className="space-y-2">
               {timeline.map((item) => (

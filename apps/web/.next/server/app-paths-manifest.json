@@ -2,8 +2,8 @@
   "/_not-found/page": "app/_not-found/page.js",
   "/api/subscribe/route": "app/api/subscribe/route.js",
   "/page": "app/page.js",
-  "/terms/page": "app/terms/page.js",
   "/privacy/page": "app/privacy/page.js",
+  "/terms/page": "app/terms/page.js",
   "/policy/page": "app/policy/page.js",
   "/terms-of-service/page": "app/terms-of-service/page.js"
 }

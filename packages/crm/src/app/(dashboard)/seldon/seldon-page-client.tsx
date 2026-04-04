@@ -12,6 +12,12 @@ type Services = {
   kit: boolean;
 };
 
+type ChatMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+};
+
 const initialState: SeldonRunState = { ok: false };
 
 function ResultCard({ result, onViewBlockMd }: { result: SeldonRunResult; onViewBlockMd: (value: SeldonRunResult) => void }) {
@@ -52,8 +58,18 @@ export function SeldonPageClient({ allowed, services, history }: { allowed: bool
   const [state, action, pending] = useActionState(runSeldonItAction, initialState);
   const [selectedResult, setSelectedResult] = useState<SeldonRunResult | null>(null);
   const [description, setDescription] = useState("");
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
 
   const hasHistoryState = pending || Boolean(state.error) || Boolean(state.message) || Boolean(state.results?.length);
+
+  const assistantContent = state.error
+    ? state.error
+    : [
+        state.message,
+        ...(state.results ?? []).map((result) => `${result.blockName}: ${result.summary || "BLOCK.md generated successfully"}`),
+      ]
+        .filter(Boolean)
+        .join("\n\n");
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -120,9 +136,35 @@ export function SeldonPageClient({ allowed, services, history }: { allowed: bool
                   </div>
                 ) : null}
 
-                {pending ? <p className="text-sm text-muted-foreground">Seldoning...</p> : null}
-                {state.error ? <p className="text-sm text-muted-foreground">{state.error}</p> : null}
-                {state.message ? <p className="text-sm text-muted-foreground">{state.message}</p> : null}
+                {chatMessages.length > 0 ? (
+                  <div className="space-y-3">
+                    {chatMessages.map((message) => (
+                      <div key={message.id} className="rounded-2xl border border-border bg-secondary dark:bg-card p-1">
+                        <div className="rounded-xl border border-border dark:border-transparent bg-card dark:bg-secondary p-4 space-y-2">
+                          <p className="text-xs uppercase tracking-wide text-muted-foreground">{message.role === "user" ? "You" : "Seldon"}</p>
+                          <p className="text-sm whitespace-pre-wrap leading-relaxed">{message.content}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                {pending ? (
+                  <div className="rounded-2xl border border-border bg-secondary dark:bg-card p-1">
+                    <div className="rounded-xl border border-border dark:border-transparent bg-card dark:bg-secondary p-4">
+                      <p className="text-sm text-muted-foreground">Processing...</p>
+                    </div>
+                  </div>
+                ) : null}
+
+                {!pending && assistantContent ? (
+                  <div className="rounded-2xl border border-border bg-secondary dark:bg-card p-1">
+                    <div className="rounded-xl border border-border dark:border-transparent bg-card dark:bg-secondary p-4 space-y-2">
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground">Seldon</p>
+                      <p className="text-sm whitespace-pre-wrap leading-relaxed">{assistantContent}</p>
+                    </div>
+                  </div>
+                ) : null}
 
                 {state.results?.length ? (
                   <div className="space-y-3">
@@ -182,7 +224,25 @@ export function SeldonPageClient({ allowed, services, history }: { allowed: bool
 
             <div className="border-t border-border px-4 md:px-8 py-[17px]">
               <div className="max-w-[640px] mx-auto">
-                <form action={action} className="rounded-2xl border border-border bg-secondary dark:bg-card p-1">
+                <form
+                  action={action}
+                  className="rounded-2xl border border-border bg-secondary dark:bg-card p-1"
+                  onSubmit={() => {
+                    const trimmed = description.trim();
+                    if (!trimmed) {
+                      return;
+                    }
+
+                    setChatMessages((current) => [
+                      ...current,
+                      {
+                        id: `user-${Date.now()}`,
+                        role: "user",
+                        content: trimmed,
+                      },
+                    ]);
+                  }}
+                >
                   <div className="rounded-xl border border-border dark:border-transparent bg-card dark:bg-secondary">
                     <textarea
                       id="seldon-description"

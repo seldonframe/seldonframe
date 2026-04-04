@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Sparkles, ChevronsUpDown } from "lucide-react";
+import Image from "next/image";
+import { ChevronsUpDown } from "lucide-react";
 import type { BlockManifest } from "@seldonframe/core/blocks";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
@@ -65,8 +66,8 @@ export function Sidebar(props: {
       <div className={isMobile ? "flex h-full w-full flex-col" : "flex w-full flex-col"}>
         <div className="p-3 pb-0 sm:p-4 sm:pb-0 lg:p-5 lg:pb-0">
           <div className="flex min-h-8 items-center gap-2">
-            <div className="flex size-5 items-center justify-center rounded bg-linear-to-b from-[#6e3ff3] to-[#aa8ef9] text-white">
-              <Sparkles className="size-3" />
+            <div className="flex size-5 items-center justify-center overflow-hidden rounded">
+              <Image src="/logo.svg" alt="SeldonFrame logo" width={20} height={20} />
             </div>
             <p className="text-base font-semibold tracking-tight text-foreground">
               SeldonFrame
@@ -76,8 +77,8 @@ export function Sidebar(props: {
 
         <div className="px-3 sm:px-4 lg:px-5">
           <div className="mb-3 flex items-center gap-2 sm:gap-3 rounded-lg border border-border bg-muted/45 p-2 sm:p-3">
-            <div className="flex size-8 sm:size-[34px] items-center justify-center rounded-lg bg-linear-to-b from-[#6e3ff3] to-[#aa8ef9] text-white shrink-0">
-              <Sparkles className="size-4 sm:size-5" />
+            <div className="flex size-8 sm:size-[34px] items-center justify-center overflow-hidden rounded-lg shrink-0">
+              <Image src="/logo.svg" alt="SeldonFrame logo" width={34} height={34} className="h-full w-full" />
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs font-semibold sm:text-sm">{workspaceName}</p>
@@ -105,7 +106,9 @@ export function Sidebar(props: {
 
   return (
     <>
-      <aside className="crm-sidebar hidden w-full flex-col border bg-card md:flex md:w-[220px]">{renderSidebarShell()}</aside>
+      <aside className="crm-sidebar hidden w-full flex-col border bg-card md:flex md:w-[220px]" style={{ height: "100svh", overflowY: "auto" }}>
+        {renderSidebarShell()}
+      </aside>
 
       <div className="md:hidden">
         <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>

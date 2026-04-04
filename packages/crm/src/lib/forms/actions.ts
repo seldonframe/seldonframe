@@ -8,6 +8,63 @@ import { getSoul } from "@/lib/soul/server";
 import { emitSeldonEvent } from "@/lib/events/bus";
 import { dispatchWebhook } from "@/lib/utils/webhooks";
 import { assertWritable } from "@/lib/demo/server";
+import type { IntakeFormField } from "@/db/schema/intake-forms";
+
+function toSlug(value: string) {
+  return (
+    value
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\s-]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-") || "intake-form"
+  );
+}
+
+function normalizeFields(input: unknown): IntakeFormField[] {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+
+  const normalized: IntakeFormField[] = [];
+
+  for (const item of input) {
+    if (!item || typeof item !== "object") {
+      continue;
+    }
+
+    const field = item as {
+      key?: unknown;
+      label?: unknown;
+      type?: unknown;
+      required?: unknown;
+      options?: unknown;
+    };
+
+    const label = String(field.label ?? "").trim();
+
+    if (!label) {
+      continue;
+    }
+
+    const key = String(field.key ?? "").trim() || toSlug(label || "field");
+    const type = String(field.type ?? "text").trim() || "text";
+    const required = Boolean(field.required);
+    const options = Array.isArray(field.options)
+      ? field.options.map((option) => String(option).trim()).filter(Boolean)
+      : undefined;
+
+    normalized.push({
+      key,
+      label,
+      type,
+      required,
+      options: options && options.length > 0 ? options : undefined,
+    });
+  }
+
+  return normalized;
+}
 
 export async function listForms() {
   const orgId = await getOrgId();
@@ -40,6 +97,82 @@ export async function createSuggestedFormAction() {
     slug: "default-intake",
     fields: soul.suggestedIntakeForm.fields,
   });
+}
+
+export async function createFormAction(formData: FormData) {
+  assertWritable();
+
+  const orgId = await getOrgId();
+
+  if (!orgId) {
+    throw new Error("Unauthorized");
+  }
+
+  const name = String(formData.get("name") ?? "").trim() || "New Intake Form";
+  const slugInput = String(formData.get("slug") ?? name);
+  const slug = toSlug(slugInput);
+  const fieldsRaw = String(formData.get("fields") ?? "[]");
+
+  let parsedFields: unknown = [];
+  try {
+    parsedFields = JSON.parse(fieldsRaw);
+  } catch {
+    parsedFields = [];
+  }
+
+  const fields = normalizeFields(parsedFields);
+
+  const [created] = await db
+    .insert(intakeForms)
+    .values({
+      orgId,
+      name,
+      slug,
+      fields,
+    })
+    .returning({ id: intakeForms.id });
+
+  return { id: created?.id ?? null };
+}
+
+export async function updateFormAction(formData: FormData) {
+  assertWritable();
+
+  const orgId = await getOrgId();
+
+  if (!orgId) {
+    throw new Error("Unauthorized");
+  }
+
+  const formId = String(formData.get("formId") ?? "").trim();
+  const name = String(formData.get("name") ?? "").trim();
+  const slugInput = String(formData.get("slug") ?? "").trim();
+  const fieldsRaw = String(formData.get("fields") ?? "[]");
+
+  if (!formId || !name || !slugInput) {
+    throw new Error("Form ID, name, and slug are required");
+  }
+
+  let parsedFields: unknown = [];
+  try {
+    parsedFields = JSON.parse(fieldsRaw);
+  } catch {
+    parsedFields = [];
+  }
+
+  const fields = normalizeFields(parsedFields);
+
+  await db
+    .update(intakeForms)
+    .set({
+      name,
+      slug: toSlug(slugInput),
+      fields,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(intakeForms.orgId, orgId), eq(intakeForms.id, formId)));
+
+  return { success: true };
 }
 
 export async function submitPublicIntakeAction({

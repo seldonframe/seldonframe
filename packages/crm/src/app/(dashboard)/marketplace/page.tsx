@@ -41,7 +41,7 @@ export default async function MarketplacePage({
         </Link>
       </div>
 
-      <form className="glass-card grid gap-3 rounded-2xl p-4 md:grid-cols-[1fr_220px_180px]" method="get">
+      <form className="grid gap-3 rounded-xl border bg-card p-4 md:grid-cols-[1fr_220px_180px]" method="get">
         <input
           className="crm-input h-10 w-full px-3"
           name="q"
@@ -65,14 +65,14 @@ export default async function MarketplacePage({
       </form>
 
       {blocks.length === 0 ? (
-        <article className="glass-card rounded-2xl p-8 text-center">
+        <article className="rounded-xl border bg-card p-8 text-center">
           <p className="text-base font-medium text-foreground">No blocks match your filters</p>
           <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">Try a different category, clear search, or submit your own block.</p>
         </article>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {blocks.map((block) => (
-            <article key={block.blockId} className="glass-card rounded-2xl p-5">
+            <article key={block.blockId} className="rounded-xl border bg-card p-5">
               <div className="mb-2 flex items-start justify-between gap-2">
                 <h2 className="text-card-title">{block.name}</h2>
                 <span className="rounded-full bg-[hsl(var(--muted)/0.6)] px-2 py-1 text-xs text-[hsl(var(--muted-foreground))]">
@@ -93,19 +93,19 @@ export default async function MarketplacePage({
         </div>
       )}
 
-      <article className="glass-card rounded-2xl p-5">
+      <article className="rounded-xl border bg-card p-5">
         <h2 className="text-card-title">My Blocks</h2>
         {myBlocks.length === 0 ? (
           <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">No submissions yet. Publish your first BLOCK.md to start selling.</p>
         ) : (
           <ul className="mt-3 space-y-2 text-sm">
             {myBlocks.map((item) => (
-              <li key={item.blockId} className="flex items-center justify-between gap-2 rounded border border-[hsl(var(--border))] px-3 py-2">
+              <li key={item.blockId} className="flex items-center justify-between gap-2 rounded border border-border px-3 py-2">
                 <div>
                   <p className="font-medium text-foreground">{item.name}</p>
                   <p className="text-xs text-[hsl(var(--muted-foreground))]">{item.blockId}</p>
                 </div>
-                <Link href={`/marketplace/review/${item.blockId}`} className="rounded border border-[hsl(var(--border))] px-3 py-1.5 text-xs">
+                <Link href={`/marketplace/review/${item.blockId}`} className="rounded border border-border px-3 py-1.5 text-xs">
                   {item.status}
                 </Link>
               </li>

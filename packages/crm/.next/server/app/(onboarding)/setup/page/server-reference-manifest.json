@@ -3,7 +3,7 @@
     "406c668319341aec1480722e053ca19e2439b3eb85": {
       "workers": {
         "app/(onboarding)/setup/page": {
-          "moduleId": 237360,
+          "moduleId": 58998,
           "async": false,
           "exportedName": "installSoul",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/soul/install.ts"

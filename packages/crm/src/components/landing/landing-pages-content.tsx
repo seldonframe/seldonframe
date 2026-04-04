@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { Copy, ExternalLink, FileText, Layout, Megaphone, Calendar } from "lucide-react";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 
 /*
   Square UI class reference (source of truth):
@@ -61,6 +62,7 @@ export function LandingPagesContent({
   const [showCreate, setShowCreate] = useState(false);
   const [pending, startTransition] = useTransition();
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [draftMode, setDraftMode] = useState("soul-template");
 
   function handleTemplateClick() {
     setShowCreate(true);
@@ -182,71 +184,74 @@ export function LandingPagesContent({
         </div>
       ) : null}
 
-      {showCreate ? (
-        <div className="fixed inset-0 z-50 flex">
-          <button
-            type="button"
-            aria-label="Close panel"
-            className="h-full flex-1 bg-[hsl(var(--muted-foreground)/0.45)]"
-            onClick={() => setShowCreate(false)}
-          />
-          <aside className="h-full w-full max-w-md border-l border-border bg-[hsl(var(--background))] p-6 shadow-2xl">
-            <div className="mb-5 flex items-center justify-between">
-              <h2 className="text-xl font-medium text-foreground">New landing page</h2>
-              <button type="button" className="crm-button-ghost h-9 px-4" onClick={() => setShowCreate(false)}>
-                Close
-              </button>
-            </div>
-
-            <form
-              action={async (formData) => {
-                startTransition(async () => {
-                  await createAction(formData);
-                  setShowCreate(false);
-                });
-              }}
-              className="space-y-4"
-            >
-              <div>
-                <label htmlFor="lp-title" className="mb-1 block text-sm text-muted-foreground">Page title</label>
-                <input id="lp-title" className="crm-input h-9 w-full px-3" name="title" placeholder="My Landing Page" required />
-              </div>
-
-              <div>
-                <label htmlFor="lp-slug" className="mb-1 block text-sm text-muted-foreground">URL slug</label>
-                <input id="lp-slug" className="crm-input h-9 w-full px-3" name="slug" placeholder="my-landing-page" required />
-              </div>
-
-              <div>
-                <label htmlFor="lp-mode" className="mb-1 block text-sm text-muted-foreground">Start mode</label>
-                <select id="lp-mode" className="crm-input h-9 w-full px-3" name="mode" defaultValue="soul-template">
-                  <option value="soul-template">From Soul Template</option>
-                  <option value="template">Start from Template</option>
-                  <option value="scratch">Start from Scratch</option>
-                </select>
-              </div>
-
-              <div>
-                <label htmlFor="lp-template" className="mb-1 block text-sm text-muted-foreground">Template preset</label>
-                <select id="lp-template" className="crm-input h-9 w-full px-3" name="template" defaultValue="lead-capture">
-                  <option value="lead-capture">Lead Capture</option>
-                  <option value="service-overview">Service Overview</option>
-                  <option value="booking-page">Booking Page</option>
-                  <option value="about-page">About Page</option>
-                  <option value="contact-page">Contact Page</option>
-                  <option value="blank">Blank Page</option>
-                </select>
-              </div>
-
-              <div className="pt-2">
-                <button type="submit" className="crm-button-primary h-9 px-6" disabled={pending}>
-                  {pending ? "Creating..." : "Create Page"}
+      <Sheet open={showCreate} onOpenChange={setShowCreate}>
+        <SheetContent side="right" className="h-full w-full max-w-none border-0 bg-background p-0">
+          <div className="h-full overflow-auto p-6">
+            <div className="mx-auto w-full max-w-3xl space-y-6">
+              <div className="mb-5 flex items-center justify-between">
+                <h2 className="text-xl font-medium text-foreground">New landing page</h2>
+                <button type="button" className="crm-button-ghost h-9 px-4" onClick={() => setShowCreate(false)}>
+                  Close
                 </button>
               </div>
-            </form>
-          </aside>
-        </div>
-      ) : null}
+
+              <form
+                action={async (formData) => {
+                  startTransition(async () => {
+                    await createAction(formData);
+                    setShowCreate(false);
+                  });
+                }}
+                className="space-y-4"
+              >
+                <div>
+                  <label htmlFor="lp-title" className="mb-1 block text-sm text-muted-foreground">Page title</label>
+                  <input id="lp-title" className="crm-input h-9 w-full px-3" name="title" placeholder="My Landing Page" required />
+                </div>
+
+                <div>
+                  <label htmlFor="lp-slug" className="mb-1 block text-sm text-muted-foreground">URL slug</label>
+                  <input id="lp-slug" className="crm-input h-9 w-full px-3" name="slug" placeholder="my-landing-page" required />
+                </div>
+
+                <div>
+                  <label htmlFor="lp-mode" className="mb-1 block text-sm text-muted-foreground">Start mode</label>
+                  <select
+                    id="lp-mode"
+                    className="crm-input h-9 w-full px-3"
+                    name="mode"
+                    value={draftMode}
+                    onChange={(event) => setDraftMode(event.target.value)}
+                  >
+                    <option value="soul-template">From Soul Template</option>
+                    <option value="scratch">Blank</option>
+                  </select>
+                </div>
+
+                {draftMode === "soul-template" ? (
+                  <div>
+                    <label htmlFor="lp-template" className="mb-1 block text-sm text-muted-foreground">Template preset</label>
+                    <select id="lp-template" className="crm-input h-9 w-full px-3" name="template" defaultValue="lead-capture">
+                      <option value="lead-capture">Lead Capture</option>
+                      <option value="service-overview">Service Overview</option>
+                      <option value="booking-page">Booking Page</option>
+                      <option value="about-page">About Page</option>
+                      <option value="contact-page">Contact Page</option>
+                      <option value="blank">Blank Page</option>
+                    </select>
+                  </div>
+                ) : null}
+
+                <div className="pt-2">
+                  <button type="submit" className="crm-button-primary h-9 px-6" disabled={pending}>
+                    {pending ? "Creating..." : "Create Page"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
