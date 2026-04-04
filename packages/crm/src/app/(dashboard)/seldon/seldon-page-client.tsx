@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useEffect, useMemo, useState } from "react";
+import { useActionState, useMemo, useState } from "react";
+import { BoxIcon, CircleDashedIcon, MessageCircleDashedIcon, PaperclipIcon, SparklesIcon, WandSparklesIcon } from "lucide-react";
 import { disableSeldonBlockAction, runSeldonItAction, type SeldonHistoryItem, type SeldonRunResult, type SeldonRunState } from "@/lib/ai/seldon-actions";
 
 type Services = {
@@ -12,40 +13,6 @@ type Services = {
 };
 
 const initialState: SeldonRunState = { ok: false };
-
-function ServiceBadge({ label, connected }: { label: string; connected: boolean }) {
-  return (
-    <span
-      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs ${
-        connected
-          ? "border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-          : "border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.25)] text-[hsl(var(--muted-foreground))]"
-      }`}
-    >
-      {connected ? "✓" : "✗"} {label}
-    </span>
-  );
-}
-
-const progressSteps = [
-  "Understanding what you need...",
-  "Generating your block...",
-  "Creating database tables...",
-  "Enabling block...",
-] as const;
-
-function ProgressList({ activeStep }: { activeStep: number }) {
-  return (
-    <div className="space-y-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.15)] p-4 text-sm">
-      {progressSteps.map((step, idx) => (
-        <p key={step} className="flex items-center justify-between">
-          <span>{step}</span>
-          <span>{idx < activeStep ? "✓" : idx === activeStep ? <span className="animate-pulse">⟳</span> : "○"}</span>
-        </p>
-      ))}
-    </div>
-  );
-}
 
 function ResultCard({ result, onViewBlockMd }: { result: SeldonRunResult; onViewBlockMd: (value: SeldonRunResult) => void }) {
   const summaryLines = useMemo(
@@ -58,22 +25,24 @@ function ResultCard({ result, onViewBlockMd }: { result: SeldonRunResult; onView
   );
 
   return (
-    <article className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.15)] p-4">
-      <p className="text-base font-medium text-foreground">✓ Your &quot;{result.blockName}&quot; block is {result.installMode === "instant" ? "ready" : "queued for review"}.</p>
-      <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">Here&apos;s what was created:</p>
-      <ul className="mt-2 space-y-1 text-sm text-[hsl(var(--muted-foreground))]">
+    <article className="rounded-2xl border border-border bg-secondary dark:bg-card p-1">
+      <div className="rounded-xl border border-border dark:border-transparent bg-card dark:bg-secondary p-4 space-y-4">
+        <p className="text-sm leading-relaxed">✓ Your &quot;{result.blockName}&quot; block is {result.installMode === "instant" ? "ready" : "queued for review"}.</p>
+        <p className="text-sm text-muted-foreground">Here&apos;s what was created:</p>
+        <ul className="space-y-1 text-sm text-muted-foreground">
         {summaryLines.length > 0 ? summaryLines.map((line, idx) => <li key={idx}>• {line.replace(/^-\s*/, "")}</li>) : <li>• BLOCK.md generated successfully</li>}
-      </ul>
-      <div className="mt-4 flex flex-wrap gap-2">
-        <Link href={result.openPath} className="crm-button-primary inline-flex h-10 items-center px-4">
-          Open {result.blockName}
-        </Link>
-        <button type="button" className="crm-button-secondary h-10 px-4" onClick={() => onViewBlockMd(result)}>
-          View BLOCK.md
-        </button>
-        <Link href={result.marketplaceSubmitPath} className="crm-button-secondary inline-flex h-10 items-center px-4">
-          Sell on Marketplace
-        </Link>
+        </ul>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link href={result.openPath} className="gap-2 inline-flex items-center justify-center rounded-md text-sm font-medium h-9 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90">
+            Open {result.blockName}
+          </Link>
+          <button type="button" className="gap-2 inline-flex items-center justify-center rounded-md text-sm font-medium h-9 px-4 py-2 border border-input bg-background hover:bg-accent" onClick={() => onViewBlockMd(result)}>
+            View BLOCK.md
+          </button>
+          <Link href={result.marketplaceSubmitPath} className="gap-2 inline-flex items-center justify-center rounded-md text-sm font-medium h-9 px-4 py-2 border border-input bg-background hover:bg-accent">
+            Sell on Marketplace
+          </Link>
+        </div>
       </div>
     </article>
   );
@@ -82,146 +51,207 @@ function ResultCard({ result, onViewBlockMd }: { result: SeldonRunResult; onView
 export function SeldonPageClient({ allowed, services, history }: { allowed: boolean; services: Services; history: SeldonHistoryItem[] }) {
   const [state, action, pending] = useActionState(runSeldonItAction, initialState);
   const [selectedResult, setSelectedResult] = useState<SeldonRunResult | null>(null);
-  const [activeStep, setActiveStep] = useState(0);
+  const [description, setDescription] = useState("");
 
-  useEffect(() => {
-    if (!pending) {
-      return;
-    }
-
-    const timer = window.setInterval(() => {
-      setActiveStep((current) => (current >= progressSteps.length - 1 ? current : current + 1));
-    }, 1200);
-
-    return () => window.clearInterval(timer);
-  }, [pending]);
+  const hasHistoryState = pending || Boolean(state.error) || Boolean(state.message) || Boolean(state.results?.length);
 
   return (
-    <section className="animate-page-enter space-y-4 sm:space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-base sm:text-[22px] font-semibold leading-snug sm:leading-relaxed text-foreground">Seldon It Into Existence</h1>
-          <p className="text-xs sm:text-base text-muted-foreground">Describe what you need. Your business context does the rest.</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <ServiceBadge label="Stripe" connected={services.stripe} />
-          <ServiceBadge label="Resend" connected={services.resend} />
-          <ServiceBadge label="Twilio" connected={services.twilio} />
-          <ServiceBadge label="Kit" connected={services.kit} />
-          <Link href="/settings/integrations" className="inline-flex min-h-11 items-center rounded-full border border-[hsl(var(--border))] px-2.5 py-1 text-xs text-[hsl(var(--muted-foreground))]">
-            Connect more
-          </Link>
+    <div className="flex h-screen overflow-hidden bg-background">
+      <div className="hidden md:block w-64 border-r border-border">
+        <div className="flex h-full w-full flex-col bg-sidebar border-r border-sidebar-border">
+          <div className="flex items-center justify-between p-3 border-b border-sidebar-border">
+            <button type="button" className="w-full justify-start gap-2 px-2 h-10 inline-flex items-center rounded-md text-sm font-medium hover:bg-accent">
+              <SparklesIcon className="size-4" />
+              <span className="text-sm">New Session</span>
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto no-scrollbar">
+            <div className="p-3 space-y-4">
+              <div className="space-y-1">
+                <div className="px-2 py-1.5">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Recent</p>
+                </div>
+                {history.length === 0 ? <p className="px-2 text-sm text-muted-foreground">No Seldon history yet.</p> : null}
+                {history.map((item) => (
+                  <div key={item.blockId} className="group/item relative flex items-center rounded-md overflow-hidden">
+                    <Link href={item.openPath} className="flex-1 justify-start gap-2 px-2 text-left h-auto py-1.5 min-w-0 pr-8 inline-flex items-center rounded-md text-sm font-medium hover:bg-accent">
+                      <MessageCircleDashedIcon className="size-4 shrink-0" />
+                      <span className="text-sm truncate min-w-0">{item.blockName}</span>
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      {!allowed ? (
-        <article className="rounded-xl border bg-card p-6">
-          <h2 className="text-card-title">Upgrade required</h2>
-          <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">Upgrade to Cloud Pro to Seldon custom blocks.</p>
-          <Link href="/settings/billing" className="crm-button-primary mt-4 inline-flex h-10 items-center px-4">
-            Upgrade Plan
-          </Link>
-        </article>
-      ) : (
-        <div className="rounded-xl border bg-card space-y-4 p-4 sm:p-6">
-          <form
-            action={action}
-            className="space-y-3"
-            onSubmit={() => {
-              setActiveStep(0);
-            }}
-          >
-            <label htmlFor="seldon-description" className="text-label">
-              Describe what you want to build
-            </label>
-            <textarea
-              id="seldon-description"
-              name="description"
-              className="crm-input min-h-32 w-full p-3"
-              placeholder={`Describe what you want to build...\n\nExamples:\n• Send a follow-up SMS if a lead doesn't book within 48 hours\n• Track referrals and automatically thank the referrer\n• A review request system that asks clients for Google reviews after appointments\n• A client portal where clients can see upcoming sessions and invoices`}
-              required
-            />
-            <button type="submit" disabled={pending} className="crm-button-primary h-9 px-6">
-              {pending ? "Seldoning..." : "Seldon It"}
-            </button>
-          </form>
+      <div className="flex flex-1 flex-col overflow-hidden">
+        <div className="flex-1 overflow-hidden relative">
+          <div className="relative z-10 h-full flex flex-col">
+            <div className="flex-1 overflow-y-auto px-4 md:px-8 py-8">
+              <div className="max-w-[640px] mx-auto space-y-6">
+                {!hasHistoryState ? (
+                  <div className="flex h-full flex-col items-center justify-center px-4 md:px-8">
+                    <div className="w-full max-w-[640px] space-y-9 -mt-12">
+                      <div className="flex justify-center">
+                        <div className="flex items-center justify-center size-8 rounded-full">
+                          <SparklesIcon className="size-20" />
+                        </div>
+                      </div>
 
-          {pending ? <ProgressList activeStep={activeStep} /> : null}
-
-          {state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
-          {state.message ? <p className="text-sm text-[hsl(var(--muted-foreground))]">{state.message}</p> : null}
-
-          {state.results?.length ? (
-            <div className="space-y-3">
-              {state.results.map((result) => (
-                <ResultCard key={result.blockId} result={result} onViewBlockMd={setSelectedResult} />
-              ))}
-            </div>
-          ) : null}
-        </div>
-      )}
-
-      <section className="rounded-xl border bg-card p-4 sm:p-6">
-        <h2 className="text-card-title">Seldon History</h2>
-        {history.length === 0 ? (
-          <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">No Seldoned blocks yet. Build your first one above.</p>
-        ) : (
-          <div className="mt-3 space-y-2">
-            {history.map((item) => (
-              <article key={item.blockId} className="rounded-xl border border-[hsl(var(--border))] px-3 py-3 bg-background">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <p className="font-medium text-foreground">{item.blockName}</p>
-                    <p className="text-xs text-[hsl(var(--muted-foreground))]">Created {new Date(item.createdAt).toLocaleDateString()}</p>
+                      <div className="space-y-4 text-center">
+                        <h1 className="text-2xl font-semibold tracking-tight">Hey! I&apos;m Seldon</h1>
+                        <p className="text-2xl text-foreground">Describe what you need</p>
+                      </div>
+                    </div>
                   </div>
-                  <span
-                    className={`rounded-full px-2 py-1 text-xs ${
-                      item.status === "Active"
-                        ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                        : item.status === "Review"
-                          ? "bg-amber-500/10 text-amber-700 dark:text-amber-300"
-                          : "bg-[hsl(var(--muted)/0.3)] text-[hsl(var(--muted-foreground))]"
-                    }`}
-                  >
-                    {item.status}
-                  </span>
-                </div>
-                <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">Updated {new Date(item.lastUpdatedAt).toLocaleDateString()}</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Link href={item.openPath} className="crm-button-secondary inline-flex h-9 items-center px-3">
-                    Open
-                  </Link>
-                  {item.status === "Active" ? (
-                    <form action={disableSeldonBlockAction}>
-                      <input type="hidden" name="blockId" value={item.blockId} />
-                      <button type="submit" className="crm-button-secondary h-9 px-3">
-                        Disable
-                      </button>
-                    </form>
-                  ) : null}
-                  <Link href={item.marketplaceSubmitPath} className="crm-button-secondary inline-flex h-9 items-center px-3">
-                    Publish to Marketplace
-                  </Link>
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
+                ) : null}
 
-      {selectedResult ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-3xl rounded-xl border bg-card p-4">
-            <div className="mb-2 flex items-center justify-between">
-              <h3 className="text-card-title">{selectedResult.blockName} BLOCK.md</h3>
-              <button type="button" className="crm-button-secondary h-9 px-3" onClick={() => setSelectedResult(null)}>
-                Close
-              </button>
+                {!allowed ? (
+                  <div className="rounded-2xl border border-border bg-secondary dark:bg-card p-1">
+                    <div className="rounded-xl border border-border dark:border-transparent bg-card dark:bg-secondary p-4 space-y-4">
+                      <p className="text-sm leading-relaxed">Upgrade to Cloud Pro to Seldon custom blocks.</p>
+                      <Link href="/settings/billing" className="gap-2 inline-flex items-center justify-center rounded-md text-sm font-medium h-9 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90">
+                        Upgrade Plan
+                      </Link>
+                    </div>
+                  </div>
+                ) : null}
+
+                {pending ? <p className="text-sm text-muted-foreground">Seldoning...</p> : null}
+                {state.error ? <p className="text-sm text-muted-foreground">{state.error}</p> : null}
+                {state.message ? <p className="text-sm text-muted-foreground">{state.message}</p> : null}
+
+                {state.results?.length ? (
+                  <div className="space-y-3">
+                    {state.results.map((result) => (
+                      <ResultCard key={result.blockId} result={result} onViewBlockMd={setSelectedResult} />
+                    ))}
+                  </div>
+                ) : null}
+
+                <div className="rounded-2xl border border-border bg-secondary dark:bg-card p-1">
+                  <div className="rounded-xl border border-border dark:border-transparent bg-card dark:bg-secondary p-4 space-y-3">
+                    <p className="text-sm text-muted-foreground">Connected services</p>
+                    <p className="text-sm leading-relaxed">
+                      Stripe: {services.stripe ? "connected" : "not connected"} · Resend: {services.resend ? "connected" : "not connected"} · Twilio: {services.twilio ? "connected" : "not connected"} · Kit: {services.kit ? "connected" : "not connected"}
+                    </p>
+                  </div>
+                </div>
+
+                {selectedResult ? (
+                  <div className="rounded-2xl border border-border bg-secondary dark:bg-card p-1">
+                    <div className="rounded-xl border border-border dark:border-transparent bg-card dark:bg-secondary p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-medium">{selectedResult.blockName} BLOCK.md</p>
+                        <button type="button" className="gap-2 inline-flex items-center justify-center rounded-md text-sm font-medium h-9 px-4 py-2 border border-input bg-background hover:bg-accent" onClick={() => setSelectedResult(null)}>
+                          Close
+                        </button>
+                      </div>
+                      <textarea readOnly value={selectedResult.blockMd} className="min-h-[120px] resize-none border-0 bg-transparent px-4 py-3 text-base placeholder:text-muted-foreground/60 focus-visible:ring-0 focus-visible:ring-offset-0 w-full" />
+                    </div>
+                  </div>
+                ) : null}
+
+                {history.length > 0 ? (
+                  <div className="space-y-1">
+                    <div className="px-2 py-1.5">
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Actions</p>
+                    </div>
+                    {history.map((item) => (
+                      <div key={`${item.blockId}-actions`} className="flex items-center gap-2">
+                        {item.status === "Active" ? (
+                          <form action={disableSeldonBlockAction}>
+                            <input type="hidden" name="blockId" value={item.blockId} />
+                            <button type="submit" className="gap-2 inline-flex items-center justify-center rounded-md text-sm font-medium h-9 px-4 py-2 border border-input bg-background hover:bg-accent">
+                              Disable {item.blockName}
+                            </button>
+                          </form>
+                        ) : null}
+                        <Link href={item.marketplaceSubmitPath} className="gap-2 inline-flex items-center justify-center rounded-md text-sm font-medium h-9 px-4 py-2 border border-input bg-background hover:bg-accent">
+                          Publish {item.blockName}
+                        </Link>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             </div>
-            <textarea readOnly value={selectedResult.blockMd} className="crm-input min-h-96 w-full p-3 font-mono text-xs" />
+
+            <div className="border-t border-border px-4 md:px-8 py-[17px]">
+              <div className="max-w-[640px] mx-auto">
+                <form action={action} className="rounded-2xl border border-border bg-secondary dark:bg-card p-1">
+                  <div className="rounded-xl border border-border dark:border-transparent bg-card dark:bg-secondary">
+                    <textarea
+                      id="seldon-description"
+                      name="description"
+                      placeholder="Describe what you want to build..."
+                      value={description}
+                      onChange={(event) => setDescription(event.target.value)}
+                      required
+                      className="min-h-[120px] resize-none border-0 bg-transparent px-4 py-3 text-base placeholder:text-muted-foreground/60 focus-visible:ring-0 focus-visible:ring-offset-0 w-full"
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" && !event.shiftKey) {
+                          event.preventDefault();
+                          if (description.trim()) {
+                            event.currentTarget.form?.requestSubmit();
+                          }
+                        }
+                      }}
+                    />
+
+                    <div className="flex items-center justify-between px-4 py-3 border-t border-border/50">
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          className="size-7 rounded-full border border-border dark:border-input bg-card dark:bg-secondary hover:bg-accent inline-flex items-center justify-center"
+                        >
+                          <PaperclipIcon className="size-4 text-muted-foreground" />
+                        </button>
+                        <button
+                          type="button"
+                          className="gap-1.5 h-7 rounded-full border border-border dark:border-input bg-card dark:bg-secondary hover:bg-accent px-3 inline-flex items-center"
+                        >
+                          <CircleDashedIcon className="size-4 text-muted-foreground" />
+                          <span className="hidden sm:inline text-sm text-muted-foreground/70">Deep Search</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="gap-1.5 h-7 rounded-full border border-border dark:border-input bg-card dark:bg-secondary hover:bg-accent px-3 inline-flex items-center"
+                        >
+                          <SparklesIcon className="size-4 text-muted-foreground" />
+                          <span className="hidden sm:inline text-sm text-muted-foreground/70">Think</span>
+                        </button>
+                      </div>
+
+                      <button type="submit" disabled={pending || !allowed || description.trim().length === 0} className="h-7 px-4 gap-2 inline-flex items-center justify-center rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+                        {pending ? "Seldoning..." : "Send"}
+                      </button>
+                    </div>
+                  </div>
+                </form>
+
+                <div className="flex flex-wrap items-center justify-center gap-2 mt-3">
+                  <button type="button" className="gap-2 inline-flex items-center justify-center rounded-md text-sm font-medium h-9 px-4 py-2 border border-input bg-background hover:bg-accent">
+                    <WandSparklesIcon className="size-4" />
+                    <span>Quick Block</span>
+                  </button>
+                  <button type="button" className="gap-2 inline-flex items-center justify-center rounded-md text-sm font-medium h-9 px-4 py-2 border border-input bg-background hover:bg-accent">
+                    <SparklesIcon className="size-4" />
+                    <span>Full Feature</span>
+                  </button>
+                  <button type="button" className="gap-2 inline-flex items-center justify-center rounded-md text-sm font-medium h-9 px-4 py-2 border border-input bg-background hover:bg-accent">
+                    <BoxIcon className="size-4" />
+                    <span>Integration</span>
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-      ) : null}
-    </section>
+      </div>
+    </div>
   );
 }
