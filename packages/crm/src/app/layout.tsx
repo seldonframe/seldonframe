@@ -1,12 +1,16 @@
 import type { Metadata } from "next";
-import { Fira_Code } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import { DemoToastProvider } from "@/components/shared/demo-toast-provider";
 import { ThemeProvider } from "@/components/shared/theme-provider";
 import "./globals.css";
 
-const firaCode = Fira_Code({
-  variable: "--font-fira-code",
-  weight: ["400", "500", "600", "700"],
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
   subsets: ["latin"],
 });
 
@@ -30,12 +34,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${firaCode.variable} h-full antialiased`}
-      suppressHydrationWarning
-    >
-      <body className="min-h-full flex flex-col bg-background text-foreground">
+    <html lang="en" suppressHydrationWarning>
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+      >
         <ThemeProvider>
           <DemoToastProvider>{children}</DemoToastProvider>
         </ThemeProvider>
