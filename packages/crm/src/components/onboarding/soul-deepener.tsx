@@ -2,10 +2,25 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { CircleDashedIcon, MessageCircleDashedIcon, PaperclipIcon, SparklesIcon, WandSparklesIcon } from "lucide-react";
 import { completeSoulDeepenerAction, saveSoulDeepenerResponseAction, skipSoulDeepenerAction } from "@/lib/soul/actions";
 import type { SoulDeepSetupResponse } from "@/lib/soul/types";
 import { isDemoBlockedError, isDemoReadonlyClient } from "@/lib/demo/client";
 import { useDemoToast } from "@/components/shared/demo-toast-provider";
+
+/*
+  Square UI class reference (source of truth):
+  - templates/chat/components/chat/chat-conversation-view.tsx
+    - messages shell: "flex-1 overflow-y-auto px-4 md:px-8 py-8"
+    - thread width: "max-w-[640px] mx-auto space-y-6"
+    - composer footer: "border-t border-border px-4 md:px-8 py-[17px]"
+  - templates/chat/components/chat/chat-message.tsx
+    - message row: "flex gap-4" + "justify-start/justify-end"
+    - bubble: "rounded-2xl px-4 py-3 max-w-[80%]"
+  - templates/chat/components/chat/chat-input-box.tsx
+    - composer shell: "rounded-2xl border border-border bg-secondary ... p-1"
+    - composer inner: "rounded-xl border ... bg-card"
+*/
 
 type DeepenerQuestion = {
   field: string;
@@ -71,6 +86,7 @@ export function SoulDeepener({ existingResponses = [] }: SoulDeepenerProps) {
   const answeredCount = responses.length;
   const totalCount = deepenerQuestions.length;
   const isFinished = !nextQuestion;
+  const hasConversationState = responses.length > 0 || Boolean(confirmingField) || isFinished || Boolean(error);
 
   const automationSummary = useMemo(() => {
     return responses
@@ -207,32 +223,58 @@ export function SoulDeepener({ existingResponses = [] }: SoulDeepenerProps) {
   }
 
   return (
-    <section className="mx-auto w-full max-w-3xl space-y-4">
-      <div className="rounded-xl border bg-card overflow-hidden">
-        <div className="flex items-center justify-between gap-3 border-b border-border px-6 py-4">
-          <div className="space-y-1">
-            <h1 className="text-lg font-semibold tracking-tight text-foreground">Soul Deep Setup</h1>
-            <p className="text-xs text-muted-foreground">Set up automations in a conversation</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <div className="h-1.5 w-24 overflow-hidden rounded-full bg-muted">
-                <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${(Math.min(answeredCount, totalCount) / totalCount) * 100}%` }} />
-              </div>
-              <span className="text-xs font-medium text-muted-foreground">{Math.min(answeredCount, totalCount)}/{totalCount}</span>
-            </div>
-            <button type="button" className="crm-button-secondary h-8 px-3 text-xs" onClick={onSkip} disabled={pending}>
-              Skip for now
-            </button>
-          </div>
-        </div>
+    <div className="flex h-full flex-col overflow-hidden bg-background rounded-2xl border border-border">
+      <div className="flex-1 overflow-hidden relative">
+        <div className="relative z-10 h-full flex flex-col">
+          <div className="flex-1 overflow-y-auto px-4 md:px-8 py-8">
+            <div className="max-w-[640px] mx-auto space-y-6">
+              {!hasConversationState ? (
+                <div className="flex h-full flex-col items-center justify-center px-4 md:px-8">
+                  <div className="w-full max-w-[640px] space-y-9 -mt-12">
+                    <div className="flex justify-center">
+                      <div className="flex items-center justify-center size-8 rounded-full">
+                        <SparklesIcon className="size-20" />
+                      </div>
+                    </div>
 
-        <div className="flex flex-col">
-          <div className="flex-1 overflow-y-auto px-6 py-6">
-            <div className="space-y-6">
+                    <div className="space-y-4 text-center">
+                      <h1 className="text-2xl font-semibold tracking-tight">Hey! I&apos;m Seldon</h1>
+                      <p className="text-2xl text-foreground">Let&apos;s deepen your soul setup</p>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="rounded-2xl border border-border bg-secondary dark:bg-card p-1">
+                <div className="rounded-xl border border-border dark:border-transparent bg-card dark:bg-secondary p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium">Soul Deep Setup</p>
+                      <p className="text-xs text-muted-foreground">Set up automations in a conversation</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="gap-2 inline-flex items-center justify-center rounded-md text-sm font-medium h-8 px-3 py-1.5 border border-input bg-background hover:bg-accent"
+                      onClick={onSkip}
+                      disabled={pending}
+                    >
+                      Skip for now
+                    </button>
+                  </div>
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                    <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${(Math.min(answeredCount, totalCount) / totalCount) * 100}%` }} />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {Math.min(answeredCount, totalCount)}/{totalCount} answered
+                  </p>
+                </div>
+              </div>
+
               <div className="flex gap-4 justify-start">
                 <div className="shrink-0">
-                  <div className="size-8 rounded-full bg-secondary flex items-center justify-center text-xs font-bold text-primary">SF</div>
+                  <div className="size-8 rounded-full bg-secondary flex items-center justify-center">
+                    <SparklesIcon className="size-5" />
+                  </div>
                 </div>
                 <div className="rounded-2xl px-4 py-3 max-w-[80%] bg-secondary">
                   <p className="text-sm leading-relaxed">Your business is set up. Want to unlock automations? Tell me how your client journey works and I&apos;ll handle the rest.</p>
@@ -245,7 +287,9 @@ export function SoulDeepener({ existingResponses = [] }: SoulDeepenerProps) {
                   <div key={item.field} className="space-y-4">
                     <div className="flex gap-4 justify-start">
                       <div className="shrink-0">
-                        <div className="size-8 rounded-full bg-secondary flex items-center justify-center text-xs font-bold text-primary">SF</div>
+                        <div className="size-8 rounded-full bg-secondary flex items-center justify-center">
+                          <SparklesIcon className="size-5" />
+                        </div>
                       </div>
                       <div className="rounded-2xl px-4 py-3 max-w-[80%] bg-secondary">
                         <p className="text-sm leading-relaxed">{question?.question ?? item.question}</p>
@@ -263,15 +307,17 @@ export function SoulDeepener({ existingResponses = [] }: SoulDeepenerProps) {
               {confirmingField ? (
                 <div className="flex gap-4 justify-start">
                   <div className="shrink-0">
-                    <div className="size-8 rounded-full bg-secondary flex items-center justify-center text-xs font-bold text-primary">SF</div>
+                    <div className="size-8 rounded-full bg-secondary flex items-center justify-center">
+                      <SparklesIcon className="size-5" />
+                    </div>
                   </div>
                   <div className="rounded-2xl px-4 py-3 max-w-[80%] bg-secondary space-y-3">
                     <p className="text-sm leading-relaxed">Here&apos;s what I understood from that answer. Does this look right?</p>
                     <div className="flex items-center gap-2">
-                      <button type="button" className="crm-button-primary h-8 px-3 text-xs" onClick={onLooksGood} disabled={pending}>
+                      <button type="button" className="gap-2 inline-flex items-center justify-center rounded-md text-sm font-medium h-8 px-3 py-1.5 bg-primary text-primary-foreground hover:bg-primary/90" onClick={onLooksGood} disabled={pending}>
                         Looks good
                       </button>
-                      <button type="button" className="crm-button-secondary h-8 px-3 text-xs" onClick={onAdjustLastResponse} disabled={pending}>
+                      <button type="button" className="gap-2 inline-flex items-center justify-center rounded-md text-sm font-medium h-8 px-3 py-1.5 border border-input bg-background hover:bg-accent" onClick={onAdjustLastResponse} disabled={pending}>
                         Let me adjust
                       </button>
                     </div>
@@ -282,7 +328,9 @@ export function SoulDeepener({ existingResponses = [] }: SoulDeepenerProps) {
               {!confirmingField && nextQuestion ? (
                 <div className="flex gap-4 justify-start">
                   <div className="shrink-0">
-                    <div className="size-8 rounded-full bg-secondary flex items-center justify-center text-xs font-bold text-primary">SF</div>
+                    <div className="size-8 rounded-full bg-secondary flex items-center justify-center">
+                      <SparklesIcon className="size-5" />
+                    </div>
                   </div>
                   <div className="rounded-2xl px-4 py-3 max-w-[80%] bg-secondary">
                     <p className="text-sm leading-relaxed">
@@ -297,7 +345,9 @@ export function SoulDeepener({ existingResponses = [] }: SoulDeepenerProps) {
                 <div className="space-y-4">
                   <div className="flex gap-4 justify-start">
                     <div className="shrink-0">
-                      <div className="size-8 rounded-full bg-secondary flex items-center justify-center text-xs font-bold text-primary">SF</div>
+                      <div className="size-8 rounded-full bg-secondary flex items-center justify-center">
+                        <SparklesIcon className="size-5" />
+                      </div>
                     </div>
                     <div className="rounded-2xl px-4 py-3 max-w-[80%] bg-secondary space-y-3">
                       <p className="text-sm font-medium leading-relaxed">Your automations are configured</p>
@@ -306,56 +356,97 @@ export function SoulDeepener({ existingResponses = [] }: SoulDeepenerProps) {
                   </div>
                   <div className="ml-12 space-y-2">
                     {automationSummary.map((item) => (
-                      <div key={item.field} className="rounded-xl border bg-card p-3 text-sm text-foreground">
-                        {item.response}
+                      <div key={item.field} className="rounded-2xl border border-border bg-secondary dark:bg-card p-1">
+                        <div className="rounded-xl border border-border dark:border-transparent bg-card dark:bg-secondary p-3 text-sm text-foreground">{item.response}</div>
                       </div>
                     ))}
                   </div>
                   <div className="ml-12">
-                    <button type="button" className="crm-button-primary h-9 px-5" onClick={onFinish} disabled={pending}>
+                    <button type="button" className="gap-2 inline-flex items-center justify-center rounded-md text-sm font-medium h-9 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90" onClick={onFinish} disabled={pending}>
                       {pending ? "Finishing..." : "Finish deep setup"}
                     </button>
                   </div>
                 </div>
               ) : null}
+
+              {error ? <p className="text-sm text-muted-foreground">{error}</p> : null}
             </div>
           </div>
 
           {!confirmingField && nextQuestion ? (
-            <div className="border-t border-border px-6 py-4">
-              <div className="rounded-2xl border border-border bg-secondary p-1">
-                <div className="rounded-xl border border-transparent bg-card">
-                  <input
-                    className="crm-input h-10 w-full border-0 bg-transparent px-4 text-sm placeholder:text-muted-foreground/60 focus-visible:ring-0"
-                    value={input}
-                    onChange={(event) => setInput(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" && !event.shiftKey) {
-                        event.preventDefault();
-                        onSubmitResponse();
-                      }
-                    }}
-                    placeholder="Type your answer..."
-                    disabled={pending}
-                  />
-                  <div className="flex items-center justify-end px-4 py-2 border-t border-border/50">
-                    <button
-                      type="button"
-                      className="crm-button-primary h-7 px-4 text-xs"
-                      onClick={onSubmitResponse}
-                      disabled={pending || input.trim().length === 0}
-                    >
-                      {pending ? "Saving..." : "Send"}
-                    </button>
+            <div className="border-t border-border px-4 md:px-8 py-[17px]">
+              <div className="max-w-[640px] mx-auto">
+                <div className="rounded-2xl border border-border bg-secondary dark:bg-card p-1">
+                  <div className="rounded-xl border border-border dark:border-transparent bg-card dark:bg-secondary">
+                    <textarea
+                      value={input}
+                      onChange={(event) => setInput(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" && !event.shiftKey) {
+                          event.preventDefault();
+                          onSubmitResponse();
+                        }
+                      }}
+                      placeholder="Type your answer..."
+                      disabled={pending}
+                      className="min-h-[120px] resize-none border-0 bg-transparent px-4 py-3 text-base placeholder:text-muted-foreground/60 focus-visible:ring-0 focus-visible:ring-offset-0 w-full"
+                    />
+
+                    <div className="flex items-center justify-between px-4 py-3 border-t border-border/50">
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          className="size-7 rounded-full border border-border dark:border-input bg-card dark:bg-secondary hover:bg-accent inline-flex items-center justify-center"
+                        >
+                          <PaperclipIcon className="size-4 text-muted-foreground" />
+                        </button>
+                        <button
+                          type="button"
+                          className="gap-1.5 h-7 rounded-full border border-border dark:border-input bg-card dark:bg-secondary hover:bg-accent px-3 inline-flex items-center"
+                        >
+                          <CircleDashedIcon className="size-4 text-muted-foreground" />
+                          <span className="hidden sm:inline text-sm text-muted-foreground/70">Deep Setup</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="gap-1.5 h-7 rounded-full border border-border dark:border-input bg-card dark:bg-secondary hover:bg-accent px-3 inline-flex items-center"
+                        >
+                          <SparklesIcon className="size-4 text-muted-foreground" />
+                          <span className="hidden sm:inline text-sm text-muted-foreground/70">Reflect</span>
+                        </button>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={onSubmitResponse}
+                        disabled={pending || input.trim().length === 0}
+                        className="h-7 px-4 gap-2 inline-flex items-center justify-center rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                      >
+                        {pending ? "Saving..." : "Send"}
+                      </button>
+                    </div>
                   </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-center gap-2 mt-3">
+                  <button type="button" className="gap-2 inline-flex items-center justify-center rounded-md text-sm font-medium h-9 px-4 py-2 border border-input bg-background hover:bg-accent">
+                    <MessageCircleDashedIcon className="size-4" />
+                    <span>Client Journey</span>
+                  </button>
+                  <button type="button" className="gap-2 inline-flex items-center justify-center rounded-md text-sm font-medium h-9 px-4 py-2 border border-input bg-background hover:bg-accent">
+                    <WandSparklesIcon className="size-4" />
+                    <span>Follow-ups</span>
+                  </button>
+                  <button type="button" className="gap-2 inline-flex items-center justify-center rounded-md text-sm font-medium h-9 px-4 py-2 border border-input bg-background hover:bg-accent">
+                    <SparklesIcon className="size-4" />
+                    <span>Services</span>
+                  </button>
                 </div>
               </div>
             </div>
           ) : null}
         </div>
-
-        {error ? <p className="px-6 pb-4 text-sm text-red-500">{error}</p> : null}
       </div>
-    </section>
+    </div>
   );
 }
