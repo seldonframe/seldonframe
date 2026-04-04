@@ -112,6 +112,11 @@ export function AutomationBuilder() {
     { id: "node-condition", kind: "condition", value: "Contact field matches" },
     { id: "node-action", kind: "action", value: "Send email" },
   ]);
+  const [enabledByNodeId, setEnabledByNodeId] = useState<Record<string, boolean>>({
+    "node-trigger": true,
+    "node-condition": true,
+    "node-action": true,
+  });
 
   const sensors = useSensors(useSensor(PointerSensor));
 
@@ -135,7 +140,13 @@ export function AutomationBuilder() {
   }
 
   function addNode(kind: NodeKind, value: string) {
-    setNodes((current) => [...current, { id: `${kind}-${Date.now()}-${Math.random()}`, kind, value }]);
+    const id = `${kind}-${Date.now()}-${Math.random()}`;
+    setNodes((current) => [...current, { id, kind, value }]);
+    setEnabledByNodeId((current) => ({ ...current, [id]: true }));
+  }
+
+  function toggleRule(nodeId: string) {
+    setEnabledByNodeId((current) => ({ ...current, [nodeId]: !current[nodeId] }));
   }
 
   function addTriggerNode() {
@@ -156,7 +167,59 @@ export function AutomationBuilder() {
 
   return (
     <section className="space-y-4">
-      <div className="rounded-xl border bg-card grid gap-3 p-4 md:grid-cols-[1fr_auto_auto] md:items-end">
+      <div className="bg-card text-card-foreground rounded-xl border overflow-hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3.5 border-b">
+          <div>
+            <h3 className="font-medium text-base">Automation Rules</h3>
+            <p className="text-xs text-muted-foreground">Table layout with status toggles</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button type="button" className="crm-button-primary h-9 px-4" onClick={saveTemplate}>
+              Save Template
+            </button>
+            <button type="button" className="crm-button-secondary h-9 px-4 text-sm font-medium">
+              Run Test
+            </button>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="hover:bg-transparent bg-muted/30 border-b border-border/50">
+                <th className="h-10 px-4 text-left align-middle font-medium text-muted-foreground">Rule</th>
+                <th className="h-10 px-4 text-left align-middle font-medium text-muted-foreground">Type</th>
+                <th className="h-10 px-4 text-left align-middle font-medium text-muted-foreground">Status</th>
+                <th className="h-10 px-4 text-left align-middle font-medium text-muted-foreground">Toggle</th>
+              </tr>
+            </thead>
+            <tbody>
+              {nodes.map((node) => (
+                <tr key={`rule-${node.id}`} className="border-b border-border/50">
+                  <td className="p-4 align-middle font-medium text-sm">{node.value}</td>
+                  <td className="p-4 align-middle text-sm capitalize">{node.kind}</td>
+                  <td className="p-4 align-middle">
+                    <span className={`rounded-full px-2 py-1 text-xs ${enabledByNodeId[node.id] ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-[hsl(var(--muted)/0.5)] text-[hsl(var(--muted-foreground))]"}`}>
+                      {enabledByNodeId[node.id] ? "Active" : "Paused"}
+                    </span>
+                  </td>
+                  <td className="p-4 align-middle">
+                    <button
+                      type="button"
+                      onClick={() => toggleRule(node.id)}
+                      className="h-8 px-3 rounded-md border border-border bg-muted/50 text-xs hover:bg-accent"
+                    >
+                      {enabledByNodeId[node.id] ? "Disable" : "Enable"}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="rounded-xl border bg-card grid gap-3 p-4 md:grid-cols-[1fr_auto] md:items-end">
         <div>
           <label className="text-label text-muted-foreground" htmlFor="automation-name">
             Automation Name
@@ -168,12 +231,7 @@ export function AutomationBuilder() {
             className="crm-input mt-1 h-9 w-full px-3"
           />
         </div>
-        <button type="button" className="crm-button-primary h-9 px-4" onClick={saveTemplate}>
-          Save Template
-        </button>
-        <button type="button" className="crm-button-secondary h-9 px-4 text-sm font-medium">
-          Run Test
-        </button>
+        <p className="text-xs text-muted-foreground">Use the node library below to add, reorder, and tune rule logic.</p>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[320px_1fr_340px]">
