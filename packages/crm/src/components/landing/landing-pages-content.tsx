@@ -4,6 +4,17 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { Copy, ExternalLink, FileText, Layout, Megaphone, Calendar } from "lucide-react";
 
+/*
+  Square UI class reference (source of truth):
+  - templates/dashboard-2/components/dashboard/deals-table.tsx
+    - section header row: "flex items-center justify-between border-b border-border px-5 py-3"
+    - card/list shell: "rounded-xl border bg-card"
+  - templates/tasks/components/tasks/filters/tasks-filters.tsx
+    - control row spacing: "flex items-center justify-between gap-2 flex-wrap"
+  - templates/dashboard-2/components/dashboard/welcome-section.tsx
+    - helper copy: "text-sm sm:text-base text-muted-foreground"
+*/
+
 type PageRow = {
   id: string;
   title: string;
@@ -67,7 +78,7 @@ export function LandingPagesContent({
         <div className="text-center">
           <p className="text-3xl">🚀</p>
           <h2 className="mt-3 text-xl font-medium text-foreground">Create your first landing page</h2>
-          <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">Choose a template to get started.</p>
+          <p className="mt-1 text-sm sm:text-base text-muted-foreground">Choose a template to get started.</p>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -82,7 +93,7 @@ export function LandingPagesContent({
                 {tpl.icon}
               </div>
               <p className="text-base font-medium text-foreground">{tpl.title}</p>
-              <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">{tpl.description}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{tpl.description}</p>
             </button>
           ))}
         </div>
@@ -92,8 +103,8 @@ export function LandingPagesContent({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-end justify-between gap-3">
-        <p className="text-sm text-[hsl(var(--muted-foreground))]">{pages.length} page{pages.length !== 1 ? "s" : ""}</p>
+      <div className="flex items-center justify-between border-b border-border px-5 py-3">
+        <p className="text-xs text-muted-foreground">{pages.length} page{pages.length !== 1 ? "s" : ""}</p>
         <button type="button" className="crm-button-primary h-9 px-6" onClick={() => setShowCreate(true)}>
           Create Page
         </button>
@@ -143,7 +154,7 @@ export function LandingPagesContent({
             className="h-full flex-1 bg-[hsl(var(--muted-foreground)/0.45)]"
             onClick={() => setShowCreate(false)}
           />
-          <aside className="h-full w-full max-w-md border-l border-[hsl(var(--border))] bg-[hsl(var(--background))] p-6 shadow-2xl">
+          <aside className="h-full w-full max-w-md border-l border-border bg-[hsl(var(--background))] p-6 shadow-2xl">
             <div className="mb-5 flex items-center justify-between">
               <h2 className="text-xl font-medium text-foreground">New landing page</h2>
               <button type="button" className="crm-button-ghost h-9 px-4" onClick={() => setShowCreate(false)}>
@@ -161,17 +172,17 @@ export function LandingPagesContent({
               className="space-y-4"
             >
               <div>
-                <label htmlFor="lp-title" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Page title</label>
+                <label htmlFor="lp-title" className="mb-1 block text-sm text-muted-foreground">Page title</label>
                 <input id="lp-title" className="crm-input h-9 w-full px-3" name="title" placeholder="My Landing Page" required />
               </div>
 
               <div>
-                <label htmlFor="lp-slug" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">URL slug</label>
+                <label htmlFor="lp-slug" className="mb-1 block text-sm text-muted-foreground">URL slug</label>
                 <input id="lp-slug" className="crm-input h-9 w-full px-3" name="slug" placeholder="my-landing-page" required />
               </div>
 
               <div>
-                <label htmlFor="lp-mode" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Start mode</label>
+                <label htmlFor="lp-mode" className="mb-1 block text-sm text-muted-foreground">Start mode</label>
                 <select id="lp-mode" className="crm-input h-9 w-full px-3" name="mode" defaultValue="soul-template">
                   <option value="soul-template">From Soul Template</option>
                   <option value="template">Start from Template</option>
@@ -180,7 +191,7 @@ export function LandingPagesContent({
               </div>
 
               <div>
-                <label htmlFor="lp-template" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Template preset</label>
+                <label htmlFor="lp-template" className="mb-1 block text-sm text-muted-foreground">Template preset</label>
                 <select id="lp-template" className="crm-input h-9 w-full px-3" name="template" defaultValue="lead-capture">
                   <option value="lead-capture">Lead Capture</option>
                   <option value="service-overview">Service Overview</option>

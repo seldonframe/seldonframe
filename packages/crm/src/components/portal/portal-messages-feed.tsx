@@ -48,7 +48,7 @@ export function PortalMessagesFeed({ orgSlug, rows }: { orgSlug: string; rows: P
 
           <button
             type="button"
-            className="rounded-md border border-[hsl(var(--border))] px-2 py-1 text-xs"
+            className="rounded-md border border-border px-2 py-1 text-xs"
             disabled={pending}
             onClick={() => {
               startTransition(async () => {
@@ -68,7 +68,7 @@ export function PortalMessagesFeed({ orgSlug, rows }: { orgSlug: string; rows: P
             href={row.attachmentUrl}
             target="_blank"
             rel="noreferrer"
-            className="mt-2 inline-flex rounded-md border border-[hsl(var(--border))] px-2 py-1 text-xs text-primary"
+            className="mt-2 inline-flex rounded-md border border-border px-2 py-1 text-xs text-primary"
           >
             Attachment: {row.attachmentName ?? "Open file"}
           </a>

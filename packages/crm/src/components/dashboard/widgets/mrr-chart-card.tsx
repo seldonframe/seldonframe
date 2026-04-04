@@ -12,7 +12,7 @@ export function MrrChartCard({ data, total }: { data: MrrPoint[]; total: number 
     <article className="crm-card">
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-[16px] font-semibold">Monthly Recurring Revenue</h3>
-        <span className="inline-flex rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--primary)/0.1)] px-2 py-1 text-xs font-medium text-primary">
+        <span className="inline-flex rounded-md border border-border bg-[hsl(var(--primary)/0.1)] px-2 py-1 text-xs font-medium text-primary">
           ${total.toLocaleString()}
         </span>
       </div>

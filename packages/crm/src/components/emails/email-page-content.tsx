@@ -3,6 +3,20 @@
 import { useState, useTransition } from "react";
 import { BUILT_IN_EVENT_TYPE_SUGGESTIONS, isValidEventType } from "@/lib/events/event-types";
 
+/*
+  Square UI class reference (source of truth):
+  - templates-baseui/emails/components/emails/emails-horizontal-nav.tsx
+    - nav shell: "flex h-[54px] items-center border-b border-border bg-background px-3 md:px-4"
+    - folder action button: "h-[30px] gap-1.5"
+    - active folder state: "bg-muted text-foreground hover:bg-muted"
+  - templates-baseui/emails/components/emails/email-list.tsx
+    - list shell: "flex h-full flex-col overflow-hidden bg-card"
+    - list header row: "flex items-center justify-between border-b border-border px-5 py-3"
+    - row shell: "flex w-full gap-2.5 border-b border-border p-4 text-left transition-colors hover:bg-muted/70"
+  - templates-baseui/emails/components/emails/emails-header.tsx
+    - helper text: "text-xs text-muted-foreground"
+*/
+
 type TemplateRow = {
   id: string;
   name: string;
@@ -62,23 +76,25 @@ export function EmailPageContent({
 
   return (
     <>
-      <div className="flex gap-1 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.35)] p-1">
-        {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            className={`rounded-md px-4 py-2 text-sm transition ${activeTab === tab.key ? "bg-primary/15 text-primary" : "text-[hsl(var(--muted-foreground))] hover:text-foreground"}`}
-            onClick={() => setActiveTab(tab.key)}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div className="flex h-[54px] items-center border-b border-border bg-background px-3 md:px-4">
+        <div className="flex items-center gap-2.5 w-full">
+          {tabs.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              className={`h-[30px] gap-1.5 rounded-md px-3 text-sm transition ${activeTab === tab.key ? "bg-muted text-foreground hover:bg-muted" : "text-muted-foreground hover:text-foreground"}`}
+              onClick={() => setActiveTab(tab.key)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {activeTab === "templates" ? (
         <section className="space-y-4">
-          <div className="flex items-end justify-between gap-3">
-            <p className="text-sm text-[hsl(var(--muted-foreground))]">{templates.length} template{templates.length !== 1 ? "s" : ""}</p>
+          <div className="flex items-center justify-between border-b border-border px-5 py-3">
+            <p className="text-xs text-muted-foreground">{templates.length} template{templates.length !== 1 ? "s" : ""}</p>
             <button type="button" className="crm-button-primary h-10 px-6" onClick={() => setShowCreate(true)}>
               Create Template
             </button>
@@ -88,7 +104,7 @@ export function EmailPageContent({
             <article className="rounded-xl border bg-card flex min-h-52 flex-col items-center justify-center p-8 text-center">
               <p className="text-3xl">✉️</p>
               <p className="mt-3 text-lg font-medium text-foreground">Create your first email template</p>
-              <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">Templates let you send consistent, personalized emails.</p>
+              <p className="mt-1 text-xs text-muted-foreground">Templates let you send consistent, personalized emails.</p>
               <button type="button" className="crm-button-primary mt-5 h-10 px-6" onClick={() => setShowCreate(true)}>
                 Create Template
               </button>
@@ -101,9 +117,9 @@ export function EmailPageContent({
                     <h3 className="text-base font-medium text-foreground">{tpl.name}</h3>
                     <span className="rounded-full bg-primary/10 px-2 py-1 text-xs text-primary">{tpl.tag || "general"}</span>
                   </div>
-                  <p className="text-sm text-[hsl(var(--muted-foreground))]">{tpl.subject}</p>
+                  <p className="text-sm text-muted-foreground">{tpl.subject}</p>
                   {tpl.triggerEvent ? (
-                    <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">
+                    <p className="mt-2 text-xs text-muted-foreground">
                       Trigger: <span className="font-mono text-foreground">{tpl.triggerEvent}</span>
                     </p>
                   ) : null}
@@ -121,12 +137,12 @@ export function EmailPageContent({
       {activeTab === "sent" ? (
         <section className="space-y-4">
           {sent.length === 0 ? (
-            <article className="rounded-xl border bg-card p-6 text-sm text-[hsl(var(--muted-foreground))]">No sent emails yet.</article>
+            <article className="rounded-xl border bg-card p-6 text-sm text-muted-foreground">No sent emails yet.</article>
           ) : (
-            <article className="rounded-xl border bg-card overflow-hidden">
+            <article className="flex h-full flex-col overflow-hidden rounded-xl border bg-card">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-muted/50 text-left text-xs font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                  <tr className="bg-muted/50 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     <th className="px-4 py-3">To</th>
                     <th className="px-4 py-3">Subject</th>
                     <th className="px-4 py-3">Status</th>
@@ -136,14 +152,14 @@ export function EmailPageContent({
                 </thead>
                 <tbody>
                   {sent.map((row) => (
-                    <tr key={row.id} className="border-t border-[hsl(var(--border))] hover:bg-[hsl(var(--muted)/0.35)]">
+                    <tr key={row.id} className="border-b border-border transition-colors hover:bg-muted/70">
                       <td className="px-4 py-3 text-foreground">{row.toEmail}</td>
-                      <td className="px-4 py-3 text-[hsl(var(--muted-foreground))]">{row.subject}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{row.subject}</td>
                       <td className="px-4 py-3">
                         <span className={`rounded-full px-2 py-1 text-xs ${statusBadge(row.status)}`}>{row.status}</span>
                       </td>
-                      <td className="px-4 py-3 text-[hsl(var(--muted-foreground))]">{row.provider}</td>
-                      <td className="px-4 py-3 text-[hsl(var(--muted-foreground))]">
+                      <td className="px-4 py-3 text-muted-foreground">{row.provider}</td>
+                      <td className="px-4 py-3 text-muted-foreground">
                         {row.sentAt ? new Date(row.sentAt).toLocaleDateString([], { month: "short", day: "numeric" }) : "—"}
                       </td>
                     </tr>
@@ -163,7 +179,7 @@ export function EmailPageContent({
             className="h-full flex-1 bg-[hsl(var(--muted-foreground)/0.45)]"
             onClick={() => setShowCreate(false)}
           />
-          <aside className="h-full w-full max-w-md border-l border-[hsl(var(--border))] bg-[hsl(var(--background))] p-6 shadow-2xl">
+          <aside className="h-full w-full max-w-md border-l border-border bg-[hsl(var(--background))] p-6 shadow-2xl">
             <div className="mb-5 flex items-center justify-between">
               <h2 className="text-xl font-medium text-foreground">New email template</h2>
               <button type="button" className="crm-button-ghost h-9 px-4" onClick={() => setShowCreate(false)}>Close</button>
@@ -188,23 +204,23 @@ export function EmailPageContent({
               className="space-y-4"
             >
               <div>
-                <label htmlFor="tpl-name" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Template name</label>
+                <label htmlFor="tpl-name" className="mb-1 block text-sm text-muted-foreground">Template name</label>
                 <input id="tpl-name" className="crm-input h-9 w-full px-3" name="name" placeholder="Welcome Email" required />
               </div>
               <div>
-                <label htmlFor="tpl-tag" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Tag</label>
+                <label htmlFor="tpl-tag" className="mb-1 block text-sm text-muted-foreground">Tag</label>
                 <input id="tpl-tag" className="crm-input h-9 w-full px-3" name="tag" placeholder="welcome" defaultValue="general" />
               </div>
               <div>
-                <label htmlFor="tpl-subject" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Subject</label>
+                <label htmlFor="tpl-subject" className="mb-1 block text-sm text-muted-foreground">Subject</label>
                 <input id="tpl-subject" className="crm-input h-9 w-full px-3" name="subject" placeholder="Welcome to {{businessName}}" required />
               </div>
               <div>
-                <label htmlFor="tpl-body" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Body</label>
+                <label htmlFor="tpl-body" className="mb-1 block text-sm text-muted-foreground">Body</label>
                 <textarea id="tpl-body" className="crm-input min-h-32 w-full p-3" name="body" placeholder="Hi {{firstName}}," required />
               </div>
               <div>
-                <label htmlFor="tpl-trigger-event" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Trigger event (optional)</label>
+                <label htmlFor="tpl-trigger-event" className="mb-1 block text-sm text-muted-foreground">Trigger event (optional)</label>
                 <input
                   id="tpl-trigger-event"
                   className="crm-input h-9 w-full px-3"
@@ -224,7 +240,7 @@ export function EmailPageContent({
                     <option key={eventType} value={eventType} />
                   ))}
                 </datalist>
-                <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">Uses lowercase entity.action format. Leave blank for manual sends only.</p>
+                <p className="mt-1 text-xs text-muted-foreground">Uses lowercase entity.action format. Leave blank for manual sends only.</p>
                 {triggerEventError ? <p className="mt-1 text-xs text-red-700 dark:text-red-300">{triggerEventError}</p> : null}
               </div>
               <div className="pt-2">

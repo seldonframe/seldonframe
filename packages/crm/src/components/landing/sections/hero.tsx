@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import type { HeroSectionContent } from "./types";
 
 export function HeroSection({
@@ -30,11 +31,11 @@ export function HeroSection({
           </div>
         </div>
 
-        <div className="glass-card rounded-3xl p-3">
+        <div className="rounded-xl border bg-card p-3">
           {heroVideo ? (
             <video controls className="h-full w-full rounded-2xl object-cover" src={heroVideo} />
           ) : heroImage ? (
-            <img src={heroImage} alt={headline} className="h-full w-full rounded-2xl object-cover" />
+            <Image src={heroImage} alt={headline} width={960} height={720} className="h-full w-full rounded-2xl object-cover" />
           ) : (
             <div className="flex min-h-72 items-center justify-center rounded-2xl bg-[hsl(var(--muted)/0.35)] text-sm text-[hsl(var(--muted-foreground))]">
               Add hero media

@@ -9,13 +9,13 @@ export function FeaturesSection({ headline, features, image }: FeaturesSectionCo
           <h2 className="text-3xl font-semibold text-foreground md:text-4xl">{headline}</h2>
           <div className="mt-6 flex flex-wrap gap-2.5">
             {features.map((feature, index) => (
-              <span key={`${feature}-${index}`} className="rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.45)] px-3.5 py-1.5 text-sm font-medium text-foreground">
+              <span key={`${feature}-${index}`} className="rounded-full border border-border bg-[hsl(var(--muted)/0.45)] px-3.5 py-1.5 text-sm font-medium text-foreground">
                 {feature}
               </span>
             ))}
           </div>
         </div>
-        <div className="glass-card rounded-3xl p-3 md:p-4">
+        <div className="rounded-xl border bg-card p-3 md:p-4">
           {image ? (
             <Image src={image} alt={headline} width={960} height={720} className="h-full w-full rounded-2xl object-cover" />
           ) : (

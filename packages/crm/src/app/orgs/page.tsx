@@ -31,7 +31,7 @@ export default async function OrganizationsPage() {
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {rows.map((org) => (
-            <article key={org.id} className="glass-card space-y-3 rounded-2xl p-5">
+            <article key={org.id} className="space-y-3 rounded-xl border bg-card p-5">
               <div>
                 <p className="text-card-title">{org.name}</p>
                 <p className="text-xs text-[hsl(var(--muted-foreground))]">/{org.slug}</p>
@@ -60,7 +60,7 @@ export default async function OrganizationsPage() {
           ))}
         </div>
 
-        <section className="glass-card rounded-2xl p-5">
+        <section className="rounded-xl border bg-card p-5">
           <h2 className="text-section-title">Add Client Organization</h2>
           <form action={createManagedOrganizationAction} className="mt-4 grid gap-3 md:grid-cols-2">
             <div className="space-y-1 md:col-span-2">

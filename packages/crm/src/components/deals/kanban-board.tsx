@@ -39,7 +39,7 @@ function DraggableDealCard({ deal, active }: { deal: Deal; active: boolean }) {
       transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
       whileHover={{ y: -2, boxShadow: "var(--shadow-card-hover)" }}
       whileTap={{ y: -3, boxShadow: "var(--shadow-card-hover)" }}
-      className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-3 transition-all"
+      className="rounded-lg border border-border bg-card p-3 transition-all"
       data-active={active}
       {...attributes}
       {...listeners}

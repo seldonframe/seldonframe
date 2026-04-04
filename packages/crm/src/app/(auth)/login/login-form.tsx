@@ -97,7 +97,7 @@ export function LoginForm() {
       {state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
 
       {state.sent && state.email ? (
-        <div className="space-y-3 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4">
+        <div className="space-y-3 rounded-xl border border-border bg-card p-4">
           <p className="text-sm text-foreground">
             Magic link sent ✨ Check your inbox for <span className="font-medium">{state.email}</span>. Click the link to sign in.
           </p>

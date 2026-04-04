@@ -21,11 +21,11 @@ export default async function PortalClientLayout({
         </div>
 
         <nav className="flex items-center gap-2 text-sm">
-          <Link href={`/portal/${orgSlug}`} className="rounded border border-[hsl(var(--border))] px-3 py-1.5">Overview</Link>
-          <Link href={`/portal/${orgSlug}/messages`} className="rounded border border-[hsl(var(--border))] px-3 py-1.5">Messages</Link>
-          <Link href={`/portal/${orgSlug}/resources`} className="rounded border border-[hsl(var(--border))] px-3 py-1.5">Resources</Link>
+          <Link href={`/portal/${orgSlug}`} className="rounded border border-border px-3 py-1.5">Overview</Link>
+          <Link href={`/portal/${orgSlug}/messages`} className="rounded border border-border px-3 py-1.5">Messages</Link>
+          <Link href={`/portal/${orgSlug}/resources`} className="rounded border border-border px-3 py-1.5">Resources</Link>
           <form action={clearPortalSessionAction.bind(null, orgSlug)}>
-            <button type="submit" className="rounded border border-[hsl(var(--border))] px-3 py-1.5">Logout</button>
+            <button type="submit" className="rounded border border-border px-3 py-1.5">Logout</button>
           </form>
         </nav>
       </header>

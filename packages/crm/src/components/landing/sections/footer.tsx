@@ -32,7 +32,7 @@ export function FooterSection({ businessName, description, links = [], socials =
   }
 
   return (
-    <footer className="border-t border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.2)] px-5 py-12">
+    <footer className="border-t border-border bg-[hsl(var(--muted)/0.2)] px-5 py-12">
       <div className="mx-auto grid w-full max-w-6xl gap-6 md:grid-cols-[1fr,auto,auto] md:items-start">
         <div>
           <p className="text-sm font-semibold text-foreground">{businessName}</p>

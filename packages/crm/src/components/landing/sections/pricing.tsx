@@ -10,7 +10,7 @@ export function PricingSection({ headline, tiers }: PricingSectionContent) {
           {tiers.map((tier, index) => (
             <article
               key={`${tier.name}-${index}`}
-              className={`relative glass-card rounded-2xl p-6 md:p-7 ${tier.popular ? "border-primary/50" : ""}`}
+              className={`relative rounded-xl border bg-card p-6 md:p-7 ${tier.popular ? "border-primary/50" : ""}`}
             >
               {tier.popular ? <span className="absolute right-4 top-4 rounded-full bg-primary px-2 py-1 text-[10px] font-semibold text-primary-foreground">Popular</span> : null}
               <p className="text-sm font-medium text-foreground">{tier.name}</p>

@@ -50,7 +50,7 @@ export function PortalResourceList({ orgSlug, rows }: { orgSlug: string; rows: R
                     </Link>
                   ) : null}
                   {!row.viewedAt ? (
-                    <button type="button" className="h-8 rounded border border-[hsl(var(--border))] px-2 text-xs" disabled={pending} onClick={() => markViewed(row.id)}>
+                    <button type="button" className="h-8 rounded border border-border px-2 text-xs" disabled={pending} onClick={() => markViewed(row.id)}>
                       Mark Viewed
                     </button>
                   ) : null}

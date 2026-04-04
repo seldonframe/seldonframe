@@ -9,7 +9,7 @@ export function TestimonialsSection({ headline, testimonials }: TestimonialsSect
         <h2 className="text-center text-3xl font-semibold text-foreground md:text-4xl">{headline}</h2>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {testimonials.map((item, index) => (
-            <article key={`${item.author}-${index}`} className="glass-card rounded-2xl p-6 md:p-7">
+            <article key={`${item.author}-${index}`} className="rounded-xl border bg-card p-6 md:p-7">
               {item.rating ? (
                 <div className="mb-3 flex items-center gap-1 text-amber-400" aria-label={`${item.rating} star rating`}>
                   {Array.from({ length: Math.max(1, Math.min(5, item.rating)) }).map((_, starIndex) => (

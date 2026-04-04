@@ -17,7 +17,7 @@ export function BenefitsSection({ headline, benefits }: BenefitsSectionContent) 
         <h2 className="text-center text-3xl font-semibold text-foreground md:text-4xl">{headline}</h2>
         <div className="grid gap-4 md:grid-cols-3">
           {benefits.map((benefit, index) => (
-            <article key={`${benefit.title}-${index}`} className="glass-card rounded-2xl p-6 md:p-7">
+            <article key={`${benefit.title}-${index}`} className="rounded-xl border bg-card p-6 md:p-7">
               <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[hsl(var(--muted)/0.5)] text-primary">
                 {benefit.icon && iconByName[benefit.icon] ? (() => {
                   const Icon = iconByName[benefit.icon];

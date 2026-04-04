@@ -12,7 +12,7 @@ export default function SignupPage() {
         <SignupForm />
       </div>
 
-      <footer className="border-t border-[hsl(var(--border))] pt-4 text-xs text-[hsl(var(--color-text-secondary))]">
+      <footer className="border-t border-border pt-4 text-xs text-[hsl(var(--color-text-secondary))]">
         <div className="flex flex-wrap items-center gap-3">
           <Link href="/privacy" className="underline-offset-4 hover:underline">
             Privacy Policy

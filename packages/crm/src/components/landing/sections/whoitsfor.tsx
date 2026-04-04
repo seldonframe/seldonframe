@@ -8,7 +8,7 @@ export function WhoItsForSection({ headline, personas }: WhoItsForSectionContent
         <h2 className="text-center text-3xl font-semibold text-foreground md:text-4xl">{headline}</h2>
         <div className="grid gap-4 md:grid-cols-3">
           {personas.map((persona, index) => (
-            <article key={`${persona.name}-${index}`} className="glass-card rounded-2xl p-6 md:p-7">
+            <article key={`${persona.name}-${index}`} className="rounded-xl border bg-card p-6 md:p-7">
               {persona.avatar ? (
                 <Image src={persona.avatar} alt={persona.name} width={48} height={48} className="h-12 w-12 rounded-full object-cover" />
               ) : (

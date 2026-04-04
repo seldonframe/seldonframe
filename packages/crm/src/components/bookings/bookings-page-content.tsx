@@ -2,6 +2,18 @@
 
 import { useMemo, useState, useTransition } from "react";
 
+/*
+  Square UI class reference (source of truth):
+  - templates-baseui/calendar/components/calendar/calendar-controls.tsx
+    - controls shell: "px-3 md:px-6 py-4 border-b border-border"
+    - control row: "flex items-center gap-2 md:gap-3 flex-wrap"
+  - templates-baseui/calendar/components/calendar/calendar-header.tsx
+    - compact title: "text-sm md:text-base lg:text-lg font-semibold text-foreground truncate"
+    - muted helper: "text-xs text-muted-foreground"
+  - templates-baseui/calendar/components/calendar/event-card.tsx
+    - event row shell: "bg-card border border-border rounded-lg ... hover:bg-muted transition-colors"
+*/
+
 type SuggestedService = {
   name: string;
   duration?: string;
@@ -148,21 +160,24 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
   return (
     <>
       <section className="space-y-4">
-        <div className="flex items-end justify-between gap-3">
+        <div className="border-b border-border px-3 md:px-6 py-4">
+          <div className="flex items-center gap-2 md:gap-3 flex-wrap">
           <div>
-            <p className="text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">Appointment Types</p>
-            <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">Share the link and let {labels.contact.plural.toLowerCase()} book with you.</p>
+            <p className="text-sm md:text-base lg:text-lg font-semibold text-foreground truncate">Appointment Types</p>
+            <p className="mt-1 text-xs text-muted-foreground">Share the link and let {labels.contact.plural.toLowerCase()} book with you.</p>
           </div>
+          <div className="ml-auto" />
           <button type="button" className="crm-button-primary h-10 px-6" onClick={() => setIsPanelOpen(true)}>
             Create Type
           </button>
+        </div>
         </div>
 
         {bookingTypes.length === 0 ? (
           <article className="rounded-xl border bg-card flex min-h-52 flex-col items-center justify-center p-8 text-center">
             <p className="text-3xl">📅</p>
             <p className="mt-3 text-lg font-medium text-foreground">Create your first appointment type</p>
-            <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">Share the link and let {labels.contact.plural.toLowerCase()} book with you.</p>
+            <p className="mt-1 text-xs text-muted-foreground">Share the link and let {labels.contact.plural.toLowerCase()} book with you.</p>
             <button type="button" className="crm-button-primary mt-5 h-10 px-6" onClick={() => setIsPanelOpen(true)}>
               Create Type
             </button>
@@ -187,7 +202,7 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
                     {metadata?.maxBookingsPerDay ? ` • Max ${metadata.maxBookingsPerDay}/day` : ""}
                   </p>
 
-                  <div className="mt-4 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] p-3">
+                  <div className="mt-4 rounded-lg border border-border bg-[hsl(var(--muted)/0.3)] p-3">
                     <p className="text-xs uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Public URL</p>
                     <p className="mt-1 truncate text-sm text-[hsl(var(--foreground))]">{publicUrl || "Set org slug to enable"}</p>
                     <div className="mt-3 flex gap-2">
@@ -224,8 +239,8 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
       </section>
 
       <section className="space-y-4">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">Upcoming {labels.activity.plural}</p>
+        <div className="border-b border-border px-3 md:px-6 py-4">
+          <p className="text-sm md:text-base lg:text-lg font-semibold text-foreground truncate">Upcoming {labels.activity.plural}</p>
         </div>
 
         {upcomingGrouped.length === 0 ? (
@@ -235,7 +250,7 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
             <div className="space-y-4">
               {upcomingGrouped.map((group) => (
                 <div key={group.key}>
-                  <p className="mb-2 text-xs font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">{group.label}</p>
+                  <p className="mb-2 text-xs text-muted-foreground">{group.label}</p>
                   <ul className="space-y-2">
                     {group.rows.map((row) => {
                       const startsAt = new Date(row.startsAt);
@@ -243,10 +258,10 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
                       const person = linkedContact ? `${linkedContact.firstName} ${linkedContact.lastName ?? ""}`.trim() : labels.contact.singular;
 
                       return (
-                        <li key={row.id} className="flex items-center justify-between gap-3 rounded-lg border border-[hsl(var(--border))] px-3 py-3 hover:bg-[hsl(var(--muted)/0.35)]">
+                        <li key={row.id} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-3 hover:bg-muted transition-colors">
                           <div className="min-w-0">
                             <p className="text-sm text-foreground">{row.title}</p>
-                            <p className="text-xs text-[hsl(var(--muted-foreground))]">{person}</p>
+                            <p className="text-xs text-muted-foreground">{person}</p>
                           </div>
                           <div className="flex items-center gap-3">
                             <p className="text-sm text-primary">{startsAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</p>
@@ -271,7 +286,7 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
             className="h-full flex-1 bg-[hsl(var(--muted-foreground)/0.45)]"
             onClick={() => setIsPanelOpen(false)}
           />
-          <aside className="h-full w-full max-w-md border-l border-[hsl(var(--border))] bg-[hsl(var(--background))] p-6 shadow-2xl">
+          <aside className="h-full w-full max-w-md border-l border-border bg-[hsl(var(--background))] p-6 shadow-2xl">
             <div className="mb-5 flex items-center justify-between">
               <h2 className="text-xl font-medium text-foreground">Create appointment type</h2>
               <button type="button" className="crm-button-ghost h-9 px-4" onClick={() => setIsPanelOpen(false)}>
@@ -397,7 +412,7 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
                 />
               </div>
 
-              <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.25)] p-3">
+              <div className="rounded-xl border border-border bg-[hsl(var(--muted)/0.25)] p-3">
                 <p className="mb-3 text-sm font-medium text-foreground">Working hours</p>
                 <div className="space-y-2">
                   {availabilityDefaults.map((day) => (

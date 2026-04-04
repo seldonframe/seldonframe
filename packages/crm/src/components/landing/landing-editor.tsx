@@ -115,7 +115,7 @@ export function LandingEditor({
         <button
           type="button"
           onClick={togglePublish}
-          className="h-9 rounded-md border border-[hsl(var(--border))] px-3 text-sm font-medium"
+          className="crm-button-secondary h-9 px-3 text-sm"
           disabled={pending}
         >
           {status === "published" ? "Unpublish" : "Publish"}
@@ -124,7 +124,7 @@ export function LandingEditor({
         <span className="crm-badge">{status}</span>
       </div>
 
-      <div className="grid gap-3 rounded-xl border border-[hsl(var(--border))] p-3 md:grid-cols-2">
+      <div className="grid gap-3 rounded-xl border border-border p-3 md:grid-cols-2">
         <label className="text-xs text-[hsl(var(--muted-foreground))]">
           Title
           <input className="crm-input mt-1 h-10 w-full px-3" value={pageTitle} onChange={(event) => setPageTitle(event.target.value)} />

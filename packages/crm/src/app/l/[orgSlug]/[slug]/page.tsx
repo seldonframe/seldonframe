@@ -30,7 +30,7 @@ export default async function PublicLandingPage({
         <style dangerouslySetInnerHTML={{ __html: payload.page.contentCss }} />
         <div dangerouslySetInnerHTML={{ __html: payload.page.contentHtml }} />
         {showBadge ? (
-          <div className="flex justify-center border-t border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.2)] py-4">
+          <div className="flex justify-center border-t border-border bg-[hsl(var(--muted)/0.2)] py-4">
             <PoweredByBadge />
           </div>
         ) : null}
@@ -42,7 +42,7 @@ export default async function PublicLandingPage({
     <main className="min-h-screen bg-background text-foreground">
       <PageRenderer sections={(payload.page.sections as LandingSection[]) ?? []} />
       {showBadge ? (
-        <div className="flex justify-center border-t border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.2)] py-4">
+        <div className="flex justify-center border-t border-border bg-[hsl(var(--muted)/0.2)] py-4">
           <PoweredByBadge />
         </div>
       ) : null}

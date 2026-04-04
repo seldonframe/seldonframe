@@ -73,7 +73,7 @@ export function EmailListTable({ rows }: { rows: EmailRow[] }) {
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    className="h-8 rounded border border-[hsl(var(--border))] px-2 text-xs"
+                    className="h-8 rounded border border-border px-2 text-xs"
                     disabled={pending}
                     onClick={() => withDemoGuard(() => markEmailOpenedAction(row.id))}
                   >
@@ -81,7 +81,7 @@ export function EmailListTable({ rows }: { rows: EmailRow[] }) {
                   </button>
                   <button
                     type="button"
-                    className="h-8 rounded border border-[hsl(var(--border))] px-2 text-xs"
+                    className="h-8 rounded border border-border px-2 text-xs"
                     disabled={pending}
                     onClick={() => withDemoGuard(() => markEmailClickedAction(row.id, "https://example.com"))}
                   >

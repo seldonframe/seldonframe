@@ -18,6 +18,19 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { BUILT_IN_EVENT_TYPE_SUGGESTIONS, isValidEventType } from "@/lib/events/event-types";
 
+/*
+  Square UI class reference (source of truth):
+  - templates/task-management/components/task/header/task-header.tsx
+    - top shell: "border-b border-border bg-background"
+    - control row spacing: "flex items-center justify-between ... gap-2"
+  - templates/task-management/components/task/board/task-column.tsx
+    - column shell: "rounded-lg border border-border ... bg-muted/70"
+  - templates/task-management/components/task/board/task-card.tsx
+    - card shell: "bg-background ... rounded-lg ... border border-border"
+  - templates/tasks/components/tasks/filters/tasks-filters.tsx
+    - filter row: "flex items-center justify-between gap-2 flex-wrap"
+*/
+
 type NodeKind = "trigger" | "condition" | "action";
 
 type FlowNode = {
@@ -79,7 +92,7 @@ function NodeCard({ node }: { node: FlowNode }) {
         </div>
         <button
           type="button"
-          className="rounded border border-[hsl(var(--border))] px-2 py-1 text-xs text-[hsl(var(--color-text-secondary))]"
+          className="rounded border border-border px-2 py-1 text-xs text-muted-foreground"
           {...attributes}
           {...listeners}
         >
@@ -145,7 +158,7 @@ export function AutomationBuilder() {
     <section className="space-y-4">
       <div className="rounded-xl border bg-card grid gap-3 p-4 md:grid-cols-[1fr_auto_auto] md:items-end">
         <div>
-          <label className="text-label text-[hsl(var(--color-text-secondary))]" htmlFor="automation-name">
+          <label className="text-label text-muted-foreground" htmlFor="automation-name">
             Automation Name
           </label>
           <input
@@ -158,13 +171,13 @@ export function AutomationBuilder() {
         <button type="button" className="crm-button-primary h-9 px-4" onClick={saveTemplate}>
           Save Template
         </button>
-        <button type="button" className="h-9 rounded-md border border-[hsl(var(--border))] px-4 text-sm font-medium">
+        <button type="button" className="crm-button-secondary h-9 px-4 text-sm font-medium">
           Run Test
         </button>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[320px_1fr_340px]">
-        <aside className="rounded-xl border bg-card p-4 space-y-4">
+        <aside className="rounded-lg border border-border bg-muted/70 p-4 space-y-4">
           <h3 className="text-card-title">Node Library</h3>
 
           <div>
@@ -183,7 +196,7 @@ export function AutomationBuilder() {
                   className="crm-input h-8 w-full px-2 text-xs"
                   placeholder="course.enrolled"
                 />
-                <button type="button" onClick={addTriggerNode} className="rounded border px-2 py-1 text-xs">
+                <button type="button" onClick={addTriggerNode} className="rounded border border-border px-2 py-1 text-xs">
                   Add
                 </button>
               </div>
@@ -192,11 +205,11 @@ export function AutomationBuilder() {
                   <option key={item} value={item} />
                 ))}
               </datalist>
-              {triggerError ? <p className="text-xs text-red-300">{triggerError}</p> : null}
+              {triggerError ? <p className="text-xs text-red-700 dark:text-red-300">{triggerError}</p> : null}
             </div>
             <div className="mt-2 flex flex-wrap gap-2">
               {triggerOptions.map((item) => (
-                <button key={item} type="button" onClick={() => addNode("trigger", item)} className="rounded border px-2 py-1 text-xs">
+                <button key={item} type="button" onClick={() => addNode("trigger", item)} className="rounded border border-border px-2 py-1 text-xs">
                   {item}
                 </button>
               ))}
@@ -207,7 +220,7 @@ export function AutomationBuilder() {
             <p className="text-xs font-semibold uppercase tracking-[0.08em] text-amber-600">Conditions</p>
             <div className="mt-2 flex flex-wrap gap-2">
               {conditionOptions.map((item) => (
-                <button key={item} type="button" onClick={() => addNode("condition", item)} className="rounded border px-2 py-1 text-xs">
+                <button key={item} type="button" onClick={() => addNode("condition", item)} className="rounded border border-border px-2 py-1 text-xs">
                   {item}
                 </button>
               ))}
@@ -218,7 +231,7 @@ export function AutomationBuilder() {
             <p className="text-xs font-semibold uppercase tracking-[0.08em] text-emerald-600">Actions</p>
             <div className="mt-2 flex flex-wrap gap-2">
               {actionOptions.map((item) => (
-                <button key={item} type="button" onClick={() => addNode("action", item)} className="rounded border px-2 py-1 text-xs">
+                <button key={item} type="button" onClick={() => addNode("action", item)} className="rounded border border-border px-2 py-1 text-xs">
                   {item}
                 </button>
               ))}
@@ -257,8 +270,8 @@ export function AutomationBuilder() {
               {sampleRunHistory.map((run) => (
                 <li key={run.id} className="crm-table-row rounded-md px-2 py-2 text-sm">
                   <p className="font-medium text-foreground">{run.template}</p>
-                  <p className="text-[hsl(var(--color-text-secondary))]">{run.target}</p>
-                  <p className="text-xs text-[hsl(var(--color-text-muted))]">
+                  <p className="text-muted-foreground">{run.target}</p>
+                  <p className="text-xs text-muted-foreground">
                     {run.status} • {run.at}
                   </p>
                 </li>

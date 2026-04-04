@@ -128,7 +128,7 @@ export default function TermsPage() {
         </p>
       </section>
 
-      <footer className="mt-12 flex flex-wrap items-center gap-4 border-t border-[hsl(var(--border))] pt-6 text-sm text-muted-foreground">
+      <footer className="mt-12 flex flex-wrap items-center gap-4 border-t border-border pt-6 text-sm text-muted-foreground">
         <Link href="/" className="underline-offset-4 hover:underline">
           Back to Home
         </Link>

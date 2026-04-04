@@ -8,7 +8,7 @@ export function ProcessSection({ headline, steps }: ProcessSectionContent) {
         <div className="grid gap-4 md:grid-cols-3">
           {steps.map((step, index) => (
             <div key={`${step.title}-${index}`} className="relative">
-              <article className="glass-card rounded-2xl p-6 text-center md:p-7">
+              <article className="rounded-xl border bg-card p-6 text-center md:p-7">
                 <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
                   {step.number}
                 </div>
