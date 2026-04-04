@@ -74,26 +74,27 @@ export function LandingPagesContent({
 
   if (pages.length === 0 && !showCreate) {
     return (
-      <div className="space-y-6">
-        <div className="text-center">
-          <p className="text-3xl">🚀</p>
-          <h2 className="mt-3 text-xl font-medium text-foreground">Create your first landing page</h2>
-          <p className="mt-1 text-sm sm:text-base text-muted-foreground">Choose a template to get started.</p>
+      <div className="space-y-4">
+        <div className="rounded-xl border bg-card p-4">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-medium text-sm">Create your first landing page</h3>
+          </div>
+          <p className="text-sm text-muted-foreground">Choose a template to get started.</p>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           {templates.map((tpl) => (
             <button
               key={tpl.key}
               type="button"
-              className="rounded-xl border bg-card p-5 text-left transition hover:border-primary/30"
+              className="p-4 rounded-xl border bg-card hover:bg-accent/50 transition-all cursor-pointer group text-left"
               onClick={() => handleTemplateClick()}
             >
-              <div className="mb-3 inline-flex rounded-lg border border-primary/30 p-2 text-primary">
+              <div className="size-10 rounded-lg flex items-center justify-center mb-3 bg-muted">
                 {tpl.icon}
               </div>
-              <p className="text-base font-medium text-foreground">{tpl.title}</p>
-              <p className="mt-1 text-sm text-muted-foreground">{tpl.description}</p>
+              <p className="font-medium text-sm truncate mb-0.5">{tpl.title}</p>
+              <p className="text-xs text-muted-foreground">{tpl.description}</p>
             </button>
           ))}
         </div>
@@ -103,27 +104,62 @@ export function LandingPagesContent({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between border-b border-border px-5 py-3">
-        <p className="text-xs text-muted-foreground">{pages.length} page{pages.length !== 1 ? "s" : ""}</p>
-        <button type="button" className="crm-button-primary h-9 px-6" onClick={() => setShowCreate(true)}>
-          Create Page
-        </button>
+      <div className="rounded-xl border bg-card overflow-hidden">
+        <div className="flex items-center justify-between border-b border-border px-5 py-3">
+          <p className="text-xs text-muted-foreground">{pages.length} page{pages.length !== 1 ? "s" : ""}</p>
+          <button type="button" className="crm-button-primary h-9 px-6" onClick={() => setShowCreate(true)}>
+            Create Page
+          </button>
+        </div>
+
+        <div className="hidden sm:grid grid-cols-[1fr_120px_140px_180px] gap-4 px-4 py-3 border-b bg-muted/50 text-xs font-medium text-muted-foreground">
+          <span>Name</span>
+          <span>Status</span>
+          <span>Last edited</span>
+          <span>URL</span>
+        </div>
+
+        <div className="divide-y">
+          {pages.map((page) => (
+            <div key={page.id} className="grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_120px_140px_180px] gap-2 sm:gap-4 px-4 py-3 hover:bg-accent/50 transition-colors items-center">
+              <div className="min-w-0">
+                <p className="font-medium text-sm truncate">{page.title}</p>
+                <p className="text-xs text-muted-foreground sm:hidden">
+                  {new Date(page.updatedAt).toLocaleDateString([], { month: "short", day: "numeric" })}
+                </p>
+              </div>
+              <div>
+                <span className={`rounded-full px-2 py-1 text-xs ${statusBadge(page.status)}`}>{page.status}</span>
+              </div>
+              <span className="hidden sm:block text-sm text-muted-foreground">
+                {new Date(page.updatedAt).toLocaleDateString([], { month: "short", day: "numeric" })}
+              </span>
+              <div className="hidden sm:flex items-center gap-2 min-w-0">
+                <span className="text-sm text-muted-foreground truncate">/l/{orgSlug}/{page.slug}</span>
+                <button type="button" className="size-7 rounded-md border border-border hover:bg-accent inline-flex items-center justify-center" onClick={() => handleCopy(page.slug, page.id)}>
+                  <Copy className="size-3.5" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {pages.length > 0 ? (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           {pages.map((page) => (
-            <article key={page.id} className="rounded-xl border bg-card p-5">
-              <div className="mb-3 flex items-start justify-between gap-2">
-                <h3 className="text-base font-medium text-foreground">{page.title}</h3>
+            <article key={page.id} className="p-4 rounded-xl border bg-card hover:bg-accent/50 transition-all cursor-pointer group">
+              <div className="flex items-start justify-between mb-3">
+                <h3 className="font-medium text-sm truncate mb-0.5">{page.title}</h3>
                 <span className={`rounded-full px-2 py-1 text-xs ${statusBadge(page.status)}`}>{page.status}</span>
               </div>
 
-              <p className="text-xs text-[hsl(var(--muted-foreground))]">
+              <p className="text-xs text-muted-foreground">
                 Last edited {new Date(page.updatedAt).toLocaleDateString([], { month: "short", day: "numeric" })}
               </p>
+              <p className="mt-1 text-xs text-muted-foreground truncate">/l/{orgSlug}/{page.slug}</p>
 
-              <div className="mt-4 flex gap-2">
+              <div className="mt-3 flex gap-2">
                 <Link href={`/landing/${page.id}`} className="crm-button-primary h-9 px-4 text-xs">
                   Edit
                 </Link>
@@ -133,7 +169,7 @@ export function LandingPagesContent({
                   onClick={() => handleCopy(page.slug, page.id)}
                 >
                   <Copy className="mr-1 inline h-3 w-3" />
-                  {copiedId === page.id ? "Copied" : "URL"}
+                  {copiedId === page.id ? "Copied" : "Copy URL"}
                 </button>
                 {page.status === "published" ? (
                   <Link href={`/l/${orgSlug}/${page.slug}`} target="_blank" rel="noopener noreferrer" className="crm-button-ghost h-9 px-4 text-xs">
