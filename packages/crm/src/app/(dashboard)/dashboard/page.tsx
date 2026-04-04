@@ -1,15 +1,31 @@
-import { and, asc, desc, eq } from "drizzle-orm";
+import { asc, desc, eq } from "drizzle-orm";
 import Link from "next/link";
-import { ArrowRight, CheckCircle2, Circle, Clock3, DollarSign, Users, Zap } from "lucide-react";
+import { DollarSign, Users, CalendarDays, Activity, ChevronDown, Plus, Download } from "lucide-react";
 import { db } from "@/db";
-import { activities, bookings, emails, intakeForms, landingPages, metricsSnapshots, organizations, paymentRecords, pipelines } from "@/db/schema";
+import { activities, metricsSnapshots, organizations, paymentRecords } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth/helpers";
 import { listBookings } from "@/lib/bookings/actions";
 import { listContacts } from "@/lib/contacts/actions";
 import { listDeals } from "@/lib/deals/actions";
 import { getSoul } from "@/lib/soul/server";
 import { skipSoulDeepenerAction } from "@/lib/soul/actions";
-import { RevenueChartCard } from "@/components/dashboard/widgets/revenue-chart-card";
+
+/*
+  Square UI class reference (source of truth):
+  - templates/dashboard-2/components/dashboard/content.tsx
+    - main: "flex-1 overflow-auto p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6 bg-background w-full"
+  - templates/dashboard-2/components/dashboard/welcome-section.tsx
+    - header: "flex flex-col sm:flex-row sm:items-end justify-between gap-4 sm:gap-6"
+    - title: "text-lg sm:text-[22px] font-semibold leading-relaxed"
+    - subtitle: "text-sm sm:text-base text-muted-foreground"
+  - templates/dashboard-2/components/dashboard/stats-cards.tsx
+    - grid: "grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 p-3 sm:p-4 lg:p-6 rounded-xl border bg-card"
+    - stat shell: "flex items-start" + "flex-1 space-y-2 sm:space-y-4 lg:space-y-6"
+    - label row: "flex items-center gap-1 sm:gap-1.5 text-muted-foreground"
+    - label text: "text-[10px] sm:text-xs lg:text-sm font-medium truncate"
+    - value: "text-lg sm:text-xl lg:text-[28px] font-semibold leading-tight tracking-tight"
+    - trend row: "flex flex-wrap items-center gap-1 sm:gap-2 text-[10px] sm:text-xs lg:text-sm font-medium"
+*/
 
 function toUtcDate(value: string | Date) {
   if (value instanceof Date) {
@@ -41,50 +57,42 @@ function formatLongDate(value: Date) {
   return new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }).format(value);
 }
 
-function Sparkline({ points }: { points: number[] }) {
-  if (points.length < 2) {
-    return null;
-  }
-
-  const width = 30;
-  const height = 16;
-  const min = Math.min(...points);
-  const max = Math.max(...points);
-  const span = max - min || 1;
-
-  const path = points
-    .map((point, index) => {
-      const x = (index / (points.length - 1)) * width;
-      const y = height - ((point - min) / span) * height;
-      return `${index === 0 ? "M" : "L"}${x.toFixed(2)} ${y.toFixed(2)}`;
-    })
-    .join(" ");
+function TrendText({ value }: { value: number }) {
+  const rounded = Math.round(value);
+  const isPositive = rounded >= 0;
 
   return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="shrink-0">
-      <path d={path} fill="none" stroke="hsl(var(--primary))" strokeWidth="1" strokeLinecap="round" />
-    </svg>
+    <span className={isPositive ? "text-emerald-600" : "text-red-600"}>
+      {isPositive ? "+" : ""}
+      {rounded}%
+    </span>
   );
 }
 
-function StatCard({ label, value, icon, trendPoints }: { label: string; value: string; icon: React.ReactNode; trendPoints: number[] }) {
+function StatCard({ label, value, icon, trendPercent }: { label: string; value: string; icon: React.ReactNode; trendPercent: number }) {
   return (
     <article className="flex items-start">
       <div className="flex-1 space-y-2 sm:space-y-4 lg:space-y-6">
         <div className="flex items-center gap-1 sm:gap-1.5 text-muted-foreground">
-          <span className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--muted)/0.6)] text-primary">{icon}</span>
+          <span className="inline-flex size-6 items-center justify-center rounded-md bg-muted/70">{icon}</span>
           <span className="text-[10px] sm:text-xs lg:text-sm font-medium truncate">{label}</span>
         </div>
-        <p className="text-lg sm:text-xl lg:text-[28px] font-semibold leading-tight tracking-tight text-foreground">{value}</p>
-        <div className="flex items-center gap-2 text-[10px] sm:text-xs text-[hsl(var(--muted-foreground))]">
-          <span>vs Last Month</span>
+        <p className="text-lg sm:text-xl lg:text-[28px] font-semibold leading-tight tracking-tight">{value}</p>
+        <div className="flex flex-wrap items-center gap-1 sm:gap-2 text-[10px] sm:text-xs lg:text-sm font-medium">
+          <TrendText value={trendPercent} />
+          <span className="text-muted-foreground hidden sm:inline">vs Last Months</span>
         </div>
-      </div>
-      <div className="ml-3 sm:ml-4 flex items-end pb-1">
-        <Sparkline points={trendPoints} />
       </div>
     </article>
   );
+}
+
+function percentChange(current: number, previous: number) {
+  if (previous === 0) {
+    return current === 0 ? 0 : 100;
+  }
+
+  return ((current - previous) / Math.abs(previous)) * 100;
 }
 
 export default async function DashboardPage() {
@@ -101,41 +109,13 @@ export default async function DashboardPage() {
     return null;
   }
 
-  const [snapshotRowsRaw, activityRows, appointmentTypeRows, landingRows, sentEmailRows, paymentRows, intakeFormRows, defaultPipeline, orgRow] = await Promise.all([
+  const [snapshotRowsRaw, activityRows, paymentRows, orgRow] = await Promise.all([
     db.select().from(metricsSnapshots).where(eq(metricsSnapshots.orgId, orgId)).orderBy(asc(metricsSnapshots.date)).limit(180),
     db.select().from(activities).where(eq(activities.orgId, orgId)).orderBy(desc(activities.createdAt)).limit(20),
-    db
-      .select()
-      .from(bookings)
-      .where(and(eq(bookings.orgId, orgId), eq(bookings.status, "template")))
-      .orderBy(desc(bookings.createdAt))
-      .limit(10),
-    db
-      .select()
-      .from(landingPages)
-      .where(eq(landingPages.orgId, orgId))
-      .orderBy(desc(landingPages.createdAt))
-      .limit(10),
-    db
-      .select({ id: emails.id })
-      .from(emails)
-      .where(and(eq(emails.orgId, orgId), eq(emails.status, "sent")))
-      .limit(10),
     db
       .select({ amount: paymentRecords.amount, createdAt: paymentRecords.createdAt })
       .from(paymentRecords)
       .where(eq(paymentRecords.orgId, orgId)),
-    db
-      .select({ id: intakeForms.id })
-      .from(intakeForms)
-      .where(eq(intakeForms.orgId, orgId))
-      .limit(10),
-    db
-      .select({ id: pipelines.id })
-      .from(pipelines)
-      .where(and(eq(pipelines.orgId, orgId), eq(pipelines.isDefault, true)))
-      .limit(1)
-      .then((rows) => rows[0] ?? null),
     db
       .select({ createdAt: organizations.createdAt, soulId: organizations.soulId, soulContentGenerated: organizations.soulContentGenerated })
       .from(organizations)
@@ -148,24 +128,9 @@ export default async function DashboardPage() {
   const snapshotRows = snapshotRowsRaw.map((row) => ({ ...row, dateObj: toUtcDate(row.date) }));
   const contactLabelSingular = soul?.entityLabels?.contact?.singular || "Contact";
   const contactLabelPlural = soul?.entityLabels?.contact?.plural || "Contacts";
-  const dealLabelSingular = soul?.entityLabels?.deal?.singular || "Deal";
   const setupComplete = Boolean(orgRow?.soulId) || Number(orgRow?.soulContentGenerated ?? 0) > 0;
   const deepSetupPending = setupComplete && !soul?.deepSetup?.completedAt && !soul?.deepSetup?.skippedAt;
 
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  const isNewUser = (orgRow ? new Date(orgRow.createdAt) >= sevenDaysAgo : false) || contactRows.length < 5;
-  const setupGuideItems = [
-    { href: "/setup", label: "Complete Setup Wizard", done: setupComplete },
-    { href: "/deals", label: "Review Generated Pipeline", done: setupComplete && Boolean(defaultPipeline) },
-    { href: "/landing", label: "Review Generated Landing Page", done: setupComplete && landingRows.length > 0 },
-    { href: "/bookings", label: "Review Generated Booking Type", done: setupComplete && appointmentTypeRows.length > 0 },
-    { href: "/forms", label: "Review Generated Intake Form", done: setupComplete && intakeFormRows.length > 0 },
-    { href: "/settings", label: "Connect Email", done: sentEmailRows.length > 0 },
-    { href: "/contacts", label: `Create First ${contactLabelSingular}`, done: contactRows.length > 0 },
-    { href: "/deals", label: `Create First ${dealLabelSingular}`, done: dealRows.length > 0 },
-  ];
-  const completedChecklistCount = setupGuideItems.filter((item) => item.done).length;
   const today = new Date();
   const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
   const startOfToday = new Date(today);
@@ -192,9 +157,7 @@ export default async function DashboardPage() {
     return new Date(task.scheduledAt) <= today;
   }).length;
 
-  const weekThreshold = new Date(today);
-  weekThreshold.setDate(weekThreshold.getDate() - 7);
-  const newClientsThisWeek = contactRows.filter((row) => new Date(row.createdAt) >= weekThreshold).length;
+  const monthThreshold = new Date(today.getFullYear(), today.getMonth() - 1, 1);
 
   const firstName = user?.name?.split(" ").filter(Boolean)[0] || "there";
   const trialEndsAt = user?.trialEndsAt ? new Date(user.trialEndsAt) : null;
@@ -204,14 +167,6 @@ export default async function DashboardPage() {
       ? Math.max(0, Math.ceil((trialEndsAt.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)))
       : null;
 
-  const weeklyRevenueRows = snapshotRows.slice(-12).map((row) => {
-    return {
-      label: new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(row.dateObj),
-      value: Number(row.revenueTotal),
-    };
-  });
-
-  const pipelineValue = dealRows.reduce((sum, row) => sum + Number(row.value), 0);
   const closedDeals = dealRows.filter((row) => {
     const stage = row.stage.toLowerCase();
     return stage.includes("won") || stage.includes("lost") || row.probability === 100;
@@ -222,19 +177,81 @@ export default async function DashboardPage() {
   });
   const winRate = closedDeals.length > 0 ? (wonDeals.length / closedDeals.length) * 100 : 0;
   const revenueTotal = paymentRows.reduce((sum, row) => sum + Number(row.amount), 0);
-  const monthlyNewClients = contactRows.filter((row) => new Date(row.createdAt) >= startOfMonth).length;
   const monthlyRevenue = paymentRows
     .filter((row) => new Date(row.createdAt) >= startOfMonth)
     .reduce((sum, row) => sum + Number(row.amount), 0);
+  const previousMonthRevenue = paymentRows
+    .filter((row) => {
+      const createdAt = new Date(row.createdAt);
+      return createdAt >= monthThreshold && createdAt < startOfMonth;
+    })
+    .reduce((sum, row) => sum + Number(row.amount), 0);
 
-  const goalMetrics = soul?.goals?.monthly ?? [];
-  const newClientsGoal = goalMetrics.find((goal) => /new\s*(clients?|contacts?|members?)/i.test(goal.metric));
-  const revenueGoal = goalMetrics.find((goal) => /revenue|sales|income|arr|mrr/i.test(goal.metric));
+  const contactsThisMonth = contactRows.filter((row) => new Date(row.createdAt) >= startOfMonth).length;
+  const contactsPreviousMonth = contactRows.filter((row) => {
+    const createdAt = new Date(row.createdAt);
+    return createdAt >= monthThreshold && createdAt < startOfMonth;
+  }).length;
 
-  const pipelineTrend = snapshotRows.slice(-7).map((row) => Number(row.pipelineValue));
-  const winRateTrend = snapshotRows.slice(-7).map((row) => Number(row.winRate) * 100);
-  const revenueTrend = snapshotRows.slice(-7).map((row) => Number(row.revenueTotal));
-  const contactsTrend = snapshotRows.slice(-7).map((row) => Number(row.contactsTotal));
+  const bookingsThisMonth = bookingRows.filter((row) => new Date(row.createdAt) >= startOfMonth).length;
+  const bookingsPreviousMonth = bookingRows.filter((row) => {
+    const createdAt = new Date(row.createdAt);
+    return createdAt >= monthThreshold && createdAt < startOfMonth;
+  }).length;
+
+  const activeEngagements = activityRows.filter((row) => row.type !== "task" || !row.completedAt).length;
+  const activeEngagementsPrev = Math.max(1, activityRows.length - activeEngagements);
+
+  const revenueFlowData = snapshotRows
+    .slice(-6)
+    .map((row) => ({
+      label: new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(row.dateObj),
+      value: Number(row.revenueTotal),
+    }));
+
+  const leadSourceBuckets = [
+    { name: "Calls", count: activityRows.filter((row) => row.type === "call").length, color: "#35b9e9" },
+    { name: "Emails", count: activityRows.filter((row) => row.type === "email").length, color: "#6e3ff3" },
+    { name: "Meetings", count: activityRows.filter((row) => row.type === "meeting").length, color: "#375dfb" },
+    { name: "Tasks", count: activityRows.filter((row) => row.type === "task").length, color: "#e255f2" },
+  ].map((row) => ({ ...row, count: row.count || 1 }));
+
+  const totalLeadSources = leadSourceBuckets.reduce((sum, row) => sum + row.count, 0);
+  let donutOffset = 0;
+  const donutStops = leadSourceBuckets
+    .map((row) => {
+      const start = donutOffset;
+      donutOffset += (row.count / totalLeadSources) * 100;
+      return `${row.color} ${start.toFixed(2)}% ${donutOffset.toFixed(2)}%`;
+    })
+    .join(", ");
+
+  const stats = [
+    {
+      label: `Total ${contactLabelPlural}`,
+      value: contactRows.length.toLocaleString(),
+      icon: <Users className="size-3.5 sm:size-[18px]" />,
+      trend: percentChange(contactsThisMonth, contactsPreviousMonth),
+    },
+    {
+      label: "Active Engagements",
+      value: activeEngagements.toLocaleString(),
+      icon: <Activity className="size-3.5 sm:size-[18px]" />,
+      trend: percentChange(activeEngagements, activeEngagementsPrev),
+    },
+    {
+      label: "Bookings This Month",
+      value: bookingsThisMonth.toLocaleString(),
+      icon: <CalendarDays className="size-3.5 sm:size-[18px]" />,
+      trend: percentChange(bookingsThisMonth, bookingsPreviousMonth),
+    },
+    {
+      label: "Revenue",
+      value: formatCurrency(monthlyRevenue),
+      icon: <DollarSign className="size-3.5 sm:size-[18px]" />,
+      trend: percentChange(monthlyRevenue, previousMonthRevenue),
+    },
+  ];
 
   const opportunityRows = [...dealRows]
     .sort((a, b) => Number(b.value) - Number(a.value))
@@ -257,7 +274,7 @@ export default async function DashboardPage() {
   });
 
   return (
-    <section className="animate-page-enter space-y-6">
+    <section className="animate-page-enter space-y-4 sm:space-y-6">
       {typeof trialDaysRemaining === "number" ? (
         <div className="rounded-xl border border-primary/30 bg-primary/10 px-4 py-3 text-sm text-primary">
           Trial: {trialDaysRemaining} day{trialDaysRemaining === 1 ? "" : "s"} remaining. Your plan activates on {formatLongDate(trialEndsAt!)}.
@@ -265,7 +282,7 @@ export default async function DashboardPage() {
       ) : null}
 
       {deepSetupPending ? (
-        <article className="glass-card rounded-2xl border-l-2 border-l-primary p-6">
+        <article className="rounded-xl border bg-card p-6">
           <p className="text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">Optional Deep Setup</p>
           <h2 className="mt-2 text-xl font-semibold text-foreground">Your business is set up. Want to unlock automations?</h2>
           <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
@@ -286,220 +303,176 @@ export default async function DashboardPage() {
 
       <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 sm:gap-6">
         <div className="space-y-2 sm:space-y-5">
-          <h1 className="text-base sm:text-[22px] font-semibold leading-snug sm:leading-relaxed text-foreground">
+          <h1 className="text-lg sm:text-[22px] font-semibold leading-relaxed text-foreground">
             Good {timeOfDay()}, {firstName}
           </h1>
-          <p className="text-xs sm:text-base text-muted-foreground">
+          <p className="text-sm sm:text-base text-muted-foreground">
             Today: <span className="text-foreground font-medium">{sessionsToday} sessions</span>,{" "}
             <span className="text-foreground font-medium">{followUpsDue} follow-ups due</span>
           </p>
-          <p className="text-xs text-muted-foreground">{formatLongDate(today)} · {newClientsThisWeek} new {contactLabelPlural.toLowerCase()} this week</p>
+          <p className="text-xs text-muted-foreground">{formatLongDate(today)}</p>
+        </div>
+
+        <div className="flex items-center gap-2 sm:gap-3">
+          <button type="button" className="inline-flex items-center gap-2 sm:gap-3 h-8 sm:h-9 rounded-md border border-border bg-background px-3 text-xs sm:text-sm">
+            <span className="hidden xs:inline">Import/Export</span>
+            <span className="xs:hidden">
+              <Download className="size-4" />
+            </span>
+            <ChevronDown className="size-3 sm:size-4 text-muted-foreground" />
+          </button>
+          <Link href="/contacts" className="inline-flex items-center gap-2 sm:gap-3 h-8 sm:h-9 rounded-md bg-linear-to-b from-foreground to-foreground/90 px-3 text-xs sm:text-sm text-background">
+            <Plus className="size-3 sm:size-4" />
+            <span className="hidden xs:inline">Create New</span>
+            <span className="xs:hidden">New</span>
+          </Link>
         </div>
       </header>
 
-      {newClientsGoal || revenueGoal ? (
-        <div className="grid gap-3 md:grid-cols-2">
-          {newClientsGoal ? (
-            <article className="glass-card rounded-2xl p-4">
-              <p className="text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">Goal Progress</p>
-              <p className="mt-2 text-base text-foreground">
-                {monthlyNewClients} of {newClientsGoal.target} new {contactLabelPlural.toLowerCase()} this month
-              </p>
-            </article>
-          ) : null}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 p-3 sm:p-4 lg:p-6 rounded-xl border bg-card">
+        {stats.map((stat, index) => (
+          <div key={stat.label} className="flex items-start">
+            <StatCard label={stat.label} value={stat.value} icon={stat.icon} trendPercent={stat.trend} />
+            {index < stats.length - 1 ? <div className="hidden lg:block w-px h-full bg-border mx-4 xl:mx-6" /> : null}
+          </div>
+        ))}
+      </div>
 
-          {revenueGoal ? (
-            <article className="glass-card rounded-2xl p-4">
-              <p className="text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">Revenue Goal</p>
-              <p className="mt-2 text-base text-foreground">
-                Revenue: {formatCurrency(monthlyRevenue)} of {formatCurrency(revenueGoal.target)} target
-              </p>
-            </article>
-          ) : null}
-        </div>
-      ) : null}
+      <div className="flex flex-col xl:flex-row gap-4 sm:gap-6">
+        <article className="flex flex-col gap-4 p-6 rounded-xl border bg-card w-full xl:w-[410px]">
+          <div className="flex items-center justify-between">
+            <span className="text-sm sm:text-base font-medium">Lead Sources</span>
+            <span className="text-xs text-muted-foreground">30 days</span>
+          </div>
 
-      {isNewUser ? (
-        <div className="grid gap-4 lg:grid-cols-12">
-          <article className="glass-card rounded-2xl border-l-2 border-l-primary p-6 lg:col-span-7">
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <p className="text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">Setup Guide</p>
-                <h2 className="mt-1 text-2xl font-light tracking-tight text-foreground">Launch your CRM with confidence</h2>
+          <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
+            <div className="relative shrink-0 size-[220px]">
+              <div
+                className="absolute inset-0 rounded-full"
+                style={{ background: `conic-gradient(${donutStops})` }}
+              />
+              <div className="absolute inset-[30%] rounded-full bg-card" />
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-lg sm:text-xl font-semibold">{totalLeadSources.toLocaleString()}</span>
+                <span className="text-[10px] sm:text-xs text-muted-foreground">Total Leads</span>
               </div>
-              <p className="text-sm text-[hsl(var(--muted-foreground))]">{completedChecklistCount} of {setupGuideItems.length} steps complete</p>
             </div>
 
-            <div className="mb-5 h-1.5 overflow-hidden rounded-full bg-[hsl(var(--muted)/0.5)]">
-              <div className="h-full rounded-full bg-primary shadow-glass-teal" style={{ width: `${(completedChecklistCount / setupGuideItems.length) * 100}%` }} />
-            </div>
-
-            <ul className="space-y-3">
-              {setupGuideItems.map((item) => (
-                <li key={item.label}>
-                  <Link
-                    href={item.href}
-                    className={`flex items-center justify-between rounded-xl border p-4 transition ${
-                      item.done ? "border-primary/25 bg-primary/10" : "border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.15)] hover:border-[hsl(var(--border))]"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      {item.done ? <CheckCircle2 className="h-4 w-4 text-primary" /> : <Circle className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />}
-                      <span className={`text-sm ${item.done ? "text-[hsl(var(--muted-foreground))] line-through" : "text-foreground"}`}>{item.label}</span>
-                    </div>
-                    {!item.done ? <ArrowRight className="h-4 w-4 text-[hsl(var(--muted-foreground))]" /> : null}
-                  </Link>
-                </li>
+            <div className="flex-1 w-full grid grid-cols-2 sm:grid-cols-1 gap-2 sm:gap-4">
+              {leadSourceBuckets.map((item) => (
+                <div key={item.name} className="flex items-center gap-2 sm:gap-2.5">
+                  <div className="w-1 h-4 sm:h-5 rounded-sm shrink-0" style={{ backgroundColor: item.color }} />
+                  <span className="flex-1 text-xs sm:text-sm text-muted-foreground truncate">{item.name}</span>
+                  <span className="text-xs sm:text-sm font-semibold tabular-nums">{item.count.toLocaleString()}</span>
+                </div>
               ))}
-            </ul>
-          </article>
-
-          <div className="space-y-4 lg:col-span-5">
-            <article className="rounded-xl border bg-card p-4 sm:p-6">
-              <p className="text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">Quick Actions</p>
-              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
-                <Link href="/contacts" className="rounded-lg border bg-background p-4 text-sm text-foreground transition hover:bg-muted/50 min-h-11">
-                  Add {contactLabelSingular}
-                </Link>
-                <Link href="/deals" className="rounded-lg border bg-background p-4 text-sm text-foreground transition hover:bg-muted/50 min-h-11">
-                  Create {dealLabelSingular}
-                </Link>
-                <Link href="/bookings" className="rounded-lg border bg-background p-4 text-sm text-foreground transition hover:bg-muted/50 min-h-11">
-                  Share Booking Page
-                </Link>
-              </div>
-            </article>
-
-            <article className="glass-card rounded-2xl p-6">
-              <p className="mb-3 text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">Recent Activity</p>
-              {activityRows.length === 0 ? (
-                <p className="text-sm text-[hsl(var(--muted-foreground))]">Activities will appear here as you work</p>
-              ) : (
-                <ul className="space-y-2">
-                  {activityRows.slice(0, 5).map((item) => {
-                    const linkedContact = item.contactId ? contactById.get(item.contactId) : null;
-                    const name = linkedContact ? `${linkedContact.firstName} ${linkedContact.lastName ?? ""}`.trim() : contactLabelSingular;
-                    return (
-                      <li key={item.id} className="flex items-center justify-between gap-3 rounded-lg border border-[hsl(var(--border))] px-3 py-2">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm text-foreground">{item.subject ?? `${item.type} activity`}</p>
-                          <p className="truncate text-xs text-[hsl(var(--muted-foreground))]">{name}</p>
-                        </div>
-                        <span className="text-xs text-[hsl(var(--muted-foreground))]">{new Date(item.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </article>
-          </div>
-        </div>
-      ) : (
-        <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 p-3 sm:p-4 lg:p-6 rounded-xl border bg-card">
-            <StatCard
-              label={`Total ${contactLabelPlural}`}
-              value={contactRows.length.toLocaleString()}
-              icon={<Users className="h-4 w-4" />}
-              trendPoints={contactsTrend}
-            />
-            <StatCard
-              label="Pipeline Value"
-              value={formatCurrency(pipelineValue)}
-              icon={<DollarSign className="h-4 w-4" />}
-              trendPoints={pipelineTrend}
-            />
-            <StatCard
-              label="Win Rate"
-              value={`${winRate.toFixed(1)}%`}
-              icon={<Zap className="h-4 w-4" />}
-              trendPoints={winRateTrend}
-            />
-            <StatCard
-              label="Revenue"
-              value={formatCurrency(revenueTotal)}
-              icon={<DollarSign className="h-4 w-4" />}
-              trendPoints={revenueTrend}
-            />
-          </div>
-
-          {weeklyRevenueRows.length > 0 ? (
-            <RevenueChartCard
-              title="Revenue Over Time"
-              data={weeklyRevenueRows}
-              ranges={["30 days", "6 months", "12 months"]}
-            />
-          ) : null}
-
-          {opportunityRows.length > 0 || upcomingSessionRows.length > 0 ? (
-            <div className="grid gap-4 xl:grid-cols-2">
-              {opportunityRows.length > 0 ? (
-                <article className="rounded-xl border bg-card">
-                  <div className="mb-4 flex items-center justify-between">
-                    <p className="px-4 pt-4 text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))] sm:px-6 sm:pt-6">Top Opportunities</p>
-                    <Link href="/deals" className="px-4 pt-4 text-sm text-primary hover:underline sm:px-6 sm:pt-6">
-                      View All →
-                    </Link>
-                  </div>
-
-                  <div className="px-3 pb-3 sm:px-6 sm:pb-4 overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="bg-muted/50 text-left text-xs font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
-                        <th className="py-2 px-3 whitespace-nowrap">Contact</th>
-                        <th className="py-2 px-3 whitespace-nowrap">Value</th>
-                        <th className="py-2 px-3 whitespace-nowrap">Stage</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {opportunityRows.map((row) => {
-                        const contactName = row.contact ? `${row.contact.firstName} ${row.contact.lastName ?? ""}`.trim() : row.title;
-                        return (
-                          <tr key={row.id} className="group hover:bg-[hsl(var(--muted)/0.35)]">
-                            <td className="py-3 px-3 text-sm text-foreground">
-                              <Link href={`/deals/${row.id}`} className="hover:text-primary">
-                                {contactName}
-                              </Link>
-                            </td>
-                            <td className="py-3 px-3 text-sm text-foreground">${row.value.toLocaleString()}</td>
-                            <td className="py-3 px-3">
-                              <span className="inline-flex rounded-md border border-[hsl(var(--border))] px-2 py-1 text-xs text-[hsl(var(--muted-foreground))]">{row.stage}</span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                  </div>
-                </article>
-              ) : null}
-
-              {upcomingSessionRows.length > 0 ? (
-                <article className="glass-card rounded-2xl p-6">
-                  <p className="mb-4 text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">Upcoming Sessions</p>
-                  <ul className="space-y-3">
-                    {upcomingSessionRows.map((booking) => {
-                      const linkedContact = booking.contactId ? contactById.get(booking.contactId) : null;
-                      const person = linkedContact ? `${linkedContact.firstName} ${linkedContact.lastName ?? ""}`.trim() : contactLabelSingular;
-                      const startsAt = new Date(booking.startsAt);
-                      return (
-                        <li key={booking.id} className="rounded-xl border border-[hsl(var(--border))] p-3 hover:bg-[hsl(var(--muted)/0.35)]">
-                          <p className="flex items-center gap-2 text-sm text-foreground">
-                            <Clock3 className="h-4 w-4 text-primary" />
-                            <span className="text-primary">{startsAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>
-                            <span className="text-[hsl(var(--muted-foreground))]">· {person}</span>
-                          </p>
-                          <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{startsAt.toLocaleDateString([], { month: "short", day: "numeric" })} · {booking.title}</p>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </article>
-              ) : null}
             </div>
-          ) : null}
-        </>
-      )}
+          </div>
+        </article>
+
+        <article className="flex-1 flex flex-col gap-4 sm:gap-6 p-6 rounded-xl border bg-card min-w-0">
+          <div className="flex items-center justify-between">
+            <span className="text-sm sm:text-base font-medium">Revenue Flow</span>
+            <span className="text-xs text-muted-foreground">Last 6 snapshots</span>
+          </div>
+
+          <div className="h-[220px] w-full flex gap-3">
+            <div className="w-10 h-full flex flex-col justify-between text-[10px] text-muted-foreground">
+              {[100, 75, 50, 25, 0].map((tick) => (
+                <span key={tick}>${tick}k</span>
+              ))}
+            </div>
+            <div className="flex-1 flex h-full items-end gap-2 sm:gap-3">
+              {(revenueFlowData.length > 0 ? revenueFlowData : [{ label: "Now", value: monthlyRevenue || revenueTotal }]).map((item, index, all) => {
+                const max = Math.max(...all.map((row) => row.value), 1);
+                const barHeight = Math.max(12, (item.value / max) * 100);
+                return (
+                  <div key={`${item.label}-${index}`} className="flex h-full w-[34px] flex-col justify-end gap-2">
+                    <div className="h-full rounded-md bg-muted/40 flex items-end">
+                      <div className="w-full rounded-t-md bg-primary/70" style={{ height: `${barHeight}%` }} />
+                    </div>
+                    <p className="truncate text-[10px] text-muted-foreground">{item.label}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </article>
+      </div>
+
+      <article className="rounded-xl border bg-card">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 p-3 sm:px-6 sm:py-3.5">
+          <div className="flex items-center gap-2 sm:gap-2.5 flex-1">
+            <span className="text-sm sm:text-base font-medium">Active Deals</span>
+            <span className="rounded-md border border-border bg-muted/50 px-2 py-0.5 text-[10px] sm:text-xs text-muted-foreground">
+              {opportunityRows.length}
+            </span>
+          </div>
+          <Link href="/deals" className="text-sm text-muted-foreground hover:text-foreground">
+            View all
+          </Link>
+        </div>
+
+        <div className="overflow-x-auto px-3 sm:px-6 pb-4">
+          <table className="w-full min-w-[680px]">
+            <thead>
+              <tr className="bg-muted/50 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                <th className="py-2.5 px-3">Deal</th>
+                <th className="py-2.5 px-3">Contact</th>
+                <th className="py-2.5 px-3">Stage</th>
+                <th className="py-2.5 px-3 text-right">Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              {opportunityRows.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="py-8 text-center text-sm text-muted-foreground">
+                    No active deals yet.
+                  </td>
+                </tr>
+              ) : (
+                opportunityRows.map((row) => {
+                  const contactName = row.contact ? `${row.contact.firstName} ${row.contact.lastName ?? ""}`.trim() : contactLabelSingular;
+                  return (
+                    <tr key={row.id} className="text-sm hover:bg-muted/50">
+                      <td className="py-3 px-3 text-foreground">
+                        <Link href={`/deals/${row.id}`} className="hover:underline">
+                          {row.title}
+                        </Link>
+                      </td>
+                      <td className="py-3 px-3 text-muted-foreground">{contactName}</td>
+                      <td className="py-3 px-3">
+                        <span className="inline-flex rounded-md border border-border px-2 py-0.5 text-xs text-muted-foreground">
+                          {row.stage}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 text-right tabular-nums text-foreground">${row.value.toLocaleString()}</td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      {upcomingSessionRows.length > 0 ? (
+        <article className="rounded-xl border bg-card p-4 sm:p-6">
+          <p className="mb-3 text-xs font-medium uppercase tracking-widest text-muted-foreground">Upcoming Sessions</p>
+          <ul className="space-y-2">
+            {upcomingSessionRows.slice(0, 3).map((booking) => {
+              const linkedContact = booking.contactId ? contactById.get(booking.contactId) : null;
+              const person = linkedContact ? `${linkedContact.firstName} ${linkedContact.lastName ?? ""}`.trim() : contactLabelSingular;
+              return (
+                <li key={booking.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm">
+                  <span className="text-foreground">{booking.title}</span>
+                  <span className="text-muted-foreground">{person}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </article>
+      ) : null}
 
     </section>
   );
