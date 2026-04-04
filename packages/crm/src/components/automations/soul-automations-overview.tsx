@@ -2,16 +2,9 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Zap } from "lucide-react";
+import { ArrowRight, CheckCircle2, CircleDashed, Zap } from "lucide-react";
 
 type ServiceKey = "stripe" | "resend" | "twilio" | "kit" | "google" | "none";
-
-type InferredActionItem = {
-  id: string;
-  stage: string;
-  action: string;
-  requiredService: ServiceKey;
-};
 
 type SuggestedAutomation = {
   id: string;
@@ -23,37 +16,94 @@ type SuggestedAutomation = {
 
 const serviceLabel: Record<ServiceKey, string> = {
   stripe: "Stripe",
-  resend: "Resend",
-  twilio: "Twilio",
-  kit: "Kit",
+  resend: "Email (Resend)",
+  twilio: "Twilio SMS",
+  kit: "Kit Newsletter",
   google: "Google Calendar",
-  none: "None",
+  none: "",
+};
+
+const serviceBadgeColor: Record<ServiceKey, string> = {
+  stripe: "bg-violet-500/10 text-violet-600 dark:text-violet-400",
+  resend: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
+  twilio: "bg-red-500/10 text-red-600 dark:text-red-400",
+  kit: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+  google: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  none: "bg-muted text-muted-foreground",
 };
 
 function inferService(action: string): ServiceKey {
   const text = action.toLowerCase();
 
-  if (/payment|invoice|charge|checkout/.test(text)) {
-    return "stripe";
-  }
-
-  if (/sms|text message|twilio/.test(text)) {
-    return "twilio";
-  }
-
-  if (/calendar|booking|appointment/.test(text)) {
-    return "google";
-  }
-
-  if (/campaign|newsletter|kit/.test(text)) {
-    return "kit";
-  }
-
-  if (/email|welcome|follow up|follow-up/.test(text)) {
-    return "resend";
-  }
+  if (/payment|invoice|charge|checkout/.test(text)) return "stripe";
+  if (/sms|text message|twilio/.test(text)) return "twilio";
+  if (/calendar|booking|appointment/.test(text)) return "google";
+  if (/campaign|newsletter|kit/.test(text)) return "kit";
+  if (/email|welcome|follow up|follow-up/.test(text)) return "resend";
 
   return "none";
+}
+
+function AutomationCard({
+  trigger,
+  actionText,
+  name,
+  service,
+  connected,
+  active,
+  onToggle,
+}: {
+  trigger: string;
+  actionText: string;
+  name: string;
+  service: ServiceKey;
+  connected: boolean;
+  active: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <article className="rounded-xl border bg-card p-4 space-y-3 transition-colors hover:border-primary/30">
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-sm font-medium text-foreground leading-snug">{name}</p>
+        <button
+          type="button"
+          onClick={onToggle}
+          className={`shrink-0 inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full text-xs font-medium transition-colors ${
+            active
+              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20"
+              : "bg-muted text-muted-foreground hover:bg-accent"
+          }`}
+        >
+          {active ? <CheckCircle2 className="size-3" /> : <CircleDashed className="size-3" />}
+          {active ? "Active" : "Off"}
+        </button>
+      </div>
+
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span className="rounded-md bg-muted px-2 py-1 text-foreground font-medium">When</span>
+        <span className="flex-1 truncate">{trigger}</span>
+        <ArrowRight className="size-3 shrink-0" />
+        <span className="rounded-md bg-muted px-2 py-1 text-foreground font-medium">Then</span>
+        <span className="flex-1 truncate">{actionText}</span>
+      </div>
+
+      {service !== "none" ? (
+        <div className="flex items-center gap-2">
+          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${serviceBadgeColor[service]}`}>
+            <Zap className="size-2.5" />
+            {serviceLabel[service]}
+          </span>
+          {!connected ? (
+            <Link href="/settings/integrations" className="text-[10px] text-primary hover:underline">
+              Connect →
+            </Link>
+          ) : (
+            <span className="text-[10px] text-emerald-600 dark:text-emerald-400">Connected</span>
+          )}
+        </div>
+      ) : null}
+    </article>
+  );
 }
 
 export function SoulAutomationsOverview({
@@ -73,179 +123,85 @@ export function SoulAutomationsOverview({
     google: boolean;
   };
 }) {
-  const items = useMemo<InferredActionItem[]>(
+  const inferredItems = useMemo(
     () =>
       inferredActions.map((entry, index) => ({
-        id: `${entry.stage}-${index}`,
+        id: `inferred-${entry.stage}-${index}`,
         stage: entry.stage,
         action: entry.action,
-        requiredService: inferService(entry.action),
+        service: inferService(entry.action),
       })),
     [inferredActions]
   );
 
-  const [activeById, setActiveById] = useState<Record<string, boolean>>(() => {
-    const base = Object.fromEntries(activeAutomations.map((item) => [item.id, true]));
-    return base;
+  const [toggleState, setToggleState] = useState<Record<string, boolean>>(() => {
+    const state: Record<string, boolean> = {};
+    for (const item of activeAutomations) state[item.id] = true;
+    for (const item of availableAutomations) state[item.id] = false;
+    for (const item of inferredItems) state[item.id] = true;
+    return state;
   });
 
-  const [availableById, setAvailableById] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(availableAutomations.map((item) => [item.id, false]))
-  );
+  function toggle(id: string) {
+    setToggleState((current) => ({ ...current, [id]: !current[id] }));
+  }
 
-  const [inferredById, setInferredById] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(items.map((item) => [item.id, true]))
-  );
-
-  function integrationConnected(service: ServiceKey) {
-    if (service === "none") {
-      return true;
-    }
-
+  function isConnected(service: ServiceKey) {
+    if (service === "none") return true;
     return integrations[service];
   }
 
+  const allSuggested = [...activeAutomations, ...availableAutomations];
+
   return (
-    <section className="space-y-4">
-      <article className="rounded-xl border bg-card p-5">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div>
-            <h3 className="text-base font-medium text-foreground">Your Automations</h3>
-            <p className="text-sm text-muted-foreground">Automations selected during onboarding and powered by your integrations.</p>
+    <section className="space-y-6">
+      {allSuggested.length > 0 ? (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Suggested Automations</h3>
+            <Link href="/settings/integrations" className="text-xs text-primary hover:underline">Manage integrations</Link>
           </div>
-          <Link href="/settings/integrations" className="crm-button-secondary h-9 px-4 text-xs">
-            Manage Integrations
-          </Link>
+          <div className="grid gap-3 md:grid-cols-2">
+            {allSuggested.map((item) => (
+              <AutomationCard
+                key={item.id}
+                trigger={item.trigger}
+                actionText={item.action}
+                name={item.name}
+                service={item.requiresIntegration}
+                connected={isConnected(item.requiresIntegration)}
+                active={toggleState[item.id] ?? false}
+                onToggle={() => toggle(item.id)}
+              />
+            ))}
+          </div>
         </div>
-      </article>
-
-      {activeAutomations.length === 0 ? (
-        <article className="rounded-xl border bg-card p-5">
-          <p className="text-sm text-muted-foreground">No active automations yet. Enable one below to get started.</p>
-        </article>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          {activeAutomations.map((item) => {
-            const connected = integrationConnected(item.requiresIntegration);
-            const isActive = activeById[item.id] ?? true;
-
-            return (
-              <article key={item.id} className="rounded-xl border bg-card p-5 space-y-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Trigger</p>
-                    <p className="text-sm font-medium text-foreground">{item.trigger}</p>
-                  </div>
-                  <button
-                    type="button"
-                    className="h-8 px-3 rounded-md border border-border bg-muted/50 text-xs hover:bg-accent"
-                    onClick={() => setActiveById((current) => ({ ...current, [item.id]: !isActive }))}
-                  >
-                    {isActive ? "Active" : "Paused"}
-                  </button>
-                </div>
-
-                <div>
-                  <p className="text-xs text-muted-foreground">Action</p>
-                  <p className="text-sm text-foreground">{item.name}</p>
-                </div>
-
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-xs text-muted-foreground">Required integration: {serviceLabel[item.requiresIntegration]}</p>
-                  {!connected && item.requiresIntegration !== "none" ? (
-                    <Link href="/settings/integrations" className="crm-button-secondary h-8 px-3 text-xs">
-                      Connect {serviceLabel[item.requiresIntegration]}
-                    </Link>
-                  ) : null}
-                </div>
-              </article>
-            );
-          })}
-        </div>
+        <article className="rounded-xl border bg-card p-5">
+          <p className="text-sm text-muted-foreground">No suggested automations for your framework yet. Use the builder below or ask Seldon It.</p>
+        </article>
       )}
 
-      <article className="rounded-xl border bg-card p-5 space-y-4">
-        <div>
-          <h3 className="text-base font-medium text-foreground">Available Automations</h3>
-          <p className="text-sm text-muted-foreground">Suggested automations you did not enable during onboarding.</p>
+      {inferredItems.length > 0 ? (
+        <div className="space-y-3">
+          <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Soul-Inferred Workflows</h3>
+          <p className="text-xs text-muted-foreground">Based on the journey stages your Soul defined during setup.</p>
+          <div className="grid gap-3 md:grid-cols-2">
+            {inferredItems.map((item) => (
+              <AutomationCard
+                key={item.id}
+                trigger={`Contact enters "${item.stage}" stage`}
+                actionText={item.action}
+                name={item.action}
+                service={item.service}
+                connected={isConnected(item.service)}
+                active={toggleState[item.id] ?? true}
+                onToggle={() => toggle(item.id)}
+              />
+            ))}
+          </div>
         </div>
-
-        {availableAutomations.length === 0 ? (
-          <p className="text-sm text-muted-foreground">All suggested automations are already enabled.</p>
-        ) : (
-          <div className="space-y-2">
-            {availableAutomations.map((item) => {
-              const enabled = availableById[item.id] ?? false;
-              const connected = integrationConnected(item.requiresIntegration);
-              return (
-                <div key={item.id} className="rounded-lg border border-border px-3 py-3 flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-medium text-foreground">{item.name}</p>
-                    <p className="text-xs text-muted-foreground">Requires {serviceLabel[item.requiresIntegration]}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {!connected && item.requiresIntegration !== "none" ? (
-                      <Link href="/settings/integrations" className="crm-button-secondary h-8 px-3 text-xs">
-                        Connect {serviceLabel[item.requiresIntegration]}
-                      </Link>
-                    ) : null}
-                    <button
-                      type="button"
-                      className="h-8 px-3 rounded-md border border-border bg-muted/50 text-xs hover:bg-accent"
-                      onClick={() => setAvailableById((current) => ({ ...current, [item.id]: !enabled }))}
-                    >
-                      {enabled ? "Enabled" : "Enable"}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </article>
-
-      <article className="rounded-xl border bg-card p-5 space-y-4">
-        <div>
-          <h3 className="text-base font-medium text-foreground">Custom Automations</h3>
-          <p className="text-sm text-muted-foreground">Advanced trigger → condition → action workflows for power users.</p>
-        </div>
-
-        {items.length > 0 ? (
-          <div className="space-y-2">
-            {items.map((item) => {
-              const connected = integrationConnected(item.requiredService);
-              const isActive = inferredById[item.id] ?? true;
-              return (
-                <div key={item.id} className="rounded-lg border border-border px-3 py-3 flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs text-muted-foreground">{item.stage}</p>
-                    <p className="text-sm text-foreground">{item.action}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {!connected && item.requiredService !== "none" ? (
-                      <Link href="/settings/integrations" className="crm-button-secondary h-8 px-3 text-xs">
-                        Connect {serviceLabel[item.requiredService]}
-                      </Link>
-                    ) : null}
-                    <button
-                      type="button"
-                      className="h-8 px-3 rounded-md border border-border bg-muted/50 text-xs hover:bg-accent"
-                      onClick={() => setInferredById((current) => ({ ...current, [item.id]: !isActive }))}
-                    >
-                      {isActive ? "Active" : "Paused"}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="rounded-lg border border-dashed border-border px-3 py-4 text-sm text-muted-foreground flex items-center gap-2">
-            <Zap className="h-4 w-4" />
-            Build your first custom automation below.
-          </div>
-        )}
-      </article>
+      ) : null}
     </section>
   );
 }

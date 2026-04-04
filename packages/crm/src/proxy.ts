@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { enforcePlanGate } from "@/middleware/plan-gate";
 
-const protectedPrefixes = ["/hub", "/dashboard", "/orgs", "/contacts", "/deals", "/activities", "/forms", "/settings", "/api/v1"];
+const protectedPrefixes = ["/hub", "/dashboard", "/welcome", "/orgs", "/contacts", "/deals", "/activities", "/forms", "/settings", "/api/v1"];
 const publicPrefixes = ["/api/v1", "/api/auth"];
 
 function isProtectedPath(pathname: string) {
@@ -27,14 +27,19 @@ export const proxy = auth((request) => {
   const user = request.auth?.user as {
     orgId?: string;
     soulCompleted?: boolean;
+    welcomeShown?: boolean;
     planId?: string | null;
     subscriptionStatus?: "trialing" | "active" | "past_due" | "canceled" | "unpaid";
     trialEndsAt?: string | null;
   } | undefined;
   const isSoulCompleted = Boolean(user?.soulCompleted);
+  const isWelcomeShown = Boolean(user?.welcomeShown);
 
   if ((pathname === "/login" || pathname === "/signup") && isAuthenticated) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    if (!isSoulCompleted) {
+      return NextResponse.redirect(new URL("/setup", request.url));
+    }
+    return NextResponse.redirect(new URL(isWelcomeShown ? "/dashboard" : "/welcome", request.url));
   }
 
   if (isPublicPath(pathname)) {
@@ -49,8 +54,12 @@ export const proxy = auth((request) => {
     return NextResponse.redirect(new URL("/setup", request.url));
   }
 
+  if (isAuthenticated && isSoulCompleted && !isWelcomeShown && pathname !== "/welcome") {
+    return NextResponse.redirect(new URL("/welcome", request.url));
+  }
+
   if (isAuthenticated && isSoulCompleted && pathname === "/setup") {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    return NextResponse.redirect(new URL(isWelcomeShown ? "/dashboard" : "/welcome", request.url));
   }
 
   const planGate = enforcePlanGate({
@@ -95,6 +104,7 @@ export const config = {
     "/signup",
     "/pricing",
     "/setup",
+    "/welcome",
     "/orgs/:path*",
     "/hub/:path*",
     "/dashboard/:path*",

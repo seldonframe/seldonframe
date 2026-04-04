@@ -68,6 +68,38 @@ function readIntegrations(raw: unknown): OrganizationIntegrations {
   return raw as OrganizationIntegrations;
 }
 
+function toSeldonErrorMessage(cause: unknown) {
+  const message = cause instanceof Error ? cause.message : "Unknown error";
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes("anthropic") || normalized.includes("api key") || normalized.includes("authentication")) {
+    return "Seldon It could not reach Anthropic. Verify ANTHROPIC_API_KEY and model access.";
+  }
+
+  if (normalized.includes("model") || normalized.includes("not found")) {
+    return "Seldon It model configuration failed. Check SELDON_MODEL (expected claude-sonnet-4-20250514).";
+  }
+
+  if (
+    normalized.includes("fetch failed") ||
+    normalized.includes("econnreset") ||
+    normalized.includes("etimedout") ||
+    normalized.includes("network")
+  ) {
+    return "Seldon It could not reach upstream services. Please retry in a moment.";
+  }
+
+  if (normalized.includes("rate") || normalized.includes("quota") || normalized.includes("429")) {
+    return "Seldon It is rate-limited right now. Please retry shortly.";
+  }
+
+  if (normalized.includes("unauthorized")) {
+    return "Unauthorized. Please sign in again.";
+  }
+
+  return `Seldon It failed: ${message}`;
+}
+
 export async function getSeldonPageData() {
   const user = await getCurrentUser();
   const orgId = await getOrgId();
@@ -178,6 +210,14 @@ export async function runSeldonItAction(_prev: SeldonRunState, formData: FormDat
   }
 
   try {
+    const aiResolution = await getAIClient({ orgId, userId: user.id });
+    if (!aiResolution.client && aiResolution.provider !== "openai") {
+      return {
+        ok: false,
+        error: "Seldon It AI is not configured. Set ANTHROPIC_API_KEY or connect an Anthropic key.",
+      };
+    }
+
     const planned = await planBlockMds({ orgId, description });
 
     if (planned.length === 0) {
@@ -221,6 +261,10 @@ export async function runSeldonItAction(_prev: SeldonRunState, formData: FormDat
         blockName,
         blockDescription: item.need,
       });
+
+      if (!generatedCode || !generatedCode.files || Object.keys(generatedCode.files).length === 0) {
+        throw new Error("Generated block payload was empty.");
+      }
 
       let decision = decideMigrationExecution(generatedCode.migrationSQL);
 
@@ -311,14 +355,12 @@ export async function runSeldonItAction(_prev: SeldonRunState, formData: FormDat
     revalidatePath("/marketplace");
 
     try {
-      const resolution = await getAIClient({ orgId, userId: user.id });
-
       for (const result of results) {
         await recordSeldonUsage({
           orgId,
           userId: user.id,
           blockId: result.blockId,
-          mode: resolution.mode,
+          mode: aiResolution.mode,
           model: "claude-sonnet",
         });
       }
@@ -336,27 +378,6 @@ export async function runSeldonItAction(_prev: SeldonRunState, formData: FormDat
       results,
     };
   } catch (cause) {
-    const message = cause instanceof Error ? cause.message : "Unknown error";
-    const normalized = message.toLowerCase();
-
-    if (normalized.includes("anthropic") || normalized.includes("api key") || normalized.includes("authentication")) {
-      return {
-        ok: false,
-        error: "Seldon It could not reach Anthropic. Verify ANTHROPIC_API_KEY and model access.",
-      };
-    }
-
-    if (normalized.includes("model") || normalized.includes("not found")) {
-      return {
-        ok: false,
-        error: "Seldon It model configuration failed. Check SELDON_MODEL (expected claude-sonnet-4-20250514).",
-      };
-    }
-
-    if (normalized.includes("unauthorized")) {
-      return { ok: false, error: "Unauthorized. Please sign in again." };
-    }
-
-    return { ok: false, error: `Seldon It failed: ${message}` };
+    return { ok: false, error: toSeldonErrorMessage(cause) };
   }
 }

@@ -60,6 +60,47 @@ export function SeldonPageClient({ allowed, services, history }: { allowed: bool
   const [description, setDescription] = useState("");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
 
+  const promptExamples: Array<{ label: string; prompt: string; icon: "wand" | "sparkles" | "box" }> = [
+    {
+      label: "Online Course",
+      prompt: "Build a course block where I can create modules and lessons, let clients enroll, track progress, and get a certificate on completion.",
+      icon: "sparkles",
+    },
+    {
+      label: "Client Portal",
+      prompt: "Create a client portal where each contact can log in, see their bookings, download files I share, and message me directly.",
+      icon: "sparkles",
+    },
+    {
+      label: "Invoicing",
+      prompt: "Build an invoicing block that lets me create line-item invoices, send them by email, and track payment status with Stripe.",
+      icon: "wand",
+    },
+    {
+      label: "Testimonials",
+      prompt: "Create a testimonial collector where clients submit reviews via a public form, I approve them, and embed a testimonial wall on my landing page.",
+      icon: "box",
+    },
+    {
+      label: "Waitlist",
+      prompt: "Build a waitlist block with a public signup form, position tracking, and automatic email when a spot opens up.",
+      icon: "wand",
+    },
+    {
+      label: "Referral Program",
+      prompt: "Create a referral program where each client gets a unique link, I can track who referred whom, and reward top referrers.",
+      icon: "box",
+    },
+  ];
+
+  function fillPrompt(prompt: string) {
+    setDescription(prompt);
+    setTimeout(() => {
+      const textarea = document.getElementById("seldon-description") as HTMLTextAreaElement | null;
+      textarea?.focus();
+    }, 50);
+  }
+
   const hasHistoryState = pending || Boolean(state.error) || Boolean(state.message) || Boolean(state.results?.length);
 
   const assistantContent = state.error
@@ -120,6 +161,20 @@ export function SeldonPageClient({ allowed, services, history }: { allowed: bool
                       <div className="space-y-4 text-center">
                         <h1 className="text-2xl font-semibold tracking-tight">Hey! I&apos;m Seldon</h1>
                         <p className="text-2xl text-foreground">Describe what you need</p>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-6">
+                        {promptExamples.map((example) => (
+                          <button
+                            key={example.label}
+                            type="button"
+                            className="text-left rounded-xl border border-border p-3 hover:bg-accent/40 transition-colors space-y-1"
+                            onClick={() => fillPrompt(example.prompt)}
+                          >
+                            <p className="text-sm font-medium text-foreground">{example.label}</p>
+                            <p className="text-xs text-muted-foreground line-clamp-2">{example.prompt}</p>
+                          </button>
+                        ))}
                       </div>
                     </div>
                   </div>
@@ -294,18 +349,17 @@ export function SeldonPageClient({ allowed, services, history }: { allowed: bool
                 </form>
 
                 <div className="flex flex-wrap items-center justify-center gap-2 mt-3">
-                  <button type="button" className="gap-2 inline-flex items-center justify-center rounded-md text-sm font-medium h-9 px-4 py-2 border border-input bg-background hover:bg-accent">
-                    <WandSparklesIcon className="size-4" />
-                    <span>Quick Block</span>
-                  </button>
-                  <button type="button" className="gap-2 inline-flex items-center justify-center rounded-md text-sm font-medium h-9 px-4 py-2 border border-input bg-background hover:bg-accent">
-                    <SparklesIcon className="size-4" />
-                    <span>Full Feature</span>
-                  </button>
-                  <button type="button" className="gap-2 inline-flex items-center justify-center rounded-md text-sm font-medium h-9 px-4 py-2 border border-input bg-background hover:bg-accent">
-                    <BoxIcon className="size-4" />
-                    <span>Integration</span>
-                  </button>
+                  {promptExamples.slice(0, 3).map((example) => (
+                    <button
+                      key={example.label}
+                      type="button"
+                      className="gap-2 inline-flex items-center justify-center rounded-md text-sm font-medium h-9 px-4 py-2 border border-input bg-background hover:bg-accent"
+                      onClick={() => fillPrompt(example.prompt)}
+                    >
+                      {example.icon === "wand" ? <WandSparklesIcon className="size-4" /> : example.icon === "sparkles" ? <SparklesIcon className="size-4" /> : <BoxIcon className="size-4" />}
+                      <span>{example.label}</span>
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>

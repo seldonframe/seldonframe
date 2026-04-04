@@ -4,6 +4,7 @@ import { getSoul } from "@/lib/soul/server";
 import Link from "next/link";
 import { Filter, Search, Users, UserCheck, BellRing, CircleDot } from "lucide-react";
 import { ContactsPageActions } from "@/components/contacts/contacts-page-actions";
+import { CsvImport } from "@/components/contacts/csv-import";
 
 /*
 Square UI Leads class references (from template source):
@@ -26,13 +27,14 @@ const sortOptions = [
 export default async function ContactsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; status?: string; sort?: "recent" | "name_asc" | "name_desc" | "score_desc" | "score_asc"; dateRange?: "all" | "month" | "week" | "today" }>;
+  searchParams: Promise<{ search?: string; status?: string; sort?: "recent" | "name_asc" | "name_desc" | "score_desc" | "score_asc"; dateRange?: "all" | "month" | "week" | "today"; import?: string }>;
 }) {
   const params = await searchParams;
   const search = (params.search ?? "").trim();
   const status = (params.status ?? "all").trim() || "all";
   const sort = params.sort ?? "recent";
   const dateRange = params.dateRange ?? "all";
+  const showCsvImport = params.import === "csv";
 
   const now = new Date();
   let createdAfter: Date | undefined;
@@ -93,6 +95,10 @@ export default async function ContactsPage({
     };
   });
 
+  const stageOptions = Array.isArray(soul?.pipeline?.stages)
+    ? soul.pipeline.stages.map((stage) => stage.name).filter((stage): stage is string => Boolean(stage?.trim()))
+    : [];
+
   const totalContacts = rows.length;
   const newThisMonth = rowsWithBadges.filter((row) => Number.isFinite(row.createdAtMs) && nowMs - row.createdAtMs <= thirtyDaysMs).length;
   const activeCount = rows.filter((row) => row.status !== "inactive").length;
@@ -121,6 +127,8 @@ export default async function ContactsPage({
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <ContactsPageActions search={search} status={status} sort={sort} dateRange={dateRange} />
       </div>
+
+      {showCsvImport ? <CsvImport stageOptions={stageOptions.length > 0 ? stageOptions : ["lead"]} /> : null}
 
       <div className="bg-card text-card-foreground rounded-xl border">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y divide-x-0 lg:divide-x sm:divide-y-0 divide-border">

@@ -38,7 +38,7 @@ export function LoginForm() {
       const callbackInput = document.createElement("input");
       callbackInput.type = "hidden";
       callbackInput.name = "callbackUrl";
-      callbackInput.value = "/";
+      callbackInput.value = "/setup";
 
       form.appendChild(csrfInput);
       form.appendChild(callbackInput);
@@ -60,10 +60,11 @@ export function LoginForm() {
       <button
         type="button"
         disabled={googlePending}
-        className="crm-button-primary h-11 w-full px-4 text-base"
+        className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md border border-border bg-card px-4 text-base font-medium text-foreground shadow-xs transition-all hover:bg-accent"
         onClick={handleGoogleSignIn}
       >
-        {googlePending ? "Redirecting to Google..." : "Sign in with Google"}
+        <span aria-hidden="true" className="text-base">G</span>
+        {googlePending ? "Redirecting to Google..." : "Continue with Google"}
       </button>
 
       <div className="relative flex items-center justify-center py-1">
@@ -90,7 +91,7 @@ export function LoginForm() {
         </div>
 
         <button type="submit" disabled={pending} className="crm-button-secondary h-10 w-full px-4">
-          {pending ? "Sending magic link..." : "Continue with email"}
+          {pending ? "Sending magic link..." : "Continue with email link"}
         </button>
       </form>
 

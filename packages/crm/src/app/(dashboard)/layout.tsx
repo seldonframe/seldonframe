@@ -9,6 +9,7 @@ import { DashboardTopbar } from "@/components/layout/dashboard-topbar";
 import { registerCrmEventListeners } from "@/lib/events/listeners";
 import { getAllBlocksForOrg } from "@/lib/blocks/registry";
 import { canSeldonIt, resolvePlanFromPlanId } from "@/lib/billing/entitlements";
+import { getHiddenBlocks } from "@/lib/blocks/visibility-actions";
 import { db } from "@/db";
 import { activities, contacts, deals, landingPages, organizations, users } from "@/db/schema";
 import { desc, eq, sql } from "drizzle-orm";
@@ -34,7 +35,10 @@ export default async function DashboardLayout({
   const avatarFallback = user?.name?.trim()?.charAt(0)?.toUpperCase() || user?.email?.charAt(0)?.toUpperCase() || "U";
 
   const orgId = await getOrgId();
-  const blocks = orgId ? await getAllBlocksForOrg(orgId) : [];
+  const [blocks, hiddenBlocks] = await Promise.all([
+    orgId ? getAllBlocksForOrg(orgId) : [],
+    getHiddenBlocks(),
+  ]);
   const [dbUserForPlan] = user?.id
     ? await db.select({ planId: sql<string | null>`plan_id` }).from(users).where(eq(users.id, user.id)).limit(1)
     : [null];
@@ -123,6 +127,7 @@ export default async function DashboardLayout({
             <Sidebar
               blocks={blocks}
               canAccessSeldon={canAccessSeldon}
+              hiddenBlocks={hiddenBlocks}
               workspaceName={activeOrg?.name || "SeldonFrame"}
               workspaceMembers={orgMemberCount > 0 ? orgMemberCount : undefined}
               userName={user?.name || "Account"}

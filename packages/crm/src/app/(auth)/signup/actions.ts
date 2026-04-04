@@ -37,7 +37,7 @@ function isRedirectControlFlowError(error: unknown) {
 export async function signInWithGoogleAction() {
   assertWritable();
 
-  await signIn("google", { redirectTo: "/" });
+  await signIn("google", { redirectTo: "/setup" });
 }
 
 export async function sendMagicLinkAction(_: MagicLinkActionState, formData: FormData): Promise<MagicLinkActionState> {

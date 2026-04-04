@@ -86,11 +86,12 @@ export const authConfig = {
             token.trialEndsAt = dbUser.trialEndsAt ? dbUser.trialEndsAt.toISOString() : null;
 
             const [org] = await db
-              .select({ id: organizations.id, soulCompletedAt: organizations.soulCompletedAt, integrations: organizations.integrations })
+              .select({ id: organizations.id, soulCompletedAt: organizations.soulCompletedAt, integrations: organizations.integrations, settings: organizations.settings })
               .from(organizations)
               .where(eq(organizations.id, dbUser.orgId))
               .limit(1);
             token.soulCompleted = Boolean(org?.soulCompletedAt);
+            token.welcomeShown = Boolean((org?.settings as Record<string, unknown> | undefined)?.welcomeShown);
 
             if (account?.provider === "google" && org) {
               const [googleAccount] = await db
@@ -146,6 +147,7 @@ export const authConfig = {
         session.user.orgId = (token.orgId as string | undefined) ?? "";
         session.user.role = (token.role as string | undefined) ?? "member";
         session.user.soulCompleted = Boolean(token.soulCompleted);
+        session.user.welcomeShown = Boolean(token.welcomeShown);
         session.user.planId = (token.planId as string | undefined) ?? null;
         session.user.subscriptionStatus =
           (token.subscriptionStatus as "trialing" | "active" | "past_due" | "canceled" | "unpaid" | undefined) ?? "trialing";

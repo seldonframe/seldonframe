@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import { ChevronsUpDown } from "lucide-react";
 import type { BlockManifest } from "@seldonframe/core/blocks";
-import { SidebarNav } from "@/components/layout/sidebar-nav";
+import { SidebarNav, type NavGroup } from "@/components/layout/sidebar-nav";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useLabels } from "@/lib/hooks/use-labels";
 
@@ -16,37 +16,74 @@ import { useLabels } from "@/lib/hooks/use-labels";
     - account card shell: "flex items-center gap-2 sm:gap-3 rounded-lg border bg-card p-2 sm:p-3"
 */
 
+const hiddenSlugToHref: Record<string, string> = {
+  bookings: "/bookings",
+  contacts: "/contacts",
+  deals: "/deals",
+  email: "/emails",
+  pages: "/landing",
+  forms: "/forms",
+  automations: "/automations",
+  payments: "/settings/integrations",
+  seldon: "/seldon",
+};
+
 export function Sidebar(props: {
   blocks: BlockManifest[];
   canAccessSeldon: boolean;
+  hiddenBlocks?: string[];
   workspaceName: string;
   workspaceMembers?: number;
   userName: string;
   userEmail: string;
   avatarFallback: string;
 }) {
-  const { canAccessSeldon, workspaceName, userName, userEmail, avatarFallback } = props;
+  const { canAccessSeldon, hiddenBlocks = [], workspaceName, userName, userEmail, avatarFallback } = props;
   const labels = useLabels();
-  const nav = [
-    { href: "/dashboard", label: "Dashboard", icon: "LayoutDashboard", order: 10 },
+  const hiddenHrefs = new Set(hiddenBlocks.map((slug) => hiddenSlugToHref[slug]).filter(Boolean));
+
+  function filterHidden<T extends { href: string }>(items: T[]): T[] {
+    return items.filter((item) => !hiddenHrefs.has(item.href));
+  }
+
+  const navGroups: NavGroup[] = [
     {
-      href: canAccessSeldon ? "/seldon" : "/settings/billing",
-      label: "Seldon It",
-      icon: "sparkles",
-      order: 20,
-      disabled: !canAccessSeldon,
-      tooltip: canAccessSeldon ? undefined : "Upgrade to Cloud Pro to Seldon custom blocks",
-      upgrade: !canAccessSeldon,
+      items: filterHidden([
+        { href: "/dashboard", label: "Dashboard", icon: "LayoutDashboard" },
+        {
+          href: canAccessSeldon ? "/seldon" : "/settings/billing",
+          label: "Seldon It",
+          icon: "sparkles",
+          disabled: !canAccessSeldon,
+          tooltip: canAccessSeldon ? undefined : "Upgrade to Cloud Pro to Seldon custom blocks",
+          upgrade: !canAccessSeldon,
+        },
+      ]),
     },
-    { href: "/contacts", label: labels.contact.plural, icon: "Users", order: 30 },
-    { href: "/deals", label: "Engagements", icon: "Building2", order: 40 },
-    { href: "/bookings", label: "Booking", icon: "Calendar", order: 50 },
-    { href: "/landing", label: "Pages", icon: "Layout", order: 60 },
-    { href: "/emails", label: "Email", icon: "Mail", order: 70 },
-    { href: "/forms", label: labels.intakeForm.plural, icon: "FileText", order: 80 },
-    { href: "/automations", label: "Automations", icon: "Zap", order: 90 },
-    { href: "/settings", label: "Settings", icon: "Settings", order: 100 },
-  ];
+    {
+      title: "CRM",
+      items: filterHidden([
+        { href: "/contacts", label: labels.contact.plural, icon: "Users" },
+        { href: "/deals", label: "Engagements", icon: "Building2" },
+        { href: "/bookings", label: "Booking", icon: "Calendar" },
+      ]),
+    },
+    {
+      title: "Marketing",
+      items: filterHidden([
+        { href: "/landing", label: "Pages", icon: "Layout" },
+        { href: "/emails", label: "Email", icon: "Mail" },
+        { href: "/forms", label: labels.intakeForm.plural, icon: "FileText" },
+      ]),
+    },
+    {
+      title: "System",
+      items: filterHidden([
+        { href: "/automations", label: "Automations", icon: "Zap" },
+        { href: "/settings", label: "Settings", icon: "Settings" },
+      ]),
+    },
+  ].filter((group) => group.items.length > 0);
 
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -85,7 +122,7 @@ export function Sidebar(props: {
             </div>
           </div>
 
-          <SidebarNav nav={nav} onNavigate={() => setMobileOpen(false)} />
+          <SidebarNav groups={navGroups} onNavigate={() => setMobileOpen(false)} />
         </div>
 
         <div className="mt-auto px-3 pb-3 pt-4 sm:px-4 sm:pb-4 sm:pt-6 lg:px-5 lg:pb-5 lg:pt-8">

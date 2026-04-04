@@ -13,6 +13,11 @@ type NavItem = {
   upgrade?: boolean;
 };
 
+export type NavGroup = {
+  title?: string;
+  items: NavItem[];
+};
+
 const iconMap = {
   dashboard: LayoutDashboard,
   layoutdashboard: LayoutDashboard,
@@ -45,42 +50,57 @@ function isActivePath(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function SidebarNav({ nav, onNavigate }: { nav: NavItem[]; onNavigate?: () => void }) {
-  const pathname = usePathname();
+function NavItemLink({ item, pathname, onNavigate, icon: Icon }: { item: NavItem; pathname: string; onNavigate?: () => void; icon: React.ComponentType<{ className?: string }> }) {
+  const active = isActivePath(pathname, item.href);
+  const className = item.disabled
+    ? "flex h-9 items-center gap-2.5 rounded-md px-3 text-sm font-medium text-muted-foreground opacity-55 sm:h-[38px]"
+    : `flex h-9 items-center gap-2.5 rounded-md px-3 text-sm font-medium transition-colors sm:h-[38px] ${active ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground"}`;
 
   return (
-    <nav className="space-y-1">
-      {nav.map((item) => {
-        const Icon = resolveIcon(item.icon);
-        const active = isActivePath(pathname, item.href);
-        const className = item.disabled
-          ? "flex h-9 items-center gap-2.5 rounded-md px-3 text-sm font-medium text-muted-foreground opacity-55 sm:h-[38px]"
-          : `flex h-9 items-center gap-2.5 rounded-md px-3 text-sm font-medium transition-colors sm:h-[38px] ${active ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground"}`;
+    <Link
+      href={item.href}
+      data-active={item.disabled ? false : active}
+      className={className}
+      title={item.tooltip}
+      onClick={() => {
+        if (!item.disabled) {
+          onNavigate?.();
+        }
+      }}
+    >
+      <Icon className="size-4 shrink-0 sm:size-5" />
+      <span className="flex-1">{item.label}</span>
+      {active && !item.disabled ? <ChevronRight className="h-4 w-4 text-[hsl(var(--muted-foreground))]/70" /> : null}
+      {item.upgrade ? (
+        <span className="rounded border border-border px-1.5 py-0.5 text-[10px] uppercase tracking-[0.06em] text-[hsl(var(--muted-foreground))]">
+          Upgrade
+        </span>
+      ) : null}
+    </Link>
+  );
+}
 
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            data-active={item.disabled ? false : active}
-            className={className}
-            title={item.tooltip}
-            onClick={() => {
-              if (!item.disabled) {
-                onNavigate?.();
-              }
-            }}
-          >
-            <Icon className="size-4 shrink-0 sm:size-5" />
-            <span className="flex-1">{item.label}</span>
-            {active && !item.disabled ? <ChevronRight className="h-4 w-4 text-[hsl(var(--muted-foreground))]/70" /> : null}
-            {item.upgrade ? (
-              <span className="rounded border border-border px-1.5 py-0.5 text-[10px] uppercase tracking-[0.06em] text-[hsl(var(--muted-foreground))]">
-                Upgrade
-              </span>
-            ) : null}
-          </Link>
-        );
-      })}
+export function SidebarNav({ nav, groups, onNavigate }: { nav?: NavItem[]; groups?: NavGroup[]; onNavigate?: () => void }) {
+  const pathname = usePathname();
+
+  const resolvedGroups: NavGroup[] = groups && groups.length > 0
+    ? groups
+    : nav
+      ? [{ items: nav }]
+      : [];
+
+  return (
+    <nav className="space-y-4">
+      {resolvedGroups.map((group, groupIndex) => (
+        <div key={group.title ?? `group-${groupIndex}`} className="space-y-0.5">
+          {group.title ? (
+            <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/60">{group.title}</p>
+          ) : null}
+          {group.items.map((item) => (
+            <NavItemLink key={item.href} item={item} pathname={pathname} onNavigate={onNavigate} icon={resolveIcon(item.icon)} />
+          ))}
+        </div>
+      ))}
     </nav>
   );
 }

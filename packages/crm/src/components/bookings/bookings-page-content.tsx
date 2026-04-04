@@ -655,7 +655,7 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
       ) : null}
 
       {showFilterNotice ? (
-        <div className="fixed bottom-4 right-4 z-[70] rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground shadow-sm">Coming soon</div>
+        <div className="fixed bottom-4 right-4 z-70 rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground shadow-sm">Coming soon</div>
       ) : null}
     </>
   );

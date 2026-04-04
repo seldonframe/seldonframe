@@ -44,7 +44,7 @@ const frameworkIcons: Record<string, React.ComponentType<{ className?: string }>
 };
 
 const integrationMeta: Record<string, { label: string; icon: React.ComponentType<{ className?: string }>; description: string }> = {
-  resend: { label: "Resend", icon: Mail, description: "Email delivery" },
+  resend: { label: "SeldonFrame Email", icon: Mail, description: "Built-in transactional emails" },
   twilio: { label: "Twilio", icon: MessageSquare, description: "SMS messages" },
   stripe: { label: "Stripe", icon: CreditCard, description: "Payments" },
   google: { label: "Google Calendar", icon: Calendar, description: "Booking sync" },
@@ -98,7 +98,10 @@ function StepTransition({ children, stepKey }: { children: React.ReactNode; step
 }
 
 type IntegrationState = {
-  resend: { apiKey: string; fromEmail: string; fromName: string; connected: boolean; saving: boolean };
+  newsletterProvider: "kit" | "mailchimp" | "beehiiv" | null;
+  kit: { apiKey: string; connected: boolean; saving: boolean };
+  mailchimp: { apiKey: string; listId: string; connected: boolean; saving: boolean };
+  beehiiv: { apiKey: string; publicationId: string; connected: boolean; saving: boolean };
   twilio: { accountSid: string; authToken: string; fromNumber: string; connected: boolean; saving: boolean };
 };
 
@@ -121,7 +124,10 @@ export function SetupWizard({ frameworks }: { frameworks: FrameworkOption[] }) {
 
   // Step 2
   const [integrations, setIntegrations] = useState<IntegrationState>({
-    resend: { apiKey: "", fromEmail: "", fromName: "", connected: false, saving: false },
+    newsletterProvider: null,
+    kit: { apiKey: "", connected: false, saving: false },
+    mailchimp: { apiKey: "", listId: "", connected: false, saving: false },
+    beehiiv: { apiKey: "", publicationId: "", connected: false, saving: false },
     twilio: { accountSid: "", authToken: "", fromNumber: "", connected: false, saving: false },
   });
 
@@ -170,7 +176,7 @@ export function SetupWizard({ frameworks }: { frameworks: FrameworkOption[] }) {
     });
   }
 
-  const saveIntegration = useCallback(async (service: "resend" | "twilio") => {
+  const saveIntegration = useCallback(async (service: "kit" | "mailchimp" | "beehiiv" | "twilio") => {
     if (isDemoReadonlyClient) {
       showDemoToast();
       return;
@@ -182,29 +188,54 @@ export function SetupWizard({ frameworks }: { frameworks: FrameworkOption[] }) {
       const s = integrations[service];
       const credentials: Record<string, string> = {};
 
-      if (service === "resend") {
-        const r = s as IntegrationState["resend"];
-        credentials.apiKey = r.apiKey;
-        credentials.fromEmail = r.fromEmail;
-        credentials.fromName = r.fromName || businessName;
-      } else {
+      if (service === "twilio") {
         const t = s as IntegrationState["twilio"];
         credentials.accountSid = t.accountSid;
         credentials.authToken = t.authToken;
         credentials.fromNumber = t.fromNumber;
+      } else if (service === "kit") {
+        const n = integrations.kit;
+        credentials.apiKey = n.apiKey;
+      } else if (service === "mailchimp") {
+        const n = integrations.mailchimp;
+        credentials.apiKey = n.apiKey;
+        credentials.listId = n.listId;
+      } else if (service === "beehiiv") {
+        const n = integrations.beehiiv;
+        credentials.apiKey = n.apiKey;
+        credentials.publicationId = n.publicationId;
       }
 
       await saveIntegrationFromWizard(service, credentials);
-      setIntegrations((prev) => ({ ...prev, [service]: { ...prev[service], saving: false, connected: true } }));
+
+      if (service === "twilio") {
+        setIntegrations((prev) => ({ ...prev, twilio: { ...prev.twilio, saving: false, connected: true } }));
+      } else {
+        setIntegrations((prev) => ({
+          ...prev,
+          newsletterProvider: service,
+          kit: { ...prev.kit, saving: false, connected: service === "kit" },
+          mailchimp: { ...prev.mailchimp, saving: false, connected: service === "mailchimp" },
+          beehiiv: { ...prev.beehiiv, saving: false, connected: service === "beehiiv" },
+        }));
+      }
     } catch {
-      setIntegrations((prev) => ({ ...prev, [service]: { ...prev[service], saving: false } }));
+      if (service === "twilio") {
+        setIntegrations((prev) => ({ ...prev, twilio: { ...prev.twilio, saving: false } }));
+      } else if (service === "kit") {
+        setIntegrations((prev) => ({ ...prev, kit: { ...prev.kit, saving: false } }));
+      } else if (service === "mailchimp") {
+        setIntegrations((prev) => ({ ...prev, mailchimp: { ...prev.mailchimp, saving: false } }));
+      } else {
+        setIntegrations((prev) => ({ ...prev, beehiiv: { ...prev.beehiiv, saving: false } }));
+      }
     }
-  }, [integrations, businessName, showDemoToast]);
+  }, [integrations, showDemoToast]);
 
   function goNext() {
     if (!canContinue || pending) return;
     if (step === 3 && installed) {
-      router.push("/dashboard?fromSetup=1");
+      router.push("/welcome?fromSetup=1");
       return;
     }
     setStep((current) => Math.min(current + 1, TOTAL_STEPS - 1));
@@ -488,90 +519,168 @@ export function SetupWizard({ frameworks }: { frameworks: FrameworkOption[] }) {
                 <p className="text-sm text-muted-foreground">Automations activate instantly when tools are connected.</p>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                {/* Resend */}
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="rounded-xl border bg-card p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="size-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">Google Calendar</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Sync your availability</p>
+                  <Link
+                    href="/api/auth/signin/google?callbackUrl=%2Fsetup&scope=openid%20email%20profile%20https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fcalendar&prompt=consent&access_type=offline"
+                    className={`${squarePrimaryButtonClass} h-8 px-3 text-xs w-full`}
+                  >
+                    Connect OAuth
+                  </Link>
+                </div>
+
+                <div className="rounded-xl border bg-card p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <CreditCard className="size-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">Stripe</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Accept payments</p>
+                  <Link href="/settings/integrations" className={`${squareOutlineButtonClass} h-8 px-3 text-xs w-full`}>
+                    Connect in Settings
+                  </Link>
+                </div>
+
                 <div className="rounded-xl border bg-card p-4 space-y-3">
                   <div className="flex items-center gap-2">
                     <Mail className="size-4 text-muted-foreground" />
-                    <span className="text-sm font-medium">Resend</span>
-                    <span className="text-xs text-muted-foreground">Email delivery</span>
+                    <span className="text-sm font-medium">Kit Newsletter</span>
                   </div>
-                  {integrations.resend.connected ? (
-                    <div className="flex items-center gap-2 text-sm text-emerald-600">
-                      <Check className="size-4" />
-                      Connected
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <input
-                        className={squareInputClass}
-                        placeholder="API Key (re_...)"
-                        value={integrations.resend.apiKey}
-                        onChange={(e) => setIntegrations((prev) => ({ ...prev, resend: { ...prev.resend, apiKey: e.target.value } }))}
-                      />
-                      <input
-                        className={squareInputClass}
-                        placeholder="From email (hello@yourdomain.com)"
-                        value={integrations.resend.fromEmail}
-                        onChange={(e) => setIntegrations((prev) => ({ ...prev, resend: { ...prev.resend, fromEmail: e.target.value } }))}
-                      />
-                      <button
-                        type="button"
-                        className={`${squarePrimaryButtonClass} h-8 px-3 text-xs w-full`}
-                        disabled={!integrations.resend.apiKey.trim() || !integrations.resend.fromEmail.trim() || integrations.resend.saving}
-                        onClick={() => saveIntegration("resend")}
-                      >
-                        {integrations.resend.saving ? <Loader2 className="size-3 animate-spin" /> : "Connect"}
-                      </button>
-                    </div>
-                  )}
+                  <p className="text-xs text-muted-foreground">Sync new contacts to your list</p>
+                  <input
+                    className={squareInputClass}
+                    placeholder="API key"
+                    value={integrations.kit.apiKey}
+                    disabled={Boolean(integrations.newsletterProvider && integrations.newsletterProvider !== "kit")}
+                    onChange={(e) => setIntegrations((prev) => ({ ...prev, kit: { ...prev.kit, apiKey: e.target.value } }))}
+                  />
+                  <button
+                    type="button"
+                    className={`${squarePrimaryButtonClass} h-8 px-3 text-xs w-full`}
+                    disabled={
+                      !integrations.kit.apiKey.trim() ||
+                      integrations.kit.saving ||
+                      Boolean(integrations.newsletterProvider && integrations.newsletterProvider !== "kit")
+                    }
+                    onClick={() => saveIntegration("kit")}
+                  >
+                    {integrations.kit.saving ? <Loader2 className="size-3 animate-spin" /> : "Connect"}
+                  </button>
                 </div>
 
-                {/* Twilio */}
+                <div className="rounded-xl border bg-card p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Mail className="size-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">Mailchimp</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Sync new contacts to your list</p>
+                  <input
+                    className={squareInputClass}
+                    placeholder="API key"
+                    value={integrations.mailchimp.apiKey}
+                    disabled={Boolean(integrations.newsletterProvider && integrations.newsletterProvider !== "mailchimp")}
+                    onChange={(e) => setIntegrations((prev) => ({ ...prev, mailchimp: { ...prev.mailchimp, apiKey: e.target.value } }))}
+                  />
+                  <input
+                    className={squareInputClass}
+                    placeholder="List ID"
+                    value={integrations.mailchimp.listId}
+                    disabled={Boolean(integrations.newsletterProvider && integrations.newsletterProvider !== "mailchimp")}
+                    onChange={(e) => setIntegrations((prev) => ({ ...prev, mailchimp: { ...prev.mailchimp, listId: e.target.value } }))}
+                  />
+                  <button
+                    type="button"
+                    className={`${squarePrimaryButtonClass} h-8 px-3 text-xs w-full`}
+                    disabled={
+                      !integrations.mailchimp.apiKey.trim() ||
+                      integrations.mailchimp.saving ||
+                      Boolean(integrations.newsletterProvider && integrations.newsletterProvider !== "mailchimp")
+                    }
+                    onClick={() => saveIntegration("mailchimp")}
+                  >
+                    {integrations.mailchimp.saving ? <Loader2 className="size-3 animate-spin" /> : "Connect"}
+                  </button>
+                </div>
+
+                <div className="rounded-xl border bg-card p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Mail className="size-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">Beehiiv</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Sync new contacts to your list</p>
+                  <input
+                    className={squareInputClass}
+                    placeholder="API key"
+                    value={integrations.beehiiv.apiKey}
+                    disabled={Boolean(integrations.newsletterProvider && integrations.newsletterProvider !== "beehiiv")}
+                    onChange={(e) => setIntegrations((prev) => ({ ...prev, beehiiv: { ...prev.beehiiv, apiKey: e.target.value } }))}
+                  />
+                  <input
+                    className={squareInputClass}
+                    placeholder="Publication ID (optional)"
+                    value={integrations.beehiiv.publicationId}
+                    disabled={Boolean(integrations.newsletterProvider && integrations.newsletterProvider !== "beehiiv")}
+                    onChange={(e) => setIntegrations((prev) => ({ ...prev, beehiiv: { ...prev.beehiiv, publicationId: e.target.value } }))}
+                  />
+                  <button
+                    type="button"
+                    className={`${squarePrimaryButtonClass} h-8 px-3 text-xs w-full`}
+                    disabled={
+                      !integrations.beehiiv.apiKey.trim() ||
+                      integrations.beehiiv.saving ||
+                      Boolean(integrations.newsletterProvider && integrations.newsletterProvider !== "beehiiv")
+                    }
+                    onClick={() => saveIntegration("beehiiv")}
+                  >
+                    {integrations.beehiiv.saving ? <Loader2 className="size-3 animate-spin" /> : "Connect"}
+                  </button>
+                </div>
+
                 <div className="rounded-xl border bg-card p-4 space-y-3">
                   <div className="flex items-center gap-2">
                     <MessageSquare className="size-4 text-muted-foreground" />
-                    <span className="text-sm font-medium">Twilio</span>
-                    <span className="text-xs text-muted-foreground">SMS messages</span>
+                    <span className="text-sm font-medium">Twilio SMS</span>
                   </div>
-                  {integrations.twilio.connected ? (
-                    <div className="flex items-center gap-2 text-sm text-emerald-600">
-                      <Check className="size-4" />
-                      Connected
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <input
-                        className={squareInputClass}
-                        placeholder="Account SID"
-                        value={integrations.twilio.accountSid}
-                        onChange={(e) => setIntegrations((prev) => ({ ...prev, twilio: { ...prev.twilio, accountSid: e.target.value } }))}
-                      />
-                      <input
-                        className={squareInputClass}
-                        placeholder="Auth Token"
-                        type="password"
-                        value={integrations.twilio.authToken}
-                        onChange={(e) => setIntegrations((prev) => ({ ...prev, twilio: { ...prev.twilio, authToken: e.target.value } }))}
-                      />
-                      <input
-                        className={squareInputClass}
-                        placeholder="Phone Number (+1...)"
-                        value={integrations.twilio.fromNumber}
-                        onChange={(e) => setIntegrations((prev) => ({ ...prev, twilio: { ...prev.twilio, fromNumber: e.target.value } }))}
-                      />
-                      <button
-                        type="button"
-                        className={`${squarePrimaryButtonClass} h-8 px-3 text-xs w-full`}
-                        disabled={!integrations.twilio.accountSid.trim() || !integrations.twilio.authToken.trim() || integrations.twilio.saving}
-                        onClick={() => saveIntegration("twilio")}
-                      >
-                        {integrations.twilio.saving ? <Loader2 className="size-3 animate-spin" /> : "Connect"}
-                      </button>
-                    </div>
-                  )}
+                  <p className="text-xs text-muted-foreground">Send text reminders</p>
+                  <input
+                    className={squareInputClass}
+                    placeholder="Account SID"
+                    value={integrations.twilio.accountSid}
+                    onChange={(e) => setIntegrations((prev) => ({ ...prev, twilio: { ...prev.twilio, accountSid: e.target.value } }))}
+                  />
+                  <input
+                    className={squareInputClass}
+                    placeholder="Auth token"
+                    type="password"
+                    value={integrations.twilio.authToken}
+                    onChange={(e) => setIntegrations((prev) => ({ ...prev, twilio: { ...prev.twilio, authToken: e.target.value } }))}
+                  />
+                  <input
+                    className={squareInputClass}
+                    placeholder="Phone number (+1...)"
+                    value={integrations.twilio.fromNumber}
+                    onChange={(e) => setIntegrations((prev) => ({ ...prev, twilio: { ...prev.twilio, fromNumber: e.target.value } }))}
+                  />
+                  <button
+                    type="button"
+                    className={`${squarePrimaryButtonClass} h-8 px-3 text-xs w-full`}
+                    disabled={!integrations.twilio.accountSid.trim() || !integrations.twilio.authToken.trim() || integrations.twilio.saving}
+                    onClick={() => saveIntegration("twilio")}
+                  >
+                    {integrations.twilio.saving ? <Loader2 className="size-3 animate-spin" /> : "Connect"}
+                  </button>
                 </div>
               </div>
+
+              {integrations.newsletterProvider ? (
+                <p className="text-xs text-center text-muted-foreground">
+                  You&apos;re already connected to {integrations.newsletterProvider}. To switch, disconnect in Settings.
+                </p>
+              ) : null}
 
               <p className="text-sm text-muted-foreground text-center">
                 Skip for now — you can connect these in{" "}
@@ -652,8 +761,8 @@ export function SetupWizard({ frameworks }: { frameworks: FrameworkOption[] }) {
                 <div className="rounded-xl border border-primary/30 bg-primary/10 px-4 py-3 text-sm text-primary flex items-center gap-2">
                   <Zap className="h-4 w-4 shrink-0" />
                   {enabledCount} automation{enabledCount !== 1 ? "s" : ""} active
-                  {!integrations.resend.connected && !integrations.twilio.connected ? (
-                    <span className="text-primary/70"> — connect Resend to activate email automations</span>
+                  {!integrations.newsletterProvider && !integrations.twilio.connected ? (
+                    <span className="text-primary/70"> — connect a newsletter or SMS provider to activate delivery automations</span>
                   ) : null}
                 </div>
               ) : (
@@ -690,9 +799,9 @@ export function SetupWizard({ frameworks }: { frameworks: FrameworkOption[] }) {
             <button
               type="button"
               className={`${squarePrimaryButtonClass} h-10 px-6`}
-              onClick={() => router.push("/dashboard?fromSetup=1")}
+              onClick={() => router.push("/welcome?fromSetup=1")}
             >
-              Go to Dashboard <ArrowRight className="ml-1.5 inline h-4 w-4" />
+              Continue <ArrowRight className="ml-1.5 inline h-4 w-4" />
             </button>
           ) : null}
         </div>

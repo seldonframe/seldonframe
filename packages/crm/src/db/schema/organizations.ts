@@ -20,6 +20,14 @@ export type OrganizationIntegrations = {
     apiKey: string;
     connected: boolean;
   };
+  newsletter?: {
+    provider: "kit" | "mailchimp" | "beehiiv";
+    apiKey: string;
+    connected: boolean;
+    subscriberCount?: number;
+    listId?: string;
+    publicationId?: string;
+  };
   google?: {
     calendarConnected: boolean;
     connected?: boolean;

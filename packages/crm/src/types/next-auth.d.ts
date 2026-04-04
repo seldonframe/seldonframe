@@ -7,6 +7,7 @@ declare module "next-auth" {
       orgId: string;
       role: string;
       soulCompleted?: boolean;
+      welcomeShown?: boolean;
       planId?: string | null;
       subscriptionStatus?: "trialing" | "active" | "past_due" | "canceled" | "unpaid";
       billingPeriod?: "monthly" | "yearly";
@@ -21,6 +22,7 @@ declare module "next-auth" {
     orgId?: string;
     role?: string;
     soulCompleted?: boolean;
+    welcomeShown?: boolean;
     planId?: string | null;
     subscriptionStatus?: "trialing" | "active" | "past_due" | "canceled" | "unpaid";
     billingPeriod?: "monthly" | "yearly";
@@ -33,6 +35,7 @@ declare module "next-auth/jwt" {
     orgId?: string;
     role?: string;
     soulCompleted?: boolean;
+    welcomeShown?: boolean;
     planId?: string | null;
     subscriptionStatus?: "trialing" | "active" | "past_due" | "canceled" | "unpaid";
     billingPeriod?: "monthly" | "yearly";

@@ -2,7 +2,7 @@
 
 import { and, asc, desc, eq, gte, ilike, or } from "drizzle-orm";
 import { db } from "@/db";
-import { contacts } from "@/db/schema";
+import { contacts, pipelines } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
 import { assertWritable } from "@/lib/demo/server";
 import { emitSeldonEvent } from "@/lib/events/bus";
@@ -15,6 +15,16 @@ type ContactListOptions = {
   status?: string;
   sort?: ContactListSort;
   createdAfter?: Date;
+};
+
+type ImportedContactRow = {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  company?: string;
+  status?: string;
+  notes?: string;
 };
 
 export async function listContacts(options?: ContactListOptions) {
@@ -108,6 +118,141 @@ export async function createContactAction(formData: FormData) {
   });
 
   return { id: createdContact?.id ?? null };
+}
+
+function normalizeText(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function resolveStatus(rawStatus: string, stageNames: string[], defaultStatus: string) {
+  const normalizedRaw = normalizeText(rawStatus);
+  if (!normalizedRaw) {
+    return { status: defaultStatus, matched: false };
+  }
+
+  const exact = stageNames.find((stage) => normalizeText(stage) === normalizedRaw);
+  if (exact) {
+    return { status: exact, matched: true };
+  }
+
+  const loose = stageNames.find((stage) => {
+    const normalizedStage = normalizeText(stage);
+    return normalizedStage.includes(normalizedRaw) || normalizedRaw.includes(normalizedStage);
+  });
+
+  if (loose) {
+    return { status: loose, matched: true };
+  }
+
+  return { status: defaultStatus, matched: false };
+}
+
+export async function bulkImportContactsAction(input: { rows: ImportedContactRow[] }) {
+  assertWritable();
+
+  const orgId = await getOrgId();
+  if (!orgId) {
+    throw new Error("Unauthorized");
+  }
+
+  const rows = Array.isArray(input.rows) ? input.rows : [];
+  if (rows.length === 0) {
+    return {
+      createdCount: 0,
+      stageSummary: [] as Array<{ stage: string; count: number }>,
+      fallbackCount: 0,
+    };
+  }
+
+  const [defaultPipeline] = await db
+    .select({ stages: pipelines.stages })
+    .from(pipelines)
+    .where(and(eq(pipelines.orgId, orgId), eq(pipelines.isDefault, true)))
+    .limit(1);
+
+  const stageNames = Array.isArray(defaultPipeline?.stages)
+    ? defaultPipeline.stages.map((stage) => stage.name).filter((stage): stage is string => Boolean(stage?.trim()))
+    : [];
+  const defaultStatus = stageNames[0] || "lead";
+
+  const toInsert: Array<{
+    orgId: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string;
+    company: string;
+    status: string;
+    source: string;
+    customFields: Record<string, unknown>;
+  }> = [];
+
+  let fallbackCount = 0;
+
+  for (const row of rows) {
+    const firstName = String(row.firstName ?? "").trim();
+    const lastName = String(row.lastName ?? "").trim();
+    const email = String(row.email ?? "").trim();
+    const phone = String(row.phone ?? "").trim();
+    const company = String(row.company ?? "").trim();
+    const notes = String(row.notes ?? "").trim();
+    const statusResult = resolveStatus(String(row.status ?? ""), stageNames, defaultStatus);
+
+    if (!statusResult.matched) {
+      fallbackCount += 1;
+    }
+
+    const derivedFirstName = firstName || (email ? email.split("@")[0] : "Contact");
+
+    toInsert.push({
+      orgId,
+      firstName: derivedFirstName,
+      lastName,
+      email,
+      phone,
+      company,
+      status: statusResult.status,
+      source: "csv_import",
+      customFields: notes ? { notes } : {},
+    });
+  }
+
+  const insertedStatuses = new Map<string, number>();
+  const createdIds: string[] = [];
+
+  for (let index = 0; index < toInsert.length; index += 50) {
+    const batch = toInsert.slice(index, index + 50);
+    const inserted = await db
+      .insert(contacts)
+      .values(batch)
+      .returning({ id: contacts.id, status: contacts.status });
+
+    for (const row of inserted) {
+      createdIds.push(row.id);
+      insertedStatuses.set(row.status, (insertedStatuses.get(row.status) ?? 0) + 1);
+    }
+  }
+
+  for (const contactId of createdIds) {
+    await emitSeldonEvent("contact.created", { contactId });
+  }
+
+  for (const [status, count] of insertedStatuses) {
+    if (count > 0) {
+      await inferClientLifecycleFromStatus({ orgId, status, source: "csv_import" });
+    }
+  }
+
+  return {
+    createdCount: createdIds.length,
+    stageSummary: Array.from(insertedStatuses.entries()).map(([stage, count]) => ({ stage, count })),
+    fallbackCount,
+  };
 }
 
 const editableContactFields = new Set(["firstName", "lastName", "email", "status"]);

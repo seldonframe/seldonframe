@@ -2,14 +2,18 @@ import { asc, desc, eq } from "drizzle-orm";
 import Link from "next/link";
 import { DollarSign, Users, CalendarDays, Activity, ChevronDown, Plus, Download, ChartLine, MoreHorizontal, BarChart2, ClipboardList, Search, Filter, FileInput } from "lucide-react";
 import { db } from "@/db";
-import { activities, metricsSnapshots, paymentRecords } from "@/db/schema";
+import { activities, metricsSnapshots, organizations, paymentRecords, stripeConnections, type OrganizationIntegrations } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth/helpers";
+import { listAppointmentTypes } from "@/lib/bookings/actions";
 import { listBookings } from "@/lib/bookings/actions";
 import { listContacts } from "@/lib/contacts/actions";
 import { listDeals } from "@/lib/deals/actions";
+import { listEmailTemplates } from "@/lib/emails/actions";
+import { listForms } from "@/lib/forms/actions";
+import { listLandingPages } from "@/lib/landing/actions";
 import { getSoul } from "@/lib/soul/server";
-import { getSetupGuideProgress } from "@/lib/setup-guide/progress";
-import { SetupGuide } from "@/components/dashboard/setup-guide";
+import { getHiddenBlocks } from "@/lib/blocks/visibility-actions";
+import { BlockVisibilityToggle } from "@/components/dashboard/block-visibility-toggle";
 
 /*
   Square UI class reference (source of truth):
@@ -100,26 +104,60 @@ function percentChange(current: number, previous: number) {
 }
 
 export default async function DashboardPage() {
-  const [user, contactRows, dealRows, bookingRows, soul, setupGuideProgress] = await Promise.all([getCurrentUser(), listContacts(), listDeals(), listBookings(), getSoul(), getSetupGuideProgress()]);
+  const [user, contactRows, dealRows, bookingRows, appointmentTypeRows, emailTemplateRows, landingPageRows, intakeFormRows, soul, hiddenBlocks] = await Promise.all([
+    getCurrentUser(),
+    listContacts(),
+    listDeals(),
+    listBookings(),
+    listAppointmentTypes(),
+    listEmailTemplates(),
+    listLandingPages(),
+    listForms(),
+    getSoul(),
+    getHiddenBlocks(),
+  ]);
   const orgId = user?.orgId;
 
   if (!orgId) {
     return null;
   }
 
-  const [snapshotRowsRaw, activityRows, paymentRows] = await Promise.all([
+  const [snapshotRowsRaw, activityRows, paymentRows, orgRow, stripeRow] = await Promise.all([
     db.select().from(metricsSnapshots).where(eq(metricsSnapshots.orgId, orgId)).orderBy(asc(metricsSnapshots.date)).limit(180),
     db.select().from(activities).where(eq(activities.orgId, orgId)).orderBy(desc(activities.createdAt)).limit(20),
     db
       .select({ amount: paymentRecords.amount, createdAt: paymentRecords.createdAt })
       .from(paymentRecords)
       .where(eq(paymentRecords.orgId, orgId)),
+    db
+      .select({ slug: organizations.slug, settings: organizations.settings, integrations: organizations.integrations })
+      .from(organizations)
+      .where(eq(organizations.id, orgId))
+      .limit(1)
+      .then((rows) => rows[0] ?? null),
+    db
+      .select({ id: stripeConnections.id })
+      .from(stripeConnections)
+      .where(eq(stripeConnections.orgId, orgId))
+      .limit(1)
+      .then((rows) => rows[0] ?? null),
   ]);
 
   const contactById = new Map(contactRows.map((contact) => [contact.id, contact]));
   const snapshotRows = snapshotRowsRaw.map((row) => ({ ...row, dateObj: toUtcDate(row.date) }));
   const contactLabelSingular = soul?.entityLabels?.contact?.singular || "Contact";
   const contactLabelPlural = soul?.entityLabels?.contact?.plural || "Contacts";
+  const integrations = ((orgRow?.integrations ?? {}) as OrganizationIntegrations) || {};
+  const settings = ((orgRow?.settings ?? {}) as Record<string, unknown>) || {};
+  const enabledAutomations = Array.isArray(settings.enabledAutomations) ? settings.enabledAutomations.filter((item): item is string => typeof item === "string") : [];
+  const newsletterConnected = Boolean(integrations.newsletter?.connected || integrations.kit?.connected);
+  const googleConnected = Boolean(integrations.google?.calendarConnected);
+  const twilioConnected = Boolean(integrations.twilio?.connected);
+  const stripeConnected = Boolean(stripeRow);
+  const hasConnectedIntegrations = newsletterConnected || googleConnected || twilioConnected || stripeConnected;
+  const bookingLinkSlug = appointmentTypeRows[0]?.bookingSlug || "default";
+  const bookingPublicPath = orgRow?.slug ? `/book/${orgRow.slug}/${bookingLinkSlug}` : "/book";
+  const bookingShared = appointmentTypeRows.length > 0 && bookingRows.length > 0;
   const today = new Date();
   const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
   const startOfToday = new Date(today);
@@ -280,10 +318,6 @@ export default async function DashboardPage() {
         </div>
       ) : null}
 
-      {setupGuideProgress && !setupGuideProgress.dismissed && !setupGuideProgress.allDone ? (
-        <SetupGuide progress={setupGuideProgress} />
-      ) : null}
-
       <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 sm:gap-6">
         <div className="space-y-2 sm:space-y-5">
           <h1 className="text-lg sm:text-[22px] font-semibold leading-relaxed text-foreground">
@@ -310,6 +344,146 @@ export default async function DashboardPage() {
           </Link>
         </div>
       </header>
+
+      <section className="rounded-xl border bg-card p-4 sm:p-6 space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-base sm:text-lg font-semibold">Your Blocks</h2>
+          <Link href="/seldon" className="crm-button-primary h-9 px-3 text-xs sm:text-sm">+ Seldon It</Link>
+        </div>
+        {(() => {
+          const allBlocks = [
+            {
+              slug: "bookings",
+              name: "Booking",
+              href: "/bookings",
+              status: appointmentTypeRows.length > 0 ? "Active" : "Not set up",
+              detail: `${appointmentTypeRows.length} types`,
+            },
+            {
+              slug: "contacts",
+              name: contactLabelPlural,
+              href: "/contacts",
+              status: "Active",
+              detail: `${contactRows.length} records`,
+            },
+            {
+              slug: "email",
+              name: "Email",
+              href: "/emails",
+              status: emailTemplateRows.length > 0 ? "Active" : "Not set up",
+              detail: `${emailTemplateRows.length} templates`,
+            },
+            {
+              slug: "pages",
+              name: "Pages",
+              href: "/landing",
+              status: landingPageRows.length > 0 ? "Active" : "Not set up",
+              detail: `${landingPageRows.length} pages`,
+            },
+            {
+              slug: "forms",
+              name: "Forms",
+              href: "/forms",
+              status: intakeFormRows.length > 0 ? "Active" : "Not set up",
+              detail: `${intakeFormRows.length} forms`,
+            },
+            {
+              slug: "automations",
+              name: "Automations",
+              href: "/automations",
+              status: enabledAutomations.length > 0 ? "Active" : "Not set up",
+              detail: `${enabledAutomations.length} enabled`,
+            },
+            {
+              slug: "payments",
+              name: "Payments",
+              href: "/settings/integrations",
+              status: stripeConnected ? "Connected externally" : "Not set up",
+              detail: stripeConnected ? "Stripe connected" : "Connect Stripe",
+            },
+            {
+              slug: "seldon",
+              name: "Seldon It",
+              href: "/seldon",
+              status: "Active",
+              detail: "Build anything",
+            },
+          ];
+          const hiddenSet = new Set(hiddenBlocks);
+          const visibleBlocks = allBlocks.filter((b) => !hiddenSet.has(b.slug));
+          const hiddenBlockItems = allBlocks.filter((b) => hiddenSet.has(b.slug));
+          return (
+            <>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                {visibleBlocks.map((block) => (
+                  <div key={block.slug} className="relative rounded-lg border border-border p-3 hover:bg-accent/30 transition-colors space-y-1.5 group">
+                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <BlockVisibilityToggle slug={block.slug} hidden={false} />
+                    </div>
+                    <Link href={block.href}>
+                      <p className="text-sm font-medium text-foreground">{block.name}</p>
+                      <p className="text-xs text-muted-foreground">{block.status}</p>
+                      <p className="text-xs text-muted-foreground">{block.detail}</p>
+                    </Link>
+                  </div>
+                ))}
+              </div>
+              {hiddenBlockItems.length > 0 ? (
+                <div className="space-y-2 pt-2">
+                  <p className="text-xs font-medium text-muted-foreground">Hidden blocks</p>
+                  <div className="flex flex-wrap gap-2">
+                    {hiddenBlockItems.map((block) => (
+                      <div key={block.slug} className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-border px-2.5 py-1.5 text-xs text-muted-foreground">
+                        <span>{block.name}</span>
+                        <BlockVisibilityToggle slug={block.slug} hidden={true} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </>
+          );
+        })()}
+      </section>
+
+      {contactRows.length === 0 ? (
+        <section className="rounded-xl border bg-card p-4 sm:p-6 space-y-4">
+          <div>
+            <h2 className="text-base sm:text-lg font-semibold">Bring your clients into SeldonFrame</h2>
+            <p className="text-sm text-muted-foreground">Import existing clients, sync from another CRM, or add one manually.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/contacts?import=csv" className="crm-button-primary h-9 px-4 text-xs sm:text-sm">Upload CSV</Link>
+            <button type="button" disabled className="crm-button-secondary h-9 px-4 text-xs sm:text-sm opacity-60">Connect HubSpot (soon)</button>
+            <Link href="/contacts" className="crm-button-secondary h-9 px-4 text-xs sm:text-sm">Add one manually</Link>
+            <Link href="/dashboard" className="crm-button-ghost h-9 px-3 text-xs sm:text-sm">Skip — I don&apos;t have clients yet</Link>
+          </div>
+        </section>
+      ) : !hasConnectedIntegrations ? (
+        <section className="rounded-xl border bg-card p-4 sm:p-6 space-y-4">
+          <div>
+            <h2 className="text-base sm:text-lg font-semibold">Connect your existing tools</h2>
+            <p className="text-sm text-muted-foreground">Connect the tools you already use so your blocks stay in sync.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/settings/integrations" className="crm-button-primary h-9 px-4 text-xs sm:text-sm">Connect Google Calendar</Link>
+            <Link href="/settings/integrations" className="crm-button-secondary h-9 px-4 text-xs sm:text-sm">Connect Newsletter Provider</Link>
+            <Link href="/settings/integrations" className="crm-button-secondary h-9 px-4 text-xs sm:text-sm">Connect Stripe</Link>
+            <Link href="/dashboard" className="crm-button-ghost h-9 px-3 text-xs sm:text-sm">I&apos;ll set these up later</Link>
+          </div>
+        </section>
+      ) : !bookingShared ? (
+        <section className="rounded-xl border bg-card p-4 sm:p-6 space-y-4">
+          <div>
+            <h2 className="text-base sm:text-lg font-semibold">Share your booking page</h2>
+            <p className="text-sm text-muted-foreground">Your booking page is live. Share it to start getting appointments.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link href={bookingPublicPath} className="crm-button-primary h-9 px-4 text-xs sm:text-sm">Copy booking link</Link>
+            <Link href={bookingPublicPath} className="crm-button-secondary h-9 px-4 text-xs sm:text-sm">Preview →</Link>
+          </div>
+        </section>
+      ) : null}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 p-3 sm:p-4 lg:p-6 rounded-xl border bg-card">
         {stats.map((stat, index) => (

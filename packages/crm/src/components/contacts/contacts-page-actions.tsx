@@ -20,6 +20,7 @@ function buildHref(params: {
   sort: SortOption;
   dateRange: DateRangeOption;
   exportCsv?: boolean;
+  importCsv?: boolean;
 }) {
   const query = new URLSearchParams();
 
@@ -41,6 +42,10 @@ function buildHref(params: {
 
   if (params.exportCsv) {
     query.set("download", "csv");
+  }
+
+  if (params.importCsv) {
+    query.set("import", "csv");
   }
 
   const queryString = query.toString();
@@ -90,7 +95,6 @@ export function ContactsPageActions({
 }) {
   const [showDateMenu, setShowDateMenu] = useState(false);
   const [showImportMenu, setShowImportMenu] = useState(false);
-  const [importMessage, setImportMessage] = useState(false);
 
   const currentRangeLabel = useMemo(
     () => dateRanges.find((option) => option.value === dateRange)?.label ?? "All Time",
@@ -100,17 +104,13 @@ export function ContactsPageActions({
   const exportLink = exportHref({ search, status, sort, dateRange });
 
   const importItem = (
-    <button
-      type="button"
+    <Link
+      href={buildHref({ search, status, sort, dateRange, importCsv: true })}
       className="block w-full px-3 py-2 text-left text-sm text-foreground hover:bg-accent"
-      onClick={() => {
-        setImportMessage(true);
-        setShowImportMenu(false);
-        window.setTimeout(() => setImportMessage(false), 2200);
-      }}
+      onClick={() => setShowImportMenu(false)}
     >
       Import CSV
-    </button>
+    </Link>
   );
 
   if (mode === "table-import") {
@@ -131,9 +131,6 @@ export function ContactsPageActions({
             </a>
             {importItem}
           </div>
-        ) : null}
-        {importMessage ? (
-          <div className="fixed bottom-4 right-4 z-[70] rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground shadow-sm">Coming soon</div>
         ) : null}
       </div>
     );
@@ -191,10 +188,6 @@ export function ContactsPageActions({
           <span>Create New</span>
         </Link>
       </div>
-
-      {importMessage ? (
-        <div className="fixed bottom-4 right-4 z-[70] rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground shadow-sm">Coming soon</div>
-      ) : null}
     </>
   );
 }

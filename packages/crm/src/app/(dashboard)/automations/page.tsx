@@ -84,7 +84,7 @@ export default async function AutomationsPage() {
       <div>
         <h2 className="text-lg sm:text-[22px] font-semibold leading-relaxed text-foreground">Automations</h2>
         <p className="text-sm sm:text-base text-muted-foreground">
-          Manage the automations configured during onboarding, then build custom workflows.
+          Toggle automations on or off. Each card reads like a sentence: &ldquo;When X happens → Then do Y.&rdquo;
         </p>
       </div>
 
