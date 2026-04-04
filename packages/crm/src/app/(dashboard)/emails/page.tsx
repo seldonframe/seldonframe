@@ -1,21 +1,36 @@
+import { Mail } from "lucide-react";
 import { createEmailTemplateAction, listEmails, listEmailTemplates } from "@/lib/emails/actions";
-import { getLabels } from "@/lib/soul/labels";
 import { EmailPageContent } from "@/components/emails/email-page-content";
 
+/*
+  Square UI class reference (source of truth):
+  - templates-baseui/emails/components/emails/emails-header.tsx
+    - top shell: "flex h-14 items-center justify-between border-b border-border bg-background px-3 md:px-6"
+    - title: "text-sm md:text-base font-normal tracking-tight text-foreground"
+    - helper text tone: "text-xs text-muted-foreground"
+*/
+
 export default async function EmailsPage() {
-  const [labels, templates, rows] = await Promise.all([
-    getLabels(),
+  const [templates, rows] = await Promise.all([
     listEmailTemplates(),
     listEmails(),
   ]);
 
   return (
-    <section className="animate-page-enter space-y-4">
-      <div>
-        <h1 className="text-page-title">Email</h1>
-        <p className="text-label text-[hsl(var(--color-text-secondary))]">
-          Send transactional and campaign emails to your {labels.contact.plural.toLowerCase()} with provider fallbacks.
-        </p>
+    <section className="animate-page-enter space-y-4 sm:space-y-6">
+      <div className="flex h-14 items-center justify-between border-b border-border bg-background px-3 md:px-6">
+        <div className="flex flex-1 items-center gap-2 md:gap-4">
+          <div className="flex items-center gap-2 md:gap-2.5">
+            <Mail className="size-4 text-foreground" />
+            <p className="text-sm md:text-base font-normal tracking-tight text-foreground">Emails</p>
+          </div>
+          <div className="hidden sm:flex items-center gap-2.5">
+            <div className="size-1 rounded-full bg-muted-foreground/20" />
+            <p className="text-sm md:text-base font-normal tracking-tight text-foreground">
+              {rows.length} email{rows.length !== 1 ? "s" : ""}
+            </p>
+          </div>
+        </div>
       </div>
 
       <EmailPageContent

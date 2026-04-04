@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { Mail } from "lucide-react";
 import { BUILT_IN_EVENT_TYPE_SUGGESTIONS, isValidEventType } from "@/lib/events/event-types";
 
 /*
@@ -137,36 +138,55 @@ export function EmailPageContent({
       {activeTab === "sent" ? (
         <section className="space-y-4">
           {sent.length === 0 ? (
-            <article className="rounded-xl border bg-card p-6 text-sm text-muted-foreground">No sent emails yet.</article>
+            <div className="flex h-full items-center justify-center bg-card rounded-xl border min-h-52">
+              <div className="text-center text-muted-foreground">
+                <p>No sent emails yet.</p>
+              </div>
+            </div>
           ) : (
-            <article className="flex h-full flex-col overflow-hidden rounded-xl border bg-card">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-muted/50 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                    <th className="px-4 py-3">To</th>
-                    <th className="px-4 py-3">Subject</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Provider</th>
-                    <th className="px-4 py-3">Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sent.map((row) => (
-                    <tr key={row.id} className="border-b border-border transition-colors hover:bg-muted/70">
-                      <td className="px-4 py-3 text-foreground">{row.toEmail}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{row.subject}</td>
-                      <td className="px-4 py-3">
-                        <span className={`rounded-full px-2 py-1 text-xs ${statusBadge(row.status)}`}>{row.status}</span>
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground">{row.provider}</td>
-                      <td className="px-4 py-3 text-muted-foreground">
-                        {row.sentAt ? new Date(row.sentAt).toLocaleDateString([], { month: "short", day: "numeric" }) : "—"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </article>
+            <div className="flex h-full flex-col overflow-hidden bg-card rounded-xl border">
+              <div className="flex items-center justify-between border-b border-border px-5 py-3">
+                <div className="flex items-center gap-2">
+                  <div className="size-3.5 rounded border border-border" />
+                  <p className="text-sm font-medium text-foreground">Sent</p>
+                </div>
+                <p className="text-xs text-muted-foreground">{sent.length} email{sent.length !== 1 ? "s" : ""}</p>
+              </div>
+
+              <div className="flex-1 overflow-y-auto">
+                {sent.map((row) => (
+                  <div
+                    key={row.id}
+                    className="flex w-full gap-2.5 border-b border-border p-4 text-left transition-colors hover:bg-muted/70"
+                  >
+                    <div className="mt-1.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-muted">
+                      <Mail className="size-3.5 text-muted-foreground" />
+                    </div>
+
+                    <div className="flex-1 overflow-hidden">
+                      <div className="flex items-start justify-between gap-2.5">
+                        <div className="flex-1 overflow-hidden">
+                          <p className="truncate text-[14px] tracking-tight font-medium text-foreground">
+                            {row.toEmail}
+                          </p>
+                          <p className="truncate text-[12px] tracking-tight text-muted-foreground">
+                            {row.subject}
+                          </p>
+                        </div>
+                        <p className="shrink-0 text-[12px] tracking-tight text-foreground">
+                          {row.sentAt ? new Date(row.sentAt).toLocaleDateString([], { month: "short", day: "numeric" }) : "—"}
+                        </p>
+                      </div>
+
+                      <div className="mt-1.5 flex items-center gap-2">
+                        <span className={`rounded-full px-2 py-0.5 text-[11px] ${statusBadge(row.status)}`}>{row.status}</span>
+                        <span className="text-[11px] text-muted-foreground">via {row.provider}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
         </section>
       ) : null}
