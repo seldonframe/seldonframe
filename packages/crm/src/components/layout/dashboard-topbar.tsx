@@ -6,8 +6,17 @@ import { Bell, Command, Menu, Moon, Search, Sun } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { useTheme } from "next-themes";
 import { usePathname } from "next/navigation";
-import { DensityToggle } from "@/components/shared/density-toggle";
 import { useLabels } from "@/lib/hooks/use-labels";
+
+/*
+  Square UI class reference (source of truth):
+  - templates/dashboard-2/components/dashboard/header.tsx
+    - header shell: "flex items-center gap-2 sm:gap-3 px-3 sm:px-6 py-3 sm:py-4 border-b bg-card sticky top-0 z-10 w-full"
+    - title: "text-base sm:text-lg font-medium flex-1 truncate"
+    - search shell: "hidden md:block relative"
+    - search icon: "absolute left-3 top-1/2 -translate-y-1/2 size-5 text-muted-foreground"
+    - input shell: "pl-10 pr-14 w-[180px] lg:w-[220px] h-9 bg-card border"
+*/
 
 const staticTitleMap: Record<string, string> = {
   "/dashboard": "Dashboard",
@@ -142,7 +151,7 @@ export function DashboardTopbar({
   }, [menuOpen]);
 
   return (
-    <header className="sticky top-0 z-10 flex w-full items-center gap-1.5 border-b border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-3 sm:gap-3 sm:px-6 sm:py-4">
+    <header className="sticky top-0 z-10 flex w-full items-center gap-2 border-b bg-card px-3 py-3 sm:gap-3 sm:px-6 sm:py-4">
       <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-3">
         <button
           type="button"
@@ -152,34 +161,25 @@ export function DashboardTopbar({
         >
           <Menu className="h-5 w-5" />
         </button>
-        <p className="truncate text-sm font-medium text-foreground sm:text-lg">{title}</p>
+        <p className="flex-1 truncate text-base font-medium sm:text-lg">{title}</p>
       </div>
 
-      <button
-        type="button"
-        className="crm-topbar-input mx-auto hidden h-9 max-w-[320px] flex-1 items-center justify-between gap-3 px-3 text-left lg:flex"
-        onClick={() => window.dispatchEvent(new CustomEvent("crm:command-palette-toggle", { detail: { open: true } }))}
-      >
-        <span className="text-sm text-[hsl(var(--color-text-secondary))]">Command Palette</span>
-        <span className="inline-flex items-center gap-1 rounded border border-[hsl(var(--border))] px-1.5 py-0.5 text-[10px] text-[hsl(var(--color-text-muted))]">
-          <Command className="h-3 w-3" />K
+      <div className="relative mx-auto hidden flex-1 md:block md:max-w-[320px]">
+        <button
+          type="button"
+          className="h-9 w-full rounded-md border bg-card pl-10 pr-14 text-left text-sm text-muted-foreground"
+          onClick={() => window.dispatchEvent(new CustomEvent("crm:command-palette-toggle", { detail: { open: true } }))}
+        >
+          Search Anything...
+        </button>
+        <Search className="absolute left-3 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />
+        <span className="absolute right-2 top-1/2 inline-flex -translate-y-1/2 items-center gap-0.5 rounded bg-muted px-1 py-0.5 text-xs text-muted-foreground">
+          <Command className="size-3" />
+          <span>K</span>
         </span>
-      </button>
+      </div>
 
       <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
-        <label className="crm-topbar-input relative hidden h-9 items-center gap-2 px-3 lg:flex">
-          <Search className="h-4 w-4 text-[hsl(var(--color-text-secondary))]" />
-          <input
-            aria-label="Search"
-            placeholder="Search"
-            className="w-28 bg-transparent text-sm text-foreground outline-none placeholder:text-[hsl(var(--color-text-secondary))] xl:w-44"
-          />
-        </label>
-
-        <div className="hidden sm:block">
-          <DensityToggle />
-        </div>
-
         <button type="button" className="crm-topbar-icon-btn" aria-label="Toggle theme" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
           {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </button>
@@ -202,22 +202,22 @@ export function DashboardTopbar({
           </button>
 
           {menuOpen ? (
-            <div className="glass-card absolute right-0 z-30 mt-2 w-56 rounded-xl p-2 shadow-dropdown sm:w-64" role="menu">
+            <div className="absolute right-0 z-30 mt-2 w-56 rounded-xl border bg-card p-2 shadow-sm sm:w-64" role="menu">
               <div className="px-2 py-2">
                 <p className="truncate text-sm font-medium text-foreground">{userName}</p>
-                <p className="truncate text-xs text-[hsl(var(--muted-foreground))]">{userEmail}</p>
+                <p className="truncate text-xs text-muted-foreground">{userEmail}</p>
               </div>
-              <div className="my-1 h-px bg-[hsl(var(--border))]" />
+              <div className="my-1 h-px bg-border" />
               <Link
                 href="/settings"
-                className="block rounded-md px-2 py-2 text-sm text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--muted)/0.5)] hover:text-foreground"
+                className="block rounded-md px-2 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
                 onClick={() => setMenuOpen(false)}
               >
                 Settings
               </Link>
               <button
                 type="button"
-                className="w-full rounded-md px-2 py-2 text-left text-sm text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--muted)/0.5)] hover:text-foreground"
+                className="w-full rounded-md px-2 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
                 onClick={() => signOut({ callbackUrl: "/login" })}
               >
                 Log out

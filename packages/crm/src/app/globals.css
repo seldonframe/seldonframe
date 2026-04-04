@@ -41,8 +41,8 @@
 
 .dark {
   --color-primary-hover: var(--primary);
-  --color-surface-raised: 215 28% 11%;
-  --color-surface-overlay: 215 28% 14%;
+  --color-surface-raised: var(--muted);
+  --color-surface-overlay: var(--card);
   --color-border-subtle: var(--border);
   --color-text-secondary: var(--muted-foreground);
   --color-info: var(--chart-1);

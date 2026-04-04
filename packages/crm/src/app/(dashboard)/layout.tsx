@@ -2,7 +2,6 @@ import { requireAuth } from "@/lib/auth/helpers";
 import { getOrgId } from "@/lib/auth/helpers";
 import { SoulProvider } from "@/components/soul/soul-provider";
 import { getSoul } from "@/lib/soul/server";
-import { adjustBrightness } from "@/lib/utils/colors";
 import { Sidebar } from "@/components/layout/sidebar";
 import { CommandPalette } from "@/components/layout/command-palette";
 import { DemoBanner } from "@/components/layout/demo-banner";
@@ -14,6 +13,13 @@ import { db } from "@/db";
 import { activities, contacts, deals, landingPages, organizations, users } from "@/db/schema";
 import { desc, eq, sql } from "drizzle-orm";
 import Link from "next/link";
+
+/*
+  Square UI class reference (source of truth):
+  - templates/dashboard-2/app/page.tsx
+    - shell wrapper: "h-svh overflow-hidden lg:p-2 w-full"
+    - inner frame: "lg:border lg:rounded-md overflow-hidden flex flex-col items-center justify-start bg-container h-full w-full bg-background"
+*/
 
 export default async function DashboardLayout({
   children,
@@ -102,33 +108,25 @@ export default async function DashboardLayout({
     })),
   ];
 
-  const bodyStyle = soul?.branding
-    ? ({
-        "--soul-primary": soul.branding.primaryColor,
-        "--soul-primary-hover": adjustBrightness(soul.branding.primaryColor, -8),
-        "--soul-accent": soul.branding.accentColor,
-      } as React.CSSProperties)
-    : undefined;
-
   return (
     <SoulProvider soul={soul}>
-      <div className="crm-page relative px-4! pb-6! pt-4! sm:px-6! sm:pb-8! sm:pt-5!" data-soul-primary style={bodyStyle}>
-        <div className="pointer-events-none fixed -left-24 -top-24 h-96 w-96 rounded-full bg-[hsl(var(--primary)/0.1)] blur-[120px]" />
-        <div className="pointer-events-none fixed right-0 top-1/3 h-72 w-72 rounded-full bg-[hsl(var(--primary)/0.06)] blur-[140px]" />
-        <div className="animate-page-enter flex flex-col gap-4 md:flex-row md:gap-6">
-          <Sidebar blocks={blocks} canAccessSeldon={canAccessSeldon} />
-          <div className="min-w-0 flex-1 space-y-4">
-            <DemoBanner />
-            {isSwitchedOrg && activeOrg ? (
-              <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.22)] px-3 py-2 text-sm text-[hsl(var(--muted-foreground))]">
-                <span className="text-foreground">{activeOrg.name}</span> active · <Link href="/orgs" className="text-primary underline underline-offset-4">Back to all organizations</Link>
-              </div>
-            ) : null}
-            <DashboardTopbar userName={user?.name || "Account"} userEmail={user?.email || ""} avatarFallback={avatarFallback} />
-            {children}
+      <div className="h-svh w-full overflow-hidden lg:p-2">
+        <div className="bg-background lg:rounded-md lg:border flex h-full w-full flex-col items-center justify-start overflow-hidden">
+          <div className="animate-page-enter flex h-full w-full flex-col md:flex-row">
+            <Sidebar blocks={blocks} canAccessSeldon={canAccessSeldon} />
+            <div className="min-w-0 flex-1 space-y-3 sm:space-y-4">
+              <DemoBanner />
+              {isSwitchedOrg && activeOrg ? (
+                <div className="rounded-xl border border-border bg-[hsl(var(--muted)/0.22)] px-3 py-2 text-sm text-[hsl(var(--muted-foreground))]">
+                  <span className="text-foreground">{activeOrg.name}</span> active · <Link href="/orgs" className="text-primary underline underline-offset-4">Back to all organizations</Link>
+                </div>
+              ) : null}
+              <DashboardTopbar userName={user?.name || "Account"} userEmail={user?.email || ""} avatarFallback={avatarFallback} />
+              {children}
+            </div>
           </div>
+          <CommandPalette items={paletteItems} />
         </div>
-        <CommandPalette items={paletteItems} />
       </div>
     </SoulProvider>
   );

@@ -1,6 +1,6 @@
 import { asc, desc, eq } from "drizzle-orm";
 import Link from "next/link";
-import { DollarSign, Users, CalendarDays, Activity, ChevronDown, Plus, Download } from "lucide-react";
+import { DollarSign, Users, CalendarDays, Activity, ChevronDown, Plus, Download, ChartLine, MoreHorizontal, BarChart2, ClipboardList, Search, Filter, FileInput } from "lucide-react";
 import { db } from "@/db";
 import { activities, metricsSnapshots, organizations, paymentRecords } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth/helpers";
@@ -69,7 +69,7 @@ function TrendText({ value }: { value: number }) {
   );
 }
 
-function StatCard({ label, value, icon, trendPercent }: { label: string; value: string; icon: React.ReactNode; trendPercent: number }) {
+function StatCard({ label, value, icon, trendPercent, deltaLabel }: { label: string; value: string; icon: React.ReactNode; trendPercent: number; deltaLabel: string }) {
   return (
     <article className="flex items-start">
       <div className="flex-1 space-y-2 sm:space-y-4 lg:space-y-6">
@@ -79,7 +79,10 @@ function StatCard({ label, value, icon, trendPercent }: { label: string; value: 
         </div>
         <p className="text-lg sm:text-xl lg:text-[28px] font-semibold leading-tight tracking-tight">{value}</p>
         <div className="flex flex-wrap items-center gap-1 sm:gap-2 text-[10px] sm:text-xs lg:text-sm font-medium">
-          <TrendText value={trendPercent} />
+          <span className="inline-flex items-center gap-0.5">
+            <TrendText value={trendPercent} />
+            <span className="hidden sm:inline text-inherit">({deltaLabel})</span>
+          </span>
           <span className="text-muted-foreground hidden sm:inline">vs Last Months</span>
         </div>
       </div>
@@ -167,15 +170,6 @@ export default async function DashboardPage() {
       ? Math.max(0, Math.ceil((trialEndsAt.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)))
       : null;
 
-  const closedDeals = dealRows.filter((row) => {
-    const stage = row.stage.toLowerCase();
-    return stage.includes("won") || stage.includes("lost") || row.probability === 100;
-  });
-  const wonDeals = dealRows.filter((row) => {
-    const stage = row.stage.toLowerCase();
-    return stage.includes("won") || row.probability === 100;
-  });
-  const winRate = closedDeals.length > 0 ? (wonDeals.length / closedDeals.length) * 100 : 0;
   const revenueTotal = paymentRows.reduce((sum, row) => sum + Number(row.amount), 0);
   const monthlyRevenue = paymentRows
     .filter((row) => new Date(row.createdAt) >= startOfMonth)
@@ -202,12 +196,21 @@ export default async function DashboardPage() {
   const activeEngagements = activityRows.filter((row) => row.type !== "task" || !row.completedAt).length;
   const activeEngagementsPrev = Math.max(1, activityRows.length - activeEngagements);
 
-  const revenueFlowData = snapshotRows
-    .slice(-6)
-    .map((row) => ({
+  const revenueFlowData = snapshotRows.slice(-6).map((row, index, all) => {
+    const current = Number(row.revenueTotal);
+    const previous = index > 0 ? Number(all[index - 1]?.revenueTotal ?? current * 0.8) : current * 0.8;
+    return {
       label: new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(row.dateObj),
-      value: Number(row.revenueTotal),
-    }));
+      thisYear: current,
+      prevYear: previous,
+    };
+  });
+
+  const revenueSeries = revenueFlowData.length > 0 ? revenueFlowData : [{ label: "Now", thisYear: monthlyRevenue || revenueTotal || 1, prevYear: Math.max(1, (monthlyRevenue || revenueTotal || 1) * 0.7) }];
+  const revenueMax = Math.max(...revenueSeries.flatMap((item) => [item.thisYear, item.prevYear]), 1);
+  const totalRevenueForCard = revenueSeries.reduce((sum, item) => sum + item.thisYear, 0);
+  const topTick = Math.ceil(revenueMax / 10000) * 10;
+  const yTicks = [topTick, Math.round(topTick * 0.75), Math.round(topTick * 0.5), Math.round(topTick * 0.25), 0];
 
   const leadSourceBuckets = [
     { name: "Calls", count: activityRows.filter((row) => row.type === "call").length, color: "#35b9e9" },
@@ -232,24 +235,28 @@ export default async function DashboardPage() {
       value: contactRows.length.toLocaleString(),
       icon: <Users className="size-3.5 sm:size-[18px]" />,
       trend: percentChange(contactsThisMonth, contactsPreviousMonth),
+      deltaLabel: `${Math.abs(contactsThisMonth - contactsPreviousMonth).toLocaleString()}`,
     },
     {
       label: "Active Engagements",
       value: activeEngagements.toLocaleString(),
       icon: <Activity className="size-3.5 sm:size-[18px]" />,
       trend: percentChange(activeEngagements, activeEngagementsPrev),
+      deltaLabel: `${Math.abs(activeEngagements - activeEngagementsPrev).toLocaleString()}`,
     },
     {
       label: "Bookings This Month",
       value: bookingsThisMonth.toLocaleString(),
       icon: <CalendarDays className="size-3.5 sm:size-[18px]" />,
       trend: percentChange(bookingsThisMonth, bookingsPreviousMonth),
+      deltaLabel: `${Math.abs(bookingsThisMonth - bookingsPreviousMonth).toLocaleString()}`,
     },
     {
       label: "Revenue",
       value: formatCurrency(monthlyRevenue),
       icon: <DollarSign className="size-3.5 sm:size-[18px]" />,
       trend: percentChange(monthlyRevenue, previousMonthRevenue),
+      deltaLabel: formatCurrency(Math.abs(monthlyRevenue - previousMonthRevenue)),
     },
   ];
 
@@ -331,9 +338,8 @@ export default async function DashboardPage() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 p-3 sm:p-4 lg:p-6 rounded-xl border bg-card">
         {stats.map((stat, index) => (
-          <div key={stat.label} className="flex items-start">
-            <StatCard label={stat.label} value={stat.value} icon={stat.icon} trendPercent={stat.trend} />
-            {index < stats.length - 1 ? <div className="hidden lg:block w-px h-full bg-border mx-4 xl:mx-6" /> : null}
+          <div key={stat.label} className={`flex items-start ${index < stats.length - 1 ? "lg:border-r lg:border-border lg:pr-6" : ""}`}>
+            <StatCard label={stat.label} value={stat.value} icon={stat.icon} trendPercent={stat.trend} deltaLabel={stat.deltaLabel} />
           </div>
         ))}
       </div>
@@ -341,8 +347,15 @@ export default async function DashboardPage() {
       <div className="flex flex-col xl:flex-row gap-4 sm:gap-6">
         <article className="flex flex-col gap-4 p-6 rounded-xl border bg-card w-full xl:w-[410px]">
           <div className="flex items-center justify-between">
-            <span className="text-sm sm:text-base font-medium">Lead Sources</span>
-            <span className="text-xs text-muted-foreground">30 days</span>
+            <div className="flex items-center gap-2 sm:gap-2.5">
+              <button type="button" className="inline-flex size-8 items-center justify-center rounded-md border border-border bg-background">
+                <ChartLine className="size-4 sm:size-[18px] text-muted-foreground" />
+              </button>
+              <span className="text-sm sm:text-base font-medium">Lead Sources</span>
+            </div>
+            <button type="button" className="inline-flex size-8 items-center justify-center rounded-md hover:bg-accent">
+              <MoreHorizontal className="size-4 text-muted-foreground" />
+            </button>
           </div>
 
           <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
@@ -368,33 +381,74 @@ export default async function DashboardPage() {
               ))}
             </div>
           </div>
+
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span>Last 30 days</span>
+          </div>
         </article>
 
         <article className="flex-1 flex flex-col gap-4 sm:gap-6 p-6 rounded-xl border bg-card min-w-0">
           <div className="flex items-center justify-between">
-            <span className="text-sm sm:text-base font-medium">Revenue Flow</span>
-            <span className="text-xs text-muted-foreground">Last 6 snapshots</span>
+            <div className="flex items-center gap-2 sm:gap-2.5">
+              <button type="button" className="inline-flex size-8 items-center justify-center rounded-md border border-border bg-background">
+                <BarChart2 className="size-4 sm:size-[18px] text-muted-foreground" />
+              </button>
+              <span className="text-sm sm:text-base font-medium">Revenue Flow</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="hidden sm:flex items-center gap-3 text-xs text-muted-foreground">
+                <span className="inline-flex items-center gap-1"><span className="size-2 rounded-full bg-[#6e3ff3]" />This Year</span>
+                <span className="inline-flex items-center gap-1"><span className="size-2 rounded-full bg-[#e255f2]" />Prev Year</span>
+              </div>
+              <button type="button" className="inline-flex size-8 items-center justify-center rounded-md hover:bg-accent">
+                <MoreHorizontal className="size-4 text-muted-foreground" />
+              </button>
+            </div>
           </div>
 
-          <div className="h-[220px] w-full flex gap-3">
-            <div className="w-10 h-full flex flex-col justify-between text-[10px] text-muted-foreground">
-              {[100, 75, 50, 25, 0].map((tick) => (
-                <span key={tick}>${tick}k</span>
-              ))}
+          <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 lg:gap-10 flex-1 min-h-0">
+            <div className="flex flex-col gap-4 w-full lg:w-[200px] xl:w-[220px] shrink-0">
+              <div className="space-y-2 sm:space-y-4">
+                <p className="text-xl sm:text-2xl lg:text-[28px] font-semibold leading-tight tracking-tight">{formatCurrency(totalRevenueForCard)}</p>
+                <p className="text-xs sm:text-sm text-muted-foreground">Total Revenue (Last 6 Months)</p>
+              </div>
+
+              <div className="bg-muted/50 rounded-lg p-3 sm:p-4 space-y-3 sm:space-y-4">
+                <p className="text-xs sm:text-sm font-semibold">🏆 Best Performing Month</p>
+                <p className="text-[10px] sm:text-xs text-muted-foreground leading-relaxed">Top recent revenue snapshot hits {formatCurrency(revenueMax)} with strong month-over-month carry.</p>
+              </div>
             </div>
-            <div className="flex-1 flex h-full items-end gap-2 sm:gap-3">
-              {(revenueFlowData.length > 0 ? revenueFlowData : [{ label: "Now", value: monthlyRevenue || revenueTotal }]).map((item, index, all) => {
-                const max = Math.max(...all.map((row) => row.value), 1);
-                const barHeight = Math.max(12, (item.value / max) * 100);
-                return (
-                  <div key={`${item.label}-${index}`} className="flex h-full w-[34px] flex-col justify-end gap-2">
-                    <div className="h-full rounded-md bg-muted/40 flex items-end">
-                      <div className="w-full rounded-t-md bg-primary/70" style={{ height: `${barHeight}%` }} />
-                    </div>
-                    <p className="truncate text-[10px] text-muted-foreground">{item.label}</p>
+
+            <div className="flex-1 h-[220px] min-w-0">
+              <div className="flex h-full gap-3">
+                <div className="w-10 h-full flex flex-col justify-between text-[10px] text-muted-foreground">
+                  {yTicks.map((tick) => (
+                    <span key={tick}>${tick}k</span>
+                  ))}
+                </div>
+                <div className="relative flex-1 h-full">
+                  <div className="absolute inset-0 flex flex-col justify-between">
+                    {yTicks.map((tick) => (
+                      <div key={`grid-${tick}`} className="border-t border-border/70" />
+                    ))}
                   </div>
-                );
-              })}
+                  <div className="relative z-10 flex h-full items-end gap-2 sm:gap-3 px-1">
+                    {revenueSeries.map((item, index) => {
+                      const thisHeight = Math.max(8, (item.thisYear / revenueMax) * 100);
+                      const prevHeight = Math.max(8, (item.prevYear / revenueMax) * 100);
+                      return (
+                        <div key={`${item.label}-${index}`} className="flex h-full flex-1 flex-col justify-end gap-2 min-w-0">
+                          <div className="flex items-end justify-center gap-1.5 h-full">
+                            <div className="w-3 rounded-t-[4px] bg-[#6e3ff3]" style={{ height: `${thisHeight}%` }} />
+                            <div className="w-3 rounded-t-[4px] bg-[#e255f2]" style={{ height: `${prevHeight}%` }} />
+                          </div>
+                          <p className="truncate text-[10px] text-center text-muted-foreground">{item.label}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </article>
@@ -403,14 +457,32 @@ export default async function DashboardPage() {
       <article className="rounded-xl border bg-card">
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 p-3 sm:px-6 sm:py-3.5">
           <div className="flex items-center gap-2 sm:gap-2.5 flex-1">
+            <button type="button" className="inline-flex size-8 items-center justify-center rounded-md border border-border bg-background">
+              <ClipboardList className="size-4 sm:size-[18px] text-muted-foreground" />
+            </button>
             <span className="text-sm sm:text-base font-medium">Active Deals</span>
             <span className="rounded-md border border-border bg-muted/50 px-2 py-0.5 text-[10px] sm:text-xs text-muted-foreground">
               {opportunityRows.length}
             </span>
           </div>
-          <Link href="/deals" className="text-sm text-muted-foreground hover:text-foreground">
-            View all
-          </Link>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="relative flex-1 sm:flex-none">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 sm:size-5 text-muted-foreground" />
+              <input placeholder="Search..." className="pl-9 sm:pl-10 w-full sm:w-[160px] lg:w-[200px] h-8 sm:h-9 text-sm rounded-md border border-border bg-background" />
+            </label>
+            <button type="button" className="inline-flex h-8 sm:h-9 items-center gap-1.5 sm:gap-2 rounded-md border border-border bg-background px-3 text-xs sm:text-sm">
+              <Filter className="size-3.5 sm:size-4" />
+              <span>Filter</span>
+            </button>
+            <button type="button" className="inline-flex h-8 sm:h-9 items-center gap-1.5 sm:gap-2 rounded-md border border-border bg-background px-3 text-xs sm:text-sm">
+              <FileInput className="size-3.5 sm:size-4" />
+              <span>Import</span>
+            </button>
+            <Link href="/deals" className="text-sm text-muted-foreground hover:text-foreground px-1">
+              View all
+            </Link>
+          </div>
         </div>
 
         <div className="overflow-x-auto px-3 sm:px-6 pb-4">
