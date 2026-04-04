@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Search, Settings, SlidersHorizontal } from "lucide-react";
 
 /*
   Square UI class reference (source of truth):
@@ -92,10 +93,46 @@ function formatDateGroupLabel(value: Date) {
   return new Intl.DateTimeFormat("en-US", { weekday: "long", month: "short", day: "numeric" }).format(value);
 }
 
+function addDaysLocal(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function startOfWeekMonday(date: Date) {
+  const next = new Date(date);
+  const weekday = next.getDay();
+  const diff = weekday === 0 ? -6 : 1 - weekday;
+  next.setDate(next.getDate() + diff);
+  next.setHours(0, 0, 0, 0);
+  return next;
+}
+
+function keyYmd(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function labelRangeStart(date: Date) {
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "2-digit" }).format(date);
+}
+
+function labelRangeEnd(date: Date) {
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "2-digit", year: "numeric" }).format(date);
+}
+
+function dayHeaderLabel(date: Date) {
+  return new Intl.DateTimeFormat("en-US", { day: "2-digit", weekday: "short" }).format(date).toUpperCase();
+}
+
 export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, suggestedServices, orgSlug, createAppointmentTypeAction }: BookingsPageContentProps) {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [searchQuery, setSearchQuery] = useState("");
   const [draftName, setDraftName] = useState("");
   const [draftDuration, setDraftDuration] = useState("30");
   const [draftPrice, setDraftPrice] = useState("0");
@@ -103,6 +140,43 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
   const [draftSlug, setDraftSlug] = useState("");
 
   const contactsById = useMemo(() => new Map(contacts.map((contact) => [contact.id, contact])), [contacts]);
+
+  const weekStart = useMemo(() => {
+    const base = addDaysLocal(new Date(), weekOffset * 7);
+    return startOfWeekMonday(base);
+  }, [weekOffset]);
+
+  const weekDays = useMemo(() => Array.from({ length: 7 }, (_, index) => addDaysLocal(weekStart, index)), [weekStart]);
+
+  const weekEventsByDay = useMemo(() => {
+    const byDay = new Map<string, BookingRow[]>();
+    for (const day of weekDays) {
+      byDay.set(keyYmd(day), []);
+    }
+
+    for (const row of bookings) {
+      const startsAt = new Date(row.startsAt);
+      const key = keyYmd(startsAt);
+      if (!byDay.has(key)) {
+        continue;
+      }
+
+      if (searchQuery.trim().length > 0 && !row.title.toLowerCase().includes(searchQuery.trim().toLowerCase())) {
+        continue;
+      }
+
+      byDay.get(key)?.push(row);
+    }
+
+    for (const [key, rows] of byDay.entries()) {
+      byDay.set(
+        key,
+        rows.sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
+      );
+    }
+
+    return byDay;
+  }, [bookings, weekDays, searchQuery]);
 
   const upcomingGrouped = useMemo(() => {
     const now = new Date();
@@ -159,6 +233,96 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
 
   return (
     <>
+      <section className="space-y-4">
+        <div className="px-3 md:px-6 py-4 border-b border-border">
+          <div className="flex items-center gap-2 md:gap-3 flex-wrap">
+            <div className="relative flex-1 min-w-[200px] max-w-[280px] shrink-0">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <input
+                placeholder="Search in calendar..."
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                className="crm-input pl-9 pr-9 h-8 bg-background"
+              />
+              <button type="button" className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex size-6 items-center justify-center rounded hover:bg-accent">
+                <Settings className="size-3.5" />
+              </button>
+            </div>
+
+            <button type="button" className="inline-flex h-8 items-center rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground" onClick={() => setWeekOffset(0)}>
+              Today
+            </button>
+
+            <button type="button" className="inline-flex h-8 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground">
+              <CalendarIcon className="size-4 text-muted-foreground" />
+              <span className="text-xs text-foreground">
+                {labelRangeStart(weekDays[0])} - {labelRangeEnd(weekDays[6])}
+              </span>
+            </button>
+
+            <div className="ml-auto" />
+
+            <button type="button" className="inline-flex h-8 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground">
+              <SlidersHorizontal className="size-4" />
+              <span className="hidden sm:inline text-xs">Filter</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="flex flex-col h-full overflow-x-auto w-full rounded-xl border bg-card">
+          <div className="flex border-b border-border sticky top-0 z-30 bg-background w-max min-w-full">
+            <div className="w-[80px] md:w-[104px] flex items-center gap-1 md:gap-2 p-1.5 md:p-2 border-r border-border shrink-0">
+              <button type="button" className="inline-flex size-7 md:size-8 items-center justify-center rounded hover:bg-accent" onClick={() => setWeekOffset((current) => current - 1)}>
+                <ChevronLeft className="size-4 md:size-5" />
+              </button>
+              <button type="button" className="inline-flex size-7 md:size-8 items-center justify-center rounded hover:bg-accent" onClick={() => setWeekOffset((current) => current + 1)}>
+                <ChevronRight className="size-4 md:size-5" />
+              </button>
+            </div>
+            {weekDays.map((day) => (
+              <div key={day.toISOString()} className="flex-1 border-r border-border last:border-r-0 p-1.5 md:p-2 min-w-44 flex items-center">
+                <div className="text-xs md:text-sm font-medium text-foreground">{dayHeaderLabel(day)}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex min-w-full w-max">
+            <div className="w-[80px] md:w-[104px] border-r border-border shrink-0 bg-background p-2">
+              {Array.from({ length: 12 }, (_, index) => `${index + 8}:00`).map((hour) => (
+                <div key={hour} className="h-20 border-b border-border/60 text-[10px] text-muted-foreground">{hour}</div>
+              ))}
+            </div>
+
+            {weekDays.map((day) => {
+              const key = keyYmd(day);
+              const events = weekEventsByDay.get(key) ?? [];
+              return (
+                <div key={key} className="flex-1 min-w-44 border-r border-border last:border-r-0">
+                  <div className="min-h-[320px] p-2 space-y-2">
+                    {events.length === 0 ? (
+                      <div className="h-20 rounded-md border border-dashed border-border/70 bg-background/40" />
+                    ) : (
+                      events.map((row) => {
+                        const startsAt = new Date(row.startsAt);
+                        const linkedContact = row.contactId ? contactsById.get(row.contactId) : null;
+                        const person = linkedContact ? `${linkedContact.firstName} ${linkedContact.lastName ?? ""}`.trim() : labels.contact.singular;
+                        return (
+                          <article key={row.id} className="rounded-lg border border-border bg-card p-2 hover:bg-muted transition-colors">
+                            <p className="text-xs font-medium text-foreground truncate">{row.title}</p>
+                            <p className="mt-0.5 text-[10px] text-muted-foreground truncate">{person}</p>
+                            <p className="mt-1 text-[10px] text-primary">{startsAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</p>
+                          </article>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
       <section className="space-y-4">
         <div className="border-b border-border px-3 md:px-6 py-4">
           <div className="flex items-center gap-2 md:gap-3 flex-wrap">
