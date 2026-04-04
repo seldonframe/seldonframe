@@ -41,9 +41,16 @@ export default async function DashboardLayout({
   const plan = resolvePlanFromPlanId(dbUserForPlan?.planId ?? null);
   const canAccessSeldon = canSeldonIt(plan);
 
-  const [activeOrg] = orgId
-    ? await db.select({ id: organizations.id, name: organizations.name }).from(organizations).where(eq(organizations.id, orgId)).limit(1)
-    : [null];
+  const [activeOrg, orgMemberCount] = orgId
+    ? await Promise.all([
+        db.select({ id: organizations.id, name: organizations.name }).from(organizations).where(eq(organizations.id, orgId)).limit(1).then((rows) => rows[0] ?? null),
+        db
+          .select({ count: sql<number>`count(*)` })
+          .from(users)
+          .where(eq(users.orgId, orgId))
+          .then((rows) => Number(rows[0]?.count ?? 0)),
+      ])
+    : [null, 0];
 
   const isSwitchedOrg = Boolean(orgId && user?.orgId && orgId !== user.orgId);
 
@@ -113,7 +120,15 @@ export default async function DashboardLayout({
       <div className="h-svh w-full overflow-hidden lg:p-2">
         <div className="bg-background lg:rounded-md lg:border flex h-full w-full flex-col items-center justify-start overflow-hidden">
           <div className="animate-page-enter flex h-full w-full flex-col md:flex-row">
-            <Sidebar blocks={blocks} canAccessSeldon={canAccessSeldon} />
+            <Sidebar
+              blocks={blocks}
+              canAccessSeldon={canAccessSeldon}
+              workspaceName={activeOrg?.name || "SeldonFrame"}
+              workspaceMembers={orgMemberCount > 0 ? orgMemberCount : undefined}
+              userName={user?.name || "Account"}
+              userEmail={user?.email || ""}
+              avatarFallback={avatarFallback}
+            />
             <div className="min-w-0 flex-1 space-y-3 sm:space-y-4">
               <DemoBanner />
               {isSwitchedOrg && activeOrg ? (

@@ -75,15 +75,15 @@ function StatCard({ label, value, icon, trendPercent, deltaLabel }: { label: str
       <div className="flex-1 space-y-2 sm:space-y-4 lg:space-y-6">
         <div className="flex items-center gap-1 sm:gap-1.5 text-muted-foreground">
           <span className="inline-flex size-6 items-center justify-center rounded-md bg-muted/70">{icon}</span>
-          <span className="text-[10px] sm:text-xs lg:text-sm font-medium truncate">{label}</span>
+          <span className="truncate text-sm font-medium text-muted-foreground">{label}</span>
         </div>
-        <p className="text-lg sm:text-xl lg:text-[28px] font-semibold leading-tight tracking-tight">{value}</p>
-        <div className="flex flex-wrap items-center gap-1 sm:gap-2 text-[10px] sm:text-xs lg:text-sm font-medium">
+        <p className="text-3xl font-bold leading-tight tracking-tight">{value}</p>
+        <div className="flex flex-wrap items-center gap-1 sm:gap-2 text-xs font-medium">
           <span className="inline-flex items-center gap-0.5">
             <TrendText value={trendPercent} />
             <span className="hidden sm:inline text-inherit">({deltaLabel})</span>
           </span>
-          <span className="text-muted-foreground hidden sm:inline">vs Last Months</span>
+          <span className="text-xs text-muted-foreground hidden sm:inline">vs Last Months</span>
         </div>
       </div>
     </article>
@@ -206,10 +206,13 @@ export default async function DashboardPage() {
     };
   });
 
-  const revenueSeries = revenueFlowData.length > 0 ? revenueFlowData : [{ label: "Now", thisYear: monthlyRevenue || revenueTotal || 1, prevYear: Math.max(1, (monthlyRevenue || revenueTotal || 1) * 0.7) }];
+  const hasRevenueHistory = revenueFlowData.length > 1;
+  const revenueSeries = hasRevenueHistory
+    ? revenueFlowData
+    : [{ label: "Now", thisYear: Math.max(monthlyRevenue || revenueTotal || 1, 1), prevYear: 0 }];
   const revenueMax = Math.max(...revenueSeries.flatMap((item) => [item.thisYear, item.prevYear]), 1);
   const totalRevenueForCard = revenueSeries.reduce((sum, item) => sum + item.thisYear, 0);
-  const topTick = Math.ceil(revenueMax / 10000) * 10;
+  const topTick = Math.max(60, Math.ceil(revenueMax / 10000) * 10);
   const yTicks = [topTick, Math.round(topTick * 0.75), Math.round(topTick * 0.5), Math.round(topTick * 0.25), 0];
 
   const leadSourceBuckets = [
@@ -310,7 +313,7 @@ export default async function DashboardPage() {
 
       <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 sm:gap-6">
         <div className="space-y-2 sm:space-y-5">
-          <h1 className="text-lg sm:text-[22px] font-semibold leading-relaxed text-foreground">
+          <h1 className="text-lg sm:text-[22px] font-semibold tracking-tight text-foreground">
             Good {timeOfDay()}, {firstName}
           </h1>
           <p className="text-sm sm:text-base text-muted-foreground">
@@ -415,7 +418,11 @@ export default async function DashboardPage() {
 
               <div className="bg-muted/50 rounded-lg p-3 sm:p-4 space-y-3 sm:space-y-4">
                 <p className="text-xs sm:text-sm font-semibold">🏆 Best Performing Month</p>
-                <p className="text-[10px] sm:text-xs text-muted-foreground leading-relaxed">Top recent revenue snapshot hits {formatCurrency(revenueMax)} with strong month-over-month carry.</p>
+                <p className="text-[10px] sm:text-xs text-muted-foreground leading-relaxed">
+                  {hasRevenueHistory
+                    ? `Top recent revenue snapshot hits ${formatCurrency(revenueMax)} with strong month-over-month carry.`
+                    : "Start tracking to see insights from monthly revenue trends."}
+                </p>
               </div>
             </div>
 
@@ -432,15 +439,15 @@ export default async function DashboardPage() {
                       <div key={`grid-${tick}`} className="border-t border-border/70" />
                     ))}
                   </div>
-                  <div className="relative z-10 flex h-full items-end gap-2 sm:gap-3 px-1">
+                  <div className={`relative z-10 flex h-full items-end gap-2 sm:gap-3 px-1 ${hasRevenueHistory ? "" : "justify-center"}`}>
                     {revenueSeries.map((item, index) => {
                       const thisHeight = Math.max(8, (item.thisYear / revenueMax) * 100);
                       const prevHeight = Math.max(8, (item.prevYear / revenueMax) * 100);
                       return (
-                        <div key={`${item.label}-${index}`} className="flex h-full flex-1 flex-col justify-end gap-2 min-w-0">
+                        <div key={`${item.label}-${index}`} className={`flex h-full ${hasRevenueHistory ? "flex-1" : "w-[72px]"} flex-col justify-end gap-2 min-w-0`}>
                           <div className="flex items-end justify-center gap-1.5 h-full">
                             <div className="w-3 rounded-t-[4px] bg-[#6e3ff3]" style={{ height: `${thisHeight}%` }} />
-                            <div className="w-3 rounded-t-[4px] bg-[#e255f2]" style={{ height: `${prevHeight}%` }} />
+                            {hasRevenueHistory ? <div className="w-3 rounded-t-[4px] bg-[#e255f2]" style={{ height: `${prevHeight}%` }} /> : null}
                           </div>
                           <p className="truncate text-[10px] text-center text-muted-foreground">{item.label}</p>
                         </div>
@@ -449,6 +456,7 @@ export default async function DashboardPage() {
                   </div>
                 </div>
               </div>
+              {!hasRevenueHistory ? <p className="mt-2 text-center text-xs text-muted-foreground">No historical data yet</p> : null}
             </div>
           </div>
         </article>

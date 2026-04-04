@@ -6,8 +6,8 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["General Sans", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
-        mono: ["Fira Code", "Fira Mono", "monospace"],
+        sans: ["var(--font-geist-sans)", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "sans-serif"],
+        mono: ["var(--font-geist-mono)", "SFMono-Regular", "Menlo", "Monaco", "Consolas", "monospace"],
       },
       fontSize: {
         "page-title": ["32px", { lineHeight: "1.2", letterSpacing: "-0.02em", fontWeight: "600" }],

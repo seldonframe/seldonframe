@@ -48,13 +48,13 @@ export function SidebarNav({ nav, onNavigate }: { nav: NavItem[]; onNavigate?: (
   const pathname = usePathname();
 
   return (
-    <nav className="space-y-1.5">
+    <nav className="space-y-1">
       {nav.map((item) => {
         const Icon = resolveIcon(item.icon);
         const active = isActivePath(pathname, item.href);
         const className = item.disabled
-          ? "crm-sidebar-link flex items-center gap-2.5 px-3 py-2.5 text-label opacity-55"
-          : "crm-sidebar-link flex items-center gap-2.5 px-3 py-2.5 text-label";
+          ? "crm-sidebar-link flex h-9 items-center gap-2.5 px-3 text-sm font-medium opacity-55 sm:h-[38px]"
+          : "crm-sidebar-link flex h-9 items-center gap-2.5 px-3 text-sm font-medium sm:h-[38px]";
 
         return (
           <Link
@@ -69,11 +69,11 @@ export function SidebarNav({ nav, onNavigate }: { nav: NavItem[]; onNavigate?: (
               }
             }}
           >
-            <Icon className="crm-sidebar-icon h-4 w-4 shrink-0" />
+            <Icon className="crm-sidebar-icon size-4 shrink-0 sm:size-5" />
             <span className="crm-sidebar-text flex-1">{item.label}</span>
             {active && !item.disabled ? <ChevronRight className="h-4 w-4 text-[hsl(var(--muted-foreground))]/70" /> : null}
             {item.upgrade ? (
-              <span className="rounded border border-[hsl(var(--border))] px-1.5 py-0.5 text-[10px] uppercase tracking-[0.06em] text-[hsl(var(--muted-foreground))]">
+              <span className="rounded border border-border px-1.5 py-0.5 text-[10px] uppercase tracking-[0.06em] text-[hsl(var(--muted-foreground))]">
                 Upgrade
               </span>
             ) : null}

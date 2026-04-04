@@ -234,8 +234,8 @@
   }
 
   .dark .crm-sidebar {
-    background: oklch(0.19 0 0);
-    border-color: oklch(0.3 0 0 / 0.45);
+    background: hsl(var(--sidebar));
+    border-color: hsl(var(--sidebar-border));
   }
 
   .crm-sidebar-link {
@@ -335,8 +335,8 @@
   }
 
   .dark .crm-topbar-icon-btn {
-    border-color: oklch(0.3 0 0 / 0.45);
-    background: oklch(0.22 0 0);
+    border-color: hsl(var(--border));
+    background: hsl(var(--card));
   }
 
   .crm-toast {
