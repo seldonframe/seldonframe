@@ -20,6 +20,15 @@ import { installSoul } from "@/lib/soul/install";
 import { isDemoBlockedError, isDemoReadonlyClient } from "@/lib/demo/client";
 import { useDemoToast } from "@/components/shared/demo-toast-provider";
 
+/*
+  Square UI class reference (source of truth):
+  - templates-baseui/marketing-dashboard/components/ui/progress.tsx
+    - progress track: "bg-muted h-1.5 rounded-full relative flex w-full items-center overflow-x-hidden"
+    - progress indicator: "bg-primary h-full transition-all"
+  - templates-baseui/marketing-dashboard/components/ui/card.tsx
+    - shell: "bg-card text-card-foreground ... rounded-xl ... shadow-xs ring-1 ring-foreground/10"
+*/
+
 type SetupSoulOption = {
   id: string;
   name: string;
@@ -52,6 +61,10 @@ type SetupSoulOption = {
 
 const stepLabels = ["Choose Your Soul", "Personalize", "Your Business Is Ready", "Choose Your Look"];
 
+const squareInputClass = "file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive";
+const squarePrimaryButtonClass = "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-primary text-primary-foreground text-sm font-medium transition-all hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50 outline-none";
+const squareOutlineButtonClass = "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border bg-background text-sm font-medium shadow-xs transition-all hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50 outline-none";
+
 function answerKey(index: number) {
   return `question_${index}`;
 }
@@ -66,35 +79,21 @@ function defaultBusinessNameForSoul(template: string, ownerName: string) {
 
 function StepIndicator({ currentStep }: { currentStep: number }) {
   return (
-    <div className="flex items-center gap-0">
+    <div className="flex w-full items-center gap-2">
       {stepLabels.map((label, index) => {
         const isDone = index < currentStep;
         const isActive = index === currentStep;
         return (
-          <div key={label} className="flex items-center">
-            {index > 0 && (
-              <div className={`hidden sm:block h-px w-6 md:w-10 transition-colors ${isDone ? "bg-primary" : "bg-border"}`} />
-            )}
-            <div className="flex items-center gap-1.5">
-              <div
-                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-all ${
-                  isDone
-                    ? "bg-primary text-primary-foreground"
-                    : isActive
-                      ? "border-2 border-primary bg-primary/10 text-primary"
-                      : "border border-border bg-card text-muted-foreground"
-                }`}
-              >
-                {isDone ? <Check className="h-3.5 w-3.5" /> : index + 1}
-              </div>
-              <span
-                className={`hidden md:inline text-xs font-medium transition-colors ${
-                  isDone || isActive ? "text-foreground" : "text-muted-foreground"
-                }`}
-              >
-                {label}
-              </span>
-            </div>
+          <div
+            key={label}
+            className={`inline-flex flex-1 items-center justify-center gap-2 h-9 px-3 rounded-md border text-sm font-medium shadow-xs ${
+              isDone || isActive
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-border bg-muted text-muted-foreground"
+            }`}
+          >
+            <span className="text-xs font-semibold">{isDone ? <Check className="h-3.5 w-3.5" /> : index + 1}</span>
+            <span className="hidden sm:inline truncate">{label}</span>
           </div>
         );
       })}
@@ -274,7 +273,7 @@ export function SetupWizard({ souls }: { souls: SetupSoulOption[] }) {
 
   return (
     <section className="mx-auto w-full max-w-5xl space-y-6 px-4 sm:px-0">
-      <div className="rounded-xl border bg-card p-5 sm:p-8 md:p-10">
+      <div className="ring-foreground/10 rounded-xl border bg-card p-5 text-card-foreground shadow-xs ring-1 sm:p-8 md:p-10">
         <div className="mb-8 flex flex-col items-center gap-4 sm:flex-row sm:justify-between">
           <StepIndicator currentStep={step} />
           <p className="text-xs text-muted-foreground sm:hidden">Step {step + 1} of {stepLabels.length}</p>
@@ -288,7 +287,7 @@ export function SetupWizard({ souls }: { souls: SetupSoulOption[] }) {
                 <p className="text-sm text-muted-foreground">Pick a niche template. We&apos;ll build your entire business system from it.</p>
               </div>
 
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                 {souls.map((item) => {
                   const active = selectedSoulId === item.id;
                   return (
@@ -296,18 +295,13 @@ export function SetupWizard({ souls }: { souls: SetupSoulOption[] }) {
                       key={item.id}
                       type="button"
                       onClick={() => onSelectSoul(item.id)}
-                      className={`group relative flex flex-col rounded-xl border bg-card overflow-hidden text-left transition-all ${
+                      className={`p-4 rounded-xl border bg-card hover:bg-accent/50 transition-all cursor-pointer group text-left ${
                         active
                           ? "ring-2 ring-primary border-primary/40"
-                          : "hover:bg-accent/30 hover:border-primary/20"
+                          : ""
                       }`}
                     >
-                      {active && (
-                        <div className="absolute top-3 right-3 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                          <Check className="h-3.5 w-3.5" />
-                        </div>
-                      )}
-                      <div className="h-36 bg-gradient-to-br from-muted/50 to-muted flex items-center justify-center overflow-hidden">
+                      <div className="size-10 rounded-lg flex items-center justify-center mb-3 bg-muted overflow-hidden">
                         <img
                           src={item.previewImageUrl}
                           alt={item.name}
@@ -316,25 +310,16 @@ export function SetupWizard({ souls }: { souls: SetupSoulOption[] }) {
                           onError={(event) => {
                             event.currentTarget.onerror = null;
                             event.currentTarget.src = "/logo.svg";
-                            event.currentTarget.className = "h-16 w-16 object-contain opacity-40";
+                            event.currentTarget.className = "h-6 w-6 object-contain opacity-40";
                           }}
                         />
                       </div>
-                      <div className="p-4 space-y-1.5">
-                        <p className="font-medium text-sm text-foreground">{item.name}</p>
-                        <p className="text-xs text-muted-foreground line-clamp-2">{item.description || "Niche-ready business system"}</p>
-                        <div className="flex flex-wrap gap-1.5 pt-1">
-                          <span className="inline-flex items-center rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                            {item.includes.landingPages} pages
-                          </span>
-                          <span className="inline-flex items-center rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                            {item.includes.emails} emails
-                          </span>
-                          <span className="inline-flex items-center rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                            {item.includes.formFields} fields
-                          </span>
-                        </div>
-                      </div>
+                      <p className="font-medium text-sm truncate mb-0.5">{item.name}</p>
+                      <p className="text-xs text-muted-foreground line-clamp-2">{item.description || "Niche-ready business system"}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {item.includes.landingPages} pages · {item.includes.emails} emails · {item.includes.formFields} fields
+                      </p>
+                      {active ? <span className="mt-2 inline-flex items-center rounded-full px-2 py-1 text-xs bg-primary/10 text-primary w-fit">Selected</span> : null}
                     </button>
                   );
                 })}
@@ -362,13 +347,18 @@ export function SetupWizard({ souls }: { souls: SetupSoulOption[] }) {
                 <p className="text-sm text-muted-foreground">Personalizing for <span className="font-medium text-foreground">{selectedSoul?.name}</span></p>
               </div>
 
-              <div className="space-y-5">
+              <div className="rounded-xl border border-border bg-card overflow-hidden">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 border-b">
+                  <h3 className="font-medium text-base">Business details</h3>
+                </div>
+
+                <div className="space-y-5 p-4">
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <label htmlFor="setup-fullname" className="text-sm font-medium text-foreground">Your full name</label>
                     <input
                       id="setup-fullname"
-                      className="crm-input h-9 w-full px-3"
+                      className={squareInputClass}
                       value={fullName}
                       onChange={(event) => {
                         const value = event.target.value;
@@ -385,7 +375,7 @@ export function SetupWizard({ souls }: { souls: SetupSoulOption[] }) {
                     <label htmlFor="setup-bizname" className="text-sm font-medium text-foreground">Your business name</label>
                     <input
                       id="setup-bizname"
-                      className="crm-input h-9 w-full px-3"
+                      className={squareInputClass}
                       value={businessName}
                       onChange={(event) => setBusinessName(event.target.value)}
                       placeholder="Smith Therapy"
@@ -399,7 +389,7 @@ export function SetupWizard({ souls }: { souls: SetupSoulOption[] }) {
                   </label>
                   <input
                     id="setup-location"
-                    className="crm-input h-9 w-full px-3"
+                    className={squareInputClass}
                     value={location}
                     onChange={(event) => setLocation(event.target.value)}
                     placeholder="Austin, TX"
@@ -412,7 +402,7 @@ export function SetupWizard({ souls }: { souls: SetupSoulOption[] }) {
                     {question.type.includes("select") && question.options?.length ? (
                       <select
                         id={`setup-q-${index}`}
-                        className="crm-input h-9 w-full px-3"
+                        className={squareInputClass}
                         value={questionAnswers[answerKey(index)] ?? ""}
                         onChange={(event) => setAnswer(index, event.target.value)}
                       >
@@ -424,7 +414,7 @@ export function SetupWizard({ souls }: { souls: SetupSoulOption[] }) {
                     ) : (
                       <input
                         id={`setup-q-${index}`}
-                        className="crm-input h-9 w-full px-3"
+                        className={squareInputClass}
                         value={questionAnswers[answerKey(index)] ?? ""}
                         onChange={(event) => setAnswer(index, event.target.value)}
                         placeholder="Your answer"
@@ -432,6 +422,7 @@ export function SetupWizard({ souls }: { souls: SetupSoulOption[] }) {
                     )}
                   </div>
                 ))}
+                </div>
               </div>
             </div>
           </StepTransition>
@@ -449,7 +440,7 @@ export function SetupWizard({ souls }: { souls: SetupSoulOption[] }) {
               </div>
               <button
                 type="button"
-                className="crm-button-primary relative h-12 px-8 text-base font-medium"
+                className={`${squarePrimaryButtonClass} relative h-12 px-8 text-base`}
                 onClick={launchBusiness}
                 disabled={pending}
               >
@@ -483,20 +474,26 @@ export function SetupWizard({ souls }: { souls: SetupSoulOption[] }) {
                 <p className="text-sm text-muted-foreground">Here&apos;s what we just built for you.</p>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 p-3 sm:p-4 lg:p-6 rounded-xl border bg-card">
                 {revealCards.map((card) => {
                   const Icon = card.icon;
                   return (
                     <Link
                       key={card.href}
                       href={card.href}
-                      className="group rounded-xl border bg-card p-4 transition-all hover:bg-accent/30 hover:border-primary/20"
+                      className="flex items-start group"
                     >
-                      <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                        <Icon className="h-5 w-5 text-primary" />
+                      <div className="flex-1 space-y-2 sm:space-y-4 lg:space-y-6">
+                        <div className="flex items-center gap-1 sm:gap-1.5 text-muted-foreground">
+                          <Icon className="size-3.5 sm:size-[18px]" />
+                          <span className="text-[10px] sm:text-xs lg:text-sm font-medium truncate">{card.title}</span>
+                        </div>
+                        <p className="text-lg sm:text-xl lg:text-[28px] font-semibold leading-tight tracking-tight">Live</p>
+                        <div className="flex flex-wrap items-center gap-1 sm:gap-2 text-[10px] sm:text-xs lg:text-sm font-medium">
+                          <span className="text-emerald-600">Ready</span>
+                          <span className="text-muted-foreground hidden sm:inline line-clamp-1">{card.description}</span>
+                        </div>
                       </div>
-                      <p className="font-medium text-sm text-foreground group-hover:text-primary transition-colors">{card.title}</p>
-                      <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{card.description}</p>
                     </Link>
                   );
                 })}
@@ -526,28 +523,30 @@ export function SetupWizard({ souls }: { souls: SetupSoulOption[] }) {
                         key={`${variant.slug}-${index}`}
                         type="button"
                         onClick={() => setSelectedVariantIndex(index)}
-                        className={`group relative flex flex-col rounded-xl border bg-card p-5 text-left transition-all ${
+                        className={`group relative flex flex-col rounded-xl border bg-card overflow-hidden hover:bg-accent/30 transition-colors text-left ${
                           active
                             ? "ring-2 ring-primary border-primary/40"
-                            : "hover:bg-accent/30 hover:border-primary/20"
+                            : ""
                         }`}
                       >
-                        {active && (
-                          <div className="absolute top-3 right-3 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                            <Check className="h-3.5 w-3.5" />
+                        <div className="h-32 bg-linear-to-br from-muted/50 to-muted flex items-center justify-center">
+                          <div className="size-12 rounded-xl bg-background shadow-sm flex items-center justify-center">
+                            <Globe className="h-5 w-5 text-muted-foreground" />
                           </div>
-                        )}
-                        <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-                          <Globe className="h-5 w-5 text-muted-foreground" />
                         </div>
-                        <p className="font-medium text-sm text-foreground">{variant.title}</p>
-                        <p className="mt-1.5 text-xs text-muted-foreground line-clamp-2">{variant.headline || "Variant preview"}</p>
+                        <div className="p-4 space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <h3 className="font-medium line-clamp-1">{variant.title}</h3>
+                          </div>
+                          <p className="text-sm text-muted-foreground line-clamp-2">{variant.headline || "Variant preview"}</p>
+                          {active ? <span className="inline-flex items-center rounded-full px-2 py-1 text-xs bg-primary/10 text-primary">Selected</span> : null}
+                        </div>
                       </button>
                     );
                   })}
                 </div>
               ) : (
-                <div className="rounded-xl border bg-card p-6 text-center">
+                <div className="rounded-xl border bg-card p-6 text-center text-card-foreground shadow-sm">
                   <p className="text-sm text-muted-foreground">This soul currently has one default landing style.</p>
                 </div>
               )}
@@ -558,7 +557,7 @@ export function SetupWizard({ souls }: { souls: SetupSoulOption[] }) {
         <div className="mt-10 flex items-center justify-between gap-3 border-t border-border pt-6">
           <button
             type="button"
-            className="crm-button-secondary h-9 px-4"
+            className={`${squareOutlineButtonClass} h-9 px-4 py-2`}
             onClick={goBack}
             disabled={step === 0 || pending}
           >
@@ -566,15 +565,15 @@ export function SetupWizard({ souls }: { souls: SetupSoulOption[] }) {
           </button>
 
           {step < 2 ? (
-            <button type="button" className="crm-button-primary h-9 px-5" onClick={goNext} disabled={!canContinue || pending}>
+            <button type="button" className={`${squarePrimaryButtonClass} h-9 px-5 py-2`} onClick={goNext} disabled={!canContinue || pending}>
               Continue <ArrowRight className="ml-1.5 inline h-4 w-4" />
             </button>
           ) : step === 2 ? (
-            <button type="button" className="crm-button-primary h-9 px-5" onClick={goNext} disabled={!installed || pending}>
+            <button type="button" className={`${squarePrimaryButtonClass} h-9 px-5 py-2`} onClick={goNext} disabled={!installed || pending}>
               {(selectedSoul?.variants.length ?? 0) > 1 ? "Continue" : "Go to Dashboard"} <ArrowRight className="ml-1.5 inline h-4 w-4" />
             </button>
           ) : (
-            <button type="button" className="crm-button-primary h-10 px-6 font-medium" onClick={finishWithVariant}>
+            <button type="button" className={`${squarePrimaryButtonClass} h-10 px-6`} onClick={finishWithVariant}>
               Finish Setup <ArrowRight className="ml-1.5 inline h-4 w-4" />
             </button>
           )}
