@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { Bell, Command, LayoutGrid, Menu, Moon, Search, Sun } from "lucide-react";
+import { Bell, Command, Menu, Moon, Search, Sun } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { useTheme } from "next-themes";
 import { usePathname } from "next/navigation";
@@ -161,10 +161,7 @@ export function DashboardTopbar({
         >
           <Menu className="h-5 w-5" />
         </button>
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          <LayoutGrid className="size-4 text-muted-foreground" />
-          <p className="truncate text-base font-medium sm:text-lg">{title}</p>
-        </div>
+        <p className="flex-1 truncate text-base font-medium sm:text-lg">{title}</p>
       </div>
 
       <div className="relative mx-auto hidden flex-1 md:block md:max-w-[320px]">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Sparkles, Users, ChevronsUpDown } from "lucide-react";
+import { Sparkles, ChevronsUpDown } from "lucide-react";
 import type { BlockManifest } from "@seldonframe/core/blocks";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
@@ -15,28 +15,7 @@ import { useLabels } from "@/lib/hooks/use-labels";
     - account card shell: "flex items-center gap-2 sm:gap-3 rounded-lg border bg-card p-2 sm:p-3"
 */
 
-const fallbackNav = [
-  { href: "/dashboard", label: "Dashboard", icon: "dashboard" },
-  { href: "/seldon", label: "Seldon It", icon: "sparkles" },
-  { href: "/contacts", label: "Contacts", icon: "contacts" },
-  { href: "/deals", label: "Deals", icon: "deals" },
-  { href: "/bookings", label: "Booking", icon: "booking" },
-  { href: "/landing", label: "Pages", icon: "pages" },
-  { href: "/emails", label: "Email", icon: "email" },
-  { href: "/forms", label: "Forms", icon: "forms" },
-  { href: "/automations", label: "Automations", icon: "automations" },
-  { href: "/settings", label: "Settings", icon: "settings" },
-];
-
-export function Sidebar({
-  blocks,
-  canAccessSeldon,
-  workspaceName,
-  workspaceMembers,
-  userName,
-  userEmail,
-  avatarFallback,
-}: {
+export function Sidebar(props: {
   blocks: BlockManifest[];
   canAccessSeldon: boolean;
   workspaceName: string;
@@ -45,42 +24,28 @@ export function Sidebar({
   userEmail: string;
   avatarFallback: string;
 }) {
+  const { canAccessSeldon, workspaceName, userName, userEmail, avatarFallback } = props;
   const labels = useLabels();
-
-  const blockNav = blocks.length
-    ? [...blocks].sort((a, b) => a.nav.order - b.nav.order).map((block) => {
-        const label =
-          block.id === "contacts"
-            ? labels.contact.plural
-            : block.id === "deals"
-              ? labels.deal.plural
-              : block.id === "forms"
-                ? labels.intakeForm.plural
-                : block.nav.label;
-
-        return {
-          href: block.nav.href,
-          label,
-          icon: block.nav.icon || block.icon || "Puzzle",
-          order: block.nav.order,
-        };
-      })
-    : fallbackNav.map((item, idx) => ({ ...item, order: idx * 10 + 10 }));
-
-  const filteredBlockNav = blockNav.filter((item) => item.href !== "/seldon");
-
   const nav = [
-    ...filteredBlockNav,
+    { href: "/dashboard", label: "Dashboard", icon: "LayoutDashboard", order: 10 },
     {
       href: canAccessSeldon ? "/seldon" : "/settings/billing",
       label: "Seldon It",
       icon: "sparkles",
-      order: 15,
+      order: 20,
       disabled: !canAccessSeldon,
       tooltip: canAccessSeldon ? undefined : "Upgrade to Cloud Pro to Seldon custom blocks",
       upgrade: !canAccessSeldon,
     },
-  ].sort((a, b) => a.order - b.order);
+    { href: "/contacts", label: labels.contact.plural, icon: "Users", order: 30 },
+    { href: "/deals", label: "Engagements", icon: "Building2", order: 40 },
+    { href: "/bookings", label: "Booking", icon: "Calendar", order: 50 },
+    { href: "/landing", label: "Pages", icon: "Layout", order: 60 },
+    { href: "/emails", label: "Email", icon: "Mail", order: 70 },
+    { href: "/forms", label: labels.intakeForm.plural, icon: "FileText", order: 80 },
+    { href: "/automations", label: "Automations", icon: "Zap", order: 90 },
+    { href: "/settings", label: "Settings", icon: "Settings", order: 100 },
+  ];
 
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -116,12 +81,6 @@ export function Sidebar({
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs font-semibold sm:text-sm">{workspaceName}</p>
-              {typeof workspaceMembers === "number" ? (
-                <div className="flex items-center gap-1 text-muted-foreground">
-                  <Users className="size-3 sm:size-3.5" />
-                  <span className="text-[10px] sm:text-xs">{workspaceMembers} Members</span>
-                </div>
-              ) : null}
             </div>
           </div>
 

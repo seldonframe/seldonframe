@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Briefcase, Calendar, ChevronRight, FileText, Layout, LayoutDashboard, Mail, Puzzle, Settings, Sparkles, Users, Zap } from "lucide-react";
+import { Briefcase, Building2, Calendar, ChevronRight, FileText, Layout, LayoutDashboard, Mail, Puzzle, Settings, Sparkles, Users, Zap } from "lucide-react";
 
 type NavItem = {
   href: string;
@@ -20,6 +20,7 @@ const iconMap = {
   users: Users,
   deals: Briefcase,
   briefcase: Briefcase,
+  building2: Building2,
   booking: Calendar,
   calendar: Calendar,
   pages: Layout,
@@ -53,8 +54,8 @@ export function SidebarNav({ nav, onNavigate }: { nav: NavItem[]; onNavigate?: (
         const Icon = resolveIcon(item.icon);
         const active = isActivePath(pathname, item.href);
         const className = item.disabled
-          ? "crm-sidebar-link flex h-9 items-center gap-2.5 px-3 text-sm font-medium opacity-55 sm:h-[38px]"
-          : "crm-sidebar-link flex h-9 items-center gap-2.5 px-3 text-sm font-medium sm:h-[38px]";
+          ? "flex h-9 items-center gap-2.5 rounded-md px-3 text-sm font-medium text-muted-foreground opacity-55 sm:h-[38px]"
+          : `flex h-9 items-center gap-2.5 rounded-md px-3 text-sm font-medium transition-colors sm:h-[38px] ${active ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground"}`;
 
         return (
           <Link
@@ -69,8 +70,8 @@ export function SidebarNav({ nav, onNavigate }: { nav: NavItem[]; onNavigate?: (
               }
             }}
           >
-            <Icon className="crm-sidebar-icon size-4 shrink-0 sm:size-5" />
-            <span className="crm-sidebar-text flex-1">{item.label}</span>
+            <Icon className="size-4 shrink-0 sm:size-5" />
+            <span className="flex-1">{item.label}</span>
             {active && !item.disabled ? <ChevronRight className="h-4 w-4 text-[hsl(var(--muted-foreground))]/70" /> : null}
             {item.upgrade ? (
               <span className="rounded border border-border px-1.5 py-0.5 text-[10px] uppercase tracking-[0.06em] text-[hsl(var(--muted-foreground))]">

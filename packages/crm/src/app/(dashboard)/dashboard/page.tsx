@@ -74,16 +74,16 @@ function StatCard({ label, value, icon, trendPercent, deltaLabel }: { label: str
     <article className="flex items-start">
       <div className="flex-1 space-y-2 sm:space-y-4 lg:space-y-6">
         <div className="flex items-center gap-1 sm:gap-1.5 text-muted-foreground">
-          <span className="inline-flex size-6 items-center justify-center rounded-md bg-muted/70">{icon}</span>
-          <span className="truncate text-sm font-medium text-muted-foreground">{label}</span>
+          {icon}
+          <span className="text-[10px] sm:text-xs lg:text-sm font-medium truncate">{label}</span>
         </div>
-        <p className="text-3xl font-bold leading-tight tracking-tight">{value}</p>
-        <div className="flex flex-wrap items-center gap-1 sm:gap-2 text-xs font-medium">
+        <p className="text-lg sm:text-xl lg:text-[28px] font-semibold leading-tight tracking-tight">{value}</p>
+        <div className="flex flex-wrap items-center gap-1 sm:gap-2 text-[10px] sm:text-xs lg:text-sm font-medium">
           <span className="inline-flex items-center gap-0.5">
             <TrendText value={trendPercent} />
             <span className="hidden sm:inline text-inherit">({deltaLabel})</span>
           </span>
-          <span className="text-xs text-muted-foreground hidden sm:inline">vs Last Months</span>
+          <span className="text-muted-foreground hidden sm:inline">vs Last Months</span>
         </div>
       </div>
     </article>
@@ -284,7 +284,7 @@ export default async function DashboardPage() {
   });
 
   return (
-    <section className="animate-page-enter space-y-4 sm:space-y-6">
+    <main className="animate-page-enter flex-1 overflow-auto p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6 bg-background w-full">
       {typeof trialDaysRemaining === "number" ? (
         <div className="rounded-xl border border-primary/30 bg-primary/10 px-4 py-3 text-sm text-primary">
           Trial: {trialDaysRemaining} day{trialDaysRemaining === 1 ? "" : "s"} remaining. Your plan activates on {formatLongDate(trialEndsAt!)}.
@@ -313,14 +313,13 @@ export default async function DashboardPage() {
 
       <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 sm:gap-6">
         <div className="space-y-2 sm:space-y-5">
-          <h1 className="text-lg sm:text-[22px] font-semibold tracking-tight text-foreground">
+          <h1 className="text-lg sm:text-[22px] font-semibold leading-relaxed text-foreground">
             Good {timeOfDay()}, {firstName}
           </h1>
           <p className="text-sm sm:text-base text-muted-foreground">
             Today: <span className="text-foreground font-medium">{sessionsToday} sessions</span>,{" "}
             <span className="text-foreground font-medium">{followUpsDue} follow-ups due</span>
           </p>
-          <p className="text-xs text-muted-foreground">{formatLongDate(today)}</p>
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
@@ -341,8 +340,9 @@ export default async function DashboardPage() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 p-3 sm:p-4 lg:p-6 rounded-xl border bg-card">
         {stats.map((stat, index) => (
-          <div key={stat.label} className={`flex items-start ${index < stats.length - 1 ? "lg:border-r lg:border-border lg:pr-6" : ""}`}>
+          <div key={stat.label} className="flex items-start">
             <StatCard label={stat.label} value={stat.value} icon={stat.icon} trendPercent={stat.trend} deltaLabel={stat.deltaLabel} />
+            {index < stats.length - 1 ? <div className="hidden lg:block w-px h-full bg-border mx-4 xl:mx-6" /> : null}
           </div>
         ))}
       </div>
@@ -554,6 +554,6 @@ export default async function DashboardPage() {
         </article>
       ) : null}
 
-    </section>
+    </main>
   );
 }
