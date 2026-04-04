@@ -1,48 +1,127 @@
 import Link from "next/link";
+import { CheckCircle2, FileText, Eye, ListTodo } from "lucide-react";
 import { createSuggestedFormAction, listForms } from "@/lib/forms/actions";
 import { getLabels } from "@/lib/soul/labels";
+
+/*
+  Square UI class reference (source of truth):
+  - templates/dashboard-2/components/dashboard/welcome-section.tsx
+    - title: "text-lg sm:text-[22px] font-semibold leading-relaxed"
+    - helper copy: "text-sm sm:text-base text-muted-foreground"
+  - templates/dashboard-2/components/dashboard/deals-table.tsx
+    - card/list shell: "rounded-xl border bg-card"
+*/
 
 export default async function FormsPage() {
   const [labels, forms] = await Promise.all([getLabels(), listForms()]);
 
+  const stats = [
+    {
+      title: "Total Forms",
+      value: String(forms.length),
+      change: "+0",
+      icon: FileText,
+    },
+    {
+      title: "Active Forms",
+      value: String(forms.filter((form) => form.isActive).length),
+      change: "+0",
+      icon: CheckCircle2,
+    },
+    {
+      title: "Draft Forms",
+      value: String(forms.filter((form) => !form.isActive).length),
+      change: "+0",
+      icon: Eye,
+    },
+    {
+      title: "Submissions",
+      value: "0",
+      change: "+0",
+      icon: ListTodo,
+    },
+  ] as const;
+
   return (
-    <section className="animate-page-enter space-y-4 sm:space-y-6">
-      <div className="space-y-2 sm:space-y-3">
-        <h1 className="text-lg sm:text-[22px] font-semibold leading-relaxed text-foreground">{labels.intakeForm.plural}</h1>
-        <p className="text-sm sm:text-base text-muted-foreground">
-          Submissions become {labels.contact.plural.toLowerCase()} in your CRM automatically.
-        </p>
+    <section className="animate-page-enter space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-semibold tracking-tight">{labels.intakeForm.plural}</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Submissions become {labels.contact.plural.toLowerCase()} in your CRM automatically.
+          </p>
+        </div>
+        <form action={createSuggestedFormAction}>
+          <button type="submit" className="crm-button-primary h-9 px-6">
+            Create Form
+          </button>
+        </form>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {stats.map((stat) => (
+          <div key={stat.title} className="rounded-xl border border-border bg-card p-4">
+            <div className="flex items-start justify-between">
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground">{stat.title}</p>
+                <p className="text-2xl font-medium text-foreground">{stat.value}</p>
+                <p className="text-xs text-muted-foreground">{stat.change} vs last month</p>
+              </div>
+              <div className="flex size-10 items-center justify-center rounded-lg border border-border bg-muted shrink-0">
+                <stat.icon className="size-5 text-muted-foreground" />
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
 
       {forms.length === 0 ? (
-        <article className="rounded-xl border bg-card flex min-h-52 flex-col items-center justify-center p-8 text-center">
-          <p className="text-3xl">📝</p>
-          <p className="mt-3 text-lg font-medium text-foreground">Create your first intake form</p>
-          <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">
-            Submissions become {labels.contact.plural.toLowerCase()} in your CRM automatically.
-          </p>
-          <form action={createSuggestedFormAction}>
-            <button type="submit" className="crm-button-primary mt-5 h-9 px-6">
-              Create Form
-            </button>
-          </form>
+        <article className="rounded-xl border border-border bg-card p-4">
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="size-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
+              <FileText className="size-7 text-muted-foreground" />
+            </div>
+            <h3 className="font-medium text-lg mb-1">Create your first intake form</h3>
+            <p className="text-sm text-muted-foreground max-w-xs">
+              Submissions become {labels.contact.plural.toLowerCase()} in your CRM automatically.
+            </p>
+          </div>
         </article>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {forms.map((form) => (
-            <article key={form.id} className="rounded-xl border bg-card p-5">
-              <h3 className="text-base font-medium text-foreground">{form.name}</h3>
-              <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">/{form.slug}</p>
-              <div className="mt-4 flex gap-2">
-                <Link href={`/forms/${form.id}`} className="crm-button-primary h-9 px-4 text-xs">
-                  Edit
-                </Link>
-                <Link href={`/forms/${form.id}`} className="crm-button-secondary h-9 px-4 text-xs">
-                  Preview
-                </Link>
+        <div className="rounded-xl border border-border bg-card overflow-hidden">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 border-b">
+            <h3 className="font-medium text-base">List Forms</h3>
+          </div>
+
+          <div className="hidden sm:grid grid-cols-[1fr_120px_140px_220px] gap-4 px-4 py-3 border-b bg-muted/50 text-xs font-medium text-muted-foreground">
+            <span>Name</span>
+            <span>Status</span>
+            <span>Submissions</span>
+            <span>Actions</span>
+          </div>
+
+          <div className="divide-y">
+            {forms.map((form) => (
+              <div key={form.id} className="grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_120px_140px_220px] gap-2 sm:gap-4 px-4 py-3 hover:bg-accent/50 transition-colors items-center">
+                <div className="min-w-0">
+                  <p className="font-medium text-sm truncate">{form.name}</p>
+                  <p className="text-xs text-muted-foreground sm:hidden">/{form.slug}</p>
+                </div>
+                <span className={`rounded-full px-2 py-1 text-xs w-fit ${form.isActive ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-[hsl(var(--muted)/0.5)] text-[hsl(var(--muted-foreground))]"}`}>
+                  {form.isActive ? "Published" : "Draft"}
+                </span>
+                <span className="hidden sm:block text-sm text-muted-foreground">0</span>
+                <div className="hidden sm:flex items-center gap-2">
+                  <Link href={`/forms/${form.id}`} className="crm-button-primary h-9 px-4 text-xs">
+                    Edit
+                  </Link>
+                  <Link href={`/forms/${form.id}`} className="crm-button-secondary h-9 px-4 text-xs">
+                    Preview
+                  </Link>
+                </div>
               </div>
-            </article>
-          ))}
+            ))}
+          </div>
         </div>
       )}
     </section>
