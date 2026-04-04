@@ -81,7 +81,7 @@ function NodeCard({ node }: { node: FlowNode }) {
     transition,
   };
 
-  const accent = node.kind === "trigger" ? "text-indigo-600" : node.kind === "condition" ? "text-amber-600" : "text-emerald-600";
+  const accent = node.kind === "trigger" ? "text-primary" : node.kind === "condition" ? "text-caution" : "text-positive";
 
   return (
     <article ref={setNodeRef} style={style} className="crm-table-row rounded-lg border bg-card p-3">
@@ -199,7 +199,13 @@ export function AutomationBuilder() {
                   <td className="p-4 align-middle font-medium text-sm">{node.value}</td>
                   <td className="p-4 align-middle text-sm capitalize">{node.kind}</td>
                   <td className="p-4 align-middle">
-                    <span className={`rounded-full px-2 py-1 text-xs ${enabledByNodeId[node.id] ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-[hsl(var(--muted)/0.5)] text-[hsl(var(--muted-foreground))]"}`}>
+                    <span
+                      className={`rounded-full border px-2 py-1 text-xs ${
+                        enabledByNodeId[node.id]
+                          ? "border-positive/20 bg-positive/10 text-positive"
+                          : "border-border bg-muted/50 text-muted-foreground"
+                      }`}
+                    >
                       {enabledByNodeId[node.id] ? "Active" : "Paused"}
                     </span>
                   </td>
@@ -239,7 +245,7 @@ export function AutomationBuilder() {
           <h3 className="text-card-title">Node Library</h3>
 
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-indigo-600">Triggers</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-primary">Triggers</p>
             <div className="mt-2 space-y-2">
               <div className="flex gap-2">
                 <input
@@ -263,7 +269,7 @@ export function AutomationBuilder() {
                   <option key={item} value={item} />
                 ))}
               </datalist>
-              {triggerError ? <p className="text-xs text-red-700 dark:text-red-300">{triggerError}</p> : null}
+              {triggerError ? <p className="text-xs text-negative">{triggerError}</p> : null}
             </div>
             <div className="mt-2 flex flex-wrap gap-2">
               {triggerOptions.map((item) => (
@@ -275,7 +281,7 @@ export function AutomationBuilder() {
           </div>
 
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-amber-600">Conditions</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-caution">Conditions</p>
             <div className="mt-2 flex flex-wrap gap-2">
               {conditionOptions.map((item) => (
                 <button key={item} type="button" onClick={() => addNode("condition", item)} className="rounded border border-border px-2 py-1 text-xs">
@@ -286,7 +292,7 @@ export function AutomationBuilder() {
           </div>
 
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-emerald-600">Actions</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-positive">Actions</p>
             <div className="mt-2 flex flex-wrap gap-2">
               {actionOptions.map((item) => (
                 <button key={item} type="button" onClick={() => addNode("action", item)} className="rounded border border-border px-2 py-1 text-xs">

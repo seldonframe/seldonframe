@@ -64,22 +64,66 @@ function formatLongDate(value: Date) {
 
 function TrendText({ value }: { value: number }) {
   const rounded = Math.round(value);
-  const isPositive = rounded >= 0;
+  const isPositive = rounded > 0;
+  const isNegative = rounded < 0;
+  const textClass = isPositive ? "text-positive" : isNegative ? "text-negative" : "text-caution";
+  const symbol = isPositive ? "↑" : isNegative ? "↓" : "→";
 
   return (
-    <span className={isPositive ? "text-emerald-600" : "text-red-600"}>
-      {isPositive ? "+" : ""}
-      {rounded}%
+    <span className={textClass}>
+      {symbol} {Math.abs(rounded)}%
     </span>
   );
 }
 
-function StatCard({ label, value, icon, trendPercent, deltaLabel }: { label: string; value: string; icon: React.ReactNode; trendPercent: number; deltaLabel: string }) {
+function stageBadgeClass(stage: string) {
+  const value = stage.toLowerCase();
+
+  if (/churn|lost|closed lost/.test(value)) {
+    return "border-negative/20 bg-negative/10 text-negative";
+  }
+
+  if (/enrolled|active|converted|won|closed won|retainer/.test(value)) {
+    return "border-positive/20 bg-positive/10 text-positive";
+  }
+
+  if (/completed|alumni|done/.test(value)) {
+    return "border-border bg-muted/50 text-muted-foreground";
+  }
+
+  if (/discovery|proposal|qualified|negotiation|review|handoff|strategy/.test(value)) {
+    return "border-caution/20 bg-caution/10 text-caution";
+  }
+
+  if (/inquiry|lead|signed up|new/.test(value)) {
+    return "border-[hsl(220_70%_55%_/_0.2)] bg-[hsl(220_70%_55%_/_0.1)] text-[hsl(220_70%_45%)]";
+  }
+
+  return "border-border bg-muted/50 text-muted-foreground";
+}
+
+function StatCard({
+  label,
+  value,
+  icon,
+  trendPercent,
+  deltaLabel,
+  accentBorderClass,
+  iconBadgeClass,
+}: {
+  label: string;
+  value: string;
+  icon: React.ReactNode;
+  trendPercent: number;
+  deltaLabel: string;
+  accentBorderClass: string;
+  iconBadgeClass: string;
+}) {
   return (
-    <article className="flex items-start">
+    <article className={`flex items-start rounded-lg border-t-2 pt-3 ${accentBorderClass}`}>
       <div className="flex-1 space-y-2 sm:space-y-4 lg:space-y-6">
         <div className="flex items-center gap-1 sm:gap-1.5 text-muted-foreground">
-          {icon}
+          <span className={`inline-flex size-6 items-center justify-center rounded-md ${iconBadgeClass}`}>{icon}</span>
           <span className="text-[10px] sm:text-xs lg:text-sm font-medium truncate">{label}</span>
         </div>
         <p className="text-lg sm:text-xl lg:text-[28px] font-semibold leading-tight tracking-tight">{value}</p>
@@ -88,7 +132,7 @@ function StatCard({ label, value, icon, trendPercent, deltaLabel }: { label: str
             <TrendText value={trendPercent} />
             <span className="hidden sm:inline text-inherit">({deltaLabel})</span>
           </span>
-          <span className="text-muted-foreground hidden sm:inline">vs Last Months</span>
+          <span className="text-muted-foreground hidden sm:inline">vs last month</span>
         </div>
       </div>
     </article>
@@ -263,30 +307,38 @@ export default async function DashboardPage() {
     {
       label: `Total ${contactLabelPlural}`,
       value: contactRows.length.toLocaleString(),
-      icon: <Users className="size-3.5 sm:size-[18px]" />,
+      icon: <Users className="size-3.5 sm:size-[18px] text-primary" />,
       trend: percentChange(contactsThisMonth, contactsPreviousMonth),
       deltaLabel: `${Math.abs(contactsThisMonth - contactsPreviousMonth).toLocaleString()}`,
+      accentBorderClass: "border-primary",
+      iconBadgeClass: "bg-primary/10",
     },
     {
       label: "Active Engagements",
       value: activeEngagements.toLocaleString(),
-      icon: <Activity className="size-3.5 sm:size-[18px]" />,
+      icon: <Activity className="size-3.5 sm:size-[18px] text-caution" />,
       trend: percentChange(activeEngagements, activeEngagementsPrev),
       deltaLabel: `${Math.abs(activeEngagements - activeEngagementsPrev).toLocaleString()}`,
+      accentBorderClass: "border-caution",
+      iconBadgeClass: "bg-caution/10",
     },
     {
       label: "Bookings This Month",
       value: bookingsThisMonth.toLocaleString(),
-      icon: <CalendarDays className="size-3.5 sm:size-[18px]" />,
+      icon: <CalendarDays className="size-3.5 sm:size-[18px] text-[hsl(220_70%_55%)]" />,
       trend: percentChange(bookingsThisMonth, bookingsPreviousMonth),
       deltaLabel: `${Math.abs(bookingsThisMonth - bookingsPreviousMonth).toLocaleString()}`,
+      accentBorderClass: "border-[hsl(220_70%_55%)]",
+      iconBadgeClass: "bg-[hsl(220_70%_55%_/_0.1)]",
     },
     {
       label: "Revenue",
       value: formatCurrency(monthlyRevenue),
-      icon: <DollarSign className="size-3.5 sm:size-[18px]" />,
+      icon: <DollarSign className="size-3.5 sm:size-[18px] text-positive" />,
       trend: percentChange(monthlyRevenue, previousMonthRevenue),
       deltaLabel: formatCurrency(Math.abs(monthlyRevenue - previousMonthRevenue)),
+      accentBorderClass: "border-positive",
+      iconBadgeClass: "bg-positive/10",
     },
   ];
 
@@ -358,6 +410,7 @@ export default async function DashboardPage() {
               href: "/bookings",
               status: appointmentTypeRows.length > 0 ? "Active" : "Not set up",
               detail: `${appointmentTypeRows.length} types`,
+              customizePrompt: "Customize my booking experience with a pre-call questionnaire and timezone-aware availability rules.",
             },
             {
               slug: "contacts",
@@ -365,6 +418,7 @@ export default async function DashboardPage() {
               href: "/contacts",
               status: "Active",
               detail: `${contactRows.length} records`,
+              customizePrompt: "Customize my contacts workspace with custom fields and a smart enrichment flow for new records.",
             },
             {
               slug: "email",
@@ -372,6 +426,7 @@ export default async function DashboardPage() {
               href: "/emails",
               status: emailTemplateRows.length > 0 ? "Active" : "Not set up",
               detail: `${emailTemplateRows.length} templates`,
+              customizePrompt: "Customize my email templates with brand voice, conditional sections, and better follow-up timing.",
             },
             {
               slug: "pages",
@@ -379,6 +434,7 @@ export default async function DashboardPage() {
               href: "/landing",
               status: landingPageRows.length > 0 ? "Active" : "Not set up",
               detail: `${landingPageRows.length} pages`,
+              customizePrompt: "Customize my landing pages with testimonials, comparison sections, and stronger conversion CTA blocks.",
             },
             {
               slug: "forms",
@@ -386,6 +442,7 @@ export default async function DashboardPage() {
               href: "/forms",
               status: intakeFormRows.length > 0 ? "Active" : "Not set up",
               detail: `${intakeFormRows.length} forms`,
+              customizePrompt: "Customize my forms with branching logic and a cleaner intake flow based on user answers.",
             },
             {
               slug: "automations",
@@ -393,6 +450,7 @@ export default async function DashboardPage() {
               href: "/automations",
               status: enabledAutomations.length > 0 ? "Active" : "Not set up",
               detail: `${enabledAutomations.length} enabled`,
+              customizePrompt: "Customize my automations with plain-language workflows and smarter follow-up actions.",
             },
             {
               slug: "payments",
@@ -400,6 +458,7 @@ export default async function DashboardPage() {
               href: "/settings/integrations",
               status: stripeConnected ? "Connected externally" : "Not set up",
               detail: stripeConnected ? "Stripe connected" : "Connect Stripe",
+              customizePrompt: "Customize my payments setup with installment plans and clearer billing reminders.",
             },
             {
               slug: "seldon",
@@ -407,6 +466,7 @@ export default async function DashboardPage() {
               href: "/seldon",
               status: "Active",
               detail: "Build anything",
+              customizePrompt: "Help me customize a block in my workspace and map the exact implementation steps.",
             },
           ];
           const hiddenSet = new Set(hiddenBlocks);
@@ -424,6 +484,12 @@ export default async function DashboardPage() {
                       <p className="text-sm font-medium text-foreground">{block.name}</p>
                       <p className="text-xs text-muted-foreground">{block.status}</p>
                       <p className="text-xs text-muted-foreground">{block.detail}</p>
+                    </Link>
+                    <Link
+                      href={`/seldon?prompt=${encodeURIComponent(block.customizePrompt)}`}
+                      className="inline-flex text-xs text-primary opacity-0 group-hover:opacity-100 transition-opacity hover:underline"
+                    >
+                      ✨ Customize
                     </Link>
                   </div>
                 ))}
@@ -488,7 +554,15 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 p-3 sm:p-4 lg:p-6 rounded-xl border bg-card">
         {stats.map((stat, index) => (
           <div key={stat.label} className="flex items-start">
-            <StatCard label={stat.label} value={stat.value} icon={stat.icon} trendPercent={stat.trend} deltaLabel={stat.deltaLabel} />
+            <StatCard
+              label={stat.label}
+              value={stat.value}
+              icon={stat.icon}
+              trendPercent={stat.trend}
+              deltaLabel={stat.deltaLabel}
+              accentBorderClass={stat.accentBorderClass}
+              iconBadgeClass={stat.iconBadgeClass}
+            />
             {index < stats.length - 1 ? <div className="hidden lg:block w-px h-full bg-border mx-4 xl:mx-6" /> : null}
           </div>
         ))}
@@ -674,7 +748,7 @@ export default async function DashboardPage() {
                       </td>
                       <td className="py-3 px-3 text-muted-foreground">{contactName}</td>
                       <td className="py-3 px-3">
-                        <span className="inline-flex rounded-md border border-border px-2 py-0.5 text-xs text-muted-foreground">
+                        <span className={`inline-flex rounded-md border px-2 py-0.5 text-xs ${stageBadgeClass(row.stage)}`}>
                           {row.stage}
                         </span>
                       </td>

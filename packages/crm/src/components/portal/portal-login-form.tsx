@@ -64,7 +64,7 @@ export function PortalLoginForm({ orgSlug }: { orgSlug: string }) {
       ) : null}
 
       {devCode ? <p className="text-xs text-[hsl(var(--color-text-muted))]">Dev code: {devCode}</p> : null}
-      {error ? <p className="text-xs text-red-500">{error}</p> : null}
+      {error ? <p className="text-xs text-negative">{error}</p> : null}
 
       <button
         type="button"

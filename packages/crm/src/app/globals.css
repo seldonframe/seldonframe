@@ -24,6 +24,9 @@
   --color-chart-3: var(--chart-3);
   --color-chart-2: var(--chart-2);
   --color-chart-1: var(--chart-1);
+  --color-positive: var(--positive);
+  --color-caution: var(--caution);
+  --color-negative: var(--negative);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -111,5 +114,41 @@
 
   .animate-page-enter {
     animation: page-enter 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .text-positive {
+    color: hsl(var(--positive));
+  }
+
+  .text-caution {
+    color: hsl(var(--caution));
+  }
+
+  .text-negative {
+    color: hsl(var(--negative));
+  }
+
+  .bg-positive\/10 {
+    background-color: hsl(var(--positive) / 0.1);
+  }
+
+  .bg-caution\/10 {
+    background-color: hsl(var(--caution) / 0.1);
+  }
+
+  .bg-negative\/10 {
+    background-color: hsl(var(--negative) / 0.1);
+  }
+
+  .border-positive\/20 {
+    border-color: hsl(var(--positive) / 0.2);
+  }
+
+  .border-caution\/20 {
+    border-color: hsl(var(--caution) / 0.2);
+  }
+
+  .border-negative\/20 {
+    border-color: hsl(var(--negative) / 0.2);
   }
 }

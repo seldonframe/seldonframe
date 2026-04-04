@@ -6,6 +6,17 @@ import { sendMagicLinkAction } from "./actions";
 import { DEMO_BLOCK_MESSAGE } from "@/lib/demo/constants";
 import { useDemoToast } from "@/components/shared/demo-toast-provider";
 
+function GoogleIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true">
+      <path fill="#EA4335" d="M12 10.2v3.9h5.4c-.2 1.3-1.5 3.8-5.4 3.8-3.3 0-5.9-2.7-5.9-5.9s2.6-5.9 5.9-5.9c1.9 0 3.2.8 3.9 1.5l2.7-2.6C16.9 3.5 14.7 2.5 12 2.5A9.5 9.5 0 0 0 2.5 12 9.5 9.5 0 0 0 12 21.5c5.5 0 9.2-3.9 9.2-9.4 0-.6-.1-1.1-.2-1.9H12Z" />
+      <path fill="#34A853" d="M3.6 7.6 6.8 10c.9-2.1 2.9-3.9 5.2-3.9 1.9 0 3.2.8 3.9 1.5l2.7-2.6C16.9 3.5 14.7 2.5 12 2.5 8.4 2.5 5.2 4.5 3.6 7.6Z" />
+      <path fill="#FBBC05" d="M12 21.5c2.6 0 4.8-.9 6.4-2.5l-3.1-2.5c-.8.6-1.9 1.1-3.3 1.1-3.8 0-5.2-2.6-5.4-3.8l-3.2 2.5c1.6 3.1 4.8 5.2 8.6 5.2Z" />
+      <path fill="#4285F4" d="M21.2 12.1c0-.6-.1-1.1-.2-1.9H12v3.9h5.4c-.3 1.6-1.4 2.8-2.8 3.6l3.1 2.5c1.9-1.8 3.1-4.4 3.1-8.1Z" />
+    </svg>
+  );
+}
+
 export function LoginForm() {
   const { showDemoToast } = useDemoToast();
   const [state, action, pending] = useActionState(sendMagicLinkAction, {});
@@ -60,11 +71,11 @@ export function LoginForm() {
       <button
         type="button"
         disabled={googlePending}
-        className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md border border-border bg-card px-4 text-base font-medium text-foreground shadow-xs transition-all hover:bg-accent"
+        className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md border border-border bg-white px-4 text-sm font-medium text-zinc-900 shadow-xs transition-all hover:bg-zinc-100"
         onClick={handleGoogleSignIn}
       >
-        <span aria-hidden="true" className="text-base">G</span>
-        {googlePending ? "Redirecting to Google..." : "Continue with Google"}
+        <GoogleIcon />
+        {googlePending ? "Redirecting to Google..." : "Sign in with Google"}
       </button>
 
       <div className="relative flex items-center justify-center py-1">
@@ -90,8 +101,8 @@ export function LoginForm() {
           />
         </div>
 
-        <button type="submit" disabled={pending} className="crm-button-secondary h-10 w-full px-4">
-          {pending ? "Sending magic link..." : "Continue with email link"}
+        <button type="submit" disabled={pending} className="crm-button-primary h-10 w-full px-4">
+          {pending ? "Sending magic link..." : "Continue with email"}
         </button>
       </form>
 
@@ -118,7 +129,7 @@ export function LoginForm() {
       ) : null}
 
       <p className="text-center text-label text-[hsl(var(--color-text-secondary))]">
-        No account yet? <Link href="/signup" className="font-medium text-primary underline underline-offset-4">Create one</Link>
+        New here? <Link href="/signup" className="font-medium text-primary underline underline-offset-4">Start for free →</Link>
       </p>
     </div>
   );

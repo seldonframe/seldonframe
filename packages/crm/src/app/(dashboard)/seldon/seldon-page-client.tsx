@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useActionState, useMemo, useState } from "react";
-import { BoxIcon, CircleDashedIcon, MessageCircleDashedIcon, PaperclipIcon, SparklesIcon, WandSparklesIcon } from "lucide-react";
+import { CircleDashedIcon, MessageCircleDashedIcon, PaperclipIcon, SparklesIcon, WandSparklesIcon } from "lucide-react";
 import { disableSeldonBlockAction, runSeldonItAction, type SeldonHistoryItem, type SeldonRunResult, type SeldonRunState } from "@/lib/ai/seldon-actions";
 
 type Services = {
@@ -54,43 +54,47 @@ function ResultCard({ result, onViewBlockMd }: { result: SeldonRunResult; onView
   );
 }
 
-export function SeldonPageClient({ allowed, services, history }: { allowed: boolean; services: Services; history: SeldonHistoryItem[] }) {
+export function SeldonPageClient({
+  allowed,
+  services,
+  history,
+  initialPrompt = "",
+}: {
+  allowed: boolean;
+  services: Services;
+  history: SeldonHistoryItem[];
+  initialPrompt?: string;
+}) {
   const [state, action, pending] = useActionState(runSeldonItAction, initialState);
   const [selectedResult, setSelectedResult] = useState<SeldonRunResult | null>(null);
-  const [description, setDescription] = useState("");
+  const [description, setDescription] = useState(initialPrompt);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
 
-  const promptExamples: Array<{ label: string; prompt: string; icon: "wand" | "sparkles" | "box" }> = [
+  const customizeExamples = [
     {
-      label: "Online Course",
-      prompt: "Build a course block where I can create modules and lessons, let clients enroll, track progress, and get a certificate on completion.",
-      icon: "sparkles",
+      icon: "📅",
+      prompt: "Add a pre-call questionnaire to discovery calls",
     },
     {
-      label: "Client Portal",
-      prompt: "Create a client portal where each contact can log in, see their bookings, download files I share, and message me directly.",
-      icon: "sparkles",
+      icon: "✉️",
+      prompt: "Make my welcome email include my podcast link",
     },
     {
-      label: "Invoicing",
-      prompt: "Build an invoicing block that lets me create line-item invoices, send them by email, and track payment status with Stripe.",
-      icon: "wand",
+      icon: "📋",
+      prompt: "Add branching logic to my intake form",
     },
     {
-      label: "Testimonials",
-      prompt: "Create a testimonial collector where clients submit reviews via a public form, I approve them, and embed a testimonial wall on my landing page.",
-      icon: "box",
+      icon: "🌐",
+      prompt: "Add testimonials to my landing page",
     },
-    {
-      label: "Waitlist",
-      prompt: "Build a waitlist block with a public signup form, position tracking, and automatic email when a spot opens up.",
-      icon: "wand",
-    },
-    {
-      label: "Referral Program",
-      prompt: "Create a referral program where each client gets a unique link, I can track who referred whom, and reward top referrers.",
-      icon: "box",
-    },
+  ];
+
+  const buildExamples = [
+    { icon: "🎯", prompt: "Build a quiz funnel that qualifies leads" },
+    { icon: "👤", prompt: "Create a client portal with session history" },
+    { icon: "🎁", prompt: "Set up a referral program with tracking" },
+    { icon: "💳", prompt: "Build a 3-installment payment plan via Stripe" },
+    { icon: "📊", prompt: "Create a weekly pipeline report sent every Monday" },
   ];
 
   function fillPrompt(prompt: string) {
@@ -160,21 +164,49 @@ export function SeldonPageClient({ allowed, services, history }: { allowed: bool
 
                       <div className="space-y-4 text-center">
                         <h1 className="text-2xl font-semibold tracking-tight">Hey! I&apos;m Seldon</h1>
-                        <p className="text-2xl text-foreground">Describe what you need</p>
+                        <p className="text-base text-muted-foreground">Describe what you want to build or customize.</p>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-6">
-                        {promptExamples.map((example) => (
-                          <button
-                            key={example.label}
-                            type="button"
-                            className="text-left rounded-xl border border-border p-3 hover:bg-accent/40 transition-colors space-y-1"
-                            onClick={() => fillPrompt(example.prompt)}
-                          >
-                            <p className="text-sm font-medium text-foreground">{example.label}</p>
-                            <p className="text-xs text-muted-foreground line-clamp-2">{example.prompt}</p>
-                          </button>
-                        ))}
+                      <div className="space-y-5 mt-6 text-left">
+                        <div className="space-y-2">
+                          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Customize a block</p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {customizeExamples.map((example) => (
+                              <button
+                                key={example.prompt}
+                                type="button"
+                                className="text-left rounded-xl border border-border p-3 hover:bg-accent/40 transition-colors"
+                                onClick={() => fillPrompt(example.prompt)}
+                              >
+                                <p className="text-sm text-foreground">
+                                  <span className="mr-1.5" aria-hidden="true">{example.icon}</span>
+                                  &quot;{example.prompt}&quot;
+                                </p>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Build something new</p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {buildExamples.map((example) => (
+                              <button
+                                key={example.prompt}
+                                type="button"
+                                className="text-left rounded-xl border border-border p-3 hover:bg-accent/40 transition-colors"
+                                onClick={() => fillPrompt(example.prompt)}
+                              >
+                                <p className="text-sm text-foreground">
+                                  <span className="mr-1.5" aria-hidden="true">{example.icon}</span>
+                                  &quot;{example.prompt}&quot;
+                                </p>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <p className="text-xs text-center text-muted-foreground">Click any to start — or type your own.</p>
                       </div>
                     </div>
                   </div>
@@ -349,15 +381,15 @@ export function SeldonPageClient({ allowed, services, history }: { allowed: bool
                 </form>
 
                 <div className="flex flex-wrap items-center justify-center gap-2 mt-3">
-                  {promptExamples.slice(0, 3).map((example) => (
+                  {[...customizeExamples, ...buildExamples].slice(0, 3).map((example) => (
                     <button
-                      key={example.label}
+                      key={example.prompt}
                       type="button"
                       className="gap-2 inline-flex items-center justify-center rounded-md text-sm font-medium h-9 px-4 py-2 border border-input bg-background hover:bg-accent"
                       onClick={() => fillPrompt(example.prompt)}
                     >
-                      {example.icon === "wand" ? <WandSparklesIcon className="size-4" /> : example.icon === "sparkles" ? <SparklesIcon className="size-4" /> : <BoxIcon className="size-4" />}
-                      <span>{example.label}</span>
+                      <WandSparklesIcon className="size-4" />
+                      <span className="max-w-[220px] truncate">{example.prompt}</span>
                     </button>
                   ))}
                 </div>

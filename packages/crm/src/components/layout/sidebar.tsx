@@ -48,6 +48,7 @@ export function Sidebar(props: {
 
   const navGroups: NavGroup[] = [
     {
+      title: "YOUR SOUL",
       items: filterHidden([
         { href: "/dashboard", label: "Dashboard", icon: "LayoutDashboard" },
         {
@@ -61,25 +62,20 @@ export function Sidebar(props: {
       ]),
     },
     {
-      title: "CRM",
+      title: "YOUR BLOCKS",
       items: filterHidden([
         { href: "/contacts", label: labels.contact.plural, icon: "Users" },
-        { href: "/deals", label: "Engagements", icon: "Building2" },
+        { href: "/deals", label: labels.deal.plural, icon: "Building2" },
         { href: "/bookings", label: "Booking", icon: "Calendar" },
-      ]),
-    },
-    {
-      title: "Marketing",
-      items: filterHidden([
         { href: "/landing", label: "Pages", icon: "Layout" },
         { href: "/emails", label: "Email", icon: "Mail" },
         { href: "/forms", label: labels.intakeForm.plural, icon: "FileText" },
+        { href: "/automations", label: "Automations", icon: "Zap" },
       ]),
     },
     {
-      title: "System",
+      title: "SYSTEM",
       items: filterHidden([
-        { href: "/automations", label: "Automations", icon: "Zap" },
         { href: "/settings", label: "Settings", icon: "Settings" },
       ]),
     },

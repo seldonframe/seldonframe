@@ -17,8 +17,22 @@ import {
     - card/list shell: "rounded-xl border bg-card"
 */
 
-function statusLabel(connected: boolean) {
-  return connected ? "Connected ✓" : "Not connected";
+function renderConnectionBadge(connected: boolean) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs ${
+        connected
+          ? "border-positive/20 bg-positive/10 text-positive"
+          : "border-caution/20 bg-caution/10 text-caution"
+      }`}
+    >
+      <span
+        className={`size-1.5 rounded-full ${connected ? "bg-positive" : "bg-caution"}`}
+        aria-hidden="true"
+      />
+      {connected ? "Connected" : "Not connected"}
+    </span>
+  );
 }
 
 export default async function IntegrationsSettingsPage({
@@ -52,7 +66,7 @@ export default async function IntegrationsSettingsPage({
         </div>
       </div>
 
-      {savedMessage ? <p className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">{savedMessage}</p> : null}
+      {savedMessage ? <p className="rounded-md border border-positive/30 bg-positive/10 px-3 py-2 text-sm text-positive">{savedMessage}</p> : null}
       {twilioTestMessage ? <p className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary">{twilioTestMessage}</p> : null}
       {kitTestMessage ? <p className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary">{kitTestMessage}</p> : null}
       {mailchimpTestMessage ? <p className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary">{mailchimpTestMessage}</p> : null}
@@ -91,7 +105,7 @@ export default async function IntegrationsSettingsPage({
         <article className="rounded-xl border bg-card p-5">
           <div className="flex items-center justify-between">
             <h2 className="text-card-title">Twilio (SMS)</h2>
-            <span className="rounded-full border border-border px-2 py-1 text-xs text-muted-foreground">{statusLabel(settings.twilio.connected)}</span>
+            {renderConnectionBadge(settings.twilio.connected)}
           </div>
           <form action={updateIntegrationAction} className="mt-4 grid gap-3">
             <input type="hidden" name="service" value="twilio" />
@@ -133,7 +147,7 @@ export default async function IntegrationsSettingsPage({
         <article className="rounded-xl border bg-card p-5">
           <div className="flex items-center justify-between">
             <h2 className="text-card-title">Kit / ConvertKit</h2>
-            <span className="rounded-full border border-border px-2 py-1 text-xs text-muted-foreground">{statusLabel(settings.newsletter.kit.connected)}</span>
+            {renderConnectionBadge(settings.newsletter.kit.connected)}
           </div>
           <form action={updateIntegrationAction} className="mt-4 grid gap-3">
             <input type="hidden" name="service" value="kit" />
@@ -165,7 +179,7 @@ export default async function IntegrationsSettingsPage({
         <article className="rounded-xl border bg-card p-5">
           <div className="flex items-center justify-between">
             <h2 className="text-card-title">Mailchimp</h2>
-            <span className="rounded-full border border-border px-2 py-1 text-xs text-muted-foreground">{statusLabel(settings.newsletter.mailchimp.connected)}</span>
+            {renderConnectionBadge(settings.newsletter.mailchimp.connected)}
           </div>
           <form action={updateIntegrationAction} className="mt-4 grid gap-3">
             <input type="hidden" name="service" value="mailchimp" />
@@ -203,7 +217,7 @@ export default async function IntegrationsSettingsPage({
         <article className="rounded-xl border bg-card p-5">
           <div className="flex items-center justify-between">
             <h2 className="text-card-title">Beehiiv</h2>
-            <span className="rounded-full border border-border px-2 py-1 text-xs text-muted-foreground">{statusLabel(settings.newsletter.beehiiv.connected)}</span>
+            {renderConnectionBadge(settings.newsletter.beehiiv.connected)}
           </div>
           <form action={updateIntegrationAction} className="mt-4 grid gap-3">
             <input type="hidden" name="service" value="beehiiv" />
@@ -241,9 +255,7 @@ export default async function IntegrationsSettingsPage({
         <article className="rounded-xl border bg-card p-5">
           <div className="flex items-center justify-between">
             <h2 className="text-card-title">Google Calendar</h2>
-            <span className="rounded-full border border-border px-2 py-1 text-xs text-muted-foreground">
-              {settings.google.calendarConnected ? "Connected ✓" : "Not connected"}
-            </span>
+            {renderConnectionBadge(settings.google.calendarConnected)}
           </div>
           <p className="mt-4 text-sm text-muted-foreground">
             Connect Google to sync booking availability and calendar events.

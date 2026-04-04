@@ -7,7 +7,7 @@ export function DemoBanner() {
   }
 
   return (
-    <div className="crm-card flex flex-wrap items-center justify-between gap-3 border-yellow-300/70 bg-yellow-50/70 p-3 text-sm">
+    <div className="crm-card flex flex-wrap items-center justify-between gap-3 border-caution/40 bg-caution/10 p-3 text-sm">
       <p className="text-[hsl(var(--color-text-secondary))]">You&apos;re viewing a live demo</p>
       <div className="flex items-center gap-2">
         <Link href={DEMO_REPO_URL} target="_blank" rel="noreferrer" className="rounded-md border px-3 py-1.5 text-xs font-medium">

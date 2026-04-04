@@ -6,10 +6,18 @@ export default function AuthLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <div className="crm-page flex items-center justify-center">
-      <div className="crm-card w-full max-w-md p-6">
-        <div>
-          <Image src="/logo.svg" alt="SeldonFrame logo" width={40} height={40} priority />
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-4 py-10">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(circle at 50% 30%, hsl(var(--primary) / 0.14) 0%, hsl(var(--primary) / 0.06) 28%, transparent 64%)",
+        }}
+      />
+      <div className="relative w-full max-w-md rounded-2xl border border-border bg-card/95 p-6 shadow-sm backdrop-blur">
+        <div className="mb-5 flex justify-center">
+          <Image src="/logo.svg" alt="SeldonFrame logo" width={56} height={56} priority />
         </div>
         {children}
       </div>

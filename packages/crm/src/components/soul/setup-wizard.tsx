@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -36,6 +36,71 @@ const squareInputClass = "file:text-foreground placeholder:text-muted-foreground
 const squareTextareaClass = "placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input w-full min-w-0 rounded-md border bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] resize-none";
 const squarePrimaryButtonClass = "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-primary text-primary-foreground text-sm font-medium transition-all hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50 outline-none";
 const squareOutlineButtonClass = "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border bg-background text-sm font-medium shadow-xs transition-all hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50 outline-none";
+
+const CONFETTI_COLORS = [
+  "hsl(166 72% 40%)",
+  "hsl(142 71% 45%)",
+  "hsl(38 92% 50%)",
+  "hsl(0 84% 60%)",
+  "hsl(217 91% 60%)",
+  "hsl(280 67% 55%)",
+];
+
+function ConfettiBurst({ active }: { active: boolean }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const firedRef = useRef(false);
+
+  useEffect(() => {
+    if (!active || firedRef.current || !containerRef.current) return;
+    firedRef.current = true;
+    const container = containerRef.current;
+    const count = 60;
+
+    for (let i = 0; i < count; i++) {
+      const el = document.createElement("span");
+      const size = Math.random() * 6 + 4;
+      const color = CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)];
+      const angle = Math.random() * 360;
+      const velocity = Math.random() * 200 + 100;
+      const dx = Math.cos((angle * Math.PI) / 180) * velocity;
+      const dy = Math.sin((angle * Math.PI) / 180) * velocity - 80;
+      const rotation = Math.random() * 720 - 360;
+      const duration = Math.random() * 800 + 1200;
+
+      Object.assign(el.style, {
+        position: "absolute",
+        left: "50%",
+        top: "40%",
+        width: `${size}px`,
+        height: `${size * (Math.random() > 0.5 ? 0.6 : 1)}px`,
+        backgroundColor: color,
+        borderRadius: Math.random() > 0.5 ? "50%" : "1px",
+        pointerEvents: "none",
+        zIndex: "50",
+        opacity: "1",
+      });
+      container.appendChild(el);
+
+      el.animate(
+        [
+          { transform: "translate(0,0) rotate(0deg)", opacity: 1 },
+          { transform: `translate(${dx}px,${dy + 300}px) rotate(${rotation}deg)`, opacity: 0 },
+        ],
+        { duration, easing: "cubic-bezier(.25,.8,.25,1)", fill: "forwards" },
+      );
+
+      setTimeout(() => el.remove(), duration + 50);
+    }
+  }, [active]);
+
+  return (
+    <div
+      ref={containerRef}
+      className="pointer-events-none absolute inset-0 overflow-hidden"
+      aria-hidden="true"
+    />
+  );
+}
 
 const frameworkIcons: Record<string, React.ComponentType<{ className?: string }>> = {
   Heart,
@@ -721,17 +786,18 @@ export function SetupWizard({ frameworks }: { frameworks: FrameworkOption[] }) {
                   </span>
                 )}
               </button>
-              {error ? <p className="text-sm text-red-500">{error}</p> : null}
+              {error ? <p className="text-sm text-negative">{error}</p> : null}
             </div>
           </StepTransition>
         ) : null}
 
         {step === 3 && installed ? (
           <StepTransition stepKey="step-3-reveal">
-            <div className="space-y-6">
+            <div className="relative space-y-6">
+              <ConfettiBurst active={installed} />
               <div className="space-y-2 text-center">
-                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/10">
-                  <Check className="h-6 w-6 text-emerald-600" />
+                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-positive/10">
+                  <Check className="h-6 w-6 text-positive" />
                 </div>
                 <h2 className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground">
                   {businessName || "SeldonFrame"} is live
@@ -749,13 +815,47 @@ export function SetupWizard({ frameworks }: { frameworks: FrameworkOption[] }) {
                           <Icon className="size-3.5 sm:size-[18px]" />
                           <span className="text-[10px] sm:text-xs font-medium truncate">{card.title}</span>
                         </div>
-                        <p className="text-base sm:text-lg font-semibold leading-tight tracking-tight text-emerald-600">Live</p>
+                        <p className="text-base sm:text-lg font-semibold leading-tight tracking-tight text-positive">Live</p>
                         <p className="text-[10px] sm:text-xs text-muted-foreground line-clamp-1">{card.description}</p>
                       </div>
                     </Link>
                   );
                 })}
               </div>
+
+              {selectedFramework?.seldonExamples?.length ? (
+                <div className="rounded-xl border bg-card p-4 sm:p-5 space-y-4">
+                  <div className="text-left space-y-1">
+                    <p className="text-base sm:text-lg font-semibold text-foreground">✨ Make a block yours</p>
+                    <p className="text-sm text-muted-foreground">
+                      Every business is different. Pick any block and tell Seldon how yours should work. Takes 10 seconds.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    {selectedFramework.seldonExamples.slice(0, 5).map((example) => (
+                      <Link
+                        key={`${example.block}-${example.label}`}
+                        href={`/seldon?prompt=${encodeURIComponent(example.prompt)}`}
+                        className="rounded-lg border border-border p-3 text-left hover:bg-accent/30 transition-colors"
+                      >
+                        <p className="text-sm font-medium text-foreground">
+                          <span className="mr-1.5" aria-hidden="true">{example.icon}</span>
+                          {example.label}
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">&quot;{example.description}&quot;</p>
+                      </Link>
+                    ))}
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                    <p className="text-muted-foreground">Click any to customize — or skip and do it from your dashboard anytime.</p>
+                    <Link href="/welcome?fromSetup=1" className="text-primary hover:underline">
+                      Skip — go to Dashboard →
+                    </Link>
+                  </div>
+                </div>
+              ) : null}
 
               {enabledCount > 0 ? (
                 <div className="rounded-xl border border-primary/30 bg-primary/10 px-4 py-3 text-sm text-primary flex items-center gap-2">

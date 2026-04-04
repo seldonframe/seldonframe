@@ -326,13 +326,13 @@ export function CsvImport({ stageOptions }: { stageOptions: string[] }) {
       ) : null}
 
       {result ? (
-        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4 space-y-2 text-sm">
-          <p className="font-medium text-emerald-300">✓ {result.createdCount} contacts imported</p>
+        <div className="rounded-lg border border-positive/30 bg-positive/10 p-4 space-y-2 text-sm text-positive">
+          <p className="font-medium">✓ {result.createdCount} contacts imported</p>
           {result.stageSummary.map((item) => (
-            <p key={item.stage} className="text-emerald-200">• {item.count} matched to &quot;{item.stage}&quot;</p>
+            <p key={item.stage}>• {item.count} matched to &quot;{item.stage}&quot;</p>
           ))}
           {result.fallbackCount > 0 ? (
-            <p className="text-emerald-200">• {result.fallbackCount} assigned to default stage</p>
+            <p>• {result.fallbackCount} assigned to default stage</p>
           ) : null}
         </div>
       ) : null}

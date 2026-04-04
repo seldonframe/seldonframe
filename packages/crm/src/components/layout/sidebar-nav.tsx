@@ -54,7 +54,7 @@ function NavItemLink({ item, pathname, onNavigate, icon: Icon }: { item: NavItem
   const active = isActivePath(pathname, item.href);
   const className = item.disabled
     ? "flex h-9 items-center gap-2.5 rounded-md px-3 text-sm font-medium text-muted-foreground opacity-55 sm:h-[38px]"
-    : `flex h-9 items-center gap-2.5 rounded-md px-3 text-sm font-medium transition-colors sm:h-[38px] ${active ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground"}`;
+    : `flex h-9 items-center gap-2.5 rounded-md border-l-[3px] px-3 text-sm font-medium transition-colors sm:h-[38px] ${active ? "border-l-primary bg-primary/8 text-foreground" : "border-l-transparent text-muted-foreground hover:bg-muted/30 hover:text-foreground"}`;
 
   return (
     <Link
@@ -68,7 +68,7 @@ function NavItemLink({ item, pathname, onNavigate, icon: Icon }: { item: NavItem
         }
       }}
     >
-      <Icon className="size-4 shrink-0 sm:size-5" />
+      <Icon className={`size-4 shrink-0 sm:size-5 ${active && !item.disabled ? "text-primary" : ""}`} />
       <span className="flex-1">{item.label}</span>
       {active && !item.disabled ? <ChevronRight className="h-4 w-4 text-[hsl(var(--muted-foreground))]/70" /> : null}
       {item.upgrade ? (
@@ -94,7 +94,7 @@ export function SidebarNav({ nav, groups, onNavigate }: { nav?: NavItem[]; group
       {resolvedGroups.map((group, groupIndex) => (
         <div key={group.title ?? `group-${groupIndex}`} className="space-y-0.5">
           {group.title ? (
-            <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/60">{group.title}</p>
+            <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{group.title}</p>
           ) : null}
           {group.items.map((item) => (
             <NavItemLink key={item.href} item={item} pathname={pathname} onNavigate={onNavigate} icon={resolveIcon(item.icon)} />

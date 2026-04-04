@@ -44,10 +44,10 @@ function statusBadge(status: string) {
   }
 
   if (status === "draft") {
-    return "bg-[hsl(var(--muted)/0.5)] text-[hsl(var(--muted-foreground))]";
+    return "bg-muted/50 text-muted-foreground";
   }
 
-  return "bg-amber-500/10 text-amber-700 dark:text-amber-300";
+  return "bg-caution/10 text-caution";
 }
 
 export function LandingPagesContent({

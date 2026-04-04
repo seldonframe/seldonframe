@@ -27,7 +27,7 @@ export default async function KitIntegrationPage({
         <p className="text-sm sm:text-base text-muted-foreground">Sync subscribers and trigger automations from CRM events.</p>
       </div>
 
-      {saved ? <p className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">{saved}</p> : null}
+      {saved ? <p className="rounded-md border border-positive/30 bg-positive/10 px-3 py-2 text-sm text-positive">{saved}</p> : null}
       {tested ? <p className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary">{tested}</p> : null}
 
       <div className="rounded-md border border-border bg-[hsl(var(--muted)/0.2)] px-3 py-2 text-xs text-[hsl(var(--muted-foreground))]">

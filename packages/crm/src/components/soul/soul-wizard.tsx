@@ -555,7 +555,7 @@ function RevealStep({ businessName, contactPlural, stages, industry, communicati
             <p className="text-sm font-medium text-foreground">Pipeline preview</p>
             <div className="mt-3 flex flex-wrap gap-2">
               {stages.map((stage) => (
-                <span key={stage} className="rounded-full border border-teal-200/40 bg-teal-500/20 px-3 py-1 text-xs text-foreground">
+                <span key={stage} className="rounded-full border border-primary/40 bg-primary/15 px-3 py-1 text-xs text-foreground">
                   {stage}
                 </span>
               ))}
@@ -572,11 +572,11 @@ function RevealStep({ businessName, contactPlural, stages, industry, communicati
           <li>✓ Email in {communicationStyle} voice</li>
           <li>✓ Dashboard focused on {priorities.join(", ")}</li>
         </ul>
-        {previewSoul ? <p className="mt-3 text-xs text-teal-200">AI preview generated and ready to launch.</p> : null}
+        {previewSoul ? <p className="mt-3 text-xs text-primary/80">AI preview generated and ready to launch.</p> : null}
         <p className="mt-2 text-xs text-slate-400">You can change everything later in Settings.</p>
       </div>
 
-      {error ? <p className="mt-4 text-sm text-red-400">{error}</p> : null}
+      {error ? <p className="mt-4 text-sm text-negative">{error}</p> : null}
     </div>
   );
 }

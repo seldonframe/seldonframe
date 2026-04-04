@@ -168,7 +168,7 @@ export function PublicBookingForm({
         {pending ? "Booking..." : price > 0 ? `Pay & Book ($${price.toFixed(2)})` : "Book"}
       </button>
 
-      {success ? <p className="text-sm text-green-600">{confirmationMessage}</p> : null}
+      {success ? <p className="text-sm text-positive">{confirmationMessage}</p> : null}
     </form>
   );
 }

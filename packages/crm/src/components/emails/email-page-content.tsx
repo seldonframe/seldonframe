@@ -42,18 +42,18 @@ function statusBadge(status: string) {
   const s = status.toLowerCase();
 
   if (s === "sent" || s === "delivered") {
-    return "bg-primary/10 text-primary";
+    return "border-positive/20 bg-positive/10 text-positive";
   }
 
-  if (s === "queued" || s === "pending") {
-    return "bg-amber-500/10 text-amber-700 dark:text-amber-300";
+  if (s === "draft" || s === "queued" || s === "pending") {
+    return "border-caution/20 bg-caution/10 text-caution";
   }
 
   if (s === "failed" || s === "bounced") {
-    return "bg-red-500/10 text-red-700 dark:text-red-300";
+    return "border-negative/20 bg-negative/10 text-negative";
   }
 
-  return "bg-[hsl(var(--muted)/0.5)] text-[hsl(var(--muted-foreground))]";
+  return "border-border bg-muted/50 text-muted-foreground";
 }
 
 export function EmailPageContent({
@@ -180,7 +180,7 @@ export function EmailPageContent({
                       </div>
 
                       <div className="mt-1.5 flex items-center gap-2">
-                        <span className={`rounded-full px-2 py-0.5 text-[11px] ${statusBadge(row.status)}`}>{row.status}</span>
+                        <span className={`rounded-full border px-2 py-0.5 text-[11px] ${statusBadge(row.status)}`}>{row.status}</span>
                         <span className="text-[11px] text-muted-foreground">via {row.provider}</span>
                       </div>
                     </div>
@@ -257,7 +257,7 @@ export function EmailPageContent({
                     ))}
                   </datalist>
                   <p className="mt-1 text-xs text-muted-foreground">Uses lowercase entity.action format. Leave blank for manual sends only.</p>
-                  {triggerEventError ? <p className="mt-1 text-xs text-red-700 dark:text-red-300">{triggerEventError}</p> : null}
+                  {triggerEventError ? <p className="mt-1 text-xs text-negative">{triggerEventError}</p> : null}
                 </div>
                 <div className="pt-2">
                   <button type="submit" className="crm-button-primary h-10 px-6" disabled={pending}>

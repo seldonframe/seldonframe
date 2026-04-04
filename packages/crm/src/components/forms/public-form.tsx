@@ -53,7 +53,7 @@ export function PublicForm({ orgSlug, formSlug, fields }: { orgSlug: string; for
         {pending ? "Submitting..." : "Submit"}
       </button>
 
-      {success ? <p className="text-sm text-green-600">Thanks, your form was submitted.</p> : null}
+      {success ? <p className="text-sm text-positive">Thanks, your form was submitted.</p> : null}
     </form>
   );
 }

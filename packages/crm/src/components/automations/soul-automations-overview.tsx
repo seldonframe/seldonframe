@@ -24,11 +24,11 @@ const serviceLabel: Record<ServiceKey, string> = {
 };
 
 const serviceBadgeColor: Record<ServiceKey, string> = {
-  stripe: "bg-violet-500/10 text-violet-600 dark:text-violet-400",
-  resend: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
-  twilio: "bg-red-500/10 text-red-600 dark:text-red-400",
-  kit: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-  google: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  stripe: "bg-primary/10 text-primary",
+  resend: "bg-primary/10 text-primary",
+  twilio: "bg-negative/10 text-negative",
+  kit: "bg-positive/10 text-positive",
+  google: "bg-caution/10 text-caution",
   none: "bg-muted text-muted-foreground",
 };
 
@@ -61,21 +61,29 @@ function AutomationCard({
   active: boolean;
   onToggle: () => void;
 }) {
+  const statusClass = active ? "text-positive" : "text-caution";
+
   return (
     <article className="rounded-xl border bg-card p-4 space-y-3 transition-colors hover:border-primary/30">
       <div className="flex items-start justify-between gap-3">
-        <p className="text-sm font-medium text-foreground leading-snug">{name}</p>
+        <div className="space-y-1">
+          <p className="text-sm font-medium text-foreground leading-snug">{name}</p>
+          <span className={`inline-flex items-center gap-1.5 text-[11px] ${statusClass}`}>
+            <span className={`size-1.5 rounded-full ${active ? "bg-positive" : "bg-caution"}`} aria-hidden="true" />
+            {active ? "Active" : "Paused"}
+          </span>
+        </div>
         <button
           type="button"
           onClick={onToggle}
           className={`shrink-0 inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full text-xs font-medium transition-colors ${
             active
-              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20"
+              ? "bg-primary text-primary-foreground hover:bg-primary/90"
               : "bg-muted text-muted-foreground hover:bg-accent"
           }`}
         >
           {active ? <CheckCircle2 className="size-3" /> : <CircleDashed className="size-3" />}
-          {active ? "Active" : "Off"}
+          {active ? "ON" : "OFF"}
         </button>
       </div>
 
@@ -94,11 +102,15 @@ function AutomationCard({
             {serviceLabel[service]}
           </span>
           {!connected ? (
-            <Link href="/settings/integrations" className="text-[10px] text-primary hover:underline">
-              Connect →
+            <Link href="/settings/integrations" className="inline-flex items-center gap-1.5 text-[10px] text-primary hover:underline">
+              <span className="size-1.5 rounded-full bg-negative" aria-hidden="true" />
+              Connect {serviceLabel[service]}
             </Link>
           ) : (
-            <span className="text-[10px] text-emerald-600 dark:text-emerald-400">Connected</span>
+            <span className="inline-flex items-center gap-1.5 text-[10px] text-positive">
+              <span className="size-1.5 rounded-full bg-positive" aria-hidden="true" />
+              Connected
+            </span>
           )}
         </div>
       ) : null}

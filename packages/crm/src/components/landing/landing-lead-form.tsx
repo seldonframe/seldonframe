@@ -53,7 +53,7 @@ export function LandingLeadForm({
       <button type="submit" className="crm-button-primary h-10 px-4" disabled={pending}>
         {pending ? "Submitting..." : "Get Started"}
       </button>
-      {success ? <p className="text-sm text-green-600">Thanks! We will reach out shortly.</p> : null}
+      {success ? <p className="text-sm text-positive">Thanks! We will reach out shortly.</p> : null}
     </form>
   );
 }

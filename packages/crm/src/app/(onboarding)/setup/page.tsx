@@ -34,6 +34,13 @@ export type FrameworkOption = {
   emailTemplates: Array<{ name: string; tag: string }>;
   intakeFormFieldCount: number;
   landingPage: { headline: string; subhead: string; cta: string };
+  seldonExamples: Array<{
+    block: string;
+    icon: string;
+    label: string;
+    prompt: string;
+    description: string;
+  }>;
   automationSuggestions: AutomationSuggestion[];
 };
 
@@ -59,6 +66,13 @@ export default async function SetupPage() {
     emailTemplates: fw.emailTemplates.map((et) => ({ name: et.name, tag: et.tag })),
     intakeFormFieldCount: fw.intakeForm.fields.length,
     landingPage: fw.landingPage,
+    seldonExamples: (fw.seldonExamples ?? []).map((item) => ({
+      block: item.block,
+      icon: item.icon,
+      label: item.label,
+      prompt: item.prompt,
+      description: item.description,
+    })),
     automationSuggestions: fw.automationSuggestions.map((a) => ({
       id: a.id,
       name: a.name,

@@ -113,7 +113,13 @@ export default async function FormsPage() {
                   <p className="font-medium text-sm truncate">{form.name}</p>
                   <p className="text-xs text-muted-foreground sm:hidden">/{form.slug}</p>
                 </div>
-                <span className={`rounded-full px-2 py-1 text-xs w-fit ${form.isActive ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-[hsl(var(--muted)/0.5)] text-[hsl(var(--muted-foreground))]"}`}>
+                <span
+                  className={`rounded-full border px-2 py-1 text-xs w-fit ${
+                    form.isActive
+                      ? "border-positive/20 bg-positive/10 text-positive"
+                      : "border-caution/20 bg-caution/10 text-caution"
+                  }`}
+                >
                   {form.isActive ? "Published" : "Draft"}
                 </span>
                 <span className="hidden sm:block text-sm text-muted-foreground">0</span>

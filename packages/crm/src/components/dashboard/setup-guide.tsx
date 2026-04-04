@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import {
   Check,
@@ -28,14 +28,19 @@ export function SetupGuide({ progress }: { progress: SetupGuideProgress }) {
   const [expanded, setExpanded] = useState(true);
   const [dismissed, setDismissed] = useState(progress.dismissed);
   const [pending, startTransition] = useTransition();
+  const targetPercentage = Math.round(
+    (progress.completedCount / progress.totalCount) * 100,
+  );
+  const [animatedPct, setAnimatedPct] = useState(0);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setAnimatedPct(targetPercentage), 150);
+    return () => clearTimeout(timer);
+  }, [targetPercentage]);
 
   if (dismissed || progress.allDone) {
     return null;
   }
-
-  const percentage = Math.round(
-    (progress.completedCount / progress.totalCount) * 100,
-  );
 
   function handleDismiss() {
     startTransition(async () => {
@@ -70,12 +75,12 @@ export function SetupGuide({ progress }: { progress: SetupGuideProgress }) {
           <div className="hidden sm:flex items-center gap-2 min-w-[120px]">
             <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
               <div
-                className="h-full bg-primary transition-all duration-500"
-                style={{ width: `${percentage}%` }}
+                className="h-full bg-primary transition-all duration-700 ease-out"
+                style={{ width: `${animatedPct}%` }}
               />
             </div>
             <span className="text-xs font-medium text-muted-foreground tabular-nums">
-              {percentage}%
+              {animatedPct}%
             </span>
           </div>
 
@@ -109,12 +114,12 @@ export function SetupGuide({ progress }: { progress: SetupGuideProgress }) {
             <div className="flex items-center gap-2">
               <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
                 <div
-                  className="h-full bg-primary transition-all duration-500"
-                  style={{ width: `${percentage}%` }}
+                  className="h-full bg-primary transition-all duration-700 ease-out"
+                  style={{ width: `${animatedPct}%` }}
                 />
               </div>
               <span className="text-xs font-medium text-muted-foreground tabular-nums">
-                {percentage}%
+                {animatedPct}%
               </span>
             </div>
           </div>

@@ -71,6 +71,43 @@
     "subhead": "{{businessName}} helps you get clear, get moving, and build the life you keep putting off.",
     "cta": "Book Your Free Discovery Call"
   },
+  "seldonExamples": [
+    {
+      "block": "booking",
+      "icon": "📅",
+      "label": "Booking",
+      "prompt": "Add a 3-question pre-call survey to my discovery calls that asks about goals, challenges, and commitment level",
+      "description": "Add a pre-call survey to discovery calls"
+    },
+    {
+      "block": "email",
+      "icon": "✉️",
+      "label": "Email",
+      "prompt": "Update my welcome email to include a link to my private resource library and a short personal video introduction",
+      "description": "Add your resources to the welcome email"
+    },
+    {
+      "block": "forms",
+      "icon": "📋",
+      "label": "Forms",
+      "prompt": "Add branching logic to my intake form — if they select executive coaching show questions about their company, if life coaching show personal goal questions",
+      "description": "Add branching logic to your intake form"
+    },
+    {
+      "block": "pages",
+      "icon": "🌐",
+      "label": "Pages",
+      "prompt": "Add a testimonial carousel and a results section showing before and after client transformations to my landing page",
+      "description": "Add testimonials and results to your page"
+    },
+    {
+      "block": "automations",
+      "icon": "⚡",
+      "label": "Automations",
+      "prompt": "When a client completes their coaching program, automatically generate a personalized completion certificate and email it to them",
+      "description": "Auto-generate completion certificates"
+    }
+  ],
   "automationSuggestions": [
     { "id": "welcome-email", "name": "Send welcome email when someone reaches out", "trigger": "contact.created", "action": "send_email", "templateTag": "welcome", "requiresIntegration": "resend", "defaultEnabled": true },
     { "id": "session-reminder", "name": "Send reminder 24h before scheduled sessions", "trigger": "booking.upcoming", "action": "send_email", "templateTag": "reminder", "requiresIntegration": "resend", "defaultEnabled": true },

@@ -62,44 +62,34 @@ export default async function SettingsPage() {
 
       <div className="space-y-4">
         {grouped.map((group) => (
-          <article key={group.id} className="rounded-xl border bg-card overflow-hidden">
-            <div className="flex items-center justify-between gap-3 px-5 py-4 border-b">
+          <article key={group.id} className="rounded-xl border bg-card p-5 space-y-4">
+            <div className="flex items-center justify-between gap-3">
               <p className="font-medium text-muted-foreground">{group.title}</p>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-muted/50 hover:bg-muted/50 border-b border-border/50">
-                    <th className="min-w-[180px] text-muted-foreground font-medium h-10 px-4 text-left align-middle">Tab</th>
-                    <th className="min-w-[220px] text-muted-foreground font-medium h-10 px-4 text-left align-middle">Description</th>
-                    <th className="min-w-[140px] text-muted-foreground font-medium h-10 px-4 text-left align-middle">Status</th>
-                    <th className="min-w-[120px] text-muted-foreground font-medium h-10 px-4 text-left align-middle">Open</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {group.items.map((section) => (
-                    <tr key={section.href} className="border-b border-border/50">
-                      <td className="p-4 align-middle font-medium">{section.title}</td>
-                      <td className="p-4 align-middle text-muted-foreground">{section.description}</td>
-                      <td className="p-4 align-middle">
-                        {section.status ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-xs font-medium bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800">
-                            {section.status}
-                          </span>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">Configured</span>
-                        )}
-                      </td>
-                      <td className="p-4 align-middle">
-                        <Link href={section.href} className="inline-flex items-center justify-center gap-2 h-8 px-3 rounded-md border text-xs font-medium border-border hover:bg-background bg-muted shadow-xs">
-                          Open
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {group.items.map((section) => (
+                <div key={section.href} className="rounded-lg border bg-background/40 p-4 space-y-3">
+                  <div className="space-y-1.5">
+                    <p className="text-sm font-medium text-foreground">{section.title}</p>
+                    <p className="text-xs text-muted-foreground">{section.description}</p>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2">
+                    {section.status ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-xs font-medium border-positive/30 bg-positive/10 text-positive">
+                        {section.status}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">Configured</span>
+                    )}
+
+                    <Link href={section.href} className="inline-flex items-center justify-center gap-2 h-8 px-3 rounded-md border text-xs font-medium border-border hover:bg-background bg-muted shadow-xs">
+                      Open
+                    </Link>
+                  </div>
+                </div>
+              ))}
             </div>
           </article>
         ))}

@@ -1,4 +1,3 @@
-import { AutomationBuilder } from "@/components/automations/automation-builder";
 import { SoulAutomationsOverview } from "@/components/automations/soul-automations-overview";
 import { getSoul } from "@/lib/soul/server";
 import { getOrgId } from "@/lib/auth/helpers";
@@ -94,8 +93,6 @@ export default async function AutomationsPage() {
         inferredActions={soulActions}
         integrations={integrations}
       />
-
-      <AutomationBuilder />
     </section>
   );
 }

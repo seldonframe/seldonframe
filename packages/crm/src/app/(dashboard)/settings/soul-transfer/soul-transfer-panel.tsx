@@ -61,7 +61,7 @@ export function SoulTransferPanel() {
         <button type="button" className="crm-button-primary h-9 px-3" disabled={pending} onClick={handleExport}>
           {pending ? "Exporting..." : "Export Soul"}
         </button>
-        {status === "exported" ? <p className="text-label text-green-500">Downloaded.</p> : null}
+        {status === "exported" ? <p className="text-label text-positive">Downloaded.</p> : null}
       </div>
 
       <div className="crm-card space-y-3">
@@ -78,8 +78,8 @@ export function SoulTransferPanel() {
         <button type="button" className="crm-button-primary h-9 px-3" disabled={pending || !importText.trim()} onClick={handleImport}>
           {pending ? "Importing..." : "Import Soul"}
         </button>
-        {status === "imported" ? <p className="text-label text-green-500">Imported successfully.</p> : null}
-        {status === "error" ? <p className="text-label text-red-400">Operation failed.</p> : null}
+        {status === "imported" ? <p className="text-label text-positive">Imported successfully.</p> : null}
+        {status === "error" ? <p className="text-label text-negative">Operation failed.</p> : null}
       </div>
     </div>
   );

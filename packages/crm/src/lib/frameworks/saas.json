@@ -72,6 +72,43 @@
     "subhead": "The simple way to get things done without the tools that slow you down.",
     "cta": "Start Free Trial"
   },
+  "seldonExamples": [
+    {
+      "block": "booking",
+      "icon": "📅",
+      "label": "Booking",
+      "prompt": "Add a feature request form to my demo calls so prospects can list their top 3 needs before we talk",
+      "description": "Add feature requests to demo calls"
+    },
+    {
+      "block": "email",
+      "icon": "✉️",
+      "label": "Email",
+      "prompt": "Create a 5-email onboarding drip sequence sent on day 1, 3, 7, 14, and 30 with progressive feature tutorials",
+      "description": "Build an onboarding drip sequence"
+    },
+    {
+      "block": "forms",
+      "icon": "📋",
+      "label": "Forms",
+      "prompt": "Add a current tools checklist to my intake form so I know exactly what each user is replacing or supplementing",
+      "description": "Add a tools checklist to onboarding"
+    },
+    {
+      "block": "pages",
+      "icon": "🌐",
+      "label": "Pages",
+      "prompt": "Add a comparison table to my landing page showing my product versus 3 competitors with feature checkmarks and pricing",
+      "description": "Add a competitor comparison table"
+    },
+    {
+      "block": "automations",
+      "icon": "⚡",
+      "label": "Automations",
+      "prompt": "When a user hasnt logged in for 7 days, send a re-engagement email showing what features they havent tried yet",
+      "description": "Auto re-engage inactive users"
+    }
+  ],
   "automationSuggestions": [
     { "id": "welcome-email", "name": "Send welcome email on signup", "trigger": "contact.created", "action": "send_email", "templateTag": "welcome", "requiresIntegration": "resend", "defaultEnabled": true },
     { "id": "day1-tips", "name": "Send Day 1 tips 24h after signup", "trigger": "contact.created", "action": "send_email", "templateTag": "tips", "delay": "24h", "requiresIntegration": "resend", "defaultEnabled": true },

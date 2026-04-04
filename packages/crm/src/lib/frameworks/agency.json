@@ -76,6 +76,43 @@
     "subhead": "{{businessName}} builds the strategy, systems, and creative that turn attention into revenue.",
     "cta": "Book a Free Strategy Call"
   },
+  "seldonExamples": [
+    {
+      "block": "booking",
+      "icon": "📅",
+      "label": "Booking",
+      "prompt": "Add a project brief form to my strategy calls that captures scope, timeline, and budget before the meeting",
+      "description": "Add a project brief to strategy calls"
+    },
+    {
+      "block": "email",
+      "icon": "✉️",
+      "label": "Email",
+      "prompt": "Create a monthly report email template that summarizes deliverables completed, key metrics, and next month priorities",
+      "description": "Auto-generate monthly client reports"
+    },
+    {
+      "block": "forms",
+      "icon": "📋",
+      "label": "Forms",
+      "prompt": "Add a file upload field to my intake form so clients can share brand guidelines, logos, and existing assets during onboarding",
+      "description": "Add file uploads to client onboarding"
+    },
+    {
+      "block": "pages",
+      "icon": "🌐",
+      "label": "Pages",
+      "prompt": "Add a case studies section to my landing page with project images, client name, industry, and measurable results achieved",
+      "description": "Add case studies to your landing page"
+    },
+    {
+      "block": "automations",
+      "icon": "⚡",
+      "label": "Automations",
+      "prompt": "When a project reaches the Review and Handoff stage, automatically send a client satisfaction survey and schedule a review call",
+      "description": "Auto-send satisfaction surveys on handoff"
+    }
+  ],
   "automationSuggestions": [
     { "id": "lead-acknowledge", "name": "Send acknowledgment when a new lead comes in", "trigger": "contact.created", "action": "send_email", "templateTag": "welcome", "requiresIntegration": "resend", "defaultEnabled": true },
     { "id": "precall-brief", "name": "Send prep brief when strategy call is booked", "trigger": "booking.created", "action": "send_email", "templateTag": "prep", "requiresIntegration": "resend", "defaultEnabled": true },

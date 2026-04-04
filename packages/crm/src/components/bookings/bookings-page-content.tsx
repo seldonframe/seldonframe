@@ -83,10 +83,10 @@ function statusClass(status: string) {
   }
 
   if (normalized.includes("pending") || normalized.includes("no_show")) {
-    return "bg-amber-500/10 text-amber-700 dark:text-amber-300";
+    return "bg-caution/10 text-caution";
   }
 
-  return "bg-[hsl(var(--muted)/0.5)] text-[hsl(var(--muted-foreground))]";
+  return "bg-muted/50 text-muted-foreground";
 }
 
 function formatDateGroupLabel(value: Date) {
@@ -127,6 +127,14 @@ function dayHeaderLabel(date: Date) {
   return new Intl.DateTimeFormat("en-US", { day: "2-digit", weekday: "short" }).format(date).toUpperCase();
 }
 
+const bookingBorderPalette = [
+  "border-l-primary",
+  "border-l-[hsl(270_60%_55%)]",
+  "border-l-[hsl(220_70%_55%)]",
+  "border-l-caution",
+  "border-l-positive",
+];
+
 export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, suggestedServices, orgSlug, createAppointmentTypeAction }: BookingsPageContentProps) {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
@@ -142,6 +150,13 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
   const [draftSlug, setDraftSlug] = useState("");
 
   const contactsById = useMemo(() => new Map(contacts.map((contact) => [contact.id, contact])), [contacts]);
+  const bookingTypeBorderByTitle = useMemo(() => {
+    const map = new Map<string, string>();
+    bookingTypes.forEach((type, index) => {
+      map.set(type.title.trim().toLowerCase(), bookingBorderPalette[index % bookingBorderPalette.length]);
+    });
+    return map;
+  }, [bookingTypes]);
 
   const weekStart = useMemo(() => {
     const base = addDaysLocal(new Date(), weekOffset * 7);
@@ -340,8 +355,9 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
                         const startsAt = new Date(row.startsAt);
                         const linkedContact = row.contactId ? contactsById.get(row.contactId) : null;
                         const person = linkedContact ? `${linkedContact.firstName} ${linkedContact.lastName ?? ""}`.trim() : labels.contact.singular;
+                        const borderClass = bookingTypeBorderByTitle.get(row.title.trim().toLowerCase()) ?? "border-l-primary";
                         return (
-                          <article key={row.id} className="rounded-lg border border-border bg-card p-2 hover:bg-muted transition-colors">
+                          <article key={row.id} className={`rounded-lg border border-border border-l-4 ${borderClass} bg-card p-2 hover:bg-muted transition-colors`}>
                             <p className="text-xs font-medium text-foreground truncate">{row.title}</p>
                             <p className="mt-0.5 text-[10px] text-muted-foreground truncate">{person}</p>
                             <p className="mt-1 text-[10px] text-primary">{startsAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</p>
@@ -424,7 +440,7 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
                       <button type="button" className="crm-button-ghost h-9 px-4 text-xs">
                         Edit
                       </button>
-                      <button type="button" className="crm-button-ghost h-9 px-4 text-xs text-amber-700 hover:text-amber-800 dark:text-amber-300 dark:hover:text-amber-200">
+                      <button type="button" className="crm-button-ghost h-9 px-4 text-xs text-caution hover:text-caution/80">
                         Delete
                       </button>
                     </div>
@@ -454,9 +470,10 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
                       const startsAt = new Date(row.startsAt);
                       const linkedContact = row.contactId ? contactsById.get(row.contactId) : null;
                       const person = linkedContact ? `${linkedContact.firstName} ${linkedContact.lastName ?? ""}`.trim() : labels.contact.singular;
+                      const borderClass = bookingTypeBorderByTitle.get(row.title.trim().toLowerCase()) ?? "border-l-primary";
 
                       return (
-                        <li key={row.id} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-3 hover:bg-muted transition-colors">
+                        <li key={row.id} className={`flex items-center justify-between gap-3 rounded-lg border border-border border-l-4 ${borderClass} bg-card px-3 py-3 hover:bg-muted transition-colors`}>
                           <div className="min-w-0">
                             <p className="text-sm text-foreground">{row.title}</p>
                             <p className="text-xs text-muted-foreground">{person}</p>

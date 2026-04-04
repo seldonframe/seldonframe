@@ -11,7 +11,7 @@ export function TestimonialsSection({ headline, testimonials }: TestimonialsSect
           {testimonials.map((item, index) => (
             <article key={`${item.author}-${index}`} className="rounded-xl border bg-card p-6 md:p-7">
               {item.rating ? (
-                <div className="mb-3 flex items-center gap-1 text-amber-400" aria-label={`${item.rating} star rating`}>
+                <div className="mb-3 flex items-center gap-1 text-caution" aria-label={`${item.rating} star rating`}>
                   {Array.from({ length: Math.max(1, Math.min(5, item.rating)) }).map((_, starIndex) => (
                     <Star key={`${item.author}-star-${starIndex}`} className="h-4 w-4 fill-current" />
                   ))}
