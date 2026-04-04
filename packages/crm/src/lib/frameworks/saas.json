@@ -1,0 +1,85 @@
+{
+  "id": "saas",
+  "name": "The SaaS Framework",
+  "description": "For software products, apps, and digital tools",
+  "icon": "Rocket",
+  "defaultBusinessName": "{{ownerName}}'s Product",
+  "contactLabel": { "singular": "User", "plural": "Users" },
+  "dealLabel": { "singular": "Deal", "plural": "Deals" },
+  "activityLabel": { "singular": "Interaction", "plural": "Interactions" },
+  "voice": {
+    "tone": "clear, helpful, slightly informal",
+    "personality": "smart product person who respects your time"
+  },
+  "pipeline": [
+    { "name": "Signed Up", "order": 1 },
+    { "name": "Onboarding", "order": 2 },
+    { "name": "Activated", "order": 3 },
+    { "name": "Trial Expiring", "order": 4 },
+    { "name": "Converted", "order": 5 },
+    { "name": "Active Customer", "order": 6 },
+    { "name": "At Risk", "order": 7 },
+    { "name": "Churned", "order": 8 },
+    { "name": "Won Back", "order": 9 }
+  ],
+  "bookingTypes": [
+    {
+      "name": "Demo Call",
+      "slug": "demo-call",
+      "durationMinutes": 30,
+      "price": 0,
+      "description": "See how it works in 30 minutes. No slides, just the real product.",
+      "bufferBefore": 10,
+      "bufferAfter": 10,
+      "maxPerDay": 5
+    },
+    {
+      "name": "Onboarding Call",
+      "slug": "onboarding-call",
+      "durationMinutes": 45,
+      "price": 0,
+      "description": "Get set up with a member of our team. We'll configure your account and answer every question.",
+      "bufferBefore": 15,
+      "bufferAfter": 15,
+      "maxPerDay": 4
+    }
+  ],
+  "emailTemplates": [
+    { "name": "Welcome", "tag": "welcome", "subject": "You're in — here's how to get started", "body": "Hi {{firstName}},\n\nWelcome to {{businessName}}! Here's the ONE thing to do first:\n\n→ Complete your quick setup (takes about 3 minutes)\n\nIf you'd prefer a walkthrough, book a free onboarding call: {{bookingLink}}\n\nWe're here if you need anything.\n\n{{ownerName}}" },
+    { "name": "Day 1 Tips", "tag": "tips", "subject": "3 things to try in your first 10 minutes", "body": "Hi {{firstName}},\n\nYou signed up yesterday — here are the three things that help new users get value fastest:\n\n1. Set up your first project\n2. Invite a teammate\n3. Connect an integration\n\nTotal: about 7 minutes.\n\n{{ownerName}}" },
+    { "name": "Feature Deep-Dive", "tag": "feature", "subject": "You unlocked something powerful", "body": "Hi {{firstName}},\n\nNice work getting set up. You've completed the basics.\n\nNow here's a feature that takes things to the next level — most power users say it's their favorite part of the product.\n\n{{ownerName}}" },
+    { "name": "Trial Expiring", "tag": "trial", "subject": "Your trial ends in 3 days", "body": "Hi {{firstName}},\n\nYour free trial expires in 3 days. You've already invested time setting things up — upgrading keeps everything in place.\n\nQuestions? Just reply.\n\n{{ownerName}}" },
+    { "name": "Converted Thank You", "tag": "conversion", "subject": "Welcome to the team, {{firstName}}", "body": "Hi {{firstName}},\n\nThank you for upgrading. You now have full access.\n\nBook a free onboarding call if you want help maximizing your setup: {{bookingLink}}\n\n{{ownerName}}" },
+    { "name": "Re-Engagement", "tag": "reengagement", "subject": "We noticed you've been away", "body": "Hi {{firstName}},\n\nIt's been a while since you logged in. No guilt — life happens.\n\nJust wanted to share what's new. If something isn't working, reply to this email.\n\nHope to see you back.\n\n{{ownerName}}" },
+    { "name": "Exit Survey", "tag": "offboarding", "subject": "We're sorry to see you go", "body": "Hi {{firstName}},\n\nWe respect the decision. If you have 30 seconds:\n\n1. Why are you leaving?\n2. What would bring you back?\n3. One thing we could improve?\n\nYour feedback shapes what we build next.\n\n{{ownerName}}" },
+    { "name": "Welcome Back", "tag": "winback", "subject": "Welcome back, {{firstName}}", "body": "Hi {{firstName}},\n\nGreat to have you back! Your account is fully active again. Everything picks up right where you left off.\n\nWelcome home.\n\n{{ownerName}}" }
+  ],
+  "intakeForm": {
+    "name": "User Onboarding",
+    "slug": "user-onboarding",
+    "fields": [
+      { "label": "Name", "type": "text", "required": true },
+      { "label": "Email", "type": "email", "required": true },
+      { "label": "Company / Product Name", "type": "text", "required": false },
+      { "label": "What problem are you trying to solve?", "type": "textarea", "required": true },
+      { "label": "How many people will use this?", "type": "select", "required": true, "options": ["Just me","2-5","6-20","20-100","100+"] },
+      { "label": "Current tools you're replacing", "type": "textarea", "required": false },
+      { "label": "How did you hear about us?", "type": "select", "required": false, "options": ["Twitter/X","Product Hunt","Google","Referral","Blog","YouTube","Other"] }
+    ]
+  },
+  "landingPage": {
+    "headline": "{{businessName}}",
+    "subhead": "The simple way to get things done without the tools that slow you down.",
+    "cta": "Start Free Trial"
+  },
+  "automationSuggestions": [
+    { "id": "welcome-email", "name": "Send welcome email on signup", "trigger": "contact.created", "action": "send_email", "templateTag": "welcome", "requiresIntegration": "resend", "defaultEnabled": true },
+    { "id": "day1-tips", "name": "Send Day 1 tips 24h after signup", "trigger": "contact.created", "action": "send_email", "templateTag": "tips", "delay": "24h", "requiresIntegration": "resend", "defaultEnabled": true },
+    { "id": "trial-expiring", "name": "Send trial expiring warning", "trigger": "deal.stage_changed", "stageTarget": "Trial Expiring", "action": "send_email", "templateTag": "trial", "requiresIntegration": "resend", "defaultEnabled": true },
+    { "id": "conversion-thanks", "name": "Send thank you on upgrade", "trigger": "deal.stage_changed", "stageTarget": "Converted", "action": "send_email", "templateTag": "conversion", "requiresIntegration": "resend", "defaultEnabled": true },
+    { "id": "reengagement", "name": "Re-engage users inactive for 14+ days", "trigger": "contact.inactive", "action": "send_email", "templateTag": "reengagement", "inactivityDays": 14, "requiresIntegration": "resend", "defaultEnabled": true },
+    { "id": "exit-survey", "name": "Send exit survey on churn", "trigger": "deal.stage_changed", "stageTarget": "Churned", "action": "send_email", "templateTag": "offboarding", "delay": "24h", "requiresIntegration": "resend", "defaultEnabled": true },
+    { "id": "sms-demo-reminder", "name": "Send SMS reminder before demo call", "trigger": "booking.upcoming", "action": "send_sms", "message": "Reminder: Your demo with {{businessName}} is in 1 hour.", "requiresIntegration": "twilio", "defaultEnabled": false },
+    { "id": "stripe-payment-notify", "name": "Notify when payment is received", "trigger": "payment.received", "action": "create_task", "taskTitle": "Payment received from {{contactName}}", "requiresIntegration": "stripe", "defaultEnabled": false }
+  ]
+}

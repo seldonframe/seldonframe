@@ -9,6 +9,8 @@ import { listContacts } from "@/lib/contacts/actions";
 import { listDeals } from "@/lib/deals/actions";
 import { getSoul } from "@/lib/soul/server";
 import { skipSoulDeepenerAction } from "@/lib/soul/actions";
+import { getSetupGuideProgress } from "@/lib/setup-guide/progress";
+import { SetupGuide } from "@/components/dashboard/setup-guide";
 
 /*
   Square UI class reference (source of truth):
@@ -105,7 +107,7 @@ export default async function DashboardPage() {
     await skipSoulDeepenerAction();
   }
 
-  const [user, contactRows, dealRows, bookingRows, soul] = await Promise.all([getCurrentUser(), listContacts(), listDeals(), listBookings(), getSoul()]);
+  const [user, contactRows, dealRows, bookingRows, soul, setupGuideProgress] = await Promise.all([getCurrentUser(), listContacts(), listDeals(), listBookings(), getSoul(), getSetupGuideProgress()]);
   const orgId = user?.orgId;
 
   if (!orgId) {
@@ -294,7 +296,11 @@ export default async function DashboardPage() {
         </div>
       ) : null}
 
-      {deepSetupPending ? (
+      {setupGuideProgress && !setupGuideProgress.dismissed && !setupGuideProgress.allDone ? (
+        <SetupGuide progress={setupGuideProgress} />
+      ) : null}
+
+      {deepSetupPending && (!setupGuideProgress || setupGuideProgress.dismissed || setupGuideProgress.allDone) ? (
         <article className="rounded-xl border bg-card p-6">
           <p className="text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">Optional Deep Setup</p>
           <h2 className="mt-2 text-xl font-semibold text-foreground">Your business is set up. Want to unlock automations?</h2>

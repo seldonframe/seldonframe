@@ -1,0 +1,88 @@
+{
+  "id": "agency",
+  "name": "The Agency Framework",
+  "description": "For marketing, design, and creative agencies",
+  "icon": "Building2",
+  "defaultBusinessName": "{{ownerName}} Agency",
+  "contactLabel": { "singular": "Client", "plural": "Clients" },
+  "dealLabel": { "singular": "Project", "plural": "Projects" },
+  "activityLabel": { "singular": "Touchpoint", "plural": "Touchpoints" },
+  "voice": {
+    "tone": "professional, confident, results-oriented",
+    "personality": "strategic partner who delivers outcomes"
+  },
+  "pipeline": [
+    { "name": "Lead", "order": 1 },
+    { "name": "Qualified", "order": 2 },
+    { "name": "Strategy Call Booked", "order": 3 },
+    { "name": "Proposal Sent", "order": 4 },
+    { "name": "Negotiation", "order": 5 },
+    { "name": "Won — Onboarding", "order": 6 },
+    { "name": "Active — Delivery", "order": 7 },
+    { "name": "Review & Handoff", "order": 8 },
+    { "name": "Retainer Active", "order": 9 },
+    { "name": "Churned", "order": 10 }
+  ],
+  "bookingTypes": [
+    {
+      "name": "Strategy Call",
+      "slug": "strategy-call",
+      "durationMinutes": 45,
+      "price": 0,
+      "description": "A focused conversation to audit your current setup, identify gaps, and map out a plan.",
+      "bufferBefore": 15,
+      "bufferAfter": 15,
+      "maxPerDay": 3
+    },
+    {
+      "name": "Client Check-In",
+      "slug": "client-check-in",
+      "durationMinutes": 30,
+      "price": 0,
+      "description": "Your regular touchpoint to review progress, align on priorities, and keep things moving.",
+      "bufferBefore": 10,
+      "bufferAfter": 10,
+      "maxPerDay": 6
+    }
+  ],
+  "emailTemplates": [
+    { "name": "Lead Acknowledgment", "tag": "welcome", "subject": "Got your message — here's what happens next", "body": "Hi {{firstName}},\n\nThanks for reaching out to {{businessName}}. We'd love to learn more about what you're working on.\n\nThe best next step is a free Strategy Call where we audit your current setup and map out a plan.\n\n{{bookingLink}}\n\nTalk soon,\n{{ownerName}}" },
+    { "name": "Pre-Call Brief", "tag": "prep", "subject": "Quick prep for our strategy call", "body": "Hi {{firstName}},\n\nLooking forward to our call. To make it productive, could you share:\n\n1. Your current website URL\n2. Your biggest marketing challenge right now\n3. Your monthly budget range\n4. Your ideal timeline\n\nJust reply to this email.\n\n{{ownerName}}" },
+    { "name": "Proposal Follow-Up", "tag": "followup", "subject": "Your proposal from {{businessName}}", "body": "Hi {{firstName}},\n\nFollowing up on the proposal we discussed. Here's the scope and next steps.\n\nIf you're ready to move forward, the next step is signing the agreement. If you have questions, let's jump on a quick call.\n\n{{ownerName}}" },
+    { "name": "Onboarding Welcome", "tag": "onboarding", "subject": "Welcome to {{businessName}} — let's get started", "body": "Hi {{firstName}},\n\nWelcome aboard! We're excited to work with you.\n\nHere's what happens next:\n1. Complete this quick intake form: {{intakeLink}}\n2. Share access credentials (we'll send a secure link)\n3. Your kickoff call is scheduled for {{date}}\n\n{{ownerName}}" },
+    { "name": "Monthly Report", "tag": "report", "subject": "Your {{month}} report is ready", "body": "Hi {{firstName}},\n\nHere's your monthly summary of what we accomplished, key metrics, and what's coming next.\n\n{{ownerName}}" },
+    { "name": "Feedback Request", "tag": "feedback", "subject": "How are we doing? 2-minute check", "body": "Hi {{firstName}},\n\nWe want to make sure we're delivering the results you expect. Could you take 2 minutes to answer:\n\n1. On a scale of 1-10, how satisfied are you?\n2. What's one thing we could do better?\n\nYour feedback shapes how we work.\n\n{{ownerName}}" },
+    { "name": "Exit Survey", "tag": "offboarding", "subject": "Thanks for working with us, {{firstName}}", "body": "Hi {{firstName}},\n\nThank you for trusting {{businessName}} with your business. We'd appreciate your honest feedback:\n\n1. What went well?\n2. What could we improve?\n3. Would you refer us to others?\n\nWishing you continued success.\n\n{{ownerName}}" }
+  ],
+  "intakeForm": {
+    "name": "Client Onboarding",
+    "slug": "client-onboarding",
+    "fields": [
+      { "label": "Company Name", "type": "text", "required": true },
+      { "label": "Contact Name", "type": "text", "required": true },
+      { "label": "Email", "type": "email", "required": true },
+      { "label": "Phone", "type": "tel", "required": false },
+      { "label": "Website URL", "type": "url", "required": false },
+      { "label": "Services interested in", "type": "select", "required": true, "options": ["Branding","Web Design","SEO","Social Media","Paid Ads","Content","Email Marketing","Other"] },
+      { "label": "Primary goal", "type": "select", "required": true, "options": ["More leads","More sales","Brand awareness","Website redesign","Launch new product"] },
+      { "label": "Monthly budget range", "type": "select", "required": true, "options": ["Under $1K","$1K-$3K","$3K-$5K","$5K-$10K","$10K+"] },
+      { "label": "Ideal start date", "type": "select", "required": true, "options": ["ASAP","Within 2 weeks","Within 1 month","Within 3 months"] },
+      { "label": "Current tools/platforms", "type": "textarea", "required": false },
+      { "label": "Anything else?", "type": "textarea", "required": false }
+    ]
+  },
+  "landingPage": {
+    "headline": "Your growth shouldn't depend on guesswork.",
+    "subhead": "{{businessName}} builds the strategy, systems, and creative that turn attention into revenue.",
+    "cta": "Book a Free Strategy Call"
+  },
+  "automationSuggestions": [
+    { "id": "lead-acknowledge", "name": "Send acknowledgment when a new lead comes in", "trigger": "contact.created", "action": "send_email", "templateTag": "welcome", "requiresIntegration": "resend", "defaultEnabled": true },
+    { "id": "precall-brief", "name": "Send prep brief when strategy call is booked", "trigger": "booking.created", "action": "send_email", "templateTag": "prep", "requiresIntegration": "resend", "defaultEnabled": true },
+    { "id": "quiet-followup", "name": "Follow up if prospect goes quiet for 5+ days", "trigger": "contact.inactive", "action": "send_email", "templateTag": "followup", "inactivityDays": 5, "requiresIntegration": "resend", "defaultEnabled": true },
+    { "id": "onboarding-kickoff", "name": "Send onboarding pack when deal is won", "trigger": "deal.stage_changed", "stageTarget": "Won — Onboarding", "action": "send_email", "templateTag": "onboarding", "requiresIntegration": "resend", "defaultEnabled": true },
+    { "id": "feedback-request", "name": "Ask for feedback after project handoff", "trigger": "deal.stage_changed", "stageTarget": "Review & Handoff", "action": "send_email", "templateTag": "feedback", "delay": "48h", "requiresIntegration": "resend", "defaultEnabled": true },
+    { "id": "exit-survey", "name": "Send exit survey when client churns", "trigger": "deal.stage_changed", "stageTarget": "Churned", "action": "send_email", "templateTag": "offboarding", "delay": "24h", "requiresIntegration": "resend", "defaultEnabled": true },
+    { "id": "sms-booking-confirm", "name": "Send SMS confirmation for booked calls", "trigger": "booking.created", "action": "send_sms", "message": "Your call with {{businessName}} is confirmed for {{bookingDate}} at {{bookingTime}}.", "requiresIntegration": "twilio", "defaultEnabled": false }
+  ]
+}

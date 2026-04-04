@@ -1,0 +1,82 @@
+{
+  "id": "coaching",
+  "name": "The Coaching Framework",
+  "description": "For coaches, consultants, and 1:1 service providers",
+  "icon": "Heart",
+  "defaultBusinessName": "{{ownerName}} Coaching",
+  "contactLabel": { "singular": "Client", "plural": "Clients" },
+  "dealLabel": { "singular": "Engagement", "plural": "Engagements" },
+  "activityLabel": { "singular": "Session", "plural": "Sessions" },
+  "voice": {
+    "tone": "warm, empowering, direct",
+    "personality": "supportive guide who challenges growth"
+  },
+  "pipeline": [
+    { "name": "Inquiry", "order": 1 },
+    { "name": "Discovery Booked", "order": 2 },
+    { "name": "Discovery Complete", "order": 3 },
+    { "name": "Proposal Sent", "order": 4 },
+    { "name": "Enrolled", "order": 5 },
+    { "name": "Active", "order": 6 },
+    { "name": "Completed", "order": 7 },
+    { "name": "Alumni", "order": 8 }
+  ],
+  "bookingTypes": [
+    {
+      "name": "Discovery Call",
+      "slug": "discovery-call",
+      "durationMinutes": 30,
+      "price": 0,
+      "description": "A free, no-pressure conversation to explore what you're working on and whether coaching is the right next step.",
+      "bufferBefore": 10,
+      "bufferAfter": 10,
+      "maxPerDay": 3
+    },
+    {
+      "name": "Coaching Session",
+      "slug": "coaching-session",
+      "durationMinutes": 60,
+      "price": 197,
+      "description": "Your dedicated coaching hour. Come with one thing you want to shift — we'll go deep.",
+      "bufferBefore": 15,
+      "bufferAfter": 15,
+      "maxPerDay": 4
+    }
+  ],
+  "emailTemplates": [
+    { "name": "Welcome", "tag": "welcome", "subject": "Thanks for reaching out, {{firstName}}", "body": "Hi {{firstName}},\n\nThank you for reaching out. I'd love to learn more about what you're working on.\n\nThe best next step is to book a free Discovery Call where we can explore whether coaching is the right fit.\n\n{{bookingLink}}\n\nLooking forward to connecting,\n{{ownerName}}" },
+    { "name": "Discovery Prep", "tag": "prep", "subject": "Before our call — one quick thing", "body": "Hi {{firstName}},\n\nLooking forward to our call. To make the most of our time together, I'd love to know:\n\n1. What's your biggest challenge right now?\n2. What does success look like for you?\n3. What have you already tried?\n\nJust hit reply with a few thoughts.\n\n{{ownerName}}" },
+    { "name": "Post-Discovery Follow-Up", "tag": "followup", "subject": "Great connecting, {{firstName}}", "body": "Hi {{firstName}},\n\nReally enjoyed our conversation today. Here's a quick recap of what we discussed and the next steps we talked about.\n\nIf you're ready to move forward, here's how to get started: {{enrollmentLink}}\n\nNo rush — take the time you need.\n\n{{ownerName}}" },
+    { "name": "Onboarding Welcome", "tag": "onboarding", "subject": "Welcome aboard — here's how we start", "body": "Hi {{firstName}},\n\nWelcome! I'm excited to work together. Here's what to expect:\n\n- We'll meet {{cadence}} for {{duration}}-minute sessions\n- Before our first session, please complete this quick intake form: {{intakeLink}}\n- Book your first session here: {{bookingLink}}\n\nLet's do this.\n\n{{ownerName}}" },
+    { "name": "Session Reminder", "tag": "reminder", "subject": "See you tomorrow, {{firstName}}", "body": "Hi {{firstName}},\n\nJust a reminder — we have a session tomorrow. Take a moment to think about:\n\n- What's been on your mind this week?\n- What's one thing you want to focus on?\n\nSee you soon.\n\n{{ownerName}}" },
+    { "name": "Testimonial Request", "tag": "testimonial", "subject": "You did the work — would you share your experience?", "body": "Hi {{firstName}},\n\nCongratulations on completing your program. The transformation I've seen in you has been remarkable.\n\nWould you be open to sharing a brief testimonial? Just a few sentences about:\n- Where you were when we started\n- What shifted during our work together\n- Where you are now\n\nIt helps others who are in the same place you were.\n\nThank you,\n{{ownerName}}" },
+    { "name": "Alumni Check-In", "tag": "alumni", "subject": "Checking in — how's everything going?", "body": "Hi {{firstName}},\n\nIt's been a while since we wrapped up, and I wanted to check in. How are things going?\n\nIf you ever want to reconnect for a tune-up session or have questions, I'm here.\n\n{{ownerName}}" }
+  ],
+  "intakeForm": {
+    "name": "Coaching Application",
+    "slug": "coaching-application",
+    "fields": [
+      { "label": "Full Name", "type": "text", "required": true },
+      { "label": "Email", "type": "email", "required": true },
+      { "label": "Phone", "type": "tel", "required": false },
+      { "label": "What's the #1 thing you want to change in the next 90 days?", "type": "textarea", "required": true },
+      { "label": "What have you already tried?", "type": "textarea", "required": false },
+      { "label": "How committed are you to making this change? (1-10)", "type": "select", "required": true, "options": ["1","2","3","4","5","6","7","8","9","10"] },
+      { "label": "How did you hear about me?", "type": "select", "required": false, "options": ["Social media","Referral","Google","Podcast","Other"] },
+      { "label": "Anything else I should know?", "type": "textarea", "required": false }
+    ]
+  },
+  "landingPage": {
+    "headline": "Stop overthinking. Start becoming.",
+    "subhead": "{{businessName}} helps you get clear, get moving, and build the life you keep putting off.",
+    "cta": "Book Your Free Discovery Call"
+  },
+  "automationSuggestions": [
+    { "id": "welcome-email", "name": "Send welcome email when someone reaches out", "trigger": "contact.created", "action": "send_email", "templateTag": "welcome", "requiresIntegration": "resend", "defaultEnabled": true },
+    { "id": "session-reminder", "name": "Send reminder 24h before scheduled sessions", "trigger": "booking.upcoming", "action": "send_email", "templateTag": "reminder", "requiresIntegration": "resend", "defaultEnabled": true },
+    { "id": "quiet-followup", "name": "Follow up if client goes quiet for 7+ days", "trigger": "contact.inactive", "action": "send_email", "templateTag": "followup", "inactivityDays": 7, "requiresIntegration": "resend", "defaultEnabled": true },
+    { "id": "testimonial-request", "name": "Ask for testimonial after completing a program", "trigger": "deal.stage_changed", "stageTarget": "Completed", "action": "send_email", "templateTag": "testimonial", "delay": "72h", "requiresIntegration": "resend", "defaultEnabled": true },
+    { "id": "alumni-checkin", "name": "Send check-in to past clients every 90 days", "trigger": "deal.stage_changed", "stageTarget": "Alumni", "action": "send_email", "templateTag": "alumni", "delay": "90d", "requiresIntegration": "resend", "defaultEnabled": false },
+    { "id": "sms-booking-confirm", "name": "Send SMS confirmation when session is booked", "trigger": "booking.created", "action": "send_sms", "message": "Your session with {{ownerName}} is confirmed for {{bookingDate}} at {{bookingTime}}. See you there!", "requiresIntegration": "twilio", "defaultEnabled": false }
+  ]
+}

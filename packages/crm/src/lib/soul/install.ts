@@ -9,7 +9,8 @@ import type { OrgSoul } from "@/lib/soul/types";
 import { assertWritable } from "@/lib/demo/server";
 
 type InstallSoulInput = {
-  soulId: string;
+  soulId?: string;
+  frameworkId?: string;
   answers?: Record<string, unknown>;
   orgId?: string;
   markCompleted?: boolean;
@@ -47,6 +48,74 @@ function normalizeStageColor(index: number) {
   return palette[index % palette.length];
 }
 
+type FrameworkConfig = {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  defaultBusinessName: string;
+  contactLabel: { singular: string; plural: string };
+  dealLabel: { singular: string; plural: string };
+  activityLabel: { singular: string; plural: string };
+  voice: { tone: string; personality: string };
+  pipeline: Array<{ name: string; order: number }>;
+  bookingTypes: Array<{
+    name: string;
+    slug: string;
+    durationMinutes: number;
+    price: number;
+    description: string;
+    bufferBefore: number;
+    bufferAfter: number;
+    maxPerDay: number;
+  }>;
+  emailTemplates: Array<{
+    name: string;
+    tag: string;
+    subject: string;
+    body: string;
+  }>;
+  intakeForm: {
+    name: string;
+    slug: string;
+    fields: Array<{
+      label: string;
+      type: string;
+      required: boolean;
+      options?: string[];
+    }>;
+  };
+  landingPage: {
+    headline: string;
+    subhead: string;
+    cta: string;
+  };
+  automationSuggestions?: Array<Record<string, unknown>>;
+};
+
+async function loadFrameworkConfig(id: string): Promise<FrameworkConfig> {
+  const loaders: Record<string, () => Promise<{ default: FrameworkConfig }>> = {
+    coaching: () => import("@/lib/frameworks/coaching.json") as Promise<{ default: FrameworkConfig }>,
+    agency: () => import("@/lib/frameworks/agency.json") as Promise<{ default: FrameworkConfig }>,
+    saas: () => import("@/lib/frameworks/saas.json") as Promise<{ default: FrameworkConfig }>,
+  };
+
+  const loader = loaders[id];
+
+  if (!loader) {
+    throw new Error(`Unknown framework: ${id}`);
+  }
+
+  const mod = await loader();
+  return mod.default;
+}
+
+function interpolateString(template: string, vars: Record<string, string>): string {
+  return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (match, key) => {
+    return key in vars ? vars[key] : match;
+  });
+}
+
 export async function installSoul(input: InstallSoulInput) {
   assertWritable();
 
@@ -64,6 +133,14 @@ export async function installSoul(input: InstallSoulInput) {
 
   if (!org) {
     throw new Error("Organization not found");
+  }
+
+  if (input.frameworkId) {
+    return installFrameworkEntities(orgId, org, input);
+  }
+
+  if (!input.soulId) {
+    throw new Error("Either soulId or frameworkId is required");
   }
 
   const soulPackage = await loadSoulPackage(input.soulId);
@@ -323,5 +400,285 @@ export async function installSoul(input: InstallSoulInput) {
     soulId: input.soulId,
     installedLandingPages,
     installedBookingTypes,
+  };
+}
+
+async function installFrameworkEntities(
+  orgId: string,
+  org: { id: string; name: string; settings: Record<string, unknown> },
+  input: InstallSoulInput,
+) {
+  const framework = await loadFrameworkConfig(input.frameworkId!);
+  const answers = input.answers ?? {};
+
+  const ownerName = String(answers.ownerName || answers.ownerFirstName || "");
+  const ownerFullName = String(answers.ownerFullName || "");
+  const businessName = String(answers.businessName || org.name);
+
+  const vars: Record<string, string> = {
+    ownerName,
+    ownerFullName,
+    businessName,
+    firstName: "{{firstName}}",
+    bookingLink: "{{bookingLink}}",
+    intakeLink: "{{intakeLink}}",
+    enrollmentLink: "{{enrollmentLink}}",
+    cadence: "weekly",
+    duration: "60",
+    date: "{{date}}",
+    month: "{{month}}",
+  };
+
+  const normalizedStages = framework.pipeline.map((stage, index) => ({
+    name: stage.name,
+    probability: Math.min(100, Math.round((stage.order / framework.pipeline.length) * 100)),
+    color: normalizeStageColor(index),
+  }));
+
+  const pipelineName = `${businessName} Pipeline`;
+
+  const [existingDefaultPipeline] = await db
+    .select({ id: pipelines.id })
+    .from(pipelines)
+    .where(and(eq(pipelines.orgId, orgId), eq(pipelines.isDefault, true)))
+    .limit(1);
+
+  if (existingDefaultPipeline) {
+    await db
+      .update(pipelines)
+      .set({ name: pipelineName, stages: normalizedStages, updatedAt: new Date() })
+      .where(eq(pipelines.id, existingDefaultPipeline.id));
+  } else {
+    await db.insert(pipelines).values({
+      orgId,
+      name: pipelineName,
+      stages: normalizedStages,
+      isDefault: true,
+    });
+  }
+
+  let installedBookingTypes = 0;
+
+  for (const bt of framework.bookingTypes) {
+    const bookingSlug = bt.slug || toSlug(bt.name);
+
+    const [existing] = await db
+      .select({ id: bookings.id })
+      .from(bookings)
+      .where(and(eq(bookings.orgId, orgId), eq(bookings.status, "template"), eq(bookings.bookingSlug, bookingSlug)))
+      .limit(1);
+
+    const metadata = {
+      kind: "appointment_type",
+      description: bt.description || "",
+      durationMinutes: bt.durationMinutes,
+      price: bt.price,
+      availability: {},
+      bufferBeforeMinutes: bt.bufferBefore,
+      bufferAfterMinutes: bt.bufferAfter,
+      maxBookingsPerDay: bt.maxPerDay,
+    };
+
+    if (existing) {
+      await db
+        .update(bookings)
+        .set({ title: bt.name, metadata, updatedAt: new Date() })
+        .where(eq(bookings.id, existing.id));
+    } else {
+      const now = new Date();
+      await db.insert(bookings).values({
+        orgId,
+        title: bt.name,
+        bookingSlug,
+        provider: "manual",
+        status: "template",
+        startsAt: now,
+        endsAt: new Date(now.getTime() + bt.durationMinutes * 60_000),
+        metadata,
+      });
+      installedBookingTypes += 1;
+    }
+  }
+
+  if (framework.intakeForm?.fields?.length) {
+    const intakeName = framework.intakeForm.name;
+    const intakeSlug = framework.intakeForm.slug || toSlug(intakeName);
+    const fields = framework.intakeForm.fields.map((field) => ({
+      key: toSlug(field.label),
+      label: field.label,
+      type: field.type,
+      required: field.required,
+      options: field.options,
+    }));
+
+    const [existingForm] = await db
+      .select({ id: intakeForms.id })
+      .from(intakeForms)
+      .where(and(eq(intakeForms.orgId, orgId), eq(intakeForms.slug, intakeSlug)))
+      .limit(1);
+
+    if (existingForm) {
+      await db
+        .update(intakeForms)
+        .set({ name: intakeName, fields, settings: { source: "framework", frameworkId: framework.id }, updatedAt: new Date() })
+        .where(eq(intakeForms.id, existingForm.id));
+    } else {
+      await db.insert(intakeForms).values({
+        orgId,
+        name: intakeName,
+        slug: intakeSlug,
+        fields,
+        settings: { source: "framework", frameworkId: framework.id },
+      });
+    }
+  }
+
+  let installedLandingPages = 0;
+  const landingSlug = toSlug(businessName) || "home";
+  const landingTitle = interpolateString(framework.landingPage.headline, vars);
+  const landingSections: LandingSection[] = [
+    {
+      type: "hero",
+      content: {
+        headline: interpolateString(framework.landingPage.headline, vars),
+        subhead: interpolateString(framework.landingPage.subhead, vars),
+        cta: framework.landingPage.cta,
+      },
+      order: 0,
+    },
+  ];
+
+  const [existingPage] = await db
+    .select({ id: landingPages.id })
+    .from(landingPages)
+    .where(and(eq(landingPages.orgId, orgId), eq(landingPages.slug, landingSlug)))
+    .limit(1);
+
+  if (existingPage) {
+    await db
+      .update(landingPages)
+      .set({ title: landingTitle, sections: landingSections, settings: { source: "framework", frameworkId: framework.id }, updatedAt: new Date() })
+      .where(eq(landingPages.id, existingPage.id));
+  } else {
+    await db.insert(landingPages).values({
+      orgId,
+      title: landingTitle,
+      slug: landingSlug,
+      status: "published",
+      sections: landingSections,
+      settings: { source: "framework", frameworkId: framework.id },
+    });
+    installedLandingPages += 1;
+  }
+
+  const interpolatedEmailTemplates = framework.emailTemplates.map((template) => ({
+    name: template.name,
+    tag: template.tag,
+    subject: interpolateString(template.subject, vars),
+    body: interpolateString(template.body, vars),
+  }));
+
+  const nextSettings = {
+    ...(org.settings ?? {}),
+    soulPackage: {
+      id: `framework:${framework.id}`,
+      installedAt: new Date().toISOString(),
+      identity: {
+        defaultBusinessName: framework.defaultBusinessName,
+        entityLabels: {
+          contact: framework.contactLabel,
+          deal: framework.dealLabel,
+          activity: framework.activityLabel,
+        },
+      },
+      emailTemplates: interpolatedEmailTemplates,
+      customFields: {},
+      proposalTemplate: null,
+    },
+  };
+
+  const soul: OrgSoul = {
+    businessName,
+    businessDescription: framework.description,
+    industry: framework.id,
+    offerType: framework.name,
+    entityLabels: {
+      contact: framework.contactLabel,
+      deal: framework.dealLabel,
+      activity: framework.activityLabel,
+      pipeline: { singular: "Pipeline", plural: "Pipelines" },
+      intakeForm: { singular: "Form", plural: "Forms" },
+    },
+    pipeline: {
+      name: pipelineName,
+      stages: normalizedStages,
+    },
+    suggestedFields: { contact: [], deal: [] },
+    contactStatuses: [
+      { value: "active", label: "Active", color: "#22c55e" },
+      { value: "inactive", label: "Inactive", color: "#94a3b8" },
+    ],
+    voice: {
+      style: framework.voice.tone,
+      vocabulary: [],
+      avoidWords: [],
+      samplePhrases: [],
+    },
+    priorities: [],
+    aiContext: `${businessName} is a ${framework.description.toLowerCase()} business. Voice: ${framework.voice.tone}. ${framework.voice.personality}.`,
+    suggestedIntakeForm: {
+      name: framework.intakeForm.name,
+      fields: framework.intakeForm.fields.map((field) => ({
+        key: toSlug(field.label),
+        label: field.label,
+        type: field.type,
+        required: field.required,
+      })),
+    },
+    branding: {
+      primaryColor: "#3b82f6",
+      accentColor: "#8b5cf6",
+      mood: framework.voice.tone.split(",")[0]?.trim() || "professional",
+    },
+    rawInput: {
+      processDescription: "",
+      painPoint: "",
+      clientDescription: "",
+    },
+  };
+
+  const orgUpdateValues: {
+    soul: OrgSoul;
+    soulId: string;
+    soulContentGenerated: number;
+    settings: Record<string, unknown>;
+    updatedAt: Date;
+    soulCompletedAt?: Date;
+  } = {
+    soul,
+    soulId: `framework:${framework.id}`,
+    soulContentGenerated: 1,
+    settings: nextSettings,
+    updatedAt: new Date(),
+  };
+
+  if (input.markCompleted !== false) {
+    orgUpdateValues.soulCompletedAt = new Date();
+  }
+
+  await db
+    .update(organizations)
+    .set(orgUpdateValues)
+    .where(eq(organizations.id, orgId));
+
+  return {
+    success: true,
+    frameworkId: framework.id,
+    frameworkName: framework.name,
+    installedLandingPages,
+    installedBookingTypes,
+    pipelineStages: normalizedStages.length,
+    emailTemplates: interpolatedEmailTemplates.length,
+    intakeFormFields: framework.intakeForm.fields.length,
   };
 }
