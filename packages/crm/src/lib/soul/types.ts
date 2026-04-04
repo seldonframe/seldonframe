@@ -108,7 +108,8 @@ export interface OrgSoul {
   };
 
   journey?: {
-    stages: SoulJourneyStage[];
+    userDescription?: string;
+    stages?: SoulJourneyStage[];
   };
   clientIntelligence?: {
     segments?: SoulClientSegment[];

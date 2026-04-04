@@ -106,7 +106,7 @@ export function Sidebar(props: {
 
   return (
     <>
-      <aside className="crm-sidebar hidden w-full flex-col border bg-card md:flex md:w-[220px]" style={{ height: "100svh", overflowY: "auto" }}>
+      <aside className="crm-sidebar hidden w-full flex-col border bg-card md:sticky md:top-0 md:flex md:h-screen md:w-[220px] md:overflow-y-auto">
         {renderSidebarShell()}
       </aside>
 

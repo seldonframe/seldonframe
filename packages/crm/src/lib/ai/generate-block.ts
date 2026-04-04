@@ -6,6 +6,8 @@ import { db } from "@/db";
 import { marketplaceBlocks } from "@/db/schema";
 import { and, desc, eq, ilike, or } from "drizzle-orm";
 
+const SELDON_MODEL = process.env.SELDON_MODEL?.trim() || "claude-sonnet-4-20250514";
+
 export type ClarifyingQuestion = {
   id: string;
   question: string;
@@ -185,7 +187,7 @@ export async function generateClarifyingQuestions(input: {
   }
 
   const response = await client.messages.create({
-    model: "claude-3-5-haiku-latest",
+    model: SELDON_MODEL,
     max_tokens: 700,
     messages: [
       {
@@ -264,7 +266,7 @@ export async function decomposeRequest(description: string, enrichedDescription?
   }
 
   const response = await client.messages.create({
-    model: "claude-3-5-haiku-latest",
+    model: SELDON_MODEL,
     max_tokens: 800,
     messages: [
       {
@@ -306,7 +308,7 @@ async function scoreInventoryMatch(params: {
   }
 
   const response = await client.messages.create({
-    model: "claude-3-5-haiku-latest",
+    model: SELDON_MODEL,
     max_tokens: 500,
     messages: [
       {
@@ -399,7 +401,7 @@ export async function descriptionToBlockMd(orgId: string, description: string): 
   }
 
   const response = await client.messages.create({
-    model: "claude-3-5-sonnet-latest",
+    model: SELDON_MODEL,
     max_tokens: 6000,
     system: `You are creating a BLOCK.md specification for SeldonFrame. Output only valid BLOCK.md content and keep it concise (max 150 lines).\n\nUse this exact structure:\n# Block: [Name]\n\n## Purpose\n[paragraph]\n\n## Entities\n[list]\n\n## Dependencies\n### Required from host system:\n[list]\n\n### Optional from host system:\n[list]\n\n## Events\n### Broadcasts:\n[list]\n\n### Listens for:\n[list]\n\n## Pages\n### Admin pages:\n[list]\n\n### Public pages:\n[list]\n\n### Integration pages:\n[list]\n\n## Navigation\n[list]\n\nRules:\n- Use services only if connected in context\n- Include loading, empty, and error states in page descriptions\n- Reuse existing events when possible\n- Keep scope focused to one block\n\n${context}`,
     messages: [{ role: "user", content: source }],
@@ -408,7 +410,7 @@ export async function descriptionToBlockMd(orgId: string, description: string): 
   const blockMd = extractText(response.content as Array<{ type: string; text?: string }>) || fallbackBlockMd(source);
 
   const summaryResponse = await client.messages.create({
-    model: "claude-3-5-haiku-latest",
+    model: SELDON_MODEL,
     max_tokens: 280,
     messages: [
       {
@@ -439,7 +441,7 @@ async function customizeInventoryBlockMd(params: {
   }
 
   const response = await client.messages.create({
-    model: "claude-3-5-haiku-latest",
+    model: SELDON_MODEL,
     max_tokens: 3500,
     system: `Customize an existing BLOCK.md with minimal diffs. Preserve structure and reliability. Keep output under 150 lines. Output only BLOCK.md.\n\n${context}`,
     messages: [

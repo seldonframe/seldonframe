@@ -138,7 +138,7 @@ export async function updateIntegration(orgId: string, service: string, credenti
       apiKey: apiKey ? encryptValue(apiKey) : "",
       fromEmail: credentials.fromEmail?.trim() || integrations.resend?.fromEmail || "",
       fromName: credentials.fromName?.trim() || integrations.resend?.fromName || "",
-      connected: Boolean((credentials.fromEmail?.trim() || integrations.resend?.fromEmail) && apiKey),
+      connected: Boolean(apiKey),
     };
   }
 
@@ -193,6 +193,19 @@ export async function updateIntegrationAction(formData: FormData) {
 
   const query = serializeResult({ saved: "1", service });
   redirect(`/settings/integrations?${query}`);
+}
+
+export async function saveIntegrationFromWizard(service: string, credentials: Record<string, string>) {
+  assertWritable();
+
+  const orgId = await getOrgId();
+
+  if (!orgId) {
+    throw new Error("Unauthorized");
+  }
+
+  await updateIntegration(orgId, service, credentials);
+  return { success: true };
 }
 
 export async function testTwilioConnectionAction(formData: FormData) {
@@ -266,6 +279,12 @@ export async function testResendConnectionAction(formData: FormData) {
   if (!domainsResponse.ok) {
     redirect("/settings/integrations?resendTest=0");
   }
+
+  await updateIntegration(orgId, "resend", {
+    apiKey: rawApiKey,
+    fromEmail,
+    fromName,
+  });
 
   if (fromEmail && user?.email) {
     const emailResponse = await fetch("https://api.resend.com/emails", {

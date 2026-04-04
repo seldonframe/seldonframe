@@ -2,13 +2,12 @@ import { asc, desc, eq } from "drizzle-orm";
 import Link from "next/link";
 import { DollarSign, Users, CalendarDays, Activity, ChevronDown, Plus, Download, ChartLine, MoreHorizontal, BarChart2, ClipboardList, Search, Filter, FileInput } from "lucide-react";
 import { db } from "@/db";
-import { activities, metricsSnapshots, organizations, paymentRecords } from "@/db/schema";
+import { activities, metricsSnapshots, paymentRecords } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth/helpers";
 import { listBookings } from "@/lib/bookings/actions";
 import { listContacts } from "@/lib/contacts/actions";
 import { listDeals } from "@/lib/deals/actions";
 import { getSoul } from "@/lib/soul/server";
-import { skipSoulDeepenerAction } from "@/lib/soul/actions";
 import { getSetupGuideProgress } from "@/lib/setup-guide/progress";
 import { SetupGuide } from "@/components/dashboard/setup-guide";
 
@@ -101,12 +100,6 @@ function percentChange(current: number, previous: number) {
 }
 
 export default async function DashboardPage() {
-  async function skipDeepSetupFormAction() {
-    "use server";
-
-    await skipSoulDeepenerAction();
-  }
-
   const [user, contactRows, dealRows, bookingRows, soul, setupGuideProgress] = await Promise.all([getCurrentUser(), listContacts(), listDeals(), listBookings(), getSoul(), getSetupGuideProgress()]);
   const orgId = user?.orgId;
 
@@ -114,28 +107,19 @@ export default async function DashboardPage() {
     return null;
   }
 
-  const [snapshotRowsRaw, activityRows, paymentRows, orgRow] = await Promise.all([
+  const [snapshotRowsRaw, activityRows, paymentRows] = await Promise.all([
     db.select().from(metricsSnapshots).where(eq(metricsSnapshots.orgId, orgId)).orderBy(asc(metricsSnapshots.date)).limit(180),
     db.select().from(activities).where(eq(activities.orgId, orgId)).orderBy(desc(activities.createdAt)).limit(20),
     db
       .select({ amount: paymentRecords.amount, createdAt: paymentRecords.createdAt })
       .from(paymentRecords)
       .where(eq(paymentRecords.orgId, orgId)),
-    db
-      .select({ createdAt: organizations.createdAt, soulId: organizations.soulId, soulContentGenerated: organizations.soulContentGenerated })
-      .from(organizations)
-      .where(eq(organizations.id, orgId))
-      .limit(1)
-      .then((rows) => rows[0] ?? null),
   ]);
 
   const contactById = new Map(contactRows.map((contact) => [contact.id, contact]));
   const snapshotRows = snapshotRowsRaw.map((row) => ({ ...row, dateObj: toUtcDate(row.date) }));
   const contactLabelSingular = soul?.entityLabels?.contact?.singular || "Contact";
   const contactLabelPlural = soul?.entityLabels?.contact?.plural || "Contacts";
-  const setupComplete = Boolean(orgRow?.soulId) || Number(orgRow?.soulContentGenerated ?? 0) > 0;
-  const deepSetupPending = setupComplete && !soul?.deepSetup?.completedAt && !soul?.deepSetup?.skippedAt;
-
   const today = new Date();
   const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
   const startOfToday = new Date(today);
@@ -298,26 +282,6 @@ export default async function DashboardPage() {
 
       {setupGuideProgress && !setupGuideProgress.dismissed && !setupGuideProgress.allDone ? (
         <SetupGuide progress={setupGuideProgress} />
-      ) : null}
-
-      {deepSetupPending && (!setupGuideProgress || setupGuideProgress.dismissed || setupGuideProgress.allDone) ? (
-        <article className="rounded-xl border bg-card p-6">
-          <p className="text-xs font-medium uppercase tracking-widest text-[hsl(var(--muted-foreground))]">Optional Deep Setup</p>
-          <h2 className="mt-2 text-xl font-semibold text-foreground">Your business is set up. Want to unlock automations?</h2>
-          <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
-            Tell us how your client journey works and we&apos;ll translate it into a deeper soul profile.
-          </p>
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <Link href="/dashboard/soul-deepener" className="crm-button-primary h-10 px-4">
-              Set Up Automations
-            </Link>
-            <form action={skipDeepSetupFormAction}>
-              <button type="submit" className="crm-button-secondary h-10 px-4">
-                Maybe Later
-              </button>
-            </form>
-          </div>
-        </article>
       ) : null}
 
       <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 sm:gap-6">

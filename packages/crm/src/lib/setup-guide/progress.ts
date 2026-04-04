@@ -33,7 +33,6 @@ export async function getSetupGuideProgress(): Promise<SetupGuideProgress | null
     .select({
       settings: organizations.settings,
       soulId: organizations.soulId,
-      integrations: organizations.integrations,
     })
     .from(organizations)
     .where(eq(organizations.id, orgId))
@@ -82,11 +81,14 @@ export async function getSetupGuideProgress(): Promise<SetupGuideProgress | null
         .then((rows) => rows[0]?.count ?? 0),
     ]);
 
-  const hasEmailIntegration = Boolean(org.integrations?.resend?.connected);
-  const hasCalendarIntegration = Boolean(org.integrations?.google?.calendarConnected);
-  const hasAnyIntegration = hasEmailIntegration || hasCalendarIntegration;
-
   const tasks: SetupTask[] = [
+    {
+      id: "complete-setup",
+      label: "Complete setup wizard",
+      description: "Your core business system is configured and live.",
+      href: "/dashboard",
+      completed: setupComplete,
+    },
     {
       id: "add-contact",
       label: "Add your first contact",
@@ -107,13 +109,6 @@ export async function getSetupGuideProgress(): Promise<SetupGuideProgress | null
       description: "Set your availability and share your booking link.",
       href: "/bookings",
       completed: bookingTemplateCount > 0,
-    },
-    {
-      id: "connect-integration",
-      label: "Connect an integration",
-      description: "Link your email or calendar to unlock automations.",
-      href: "/settings/integrations",
-      completed: hasAnyIntegration,
     },
     {
       id: "review-landing",

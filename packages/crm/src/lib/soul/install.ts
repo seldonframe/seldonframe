@@ -414,6 +414,8 @@ async function installFrameworkEntities(
   const ownerName = String(answers.ownerName || answers.ownerFirstName || "");
   const ownerFullName = String(answers.ownerFullName || "");
   const businessName = String(answers.businessName || org.name);
+  const journeyDescription = String(answers.journeyDescription || "");
+  const enabledAutomations = Array.isArray(answers.enabledAutomations) ? (answers.enabledAutomations as string[]) : [];
 
   const vars: Record<string, string> = {
     ownerName,
@@ -595,6 +597,7 @@ async function installFrameworkEntities(
       customFields: {},
       proposalTemplate: null,
     },
+    enabledAutomations,
   };
 
   const soul: OrgSoul = {
@@ -641,9 +644,12 @@ async function installFrameworkEntities(
       mood: framework.voice.tone.split(",")[0]?.trim() || "professional",
     },
     rawInput: {
-      processDescription: "",
+      processDescription: journeyDescription,
       painPoint: "",
       clientDescription: "",
+    },
+    journey: {
+      userDescription: journeyDescription,
     },
   };
 

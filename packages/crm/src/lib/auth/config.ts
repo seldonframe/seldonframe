@@ -2,8 +2,8 @@ import type { NextAuthConfig } from "next-auth";
 import Google from "next-auth/providers/google";
 import Resend from "next-auth/providers/resend";
 import { db } from "@/db";
-import { organizations, users } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { accounts, organizations, users } from "@/db/schema";
+import { and, eq } from "drizzle-orm";
 
 const BILLING_STATUSES = ["trialing", "active", "past_due", "canceled", "unpaid"] as const;
 const BILLING_PERIODS = ["monthly", "yearly"] as const;
@@ -54,7 +54,7 @@ export const authConfig = {
   },
   providers: authProviders,
   callbacks: {
-    jwt: async ({ token, user }) => {
+    jwt: async ({ token, user, account }) => {
       try {
         if (user) {
           console.log("[auth][jwt] user present in token, sub:", token.sub);
@@ -86,11 +86,51 @@ export const authConfig = {
             token.trialEndsAt = dbUser.trialEndsAt ? dbUser.trialEndsAt.toISOString() : null;
 
             const [org] = await db
-              .select({ id: organizations.id, soulCompletedAt: organizations.soulCompletedAt })
+              .select({ id: organizations.id, soulCompletedAt: organizations.soulCompletedAt, integrations: organizations.integrations })
               .from(organizations)
               .where(eq(organizations.id, dbUser.orgId))
               .limit(1);
             token.soulCompleted = Boolean(org?.soulCompletedAt);
+
+            if (account?.provider === "google" && org) {
+              const [googleAccount] = await db
+                .select({
+                  accessToken: accounts.accessToken,
+                  refreshToken: accounts.refreshToken,
+                  expiresAt: accounts.expiresAt,
+                  scope: accounts.scope,
+                })
+                .from(accounts)
+                .where(and(eq(accounts.userId, dbUser.id), eq(accounts.provider, "google")))
+                .limit(1);
+
+              if (googleAccount) {
+                const existingIntegrations = (org.integrations ?? {}) as Record<string, unknown>;
+                const existingGoogle = (existingIntegrations.google ?? {}) as Record<string, unknown>;
+                const hasCalendarScope = Boolean(googleAccount.scope?.includes("https://www.googleapis.com/auth/calendar"));
+
+                const nextGoogle = {
+                  ...existingGoogle,
+                  calendarConnected: hasCalendarScope || Boolean(existingGoogle.calendarConnected),
+                  connected: hasCalendarScope || Boolean(existingGoogle.connected),
+                  accessToken: googleAccount.accessToken ?? String(existingGoogle.accessToken ?? ""),
+                  refreshToken: googleAccount.refreshToken ?? String(existingGoogle.refreshToken ?? ""),
+                  expiresAt: googleAccount.expiresAt ?? Number(existingGoogle.expiresAt ?? 0),
+                  scope: googleAccount.scope ?? String(existingGoogle.scope ?? ""),
+                };
+
+                await db
+                  .update(organizations)
+                  .set({
+                    integrations: {
+                      ...existingIntegrations,
+                      google: nextGoogle,
+                    },
+                    updatedAt: new Date(),
+                  })
+                  .where(eq(organizations.id, org.id));
+              }
+            }
           }
         }
 

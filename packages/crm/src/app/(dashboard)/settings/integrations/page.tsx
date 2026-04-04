@@ -27,6 +27,8 @@ export default async function IntegrationsSettingsPage({
 }) {
   const params = await searchParams;
   const settings = await getIntegrationSettings();
+  const googleCalendarConnectUrl =
+    "/api/auth/signin/google?callbackUrl=%2Fsettings%2Fintegrations&scope=openid%20email%20profile%20https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fcalendar&prompt=consent&access_type=offline";
 
   if (!settings) {
     return null;
@@ -178,7 +180,7 @@ export default async function IntegrationsSettingsPage({
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             {!settings.google.calendarConnected ? (
-              <Link href="/api/auth/signin/google" className="crm-button-primary h-10 px-4">
+              <Link href={googleCalendarConnectUrl} className="crm-button-primary h-10 px-4">
                 Connect Google Calendar
               </Link>
             ) : (

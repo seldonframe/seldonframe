@@ -11,6 +11,16 @@ import saasFramework from "@/lib/frameworks/saas.json";
     - content shell: "flex-1 overflow-auto p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6 bg-background w-full"
 */
 
+export type AutomationSuggestion = {
+  id: string;
+  name: string;
+  trigger: string;
+  action: string;
+  templateTag?: string;
+  requiresIntegration: string;
+  defaultEnabled: boolean;
+};
+
 export type FrameworkOption = {
   id: string;
   name: string;
@@ -18,11 +28,13 @@ export type FrameworkOption = {
   icon: string;
   defaultBusinessName: string;
   contactLabel: { singular: string; plural: string };
+  dealLabel: { singular: string; plural: string };
   pipeline: Array<{ name: string; order: number }>;
-  bookingTypes: Array<{ name: string; slug: string; durationMinutes: number }>;
+  bookingTypes: Array<{ name: string; slug: string; durationMinutes: number; price: number }>;
   emailTemplates: Array<{ name: string; tag: string }>;
   intakeFormFieldCount: number;
   landingPage: { headline: string; subhead: string; cta: string };
+  automationSuggestions: AutomationSuggestion[];
 };
 
 const allFrameworks = [coachingFramework, agencyFramework, saasFramework];
@@ -41,15 +53,25 @@ export default async function SetupPage() {
     icon: fw.icon,
     defaultBusinessName: fw.defaultBusinessName,
     contactLabel: fw.contactLabel,
+    dealLabel: fw.dealLabel,
     pipeline: fw.pipeline,
-    bookingTypes: fw.bookingTypes.map((bt) => ({ name: bt.name, slug: bt.slug, durationMinutes: bt.durationMinutes })),
+    bookingTypes: fw.bookingTypes.map((bt) => ({ name: bt.name, slug: bt.slug, durationMinutes: bt.durationMinutes, price: bt.price })),
     emailTemplates: fw.emailTemplates.map((et) => ({ name: et.name, tag: et.tag })),
     intakeFormFieldCount: fw.intakeForm.fields.length,
     landingPage: fw.landingPage,
+    automationSuggestions: fw.automationSuggestions.map((a) => ({
+      id: a.id,
+      name: a.name,
+      trigger: a.trigger,
+      action: a.action,
+      templateTag: a.templateTag,
+      requiresIntegration: a.requiresIntegration,
+      defaultEnabled: a.defaultEnabled,
+    })),
   }));
 
   return (
-    <main className="animate-page-enter flex-1 overflow-auto p-3 sm:p-4 md:p-6 bg-background w-full">
+    <main className="animate-page-enter flex-1 overflow-auto p-3 sm:p-4 md:p-6 bg-background w-full min-h-svh">
       <SetupWizard frameworks={frameworks} />
     </main>
   );

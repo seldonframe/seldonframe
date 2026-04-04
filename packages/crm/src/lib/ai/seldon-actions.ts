@@ -335,7 +335,28 @@ export async function runSeldonItAction(_prev: SeldonRunState, formData: FormDat
         : "Your block is ready!",
       results,
     };
-  } catch {
-    return { ok: false, error: "Seldon It failed. Please try again." };
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : "Unknown error";
+    const normalized = message.toLowerCase();
+
+    if (normalized.includes("anthropic") || normalized.includes("api key") || normalized.includes("authentication")) {
+      return {
+        ok: false,
+        error: "Seldon It could not reach Anthropic. Verify ANTHROPIC_API_KEY and model access.",
+      };
+    }
+
+    if (normalized.includes("model") || normalized.includes("not found")) {
+      return {
+        ok: false,
+        error: "Seldon It model configuration failed. Check SELDON_MODEL (expected claude-sonnet-4-20250514).",
+      };
+    }
+
+    if (normalized.includes("unauthorized")) {
+      return { ok: false, error: "Unauthorized. Please sign in again." };
+    }
+
+    return { ok: false, error: `Seldon It failed: ${message}` };
   }
 }

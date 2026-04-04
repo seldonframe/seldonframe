@@ -22,6 +22,11 @@ export type OrganizationIntegrations = {
   };
   google?: {
     calendarConnected: boolean;
+    connected?: boolean;
+    accessToken?: string;
+    refreshToken?: string;
+    expiresAt?: number;
+    scope?: string;
   };
 };
 
