@@ -82,6 +82,7 @@ export function Sidebar(props: {
     {
       title: "SYSTEM",
       items: filterHidden([
+        { href: "/docs", label: "Docs", icon: "BookOpen" },
         { href: "/settings", label: "Settings", icon: "Settings" },
       ]),
     },

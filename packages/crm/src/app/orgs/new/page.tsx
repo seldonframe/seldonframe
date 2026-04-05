@@ -59,6 +59,7 @@ export default async function NewWorkspacePage() {
       requiresIntegration: a.requiresIntegration,
       defaultEnabled: a.defaultEnabled,
     })),
+    readme: fw.readme,
   }));
 
   const savedFrameworks = await listSavedFrameworkOptions();

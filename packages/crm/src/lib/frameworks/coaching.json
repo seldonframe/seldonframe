@@ -2,6 +2,13 @@
   "id": "coaching",
   "name": "The Coaching Framework",
   "description": "For coaches, consultants, and 1:1 service providers",
+  "readme": {
+    "overview": "The Coaching Framework is built for 1:1 service providers who need a complete journey from inquiry to alumni retention without duct-taping tools.",
+    "whyThisPipeline": "The 8-stage pipeline follows the natural coaching client journey: from first inquiry through active coaching to alumni status. Each stage maps to practical handoffs and automation triggers.",
+    "whyTheseEmails": "7 email templates cover the full client lifecycle: welcome, prep, follow-up, onboarding, reminders, testimonial requests, and alumni check-ins. Each template keeps a warm, empowering coaching voice.",
+    "whyTheseBookings": "Two booking types support the core sales-to-delivery motion: a free 30-minute discovery call and a paid 60-minute coaching session. Built-in buffers protect coach energy and scheduling quality.",
+    "whyTheseAutomations": "6 suggested automations handle recurring operational tasks coaches often miss: lead follow-up, reminders, inactivity nudges, testimonial capture, alumni care, and optional SMS confirmations."
+  },
   "icon": "Heart",
   "defaultBusinessName": "{{ownerName}} Coaching",
   "contactLabel": { "singular": "Client", "plural": "Clients" },

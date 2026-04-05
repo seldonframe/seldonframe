@@ -41,6 +41,7 @@ export default async function SettingsPage() {
     { href: "/settings/api", title: "API Keys", description: "Generate keys for programmatic access", status: null },
     { href: "/settings/payments", title: "Payments", description: "Connect Stripe to accept payments", status: stripeStatus ? "Connected ✓" : null },
     { href: "/settings/billing", title: "Billing", description: "Manage plan, trial, and subscription portal", status: null },
+    { href: "/docs", title: "Docs", description: "Concept guides for souls, blocks, frameworks, and Seldon It", status: null },
     { href: "/settings/domain", title: "Domain", description: "Connect a custom domain for public pages", status: domainStatus },
     { href: "/settings/branding", title: "Branding", description: "Control public branding and white-label defaults", status: brandingStatus },
     { href: "/settings/frameworks", title: "Saved Frameworks", description: "Manage reusable framework presets", status: frameworksStatus },

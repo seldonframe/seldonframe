@@ -49,6 +49,9 @@ export default function PublicHomePage() {
             <a href="#pricing" className="transition-colors hover:text-foreground">
               Pricing
             </a>
+            <Link href="/docs" className="transition-colors hover:text-foreground">
+              Docs
+            </Link>
             <Link
               href="https://github.com/seldonframe/crm"
               target="_blank"

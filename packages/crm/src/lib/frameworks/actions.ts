@@ -37,6 +37,13 @@ export type GeneratedFrameworkOption = {
     requiresIntegration: string;
     defaultEnabled: boolean;
   }>;
+  readme?: {
+    overview: string;
+    whyThisPipeline: string;
+    whyTheseEmails: string;
+    whyTheseBookings: string;
+    whyTheseAutomations: string;
+  };
 };
 
 export type GeneratedFrameworkPayload = {
@@ -308,6 +315,7 @@ function toFrameworkOption(framework: FrameworkConfig): GeneratedFrameworkOption
       requiresIntegration: toWord(a.requiresIntegration, "resend"),
       defaultEnabled: Boolean(a.defaultEnabled),
     })) ?? [],
+    readme: framework.readme,
   };
 }
 

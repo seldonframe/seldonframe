@@ -537,6 +537,16 @@ export function SetupWizard({
                             <p className="font-medium text-foreground text-xs mb-1">Automations</p>
                             <p>{fw.automationSuggestions.map((a) => a.name.replace(/^Send |^Ask |^Follow /i, (m) => m.toLowerCase())).join(" · ")}</p>
                           </div>
+                          {fw.readme ? (
+                            <div className="space-y-2 rounded-lg border border-border bg-background/70 p-3">
+                              <p className="font-medium text-foreground text-xs">Why this framework works</p>
+                              <p>{fw.readme.overview}</p>
+                              <p><span className="font-medium text-foreground">Pipeline:</span> {fw.readme.whyThisPipeline}</p>
+                              <p><span className="font-medium text-foreground">Emails:</span> {fw.readme.whyTheseEmails}</p>
+                              <p><span className="font-medium text-foreground">Bookings:</span> {fw.readme.whyTheseBookings}</p>
+                              <p><span className="font-medium text-foreground">Automations:</span> {fw.readme.whyTheseAutomations}</p>
+                            </div>
+                          ) : null}
                         </div>
                       ) : null}
                     </div>

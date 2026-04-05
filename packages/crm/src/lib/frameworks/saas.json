@@ -2,6 +2,13 @@
   "id": "saas",
   "name": "The SaaS Framework",
   "description": "For software products, apps, and digital tools",
+  "readme": {
+    "overview": "The SaaS Framework is built for software teams that need to move users from signup to activation, conversion, and retention with minimal manual ops.",
+    "whyThisPipeline": "The 9-stage pipeline follows a practical SaaS lifecycle: signup, onboarding, activation, trial conversion, healthy usage, risk detection, churn, and winback. It gives teams clear intervention points.",
+    "whyTheseEmails": "The email set covers onboarding, feature education, trial urgency, conversion, re-engagement, and offboarding. Messages are concise and product-first so users always know the next action.",
+    "whyTheseBookings": "Demo and onboarding calls support both pre-sale and post-sale adoption. Durations and buffers balance calendar efficiency with enough depth to solve real setup issues.",
+    "whyTheseAutomations": "Automations ensure users are guided at key lifecycle moments: welcome, day-one activation, trial warnings, conversion handoff, inactivity nudges, and churn feedback capture."
+  },
   "icon": "Rocket",
   "defaultBusinessName": "{{ownerName}}'s Product",
   "contactLabel": { "singular": "User", "plural": "Users" },

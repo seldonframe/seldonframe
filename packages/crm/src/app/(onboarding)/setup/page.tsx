@@ -43,6 +43,13 @@ export type FrameworkOption = {
     description: string;
   }>;
   automationSuggestions: AutomationSuggestion[];
+  readme?: {
+    overview: string;
+    whyThisPipeline: string;
+    whyTheseEmails: string;
+    whyTheseBookings: string;
+    whyTheseAutomations: string;
+  };
 };
 
 const allFrameworks = [coachingFramework, agencyFramework, saasFramework];
@@ -83,6 +90,7 @@ export default async function SetupPage() {
       requiresIntegration: a.requiresIntegration,
       defaultEnabled: a.defaultEnabled,
     })),
+    readme: fw.readme,
   }));
 
   const savedFrameworks = await listSavedFrameworkOptions();

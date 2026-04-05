@@ -91,6 +91,13 @@ export type FrameworkConfig = {
     subhead: string;
     cta: string;
   };
+  readme?: {
+    overview: string;
+    whyThisPipeline: string;
+    whyTheseEmails: string;
+    whyTheseBookings: string;
+    whyTheseAutomations: string;
+  };
   automationSuggestions?: Array<Record<string, unknown>>;
 };
 

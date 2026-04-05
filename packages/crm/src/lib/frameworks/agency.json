@@ -2,6 +2,13 @@
   "id": "agency",
   "name": "The Agency Framework",
   "description": "For marketing, design, and creative agencies",
+  "readme": {
+    "overview": "The Agency Framework is built for service teams that need a repeatable sales-to-delivery operating system from first lead through retainer growth.",
+    "whyThisPipeline": "The 10-stage pipeline reflects how real agency deals move: qualification, strategy, proposal, onboarding, delivery, handoff, retention, or churn. Each stage gives teams clear ownership and timing.",
+    "whyTheseEmails": "The templates cover key agency moments: lead acknowledgment, pre-call prep, proposal follow-up, onboarding, reporting, feedback, and offboarding. They reduce bottlenecks while keeping communication professional.",
+    "whyTheseBookings": "Strategy calls drive qualification and scope clarity, while check-ins keep delivery aligned with clients. Built-in durations and buffers help agencies protect focus and meeting quality.",
+    "whyTheseAutomations": "Automations handle recurring agency workflows automatically: lead response, pre-call preparation, inactivity follow-up, onboarding, feedback loops, and handoff communications."
+  },
   "icon": "Building2",
   "defaultBusinessName": "{{ownerName}} Agency",
   "contactLabel": { "singular": "Client", "plural": "Clients" },
