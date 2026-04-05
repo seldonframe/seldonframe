@@ -99,6 +99,10 @@ export const proxy = auth(async (request) => {
   const isSoulCompleted = Boolean(user?.soulCompleted);
   let isWelcomeShown = Boolean(user?.welcomeShown);
 
+  if (pathname === "/") {
+    return NextResponse.redirect(new URL(isAuthenticated ? "/dashboard" : "/login", request.url));
+  }
+
   if (isAuthenticated && isSoulCompleted && !isWelcomeShown) {
     const activeOrgId = request.cookies.get("sf_active_org_id")?.value || user?.orgId;
 
