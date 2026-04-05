@@ -3,7 +3,14 @@
 import Link from "next/link";
 import { useActionState, useEffect, useMemo, useState } from "react";
 import { CircleDashedIcon, MessageCircleDashedIcon, PaperclipIcon, SparklesIcon, WandSparklesIcon } from "lucide-react";
-import { runSeldonItAction, saveSeldonBlockAction, type SeldonRunResult, type SeldonRunState, type SeldonSessionItem } from "@/lib/ai/seldon-actions";
+import {
+  runSeldonItAction,
+  saveSeldonBlockAction,
+  type SeldonRunResult,
+  type SeldonRunState,
+  type SeldonSavedBlock,
+  type SeldonSessionItem,
+} from "@/lib/ai/seldon-actions";
 
 type ChatMessage = {
   id: string;
@@ -20,6 +27,22 @@ const processingSteps = [
   "Setting up connections...",
   "Almost there...",
 ];
+
+function toOpenLabel(path: string) {
+  if (path === "/forms") return "Open Forms";
+  if (path === "/emails") return "Open Email";
+  if (path === "/bookings") return "Open Booking";
+  if (path === "/landing") return "Open Landing";
+  return "Open Dashboard";
+}
+
+function toOpenEmoji(path: string) {
+  if (path === "/forms") return "📋";
+  if (path === "/emails") return "✉️";
+  if (path === "/bookings") return "📅";
+  if (path === "/landing") return "🌐";
+  return "🧩";
+}
 
 function ResultCard({ result, onViewBlockMd, onRefine }: { result: SeldonRunResult; onViewBlockMd: (value: SeldonRunResult) => void; onRefine: (prompt: string) => void }) {
   const summaryLines = useMemo(
@@ -42,7 +65,9 @@ function ResultCard({ result, onViewBlockMd, onRefine }: { result: SeldonRunResu
         <p className="text-sm leading-relaxed font-medium">✓ Created: {result.blockName}</p>
         <p className="text-xs font-semibold tracking-[0.08em] text-muted-foreground">WHAT WAS CREATED</p>
         <ul className="space-y-1 text-sm text-muted-foreground">
-        {summaryLines.length > 0 ? summaryLines.map((line, idx) => <li key={idx}>• {line.replace(/^[-\s]*/, "")}</li>) : <li>• BLOCK.md generated successfully</li>}
+          {summaryLines.length > 0
+            ? summaryLines.map((line, idx) => <li key={idx}>• {line.replace(/^[-\s]*/, "")}</li>)
+            : <li>• BLOCK.md generated successfully</li>}
         </ul>
         <div className="space-y-2">
           <p className="text-xs font-semibold tracking-[0.08em] text-muted-foreground">NEXT STEPS</p>
@@ -80,13 +105,51 @@ function ResultCard({ result, onViewBlockMd, onRefine }: { result: SeldonRunResu
   );
 }
 
+function ConnectedFlowCard({ results, onViewBlockMd }: { results: SeldonRunResult[]; onViewBlockMd: (value: SeldonRunResult) => void }) {
+  const flowName = results[0]?.blockName ?? "Connected Flow";
+
+  return (
+    <article className="rounded-2xl border border-border bg-secondary dark:bg-card p-1">
+      <div className="rounded-xl border border-border dark:border-transparent bg-card dark:bg-secondary px-6 py-5 space-y-4">
+        <p className="text-sm leading-relaxed font-medium">✓ Created: {flowName}</p>
+        <p className="text-sm text-muted-foreground">{results.length} blocks created and connected:</p>
+        <div className="space-y-4">
+          {results.map((result, index) => (
+            <div key={result.blockId} className="space-y-1">
+              <p className="text-sm font-medium">
+                {index + 1}. {toOpenEmoji(result.openPath)} {result.blockName}
+              </p>
+              <p className="text-xs text-muted-foreground">{result.summary.split("\n")[0]?.replace(/^[-\s]*/, "") || "Generated and connected."}</p>
+              <div className="flex items-center gap-2">
+                <Link href={result.openPath} className="text-xs text-primary underline underline-offset-4">
+                  {toOpenLabel(result.openPath)}
+                </Link>
+                <button
+                  type="button"
+                  className="text-xs text-muted-foreground underline underline-offset-4"
+                  onClick={() => onViewBlockMd(result)}
+                >
+                  View BLOCK.md
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">Connected: Form → CRM → Email → Booking link</p>
+      </div>
+    </article>
+  );
+}
+
 export function SeldonPageClient({
   allowed,
   sessions,
+  savedBlocks,
   initialPrompt = "",
 }: {
   allowed: boolean;
   sessions: SeldonSessionItem[];
+  savedBlocks: SeldonSavedBlock[];
   initialPrompt?: string;
 }) {
   const [state, action, pending] = useActionState(runSeldonItAction, initialState);
@@ -210,6 +273,36 @@ export function SeldonPageClient({
                   </div>
                 ))}
               </div>
+
+              <div className="space-y-1">
+                <div className="px-2 py-1.5">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">My Blocks</p>
+                </div>
+                {savedBlocks.length === 0 ? <p className="px-2 text-sm text-muted-foreground">No saved blocks yet.</p> : null}
+                {savedBlocks.map((item) => (
+                  <div key={item.id} className="group/item relative flex items-center rounded-md overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedResult({
+                          blockId: item.id,
+                          blockName: item.name,
+                          blockMd: item.blockMd,
+                          summary: "Saved block package",
+                          fromInventory: false,
+                          installMode: "instant",
+                          openPath: "/seldon",
+                          savePath: "/seldon",
+                        });
+                      }}
+                      className="flex-1 justify-start gap-2 px-2 text-left h-auto py-1.5 min-w-0 pr-8 inline-flex items-center rounded-md text-sm font-medium hover:bg-accent"
+                    >
+                      <SparklesIcon className="size-4 shrink-0" />
+                      <span className="text-sm truncate min-w-0">{item.name}</span>
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -325,6 +418,7 @@ export function SeldonPageClient({
 
                 {state.results?.length ? (
                   <div className="space-y-3">
+                    {state.results.length > 1 ? <ConnectedFlowCard results={state.results} onViewBlockMd={setSelectedResult} /> : null}
                     {state.results.map((result) => (
                       <ResultCard key={result.blockId} result={result} onViewBlockMd={setSelectedResult} onRefine={fillPrompt} />
                     ))}

@@ -41,6 +41,13 @@ export type SeldonSessionItem = {
   }>;
 };
 
+export type SeldonSavedBlock = {
+  id: string;
+  name: string;
+  blockMd: string;
+  createdAt: string;
+};
+
 function slugify(input: string) {
   return input
     .trim()
@@ -135,7 +142,11 @@ export async function getSeldonPageData() {
   const allowed = canSeldonIt(plan);
 
   const [[org], [stripe]] = await Promise.all([
-    db.select({ integrations: organizations.integrations }).from(organizations).where(eq(organizations.id, orgId)).limit(1),
+    db
+      .select({ integrations: organizations.integrations, settings: organizations.settings })
+      .from(organizations)
+      .where(eq(organizations.id, orgId))
+      .limit(1),
     db.select({ id: stripeConnections.id }).from(stripeConnections).where(eq(stripeConnections.orgId, orgId)).limit(1),
   ]);
 
@@ -160,6 +171,19 @@ export async function getSeldonPageData() {
     messages: (Array.isArray(row.messages) ? row.messages : []) as SeldonSessionItem["messages"],
   }));
 
+  const settings = ((org?.settings ?? {}) as Record<string, unknown>) || {};
+  const rawSavedBlocks = Array.isArray(settings.savedBlocks) ? settings.savedBlocks : [];
+  const savedBlocks: SeldonSavedBlock[] = rawSavedBlocks
+    .map((entry) => (entry && typeof entry === "object" ? (entry as Record<string, unknown>) : null))
+    .filter((entry): entry is Record<string, unknown> => Boolean(entry))
+    .map((entry) => ({
+      id: String(entry.id ?? "").trim(),
+      name: String(entry.name ?? "").trim(),
+      blockMd: String(entry.blockMd ?? "").trim(),
+      createdAt: String(entry.createdAt ?? "").trim(),
+    }))
+    .filter((entry) => entry.id && entry.name && entry.blockMd);
+
   return {
     allowed,
     services: {
@@ -169,6 +193,7 @@ export async function getSeldonPageData() {
       kit: Boolean(integrations.kit?.connected),
     },
     sessions,
+    savedBlocks,
   };
 }
 
@@ -195,14 +220,14 @@ export async function saveSeldonBlockAction(formData: FormData) {
     .limit(1);
 
   const settings = ((org?.settings ?? {}) as Record<string, unknown>) || {};
-  const existing = Array.isArray(settings.savedSeldonBlocks) ? (settings.savedSeldonBlocks as Array<Record<string, unknown>>) : [];
-  const filtered = existing.filter((item) => String(item.blockId ?? "") !== blockId);
+  const existing = Array.isArray(settings.savedBlocks) ? (settings.savedBlocks as Array<Record<string, unknown>>) : [];
+  const filtered = existing.filter((item) => String(item.id ?? "") !== blockId);
 
   filtered.unshift({
-    blockId,
-    blockName,
+    id: blockId,
+    name: blockName,
     blockMd,
-    savedAt: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
   });
 
   await db
@@ -210,7 +235,7 @@ export async function saveSeldonBlockAction(formData: FormData) {
     .set({
       settings: {
         ...settings,
-        savedSeldonBlocks: filtered.slice(0, 50),
+        savedBlocks: filtered.slice(0, 50),
       },
       updatedAt: new Date(),
     })
@@ -435,7 +460,9 @@ export async function runSeldonItAction(_prev: SeldonRunState, formData: FormDat
     const hasReview = results.some((entry) => entry.installMode === "review");
     const message = hasReview
       ? "Your block is being reviewed and will be live within 24 hours."
-      : "Your block is ready!";
+      : results.length > 1
+        ? `Created ${results.length} blocks and connected them in one flow.`
+        : "Your block is ready!";
 
     await db.insert(seldonSessions).values({
       orgId,

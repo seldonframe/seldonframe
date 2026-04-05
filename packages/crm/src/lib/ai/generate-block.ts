@@ -96,41 +96,33 @@ function extractKeywords(input: string) {
 function fallbackBlockMd(description: string) {
   const title = description.split("\n")[0]?.slice(0, 72) || "Custom Block";
 
-  return `# Block: ${title}
+  return `---
+name: "${title}"
+version: "1.0.0"
+author: "Seldon It"
+framework: "custom"
+requires: ["crm"]
+integrations: []
+---
 
-## Purpose
+## Description
 ${description}
 
-## Entities
-- Person
+## Resources Created
+- custom_resource: ${title}
 
-## Dependencies
-### Required from host system:
-- contacts
+## Configuration
+\`\`\`json
+{
+  "resource": {
+    "name": "${title}"
+  }
+}
+\`\`\`
 
-### Optional from host system:
-- bookings
-- emails
-
-## Events
-### Broadcasts:
-- block.executed
-
-### Listens for:
-- contact.created
-
-## Pages
-### Admin pages:
-- /[block-id]
-
-### Public pages:
-- None
-
-### Integration pages:
-- /settings/integrations
-
-## Navigation
-- Add to sidebar under custom blocks`;
+## Install
+This block installs into an existing SeldonFrame workspace.
+Resources are created in the relevant tables.`;
 }
 
 function summarizeBlockMd(blockMd: string) {
@@ -271,7 +263,7 @@ export async function decomposeRequest(description: string, enrichedDescription?
     messages: [
       {
         role: "user",
-        content: `Break this request into block-sized units.\n\nReturn ONLY JSON:\n{ "blocks": ["piece 1", "piece 2"] }\n\nRules:\n- 1 to 8 pieces\n- each piece must be independently useful\n- each piece should be 1 sentence\n- prefer practical implementation language\n\nRequest:\n${source}`,
+        content: `Break this request into block-sized units.\n\nWhen the user asks for multiple connected things (e.g., "build me an onboarding flow with intake form, welcome sequence, and booking page"), create ALL of them in a single response. List each created resource separately in the output. Connect them to each other — the form feeds the CRM, the CRM triggers the email sequence, the booking link goes in the email.\n\nReturn ONLY JSON:\n{ "blocks": ["piece 1", "piece 2"] }\n\nRules:\n- 1 to 8 pieces\n- each piece must be independently useful\n- each piece should be 1 sentence\n- preserve connected flow order when request describes a funnel\n- prefer practical implementation language\n\nRequest:\n${source}`,
       },
     ],
   });
@@ -403,7 +395,7 @@ export async function descriptionToBlockMd(orgId: string, description: string): 
   const response = await client.messages.create({
     model: SELDON_MODEL,
     max_tokens: 6000,
-    system: `You are creating a BLOCK.md specification for SeldonFrame. Output only valid BLOCK.md content and keep it concise (max 150 lines).\n\nUse this exact structure:\n# Block: [Name]\n\n## Purpose\n[paragraph]\n\n## Entities\n[list]\n\n## Dependencies\n### Required from host system:\n[list]\n\n### Optional from host system:\n[list]\n\n## Events\n### Broadcasts:\n[list]\n\n### Listens for:\n[list]\n\n## Pages\n### Admin pages:\n[list]\n\n### Public pages:\n[list]\n\n### Integration pages:\n[list]\n\n## Navigation\n[list]\n\nRules:\n- Use services only if connected in context\n- Include loading, empty, and error states in page descriptions\n- Reuse existing events when possible\n- Keep scope focused to one block\n\n${context}`,
+    system: `You are creating a BLOCK.md specification for SeldonFrame. Output only valid BLOCK.md content and keep it concise (max 180 lines).\n\nWhen the user asks for multiple connected things (e.g., "build me an onboarding flow with intake form, welcome sequence, and booking page"), create ALL of them in a single response. List each created resource separately in the output. Connect them to each other — the form feeds the CRM, the CRM triggers the email sequence, the booking link goes in the email.\n\nAlways use this exact structure:\n---\nname: "[Block Name]"\nversion: "1.0.0"\nauthor: "[Author]"\nframework: "[framework]"\nrequires: ["crm"]\nintegrations: []\n---\n\n## Description\n[3-5 sentence description]\n\n## Resources Created\n- [resource_type]: [resource name] ([details])\n\n## Configuration\n\`\`\`json\n{\n  "resource": {}\n}\n\`\`\`\n\n## Install\nThis block installs into an existing SeldonFrame workspace.\nResources are created in the relevant tables.\n\nRules:\n- Use services only if connected in context\n- Include explicit connected flow relationships when multiple resources are created\n- Keep event names lowercase entity.action\n- Make the output previewable and reusable as a portable BLOCK.md package\n\n${context}`,
     messages: [{ role: "user", content: source }],
   });
 
