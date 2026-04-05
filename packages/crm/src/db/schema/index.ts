@@ -1,4 +1,5 @@
 export * from "./organizations";
+export * from "./org-members";
 export * from "./users";
 export * from "./auth";
 export * from "./contacts";
@@ -18,3 +19,4 @@ export * from "./api-keys";
 export * from "./payments";
 export * from "./marketplace";
 export * from "./seldon-usage";
+export * from "./seldon-sessions";
