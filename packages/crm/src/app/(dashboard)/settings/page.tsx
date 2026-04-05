@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { getStripeConnectionStatus } from "@/lib/payments/actions";
 import { getLabels } from "@/lib/soul/labels";
+import { getCustomDomainSettings } from "@/lib/domains/actions";
+import { listSavedFrameworkLibrary } from "@/lib/frameworks/actions";
+import { getBrandingSettings } from "@/lib/branding/actions";
 
 /*
   Square UI class reference (source of truth):
@@ -12,7 +15,22 @@ import { getLabels } from "@/lib/soul/labels";
 */
 
 export default async function SettingsPage() {
-  const [labels, stripeStatus] = await Promise.all([getLabels(), getStripeConnectionStatus()]);
+  const [labels, stripeStatus, domainSettings, savedFrameworks, brandingSettings] = await Promise.all([
+    getLabels(),
+    getStripeConnectionStatus(),
+    getCustomDomainSettings(),
+    listSavedFrameworkLibrary(),
+    getBrandingSettings(),
+  ]);
+
+  const domainStatus = domainSettings?.customDomain
+    ? domainSettings.domainVerified
+      ? "Verified ✓"
+      : "Pending verification"
+    : null;
+
+  const frameworksStatus = savedFrameworks.length > 0 ? `${savedFrameworks.length} saved` : null;
+  const brandingStatus = brandingSettings?.removePoweredBy ? "White-label enabled" : null;
 
   const sections = [
     { href: "/settings/profile", title: "Business Profile", description: "Your business name, industry, and branding", status: null },
@@ -23,6 +41,9 @@ export default async function SettingsPage() {
     { href: "/settings/api", title: "API Keys", description: "Generate keys for programmatic access", status: null },
     { href: "/settings/payments", title: "Payments", description: "Connect Stripe to accept payments", status: stripeStatus ? "Connected ✓" : null },
     { href: "/settings/billing", title: "Billing", description: "Manage plan, trial, and subscription portal", status: null },
+    { href: "/settings/domain", title: "Domain", description: "Connect a custom domain for public pages", status: domainStatus },
+    { href: "/settings/branding", title: "Branding", description: "Control public branding and white-label defaults", status: brandingStatus },
+    { href: "/settings/frameworks", title: "Saved Frameworks", description: "Manage reusable framework presets", status: frameworksStatus },
     { href: "/settings/integrations", title: "Integrations", description: "Connect Twilio, Resend, Kit, and Google", status: null },
     { href: "/settings/soul-transfer", title: "Soul Export / Import", description: "Download or upload your system configuration", status: null },
   ] as const;

@@ -108,7 +108,19 @@
       "static/media/caa3a2e1cccd8315-s.p.16t1db8_9y2o~.woff2",
       "static/media/797e433ab948586e-s.p.0.q-h669a_dqa.woff2"
     ],
+    "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/(dashboard)/settings/branding/page": [
+      "static/media/caa3a2e1cccd8315-s.p.16t1db8_9y2o~.woff2",
+      "static/media/797e433ab948586e-s.p.0.q-h669a_dqa.woff2"
+    ],
+    "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/(dashboard)/settings/domain/page": [
+      "static/media/caa3a2e1cccd8315-s.p.16t1db8_9y2o~.woff2",
+      "static/media/797e433ab948586e-s.p.0.q-h669a_dqa.woff2"
+    ],
     "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/(dashboard)/settings/fields/page": [
+      "static/media/caa3a2e1cccd8315-s.p.16t1db8_9y2o~.woff2",
+      "static/media/797e433ab948586e-s.p.0.q-h669a_dqa.woff2"
+    ],
+    "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/(dashboard)/settings/frameworks/page": [
       "static/media/caa3a2e1cccd8315-s.p.16t1db8_9y2o~.woff2",
       "static/media/797e433ab948586e-s.p.0.q-h669a_dqa.woff2"
     ],
@@ -152,6 +164,10 @@
       "static/media/caa3a2e1cccd8315-s.p.16t1db8_9y2o~.woff2",
       "static/media/797e433ab948586e-s.p.0.q-h669a_dqa.woff2"
     ],
+    "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/(onboarding)/welcome/page": [
+      "static/media/caa3a2e1cccd8315-s.p.16t1db8_9y2o~.woff2",
+      "static/media/797e433ab948586e-s.p.0.q-h669a_dqa.woff2"
+    ],
     "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/(public)/page": [
       "static/media/caa3a2e1cccd8315-s.p.16t1db8_9y2o~.woff2",
       "static/media/797e433ab948586e-s.p.0.q-h669a_dqa.woff2"
@@ -169,6 +185,10 @@
       "static/media/797e433ab948586e-s.p.0.q-h669a_dqa.woff2"
     ],
     "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/l/[orgSlug]/[slug]/page": [
+      "static/media/caa3a2e1cccd8315-s.p.16t1db8_9y2o~.woff2",
+      "static/media/797e433ab948586e-s.p.0.q-h669a_dqa.woff2"
+    ],
+    "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/orgs/new/page": [
       "static/media/caa3a2e1cccd8315-s.p.16t1db8_9y2o~.woff2",
       "static/media/797e433ab948586e-s.p.0.q-h669a_dqa.woff2"
     ],

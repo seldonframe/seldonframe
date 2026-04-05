@@ -14,6 +14,31 @@ type SuggestedAutomation = {
   requiresIntegration: ServiceKey;
 };
 
+function humanizeTrigger(trigger: string) {
+  const value = trigger.toLowerCase().trim();
+  const map: Record<string, string> = {
+    "contact.created": "When someone reaches out",
+    "contact.inactive": "When a user goes quiet for 14+ days",
+    "deal.stage_changed": "When a deal moves forward",
+    "booking.upcoming": "Before a scheduled session",
+    "booking.created": "When someone books a session",
+    "payment.received": "When a payment comes in",
+  };
+
+  return map[value] ?? trigger;
+}
+
+function humanizeAction(action: string) {
+  const value = action.toLowerCase().trim();
+  const map: Record<string, string> = {
+    send_email: "send them an email",
+    send_sms: "send them a text",
+    create_task: "create a task for you",
+  };
+
+  return map[value] ?? action;
+}
+
 const serviceLabel: Record<ServiceKey, string> = {
   stripe: "Stripe",
   resend: "Email (Resend)",
@@ -89,10 +114,10 @@ function AutomationCard({
 
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <span className="rounded-md bg-muted px-2 py-1 text-foreground font-medium">When</span>
-        <span className="flex-1 truncate">{trigger}</span>
+        <span className="flex-1 truncate">{humanizeTrigger(trigger)}</span>
         <ArrowRight className="size-3 shrink-0" />
         <span className="rounded-md bg-muted px-2 py-1 text-foreground font-medium">Then</span>
-        <span className="flex-1 truncate">{actionText}</span>
+        <span className="flex-1 truncate">{humanizeAction(actionText)}</span>
       </div>
 
       {service !== "none" ? (
@@ -104,7 +129,7 @@ function AutomationCard({
           {!connected ? (
             <Link href="/settings/integrations" className="inline-flex items-center gap-1.5 text-[10px] text-primary hover:underline">
               <span className="size-1.5 rounded-full bg-negative" aria-hidden="true" />
-              Connect {serviceLabel[service]}
+              {service === "resend" ? "Connect Email (Resend)" : `Connect ${serviceLabel[service]}`}
             </Link>
           ) : (
             <span className="inline-flex items-center gap-1.5 text-[10px] text-positive">
@@ -214,6 +239,15 @@ export function SoulAutomationsOverview({
           </div>
         </div>
       ) : null}
+
+      <div className="pt-2">
+        <p className="text-sm text-muted-foreground">
+          Need a custom automation?{" "}
+          <Link href="/seldon" className="font-medium text-primary hover:underline">
+            Open Seldon It →
+          </Link>
+        </p>
+      </div>
     </section>
   );
 }

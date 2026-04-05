@@ -1,8 +1,8 @@
-import { asc, desc, eq } from "drizzle-orm";
+import { asc, desc, eq, or, sql } from "drizzle-orm";
 import Link from "next/link";
 import { DollarSign, Users, CalendarDays, Activity, ChevronDown, Plus, Download, ChartLine, MoreHorizontal, BarChart2, ClipboardList, Search, Filter, FileInput } from "lucide-react";
 import { db } from "@/db";
-import { activities, metricsSnapshots, organizations, paymentRecords, stripeConnections, type OrganizationIntegrations } from "@/db/schema";
+import { activities, contacts as contactsTable, metricsSnapshots, organizations, orgMembers, paymentRecords, stripeConnections, type OrganizationIntegrations } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth/helpers";
 import { listAppointmentTypes } from "@/lib/bookings/actions";
 import { listBookings } from "@/lib/bookings/actions";
@@ -14,6 +14,7 @@ import { listLandingPages } from "@/lib/landing/actions";
 import { getSoul } from "@/lib/soul/server";
 import { getHiddenBlocks } from "@/lib/blocks/visibility-actions";
 import { BlockVisibilityToggle } from "@/components/dashboard/block-visibility-toggle";
+import { setActiveOrgAction } from "@/lib/billing/orgs";
 
 /*
   Square UI class reference (source of truth):
@@ -60,6 +61,14 @@ function formatCurrency(value: number) {
 
 function formatLongDate(value: Date) {
   return new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }).format(value);
+}
+
+function formatFrameworkLabel(soulId: string | null) {
+  if (!soulId) {
+    return "Custom";
+  }
+
+  return soulId.charAt(0).toUpperCase() + soulId.slice(1);
 }
 
 function TrendText({ value }: { value: number }) {
@@ -147,7 +156,12 @@ function percentChange(current: number, previous: number) {
   return ((current - previous) / Math.abs(previous)) * 100;
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ view?: string }>;
+}) {
+  const params = searchParams ? await searchParams : undefined;
   const [user, contactRows, dealRows, bookingRows, appointmentTypeRows, emailTemplateRows, landingPageRows, intakeFormRows, soul, hiddenBlocks] = await Promise.all([
     getCurrentUser(),
     listContacts(),
@@ -165,6 +179,65 @@ export default async function DashboardPage() {
   if (!orgId) {
     return null;
   }
+
+  const membershipRows = user?.id
+    ? await db
+        .select({ orgId: orgMembers.orgId })
+        .from(orgMembers)
+        .where(eq(orgMembers.userId, user.id))
+    : [];
+
+  const membershipOrgIds = membershipRows.map((row) => row.orgId);
+
+  const workspaceRows = user?.id
+    ? await db
+        .select({
+          id: organizations.id,
+          name: organizations.name,
+          soulId: organizations.soulId,
+          slug: organizations.slug,
+          ownerId: organizations.ownerId,
+          parentUserId: organizations.parentUserId,
+        })
+        .from(organizations)
+        .where(
+          or(
+            eq(organizations.ownerId, user.id),
+            eq(organizations.parentUserId, user.id),
+            eq(organizations.id, user.orgId),
+            membershipOrgIds.length > 0 ? sql`${organizations.id} = any(${membershipOrgIds})` : sql`false`
+          )
+        )
+    : [];
+
+  const workspaceStats = await Promise.all(
+    workspaceRows.map(async (workspace) => {
+      const [contactCount] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(contactsTable)
+        .where(eq(contactsTable.orgId, workspace.id));
+
+      const monthlyRevenueRows = await db
+        .select({ amount: paymentRecords.amount })
+        .from(paymentRecords)
+        .where(eq(paymentRecords.orgId, workspace.id));
+
+      const monthlyRevenue = monthlyRevenueRows.reduce((sum, row) => sum + Number(row.amount), 0);
+
+      return {
+        orgId: workspace.id,
+        contactCount: Number(contactCount?.count ?? 0),
+        monthlyRevenue,
+      };
+    })
+  );
+
+  const workspaceStatMap = new Map(workspaceStats.map((row) => [row.orgId, row]));
+  const totalWorkspaceContacts = workspaceStats.reduce((sum, row) => sum + row.contactCount, 0);
+  const totalWorkspaceRevenue = workspaceStats.reduce((sum, row) => sum + row.monthlyRevenue, 0);
+
+  const showWorkspaceTabs = workspaceRows.length > 1;
+  const activeDashboardView = showWorkspaceTabs && params?.view === "all" ? "all" : "workspace";
 
   const [snapshotRowsRaw, activityRows, paymentRows, orgRow, stripeRow] = await Promise.all([
     db.select().from(metricsSnapshots).where(eq(metricsSnapshots.orgId, orgId)).orderBy(asc(metricsSnapshots.date)).limit(180),
@@ -364,6 +437,87 @@ export default async function DashboardPage() {
 
   return (
     <main className="animate-page-enter flex-1 overflow-auto p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6 bg-background w-full">
+      {showWorkspaceTabs ? (
+        <div className="inline-flex items-center rounded-lg border border-border bg-card p-1">
+          <Link
+            href="/dashboard"
+            className={`inline-flex h-8 items-center rounded-md px-3 text-xs font-medium transition-colors sm:text-sm ${
+              activeDashboardView === "workspace" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent"
+            }`}
+          >
+            This Workspace
+          </Link>
+          <Link
+            href="/dashboard?view=all"
+            className={`inline-flex h-8 items-center rounded-md px-3 text-xs font-medium transition-colors sm:text-sm ${
+              activeDashboardView === "all" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent"
+            }`}
+          >
+            All Workspaces
+          </Link>
+        </div>
+      ) : null}
+
+      {activeDashboardView === "all" ? (
+        <section className="rounded-xl border bg-card p-4 sm:p-6 space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base sm:text-lg font-semibold">All Workspaces</h2>
+              <p className="text-sm text-muted-foreground">Overview across all workspaces you manage.</p>
+            </div>
+            <Link href="/orgs/new" className="crm-button-primary h-9 px-3 text-xs sm:text-sm">+ New Workspace</Link>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[680px] text-sm">
+              <thead>
+                <tr className="border-b border-border/60 text-left text-xs uppercase tracking-wider text-muted-foreground">
+                  <th className="px-3 py-2">Name</th>
+                  <th className="px-3 py-2">Framework</th>
+                  <th className="px-3 py-2">Clients</th>
+                  <th className="px-3 py-2">Revenue</th>
+                  <th className="px-3 py-2">Status</th>
+                  <th className="px-3 py-2 text-right">Open</th>
+                </tr>
+              </thead>
+              <tbody>
+                {workspaceRows.map((workspace) => {
+                  const stat = workspaceStatMap.get(workspace.id);
+                  return (
+                    <tr key={workspace.id} className="border-b border-border/40">
+                      <td className="px-3 py-3 font-medium text-foreground">{workspace.name}</td>
+                      <td className="px-3 py-3 text-muted-foreground">{formatFrameworkLabel(workspace.soulId)}</td>
+                      <td className="px-3 py-3 text-muted-foreground">{(stat?.contactCount ?? 0).toLocaleString()}</td>
+                      <td className="px-3 py-3 text-muted-foreground">{formatCurrency(stat?.monthlyRevenue ?? 0)}</td>
+                      <td className="px-3 py-3">
+                        <span className="inline-flex items-center gap-1 rounded-md border border-positive/30 bg-positive/10 px-2 py-0.5 text-xs font-medium text-positive">
+                          ✓ Active
+                        </span>
+                      </td>
+                      <td className="px-3 py-3 text-right">
+                        <form action={setActiveOrgAction} className="inline-block">
+                          <input type="hidden" name="orgId" value={workspace.id} />
+                          <input type="hidden" name="redirectTo" value="/dashboard" />
+                          <button type="submit" className="inline-flex h-8 items-center rounded-md border border-border px-3 text-xs font-medium hover:bg-accent">
+                            Open
+                          </button>
+                        </form>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <p className="text-sm text-muted-foreground">
+            Totals: <span className="text-foreground font-medium">{workspaceRows.length} workspaces</span> · {" "}
+            <span className="text-foreground font-medium">{totalWorkspaceContacts.toLocaleString()} clients</span> · {" "}
+            <span className="text-foreground font-medium">{formatCurrency(totalWorkspaceRevenue)}/mo revenue</span>
+          </p>
+        </section>
+      ) : (
+        <>
       {typeof trialDaysRemaining === "number" ? (
         <div className="rounded-xl border border-primary/30 bg-primary/10 px-4 py-3 text-sm text-primary">
           Trial: {trialDaysRemaining} day{trialDaysRemaining === 1 ? "" : "s"} remaining. Your plan activates on {formatLongDate(trialEndsAt!)}.
@@ -779,6 +933,8 @@ export default async function DashboardPage() {
           </ul>
         </article>
       ) : null}
+        </>
+      )}
 
     </main>
   );

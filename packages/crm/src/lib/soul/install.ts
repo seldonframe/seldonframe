@@ -11,6 +11,7 @@ import { assertWritable } from "@/lib/demo/server";
 type InstallSoulInput = {
   soulId?: string;
   frameworkId?: string;
+  framework?: FrameworkConfig;
   answers?: Record<string, unknown>;
   orgId?: string;
   markCompleted?: boolean;
@@ -48,7 +49,7 @@ function normalizeStageColor(index: number) {
   return palette[index % palette.length];
 }
 
-type FrameworkConfig = {
+export type FrameworkConfig = {
   id: string;
   name: string;
   description: string;
@@ -408,7 +409,7 @@ async function installFrameworkEntities(
   org: { id: string; name: string; settings: Record<string, unknown> },
   input: InstallSoulInput,
 ) {
-  const framework = await loadFrameworkConfig(input.frameworkId!);
+  const framework = input.framework ?? (await loadFrameworkConfig(input.frameworkId!));
   const answers = input.answers ?? {};
 
   const ownerName = String(answers.ownerName || answers.ownerFirstName || "");

@@ -4,6 +4,7 @@ import {
   getIntegrationSettings,
   testKitConnectionAction,
   testMailchimpConnectionAction,
+  testResendConnectionAction,
   testTwilioConnectionAction,
   updateIntegrationAction,
 } from "@/lib/integrations/actions";
@@ -38,12 +39,11 @@ function renderConnectionBadge(connected: boolean) {
 export default async function IntegrationsSettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ saved?: string; service?: string; twilioTest?: string; kitTest?: string; mailchimpTest?: string; beehiivTest?: string }>;
+  searchParams: Promise<{ saved?: string; service?: string; twilioTest?: string; resendTest?: string; kitTest?: string; mailchimpTest?: string; beehiivTest?: string; calendarConnected?: string }>;
 }) {
   const params = await searchParams;
   const settings = await getIntegrationSettings();
-  const googleCalendarConnectUrl =
-    "/api/auth/signin/google?callbackUrl=%2Fsettings%2Fintegrations&scope=openid%20email%20profile%20https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fcalendar&prompt=consent&access_type=offline";
+  const googleCalendarConnectUrl = "/api/integrations/google-calendar?returnTo=%2Fsettings%2Fintegrations";
 
   if (!settings) {
     return null;
@@ -51,11 +51,18 @@ export default async function IntegrationsSettingsPage({
 
   const savedMessage = params.saved === "1" && params.service ? `${params.service} settings saved` : null;
   const twilioTestMessage = params.twilioTest === "1" ? "Twilio connection successful" : params.twilioTest === "0" ? "Twilio connection failed" : null;
+  const resendTestMessage = params.resendTest === "1" ? "Resend connection successful" : params.resendTest === "0" ? "Resend connection failed" : null;
   const kitTestMessage = params.kitTest === "1" ? "Kit connection successful" : params.kitTest === "0" ? "Kit connection failed" : null;
   const mailchimpTestMessage =
     params.mailchimpTest === "1" ? "Mailchimp connection successful" : params.mailchimpTest === "0" ? "Mailchimp connection failed" : null;
   const beehiivTestMessage =
     params.beehiivTest === "1" ? "Beehiiv connection successful" : params.beehiivTest === "0" ? "Beehiiv connection failed" : null;
+  const calendarMessage =
+    params.calendarConnected === "1"
+      ? "Google Calendar connected"
+      : params.calendarConnected === "0"
+        ? "Google Calendar connection failed"
+        : null;
 
   return (
     <section className="animate-page-enter space-y-4 sm:space-y-6">
@@ -68,9 +75,11 @@ export default async function IntegrationsSettingsPage({
 
       {savedMessage ? <p className="rounded-md border border-positive/30 bg-positive/10 px-3 py-2 text-sm text-positive">{savedMessage}</p> : null}
       {twilioTestMessage ? <p className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary">{twilioTestMessage}</p> : null}
+      {resendTestMessage ? <p className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary">{resendTestMessage}</p> : null}
       {kitTestMessage ? <p className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary">{kitTestMessage}</p> : null}
       {mailchimpTestMessage ? <p className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary">{mailchimpTestMessage}</p> : null}
       {beehiivTestMessage ? <p className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary">{beehiivTestMessage}</p> : null}
+      {calendarMessage ? <p className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary">{calendarMessage}</p> : null}
 
       <div className="grid gap-4 xl:grid-cols-2">
         <article className="rounded-xl border bg-card p-5 xl:col-span-2 space-y-4">
@@ -138,6 +147,54 @@ export default async function IntegrationsSettingsPage({
                 Save Twilio
               </button>
               <button type="submit" formAction={testTwilioConnectionAction} className="crm-button-secondary h-10 px-4">
+                Test Connection
+              </button>
+            </div>
+          </form>
+        </article>
+
+        <article className="rounded-xl border bg-card p-5">
+          <div className="flex items-center justify-between">
+            <h2 className="text-card-title">Resend Email</h2>
+            {renderConnectionBadge(settings.resend.connected)}
+          </div>
+          <form action={updateIntegrationAction} className="mt-4 grid gap-3">
+            <input type="hidden" name="service" value="resend" />
+            <div className="space-y-1">
+              <label htmlFor="resend-api-key" className="text-label">
+                API Key
+              </label>
+              <input
+                id="resend-api-key"
+                name="apiKey"
+                type="password"
+                placeholder={settings.resend.apiKeyHint ? `${settings.resend.apiKeyHint} (leave blank to keep)` : "Enter Resend API key"}
+                className="crm-input h-10 w-full px-3"
+              />
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="resend-from-email" className="text-label">
+                From Email
+              </label>
+              <input
+                id="resend-from-email"
+                name="fromEmail"
+                className="crm-input h-10 w-full px-3"
+                defaultValue={settings.resend.fromEmail}
+                placeholder="noreply@yourdomain.com"
+              />
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="resend-from-name" className="text-label">
+                From Name
+              </label>
+              <input id="resend-from-name" name="fromName" className="crm-input h-10 w-full px-3" defaultValue={settings.resend.fromName} />
+            </div>
+            <div className="flex flex-wrap gap-2 pt-1">
+              <button type="submit" className="crm-button-primary h-10 px-4">
+                Save Resend
+              </button>
+              <button type="submit" formAction={testResendConnectionAction} className="crm-button-secondary h-10 px-4">
                 Test Connection
               </button>
             </div>

@@ -25,25 +25,56 @@ type EmailTemplate = {
 
 type OrgSettingsWithTemplates = {
   emailTemplates?: EmailTemplate[];
+  soulPackage?: {
+    emailTemplates?: Array<{
+      name?: string;
+      subject?: string;
+      body?: string;
+      tag?: string;
+      triggerEvent?: string;
+    }>;
+  };
 };
 
 function extractEmailTemplates(settings: unknown): EmailTemplate[] {
-  const templates = (settings as OrgSettingsWithTemplates | null)?.emailTemplates;
-  if (!Array.isArray(templates)) {
-    return [];
+  const source = (settings as OrgSettingsWithTemplates | null) ?? {};
+  const rootTemplates = Array.isArray(source.emailTemplates) ? source.emailTemplates : [];
+  const frameworkTemplates = Array.isArray(source.soulPackage?.emailTemplates) ? source.soulPackage.emailTemplates : [];
+
+  const normalizedRoot = rootTemplates
+    .filter((item): item is EmailTemplate => Boolean(item && typeof item === "object" && item.name && item.subject && item.body))
+    .map((item, index) => ({
+      id: typeof item.id === "string" && item.id.trim() ? item.id : `tmpl_root_${index}_${Date.now()}`,
+      name: item.name,
+      subject: item.subject,
+      body: item.body,
+      tag: item.tag || "general",
+      triggerEvent: typeof item.triggerEvent === "string" ? item.triggerEvent : undefined,
+      createdAt: item.createdAt || new Date().toISOString(),
+    }));
+
+  const normalizedFramework = frameworkTemplates
+    .filter((item): item is NonNullable<typeof item> => Boolean(item && typeof item === "object"))
+    .filter((item) => typeof item.name === "string" && typeof item.subject === "string" && typeof item.body === "string")
+    .map((item, index) => ({
+      id: `tmpl_framework_${index}_${item.name!.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+      name: item.name!,
+      subject: item.subject!,
+      body: item.body!,
+      tag: typeof item.tag === "string" ? item.tag : "framework",
+      triggerEvent: typeof item.triggerEvent === "string" ? item.triggerEvent : undefined,
+      createdAt: new Date().toISOString(),
+    }));
+
+  const deduped = new Map<string, EmailTemplate>();
+  for (const template of [...normalizedFramework, ...normalizedRoot]) {
+    const key = `${template.name.toLowerCase()}::${template.subject.toLowerCase()}`;
+    if (!deduped.has(key)) {
+      deduped.set(key, template);
+    }
   }
 
-  return templates.filter((item): item is EmailTemplate => {
-    if (!item || typeof item !== "object") {
-      return false;
-    }
-
-    if (item.triggerEvent != null && typeof item.triggerEvent !== "string") {
-      return false;
-    }
-
-    return typeof item.id === "string" && typeof item.name === "string" && typeof item.subject === "string" && typeof item.body === "string";
-  });
+  return Array.from(deduped.values());
 }
 
 function renderTemplateWithContact(template: EmailTemplate, contactFirstName: string | null) {

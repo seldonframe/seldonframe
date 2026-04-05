@@ -13,5 +13,5 @@ export default async function SeldonPage({
     return null;
   }
 
-  return <SeldonPageClient allowed={data.allowed} services={data.services} history={data.history} initialPrompt={params.prompt ?? ""} />;
+  return <SeldonPageClient allowed={data.allowed} sessions={data.sessions} initialPrompt={params.prompt ?? ""} />;
 }

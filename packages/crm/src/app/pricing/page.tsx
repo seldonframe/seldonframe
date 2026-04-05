@@ -84,19 +84,27 @@ export default async function PricingPage({ searchParams }: PricingPageProps) {
 
           <section className="space-y-3">
             <h2 className="text-section-title">For Your Agency</h2>
+            <p className="text-sm text-[hsl(var(--color-text-secondary))]">
+              Pick a Pro tier by number of managed workspaces. Upgrade anytime as you grow.
+            </p>
             <div className="space-y-3">
-              {proPlans.map((plan) => {
+              {proPlans.map((plan, index) => {
                 const periodPrice = billingPeriod === "yearly" ? plan.yearlyPrice : plan.price;
+                const isPopular = index === 1;
 
                 return (
                   <article key={plan.id} className="crm-card space-y-4 p-5">
-                    <h3 className="text-lg font-semibold">{plan.name}</h3>
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-semibold">{plan.name}</h3>
+                      {isPopular ? <span className="rounded-full bg-primary/15 px-3 py-1 text-xs font-medium text-primary">Best Value</span> : null}
+                    </div>
                     <p className="text-2xl font-semibold">{formatPrice(periodPrice)}{billingPeriod === "yearly" ? "/yr" : "/mo"}</p>
                     <ul className="space-y-1 text-sm text-[hsl(var(--color-text-secondary))]">
-                      <li>Manage up to {plan.limits.maxOrgs} client organizations</li>
-                      <li>Unlimited contacts + email scaling per org</li>
-                      <li>Multi-org dashboard + org switching</li>
-                      <li>Custom domains and no SeldonFrame branding</li>
+                      <li>Up to {plan.limits.maxOrgs} managed workspaces</li>
+                      <li>Workspace switcher + all-workspaces dashboard</li>
+                      <li>Workspace onboarding + saved framework library</li>
+                      <li>Custom domains + white-label branding</li>
+                      <li>Seldon custom generation for each workspace</li>
                     </ul>
                     {session?.user ? (
                       <form action={selectPlanAction}>

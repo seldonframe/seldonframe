@@ -1,13 +1,13 @@
 var R=require("../../chunks/ssr/[turbopack]_runtime.js")("server/app/_global-error/page.js")
-R.c("server/chunks/ssr/[root-of-the-server]__0.ys9_8._.js")
+R.c("server/chunks/ssr/[root-of-the-server]__09u23da._.js")
 R.c("server/chunks/ssr/07s-_next_dist_07mg23t._.js")
 R.c("server/chunks/ssr/07s-_next_dist_esm_build_templates_app-page_0mh4g_~.js")
 R.c("server/chunks/ssr/07s-_next_dist_0f9zs.-._.js")
-R.c("server/chunks/ssr/[root-of-the-server]__01woy6_._.js")
+R.c("server/chunks/ssr/[root-of-the-server]__06i0ej.._.js")
 R.c("server/chunks/ssr/07s-_next_dist_compiled_@opentelemetry_api_index_0_s33y6.js")
 R.c("server/chunks/ssr/07s-_next_dist_0bpxxqh._.js")
 R.c("server/chunks/ssr/07s-_next_dist_0q0_6n1._.js")
 R.c("server/chunks/ssr/07s-_next_dist_client_components_builtin_global-error_09.yc82.js")
 R.c("server/chunks/ssr/0nxh_packages_crm__next-internal_server_app__global-error_page_actions_00dgrd6.js")
-R.m(51126)
-module.exports=R.m(51126).exports
+R.m(851126)
+module.exports=R.m(851126).exports

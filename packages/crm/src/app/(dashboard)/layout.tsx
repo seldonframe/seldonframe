@@ -9,6 +9,7 @@ import { DashboardTopbar } from "@/components/layout/dashboard-topbar";
 import { registerCrmEventListeners } from "@/lib/events/listeners";
 import { getAllBlocksForOrg } from "@/lib/blocks/registry";
 import { canSeldonIt, resolvePlanFromPlanId } from "@/lib/billing/entitlements";
+import { listManagedOrganizations, setActiveOrgAction } from "@/lib/billing/orgs";
 import { getHiddenBlocks } from "@/lib/blocks/visibility-actions";
 import { db } from "@/db";
 import { activities, contacts, deals, landingPages, organizations, users } from "@/db/schema";
@@ -44,6 +45,7 @@ export default async function DashboardLayout({
     : [null];
   const plan = resolvePlanFromPlanId(dbUserForPlan?.planId ?? null);
   const canAccessSeldon = canSeldonIt(plan);
+  const workspaceOptions = await listManagedOrganizations();
 
   const [activeOrg, orgMemberCount] = orgId
     ? await Promise.all([
@@ -129,12 +131,20 @@ export default async function DashboardLayout({
               canAccessSeldon={canAccessSeldon}
               hiddenBlocks={hiddenBlocks}
               workspaceName={activeOrg?.name || "SeldonFrame"}
+              activeWorkspaceId={orgId}
+              workspaceOptions={workspaceOptions.map((workspace) => ({
+                id: workspace.id,
+                name: workspace.name,
+                contactCount: workspace.contactCount,
+                soulId: workspace.soulId,
+              }))}
+              switchWorkspaceAction={setActiveOrgAction}
               workspaceMembers={orgMemberCount > 0 ? orgMemberCount : undefined}
               userName={user?.name || "Account"}
               userEmail={user?.email || ""}
               avatarFallback={avatarFallback}
             />
-            <div className="min-w-0 flex-1 min-h-screen overflow-y-auto space-y-3 sm:space-y-4">
+            <div className="min-w-0 flex-1 min-h-screen overflow-y-auto px-10 py-8 space-y-8">
               <DemoBanner />
               {isSwitchedOrg && activeOrg ? (
                 <div className="rounded-xl border border-border bg-[hsl(var(--muted)/0.22)] px-3 py-2 text-sm text-[hsl(var(--muted-foreground))]">

@@ -1,16 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 import { CircleDashedIcon, MessageCircleDashedIcon, PaperclipIcon, SparklesIcon, WandSparklesIcon } from "lucide-react";
-import { disableSeldonBlockAction, runSeldonItAction, type SeldonHistoryItem, type SeldonRunResult, type SeldonRunState } from "@/lib/ai/seldon-actions";
-
-type Services = {
-  stripe: boolean;
-  resend: boolean;
-  twilio: boolean;
-  kit: boolean;
-};
+import { runSeldonItAction, saveSeldonBlockAction, type SeldonRunResult, type SeldonRunState, type SeldonSessionItem } from "@/lib/ai/seldon-actions";
 
 type ChatMessage = {
   id: string;
@@ -19,8 +12,16 @@ type ChatMessage = {
 };
 
 const initialState: SeldonRunState = { ok: false };
+const processingSteps = [
+  "Analyzing your request...",
+  "Reading your soul...",
+  "Designing the block...",
+  "Writing the code...",
+  "Setting up connections...",
+  "Almost there...",
+];
 
-function ResultCard({ result, onViewBlockMd }: { result: SeldonRunResult; onViewBlockMd: (value: SeldonRunResult) => void }) {
+function ResultCard({ result, onViewBlockMd, onRefine }: { result: SeldonRunResult; onViewBlockMd: (value: SeldonRunResult) => void; onRefine: (prompt: string) => void }) {
   const summaryLines = useMemo(
     () =>
       result.summary
@@ -30,24 +31,49 @@ function ResultCard({ result, onViewBlockMd }: { result: SeldonRunResult; onView
     [result.summary]
   );
 
+  const refineIdeas = [
+    `Make ${result.blockName} more casual`,
+    `Add a referral link in ${result.blockName}`,
+  ];
+
   return (
     <article className="rounded-2xl border border-border bg-secondary dark:bg-card p-1">
-      <div className="rounded-xl border border-border dark:border-transparent bg-card dark:bg-secondary p-4 space-y-4">
-        <p className="text-sm leading-relaxed">✓ Your &quot;{result.blockName}&quot; block is {result.installMode === "instant" ? "ready" : "queued for review"}.</p>
-        <p className="text-sm text-muted-foreground">Here&apos;s what was created:</p>
+      <div className="rounded-xl border border-border dark:border-transparent bg-card dark:bg-secondary px-6 py-5 space-y-4">
+        <p className="text-sm leading-relaxed font-medium">✓ Created: {result.blockName}</p>
+        <p className="text-xs font-semibold tracking-[0.08em] text-muted-foreground">WHAT WAS CREATED</p>
         <ul className="space-y-1 text-sm text-muted-foreground">
-        {summaryLines.length > 0 ? summaryLines.map((line, idx) => <li key={idx}>• {line.replace(/^-\s*/, "")}</li>) : <li>• BLOCK.md generated successfully</li>}
+        {summaryLines.length > 0 ? summaryLines.map((line, idx) => <li key={idx}>• {line.replace(/^[-\s]*/, "")}</li>) : <li>• BLOCK.md generated successfully</li>}
         </ul>
+        <div className="space-y-2">
+          <p className="text-xs font-semibold tracking-[0.08em] text-muted-foreground">NEXT STEPS</p>
+          <ol className="space-y-1 text-sm text-muted-foreground">
+            <li>1. Review → <Link href={result.openPath} className="text-primary underline underline-offset-4">Open {result.blockName}</Link></li>
+            <li>2. Connect → <Link href="/settings/integrations" className="text-primary underline underline-offset-4">Connect integrations</Link></li>
+            <li>3. Refine → type below to adjust</li>
+          </ol>
+        </div>
+        <div className="space-y-2">
+          <p className="text-xs font-semibold tracking-[0.08em] text-muted-foreground">REFINE FURTHER</p>
+          <div className="flex flex-wrap gap-2">
+            {refineIdeas.map((idea) => (
+              <button key={idea} type="button" className="rounded-full border border-border px-3 py-1.5 text-xs hover:bg-accent" onClick={() => onRefine(idea)}>
+                {idea}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Link href={result.openPath} className="gap-2 inline-flex items-center justify-center rounded-md text-sm font-medium h-9 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90">
-            Open {result.blockName}
-          </Link>
           <button type="button" className="gap-2 inline-flex items-center justify-center rounded-md text-sm font-medium h-9 px-4 py-2 border border-input bg-background hover:bg-accent" onClick={() => onViewBlockMd(result)}>
             View BLOCK.md
           </button>
-          <Link href={result.marketplaceSubmitPath} className="gap-2 inline-flex items-center justify-center rounded-md text-sm font-medium h-9 px-4 py-2 border border-input bg-background hover:bg-accent">
-            Sell on Marketplace
-          </Link>
+          <form action={saveSeldonBlockAction}>
+            <input type="hidden" name="blockId" value={result.blockId} />
+            <input type="hidden" name="blockName" value={result.blockName} />
+            <input type="hidden" name="blockMd" value={result.blockMd} />
+            <button type="submit" className="gap-2 inline-flex items-center justify-center rounded-md text-sm font-medium h-9 px-4 py-2 border border-input bg-background hover:bg-accent">
+              Save to My Blocks
+            </button>
+          </form>
         </div>
       </div>
     </article>
@@ -56,19 +82,41 @@ function ResultCard({ result, onViewBlockMd }: { result: SeldonRunResult; onView
 
 export function SeldonPageClient({
   allowed,
-  services,
-  history,
+  sessions,
   initialPrompt = "",
 }: {
   allowed: boolean;
-  services: Services;
-  history: SeldonHistoryItem[];
+  sessions: SeldonSessionItem[];
   initialPrompt?: string;
 }) {
   const [state, action, pending] = useActionState(runSeldonItAction, initialState);
   const [selectedResult, setSelectedResult] = useState<SeldonRunResult | null>(null);
   const [description, setDescription] = useState(initialPrompt);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [processingIndex, setProcessingIndex] = useState(0);
+
+  useEffect(() => {
+    if (!pending) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setProcessingIndex((current) => (current + 1) % processingSteps.length);
+    }, 2500);
+
+    return () => window.clearInterval(timer);
+  }, [pending]);
+
+  const activeSession = useMemo(
+    () => sessions.find((entry) => entry.id === activeSessionId) ?? null,
+    [activeSessionId, sessions],
+  );
+
+  const activeSessionResults = useMemo(
+    () => (activeSession?.messages ?? []).flatMap((message) => message.results ?? []),
+    [activeSession],
+  );
 
   const customizeExamples = [
     {
@@ -105,7 +153,13 @@ export function SeldonPageClient({
     }, 50);
   }
 
-  const hasHistoryState = pending || Boolean(state.error) || Boolean(state.message) || Boolean(state.results?.length);
+  const hasHistoryState =
+    pending ||
+    Boolean(state.error) ||
+    Boolean(state.message) ||
+    Boolean(state.results?.length) ||
+    chatMessages.length > 0 ||
+    Boolean(activeSession);
 
   const assistantContent = state.error
     ? state.error
@@ -133,13 +187,26 @@ export function SeldonPageClient({
                 <div className="px-2 py-1.5">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Recent</p>
                 </div>
-                {history.length === 0 ? <p className="px-2 text-sm text-muted-foreground">No Seldon history yet.</p> : null}
-                {history.map((item) => (
-                  <div key={item.blockId} className="group/item relative flex items-center rounded-md overflow-hidden">
-                    <Link href={item.openPath} className="flex-1 justify-start gap-2 px-2 text-left h-auto py-1.5 min-w-0 pr-8 inline-flex items-center rounded-md text-sm font-medium hover:bg-accent">
+                {sessions.length === 0 ? <p className="px-2 text-sm text-muted-foreground">No Seldon history yet.</p> : null}
+                {sessions.map((item) => (
+                  <div key={item.id} className="group/item relative flex items-center rounded-md overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveSessionId(item.id);
+                        setChatMessages(
+                          item.messages.map((message, index) => ({
+                            id: `${item.id}-${index}`,
+                            role: message.role,
+                            content: message.content,
+                          })),
+                        );
+                      }}
+                      className="flex-1 justify-start gap-2 px-2 text-left h-auto py-1.5 min-w-0 pr-8 inline-flex items-center rounded-md text-sm font-medium hover:bg-accent"
+                    >
                       <MessageCircleDashedIcon className="size-4 shrink-0" />
-                      <span className="text-sm truncate min-w-0">{item.blockName}</span>
-                    </Link>
+                      <span className="text-sm truncate min-w-0">{item.title}</span>
+                    </button>
                   </div>
                 ))}
               </div>
@@ -238,8 +305,11 @@ export function SeldonPageClient({
 
                 {pending ? (
                   <div className="rounded-2xl border border-border bg-secondary dark:bg-card p-1">
-                    <div className="rounded-xl border border-border dark:border-transparent bg-card dark:bg-secondary p-4">
-                      <p className="text-sm text-muted-foreground">Processing...</p>
+                    <div className="rounded-xl border border-border dark:border-transparent bg-card dark:bg-secondary px-6 py-4">
+                      <p className="text-sm text-muted-foreground flex items-center gap-2 animate-pulse">
+                        <span className="size-2 rounded-full bg-primary" />
+                        {processingSteps[processingIndex]}
+                      </p>
                     </div>
                   </div>
                 ) : null}
@@ -256,54 +326,50 @@ export function SeldonPageClient({
                 {state.results?.length ? (
                   <div className="space-y-3">
                     {state.results.map((result) => (
-                      <ResultCard key={result.blockId} result={result} onViewBlockMd={setSelectedResult} />
+                      <ResultCard key={result.blockId} result={result} onViewBlockMd={setSelectedResult} onRefine={fillPrompt} />
                     ))}
                   </div>
                 ) : null}
 
-                <div className="rounded-2xl border border-border bg-secondary dark:bg-card p-1">
-                  <div className="rounded-xl border border-border dark:border-transparent bg-card dark:bg-secondary p-4 space-y-3">
-                    <p className="text-sm text-muted-foreground">Connected services</p>
-                    <p className="text-sm leading-relaxed">
-                      Stripe: {services.stripe ? "connected" : "not connected"} · Resend: {services.resend ? "connected" : "not connected"} · Twilio: {services.twilio ? "connected" : "not connected"} · Kit: {services.kit ? "connected" : "not connected"}
-                    </p>
+                {activeSessionResults.length > 0 ? (
+                  <div className="space-y-3">
+                    {activeSessionResults.map((result) => (
+                      <ResultCard key={`session-${result.blockId}`} result={result} onViewBlockMd={setSelectedResult} onRefine={fillPrompt} />
+                    ))}
                   </div>
-                </div>
+                ) : null}
 
                 {selectedResult ? (
-                  <div className="rounded-2xl border border-border bg-secondary dark:bg-card p-1">
-                    <div className="rounded-xl border border-border dark:border-transparent bg-card dark:bg-secondary p-4 space-y-3">
+                  <div className="fixed inset-y-0 right-0 z-50 w-full max-w-[560px] border-l border-border bg-card px-6 py-5 shadow-xl">
+                    <div className="flex h-full flex-col gap-4">
                       <div className="flex items-center justify-between">
                         <p className="text-sm font-medium">{selectedResult.blockName} BLOCK.md</p>
-                        <button type="button" className="gap-2 inline-flex items-center justify-center rounded-md text-sm font-medium h-9 px-4 py-2 border border-input bg-background hover:bg-accent" onClick={() => setSelectedResult(null)}>
-                          Close
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button type="button" className="gap-2 inline-flex items-center justify-center rounded-md text-sm font-medium h-9 px-4 py-2 border border-input bg-background hover:bg-accent" onClick={async () => {
+                            await navigator.clipboard.writeText(selectedResult.blockMd);
+                          }}>
+                            Copy
+                          </button>
+                          <button type="button" className="gap-2 inline-flex items-center justify-center rounded-md text-sm font-medium h-9 px-4 py-2 border border-input bg-background hover:bg-accent" onClick={() => {
+                            const blob = new Blob([selectedResult.blockMd], { type: "text/markdown;charset=utf-8" });
+                            const url = URL.createObjectURL(blob);
+                            const link = document.createElement("a");
+                            link.href = url;
+                            link.download = `${selectedResult.blockName.toLowerCase().replace(/[^a-z0-9-]+/g, "-")}.md`;
+                            link.click();
+                            URL.revokeObjectURL(url);
+                          }}>
+                            Download .md
+                          </button>
+                          <button type="button" className="gap-2 inline-flex items-center justify-center rounded-md text-sm font-medium h-9 px-4 py-2 border border-input bg-background hover:bg-accent" onClick={() => setSelectedResult(null)}>
+                            Close
+                          </button>
+                        </div>
                       </div>
-                      <textarea readOnly value={selectedResult.blockMd} className="min-h-[120px] resize-none border-0 bg-transparent px-4 py-3 text-base placeholder:text-muted-foreground/60 focus-visible:ring-0 focus-visible:ring-offset-0 w-full" />
+                      <pre className="min-h-0 flex-1 overflow-auto rounded-xl border border-border bg-secondary p-4 text-xs leading-relaxed whitespace-pre-wrap">
+                        {selectedResult.blockMd}
+                      </pre>
                     </div>
-                  </div>
-                ) : null}
-
-                {history.length > 0 ? (
-                  <div className="space-y-1">
-                    <div className="px-2 py-1.5">
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Actions</p>
-                    </div>
-                    {history.map((item) => (
-                      <div key={`${item.blockId}-actions`} className="flex items-center gap-2">
-                        {item.status === "Active" ? (
-                          <form action={disableSeldonBlockAction}>
-                            <input type="hidden" name="blockId" value={item.blockId} />
-                            <button type="submit" className="gap-2 inline-flex items-center justify-center rounded-md text-sm font-medium h-9 px-4 py-2 border border-input bg-background hover:bg-accent">
-                              Disable {item.blockName}
-                            </button>
-                          </form>
-                        ) : null}
-                        <Link href={item.marketplaceSubmitPath} className="gap-2 inline-flex items-center justify-center rounded-md text-sm font-medium h-9 px-4 py-2 border border-input bg-background hover:bg-accent">
-                          Publish {item.blockName}
-                        </Link>
-                      </div>
-                    ))}
                   </div>
                 ) : null}
               </div>

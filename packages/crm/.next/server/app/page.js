@@ -1,10 +1,10 @@
 var R=require("../chunks/ssr/[turbopack]_runtime.js")("server/app/page.js")
-R.c("server/chunks/ssr/CascadeProjects_Seldon Frame_packages_crm_src_app_page_tsx_0goin29._.js")
-R.c("server/chunks/ssr/[root-of-the-server]__0u92ony._.js")
+R.c("server/chunks/ssr/[root-of-the-server]__0m4b.en._.js")
+R.c("server/chunks/ssr/07s-_next_dist_07mg23t._.js")
 R.c("server/chunks/ssr/07s-_next_dist_esm_build_templates_app-page_0-bsz5~.js")
 R.c("server/chunks/ssr/07s-_next_dist_0f9zs.-._.js")
-R.c("server/chunks/ssr/07s-_next_dist_07mg23t._.js")
-R.c("server/chunks/ssr/[root-of-the-server]__01woy6_._.js")
+R.c("server/chunks/ssr/CascadeProjects_Seldon Frame_packages_crm_src_0pv6hho._.js")
+R.c("server/chunks/ssr/[root-of-the-server]__06i0ej.._.js")
 R.c("server/chunks/ssr/07s-_next_dist_compiled_@opentelemetry_api_index_0_s33y6.js")
 R.c("server/chunks/ssr/07s-_next_dist_0bpxxqh._.js")
 R.c("server/chunks/ssr/07s-_next_dist_0q0_6n1._.js")
@@ -14,5 +14,5 @@ R.c("server/chunks/ssr/07s-_next_dist_client_components_builtin_forbidden_0m9co9
 R.c("server/chunks/ssr/07s-_next_dist_client_components_builtin_unauthorized_0p99-~g.js")
 R.c("server/chunks/ssr/07s-_next_dist_client_components_builtin_global-error_09.yc82.js")
 R.c("server/chunks/ssr/0m8d_Seldon Frame_packages_crm__next-internal_server_app_page_actions_126el1l.js")
-R.m(67669)
-module.exports=R.m(67669).exports
+R.m(267669)
+module.exports=R.m(267669).exports

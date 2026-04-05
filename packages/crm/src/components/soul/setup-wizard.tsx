@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -24,7 +24,9 @@ import {
   CreditCard,
 } from "lucide-react";
 import { installSoul } from "@/lib/soul/install";
+import { createWorkspaceFromSetupAction } from "@/lib/billing/orgs";
 import { saveIntegrationFromWizard } from "@/lib/integrations/actions";
+import { generateCustomFrameworkAction, type GeneratedFrameworkPayload } from "@/lib/frameworks/actions";
 import { isDemoBlockedError, isDemoReadonlyClient } from "@/lib/demo/client";
 import { useDemoToast } from "@/components/shared/demo-toast-provider";
 import type { FrameworkOption } from "@/app/(onboarding)/setup/page";
@@ -163,6 +165,8 @@ function StepTransition({ children, stepKey }: { children: React.ReactNode; step
 }
 
 type IntegrationState = {
+  google: { connected: boolean };
+  resend: { apiKey: string; fromEmail: string; fromName: string; connected: boolean; saving: boolean };
   newsletterProvider: "kit" | "mailchimp" | "beehiiv" | null;
   kit: { apiKey: string; connected: boolean; saving: boolean };
   mailchimp: { apiKey: string; listId: string; connected: boolean; saving: boolean };
@@ -170,8 +174,17 @@ type IntegrationState = {
   twilio: { accountSid: string; authToken: string; fromNumber: string; connected: boolean; saving: boolean };
 };
 
-export function SetupWizard({ frameworks }: { frameworks: FrameworkOption[] }) {
+export function SetupWizard({
+  frameworks,
+  createWorkspace = false,
+  completionRedirect = "/welcome?fromSetup=1",
+}: {
+  frameworks: FrameworkOption[];
+  createWorkspace?: boolean;
+  completionRedirect?: string;
+}) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { showDemoToast } = useDemoToast();
   const [step, setStep] = useState(0);
   const [pending, startTransition] = useTransition();
@@ -179,6 +192,9 @@ export function SetupWizard({ frameworks }: { frameworks: FrameworkOption[] }) {
   // Step 0
   const [selectedFrameworkId, setSelectedFrameworkId] = useState<string>("");
   const [expandedFramework, setExpandedFramework] = useState<string | null>(null);
+  const [customFrameworkPrompt, setCustomFrameworkPrompt] = useState("");
+  const [customFrameworkPending, setCustomFrameworkPending] = useState(false);
+  const [generatedFramework, setGeneratedFramework] = useState<GeneratedFrameworkPayload | null>(null);
 
   // Step 1
   const [businessName, setBusinessName] = useState("");
@@ -189,6 +205,8 @@ export function SetupWizard({ frameworks }: { frameworks: FrameworkOption[] }) {
 
   // Step 2
   const [integrations, setIntegrations] = useState<IntegrationState>({
+    google: { connected: false },
+    resend: { apiKey: "", fromEmail: "", fromName: "SeldonFrame", connected: false, saving: false },
     newsletterProvider: null,
     kit: { apiKey: "", connected: false, saving: false },
     mailchimp: { apiKey: "", listId: "", connected: false, saving: false },
@@ -200,9 +218,14 @@ export function SetupWizard({ frameworks }: { frameworks: FrameworkOption[] }) {
   const [installed, setInstalled] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const frameworkOptions = useMemo(
+    () => (generatedFramework ? [...frameworks, generatedFramework.option] : frameworks),
+    [frameworks, generatedFramework],
+  );
+
   const selectedFramework = useMemo(
-    () => frameworks.find((fw) => fw.id === selectedFrameworkId) ?? null,
-    [selectedFrameworkId, frameworks],
+    () => frameworkOptions.find((fw) => fw.id === selectedFrameworkId) ?? null,
+    [selectedFrameworkId, frameworkOptions],
   );
 
   const enabledCount = useMemo(
@@ -218,10 +241,16 @@ export function SetupWizard({ frameworks }: { frameworks: FrameworkOption[] }) {
     return true;
   }, [businessName, installed, selectedFramework, step]);
 
+  useEffect(() => {
+    if (searchParams.get("calendarConnected") === "1") {
+      setIntegrations((prev) => ({ ...prev, google: { connected: true } }));
+    }
+  }, [searchParams]);
+
   function onSelectFramework(id: string) {
     setSelectedFrameworkId(id);
     setExpandedFramework((prev) => (prev === id ? null : id));
-    const fw = frameworks.find((item) => item.id === id);
+    const fw = frameworkOptions.find((item) => item.id === id);
     if (fw && !businessName.trim()) {
       setBusinessName(resolveBusinessName(fw.defaultBusinessName, ""));
     }
@@ -229,6 +258,40 @@ export function SetupWizard({ frameworks }: { frameworks: FrameworkOption[] }) {
       const defaults = new Set(fw.automationSuggestions.filter((a) => a.defaultEnabled).map((a) => a.id));
       setEnabledAutomations(defaults);
       setAutomationsInitialized(true);
+    }
+  }
+
+  async function generateCustomFramework() {
+    if (customFrameworkPending || !customFrameworkPrompt.trim()) {
+      return;
+    }
+
+    setCustomFrameworkPending(true);
+    setError(null);
+
+    try {
+      const generated = await generateCustomFrameworkAction({
+        description: customFrameworkPrompt,
+        businessName,
+      });
+
+      setGeneratedFramework(generated);
+      setSelectedFrameworkId(generated.option.id);
+      setExpandedFramework(generated.option.id);
+
+      if (!businessName.trim()) {
+        setBusinessName(resolveBusinessName(generated.option.defaultBusinessName, ""));
+      }
+
+      if (!automationsInitialized) {
+        const defaults = new Set(generated.option.automationSuggestions.filter((a) => a.defaultEnabled).map((a) => a.id));
+        setEnabledAutomations(defaults);
+        setAutomationsInitialized(true);
+      }
+    } catch {
+      setError("Unable to generate custom framework. Please try again.");
+    } finally {
+      setCustomFrameworkPending(false);
     }
   }
 
@@ -241,7 +304,7 @@ export function SetupWizard({ frameworks }: { frameworks: FrameworkOption[] }) {
     });
   }
 
-  const saveIntegration = useCallback(async (service: "kit" | "mailchimp" | "beehiiv" | "twilio") => {
+  const saveIntegration = useCallback(async (service: "resend" | "kit" | "mailchimp" | "beehiiv" | "twilio") => {
     if (isDemoReadonlyClient) {
       showDemoToast();
       return;
@@ -258,6 +321,11 @@ export function SetupWizard({ frameworks }: { frameworks: FrameworkOption[] }) {
         credentials.accountSid = t.accountSid;
         credentials.authToken = t.authToken;
         credentials.fromNumber = t.fromNumber;
+      } else if (service === "resend") {
+        const r = integrations.resend;
+        credentials.apiKey = r.apiKey;
+        credentials.fromEmail = r.fromEmail;
+        credentials.fromName = r.fromName;
       } else if (service === "kit") {
         const n = integrations.kit;
         credentials.apiKey = n.apiKey;
@@ -275,6 +343,8 @@ export function SetupWizard({ frameworks }: { frameworks: FrameworkOption[] }) {
 
       if (service === "twilio") {
         setIntegrations((prev) => ({ ...prev, twilio: { ...prev.twilio, saving: false, connected: true } }));
+      } else if (service === "resend") {
+        setIntegrations((prev) => ({ ...prev, resend: { ...prev.resend, saving: false, connected: true } }));
       } else {
         setIntegrations((prev) => ({
           ...prev,
@@ -287,6 +357,8 @@ export function SetupWizard({ frameworks }: { frameworks: FrameworkOption[] }) {
     } catch {
       if (service === "twilio") {
         setIntegrations((prev) => ({ ...prev, twilio: { ...prev.twilio, saving: false } }));
+      } else if (service === "resend") {
+        setIntegrations((prev) => ({ ...prev, resend: { ...prev.resend, saving: false } }));
       } else if (service === "kit") {
         setIntegrations((prev) => ({ ...prev, kit: { ...prev.kit, saving: false } }));
       } else if (service === "mailchimp") {
@@ -300,7 +372,7 @@ export function SetupWizard({ frameworks }: { frameworks: FrameworkOption[] }) {
   function goNext() {
     if (!canContinue || pending) return;
     if (step === 3 && installed) {
-      router.push("/welcome?fromSetup=1");
+      router.push(completionRedirect);
       return;
     }
     setStep((current) => Math.min(current + 1, TOTAL_STEPS - 1));
@@ -323,18 +395,30 @@ export function SetupWizard({ frameworks }: { frameworks: FrameworkOption[] }) {
 
         const ownerName = businessName.split(" ")[0] || "";
 
-        await installSoul({
-          frameworkId: selectedFramework!.id,
-          answers: {
-            ownerName,
-            ownerFullName: ownerName,
+        if (createWorkspace) {
+          await createWorkspaceFromSetupAction({
             businessName,
+            frameworkId: selectedFramework!.id,
+            generatedFramework: generatedFramework && selectedFramework!.id === generatedFramework.option.id ? generatedFramework.framework : null,
             location,
             journeyDescription,
             enabledAutomations: Array.from(enabledAutomations),
-          },
-          markCompleted: true,
-        });
+          });
+        } else {
+          await installSoul({
+            frameworkId: selectedFramework!.id,
+            framework: generatedFramework && selectedFramework!.id === generatedFramework.option.id ? generatedFramework.framework : undefined,
+            answers: {
+              ownerName,
+              ownerFullName: ownerName,
+              businessName,
+              location,
+              journeyDescription,
+              enabledAutomations: Array.from(enabledAutomations),
+            },
+            markCompleted: true,
+          });
+        }
 
         setInstalled(true);
       } catch (cause) {
@@ -404,7 +488,7 @@ export function SetupWizard({ frameworks }: { frameworks: FrameworkOption[] }) {
               </div>
 
               <div className="space-y-3">
-                {frameworks.map((fw) => {
+                {frameworkOptions.map((fw) => {
                   const active = selectedFrameworkId === fw.id;
                   const expanded = expandedFramework === fw.id;
                   const IconComponent = frameworkIcons[fw.icon] ?? Rocket;
@@ -458,6 +542,45 @@ export function SetupWizard({ frameworks }: { frameworks: FrameworkOption[] }) {
                     </div>
                   );
                 })}
+
+                <div className={`rounded-xl border transition-all ${selectedFrameworkId.startsWith("custom-") ? "ring-2 ring-primary border-primary/40" : ""}`}>
+                  <div className="p-4 space-y-3">
+                    <div className="flex items-start gap-3">
+                      <div className="size-10 rounded-lg flex items-center justify-center bg-muted shrink-0">
+                        <Sparkles className="size-5 text-muted-foreground" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm">Custom (Generate with Seldon)</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Describe your business and Seldon will generate a custom CRM framework.</p>
+                      </div>
+                    </div>
+
+                    <textarea
+                      className={squareTextareaClass}
+                      rows={3}
+                      value={customFrameworkPrompt}
+                      onChange={(event) => setCustomFrameworkPrompt(event.target.value)}
+                      placeholder="I run a boutique recruiting firm for healthcare leadership. We qualify candidates, run interview sprints, and place retained executive searches."
+                    />
+
+                    <button
+                      type="button"
+                      onClick={generateCustomFramework}
+                      disabled={customFrameworkPending || !customFrameworkPrompt.trim()}
+                      className={`${squarePrimaryButtonClass} h-9 px-4 py-2`}
+                    >
+                      {customFrameworkPending ? (
+                        <span className="flex items-center gap-2">
+                          <Loader2 className="size-4 animate-spin" /> Generating...
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-2">
+                          <Sparkles className="size-4" /> Generate Custom Framework
+                        </span>
+                      )}
+                    </button>
+                  </div>
+                </div>
               </div>
 
               <p className="text-sm text-muted-foreground text-center">
@@ -587,15 +710,44 @@ export function SetupWizard({ frameworks }: { frameworks: FrameworkOption[] }) {
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <div className="rounded-xl border bg-card p-4 space-y-3">
                   <div className="flex items-center gap-2">
+                    <Mail className="size-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">Resend Email</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Send transactional emails</p>
+                  <input
+                    className={squareInputClass}
+                    placeholder="Resend API key"
+                    type="password"
+                    value={integrations.resend.apiKey}
+                    onChange={(e) => setIntegrations((prev) => ({ ...prev, resend: { ...prev.resend, apiKey: e.target.value } }))}
+                  />
+                  <input
+                    className={squareInputClass}
+                    placeholder="From email (optional)"
+                    value={integrations.resend.fromEmail}
+                    onChange={(e) => setIntegrations((prev) => ({ ...prev, resend: { ...prev.resend, fromEmail: e.target.value } }))}
+                  />
+                  <button
+                    type="button"
+                    className={`${squarePrimaryButtonClass} h-8 px-3 text-xs w-full`}
+                    disabled={!integrations.resend.apiKey.trim() || integrations.resend.saving}
+                    onClick={() => saveIntegration("resend")}
+                  >
+                    {integrations.resend.connected ? "✓ Connected" : integrations.resend.saving ? <Loader2 className="size-3 animate-spin" /> : "Connect"}
+                  </button>
+                </div>
+
+                <div className="rounded-xl border bg-card p-4 space-y-3">
+                  <div className="flex items-center gap-2">
                     <Calendar className="size-4 text-muted-foreground" />
                     <span className="text-sm font-medium">Google Calendar</span>
                   </div>
                   <p className="text-xs text-muted-foreground">Sync your availability</p>
                   <Link
-                    href="/api/auth/signin/google?callbackUrl=%2Fsetup&scope=openid%20email%20profile%20https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fcalendar&prompt=consent&access_type=offline"
-                    className={`${squarePrimaryButtonClass} h-8 px-3 text-xs w-full`}
+                    href="/api/integrations/google-calendar?returnTo=%2Fsetup"
+                    className={`${integrations.google.connected ? squareOutlineButtonClass : squarePrimaryButtonClass} h-8 px-3 text-xs w-full`}
                   >
-                    Connect OAuth
+                    {integrations.google.connected ? "✓ Connected" : "Connect OAuth"}
                   </Link>
                 </div>
 
@@ -770,7 +922,7 @@ export function SetupWizard({ frameworks }: { frameworks: FrameworkOption[] }) {
               </div>
               <button
                 type="button"
-                className={`${squarePrimaryButtonClass} relative h-12 px-8 text-base`}
+                className={`${squarePrimaryButtonClass} relative h-12 px-8 text-base bg-primary text-primary-foreground hover:bg-primary/90`}
                 onClick={launchBusiness}
                 disabled={pending}
               >
@@ -850,7 +1002,7 @@ export function SetupWizard({ frameworks }: { frameworks: FrameworkOption[] }) {
 
                   <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
                     <p className="text-muted-foreground">Click any to customize — or skip and do it from your dashboard anytime.</p>
-                    <Link href="/welcome?fromSetup=1" className="text-primary hover:underline">
+                    <Link href={completionRedirect} className="text-primary hover:underline">
                       Skip — go to Dashboard →
                     </Link>
                   </div>
@@ -899,7 +1051,7 @@ export function SetupWizard({ frameworks }: { frameworks: FrameworkOption[] }) {
             <button
               type="button"
               className={`${squarePrimaryButtonClass} h-10 px-6`}
-              onClick={() => router.push("/welcome?fromSetup=1")}
+              onClick={() => router.push(completionRedirect)}
             >
               Continue <ArrowRight className="ml-1.5 inline h-4 w-4" />
             </button>

@@ -4,6 +4,7 @@ import { SetupWizard } from "@/components/soul/setup-wizard";
 import coachingFramework from "@/lib/frameworks/coaching.json";
 import agencyFramework from "@/lib/frameworks/agency.json";
 import saasFramework from "@/lib/frameworks/saas.json";
+import { listSavedFrameworkOptions } from "@/lib/frameworks/actions";
 
 /*
   Square UI class reference (source of truth):
@@ -53,7 +54,7 @@ export default async function SetupPage() {
     redirect("/login");
   }
 
-  const frameworks: FrameworkOption[] = allFrameworks.map((fw) => ({
+  const baseFrameworks: FrameworkOption[] = allFrameworks.map((fw) => ({
     id: fw.id,
     name: fw.name,
     description: fw.description,
@@ -83,6 +84,9 @@ export default async function SetupPage() {
       defaultEnabled: a.defaultEnabled,
     })),
   }));
+
+  const savedFrameworks = await listSavedFrameworkOptions();
+  const frameworks: FrameworkOption[] = [...savedFrameworks, ...baseFrameworks.filter((fw) => !savedFrameworks.some((saved) => saved.id === fw.id))];
 
   return (
     <main className="animate-page-enter flex-1 overflow-auto p-3 sm:p-4 md:p-6 bg-background w-full min-h-svh">

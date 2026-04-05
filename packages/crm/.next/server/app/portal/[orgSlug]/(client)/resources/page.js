@@ -1,8 +1,8 @@
 var R=require("../../../../../chunks/ssr/[turbopack]_runtime.js")("server/app/portal/[orgSlug]/(client)/resources/page.js")
-R.c("server/chunks/ssr/[root-of-the-server]__0onqd3q._.js")
+R.c("server/chunks/ssr/[root-of-the-server]__0778rq8._.js")
 R.c("server/chunks/ssr/07s-_next_dist_0f9zs.-._.js")
 R.c("server/chunks/ssr/07s-_next_dist_esm_build_templates_app-page_03wvk_1.js")
-R.c("server/chunks/ssr/[root-of-the-server]__01woy6_._.js")
+R.c("server/chunks/ssr/[root-of-the-server]__06i0ej.._.js")
 R.c("server/chunks/ssr/07s-_next_dist_compiled_@opentelemetry_api_index_0_s33y6.js")
 R.c("server/chunks/ssr/07s-_next_dist_0bpxxqh._.js")
 R.c("server/chunks/ssr/07s-_next_dist_0q0_6n1._.js")
@@ -17,5 +17,5 @@ R.c("server/chunks/ssr/CascadeProjects_Seldon Frame_129psms._.js")
 R.c("server/chunks/ssr/07s-_next_01htf-7._.js")
 R.c("server/chunks/ssr/07s-_next_dist_0ggzy37._.js")
 R.c("server/chunks/ssr/CascadeProjects_Seldon Frame_packages_crm_05s9_qc._.js")
-R.m(91169)
-module.exports=R.m(91169).exports
+R.m(691169)
+module.exports=R.m(691169).exports

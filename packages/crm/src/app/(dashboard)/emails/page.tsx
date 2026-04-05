@@ -38,6 +38,7 @@ export default async function EmailsPage() {
           id: t.id,
           name: t.name,
           subject: t.subject,
+          body: t.body,
           tag: t.tag,
           triggerEvent: t.triggerEvent ?? null,
         }))}

@@ -16,6 +16,7 @@ type IntegrationViewModel = {
   orgId: string;
   orgName: string;
   twilio: { connected: boolean; accountSid: string; fromNumber: string; authTokenHint: string };
+  resend: { connected: boolean; apiKeyHint: string; fromEmail: string; fromName: string };
   newsletter: {
     provider: NewsletterProvider | null;
     connected: boolean;
@@ -80,6 +81,7 @@ export async function getIntegrationSettings(): Promise<IntegrationViewModel | n
 
   const integrations = readIntegrations(org.integrations);
   const twilioToken = tryDecrypt(integrations.twilio?.authToken);
+  const resendKey = tryDecrypt(integrations.resend?.apiKey);
   const newsletterProvider = integrations.newsletter?.provider ?? (integrations.kit?.connected ? "kit" : null);
   const newsletterKey = tryDecrypt(
     integrations.newsletter?.apiKey || (newsletterProvider === "kit" ? integrations.kit?.apiKey : "")
@@ -97,6 +99,12 @@ export async function getIntegrationSettings(): Promise<IntegrationViewModel | n
       accountSid: integrations.twilio?.accountSid ?? "",
       fromNumber: integrations.twilio?.fromNumber ?? "",
       authTokenHint: twilioToken ? "••••••••" : "",
+    },
+    resend: {
+      connected: Boolean(integrations.resend?.connected),
+      apiKeyHint: resendKey ? "••••••••" : "",
+      fromEmail: integrations.resend?.fromEmail ?? "",
+      fromName: integrations.resend?.fromName ?? "SeldonFrame",
     },
     newsletter: {
       provider: activeProvider,
@@ -212,6 +220,8 @@ export async function updateIntegration(orgId: string, service: string, credenti
     .where(eq(organizations.id, orgId));
 
   revalidatePath("/settings/integrations");
+  revalidatePath("/setup");
+  revalidatePath("/automations");
 }
 
 export async function updateIntegrationAction(formData: FormData) {
@@ -251,11 +261,19 @@ export async function saveIntegrationFromWizard(service: string, credentials: Re
 
   const orgId = await getOrgId();
 
+  console.info("[integrations][wizard] save start", {
+    service,
+    hasOrgId: Boolean(orgId),
+    credentialKeys: Object.keys(credentials),
+  });
+
   if (!orgId) {
+    console.error("[integrations][wizard] save failed: missing org id", { service });
     throw new Error("Unauthorized");
   }
 
   await updateIntegration(orgId, service, credentials);
+  console.info("[integrations][wizard] save success", { service, orgId });
   return { success: true };
 }
 

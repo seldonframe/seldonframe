@@ -23,6 +23,7 @@ type TemplateRow = {
   id: string;
   name: string;
   subject: string;
+  body: string;
   tag: string | null;
   triggerEvent: string | null;
 };
@@ -70,6 +71,8 @@ export function EmailPageContent({
   const [triggerEventInput, setTriggerEventInput] = useState("");
   const [triggerEventError, setTriggerEventError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [previewTemplate, setPreviewTemplate] = useState<TemplateRow | null>(null);
+  const [editTemplate, setEditTemplate] = useState<TemplateRow | null>(null);
 
   const tabs: { key: Tab; label: string }[] = [
     { key: "templates", label: `Templates (${templates.length})` },
@@ -95,6 +98,28 @@ export function EmailPageContent({
 
       {activeTab === "templates" ? (
         <section className="space-y-4">
+          <article className="rounded-xl border bg-card p-5 space-y-4">
+            <div>
+              <h3 className="text-base font-medium text-foreground">Newsletter Connections</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                New contacts sync to your list. You keep your newsletter tool. SeldonFrame handles 1:1 transactional emails.
+              </p>
+            </div>
+            <div className="grid gap-4 md:grid-cols-3">
+              {[
+                { id: "kit", title: "Kit", placeholder: "Kit API key" },
+                { id: "mailchimp", title: "Mailchimp", placeholder: "Mailchimp API key" },
+                { id: "beehiiv", title: "Beehiiv", placeholder: "Beehiiv API key" },
+              ].map((provider) => (
+                <div key={provider.id} className="rounded-lg border p-4 space-y-3">
+                  <p className="text-sm font-medium text-foreground">{provider.title}</p>
+                  <input className="crm-input h-10 w-full px-3" placeholder={provider.placeholder} type="password" />
+                  <button type="button" className="crm-button-secondary h-9 px-4 text-xs w-full">Connect</button>
+                </div>
+              ))}
+            </div>
+          </article>
+
           <div className="flex items-center justify-between border-b border-border px-5 py-3">
             <p className="text-xs text-muted-foreground">{templates.length} template{templates.length !== 1 ? "s" : ""}</p>
             <button type="button" className="crm-button-primary h-10 px-6" onClick={() => setShowCreate(true)}>
@@ -126,8 +151,8 @@ export function EmailPageContent({
                     </p>
                   ) : null}
                   <div className="mt-4 flex gap-2">
-                    <button type="button" className="crm-button-secondary h-9 px-4 text-xs">Edit</button>
-                    <button type="button" className="crm-button-ghost h-9 px-4 text-xs">Duplicate</button>
+                    <button type="button" className="crm-button-secondary h-9 px-4 text-xs" onClick={() => setPreviewTemplate(tpl)}>Preview</button>
+                    <button type="button" className="crm-button-ghost h-9 px-4 text-xs" onClick={() => setEditTemplate(tpl)}>Edit</button>
                   </div>
                 </article>
               ))}
@@ -265,6 +290,47 @@ export function EmailPageContent({
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      <Sheet open={Boolean(previewTemplate)} onOpenChange={(open) => !open && setPreviewTemplate(null)}>
+        <SheetContent side="right" className="h-full w-full max-w-none border-0 bg-background p-0">
+          <div className="h-full overflow-auto p-6">
+            <div className="mx-auto w-full max-w-3xl space-y-4">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-xl font-medium text-foreground">Preview Template</h2>
+                <button type="button" className="crm-button-ghost h-9 px-4" onClick={() => setPreviewTemplate(null)}>Close</button>
+              </div>
+              {previewTemplate ? (
+                <article className="rounded-xl border bg-card p-6 space-y-3">
+                  <p className="text-sm text-muted-foreground">{previewTemplate.name}</p>
+                  <p className="text-lg font-medium text-foreground">{previewTemplate.subject}</p>
+                  <pre className="rounded-lg border bg-background p-4 text-sm whitespace-pre-wrap">{previewTemplate.body}</pre>
+                </article>
+              ) : null}
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      <Sheet open={Boolean(editTemplate)} onOpenChange={(open) => !open && setEditTemplate(null)}>
+        <SheetContent side="right" className="h-full w-full max-w-none border-0 bg-background p-0">
+          <div className="h-full overflow-auto p-6">
+            <div className="mx-auto w-full max-w-3xl space-y-4">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-xl font-medium text-foreground">Edit Template</h2>
+                <button type="button" className="crm-button-ghost h-9 px-4" onClick={() => setEditTemplate(null)}>Close</button>
+              </div>
+              {editTemplate ? (
+                <form className="rounded-xl border bg-card p-6 space-y-3" onSubmit={(event) => event.preventDefault()}>
+                  <input className="crm-input h-10 w-full px-3" defaultValue={editTemplate.name} />
+                  <input className="crm-input h-10 w-full px-3" defaultValue={editTemplate.subject} />
+                  <textarea className="crm-input min-h-40 w-full p-3" defaultValue={editTemplate.body} />
+                  <p className="text-xs text-muted-foreground">Editing is currently local preview only for framework templates.</p>
+                </form>
+              ) : null}
             </div>
           </div>
         </SheetContent>

@@ -3,7 +3,7 @@ import { and, eq, or } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
-import { organizations } from "@/db/schema";
+import { orgMembers, organizations } from "@/db/schema";
 
 export async function getCurrentUser() {
   const session = await auth();
@@ -26,6 +26,16 @@ export async function getOrgId() {
 
   if (activeOrgId === user.orgId) {
     return activeOrgId;
+  }
+
+  const [memberOrg] = await db
+    .select({ orgId: orgMembers.orgId })
+    .from(orgMembers)
+    .where(and(eq(orgMembers.orgId, activeOrgId), eq(orgMembers.userId, user.id)))
+    .limit(1);
+
+  if (memberOrg?.orgId) {
+    return memberOrg.orgId;
   }
 
   const [managedOrg] = await db

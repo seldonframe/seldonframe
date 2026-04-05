@@ -249,10 +249,40 @@
       "namedRegex": "^/api/cron/usage\\-reset(?:/)?$"
     },
     {
+      "page": "/api/integrations/google-calendar",
+      "regex": "^/api/integrations/google\\-calendar(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/integrations/google\\-calendar(?:/)?$"
+    },
+    {
+      "page": "/api/integrations/google-calendar/callback",
+      "regex": "^/api/integrations/google\\-calendar/callback(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/integrations/google\\-calendar/callback(?:/)?$"
+    },
+    {
+      "page": "/api/stripe/checkout",
+      "regex": "^/api/stripe/checkout(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/stripe/checkout(?:/)?$"
+    },
+    {
       "page": "/api/stripe/connect/callback",
       "regex": "^/api/stripe/connect/callback(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/api/stripe/connect/callback(?:/)?$"
+    },
+    {
+      "page": "/api/stripe/portal",
+      "regex": "^/api/stripe/portal(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/stripe/portal(?:/)?$"
+    },
+    {
+      "page": "/api/stripe/webhook",
+      "regex": "^/api/stripe/webhook(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/stripe/webhook(?:/)?$"
     },
     {
       "page": "/api/v1/activities",
@@ -271,6 +301,12 @@
       "regex": "^/api/v1/deals(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/api/v1/deals(?:/)?$"
+    },
+    {
+      "page": "/api/v1/public/domain",
+      "regex": "^/api/v1/public/domain(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/v1/public/domain(?:/)?$"
     },
     {
       "page": "/api/v1/webhooks",
@@ -399,6 +435,12 @@
       "namedRegex": "^/orgs(?:/)?$"
     },
     {
+      "page": "/orgs/new",
+      "regex": "^/orgs/new(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/orgs/new(?:/)?$"
+    },
+    {
       "page": "/pricing",
       "regex": "^/pricing(?:/)?$",
       "routeKeys": {},
@@ -435,10 +477,28 @@
       "namedRegex": "^/settings/billing(?:/)?$"
     },
     {
+      "page": "/settings/branding",
+      "regex": "^/settings/branding(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/settings/branding(?:/)?$"
+    },
+    {
+      "page": "/settings/domain",
+      "regex": "^/settings/domain(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/settings/domain(?:/)?$"
+    },
+    {
       "page": "/settings/fields",
       "regex": "^/settings/fields(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/settings/fields(?:/)?$"
+    },
+    {
+      "page": "/settings/frameworks",
+      "regex": "^/settings/frameworks(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/settings/frameworks(?:/)?$"
     },
     {
       "page": "/settings/integrations",
@@ -505,6 +565,12 @@
       "regex": "^/terms(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/terms(?:/)?$"
+    },
+    {
+      "page": "/welcome",
+      "regex": "^/welcome(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/welcome(?:/)?$"
     }
   ],
   "dataRoutes": [],

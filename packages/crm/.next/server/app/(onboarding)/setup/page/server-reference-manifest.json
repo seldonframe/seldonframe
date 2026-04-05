@@ -3,7 +3,7 @@
     "406c668319341aec1480722e053ca19e2439b3eb85": {
       "workers": {
         "app/(onboarding)/setup/page": {
-          "moduleId": 58998,
+          "moduleId": 318574,
           "async": false,
           "exportedName": "installSoul",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/soul/install.ts"
@@ -11,6 +11,78 @@
       },
       "exportedName": "installSoul",
       "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/soul/install.ts"
+    },
+    "4010103f88e240ce8b5cae7fcb198ce810592698ad": {
+      "workers": {
+        "app/(onboarding)/setup/page": {
+          "moduleId": 318574,
+          "async": false,
+          "exportedName": "createWorkspaceFromSetupAction",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/billing/orgs.ts"
+        }
+      },
+      "exportedName": "createWorkspaceFromSetupAction",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/billing/orgs.ts"
+    },
+    "60241630e201627289b6b15717c6deb6f3685d1160": {
+      "workers": {
+        "app/(onboarding)/setup/page": {
+          "moduleId": 318574,
+          "async": false,
+          "exportedName": "saveIntegrationFromWizard",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/integrations/actions.ts"
+        }
+      },
+      "exportedName": "saveIntegrationFromWizard",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/integrations/actions.ts"
+    },
+    "40af825ff19031f146114481df1ba7530398932801": {
+      "workers": {
+        "app/(onboarding)/setup/page": {
+          "moduleId": 318574,
+          "async": false,
+          "exportedName": "generateCustomFrameworkAction",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/frameworks/actions.ts"
+        }
+      },
+      "exportedName": "generateCustomFrameworkAction",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/frameworks/actions.ts"
+    },
+    "002208324f130ebce200ec3feb06ced703182b459e": {
+      "workers": {
+        "app/(onboarding)/setup/page": {
+          "moduleId": 318574,
+          "async": false,
+          "exportedName": "listSavedFrameworkOptions",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/frameworks/actions.ts"
+        }
+      },
+      "exportedName": "listSavedFrameworkOptions",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/frameworks/actions.ts"
+    },
+    "0023bac356e9d010a9e19914300646fe7e83da76f5": {
+      "workers": {
+        "app/(onboarding)/setup/page": {
+          "moduleId": 318574,
+          "async": false,
+          "exportedName": "listSavedFrameworkLibrary",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/frameworks/actions.ts"
+        }
+      },
+      "exportedName": "listSavedFrameworkLibrary",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/frameworks/actions.ts"
+    },
+    "4038bb3c62c9872227efdc6f7bd820e54bee48c715": {
+      "workers": {
+        "app/(onboarding)/setup/page": {
+          "moduleId": 318574,
+          "async": false,
+          "exportedName": "deleteSavedFrameworkAction",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/frameworks/actions.ts"
+        }
+      },
+      "exportedName": "deleteSavedFrameworkAction",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/frameworks/actions.ts"
     }
   },
   "edge": {}

@@ -3,7 +3,7 @@
 import { desc, eq, sql as drizzleSql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
-import { generatedBlocks, marketplaceBlocks, organizations, stripeConnections } from "@/db/schema";
+import { generatedBlocks, marketplaceBlocks, organizations, seldonSessions, stripeConnections } from "@/db/schema";
 import { getCurrentUser, getOrgId } from "@/lib/auth/helpers";
 import { canSeldonIt, resolvePlanFromPlanId } from "@/lib/billing/entitlements";
 import { assertWritable } from "@/lib/demo/server";
@@ -20,7 +20,7 @@ export type SeldonRunResult = {
   fromInventory: boolean;
   installMode: "instant" | "review";
   openPath: string;
-  marketplaceSubmitPath: string;
+  savePath: string;
 };
 
 export type SeldonRunState = {
@@ -30,14 +30,15 @@ export type SeldonRunState = {
   results?: SeldonRunResult[];
 };
 
-export type SeldonHistoryItem = {
-  blockId: string;
-  blockName: string;
+export type SeldonSessionItem = {
+  id: string;
+  title: string;
   createdAt: string;
-  lastUpdatedAt: string;
-  status: "Active" | "Review" | "Disabled";
-  openPath: string;
-  marketplaceSubmitPath: string;
+  messages: Array<{
+    role: "user" | "assistant";
+    content: string;
+    results?: SeldonRunResult[];
+  }>;
 };
 
 function slugify(input: string) {
@@ -48,6 +49,28 @@ function slugify(input: string) {
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-")
     .slice(0, 40);
+}
+
+function resolveOpenPath(blockName: string, need: string, summary: string) {
+  const combined = `${blockName} ${need} ${summary}`.toLowerCase();
+
+  if (/(email|newsletter|campaign)/.test(combined)) {
+    return "/emails";
+  }
+
+  if (/(form|intake|survey|quiz)/.test(combined)) {
+    return "/forms";
+  }
+
+  if (/(booking|calendar|appointment|session)/.test(combined)) {
+    return "/bookings";
+  }
+
+  if (/(landing|page|website)/.test(combined)) {
+    return "/landing";
+  }
+
+  return "/dashboard";
 }
 
 function extractNameFromBlockMd(blockMd: string, fallback: string) {
@@ -112,35 +135,29 @@ export async function getSeldonPageData() {
   const allowed = canSeldonIt(plan);
 
   const [[org], [stripe]] = await Promise.all([
-    db.select({ integrations: organizations.integrations, enabledBlocks: organizations.enabledBlocks }).from(organizations).where(eq(organizations.id, orgId)).limit(1),
+    db.select({ integrations: organizations.integrations }).from(organizations).where(eq(organizations.id, orgId)).limit(1),
     db.select({ id: stripeConnections.id }).from(stripeConnections).where(eq(stripeConnections.orgId, orgId)).limit(1),
   ]);
 
   const integrations = readIntegrations(org?.integrations);
-  const enabledSet = new Set(org?.enabledBlocks ?? []);
 
-  const historyRows = await db
+  const sessionRows = await db
     .select({
-      blockId: generatedBlocks.blockId,
-      name: marketplaceBlocks.name,
-      createdAt: generatedBlocks.createdAt,
-      updatedAt: generatedBlocks.updatedAt,
-      generationStatus: marketplaceBlocks.generationStatus,
+      id: seldonSessions.id,
+      title: seldonSessions.title,
+      messages: seldonSessions.messages,
+      createdAt: seldonSessions.createdAt,
     })
-    .from(generatedBlocks)
-    .innerJoin(marketplaceBlocks, eq(marketplaceBlocks.blockId, generatedBlocks.blockId))
-    .where(eq(generatedBlocks.sellerOrgId, orgId))
-    .orderBy(desc(generatedBlocks.createdAt))
-    .limit(12);
+    .from(seldonSessions)
+    .where(eq(seldonSessions.orgId, orgId))
+    .orderBy(desc(seldonSessions.createdAt))
+    .limit(20);
 
-  const history: SeldonHistoryItem[] = historyRows.map((row) => ({
-    blockId: row.blockId,
-    blockName: row.name,
+  const sessions: SeldonSessionItem[] = sessionRows.map((row) => ({
+    id: row.id,
+    title: row.title,
     createdAt: row.createdAt.toISOString(),
-    lastUpdatedAt: row.updatedAt.toISOString(),
-    status: enabledSet.has(row.blockId) ? "Active" : row.generationStatus === "published" ? "Disabled" : "Review",
-    openPath: `/${row.blockId}`,
-    marketplaceSubmitPath: `/marketplace/submit?from=${encodeURIComponent(row.blockId)}`,
+    messages: (Array.isArray(row.messages) ? row.messages : []) as SeldonSessionItem["messages"],
   }));
 
   return {
@@ -151,8 +168,55 @@ export async function getSeldonPageData() {
       twilio: Boolean(integrations.twilio?.connected),
       kit: Boolean(integrations.kit?.connected),
     },
-    history,
+    sessions,
   };
+}
+
+export async function saveSeldonBlockAction(formData: FormData) {
+  assertWritable();
+
+  const orgId = await getOrgId();
+  if (!orgId) {
+    throw new Error("Unauthorized");
+  }
+
+  const blockId = String(formData.get("blockId") ?? "").trim();
+  const blockName = String(formData.get("blockName") ?? "").trim();
+  const blockMd = String(formData.get("blockMd") ?? "").trim();
+
+  if (!blockId || !blockName || !blockMd) {
+    throw new Error("Missing block payload");
+  }
+
+  const [org] = await db
+    .select({ settings: organizations.settings })
+    .from(organizations)
+    .where(eq(organizations.id, orgId))
+    .limit(1);
+
+  const settings = ((org?.settings ?? {}) as Record<string, unknown>) || {};
+  const existing = Array.isArray(settings.savedSeldonBlocks) ? (settings.savedSeldonBlocks as Array<Record<string, unknown>>) : [];
+  const filtered = existing.filter((item) => String(item.blockId ?? "") !== blockId);
+
+  filtered.unshift({
+    blockId,
+    blockName,
+    blockMd,
+    savedAt: new Date().toISOString(),
+  });
+
+  await db
+    .update(organizations)
+    .set({
+      settings: {
+        ...settings,
+        savedSeldonBlocks: filtered.slice(0, 50),
+      },
+      updatedAt: new Date(),
+    })
+    .where(eq(organizations.id, orgId));
+
+  revalidatePath("/seldon");
 }
 
 export async function disableSeldonBlockAction(formData: FormData) {
@@ -245,8 +309,8 @@ export async function runSeldonItAction(_prev: SeldonRunState, formData: FormDat
           summary: item.result.summary,
           fromInventory: true,
           installMode: "instant",
-          openPath: `/${item.result.matchedBlockId}`,
-          marketplaceSubmitPath: `/marketplace/submit?from=${encodeURIComponent(item.result.matchedBlockId)}`,
+          openPath: resolveOpenPath(existing?.name || fallbackName, item.need, item.result.summary),
+          savePath: "/seldon",
         });
         continue;
       }
@@ -346,8 +410,8 @@ export async function runSeldonItAction(_prev: SeldonRunState, formData: FormDat
         summary: item.result.summary,
         fromInventory: false,
         installMode: decision.mode === "instant" ? "instant" : "review",
-        openPath: `/${generatedId}`,
-        marketplaceSubmitPath: `/marketplace/submit?from=${encodeURIComponent(generatedId)}`,
+        openPath: resolveOpenPath(blockName, item.need, item.result.summary),
+        savePath: "/seldon",
       });
     }
 
@@ -369,12 +433,22 @@ export async function runSeldonItAction(_prev: SeldonRunState, formData: FormDat
     }
 
     const hasReview = results.some((entry) => entry.installMode === "review");
+    const message = hasReview
+      ? "Your block is being reviewed and will be live within 24 hours."
+      : "Your block is ready!";
+
+    await db.insert(seldonSessions).values({
+      orgId,
+      title: description.slice(0, 120),
+      messages: [
+        { role: "user", content: description },
+        { role: "assistant", content: message, results },
+      ],
+    });
 
     return {
       ok: true,
-      message: hasReview
-        ? "Your block is being reviewed and will be live within 24 hours."
-        : "Your block is ready!",
+      message,
       results,
     };
   } catch (cause) {

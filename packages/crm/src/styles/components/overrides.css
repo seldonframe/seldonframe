@@ -18,7 +18,7 @@
     border-radius: 0.75rem;
     box-shadow: var(--shadow-sm);
     transition: background-color var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
-    padding: 1.5rem;
+    padding: 1.25rem 1.5rem;
   }
 
   .crm-card:hover {
@@ -229,13 +229,14 @@
     width: 220px;
     border-radius: 0;
     background: hsl(var(--sidebar));
+    border-right: 0;
     padding: 0;
     transition: width var(--transition-slow);
   }
 
   .dark .crm-sidebar {
     background: hsl(var(--sidebar));
-    border-color: hsl(var(--sidebar-border));
+    border-color: transparent;
   }
 
   .crm-sidebar-link {

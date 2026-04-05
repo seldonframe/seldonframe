@@ -3,7 +3,7 @@
     "60ee01fdf847f34099b3c795230ad07cc44bd328d7": {
       "workers": {
         "app/(auth)/login/page": {
-          "moduleId": 81535,
+          "moduleId": 881535,
           "async": false,
           "exportedName": "sendMagicLinkAction",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/app/(auth)/signup/actions.ts"
