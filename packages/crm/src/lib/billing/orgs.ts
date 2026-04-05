@@ -7,10 +7,12 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { contacts, organizations, users } from "@/db/schema";
+import { contacts, orgMembers, organizations, users } from "@/db/schema";
+import { getOrgFeatures } from "@/lib/billing/features";
 import { assertWritable } from "@/lib/demo/server";
 import { getPlan } from "@/lib/billing/plans";
-import { installSoul } from "@/lib/soul/install";
+import { getOrgSubscription } from "@/lib/billing/subscription";
+import { installSoul, type FrameworkConfig } from "@/lib/soul/install";
 
 function slugify(value: string) {
   return value
@@ -48,8 +50,35 @@ async function requireBillingUser() {
   return dbUser;
 }
 
+export async function getWorkspaceLimitStatus() {
+  const user = await requireBillingUser();
+  const plan = getPlan(user.planId ?? "");
+  const orgSubscription = await getOrgSubscription(user.orgId);
+  const orgFeatures = getOrgFeatures(orgSubscription.tier ?? "free");
+  const managedOrgs = await listManagedOrganizations();
+
+  const maxOrgs = orgFeatures.maxWorkspaces;
+  const canCreate = maxOrgs <= 0 || managedOrgs.length < maxOrgs;
+
+  return {
+    plan,
+    tier: orgSubscription.tier ?? "free",
+    features: orgFeatures,
+    currentOrgs: managedOrgs.length,
+    maxOrgs,
+    canCreate,
+  };
+}
+
 export async function listManagedOrganizations() {
   const user = await requireBillingUser();
+
+  const membershipRows = await db
+    .select({ orgId: orgMembers.orgId })
+    .from(orgMembers)
+    .where(eq(orgMembers.userId, user.id));
+
+  const membershipOrgIds = membershipRows.map((row) => row.orgId);
 
   const rows = await db
     .select({
@@ -62,7 +91,14 @@ export async function listManagedOrganizations() {
       createdAt: organizations.createdAt,
     })
     .from(organizations)
-    .where(or(eq(organizations.parentUserId, user.id), eq(organizations.ownerId, user.id), eq(organizations.id, user.orgId)));
+    .where(
+      or(
+        eq(organizations.parentUserId, user.id),
+        eq(organizations.ownerId, user.id),
+        eq(organizations.id, user.orgId),
+        membershipOrgIds.length > 0 ? sql`${organizations.id} = any(${membershipOrgIds})` : sql`false`
+      )
+    );
 
   if (rows.length === 0) {
     return [];
@@ -96,6 +132,24 @@ export async function setActiveOrgAction(formData: FormData) {
   const user = await requireBillingUser();
   const orgId = String(formData.get("orgId") ?? "");
   const redirectTo = String(formData.get("redirectTo") ?? "/dashboard");
+
+  const [membership] = await db
+    .select({ orgId: orgMembers.orgId })
+    .from(orgMembers)
+    .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.userId, user.id)))
+    .limit(1);
+
+  if (membership?.orgId) {
+    const cookieStore = await cookies();
+    cookieStore.set("sf_active_org_id", membership.orgId, {
+      path: "/",
+      httpOnly: true,
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 30,
+    });
+
+    redirect(redirectTo.startsWith("/") ? redirectTo : "/dashboard");
+  }
 
   const [org] = await db
     .select({ id: organizations.id })
@@ -136,14 +190,12 @@ export async function createManagedOrganizationAction(formData: FormData) {
     throw new Error("Business name is required");
   }
 
-  const plan = getPlan(user.planId ?? "");
-
-  if (!plan || plan.type !== "pro") {
+  const limitStatus = await getWorkspaceLimitStatus();
+  if (limitStatus.tier === "free") {
     throw new Error("Pro plan required to create managed organizations");
   }
 
-  const managedOrgs = await listManagedOrganizations();
-  if (plan.limits.maxOrgs > 0 && managedOrgs.length >= plan.limits.maxOrgs) {
+  if (!limitStatus.canCreate) {
     throw new Error("Organization limit reached for current plan");
   }
 
@@ -180,6 +232,12 @@ export async function createManagedOrganizationAction(formData: FormData) {
     markCompleted: true,
   });
 
+  await db.insert(orgMembers).values({
+    orgId: org.id,
+    userId: user.id,
+    role: "owner",
+  });
+
   if (ownerEmail) {
     const tempPassword = randomUUID();
     const passwordHash = await bcrypt.hash(tempPassword, 10);
@@ -209,4 +267,99 @@ export async function createManagedOrganizationAction(formData: FormData) {
   });
 
   redirect("/dashboard");
+}
+
+type CreateWorkspaceFromSetupInput = {
+  businessName: string;
+  frameworkId: string;
+  generatedFramework?: FrameworkConfig | null;
+  location?: string;
+  journeyDescription?: string;
+  enabledAutomations?: string[];
+};
+
+export async function createWorkspaceFromSetupAction(input: CreateWorkspaceFromSetupInput) {
+  assertWritable();
+
+  const user = await requireBillingUser();
+  const businessName = String(input.businessName ?? "").trim();
+  const frameworkId = String(input.frameworkId ?? "").trim();
+  const generatedFramework = input.generatedFramework ?? null;
+
+  if (!businessName) {
+    throw new Error("Business name is required");
+  }
+
+  if (!frameworkId) {
+    throw new Error("Framework is required");
+  }
+
+  const limitStatus = await getWorkspaceLimitStatus();
+  if (limitStatus.tier === "free") {
+    throw new Error("Pro plan required to create additional workspaces");
+  }
+
+  if (!limitStatus.canCreate) {
+    throw new Error("Organization limit reached for current plan");
+  }
+
+  const baseSlug = slugify(businessName) || `workspace-${randomUUID().slice(0, 8)}`;
+  let slug = baseSlug;
+
+  for (let index = 0; index < 8; index += 1) {
+    const [existing] = await db.select({ id: organizations.id }).from(organizations).where(eq(organizations.slug, slug)).limit(1);
+    if (!existing) {
+      break;
+    }
+
+    slug = `${baseSlug}-${Math.floor(Math.random() * 10000)}`;
+  }
+
+  const [org] = await db
+    .insert(organizations)
+    .values({
+      name: businessName,
+      slug,
+      ownerId: user.id,
+      parentUserId: user.id,
+      plan: "pro",
+    })
+    .returning({ id: organizations.id });
+
+  if (!org) {
+    throw new Error("Could not create workspace");
+  }
+
+  await db.insert(orgMembers).values({
+    orgId: org.id,
+    userId: user.id,
+    role: "owner",
+  });
+
+  const ownerName = businessName.split(" ")[0] || "";
+
+  await installSoul({
+    orgId: org.id,
+    frameworkId,
+    framework: generatedFramework ?? undefined,
+    answers: {
+      ownerName,
+      ownerFullName: ownerName,
+      businessName,
+      location: String(input.location ?? ""),
+      journeyDescription: String(input.journeyDescription ?? ""),
+      enabledAutomations: Array.isArray(input.enabledAutomations) ? input.enabledAutomations : [],
+    },
+    markCompleted: true,
+  });
+
+  const cookieStore = await cookies();
+  cookieStore.set("sf_active_org_id", org.id, {
+    path: "/",
+    httpOnly: true,
+    sameSite: "lax",
+    maxAge: 60 * 60 * 24 * 30,
+  });
+
+  return { orgId: org.id };
 }

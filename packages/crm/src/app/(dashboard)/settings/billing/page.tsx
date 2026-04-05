@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { auth } from "@/auth";
 import { createBillingPortalSessionAction } from "@/lib/billing/actions";
+import { getOrgFeatures } from "@/lib/billing/features";
 import { listManagedOrganizations } from "@/lib/billing/orgs";
-import { getPlan, getProPlans } from "@/lib/billing/plans";
+import { getOrgSubscription } from "@/lib/billing/subscription";
 import { getSeldonUsageStats } from "@/lib/ai/client";
 import { getOrgId } from "@/lib/auth/helpers";
 
@@ -29,6 +30,20 @@ function formatDate(value: string | null | undefined) {
   return date.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
 }
 
+function getTierLabel(tier: string) {
+  const labels: Record<string, string> = {
+    free: "Self-hosted / Free",
+    starter: "Starter",
+    cloud_pro: "Cloud Pro",
+    pro_3: "Pro 3",
+    pro_5: "Pro 5",
+    pro_10: "Pro 10",
+    pro_20: "Pro 20",
+  };
+
+  return labels[tier] ?? tier;
+}
+
 export default async function BillingSettingsPage() {
   const session = await auth();
 
@@ -36,13 +51,16 @@ export default async function BillingSettingsPage() {
     return null;
   }
 
-  const plan = getPlan(session.user.planId ?? "");
-  const trialEndsAt = session.user.trialEndsAt ?? null;
-  const status = session.user.subscriptionStatus ?? "trialing";
-  const managedOrgs = plan?.type === "pro" ? await listManagedOrganizations() : [];
-  const nextProTier = plan?.type === "pro" ? getProPlans().find((entry) => entry.limits.maxOrgs > plan.limits.maxOrgs) : null;
   const orgId = await getOrgId();
-  const usageStats = orgId ? await getSeldonUsageStats({ orgId, userId: session.user.id }) : null;
+  const activeOrgId = orgId ?? session.user.orgId ?? null;
+  const subscription = await getOrgSubscription(activeOrgId);
+  const tier = subscription.tier ?? "free";
+  const features = getOrgFeatures(tier);
+  const trialEndsAt = subscription.trialEndsAt ?? null;
+  const status = subscription.status ?? "trialing";
+  const billingPeriod = subscription.stripePriceId?.includes("year") ? "yearly" : "monthly";
+  const managedOrgs = features.maxWorkspaces > 1 ? await listManagedOrganizations() : [];
+  const usageStats = activeOrgId ? await getSeldonUsageStats({ orgId: activeOrgId, userId: session.user.id }) : null;
 
   return (
     <section className="animate-page-enter space-y-4 sm:space-y-6">
@@ -55,7 +73,7 @@ export default async function BillingSettingsPage() {
         <div className="grid gap-2 md:grid-cols-2">
           <div>
             <p className="text-xs uppercase tracking-[0.08em] text-[hsl(var(--muted-foreground))]">Current plan</p>
-            <p className="text-lg font-semibold text-foreground">{plan?.name ?? "Self-hosted / Free"}</p>
+            <p className="text-lg font-semibold text-foreground">{getTierLabel(tier)}</p>
           </div>
           <div>
             <p className="text-xs uppercase tracking-[0.08em] text-[hsl(var(--muted-foreground))]">Subscription status</p>
@@ -63,7 +81,7 @@ export default async function BillingSettingsPage() {
           </div>
           <div>
             <p className="text-xs uppercase tracking-[0.08em] text-[hsl(var(--muted-foreground))]">Billing period</p>
-            <p className="text-foreground capitalize">{session.user.billingPeriod ?? "monthly"}</p>
+            <p className="text-foreground capitalize">{billingPeriod}</p>
           </div>
           <div>
             <p className="text-xs uppercase tracking-[0.08em] text-[hsl(var(--muted-foreground))]">Trial end</p>
@@ -130,12 +148,12 @@ export default async function BillingSettingsPage() {
         </div>
       ) : null}
 
-      {plan?.type === "pro" ? (
+      {features.maxWorkspaces > 1 ? (
         <div className="rounded-xl border bg-card space-y-4 p-5">
           <div className="flex items-center justify-between gap-2">
             <h2 className="text-section-title">Client Organizations</h2>
             <p className="text-sm text-[hsl(var(--muted-foreground))]">
-              {managedOrgs.length} of {plan.limits.maxOrgs} used
+              {managedOrgs.length} of {features.maxWorkspaces} used
             </p>
           </div>
 
@@ -148,11 +166,9 @@ export default async function BillingSettingsPage() {
             ))}
           </ul>
 
-          {nextProTier ? (
-            <p className="text-sm text-[hsl(var(--muted-foreground))]">
-              Need more capacity? Upgrade to <span className="font-medium text-foreground">{nextProTier.name}</span>.
-            </p>
-          ) : null}
+          <p className="text-sm text-[hsl(var(--muted-foreground))]">
+            Need more capacity? Upgrade to a higher Pro tier from the pricing page.
+          </p>
         </div>
       ) : null}
     </section>

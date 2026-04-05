@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { users } from "@/db/schema";
+import { getOrgId } from "@/lib/auth/helpers";
+import { getOrgSubscription } from "@/lib/billing/subscription";
 import { assertWritable } from "@/lib/demo/server";
 import { getPlan } from "@/lib/billing/plans";
 
@@ -197,6 +199,9 @@ export async function createBillingPortalSessionAction() {
     redirect("/settings/billing");
   }
 
+  const orgId = await getOrgId();
+  const orgSubscription = await getOrgSubscription(orgId ?? session?.user?.orgId ?? null);
+
   const [user] = await db
     .select({
       stripeCustomerId: users.stripeCustomerId,
@@ -205,13 +210,15 @@ export async function createBillingPortalSessionAction() {
     .where(eq(users.id, userId))
     .limit(1);
 
-  if (!user?.stripeCustomerId) {
+  const customerId = orgSubscription.stripeCustomerId ?? user?.stripeCustomerId ?? null;
+
+  if (!customerId) {
     throw new Error("No Stripe customer is associated with this account");
   }
 
   const portalUrl = await createStripeBillingPortalUrl({
     secretKey,
-    customerId: user.stripeCustomerId,
+    customerId,
   });
 
   redirect(portalUrl);

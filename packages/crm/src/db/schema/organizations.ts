@@ -38,6 +38,17 @@ export type OrganizationIntegrations = {
   };
 };
 
+export type OrganizationSubscription = {
+  stripeCustomerId?: string | null;
+  stripeSubscriptionId?: string | null;
+  stripePriceId?: string | null;
+  tier?: string;
+  maxWorkspaces?: number;
+  status?: "active" | "trialing" | "past_due" | "canceled" | "unpaid";
+  trialEndsAt?: string | null;
+  currentPeriodEnd?: string | null;
+};
+
 export const organizations = pgTable("organizations", {
   id: uuid("id")
     .default(sql`gen_random_uuid()`)
@@ -54,6 +65,7 @@ export const organizations = pgTable("organizations", {
   soulCompletedAt: timestamp("soul_completed_at", { withTimezone: true }),
   enabledBlocks: text("enabled_blocks").array().notNull().default(sql`'{}'::text[]`),
   integrations: jsonb("integrations").$type<OrganizationIntegrations>().notNull().default(sql`'{}'::jsonb`),
+  subscription: jsonb("subscription").$type<OrganizationSubscription>().notNull().default(sql`'{}'::jsonb`),
   plan: text("plan").notNull().default("free"),
   emailSendsThisMonth: integer("email_sends_this_month").notNull().default(0),
   aiCallsToday: integer("ai_calls_today").notNull().default(0),
