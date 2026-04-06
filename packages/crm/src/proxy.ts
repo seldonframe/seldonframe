@@ -8,10 +8,20 @@ import { enforcePlanGate } from "@/middleware/plan-gate";
 const protectedPrefixes = ["/hub", "/dashboard", "/welcome", "/orgs", "/contacts", "/deals", "/activities", "/forms", "/settings", "/api/v1"];
 const publicPrefixes = ["/api/v1", "/api/auth"];
 const defaultAppHosts = new Set(["app.seldonframe.com", "localhost", "127.0.0.1"]);
+const marketingHosts = new Set(["seldonframe.com", "www.seldonframe.com"]);
+const appHostFallback = "app.seldonframe.com";
 
 function normalizeHost(host: string | null) {
   if (!host) return "";
   return host.trim().toLowerCase().replace(/:\d+$/, "");
+}
+
+function isAppHost(host: string) {
+  return defaultAppHosts.has(host) || host.endsWith(".vercel.app");
+}
+
+function isAuthPath(pathname: string) {
+  return pathname === "/login" || pathname === "/signup" || pathname === "/setup" || pathname === "/welcome";
 }
 
 function isProtectedPath(pathname: string) {
@@ -45,10 +55,12 @@ function isPublicPath(pathname: string) {
 export const proxy = auth(async (request) => {
   const pathname = request.nextUrl.pathname;
   const host = normalizeHost(request.headers.get("host"));
+  const appHost = isAppHost(host);
+  const isMarketingHost = marketingHosts.has(host);
 
   if (
     host &&
-    !defaultAppHosts.has(host) &&
+    !appHost &&
     !pathname.startsWith("/_next") &&
     !pathname.startsWith("/api/")
   ) {
@@ -123,7 +135,18 @@ export const proxy = auth(async (request) => {
   const isSoulCompleted = Boolean(user?.soulCompleted);
   let isWelcomeShown = Boolean(user?.welcomeShown);
 
+  if (!appHost && isMarketingHost && (isProtectedPath(pathname) || isAuthPath(pathname))) {
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.host = appHostFallback;
+    redirectUrl.protocol = "https:";
+    return NextResponse.redirect(redirectUrl);
+  }
+
   if (pathname === "/") {
+    if (!appHost) {
+      return NextResponse.next();
+    }
+
     return NextResponse.redirect(new URL(isAuthenticated ? "/dashboard" : "/login", request.url));
   }
 

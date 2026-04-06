@@ -274,6 +274,7 @@ type CreateWorkspaceFromSetupInput = {
   frameworkId: string;
   generatedFramework?: FrameworkConfig | null;
   location?: string;
+  websiteUrl?: string;
   journeyDescription?: string;
   enabledAutomations?: string[];
 };
@@ -347,6 +348,7 @@ export async function createWorkspaceFromSetupAction(input: CreateWorkspaceFromS
       ownerFullName: ownerName,
       businessName,
       location: String(input.location ?? ""),
+      websiteUrl: String(input.websiteUrl ?? ""),
       journeyDescription: String(input.journeyDescription ?? ""),
       enabledAutomations: Array.isArray(input.enabledAutomations) ? input.enabledAutomations : [],
     },

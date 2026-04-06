@@ -45,15 +45,19 @@ function decryptIfNeeded(value: string | undefined) {
 }
 
 function getIncludedSeldonLimit(planId: string | null) {
-  if (!planId) {
+  if (!planId || planId === "free" || planId === "starter") {
+    return 50;
+  }
+
+  if (planId === "cloud_pro" || planId === "cloud-pro") {
+    return 500;
+  }
+
+  if (planId.startsWith("pro_") || planId.startsWith("pro-")) {
     return Number.POSITIVE_INFINITY;
   }
 
-  if (planId === "cloud-pro" || planId.startsWith("pro-")) {
-    return 10;
-  }
-
-  return 0;
+  return 50;
 }
 
 function getCurrentMonthStart() {

@@ -16,6 +16,8 @@ export default async function SeldonPage({
   return (
     <SeldonPageClient
       allowed={data.allowed}
+      planId={data.planId}
+      usage={data.usage}
       sessions={data.sessions}
       savedBlocks={data.savedBlocks}
       initialPrompt={params.prompt ?? ""}

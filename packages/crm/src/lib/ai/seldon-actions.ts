@@ -7,9 +7,11 @@ import { organizations, seldonSessions, stripeConnections } from "@/db/schema";
 import { getCurrentUser, getOrgId } from "@/lib/auth/helpers";
 import { canSeldonIt, resolvePlanFromPlanId } from "@/lib/billing/entitlements";
 import { assertWritable } from "@/lib/demo/server";
-import { getAIClient, recordSeldonUsage } from "@/lib/ai/client";
+import { getAIClient, getSeldonUsageStats, recordSeldonUsage } from "@/lib/ai/client";
 import { createLandingPageForSeldonAction } from "@/lib/landing/actions";
 import { generatePuckPage } from "@/lib/puck/generate-page";
+import { querySoulWiki } from "@/lib/soul-wiki/query";
+import { fileSeldonOutputToSoul } from "@/lib/soul-wiki/output-filing";
 import { installBlock, updateBlock, type InstallResult, type SeldonBlockType, type UpdateResult } from "@/lib/seldon/block-installer";
 import type { OrgSoul } from "@/lib/soul/types";
 import type { OrgTheme } from "@/lib/theme/types";
@@ -357,13 +359,29 @@ function normalizePlan(raw: ParsedSeldonResponse["plan"]): SeldonPlan | null {
   };
 }
 
-function buildSystemPrompt(soul: OrgSoul | null, integrations: OrganizationIntegrations) {
+function buildSystemPrompt(soul: OrgSoul | null, integrations: OrganizationIntegrations, wikiContent: string) {
   const connectedIntegrations = [
     integrations.resend?.connected ? "Resend" : null,
     integrations.twilio?.connected ? "Twilio" : null,
     integrations.google?.calendarConnected ? "Google Calendar" : null,
     integrations.kit?.connected ? "Kit" : null,
   ].filter(Boolean);
+
+  const wikiSection = wikiContent
+    ? `
+
+COMPILED BUSINESS KNOWLEDGE (use this for real content - specific phrases, real testimonials, actual FAQ, real service details):
+---
+${wikiContent}
+---
+
+IMPORTANT: When creating pages, emails, or any content, use the ACTUAL language, testimonials, FAQ answers, and details from the compiled knowledge above. Do NOT use generic placeholder text when real content is available. For example:
+- If the knowledge has real client testimonials, use those exact quotes in TestimonialCard components
+- If the knowledge has real FAQ questions, use those in FAQ components
+- If the knowledge describes services with real prices, use those in ServiceCard components
+- If the knowledge captures the business's actual voice/phrases, write all copy in that voice
+`
+    : "";
 
   return `You are Seldon It, an AI workflow builder for SeldonFrame CRM.
 
@@ -378,6 +396,7 @@ ${soul?.customContext || "No custom context provided."}
 ---
 
 CONNECTED INTEGRATIONS: ${connectedIntegrations.join(", ") || "none"}
+${wikiSection}
 
 Return ONLY valid JSON with one top-level action.
 
@@ -494,8 +513,12 @@ export async function getSeldonPageData() {
     }))
     .filter((entry) => entry.id && entry.name && entry.blockMd);
 
+  const usage = await getSeldonUsageStats({ orgId, userId: user.id });
+
   return {
     allowed,
+    planId: user.planId ?? null,
+    usage,
     services: {
       stripe: Boolean(stripe),
       resend: Boolean(integrations.resend?.connected),
@@ -690,7 +713,8 @@ export async function runSeldonItAction(_prev: SeldonRunState, formData: FormDat
     const activePlan = getActivePlan(existingMessages);
     const contextMessage = buildSessionContextMessage(sessionEntities, activePlan);
 
-    const systemPrompt = buildSystemPrompt(soul, integrations);
+    const wikiContent = await querySoulWiki(orgId, description);
+    const systemPrompt = buildSystemPrompt(soul, integrations, wikiContent);
 
     const response = await aiResolution.client.messages.create({
       model: process.env.SELDON_MODEL?.trim() || "claude-sonnet-4-20250514",
@@ -861,9 +885,16 @@ export async function runSeldonItAction(_prev: SeldonRunState, formData: FormDat
           mode: aiResolution.mode,
           model: "claude-sonnet",
         });
+
+        await fileSeldonOutputToSoul({
+          orgId,
+          userPrompt: description,
+          action,
+          result,
+        });
       }
     } catch {
-      // Usage recording is non-critical; do not fail the run.
+      // Usage and learning capture are non-critical; do not fail the run.
     }
 
     const message = parsed.message || (results.length > 0 ? "Done — changes are live." : "Blueprint ready.");

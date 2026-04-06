@@ -3,12 +3,14 @@
 import { and, eq } from "drizzle-orm";
 import { buildSoulVariables, interpolateDeep, loadSoulPackage } from "@seldonframe/core/soul";
 import { db } from "@/db";
-import { bookings, intakeForms, landingPages, organizations, pipelines } from "@/db/schema";
+import { bookings, intakeForms, landingPages, organizations, pipelines, soulSources } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
 import type { OrgSoul } from "@/lib/soul/types";
 import { DEFAULT_ORG_THEME, type OrgTheme } from "@/lib/theme/types";
 import { normalizeTheme } from "@/lib/theme/normalize-theme";
 import { assertWritable } from "@/lib/demo/server";
+import { ingestSource } from "@/lib/soul-wiki/ingest";
+import { incrementalCompile } from "@/lib/soul-wiki/compile";
 
 type InstallSoulInput = {
   soulId?: string;
@@ -44,6 +46,53 @@ function toSlug(value: string) {
     .replace(/[^a-z0-9\s-]/g, "")
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-");
+}
+
+async function seedSoulWikiFromOnboardingWebsite(orgId: string, answers: Record<string, unknown> | undefined) {
+  const websiteUrl = String(answers?.websiteUrl ?? "").trim();
+
+  if (!websiteUrl || !/^https?:\/\//i.test(websiteUrl)) {
+    return;
+  }
+
+  const [existing] = await db
+    .select({ id: soulSources.id })
+    .from(soulSources)
+    .where(and(eq(soulSources.orgId, orgId), eq(soulSources.type, "url"), eq(soulSources.sourceUrl, websiteUrl)))
+    .limit(1);
+
+  if (existing?.id) {
+    return;
+  }
+
+  try {
+    const { rawContent, title, metadata } = await ingestSource(orgId, {
+      type: "url",
+      url: websiteUrl,
+      title: `Website: ${websiteUrl}`,
+    });
+
+    const [source] = await db
+      .insert(soulSources)
+      .values({
+        orgId,
+        type: "url",
+        title,
+        sourceUrl: websiteUrl,
+        rawContent,
+        metadata,
+        status: "pending",
+      })
+      .returning({ id: soulSources.id });
+
+    if (source?.id) {
+      void incrementalCompile(orgId, source.id).catch(() => {
+        return;
+      });
+    }
+  } catch {
+    return;
+  }
 }
 
 function normalizeStageColor(index: number) {
@@ -413,6 +462,8 @@ export async function installSoul(input: InstallSoulInput) {
     .set(orgUpdateValues)
     .where(eq(organizations.id, orgId));
 
+  await seedSoulWikiFromOnboardingWebsite(orgId, input.answers);
+
   return {
     success: true,
     soulId: input.soulId,
@@ -704,6 +755,8 @@ async function installFrameworkEntities(
     .update(organizations)
     .set(orgUpdateValues)
     .where(eq(organizations.id, orgId));
+
+  await seedSoulWikiFromOnboardingWebsite(orgId, input.answers);
 
   return {
     success: true,

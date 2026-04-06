@@ -24,6 +24,10 @@
       "static/media/caa3a2e1cccd8315-s.p.16t1db8_9y2o~.woff2",
       "static/media/797e433ab948586e-s.p.0.q-h669a_dqa.woff2"
     ],
+    "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/(dashboard)/claim/page": [
+      "static/media/caa3a2e1cccd8315-s.p.16t1db8_9y2o~.woff2",
+      "static/media/797e433ab948586e-s.p.0.q-h669a_dqa.woff2"
+    ],
     "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/(dashboard)/contacts/[id]/page": [
       "static/media/caa3a2e1cccd8315-s.p.16t1db8_9y2o~.woff2",
       "static/media/797e433ab948586e-s.p.0.q-h669a_dqa.woff2"
@@ -49,6 +53,10 @@
       "static/media/797e433ab948586e-s.p.0.q-h669a_dqa.woff2"
     ],
     "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/(dashboard)/deals/page": [
+      "static/media/caa3a2e1cccd8315-s.p.16t1db8_9y2o~.woff2",
+      "static/media/797e433ab948586e-s.p.0.q-h669a_dqa.woff2"
+    ],
+    "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/(dashboard)/editor/[pageId]/page": [
       "static/media/caa3a2e1cccd8315-s.p.16t1db8_9y2o~.woff2",
       "static/media/797e433ab948586e-s.p.0.q-h669a_dqa.woff2"
     ],
@@ -152,11 +160,27 @@
       "static/media/caa3a2e1cccd8315-s.p.16t1db8_9y2o~.woff2",
       "static/media/797e433ab948586e-s.p.0.q-h669a_dqa.woff2"
     ],
+    "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/(dashboard)/settings/soul-wiki/page": [
+      "static/media/caa3a2e1cccd8315-s.p.16t1db8_9y2o~.woff2",
+      "static/media/797e433ab948586e-s.p.0.q-h669a_dqa.woff2"
+    ],
     "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/(dashboard)/settings/team/page": [
       "static/media/caa3a2e1cccd8315-s.p.16t1db8_9y2o~.woff2",
       "static/media/797e433ab948586e-s.p.0.q-h669a_dqa.woff2"
     ],
+    "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/(dashboard)/settings/theme/page": [
+      "static/media/caa3a2e1cccd8315-s.p.16t1db8_9y2o~.woff2",
+      "static/media/797e433ab948586e-s.p.0.q-h669a_dqa.woff2"
+    ],
     "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/(dashboard)/settings/webhooks/page": [
+      "static/media/caa3a2e1cccd8315-s.p.16t1db8_9y2o~.woff2",
+      "static/media/797e433ab948586e-s.p.0.q-h669a_dqa.woff2"
+    ],
+    "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/(dashboard)/studio/new/page": [
+      "static/media/caa3a2e1cccd8315-s.p.16t1db8_9y2o~.woff2",
+      "static/media/797e433ab948586e-s.p.0.q-h669a_dqa.woff2"
+    ],
+    "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/(dashboard)/studio/page": [
       "static/media/caa3a2e1cccd8315-s.p.16t1db8_9y2o~.woff2",
       "static/media/797e433ab948586e-s.p.0.q-h669a_dqa.woff2"
     ],
@@ -168,7 +192,27 @@
       "static/media/caa3a2e1cccd8315-s.p.16t1db8_9y2o~.woff2",
       "static/media/797e433ab948586e-s.p.0.q-h669a_dqa.woff2"
     ],
+    "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/(public)/docs/page": [
+      "static/media/caa3a2e1cccd8315-s.p.16t1db8_9y2o~.woff2",
+      "static/media/797e433ab948586e-s.p.0.q-h669a_dqa.woff2"
+    ],
     "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/(public)/page": [
+      "static/media/caa3a2e1cccd8315-s.p.16t1db8_9y2o~.woff2",
+      "static/media/797e433ab948586e-s.p.0.q-h669a_dqa.woff2"
+    ],
+    "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/(public)/s/[orgSlug]/[...slug]/page": [
+      "static/media/caa3a2e1cccd8315-s.p.16t1db8_9y2o~.woff2",
+      "static/media/797e433ab948586e-s.p.0.q-h669a_dqa.woff2"
+    ],
+    "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/(public)/soul-marketplace/[slug]/install/page": [
+      "static/media/caa3a2e1cccd8315-s.p.16t1db8_9y2o~.woff2",
+      "static/media/797e433ab948586e-s.p.0.q-h669a_dqa.woff2"
+    ],
+    "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/(public)/soul-marketplace/[slug]/page": [
+      "static/media/caa3a2e1cccd8315-s.p.16t1db8_9y2o~.woff2",
+      "static/media/797e433ab948586e-s.p.0.q-h669a_dqa.woff2"
+    ],
+    "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/(public)/soul-marketplace/page": [
       "static/media/caa3a2e1cccd8315-s.p.16t1db8_9y2o~.woff2",
       "static/media/797e433ab948586e-s.p.0.q-h669a_dqa.woff2"
     ],
@@ -229,6 +273,10 @@
       "static/media/797e433ab948586e-s.p.0.q-h669a_dqa.woff2"
     ],
     "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/terms/page": [
+      "static/media/caa3a2e1cccd8315-s.p.16t1db8_9y2o~.woff2",
+      "static/media/797e433ab948586e-s.p.0.q-h669a_dqa.woff2"
+    ],
+    "[project]/CascadeProjects/Seldon Frame/packages/crm/src/app/welcome-public/page": [
       "static/media/caa3a2e1cccd8315-s.p.16t1db8_9y2o~.woff2",
       "static/media/797e433ab948586e-s.p.0.q-h669a_dqa.woff2"
     ]

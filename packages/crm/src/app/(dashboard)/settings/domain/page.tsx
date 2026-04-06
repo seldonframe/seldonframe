@@ -1,4 +1,8 @@
 import { getCustomDomainSettings, saveCustomDomainAction } from "@/lib/domains/actions";
+import { UpgradeGate } from "@/components/upgrade-gate";
+import { getOrgFeatures } from "@/lib/billing/features";
+import { getOrgId } from "@/lib/auth/helpers";
+import { getOrgSubscription } from "@/lib/billing/subscription";
 
 export default async function DomainSettingsPage({
   searchParams,
@@ -7,6 +11,10 @@ export default async function DomainSettingsPage({
 }) {
   const params = await searchParams;
   const settings = await getCustomDomainSettings();
+  const orgId = await getOrgId();
+  const subscription = await getOrgSubscription(orgId);
+  const features = getOrgFeatures(subscription.tier ?? "free");
+  const hasCustomDomainAccess = features.customDomains;
 
   if (!settings) {
     return null;
@@ -65,63 +73,70 @@ export default async function DomainSettingsPage({
           </div>
         </div>
 
-        <form action={saveCustomDomainAction} className="space-y-3">
-          <input type="hidden" name="intent" value="add" />
-          <div className="space-y-1">
-            <label htmlFor="custom-domain" className="text-label">
-              Custom domain
-            </label>
-            <input
-              id="custom-domain"
-              name="domain"
-              defaultValue={settings.customDomain}
-              placeholder="crm.cleardrain.com"
-              className="crm-input h-10 w-full px-3"
-            />
-          </div>
+        <UpgradeGate
+          feature="custom-domain"
+          requiredPlan="cloud"
+          hasAccess={hasCustomDomainAccess}
+          message="Custom domains are available on Cloud+. Keep your pages on your own domain instead of app.seldonframe.com routes."
+        >
+          <form action={saveCustomDomainAction} className="space-y-3">
+            <input type="hidden" name="intent" value="add" />
+            <div className="space-y-1">
+              <label htmlFor="custom-domain" className="text-label">
+                Custom domain
+              </label>
+              <input
+                id="custom-domain"
+                name="domain"
+                defaultValue={settings.customDomain}
+                placeholder="crm.cleardrain.com"
+                className="crm-input h-10 w-full px-3"
+              />
+            </div>
 
-          <div className="flex flex-wrap gap-2">
-            <button type="submit" className="crm-button-primary h-10 px-4">
-              {settings.customDomain ? "Save Domain" : "Add Domain"}
-            </button>
-            {settings.customDomain ? (
-              <button type="submit" formAction={saveCustomDomainAction} name="intent" value="check" className="crm-button-secondary h-10 px-4">
-                Check Status
+            <div className="flex flex-wrap gap-2">
+              <button type="submit" className="crm-button-primary h-10 px-4">
+                {settings.customDomain ? "Save Domain" : "Add Domain"}
               </button>
-            ) : null}
-            {settings.customDomain ? (
-              <button type="submit" formAction={saveCustomDomainAction} name="intent" value="remove" className="crm-button-secondary h-10 px-4">
-                Remove Domain
-              </button>
-            ) : null}
-          </div>
-        </form>
+              {settings.customDomain ? (
+                <button type="submit" formAction={saveCustomDomainAction} name="intent" value="check" className="crm-button-secondary h-10 px-4">
+                  Check Status
+                </button>
+              ) : null}
+              {settings.customDomain ? (
+                <button type="submit" formAction={saveCustomDomainAction} name="intent" value="remove" className="crm-button-secondary h-10 px-4">
+                  Remove Domain
+                </button>
+              ) : null}
+            </div>
+          </form>
 
-        <div className="rounded-lg border border-border bg-muted/40 p-4 space-y-2">
-          <p className="text-sm font-medium text-foreground">DNS Configuration Required</p>
-          <p className="text-sm text-muted-foreground">Add this CNAME record at your domain registrar:</p>
-          <div className="rounded-md border border-border bg-background/70 p-3 text-sm font-mono">
-            <p>
-              <span className="text-muted-foreground">Type:</span> CNAME
+          <div className="rounded-lg border border-border bg-muted/40 p-4 space-y-2">
+            <p className="text-sm font-medium text-foreground">DNS Configuration Required</p>
+            <p className="text-sm text-muted-foreground">Add this CNAME record at your domain registrar:</p>
+            <div className="rounded-md border border-border bg-background/70 p-3 text-sm font-mono">
+              <p>
+                <span className="text-muted-foreground">Type:</span> CNAME
+              </p>
+              <p>
+                <span className="text-muted-foreground">Name:</span> {dnsName}
+              </p>
+              <p>
+                <span className="text-muted-foreground">Value:</span> cname.vercel-dns.com
+              </p>
+            </div>
+            <p className="text-xs text-muted-foreground">DNS changes can take up to 48 hours to propagate.</p>
+            <p className="text-sm text-muted-foreground">
+              Status: <span className={settings.domainVerified ? "text-positive" : "text-caution"}>{verificationMessage}</span>
             </p>
-            <p>
-              <span className="text-muted-foreground">Name:</span> {dnsName}
-            </p>
-            <p>
-              <span className="text-muted-foreground">Value:</span> cname.vercel-dns.com
-            </p>
+            {settings.customDomain ? (
+              <p className="text-xs text-muted-foreground">
+                Domain: <span className="text-foreground">{settings.customDomain}</span>
+                {settings.domainStatus ? ` · ${settings.domainStatus}` : ""}
+              </p>
+            ) : null}
           </div>
-          <p className="text-xs text-muted-foreground">DNS changes can take up to 48 hours to propagate.</p>
-          <p className="text-sm text-muted-foreground">
-            Status: <span className={settings.domainVerified ? "text-positive" : "text-caution"}>{verificationMessage}</span>
-          </p>
-          {settings.customDomain ? (
-            <p className="text-xs text-muted-foreground">
-              Domain: <span className="text-foreground">{settings.customDomain}</span>
-              {settings.domainStatus ? ` · ${settings.domainStatus}` : ""}
-            </p>
-          ) : null}
-        </div>
+        </UpgradeGate>
       </article>
     </section>
   );

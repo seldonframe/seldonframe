@@ -42,6 +42,15 @@ type SessionPlan = {
   }>;
 };
 
+type SeldonUsageInfo = {
+  includedUsed: number;
+  includedLimit: number;
+  meteredUsed: number;
+  byokUsed: number;
+  totalThisMonth: number;
+  mode: "byok" | "included" | "metered";
+};
+
 const initialState: SeldonRunState = { ok: false };
 const processingSteps = [
   "Analyzing your request...",
@@ -305,11 +314,15 @@ function ResultCard({
 
 export function SeldonPageClient({
   allowed,
+  planId,
+  usage,
   sessions,
   savedBlocks,
   initialPrompt = "",
 }: {
   allowed: boolean;
+  planId: string | null;
+  usage: SeldonUsageInfo;
   sessions: SeldonSessionItem[];
   savedBlocks: SeldonSavedBlock[];
   initialPrompt?: string;
@@ -346,6 +359,8 @@ export function SeldonPageClient({
   const statePlan = state.plan as SessionPlan | null | undefined;
   const activeSessionPlan = useMemo(() => (activeSession ? getSessionPlan(activeSession) : null), [activeSession]);
   const activeSessionCreatedCount = useMemo(() => (activeSession ? getSessionCreatedEntityCount(activeSession) : 0), [activeSession]);
+  const isFreeTier = !planId || planId === "free" || planId === "starter";
+  const includedLimitLabel = Number.isFinite(usage.includedLimit) ? usage.includedLimit : 50;
 
   const customizeExamples = [
     {
@@ -741,6 +756,15 @@ export function SeldonPageClient({
                     </button>
                   ))}
                 </div>
+
+                {isFreeTier ? (
+                  <p className="mt-3 text-center text-xs text-muted-foreground">
+                    {usage.includedUsed}/{includedLimitLabel} this month
+                    {usage.includedUsed >= Math.floor(includedLimitLabel * 0.8) ? (
+                      <span className="text-amber-500"> · Running low</span>
+                    ) : null}
+                  </p>
+                ) : null}
               </div>
             </div>
           </div>

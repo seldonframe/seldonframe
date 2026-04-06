@@ -3,7 +3,7 @@
     "00879f4fe5f6166e8f6cfbc144add6ee11c961458c": {
       "workers": {
         "app/(dashboard)/forms/page": {
-          "moduleId": 751440,
+          "moduleId": 166830,
           "async": false,
           "exportedName": "listEmails",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/emails/actions.ts"
@@ -15,7 +15,7 @@
     "00e1a2270c87557eb777d44fd4164cc58154f27223": {
       "workers": {
         "app/(dashboard)/forms/page": {
-          "moduleId": 751440,
+          "moduleId": 166830,
           "async": false,
           "exportedName": "listEmailTemplates",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/emails/actions.ts"
@@ -27,7 +27,7 @@
     "401ba4c50e2561614f9dcbd8018b97e991196982dd": {
       "workers": {
         "app/(dashboard)/forms/page": {
-          "moduleId": 751440,
+          "moduleId": 166830,
           "async": false,
           "exportedName": "sendEmailAction",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/emails/actions.ts"
@@ -39,7 +39,7 @@
     "402bc13d01baf976bc855b1b1a97c29413ec6eab67": {
       "workers": {
         "app/(dashboard)/forms/page": {
-          "moduleId": 751440,
+          "moduleId": 166830,
           "async": false,
           "exportedName": "sendEmailTemplateToContactAction",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/emails/actions.ts"
@@ -51,7 +51,7 @@
     "403299e8221ff1d1ed4e4027ced4e736f20d6a8b91": {
       "workers": {
         "app/(dashboard)/forms/page": {
-          "moduleId": 751440,
+          "moduleId": 166830,
           "async": false,
           "exportedName": "sendWelcomeEmailForContact",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/emails/actions.ts"
@@ -63,7 +63,7 @@
     "406a07a7744d1b5dc30bf64b3cacd61bf67dd0169a": {
       "workers": {
         "app/(dashboard)/forms/page": {
-          "moduleId": 751440,
+          "moduleId": 166830,
           "async": false,
           "exportedName": "markEmailOpenedByPixelAction",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/emails/actions.ts"
@@ -75,7 +75,7 @@
     "407b6c6c3a6b7c1fd77065478ee36ebfa4593c8b63": {
       "workers": {
         "app/(dashboard)/forms/page": {
-          "moduleId": 751440,
+          "moduleId": 166830,
           "async": false,
           "exportedName": "createEmailTemplateAction",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/emails/actions.ts"
@@ -84,10 +84,22 @@
       "exportedName": "createEmailTemplateAction",
       "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/emails/actions.ts"
     },
+    "407e7aa13aefbbccb6a148588f5e129a58d2ea1bef": {
+      "workers": {
+        "app/(dashboard)/forms/page": {
+          "moduleId": 166830,
+          "async": false,
+          "exportedName": "updateEmailTemplateAction",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/emails/actions.ts"
+        }
+      },
+      "exportedName": "updateEmailTemplateAction",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/emails/actions.ts"
+    },
     "40b4cbcad6474c2323f19c05631d18493540d8d1b0": {
       "workers": {
         "app/(dashboard)/forms/page": {
-          "moduleId": 751440,
+          "moduleId": 166830,
           "async": false,
           "exportedName": "markEmailOpenedAction",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/emails/actions.ts"
@@ -99,7 +111,7 @@
     "40bfc99e31deff714fac80575ef77178e2b2cc0a12": {
       "workers": {
         "app/(dashboard)/forms/page": {
-          "moduleId": 751440,
+          "moduleId": 166830,
           "async": false,
           "exportedName": "sendTriggeredEmailsForContactEvent",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/emails/actions.ts"
@@ -108,10 +120,22 @@
       "exportedName": "sendTriggeredEmailsForContactEvent",
       "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/emails/actions.ts"
     },
+    "40cb23b86189bdb375aebbc95db39f0f61eeb56f64": {
+      "workers": {
+        "app/(dashboard)/forms/page": {
+          "moduleId": 166830,
+          "async": false,
+          "exportedName": "createEmailTemplateForSeldonAction",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/emails/actions.ts"
+        }
+      },
+      "exportedName": "createEmailTemplateForSeldonAction",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/emails/actions.ts"
+    },
     "40f82872556e2113b40baed41bac14a667eccac9dc": {
       "workers": {
         "app/(dashboard)/forms/page": {
-          "moduleId": 751440,
+          "moduleId": 166830,
           "async": false,
           "exportedName": "sendEmailTemplateToContactFormAction",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/emails/actions.ts"
@@ -123,7 +147,7 @@
     "601849675816cc3f8dab9ef40e5c9bacf735eacc89": {
       "workers": {
         "app/(dashboard)/forms/page": {
-          "moduleId": 751440,
+          "moduleId": 166830,
           "async": false,
           "exportedName": "markEmailClickedAction",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/emails/actions.ts"
@@ -132,58 +156,10 @@
       "exportedName": "markEmailClickedAction",
       "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/emails/actions.ts"
     },
-    "00b66343f1d2e67ccfd014c5c217ac785074f30d38": {
-      "workers": {
-        "app/(dashboard)/forms/page": {
-          "moduleId": 751440,
-          "async": false,
-          "exportedName": "getKitIntegrationSettings",
-          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/integrations/kit/actions.ts"
-        }
-      },
-      "exportedName": "getKitIntegrationSettings",
-      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/integrations/kit/actions.ts"
-    },
-    "40308e3c846fa1a3a0ce6671c7372546bf2b3d77a6": {
-      "workers": {
-        "app/(dashboard)/forms/page": {
-          "moduleId": 751440,
-          "async": false,
-          "exportedName": "testKitConnectionAction",
-          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/integrations/kit/actions.ts"
-        }
-      },
-      "exportedName": "testKitConnectionAction",
-      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/integrations/kit/actions.ts"
-    },
-    "4087ec420483216579db582470ce28bdff7667594e": {
-      "workers": {
-        "app/(dashboard)/forms/page": {
-          "moduleId": 751440,
-          "async": false,
-          "exportedName": "syncKitForContactEvent",
-          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/integrations/kit/actions.ts"
-        }
-      },
-      "exportedName": "syncKitForContactEvent",
-      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/integrations/kit/actions.ts"
-    },
-    "409cbcf65c45b7b42a430484d0adf9f14dc4ba66b8": {
-      "workers": {
-        "app/(dashboard)/forms/page": {
-          "moduleId": 751440,
-          "async": false,
-          "exportedName": "saveKitIntegrationAction",
-          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/integrations/kit/actions.ts"
-        }
-      },
-      "exportedName": "saveKitIntegrationAction",
-      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/integrations/kit/actions.ts"
-    },
     "00085c2d5ccec9fdc986ee00c912cc33c5fdc361cd": {
       "workers": {
         "app/(dashboard)/forms/page": {
-          "moduleId": 751440,
+          "moduleId": 166830,
           "async": false,
           "exportedName": "listManagedOrganizations",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/billing/orgs.ts"
@@ -195,7 +171,7 @@
     "00a089b57be415ff4fe5df97054648a73b81b6e12a": {
       "workers": {
         "app/(dashboard)/forms/page": {
-          "moduleId": 751440,
+          "moduleId": 166830,
           "async": false,
           "exportedName": "getWorkspaceLimitStatus",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/billing/orgs.ts"
@@ -207,7 +183,7 @@
     "4010103f88e240ce8b5cae7fcb198ce810592698ad": {
       "workers": {
         "app/(dashboard)/forms/page": {
-          "moduleId": 751440,
+          "moduleId": 166830,
           "async": false,
           "exportedName": "createWorkspaceFromSetupAction",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/billing/orgs.ts"
@@ -219,7 +195,7 @@
     "4016a95463cd3033263184ed66771e74be761cdc67": {
       "workers": {
         "app/(dashboard)/forms/page": {
-          "moduleId": 751440,
+          "moduleId": 166830,
           "async": false,
           "exportedName": "createManagedOrganizationAction",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/billing/orgs.ts"
@@ -231,7 +207,7 @@
     "408e88e937d58461c7291696b137bd9a2e3a1f6f9e": {
       "workers": {
         "app/(dashboard)/forms/page": {
-          "moduleId": 751440,
+          "moduleId": 166830,
           "async": false,
           "exportedName": "setActiveOrgAction",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/billing/orgs.ts"
@@ -243,7 +219,7 @@
     "406c668319341aec1480722e053ca19e2439b3eb85": {
       "workers": {
         "app/(dashboard)/forms/page": {
-          "moduleId": 751440,
+          "moduleId": 166830,
           "async": false,
           "exportedName": "installSoul",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/soul/install.ts"
@@ -255,7 +231,7 @@
     "007d58df420f30fdc81dfc06c079218fbea27783e1": {
       "workers": {
         "app/(dashboard)/forms/page": {
-          "moduleId": 751440,
+          "moduleId": 166830,
           "async": false,
           "exportedName": "getHiddenBlocks",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/blocks/visibility-actions.ts"
@@ -267,7 +243,7 @@
     "40452e7fbf5a57122506715483e07ae1b8e6989646": {
       "workers": {
         "app/(dashboard)/forms/page": {
-          "moduleId": 751440,
+          "moduleId": 166830,
           "async": false,
           "exportedName": "toggleBlockVisibilityAction",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/blocks/visibility-actions.ts"
@@ -279,7 +255,7 @@
     "00425d150235a1b1f03c7bf8b458c3e5455be13cf0": {
       "workers": {
         "app/(dashboard)/forms/page": {
-          "moduleId": 751440,
+          "moduleId": 166830,
           "async": false,
           "exportedName": "createSuggestedFormAction",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/forms/actions.ts"
@@ -291,7 +267,7 @@
     "004b63b90966d77e5025b587b32ea8357d321187e6": {
       "workers": {
         "app/(dashboard)/forms/page": {
-          "moduleId": 751440,
+          "moduleId": 166830,
           "async": false,
           "exportedName": "listForms",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/forms/actions.ts"
@@ -303,7 +279,7 @@
     "4017584600945920fae83437ba62763450cb923b87": {
       "workers": {
         "app/(dashboard)/forms/page": {
-          "moduleId": 751440,
+          "moduleId": 166830,
           "async": false,
           "exportedName": "submitPublicIntakeAction",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/forms/actions.ts"
@@ -315,7 +291,7 @@
     "40a0c4bfd9274e4d1fb6b4784a029821c968b82428": {
       "workers": {
         "app/(dashboard)/forms/page": {
-          "moduleId": 751440,
+          "moduleId": 166830,
           "async": false,
           "exportedName": "updateFormAction",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/forms/actions.ts"
@@ -327,7 +303,7 @@
     "40bc8e32b7e10b64f449edfc5ee29bcf5549737ec9": {
       "workers": {
         "app/(dashboard)/forms/page": {
-          "moduleId": 751440,
+          "moduleId": 166830,
           "async": false,
           "exportedName": "createFormAction",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/forms/actions.ts"

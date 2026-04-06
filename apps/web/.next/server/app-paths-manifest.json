@@ -4,6 +4,6 @@
   "/page": "app/page.js",
   "/privacy/page": "app/privacy/page.js",
   "/terms/page": "app/terms/page.js",
-  "/policy/page": "app/policy/page.js",
-  "/terms-of-service/page": "app/terms-of-service/page.js"
+  "/terms-of-service/page": "app/terms-of-service/page.js",
+  "/policy/page": "app/policy/page.js"
 }

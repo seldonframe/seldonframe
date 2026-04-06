@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import {
   BookOpen,
   Check,
@@ -11,8 +12,9 @@ import {
   Star,
   Zap,
 } from "lucide-react";
+import { auth } from "@/auth";
+import { UrlAnalyzer } from "@/components/landing/url-analyzer";
 import { BackgroundBeams } from "@/components/marketing/background-beams";
-import { HeroPrimaryCta } from "@/components/marketing/hero-primary-cta";
 import { LandingPricingSection } from "@/components/marketing/landing-pricing-section";
 import { SeldonItDemo } from "@/components/marketing/seldon-it-demo";
 import { SpotlightHeading } from "@/components/marketing/spotlight-heading";
@@ -33,7 +35,12 @@ export const metadata: Metadata = {
   },
 };
 
-export default function PublicHomePage() {
+export default async function PublicHomePage() {
+  const session = await auth();
+  if (session?.user?.id) {
+    redirect("/dashboard");
+  }
+
   return (
     <div className="bg-[#050d0f] font-[family-name:var(--font-geist-sans)] text-foreground">
       <header className="sticky top-0 z-20 border-b border-white/10 bg-[#050d0f]/80 backdrop-blur-md">
@@ -78,27 +85,32 @@ export default function PublicHomePage() {
           <Particles className="absolute inset-0" quantity={90} color="#36d1c9" size={1.1} ease={140} staticity={42} />
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(21,184,176,0.22),rgba(5,13,15,0)_60%)]" />
           <TextReveal
-            lines={["Download a framework.", "Customize every block.", "Your business runs itself."]}
+            lines={["Paste your website.", "Get your business system.", "Go live in minutes."]}
             className="relative max-w-4xl text-5xl font-bold tracking-tight md:text-6xl lg:text-7xl"
           />
           <p className="relative mt-7 max-w-2xl text-base leading-relaxed text-[#9fb2b8] md:text-lg">
-            Free business frameworks with CRM, booking, email, pages, forms, and automations — all connected by one
-            soul. Need a feature that doesn&apos;t exist? Seldon it.
+            One URL. Seldon reads your site, learns your business, and builds your CRM, booking page, quiz funnel,
+            and email sequences with your actual voice.
           </p>
 
-          <div className="relative mt-9 flex flex-wrap items-center gap-3">
-            <HeroPrimaryCta />
-            <Link
-              href="https://github.com/seldonframe/crm"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex h-11 items-center justify-center rounded-full border border-white/20 px-6 text-sm font-medium text-foreground transition-colors hover:border-[#15b8b0]/80 hover:text-[#5cdad3]"
-            >
-              Star on GitHub ↗
-            </Link>
+          <div className="relative mt-10">
+            <UrlAnalyzer />
           </div>
 
-          <p className="relative mt-4 text-xs text-[#7f959d]">Free forever. Self-host or Cloud.</p>
+          <div className="relative mt-6 text-center">
+            <p className="text-sm text-[#7f959d]">Try an example:</p>
+            <div className="mt-3 flex flex-wrap justify-center gap-2">
+              {[
+                "https://jamesclear.com",
+                "https://seths.blog",
+                "https://tim.blog",
+              ].map((example) => (
+                <span key={example} className="rounded-full border border-white/15 px-3 py-1 text-xs text-[#9ec0c6]">
+                  {example}
+                </span>
+              ))}
+            </div>
+          </div>
 
           <div className="relative mt-10 overflow-hidden rounded-2xl border border-white/10 bg-[#081418] p-2 shadow-[0_20px_80px_rgba(0,0,0,0.55)]">
             <Image

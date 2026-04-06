@@ -3,7 +3,7 @@
     "408306472eae3684a42bcc86b8c345d2e452fc46d2": {
       "workers": {
         "app/book/[orgSlug]/[bookingSlug]/page": {
-          "moduleId": 209151,
+          "moduleId": 967129,
           "async": false,
           "exportedName": "listPublicBookingSlotsAction",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/bookings/actions.ts"
@@ -15,7 +15,7 @@
     "40b50bd7a5e6c9d95733777d3c375143bafc482589": {
       "workers": {
         "app/book/[orgSlug]/[bookingSlug]/page": {
-          "moduleId": 209151,
+          "moduleId": 967129,
           "async": false,
           "exportedName": "submitPublicBookingAction",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/bookings/actions.ts"
@@ -27,7 +27,7 @@
     "00014379d477f67eb167e434085757fe7c53a30db6": {
       "workers": {
         "app/book/[orgSlug]/[bookingSlug]/page": {
-          "moduleId": 209151,
+          "moduleId": 967129,
           "async": false,
           "exportedName": "listAppointmentTypes",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/bookings/actions.ts"
@@ -39,7 +39,7 @@
     "00ed2f695c56e5be010a61e3c4b922a3cdcedadcdc": {
       "workers": {
         "app/book/[orgSlug]/[bookingSlug]/page": {
-          "moduleId": 209151,
+          "moduleId": 967129,
           "async": false,
           "exportedName": "listBookings",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/bookings/actions.ts"
@@ -48,10 +48,22 @@
       "exportedName": "listBookings",
       "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/bookings/actions.ts"
     },
+    "4037b1bf574e0aaceb237a977e4b848f5a80707a44": {
+      "workers": {
+        "app/book/[orgSlug]/[bookingSlug]/page": {
+          "moduleId": 967129,
+          "async": false,
+          "exportedName": "updateBookingTypeAction",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/bookings/actions.ts"
+        }
+      },
+      "exportedName": "updateBookingTypeAction",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/bookings/actions.ts"
+    },
     "403e9cd3188e244ae2b19061218baff6d82d88490f": {
       "workers": {
         "app/book/[orgSlug]/[bookingSlug]/page": {
-          "moduleId": 209151,
+          "moduleId": 967129,
           "async": false,
           "exportedName": "markBookingNoShowAction",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/bookings/actions.ts"
@@ -60,10 +72,22 @@
       "exportedName": "markBookingNoShowAction",
       "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/bookings/actions.ts"
     },
+    "404e953c149ea3ea17b4dff78a408ca3f0471928f6": {
+      "workers": {
+        "app/book/[orgSlug]/[bookingSlug]/page": {
+          "moduleId": 967129,
+          "async": false,
+          "exportedName": "createBookingTypeForSeldonAction",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/bookings/actions.ts"
+        }
+      },
+      "exportedName": "createBookingTypeForSeldonAction",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/bookings/actions.ts"
+    },
     "40746de1dfc86a62ef4ac51b207b20d28ead9f6f02": {
       "workers": {
         "app/book/[orgSlug]/[bookingSlug]/page": {
-          "moduleId": 209151,
+          "moduleId": 967129,
           "async": false,
           "exportedName": "createBookingAction",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/bookings/actions.ts"
@@ -75,7 +99,7 @@
     "407fcb4acac2b782360cb22412a8a63b43c269915f": {
       "workers": {
         "app/book/[orgSlug]/[bookingSlug]/page": {
-          "moduleId": 209151,
+          "moduleId": 967129,
           "async": false,
           "exportedName": "completeBookingAction",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/bookings/actions.ts"
@@ -87,7 +111,7 @@
     "4091882fe723e13cea33b5ace4f4217c00125bb5ab": {
       "workers": {
         "app/book/[orgSlug]/[bookingSlug]/page": {
-          "moduleId": 209151,
+          "moduleId": 967129,
           "async": false,
           "exportedName": "createAppointmentTypeAction",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/bookings/actions.ts"
@@ -99,7 +123,7 @@
     "40cdd9dfc75b9809c7d09c570184a608db1627eeec": {
       "workers": {
         "app/book/[orgSlug]/[bookingSlug]/page": {
-          "moduleId": 209151,
+          "moduleId": 967129,
           "async": false,
           "exportedName": "cancelBookingAction",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/bookings/actions.ts"
@@ -111,7 +135,7 @@
     "60854085f295b955a19f2e030d1bedfdf9bbd6ca8d": {
       "workers": {
         "app/book/[orgSlug]/[bookingSlug]/page": {
-          "moduleId": 209151,
+          "moduleId": 967129,
           "async": false,
           "exportedName": "getPublicBookingContext",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/bookings/actions.ts"
@@ -123,7 +147,7 @@
     "009ec132f9d61a5da7bae230c17d5e5b52f4ba1e23": {
       "workers": {
         "app/book/[orgSlug]/[bookingSlug]/page": {
-          "moduleId": 209151,
+          "moduleId": 967129,
           "async": false,
           "exportedName": "getStripeConnectionStatus",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/payments/actions.ts"
@@ -135,7 +159,7 @@
     "00a716897617c11f5a4aaf8a7ce12fd917ac1cc4da": {
       "workers": {
         "app/book/[orgSlug]/[bookingSlug]/page": {
-          "moduleId": 209151,
+          "moduleId": 967129,
           "async": false,
           "exportedName": "startStripeConnectAction",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/payments/actions.ts"
@@ -147,7 +171,7 @@
     "40282ebf589b299871ab3f037279a8a60606862db9": {
       "workers": {
         "app/book/[orgSlug]/[bookingSlug]/page": {
-          "moduleId": 209151,
+          "moduleId": 967129,
           "async": false,
           "exportedName": "getContactRevenue",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/payments/actions.ts"
@@ -159,7 +183,7 @@
     "4079813c6d4da7dc4a22a7d9d42c2f4b4bfc6ce9a9": {
       "workers": {
         "app/book/[orgSlug]/[bookingSlug]/page": {
-          "moduleId": 209151,
+          "moduleId": 967129,
           "async": false,
           "exportedName": "handleStripeCheckoutCompleted",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/payments/actions.ts"
@@ -171,7 +195,7 @@
     "4098dc7a29ee8c29bc9cdb725344ce7da1ef511fcc": {
       "workers": {
         "app/book/[orgSlug]/[bookingSlug]/page": {
-          "moduleId": 209151,
+          "moduleId": 967129,
           "async": false,
           "exportedName": "createBookingCheckoutSession",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/payments/actions.ts"
@@ -183,7 +207,7 @@
     "40ec74bf82c44c417ec71d241f86cda2350bbd157e": {
       "workers": {
         "app/book/[orgSlug]/[bookingSlug]/page": {
-          "moduleId": 209151,
+          "moduleId": 967129,
           "async": false,
           "exportedName": "completeStripeConnectFromCode",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/payments/actions.ts"
@@ -195,7 +219,7 @@
     "606f7c86f782d01579a9c255e41b629fac03b3d144": {
       "workers": {
         "app/book/[orgSlug]/[bookingSlug]/page": {
-          "moduleId": 209151,
+          "moduleId": 967129,
           "async": false,
           "exportedName": "getRevenueByContactId",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/payments/actions.ts"
@@ -203,6 +227,54 @@
       },
       "exportedName": "getRevenueByContactId",
       "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/payments/actions.ts"
+    },
+    "0054b6cf12b52394253dd05b9f78afc87187b2a51b": {
+      "workers": {
+        "app/book/[orgSlug]/[bookingSlug]/page": {
+          "moduleId": 967129,
+          "async": false,
+          "exportedName": "getThemeSettings",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/theme/actions.ts"
+        }
+      },
+      "exportedName": "getThemeSettings",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/theme/actions.ts"
+    },
+    "4086ab4a4a4eb8d99433dc9e8844d0011dfdc7a124": {
+      "workers": {
+        "app/book/[orgSlug]/[bookingSlug]/page": {
+          "moduleId": 967129,
+          "async": false,
+          "exportedName": "getPublicOrgThemeById",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/theme/actions.ts"
+        }
+      },
+      "exportedName": "getPublicOrgThemeById",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/theme/actions.ts"
+    },
+    "40cc985fd3266afac537bc092dd1a5cdd1a8f5a205": {
+      "workers": {
+        "app/book/[orgSlug]/[bookingSlug]/page": {
+          "moduleId": 967129,
+          "async": false,
+          "exportedName": "saveThemeSettingsAction",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/theme/actions.ts"
+        }
+      },
+      "exportedName": "saveThemeSettingsAction",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/theme/actions.ts"
+    },
+    "40e8adf6bdaa0134aa1146e7b5906801b94b5270c0": {
+      "workers": {
+        "app/book/[orgSlug]/[bookingSlug]/page": {
+          "moduleId": 967129,
+          "async": false,
+          "exportedName": "getPublicOrgThemeBySlug",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/theme/actions.ts"
+        }
+      },
+      "exportedName": "getPublicOrgThemeBySlug",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/theme/actions.ts"
     }
   },
   "edge": {}

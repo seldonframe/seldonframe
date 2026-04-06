@@ -54,11 +54,25 @@ export type FrameworkOption = {
 
 const allFrameworks = [coachingFramework, agencyFramework, saasFramework];
 
-export default async function SetupPage() {
+export default async function SetupPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ token?: string }>;
+}) {
   const session = await auth();
+  const params = await searchParams;
+  const token = typeof params.token === "string" ? params.token.trim() : "";
 
   if (!session?.user) {
+    if (token) {
+      redirect(`/signup?token=${encodeURIComponent(token)}`);
+    }
+
     redirect("/login");
+  }
+
+  if (token) {
+    redirect(`/claim?token=${encodeURIComponent(token)}`);
   }
 
   const baseFrameworks: FrameworkOption[] = allFrameworks.map((fw) => ({

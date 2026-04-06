@@ -1,7 +1,13 @@
 import { SignupForm } from "./signup-form";
 import Link from "next/link";
 
-export default function SignupPage() {
+export default async function SignupPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ token?: string }>;
+}) {
+  const params = await searchParams;
+
   return (
     <div className="space-y-6">
       <div className="space-y-4">
@@ -9,7 +15,7 @@ export default function SignupPage() {
         <h1 className="text-section-title text-foreground">Welcome to SeldonFrame</h1>
         <p className="text-label text-[hsl(var(--color-text-secondary))]">One Soul powering every block in your business.</p>
         </div>
-        <SignupForm />
+        <SignupForm token={typeof params.token === "string" ? params.token : ""} />
       </div>
 
       <footer className="border-t border-border pt-4 text-xs text-[hsl(var(--color-text-secondary))]">

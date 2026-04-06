@@ -199,6 +199,7 @@ export function SetupWizard({
   // Step 1
   const [businessName, setBusinessName] = useState("");
   const [location, setLocation] = useState("");
+  const [websiteUrl, setWebsiteUrl] = useState("");
   const [journeyDescription, setJourneyDescription] = useState("");
   const [enabledAutomations, setEnabledAutomations] = useState<Set<string>>(new Set());
   const [automationsInitialized, setAutomationsInitialized] = useState(false);
@@ -401,6 +402,7 @@ export function SetupWizard({
             frameworkId: selectedFramework!.id,
             generatedFramework: generatedFramework && selectedFramework!.id === generatedFramework.option.id ? generatedFramework.framework : null,
             location,
+            websiteUrl,
             journeyDescription,
             enabledAutomations: Array.from(enabledAutomations),
           });
@@ -413,6 +415,7 @@ export function SetupWizard({
               ownerFullName: ownerName,
               businessName,
               location,
+              websiteUrl,
               journeyDescription,
               enabledAutomations: Array.from(enabledAutomations),
             },
@@ -644,6 +647,20 @@ export function SetupWizard({
                         placeholder="Austin, TX"
                       />
                     </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label htmlFor="setup-website" className="text-sm font-medium text-foreground">
+                      Website URL <span className="text-muted-foreground font-normal">(optional)</span>
+                    </label>
+                    <input
+                      id="setup-website"
+                      className={squareInputClass}
+                      value={websiteUrl}
+                      onChange={(event) => setWebsiteUrl(event.target.value)}
+                      placeholder="https://yourwebsite.com"
+                    />
+                    <p className="text-xs text-muted-foreground">If provided, Seldon will ingest this site into Soul Knowledge during setup.</p>
                   </div>
                 </div>
               </div>

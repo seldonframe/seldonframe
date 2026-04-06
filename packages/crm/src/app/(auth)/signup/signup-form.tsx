@@ -17,10 +17,11 @@ function GoogleIcon() {
   );
 }
 
-export function SignupForm() {
+export function SignupForm({ token = "" }: { token?: string }) {
   const { showDemoToast } = useDemoToast();
   const [state, action, pending] = useActionState(sendMagicLinkAction, {});
   const [googlePending, setGooglePending] = useState(false);
+  const callbackUrl = token ? `/claim?token=${encodeURIComponent(token)}` : "/setup";
 
   const handleGoogleSignIn = async () => {
     try {
@@ -49,7 +50,7 @@ export function SignupForm() {
       const callbackInput = document.createElement("input");
       callbackInput.type = "hidden";
       callbackInput.name = "callbackUrl";
-      callbackInput.value = "/setup";
+      callbackInput.value = callbackUrl;
 
       form.appendChild(csrfInput);
       form.appendChild(callbackInput);
@@ -86,6 +87,7 @@ export function SignupForm() {
       </div>
 
       <form action={action} className="space-y-3">
+        <input type="hidden" name="redirectTo" value={callbackUrl} />
         <div className="space-y-1">
           <label htmlFor="email" className="text-label text-foreground">
             Email

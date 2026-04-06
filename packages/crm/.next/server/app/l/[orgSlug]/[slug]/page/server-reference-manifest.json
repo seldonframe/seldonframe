@@ -3,7 +3,7 @@
     "001a985ed4a43d80f14a6061dc8e7e539040eaab5a": {
       "workers": {
         "app/l/[orgSlug]/[slug]/page": {
-          "moduleId": 244401,
+          "moduleId": 739478,
           "async": false,
           "exportedName": "listLandingPages",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/landing/actions.ts"
@@ -15,7 +15,7 @@
     "40486c327df93a085536dcfe218b308d406af8da6e": {
       "workers": {
         "app/l/[orgSlug]/[slug]/page": {
-          "moduleId": 244401,
+          "moduleId": 739478,
           "async": false,
           "exportedName": "getLandingPageById",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/landing/actions.ts"
@@ -27,7 +27,7 @@
     "40588198e46604f81f689af22f714cb49b63000aac": {
       "workers": {
         "app/l/[orgSlug]/[slug]/page": {
-          "moduleId": 244401,
+          "moduleId": 739478,
           "async": false,
           "exportedName": "updateLandingEditorAction",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/landing/actions.ts"
@@ -39,7 +39,7 @@
     "407dd14c593e6dc7c4d400db1866fa85a11bcb8d7c": {
       "workers": {
         "app/l/[orgSlug]/[slug]/page": {
-          "moduleId": 244401,
+          "moduleId": 739478,
           "async": false,
           "exportedName": "createLandingPageAction",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/landing/actions.ts"
@@ -48,10 +48,34 @@
       "exportedName": "createLandingPageAction",
       "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/landing/actions.ts"
     },
+    "409f4523ca891afa82f23ae4939d234f884cec9aa2": {
+      "workers": {
+        "app/l/[orgSlug]/[slug]/page": {
+          "moduleId": 739478,
+          "async": false,
+          "exportedName": "createLandingPageForSeldonAction",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/landing/actions.ts"
+        }
+      },
+      "exportedName": "createLandingPageForSeldonAction",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/landing/actions.ts"
+    },
+    "40b1ec4c7f51ac4426b7eb4b311eb038db3157ad92": {
+      "workers": {
+        "app/l/[orgSlug]/[slug]/page": {
+          "moduleId": 739478,
+          "async": false,
+          "exportedName": "updateLandingPageAction",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/landing/actions.ts"
+        }
+      },
+      "exportedName": "updateLandingPageAction",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/landing/actions.ts"
+    },
     "40b275d28776e2ccb9916709e1025fae5b02d3d6f7": {
       "workers": {
         "app/l/[orgSlug]/[slug]/page": {
-          "moduleId": 244401,
+          "moduleId": 739478,
           "async": false,
           "exportedName": "updateLandingPageSettingsAction",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/landing/actions.ts"
@@ -63,7 +87,7 @@
     "40e2a112f39e3ef706cfc219f7588d18f93680ba08": {
       "workers": {
         "app/l/[orgSlug]/[slug]/page": {
-          "moduleId": 244401,
+          "moduleId": 739478,
           "async": false,
           "exportedName": "trackLandingVisitAction",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/landing/actions.ts"
@@ -75,7 +99,7 @@
     "40e6882a83dac47803f888e39ba750555f87c16516": {
       "workers": {
         "app/l/[orgSlug]/[slug]/page": {
-          "moduleId": 244401,
+          "moduleId": 739478,
           "async": false,
           "exportedName": "submitLandingLeadAction",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/landing/actions.ts"
@@ -87,7 +111,7 @@
     "60aa3340727dd9d9368eaa95a29518318770955458": {
       "workers": {
         "app/l/[orgSlug]/[slug]/page": {
-          "moduleId": 244401,
+          "moduleId": 739478,
           "async": false,
           "exportedName": "publishLandingPageAction",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/landing/actions.ts"
@@ -99,7 +123,7 @@
     "60dcebefd243d1f5e5f91cf58146c00602fcdd1d7f": {
       "workers": {
         "app/l/[orgSlug]/[slug]/page": {
-          "moduleId": 244401,
+          "moduleId": 739478,
           "async": false,
           "exportedName": "getPublicLandingPage",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/landing/actions.ts"
@@ -107,6 +131,54 @@
       },
       "exportedName": "getPublicLandingPage",
       "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/landing/actions.ts"
+    },
+    "0054b6cf12b52394253dd05b9f78afc87187b2a51b": {
+      "workers": {
+        "app/l/[orgSlug]/[slug]/page": {
+          "moduleId": 739478,
+          "async": false,
+          "exportedName": "getThemeSettings",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/theme/actions.ts"
+        }
+      },
+      "exportedName": "getThemeSettings",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/theme/actions.ts"
+    },
+    "4086ab4a4a4eb8d99433dc9e8844d0011dfdc7a124": {
+      "workers": {
+        "app/l/[orgSlug]/[slug]/page": {
+          "moduleId": 739478,
+          "async": false,
+          "exportedName": "getPublicOrgThemeById",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/theme/actions.ts"
+        }
+      },
+      "exportedName": "getPublicOrgThemeById",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/theme/actions.ts"
+    },
+    "40cc985fd3266afac537bc092dd1a5cdd1a8f5a205": {
+      "workers": {
+        "app/l/[orgSlug]/[slug]/page": {
+          "moduleId": 739478,
+          "async": false,
+          "exportedName": "saveThemeSettingsAction",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/theme/actions.ts"
+        }
+      },
+      "exportedName": "saveThemeSettingsAction",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/theme/actions.ts"
+    },
+    "40e8adf6bdaa0134aa1146e7b5906801b94b5270c0": {
+      "workers": {
+        "app/l/[orgSlug]/[slug]/page": {
+          "moduleId": 739478,
+          "async": false,
+          "exportedName": "getPublicOrgThemeBySlug",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/theme/actions.ts"
+        }
+      },
+      "exportedName": "getPublicOrgThemeBySlug",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/theme/actions.ts"
     }
   },
   "edge": {}

@@ -63,6 +63,22 @@
       "namedRegex": "^/api/v1/forms/(?<nxtPid>[^/]+?)/submissions(?:/)?$"
     },
     {
+      "page": "/api/v1/marketplace/listings/[listingId]/publish",
+      "regex": "^/api/v1/marketplace/listings/([^/]+?)/publish(?:/)?$",
+      "routeKeys": {
+        "nxtPlistingId": "nxtPlistingId"
+      },
+      "namedRegex": "^/api/v1/marketplace/listings/(?<nxtPlistingId>[^/]+?)/publish(?:/)?$"
+    },
+    {
+      "page": "/api/v1/pages/[pageId]",
+      "regex": "^/api/v1/pages/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPpageId": "nxtPpageId"
+      },
+      "namedRegex": "^/api/v1/pages/(?<nxtPpageId>[^/]+?)(?:/)?$"
+    },
+    {
       "page": "/book/[orgSlug]/[bookingSlug]",
       "regex": "^/book/([^/]+?)/([^/]+?)(?:/)?$",
       "routeKeys": {
@@ -86,6 +102,14 @@
         "nxtPid": "nxtPid"
       },
       "namedRegex": "^/deals/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/editor/[pageId]",
+      "regex": "^/editor/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPpageId": "nxtPpageId"
+      },
+      "namedRegex": "^/editor/(?<nxtPpageId>[^/]+?)(?:/)?$"
     },
     {
       "page": "/forms/[id]",
@@ -185,6 +209,31 @@
         "nxtPorgSlug": "nxtPorgSlug"
       },
       "namedRegex": "^/portal/(?<nxtPorgSlug>[^/]+?)/resources(?:/)?$"
+    },
+    {
+      "page": "/s/[orgSlug]/[...slug]",
+      "regex": "^/s/([^/]+?)/(.+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPorgSlug": "nxtPorgSlug",
+        "nxtPslug": "nxtPslug"
+      },
+      "namedRegex": "^/s/(?<nxtPorgSlug>[^/]+?)/(?<nxtPslug>.+?)(?:/)?$"
+    },
+    {
+      "page": "/soul-marketplace/[slug]",
+      "regex": "^/soul\\-marketplace/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPslug": "nxtPslug"
+      },
+      "namedRegex": "^/soul\\-marketplace/(?<nxtPslug>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/soul-marketplace/[slug]/install",
+      "regex": "^/soul\\-marketplace/([^/]+?)/install(?:/)?$",
+      "routeKeys": {
+        "nxtPslug": "nxtPslug"
+      },
+      "namedRegex": "^/soul\\-marketplace/(?<nxtPslug>[^/]+?)/install(?:/)?$"
     }
   ],
   "staticRoutes": [
@@ -285,10 +334,22 @@
       "namedRegex": "^/api/stripe/webhook(?:/)?$"
     },
     {
+      "page": "/api/v1/access-check",
+      "regex": "^/api/v1/access\\-check(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/v1/access\\-check(?:/)?$"
+    },
+    {
       "page": "/api/v1/activities",
       "regex": "^/api/v1/activities(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/api/v1/activities(?:/)?$"
+    },
+    {
+      "page": "/api/v1/claim",
+      "regex": "^/api/v1/claim(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/v1/claim(?:/)?$"
     },
     {
       "page": "/api/v1/contacts",
@@ -303,10 +364,52 @@
       "namedRegex": "^/api/v1/deals(?:/)?$"
     },
     {
+      "page": "/api/v1/forms/submit",
+      "regex": "^/api/v1/forms/submit(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/v1/forms/submit(?:/)?$"
+    },
+    {
+      "page": "/api/v1/integrations",
+      "regex": "^/api/v1/integrations(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/v1/integrations(?:/)?$"
+    },
+    {
+      "page": "/api/v1/marketplace/listings",
+      "regex": "^/api/v1/marketplace/listings(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/v1/marketplace/listings(?:/)?$"
+    },
+    {
+      "page": "/api/v1/public/analyze-url",
+      "regex": "^/api/v1/public/analyze\\-url(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/v1/public/analyze\\-url(?:/)?$"
+    },
+    {
       "page": "/api/v1/public/domain",
       "regex": "^/api/v1/public/domain(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/api/v1/public/domain(?:/)?$"
+    },
+    {
+      "page": "/api/v1/soul/ingest",
+      "regex": "^/api/v1/soul/ingest(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/v1/soul/ingest(?:/)?$"
+    },
+    {
+      "page": "/api/v1/soul/sources",
+      "regex": "^/api/v1/soul/sources(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/v1/soul/sources(?:/)?$"
+    },
+    {
+      "page": "/api/v1/soul/wiki",
+      "regex": "^/api/v1/soul/wiki(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/v1/soul/wiki(?:/)?$"
     },
     {
       "page": "/api/v1/webhooks",
@@ -337,6 +440,12 @@
       "regex": "^/bookings(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/bookings(?:/)?$"
+    },
+    {
+      "page": "/claim",
+      "regex": "^/claim(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/claim(?:/)?$"
     },
     {
       "page": "/contacts",
@@ -373,6 +482,12 @@
       "regex": "^/deals(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/deals(?:/)?$"
+    },
+    {
+      "page": "/docs",
+      "regex": "^/docs(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/docs(?:/)?$"
     },
     {
       "page": "/emails",
@@ -537,10 +652,22 @@
       "namedRegex": "^/settings/soul\\-transfer(?:/)?$"
     },
     {
+      "page": "/settings/soul-wiki",
+      "regex": "^/settings/soul\\-wiki(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/settings/soul\\-wiki(?:/)?$"
+    },
+    {
       "page": "/settings/team",
       "regex": "^/settings/team(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/settings/team(?:/)?$"
+    },
+    {
+      "page": "/settings/theme",
+      "regex": "^/settings/theme(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/settings/theme(?:/)?$"
     },
     {
       "page": "/settings/webhooks",
@@ -561,6 +688,24 @@
       "namedRegex": "^/signup(?:/)?$"
     },
     {
+      "page": "/soul-marketplace",
+      "regex": "^/soul\\-marketplace(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/soul\\-marketplace(?:/)?$"
+    },
+    {
+      "page": "/studio",
+      "regex": "^/studio(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/studio(?:/)?$"
+    },
+    {
+      "page": "/studio/new",
+      "regex": "^/studio/new(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/studio/new(?:/)?$"
+    },
+    {
       "page": "/terms",
       "regex": "^/terms(?:/)?$",
       "routeKeys": {},
@@ -571,6 +716,12 @@
       "regex": "^/welcome(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/welcome(?:/)?$"
+    },
+    {
+      "page": "/welcome-public",
+      "regex": "^/welcome\\-public(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/welcome\\-public(?:/)?$"
     }
   ],
   "dataRoutes": [],

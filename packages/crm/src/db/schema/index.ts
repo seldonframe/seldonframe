@@ -22,3 +22,6 @@ export * from "./seldon-usage";
 export * from "./seldon-sessions";
 export * from "./form-submissions";
 export * from "./memberships";
+export * from "./soul-sources";
+export * from "./seldon-patterns";
+export * from "./preview-sessions";

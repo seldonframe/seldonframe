@@ -2,7 +2,7 @@ import Link from "next/link";
 import { eq, sql } from "drizzle-orm";
 import { ChevronRight } from "lucide-react";
 import { db } from "@/db";
-import { orgMembers, organizations, type OrganizationSubscription } from "@/db/schema";
+import { orgMembers, organizations, soulSources, soulWiki, type OrganizationSubscription } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
 import { getOrgSubscription } from "@/lib/billing/subscription";
 import { getStripeConnectionStatus } from "@/lib/payments/actions";
@@ -56,6 +56,20 @@ export default async function SettingsPage() {
         .where(eq(orgMembers.orgId, orgId))
     : [{ count: 0 }];
 
+  const [sourceCountRow] = orgId
+    ? await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(soulSources)
+        .where(eq(soulSources.orgId, orgId))
+    : [{ count: 0 }];
+
+  const [articleCountRow] = orgId
+    ? await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(soulWiki)
+        .where(eq(soulWiki.orgId, orgId))
+    : [{ count: 0 }];
+
   const integrations = (orgRow?.integrations ?? {}) as {
     twilio?: { connected?: boolean };
     resend?: { connected?: boolean };
@@ -93,6 +107,8 @@ export default async function SettingsPage() {
   const domainStatus = domainSettings?.customDomain || "Not configured";
   const pipelineStagesCount = soul?.pipeline?.stages?.length ?? 0;
   const teamCount = Math.max(1, teamCountRow?.count ?? 0);
+  const soulSourceCount = Math.max(0, sourceCountRow?.count ?? 0);
+  const soulArticleCount = Math.max(0, articleCountRow?.count ?? 0);
 
   const frameworksStatus = savedFrameworks.length > 0 ? `${savedFrameworks.length} saved` : "No saved frameworks";
   const brandingStatus = brandingSettings?.removePoweredBy ? "White-label enabled" : null;
@@ -118,6 +134,12 @@ export default async function SettingsPage() {
               {themeSettings?.theme.primaryColor || "Primary color"}
             </span>
           ),
+        },
+        {
+          href: "/settings/soul-wiki",
+          title: "Soul Knowledge",
+          description: "Feed Seldon your website, videos, and testimonials",
+          status: <span className="text-xs text-zinc-400">{soulSourceCount} sources · {soulArticleCount} articles compiled</span>,
         },
         {
           href: "/settings/pipeline",

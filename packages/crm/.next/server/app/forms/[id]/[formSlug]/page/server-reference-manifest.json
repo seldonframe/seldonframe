@@ -3,7 +3,7 @@
     "4017584600945920fae83437ba62763450cb923b87": {
       "workers": {
         "app/forms/[id]/[formSlug]/page": {
-          "moduleId": 538496,
+          "moduleId": 267824,
           "async": false,
           "exportedName": "submitPublicIntakeAction",
           "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/forms/actions.ts"
@@ -11,6 +11,54 @@
       },
       "exportedName": "submitPublicIntakeAction",
       "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/forms/actions.ts"
+    },
+    "0054b6cf12b52394253dd05b9f78afc87187b2a51b": {
+      "workers": {
+        "app/forms/[id]/[formSlug]/page": {
+          "moduleId": 267824,
+          "async": false,
+          "exportedName": "getThemeSettings",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/theme/actions.ts"
+        }
+      },
+      "exportedName": "getThemeSettings",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/theme/actions.ts"
+    },
+    "4086ab4a4a4eb8d99433dc9e8844d0011dfdc7a124": {
+      "workers": {
+        "app/forms/[id]/[formSlug]/page": {
+          "moduleId": 267824,
+          "async": false,
+          "exportedName": "getPublicOrgThemeById",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/theme/actions.ts"
+        }
+      },
+      "exportedName": "getPublicOrgThemeById",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/theme/actions.ts"
+    },
+    "40cc985fd3266afac537bc092dd1a5cdd1a8f5a205": {
+      "workers": {
+        "app/forms/[id]/[formSlug]/page": {
+          "moduleId": 267824,
+          "async": false,
+          "exportedName": "saveThemeSettingsAction",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/theme/actions.ts"
+        }
+      },
+      "exportedName": "saveThemeSettingsAction",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/theme/actions.ts"
+    },
+    "40e8adf6bdaa0134aa1146e7b5906801b94b5270c0": {
+      "workers": {
+        "app/forms/[id]/[formSlug]/page": {
+          "moduleId": 267824,
+          "async": false,
+          "exportedName": "getPublicOrgThemeBySlug",
+          "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/theme/actions.ts"
+        }
+      },
+      "exportedName": "getPublicOrgThemeBySlug",
+      "filename": "CascadeProjects/Seldon Frame/packages/crm/src/lib/theme/actions.ts"
     }
   },
   "edge": {}

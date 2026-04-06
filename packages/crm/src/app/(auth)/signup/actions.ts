@@ -34,6 +34,15 @@ function isRedirectControlFlowError(error: unknown) {
   return typeof digest === "string" && digest.startsWith("NEXT_REDIRECT");
 }
 
+function sanitizeRedirectTo(value: unknown) {
+  const raw = typeof value === "string" ? value.trim() : "";
+  if (!raw.startsWith("/") || raw.startsWith("//")) {
+    return "/setup";
+  }
+
+  return raw;
+}
+
 export async function signInWithGoogleAction() {
   assertWritable();
 
@@ -56,12 +65,13 @@ export async function sendMagicLinkAction(_: MagicLinkActionState, formData: For
   }
 
   const email = parsed.data.email.trim().toLowerCase();
+  const redirectTo = sanitizeRedirectTo(formData.get("redirectTo"));
 
   try {
     await signIn("resend", {
       email,
       redirect: false,
-      redirectTo: "/",
+      redirectTo,
     });
 
     return {

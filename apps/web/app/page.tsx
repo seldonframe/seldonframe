@@ -88,14 +88,19 @@ export default function Page() {
             <Image src="/logo.svg" alt="SeldonFrame" width={28} height={36} className="h-9 w-auto" priority />
             <span className="text-sm font-semibold">SeldonFrame</span>
           </Link>
-          <Link
-            href="https://github.com/seldonframe/crm"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm text-muted-foreground transition-all duration-200 hover:text-foreground"
-          >
-            GitHub ↗
-          </Link>
+          <div className="flex items-center gap-4">
+            <Link href="/pricing" className="text-sm text-muted-foreground transition-all duration-200 hover:text-foreground">
+              Pricing
+            </Link>
+            <Link
+              href="https://github.com/seldonframe/crm"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-muted-foreground transition-all duration-200 hover:text-foreground"
+            >
+              GitHub ↗
+            </Link>
+          </div>
         </header>
 
         <section className="mx-auto flex w-full max-w-3xl flex-col items-center px-6 pb-12 pt-6 text-center md:min-h-[calc(100vh-5rem)] md:justify-center md:pb-20 md:pt-0">
@@ -218,6 +223,27 @@ export default function Page() {
               <li>✓ AI-powered Seldon It — describe features, they appear</li>
               <li>✓ Direct line to the founder for your first 90 days</li>
             </ul>
+          </section>
+
+          <section className="mt-10 w-full max-w-4xl rounded-2xl border border-border bg-card/60 p-6 text-left md:p-8">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary">Built for agencies and builders</p>
+            <h3 className="mt-3 text-2xl font-semibold tracking-tight md:text-3xl">One login. Multiple client workspaces.</h3>
+            <p className="mt-3 text-sm text-muted-foreground md:text-base">
+              Pro plans are coming soon for operators who serve multiple businesses. Each workspace gets its own Soul,
+              blocks, data, and public presence.
+            </p>
+            <div className="mt-5 grid gap-3 text-sm text-muted-foreground sm:grid-cols-2">
+              <p>✓ Multi-workspace switcher and per-client isolation</p>
+              <p>✓ Custom frameworks generated with Seldon</p>
+              <p>✓ Custom domains and white-label controls</p>
+              <p>✓ Workspace limits by plan for agency growth</p>
+            </div>
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <Link href="/pricing#pro-coming-soon" className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90">
+                See Pro Plans →
+              </Link>
+              <p className="text-xs text-muted-foreground">Join the waitlist now to get notified when Pro opens.</p>
+            </div>
           </section>
 
           <section className="mt-10 w-full max-w-sm rounded-xl border border-border bg-card/50 p-4 text-center">
