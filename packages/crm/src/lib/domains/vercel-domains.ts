@@ -1,8 +1,17 @@
-const VERCEL_TOKEN = process.env.VERCEL_TOKEN?.trim();
+const VERCEL_TOKEN = process.env.VERCEL_API_TOKEN?.trim() || process.env.VERCEL_TOKEN?.trim();
 const VERCEL_PROJECT_ID = process.env.VERCEL_PROJECT_ID?.trim();
 const VERCEL_TEAM_ID = process.env.VERCEL_TEAM_ID?.trim();
 
 type JsonObject = Record<string, unknown>;
+type VercelApiResult = {
+  ok: boolean;
+  status: number;
+  data: JsonObject;
+};
+
+export function hasVercelDomainEnv() {
+  return Boolean(VERCEL_TOKEN && VERCEL_PROJECT_ID);
+}
 
 function getVercelAuthHeaders(includeJson = false) {
   if (!VERCEL_TOKEN) {
@@ -33,38 +42,76 @@ async function parseJsonSafe(response: Response): Promise<JsonObject> {
   }
 }
 
+function getVercelGlobalUrl(path: string) {
+  const teamQuery = VERCEL_TEAM_ID ? `?teamId=${encodeURIComponent(VERCEL_TEAM_ID)}` : "";
+  return `https://api.vercel.com${path}${teamQuery}`;
+}
+
+async function requestVercel(url: string, init: RequestInit, logLabel: string): Promise<VercelApiResult> {
+  const res = await fetch(url, { ...init, cache: "no-store" });
+  const data = await parseJsonSafe(res);
+  console.log(logLabel, JSON.stringify({ status: res.status, ok: res.ok, data }, null, 2));
+
+  return {
+    ok: res.ok,
+    status: res.status,
+    data,
+  };
+}
+
 export async function addDomain(domain: string) {
   const normalizedDomain = domain.trim().toLowerCase();
 
-  const res = await fetch(getVercelProjectUrl("/domains"), {
+  return requestVercel(
+    getVercelProjectUrl("/domains"),
+    {
     method: "POST",
     headers: getVercelAuthHeaders(true),
     body: JSON.stringify({ name: normalizedDomain }),
-    cache: "no-store",
-  });
-
-  return parseJsonSafe(res);
+    },
+    "Vercel domain API response:"
+  );
 }
 
 export async function removeDomain(domain: string) {
   const normalizedDomain = domain.trim().toLowerCase();
 
-  const res = await fetch(getVercelProjectUrl(`/domains/${encodeURIComponent(normalizedDomain)}`), {
-    method: "DELETE",
-    headers: getVercelAuthHeaders(),
-    cache: "no-store",
-  });
-
-  return parseJsonSafe(res);
+  return requestVercel(
+    getVercelProjectUrl(`/domains/${encodeURIComponent(normalizedDomain)}`),
+    {
+      method: "DELETE",
+      headers: getVercelAuthHeaders(),
+    },
+    "Vercel remove domain API response:"
+  );
 }
 
 export async function checkDomainStatus(domain: string) {
   const normalizedDomain = domain.trim().toLowerCase();
 
-  const res = await fetch(getVercelProjectUrl(`/domains/${encodeURIComponent(normalizedDomain)}`), {
-    headers: getVercelAuthHeaders(),
-    cache: "no-store",
-  });
+  const [projectStatus, configStatus] = await Promise.all([
+    requestVercel(
+      getVercelProjectUrl(`/domains/${encodeURIComponent(normalizedDomain)}`),
+      {
+        headers: getVercelAuthHeaders(),
+      },
+      "Vercel project domain status API response:"
+    ),
+    requestVercel(
+      getVercelGlobalUrl(`/v6/domains/${encodeURIComponent(normalizedDomain)}/config`),
+      {
+        headers: getVercelAuthHeaders(),
+      },
+      "Vercel domain config API response:"
+    ),
+  ]);
 
-  return parseJsonSafe(res);
+  return {
+    ok: projectStatus.ok && configStatus.ok,
+    status: Math.max(projectStatus.status, configStatus.status),
+    data: {
+      ...projectStatus.data,
+      config: configStatus.data,
+    },
+  } satisfies VercelApiResult;
 }

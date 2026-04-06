@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { activities, contacts, emails, organizations, users } from "@/db/schema";
 import { getCurrentUser, getOrgId } from "@/lib/auth/helpers";
 import { assertWritable } from "@/lib/demo/server";
+import { decryptValue } from "@/lib/encryption";
 import { emitSeldonEvent } from "@/lib/events/bus";
 import { isValidEventType } from "@/lib/events/event-types";
 import { recordEmailOpenedLearning, recordEmailSentLearning } from "@/lib/soul/learning";
@@ -91,13 +92,14 @@ function buildTrackingPixel(emailId: string) {
 }
 
 async function sendViaResend(params: {
+  orgId: string;
   fromEmail: string;
   toEmail: string;
   subject: string;
   html: string;
   text: string;
 }) {
-  const apiKey = process.env.RESEND_API_KEY;
+  const apiKey = await resolveResendApiKey(params.orgId);
 
   if (!apiKey) {
     return null;
@@ -124,6 +126,28 @@ async function sendViaResend(params: {
 
   const payload = (await response.json()) as { id?: string };
   return payload.id ?? null;
+}
+
+async function resolveResendApiKey(orgId: string) {
+  const [org] = await db
+    .select({ integrations: organizations.integrations })
+    .from(organizations)
+    .where(eq(organizations.id, orgId))
+    .limit(1);
+
+  const integrations = (org?.integrations ?? {}) as Record<string, unknown>;
+  const resend = integrations.resend as Record<string, unknown> | undefined;
+  const rawOrgKey = typeof resend?.apiKey === "string" ? resend.apiKey.trim() : "";
+
+  if (rawOrgKey) {
+    if (rawOrgKey.startsWith("v1.")) {
+      return decryptValue(rawOrgKey);
+    }
+
+    return rawOrgKey;
+  }
+
+  return process.env.RESEND_API_KEY?.trim() || "";
 }
 
 async function getOrgOwnerUserId(orgId: string) {
@@ -203,6 +227,7 @@ async function sendEmailForOrg(params: {
 
   if (provider === "resend") {
     const resendId = await sendViaResend({
+      orgId: params.orgId,
       fromEmail: resolveDefaultFromEmail(),
       toEmail: params.toEmail,
       subject: params.subject,

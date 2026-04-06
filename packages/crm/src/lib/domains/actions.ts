@@ -7,7 +7,7 @@ import { db } from "@/db";
 import { bookings, intakeForms, landingPages, organizations } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
 import { assertWritable } from "@/lib/demo/server";
-import { addDomain, checkDomainStatus, removeDomain } from "@/lib/domains/vercel-domains";
+import { addDomain, checkDomainStatus, hasVercelDomainEnv, removeDomain } from "@/lib/domains/vercel-domains";
 
 type DomainSettings = {
   customDomain?: string;
@@ -37,7 +37,33 @@ function normalizeDomain(input: string) {
     .replace(/\/$/, "");
 }
 
+function isValidDomain(domain: string) {
+  return /^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/i.test(domain);
+}
+
+function getErrorMessage(payload: Record<string, unknown>) {
+  const error = payload.error;
+  if (error && typeof error === "object" && typeof (error as Record<string, unknown>).message === "string") {
+    return String((error as Record<string, unknown>).message);
+  }
+
+  if (typeof payload.message === "string" && payload.message.trim()) {
+    return payload.message;
+  }
+
+  return "Failed to configure domain";
+}
+
+function redirectWithError(message: string) {
+  redirect(`/settings/domain?saved=0&error=${encodeURIComponent(message)}`);
+}
+
 function resolveDomainVerified(payload: Record<string, unknown>) {
+  const config = payload.config;
+  if (config && typeof config === "object" && typeof (config as Record<string, unknown>).misconfigured === "boolean") {
+    return !(config as Record<string, unknown>).misconfigured;
+  }
+
   if (typeof payload.verified === "boolean") {
     return payload.verified;
   }
@@ -50,6 +76,14 @@ function resolveDomainVerified(payload: Record<string, unknown>) {
 }
 
 function resolveDomainStatus(payload: Record<string, unknown>) {
+  const config = payload.config;
+  if (config && typeof config === "object") {
+    const configRecord = config as Record<string, unknown>;
+    if (typeof configRecord.misconfigured === "boolean") {
+      return configRecord.misconfigured ? "DNS misconfigured" : "DNS configured";
+    }
+  }
+
   const error = payload.error;
   if (error && typeof error === "object" && typeof (error as Record<string, unknown>).message === "string") {
     return String((error as Record<string, unknown>).message);
@@ -147,11 +181,20 @@ export async function saveCustomDomainAction(formData: FormData) {
   const currentSettings = (org.settings as Record<string, unknown>) ?? {};
   const domainSettings = readDomainSettings(currentSettings);
 
+  if (!hasVercelDomainEnv()) {
+    redirectWithError(
+      "Custom domains require VERCEL_API_TOKEN and VERCEL_PROJECT_ID environment variables. Set them in your Vercel project settings."
+    );
+  }
+
   if (intent === "remove") {
     const currentDomain = domainSettings.customDomain;
 
     if (currentDomain) {
-      await removeDomain(currentDomain);
+      const removeResult = await removeDomain(currentDomain);
+      if (!removeResult.ok) {
+        redirectWithError(getErrorMessage(removeResult.data));
+      }
     }
 
     await db
@@ -175,13 +218,22 @@ export async function saveCustomDomainAction(formData: FormData) {
   const domain = inputDomain || domainSettings.customDomain || "";
 
   if (!domain) {
-    redirect("/settings/domain?saved=0&domainAction=invalid");
+    redirectWithError("Please enter a custom domain.");
+  }
+
+  if (!isValidDomain(domain)) {
+    redirectWithError("Please enter a valid domain or subdomain (for example: crm.example.com).");
   }
 
   if (intent === "check") {
-    const statusPayload = await checkDomainStatus(domain);
+    const statusResult = await checkDomainStatus(domain);
+    const statusPayload = statusResult.data;
     const verified = resolveDomainVerified(statusPayload);
     const status = resolveDomainStatus(statusPayload);
+
+    if (!statusResult.ok) {
+      redirectWithError(getErrorMessage(statusPayload));
+    }
 
     await db
       .update(organizations)
@@ -201,8 +253,18 @@ export async function saveCustomDomainAction(formData: FormData) {
     redirect(`/settings/domain?saved=1&domainAction=checked&verified=${verified ? "1" : "0"}`);
   }
 
-  const addPayload = await addDomain(domain);
-  const statusPayload = await checkDomainStatus(domain);
+  const addResult = await addDomain(domain);
+  if (!addResult.ok) {
+    redirectWithError(getErrorMessage(addResult.data));
+  }
+
+  const statusResult = await checkDomainStatus(domain);
+  const statusPayload = statusResult.data;
+  if (!statusResult.ok) {
+    redirectWithError(getErrorMessage(statusPayload));
+  }
+
+  const addPayload = addResult.data;
   const mergedPayload = { ...addPayload, ...statusPayload };
   const verified = resolveDomainVerified(mergedPayload);
   const status = resolveDomainStatus(mergedPayload);

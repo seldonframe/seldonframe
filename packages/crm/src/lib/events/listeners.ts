@@ -2,7 +2,9 @@ import { getSeldonEventBus } from "@seldonframe/core/events";
 import { getCoreRuntimeConfig } from "@seldonframe/core/config";
 import { configureTelemetry, trackTelemetryEvent } from "@seldonframe/core/telemetry";
 import { sendTriggeredEmailsForContactEvent, sendWelcomeEmailForContact } from "@/lib/emails/actions";
-import { syncKitForContactEvent } from "@/lib/integrations/kit/actions";
+import { syncContactToNewsletter } from "@/lib/integrations/newsletter-sync";
+import { autoIngestSoulFromEvent } from "@/lib/soul-wiki/event-auto-ingest";
+import { captureAnonymousPattern } from "@/lib/soul-wiki/pattern-capture";
 
 let listenersRegistered = false;
 
@@ -18,13 +20,19 @@ export function registerCrmEventListeners() {
   bus.onAny(async (event) => {
     const maybeContactId = (event.data as Record<string, unknown> | null)?.contactId;
 
-    if (typeof maybeContactId !== "string" || !maybeContactId) {
-      return;
+    if (typeof maybeContactId === "string" && maybeContactId) {
+      await sendTriggeredEmailsForContactEvent({
+        eventType: event.type,
+        contactId: maybeContactId,
+      });
     }
 
-    await sendTriggeredEmailsForContactEvent({
-      eventType: event.type,
-      contactId: maybeContactId,
+    void autoIngestSoulFromEvent(event).catch(() => {
+      return;
+    });
+
+    void captureAnonymousPattern(event).catch(() => {
+      return;
     });
   });
 
@@ -32,7 +40,9 @@ export function registerCrmEventListeners() {
     console.log(JSON.stringify({ action: "event.contact.created", ...event }));
 
     await sendWelcomeEmailForContact(event.data.contactId);
-    await syncKitForContactEvent({ eventType: "contact.created", contactId: event.data.contactId });
+    void syncContactToNewsletter({ contactId: event.data.contactId }).catch(() => {
+      return;
+    });
 
     trackTelemetryEvent("churn_signal", {
       industry: "unknown",
@@ -83,7 +93,9 @@ export function registerCrmEventListeners() {
       conversion_rate: 1,
     });
 
-    await syncKitForContactEvent({ eventType: "booking.completed", contactId: event.data.contactId });
+    void syncContactToNewsletter({ contactId: event.data.contactId }).catch(() => {
+      return;
+    });
   });
 
   bus.on("booking.cancelled", async (event) => {

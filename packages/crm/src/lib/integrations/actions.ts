@@ -12,7 +12,7 @@ import { decryptValue, encryptValue, redactApiKey } from "@/lib/encryption";
 type NewsletterProvider = "kit" | "mailchimp" | "beehiiv";
 type IntegrationService = "twilio" | "resend" | "kit" | "mailchimp" | "beehiiv" | "google";
 
-type IntegrationViewModel = {
+export type IntegrationViewModel = {
   orgId: string;
   orgName: string;
   twilio: { connected: boolean; accountSid: string; fromNumber: string; authTokenHint: string };
@@ -36,6 +36,15 @@ function readIntegrations(raw: unknown): OrganizationIntegrations {
   }
 
   return raw as OrganizationIntegrations;
+}
+
+function maskLastEight(value: string | undefined) {
+  const key = String(value ?? "").trim();
+  if (!key) {
+    return "";
+  }
+
+  return `••••${key.slice(-8)}`;
 }
 
 function tryDecrypt(value: string | undefined) {
@@ -222,6 +231,144 @@ export async function updateIntegration(orgId: string, service: string, credenti
   revalidatePath("/settings/integrations");
   revalidatePath("/setup");
   revalidatePath("/automations");
+  revalidatePath("/emails");
+}
+
+export async function disconnectIntegration(orgId: string, service: string) {
+  const integrationService = service as IntegrationService;
+
+  if (![
+    "twilio",
+    "resend",
+    "kit",
+    "mailchimp",
+    "beehiiv",
+    "google",
+  ].includes(integrationService)) {
+    throw new Error("Invalid integration service");
+  }
+
+  const [org] = await db
+    .select({ id: organizations.id, integrations: organizations.integrations })
+    .from(organizations)
+    .where(eq(organizations.id, orgId))
+    .limit(1);
+
+  if (!org) {
+    throw new Error("Organization not found");
+  }
+
+  const integrations = readIntegrations(org.integrations);
+
+  if (integrationService === "twilio") {
+    integrations.twilio = {
+      accountSid: "",
+      authToken: "",
+      fromNumber: "",
+      connected: false,
+    };
+  }
+
+  if (integrationService === "resend") {
+    integrations.resend = {
+      apiKey: "",
+      fromEmail: "",
+      fromName: integrations.resend?.fromName || "SeldonFrame",
+      connected: false,
+    };
+  }
+
+  if (["kit", "mailchimp", "beehiiv"].includes(integrationService)) {
+    integrations.newsletter = undefined;
+    integrations.kit = undefined;
+  }
+
+  if (integrationService === "google") {
+    integrations.google = {
+      calendarConnected: false,
+    };
+  }
+
+  await db
+    .update(organizations)
+    .set({ integrations, updatedAt: new Date() })
+    .where(eq(organizations.id, orgId));
+
+  revalidatePath("/settings/integrations");
+  revalidatePath("/setup");
+  revalidatePath("/automations");
+  revalidatePath("/emails");
+}
+
+export async function disconnectIntegrationAction(formData: FormData) {
+  assertWritable();
+
+  const orgId = await getOrgId();
+
+  if (!orgId) {
+    throw new Error("Unauthorized");
+  }
+
+  const service = String(formData.get("service") ?? "").trim();
+
+  if (!service) {
+    throw new Error("Missing integration service");
+  }
+
+  await disconnectIntegration(orgId, service);
+}
+
+export type EmailIntegrationsViewModel = {
+  resend: { connected: boolean; maskedKey: string };
+  newsletter: {
+    kit: { connected: boolean; maskedKey: string };
+    mailchimp: { connected: boolean; maskedKey: string };
+    beehiiv: { connected: boolean; maskedKey: string };
+  };
+};
+
+export async function getEmailIntegrationsSettings(): Promise<EmailIntegrationsViewModel | null> {
+  const orgId = await getOrgId();
+
+  if (!orgId) {
+    return null;
+  }
+
+  const [org] = await db
+    .select({ integrations: organizations.integrations })
+    .from(organizations)
+    .where(eq(organizations.id, orgId))
+    .limit(1);
+
+  if (!org) {
+    return null;
+  }
+
+  const integrations = readIntegrations(org.integrations);
+  const resendKey = tryDecrypt(integrations.resend?.apiKey);
+  const newsletterKey = tryDecrypt(integrations.newsletter?.apiKey);
+  const activeProvider = integrations.newsletter?.provider ?? null;
+
+  return {
+    resend: {
+      connected: Boolean(integrations.resend?.connected && resendKey),
+      maskedKey: maskLastEight(resendKey),
+    },
+    newsletter: {
+      kit: {
+        connected: activeProvider === "kit" && Boolean(integrations.newsletter?.connected),
+        maskedKey: activeProvider === "kit" ? maskLastEight(newsletterKey || tryDecrypt(integrations.kit?.apiKey)) : "",
+      },
+      mailchimp: {
+        connected: activeProvider === "mailchimp" && Boolean(integrations.newsletter?.connected),
+        maskedKey: activeProvider === "mailchimp" ? maskLastEight(newsletterKey) : "",
+      },
+      beehiiv: {
+        connected: activeProvider === "beehiiv" && Boolean(integrations.newsletter?.connected),
+        maskedKey: activeProvider === "beehiiv" ? maskLastEight(newsletterKey) : "",
+      },
+    },
+  };
 }
 
 export async function updateIntegrationAction(formData: FormData) {
@@ -254,6 +401,30 @@ export async function updateIntegrationAction(formData: FormData) {
 
   const query = serializeResult({ saved: "1", service });
   redirect(`/settings/integrations?${query}`);
+}
+
+export async function saveEmailIntegrationAction(formData: FormData) {
+  assertWritable();
+
+  const orgId = await getOrgId();
+
+  if (!orgId) {
+    throw new Error("Unauthorized");
+  }
+
+  const service = String(formData.get("service") ?? "").trim();
+
+  if (!service) {
+    throw new Error("Missing integration service");
+  }
+
+  await updateIntegration(orgId, service, {
+    apiKey: String(formData.get("apiKey") ?? ""),
+    fromEmail: String(formData.get("fromEmail") ?? ""),
+    fromName: String(formData.get("fromName") ?? ""),
+    listId: String(formData.get("listId") ?? ""),
+    publicationId: String(formData.get("publicationId") ?? ""),
+  });
 }
 
 export async function saveIntegrationFromWizard(service: string, credentials: Record<string, string>) {

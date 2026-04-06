@@ -3,7 +3,7 @@ import { getCustomDomainSettings, saveCustomDomainAction } from "@/lib/domains/a
 export default async function DomainSettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ saved?: string; domainAction?: string; verified?: string }>;
+  searchParams: Promise<{ saved?: string; domainAction?: string; verified?: string; error?: string }>;
 }) {
   const params = await searchParams;
   const settings = await getCustomDomainSettings();
@@ -30,6 +30,10 @@ export default async function DomainSettingsPage({
           ? "Pending DNS verification"
           : "Not configured";
 
+  const errorMessage = typeof params.error === "string" ? decodeURIComponent(params.error) : "";
+  const domainParts = settings.customDomain ? settings.customDomain.split(".") : [];
+  const dnsName = domainParts.length > 2 ? domainParts.slice(0, -2).join(".") : "@";
+
   return (
     <section className="animate-page-enter space-y-4 sm:space-y-6">
       <div>
@@ -39,6 +43,10 @@ export default async function DomainSettingsPage({
 
       {successMessage ? (
         <p className="rounded-md border border-positive/30 bg-positive/10 px-3 py-2 text-sm text-positive">{successMessage}</p>
+      ) : null}
+
+      {errorMessage ? (
+        <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{errorMessage}</p>
       ) : null}
 
       <article className="rounded-xl border bg-card p-5 space-y-5">
@@ -90,8 +98,20 @@ export default async function DomainSettingsPage({
         </form>
 
         <div className="rounded-lg border border-border bg-muted/40 p-4 space-y-2">
-          <p className="text-sm font-medium text-foreground">After adding, update your DNS:</p>
-          <p className="text-sm text-muted-foreground">CNAME → cname.vercel-dns.com</p>
+          <p className="text-sm font-medium text-foreground">DNS Configuration Required</p>
+          <p className="text-sm text-muted-foreground">Add this CNAME record at your domain registrar:</p>
+          <div className="rounded-md border border-border bg-background/70 p-3 text-sm font-mono">
+            <p>
+              <span className="text-muted-foreground">Type:</span> CNAME
+            </p>
+            <p>
+              <span className="text-muted-foreground">Name:</span> {dnsName}
+            </p>
+            <p>
+              <span className="text-muted-foreground">Value:</span> cname.vercel-dns.com
+            </p>
+          </div>
+          <p className="text-xs text-muted-foreground">DNS changes can take up to 48 hours to propagate.</p>
           <p className="text-sm text-muted-foreground">
             Status: <span className={settings.domainVerified ? "text-positive" : "text-caution"}>{verificationMessage}</span>
           </p>

@@ -1,5 +1,10 @@
 import { Mail } from "lucide-react";
 import { createEmailTemplateAction, listEmails, listEmailTemplates } from "@/lib/emails/actions";
+import {
+  disconnectIntegrationAction,
+  getEmailIntegrationsSettings,
+  saveEmailIntegrationAction,
+} from "@/lib/integrations/actions";
 import { EmailPageContent } from "@/components/emails/email-page-content";
 
 /*
@@ -11,9 +16,10 @@ import { EmailPageContent } from "@/components/emails/email-page-content";
 */
 
 export default async function EmailsPage() {
-  const [templates, rows] = await Promise.all([
+  const [templates, rows, emailIntegrations] = await Promise.all([
     listEmailTemplates(),
     listEmails(),
+    getEmailIntegrationsSettings(),
   ]);
 
   return (
@@ -51,6 +57,18 @@ export default async function EmailsPage() {
           sentAt: r.sentAt ? r.sentAt.toISOString() : null,
         }))}
         createTemplateAction={createEmailTemplateAction}
+        emailIntegrations={
+          emailIntegrations ?? {
+            resend: { connected: false, maskedKey: "" },
+            newsletter: {
+              kit: { connected: false, maskedKey: "" },
+              mailchimp: { connected: false, maskedKey: "" },
+              beehiiv: { connected: false, maskedKey: "" },
+            },
+          }
+        }
+        saveIntegrationAction={saveEmailIntegrationAction}
+        disconnectIntegrationAction={disconnectIntegrationAction}
       />
     </section>
   );

@@ -39,6 +39,15 @@ type SentRow = {
 
 type Tab = "templates" | "sent" | "settings";
 
+type EmailIntegrationsState = {
+  resend: { connected: boolean; maskedKey: string };
+  newsletter: {
+    kit: { connected: boolean; maskedKey: string };
+    mailchimp: { connected: boolean; maskedKey: string };
+    beehiiv: { connected: boolean; maskedKey: string };
+  };
+};
+
 function statusBadge(status: string) {
   const s = status.toLowerCase();
 
@@ -61,10 +70,16 @@ export function EmailPageContent({
   templates,
   sent,
   createTemplateAction,
+  emailIntegrations,
+  saveIntegrationAction,
+  disconnectIntegrationAction,
 }: {
   templates: TemplateRow[];
   sent: SentRow[];
   createTemplateAction: (formData: FormData) => Promise<void>;
+  emailIntegrations: EmailIntegrationsState;
+  saveIntegrationAction: (formData: FormData) => Promise<void>;
+  disconnectIntegrationAction: (formData: FormData) => Promise<void>;
 }) {
   const [activeTab, setActiveTab] = useState<Tab>("templates");
   const [showCreate, setShowCreate] = useState(false);
@@ -107,16 +122,61 @@ export function EmailPageContent({
             </div>
             <div className="grid gap-4 md:grid-cols-3">
               {[
-                { id: "kit", title: "Kit", placeholder: "Kit API key" },
-                { id: "mailchimp", title: "Mailchimp", placeholder: "Mailchimp API key" },
-                { id: "beehiiv", title: "Beehiiv", placeholder: "Beehiiv API key" },
+                { id: "kit", title: "Kit", placeholder: "Kit API key", state: emailIntegrations.newsletter.kit },
+                { id: "mailchimp", title: "Mailchimp", placeholder: "Mailchimp API key", state: emailIntegrations.newsletter.mailchimp },
+                { id: "beehiiv", title: "Beehiiv", placeholder: "Beehiiv API key", state: emailIntegrations.newsletter.beehiiv },
               ].map((provider) => (
                 <div key={provider.id} className="rounded-lg border p-4 space-y-3">
-                  <p className="text-sm font-medium text-foreground">{provider.title}</p>
-                  <input className="crm-input h-10 w-full px-3" placeholder={provider.placeholder} type="password" />
-                  <button type="button" className="crm-button-secondary h-9 px-4 text-xs w-full">Connect</button>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-medium text-foreground">{provider.title}</p>
+                    {provider.state.connected ? (
+                      <span className="rounded-full border border-positive/30 bg-positive/10 px-2 py-0.5 text-[11px] text-positive">Connected</span>
+                    ) : null}
+                  </div>
+
+                  {provider.state.connected ? (
+                    <div className="space-y-2">
+                      <p className="text-xs font-mono text-muted-foreground">{provider.state.maskedKey}</p>
+                      <form action={disconnectIntegrationAction}>
+                        <input type="hidden" name="service" value={provider.id} />
+                        <button type="submit" className="crm-button-secondary h-9 px-4 text-xs w-full">Disconnect</button>
+                      </form>
+                    </div>
+                  ) : (
+                    <form action={saveIntegrationAction} className="space-y-2">
+                      <input type="hidden" name="service" value={provider.id} />
+                      <input className="crm-input h-10 w-full px-3" placeholder={provider.placeholder} name="apiKey" type="password" required />
+                      <button type="submit" className="crm-button-secondary h-9 px-4 text-xs w-full">Connect</button>
+                    </form>
+                  )}
                 </div>
               ))}
+            </div>
+
+            <div className="rounded-lg border p-4 space-y-3">
+              <div>
+                <h4 className="text-sm font-medium text-foreground">Transactional Email (Resend)</h4>
+                <p className="mt-1 text-xs text-muted-foreground">Bring your own Resend API key for outbound transactional email.</p>
+              </div>
+
+              {emailIntegrations.resend.connected ? (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="rounded-full border border-positive/30 bg-positive/10 px-2 py-0.5 text-[11px] text-positive">Connected</span>
+                    <p className="text-xs font-mono text-muted-foreground">{emailIntegrations.resend.maskedKey}</p>
+                  </div>
+                  <form action={disconnectIntegrationAction}>
+                    <input type="hidden" name="service" value="resend" />
+                    <button type="submit" className="crm-button-secondary h-9 px-4 text-xs">Disconnect Resend</button>
+                  </form>
+                </div>
+              ) : (
+                <form action={saveIntegrationAction} className="space-y-2 md:flex md:items-center md:gap-2 md:space-y-0">
+                  <input type="hidden" name="service" value="resend" />
+                  <input className="crm-input h-10 w-full px-3" name="apiKey" placeholder="re_xxxxxxxxx" type="password" required />
+                  <button type="submit" className="crm-button-secondary h-9 px-4 text-xs">Connect Resend</button>
+                </form>
+              )}
             </div>
           </article>
 
