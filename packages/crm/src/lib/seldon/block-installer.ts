@@ -166,6 +166,7 @@ export async function installBlock(
         slug: String(params.slug ?? params.title ?? params.name ?? "landing-page"),
         mode: typeof params.mode === "string" ? params.mode : "soul-template",
         template: typeof params.template === "string" ? params.template : "lead-capture",
+        published: true,
       });
       if (!created.id) {
         throw new Error("Landing page creation failed");
