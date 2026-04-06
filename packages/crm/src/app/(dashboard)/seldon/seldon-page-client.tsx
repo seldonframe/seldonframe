@@ -11,6 +11,7 @@ import {
   FileText,
   Layers,
   MessageCircleDashedIcon,
+  Paintbrush,
   PaperclipIcon,
   RefreshCw,
   SparklesIcon,
@@ -197,8 +198,8 @@ function CreateOrPlanResultCard({ result }: { result: SeldonRunResult }) {
           </a>
         ) : null}
         {result.editUrl ? (
-          <a href={result.editUrl} className="text-sm text-indigo-400 hover:text-indigo-300">
-            Edit Visually
+          <a href={result.editUrl} className="text-sm text-indigo-400 hover:text-indigo-300 flex items-center gap-1">
+            Edit Visually <Paintbrush className="h-3.5 w-3.5" />
           </a>
         ) : null}
       </div>

@@ -8,6 +8,8 @@ import { getCurrentUser, getOrgId } from "@/lib/auth/helpers";
 import { canSeldonIt, resolvePlanFromPlanId } from "@/lib/billing/entitlements";
 import { assertWritable } from "@/lib/demo/server";
 import { getAIClient, recordSeldonUsage } from "@/lib/ai/client";
+import { createLandingPageForSeldonAction } from "@/lib/landing/actions";
+import { generatePuckPage } from "@/lib/puck/generate-page";
 import { installBlock, updateBlock, type InstallResult, type SeldonBlockType, type UpdateResult } from "@/lib/seldon/block-installer";
 import type { OrgSoul } from "@/lib/soul/types";
 import type { OrgTheme } from "@/lib/theme/types";
@@ -208,6 +210,47 @@ function parseJsonResponse(raw: string): ParsedSeldonResponse | null {
   } catch {
     return null;
   }
+}
+
+function slugify(text: string) {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+}
+
+function buildPuckPrompt(item: SeldonCreateItem): string {
+  if (item.blockType === "form") {
+    const fields = Array.isArray(item.params?.fields) ? (item.params?.fields as Array<Record<string, unknown>>) : [];
+    const fieldText = fields
+      .map((field) => `${String(field.label ?? field.fieldName ?? "Field")} (${String(field.type ?? "text")})`)
+      .join(", ");
+    const hasScoreSelect = fields.some((field) => String(field.type ?? "") === "score_select");
+
+    return [
+      `Create a conversion-focused form page titled \"${item.name ?? "Lead Form"}\".`,
+      item.description ? String(item.description) : "",
+      "Use a Hero section at the top with the title and short subheadline.",
+      `Then add a FormContainer with fields: ${fieldText || "Name (text), Email (email), Message (textarea)"}.`,
+      hasScoreSelect ? "This is a scored quiz. Use ScoreSelect for scored fields and preserve points metadata." : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  if (item.blockType === "page") {
+    return [
+      `Create a polished landing page titled \"${item.name ?? "Landing Page"}\".`,
+      item.description ? String(item.description) : "",
+      "Use a strong Hero section, service/value sections, social proof, and a clear CTA.",
+      "Compose using available Puck components only.",
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  return `Create a page for: ${item.name ?? "Untitled"}. ${item.description ?? ""}`;
 }
 
 function toAction(blockType: SeldonBlockType, data: InstallResult | UpdateResult): SeldonRunResult {
@@ -680,6 +723,39 @@ export async function runSeldonItAction(_prev: SeldonRunState, formData: FormDat
 
       for (const item of creates) {
         try {
+          if (item.blockType === "page" || item.blockType === "form") {
+            const puckPrompt = buildPuckPrompt(item);
+            const puckData = await generatePuckPage(puckPrompt, soul, theme);
+            const rawName = String(item.name ?? item.params?.name ?? item.params?.title ?? (item.blockType === "form" ? "Lead Form" : "Landing Page"));
+            const created = await createLandingPageForSeldonAction({
+              title: rawName,
+              slug: String(item.params?.slug ?? slugify(rawName || `${item.blockType}-${Date.now()}`)),
+              mode: typeof item.params?.mode === "string" ? item.params.mode : "soul-template",
+              template: typeof item.params?.template === "string" ? item.params.template : "lead-capture",
+              published: true,
+              pageType: item.blockType,
+              puckData,
+            });
+
+            if (!created.id) {
+              throw new Error(`${item.blockType} creation failed`);
+            }
+
+            const directResult: InstallResult = {
+              entityId: created.id,
+              type: item.blockType,
+              name: created.title,
+              description: String(item.description ?? `${item.blockType} created with Puck AI`),
+              publicUrl: `/s/${orgSlug}/${created.slug}`,
+              adminUrl: "/landing",
+              status: created.status === "published" ? "live" : "draft",
+              editUrl: `/editor/${created.id}`,
+            };
+
+            results.push(toAction(item.blockType, directResult));
+            continue;
+          }
+
           const installed = await installBlock(
             orgId,
             orgSlug,

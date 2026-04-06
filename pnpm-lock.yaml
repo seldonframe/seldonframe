@@ -183,6 +183,9 @@ importers:
       '@neondatabase/serverless':
         specifier: ^1.0.2
         version: 1.0.2
+      '@puckeditor/cloud-client':
+        specifier: ^0.6.0
+        version: 0.6.0
       '@puckeditor/core':
         specifier: ^0.21.2
         version: 0.21.2(@floating-ui/dom@1.7.6)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(immer@11.1.4)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(use-sync-external-store@1.6.0(react@19.2.4))
@@ -1525,6 +1528,9 @@ packages:
 
   '@preact/signals-core@1.14.1':
     resolution: {integrity: sha512-vxPpfXqrwUe9lpjqfYNjAF/0RF/eFGeLgdJzdmIIZjpOnTmGmAB4BjWone562mJGMRP4frU6iZ6ei3PDsu52Ng==}
+
+  '@puckeditor/cloud-client@0.6.0':
+    resolution: {integrity: sha512-xzTVIhfPFo2Naad+yjIn4mRzhAgyNLzxu33zRiSH0xV5KDLwxR3VnU+4PS6xasj4NW7WN8qr/dgi1SeofeMwpQ==}
 
   '@puckeditor/core@0.21.2':
     resolution: {integrity: sha512-XFkIb2Q5f74bG6FmNlupOfythTszythVSOm2ByeUwez5ePpWSUl94zy8GGxAbDLLqja4Pkx9TnLuuwZx2225aQ==}
@@ -6301,6 +6307,8 @@ snapshots:
     optional: true
 
   '@preact/signals-core@1.14.1': {}
+
+  '@puckeditor/cloud-client@0.6.0': {}
 
   '@puckeditor/core@0.21.2(@floating-ui/dom@1.7.6)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(immer@11.1.4)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(use-sync-external-store@1.6.0(react@19.2.4))':
     dependencies:
