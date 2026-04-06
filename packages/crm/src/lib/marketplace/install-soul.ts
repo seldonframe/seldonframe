@@ -1,7 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { landingPages, organizations } from "@/db/schema";
-import { soulWiki } from "@/db/schema/soul-sources";
 import { normalizeTheme } from "@/lib/theme/normalize-theme";
 import type { OrgSoul } from "@/lib/soul/types";
 import type { SoulPackage } from "@/lib/marketplace/soul-package";
@@ -68,30 +67,6 @@ export async function installSoulPackage(orgId: string, pkg: SoulPackage) {
     .update(organizations)
     .set({ soul: nextSoul, theme: nextTheme, updatedAt: new Date() })
     .where(eq(organizations.id, orgId));
-
-  for (const article of pkg.wiki.articles) {
-    await db
-      .insert(soulWiki)
-      .values({
-        orgId,
-        slug: article.slug,
-        title: article.title,
-        category: article.category,
-        content: article.content,
-        sourceIds: [],
-        lastCompiledAt: new Date(),
-      })
-      .onConflictDoUpdate({
-        target: [soulWiki.orgId, soulWiki.slug],
-        set: {
-          content: article.content,
-          category: article.category,
-          title: article.title,
-          lastCompiledAt: new Date(),
-          updatedAt: new Date(),
-        },
-      });
-  }
 
   let blocksCreated = 0;
 

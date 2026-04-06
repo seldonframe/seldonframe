@@ -1,7 +1,6 @@
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { bookings, intakeForms, landingPages, organizations } from "@/db/schema";
-import { soulWiki } from "@/db/schema/soul-sources";
 import { normalizeTheme } from "@/lib/theme/normalize-theme";
 import type { OrgSoul } from "@/lib/soul/types";
 import type { SoulPackage } from "@/lib/marketplace/soul-package";
@@ -26,11 +25,7 @@ export async function exportSoulPackage(orgId: string): Promise<SoulPackage> {
   const soul = (org.soul ?? {}) as Partial<OrgSoul>;
   const theme = normalizeTheme(org.theme);
 
-  const articles = await db
-    .select({ slug: soulWiki.slug, title: soulWiki.title, category: soulWiki.category, content: soulWiki.content })
-    .from(soulWiki)
-    .where(eq(soulWiki.orgId, orgId))
-    .orderBy(soulWiki.slug);
+  const articles: Array<{ slug: string; title: string; category: string; content: string }> = [];
 
   const pages = await db
     .select({
