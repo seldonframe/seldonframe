@@ -20,7 +20,11 @@ export type SeldonRunResult = {
   blockId: string;
   blockName: string;
   blockMd: string;
+  description?: string;
   summary: string;
+  status?: "live" | "draft" | "needs-integration" | "error";
+  integrationNote?: string;
+  changes?: string;
   fromInventory: boolean;
   installMode: "instant" | "review";
   openPath: string;
@@ -73,48 +77,6 @@ export type SeldonSavedBlock = {
   blockMd: string;
   createdAt: string;
 };
-
-function slugify(input: string) {
-  return input
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .slice(0, 40);
-}
-
-function resolveOpenPath(blockName: string, need: string, summary: string) {
-  const combined = `${blockName} ${need} ${summary}`.toLowerCase();
-
-  if (/(email|newsletter|campaign)/.test(combined)) {
-    return "/emails";
-  }
-
-  if (/(form|intake|survey|quiz)/.test(combined)) {
-    return "/forms";
-  }
-
-  if (/(booking|calendar|appointment|session)/.test(combined)) {
-    return "/bookings";
-  }
-
-  if (/(landing|page|website)/.test(combined)) {
-    return "/landing";
-  }
-
-  return "/dashboard";
-}
-
-function extractNameFromBlockMd(blockMd: string, fallback: string) {
-  const firstLine = blockMd.split("\n").find((line) => line.trim().toLowerCase().startsWith("# block:"));
-  if (!firstLine) {
-    return fallback;
-  }
-
-  const parsed = firstLine.replace(/^#\s*block\s*:\s*/i, "").trim();
-  return parsed || fallback;
-}
 
 function readIntegrations(raw: unknown): OrganizationIntegrations {
   if (!raw || typeof raw !== "object") {
@@ -224,7 +186,11 @@ function toAction(blockType: SeldonBlockType, data: InstallResult | UpdateResult
     blockId: `${blockType}-${data.entityId}`,
     blockName: data.name,
     blockMd: "# BLOCK.md\n\nGenerated via Seldon composable flow.",
+    description: data.description,
     summary: summaryLine,
+    status: data.status,
+    integrationNote: "integrationNote" in data ? data.integrationNote : undefined,
+    changes: "changes" in data ? data.changes : undefined,
     fromInventory: false,
     installMode: "instant",
     openPath: data.adminUrl,
@@ -701,7 +667,9 @@ export async function runSeldonItAction(_prev: SeldonRunState, formData: FormDat
             blockId: `${item.blockType}-${Date.now()}`,
             blockName: item.name || `${item.blockType} block`,
             blockMd: "# BLOCK.md\n\nGeneration failed.",
+            description: message,
             summary: `- ${message}`,
+            status: "error",
             fromInventory: false,
             installMode: "review",
             openPath: "/seldon",
@@ -744,7 +712,10 @@ export async function runSeldonItAction(_prev: SeldonRunState, formData: FormDat
             blockId: `${item.blockType}-${Date.now()}`,
             blockName: item.name || `${item.blockType} block`,
             blockMd: "# BLOCK.md\n\nUpdate failed.",
+            description: message,
             summary: `- ${message}`,
+            status: "error",
+            changes: message,
             fromInventory: false,
             installMode: "review",
             openPath: "/seldon",
