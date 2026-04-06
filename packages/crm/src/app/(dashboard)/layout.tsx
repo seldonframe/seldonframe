@@ -91,6 +91,8 @@ export default async function DashboardLayout({
 
   const paletteItems = [
     { label: "Dashboard", href: "/dashboard", group: "Navigate" },
+    { label: "Creator Studio", href: "/studio", group: "Navigate" },
+    { label: "Soul Marketplace", href: "/soul-marketplace", group: "Navigate" },
     { label: "Seldon It", href: canAccessSeldon ? "/seldon" : "/settings/billing", group: "Navigate" as const },
     ...(dbUserForPlan?.planId?.startsWith("pro-") ? [{ label: "Organizations", href: "/orgs", group: "Navigate" as const }] : []),
     { label: "Contacts", href: "/contacts", group: "Navigate" },

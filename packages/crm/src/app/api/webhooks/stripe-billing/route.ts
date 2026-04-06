@@ -4,7 +4,7 @@ import { verifyStripeWebhook } from "@seldonframe/payments";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { getPlanByStripePriceId } from "@/lib/billing/plans";
-import { finalizeBlockPurchaseFromWebhook } from "@/lib/marketplace/actions";
+import { finalizeBlockPurchaseFromWebhook, finalizeSoulPurchaseFromWebhook } from "@/lib/marketplace/actions";
 
 type BillingStatus = "trialing" | "active" | "past_due" | "canceled" | "unpaid";
 
@@ -96,6 +96,21 @@ export async function POST(request: Request) {
           orgId: object.metadata?.orgId || "",
           userId: object.metadata?.userId || null,
           blockId: object.metadata?.blockId || "",
+          stripePaymentId,
+        });
+
+        break;
+      }
+
+      if (object.metadata?.type === "soul_purchase") {
+        const stripePaymentId =
+          typeof object.payment_intent === "string" ? object.payment_intent : object.payment_intent?.id || null;
+
+        await finalizeSoulPurchaseFromWebhook({
+          orgId: object.metadata?.orgId || "",
+          userId: object.metadata?.userId || null,
+          listingId: object.metadata?.listingId || null,
+          listingSlug: object.metadata?.listingSlug || null,
           stripePaymentId,
         });
 

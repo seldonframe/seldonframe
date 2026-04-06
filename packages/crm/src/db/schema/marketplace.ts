@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, integer, jsonb, numeric, pgTable, text, timestamp, uuid, uniqueIndex } from "drizzle-orm/pg-core";
+import { boolean, index, integer, jsonb, numeric, pgTable, real, text, timestamp, uuid, uniqueIndex } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
 import { users } from "./users";
 
@@ -101,4 +101,60 @@ export const blockRatings = pgTable(
     uniqueIndex("block_ratings_block_user_uidx").on(table.blockId, table.userId),
     index("block_ratings_block_idx").on(table.blockId),
   ]
+);
+
+export const marketplaceListings = pgTable(
+  "marketplace_listings",
+  {
+    id: uuid("id")
+      .default(sql`gen_random_uuid()`)
+      .primaryKey(),
+    creatorOrgId: uuid("creator_org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    slug: text("slug").notNull().unique(),
+    name: text("name").notNull(),
+    description: text("description"),
+    longDescription: text("long_description"),
+    niche: text("niche").notNull(),
+    tags: jsonb("tags").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+    price: integer("price").notNull().default(0),
+    soulPackage: jsonb("soul_package").notNull(),
+    previewImageUrl: text("preview_image_url"),
+    previewImages: jsonb("preview_images").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+    installCount: integer("install_count").notNull().default(0),
+    rating: real("rating").notNull().default(0),
+    reviewCount: integer("review_count").notNull().default(0),
+    stripeConnectAccountId: text("stripe_connect_account_id"),
+    isPublished: boolean("is_published").notNull().default(false),
+    isFeatured: boolean("is_featured").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_marketplace_slug").on(table.slug),
+    index("idx_marketplace_niche").on(table.niche).where(sql`${table.isPublished} = true`),
+    index("idx_marketplace_featured")
+      .on(table.isFeatured, table.installCount)
+      .where(sql`${table.isPublished} = true`),
+  ]
+);
+
+export const marketplaceReviews = pgTable(
+  "marketplace_reviews",
+  {
+    id: uuid("id")
+      .default(sql`gen_random_uuid()`)
+      .primaryKey(),
+    listingId: uuid("listing_id")
+      .notNull()
+      .references(() => marketplaceListings.id, { onDelete: "cascade" }),
+    buyerOrgId: uuid("buyer_org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    rating: integer("rating").notNull(),
+    review: text("review"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("idx_reviews_listing").on(table.listingId)]
 );

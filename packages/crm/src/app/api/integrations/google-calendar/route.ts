@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getOrgId } from "@/lib/auth/helpers";
 
 function getAppBaseUrl(request: NextRequest) {
-  return process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
+  const raw = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
+  return raw.replace(/[\r\n]/g, "").trim().replace(/\/+$/, "");
 }
 
 function sanitizeReturnTo(value: string | null) {

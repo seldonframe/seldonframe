@@ -57,6 +57,8 @@ export function Sidebar(props: {
       title: "YOUR SOUL",
       items: filterHidden([
         { href: "/dashboard", label: "Dashboard", icon: "LayoutDashboard" },
+        { href: "/studio", label: "Creator Studio", icon: "Sparkles" },
+        { href: "/soul-marketplace", label: "Soul Marketplace", icon: "Puzzle" },
         {
           href: canAccessSeldon ? "/seldon" : "/settings/billing",
           label: "Seldon It",

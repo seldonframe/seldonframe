@@ -3,10 +3,12 @@
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
-import { blockPurchases, blockRatings, generatedBlocks, marketplaceBlocks, organizations } from "@/db/schema";
+import { blockPurchases, blockRatings, generatedBlocks, marketplaceBlocks, marketplaceListings, marketplaceReviews, organizations } from "@/db/schema";
 import { getCurrentUser, getOrgId } from "@/lib/auth/helpers";
 import { canInstallBlocks, canRateBlocks, canSubmitBlocks, resolvePlanFromPlanId } from "@/lib/billing/entitlements";
 import { assertWritable } from "@/lib/demo/server";
+import { installSoulPackage } from "@/lib/marketplace/install-soul";
+import type { SoulPackage } from "@/lib/marketplace/soul-package";
 import { getStripeClient } from "@seldonframe/payments";
 
 type GeneratedFile = { path: string; content: string };
@@ -39,6 +41,52 @@ function slugify(input: string) {
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-")
     .slice(0, 48);
+}
+
+function readInstalledListingIds(settings: Record<string, unknown> | null | undefined) {
+  const value = settings?.marketplaceInstalledListingIds;
+  if (!Array.isArray(value)) {
+    return [] as string[];
+  }
+
+  return value.map((item) => String(item)).filter(Boolean);
+}
+
+async function hasOrgInstalledListing(orgId: string, listingId: string) {
+  const [org] = await db
+    .select({ settings: organizations.settings })
+    .from(organizations)
+    .where(eq(organizations.id, orgId))
+    .limit(1);
+
+  const installedIds = readInstalledListingIds(org?.settings as Record<string, unknown> | null | undefined);
+  return installedIds.includes(listingId);
+}
+
+async function markOrgInstalledListing(orgId: string, listingId: string) {
+  const [org] = await db
+    .select({ settings: organizations.settings })
+    .from(organizations)
+    .where(eq(organizations.id, orgId))
+    .limit(1);
+
+  const currentSettings = (org?.settings ?? {}) as Record<string, unknown>;
+  const installedIds = readInstalledListingIds(currentSettings);
+
+  if (installedIds.includes(listingId)) {
+    return;
+  }
+
+  await db
+    .update(organizations)
+    .set({
+      settings: {
+        ...currentSettings,
+        marketplaceInstalledListingIds: [...installedIds, listingId],
+      },
+      updatedAt: new Date(),
+    })
+    .where(eq(organizations.id, orgId));
 }
 
 async function hasOrgPurchasedBlock(orgId: string, blockId: string) {
@@ -246,6 +294,64 @@ export async function finalizeBlockPurchaseFromWebhook(params: {
   await enableBlockForOrg(params.orgId, params.blockId);
 }
 
+export async function finalizeSoulPurchaseFromWebhook(params: {
+  orgId: string;
+  userId?: string | null;
+  listingId?: string | null;
+  listingSlug?: string | null;
+  stripePaymentId?: string | null;
+}) {
+  if (!params.orgId) {
+    return;
+  }
+
+  const listing = params.listingId
+    ? (
+        await db
+          .select({
+            id: marketplaceListings.id,
+            slug: marketplaceListings.slug,
+            soulPackage: marketplaceListings.soulPackage,
+          })
+          .from(marketplaceListings)
+          .where(and(eq(marketplaceListings.id, params.listingId), eq(marketplaceListings.isPublished, true)))
+          .limit(1)
+      )[0]
+    : params.listingSlug
+      ? (
+          await db
+            .select({
+              id: marketplaceListings.id,
+              slug: marketplaceListings.slug,
+              soulPackage: marketplaceListings.soulPackage,
+            })
+            .from(marketplaceListings)
+            .where(and(eq(marketplaceListings.slug, params.listingSlug), eq(marketplaceListings.isPublished, true)))
+            .limit(1)
+        )[0]
+      : null;
+
+  if (!listing) {
+    return;
+  }
+
+  const alreadyInstalled = await hasOrgInstalledListing(params.orgId, listing.id);
+  if (alreadyInstalled) {
+    return;
+  }
+
+  await installSoulPackage(params.orgId, listing.soulPackage as SoulPackage);
+  await markOrgInstalledListing(params.orgId, listing.id);
+
+  await db
+    .update(marketplaceListings)
+    .set({ installCount: sql`${marketplaceListings.installCount} + 1`, updatedAt: new Date() })
+    .where(eq(marketplaceListings.id, listing.id));
+
+  revalidatePath("/soul-marketplace");
+  revalidatePath(`/soul-marketplace/${listing.slug}`);
+}
+
 export async function finalizeMarketplacePurchaseReturnAction(formData: FormData) {
   assertWritable();
 
@@ -265,6 +371,221 @@ export async function finalizeMarketplacePurchaseReturnAction(formData: FormData
   await enableBlockForOrg(orgId, blockId);
   revalidatePath(`/marketplace/${blockId}`);
   revalidatePath("/marketplace");
+}
+
+export async function finalizeSoulListingPurchaseReturnAction(formData: FormData) {
+  assertWritable();
+
+  const user = await getCurrentUser();
+  const orgId = await getOrgId();
+
+  if (!user?.id || !orgId) {
+    throw new Error("Unauthorized");
+  }
+
+  const slug = String(formData.get("slug") ?? "").trim();
+  if (!slug) {
+    throw new Error("Soul slug is required");
+  }
+
+  const [listing] = await db
+    .select({
+      id: marketplaceListings.id,
+      slug: marketplaceListings.slug,
+      soulPackage: marketplaceListings.soulPackage,
+    })
+    .from(marketplaceListings)
+    .where(and(eq(marketplaceListings.slug, slug), eq(marketplaceListings.isPublished, true)))
+    .limit(1);
+
+  if (!listing) {
+    throw new Error("Soul listing not found");
+  }
+
+  const alreadyInstalled = await hasOrgInstalledListing(orgId, listing.id);
+  if (!alreadyInstalled) {
+    await installSoulPackage(orgId, listing.soulPackage as SoulPackage);
+    await markOrgInstalledListing(orgId, listing.id);
+
+    await db
+      .update(marketplaceListings)
+      .set({ installCount: sql`${marketplaceListings.installCount} + 1`, updatedAt: new Date() })
+      .where(eq(marketplaceListings.id, listing.id));
+  }
+
+  revalidatePath("/soul-marketplace");
+  revalidatePath(`/soul-marketplace/${listing.slug}`);
+
+  return { installed: true };
+}
+
+export async function purchaseSoulListingAction(formData: FormData) {
+  assertWritable();
+
+  const user = await getCurrentUser();
+  const orgId = await getOrgId();
+
+  if (!user?.id || !orgId) {
+    throw new Error("Unauthorized");
+  }
+
+  const slug = String(formData.get("slug") ?? "").trim();
+  if (!slug) {
+    throw new Error("Soul slug is required");
+  }
+
+  const [listing] = await db
+    .select({
+      id: marketplaceListings.id,
+      slug: marketplaceListings.slug,
+      name: marketplaceListings.name,
+      description: marketplaceListings.description,
+      price: marketplaceListings.price,
+      stripeConnectAccountId: marketplaceListings.stripeConnectAccountId,
+      soulPackage: marketplaceListings.soulPackage,
+    })
+    .from(marketplaceListings)
+    .where(and(eq(marketplaceListings.slug, slug), eq(marketplaceListings.isPublished, true)))
+    .limit(1);
+
+  if (!listing) {
+    throw new Error("Soul listing not found");
+  }
+
+  const alreadyInstalled = await hasOrgInstalledListing(orgId, listing.id);
+  if (alreadyInstalled) {
+    return { installed: true };
+  }
+
+  const price = Number(listing.price ?? 0);
+  if (price <= 0) {
+    await installSoulPackage(orgId, listing.soulPackage as SoulPackage);
+    await markOrgInstalledListing(orgId, listing.id);
+
+    await db
+      .update(marketplaceListings)
+      .set({ installCount: sql`${marketplaceListings.installCount} + 1`, updatedAt: new Date() })
+      .where(eq(marketplaceListings.id, listing.id));
+
+    revalidatePath("/soul-marketplace");
+    revalidatePath(`/soul-marketplace/${listing.slug}`);
+
+    return { installed: true };
+  }
+
+  if (!listing.stripeConnectAccountId) {
+    throw new Error("Seller payout account is not configured for this soul.");
+  }
+
+  const stripe = getStripeClient();
+  if (!stripe) {
+    throw new Error("Stripe is not configured.");
+  }
+
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const session = await stripe.checkout.sessions.create({
+    mode: "payment",
+    success_url: `${baseUrl}/soul-marketplace/${listing.slug}/install?purchased=true`,
+    cancel_url: `${baseUrl}/soul-marketplace/${listing.slug}`,
+    line_items: [
+      {
+        quantity: 1,
+        price_data: {
+          currency: "usd",
+          unit_amount: Math.round(price),
+          product_data: {
+            name: `SeldonFrame Soul: ${listing.name}`,
+            description: listing.description || undefined,
+          },
+        },
+      },
+    ],
+    payment_intent_data: {
+      application_fee_amount: 0,
+      transfer_data: {
+        destination: listing.stripeConnectAccountId,
+      },
+    },
+    metadata: {
+      type: "soul_purchase",
+      orgId,
+      userId: user.id,
+      listingId: listing.id,
+      listingSlug: listing.slug,
+    },
+  });
+
+  return { checkoutUrl: session.url };
+}
+
+export async function submitSoulListingReviewAction(formData: FormData) {
+  assertWritable();
+
+  const user = await getCurrentUser();
+  const orgId = await getOrgId();
+
+  if (!user?.id || !orgId) {
+    throw new Error("Unauthorized");
+  }
+
+  const slug = String(formData.get("slug") ?? "").trim();
+  const rating = Number(formData.get("rating") ?? 0);
+  const review = String(formData.get("review") ?? "").trim() || null;
+
+  if (!slug || !Number.isFinite(rating) || rating < 1 || rating > 5) {
+    throw new Error("Valid soul slug and rating are required");
+  }
+
+  const [listing] = await db
+    .select({ id: marketplaceListings.id, slug: marketplaceListings.slug })
+    .from(marketplaceListings)
+    .where(and(eq(marketplaceListings.slug, slug), eq(marketplaceListings.isPublished, true)))
+    .limit(1);
+
+  if (!listing) {
+    throw new Error("Soul listing not found");
+  }
+
+  const installed = await hasOrgInstalledListing(orgId, listing.id);
+  if (!installed) {
+    throw new Error("Install this soul before leaving a review.");
+  }
+
+  const [existing] = await db
+    .select({ id: marketplaceReviews.id })
+    .from(marketplaceReviews)
+    .where(and(eq(marketplaceReviews.listingId, listing.id), eq(marketplaceReviews.buyerOrgId, orgId)))
+    .limit(1);
+
+  if (existing) {
+    await db
+      .update(marketplaceReviews)
+      .set({ rating, review })
+      .where(eq(marketplaceReviews.id, existing.id));
+  } else {
+    await db.insert(marketplaceReviews).values({
+      listingId: listing.id,
+      buyerOrgId: orgId,
+      rating,
+      review,
+    });
+  }
+
+  const rows = await db.select({ rating: marketplaceReviews.rating }).from(marketplaceReviews).where(eq(marketplaceReviews.listingId, listing.id));
+  const total = rows.reduce((sum, row) => sum + row.rating, 0);
+  const average = rows.length > 0 ? total / rows.length : 0;
+
+  await db
+    .update(marketplaceListings)
+    .set({
+      rating: average,
+      reviewCount: rows.length,
+      updatedAt: new Date(),
+    })
+    .where(eq(marketplaceListings.id, listing.id));
+
+  revalidatePath("/soul-marketplace");
+  revalidatePath(`/soul-marketplace/${listing.slug}`);
 }
 
 export async function purchaseMarketplaceBlockAction(formData: FormData) {
