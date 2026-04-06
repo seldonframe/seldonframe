@@ -2,7 +2,18 @@
 
 import Link from "next/link";
 import { useActionState, useEffect, useMemo, useState } from "react";
-import { CircleDashedIcon, MessageCircleDashedIcon, PaperclipIcon, SparklesIcon, WandSparklesIcon } from "lucide-react";
+import {
+  CheckCircle,
+  Circle,
+  CircleDashedIcon,
+  ExternalLink,
+  Layers,
+  MessageCircleDashedIcon,
+  PaperclipIcon,
+  RefreshCw,
+  SparklesIcon,
+  WandSparklesIcon,
+} from "lucide-react";
 import {
   runSeldonItAction,
   saveSeldonBlockAction,
@@ -16,6 +27,16 @@ type ChatMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
+};
+
+type SessionPlan = {
+  title: string;
+  totalSteps: number;
+  steps: Array<{
+    stepNumber: number;
+    description: string;
+    blockType: "form" | "email" | "booking" | "page" | "automation";
+  }>;
 };
 
 const initialState: SeldonRunState = { ok: false };
@@ -34,6 +55,93 @@ function toOpenLabel(path: string) {
   if (path === "/bookings") return "Open Booking";
   if (path === "/landing") return "Open Landing";
   return "Open Dashboard";
+}
+
+function PlanCard({
+  plan,
+  completedCount,
+}: {
+  plan: SessionPlan;
+  completedCount: number;
+}) {
+  return (
+    <div className="rounded-lg border border-zinc-700 bg-zinc-900/30 p-4 mb-4">
+      <div className="flex items-center gap-2 mb-2">
+        <Layers className="h-4 w-4 text-teal-400" />
+        <span className="text-sm font-medium text-zinc-200">{plan.title}</span>
+        <span className="text-xs text-zinc-500">{plan.totalSteps} steps</span>
+      </div>
+      <div className="space-y-1">
+        {plan.steps.map((step) => {
+          const isDone = step.stepNumber <= completedCount;
+          return (
+            <div key={`${plan.title}-${step.stepNumber}`} className="flex items-center gap-2 text-xs">
+              {isDone ? <CheckCircle className="h-3.5 w-3.5 text-emerald-500" /> : <Circle className="h-3.5 w-3.5 text-zinc-600" />}
+              <span className={isDone ? "text-zinc-400" : "text-zinc-500"}>{step.description}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function UpdateResultCard({ result }: { result: SeldonRunResult }) {
+  const changeText = result.summary.replace(/^[-\s]*/, "") || "Updated";
+
+  return (
+    <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-5 space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <RefreshCw className="h-4 w-4 text-blue-400" />
+          <span className="font-semibold text-base text-zinc-100">Updated: {result.blockName}</span>
+        </div>
+        <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400">Modified</span>
+      </div>
+
+      <p className="text-sm text-zinc-400">{changeText}</p>
+
+      <div className="flex items-center gap-3 pt-1">
+        {result.publicUrl ? (
+          <a href={result.publicUrl} target="_blank" rel="noopener" className="text-sm text-teal-400 hover:text-teal-300 flex items-center gap-1">
+            Open <ExternalLink className="h-3.5 w-3.5" />
+          </a>
+        ) : null}
+        {result.adminUrl ? (
+          <a href={result.adminUrl} className="text-sm text-zinc-500 hover:text-zinc-300">
+            Edit
+          </a>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function getSessionPlan(item: SeldonSessionItem): SessionPlan | null {
+  for (let index = item.messages.length - 1; index >= 0; index -= 1) {
+    const plan = item.messages[index] as { plan?: SessionPlan };
+    if (plan?.plan) {
+      return plan.plan;
+    }
+  }
+
+  return null;
+}
+
+function getSessionCreatedEntityCount(item: SeldonSessionItem) {
+  const ids = new Set<string>();
+
+  for (const message of item.messages) {
+    if (!Array.isArray(message.createdEntities)) {
+      continue;
+    }
+
+    for (const entity of message.createdEntities) {
+      ids.add(entity.id);
+    }
+  }
+
+  return ids.size;
 }
 
 function toOpenEmoji(path: string) {
@@ -181,6 +289,10 @@ export function SeldonPageClient({
     [activeSession],
   );
 
+  const statePlan = state.plan as SessionPlan | null | undefined;
+  const activeSessionPlan = useMemo(() => (activeSession ? getSessionPlan(activeSession) : null), [activeSession]);
+  const activeSessionCreatedCount = useMemo(() => (activeSession ? getSessionCreatedEntityCount(activeSession) : 0), [activeSession]);
+
   const customizeExamples = [
     {
       icon: "📅",
@@ -272,6 +384,19 @@ export function SeldonPageClient({
                     </button>
                   </div>
                 ))}
+                {sessions.map((item) => {
+                  const plan = getSessionPlan(item);
+                  if (!plan) {
+                    return null;
+                  }
+
+                  const createdCount = getSessionCreatedEntityCount(item);
+                  return (
+                    <div key={`${item.id}-plan-progress`} className="px-2 text-xs text-zinc-500 mt-0.5">
+                      {createdCount}/{plan.totalSteps} steps complete
+                    </div>
+                  );
+                })}
               </div>
 
               <div className="space-y-1">
@@ -418,15 +543,20 @@ export function SeldonPageClient({
 
                 {state.results?.length ? (
                   <div className="space-y-3">
-                    {state.results.length > 1 ? <ConnectedFlowCard results={state.results} onViewBlockMd={setSelectedResult} /> : null}
-                    {state.results.map((result) => (
-                      <ResultCard key={result.blockId} result={result} onViewBlockMd={setSelectedResult} onRefine={fillPrompt} />
-                    ))}
+                    {state.action === "plan" && statePlan ? (
+                      <PlanCard plan={statePlan} completedCount={Math.max(1, Math.min(statePlan.totalSteps, state.results.length))} />
+                    ) : null}
+                    {state.action === "update"
+                      ? state.results.map((result) => <UpdateResultCard key={`updated-${result.blockId}`} result={result} />)
+                      : state.results.map((result) => (
+                          <ResultCard key={result.blockId} result={result} onViewBlockMd={setSelectedResult} onRefine={fillPrompt} />
+                        ))}
                   </div>
                 ) : null}
 
                 {activeSessionResults.length > 0 ? (
                   <div className="space-y-3">
+                    {activeSessionPlan ? <PlanCard plan={activeSessionPlan} completedCount={activeSessionCreatedCount} /> : null}
                     {activeSessionResults.map((result) => (
                       <ResultCard key={`session-${result.blockId}`} result={result} onViewBlockMd={setSelectedResult} onRefine={fillPrompt} />
                     ))}
@@ -491,6 +621,7 @@ export function SeldonPageClient({
                   }}
                 >
                   <div className="rounded-xl border border-border dark:border-transparent bg-card dark:bg-secondary">
+                    <input type="hidden" name="sessionId" value={activeSessionId ?? state.sessionId ?? ""} />
                     <textarea
                       id="seldon-description"
                       name="description"
