@@ -125,7 +125,7 @@ export function PublicBookingForm({
 
       <div className="grid gap-3 md:grid-cols-2">
         <div>
-          <label htmlFor="booking-date" className="text-label text-[hsl(var(--color-text-secondary))]">Date</label>
+          <label htmlFor="booking-date" className="text-label" style={{ color: "var(--sf-muted)" }}>Date</label>
           <select
             id="booking-date"
             className="crm-input mt-1 h-10 w-full px-3"
@@ -141,8 +141,8 @@ export function PublicBookingForm({
         </div>
 
         <div>
-          <label htmlFor="booking-slot" className="text-label text-[hsl(var(--color-text-secondary))]">Time slot</label>
-          <p className="mt-1 text-xs text-[hsl(var(--color-text-muted))]">Times shown in {timezone}</p>
+          <label htmlFor="booking-slot" className="text-label" style={{ color: "var(--sf-muted)" }}>Time slot</label>
+          <p className="mt-1 text-xs" style={{ color: "var(--sf-muted)" }}>Times shown in {timezone}</p>
           <select
             id="booking-slot"
             className="crm-input mt-1 h-10 w-full px-3"
@@ -168,7 +168,7 @@ export function PublicBookingForm({
         {pending ? "Booking..." : price > 0 ? `Pay & Book ($${price.toFixed(2)})` : "Book"}
       </button>
 
-      {success ? <p className="text-sm text-positive">{confirmationMessage}</p> : null}
+      {success ? <p className="text-sm" style={{ color: "var(--sf-accent)" }}>{confirmationMessage}</p> : null}
     </form>
   );
 }

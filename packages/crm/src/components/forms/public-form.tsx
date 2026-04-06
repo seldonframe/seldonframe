@@ -44,7 +44,7 @@ export function PublicForm({ orgSlug, formSlug, fields }: { orgSlug: string; for
     >
       {fields.map((field) => (
         <div key={field.key} className="space-y-1">
-          <label htmlFor={field.key} className="text-sm font-medium">{field.label}</label>
+          <label htmlFor={field.key} className="text-sm font-medium" style={{ color: "var(--sf-text)" }}>{field.label}</label>
           <input id={field.key} name={field.key} required={field.required} className="crm-input h-10 w-full px-3" />
         </div>
       ))}
@@ -53,7 +53,7 @@ export function PublicForm({ orgSlug, formSlug, fields }: { orgSlug: string; for
         {pending ? "Submitting..." : "Submit"}
       </button>
 
-      {success ? <p className="text-sm text-positive">Thanks, your form was submitted.</p> : null}
+      {success ? <p className="text-sm" style={{ color: "var(--sf-accent)" }}>Thanks, your form was submitted.</p> : null}
     </form>
   );
 }

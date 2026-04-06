@@ -5,7 +5,7 @@ export function PageRenderer({ sections }: { sections: LandingPageSection[] }) {
   const ordered = [...sections].sort((a, b) => a.order - b.order);
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen" style={{ backgroundColor: "var(--sf-bg)", color: "var(--sf-text)" }}>
       {ordered.map((section, index) => {
         const key = `${section.type}-${index}`;
         const manifest = getLandingBlockManifest(section.type);

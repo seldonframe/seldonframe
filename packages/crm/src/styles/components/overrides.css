@@ -11,6 +11,41 @@
     - templates/dashboard-2/components/ui/input.tsx
       - input shell: "border-input h-9 w-full ... rounded-md border bg-transparent ... shadow-xs"
   */
+  .sf-public .crm-card {
+    border: 1px solid var(--sf-border);
+    background: var(--sf-card-bg);
+    color: var(--sf-text);
+    border-radius: var(--sf-radius);
+    box-shadow: none;
+  }
+
+  .sf-public .crm-button-primary {
+    border-radius: var(--sf-radius);
+    background: var(--sf-primary);
+    color: #fff;
+  }
+
+  .sf-public .crm-button-primary:hover {
+    background: color-mix(in oklab, var(--sf-primary) 88%, black 12%);
+  }
+
+  .sf-public .crm-input {
+    border: 1px solid var(--sf-border);
+    background: color-mix(in oklab, var(--sf-bg) 85%, var(--sf-card-bg) 15%);
+    color: var(--sf-text);
+    border-radius: var(--sf-radius);
+    box-shadow: none;
+  }
+
+  .sf-public .crm-input::placeholder {
+    color: var(--sf-muted);
+  }
+
+  .sf-public .crm-input:focus-visible {
+    border-color: var(--sf-accent);
+    box-shadow: 0 0 0 2px color-mix(in oklab, var(--sf-accent) 45%, transparent 55%);
+  }
+
   .crm-card {
     border: 1px solid hsl(var(--border));
     background: hsl(var(--card));

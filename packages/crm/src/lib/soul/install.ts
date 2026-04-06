@@ -6,6 +6,8 @@ import { db } from "@/db";
 import { bookings, intakeForms, landingPages, organizations, pipelines } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
 import type { OrgSoul } from "@/lib/soul/types";
+import { DEFAULT_ORG_THEME, type OrgTheme } from "@/lib/theme/types";
+import { normalizeTheme } from "@/lib/theme/normalize-theme";
 import { assertWritable } from "@/lib/demo/server";
 
 type InstallSoulInput = {
@@ -48,6 +50,12 @@ function normalizeStageColor(index: number) {
   const palette = ["#14b8a6", "#3b82f6", "#8b5cf6", "#f59e0b", "#22c55e"];
   return palette[index % palette.length];
 }
+
+const frameworkThemes: Record<string, Partial<OrgTheme>> = {
+  coaching: { primaryColor: "#f43f5e", fontFamily: "DM Sans", borderRadius: "rounded" },
+  agency: { primaryColor: "#3b82f6", fontFamily: "Space Grotesk", borderRadius: "sharp" },
+  saas: { primaryColor: "#8b5cf6", fontFamily: "Inter", borderRadius: "rounded" },
+};
 
 export type FrameworkConfig = {
   id: string;
@@ -134,7 +142,7 @@ export async function installSoul(input: InstallSoulInput) {
   }
 
   const [org] = await db
-    .select({ id: organizations.id, name: organizations.name, settings: organizations.settings })
+    .select({ id: organizations.id, name: organizations.name, settings: organizations.settings, theme: organizations.theme })
     .from(organizations)
     .where(eq(organizations.id, orgId))
     .limit(1);
@@ -384,6 +392,7 @@ export async function installSoul(input: InstallSoulInput) {
     soulId: string;
     soulContentGenerated: number;
     settings: Record<string, unknown>;
+    theme: OrgTheme;
     updatedAt: Date;
     soulCompletedAt?: Date;
   } = {
@@ -391,6 +400,7 @@ export async function installSoul(input: InstallSoulInput) {
     soulId: input.soulId,
     soulContentGenerated: 1,
     settings: nextSettings,
+    theme: normalizeTheme(org.theme ?? DEFAULT_ORG_THEME),
     updatedAt: new Date(),
   };
 
@@ -413,7 +423,7 @@ export async function installSoul(input: InstallSoulInput) {
 
 async function installFrameworkEntities(
   orgId: string,
-  org: { id: string; name: string; settings: Record<string, unknown> },
+  org: { id: string; name: string; settings: Record<string, unknown>; theme: OrgTheme },
   input: InstallSoulInput,
 ) {
   const framework = input.framework ?? (await loadFrameworkConfig(input.frameworkId!));
@@ -608,6 +618,14 @@ async function installFrameworkEntities(
     enabledAutomations,
   };
 
+  const existingTheme = normalizeTheme(org.theme ?? DEFAULT_ORG_THEME);
+  const frameworkThemeDefaults = frameworkThemes[framework.id] ?? {};
+  const nextTheme = {
+    ...existingTheme,
+    ...frameworkThemeDefaults,
+    accentColor: frameworkThemeDefaults.primaryColor ?? existingTheme.accentColor,
+  };
+
   const soul: OrgSoul = {
     businessName,
     businessDescription: framework.description,
@@ -666,6 +684,7 @@ async function installFrameworkEntities(
     soulId: string;
     soulContentGenerated: number;
     settings: Record<string, unknown>;
+    theme: OrgTheme;
     updatedAt: Date;
     soulCompletedAt?: Date;
   } = {
@@ -673,6 +692,7 @@ async function installFrameworkEntities(
     soulId: `framework:${framework.id}`,
     soulContentGenerated: 1,
     settings: nextSettings,
+    theme: nextTheme,
     updatedAt: new Date(),
   };
 

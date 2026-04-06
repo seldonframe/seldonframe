@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { pgTable, text, timestamp, uuid, jsonb, integer } from "drizzle-orm/pg-core";
 import type { SoulLearning } from "@seldonframe/core/soul";
 import type { OrgSoul } from "@/lib/soul/types";
+import { DEFAULT_ORG_THEME, type OrgTheme } from "@/lib/theme/types";
 
 export type OrganizationIntegrations = {
   twilio?: {
@@ -62,6 +63,7 @@ export const organizations = pgTable("organizations", {
   soulId: text("soul_id"),
   soulContentGenerated: integer("soul_content_generated").notNull().default(0),
   soulLearning: jsonb("soul_learning").$type<SoulLearning>().notNull().default(sql`'{}'::jsonb`),
+  theme: jsonb("theme").$type<OrgTheme>().notNull().default(DEFAULT_ORG_THEME),
   soulCompletedAt: timestamp("soul_completed_at", { withTimezone: true }),
   enabledBlocks: text("enabled_blocks").array().notNull().default(sql`'{}'::text[]`),
   integrations: jsonb("integrations").$type<OrganizationIntegrations>().notNull().default(sql`'{}'::jsonb`),

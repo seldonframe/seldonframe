@@ -34,6 +34,7 @@ export default async function SettingsPage() {
 
   const sections = [
     { href: "/settings/profile", title: "Business Profile", description: "Your business name, industry, and branding", status: null },
+    { href: "/settings/theme", title: "Brand & Theme", description: "Set public colors, fonts, radius, and logo", status: null },
     { href: "/settings/pipeline", title: "Pipeline", description: `Manage your ${labels.deal.singular.toLowerCase()} stages and workflow`, status: null },
     { href: "/settings/fields", title: "Custom Fields", description: "Add fields specific to your business", status: null },
     { href: "/settings/team", title: "Team", description: "Invite team members and manage roles", status: null },
@@ -53,17 +54,17 @@ export default async function SettingsPage() {
     {
       id: "business",
       title: "Business Settings",
-      items: sections.slice(0, 4),
+      items: sections.slice(0, 5),
     },
     {
       id: "developer",
       title: "Developer & System",
-      items: sections.slice(4, 7),
+      items: sections.slice(5, 8),
     },
     {
       id: "billing",
       title: "Billing & Integrations",
-      items: sections.slice(7),
+      items: sections.slice(8),
     },
   ] as const;
 
