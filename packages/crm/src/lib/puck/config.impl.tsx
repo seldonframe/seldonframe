@@ -830,7 +830,15 @@ export const puckConfig: Config = {
     ConditionalBlock: {
       label: "Conditional Block",
       fields: {
-        condition: { type: "select", options: [{ label: "Always", value: "always" }, { label: "Score", value: "score" }] },
+        condition: {
+          type: "select",
+          options: [
+            { label: "Always", value: "always" },
+            { label: "Authenticated", value: "auth" },
+            { label: "Paid Member", value: "paid" },
+            { label: "Score", value: "score" },
+          ],
+        },
         threshold: { type: "number" },
         content: { type: "slot" },
         fallbackContent: { type: "slot" },
@@ -841,11 +849,19 @@ export const puckConfig: Config = {
 
         useEffect(() => {
           if (puck?.isEditing || condition === "always") return;
-          fetch(`/api/v1/access-check?condition=${condition}&threshold=${threshold}`)
+          const orgId = (puck as { metadata?: { orgId?: string } } | undefined)?.metadata?.orgId;
+          const params = new URLSearchParams({
+            condition: String(condition),
+            threshold: String(threshold ?? 0),
+            ...(orgId ? { orgId } : {}),
+          });
+
+          fetch(`/api/v1/access-check?${params.toString()}`)
             .then((res) => res.json())
             .then((data) => setIsMet(Boolean(data.allowed)))
+            .catch(() => setIsMet(false))
             .finally(() => setLoading(false));
-        }, [condition, threshold, puck?.isEditing]);
+        }, [condition, threshold, puck]);
 
         if (puck?.isEditing) {
           return (
