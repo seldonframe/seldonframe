@@ -398,12 +398,40 @@ export const puckConfig: Config = {
         formName: { type: "text" },
         submitButtonText: { type: "text" },
         successMessage: { type: "text" },
+        enableScoring: {
+          type: "select",
+          options: [
+            { label: "No scoring", value: "none" },
+            { label: "Score and redirect by threshold", value: "score" },
+          ],
+        },
+        scoreThreshold: { type: "number" },
+        qualifiedRedirectUrl: { type: "text" },
+        unqualifiedRedirectUrl: { type: "text" },
         content: { type: "slot" },
       },
-      defaultProps: { formName: "Lead Capture", submitButtonText: "Submit", successMessage: "Sent!" },
-      render: ({ formName, submitButtonText, successMessage, content, puck }) => {
+      defaultProps: {
+        formName: "Lead Capture",
+        submitButtonText: "Submit",
+        successMessage: "Sent!",
+        enableScoring: "none",
+        scoreThreshold: 10,
+        qualifiedRedirectUrl: "",
+        unqualifiedRedirectUrl: "",
+      },
+      render: ({ formName, submitButtonText, successMessage, enableScoring, scoreThreshold, qualifiedRedirectUrl, unqualifiedRedirectUrl, content, puck }) => {
         const [loading, setLoading] = useState(false);
         const [done, setDone] = useState(false);
+
+        const withScoreParam = (url: string, score: number) => {
+          try {
+            const parsed = new URL(url, window.location.origin);
+            parsed.searchParams.set("score", String(score));
+            return url.startsWith("http") ? parsed.toString() : `${parsed.pathname}${parsed.search}${parsed.hash}`;
+          } catch {
+            return url;
+          }
+        };
 
         const handleSubmit = async (e: React.FormEvent) => {
           e.preventDefault();
@@ -440,11 +468,23 @@ export const puckConfig: Config = {
           }
 
           try {
-            await fetch("/api/v1/forms/submit", {
+            const response = await fetch("/api/v1/forms/submit", {
               method: "POST",
               body: JSON.stringify({ formName, data, orgId: (puck as { metadata?: { orgId?: string } } | undefined)?.metadata?.orgId }),
               headers: { "Content-Type": "application/json" },
             });
+
+            const payload = (await response.json().catch(() => ({}))) as { score?: number };
+            const score = Number(payload?.score ?? 0);
+
+            if (enableScoring === "score") {
+              const target = score >= Number(scoreThreshold ?? 0) ? qualifiedRedirectUrl : unqualifiedRedirectUrl;
+              if (typeof target === "string" && target.trim().length > 0) {
+                window.location.assign(withScoreParam(target.trim(), score));
+                return;
+              }
+            }
+
             setDone(true);
           } catch (err) {
             console.error(err);
