@@ -336,6 +336,148 @@ export async function createEmailTemplateAction(formData: FormData) {
     .where(eq(organizations.id, orgId));
 }
 
+export async function createEmailTemplateForSeldonAction(input: {
+  name: string;
+  subject: string;
+  body: string;
+  tag?: string;
+  triggerEvent?: string;
+}) {
+  assertWritable();
+
+  const orgId = await getOrgId();
+
+  if (!orgId) {
+    throw new Error("Unauthorized");
+  }
+
+  const name = String(input.name ?? "").trim();
+  const subject = String(input.subject ?? "").trim();
+  const body = String(input.body ?? "").trim();
+  const tag = String(input.tag ?? "general").trim().toLowerCase() || "general";
+  const triggerEventRaw = String(input.triggerEvent ?? "").trim();
+  const triggerEvent = triggerEventRaw ? triggerEventRaw.toLowerCase() : "";
+
+  if (!name || !subject || !body) {
+    throw new Error("Template name, subject, and body are required");
+  }
+
+  if (triggerEvent && !isValidEventType(triggerEvent)) {
+    throw new Error("Trigger event must use lowercase entity.action format");
+  }
+
+  const [org] = await db.select({ settings: organizations.settings }).from(organizations).where(eq(organizations.id, orgId)).limit(1);
+  const currentTemplates = extractEmailTemplates(org?.settings);
+
+  const nextTemplate: EmailTemplate = {
+    id: `tmpl_${Date.now()}`,
+    name,
+    subject,
+    body,
+    tag,
+    triggerEvent: triggerEvent || undefined,
+    createdAt: new Date().toISOString(),
+  };
+
+  const nextSettings = {
+    ...((org?.settings as Record<string, unknown> | null) ?? {}),
+    emailTemplates: [...currentTemplates, nextTemplate],
+  };
+
+  await db
+    .update(organizations)
+    .set({
+      settings: nextSettings,
+      updatedAt: new Date(),
+    })
+    .where(eq(organizations.id, orgId));
+
+  return { id: nextTemplate.id };
+}
+
+export async function updateEmailTemplateAction(input: {
+  templateId: string;
+  name?: string;
+  subject?: string;
+  body?: string;
+  tag?: string;
+  triggerEvent?: string;
+}) {
+  assertWritable();
+
+  const orgId = await getOrgId();
+
+  if (!orgId) {
+    throw new Error("Unauthorized");
+  }
+
+  const templateId = String(input.templateId ?? "").trim();
+  const requestedName = typeof input.name === "string" ? input.name.trim() : undefined;
+  const requestedSubject = typeof input.subject === "string" ? input.subject.trim() : undefined;
+  const requestedBody = typeof input.body === "string" ? input.body.trim() : undefined;
+  const requestedTag = typeof input.tag === "string" ? input.tag.trim().toLowerCase() : undefined;
+  const triggerEventRaw = String(input.triggerEvent ?? "").trim();
+  const triggerEvent = triggerEventRaw ? triggerEventRaw.toLowerCase() : "";
+
+  if (!templateId) {
+    throw new Error("Template ID is required");
+  }
+
+  if (triggerEvent && !isValidEventType(triggerEvent)) {
+    throw new Error("Trigger event must use lowercase entity.action format");
+  }
+
+  const [org] = await db.select({ settings: organizations.settings }).from(organizations).where(eq(organizations.id, orgId)).limit(1);
+  const currentTemplates = extractEmailTemplates(org?.settings);
+  const target = currentTemplates.find((template) => template.id === templateId);
+
+  if (!target) {
+    throw new Error("Template not found");
+  }
+
+  const name = requestedName || target.name;
+  const subject = requestedSubject || target.subject;
+  const body = requestedBody || target.body;
+  const tag = requestedTag || target.tag || "general";
+
+  const nextTemplates = currentTemplates.map((template) => {
+    if (template.id !== templateId) {
+      return template;
+    }
+
+    return {
+      ...template,
+      name,
+      subject,
+      body,
+      tag,
+      triggerEvent: triggerEvent || undefined,
+    };
+  });
+
+  const nextSettings = {
+    ...((org?.settings as Record<string, unknown> | null) ?? {}),
+    emailTemplates: nextTemplates,
+  };
+
+  await db
+    .update(organizations)
+    .set({
+      settings: nextSettings,
+      updatedAt: new Date(),
+    })
+    .where(eq(organizations.id, orgId));
+
+  return {
+    id: templateId,
+    name,
+    subject,
+    body,
+    tag,
+    triggerEvent: triggerEvent || undefined,
+  };
+}
+
 export async function sendEmailTemplateToContactAction({
   contactId,
   templateId,

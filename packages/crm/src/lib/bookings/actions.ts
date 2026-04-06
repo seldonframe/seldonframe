@@ -439,6 +439,137 @@ export async function createAppointmentTypeAction(formData: FormData) {
   });
 }
 
+export async function createBookingTypeForSeldonAction(input: {
+  name: string;
+  slug: string;
+  durationMinutes?: number;
+  description?: string;
+  price?: number;
+}) {
+  assertWritable();
+
+  const orgId = await getOrgId();
+  const user = await getCurrentUser();
+
+  if (!orgId || !user?.id) {
+    throw new Error("Unauthorized");
+  }
+
+  const name = String(input.name ?? "Consultation").trim() || "Consultation";
+  const slugInput = String(input.slug ?? name ?? "consultation");
+  const bookingSlug = toBookingSlug(slugInput) || "consultation";
+  const duration = resolveDuration(input.durationMinutes ?? 30);
+  const description = String(input.description ?? "").trim();
+  const price = Math.max(0, Number(input.price ?? 0));
+  const now = new Date();
+
+  const [created] = await db
+    .insert(bookings)
+    .values({
+      orgId,
+      userId: user.id,
+      title: name,
+      bookingSlug,
+      fullName: null,
+      email: null,
+      notes: null,
+      provider: "manual",
+      status: "template",
+      startsAt: now,
+      endsAt: deriveEndsAt(now, duration),
+      metadata: {
+        kind: "appointment_type",
+        durationMinutes: duration,
+        description,
+        price,
+        availability: defaultAvailabilitySchedule(),
+        bufferBeforeMinutes: 0,
+        bufferAfterMinutes: 0,
+        maxBookingsPerDay: 0,
+      },
+    })
+    .returning({ id: bookings.id, bookingSlug: bookings.bookingSlug, title: bookings.title });
+
+  return {
+    id: created?.id ?? null,
+    bookingSlug: created?.bookingSlug ?? bookingSlug,
+    name: created?.title ?? name,
+  };
+}
+
+export async function updateBookingTypeAction(input: {
+  bookingId: string;
+  name: string;
+  slug: string;
+  durationMinutes?: number;
+  description?: string;
+  price?: number;
+  availability?: AvailabilitySchedule;
+  bufferBeforeMinutes?: number;
+  bufferAfterMinutes?: number;
+  maxBookingsPerDay?: number;
+}) {
+  assertWritable();
+
+  const orgId = await getOrgId();
+
+  if (!orgId) {
+    throw new Error("Unauthorized");
+  }
+
+  const bookingId = String(input.bookingId ?? "").trim();
+  const name = String(input.name ?? "").trim();
+  const slugInput = String(input.slug ?? name ?? "consultation");
+  const slug = toBookingSlug(slugInput) || "consultation";
+
+  if (!bookingId || !name) {
+    throw new Error("Booking ID and name are required");
+  }
+
+  const [existing] = await db
+    .select({ id: bookings.id, metadata: bookings.metadata })
+    .from(bookings)
+    .where(and(eq(bookings.orgId, orgId), eq(bookings.id, bookingId), eq(bookings.status, "template")))
+    .limit(1);
+
+  if (!existing) {
+    throw new Error("Booking type not found");
+  }
+
+  const metadata = (existing.metadata as AppointmentTypeMeta | null) ?? {};
+  const nextDuration = resolveDuration(input.durationMinutes ?? metadata.durationMinutes);
+  const nextAvailability = normalizeAvailability(input.availability ?? metadata.availability);
+  const nextBufferBefore = resolveBufferMinutes(input.bufferBeforeMinutes ?? metadata.bufferBeforeMinutes);
+  const nextBufferAfter = resolveBufferMinutes(input.bufferAfterMinutes ?? metadata.bufferAfterMinutes);
+  const nextMaxPerDay = resolveMaxBookingsPerDay(input.maxBookingsPerDay ?? metadata.maxBookingsPerDay);
+
+  await db
+    .update(bookings)
+    .set({
+      title: name,
+      bookingSlug: slug,
+      metadata: {
+        ...metadata,
+        kind: "appointment_type",
+        durationMinutes: nextDuration,
+        description: String(input.description ?? metadata.description ?? "").trim(),
+        price: Math.max(0, Number(input.price ?? metadata.price ?? 0)),
+        availability: nextAvailability,
+        bufferBeforeMinutes: nextBufferBefore,
+        bufferAfterMinutes: nextBufferAfter,
+        maxBookingsPerDay: nextMaxPerDay,
+      },
+      updatedAt: new Date(),
+    })
+    .where(and(eq(bookings.orgId, orgId), eq(bookings.id, bookingId), eq(bookings.status, "template")));
+
+  return {
+    id: bookingId,
+    name,
+    bookingSlug: slug,
+  };
+}
+
 export async function listAppointmentTypes() {
   const orgId = await getOrgId();
 

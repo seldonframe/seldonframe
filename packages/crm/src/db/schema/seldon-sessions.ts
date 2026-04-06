@@ -5,6 +5,13 @@ import { organizations } from "./organizations";
 export type SeldonSessionMessage = {
   role: "user" | "assistant";
   content: string;
+  createdEntities?: Array<{
+    id: string;
+    blockType: "form" | "email" | "booking" | "page" | "automation";
+    name: string;
+    publicUrl: string | null;
+    adminUrl: string;
+  }>;
   results?: Array<{
     blockId: string;
     blockName: string;

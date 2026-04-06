@@ -13,6 +13,8 @@ import { enableBlockForOrg } from "@/lib/marketplace/actions";
 import type { OrganizationIntegrations } from "@/db/schema";
 
 export type SeldonRunResult = {
+  entityId?: string;
+  blockType?: "form" | "email" | "booking" | "page" | "automation";
   blockId: string;
   blockName: string;
   blockMd: string;
@@ -21,6 +23,8 @@ export type SeldonRunResult = {
   installMode: "instant" | "review";
   openPath: string;
   savePath: string;
+  publicUrl?: string | null;
+  adminUrl?: string;
 };
 
 export type SeldonRunState = {
@@ -37,6 +41,13 @@ export type SeldonSessionItem = {
   messages: Array<{
     role: "user" | "assistant";
     content: string;
+    createdEntities?: Array<{
+      id: string;
+      blockType: "form" | "email" | "booking" | "page" | "automation";
+      name: string;
+      publicUrl: string | null;
+      adminUrl: string;
+    }>;
     results?: SeldonRunResult[];
   }>;
 };
@@ -464,12 +475,28 @@ export async function runSeldonItAction(_prev: SeldonRunState, formData: FormDat
         ? `Created ${results.length} blocks and connected them in one flow.`
         : "Your block is ready!";
 
+    const createdEntities = results
+      .map((result) => {
+        if (!result.entityId || !result.blockType || !result.adminUrl) {
+          return null;
+        }
+
+        return {
+          id: result.entityId,
+          blockType: result.blockType,
+          name: result.blockName,
+          publicUrl: result.publicUrl ?? null,
+          adminUrl: result.adminUrl,
+        };
+      })
+      .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+
     await db.insert(seldonSessions).values({
       orgId,
       title: description.slice(0, 120),
       messages: [
         { role: "user", content: description },
-        { role: "assistant", content: message, results },
+        { role: "assistant", content: message, results, createdEntities },
       ],
     });
 

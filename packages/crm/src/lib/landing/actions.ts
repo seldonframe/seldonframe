@@ -91,6 +91,57 @@ export async function createLandingPageAction(formData: FormData) {
   });
 }
 
+export async function createLandingPageForSeldonAction(input: {
+  title: string;
+  slug: string;
+  mode?: string;
+  template?: string;
+}) {
+  assertWritable();
+
+  const orgId = await getOrgId();
+
+  if (!orgId) {
+    throw new Error("Unauthorized");
+  }
+
+  const title = String(input.title ?? "New Landing Page");
+  const slugInput = String(input.slug ?? title ?? "landing-page");
+  const slug = toSlug(slugInput);
+  const mode = String(input.mode ?? "soul-template");
+  const template = String(input.template ?? "lead-capture");
+
+  await assertLandingPageLimit(orgId);
+
+  const sections = defaultLandingSections();
+  const initial = sectionsToHTML(sections);
+
+  const [created] = await db
+    .insert(landingPages)
+    .values({
+      orgId,
+      title,
+      slug,
+      status: "draft",
+      source: mode === "scratch" ? "scratch" : mode === "template" ? "template" : "soul",
+      sections: sections as unknown as Record<string, unknown>[],
+      contentHtml: mode === "scratch" ? null : initial.html,
+      contentCss: mode === "scratch" ? null : initial.css,
+      settings: {
+        mode,
+        template,
+      },
+    })
+    .returning({ id: landingPages.id, slug: landingPages.slug, title: landingPages.title, status: landingPages.status });
+
+  return {
+    id: created?.id ?? null,
+    slug: created?.slug ?? slug,
+    title: created?.title ?? title,
+    status: created?.status ?? "draft",
+  };
+}
+
 export async function updateLandingEditorAction({
   pageId,
   html,
@@ -122,6 +173,60 @@ export async function updateLandingEditorAction({
       updatedAt: new Date(),
     })
     .where(and(eq(landingPages.orgId, orgId), eq(landingPages.id, pageId)));
+}
+
+export async function updateLandingPageAction(input: {
+  pageId: string;
+  title: string;
+  slug: string;
+  contentHtml: string;
+  contentCss: string;
+  sections?: Record<string, unknown>[];
+  seoDescription?: string;
+}) {
+  assertWritable();
+
+  const orgId = await getOrgId();
+
+  if (!orgId) {
+    throw new Error("Unauthorized");
+  }
+
+  const pageId = String(input.pageId ?? "").trim();
+  const title = String(input.title ?? "").trim();
+  const slug = toSlug(String(input.slug ?? title));
+
+  if (!pageId || !title || !slug) {
+    throw new Error("Page ID, title, and slug are required");
+  }
+
+  const [page] = await db
+    .select({ seo: landingPages.seo })
+    .from(landingPages)
+    .where(and(eq(landingPages.orgId, orgId), eq(landingPages.id, pageId)))
+    .limit(1);
+
+  if (!page) {
+    throw new Error("Landing page not found");
+  }
+
+  await db
+    .update(landingPages)
+    .set({
+      title,
+      slug,
+      contentHtml: input.contentHtml,
+      contentCss: input.contentCss,
+      ...(input.sections ? { sections: input.sections } : {}),
+      seo: {
+        ...(page.seo ?? {}),
+        description: input.seoDescription ?? "",
+      },
+      updatedAt: new Date(),
+    })
+    .where(and(eq(landingPages.orgId, orgId), eq(landingPages.id, pageId)));
+
+  return { id: pageId, title, slug };
 }
 
 export async function updateLandingPageSettingsAction({
