@@ -53,27 +53,40 @@ export const proxy = auth(async (request) => {
       domainLookupUrl.searchParams.set("host", host);
 
       const domainResponse = await fetch(domainLookupUrl, { cache: "no-store" });
-      const domainPayload = (await domainResponse.json()) as { org?: { id: string; slug: string } | null };
+      const domainPayload = (await domainResponse.json()) as {
+        org?: {
+          id: string;
+          slug: string;
+          defaults?: {
+            landingSlug?: string;
+            bookingSlug?: string;
+            formSlug?: string;
+          };
+        } | null;
+      };
       const domainOrg = domainPayload?.org;
 
       if (domainOrg?.slug) {
+        const defaultLandingSlug = domainOrg.defaults?.landingSlug || "home";
+        const defaultBookingSlug = domainOrg.defaults?.bookingSlug || "default";
+        const defaultFormSlug = domainOrg.defaults?.formSlug || "intake";
         let rewritePath = pathname;
         const segments = pathname.split("/").filter(Boolean);
 
         if (pathname === "/" || pathname === "") {
-          rewritePath = `/l/${domainOrg.slug}/home`;
+          rewritePath = `/l/${domainOrg.slug}/${defaultLandingSlug}`;
         } else if (pathname === "/book") {
-          rewritePath = `/book/${domainOrg.slug}/default`;
+          rewritePath = `/book/${domainOrg.slug}/${defaultBookingSlug}`;
         } else if (pathname === "/forms") {
-          rewritePath = `/forms/${domainOrg.slug}/intake`;
+          rewritePath = `/forms/${domainOrg.slug}/${defaultFormSlug}`;
         } else if (pathname === "/l") {
-          rewritePath = `/l/${domainOrg.slug}/home`;
+          rewritePath = `/l/${domainOrg.slug}/${defaultLandingSlug}`;
         } else if (pathname.startsWith("/book/") && segments.length === 2) {
-          rewritePath = `/book/${domainOrg.slug}/${segments[1]}`;
+          rewritePath = `/book/${domainOrg.slug}/${segments[1] || defaultBookingSlug}`;
         } else if (pathname.startsWith("/forms/") && segments.length === 2) {
-          rewritePath = `/forms/${domainOrg.slug}/${segments[1]}`;
+          rewritePath = `/forms/${domainOrg.slug}/${segments[1] || defaultFormSlug}`;
         } else if (pathname.startsWith("/l/") && segments.length === 2) {
-          rewritePath = `/l/${domainOrg.slug}/${segments[1]}`;
+          rewritePath = `/l/${domainOrg.slug}/${segments[1] || defaultLandingSlug}`;
         }
 
         if (rewritePath !== pathname) {
