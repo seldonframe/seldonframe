@@ -164,7 +164,6 @@ export default async function SettingsPage() {
     { href: "/settings/frameworks", title: "Saved Frameworks", description: "Manage reusable framework presets", status: <span className="text-xs text-zinc-400">{frameworksStatus}</span> },
     { href: "/settings/soul-transfer", title: "Soul Export / Import", description: "Download or upload your system configuration", status: null },
     { href: "/settings/payments", title: "Payments", description: "Connect Stripe to accept payments", status: stripeStatus ? <span className="text-xs text-zinc-400">Connected</span> : <span className="text-xs text-zinc-400">Not connected</span> },
-    { href: "/docs", title: "Docs", description: "Concept guides for souls, blocks, frameworks, and Seldon It", status: null },
   ] as const;
 
   return (
