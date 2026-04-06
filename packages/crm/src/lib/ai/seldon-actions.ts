@@ -31,6 +31,7 @@ export type SeldonRunResult = {
   savePath: string;
   publicUrl?: string | null;
   adminUrl?: string;
+  editUrl?: string;
 };
 
 export type SeldonRunState = {
@@ -229,6 +230,7 @@ function toAction(blockType: SeldonBlockType, data: InstallResult | UpdateResult
     savePath: "/seldon",
     publicUrl: data.publicUrl,
     adminUrl: data.adminUrl,
+    editUrl: data.editUrl,
   };
 }
 

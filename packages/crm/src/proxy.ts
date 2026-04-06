@@ -35,6 +35,10 @@ function isPublicPath(pathname: string) {
     return true;
   }
 
+  if (pathname.startsWith("/s/") && pathname.split("/").filter(Boolean).length >= 3) {
+    return true;
+  }
+
   return false;
 }
 
@@ -74,19 +78,26 @@ export const proxy = auth(async (request) => {
         const segments = pathname.split("/").filter(Boolean);
 
         if (pathname === "/" || pathname === "") {
-          rewritePath = `/l/${domainOrg.slug}/${defaultLandingSlug}`;
+          rewritePath = `/s/${domainOrg.slug}/${defaultLandingSlug}`;
         } else if (pathname === "/book") {
           rewritePath = `/book/${domainOrg.slug}/${defaultBookingSlug}`;
         } else if (pathname === "/forms") {
           rewritePath = `/forms/${domainOrg.slug}/${defaultFormSlug}`;
         } else if (pathname === "/l") {
-          rewritePath = `/l/${domainOrg.slug}/${defaultLandingSlug}`;
+          rewritePath = `/s/${domainOrg.slug}/${defaultLandingSlug}`;
+        } else if (pathname === "/s") {
+          rewritePath = `/s/${domainOrg.slug}/${defaultLandingSlug}`;
         } else if (pathname.startsWith("/book/") && segments.length === 2) {
           rewritePath = `/book/${domainOrg.slug}/${segments[1] || defaultBookingSlug}`;
         } else if (pathname.startsWith("/forms/") && segments.length === 2) {
           rewritePath = `/forms/${domainOrg.slug}/${segments[1] || defaultFormSlug}`;
         } else if (pathname.startsWith("/l/") && segments.length === 2) {
-          rewritePath = `/l/${domainOrg.slug}/${segments[1] || defaultLandingSlug}`;
+          rewritePath = `/s/${domainOrg.slug}/${segments[1] || defaultLandingSlug}`;
+        } else if (!pathname.startsWith("/book/") && !pathname.startsWith("/forms/") && !pathname.startsWith("/api/")) {
+          const normalizedPath = pathname.replace(/^\/+/, "");
+          rewritePath = normalizedPath
+            ? `/s/${domainOrg.slug}/${normalizedPath}`
+            : `/s/${domainOrg.slug}/${defaultLandingSlug}`;
         }
 
         if (rewritePath !== pathname) {

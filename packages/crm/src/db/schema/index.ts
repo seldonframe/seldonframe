@@ -20,3 +20,4 @@ export * from "./payments";
 export * from "./marketplace";
 export * from "./seldon-usage";
 export * from "./seldon-sessions";
+export * from "./form-submissions";

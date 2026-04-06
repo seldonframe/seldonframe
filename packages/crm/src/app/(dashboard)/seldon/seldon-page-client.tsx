@@ -196,6 +196,11 @@ function CreateOrPlanResultCard({ result }: { result: SeldonRunResult }) {
             {status === "needs-integration" ? "Setup" : "Edit"}
           </a>
         ) : null}
+        {result.editUrl ? (
+          <a href={result.editUrl} className="text-sm text-indigo-400 hover:text-indigo-300">
+            Edit Visually
+          </a>
+        ) : null}
       </div>
     </div>
   );

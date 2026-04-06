@@ -8,10 +8,11 @@ import {
   organizations,
   type OrganizationIntegrations,
 } from "@/db/schema";
-import { createFormAction, updateFormAction } from "@/lib/forms/actions";
+import { updateFormAction } from "@/lib/forms/actions";
 import { createEmailTemplateForSeldonAction, updateEmailTemplateAction } from "@/lib/emails/actions";
 import { createBookingTypeForSeldonAction, updateBookingTypeAction } from "@/lib/bookings/actions";
 import { createLandingPageForSeldonAction, updateLandingPageAction } from "@/lib/landing/actions";
+import { convertFormToPuckData, convertToPuckData } from "@/lib/puck/convert";
 import type { OrgSoul } from "@/lib/soul/types";
 import type { OrgTheme } from "@/lib/theme/types";
 
@@ -36,6 +37,7 @@ export interface InstallResult {
   adminUrl: string;
   status: "live" | "draft" | "needs-integration";
   integrationNote?: string;
+  editUrl?: string;
 }
 
 export interface UpdateResult {
@@ -47,6 +49,7 @@ export interface UpdateResult {
   adminUrl: string;
   status: "live" | "draft" | "needs-integration";
   changes: string;
+  editUrl?: string;
 }
 
 async function readOrgSettings(orgId: string) {
@@ -80,34 +83,30 @@ export async function installBlock(
 ): Promise<InstallResult> {
   switch (blockType) {
     case "form": {
-      const payload = new FormData();
-      payload.set("name", String(params.name ?? "New Intake Form"));
-      payload.set("slug", String(params.slug ?? params.name ?? "intake-form"));
-      payload.set("fields", JSON.stringify(Array.isArray(params.fields) ? params.fields : []));
+      const title = String(params.name ?? "New Intake Form");
+      const created = await createLandingPageForSeldonAction({
+        title,
+        slug: String(params.slug ?? params.name ?? "intake-form"),
+        mode: typeof params.mode === "string" ? params.mode : "soul-template",
+        template: typeof params.template === "string" ? params.template : "lead-capture",
+        published: true,
+        pageType: "form",
+        puckData: convertFormToPuckData(params),
+      });
 
-      const created = await createFormAction(payload);
       if (!created.id) {
-        throw new Error("Form creation failed");
-      }
-
-      const [form] = await db
-        .select({ id: intakeForms.id, name: intakeForms.name, slug: intakeForms.slug })
-        .from(intakeForms)
-        .where(and(eq(intakeForms.orgId, orgId), eq(intakeForms.id, created.id)))
-        .limit(1);
-
-      if (!form) {
-        throw new Error("Form not found after creation");
+        throw new Error("Form page creation failed");
       }
 
       return {
-        entityId: form.id,
+        entityId: created.id,
         type: "form",
-        name: form.name,
-        description: String(params.description ?? "Intake form created"),
-        publicUrl: `/forms/${orgSlug}/${form.slug}`,
-        adminUrl: "/forms",
-        status: "live",
+        name: created.title,
+        description: String(params.description ?? "Form page created"),
+        publicUrl: `/s/${orgSlug}/${created.slug}`,
+        adminUrl: "/landing",
+        status: created.status === "published" ? "live" : "draft",
+        editUrl: `/editor/${created.id}`,
       };
     }
 
@@ -167,6 +166,8 @@ export async function installBlock(
         mode: typeof params.mode === "string" ? params.mode : "soul-template",
         template: typeof params.template === "string" ? params.template : "lead-capture",
         published: true,
+        pageType: "page",
+        puckData: convertToPuckData(params),
       });
       if (!created.id) {
         throw new Error("Landing page creation failed");
@@ -177,9 +178,10 @@ export async function installBlock(
         type: "page",
         name: created.title,
         description: String(params.description ?? "Landing page created"),
-        publicUrl: `/l/${orgSlug}/${created.slug}`,
+        publicUrl: `/s/${orgSlug}/${created.slug}`,
         adminUrl: "/landing",
         status: created.status === "published" ? "live" : "draft",
+        editUrl: `/editor/${created.id}`,
       };
     }
 
@@ -363,10 +365,11 @@ export async function updateBlock(
         type: "page",
         name: updated.title,
         description: `Updated: ${changes}`,
-        publicUrl: `/l/${orgSlug}/${updated.slug}`,
+        publicUrl: `/s/${orgSlug}/${updated.slug}`,
         adminUrl: "/landing",
         status: "live",
         changes,
+        editUrl: `/editor/${updated.id}`,
       };
     }
 

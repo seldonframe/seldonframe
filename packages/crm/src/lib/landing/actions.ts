@@ -97,6 +97,8 @@ export async function createLandingPageForSeldonAction(input: {
   mode?: string;
   template?: string;
   published?: boolean;
+  pageType?: string;
+  puckData?: Record<string, unknown> | null;
 }) {
   assertWritable();
 
@@ -112,6 +114,8 @@ export async function createLandingPageForSeldonAction(input: {
   const mode = String(input.mode ?? "soul-template");
   const template = String(input.template ?? "lead-capture");
   const status = input.published ? "published" : "draft";
+  const pageType = String(input.pageType ?? "page");
+  const puckData = input.puckData ?? null;
 
   await assertLandingPageLimit(orgId);
 
@@ -125,7 +129,9 @@ export async function createLandingPageForSeldonAction(input: {
       title,
       slug,
       status,
+      pageType,
       source: mode === "scratch" ? "scratch" : mode === "template" ? "template" : "soul",
+      puckData,
       sections: sections as unknown as Record<string, unknown>[],
       contentHtml: mode === "scratch" ? null : initial.html,
       contentCss: mode === "scratch" ? null : initial.css,
