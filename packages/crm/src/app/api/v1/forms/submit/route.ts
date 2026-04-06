@@ -116,21 +116,29 @@ export async function POST(request: Request) {
       contactId = created?.id ?? null;
 
       if (contactId) {
-        await emitSeldonEvent("contact.created", { contactId });
+        try {
+          await emitSeldonEvent("contact.created", { contactId });
+        } catch {
+          // Non-blocking for public form submission path.
+        }
       }
     }
   }
 
   if (contactId) {
-    await emitSeldonEvent("form.submitted", {
-      formId: formName,
-      contactId,
-      data: {
-        ...data,
-        score,
-        ...(email ? { email } : {}),
-      },
-    });
+    try {
+      await emitSeldonEvent("form.submitted", {
+        formId: formName,
+        contactId,
+        data: {
+          ...data,
+          score,
+          ...(email ? { email } : {}),
+        },
+      });
+    } catch {
+      // Non-blocking for public form submission path.
+    }
   }
 
   const response = NextResponse.json({ success: true, score });
