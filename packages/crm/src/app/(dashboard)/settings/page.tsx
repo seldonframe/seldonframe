@@ -27,6 +27,7 @@ export default async function SettingsPage() {
   const subscriptionPromise: Promise<OrganizationSubscription> = orgId
     ? getOrgSubscription(orgId).catch((): OrganizationSubscription => ({}))
     : Promise.resolve<OrganizationSubscription>({});
+  const themeSettingsPromise = getThemeSettings().catch(() => null);
 
   const [labels, stripeStatus, domainSettings, savedFrameworks, brandingSettings, themeSettings, subscription, soul] = await Promise.all([
     getLabels(),
@@ -34,7 +35,7 @@ export default async function SettingsPage() {
     getCustomDomainSettings(),
     listSavedFrameworkLibrary(),
     getBrandingSettings(),
-    getThemeSettings(),
+    themeSettingsPromise,
     subscriptionPromise,
     getSoul(),
   ]);
@@ -45,6 +46,7 @@ export default async function SettingsPage() {
         .from(organizations)
         .where(eq(organizations.id, orgId))
         .limit(1)
+        .catch(() => [null])
     : [null];
 
   const [teamCountRow] = orgId
