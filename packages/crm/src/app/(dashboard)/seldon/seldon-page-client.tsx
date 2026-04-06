@@ -145,6 +145,7 @@ function getSessionCreatedEntityCount(item: SeldonSessionItem) {
 function CreateOrPlanResultCard({ result }: { result: SeldonRunResult }) {
   const description = result.description || normalizeSummaryLine(result.summary);
   const status = result.status ?? "live";
+  const [copied, setCopied] = useState(false);
 
   return (
     <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-5 space-y-3">
@@ -182,15 +183,17 @@ function CreateOrPlanResultCard({ result }: { result: SeldonRunResult }) {
                 ? result.publicUrl
                 : `${window.location.origin}${result.publicUrl?.startsWith("/") ? result.publicUrl : `/${result.publicUrl}`}`;
               await navigator.clipboard.writeText(absoluteUrl || "");
+              setCopied(true);
+              window.setTimeout(() => setCopied(false), 1400);
             }}
             className="text-sm text-zinc-500 hover:text-zinc-300"
           >
-            Copy Link
+            {copied ? "Copied!" : "Copy Link"}
           </button>
         ) : null}
         {result.adminUrl ? (
           <a href={result.adminUrl} className="text-sm text-zinc-500 hover:text-zinc-300">
-            Edit
+            {status === "needs-integration" ? "Setup" : "Edit"}
           </a>
         ) : null}
       </div>

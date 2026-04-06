@@ -118,6 +118,38 @@ function toSeldonErrorMessage(cause: unknown) {
   return `Seldon It failed: ${message}`;
 }
 
+function parseTierLimitError(message: string) {
+  try {
+    const parsed = JSON.parse(message) as {
+      error?: string;
+      limit?: string;
+      current?: number;
+      tier?: string;
+      nextTier?: string | null;
+    };
+
+    if (parsed.error !== "upgrade_required") {
+      return null;
+    }
+
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function buildUpgradeGuidance(limit: string | undefined, tier: string | undefined, nextTier: string | null | undefined) {
+  const limitLabel = limit === "landingPages" ? "landing pages" : "current plan limit";
+  const tierLabel = tier ? tier[0].toUpperCase() + tier.slice(1) : "Current";
+  const nextTierLabel = nextTier ? nextTier[0].toUpperCase() + nextTier.slice(1) : "a higher plan";
+
+  return {
+    description: `Upgrade required to continue: ${tierLabel} plan reached ${limitLabel}.`,
+    summary: `- Upgrade required: ${tierLabel} reached ${limitLabel}.`,
+    integrationNote: `Upgrade to ${nextTierLabel} in Settings → Billing to continue this step.`,
+  };
+}
+
 type SeldonPlan = {
   title: string;
   totalSteps: number;
@@ -663,17 +695,24 @@ export async function runSeldonItAction(_prev: SeldonRunState, formData: FormDat
           results.push(toAction(item.blockType, installed));
         } catch (error) {
           const message = error instanceof Error ? error.message : "Create failed";
+          const tierLimitError = parseTierLimitError(message);
+          const upgradeGuidance = tierLimitError
+            ? buildUpgradeGuidance(tierLimitError.limit, tierLimitError.tier, tierLimitError.nextTier)
+            : null;
+
           results.push({
             blockId: `${item.blockType}-${Date.now()}`,
             blockName: item.name || `${item.blockType} block`,
             blockMd: "# BLOCK.md\n\nGeneration failed.",
-            description: message,
-            summary: `- ${message}`,
-            status: "error",
+            description: upgradeGuidance?.description ?? message,
+            summary: upgradeGuidance?.summary ?? `- ${message}`,
+            status: upgradeGuidance ? "needs-integration" : "error",
+            integrationNote: upgradeGuidance?.integrationNote,
             fromInventory: false,
             installMode: "review",
-            openPath: "/seldon",
+            openPath: upgradeGuidance ? "/settings/billing" : "/seldon",
             savePath: "/seldon",
+            adminUrl: upgradeGuidance ? "/settings/billing" : "/seldon",
           });
         }
       }
@@ -708,18 +747,25 @@ export async function runSeldonItAction(_prev: SeldonRunState, formData: FormDat
           results.push(toAction(item.blockType, updated));
         } catch (error) {
           const message = error instanceof Error ? error.message : "Update failed";
+          const tierLimitError = parseTierLimitError(message);
+          const upgradeGuidance = tierLimitError
+            ? buildUpgradeGuidance(tierLimitError.limit, tierLimitError.tier, tierLimitError.nextTier)
+            : null;
+
           results.push({
             blockId: `${item.blockType}-${Date.now()}`,
             blockName: item.name || `${item.blockType} block`,
             blockMd: "# BLOCK.md\n\nUpdate failed.",
-            description: message,
-            summary: `- ${message}`,
-            status: "error",
-            changes: message,
+            description: upgradeGuidance?.description ?? message,
+            summary: upgradeGuidance?.summary ?? `- ${message}`,
+            status: upgradeGuidance ? "needs-integration" : "error",
+            integrationNote: upgradeGuidance?.integrationNote,
+            changes: upgradeGuidance?.description ?? message,
             fromInventory: false,
             installMode: "review",
-            openPath: "/seldon",
+            openPath: upgradeGuidance ? "/settings/billing" : "/seldon",
             savePath: "/seldon",
+            adminUrl: upgradeGuidance ? "/settings/billing" : "/seldon",
           });
         }
       }
