@@ -17,11 +17,34 @@ export async function getThemeSettings() {
     return null;
   }
 
-  const [org] = await db
-    .select({ id: organizations.id, name: organizations.name, theme: organizations.theme })
-    .from(organizations)
-    .where(eq(organizations.id, orgId))
-    .limit(1);
+  let org:
+    | {
+        id: string;
+        name: string;
+        theme: unknown;
+      }
+    | undefined;
+
+  try {
+    [org] = await db
+      .select({ id: organizations.id, name: organizations.name, theme: organizations.theme })
+      .from(organizations)
+      .where(eq(organizations.id, orgId))
+      .limit(1);
+  } catch {
+    const [fallbackOrg] = await db
+      .select({ id: organizations.id, name: organizations.name })
+      .from(organizations)
+      .where(eq(organizations.id, orgId))
+      .limit(1);
+
+    org = fallbackOrg
+      ? {
+          ...fallbackOrg,
+          theme: null,
+        }
+      : undefined;
+  }
 
   if (!org) {
     return null;
@@ -35,21 +58,41 @@ export async function getThemeSettings() {
 }
 
 export async function getPublicOrgThemeBySlug(orgSlug: string): Promise<OrgTheme> {
-  const [org] = await db
-    .select({ theme: organizations.theme })
-    .from(organizations)
-    .where(eq(organizations.slug, orgSlug))
-    .limit(1);
+  let org:
+    | {
+        theme: unknown;
+      }
+    | undefined;
+
+  try {
+    [org] = await db
+      .select({ theme: organizations.theme })
+      .from(organizations)
+      .where(eq(organizations.slug, orgSlug))
+      .limit(1);
+  } catch {
+    org = { theme: null };
+  }
 
   return normalizeTheme(org?.theme);
 }
 
 export async function getPublicOrgThemeById(orgId: string): Promise<OrgTheme> {
-  const [org] = await db
-    .select({ theme: organizations.theme })
-    .from(organizations)
-    .where(eq(organizations.id, orgId))
-    .limit(1);
+  let org:
+    | {
+        theme: unknown;
+      }
+    | undefined;
+
+  try {
+    [org] = await db
+      .select({ theme: organizations.theme })
+      .from(organizations)
+      .where(eq(organizations.id, orgId))
+      .limit(1);
+  } catch {
+    org = { theme: null };
+  }
 
   return normalizeTheme(org?.theme);
 }
