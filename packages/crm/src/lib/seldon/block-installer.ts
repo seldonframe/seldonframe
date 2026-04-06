@@ -176,7 +176,7 @@ export async function installBlock(
         type: "page",
         name: created.title,
         description: String(params.description ?? "Landing page created"),
-        publicUrl: `/p/${orgSlug}/${created.slug}`,
+        publicUrl: `/l/${orgSlug}/${created.slug}`,
         adminUrl: "/landing",
         status: created.status === "published" ? "live" : "draft",
       };
@@ -362,7 +362,7 @@ export async function updateBlock(
         type: "page",
         name: updated.title,
         description: `Updated: ${changes}`,
-        publicUrl: `/p/${orgSlug}/${updated.slug}`,
+        publicUrl: `/l/${orgSlug}/${updated.slug}`,
         adminUrl: "/landing",
         status: "live",
         changes,
