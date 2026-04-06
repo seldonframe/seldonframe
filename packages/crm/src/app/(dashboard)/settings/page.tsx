@@ -2,7 +2,7 @@ import Link from "next/link";
 import { eq, sql } from "drizzle-orm";
 import { ChevronRight } from "lucide-react";
 import { db } from "@/db";
-import { orgMembers, organizations } from "@/db/schema";
+import { orgMembers, organizations, type OrganizationSubscription } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
 import { getOrgSubscription } from "@/lib/billing/subscription";
 import { getStripeConnectionStatus } from "@/lib/payments/actions";
@@ -24,6 +24,9 @@ import { getThemeSettings } from "@/lib/theme/actions";
 
 export default async function SettingsPage() {
   const orgId = await getOrgId();
+  const subscriptionPromise: Promise<OrganizationSubscription> = orgId
+    ? getOrgSubscription(orgId).catch((): OrganizationSubscription => ({}))
+    : Promise.resolve<OrganizationSubscription>({});
 
   const [labels, stripeStatus, domainSettings, savedFrameworks, brandingSettings, themeSettings, subscription, soul] = await Promise.all([
     getLabels(),
@@ -32,7 +35,7 @@ export default async function SettingsPage() {
     listSavedFrameworkLibrary(),
     getBrandingSettings(),
     getThemeSettings(),
-    getOrgSubscription(orgId),
+    subscriptionPromise,
     getSoul(),
   ]);
 
@@ -79,13 +82,11 @@ export default async function SettingsPage() {
   const tier = String(subscription.tier ?? "free");
   const tierLabel = tierLabelMap[tier] ?? tier;
   const periodLabel = String(subscription.stripePriceId ?? "").includes("year") ? "Yearly" : "Monthly";
-
-  const trialEnd = subscription.trialEndsAt ? new Date(subscription.trialEndsAt) : null;
-  const trialDaysLeft = trialEnd
-    ? Math.max(0, Math.ceil((trialEnd.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
-    : 0;
-  const isTrial = subscription.status === "trialing" && trialDaysLeft > 0;
-  const billingStatus = isTrial ? `Free Trial · ${trialDaysLeft} days left` : `${tierLabel} · ${periodLabel}`;
+  const trialEndLabel = subscription.trialEndsAt
+    ? new Date(subscription.trialEndsAt).toLocaleDateString([], { month: "short", day: "numeric" })
+    : null;
+  const isTrial = subscription.status === "trialing" && Boolean(trialEndLabel);
+  const billingStatus = isTrial ? `Free Trial · ends ${trialEndLabel}` : `${tierLabel} · ${periodLabel}`;
 
   const domainStatus = domainSettings?.customDomain || "Not configured";
   const pipelineStagesCount = soul?.pipeline?.stages?.length ?? 0;
