@@ -1,4 +1,5 @@
 import { getSoul } from "@/lib/soul/server";
+import { CustomContextForm } from "./custom-context-form";
 
 /*
   Square UI class reference (source of truth):
@@ -22,6 +23,7 @@ export default async function SettingsProfilePage() {
         <p className="text-sm text-foreground">Industry: {soul?.industry ?? "Not set"}</p>
         <p className="mt-2 text-sm sm:text-base text-muted-foreground">Edit via Soul setup to regenerate labels, voice, and pipeline defaults.</p>
       </div>
+      <CustomContextForm initialValue={soul?.customContext ?? ""} />
     </section>
   );
 }

@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { organizations, pipelines, users } from "@/db/schema";
+import { revalidatePath } from "next/cache";
 import { generateSoul } from "@/lib/soul/generate";
 import type { OrgSoul, SoulWizardInput } from "@/lib/soul/types";
 import { assertWritable } from "@/lib/demo/server";
@@ -84,4 +85,45 @@ export async function saveSoulAction(soul: OrgSoul) {
   });
 
   return { success: true };
+}
+
+export async function updateSoulCustomContextAction(input: { customContext: string }) {
+  assertWritable();
+
+  const orgId = await getCurrentOrgId();
+
+  if (!orgId) {
+    throw new Error("Unauthorized");
+  }
+
+  const normalized = String(input.customContext ?? "").trim().slice(0, 2000);
+
+  const [org] = await db
+    .select({ soul: organizations.soul })
+    .from(organizations)
+    .where(eq(organizations.id, orgId))
+    .limit(1);
+
+  const existingSoul = (org?.soul as OrgSoul | null) ?? null;
+  if (!existingSoul) {
+    throw new Error("Soul not configured yet");
+  }
+
+  const nextSoul: OrgSoul = {
+    ...existingSoul,
+    customContext: normalized,
+  };
+
+  await db
+    .update(organizations)
+    .set({
+      soul: nextSoul,
+      updatedAt: new Date(),
+    })
+    .where(eq(organizations.id, orgId));
+
+  revalidatePath("/settings/profile");
+  revalidatePath("/seldon");
+
+  return { success: true, customContext: normalized };
 }

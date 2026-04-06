@@ -92,6 +92,7 @@ export interface OrgSoul {
   };
   priorities: string[];
   aiContext: string;
+  customContext?: string;
   suggestedIntakeForm: {
     name: string;
     fields: Array<{ key: string; label: string; type: string; required: boolean }>;

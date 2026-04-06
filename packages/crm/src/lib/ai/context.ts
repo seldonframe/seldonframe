@@ -158,9 +158,16 @@ Avoid words: ${soul.voice?.avoidWords?.join(", ") || "none specified"}
 Pipeline stages: ${soul.pipeline?.stages?.map((stage) => stage.name).join(" → ") || "not configured"}`
     : "## Soul: Not configured yet";
 
+  const customContextSection = `THE USER'S CUSTOM CONTEXT (unique rules and preferences - follow these closely):
+---
+${soul?.customContext?.trim() || "No custom context provided."}
+---`;
+
   const schemaCompressed = await getCompressedSchema();
 
   return `${soulContext}
+
+${customContextSection}
 
 ## Installed Blocks
 ${installedBlockLines.join("\n") || "Only built-in blocks (CRM, Booking, Email, Forms, Payments)"}
