@@ -574,17 +574,49 @@ export async function runSeldonItAction(_prev: SeldonRunState, formData: FormDat
         error: "Seldon It AI is not configured. Set ANTHROPIC_API_KEY or connect an Anthropic key.",
       };
     }
-    const [orgRow] = await db
-      .select({
-        id: organizations.id,
-        slug: organizations.slug,
-        soul: organizations.soul,
-        theme: organizations.theme,
-        integrations: organizations.integrations,
-      })
-      .from(organizations)
-      .where(eq(organizations.id, orgId))
-      .limit(1);
+    let orgRow:
+      | {
+          id: string;
+          slug: string;
+          soul: unknown;
+          theme: unknown;
+          integrations: unknown;
+        }
+      | null = null;
+
+    try {
+      const [fullOrgRow] = await db
+        .select({
+          id: organizations.id,
+          slug: organizations.slug,
+          soul: organizations.soul,
+          theme: organizations.theme,
+          integrations: organizations.integrations,
+        })
+        .from(organizations)
+        .where(eq(organizations.id, orgId))
+        .limit(1);
+
+      orgRow = fullOrgRow ?? null;
+    } catch {
+      const [fallbackOrgRow] = await db
+        .select({
+          id: organizations.id,
+          slug: organizations.slug,
+          soul: organizations.soul,
+        })
+        .from(organizations)
+        .where(eq(organizations.id, orgId))
+        .limit(1);
+
+      orgRow = fallbackOrgRow
+        ? {
+            ...fallbackOrgRow,
+            theme: null,
+            integrations: {},
+          }
+        : null;
+    }
 
     if (!orgRow?.slug) {
       return { ok: false, error: "Organization not found." };
