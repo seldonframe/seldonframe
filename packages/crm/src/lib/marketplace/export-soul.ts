@@ -1,6 +1,7 @@
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { bookings, intakeForms, landingPages, organizations, soulWiki } from "@/db/schema";
+import { bookings, intakeForms, landingPages, organizations } from "@/db/schema";
+import { soulWiki } from "@/db/schema/soul-sources";
 import { normalizeTheme } from "@/lib/theme/normalize-theme";
 import type { OrgSoul } from "@/lib/soul/types";
 import type { SoulPackage } from "@/lib/marketplace/soul-package";
