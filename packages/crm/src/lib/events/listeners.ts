@@ -3,8 +3,6 @@ import { getCoreRuntimeConfig } from "@seldonframe/core/config";
 import { configureTelemetry, trackTelemetryEvent } from "@seldonframe/core/telemetry";
 import { sendTriggeredEmailsForContactEvent, sendWelcomeEmailForContact } from "@/lib/emails/actions";
 import { syncContactToNewsletter } from "@/lib/integrations/newsletter-sync";
-import { autoIngestSoulFromEvent } from "@/lib/soul-wiki/event-auto-ingest";
-import { captureAnonymousPattern } from "@/lib/soul-wiki/pattern-capture";
 
 let listenersRegistered = false;
 
@@ -27,13 +25,6 @@ export function registerCrmEventListeners() {
       });
     }
 
-    void autoIngestSoulFromEvent(event).catch(() => {
-      return;
-    });
-
-    void captureAnonymousPattern(event).catch(() => {
-      return;
-    });
   });
 
   bus.on("contact.created", async (event) => {
