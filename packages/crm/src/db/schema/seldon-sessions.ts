@@ -5,6 +5,15 @@ import { organizations } from "./organizations";
 export type SeldonSessionMessage = {
   role: "user" | "assistant";
   content: string;
+  plan?: {
+    title: string;
+    totalSteps: number;
+    steps: Array<{
+      stepNumber: number;
+      description: string;
+      blockType: "form" | "email" | "booking" | "page" | "automation";
+    }>;
+  };
   createdEntities?: Array<{
     id: string;
     blockType: "form" | "email" | "booking" | "page" | "automation";
