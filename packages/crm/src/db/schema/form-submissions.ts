@@ -12,6 +12,7 @@ export const formSubmissions = pgTable("form_submissions", {
   formName: text("form_name").notNull(),
   data: jsonb("data").$type<Record<string, unknown>>().notNull(),
   score: integer("score").notNull().default(0),
+  scoredFields: jsonb("scored_fields").$type<Record<string, number>>().notNull().default(sql`'{}'::jsonb`),
   submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull().defaultNow(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

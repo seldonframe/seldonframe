@@ -545,15 +545,36 @@ export const puckConfig: Config = {
       fields: {
         label: { type: "text" },
         fieldName: { type: "text" },
+        required: {
+          type: "radio",
+          options: [
+            { label: "Yes", value: "yes" },
+            { label: "No", value: "no" },
+          ],
+        },
         options: {
           type: "array",
           arrayFields: { label: { type: "text" }, value: { type: "text" }, points: { type: "number" } },
         },
       },
-      render: ({ label, fieldName, options }) => (
+      defaultProps: {
+        label: "How ready are you?",
+        fieldName: "readiness",
+        required: "yes",
+        options: [
+          { label: "Not ready", value: "not_ready", points: 0 },
+          { label: "Somewhat ready", value: "somewhat_ready", points: 5 },
+          { label: "Very ready", value: "very_ready", points: 10 },
+        ],
+      },
+      render: ({ label, fieldName, required, options }) => (
         <div className="space-y-2">
-          <Label>{label}</Label>
-          <select name={fieldName} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+          <Label>
+            {label}
+            {required === "yes" ? " *" : ""}
+          </Label>
+          <select name={fieldName} required={required === "yes"} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+            <option value="">Select...</option>
             {options?.map((o: { label: string; value: string; points: number }, i: number) => (
               <option key={i} value={o.value} data-points={o.points}>
                 {o.label}
@@ -915,38 +936,81 @@ export const puckConfig: Config = {
         qualifiedHeadline: { type: "text" },
         qualifiedMessage: { type: "textarea" },
         qualifiedCtaText: { type: "text" },
+        qualifiedCtaLink: { type: "text" },
         unqualifiedHeadline: { type: "text" },
         unqualifiedMessage: { type: "textarea" },
         unqualifiedCtaText: { type: "text" },
+        unqualifiedCtaLink: { type: "text" },
         threshold: { type: "number" },
       },
-      render: ({ qualifiedHeadline, qualifiedMessage, qualifiedCtaText, unqualifiedHeadline, unqualifiedMessage, unqualifiedCtaText, threshold, puck }) => {
+      defaultProps: {
+        qualifiedHeadline: "You're a great fit!",
+        qualifiedMessage: "Based on your answers, we recommend booking a discovery call.",
+        qualifiedCtaText: "Book Your Discovery Call",
+        qualifiedCtaLink: "#",
+        unqualifiedHeadline: "Thanks for your interest",
+        unqualifiedMessage: "You're not quite ready yet, but we can still help with resources.",
+        unqualifiedCtaText: "Join Our Newsletter",
+        unqualifiedCtaLink: "#",
+        threshold: 10,
+      },
+      render: ({
+        qualifiedHeadline,
+        qualifiedMessage,
+        qualifiedCtaText,
+        qualifiedCtaLink,
+        unqualifiedHeadline,
+        unqualifiedMessage,
+        unqualifiedCtaText,
+        unqualifiedCtaLink,
+        threshold,
+        puck,
+      }) => {
         const [score, setScore] = useState<number | null>(null);
 
         useEffect(() => {
-          if (puck?.isEditing) return;
+          if (puck?.isEditing) {
+            setScore(threshold ?? 0);
+            return;
+          }
+
           const urlScore = new URLSearchParams(window.location.search).get("score");
           const cookieScore = document.cookie
             .split("; ")
             .find((row) => row.startsWith("sf_score="))
             ?.split("=")[1];
-          setScore(parseInt(urlScore || cookieScore || "0", 10));
+
+          const raw = urlScore || cookieScore;
+          if (!raw) {
+            setScore(null);
+            return;
+          }
+
+          const parsed = parseInt(raw, 10);
+          setScore(Number.isFinite(parsed) ? parsed : null);
         }, [puck?.isEditing]);
 
-        const isQualified = score !== null ? score >= (threshold || 0) : true;
+        if (score === null) {
+          return <div className="p-8 text-center">Loading results...</div>;
+        }
+
+        const normalizedThreshold = threshold || 0;
+        const isQualified = score >= normalizedThreshold;
         const current = isQualified
-          ? { h: qualifiedHeadline, m: qualifiedMessage, cta: qualifiedCtaText, icon: <Check className="text-green-600" /> }
-          : { h: unqualifiedHeadline, m: unqualifiedMessage, cta: unqualifiedCtaText, icon: <XCircle className="text-red-600" /> };
+          ? { h: qualifiedHeadline, m: qualifiedMessage, cta: qualifiedCtaText, link: qualifiedCtaLink, icon: <Check className="text-green-600" /> }
+          : { h: unqualifiedHeadline, m: unqualifiedMessage, cta: unqualifiedCtaText, link: unqualifiedCtaLink, icon: <XCircle className="text-red-600" /> };
 
         return (
           <div className="p-8 text-center border-2" style={{ borderColor: isQualified ? "var(--sf-primary)" : "var(--sf-border)", borderRadius: "var(--sf-radius)" }}>
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-6 bg-slate-50">{current.icon}</div>
             <h2 className="text-3xl font-bold mb-4">{current.h}</h2>
             <p className="opacity-70 mb-8 max-w-lg mx-auto">{current.m}</p>
-            <Button size="lg" style={{ backgroundColor: "var(--sf-primary)" }}>
-              {current.cta}
-            </Button>
-            {score !== null && <p className="mt-8 text-xs opacity-30">Your Score: {score}</p>}
+            <a href={current.link || "#"}>
+              <Button size="lg" style={{ backgroundColor: "var(--sf-primary)" }}>
+                {current.cta}
+              </Button>
+            </a>
+            <p className="mt-8 text-xs opacity-50">Your score: {score} / {normalizedThreshold}+</p>
           </div>
         );
       },

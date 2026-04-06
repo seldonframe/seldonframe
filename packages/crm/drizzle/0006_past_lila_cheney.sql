@@ -1,0 +1,1 @@
+ALTER TABLE "form_submissions" ADD COLUMN "scored_fields" jsonb DEFAULT '{}'::jsonb NOT NULL;

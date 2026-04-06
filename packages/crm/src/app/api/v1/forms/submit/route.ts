@@ -41,17 +41,19 @@ function detectName(data: Record<string, unknown>, email: string | null) {
 
 function calculateScore(data: Record<string, unknown>) {
   let totalScore = 0;
+  const scoredFields: Record<string, number> = {};
 
-  for (const value of Object.values(data)) {
+  for (const [key, value] of Object.entries(data)) {
     if (typeof value === "object" && value !== null && "points" in value) {
       const points = Number((value as { points?: unknown }).points);
       if (Number.isFinite(points)) {
         totalScore += points;
+        scoredFields[key] = points;
       }
     }
   }
 
-  return totalScore;
+  return { totalScore, scoredFields };
 }
 
 export async function POST(request: Request) {
@@ -70,7 +72,7 @@ export async function POST(request: Request) {
   }
 
   const formName = String(body.formName ?? "Puck Form");
-  const score = calculateScore(data);
+  const { totalScore: score, scoredFields } = calculateScore(data);
   const email = detectEmail(data);
   const displayName = detectName(data, email);
 
@@ -79,6 +81,7 @@ export async function POST(request: Request) {
     formName,
     data,
     score,
+    scoredFields,
     submittedAt: new Date(),
   });
 
@@ -133,6 +136,7 @@ export async function POST(request: Request) {
         data: {
           ...data,
           score,
+          scoredFields,
           ...(email ? { email } : {}),
         },
       });
@@ -142,14 +146,11 @@ export async function POST(request: Request) {
   }
 
   const response = NextResponse.json({ success: true, score });
-
-  if (score > 0) {
-    response.cookies.set("sf_score", String(score), {
-      path: "/",
-      maxAge: 60 * 60,
-      sameSite: "lax",
-    });
-  }
+  response.cookies.set("sf_score", String(score), {
+    path: "/",
+    maxAge: 60 * 60,
+    sameSite: "lax",
+  });
 
   return response;
 }
