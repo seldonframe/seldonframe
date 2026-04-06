@@ -1,6 +1,5 @@
 import { getSoul } from "@/lib/soul/server";
 import { BusinessProfileForm } from "./business-profile-form";
-import { CustomContextForm } from "./custom-context-form";
 
 /*
   Square UI class reference (source of truth):
@@ -24,8 +23,8 @@ export default async function SettingsProfilePage() {
         initialIndustry={soul?.industry ?? ""}
         initialBusinessDescription={soul?.businessDescription ?? ""}
         initialOfferType={soul?.offerType ?? "services"}
+        initialCustomContext={soul?.customContext ?? ""}
       />
-      <CustomContextForm initialValue={soul?.customContext ?? ""} />
     </section>
   );
 }

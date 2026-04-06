@@ -133,6 +133,7 @@ export async function updateSoulBusinessProfileAction(input: {
   industry: string;
   businessDescription: string;
   offerType?: string;
+  customContext?: string;
 }) {
   assertWritable();
 
@@ -159,6 +160,7 @@ export async function updateSoulBusinessProfileAction(input: {
     industry: String(input.industry ?? "").trim().slice(0, 120),
     businessDescription: String(input.businessDescription ?? "").trim().slice(0, 1000),
     offerType: String(input.offerType ?? existingSoul.offerType ?? "services").trim().slice(0, 120) || "services",
+    customContext: String(input.customContext ?? existingSoul.customContext ?? "").trim().slice(0, 2000),
   };
 
   await db
@@ -180,6 +182,7 @@ export async function updateSoulBusinessProfileAction(input: {
       industry: nextSoul.industry,
       businessDescription: nextSoul.businessDescription,
       offerType: nextSoul.offerType,
+      customContext: nextSoul.customContext ?? "",
     },
   };
 }

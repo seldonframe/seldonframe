@@ -11,6 +11,7 @@ type BusinessProfileFormProps = {
   initialIndustry: string;
   initialBusinessDescription: string;
   initialOfferType: string;
+  initialCustomContext: string;
 };
 
 export function BusinessProfileForm({
@@ -18,11 +19,13 @@ export function BusinessProfileForm({
   initialIndustry,
   initialBusinessDescription,
   initialOfferType,
+  initialCustomContext,
 }: BusinessProfileFormProps) {
   const [businessName, setBusinessName] = useState(initialBusinessName);
   const [industry, setIndustry] = useState(initialIndustry);
   const [businessDescription, setBusinessDescription] = useState(initialBusinessDescription);
   const [offerType, setOfferType] = useState(initialOfferType);
+  const [customContext, setCustomContext] = useState(initialCustomContext);
   const [status, setStatus] = useState<"idle" | "error">("idle");
   const [showSavedToast, setShowSavedToast] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -41,12 +44,14 @@ export function BusinessProfileForm({
           industry,
           businessDescription,
           offerType,
+          customContext,
         });
 
         setBusinessName(result.soul.businessName);
         setIndustry(result.soul.industry);
         setBusinessDescription(result.soul.businessDescription);
         setOfferType(result.soul.offerType);
+        setCustomContext(result.soul.customContext);
         setStatus("idle");
         setShowSavedToast(true);
         window.setTimeout(() => setShowSavedToast(false), 2500);
@@ -137,6 +142,29 @@ export function BusinessProfileForm({
             className="crm-input w-full p-3 text-sm"
             placeholder="Describe what you do in one or two sentences."
           />
+        </div>
+
+        <div className="space-y-2 pt-6 border-t border-zinc-800">
+          <label htmlFor="profile-custom-context" className="text-sm font-medium text-zinc-200">
+            Anything else Seldon should know?
+          </label>
+          <p className="text-xs text-zinc-500">
+            Tell Seldon about your unique business rules, pricing, terminology, or preferences. This shapes everything Seldon creates for
+            you.
+          </p>
+          <textarea
+            id="profile-custom-context"
+            value={customContext}
+            onChange={(event) => {
+              setStatus("idle");
+              setCustomContext(event.target.value.slice(0, 2000));
+            }}
+            maxLength={2000}
+            rows={5}
+            placeholder={"Examples:\n• \"I use sliding scale pricing $75-$200 based on income\"\n• \"Never say 'coaching' — I call it 'strategic partnership'\"\n• \"All new clients must sign an NDA before onboarding\"\n• \"Discovery calls are always free but require a pre-call questionnaire\""}
+            className="w-full rounded-md border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 resize-y"
+          />
+          <div className="text-xs text-zinc-600 text-right">{customContext.length} / 2,000</div>
         </div>
 
         <div className="flex items-center justify-between gap-3 pt-2">
