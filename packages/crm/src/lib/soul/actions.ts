@@ -127,3 +127,59 @@ export async function updateSoulCustomContextAction(input: { customContext: stri
 
   return { success: true, customContext: normalized };
 }
+
+export async function updateSoulBusinessProfileAction(input: {
+  businessName: string;
+  industry: string;
+  businessDescription: string;
+  offerType?: string;
+}) {
+  assertWritable();
+
+  const orgId = await getCurrentOrgId();
+
+  if (!orgId) {
+    throw new Error("Unauthorized");
+  }
+
+  const [org] = await db
+    .select({ soul: organizations.soul })
+    .from(organizations)
+    .where(eq(organizations.id, orgId))
+    .limit(1);
+
+  const existingSoul = (org?.soul as OrgSoul | null) ?? null;
+  if (!existingSoul) {
+    throw new Error("Soul not configured yet");
+  }
+
+  const nextSoul: OrgSoul = {
+    ...existingSoul,
+    businessName: String(input.businessName ?? "").trim().slice(0, 120),
+    industry: String(input.industry ?? "").trim().slice(0, 120),
+    businessDescription: String(input.businessDescription ?? "").trim().slice(0, 1000),
+    offerType: String(input.offerType ?? existingSoul.offerType ?? "services").trim().slice(0, 120) || "services",
+  };
+
+  await db
+    .update(organizations)
+    .set({
+      soul: nextSoul,
+      updatedAt: new Date(),
+    })
+    .where(eq(organizations.id, orgId));
+
+  revalidatePath("/settings/profile");
+  revalidatePath("/settings");
+  revalidatePath("/seldon");
+
+  return {
+    success: true,
+    soul: {
+      businessName: nextSoul.businessName,
+      industry: nextSoul.industry,
+      businessDescription: nextSoul.businessDescription,
+      offerType: nextSoul.offerType,
+    },
+  };
+}

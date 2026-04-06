@@ -1,4 +1,5 @@
 import { getSoul } from "@/lib/soul/server";
+import { BusinessProfileForm } from "./business-profile-form";
 import { CustomContextForm } from "./custom-context-form";
 
 /*
@@ -18,11 +19,12 @@ export default async function SettingsProfilePage() {
       <div>
         <h1 className="text-lg sm:text-[22px] font-semibold leading-relaxed text-foreground">Business Profile</h1>
       </div>
-      <div className="rounded-xl border bg-card p-5">
-        <p className="text-sm text-foreground">Business: {soul?.businessName ?? "Not set"}</p>
-        <p className="text-sm text-foreground">Industry: {soul?.industry ?? "Not set"}</p>
-        <p className="mt-2 text-sm sm:text-base text-muted-foreground">Edit via Soul setup to regenerate labels, voice, and pipeline defaults.</p>
-      </div>
+      <BusinessProfileForm
+        initialBusinessName={soul?.businessName ?? ""}
+        initialIndustry={soul?.industry ?? ""}
+        initialBusinessDescription={soul?.businessDescription ?? ""}
+        initialOfferType={soul?.offerType ?? "services"}
+      />
       <CustomContextForm initialValue={soul?.customContext ?? ""} />
     </section>
   );
