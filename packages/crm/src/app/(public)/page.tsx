@@ -31,7 +31,7 @@ export default async function PublicHomePage() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 font-sans selection:bg-teal-500/30 selection:text-teal-200">
+    <div className="min-h-screen bg-[#09090b] font-sans selection:bg-[#14b8a6]/30 selection:text-[#14b8a6]">
       <LandingNav />
 
       <main>

@@ -3,7 +3,7 @@ import { ExternalLink } from "lucide-react";
 
 export function LandingNav() {
   return (
-    <nav className="sticky top-0 z-50 w-full border-b border-zinc-800/50 bg-zinc-950/80 backdrop-blur-sm">
+    <nav className="sticky top-0 z-50 w-full border-b border-zinc-800/50 bg-[#09090b]/80 backdrop-blur-md">
       <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-6">
         <span className="text-lg font-semibold tracking-tight text-zinc-100">SeldonFrame</span>
         <div className="flex items-center gap-6 text-sm font-medium text-zinc-500">

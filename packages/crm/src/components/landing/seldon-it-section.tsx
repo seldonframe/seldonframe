@@ -2,23 +2,23 @@ import { Check } from "lucide-react";
 
 export function LandingSeldonItSection() {
   return (
-    <section className="mx-auto max-w-5xl px-6 py-24 md:py-32">
-      <div className="grid items-center gap-16 md:grid-cols-2">
+    <section className="mx-auto max-w-5xl border-t border-zinc-800/30 px-6 py-16 md:py-20">
+      <div className="grid items-center gap-12 md:grid-cols-2">
         <div className="order-2 rounded-xl border border-zinc-800 bg-zinc-900 p-1 md:order-1">
-          <div className="border-b border-zinc-800 p-4">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">User</span>
-            <div className="mt-2 rounded-lg bg-zinc-800 p-4 text-sm text-zinc-300">
+          <div className="border-b border-zinc-800 p-3">
+            <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-zinc-500">Prompt</p>
+            <div className="rounded-lg bg-zinc-800 p-3 text-sm text-zinc-300">
               Build a quiz that scores leads and books top scorers into a free call
             </div>
           </div>
-          <div className="p-4">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Seldon</span>
-            <div className="mt-4 space-y-3">
+          <div className="p-3">
+            <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-zinc-500">Live Output</p>
+            <div className="space-y-2">
               {[
                 { name: "Lead Scoring Quiz", info: "6 questions" },
-                { name: "Results Page", info: "different message by score" },
-                { name: "Follow-up Email", info: "sent automatically" },
-                { name: "Call Booking", info: "synced to your calendar" },
+                { name: "Results Page", info: "dynamic logic" },
+                { name: "Follow-up Email", info: "instant" },
+                { name: "Call Booking", info: "calendar sync" },
               ].map((tool) => (
                 <div key={tool.name} className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-sm text-zinc-300">
@@ -29,19 +29,19 @@ export function LandingSeldonItSection() {
                 </div>
               ))}
             </div>
-            <div className="mt-6 text-xs text-zinc-500">Everything is connected. Everything uses your soul.</div>
+            <div className="mt-4 text-[11px] text-zinc-500">Connected to your soul. Ready to go live.</div>
           </div>
         </div>
         <div className="order-1 md:order-2">
-          <span className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Seldon It</span>
-          <h2 className="mt-4 text-3xl font-bold text-zinc-100 md:text-4xl">If it doesn&apos;t exist, Seldon it.</h2>
-          <p className="mt-6 leading-relaxed text-zinc-400">
-            You need a quiz that scores leads and books the good ones. You could build it in four different tools and
-            spend a week connecting them.
-          </p>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Seldon It</p>
+          <h2 className="text-3xl font-bold text-zinc-100 md:text-4xl">If it doesn&apos;t exist, Seldon it.</h2>
           <p className="mt-4 leading-relaxed text-zinc-400">
-            Or you type one sentence. Seldon builds the quiz, the results page, the email, and the booking page. They
-            are live in seconds.
+            Describe the tool you need in plain English. Seldon builds the quiz, the results page, the email, and the
+            booking page in seconds.
+          </p>
+          <p className="mt-3 leading-relaxed text-zinc-400">
+            They aren&apos;t just templates. They are production-ready tools linked directly to your business data and
+            logic.
           </p>
         </div>
       </div>

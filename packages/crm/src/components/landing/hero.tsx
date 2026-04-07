@@ -4,7 +4,7 @@ import { UrlAnalyzer } from "@/components/landing/url-analyzer";
 
 export function LandingHero() {
   return (
-    <section className="flex flex-col items-center justify-center px-6 py-40 text-center md:py-56">
+    <section className="flex flex-col items-center justify-center px-6 py-20 text-center md:py-28">
       <h1 className="max-w-4xl text-5xl font-bold tracking-tight text-zinc-100 md:text-6xl lg:leading-[1.1]">
         Paste your website.
         <br />
@@ -15,7 +15,7 @@ export function LandingHero() {
         sounds like you.
       </p>
 
-      <div className="mt-12 w-full max-w-2xl">
+      <div className="mt-8 w-full max-w-2xl">
         <UrlAnalyzer />
       </div>
     </section>
