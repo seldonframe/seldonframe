@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 export function LandingAgenciesSection() {
   return (
     <section className="mx-auto max-w-3xl px-6 py-24 text-center md:py-32">
@@ -23,9 +21,9 @@ export function LandingAgenciesSection() {
           <div className="mt-1 text-[10px] uppercase tracking-wider text-zinc-500">what you can charge</div>
         </div>
       </div>
-      <Link href="/pricing" className="mt-10 inline-block text-sm font-semibold text-[#14b8a6] transition-opacity hover:opacity-80">
+      <button className="mt-10 text-sm font-semibold text-[#14b8a6] transition-opacity hover:opacity-80">
         See Pro plans →
-      </Link>
+      </button>
     </section>
   );
 }
