@@ -30,6 +30,9 @@ Example:
 When limit is hit, the skill responds:
 `You've used your free workspace. Each additional workspace is $9/month.`
 
+If the user currently has exactly 1 workspace (their primary), the skill can use this clearer message:
+`You currently have 1 workspace (your primary). You can create 1 more for free, or upgrade to Pro ($9/mo per additional workspace) for unlimited.`
+
 Then offers:
 1. `Upgrade to Pro ($9/mo per workspace)`
    - Calls `POST https://app.seldonframe.com/api/stripe/checkout` with body `{ "quantity": 1 }`
@@ -37,7 +40,9 @@ Then offers:
      - `Here's your direct upgrade link for $9/month per additional workspace: [url]`
      - `• Create unlimited additional workspaces`
      - `• Full business OS (CRM, booking, intake, landing page, payments)`
-   - Falls back to `SELDONFRAME_UPGRADE_URL` or `https://app.seldonframe.com/pricing`
+   - If checkout fails with `Stripe is not configured`, responds with:
+     - `Stripe checkout is being finalized. For now, visit https://app.seldonframe.com/pricing to upgrade.`
+   - For other checkout errors, falls back to `SELDONFRAME_UPGRADE_URL` or `https://app.seldonframe.com/pricing`
 2. `List my workspaces`
    - Calls `GET https://app.seldonframe.com/api/v1/workspaces`
    - Shows `name`, `slug`, `subdomain`

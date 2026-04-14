@@ -63,7 +63,13 @@ export async function POST(req: NextRequest) {
 
   const stripe = getStripeClient();
   if (!stripe) {
-    return NextResponse.json({ error: "Stripe is not configured" }, { status: 500 });
+    return NextResponse.json(
+      {
+        error:
+          "Stripe is not configured. Set STRIPE_SECRET_KEY (or STRIPE_LIVE_SECRET_KEY / STRIPE_TEST_SECRET_KEY).",
+      },
+      { status: 500 }
+    );
   }
 
   const body = (await req.json().catch(() => ({}))) as { quantity?: unknown };

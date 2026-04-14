@@ -68,8 +68,17 @@ function hasActiveWorkspaceSubscription(status: string | null | undefined) {
 const WORKSPACE_UPGRADE_REQUIRED_MESSAGE =
   "You've used your free workspace. Each additional workspace is $9/month. Please upgrade to continue.";
 
+async function getOwnedWorkspaceCount(userId: string) {
+  const [result] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(organizations)
+    .where(eq(organizations.ownerId, userId));
+
+  return Number(result?.count ?? 0);
+}
+
 async function ensureWorkspaceCreationBillingForUser(user: Awaited<ReturnType<typeof getBillingUserById>>, existingWorkspaces: number) {
-  if (existingWorkspaces === 0) {
+  if (existingWorkspaces <= 1) {
     return;
   }
 
@@ -115,16 +124,17 @@ export async function getWorkspaceLimitStatus() {
   const plan = getPlan(user.planId ?? "");
   const orgSubscription = await getOrgSubscription(user.orgId);
   const orgFeatures = getOrgFeatures(orgSubscription.tier ?? "free");
-  const managedOrgs = await listManagedOrganizations(user.id);
+  const ownedWorkspaceCount = await getOwnedWorkspaceCount(user.id);
+  const hasActiveSubscription = hasActiveWorkspaceSubscription(orgSubscription.status ?? null);
 
-  const maxOrgs = orgFeatures.maxWorkspaces;
-  const canCreate = maxOrgs <= 0 || managedOrgs.length < maxOrgs;
+  const maxOrgs = hasActiveSubscription ? -1 : 2;
+  const canCreate = ownedWorkspaceCount <= 1 || hasActiveSubscription;
 
   return {
     plan,
     tier: orgSubscription.tier ?? "free",
     features: orgFeatures,
-    currentOrgs: managedOrgs.length,
+    currentOrgs: ownedWorkspaceCount,
     maxOrgs,
     canCreate,
   };
@@ -135,16 +145,17 @@ export async function getWorkspaceLimitStatusForUser(userId: string) {
   const plan = getPlan(user.planId ?? "");
   const orgSubscription = await getOrgSubscription(user.orgId);
   const orgFeatures = getOrgFeatures(orgSubscription.tier ?? "free");
-  const managedOrgs = await listManagedOrganizations(user.id);
+  const ownedWorkspaceCount = await getOwnedWorkspaceCount(user.id);
+  const hasActiveSubscription = hasActiveWorkspaceSubscription(orgSubscription.status ?? null);
 
-  const maxOrgs = orgFeatures.maxWorkspaces;
-  const canCreate = maxOrgs <= 0 || managedOrgs.length < maxOrgs;
+  const maxOrgs = hasActiveSubscription ? -1 : 2;
+  const canCreate = ownedWorkspaceCount <= 1 || hasActiveSubscription;
 
   return {
     plan,
     tier: orgSubscription.tier ?? "free",
     features: orgFeatures,
-    currentOrgs: managedOrgs.length,
+    currentOrgs: ownedWorkspaceCount,
     maxOrgs,
     canCreate,
   };
@@ -519,8 +530,8 @@ export async function createWorkspaceFromSoulAction(input: CreateWorkspaceFromSo
     throw new Error("Business name is required");
   }
 
-  const managedOrgs = await listManagedOrganizations(user.id);
-  await ensureWorkspaceCreationBillingForUser(user, managedOrgs.length);
+  const existingWorkspaces = await getOwnedWorkspaceCount(user.id);
+  await ensureWorkspaceCreationBillingForUser(user, existingWorkspaces);
 
   const baseSlug = slugify(businessName) || `workspace-${randomUUID().slice(0, 8)}`;
   let slug = baseSlug;
@@ -612,8 +623,8 @@ export async function createWorkspaceFromSetupAction(input: CreateWorkspaceFromS
     throw new Error("Framework is required");
   }
 
-  const managedOrgs = await listManagedOrganizations(user.id);
-  await ensureWorkspaceCreationBillingForUser(user, managedOrgs.length);
+  const existingWorkspaces = await getOwnedWorkspaceCount(user.id);
+  await ensureWorkspaceCreationBillingForUser(user, existingWorkspaces);
 
   const baseSlug = slugify(businessName) || `workspace-${randomUUID().slice(0, 8)}`;
   let slug = baseSlug;

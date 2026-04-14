@@ -26,6 +26,7 @@ Pricing model:
 1. Ask: “Tell me about your business or share your website URL.”
 2. Accept either plain text or a URL.
 3. POST to `{{SELDONFRAME_API_URL}}` (set to `https://app.seldonframe.com/api/v1/workspace/create`).
+   - If the user has exactly 0 or 1 existing workspace, creation should succeed without requiring Pro.
 4. Always send headers:
    - `x-claude-api-key: {{CLAUDE_API_KEY}}`
    - `x-seldon-api-key: {{SELDONFRAME_API_KEY}}`
@@ -37,6 +38,8 @@ Pricing model:
    - `split_required`: explain briefly and ask which side to build first.
    - `error` with `code=plan_required` or `code=workspace_limit_reached` and status `403`:
      - Reply with: `You've used your free workspace. Each additional workspace is $9/month.`
+     - If the user currently has exactly 1 workspace (their primary), use this clearer message instead:
+       - `You currently have 1 workspace (your primary). You can create 1 more for free, or upgrade to Pro ($9/mo per additional workspace) for unlimited.`
      - Then offer these options:
        1. `Upgrade to Pro ($9/mo per workspace)`
           - Call `POST https://app.seldonframe.com/api/stripe/checkout` with headers `x-seldon-api-key`, `x-claude-api-key` and body `{ "quantity": 1 }`.
@@ -45,7 +48,9 @@ Pricing model:
             - `Here's your direct upgrade link for $9/month per additional workspace: [url]`
             - `• Create unlimited additional workspaces`
             - `• Full business OS (CRM, booking, intake, landing page, payments)`
-          - If checkout cannot be created, share `{{SELDONFRAME_UPGRADE_URL}}` if set; otherwise share `https://app.seldonframe.com/pricing`.
+          - If checkout fails with `Stripe is not configured`, reply exactly:
+            - `Stripe checkout is being finalized. For now, visit https://app.seldonframe.com/pricing to upgrade.`
+          - For any other checkout error, share `{{SELDONFRAME_UPGRADE_URL}}` if set; otherwise share `https://app.seldonframe.com/pricing`.
        2. `List my workspaces`
           - Call `GET https://app.seldonframe.com/api/v1/workspaces` with `x-seldon-api-key` (+ BYOK header).
           - Show numbered list format: `1. Name — slug — subdomain`.
