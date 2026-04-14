@@ -1,0 +1,14 @@
+{
+  "skills": [
+    {
+      "name": "seldonframe",
+      "path": "./openclaw/skills/seldonframe/SKILL.md"
+    }
+  ],
+  "env": {
+    "SELDONFRAME_API_URL": "https://app.seldonframe.com/api/v1/workspace/create",
+    "SELDONFRAME_API_KEY": "${SELDONFRAME_API_KEY}",
+    "CLAUDE_API_KEY": "${CLAUDE_API_KEY}",
+    "SELDONFRAME_SESSION_COOKIE": "${SELDONFRAME_SESSION_COOKIE}"
+  }
+}

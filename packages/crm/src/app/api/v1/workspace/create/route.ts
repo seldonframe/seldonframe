@@ -12,6 +12,36 @@ type WorkspaceCreateBody = {
   model?: unknown;
 };
 
+function resolveUserIdFromSeldonApiKey(headers: Headers): string | null {
+  const providedKey = headers.get("x-seldon-api-key")?.trim();
+  if (!providedKey) {
+    return null;
+  }
+
+  const configuredPairs = (process.env.SELDON_BUILDER_API_KEYS ?? "")
+    .split(",")
+    .map((pair) => pair.trim())
+    .filter(Boolean)
+    .map((pair) => {
+      const separator = pair.indexOf(":");
+      if (separator < 1) {
+        return null;
+      }
+
+      const key = pair.slice(0, separator).trim();
+      const userId = pair.slice(separator + 1).trim();
+      if (!key || !userId) {
+        return null;
+      }
+
+      return { key, userId };
+    })
+    .filter((entry): entry is { key: string; userId: string } => Boolean(entry));
+
+  const match = configuredPairs.find((entry) => entry.key === providedKey);
+  return match?.userId ?? null;
+}
+
 function logWorkspaceCompile(event: string, data: Record<string, unknown>) {
   console.info(
     JSON.stringify({
@@ -29,15 +59,26 @@ export async function POST(request: Request) {
     return demoApiBlockedResponse();
   }
 
-  const session = await auth();
-  if (!session?.user?.id) {
+  const apiKeyUserId = resolveUserIdFromSeldonApiKey(request.headers);
+  const hasApiKeyHeader = Boolean(request.headers.get("x-seldon-api-key")?.trim());
+
+  const session = apiKeyUserId ? null : await auth();
+  const userId = apiKeyUserId ?? session?.user?.id ?? null;
+
+  if (hasApiKeyHeader && !apiKeyUserId) {
+    logWorkspaceCompile("workspace_compile_invalid_api_key", {
+      status: 401,
+    });
+    return NextResponse.json({ error: "Invalid x-seldon-api-key." }, { status: 401 });
+  }
+
+  if (!userId) {
     logWorkspaceCompile("workspace_compile_unauthorized", {
       status: 401,
     });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const userId = session.user.id;
   const rateKey = `workspace-compile:${userId}`;
   const rateLimitPerHour = process.env.NODE_ENV === "development" ? 30 : 10;
 
@@ -134,7 +175,7 @@ export async function POST(request: Request) {
       soul: compileResult.soul,
       sourceText: compileResult.sourceText,
       pagesUsed: compileResult.pagesUsed,
-    });
+    }, { userId });
 
     const workspaceBaseDomain = process.env.WORKSPACE_BASE_DOMAIN?.trim() || "seldonframe.app";
     const subdomain = `${workspace.slug}.${workspaceBaseDomain}`;

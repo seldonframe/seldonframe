@@ -33,6 +33,14 @@ async function requireBillingUser() {
     throw new Error("Unauthorized");
   }
 
+  return getBillingUserById(session.user.id);
+}
+
+async function getBillingUserById(userId: string) {
+  if (!userId) {
+    throw new Error("Unauthorized");
+  }
+
   const [dbUser] = await db
     .select({
       id: users.id,
@@ -42,7 +50,7 @@ async function requireBillingUser() {
       email: users.email,
     })
     .from(users)
-    .where(eq(users.id, session.user.id))
+    .where(eq(users.id, userId))
     .limit(1);
 
   if (!dbUser) {
@@ -57,7 +65,7 @@ export async function getWorkspaceLimitStatus() {
   const plan = getPlan(user.planId ?? "");
   const orgSubscription = await getOrgSubscription(user.orgId);
   const orgFeatures = getOrgFeatures(orgSubscription.tier ?? "free");
-  const managedOrgs = await listManagedOrganizations();
+  const managedOrgs = await listManagedOrganizations(user.id);
 
   const maxOrgs = orgFeatures.maxWorkspaces;
   const canCreate = maxOrgs <= 0 || managedOrgs.length < maxOrgs;
@@ -72,8 +80,87 @@ export async function getWorkspaceLimitStatus() {
   };
 }
 
-export async function listManagedOrganizations() {
-  const user = await requireBillingUser();
+export async function getWorkspaceLimitStatusForUser(userId: string) {
+  const user = await getBillingUserById(userId);
+  const plan = getPlan(user.planId ?? "");
+  const orgSubscription = await getOrgSubscription(user.orgId);
+  const orgFeatures = getOrgFeatures(orgSubscription.tier ?? "free");
+  const managedOrgs = await listManagedOrganizations(user.id);
+
+  const maxOrgs = orgFeatures.maxWorkspaces;
+  const canCreate = maxOrgs <= 0 || managedOrgs.length < maxOrgs;
+
+  return {
+    plan,
+    tier: orgSubscription.tier ?? "free",
+    features: orgFeatures,
+    currentOrgs: managedOrgs.length,
+    maxOrgs,
+    canCreate,
+  };
+}
+
+export async function listManagedOrganizations(userId?: string) {
+  const user = userId ? await getBillingUserById(userId) : await requireBillingUser();
+
+  const membershipRows = await db
+    .select({ orgId: orgMembers.orgId })
+    .from(orgMembers)
+    .where(eq(orgMembers.userId, user.id));
+
+  const membershipOrgIds = membershipRows.map((row) => row.orgId);
+
+  const rows = await db
+    .select({
+      id: organizations.id,
+      name: organizations.name,
+      slug: organizations.slug,
+      soulId: organizations.soulId,
+      parentUserId: organizations.parentUserId,
+      ownerId: organizations.ownerId,
+      createdAt: organizations.createdAt,
+    })
+    .from(organizations)
+    .where(
+      or(
+        eq(organizations.parentUserId, user.id),
+        eq(organizations.ownerId, user.id),
+        eq(organizations.id, user.orgId),
+        // Use inArray so UUID list is bound as an array parameter instead of scalar any(($4)).
+        membershipOrgIds.length > 0 ? inArray(organizations.id, membershipOrgIds) : sql`false`
+      )
+    );
+
+  if (rows.length === 0) {
+    return [];
+  }
+
+  const counts = await Promise.all(
+    rows.map(async (org) => {
+      const [contactCount] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(contacts)
+        .where(eq(contacts.orgId, org.id));
+
+      return {
+        orgId: org.id,
+        count: contactCount ? Number(contactCount.count) : 0,
+      };
+    })
+  );
+
+  const countMap = new Map(counts.map((row) => [row.orgId, row.count]));
+
+  return rows
+    .map((org) => ({
+      ...org,
+      contactCount: countMap.get(org.id) ?? 0,
+    }))
+    .sort((a, b) => Number(new Date(b.createdAt)) - Number(new Date(a.createdAt)));
+}
+
+export async function listManagedOrganizationsForUser(userId: string) {
+  const user = await getBillingUserById(userId);
 
   const membershipRows = await db
     .select({ orgId: orgMembers.orgId })
@@ -193,7 +280,7 @@ export async function createManagedOrganizationAction(formData: FormData) {
     throw new Error("Business name is required");
   }
 
-  const limitStatus = await getWorkspaceLimitStatus();
+  const limitStatus = await getWorkspaceLimitStatusForUser(user.id);
   if (limitStatus.tier === "free") {
     throw new Error("Pro plan required to create managed organizations");
   }
@@ -367,10 +454,14 @@ type CreateWorkspaceFromSoulInput = {
   pagesUsed?: string[];
 };
 
-export async function createWorkspaceFromSoulAction(input: CreateWorkspaceFromSoulInput) {
+type CreateWorkspaceFromSoulOptions = {
+  userId?: string;
+};
+
+export async function createWorkspaceFromSoulAction(input: CreateWorkspaceFromSoulInput, options?: CreateWorkspaceFromSoulOptions) {
   assertWritable();
 
-  const user = await requireBillingUser();
+  const user = options?.userId ? await getBillingUserById(options.userId) : await requireBillingUser();
   const soul = input.soul;
   const businessName = String(soul.business_name ?? "").trim();
 
@@ -378,7 +469,7 @@ export async function createWorkspaceFromSoulAction(input: CreateWorkspaceFromSo
     throw new Error("Business name is required");
   }
 
-  const limitStatus = await getWorkspaceLimitStatus();
+  const limitStatus = await getWorkspaceLimitStatusForUser(user.id);
   if (limitStatus.tier === "free") {
     throw new Error("Pro plan required to create additional workspaces");
   }
