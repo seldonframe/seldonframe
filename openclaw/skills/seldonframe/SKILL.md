@@ -36,7 +36,7 @@ Pricing model:
      - `🚀 Your new business OS is ready! Open it here: https://[slug].seldonframe.app`
    - `split_required`: explain briefly and ask which side to build first.
    - `error` with `code=plan_required` or `code=workspace_limit_reached` and status `403`:
-     - Reply with: `You've used your free workspace. Additional workspaces are $9/month each.`
+     - Reply with: `You've used your free workspace. Each additional workspace is $9/month.`
      - Then offer these options:
        1. `Upgrade to Pro ($9/mo per workspace)`
           - Try to generate checkout link by calling `POST https://app.seldonframe.com/api/stripe/checkout` with body `{ "plan": "pro", "priceId": "price_1TMC7UJOtNZA0x7xNrl2VDVE" }`.

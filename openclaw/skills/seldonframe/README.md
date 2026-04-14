@@ -28,7 +28,7 @@ Example:
 
 ## Limit-resolution flow in skill
 When limit is hit, the skill responds:
-`You've used your free workspace. Additional workspaces are $9/month each.`
+`You've used your free workspace. Each additional workspace is $9/month.`
 
 Then offers:
 1. `Upgrade to Pro ($9/mo per workspace)`

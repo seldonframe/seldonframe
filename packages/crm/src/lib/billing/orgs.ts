@@ -3,6 +3,7 @@
 import { randomUUID } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
+import Stripe from "stripe";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
@@ -58,6 +59,52 @@ async function getBillingUserById(userId: string) {
   }
 
   return dbUser;
+}
+
+function hasActiveWorkspaceSubscription(status: string | null | undefined) {
+  return status === "active" || status === "trialing";
+}
+
+async function ensureWorkspaceCreationBillingForUser(user: Awaited<ReturnType<typeof getBillingUserById>>, existingWorkspaces: number) {
+  if (existingWorkspaces === 0) {
+    return;
+  }
+
+  const orgSubscription = await getOrgSubscription(user.orgId);
+  const stripeSubscriptionId = orgSubscription.stripeSubscriptionId ?? null;
+
+  if (!stripeSubscriptionId || !hasActiveWorkspaceSubscription(orgSubscription.status ?? null)) {
+    throw new Error("Pro plan required to create additional workspaces");
+  }
+
+  const secretKey = process.env.STRIPE_SECRET_KEY?.trim();
+  if (!secretKey) {
+    throw new Error("Stripe is not configured for additional workspace billing");
+  }
+
+  const stripe = new Stripe(secretKey, {
+    apiVersion: "2025-08-27.basil",
+  });
+
+  const subscription = await stripe.subscriptions.retrieve(stripeSubscriptionId);
+  if (!hasActiveWorkspaceSubscription(subscription.status)) {
+    throw new Error("Pro plan required to create additional workspaces");
+  }
+
+  const item = subscription.items.data[0];
+  if (!item?.id) {
+    throw new Error("Could not update workspace subscription quantity");
+  }
+
+  const targetQuantity = Math.max(1, existingWorkspaces);
+  const currentQuantity = item.quantity ?? 1;
+
+  if (currentQuantity !== targetQuantity) {
+    await stripe.subscriptionItems.update(item.id, {
+      quantity: targetQuantity,
+      proration_behavior: "create_prorations",
+    });
+  }
 }
 
 export async function getWorkspaceLimitStatus() {
@@ -470,16 +517,7 @@ export async function createWorkspaceFromSoulAction(input: CreateWorkspaceFromSo
   }
 
   const managedOrgs = await listManagedOrganizations(user.id);
-  const isFirstWorkspace = managedOrgs.length === 0;
-
-  const limitStatus = await getWorkspaceLimitStatusForUser(user.id);
-  if (!isFirstWorkspace && limitStatus.tier === "free") {
-    throw new Error("Pro plan required to create additional workspaces");
-  }
-
-  if (!limitStatus.canCreate) {
-    throw new Error("Organization limit reached for current plan");
-  }
+  await ensureWorkspaceCreationBillingForUser(user, managedOrgs.length);
 
   const baseSlug = slugify(businessName) || `workspace-${randomUUID().slice(0, 8)}`;
   let slug = baseSlug;
@@ -571,14 +609,8 @@ export async function createWorkspaceFromSetupAction(input: CreateWorkspaceFromS
     throw new Error("Framework is required");
   }
 
-  const limitStatus = await getWorkspaceLimitStatus();
-  if (limitStatus.tier === "free") {
-    throw new Error("Pro plan required to create additional workspaces");
-  }
-
-  if (!limitStatus.canCreate) {
-    throw new Error("Organization limit reached for current plan");
-  }
+  const managedOrgs = await listManagedOrganizations(user.id);
+  await ensureWorkspaceCreationBillingForUser(user, managedOrgs.length);
 
   const baseSlug = slugify(businessName) || `workspace-${randomUUID().slice(0, 8)}`;
   let slug = baseSlug;
