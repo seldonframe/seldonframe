@@ -32,9 +32,11 @@ When limit is hit, the skill responds:
 
 Then offers:
 1. `Upgrade to Pro ($9/mo per workspace)`
-   - Attempts `POST https://app.seldonframe.com/api/stripe/checkout` with body:
-     - `{ "plan": "pro", "priceId": "price_1TMC7UJOtNZA0x7xNrl2VDVE" }`
-   - Shares checkout URL if returned
+   - Calls `POST https://app.seldonframe.com/api/stripe/checkout` with body `{ "quantity": 1 }`
+   - On success, responds with:
+     - `Here's your direct upgrade link for $9/month per additional workspace: [url]`
+     - `• Create unlimited additional workspaces`
+     - `• Full business OS (CRM, booking, intake, landing page, payments)`
    - Falls back to `SELDONFRAME_UPGRADE_URL` or `https://app.seldonframe.com/pricing`
 2. `List my workspaces`
    - Calls `GET https://app.seldonframe.com/api/v1/workspaces`

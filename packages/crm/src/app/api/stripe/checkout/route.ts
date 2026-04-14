@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import Stripe from "stripe";
 import { eq } from "drizzle-orm";
+import { getStripeClient } from "@seldonframe/payments";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
 
-const DEFAULT_PRO_WORKSPACE_PRICE_ID = "price_1TMC7UJOtNZA0x7xNrl2VDVE";
+const WORKSPACE_MONTHLY_PRICE_ID = "price_1TMC7UJOtNZA0x7xNrl2VDVE";
 
 function resolveUserIdFromSeldonApiKey(headers: Headers): string | null {
   const providedKey = headers.get("x-seldon-api-key")?.trim();
@@ -38,20 +38,12 @@ function resolveUserIdFromSeldonApiKey(headers: Headers): string | null {
   return match?.userId ?? null;
 }
 
-function getStripeClient() {
-  const secretKey = process.env.STRIPE_SECRET_KEY;
-
-  if (!secretKey) {
-    return null;
+function getRequestOrigin(req: NextRequest) {
+  try {
+    return new URL(req.url).origin;
+  } catch {
+    return process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
   }
-
-  return new Stripe(secretKey, {
-    apiVersion: "2025-08-27.basil",
-  });
-}
-
-function getAppUrl() {
-  return process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 }
 
 export async function POST(req: NextRequest) {
@@ -69,14 +61,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (!process.env.STRIPE_SECRET_KEY) {
+  const stripe = getStripeClient();
+  if (!stripe) {
     return NextResponse.json({ error: "Stripe is not configured" }, { status: 500 });
   }
 
-  const stripe = getStripeClient();
+  const body = (await req.json().catch(() => ({}))) as { quantity?: unknown };
+  const quantity = typeof body.quantity === "number" ? body.quantity : 1;
 
-  if (!stripe) {
-    return NextResponse.json({ error: "Stripe is not configured" }, { status: 500 });
+  if (!Number.isInteger(quantity) || quantity < 1) {
+    return NextResponse.json({ error: "quantity must be a positive integer" }, { status: 400 });
   }
 
   const [dbUser] = await db
@@ -93,53 +87,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { priceId, billingPeriod, plan } = (await req.json()) as {
-    priceId?: string;
-    billingPeriod?: string;
-    plan?: string;
-  };
-
-  let stripePriceId = (priceId ?? "").trim();
-
-  if (!stripePriceId && plan?.trim().toLowerCase() === "pro") {
-    stripePriceId = process.env.SELDONFRAME_PRO_PRICE_ID?.trim() || DEFAULT_PRO_WORKSPACE_PRICE_ID;
-  }
-
-  if (!stripePriceId && billingPeriod) {
-    const prices = await stripe.prices.list({
-      lookup_keys: [billingPeriod],
-      active: true,
-      limit: 1,
-    });
-
-    stripePriceId = prices.data[0]?.id || "";
-  }
-
-  if (!stripePriceId) {
-    return NextResponse.json({ error: "Price not found" }, { status: 400 });
-  }
-
   const orgId = apiKeyUserId ? dbUser.orgId : (await getOrgId()) ?? dbUser.orgId;
+  const origin = getRequestOrigin(req);
 
   const checkoutSession = await stripe.checkout.sessions.create({
     customer_email: dbUser.email ?? undefined,
     mode: "subscription",
     payment_method_types: ["card"],
-    line_items: [{ price: stripePriceId, quantity: 1 }],
-    success_url: `${getAppUrl()}/dashboard?upgraded=1`,
-    cancel_url: `${getAppUrl()}/pricing`,
+    line_items: [{ price: WORKSPACE_MONTHLY_PRICE_ID, quantity }],
+    success_url: `${origin}/dashboard?success=true&session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${origin}/pricing`,
     metadata: {
       userId,
       orgId: orgId ?? "",
-      plan: plan?.trim().toLowerCase() === "pro" ? "pro" : "",
-    },
-    subscription_data: {
-      metadata: {
-        userId,
-        orgId: orgId ?? "",
-        plan: plan?.trim().toLowerCase() === "pro" ? "pro" : "",
-      },
-      trial_period_days: 14,
+      type: "workspace_addon",
     },
   });
 

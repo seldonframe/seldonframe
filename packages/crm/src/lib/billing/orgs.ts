@@ -65,6 +65,9 @@ function hasActiveWorkspaceSubscription(status: string | null | undefined) {
   return status === "active" || status === "trialing";
 }
 
+const WORKSPACE_UPGRADE_REQUIRED_MESSAGE =
+  "You've used your free workspace. Each additional workspace is $9/month. Please upgrade to continue.";
+
 async function ensureWorkspaceCreationBillingForUser(user: Awaited<ReturnType<typeof getBillingUserById>>, existingWorkspaces: number) {
   if (existingWorkspaces === 0) {
     return;
@@ -74,12 +77,12 @@ async function ensureWorkspaceCreationBillingForUser(user: Awaited<ReturnType<ty
   const stripeSubscriptionId = orgSubscription.stripeSubscriptionId ?? null;
 
   if (!stripeSubscriptionId || !hasActiveWorkspaceSubscription(orgSubscription.status ?? null)) {
-    throw new Error("Pro plan required to create additional workspaces");
+    throw new Error(WORKSPACE_UPGRADE_REQUIRED_MESSAGE);
   }
 
   const secretKey = process.env.STRIPE_SECRET_KEY?.trim();
   if (!secretKey) {
-    throw new Error("Stripe is not configured for additional workspace billing");
+    throw new Error(WORKSPACE_UPGRADE_REQUIRED_MESSAGE);
   }
 
   const stripe = new Stripe(secretKey, {
@@ -88,12 +91,12 @@ async function ensureWorkspaceCreationBillingForUser(user: Awaited<ReturnType<ty
 
   const subscription = await stripe.subscriptions.retrieve(stripeSubscriptionId);
   if (!hasActiveWorkspaceSubscription(subscription.status)) {
-    throw new Error("Pro plan required to create additional workspaces");
+    throw new Error(WORKSPACE_UPGRADE_REQUIRED_MESSAGE);
   }
 
   const item = subscription.items.data[0];
   if (!item?.id) {
-    throw new Error("Could not update workspace subscription quantity");
+    throw new Error(WORKSPACE_UPGRADE_REQUIRED_MESSAGE);
   }
 
   const targetQuantity = Math.max(1, existingWorkspaces);

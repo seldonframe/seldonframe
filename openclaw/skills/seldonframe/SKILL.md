@@ -39,9 +39,12 @@ Pricing model:
      - Reply with: `You've used your free workspace. Each additional workspace is $9/month.`
      - Then offer these options:
        1. `Upgrade to Pro ($9/mo per workspace)`
-          - Try to generate checkout link by calling `POST https://app.seldonframe.com/api/stripe/checkout` with body `{ "plan": "pro", "priceId": "price_1TMC7UJOtNZA0x7xNrl2VDVE" }`.
+          - Call `POST https://app.seldonframe.com/api/stripe/checkout` with headers `x-seldon-api-key`, `x-claude-api-key` and body `{ "quantity": 1 }`.
           - Include `Cookie: {{SELDONFRAME_SESSION_COOKIE}}` when available.
-          - If checkout returns `{ url }`, share it as the upgrade link.
+          - If checkout returns `{ url }`, reply with:
+            - `Here's your direct upgrade link for $9/month per additional workspace: [url]`
+            - `• Create unlimited additional workspaces`
+            - `• Full business OS (CRM, booking, intake, landing page, payments)`
           - If checkout cannot be created, share `{{SELDONFRAME_UPGRADE_URL}}` if set; otherwise share `https://app.seldonframe.com/pricing`.
        2. `List my workspaces`
           - Call `GET https://app.seldonframe.com/api/v1/workspaces` with `x-seldon-api-key` (+ BYOK header).

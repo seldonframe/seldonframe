@@ -211,7 +211,10 @@ export async function POST(request: Request) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to create workspace from compiled soul.";
     const loweredMessage = message.toLowerCase();
-    const isPlanRequired = loweredMessage.includes("pro plan required");
+    const isPlanRequired =
+      loweredMessage.includes("pro plan required") ||
+      loweredMessage.includes("used your free workspace") ||
+      loweredMessage.includes("additional workspace is $9/month");
     const isWorkspaceLimit = loweredMessage.includes("organization limit reached") || loweredMessage.includes("workspace limit");
     const status = isPlanRequired || isWorkspaceLimit ? 403 : 500;
     const code = isPlanRequired
