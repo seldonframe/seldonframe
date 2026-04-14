@@ -210,10 +210,19 @@ export async function POST(request: Request) {
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to create workspace from compiled soul.";
+    const loweredMessage = message.toLowerCase();
+    const isPlanRequired = loweredMessage.includes("pro plan required");
+    const isWorkspaceLimit = loweredMessage.includes("organization limit reached") || loweredMessage.includes("workspace limit");
+    const status = isPlanRequired || isWorkspaceLimit ? 403 : 500;
+    const code = isPlanRequired
+      ? "plan_required"
+      : isWorkspaceLimit
+        ? "workspace_limit_reached"
+        : "workspace_create_failed";
 
     logWorkspaceCompile("workspace_compile_workspace_create_failed", {
       userId,
-      status: 500,
+      status,
       durationMs: Date.now() - startedAt,
       error: message,
     });
@@ -221,10 +230,10 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         status: "error",
-        code: "workspace_create_failed",
+        code,
         error: message,
       },
-      { status: 500 }
+      { status }
     );
   }
 }

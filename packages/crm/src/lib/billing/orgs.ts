@@ -469,8 +469,11 @@ export async function createWorkspaceFromSoulAction(input: CreateWorkspaceFromSo
     throw new Error("Business name is required");
   }
 
+  const managedOrgs = await listManagedOrganizations(user.id);
+  const isFirstWorkspace = managedOrgs.length === 0;
+
   const limitStatus = await getWorkspaceLimitStatusForUser(user.id);
-  if (limitStatus.tier === "free") {
+  if (!isFirstWorkspace && limitStatus.tier === "free") {
     throw new Error("Pro plan required to create additional workspaces");
   }
 
