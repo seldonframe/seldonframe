@@ -2,9 +2,10 @@
 
 import { randomUUID } from "node:crypto";
 import bcrypt from "bcryptjs";
-import { and, eq, inArray, or, sql } from "drizzle-orm";
+import { and, eq, or, sql } from "drizzle-orm";
 import Stripe from "stripe";
 import { cookies } from "next/headers";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { db } from "@/db";
@@ -119,6 +120,44 @@ async function ensureWorkspaceCreationBillingForUser(user: Awaited<ReturnType<ty
   }
 }
 
+function buildMembershipOrgCondition(membershipOrgIds: string[]) {
+  if (membershipOrgIds.length === 0) {
+    return sql`false`;
+  }
+
+  if (membershipOrgIds.length === 1) {
+    return eq(organizations.id, membershipOrgIds[0]);
+  }
+
+  return or(...membershipOrgIds.map((orgId) => eq(organizations.id, orgId))) ?? sql`false`;
+}
+
+async function logOrgListDiag(tag: string, membershipIds: unknown, extra: Record<string, unknown>) {
+  let requestPath = "unknown";
+  let host = "unknown";
+
+  try {
+    const headerStore = await headers();
+    requestPath = headerStore.get("x-pathname") ?? headerStore.get("next-url") ?? "unknown";
+    host = headerStore.get("host") ?? "unknown";
+  } catch {
+    requestPath = "unknown";
+    host = "unknown";
+  }
+
+  console.error("[ORG-LIST-DIAG]", {
+    tag,
+    requestPath,
+    host,
+    pid: process.pid,
+    membershipIdsRaw: membershipIds,
+    isArray: Array.isArray(membershipIds),
+    typeofValue: typeof membershipIds,
+    length: Array.isArray(membershipIds) ? membershipIds.length : null,
+    ...extra,
+  });
+}
+
 export async function getWorkspaceLimitStatus() {
   const user = await requireBillingUser();
   const plan = getPlan(user.planId ?? "");
@@ -171,6 +210,11 @@ export async function listManagedOrganizations(userId?: string) {
 
   const membershipOrgIds = membershipRows.map((row) => row.orgId);
 
+  await logOrgListDiag("listManagedOrganizations", membershipOrgIds, {
+    userId: user.id,
+    userOrgId: user.orgId,
+  });
+
   const rows = await db
     .select({
       id: organizations.id,
@@ -187,8 +231,7 @@ export async function listManagedOrganizations(userId?: string) {
         eq(organizations.parentUserId, user.id),
         eq(organizations.ownerId, user.id),
         eq(organizations.id, user.orgId),
-        // Use inArray so UUID list is bound as an array parameter instead of scalar any(($4)).
-        membershipOrgIds.length > 0 ? inArray(organizations.id, membershipOrgIds) : sql`false`
+        buildMembershipOrgCondition(membershipOrgIds)
       )
     );
 
@@ -230,6 +273,12 @@ export async function listManagedOrganizationsForUser(userId: string) {
 
   const membershipOrgIds = membershipRows.map((row) => row.orgId);
 
+  await logOrgListDiag("listManagedOrganizationsForUser", membershipOrgIds, {
+    userId: user.id,
+    userOrgId: user.orgId,
+    inputUserId: userId,
+  });
+
   const rows = await db
     .select({
       id: organizations.id,
@@ -246,8 +295,7 @@ export async function listManagedOrganizationsForUser(userId: string) {
         eq(organizations.parentUserId, user.id),
         eq(organizations.ownerId, user.id),
         eq(organizations.id, user.orgId),
-        // Use inArray so UUID list is bound as an array parameter instead of scalar any(($4)).
-        membershipOrgIds.length > 0 ? inArray(organizations.id, membershipOrgIds) : sql`false`
+        buildMembershipOrgCondition(membershipOrgIds)
       )
     );
 
@@ -566,6 +614,8 @@ export async function createWorkspaceFromSoulAction(input: CreateWorkspaceFromSo
   if (!org) {
     throw new Error("Could not create workspace");
   }
+
+  console.info(`Workspace record created successfully with id: ${org.id}, slug: ${org.slug}`);
 
   await db.insert(orgMembers).values({
     orgId: org.id,

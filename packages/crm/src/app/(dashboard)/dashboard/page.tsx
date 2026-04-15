@@ -188,8 +188,19 @@ export default async function DashboardPage({
     : [];
 
   const membershipOrgIds = membershipRows.map((row) => row.orgId);
-
-  const workspaceRows = user?.id
+  console.error("[ORG-LIST-DIAG]", {
+    tag: "dashboard.workspaceRows",
+    requestPath: "/dashboard",
+    host: "unknown",
+    pid: process.pid,
+    membershipIdsRaw: membershipOrgIds,
+    isArray: Array.isArray(membershipOrgIds),
+    typeofValue: typeof membershipOrgIds,
+    length: Array.isArray(membershipOrgIds) ? membershipOrgIds.length : null,
+    userId: user?.id ?? null,
+    userOrgId: user?.orgId ?? null,
+  });
+  const directWorkspaceRows = user?.id
     ? await db
         .select({
           id: organizations.id,
@@ -204,11 +215,33 @@ export default async function DashboardPage({
           or(
             eq(organizations.ownerId, user.id),
             eq(organizations.parentUserId, user.id),
-            eq(organizations.id, user.orgId),
-            membershipOrgIds.length > 0 ? sql`${organizations.id} = any(${membershipOrgIds})` : sql`false`
+            eq(organizations.id, user.orgId)
           )
         )
     : [];
+
+  const membershipWorkspaceRows = user?.id
+    ? (
+        await Promise.all(
+          membershipOrgIds.map((membershipOrgId) =>
+            db
+              .select({
+                id: organizations.id,
+                name: organizations.name,
+                soulId: organizations.soulId,
+                slug: organizations.slug,
+                ownerId: organizations.ownerId,
+                parentUserId: organizations.parentUserId,
+              })
+              .from(organizations)
+              .where(eq(organizations.id, membershipOrgId))
+              .limit(1)
+          )
+        )
+      ).flat()
+    : [];
+
+  const workspaceRows = Array.from(new Map([...directWorkspaceRows, ...membershipWorkspaceRows].map((row) => [row.id, row])).values());
 
   const workspaceStats = await Promise.all(
     workspaceRows.map(async (workspace) => {
