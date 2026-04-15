@@ -54,6 +54,13 @@ export const authConfig = {
   },
   providers: authProviders,
   callbacks: {
+    authorized: (params) => {
+      if (!params || !params.request) {
+        return true;
+      }
+
+      return true;
+    },
     jwt: async ({ token, user, account }) => {
       try {
         if (user) {
