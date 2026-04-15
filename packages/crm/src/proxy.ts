@@ -16,6 +16,12 @@ function normalizeHost(host: string | null) {
   return host.trim().toLowerCase().replace(/:\d+$/, "");
 }
 
+function getRequestHost(request: NextRequest) {
+  const forwardedHost = request.headers.get("x-forwarded-host");
+  const candidate = forwardedHost?.split(",")[0]?.trim() || request.headers.get("host");
+  return normalizeHost(candidate);
+}
+
 function resolveWorkspaceSlugFromHost(host: string) {
   const workspaceBaseDomain = (process.env.WORKSPACE_BASE_DOMAIN?.trim().toLowerCase() || "seldonframe.com")
     .replace(/^\.+/, "")
@@ -130,7 +136,7 @@ function isPublicPath(pathname: string) {
 
 const authProxy = auth(async (request) => {
   const pathname = request.nextUrl.pathname;
-  const host = normalizeHost(request.headers.get("host"));
+  const host = getRequestHost(request);
   const appHost = isAppHost(host);
   const isMarketingHost = marketingHosts.has(host);
 
@@ -244,7 +250,7 @@ const authProxy = auth(async (request) => {
 
 export async function proxy(request: NextRequest, event: NextFetchEvent) {
   const pathname = request.nextUrl.pathname;
-  const host = normalizeHost(request.headers.get("host"));
+  const host = getRequestHost(request);
   const appHost = isAppHost(host);
   const hostWorkspaceSlug = resolveWorkspaceSlugFromHost(host);
 
