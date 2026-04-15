@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextFetchEvent, NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { auth } from "@/auth";
 import { db } from "@/db";
@@ -242,7 +242,7 @@ const authProxy = auth(async (request) => {
   });
 });
 
-export async function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest, event: NextFetchEvent) {
   const pathname = request.nextUrl.pathname;
   const host = normalizeHost(request.headers.get("host"));
   const appHost = isAppHost(host);
@@ -310,7 +310,10 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  return (authProxy as (req: NextRequest) => Promise<Response | NextResponse>)(request);
+  return (authProxy as unknown as (req: NextRequest, event: NextFetchEvent) => Promise<Response | NextResponse>)(
+    request,
+    event
+  );
 }
 
 export const config = {
