@@ -310,10 +310,24 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
     return NextResponse.next();
   }
 
-  return (authProxy as unknown as (req: NextRequest, event: NextFetchEvent) => Promise<Response | NextResponse>)(
-    request,
-    event
-  );
+  try {
+    return await (authProxy as unknown as (req: NextRequest, event: NextFetchEvent) => Promise<Response | NextResponse>)(
+      request,
+      event
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message.includes("Cannot destructure property 'auth'")) {
+      console.error("[proxy] authProxy fallback", {
+        host,
+        pathname,
+        appHost,
+      });
+      return NextResponse.next();
+    }
+
+    throw error;
+  }
 }
 
 export const config = {
