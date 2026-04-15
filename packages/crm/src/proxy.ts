@@ -16,6 +16,82 @@ function normalizeHost(host: string | null) {
   return host.trim().toLowerCase().replace(/:\d+$/, "");
 }
 
+function resolveWorkspaceSlugFromHost(host: string) {
+  const workspaceBaseDomain = (process.env.WORKSPACE_BASE_DOMAIN?.trim().toLowerCase() || "seldonframe.com")
+    .replace(/^\.+/, "")
+    .replace(/\.+$/, "");
+
+  if (!workspaceBaseDomain || host === workspaceBaseDomain) {
+    return null;
+  }
+
+  const suffix = `.${workspaceBaseDomain}`;
+  if (!host.endsWith(suffix)) {
+    return null;
+  }
+
+  const subdomain = host.slice(0, -suffix.length);
+  if (!subdomain || subdomain.includes(".")) {
+    return null;
+  }
+
+  if (subdomain === "app" || subdomain === "www") {
+    return null;
+  }
+
+  return subdomain;
+}
+
+function resolveWorkspaceRewritePath(
+  pathname: string,
+  slug: string,
+  defaults?: {
+    landingSlug?: string;
+    bookingSlug?: string;
+    formSlug?: string;
+  }
+) {
+  const defaultLandingSlug = defaults?.landingSlug || "home";
+  const defaultBookingSlug = defaults?.bookingSlug || "default";
+  const defaultFormSlug = defaults?.formSlug || "intake";
+  const segments = pathname.split("/").filter(Boolean);
+
+  if (pathname === "/" || pathname === "") {
+    return `/s/${slug}/${defaultLandingSlug}`;
+  }
+
+  if (pathname === "/book") {
+    return `/book/${slug}/${defaultBookingSlug}`;
+  }
+
+  if (pathname === "/forms") {
+    return `/forms/${slug}/${defaultFormSlug}`;
+  }
+
+  if (pathname === "/l" || pathname === "/s") {
+    return `/s/${slug}/${defaultLandingSlug}`;
+  }
+
+  if (pathname.startsWith("/book/") && segments.length === 2) {
+    return `/book/${slug}/${segments[1] || defaultBookingSlug}`;
+  }
+
+  if (pathname.startsWith("/forms/") && segments.length === 2) {
+    return `/forms/${slug}/${segments[1] || defaultFormSlug}`;
+  }
+
+  if (pathname.startsWith("/l/") && segments.length === 2) {
+    return `/s/${slug}/${segments[1] || defaultLandingSlug}`;
+  }
+
+  if (!pathname.startsWith("/book/") && !pathname.startsWith("/forms/") && !pathname.startsWith("/api/")) {
+    const normalizedPath = pathname.replace(/^\/+/, "");
+    return normalizedPath ? `/s/${slug}/${normalizedPath}` : `/s/${slug}/${defaultLandingSlug}`;
+  }
+
+  return pathname;
+}
+
 function isAppHost(host: string) {
   return defaultAppHosts.has(host) || host.endsWith(".vercel.app");
 }
@@ -170,6 +246,7 @@ export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const host = normalizeHost(request.headers.get("host"));
   const appHost = isAppHost(host);
+  const hostWorkspaceSlug = resolveWorkspaceSlugFromHost(host);
 
   if (
     host &&
@@ -193,37 +270,15 @@ export async function proxy(request: NextRequest) {
           };
         } | null;
       };
-      const domainOrg = domainPayload?.org;
+      const domainOrg = domainPayload?.org ?? (hostWorkspaceSlug
+        ? {
+            id: "",
+            slug: hostWorkspaceSlug,
+          }
+        : null);
 
       if (domainOrg?.slug) {
-        const defaultLandingSlug = domainOrg.defaults?.landingSlug || "home";
-        const defaultBookingSlug = domainOrg.defaults?.bookingSlug || "default";
-        const defaultFormSlug = domainOrg.defaults?.formSlug || "intake";
-        let rewritePath = pathname;
-        const segments = pathname.split("/").filter(Boolean);
-
-        if (pathname === "/" || pathname === "") {
-          rewritePath = `/s/${domainOrg.slug}/${defaultLandingSlug}`;
-        } else if (pathname === "/book") {
-          rewritePath = `/book/${domainOrg.slug}/${defaultBookingSlug}`;
-        } else if (pathname === "/forms") {
-          rewritePath = `/forms/${domainOrg.slug}/${defaultFormSlug}`;
-        } else if (pathname === "/l") {
-          rewritePath = `/s/${domainOrg.slug}/${defaultLandingSlug}`;
-        } else if (pathname === "/s") {
-          rewritePath = `/s/${domainOrg.slug}/${defaultLandingSlug}`;
-        } else if (pathname.startsWith("/book/") && segments.length === 2) {
-          rewritePath = `/book/${domainOrg.slug}/${segments[1] || defaultBookingSlug}`;
-        } else if (pathname.startsWith("/forms/") && segments.length === 2) {
-          rewritePath = `/forms/${domainOrg.slug}/${segments[1] || defaultFormSlug}`;
-        } else if (pathname.startsWith("/l/") && segments.length === 2) {
-          rewritePath = `/s/${domainOrg.slug}/${segments[1] || defaultLandingSlug}`;
-        } else if (!pathname.startsWith("/book/") && !pathname.startsWith("/forms/") && !pathname.startsWith("/api/")) {
-          const normalizedPath = pathname.replace(/^\/+/, "");
-          rewritePath = normalizedPath
-            ? `/s/${domainOrg.slug}/${normalizedPath}`
-            : `/s/${domainOrg.slug}/${defaultLandingSlug}`;
-        }
+        const rewritePath = resolveWorkspaceRewritePath(pathname, domainOrg.slug, domainOrg.defaults);
 
         if (rewritePath !== pathname) {
           const rewriteUrl = request.nextUrl.clone();
@@ -234,6 +289,17 @@ export async function proxy(request: NextRequest) {
         return NextResponse.next();
       }
     } catch {
+      if (hostWorkspaceSlug) {
+        const rewritePath = resolveWorkspaceRewritePath(pathname, hostWorkspaceSlug);
+        if (rewritePath !== pathname) {
+          const rewriteUrl = request.nextUrl.clone();
+          rewriteUrl.pathname = rewritePath;
+          return NextResponse.rewrite(rewriteUrl);
+        }
+
+        return NextResponse.next();
+      }
+
       return NextResponse.next();
     }
   }
