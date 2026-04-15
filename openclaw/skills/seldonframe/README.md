@@ -74,7 +74,7 @@ Use this in OpenClaw:
 `I run a niche coaching business for software engineers transitioning into AI roles. I want a booking flow, intake form, and landing page.`
 
 Expected behavior:
-- If backend returns `ready`: assistant shares `🚀 Your new business OS is ready! Open it here: https://[slug].seldonframe.app`
+- If backend returns `ready`: assistant shares `🚀 Your new business OS is ready!` and uses `subdomain_url` exactly as returned by the API (current production: `https://[slug].seldonframe.com`)
 - If backend returns `split_required`: assistant asks which part to start with first
 - If backend returns `403` with `plan_required` or `workspace_limit_reached`: assistant offers upgrade/list/delete/use-existing options
 - If `429`: rate-limit message

@@ -33,8 +33,14 @@ Pricing model:
 5. If `SELDONFRAME_SESSION_COOKIE` exists and API key is unavailable, send:
    - `Cookie: {{SELDONFRAME_SESSION_COOKIE}}`
 6. Handle response:
-   - `ready`: reply exactly with
-     - `🚀 Your new business OS is ready! Open it here: https://[slug].seldonframe.app`
+   - `ready`: use `subdomain_url` and `dashboard_url` from the API response exactly as returned (do not rewrite the hostname), then reply with:
+    - `🚀 Your new business OS is ready!`
+    - `Subdomain: {{subdomain_url}}`
+    - `(Current production uses .seldonframe.com workspace hosts.)`
+    - `(It may take 2–10 minutes for Vercel to fully activate the subdomain. Just refresh the page if it doesn't load immediately.)`
+    - `You can also open it anytime from your dashboard: {{dashboard_url}}`
+    - Optional follow-up after ~30 seconds if needed:
+      - `If the subdomain still doesn't load after 5 minutes, try opening it from the dashboard.`
    - `split_required`: explain briefly and ask which side to build first.
    - `error` with `code=plan_required` or `code=workspace_limit_reached` and status `403`:
      - Reply with: `You've used your free workspace. Each additional workspace is $9/month.`
