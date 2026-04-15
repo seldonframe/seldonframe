@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { auth } from "@/auth";
 import { db } from "@/db";
@@ -52,76 +52,11 @@ function isPublicPath(pathname: string) {
   return false;
 }
 
-export const proxy = auth(async (request) => {
+const authProxy = auth(async (request) => {
   const pathname = request.nextUrl.pathname;
   const host = normalizeHost(request.headers.get("host"));
   const appHost = isAppHost(host);
   const isMarketingHost = marketingHosts.has(host);
-
-  if (
-    host &&
-    !appHost &&
-    !pathname.startsWith("/_next") &&
-    !pathname.startsWith("/api/")
-  ) {
-    try {
-      const domainLookupUrl = new URL("/api/v1/public/domain", request.url);
-      domainLookupUrl.searchParams.set("host", host);
-
-      const domainResponse = await fetch(domainLookupUrl, { cache: "no-store" });
-      const domainPayload = (await domainResponse.json()) as {
-        org?: {
-          id: string;
-          slug: string;
-          defaults?: {
-            landingSlug?: string;
-            bookingSlug?: string;
-            formSlug?: string;
-          };
-        } | null;
-      };
-      const domainOrg = domainPayload?.org;
-
-      if (domainOrg?.slug) {
-        const defaultLandingSlug = domainOrg.defaults?.landingSlug || "home";
-        const defaultBookingSlug = domainOrg.defaults?.bookingSlug || "default";
-        const defaultFormSlug = domainOrg.defaults?.formSlug || "intake";
-        let rewritePath = pathname;
-        const segments = pathname.split("/").filter(Boolean);
-
-        if (pathname === "/" || pathname === "") {
-          rewritePath = `/s/${domainOrg.slug}/${defaultLandingSlug}`;
-        } else if (pathname === "/book") {
-          rewritePath = `/book/${domainOrg.slug}/${defaultBookingSlug}`;
-        } else if (pathname === "/forms") {
-          rewritePath = `/forms/${domainOrg.slug}/${defaultFormSlug}`;
-        } else if (pathname === "/l") {
-          rewritePath = `/s/${domainOrg.slug}/${defaultLandingSlug}`;
-        } else if (pathname === "/s") {
-          rewritePath = `/s/${domainOrg.slug}/${defaultLandingSlug}`;
-        } else if (pathname.startsWith("/book/") && segments.length === 2) {
-          rewritePath = `/book/${domainOrg.slug}/${segments[1] || defaultBookingSlug}`;
-        } else if (pathname.startsWith("/forms/") && segments.length === 2) {
-          rewritePath = `/forms/${domainOrg.slug}/${segments[1] || defaultFormSlug}`;
-        } else if (pathname.startsWith("/l/") && segments.length === 2) {
-          rewritePath = `/s/${domainOrg.slug}/${segments[1] || defaultLandingSlug}`;
-        } else if (!pathname.startsWith("/book/") && !pathname.startsWith("/forms/") && !pathname.startsWith("/api/")) {
-          const normalizedPath = pathname.replace(/^\/+/, "");
-          rewritePath = normalizedPath
-            ? `/s/${domainOrg.slug}/${normalizedPath}`
-            : `/s/${domainOrg.slug}/${defaultLandingSlug}`;
-        }
-
-        if (rewritePath !== pathname) {
-          const rewriteUrl = request.nextUrl.clone();
-          rewriteUrl.pathname = rewritePath;
-          return NextResponse.rewrite(rewriteUrl);
-        }
-      }
-    } catch {
-      // fall through to normal auth and routing behavior
-    }
-  }
 
   const isAuthenticated = Boolean(request.auth?.user);
   const user = request.auth?.user as {
@@ -230,6 +165,81 @@ export const proxy = auth(async (request) => {
     },
   });
 });
+
+export async function proxy(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+  const host = normalizeHost(request.headers.get("host"));
+  const appHost = isAppHost(host);
+
+  if (
+    host &&
+    !appHost &&
+    !pathname.startsWith("/_next") &&
+    !pathname.startsWith("/api/")
+  ) {
+    try {
+      const domainLookupUrl = new URL("/api/v1/public/domain", request.url);
+      domainLookupUrl.searchParams.set("host", host);
+
+      const domainResponse = await fetch(domainLookupUrl, { cache: "no-store" });
+      const domainPayload = (await domainResponse.json()) as {
+        org?: {
+          id: string;
+          slug: string;
+          defaults?: {
+            landingSlug?: string;
+            bookingSlug?: string;
+            formSlug?: string;
+          };
+        } | null;
+      };
+      const domainOrg = domainPayload?.org;
+
+      if (domainOrg?.slug) {
+        const defaultLandingSlug = domainOrg.defaults?.landingSlug || "home";
+        const defaultBookingSlug = domainOrg.defaults?.bookingSlug || "default";
+        const defaultFormSlug = domainOrg.defaults?.formSlug || "intake";
+        let rewritePath = pathname;
+        const segments = pathname.split("/").filter(Boolean);
+
+        if (pathname === "/" || pathname === "") {
+          rewritePath = `/s/${domainOrg.slug}/${defaultLandingSlug}`;
+        } else if (pathname === "/book") {
+          rewritePath = `/book/${domainOrg.slug}/${defaultBookingSlug}`;
+        } else if (pathname === "/forms") {
+          rewritePath = `/forms/${domainOrg.slug}/${defaultFormSlug}`;
+        } else if (pathname === "/l") {
+          rewritePath = `/s/${domainOrg.slug}/${defaultLandingSlug}`;
+        } else if (pathname === "/s") {
+          rewritePath = `/s/${domainOrg.slug}/${defaultLandingSlug}`;
+        } else if (pathname.startsWith("/book/") && segments.length === 2) {
+          rewritePath = `/book/${domainOrg.slug}/${segments[1] || defaultBookingSlug}`;
+        } else if (pathname.startsWith("/forms/") && segments.length === 2) {
+          rewritePath = `/forms/${domainOrg.slug}/${segments[1] || defaultFormSlug}`;
+        } else if (pathname.startsWith("/l/") && segments.length === 2) {
+          rewritePath = `/s/${domainOrg.slug}/${segments[1] || defaultLandingSlug}`;
+        } else if (!pathname.startsWith("/book/") && !pathname.startsWith("/forms/") && !pathname.startsWith("/api/")) {
+          const normalizedPath = pathname.replace(/^\/+/, "");
+          rewritePath = normalizedPath
+            ? `/s/${domainOrg.slug}/${normalizedPath}`
+            : `/s/${domainOrg.slug}/${defaultLandingSlug}`;
+        }
+
+        if (rewritePath !== pathname) {
+          const rewriteUrl = request.nextUrl.clone();
+          rewriteUrl.pathname = rewritePath;
+          return NextResponse.rewrite(rewriteUrl);
+        }
+
+        return NextResponse.next();
+      }
+    } catch {
+      return NextResponse.next();
+    }
+  }
+
+  return (authProxy as (req: NextRequest) => Promise<Response | NextResponse>)(request);
+}
 
 export const config = {
   matcher: [
