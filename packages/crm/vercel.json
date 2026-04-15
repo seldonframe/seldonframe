@@ -6,6 +6,10 @@
     {
       "path": "/api/cron/automations",
       "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/cron/brain-compile",
+      "schedule": "0 2 * * *"
     }
   ]
 }

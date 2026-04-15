@@ -179,11 +179,16 @@ export async function POST(request: Request) {
 
     const workspaceBaseDomain = process.env.WORKSPACE_BASE_DOMAIN?.trim() || "seldonframe.app";
     const subdomain = `${workspace.slug}.${workspaceBaseDomain}`;
+    const subdomainUrl = `https://${subdomain}`;
+    const dashboardUrl = `https://app.seldonframe.com/dashboard?workspace=${workspace.orgId}`;
+
+    console.info(`Subdomain assigned: ${subdomain}`);
 
     logWorkspaceCompile("workspace_compile_ready", {
       userId,
       orgId: workspace.orgId,
       slug: workspace.slug,
+      subdomain,
       audienceType: compileResult.routing.audience_type,
       baseFramework: compileResult.routing.base_framework,
       attempts: compileResult.attempts,
@@ -200,8 +205,10 @@ export async function POST(request: Request) {
           name: workspace.name,
           slug: workspace.slug,
           subdomain,
-          url: `https://${subdomain}`,
+          url: subdomainUrl,
         },
+        subdomain_url: subdomainUrl,
+        dashboard_url: dashboardUrl,
         routing: compileResult.routing,
         attempts: compileResult.attempts,
         pagesUsed: compileResult.pagesUsed,
@@ -229,6 +236,14 @@ export async function POST(request: Request) {
       durationMs: Date.now() - startedAt,
       error: message,
     });
+
+    if (loweredMessage.includes("dns") || loweredMessage.includes("domain") || loweredMessage.includes("vercel") || loweredMessage.includes("nxdomain")) {
+      logWorkspaceCompile("workspace_compile_domain_routing_error", {
+        userId,
+        status,
+        error: message,
+      });
+    }
 
     return NextResponse.json(
       {

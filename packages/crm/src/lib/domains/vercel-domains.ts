@@ -1,3 +1,5 @@
+import { connectCustomDomain, VercelDomainError } from "@/lib/vercel";
+
 const VERCEL_TOKEN = process.env.VERCEL_API_TOKEN?.trim() || process.env.VERCEL_TOKEN?.trim();
 const VERCEL_PROJECT_ID = process.env.VERCEL_PROJECT_ID?.trim();
 const VERCEL_TEAM_ID = process.env.VERCEL_TEAM_ID?.trim();
@@ -62,15 +64,36 @@ async function requestVercel(url: string, init: RequestInit, logLabel: string): 
 export async function addDomain(domain: string) {
   const normalizedDomain = domain.trim().toLowerCase();
 
-  return requestVercel(
-    getVercelProjectUrl("/domains"),
-    {
-    method: "POST",
-    headers: getVercelAuthHeaders(true),
-    body: JSON.stringify({ name: normalizedDomain }),
-    },
-    "Vercel domain API response:"
-  );
+  try {
+    const connected = await connectCustomDomain(VERCEL_PROJECT_ID ?? "workspace", normalizedDomain);
+
+    return {
+      ok: true,
+      status: 200,
+      data: {
+        name: connected.domain,
+        status: connected.status,
+        verification: connected.verification,
+        message: connected.message,
+      },
+    } satisfies VercelApiResult;
+  } catch (error) {
+    if (error instanceof VercelDomainError) {
+      return {
+        ok: false,
+        status: error.status,
+        data: error.data,
+      } satisfies VercelApiResult;
+    }
+
+    return {
+      ok: false,
+      status: 500,
+      data: {
+        error: error instanceof Error ? error.message : "Vercel domain error",
+      },
+    } satisfies VercelApiResult;
+  }
 }
 
 export async function removeDomain(domain: string) {

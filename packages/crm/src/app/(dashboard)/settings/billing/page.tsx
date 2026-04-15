@@ -59,7 +59,7 @@ export default async function BillingSettingsPage() {
   const trialEndsAt = subscription.trialEndsAt ?? null;
   const status = subscription.status ?? "trialing";
   const billingPeriod = subscription.stripePriceId?.includes("year") ? "yearly" : "monthly";
-  const managedOrgs = features.maxWorkspaces > 1 ? await listManagedOrganizations() : [];
+  const managedOrgs = features.maxWorkspaces > 1 ? await listManagedOrganizations(session.user.id) : [];
   const usageStats = activeOrgId ? await getSeldonUsageStats({ orgId: activeOrgId, userId: session.user.id }) : null;
 
   return (

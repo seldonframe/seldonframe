@@ -8,11 +8,13 @@ import { getCurrentUser, getOrgId } from "@/lib/auth/helpers";
 import { canSeldonIt, resolvePlanFromPlanId } from "@/lib/billing/entitlements";
 import { assertWritable } from "@/lib/demo/server";
 import { getAIClient, getSeldonUsageStats, recordSeldonUsage } from "@/lib/ai/client";
+import { writeEvent } from "@/lib/brain";
 import { createLandingPageForSeldonAction } from "@/lib/landing/actions";
 import { generatePuckPage } from "@/lib/puck/generate-page";
 import { querySoulWiki } from "@/lib/soul-wiki/query";
 import { fileSeldonOutputToSoul } from "@/lib/soul-wiki/output-filing";
 import { installBlock, updateBlock, type InstallResult, type SeldonBlockType, type UpdateResult } from "@/lib/seldon/block-installer";
+import { getPortalSessionForOrg } from "@/lib/portal/auth";
 import type { OrgSoul } from "@/lib/soul/types";
 import type { OrgTheme } from "@/lib/theme/types";
 import type { OrganizationIntegrations } from "@/db/schema";
@@ -547,31 +549,64 @@ export async function disableSeldonBlockAction(formData: FormData) {
 export async function runSeldonItAction(_prev: SeldonRunState, formData: FormData): Promise<SeldonRunState> {
   assertWritable();
 
-  const user = await getCurrentUser();
-  const orgId = await getOrgId();
+  const builderMode = String(formData.get("builder_mode") ?? "") === "true";
+  const endClientMode = String(formData.get("end_client_mode") ?? "") === "true";
+  const orgSlugFromForm = String(formData.get("orgSlug") ?? "").trim();
 
-  if (!user?.id || !orgId) {
+  let user = await getCurrentUser();
+  let orgId = await getOrgId();
+  let endClientSession: Awaited<ReturnType<typeof getPortalSessionForOrg>> | null = null;
+
+  if (endClientMode) {
+    endClientSession = await getPortalSessionForOrg(orgSlugFromForm);
+    if (!endClientSession) {
+      return { ok: false, error: "Unauthorized" };
+    }
+
+    orgId = endClientSession.orgId;
+    user = null;
+  }
+
+  if (!orgId || (!endClientMode && !user?.id)) {
     return { ok: false, error: "Unauthorized" };
   }
 
-  const plan = resolvePlanFromPlanId(user.planId ?? null);
-  if (!canSeldonIt(plan)) {
+  const plan = resolvePlanFromPlanId(user?.planId ?? null);
+  if (!endClientMode && !canSeldonIt(plan)) {
     return {
       ok: false,
       error: "Upgrade to Cloud Pro to Seldon custom blocks.",
     };
   }
 
-  const description = String(formData.get("description") ?? "").trim();
+  const rawDescription = String(formData.get("description") ?? "").trim();
+  const description = endClientMode && endClientSession
+    ? `[END_CLIENT_MODE]\nclient_id: ${endClientSession.contact.id}\n${rawDescription}`
+    : builderMode
+      ? `[BUILDER_MODE]\n${rawDescription}`
+      : rawDescription;
   const sessionIdFromForm = String(formData.get("sessionId") ?? "").trim();
 
   if (!description) {
     return { ok: false, error: "Describe what you want to build." };
   }
 
+  const emitBrainEvent = (payload: Record<string, unknown>) => {
+    void writeEvent(orgId, "seldon_it_applied", {
+      mode: endClientMode ? "end_client" : builderMode ? "builder" : "default",
+      client_id: endClientSession?.contact.id ?? null,
+      ...payload,
+    });
+  };
+
   try {
-    const aiResolution = await getAIClient({ orgId, userId: user.id });
+    const aiResolution = await getAIClient({ orgId, userId: user?.id ?? null });
     if (!aiResolution.client || aiResolution.provider === "openai") {
+      emitBrainEvent({
+        status: "error",
+        reason: "anthropic_not_configured",
+        query_summary: rawDescription.slice(0, 140),
+      });
       return {
         ok: false,
         error: "Seldon It AI is not configured. Set ANTHROPIC_API_KEY or connect an Anthropic key.",
@@ -672,6 +707,11 @@ export async function runSeldonItAction(_prev: SeldonRunState, formData: FormDat
     const parsed = parseJsonResponse(raw);
 
     if (!parsed?.action) {
+      emitBrainEvent({
+        status: "error",
+        reason: "parse_failed",
+        query_summary: rawDescription.slice(0, 140),
+      });
       return { ok: false, error: "Failed to parse Seldon response.", message: raw };
     }
 
@@ -815,13 +855,15 @@ export async function runSeldonItAction(_prev: SeldonRunState, formData: FormDat
 
     try {
       for (const result of results) {
-        await recordSeldonUsage({
-          orgId,
-          userId: user.id,
-          blockId: result.entityId ?? result.blockId,
-          mode: aiResolution.mode,
-          model: "claude-sonnet",
-        });
+        if (user?.id) {
+          await recordSeldonUsage({
+            orgId,
+            userId: user.id,
+            blockId: result.entityId ?? result.blockId,
+            mode: aiResolution.mode,
+            model: "claude-sonnet",
+          });
+        }
 
         await fileSeldonOutputToSoul({
           orgId,
@@ -835,6 +877,13 @@ export async function runSeldonItAction(_prev: SeldonRunState, formData: FormDat
     }
 
     const message = parsed.message || (results.length > 0 ? "Done — changes are live." : "Blueprint ready.");
+
+    emitBrainEvent({
+      status: "ok",
+      action,
+      results_count: results.length,
+      query_summary: rawDescription.slice(0, 140),
+    });
 
     const createdEntities = results
       .map((result) => {
@@ -892,6 +941,11 @@ export async function runSeldonItAction(_prev: SeldonRunState, formData: FormDat
       results,
     };
   } catch (cause) {
+    emitBrainEvent({
+      status: "error",
+      reason: cause instanceof Error ? cause.message : "unknown_error",
+      query_summary: rawDescription.slice(0, 140),
+    });
     return { ok: false, error: toSeldonErrorMessage(cause) };
   }
 }

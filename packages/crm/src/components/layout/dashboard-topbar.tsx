@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { Bell, Command, Menu, Moon, Search, Sun } from "lucide-react";
+import { Bell, Command, Menu, MessageCircle, Moon, Search, Sun } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { useTheme } from "next-themes";
 import { usePathname } from "next/navigation";
@@ -119,10 +119,12 @@ export function DashboardTopbar({
   userName,
   userEmail,
   avatarFallback,
+  canAccessSeldon,
 }: {
   userName: string;
   userEmail: string;
   avatarFallback: string;
+  canAccessSeldon: boolean;
 }) {
   const pathname = usePathname();
   const labels = useLabels();
@@ -181,6 +183,17 @@ export function DashboardTopbar({
       </div>
 
       <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
+        {canAccessSeldon ? (
+          <button
+            type="button"
+            className="crm-topbar-icon-btn"
+            aria-label="Open Seldon builder chat"
+            onClick={() => window.dispatchEvent(new CustomEvent("crm:builder-seldon-open"))}
+          >
+            <MessageCircle className="h-4 w-4" />
+          </button>
+        ) : null}
+
         <button type="button" className="crm-topbar-icon-btn" aria-label="Toggle theme" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
           {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </button>

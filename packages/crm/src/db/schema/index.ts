@@ -25,3 +25,4 @@ export * from "./memberships";
 export * from "./soul-sources";
 export * from "./seldon-patterns";
 export * from "./preview-sessions";
+export * from "./brain";

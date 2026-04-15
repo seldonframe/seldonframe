@@ -48,6 +48,7 @@ export type OrganizationSubscription = {
   status?: "active" | "trialing" | "past_due" | "canceled" | "unpaid";
   trialEndsAt?: string | null;
   currentPeriodEnd?: string | null;
+  stripeProcessedEventIds?: string[];
 };
 
 export const organizations = pgTable("organizations", {

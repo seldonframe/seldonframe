@@ -6,6 +6,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { CommandPalette } from "@/components/layout/command-palette";
 import { DemoBanner } from "@/components/layout/demo-banner";
 import { DashboardTopbar } from "@/components/layout/dashboard-topbar";
+import { SeldonChat } from "@/components/seldon-chat";
 import { registerCrmEventListeners } from "@/lib/events/listeners";
 import { getAllBlocksForOrg } from "@/lib/blocks/registry";
 import { canSeldonIt, resolvePlanFromPlanId } from "@/lib/billing/entitlements";
@@ -45,7 +46,7 @@ export default async function DashboardLayout({
     : [null];
   const plan = resolvePlanFromPlanId(dbUserForPlan?.planId ?? null);
   const canAccessSeldon = canSeldonIt(plan);
-  const workspaceOptions = await listManagedOrganizations();
+  const workspaceOptions = user?.id ? await listManagedOrganizations(user.id) : [];
 
   const [activeOrg, orgMemberCount] = orgId
     ? await Promise.all([
@@ -153,10 +154,16 @@ export default async function DashboardLayout({
                   <span className="text-foreground">{activeOrg.name}</span> active · <Link href="/orgs" className="text-primary underline underline-offset-4">Back to all organizations</Link>
                 </div>
               ) : null}
-              <DashboardTopbar userName={user?.name || "Account"} userEmail={user?.email || ""} avatarFallback={avatarFallback} />
+              <DashboardTopbar
+                userName={user?.name || "Account"}
+                userEmail={user?.email || ""}
+                avatarFallback={avatarFallback}
+                canAccessSeldon={canAccessSeldon}
+              />
               {children}
             </div>
           </div>
+          <SeldonChat enabled={canAccessSeldon} />
           <CommandPalette items={paletteItems} />
         </div>
       </div>
