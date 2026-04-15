@@ -256,8 +256,6 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
   ) {
     try {
       const domainLookupUrl = new URL("/api/v1/public/domain", request.url);
-      domainLookupUrl.host = appHostFallback;
-      domainLookupUrl.protocol = "https:";
       domainLookupUrl.searchParams.set("host", host);
 
       const domainResponse = await fetch(domainLookupUrl, { cache: "no-store" });
