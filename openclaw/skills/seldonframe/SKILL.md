@@ -1,7 +1,7 @@
 ---
 name: seldonframe
 description: Build a complete personalized business OS from one text or URL. First workspace free forever.
-version: 1.3.1
+version: 1.3.3
 user-invocable: true
 metadata:
   requires:
@@ -13,6 +13,13 @@ metadata:
 ---
 
 # SeldonFrame
+
+Distribution channel policy:
+- Primary: MCP + Claude Code
+- Secondary: OpenClaw (lightweight mobile option)
+
+Privacy policy:
+- Follow `docs/multi-tenant-privacy.md` (Multi-Tenant Privacy Strategies v1).
 
 **From idea to first paying customer, in one text.**
 

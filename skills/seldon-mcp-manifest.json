@@ -1,0 +1,26 @@
+{
+  "name": "SeldonFrame",
+  "version": "1.0.0",
+  "description": "Instant business OS in 15 seconds. CRM, booking, intake forms, landing page, payments, email automation + living intelligence layer. Supports your own custom domain.",
+  "author": "@seldonframe",
+  "type": "skill",
+  "capabilities": [
+    "workspace_creation",
+    "soul_management",
+    "block_forking",
+    "harness_rules_editing",
+    "brain_wiki_access",
+    "live_subdomain_preview",
+    "custom_domain"
+  ],
+  "entrypoint": "seldon-it",
+  "api_base": "https://api.seldonframe.com/v1",
+  "required_env": ["SELDON_API_KEY"],
+  "instructions": "Paste your website URL or business description → get your full OS in ~15 seconds (hosted on Vercel + Neon). Then customize with natural language or connect your own domain (e.g. 'use myagency.com as my OS domain').",
+  "tools": [
+    { "name": "create_workspace" },
+    { "name": "seldon_it" },
+    { "name": "connect_custom_domain" },
+    { "name": "export_full_code" }
+  ]
+}
