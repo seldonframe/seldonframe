@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { bookings, intakeForms, landingPages, organizations } from "@/db/schema";
@@ -10,12 +10,13 @@ function normalizeHost(host: string) {
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const host = normalizeHost(String(url.searchParams.get("host") ?? ""));
+  const workspaceBaseDomain = (process.env.WORKSPACE_BASE_DOMAIN?.trim().toLowerCase() || "seldonframe.app").replace(/^\.+/, "");
 
   if (!host) {
     return NextResponse.json({ ok: false, error: "missing_host" }, { status: 400 });
   }
 
-  const [org] = await db
+  const [customDomainOrg] = await db
     .select({ id: organizations.id, slug: organizations.slug })
     .from(organizations)
     .where(
@@ -23,6 +24,21 @@ export async function GET(request: Request) {
       and coalesce((${organizations.settings} ->> 'domainVerified')::boolean, false) = true`
     )
     .limit(1);
+
+  const wildcardSuffix = `.${workspaceBaseDomain}`;
+  const wildcardSlug = host.endsWith(wildcardSuffix)
+    ? host.slice(0, -wildcardSuffix.length)
+    : null;
+
+  const [subdomainOrg] = !customDomainOrg && wildcardSlug && !wildcardSlug.includes(".")
+    ? await db
+        .select({ id: organizations.id, slug: organizations.slug })
+        .from(organizations)
+        .where(eq(organizations.slug, wildcardSlug))
+        .limit(1)
+    : [null];
+
+  const org = customDomainOrg ?? subdomainOrg;
 
   if (!org) {
     return NextResponse.json({ ok: true, org: null });
