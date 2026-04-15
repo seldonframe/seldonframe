@@ -256,6 +256,8 @@ export async function proxy(request: NextRequest) {
   ) {
     try {
       const domainLookupUrl = new URL("/api/v1/public/domain", request.url);
+      domainLookupUrl.host = appHostFallback;
+      domainLookupUrl.protocol = "https:";
       domainLookupUrl.searchParams.set("host", host);
 
       const domainResponse = await fetch(domainLookupUrl, { cache: "no-store" });
@@ -302,6 +304,10 @@ export async function proxy(request: NextRequest) {
 
       return NextResponse.next();
     }
+  }
+
+  if (!appHost) {
+    return NextResponse.next();
   }
 
   return (authProxy as (req: NextRequest) => Promise<Response | NextResponse>)(request);
