@@ -346,27 +346,21 @@ async function collectAllFiles(rootDir: string) {
   return files.sort((a, b) => a.localeCompare(b));
 }
 
-export async function exportWorkspaceAsAgentAction(input?: { workspaceId?: string | null }): Promise<PortableAgentExportResult> {
-  assertWritable();
-
-  const orgId = await getOrgId();
-  if (!orgId) {
-    throw new Error("Unauthorized");
+export async function exportWorkspaceAsAgentForWorkspace(input: {
+  workspaceId: string;
+  orgName?: string;
+  orgSlug?: string;
+  orgSoul?: unknown;
+}): Promise<PortableAgentExportResult> {
+  const workspaceId = String(input.workspaceId ?? "").trim();
+  if (!workspaceId) {
+    throw new Error("workspaceId is required");
   }
 
-  const requestedWorkspaceId = String(input?.workspaceId ?? "").trim();
-  const workspaceId = requestedWorkspaceId || orgId;
   const workspaceHash = isHashedWorkspaceId(workspaceId) ? workspaceId : hashWorkspaceId(workspaceId);
-
-  const [org] = await db
-    .select({ id: organizations.id, name: organizations.name, slug: organizations.slug, soul: organizations.soul })
-    .from(organizations)
-    .where(eq(organizations.id, orgId))
-    .limit(1);
-
-  if (!org) {
-    throw new Error("Organization not found");
-  }
+  const organizationLabel = input.orgName?.trim() || "Workspace";
+  const organizationSlug = input.orgSlug?.trim() || `workspace-${workspaceHash.slice(0, 8)}`;
+  const organizationSoul = input.orgSoul ?? null;
 
   const runStamp = new Date().toISOString().replace(/[:.]/g, "-");
   const exportBaseDir = path.join(EXPORT_ROOT, `${workspaceHash}-${runStamp}`);
@@ -480,7 +474,7 @@ export async function exportWorkspaceAsAgentAction(input?: { workspaceId?: strin
 
   await writeAgentFile(agentRoot, "protocols/harness-rules.json", `${JSON.stringify(harnessRules, null, 2)}\n`);
   await writeAgentFile(agentRoot, "protocols/privacy-rules.json", `${JSON.stringify(buildPrivacyRulesExcerpt(), null, 2)}\n`);
-  await writeAgentFile(agentRoot, "SOUL.md", buildSoulStub({ name: org.name, slug: org.slug, soul: org.soul }));
+  await writeAgentFile(agentRoot, "SOUL.md", buildSoulStub({ name: organizationLabel, slug: organizationSlug, soul: organizationSoul }));
 
   const readme = buildReadme({
     workspaceHash,
@@ -520,6 +514,33 @@ export async function exportWorkspaceAsAgentAction(input?: { workspaceId?: strin
     fileCount: zipEntries.length,
     warning: zipEntries.length === 0 ? "No files were written to the export." : undefined,
   };
+}
+
+export async function exportWorkspaceAsAgentAction(input?: { workspaceId?: string | null }): Promise<PortableAgentExportResult> {
+  assertWritable();
+
+  const orgId = await getOrgId();
+  if (!orgId) {
+    throw new Error("Unauthorized");
+  }
+
+  const [org] = await db
+    .select({ id: organizations.id, name: organizations.name, slug: organizations.slug, soul: organizations.soul })
+    .from(organizations)
+    .where(eq(organizations.id, orgId))
+    .limit(1);
+
+  if (!org) {
+    throw new Error("Organization not found");
+  }
+
+  const requestedWorkspaceId = String(input?.workspaceId ?? "").trim();
+  return exportWorkspaceAsAgentForWorkspace({
+    workspaceId: requestedWorkspaceId || orgId,
+    orgName: org.name,
+    orgSlug: org.slug,
+    orgSoul: org.soul,
+  });
 }
 
 export async function importWorkspaceFromAgentStubAction() {

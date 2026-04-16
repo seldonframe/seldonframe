@@ -80,6 +80,8 @@ type BrainHealthSummary = {
   };
 };
 
+const CURRENT_RUN_WINDOW_GRACE_MS = 5 * 60 * 1000;
+
 function round(value: number, digits = 3) {
   const factor = 10 ** digits;
   return Math.round(value * factor) / factor;
@@ -166,9 +168,13 @@ function parseDreamRunMetrics(articlesUpdated: string[]) {
   return metrics;
 }
 
-export async function computeBrainHealthMetrics(windowDays: number, options?: { endAt?: Date }): Promise<BrainHealthWindow> {
+export async function computeBrainHealthMetrics(
+  windowDays: number,
+  options?: { endAt?: Date; runWindowGraceMs?: number }
+): Promise<BrainHealthWindow> {
   const endAt = options?.endAt ?? new Date();
   const since = new Date(endAt.getTime() - windowDays * 24 * 60 * 60 * 1000);
+  const runWindowEndAt = new Date(endAt.getTime() + Math.max(0, options?.runWindowGraceMs ?? 0));
 
   const [eventRows, runRows] = await Promise.all([
     db
@@ -187,7 +193,13 @@ export async function computeBrainHealthMetrics(windowDays: number, options?: { 
         articlesUpdated: brainCompilationRuns.articlesUpdated,
       })
       .from(brainCompilationRuns)
-      .where(and(eq(brainCompilationRuns.status, "success"), gt(brainCompilationRuns.runAt, since), lte(brainCompilationRuns.runAt, endAt))),
+      .where(
+        and(
+          eq(brainCompilationRuns.status, "success"),
+          gt(brainCompilationRuns.runAt, since),
+          lte(brainCompilationRuns.runAt, runWindowEndAt)
+        )
+      ),
   ]);
 
   const salienceValues = eventRows
@@ -309,9 +321,9 @@ function buildTrends(current: BrainHealthWindow, previous: BrainHealthWindow): B
 export async function getBrainHealthSummary(): Promise<BrainHealthSummary> {
   const now = new Date();
   const [last7Days, previous7Days, last30Days, previous30Days] = await Promise.all([
-    computeBrainHealthMetrics(7, { endAt: now }),
+    computeBrainHealthMetrics(7, { endAt: now, runWindowGraceMs: CURRENT_RUN_WINDOW_GRACE_MS }),
     computeBrainHealthMetrics(7, { endAt: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) }),
-    computeBrainHealthMetrics(30, { endAt: now }),
+    computeBrainHealthMetrics(30, { endAt: now, runWindowGraceMs: CURRENT_RUN_WINDOW_GRACE_MS }),
     computeBrainHealthMetrics(30, { endAt: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000) }),
   ]);
 

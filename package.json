@@ -17,7 +17,8 @@
     "db:push": "pnpm --filter @seldonframe/crm db:push",
     "db:studio": "pnpm --filter @seldonframe/crm db:studio",
     "db:seed": "pnpm --filter @seldonframe/crm db:seed",
-    "db:seed-demo": "pnpm --filter @seldonframe/crm db:seed-demo"
+    "db:seed-demo": "pnpm --filter @seldonframe/crm db:seed-demo",
+    "tsx": "node scripts/run-tsx.js"
   },
   "devDependencies": {
     "turbo": "^2.5.6"

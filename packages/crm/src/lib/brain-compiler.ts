@@ -12,7 +12,7 @@ import { regenerateBrainManifestForWorkspace } from "@/lib/brain-manifest";
 const BRAIN_WIKI_ROOT = process.env.BRAIN_WIKI_ROOT?.trim() || "/brain/wiki";
 const WORKSPACES_ROOT = path.join(BRAIN_WIKI_ROOT, "workspaces");
 const PERSONAL_ROOT = path.join(BRAIN_WIKI_ROOT, "personal");
-const COMPILER_MODEL = process.env.BRAIN_COMPILER_MODEL?.trim() || "claude-3-5-haiku-latest";
+const COMPILER_MODEL = process.env.BRAIN_COMPILER_MODEL?.trim() || "claude-haiku-4-5-20251001";
 const DREAM_SALIENCE_THRESHOLD = 0.6;
 
 type DreamPromotion = {
@@ -230,7 +230,7 @@ async function compileDreamPromotionWithHaiku(workspaceId: string, events: Brain
       model: COMPILER_MODEL,
       max_tokens: 1200,
       system:
-        "You are the Seldon Brain dream-cycle engine. Convert anonymized episodic events into compact promotions for semantic and personal memory. Return strict JSON only.",
+        "You are the Seldon Brain dream-cycle engine. Convert anonymized episodic events into compact promotions for semantic and personal memory. Prefer specific, actionable business patterns tied to revenue, conversion, retention, or workflow efficiency. Avoid generic taxonomy labels or broad category names unless the event stream shows repeated, decision-useful evidence. Return strict JSON only.",
       messages: [
         {
           role: "user",
@@ -238,6 +238,8 @@ async function compileDreamPromotionWithHaiku(workspaceId: string, events: Brain
             `Workspace hash: ${workspaceId}`,
             "Return JSON with keys: industries, concepts, insights, personalInsights, lessons, selfRewriteHints.",
             "Each key must be an array of short strings. Prioritize high-salience events and recurring patterns.",
+            "Do not emit generic labels like 'AI video generation' or 'conversion optimization' unless they are supported by repeated concrete behaviors and phrased as actionable observations.",
+            "Favor concise statements that explain what is working, what drives revenue or conversion, and which workflow/context patterns appear most effective.",
             "Events:",
             JSON.stringify(eventBundle, null, 2),
           ].join("\n\n"),

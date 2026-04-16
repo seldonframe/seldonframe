@@ -133,7 +133,7 @@ export async function parseSoulResponse(
 
   try {
     const completion = await client.messages.create({
-      model: "claude-3-5-haiku-latest",
+      model: "claude-3-5-haiku-20241022",
       max_tokens: 2000,
       system: `You are helping configure a business management system.
 Parse the user's answer into JSON that matches the soul schema.

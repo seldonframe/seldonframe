@@ -25,7 +25,7 @@ export type BlockRewriteSuggestion = {
 const PII_FIELD_NAMES = new Set(["email", "phone", "name", "full_name", "first_name", "last_name"]);
 const FREE_TEXT_FIELDS = new Set(["description", "notes", "message", "content", "query_summary", "prompt", "query"]);
 const HASHED_IDENTIFIER_FIELDS = new Set(["client_id", "clientid", "contact_id", "contactid", "person_id", "personid", "user_id", "userid"]);
-const SALIENCE_MODEL = process.env.BRAIN_SALIENCE_MODEL?.trim() || "claude-3-5-haiku-latest";
+const SALIENCE_MODEL = process.env.BRAIN_SALIENCE_MODEL?.trim() || "claude-haiku-4-5-20251001";
 const BLOCK_REWRITE_RISK_LEVELS = new Set<BlockRewriteSuggestion["risk_level"]>(["low", "medium", "high"]);
 
 function sanitizeSuggestionText(value: unknown, maxLength: number) {
