@@ -127,8 +127,11 @@ export async function POST(req: NextRequest) {
 
       const shouldProcess = await markStripeEventProcessed(orgId, event.id);
       if (!shouldProcess) {
+        console.info("[stripe-webhook] duplicate event ignored", { eventId: event.id, eventType: event.type, orgId });
         break;
       }
+
+      const previousSubscription = await getOrgSubscription(orgId);
 
       const subscription = await stripe.subscriptions.retrieve(subscriptionId);
       const priceId = subscription.items.data[0]?.price?.id;
@@ -151,6 +154,16 @@ export async function POST(req: NextRequest) {
         status: subscription.status as "active" | "trialing" | "past_due" | "canceled" | "unpaid",
         trialEndsAt: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
         currentPeriodEnd: currentPeriodEnd ? new Date(currentPeriodEnd * 1000).toISOString() : null,
+      });
+
+      const nextSubscription = await getOrgSubscription(orgId);
+      console.info("[stripe-webhook] checkout.session.completed applied", {
+        eventId: event.id,
+        orgId,
+        previousStatus: previousSubscription.status ?? null,
+        nextStatus: nextSubscription.status ?? null,
+        previousMaxWorkspaces: previousSubscription.maxWorkspaces ?? 1,
+        nextMaxWorkspaces: nextSubscription.maxWorkspaces ?? 1,
       });
 
       break;
@@ -225,8 +238,11 @@ export async function POST(req: NextRequest) {
 
       const shouldProcess = await markStripeEventProcessed(orgId, event.id);
       if (!shouldProcess) {
+        console.info("[stripe-webhook] duplicate event ignored", { eventId: event.id, eventType: event.type, orgId });
         break;
       }
+
+      const previousSubscription = await getOrgSubscription(orgId);
 
       let stripePriceId: string | null = null;
       let maxWorkspaces = 1;
@@ -253,10 +269,22 @@ export async function POST(req: NextRequest) {
         status: event.type === "invoice.payment_failed" ? "past_due" : "active",
       });
 
+      const nextSubscription = await getOrgSubscription(orgId);
+      console.info("[stripe-webhook] invoice status applied", {
+        eventId: event.id,
+        eventType: event.type,
+        orgId,
+        previousStatus: previousSubscription.status ?? null,
+        nextStatus: nextSubscription.status ?? null,
+        previousMaxWorkspaces: previousSubscription.maxWorkspaces ?? 1,
+        nextMaxWorkspaces: nextSubscription.maxWorkspaces ?? 1,
+      });
+
       break;
     }
 
     default:
+      console.info("[stripe-webhook] unhandled event type", { eventId: event.id, eventType: event.type });
       break;
   }
 

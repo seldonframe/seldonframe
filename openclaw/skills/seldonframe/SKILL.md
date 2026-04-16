@@ -1,7 +1,7 @@
 ---
 name: seldonframe
 description: Build a complete personalized business OS from one text or URL. First workspace free forever.
-version: 1.3.3
+version: 1.3.4
 user-invocable: true
 metadata:
   requires:

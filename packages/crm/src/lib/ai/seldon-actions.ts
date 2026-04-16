@@ -9,6 +9,7 @@ import { canSeldonIt, resolvePlanFromPlanId } from "@/lib/billing/entitlements";
 import { assertWritable } from "@/lib/demo/server";
 import { getAIClient, getSeldonUsageStats, recordSeldonUsage } from "@/lib/ai/client";
 import { writeEvent } from "@/lib/brain";
+import { addDomain, checkDomainStatus, hasVercelDomainEnv } from "@/lib/domains/vercel-domains";
 import { createLandingPageForSeldonAction } from "@/lib/landing/actions";
 import { generatePuckPage } from "@/lib/puck/generate-page";
 import { querySoulWiki } from "@/lib/soul-wiki/query";
@@ -361,6 +362,147 @@ function normalizePlan(raw: ParsedSeldonResponse["plan"]): SeldonPlan | null {
   };
 }
 
+function extractCustomDomainIntent(input: string) {
+  const normalized = input.trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+
+  const hasDomainSignal = /(custom\s+domain|\bdomain\b|\bdns\b|\bcname\b|\ba\s*record\b|\bssl\b|\bvercel\b)/.test(normalized);
+  const hasActionSignal = /(\buse\b|\bconnect\b|\bset\b|\bpoint\b|\bmap\b|\battach\b)/.test(normalized);
+  if (!hasDomainSignal || !hasActionSignal) {
+    return null;
+  }
+
+  const matches = normalized.match(/([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+)/g);
+  if (!matches || matches.length === 0) {
+    return null;
+  }
+
+  const candidate = matches[0]?.replace(/[.,!?;:]+$/, "") ?? "";
+  const validDomain = /^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/i.test(candidate);
+  return validDomain ? candidate : null;
+}
+
+function getDomainErrorMessage(payload: Record<string, unknown>) {
+  const error = payload.error;
+  if (error && typeof error === "object" && typeof (error as Record<string, unknown>).message === "string") {
+    return String((error as Record<string, unknown>).message);
+  }
+
+  if (typeof payload.message === "string" && payload.message.trim()) {
+    return payload.message;
+  }
+
+  return "Failed to configure custom domain. Please retry in Settings -> Domain.";
+}
+
+function resolveDomainVerified(payload: Record<string, unknown>) {
+  const config = payload.config;
+  if (config && typeof config === "object" && typeof (config as Record<string, unknown>).misconfigured === "boolean") {
+    return !(config as Record<string, unknown>).misconfigured;
+  }
+
+  if (typeof payload.verified === "boolean") {
+    return payload.verified;
+  }
+
+  const verification = Array.isArray(payload.verification)
+    ? (payload.verification as Array<Record<string, unknown>>)
+    : [];
+
+  return verification.some((item) => String(item?.status ?? "").toLowerCase() === "valid");
+}
+
+function resolveDomainStatus(payload: Record<string, unknown>) {
+  const config = payload.config;
+  if (config && typeof config === "object") {
+    const configRecord = config as Record<string, unknown>;
+    if (typeof configRecord.misconfigured === "boolean") {
+      return configRecord.misconfigured ? "DNS misconfigured" : "DNS configured";
+    }
+  }
+
+  const verification = Array.isArray(payload.verification)
+    ? (payload.verification as Array<Record<string, unknown>>)
+    : [];
+
+  const firstStatus = verification
+    .map((item) => String(item?.status ?? "").trim())
+    .find((status) => status.length > 0);
+
+  return firstStatus || "Pending DNS verification";
+}
+
+async function connectCustomDomainForSeldon(orgId: string, inputDomain: string) {
+  if (!hasVercelDomainEnv()) {
+    return {
+      ok: false as const,
+      error: "Custom domains require VERCEL_API_TOKEN and VERCEL_PROJECT_ID environment variables. Set them in Vercel project settings.",
+    };
+  }
+
+  const domain = inputDomain.trim().toLowerCase();
+  const addResult = await addDomain(domain);
+  if (!addResult.ok) {
+    return {
+      ok: false as const,
+      error: getDomainErrorMessage(addResult.data),
+    };
+  }
+
+  const statusResult = await checkDomainStatus(domain);
+  if (!statusResult.ok) {
+    return {
+      ok: false as const,
+      error: getDomainErrorMessage(statusResult.data),
+    };
+  }
+
+  const [org] = await db
+    .select({ settings: organizations.settings })
+    .from(organizations)
+    .where(eq(organizations.id, orgId))
+    .limit(1);
+
+  if (!org) {
+    return {
+      ok: false as const,
+      error: "Organization not found.",
+    };
+  }
+
+  const mergedPayload = { ...addResult.data, ...statusResult.data };
+  const verified = resolveDomainVerified(mergedPayload);
+  const status = resolveDomainStatus(mergedPayload);
+  const settings = ((org.settings ?? {}) as Record<string, unknown>) || {};
+
+  await db
+    .update(organizations)
+    .set({
+      settings: {
+        ...settings,
+        customDomain: domain,
+        domainVerified: verified,
+        domainStatus: status,
+      },
+      updatedAt: new Date(),
+    })
+    .where(eq(organizations.id, orgId));
+
+  const dnsMessage = typeof addResult.data.message === "string" && addResult.data.message.trim()
+    ? addResult.data.message
+    : `DNS: Point ${domain} to Vercel (CNAME or A record). SSL auto-provisioned.`;
+
+  return {
+    ok: true as const,
+    domain,
+    verified,
+    status,
+    dnsMessage,
+  };
+}
+
 function buildSystemPrompt(_soul: OrgSoul | null, _integrations: OrganizationIntegrations, _wikiContent: string) {
   return `You are Seldon It — the 5-agent customization and intelligence pipeline inside every SeldonFrame workspace.
 
@@ -585,33 +727,27 @@ export async function runSeldonItAction(_prev: SeldonRunState, formData: FormDat
     : builderMode
       ? `[BUILDER_MODE]\n${rawDescription}`
       : rawDescription;
+  const resolvedClientId = endClientSession?.contact.id ?? null;
+  const requestedCustomDomain = !endClientMode ? extractCustomDomainIntent(rawDescription) : null;
   const sessionIdFromForm = String(formData.get("sessionId") ?? "").trim();
 
   if (!description) {
     return { ok: false, error: "Describe what you want to build." };
   }
 
+  if (endClientMode && !resolvedClientId) {
+    return { ok: false, error: "Client-scoped customization requires a valid client session." };
+  }
+
   const emitBrainEvent = (payload: Record<string, unknown>) => {
     void writeEvent(orgId, "seldon_it_applied", {
       mode: endClientMode ? "end_client" : builderMode ? "builder" : "default",
-      client_id: endClientSession?.contact.id ?? null,
+      client_id: resolvedClientId,
       ...payload,
     });
   };
 
   try {
-    const aiResolution = await getAIClient({ orgId, userId: user?.id ?? null });
-    if (!aiResolution.client || aiResolution.provider === "openai") {
-      emitBrainEvent({
-        status: "error",
-        reason: "anthropic_not_configured",
-        query_summary: rawDescription.slice(0, 140),
-      });
-      return {
-        ok: false,
-        error: "Seldon It AI is not configured. Set ANTHROPIC_API_KEY or connect an Anthropic key.",
-      };
-    }
     let orgRow:
       | {
           id: string;
@@ -685,6 +821,107 @@ export async function runSeldonItAction(_prev: SeldonRunState, formData: FormDat
     const activePlan = getActivePlan(existingMessages);
     const contextMessage = buildSessionContextMessage(sessionEntities, activePlan);
 
+    if (requestedCustomDomain) {
+      const domainResult = await connectCustomDomainForSeldon(orgId, requestedCustomDomain);
+      if (!domainResult.ok) {
+        emitBrainEvent({
+          status: "error",
+          reason: "custom_domain_failed",
+          domain: requestedCustomDomain,
+          detail: domainResult.error,
+          query_summary: rawDescription.slice(0, 140),
+        });
+
+        return {
+          ok: false,
+          action: "update",
+          error: domainResult.error,
+        };
+      }
+
+      const message = domainResult.verified
+        ? `Done — ${domainResult.domain} is connected and verified. ${domainResult.dnsMessage}`
+        : `Done — ${domainResult.domain} is connected. ${domainResult.dnsMessage} Status: ${domainResult.status}.`;
+
+      const results: SeldonRunResult[] = [
+        {
+          blockId: `custom-domain-${Date.now()}`,
+          blockName: `Custom domain: ${domainResult.domain}`,
+          blockMd: "# CUSTOM_DOMAIN\n\nConnected via Seldon It domain flow.",
+          description: message,
+          summary: `- ${message}`,
+          status: domainResult.verified ? "live" : "needs-integration",
+          integrationNote: domainResult.verified ? undefined : "If DNS was just added, propagation can take up to 48 hours.",
+          fromInventory: false,
+          installMode: "instant",
+          openPath: "/settings/domain",
+          savePath: "/settings/domain",
+          adminUrl: "/settings/domain",
+        },
+      ];
+
+      const nextMessages: SeldonSessionMessage[] = [
+        ...existingMessages,
+        { role: "user", content: description },
+        {
+          role: "assistant",
+          content: message,
+          results,
+          ...(activePlan ? { plan: activePlan } : {}),
+        },
+      ];
+
+      let persistedSessionId = selectedSession?.id ?? "";
+      if (selectedSession?.id) {
+        await db.update(seldonSessions).set({ messages: nextMessages }).where(eq(seldonSessions.id, selectedSession.id));
+        persistedSessionId = selectedSession.id;
+      } else {
+        const [createdSession] = await db
+          .insert(seldonSessions)
+          .values({
+            orgId,
+            title: description.slice(0, 120),
+            messages: nextMessages,
+          })
+          .returning({ id: seldonSessions.id });
+
+        persistedSessionId = createdSession?.id ?? "";
+      }
+
+      revalidatePath("/settings");
+      revalidatePath("/settings/domain");
+      emitBrainEvent({
+        status: "ok",
+        action: "custom_domain_connected",
+        domain: domainResult.domain,
+        verified: domainResult.verified,
+        domain_status: domainResult.status,
+        query_summary: rawDescription.slice(0, 140),
+      });
+
+      return {
+        ok: true,
+        action: "update",
+        message,
+        sessionId: persistedSessionId,
+        results,
+        plan: activePlan,
+      };
+    }
+
+    const aiResolution = await getAIClient({ orgId, userId: user?.id ?? null });
+    if (!aiResolution.client || aiResolution.provider === "openai") {
+      emitBrainEvent({
+        status: "error",
+        reason: "anthropic_not_configured",
+        query_summary: rawDescription.slice(0, 140),
+      });
+      return {
+        ok: false,
+        error: "Seldon It AI is not configured. Set ANTHROPIC_API_KEY or connect an Anthropic key.",
+      };
+    }
+
     const wikiContent = await querySoulWiki(orgId, description);
     const systemPrompt = buildSystemPrompt(soul, integrations, wikiContent);
 
@@ -724,7 +961,7 @@ export async function runSeldonItAction(_prev: SeldonRunState, formData: FormDat
 
       for (const item of creates) {
         try {
-          if (item.blockType === "page" || item.blockType === "form") {
+          if (!endClientMode && (item.blockType === "page" || item.blockType === "form")) {
             const puckPrompt = buildPuckPrompt(item);
             const puckData = await generatePuckPage(puckPrompt, soul, theme);
             const rawName = String(item.name ?? item.params?.name ?? item.params?.title ?? (item.blockType === "form" ? "Lead Form" : "Landing Page"));
@@ -768,7 +1005,8 @@ export async function runSeldonItAction(_prev: SeldonRunState, formData: FormDat
             },
             soul as OrgSoul,
             theme as OrgTheme,
-            integrations
+            integrations,
+            resolvedClientId ?? undefined
           );
 
           results.push(toAction(item.blockType, installed));
@@ -820,7 +1058,8 @@ export async function runSeldonItAction(_prev: SeldonRunState, formData: FormDat
             },
             soul as OrgSoul,
             theme as OrgTheme,
-            integrations
+            integrations,
+            resolvedClientId ?? undefined
           );
 
           results.push(toAction(item.blockType, updated));

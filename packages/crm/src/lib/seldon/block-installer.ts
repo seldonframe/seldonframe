@@ -28,6 +28,16 @@ type AutomationRecord = {
   updatedAt: string;
 };
 
+type ClientOverrideRecord = {
+  id: string;
+  clientId: string;
+  blockType: SeldonBlockType;
+  operation: "create" | "update";
+  entityId?: string;
+  payload: Record<string, unknown>;
+  updatedAt: string;
+};
+
 export interface InstallResult {
   entityId: string;
   type: SeldonBlockType;
@@ -72,6 +82,47 @@ async function writeOrgSettings(orgId: string, settings: Record<string, unknown>
     .where(eq(organizations.id, orgId));
 }
 
+function normalizeClientId(clientId?: string) {
+  const normalized = typeof clientId === "string" ? clientId.trim() : "";
+  return normalized.length > 0 ? normalized : null;
+}
+
+function isSupportedBlockType(value: string): value is SeldonBlockType {
+  return value === "form" || value === "email" || value === "booking" || value === "page" || value === "automation";
+}
+
+async function writeClientScopedOverride(
+  orgId: string,
+  clientId: string,
+  blockType: SeldonBlockType,
+  operation: "create" | "update",
+  payload: Record<string, unknown>,
+  entityId?: string
+) {
+  const settings = await readOrgSettings(orgId);
+  const current = Array.isArray(settings.seldonClientOverrides)
+    ? (settings.seldonClientOverrides as ClientOverrideRecord[])
+    : [];
+
+  const id = `client_override_${Date.now().toString(36)}`;
+  const next: ClientOverrideRecord = {
+    id,
+    clientId,
+    blockType,
+    operation,
+    ...(entityId ? { entityId } : {}),
+    payload,
+    updatedAt: new Date().toISOString(),
+  };
+
+  await writeOrgSettings(orgId, {
+    ...settings,
+    seldonClientOverrides: [...current, next],
+  });
+
+  return next;
+}
+
 export async function installBlock(
   orgId: string,
   orgSlug: string,
@@ -79,8 +130,28 @@ export async function installBlock(
   params: Record<string, unknown>,
   _soul: OrgSoul,
   _theme: OrgTheme,
-  integrations: IntegrationStatus
+  integrations: IntegrationStatus,
+  clientId?: string
 ): Promise<InstallResult> {
+  if (!isSupportedBlockType(blockType)) {
+    throw new Error(`Unknown block type: ${blockType}`);
+  }
+
+  const normalizedClientId = normalizeClientId(clientId);
+  if (normalizedClientId) {
+    const override = await writeClientScopedOverride(orgId, normalizedClientId, blockType, "create", params);
+
+    return {
+      entityId: override.id,
+      type: blockType,
+      name: String(params.name ?? params.title ?? `${blockType} override`),
+      description: `Client-scoped override saved for ${blockType}`,
+      publicUrl: null,
+      adminUrl: `/portal/${orgSlug}/messages`,
+      status: "live",
+    };
+  }
+
   switch (blockType) {
     case "form": {
       const title = String(params.name ?? "New Intake Form");
@@ -218,9 +289,6 @@ export async function installBlock(
         status: "live",
       };
     }
-
-    default:
-      throw new Error(`Unknown block type: ${blockType}`);
   }
 }
 
@@ -232,8 +300,30 @@ export async function updateBlock(
   updates: Record<string, unknown>,
   _soul: OrgSoul,
   _theme: OrgTheme,
-  integrations: IntegrationStatus
+  integrations: IntegrationStatus,
+  clientId?: string
 ): Promise<UpdateResult> {
+  if (!isSupportedBlockType(blockType)) {
+    throw new Error(`Unknown block type for update: ${blockType}`);
+  }
+
+  const normalizedClientId = normalizeClientId(clientId);
+  if (normalizedClientId) {
+    const override = await writeClientScopedOverride(orgId, normalizedClientId, blockType, "update", updates, entityId);
+    const changes = String(updates.changeDescription ?? `${blockType} updated`);
+
+    return {
+      entityId: override.id,
+      type: blockType,
+      name: String(updates.name ?? `${blockType} override`),
+      description: `Client-scoped override saved: ${changes}`,
+      publicUrl: null,
+      adminUrl: `/portal/${orgSlug}/messages`,
+      status: "live",
+      changes,
+    };
+  }
+
   switch (blockType) {
     case "form": {
       const [existing] = await db
@@ -419,8 +509,5 @@ export async function updateBlock(
         changes,
       };
     }
-
-    default:
-      throw new Error(`Unknown block type for update: ${blockType}`);
   }
 }

@@ -14,6 +14,7 @@ export type BrainEventType =
 
 const PII_FIELD_NAMES = new Set(["email", "phone", "name", "full_name", "first_name", "last_name"]);
 const FREE_TEXT_FIELDS = new Set(["description", "notes", "message", "content", "query_summary", "prompt", "query"]);
+const HASHED_IDENTIFIER_FIELDS = new Set(["client_id", "clientid", "contact_id", "contactid", "person_id", "personid", "user_id", "userid"]);
 
 function toSha256(value: string) {
   return createHash("sha256").update(value).digest("hex");
@@ -33,9 +34,13 @@ function summarizeFreeText(value: string) {
 }
 
 function anonymizeValue(key: string, value: unknown): unknown {
-  const normalizedKey = key.toLowerCase();
+  const normalizedKey = key.toLowerCase().replace(/[^a-z0-9_]/g, "");
 
   if (typeof value === "string") {
+    if (HASHED_IDENTIFIER_FIELDS.has(normalizedKey) || normalizedKey === "id" || normalizedKey.endsWith("_id")) {
+      return toSha256(value);
+    }
+
     if (PII_FIELD_NAMES.has(normalizedKey)) {
       return `CLIENT-${toSha256(value).slice(0, 12)}`;
     }
