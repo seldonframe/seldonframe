@@ -8,7 +8,9 @@ import { getCurrentUser, getOrgId } from "@/lib/auth/helpers";
 import { canSeldonIt, resolvePlanFromPlanId } from "@/lib/billing/entitlements";
 import { assertWritable } from "@/lib/demo/server";
 import { getAIClient, getSeldonUsageStats, recordSeldonUsage } from "@/lib/ai/client";
+import { exportWorkspaceAsAgentAction } from "@/lib/ai/export-workspace-as-agent";
 import { writeEvent } from "@/lib/brain";
+import { buildProgressiveBrainContext } from "@/lib/brain-manifest";
 import { addDomain, checkDomainStatus, hasVercelDomainEnv } from "@/lib/domains/vercel-domains";
 import { createLandingPageForSeldonAction } from "@/lib/landing/actions";
 import { generatePuckPage } from "@/lib/puck/generate-page";
@@ -384,6 +386,38 @@ function extractCustomDomainIntent(input: string) {
   return validDomain ? candidate : null;
 }
 
+function extractPortableBrainExportIntent(input: string) {
+  const normalized = input.trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+
+  const hasExportSignal = /(\bexport\b|\bdownload\b|\bpackage\b|\bportable\b)/.test(normalized);
+  if (!hasExportSignal) {
+    return false;
+  }
+
+  return /(portable\s+brain|workspace\s+as\s+portable\s+brain|\.agent|agent\s+folder|export\s+my\s+workspace)/.test(normalized);
+}
+
+function formatBytes(bytes: number) {
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return "0 B";
+  }
+
+  const units = ["B", "KB", "MB", "GB"];
+  let value = bytes;
+  let unitIndex = 0;
+
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+
+  const precision = unitIndex === 0 ? 0 : value < 10 ? 2 : 1;
+  return `${value.toFixed(precision)} ${units[unitIndex]}`;
+}
+
 function getDomainErrorMessage(payload: Record<string, unknown>) {
   const error = payload.error;
   if (error && typeof error === "object" && typeof (error as Record<string, unknown>).message === "string") {
@@ -504,6 +538,8 @@ async function connectCustomDomainForSeldon(orgId: string, inputDomain: string) 
 }
 
 function buildSystemPrompt(_soul: OrgSoul | null, _integrations: OrganizationIntegrations, _wikiContent: string) {
+  const trimmedWikiContext = _wikiContent.trim();
+
   return `You are Seldon It — the 5-agent customization and intelligence pipeline inside every SeldonFrame workspace.
 
 You are the living layer that turns natural language requests into permanent, scoped changes using the soul, blocks, harness-rules.json, and the Brain wiki.
@@ -537,7 +573,12 @@ Output format (always):
 - Next step for the user
 - CTA: “Anything else you’d like me to customize?”
 
-You are the reason the workspace feels alive and personal. Be precise, helpful, and relentless about compounding value through the iteration loop — while protecting every user’s privacy as if it were your own.`;
+You are the reason the workspace feels alive and personal. Be precise, helpful, and relentless about compounding value through the iteration loop — while protecting every user’s privacy as if it were your own.
+
+${trimmedWikiContext ? `
+Progressive Brain Context (lazy-loaded):
+${trimmedWikiContext}
+` : ""}`;
 }
 
 export async function getSeldonPageData() {
@@ -729,6 +770,7 @@ export async function runSeldonItAction(_prev: SeldonRunState, formData: FormDat
       : rawDescription;
   const resolvedClientId = endClientSession?.contact.id ?? null;
   const requestedCustomDomain = !endClientMode ? extractCustomDomainIntent(rawDescription) : null;
+  const requestedPortableExport = !endClientMode && extractPortableBrainExportIntent(rawDescription);
   const sessionIdFromForm = String(formData.get("sessionId") ?? "").trim();
 
   if (!description) {
@@ -745,6 +787,18 @@ export async function runSeldonItAction(_prev: SeldonRunState, formData: FormDat
       client_id: resolvedClientId,
       ...payload,
     });
+  };
+
+  const contextMetrics: {
+    source: "none" | "manifest" | "fallback";
+    contextChars: number;
+    selectedArticles: number;
+    selectedPersonalInsights: number;
+  } = {
+    source: "none",
+    contextChars: 0,
+    selectedArticles: 0,
+    selectedPersonalInsights: 0,
   };
 
   try {
@@ -820,6 +874,81 @@ export async function runSeldonItAction(_prev: SeldonRunState, formData: FormDat
     const sessionEntities = collectCreatedEntities(existingMessages);
     const activePlan = getActivePlan(existingMessages);
     const contextMessage = buildSessionContextMessage(sessionEntities, activePlan);
+
+    if (requestedPortableExport) {
+      const exportResult = await exportWorkspaceAsAgentAction({ workspaceId: orgId });
+      const zipSizeLabel = formatBytes(exportResult.zipSizeBytes);
+      const message = [
+        "Portable brain export completed successfully.",
+        `ZIP path: ${exportResult.zipPath}`,
+        `Included files: ${exportResult.fileCount} (${zipSizeLabel})`,
+      ].join(" ");
+
+      const results: SeldonRunResult[] = [
+        {
+          blockId: `portable-brain-export-${Date.now()}`,
+          blockName: "Portable .agent export",
+          blockMd: "# AGENT_EXPORT\n\nPortable workspace export generated.",
+          description: message,
+          summary: `- ${message}`,
+          status: "live",
+          fromInventory: false,
+          installMode: "instant",
+          openPath: "/seldon",
+          savePath: "/seldon",
+          adminUrl: "/seldon",
+        },
+      ];
+
+      const nextMessages: SeldonSessionMessage[] = [
+        ...existingMessages,
+        { role: "user", content: description },
+        {
+          role: "assistant",
+          content: message,
+          results,
+          ...(activePlan ? { plan: activePlan } : {}),
+        },
+      ];
+
+      let persistedSessionId = selectedSession?.id ?? "";
+      if (selectedSession?.id) {
+        await db.update(seldonSessions).set({ messages: nextMessages }).where(eq(seldonSessions.id, selectedSession.id));
+        persistedSessionId = selectedSession.id;
+      } else {
+        const [createdSession] = await db
+          .insert(seldonSessions)
+          .values({
+            orgId,
+            title: description.slice(0, 120),
+            messages: nextMessages,
+          })
+          .returning({ id: seldonSessions.id });
+
+        persistedSessionId = createdSession?.id ?? "";
+      }
+
+      emitBrainEvent({
+        status: "ok",
+        action: "portable_brain_export_success",
+        export_zip_path: exportResult.zipPath,
+        export_dir_path: exportResult.exportDir,
+        export_file_count: exportResult.fileCount,
+        export_zip_size_bytes: exportResult.zipSizeBytes,
+        export_zip_size_label: zipSizeLabel,
+        export_generated_at: exportResult.generatedAt,
+        query_summary: rawDescription.slice(0, 140),
+      });
+
+      return {
+        ok: true,
+        action: "update",
+        message,
+        sessionId: persistedSessionId,
+        results,
+        plan: activePlan,
+      };
+    }
 
     if (requestedCustomDomain) {
       const domainResult = await connectCustomDomainForSeldon(orgId, requestedCustomDomain);
@@ -922,7 +1051,28 @@ export async function runSeldonItAction(_prev: SeldonRunState, formData: FormDat
       };
     }
 
-    const wikiContent = await querySoulWiki(orgId, description);
+    const progressiveBrain = await buildProgressiveBrainContext(orgId, description);
+    let wikiContent = progressiveBrain.context;
+
+    if (!wikiContent) {
+      wikiContent = await querySoulWiki(orgId, description);
+      contextMetrics.source = "fallback";
+      contextMetrics.contextChars = wikiContent.length;
+    } else {
+      contextMetrics.source = progressiveBrain.stats.source;
+      contextMetrics.contextChars = wikiContent.length;
+      contextMetrics.selectedArticles = progressiveBrain.stats.selectedArticles;
+      contextMetrics.selectedPersonalInsights = progressiveBrain.stats.selectedPersonalInsights;
+    }
+
+    console.info("[seldon-it] brain context selected", {
+      orgId,
+      source: progressiveBrain.stats.source,
+      selectedArticles: progressiveBrain.stats.selectedArticles,
+      selectedPersonalInsights: progressiveBrain.stats.selectedPersonalInsights,
+      contextChars: wikiContent.length,
+    });
+
     const systemPrompt = buildSystemPrompt(soul, integrations, wikiContent);
 
     const response = await aiResolution.client.messages.create({
@@ -948,6 +1098,10 @@ export async function runSeldonItAction(_prev: SeldonRunState, formData: FormDat
         status: "error",
         reason: "parse_failed",
         query_summary: rawDescription.slice(0, 140),
+        context_source: contextMetrics.source,
+        context_chars: contextMetrics.contextChars,
+        context_selected_articles: contextMetrics.selectedArticles,
+        context_selected_personal_insights: contextMetrics.selectedPersonalInsights,
       });
       return { ok: false, error: "Failed to parse Seldon response.", message: raw };
     }
@@ -1122,6 +1276,10 @@ export async function runSeldonItAction(_prev: SeldonRunState, formData: FormDat
       action,
       results_count: results.length,
       query_summary: rawDescription.slice(0, 140),
+      context_source: contextMetrics.source,
+      context_chars: contextMetrics.contextChars,
+      context_selected_articles: contextMetrics.selectedArticles,
+      context_selected_personal_insights: contextMetrics.selectedPersonalInsights,
     });
 
     const createdEntities = results
@@ -1184,6 +1342,10 @@ export async function runSeldonItAction(_prev: SeldonRunState, formData: FormDat
       status: "error",
       reason: cause instanceof Error ? cause.message : "unknown_error",
       query_summary: rawDescription.slice(0, 140),
+      context_source: contextMetrics.source,
+      context_chars: contextMetrics.contextChars,
+      context_selected_articles: contextMetrics.selectedArticles,
+      context_selected_personal_insights: contextMetrics.selectedPersonalInsights,
     });
     return { ok: false, error: toSeldonErrorMessage(cause) };
   }

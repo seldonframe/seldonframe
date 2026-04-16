@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { runDreamCycle } from "@/lib/brain-compiler";
+import { getBrainHealthSummary } from "@/lib/brain-health";
 
 export const runtime = "nodejs";
 
@@ -16,7 +16,12 @@ function isAuthorized(request: Request) {
   }
 
   const cronHeader = request.headers.get("x-cron-secret");
-  return cronHeader === configuredSecret;
+  if (cronHeader === configuredSecret) {
+    return true;
+  }
+
+  const adminHeader = request.headers.get("x-admin-secret");
+  return adminHeader === configuredSecret;
 }
 
 export async function GET(request: Request) {
@@ -24,6 +29,6 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const result = await runDreamCycle();
-  return NextResponse.json(result);
+  const summary = await getBrainHealthSummary();
+  return NextResponse.json(summary);
 }

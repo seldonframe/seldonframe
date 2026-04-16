@@ -1,7 +1,7 @@
 ---
 name: seldonframe
 description: Build a complete personalized business OS from one text or URL. First workspace free forever.
-version: 1.3.4
+version: 1.3.5
 user-invocable: true
 metadata:
   requires:
@@ -17,6 +17,10 @@ metadata:
 Distribution channel policy:
 - Primary: MCP + Claude Code
 - Secondary: OpenClaw (lightweight mobile option)
+
+Brain v2 capabilities:
+- Portable workspace export command: "export my workspace as portable brain"
+- Structured memory layers (episodic, semantic, personal) with safe ownership transfer via `.agent` archive
 
 Privacy policy:
 - Follow `docs/multi-tenant-privacy.md` (Multi-Tenant Privacy Strategies v1).

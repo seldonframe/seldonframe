@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { boolean, index, integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, index, integer, jsonb, numeric, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 export const brainEvents = pgTable(
   "brain_events",
@@ -9,6 +9,8 @@ export const brainEvents = pgTable(
     timestamp: timestamp("timestamp", { withTimezone: true }).notNull().defaultNow(),
     eventType: text("event_type").notNull(),
     payload: jsonb("payload").$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
+    salienceScore: numeric("salience_score", { precision: 4, scale: 3, mode: "number" }).notNull().default(0.5),
+    feedbackScore: integer("feedback_score"),
     anonymized: boolean("anonymized").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
