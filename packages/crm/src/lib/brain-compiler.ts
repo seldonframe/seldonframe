@@ -9,11 +9,22 @@ import { proposeBlockRewrite, type BlockRewriteSuggestion } from "@/lib/brain";
 import { getBrainHealthSummary } from "@/lib/brain-health";
 import { regenerateBrainManifestForWorkspace } from "@/lib/brain-manifest";
 
-const BRAIN_WIKI_ROOT = process.env.BRAIN_WIKI_ROOT?.trim() || "/brain/wiki";
+const DEFAULT_BRAIN_WIKI_ROOT = path.join(process.cwd(), "brain", "wiki");
+const BRAIN_WIKI_ROOT = path.resolve(process.env.BRAIN_WIKI_ROOT?.trim() || DEFAULT_BRAIN_WIKI_ROOT);
 const WORKSPACES_ROOT = path.join(BRAIN_WIKI_ROOT, "workspaces");
 const PERSONAL_ROOT = path.join(BRAIN_WIKI_ROOT, "personal");
+const SEMANTIC_DIRS = ["industries", "concepts", "insights"] as const;
 const COMPILER_MODEL = process.env.BRAIN_COMPILER_MODEL?.trim() || "claude-haiku-4-5-20251001";
 const DREAM_SALIENCE_THRESHOLD = 0.6;
+
+async function ensureBrainWikiDirectories() {
+  await Promise.all([
+    mkdir(BRAIN_WIKI_ROOT, { recursive: true }),
+    mkdir(WORKSPACES_ROOT, { recursive: true }),
+    mkdir(PERSONAL_ROOT, { recursive: true }),
+    ...SEMANTIC_DIRS.map((semanticDir) => mkdir(path.join(BRAIN_WIKI_ROOT, semanticDir), { recursive: true })),
+  ]);
+}
 
 type DreamPromotion = {
   industries: string[];
@@ -568,7 +579,7 @@ async function writeWorkspaceWiki(workspaceId: string, events: BrainEventRow[]) 
 }
 
 export async function runDreamCycle() {
-  await mkdir(PERSONAL_ROOT, { recursive: true });
+  await ensureBrainWikiDirectories();
 
   const since = await getLastSuccessfulRunAt();
   const workspaceIds = await getWorkspaceIdsWithNewEvents(since);

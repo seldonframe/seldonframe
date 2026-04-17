@@ -3,12 +3,22 @@ import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import type { Dirent } from "node:fs";
 import path from "node:path";
 
-const BRAIN_WIKI_ROOT = process.env.BRAIN_WIKI_ROOT?.trim() || "/brain/wiki";
+const DEFAULT_BRAIN_WIKI_ROOT = path.join(process.cwd(), "brain", "wiki");
+const BRAIN_WIKI_ROOT = path.resolve(process.env.BRAIN_WIKI_ROOT?.trim() || DEFAULT_BRAIN_WIKI_ROOT);
 const WORKSPACES_ROOT = path.join(BRAIN_WIKI_ROOT, "workspaces");
 const PERSONAL_ROOT = path.join(BRAIN_WIKI_ROOT, "personal");
 const SEMANTIC_DIRS = ["industries", "concepts", "insights"];
 const MAX_RELEVANT_ARTICLES = 6;
 const MAX_PERSONAL_INSIGHTS = 5;
+
+async function ensureBrainWikiDirectories() {
+  await Promise.all([
+    mkdir(BRAIN_WIKI_ROOT, { recursive: true }),
+    mkdir(WORKSPACES_ROOT, { recursive: true }),
+    mkdir(PERSONAL_ROOT, { recursive: true }),
+    ...SEMANTIC_DIRS.map((semanticDir) => mkdir(path.join(BRAIN_WIKI_ROOT, semanticDir), { recursive: true })),
+  ]);
+}
 
 type BrainManifestEvent = {
   eventType: string;
@@ -339,6 +349,7 @@ export function hashWorkspaceId(workspaceId: string) {
 }
 
 export async function readBrainManifestForWorkspace(workspaceId: string, options?: { workspaceIdIsHashed?: boolean }) {
+  await ensureBrainWikiDirectories();
   const workspaceHash = options?.workspaceIdIsHashed ? workspaceId : hashWorkspaceId(workspaceId);
   const { manifest } = await resolveManifest(workspaceHash);
   return manifest;
@@ -349,6 +360,7 @@ export async function regenerateBrainManifestForWorkspace(params: {
   events?: BrainManifestEvent[];
   workspaceIdIsHashed?: boolean;
 }) {
+  await ensureBrainWikiDirectories();
   const workspaceHash = params.workspaceIdIsHashed ? params.workspaceId : hashWorkspaceId(params.workspaceId);
   const events = Array.isArray(params.events) ? params.events : [];
   const { manifestPath, manifest: existingManifest } = await resolveManifest(workspaceHash);
@@ -397,6 +409,7 @@ export async function regenerateBrainManifestForWorkspace(params: {
 }
 
 export async function buildProgressiveBrainContext(workspaceId: string, userPrompt: string) {
+  await ensureBrainWikiDirectories();
   let manifest = await readBrainManifestForWorkspace(workspaceId);
   if (!manifest) {
     const regenerated = await regenerateBrainManifestForWorkspace({ workspaceId });
