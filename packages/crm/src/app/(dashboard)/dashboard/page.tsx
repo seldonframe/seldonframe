@@ -489,31 +489,12 @@ export default async function DashboardPage({
     return startsAt >= startOfToday && startsAt < endOfTomorrow;
   });
 
-  const agencyQuickActions = [
-    {
-      label: "Create New Client OS",
-      href: "/orgs/new",
-      className: "crm-button-primary",
-    },
-    {
-      label: "Clone as Template",
-      href: "/seldon?prompt=Help%20me%20clone%20my%20current%20workspace%20as%20a%20reusable%20agency%20template.",
-      className: "crm-button-secondary",
-    },
-    {
-      label: "Install Block to Multiple Clients",
-      href: "/seldon?prompt=Install%20a%20block%20across%20multiple%20client%20workspaces%20and%20tell%20me%20which%20clients%20should%20get%20it.",
-      className: "crm-button-secondary",
-    },
-    {
-      label: "View Cross-Client Insights",
-      href: "/dashboard?view=all",
-      className: "crm-button-secondary",
-    },
-  ];
-
   return (
     <main className="animate-page-enter flex-1 overflow-auto w-full space-y-5 p-3 sm:space-y-6 sm:p-4 md:p-6">
+      <div className="rounded-2xl border border-border/80 bg-background/30 px-4 py-3 text-sm text-muted-foreground">
+        For the best experience, use Seldon directly from Claude Code with our MCP + Skill.
+      </div>
+
       {showWorkspaceTabs ? (
         <div className="inline-flex items-center rounded-xl border border-border/80 bg-card/75 p-1 shadow-(--shadow-xs)">
           <Link
@@ -540,35 +521,19 @@ export default async function DashboardPage({
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <h2 className="text-base sm:text-lg font-semibold">Your Client Workspaces</h2>
-              <p className="text-sm text-muted-foreground">Pick a client, jump into Studio, or let Seldon choose the highest-impact next move.</p>
+              <p className="text-sm text-muted-foreground">A calm overview of every client workspace.</p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Link href="/seldon?prompt=Help%20me%20manage%20my%20agency%20portfolio%2C%20pick%20the%20next%20best%20client%20action%2C%20and%20do%20the%20work." className="crm-button-primary h-9 px-4 text-xs sm:text-sm">
-                Ask Seldon
-              </Link>
               <Link href="/orgs/new" className="crm-button-secondary h-9 px-4 text-xs sm:text-sm">
                 Create New Client OS
               </Link>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-border/80 bg-background/30 px-4 py-3 text-sm text-muted-foreground">
-            Fast path: <span className="font-medium text-foreground">pick a client</span> → <span className="font-medium text-foreground">open Creator Studio</span> → <span className="font-medium text-foreground">generate the block</span> → <span className="font-medium text-foreground">install it</span>.
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            {agencyQuickActions.map((action) => (
-              <Link key={action.label} href={action.href} className={`${action.className} h-9 px-4 text-xs sm:text-sm`}>
-                {action.label}
-              </Link>
-            ))}
-          </div>
-
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {workspaceRows.map((workspace) => {
               const stat = workspaceStatMap.get(workspace.id);
               const isActiveWorkspace = workspace.id === orgId;
-              const workspacePrompt = `Help me improve the ${workspace.name} client workspace. Audit the highest-impact fixes, tighten the brand, and suggest the next build step.`;
 
               return (
                 <article key={workspace.id} className="rounded-2xl border border-border/80 bg-background/35 p-5 shadow-(--shadow-xs)">
@@ -606,20 +571,6 @@ export default async function DashboardPage({
                         Open dashboard
                       </button>
                     </form>
-                    <form action={setActiveOrgAction}>
-                      <input type="hidden" name="orgId" value={workspace.id} />
-                      <input type="hidden" name="redirectTo" value="/studio" />
-                      <button type="submit" className="crm-button-secondary h-9 px-4 text-xs sm:text-sm">
-                        Open Studio
-                      </button>
-                    </form>
-                    <form action={setActiveOrgAction}>
-                      <input type="hidden" name="orgId" value={workspace.id} />
-                      <input type="hidden" name="redirectTo" value={`/seldon?prompt=${encodeURIComponent(workspacePrompt)}`} />
-                      <button type="submit" className="crm-button-primary h-9 px-4 text-xs sm:text-sm">
-                        Ask Seldon
-                      </button>
-                    </form>
                   </div>
                 </article>
               );
@@ -646,45 +597,21 @@ export default async function DashboardPage({
             Good {timeOfDay()}, {firstName}
           </h1>
           <p className="text-sm sm:text-base text-muted-foreground">
-            Fastest path: <span className="text-foreground font-medium">open Creator Studio</span> or <span className="text-foreground font-medium">ask Seldon</span> to build the next client workflow.
+            This is your calm workspace overview.
           </p>
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
-          <Link href="/studio" className="crm-button-secondary h-8 gap-2 px-3 text-xs sm:h-9 sm:gap-3 sm:text-sm">
-            <span>Open Creator Studio</span>
-          </Link>
           <Link href="/orgs/new" className="crm-button-secondary h-8 gap-2 px-3 text-xs sm:h-9 sm:gap-3 sm:text-sm">
             <Plus className="size-3 sm:size-4" />
             <span>Create New Client OS</span>
           </Link>
-          <Link href="/seldon?prompt=Help%20me%20improve%20this%20client%20workspace%2C%20tell%20me%20the%20next%20best%20action%2C%20and%20start%20building%20it." className="crm-button-primary h-8 gap-2 px-3 text-xs sm:h-9 sm:gap-3 sm:text-sm">
-            <span className="hidden xs:inline">Ask Seldon</span>
-            <span className="xs:hidden">Seldon</span>
-          </Link>
         </div>
       </header>
-
-      {showWorkspaceTabs ? (
-        <section className="crm-card space-y-4">
-          <div>
-            <h2 className="text-base sm:text-lg font-semibold">Agency quick actions</h2>
-            <p className="text-sm text-muted-foreground">Start in Studio if you already know the workflow. Ask Seldon if you want the shortest path.</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {agencyQuickActions.map((action) => (
-              <Link key={action.label} href={action.href} className={`${action.className} h-9 px-4 text-xs sm:text-sm`}>
-                {action.label}
-              </Link>
-            ))}
-          </div>
-        </section>
-      ) : null}
 
       <section className="crm-card space-y-5">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-base sm:text-lg font-semibold">Your Blocks</h2>
-          <Link href="/seldon" className="crm-button-primary h-9 px-3 text-xs sm:text-sm">+ Seldon It</Link>
         </div>
         {(() => {
           const allBlocks = [
@@ -754,8 +681,8 @@ export default async function DashboardPage({
             },
           ];
           const hiddenSet = new Set(hiddenBlocks);
-          const visibleBlocks = allBlocks.filter((b) => !hiddenSet.has(b.slug));
-          const hiddenBlockItems = allBlocks.filter((b) => hiddenSet.has(b.slug));
+          const visibleBlocks = allBlocks.filter((b) => b.slug !== "seldon" && !hiddenSet.has(b.slug));
+          const hiddenBlockItems = allBlocks.filter((b) => b.slug !== "seldon" && hiddenSet.has(b.slug));
           return (
             <>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -768,12 +695,6 @@ export default async function DashboardPage({
                       <p className="text-sm font-medium text-foreground">{block.name}</p>
                       <p className="text-xs text-muted-foreground">{block.status}</p>
                       <p className="text-xs text-muted-foreground">{block.detail}</p>
-                    </Link>
-                    <Link
-                      href={`/seldon?prompt=${encodeURIComponent(block.customizePrompt)}`}
-                      className="inline-flex text-xs text-primary opacity-0 group-hover:opacity-100 transition-opacity hover:underline"
-                    >
-                      ✨ Customize
                     </Link>
                   </div>
                 ))}
@@ -1065,6 +986,13 @@ export default async function DashboardPage({
       ) : null}
         </>
       )}
+
+      <Link
+        href="/seldon?prompt=Help%20me%20improve%20this%20client%20workspace%2C%20tell%20me%20the%20next%20best%20action%2C%20and%20start%20building%20it."
+        className="fixed bottom-5 right-5 z-20 inline-flex h-12 items-center rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground shadow-(--shadow-dropdown) transition hover:opacity-95"
+      >
+        Ask Seldon
+      </Link>
 
     </main>
   );

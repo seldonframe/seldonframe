@@ -145,7 +145,6 @@ export function StudioPageClient({
   const [prompt, setPrompt] = useState<string>(starterTemplates[1]?.prompt ?? starterTemplates[0].prompt);
   const [baseBlockId, setBaseBlockId] = useState<string>("");
   const [generatedBlock, setGeneratedBlock] = useState<GeneratedBlockPreview | null>(null);
-  const [selectedWorkspaceIds, setSelectedWorkspaceIds] = useState<string[]>(workspaces.map((workspace) => workspace.id));
   const [installTick, setInstallTick] = useState(0);
 
   const baseBlockLabel = useMemo(() => {
@@ -161,13 +160,7 @@ export function StudioPageClient({
     [selectedStarterId]
   );
 
-  const selectedWorkspaceNames = useMemo(
-    () => workspaces.filter((workspace) => selectedWorkspaceIds.includes(workspace.id)).map((workspace) => workspace.name),
-    [selectedWorkspaceIds, workspaces]
-  );
   const activeWorkspaceLabel = activeWorkspaceName;
-  const selectedWorkspaceSummary = selectedWorkspaceNames.length > 0 ? selectedWorkspaceNames.join(", ") : "No client selected";
-  const maxAccessibleStep: StudioStep = generatedBlock ? 4 : currentStep;
   const installResults = installState.results ?? [];
   const primaryInstallResult = installResults[0] ?? null;
   const showInstallSuccess = installState.ok && (installResults.length > 0 || Boolean(installState.message));
@@ -179,7 +172,6 @@ export function StudioPageClient({
 
   useEffect(() => {
     if (!installPending) {
-      setInstallTick(0);
       return;
     }
 
@@ -207,18 +199,6 @@ export function StudioPageClient({
     resetGeneratedBlock();
   }
 
-  function toggleWorkspace(workspaceId: string) {
-    setSelectedWorkspaceIds((current) =>
-      current.includes(workspaceId) ? current.filter((id) => id !== workspaceId) : [...current, workspaceId]
-    );
-  }
-
-  function goToStep(step: StudioStep) {
-    if (step <= maxAccessibleStep) {
-      setCurrentStep(step);
-    }
-  }
-
   function generateBlock() {
     const normalizedPrompt = prompt.trim();
     if (!normalizedPrompt) {
@@ -240,19 +220,6 @@ Summary: ${generatedBlock.summary}
 Outcome: ${generatedBlock.outcome}
 Original request: ${prompt}
 Keep the experience calm, dark, and understandable in under five seconds.`
-    : "";
-
-  const installToSelectedPrompt = generatedBlock
-    ? `Install this generated block across multiple client workspaces.
-Selected client workspaces: ${selectedWorkspaceSummary}
-Mode: Builder Mode
-Block: ${generatedBlock.name}
-Starter: ${generatedBlock.starterLabel}
-Base block: ${generatedBlock.baseLabel}
-Summary: ${generatedBlock.summary}
-Outcome: ${generatedBlock.outcome}
-Original request: ${prompt}
-Apply the block consistently and tell me which clients need manual follow-up.`
     : "";
 
   const saveTemplatePrompt = generatedBlock
@@ -280,25 +247,21 @@ Make the template reusable across future client workspaces.`
           {studioSteps.map((step) => {
             const isActive = step.id === currentStep;
             const isComplete = step.id < currentStep || (step.id === 3 && generatedBlock) || (step.id === 4 && installState.ok);
-            const isAccessible = step.id <= maxAccessibleStep;
 
             return (
-              <button
+              <div
                 key={step.id}
-                type="button"
-                onClick={() => goToStep(step.id)}
-                disabled={!isAccessible}
                 className={`rounded-2xl border px-4 py-3 text-left transition-all ${
                   isActive
                     ? "border-primary bg-primary/10"
                     : isComplete
                       ? "border-primary/30 bg-primary/5"
                       : "border-border/80 bg-background/35"
-                } ${!isAccessible ? "cursor-not-allowed opacity-60" : "hover:border-border"}`}
+                }`}
               >
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Step {step.id}</p>
                 <p className="mt-1 text-sm font-medium text-foreground">{step.label}</p>
-              </button>
+              </div>
             );
           })}
         </div>
@@ -440,18 +403,13 @@ Make the template reusable across future client workspaces.`
 
                 <div className="rounded-3xl border border-border/70 bg-card/70 p-5">
                   <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Install targets</p>
+                  <p className="mt-2 text-sm text-muted-foreground">Install to the active workspace first, or save it as a reusable template.</p>
                   <div className="mt-3 space-y-2">
                     {workspaces.map((workspace) => {
-                      const checked = selectedWorkspaceIds.includes(workspace.id);
                       const isActiveWorkspace = workspace.id === activeWorkspaceId;
                       return (
-                        <label key={workspace.id} className="flex items-start gap-3 rounded-xl border border-border/70 bg-background/35 px-3 py-2.5 text-sm text-foreground">
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => toggleWorkspace(workspace.id)}
-                            className="mt-1"
-                          />
+                        <div key={workspace.id} className="flex items-start gap-3 rounded-xl border border-border/70 bg-background/35 px-3 py-2.5 text-sm text-foreground">
+                          <span className={`mt-1 inline-flex size-2.5 shrink-0 rounded-full ${isActiveWorkspace ? "bg-primary" : "bg-border"}`} />
                           <span className="min-w-0 flex-1">
                             <span className="flex items-center gap-2 truncate font-medium">
                               <span className="truncate">{workspace.name}</span>
@@ -463,7 +421,7 @@ Make the template reusable across future client workspaces.`
                             </span>
                             <span className="block truncate text-xs text-muted-foreground">/{workspace.slug}</span>
                           </span>
-                        </label>
+                        </div>
                       );
                     })}
                   </div>
@@ -474,7 +432,12 @@ Make the template reusable across future client workspaces.`
                     <input type="hidden" name="builder_mode" value="true" />
                     <input type="hidden" name="sessionId" value={installState.sessionId ?? ""} />
                     <input type="hidden" name="description" value={installToActivePrompt} />
-                    <button type="submit" disabled={installPending} className="crm-button-primary h-10 w-full px-4 disabled:cursor-not-allowed disabled:opacity-60">
+                    <button
+                      type="submit"
+                      disabled={installPending}
+                      onClick={() => setInstallTick(0)}
+                      className="crm-button-primary h-10 w-full px-4 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
                       {installPending ? "Installing..." : `Install to ${activeWorkspaceLabel}`}
                     </button>
                   </form>
@@ -482,21 +445,13 @@ Make the template reusable across future client workspaces.`
                   <form action={installAction}>
                     <input type="hidden" name="builder_mode" value="true" />
                     <input type="hidden" name="sessionId" value={installState.sessionId ?? ""} />
-                    <input type="hidden" name="description" value={installToSelectedPrompt} />
+                    <input type="hidden" name="description" value={saveTemplatePrompt} />
                     <button
                       type="submit"
-                      disabled={installPending || selectedWorkspaceNames.length === 0}
+                      disabled={installPending}
+                      onClick={() => setInstallTick(0)}
                       className="crm-button-secondary h-10 w-full px-4 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {installPending ? "Installing..." : "Install to selected clients"}
-                    </button>
-                  </form>
-
-                  <form action={installAction}>
-                    <input type="hidden" name="builder_mode" value="true" />
-                    <input type="hidden" name="sessionId" value={installState.sessionId ?? ""} />
-                    <input type="hidden" name="description" value={saveTemplatePrompt} />
-                    <button type="submit" disabled={installPending} className="crm-button-secondary h-10 w-full px-4 disabled:cursor-not-allowed disabled:opacity-60">
                       {installPending ? "Saving..." : "Save as template"}
                     </button>
                   </form>

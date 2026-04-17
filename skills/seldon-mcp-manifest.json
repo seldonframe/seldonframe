@@ -1,26 +1,82 @@
 {
-  "name": "SeldonFrame",
-  "version": "1.0.0",
-  "description": "Instant business OS in 15 seconds. CRM, booking, intake forms, landing page, payments, email automation + living intelligence layer. Supports your own custom domain.",
-  "author": "@seldonframe",
-  "type": "skill",
-  "capabilities": [
-    "workspace_creation",
-    "soul_management",
-    "block_forking",
-    "harness_rules_editing",
-    "brain_wiki_access",
-    "live_subdomain_preview",
-    "custom_domain"
-  ],
+  "name": "seldonframe",
+  "version": "1.5.0",
+  "description": "Official SeldonFrame MCP — full control over workspaces, blocks, soul, brain, domains, and billing directly from Claude Code",
   "entrypoint": "seldon-it",
-  "api_base": "https://api.seldonframe.com/v1",
-  "required_env": ["SELDON_API_KEY"],
-  "instructions": "Paste your website URL or business description → get your full OS in ~15 seconds (hosted on Vercel + Neon). Then customize with natural language or connect your own domain (e.g. 'use myagency.com as my OS domain').",
+  "capabilities": [
+    "workspace_management",
+    "block_lifecycle",
+    "soul_customization",
+    "brain_intelligence",
+    "custom_domain",
+    "export_import",
+    "billing_upgrade",
+    "multi_client_bulk",
+    "inline_preview",
+    "auto_validation"
+  ],
+  "required_env": ["SELDONFRAME_API_KEY", "ANTHROPIC_API_KEY"],
   "tools": [
-    { "name": "create_workspace" },
-    { "name": "seldon_it" },
-    { "name": "connect_custom_domain" },
-    { "name": "export_full_code" }
-  ]
+    {
+      "name": "create_workspace",
+      "description": "Create a new client workspace from description or URL"
+    },
+    {
+      "name": "list_workspaces",
+      "description": "List all client workspaces with status"
+    },
+    {
+      "name": "switch_workspace",
+      "description": "Switch to a specific client workspace"
+    },
+    {
+      "name": "clone_workspace",
+      "description": "Clone a workspace as template"
+    },
+    {
+      "name": "generate_block",
+      "description": "Generate a new block from natural language"
+    },
+    {
+      "name": "install_block",
+      "description": "Install a block into current or specified workspace"
+    },
+    {
+      "name": "bulk_install_block",
+      "description": "Install same block to multiple clients with confirmation"
+    },
+    {
+      "name": "update_block",
+      "description": "Update or customize an existing block"
+    },
+    {
+      "name": "customize_soul",
+      "description": "Update branding, theme or soul rules"
+    },
+    {
+      "name": "query_brain",
+      "description": "Ask for Brain v2 insights with visual summary"
+    },
+    {
+      "name": "connect_custom_domain",
+      "description": "Connect and verify custom domain"
+    },
+    {
+      "name": "export_agent",
+      "description": "Export the current workspace as a portable .agent/ folder"
+    },
+    {
+      "name": "upgrade_plan",
+      "description": "Upgrade to unlock more workspaces"
+    },
+    {
+      "name": "get_inline_preview",
+      "description": "Return a live preview link or rendered component for a block"
+    },
+    {
+      "name": "auto_validate_block",
+      "description": "Automatically generate and run tests for a generated block"
+    }
+  ],
+  "api_base": "https://app.seldonframe.com/api/v1"
 }

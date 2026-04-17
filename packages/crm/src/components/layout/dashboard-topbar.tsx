@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { Bell, Check, Command, ChevronsUpDown, Menu, MessageCircle, Moon, Search, Sun } from "lucide-react";
+import { Bell, Check, Command, ChevronsUpDown, Menu, Moon, Search, Sun } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { useTheme } from "next-themes";
 import { usePathname } from "next/navigation";
@@ -119,7 +119,6 @@ export function DashboardTopbar({
   userName,
   userEmail,
   avatarFallback,
-  canAccessSeldon,
   workspaceName,
   activeWorkspaceId,
   workspaceOptions,
@@ -196,7 +195,7 @@ export function DashboardTopbar({
         </button>
         <div className="min-w-0 flex-1">
           <p className="truncate text-base font-semibold tracking-tight sm:text-lg">{title}</p>
-          <p className="truncate text-xs text-muted-foreground">Pick a client. Ask Seldon. Ship the block.</p>
+          <p className="truncate text-xs text-muted-foreground">Stay focused on the current client workspace.</p>
         </div>
       </div>
 
@@ -257,23 +256,6 @@ export function DashboardTopbar({
       </div>
 
       <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
-        {canAccessSeldon ? (
-          <>
-            <Link href="/seldon?prompt=Help%20me%20manage%20my%20client%20workspaces%2C%20recommend%20the%20next%20best%20action%2C%20and%20do%20the%20work%20for%20me." className="hidden h-9 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground shadow-(--shadow-xs) transition-all hover:opacity-95 sm:inline-flex">
-              <MessageCircle className="h-4 w-4" />
-              Ask Seldon
-            </Link>
-            <button
-              type="button"
-              className="crm-topbar-icon-btn sm:hidden"
-              aria-label="Open Seldon builder chat"
-              onClick={() => window.dispatchEvent(new CustomEvent("crm:builder-seldon-open"))}
-            >
-              <MessageCircle className="h-4 w-4" />
-            </button>
-          </>
-        ) : null}
-
         <button type="button" className="crm-topbar-icon-btn" aria-label="Toggle theme" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
           {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </button>

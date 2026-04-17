@@ -43,7 +43,7 @@ export function Sidebar(props: {
   userEmail: string;
   avatarFallback: string;
 }) {
-  const { canAccessSeldon, hiddenBlocks = [], workspaceName, activeWorkspaceId, workspaceOptions, switchWorkspaceAction, userName, userEmail, avatarFallback } = props;
+  const { hiddenBlocks = [], workspaceName, activeWorkspaceId, workspaceOptions, switchWorkspaceAction, userName, userEmail, avatarFallback } = props;
   const labels = useLabels();
   const pathname = usePathname();
   const hiddenHrefs = new Set(hiddenBlocks.map((slug) => hiddenSlugToHref[slug]).filter(Boolean));
@@ -57,16 +57,7 @@ export function Sidebar(props: {
       title: "YOUR SOUL",
       items: filterHidden([
         { href: "/dashboard", label: "Dashboard", icon: "LayoutDashboard" },
-        { href: "/studio", label: "Creator Studio", icon: "Sparkles" },
         { href: "/soul-marketplace", label: "Soul Marketplace", icon: "Puzzle" },
-        {
-          href: canAccessSeldon ? "/seldon" : "/settings/billing",
-          label: "Seldon It",
-          icon: "sparkles",
-          disabled: !canAccessSeldon,
-          tooltip: canAccessSeldon ? undefined : "Upgrade to Cloud Pro to Seldon custom blocks",
-          upgrade: !canAccessSeldon,
-        },
       ]),
     },
     {
