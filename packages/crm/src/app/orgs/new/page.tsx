@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
+import Link from "next/link";
 import { auth } from "@/auth";
 import { SetupWizard } from "@/components/soul/setup-wizard";
 import { NewWorkspacePromptForm } from "@/components/orgs/new-workspace-prompt-form";
@@ -41,10 +42,6 @@ export default async function NewWorkspacePage() {
   }
 
   const limitStatus = await getWorkspaceLimitStatus();
-
-  if (!limitStatus.canCreate) {
-    redirect("/orgs?limit=1");
-  }
 
   async function createWorkspaceAction(_prevState: CreateWorkspaceState, formData: FormData): Promise<CreateWorkspaceState> {
     "use server";
@@ -140,16 +137,38 @@ export default async function NewWorkspacePage() {
       <main className="animate-page-enter flex-1 overflow-auto bg-background p-3 sm:p-4 md:p-6 w-full min-h-svh">
         <section className="mx-auto flex min-h-[70vh] max-w-4xl items-center justify-center">
           <div className="glass-card w-full max-w-3xl rounded-2xl border border-border/70 p-6 sm:p-8 md:p-10">
-            <div className="space-y-3 text-center">
-              <h1 className="text-page-title">Create New Workspace</h1>
-              <p className="mx-auto max-w-2xl text-sm text-muted-foreground sm:text-base">
-                Tell Seldon what you do, or paste a URL, and it will generate your complete operating system.
-              </p>
-            </div>
+            {limitStatus.canCreate ? (
+              <>
+                <div className="space-y-3 text-center">
+                  <h1 className="text-page-title">Create New Workspace</h1>
+                  <p className="mx-auto max-w-2xl text-sm text-muted-foreground sm:text-base">
+                    Tell Seldon what you do, or paste a URL, and it will generate your complete operating system.
+                  </p>
+                </div>
 
-            <div className="mt-8">
-              <NewWorkspacePromptForm action={createWorkspaceAction} />
-            </div>
+                <div className="mt-8">
+                  <NewWorkspacePromptForm action={createWorkspaceAction} />
+                </div>
+              </>
+            ) : (
+              <div className="mx-auto max-w-xl space-y-5 text-center">
+                <div className="space-y-3">
+                  <h1 className="text-page-title">You&apos;ve used your free workspace</h1>
+                  <p className="text-sm text-muted-foreground sm:text-base">
+                    Each additional workspace is $9/month and unlocks more Brain intelligence.
+                  </p>
+                </div>
+
+                <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
+                  <Link href="/pricing" className="crm-button-primary h-11 px-5 inline-flex items-center justify-center">
+                    Upgrade to unlock more workspaces
+                  </Link>
+                  <Link href="/orgs" className="crm-button-secondary h-11 px-5 inline-flex items-center justify-center">
+                    Or use an existing workspace
+                  </Link>
+                </div>
+              </div>
+            )}
           </div>
         </section>
       </main>
