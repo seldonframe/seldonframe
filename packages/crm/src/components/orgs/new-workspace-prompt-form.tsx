@@ -82,16 +82,17 @@ export function NewWorkspacePromptForm({ action, initialUpgradeRequired = false 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          priceId: "price_1TMC7UJOtNZA0x7xNrl2VDVE",
           quantity: 1,
-          successPath: "/orgs/new?upgrade=success&session_id={CHECKOUT_SESSION_ID}",
+          successPath: "/orgs/new?upgrade=success",
           cancelPath: "/orgs/new",
         }),
       });
 
-      const payload = (await response.json().catch(() => null)) as { error?: string; url?: string } | null;
+      const payload = await response.json();
 
       if (!response.ok || !payload?.url) {
-        throw new Error(payload?.error ?? "Failed to open Stripe checkout.");
+        throw new Error(payload?.error ?? "Failed to open checkout");
       }
 
       window.location.href = payload.url;

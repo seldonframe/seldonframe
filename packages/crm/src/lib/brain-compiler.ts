@@ -1,6 +1,6 @@
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import fs from "fs/promises";
 import type { Dirent } from "node:fs";
-import path from "node:path";
+import path from "path";
 import Anthropic from "@anthropic-ai/sdk";
 import { and, desc, eq, gt, inArray, lt, or } from "drizzle-orm";
 import { db } from "@/db";
@@ -9,21 +9,27 @@ import { proposeBlockRewrite, type BlockRewriteSuggestion } from "@/lib/brain";
 import { getBrainHealthSummary } from "@/lib/brain-health";
 import { regenerateBrainManifestForWorkspace } from "@/lib/brain-manifest";
 
-const DEFAULT_BRAIN_WIKI_ROOT = path.join(process.cwd(), "brain", "wiki");
-const BRAIN_WIKI_ROOT = path.resolve(process.env.BRAIN_WIKI_ROOT?.trim() || DEFAULT_BRAIN_WIKI_ROOT);
+const BRAIN_ROOT = path.join(process.cwd(), "brain");
+const BRAIN_WIKI_ROOT = path.join(BRAIN_ROOT, "wiki");
 const WORKSPACES_ROOT = path.join(BRAIN_WIKI_ROOT, "workspaces");
 const PERSONAL_ROOT = path.join(BRAIN_WIKI_ROOT, "personal");
-const SEMANTIC_DIRS = ["industries", "concepts", "insights"] as const;
 const COMPILER_MODEL = process.env.BRAIN_COMPILER_MODEL?.trim() || "claude-haiku-4-5-20251001";
 const DREAM_SALIENCE_THRESHOLD = 0.6;
 
-async function ensureBrainWikiDirectories() {
-  await Promise.all([
-    mkdir(BRAIN_WIKI_ROOT, { recursive: true }),
-    mkdir(WORKSPACES_ROOT, { recursive: true }),
-    mkdir(PERSONAL_ROOT, { recursive: true }),
-    ...SEMANTIC_DIRS.map((semanticDir) => mkdir(path.join(BRAIN_WIKI_ROOT, semanticDir), { recursive: true })),
-  ]);
+async function ensureBrainDirs() {
+  const dirs = [
+    BRAIN_ROOT,
+    path.join(BRAIN_ROOT, "wiki"),
+    path.join(BRAIN_ROOT, "wiki", "workspaces"),
+    path.join(BRAIN_ROOT, "wiki", "personal"),
+    path.join(BRAIN_ROOT, "wiki", "industries"),
+    path.join(BRAIN_ROOT, "wiki", "concepts"),
+    path.join(BRAIN_ROOT, "wiki", "insights"),
+  ];
+
+  for (const dir of dirs) {
+    await fs.mkdir(dir, { recursive: true });
+  }
 }
 
 type DreamPromotion = {
@@ -270,11 +276,11 @@ async function compileDreamPromotionWithHaiku(workspaceId: string, events: Brain
 }
 
 async function appendSection(filePath: string, sectionTitle: string, lines: string[]) {
-  await mkdir(path.dirname(filePath), { recursive: true });
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
 
   let existing = "";
   try {
-    existing = await readFile(filePath, "utf8");
+    existing = await fs.readFile(filePath, "utf8");
   } catch {
     existing = "";
   }
@@ -286,7 +292,7 @@ async function appendSection(filePath: string, sectionTitle: string, lines: stri
   ].join("\n");
 
   const next = existing.trim().length > 0 ? `${existing.trim()}\n\n${section}` : `# Brain Notes\n\n${section}`;
-  await writeFile(filePath, `${next.trim()}\n`, "utf8");
+  await fs.writeFile(filePath, `${next.trim()}\n`, "utf8");
 }
 
 async function promoteToSemanticLayer(workspaceId: string, promotion: DreamPromotion) {
@@ -313,7 +319,7 @@ async function promoteToSemanticLayer(workspaceId: string, promotion: DreamPromo
 
 async function promoteToPersonalLayer(workspaceId: string, promotion: DreamPromotion) {
   const workspacePersonalDir = path.join(PERSONAL_ROOT, workspaceId);
-  await mkdir(workspacePersonalDir, { recursive: true });
+  await fs.mkdir(workspacePersonalDir, { recursive: true });
 
   const dayKey = new Date().toISOString().slice(0, 10);
   const personalPath = path.join(workspacePersonalDir, `dream-${dayKey}.md`);
@@ -339,7 +345,7 @@ async function collectFilesNamed(rootDir: string, targetName: string, limit = 20
 
     let entries: Dirent<string>[];
     try {
-      entries = await readdir(current, { withFileTypes: true, encoding: "utf8" });
+      entries = await fs.readdir(current, { withFileTypes: true, encoding: "utf8" });
     } catch {
       continue;
     }
@@ -489,7 +495,7 @@ async function triggerSelfRewriteHooks(workspaceId: string, promotion: DreamProm
     const blockFiles = await collectFilesNamed(root, "BLOCK.md", 120);
     for (const blockPath of blockFiles) {
       try {
-        const content = await readFile(blockPath, "utf8");
+        const content = await fs.readFile(blockPath, "utf8");
         if (/self_improve\s*:\s*true/i.test(content)) {
           matchingBlocks.push({ blockPath, blockContent: content });
         }
@@ -502,7 +508,7 @@ async function triggerSelfRewriteHooks(workspaceId: string, promotion: DreamProm
   const rewriteSuggestionPaths: string[] = [];
   const dateKey = new Date().toISOString().slice(0, 10);
   const rewriteSuggestionDir = path.join(PERSONAL_ROOT, workspaceId, "rewrite-suggestions");
-  await mkdir(rewriteSuggestionDir, { recursive: true });
+  await fs.mkdir(rewriteSuggestionDir, { recursive: true });
 
   for (const match of matchingBlocks) {
     const blockName = deriveBlockName(match.blockPath);
@@ -515,7 +521,7 @@ async function triggerSelfRewriteHooks(workspaceId: string, promotion: DreamProm
     const fileName = `${slugify(blockName) || "block"}-${dateKey}.md`;
     const suggestionPath = path.join(rewriteSuggestionDir, fileName);
     const suggestionContent = formatRewriteSuggestionMarkdown(blockName, match.blockPath, workspaceId, structuredSuggestion);
-    await writeFile(suggestionPath, `${suggestionContent.trim()}\n`, "utf8");
+    await fs.writeFile(suggestionPath, `${suggestionContent.trim()}\n`, "utf8");
     rewriteSuggestionPaths.push(suggestionPath);
   }
 
@@ -552,8 +558,9 @@ async function pruneLowSalienceEventsOlderThan90Days() {
 }
 
 async function writeWorkspaceWiki(workspaceId: string, events: BrainEventRow[]) {
+  await ensureBrainDirs();
   const workspaceDir = path.join(WORKSPACES_ROOT, workspaceId);
-  await mkdir(workspaceDir, { recursive: true });
+  await fs.mkdir(workspaceDir, { recursive: true });
 
   const now = new Date();
   const monthKey = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
@@ -563,23 +570,23 @@ async function writeWorkspaceWiki(workspaceId: string, events: BrainEventRow[]) 
   const summary = await compileWorkspaceSummaryWithHaiku(workspaceId, events);
   const rollup = buildMonthlyRollup(events);
 
-  await writeFile(summaryPath, `${summary.trim()}\n`, "utf8");
+  await fs.writeFile(summaryPath, `${summary.trim()}\n`, "utf8");
 
   let existingRollup = "";
   try {
-    existingRollup = await readFile(monthlyPath, "utf8");
+    existingRollup = await fs.readFile(monthlyPath, "utf8");
   } catch {
     existingRollup = "";
   }
 
   const nextRollup = existingRollup.trim().length > 0 ? `${existingRollup.trim()}\n\n${rollup.trim()}\n` : rollup;
-  await writeFile(monthlyPath, nextRollup, "utf8");
+  await fs.writeFile(monthlyPath, nextRollup, "utf8");
 
   return [summaryPath, monthlyPath];
 }
 
 export async function runDreamCycle() {
-  await ensureBrainWikiDirectories();
+  await ensureBrainDirs();
 
   const since = await getLastSuccessfulRunAt();
   const workspaceIds = await getWorkspaceIdsWithNewEvents(since);

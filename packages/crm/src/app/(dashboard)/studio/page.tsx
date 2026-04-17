@@ -35,8 +35,6 @@ export default async function CreatorStudioPage() {
         id: workspace.id,
         name: workspace.name,
         slug: workspace.slug,
-        contactCount: workspace.contactCount,
-        soulId: workspace.soulId,
       }))}
     />
   );

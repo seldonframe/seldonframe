@@ -1,23 +1,30 @@
 import { createHash } from "node:crypto";
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import fs from "fs/promises";
 import type { Dirent } from "node:fs";
-import path from "node:path";
+import path from "path";
 
-const DEFAULT_BRAIN_WIKI_ROOT = path.join(process.cwd(), "brain", "wiki");
-const BRAIN_WIKI_ROOT = path.resolve(process.env.BRAIN_WIKI_ROOT?.trim() || DEFAULT_BRAIN_WIKI_ROOT);
+const BRAIN_ROOT = path.join(process.cwd(), "brain");
+const BRAIN_WIKI_ROOT = path.join(BRAIN_ROOT, "wiki");
 const WORKSPACES_ROOT = path.join(BRAIN_WIKI_ROOT, "workspaces");
 const PERSONAL_ROOT = path.join(BRAIN_WIKI_ROOT, "personal");
 const SEMANTIC_DIRS = ["industries", "concepts", "insights"];
 const MAX_RELEVANT_ARTICLES = 6;
 const MAX_PERSONAL_INSIGHTS = 5;
 
-async function ensureBrainWikiDirectories() {
-  await Promise.all([
-    mkdir(BRAIN_WIKI_ROOT, { recursive: true }),
-    mkdir(WORKSPACES_ROOT, { recursive: true }),
-    mkdir(PERSONAL_ROOT, { recursive: true }),
-    ...SEMANTIC_DIRS.map((semanticDir) => mkdir(path.join(BRAIN_WIKI_ROOT, semanticDir), { recursive: true })),
-  ]);
+async function ensureBrainDirs() {
+  const dirs = [
+    BRAIN_ROOT,
+    path.join(BRAIN_ROOT, "wiki"),
+    path.join(BRAIN_ROOT, "wiki", "workspaces"),
+    path.join(BRAIN_ROOT, "wiki", "personal"),
+    path.join(BRAIN_ROOT, "wiki", "industries"),
+    path.join(BRAIN_ROOT, "wiki", "concepts"),
+    path.join(BRAIN_ROOT, "wiki", "insights"),
+  ];
+
+  for (const dir of dirs) {
+    await fs.mkdir(dir, { recursive: true });
+  }
 }
 
 type BrainManifestEvent = {
@@ -140,7 +147,7 @@ async function collectMarkdownFiles(rootDir: string, limit = 300) {
 
     let entries: Dirent<string>[];
     try {
-      entries = await readdir(nextDir, { withFileTypes: true, encoding: "utf8" });
+      entries = await fs.readdir(nextDir, { withFileTypes: true, encoding: "utf8" });
     } catch {
       continue;
     }
@@ -171,7 +178,7 @@ async function collectMarkdownFiles(rootDir: string, limit = 300) {
 
 async function readSnippet(filePath: string, maxChars = 1200) {
   try {
-    const content = await readFile(filePath, "utf8");
+    const content = await fs.readFile(filePath, "utf8");
     return content.trim().slice(0, maxChars);
   } catch {
     return "";
@@ -319,10 +326,11 @@ async function buildPersonalInsights(workspaceHash: string, tags: string[], tagS
 }
 
 async function resolveManifest(workspaceHash: string) {
+  await ensureBrainDirs();
   const manifestPath = path.join(WORKSPACES_ROOT, workspaceHash, "brain-manifest.json");
 
   try {
-    const content = await readFile(manifestPath, "utf8");
+    const content = await fs.readFile(manifestPath, "utf8");
     const parsed = JSON.parse(content) as BrainManifest;
 
     if (!parsed || typeof parsed !== "object") {
@@ -349,7 +357,7 @@ export function hashWorkspaceId(workspaceId: string) {
 }
 
 export async function readBrainManifestForWorkspace(workspaceId: string, options?: { workspaceIdIsHashed?: boolean }) {
-  await ensureBrainWikiDirectories();
+  await ensureBrainDirs();
   const workspaceHash = options?.workspaceIdIsHashed ? workspaceId : hashWorkspaceId(workspaceId);
   const { manifest } = await resolveManifest(workspaceHash);
   return manifest;
@@ -360,7 +368,7 @@ export async function regenerateBrainManifestForWorkspace(params: {
   events?: BrainManifestEvent[];
   workspaceIdIsHashed?: boolean;
 }) {
-  await ensureBrainWikiDirectories();
+  await ensureBrainDirs();
   const workspaceHash = params.workspaceIdIsHashed ? params.workspaceId : hashWorkspaceId(params.workspaceId);
   const events = Array.isArray(params.events) ? params.events : [];
   const { manifestPath, manifest: existingManifest } = await resolveManifest(workspaceHash);
@@ -387,8 +395,8 @@ export async function regenerateBrainManifestForWorkspace(params: {
     relevantArticles,
   };
 
-  await mkdir(path.dirname(manifestPath), { recursive: true });
-  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  await fs.mkdir(path.dirname(manifestPath), { recursive: true });
+  await fs.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 
   if (events.length > 0) {
     const topEventSalience = events
@@ -409,7 +417,7 @@ export async function regenerateBrainManifestForWorkspace(params: {
 }
 
 export async function buildProgressiveBrainContext(workspaceId: string, userPrompt: string) {
-  await ensureBrainWikiDirectories();
+  await ensureBrainDirs();
   let manifest = await readBrainManifestForWorkspace(workspaceId);
   if (!manifest) {
     const regenerated = await regenerateBrainManifestForWorkspace({ workspaceId });

@@ -14,8 +14,6 @@ type WorkspaceOption = {
   id: string;
   name: string;
   slug: string;
-  contactCount: number;
-  soulId: string | null;
 };
 
 type GeneratedBlockPreview = {
@@ -96,14 +94,6 @@ const starterTemplates = [
   },
 ] as const;
 
-function formatFrameworkLabel(soulId: string | null) {
-  if (!soulId) {
-    return "Custom";
-  }
-
-  return soulId.charAt(0).toUpperCase() + soulId.slice(1);
-}
-
 function buildGeneratedBlockName(prompt: string) {
   const normalized = prompt
     .replace(/^build\s+(me\s+)?/i, "")
@@ -123,8 +113,8 @@ function buildGeneratedPreview(prompt: string, baseLabel: string, starterLabel: 
   const name = buildGeneratedBlockName(prompt);
   return {
     name,
-    summary: `${name} gives the agency one calm control surface to decide what happens next without extra clicks.`,
-    outcome: `Generated from your prompt and ready for ${starterLabel.toLowerCase()} workflows${baseLabel !== "None" ? ` using ${baseLabel} as the base` : ""}.`,
+    summary: "Ready to install.",
+    outcome: baseLabel !== "None" ? `${starterLabel} · Based on ${baseLabel}` : starterLabel,
     baseLabel,
     starterLabel,
   };
@@ -166,13 +156,7 @@ export function StudioPageClient({
     () => workspaces.filter((workspace) => selectedWorkspaceIds.includes(workspace.id)).map((workspace) => workspace.name),
     [selectedWorkspaceIds, workspaces]
   );
-
-  const activeWorkspace = useMemo(
-    () => workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? workspaces[0] ?? null,
-    [activeWorkspaceId, workspaces]
-  );
-
-  const activeWorkspaceLabel = activeWorkspace?.name ?? activeWorkspaceName;
+  const activeWorkspaceLabel = activeWorkspaceName;
   const selectedWorkspaceSummary = selectedWorkspaceNames.length > 0 ? selectedWorkspaceNames.join(", ") : "No client selected";
   const maxAccessibleStep: StudioStep = generatedBlock ? 4 : currentStep;
 
@@ -254,24 +238,14 @@ Make the template reusable across future client workspaces.`
 
   return (
     <section className="animate-page-enter space-y-4">
-      <div className="flex flex-col gap-3">
-        <div className="space-y-1.5">
+      <div className="space-y-1.5">
           <h1 className="text-page-title">Creator Studio</h1>
-          <p className="text-label text-[hsl(var(--color-text-secondary))]">
-            Pick a starter. Describe the outcome. Generate. Install.
-          </p>
           <p className="text-sm text-muted-foreground">
-            Current client: <span className="font-medium text-foreground">{activeWorkspaceName}</span>
-            {activeWorkspace ? (
-              <span>
-                {" "}· {activeWorkspace.contactCount.toLocaleString()} clients · /{activeWorkspace.slug}
-              </span>
-            ) : null}
+            Workspace: <span className="font-medium text-foreground">{activeWorkspaceName}</span>
           </p>
-        </div>
       </div>
 
-      <article className="crm-card space-y-6 p-4 sm:p-6">
+      <article className="crm-card space-y-8 p-6 sm:p-8">
         <div className="grid gap-2 sm:grid-cols-4">
           {studioSteps.map((step) => {
             const isActive = step.id === currentStep;
@@ -300,13 +274,10 @@ Make the template reusable across future client workspaces.`
         </div>
 
         {currentStep === 1 ? (
-          <div className="space-y-5">
-            <div>
-              <h2 className="text-card-title">1. Pick a starter</h2>
-              <p className="text-label text-[hsl(var(--color-text-secondary))]">Choose the closest starting point for this block.</p>
-            </div>
+          <div className="space-y-8">
+            <h2 className="text-page-title text-2xl sm:text-3xl">Pick a starter</h2>
 
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               {starterTemplates.map((template) => {
                 const isSelected = template.id === selectedStarterId;
                 return (
@@ -314,27 +285,26 @@ Make the template reusable across future client workspaces.`
                     key={template.id}
                     type="button"
                     onClick={() => handleTemplateUse(template.id)}
-                    className={`rounded-2xl border p-3 text-left transition-all ${
+                    className={`rounded-3xl border px-5 py-6 text-left transition-all ${
                       isSelected
                         ? "border-primary bg-primary/10 shadow-(--shadow-xs)"
                         : "border-border/80 bg-background/35 hover:border-border hover:bg-accent/35"
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="rounded-full border border-border/80 bg-card/80 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="rounded-full border border-border/80 bg-card/80 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                         {template.category}
                       </span>
                       {isSelected ? <Check className="size-4 text-primary" /> : null}
                     </div>
-                    <p className="mt-2.5 text-sm font-semibold text-foreground">{template.name}</p>
-                    <p className="mt-1 text-xs leading-5 text-muted-foreground">{template.summary}</p>
+                    <p className="mt-4 text-base font-semibold text-foreground">{template.name}</p>
                   </button>
                 );
               })}
             </div>
 
             <div className="flex justify-end">
-              <button type="button" onClick={() => setCurrentStep(2)} className="crm-button-primary h-11 px-5">
+              <button type="button" onClick={() => setCurrentStep(2)} className="crm-button-primary h-11 px-6">
                 Continue
               </button>
             </div>
@@ -342,28 +312,24 @@ Make the template reusable across future client workspaces.`
         ) : null}
 
         {currentStep === 2 ? (
-          <div className="space-y-5">
-            <div>
-              <h2 className="text-card-title">2. Describe the outcome</h2>
-              <p className="text-label text-[hsl(var(--color-text-secondary))]">Say what you want the block to do in one short sentence.</p>
-            </div>
+          <div className="space-y-8">
+            <h2 className="text-page-title text-2xl sm:text-3xl">Describe it</h2>
 
             <label className="space-y-2 text-sm text-muted-foreground">
-              What should this block do?
+              Request
               <textarea
                 value={prompt}
                 onChange={(event) => {
                   resetGeneratedBlock();
                   setPrompt(event.target.value);
                 }}
-                className="crm-input min-h-40 w-full p-4"
+                className="crm-input min-h-48 w-full p-5 text-base"
                 placeholder="Build a lead scoring block that scores leads and auto-books discovery calls"
               />
-              <p className="text-xs text-muted-foreground">Example: “Build a block that scores leads and auto-books discovery calls.”</p>
             </label>
 
-            <label className="space-y-2 text-sm text-muted-foreground">
-              Optional base block
+            <label className="max-w-md space-y-2 text-sm text-muted-foreground">
+              Base block
               <select
                 value={baseBlockId}
                 onChange={(event) => {
@@ -382,11 +348,11 @@ Make the template reusable across future client workspaces.`
             </label>
 
             <div className="flex items-center justify-between gap-3">
-              <button type="button" onClick={() => setCurrentStep(1)} className="crm-button-secondary h-11 px-5">
+              <button type="button" onClick={() => setCurrentStep(1)} className="crm-button-secondary h-11 px-6">
                 <ArrowLeft className="size-4" />
                 Back
               </button>
-              <button type="button" onClick={() => setCurrentStep(3)} disabled={prompt.trim().length === 0} className="crm-button-primary h-11 px-5 disabled:cursor-not-allowed disabled:opacity-60">
+              <button type="button" onClick={() => setCurrentStep(3)} disabled={prompt.trim().length === 0} className="crm-button-primary h-11 px-6 disabled:cursor-not-allowed disabled:opacity-60">
                 Continue
               </button>
             </div>
@@ -394,13 +360,10 @@ Make the template reusable across future client workspaces.`
         ) : null}
 
         {currentStep === 3 ? (
-          <div className="space-y-5">
-            <div>
-              <h2 className="text-card-title">3. Generate</h2>
-              <p className="text-label text-[hsl(var(--color-text-secondary))]">Review the setup, then generate the block preview.</p>
-            </div>
+          <div className="space-y-8">
+            <h2 className="text-page-title text-2xl sm:text-3xl">Generate</h2>
 
-            <div className="rounded-2xl border border-border/80 bg-background/35 p-4">
+            <div className="rounded-3xl border border-border/80 bg-background/35 p-6">
               <div className="space-y-3 text-sm">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Starter</p>
@@ -418,27 +381,24 @@ Make the template reusable across future client workspaces.`
             </div>
 
             <div className="flex items-center justify-between gap-3">
-              <button type="button" onClick={() => setCurrentStep(2)} className="crm-button-secondary h-11 px-5">
+              <button type="button" onClick={() => setCurrentStep(2)} className="crm-button-secondary h-11 px-6">
                 <ArrowLeft className="size-4" />
                 Back
               </button>
-              <button type="button" onClick={generateBlock} className="crm-button-primary h-11 px-5">
+              <button type="button" onClick={generateBlock} className="crm-button-primary h-11 px-6">
                 <Sparkles className="size-4" />
-                Generate preview
+                Generate
               </button>
             </div>
           </div>
         ) : null}
 
         {currentStep === 4 ? (
-          <div className="space-y-5">
-            <div>
-              <h2 className="text-card-title">4. Install</h2>
-              <p className="text-label text-[hsl(var(--color-text-secondary))]">Install the generated block without leaving this page.</p>
-            </div>
+          <div className="space-y-8">
+            <h2 className="text-page-title text-2xl sm:text-3xl">Install</h2>
 
             {generatedBlock ? (
-              <div className="space-y-4 rounded-2xl border border-border/80 bg-background/35 p-4">
+              <div className="space-y-6 rounded-3xl border border-border/80 bg-background/35 p-6">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-base font-semibold text-foreground">{generatedBlock.name}</p>
@@ -448,9 +408,8 @@ Make the template reusable across future client workspaces.`
                   <p className="text-xs leading-5 text-muted-foreground">{generatedBlock.outcome}</p>
                 </div>
 
-                <div className="rounded-2xl border border-border/70 bg-card/70 p-4">
+                <div className="rounded-3xl border border-border/70 bg-card/70 p-5">
                   <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Install targets</p>
-                  <p className="mt-1 text-xs text-muted-foreground">Choose where this block should go.</p>
                   <div className="mt-3 space-y-2">
                     {workspaces.map((workspace) => {
                       const checked = selectedWorkspaceIds.includes(workspace.id);
@@ -472,9 +431,7 @@ Make the template reusable across future client workspaces.`
                                 </span>
                               ) : null}
                             </span>
-                            <span className="block truncate text-xs text-muted-foreground">
-                              {workspace.contactCount.toLocaleString()} clients · {formatFrameworkLabel(workspace.soulId)} · /{workspace.slug}
-                            </span>
+                            <span className="block truncate text-xs text-muted-foreground">/{workspace.slug}</span>
                           </span>
                         </label>
                       );
@@ -522,8 +479,8 @@ Make the template reusable across future client workspaces.`
                 ) : null}
 
                 {installState.message || (installState.results?.length ?? 0) > 0 ? (
-                  <div className="rounded-2xl border border-border/70 bg-card/70 p-4">
-                    <p className="text-sm font-medium text-foreground">Seldon response</p>
+                  <div className="rounded-3xl border border-border/70 bg-card/70 p-5">
+                    <p className="text-sm font-medium text-foreground">Result</p>
                     {installState.message ? <p className="mt-2 text-sm text-muted-foreground">{installState.message}</p> : null}
                     {(installState.results?.length ?? 0) > 0 ? (
                       <div className="mt-3 space-y-3">
@@ -531,14 +488,9 @@ Make the template reusable across future client workspaces.`
                           <div key={`${result.blockId}-${result.openPath}`} className="rounded-xl border border-border/70 bg-background/35 p-3">
                             <p className="text-sm font-medium text-foreground">{result.blockName}</p>
                             <p className="mt-1 text-sm text-muted-foreground">{result.description ?? result.summary}</p>
-                            <div className="mt-3 flex flex-wrap gap-2">
-                              <Link href={result.openPath} className="crm-button-secondary h-9 px-3 inline-flex items-center justify-center">
-                                Open
-                              </Link>
-                              <Link href={result.savePath} className="crm-button-secondary h-9 px-3 inline-flex items-center justify-center">
-                                View in Seldon
-                              </Link>
-                            </div>
+                            <Link href={result.openPath} className="crm-button-secondary mt-3 h-9 px-3 inline-flex items-center justify-center">
+                              Open
+                            </Link>
                           </div>
                         ))}
                       </div>
@@ -547,16 +499,15 @@ Make the template reusable across future client workspaces.`
                 ) : null}
 
                 <div className="flex justify-start">
-                  <button type="button" onClick={() => setCurrentStep(3)} className="crm-button-secondary h-11 px-5">
+                  <button type="button" onClick={() => setCurrentStep(3)} className="crm-button-secondary h-11 px-6">
                     <ArrowLeft className="size-4" />
                     Back
                   </button>
                 </div>
               </div>
             ) : (
-              <div className="rounded-2xl border border-dashed border-border/80 bg-background/20 p-8 text-center">
-                <p className="text-sm font-medium text-foreground">Generate the preview first.</p>
-                <p className="mt-2 text-sm text-muted-foreground">You&apos;ll install the block here once step 3 is complete.</p>
+              <div className="rounded-3xl border border-dashed border-border/80 bg-background/20 p-10 text-center">
+                <p className="text-sm font-medium text-foreground">Generate first.</p>
               </div>
             )}
           </div>
