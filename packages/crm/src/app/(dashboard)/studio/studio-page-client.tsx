@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useMemo, useState } from "react";
-import { ArrowLeft, Check, Sparkles } from "lucide-react";
+import { useActionState, useEffect, useMemo, useState } from "react";
+import { ArrowLeft, ArrowUpRight, Check, LoaderCircle, Sparkles } from "lucide-react";
 import { runSeldonItAction, type SeldonRunState } from "@/lib/ai/seldon-actions";
 
 type StudioListing = {
@@ -34,6 +34,14 @@ const studioSteps: Array<{ id: StudioStep; label: string }> = [
 ];
 
 const initialInstallState: SeldonRunState = { ok: false };
+const installLoadingMessages = [
+  "Analyzing...",
+  "Compiling Soul...",
+  "Building core blocks...",
+  "Wiring payments...",
+  "Activating Brain v2...",
+  "Deploying...",
+];
 
 const starterTemplates = [
   {
@@ -138,6 +146,7 @@ export function StudioPageClient({
   const [baseBlockId, setBaseBlockId] = useState<string>("");
   const [generatedBlock, setGeneratedBlock] = useState<GeneratedBlockPreview | null>(null);
   const [selectedWorkspaceIds, setSelectedWorkspaceIds] = useState<string[]>(workspaces.map((workspace) => workspace.id));
+  const [installTick, setInstallTick] = useState(0);
 
   const baseBlockLabel = useMemo(() => {
     if (!baseBlockId) {
@@ -159,6 +168,27 @@ export function StudioPageClient({
   const activeWorkspaceLabel = activeWorkspaceName;
   const selectedWorkspaceSummary = selectedWorkspaceNames.length > 0 ? selectedWorkspaceNames.join(", ") : "No client selected";
   const maxAccessibleStep: StudioStep = generatedBlock ? 4 : currentStep;
+  const installResults = installState.results ?? [];
+  const primaryInstallResult = installResults[0] ?? null;
+  const showInstallSuccess = installState.ok && (installResults.length > 0 || Boolean(installState.message));
+  const installLoadingMessage = installLoadingMessages[installTick % installLoadingMessages.length] ?? installLoadingMessages[0];
+  const installDescription =
+    primaryInstallResult?.description?.trim() ||
+    installState.message?.trim() ||
+    (generatedBlock ? `${generatedBlock.name} is now live in your workspace.` : "Your new block is ready.");
+
+  useEffect(() => {
+    if (!installPending) {
+      setInstallTick(0);
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      setInstallTick((current) => current + 1);
+    }, 1800);
+
+    return () => window.clearInterval(interval);
+  }, [installPending]);
 
   function resetGeneratedBlock() {
     if (generatedBlock) {
@@ -472,29 +502,66 @@ Make the template reusable across future client workspaces.`
                   </form>
                 </div>
 
+                {installPending ? (
+                  <div className="rounded-3xl border border-primary/20 bg-primary/5 p-6">
+                    <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:text-left">
+                      <div className="inline-flex size-12 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-primary">
+                        <LoaderCircle className="size-5 animate-spin" />
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-base font-semibold text-foreground">Installing your block</p>
+                        <p className="text-sm text-muted-foreground">{installLoadingMessage}</p>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+
                 {installState.error ? (
                   <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
                     {installState.error}
                   </div>
                 ) : null}
 
-                {installState.message || (installState.results?.length ?? 0) > 0 ? (
-                  <div className="rounded-3xl border border-border/70 bg-card/70 p-5">
-                    <p className="text-sm font-medium text-foreground">Result</p>
-                    {installState.message ? <p className="mt-2 text-sm text-muted-foreground">{installState.message}</p> : null}
-                    {(installState.results?.length ?? 0) > 0 ? (
-                      <div className="mt-3 space-y-3">
-                        {installState.results?.map((result) => (
-                          <div key={`${result.blockId}-${result.openPath}`} className="rounded-xl border border-border/70 bg-background/35 p-3">
-                            <p className="text-sm font-medium text-foreground">{result.blockName}</p>
-                            <p className="mt-1 text-sm text-muted-foreground">{result.description ?? result.summary}</p>
-                            <Link href={result.openPath} className="crm-button-secondary mt-3 h-9 px-3 inline-flex items-center justify-center">
-                              Open
-                            </Link>
-                          </div>
-                        ))}
+                {showInstallSuccess ? (
+                  <div className="rounded-3xl border border-emerald-500/25 bg-emerald-500/5 p-6 shadow-(--shadow-card)">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="flex items-start gap-4">
+                        <div className="inline-flex size-12 items-center justify-center rounded-full border border-emerald-500/20 bg-emerald-500/10 text-emerald-500">
+                          <Check className="size-5" />
+                        </div>
+                        <div className="space-y-2">
+                          <h3 className="text-xl font-semibold text-foreground">Block installed successfully</h3>
+                          <p className="text-sm text-muted-foreground">{installDescription}</p>
+                        </div>
                       </div>
-                    ) : null}
+                      {installResults.length > 1 ? (
+                        <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                          {installResults.length} installs ready
+                        </span>
+                      ) : null}
+                    </div>
+
+                    <div className="mt-5 rounded-2xl border border-border/70 bg-background/50 p-4">
+                      <p className="text-sm font-medium text-foreground">{primaryInstallResult?.blockName ?? generatedBlock?.name ?? "New block"}</p>
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        This block was automatically personalized to your current OS (branding, CRM, Soul settings)
+                      </p>
+                    </div>
+
+                    <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+                      <Link
+                        href={primaryInstallResult?.openPath ?? "/dashboard"}
+                        className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-emerald-500 px-5 text-sm font-medium text-white transition hover:bg-emerald-400"
+                      >
+                        Open the new block now
+                        <ArrowUpRight className="size-4" />
+                      </Link>
+                      <Link href="/seldon" className="crm-button-secondary h-11 px-5 inline-flex items-center justify-center">
+                        Customize further with Seldon It
+                      </Link>
+                    </div>
+
+                    <p className="mt-4 text-xs text-muted-foreground">You can always ask Seldon It to modify it later</p>
                   </div>
                 ) : null}
 
