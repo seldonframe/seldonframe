@@ -8,6 +8,19 @@ import { getOrgId } from "@/lib/auth/helpers";
 
 const WORKSPACE_MONTHLY_PRICE_ID = "price_1TMC7UJOtNZA0x7xNrl2VDVE";
 
+function normalizeReturnPath(value: unknown, fallback: string) {
+  if (typeof value !== "string") {
+    return fallback;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("/") || trimmed.startsWith("//")) {
+    return fallback;
+  }
+
+  return trimmed;
+}
+
 function resolveUserIdFromSeldonApiKey(headers: Headers): string | null {
   const providedKey = headers.get("x-seldon-api-key")?.trim();
   if (!providedKey) {
@@ -72,8 +85,10 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const body = (await req.json().catch(() => ({}))) as { quantity?: unknown };
+  const body = (await req.json().catch(() => ({}))) as { quantity?: unknown; successPath?: unknown; cancelPath?: unknown };
   const quantity = typeof body.quantity === "number" ? body.quantity : 1;
+  const successPath = normalizeReturnPath(body.successPath, "/dashboard?success=true&session_id={CHECKOUT_SESSION_ID}");
+  const cancelPath = normalizeReturnPath(body.cancelPath, "/pricing");
 
   if (!Number.isInteger(quantity) || quantity < 1) {
     return NextResponse.json({ error: "quantity must be a positive integer" }, { status: 400 });
@@ -101,8 +116,8 @@ export async function POST(req: NextRequest) {
     mode: "subscription",
     payment_method_types: ["card"],
     line_items: [{ price: WORKSPACE_MONTHLY_PRICE_ID, quantity }],
-    success_url: `${origin}/dashboard?success=true&session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${origin}/pricing`,
+    success_url: `${origin}${successPath}`,
+    cancel_url: `${origin}${cancelPath}`,
     metadata: {
       userId,
       orgId: orgId ?? "",

@@ -14,6 +14,7 @@ type CreateWorkspaceState = {
 
 type NewWorkspacePromptFormProps = {
   action: (state: CreateWorkspaceState, formData: FormData) => Promise<CreateWorkspaceState>;
+  initialUpgradeRequired?: boolean;
 };
 
 const initialState: CreateWorkspaceState = {};
@@ -63,11 +64,43 @@ function SubmitButton() {
   );
 }
 
-export function NewWorkspacePromptForm({ action }: NewWorkspacePromptFormProps) {
+export function NewWorkspacePromptForm({ action, initialUpgradeRequired = false }: NewWorkspacePromptFormProps) {
   const [state, formAction] = useActionState(action, initialState);
   const [description, setDescription] = useState("");
+  const [upgradePending, setUpgradePending] = useState(false);
+  const [upgradeError, setUpgradeError] = useState<string | null>(null);
 
-  if (state.upgradeRequired) {
+  const showUpgradeCard = initialUpgradeRequired || state.upgradeRequired;
+
+  async function openUpgradeCheckout() {
+    try {
+      setUpgradePending(true);
+      setUpgradeError(null);
+
+      const response = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          quantity: 1,
+          successPath: "/orgs/new?upgrade=success&session_id={CHECKOUT_SESSION_ID}",
+          cancelPath: "/orgs/new",
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as { error?: string; url?: string } | null;
+
+      if (!response.ok || !payload?.url) {
+        throw new Error(payload?.error ?? "Failed to open Stripe checkout.");
+      }
+
+      window.location.href = payload.url;
+    } catch (error) {
+      setUpgradeError(error instanceof Error ? error.message : "Failed to open Stripe checkout.");
+      setUpgradePending(false);
+    }
+  }
+
+  if (showUpgradeCard) {
     return (
       <div className="mx-auto max-w-xl">
         <div className="rounded-3xl border border-primary/20 bg-primary/6 px-6 py-8 text-center shadow-(--shadow-card) sm:px-8">
@@ -82,15 +115,22 @@ export function NewWorkspacePromptForm({ action }: NewWorkspacePromptFormProps) 
           </div>
 
           <div className="mt-6 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-            <Link href="/pricing" className="crm-button-primary h-11 px-5 inline-flex items-center justify-center">
-              Upgrade to unlock more workspaces
-            </Link>
+            <Button type="button" size="lg" className="h-11 min-w-64 px-5 text-sm sm:text-base" disabled={upgradePending} onClick={() => void openUpgradeCheckout()}>
+              {upgradePending ? (
+                <span className="inline-flex items-center gap-2">
+                  <LoaderCircle className="size-4 animate-spin" />
+                  <span>Opening secure checkout...</span>
+                </span>
+              ) : (
+                "Upgrade to unlock more workspaces"
+              )}
+            </Button>
             <Link href="/orgs" className="crm-button-secondary h-11 px-5 inline-flex items-center justify-center">
               Or use an existing workspace
             </Link>
           </div>
 
-          {state.error ? <p className="mt-4 text-sm text-muted-foreground">{state.error}</p> : null}
+          {upgradeError || state.error ? <p className="mt-4 text-sm text-muted-foreground">{upgradeError ?? state.error}</p> : null}
         </div>
       </div>
     );
