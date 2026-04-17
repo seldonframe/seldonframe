@@ -1,6 +1,6 @@
 import { asc, desc, eq, or, sql } from "drizzle-orm";
 import Link from "next/link";
-import { DollarSign, Users, CalendarDays, Activity, ChevronDown, Plus, Download, ChartLine, MoreHorizontal, BarChart2, ClipboardList, Search, Filter, FileInput } from "lucide-react";
+import { DollarSign, Users, CalendarDays, Activity, Plus, ChartLine, MoreHorizontal, BarChart2, ClipboardList, Search, Filter, FileInput } from "lucide-react";
 import { db } from "@/db";
 import { activities, contacts as contactsTable, metricsSnapshots, organizations, orgMembers, paymentRecords, stripeConnections, type OrganizationIntegrations } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth/helpers";
@@ -69,6 +69,27 @@ function formatFrameworkLabel(soulId: string | null) {
   }
 
   return soulId.charAt(0).toUpperCase() + soulId.slice(1);
+}
+
+function getWorkspaceInitials(name: string) {
+  const parts = name.split(" ").filter(Boolean).slice(0, 2);
+  if (parts.length === 0) {
+    return "WS";
+  }
+
+  return parts.map((part) => part.charAt(0).toUpperCase()).join("");
+}
+
+function getWorkspaceStatus(isActive: boolean, contactCount: number) {
+  if (isActive) {
+    return "Active workspace";
+  }
+
+  if (contactCount > 0) {
+    return "Live with clients";
+  }
+
+  return "Ready to launch";
 }
 
 function TrendText({ value }: { value: number }) {
@@ -270,7 +291,7 @@ export default async function DashboardPage({
   const totalWorkspaceRevenue = workspaceStats.reduce((sum, row) => sum + row.monthlyRevenue, 0);
 
   const showWorkspaceTabs = workspaceRows.length > 1;
-  const activeDashboardView = showWorkspaceTabs && params?.view === "all" ? "all" : "workspace";
+  const activeDashboardView = showWorkspaceTabs ? (params?.view === "workspace" ? "workspace" : "all") : "workspace";
 
   const [snapshotRowsRaw, activityRows, paymentRows, orgRow, stripeRow] = await Promise.all([
     db.select().from(metricsSnapshots).where(eq(metricsSnapshots.orgId, orgId)).orderBy(asc(metricsSnapshots.date)).limit(180),
@@ -468,17 +489,40 @@ export default async function DashboardPage({
     return startsAt >= startOfToday && startsAt < endOfTomorrow;
   });
 
+  const agencyQuickActions = [
+    {
+      label: "Create New Client OS",
+      href: "/orgs/new",
+      className: "crm-button-primary",
+    },
+    {
+      label: "Clone as Template",
+      href: "/seldon?prompt=Help%20me%20clone%20my%20current%20workspace%20as%20a%20reusable%20agency%20template.",
+      className: "crm-button-secondary",
+    },
+    {
+      label: "Install Block to Multiple Clients",
+      href: "/seldon?prompt=Install%20a%20block%20across%20multiple%20client%20workspaces%20and%20tell%20me%20which%20clients%20should%20get%20it.",
+      className: "crm-button-secondary",
+    },
+    {
+      label: "View Cross-Client Insights",
+      href: "/dashboard?view=all",
+      className: "crm-button-secondary",
+    },
+  ];
+
   return (
     <main className="animate-page-enter flex-1 overflow-auto w-full space-y-5 p-3 sm:space-y-6 sm:p-4 md:p-6">
       {showWorkspaceTabs ? (
         <div className="inline-flex items-center rounded-xl border border-border/80 bg-card/75 p-1 shadow-(--shadow-xs)">
           <Link
-            href="/dashboard"
+            href="/dashboard?view=workspace"
             className={`inline-flex h-8 items-center rounded-md px-3 text-xs font-medium transition-colors sm:text-sm ${
               activeDashboardView === "workspace" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent"
             }`}
           >
-            This Workspace
+            Active Workspace
           </Link>
           <Link
             href="/dashboard?view=all"
@@ -493,54 +537,93 @@ export default async function DashboardPage({
 
       {activeDashboardView === "all" ? (
         <section className="crm-card space-y-5">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
-              <h2 className="text-base sm:text-lg font-semibold">All Workspaces</h2>
-              <p className="text-sm text-muted-foreground">Overview across all workspaces you manage.</p>
+              <h2 className="text-base sm:text-lg font-semibold">Your Client Workspaces</h2>
+              <p className="text-sm text-muted-foreground">Pick a client, jump into Studio, or let Seldon choose the highest-impact next move.</p>
             </div>
-            <Link href="/orgs/new" className="crm-button-primary h-9 px-3 text-xs sm:text-sm">+ New Workspace</Link>
+            <div className="flex flex-wrap gap-2">
+              <Link href="/seldon?prompt=Help%20me%20manage%20my%20agency%20portfolio%2C%20pick%20the%20next%20best%20client%20action%2C%20and%20do%20the%20work." className="crm-button-primary h-9 px-4 text-xs sm:text-sm">
+                Ask Seldon
+              </Link>
+              <Link href="/orgs/new" className="crm-button-secondary h-9 px-4 text-xs sm:text-sm">
+                Create New Client OS
+              </Link>
+            </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[680px] text-sm">
-              <thead>
-                <tr className="border-b border-border/60 text-left text-xs uppercase tracking-wider text-muted-foreground">
-                  <th className="px-3 py-2">Name</th>
-                  <th className="px-3 py-2">Framework</th>
-                  <th className="px-3 py-2">Clients</th>
-                  <th className="px-3 py-2">Revenue</th>
-                  <th className="px-3 py-2">Status</th>
-                  <th className="px-3 py-2 text-right">Open</th>
-                </tr>
-              </thead>
-              <tbody>
-                {workspaceRows.map((workspace) => {
-                  const stat = workspaceStatMap.get(workspace.id);
-                  return (
-                    <tr key={workspace.id} className="border-b border-border/40">
-                      <td className="px-3 py-3 font-medium text-foreground">{workspace.name}</td>
-                      <td className="px-3 py-3 text-muted-foreground">{formatFrameworkLabel(workspace.soulId)}</td>
-                      <td className="px-3 py-3 text-muted-foreground">{(stat?.contactCount ?? 0).toLocaleString()}</td>
-                      <td className="px-3 py-3 text-muted-foreground">{formatCurrency(stat?.monthlyRevenue ?? 0)}</td>
-                      <td className="px-3 py-3">
-                        <span className="inline-flex items-center gap-1 rounded-md border border-positive/30 bg-positive/10 px-2 py-0.5 text-xs font-medium text-positive">
-                          ✓ Active
-                        </span>
-                      </td>
-                      <td className="px-3 py-3 text-right">
-                        <form action={setActiveOrgAction} className="inline-block">
-                          <input type="hidden" name="orgId" value={workspace.id} />
-                          <input type="hidden" name="redirectTo" value="/dashboard" />
-                          <button type="submit" className="crm-button-secondary h-8 px-3 text-xs font-medium">
-                            Open
-                          </button>
-                        </form>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="rounded-2xl border border-border/80 bg-background/30 px-4 py-3 text-sm text-muted-foreground">
+            Fast path: <span className="font-medium text-foreground">pick a client</span> → <span className="font-medium text-foreground">open Creator Studio</span> → <span className="font-medium text-foreground">generate the block</span> → <span className="font-medium text-foreground">install it</span>.
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {agencyQuickActions.map((action) => (
+              <Link key={action.label} href={action.href} className={`${action.className} h-9 px-4 text-xs sm:text-sm`}>
+                {action.label}
+              </Link>
+            ))}
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {workspaceRows.map((workspace) => {
+              const stat = workspaceStatMap.get(workspace.id);
+              const isActiveWorkspace = workspace.id === orgId;
+              const workspacePrompt = `Help me improve the ${workspace.name} client workspace. Audit the highest-impact fixes, tighten the brand, and suggest the next build step.`;
+
+              return (
+                <article key={workspace.id} className="rounded-2xl border border-border/80 bg-background/35 p-5 shadow-(--shadow-xs)">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl border border-border/70 bg-card text-sm font-semibold text-foreground">
+                        {getWorkspaceInitials(workspace.name)}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-foreground">{workspace.name}</p>
+                        <p className="truncate text-xs text-muted-foreground">{formatFrameworkLabel(workspace.soulId)} OS · /{workspace.slug}</p>
+                      </div>
+                    </div>
+                    <span className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-1 text-[11px] font-medium ${isActiveWorkspace ? "border-primary/30 bg-primary/10 text-primary" : "border-border bg-muted/40 text-muted-foreground"}`}>
+                      {getWorkspaceStatus(isActiveWorkspace, stat?.contactCount ?? 0)}
+                    </span>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                    <div className="rounded-xl border border-border/70 bg-card/70 p-3">
+                      <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">Clients</p>
+                      <p className="mt-1 text-base font-semibold text-foreground">{(stat?.contactCount ?? 0).toLocaleString()}</p>
+                    </div>
+                    <div className="rounded-xl border border-border/70 bg-card/70 p-3">
+                      <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">Revenue</p>
+                      <p className="mt-1 text-base font-semibold text-foreground">{formatCurrency(stat?.monthlyRevenue ?? 0)}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <form action={setActiveOrgAction}>
+                      <input type="hidden" name="orgId" value={workspace.id} />
+                      <input type="hidden" name="redirectTo" value="/dashboard?view=workspace" />
+                      <button type="submit" className="crm-button-secondary h-9 px-4 text-xs sm:text-sm">
+                        Open dashboard
+                      </button>
+                    </form>
+                    <form action={setActiveOrgAction}>
+                      <input type="hidden" name="orgId" value={workspace.id} />
+                      <input type="hidden" name="redirectTo" value="/studio" />
+                      <button type="submit" className="crm-button-secondary h-9 px-4 text-xs sm:text-sm">
+                        Open Studio
+                      </button>
+                    </form>
+                    <form action={setActiveOrgAction}>
+                      <input type="hidden" name="orgId" value={workspace.id} />
+                      <input type="hidden" name="redirectTo" value={`/seldon?prompt=${encodeURIComponent(workspacePrompt)}`} />
+                      <button type="submit" className="crm-button-primary h-9 px-4 text-xs sm:text-sm">
+                        Ask Seldon
+                      </button>
+                    </form>
+                  </div>
+                </article>
+              );
+            })}
           </div>
 
           <p className="text-sm text-muted-foreground">
@@ -563,26 +646,40 @@ export default async function DashboardPage({
             Good {timeOfDay()}, {firstName}
           </h1>
           <p className="text-sm sm:text-base text-muted-foreground">
-            Today: <span className="text-foreground font-medium">{sessionsToday} sessions</span>,{" "}
-            <span className="text-foreground font-medium">{followUpsDue} follow-ups due</span>
+            Fastest path: <span className="text-foreground font-medium">open Creator Studio</span> or <span className="text-foreground font-medium">ask Seldon</span> to build the next client workflow.
           </p>
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
-          <button type="button" className="crm-button-secondary h-8 gap-2 px-3 text-xs sm:h-9 sm:gap-3 sm:text-sm">
-            <span className="hidden xs:inline">Import/Export</span>
-            <span className="xs:hidden">
-              <Download className="size-4" />
-            </span>
-            <ChevronDown className="size-3 sm:size-4 text-muted-foreground" />
-          </button>
-          <Link href="/contacts" className="crm-button-primary h-8 gap-2 px-3 text-xs sm:h-9 sm:gap-3 sm:text-sm">
+          <Link href="/studio" className="crm-button-secondary h-8 gap-2 px-3 text-xs sm:h-9 sm:gap-3 sm:text-sm">
+            <span>Open Creator Studio</span>
+          </Link>
+          <Link href="/orgs/new" className="crm-button-secondary h-8 gap-2 px-3 text-xs sm:h-9 sm:gap-3 sm:text-sm">
             <Plus className="size-3 sm:size-4" />
-            <span className="hidden xs:inline">Create New</span>
-            <span className="xs:hidden">New</span>
+            <span>Create New Client OS</span>
+          </Link>
+          <Link href="/seldon?prompt=Help%20me%20improve%20this%20client%20workspace%2C%20tell%20me%20the%20next%20best%20action%2C%20and%20start%20building%20it." className="crm-button-primary h-8 gap-2 px-3 text-xs sm:h-9 sm:gap-3 sm:text-sm">
+            <span className="hidden xs:inline">Ask Seldon</span>
+            <span className="xs:hidden">Seldon</span>
           </Link>
         </div>
       </header>
+
+      {showWorkspaceTabs ? (
+        <section className="crm-card space-y-4">
+          <div>
+            <h2 className="text-base sm:text-lg font-semibold">Agency quick actions</h2>
+            <p className="text-sm text-muted-foreground">Start in Studio if you already know the workflow. Ask Seldon if you want the shortest path.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {agencyQuickActions.map((action) => (
+              <Link key={action.label} href={action.href} className={`${action.className} h-9 px-4 text-xs sm:text-sm`}>
+                {action.label}
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section className="crm-card space-y-5">
         <div className="flex items-center justify-between gap-3">

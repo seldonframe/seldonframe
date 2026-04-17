@@ -163,6 +163,15 @@ export default async function DashboardLayout({
                   userEmail={user?.email || ""}
                   avatarFallback={avatarFallback}
                   canAccessSeldon={canAccessSeldon}
+                  workspaceName={activeOrg?.name || "SeldonFrame"}
+                  activeWorkspaceId={orgId}
+                  workspaceOptions={workspaceOptions.map((workspace) => ({
+                    id: workspace.id,
+                    name: workspace.name,
+                    contactCount: workspace.contactCount,
+                    soulId: workspace.soulId,
+                  }))}
+                  switchWorkspaceAction={setActiveOrgAction}
                 />
                 {children}
               </div>

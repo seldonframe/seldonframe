@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { Bell, Command, Menu, MessageCircle, Moon, Search, Sun } from "lucide-react";
+import { Bell, Check, Command, ChevronsUpDown, Menu, MessageCircle, Moon, Search, Sun } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { useTheme } from "next-themes";
 import { usePathname } from "next/navigation";
@@ -120,18 +120,28 @@ export function DashboardTopbar({
   userEmail,
   avatarFallback,
   canAccessSeldon,
+  workspaceName,
+  activeWorkspaceId,
+  workspaceOptions,
+  switchWorkspaceAction,
 }: {
   userName: string;
   userEmail: string;
   avatarFallback: string;
   canAccessSeldon: boolean;
+  workspaceName: string;
+  activeWorkspaceId: string | null;
+  workspaceOptions: Array<{ id: string; name: string; contactCount: number; soulId: string | null }>;
+  switchWorkspaceAction: (formData: FormData) => void | Promise<void>;
 }) {
   const pathname = usePathname();
   const labels = useLabels();
   const title = getTitle(pathname, labels);
   const { theme, setTheme } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const workspaceMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -153,6 +163,26 @@ export function DashboardTopbar({
     };
   }, [menuOpen]);
 
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (!workspaceMenuRef.current) {
+        return;
+      }
+
+      if (!workspaceMenuRef.current.contains(event.target as Node)) {
+        setWorkspaceMenuOpen(false);
+      }
+    }
+
+    if (workspaceMenuOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [workspaceMenuOpen]);
+
   return (
     <header className="sticky top-0 z-10 flex w-full items-center gap-2 rounded-2xl border border-border/80 bg-card/88 px-3 py-3 shadow-(--shadow-xs) backdrop-blur-xl sm:gap-3 sm:px-5 sm:py-4">
       <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-3">
@@ -164,7 +194,51 @@ export function DashboardTopbar({
         >
           <Menu className="h-5 w-5" />
         </button>
-        <p className="flex-1 truncate text-base font-semibold tracking-tight sm:text-lg">{title}</p>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-base font-semibold tracking-tight sm:text-lg">{title}</p>
+          <p className="truncate text-xs text-muted-foreground">Pick a client. Ask Seldon. Ship the block.</p>
+        </div>
+      </div>
+
+      <div className="relative hidden shrink-0 lg:block" ref={workspaceMenuRef}>
+        <button
+          type="button"
+          onClick={() => setWorkspaceMenuOpen((current) => !current)}
+          className="flex h-10 min-w-[240px] items-center gap-3 rounded-xl border border-border/80 bg-background/80 px-3 text-left shadow-(--shadow-xs) transition-all hover:border-border hover:bg-background"
+        >
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium text-foreground">{workspaceName}</p>
+            <p className="truncate text-[11px] text-muted-foreground">Switch client workspace</p>
+          </div>
+          <ChevronsUpDown className="size-4 text-muted-foreground" />
+        </button>
+
+        {workspaceMenuOpen ? (
+          <div className="absolute right-0 z-30 mt-2 w-[320px] rounded-2xl border border-border/80 bg-card/96 p-2.5 shadow-(--shadow-dropdown) backdrop-blur-xl">
+            <p className="px-2 pb-1 text-[10px] font-semibold tracking-[0.16em] text-muted-foreground/80">CLIENT WORKSPACES</p>
+            <div className="space-y-1">
+              {workspaceOptions.map((workspace) => (
+                <form key={workspace.id} action={switchWorkspaceAction}>
+                  <input type="hidden" name="orgId" value={workspace.id} />
+                  <input type="hidden" name="redirectTo" value={pathname || "/dashboard"} />
+                  <button
+                    type="submit"
+                    className="flex w-full items-start gap-2 rounded-xl px-2.5 py-2.5 text-left transition-colors hover:bg-accent/60"
+                    onClick={() => setWorkspaceMenuOpen(false)}
+                  >
+                    <span className="mt-0.5 inline-flex size-4 items-center justify-center text-primary">
+                      {activeWorkspaceId === workspace.id ? <Check className="size-3.5" /> : null}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-foreground">{workspace.name}</span>
+                      <span className="block truncate text-xs text-muted-foreground">{workspace.contactCount.toLocaleString()} clients · {workspace.soulId ? workspace.soulId.charAt(0).toUpperCase() + workspace.soulId.slice(1) : "Custom"}</span>
+                    </span>
+                  </button>
+                </form>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <div className="relative mx-auto hidden flex-1 md:block md:max-w-[320px]">
@@ -184,14 +258,20 @@ export function DashboardTopbar({
 
       <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
         {canAccessSeldon ? (
-          <button
-            type="button"
-            className="crm-topbar-icon-btn"
-            aria-label="Open Seldon builder chat"
-            onClick={() => window.dispatchEvent(new CustomEvent("crm:builder-seldon-open"))}
-          >
-            <MessageCircle className="h-4 w-4" />
-          </button>
+          <>
+            <Link href="/seldon?prompt=Help%20me%20manage%20my%20client%20workspaces%2C%20recommend%20the%20next%20best%20action%2C%20and%20do%20the%20work%20for%20me." className="hidden h-9 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground shadow-(--shadow-xs) transition-all hover:opacity-95 sm:inline-flex">
+              <MessageCircle className="h-4 w-4" />
+              Ask Seldon
+            </Link>
+            <button
+              type="button"
+              className="crm-topbar-icon-btn sm:hidden"
+              aria-label="Open Seldon builder chat"
+              onClick={() => window.dispatchEvent(new CustomEvent("crm:builder-seldon-open"))}
+            >
+              <MessageCircle className="h-4 w-4" />
+            </button>
+          </>
         ) : null}
 
         <button type="button" className="crm-topbar-icon-btn" aria-label="Toggle theme" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
