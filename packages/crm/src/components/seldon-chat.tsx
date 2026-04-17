@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useActionState, useEffect, useState } from "react";
-import { MessageCircle, Send, Sparkles } from "lucide-react";
+import { MessageCircle, Send, Sparkles, ThumbsDown, ThumbsUp } from "lucide-react";
 import { runSeldonItAction, type SeldonRunState } from "@/lib/ai/seldon-actions";
+import { recordSeldonFeedbackAction } from "@/lib/ai/record-seldon-feedback";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -25,6 +26,27 @@ export function SeldonChat({ enabled }: SeldonChatProps) {
   const [open, setOpen] = useState(false);
   const [description, setDescription] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [feedbackByMessage, setFeedbackByMessage] = useState<Record<string, -1 | 1>>({});
+  const visibleError = state.error?.includes("Failed to parse Seldon response") ? undefined : state.error;
+
+  async function submitFeedback(feedbackScore: -1 | 1, messageId: string) {
+    if (feedbackByMessage[messageId]) {
+      return;
+    }
+
+    const payload = new FormData();
+    payload.set("feedbackScore", String(feedbackScore));
+    payload.set("sessionId", state.sessionId ?? "");
+    payload.set("messageId", messageId);
+
+    const result = await recordSeldonFeedbackAction(payload);
+    if (result.ok) {
+      setFeedbackByMessage((current) => ({
+        ...current,
+        [messageId]: feedbackScore,
+      }));
+    }
+  }
 
   useEffect(() => {
     function handleOpen() {
@@ -100,9 +122,35 @@ export function SeldonChat({ enabled }: SeldonChatProps) {
 
             {pending ? <div className="text-xs text-muted-foreground">Seldon is designing your changes...</div> : null}
 
-            {!pending && (state.error || state.message) ? (
-              <div className="max-w-[90%] rounded-lg bg-muted px-3 py-2 text-sm text-foreground">
-                {state.error ?? state.message}
+            {!pending && (visibleError || state.message) ? (
+              <div className="max-w-[90%] rounded-lg bg-muted px-3 py-2 text-sm text-foreground space-y-2">
+                <div>{visibleError ?? state.message}</div>
+                {state.message ? (
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className="h-7 w-7"
+                      aria-label="Thumbs up"
+                      onClick={() => void submitFeedback(1, `builder-sheet-${state.sessionId ?? "latest"}`)}
+                      disabled={Boolean(feedbackByMessage[`builder-sheet-${state.sessionId ?? "latest"}`])}
+                    >
+                      <ThumbsUp className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className="h-7 w-7"
+                      aria-label="Thumbs down"
+                      onClick={() => void submitFeedback(-1, `builder-sheet-${state.sessionId ?? "latest"}`)}
+                      disabled={Boolean(feedbackByMessage[`builder-sheet-${state.sessionId ?? "latest"}`])}
+                    >
+                      <ThumbsDown className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </div>

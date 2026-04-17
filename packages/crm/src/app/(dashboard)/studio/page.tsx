@@ -16,16 +16,7 @@ export default async function CreatorStudioPage() {
     db
       .select({
         id: marketplaceListings.id,
-        slug: marketplaceListings.slug,
         name: marketplaceListings.name,
-        niche: marketplaceListings.niche,
-        price: marketplaceListings.price,
-        previewImageUrl: marketplaceListings.previewImageUrl,
-        installCount: marketplaceListings.installCount,
-        rating: marketplaceListings.rating,
-        reviewCount: marketplaceListings.reviewCount,
-        isPublished: marketplaceListings.isPublished,
-        updatedAt: marketplaceListings.updatedAt,
       })
       .from(marketplaceListings)
       .where(eq(marketplaceListings.creatorOrgId, orgId))
@@ -39,10 +30,7 @@ export default async function CreatorStudioPage() {
     <StudioPageClient
       activeWorkspaceId={activeWorkspace?.id ?? orgId}
       activeWorkspaceName={activeWorkspace?.name ?? "Active Workspace"}
-      listings={listings.map((listing) => ({
-        ...listing,
-        updatedAt: listing.updatedAt.toISOString(),
-      }))}
+      listings={listings}
       workspaces={workspaces.map((workspace) => ({
         id: workspace.id,
         name: workspace.name,

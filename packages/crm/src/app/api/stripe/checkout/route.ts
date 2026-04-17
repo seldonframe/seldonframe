@@ -115,13 +115,23 @@ export async function POST(req: NextRequest) {
     customer_email: dbUser.email ?? undefined,
     mode: "subscription",
     payment_method_types: ["card"],
+    client_reference_id: userId,
     line_items: [{ price: WORKSPACE_MONTHLY_PRICE_ID, quantity }],
     success_url: `${origin}${successPath}`,
     cancel_url: `${origin}${cancelPath}`,
     metadata: {
+      seldonframe_user_id: userId,
       userId,
       orgId: orgId ?? "",
       type: "workspace_addon",
+    },
+    subscription_data: {
+      metadata: {
+        seldonframe_user_id: userId,
+        userId,
+        orgId: orgId ?? "",
+        type: "workspace_addon",
+      },
     },
   });
 

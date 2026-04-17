@@ -3,7 +3,6 @@ import { headers } from "next/headers";
 import { auth } from "@/auth";
 import { SetupWizard } from "@/components/soul/setup-wizard";
 import { NewWorkspacePromptForm } from "@/components/orgs/new-workspace-prompt-form";
-import { getPlan } from "@/lib/billing/plans";
 import coachingFramework from "@/lib/frameworks/coaching.json";
 import agencyFramework from "@/lib/frameworks/agency.json";
 import saasFramework from "@/lib/frameworks/saas.json";
@@ -45,12 +44,6 @@ export default async function NewWorkspacePage() {
 
   if (!session?.user) {
     redirect("/login");
-  }
-
-  const plan = getPlan(session.user.planId ?? "");
-
-  if (!plan || plan.type !== "pro") {
-    redirect("/dashboard");
   }
 
   const limitStatus = await getWorkspaceLimitStatus();
@@ -156,23 +149,17 @@ export default async function NewWorkspacePage() {
         <section className="mx-auto flex min-h-[74vh] max-w-5xl items-center justify-center">
           <div className="glass-card w-full max-w-3xl border border-border/70 p-6 sm:p-8 md:p-10">
             {limitStatus.canCreate ? (
-              <>
-                <div className="space-y-4 text-center">
-                  <h1 className="text-page-title">Create New Workspace</h1>
-                  <p className="mx-auto max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
-                    Tell Seldon what you do, or paste a URL, and it will generate your complete operating system.
-                  </p>
-                </div>
-
-                <div className="mt-10">
-                  <NewWorkspacePromptForm action={createWorkspaceAction} initialUpgradeRequired={!limitStatus.canCreate} />
-                </div>
-              </>
-            ) : (
-              <div className="mt-2">
-                <NewWorkspacePromptForm action={createWorkspaceAction} initialUpgradeRequired />
+              <div className="space-y-4 text-center">
+                <h1 className="text-page-title">Create New Workspace</h1>
+                <p className="mx-auto max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
+                  Tell Seldon what you do, or paste a URL, and it will generate your complete operating system.
+                </p>
               </div>
-            )}
+            ) : null}
+
+            <div className={limitStatus.canCreate ? "mt-10" : "mt-2"}>
+              <NewWorkspacePromptForm action={createWorkspaceAction} initialUpgradeRequired={!limitStatus.canCreate} />
+            </div>
           </div>
         </section>
       </main>

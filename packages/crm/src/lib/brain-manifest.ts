@@ -397,7 +397,12 @@ export async function regenerateBrainManifestForWorkspace(params: {
 }
 
 export async function buildProgressiveBrainContext(workspaceId: string, userPrompt: string) {
-  const manifest = await readBrainManifestForWorkspace(workspaceId);
+  let manifest = await readBrainManifestForWorkspace(workspaceId);
+  if (!manifest) {
+    const regenerated = await regenerateBrainManifestForWorkspace({ workspaceId });
+    manifest = regenerated.manifest;
+  }
+
   if (!manifest) {
     return {
       manifest: null,
@@ -423,6 +428,10 @@ export async function buildProgressiveBrainContext(workspaceId: string, userProm
     .sort((a, b) => b.score - a.score || a.relativePath.localeCompare(b.relativePath))
     .slice(0, 4);
 
+  const fallbackArticles = manifest.relevantArticles
+    .filter((relativePath) => !rankedArticles.some((article) => article.relativePath === relativePath))
+    .slice(0, 4);
+
   const articleBlocks: string[] = [];
   for (const article of rankedArticles) {
     const absolutePath = toAbsoluteBrainPath(article.relativePath);
@@ -434,7 +443,23 @@ export async function buildProgressiveBrainContext(workspaceId: string, userProm
     articleBlocks.push(`### ${article.relativePath}\n${snippet}`);
   }
 
-  const selectedInsights = manifest.personalInsights
+  if (articleBlocks.length === 0) {
+    for (const relativePath of fallbackArticles) {
+      const absolutePath = toAbsoluteBrainPath(relativePath);
+      const snippet = await readSnippet(absolutePath, 1000);
+      if (!snippet) {
+        continue;
+      }
+
+      articleBlocks.push(`### ${relativePath}\n${snippet}`);
+
+      if (articleBlocks.length >= 3) {
+        break;
+      }
+    }
+  }
+
+  let selectedInsights = manifest.personalInsights
     .filter((insight) => {
       if (combinedTags.size === 0) {
         return true;
@@ -443,6 +468,10 @@ export async function buildProgressiveBrainContext(workspaceId: string, userProm
       return scorePathByTags(insight, combinedTags) > 0;
     })
     .slice(0, 5);
+
+  if (selectedInsights.length === 0) {
+    selectedInsights = manifest.personalInsights.slice(0, 3);
+  }
 
   const sections: string[] = [];
   if (manifest.semanticTags.length > 0) {

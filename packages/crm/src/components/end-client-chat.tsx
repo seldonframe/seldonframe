@@ -26,6 +26,7 @@ export function EndClientChat({ orgSlug }: EndClientChatProps) {
   const [description, setDescription] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [feedbackByMessage, setFeedbackByMessage] = useState<Record<string, -1 | 1>>({});
+  const visibleError = state.error?.includes("Failed to parse Seldon response") ? undefined : state.error;
 
   async function submitFeedback(feedbackScore: -1 | 1, messageId: string) {
     if (feedbackByMessage[messageId]) {
@@ -111,9 +112,9 @@ export function EndClientChat({ orgSlug }: EndClientChatProps) {
 
               {pending ? <div className="text-xs text-muted-foreground">Seldon is thinking...</div> : null}
 
-              {!pending && (state.error || state.message) ? (
+              {!pending && (visibleError || state.message) ? (
                 <div className="max-w-[90%] space-y-2 rounded-2xl border border-border/80 bg-card/80 px-4 py-3 text-sm text-foreground shadow-(--shadow-xs)">
-                  <div>{state.error ?? state.message}</div>
+                  <div>{visibleError ?? state.message}</div>
                   {state.message ? (
                     <div className="flex items-center gap-1.5 text-muted-foreground">
                       <Button

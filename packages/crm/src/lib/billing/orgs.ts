@@ -18,6 +18,9 @@ import { installSoul, type FrameworkConfig } from "@/lib/soul/install";
 import { seedInitialBlocks } from "@/lib/soul-compiler/blocks";
 import type { SoulV4 } from "@/lib/soul-compiler/schema";
 
+const FREE_WORKSPACE_ALLOWANCE = 1;
+const WORKSPACE_MONTHLY_PRICE_ID = "price_1TMC7UJOtNZA0x7xNrl2VDVE";
+
 function slugify(value: string) {
   return value
     .toLowerCase()
@@ -48,6 +51,8 @@ async function getBillingUserById(userId: string) {
       id: users.id,
       orgId: users.orgId,
       planId: users.planId,
+      stripeSubscriptionId: users.stripeSubscriptionId,
+      subscriptionStatus: users.subscriptionStatus,
       name: users.name,
       email: users.email,
     })
@@ -67,7 +72,7 @@ function hasActiveWorkspaceSubscription(status: string | null | undefined) {
 }
 
 const WORKSPACE_UPGRADE_REQUIRED_MESSAGE =
-  "You've used your free workspace. Each additional workspace is $9/month. Please upgrade to continue.";
+  "You've used your free workspace. Each additional workspace is $9/month and unlocks more Brain intelligence for your OS.";
 
 async function getOwnedWorkspaceCount(userId: string) {
   const [result] = await db
@@ -78,20 +83,84 @@ async function getOwnedWorkspaceCount(userId: string) {
   return Number(result?.count ?? 0);
 }
 
-async function ensureWorkspaceCreationBillingForUser(user: Awaited<ReturnType<typeof getBillingUserById>>, existingWorkspaces: number) {
-  if (existingWorkspaces <= 1) {
-    return;
-  }
+async function loadWorkspaceAddonSubscription(
+  user: Awaited<ReturnType<typeof getBillingUserById>>,
+  orgSubscription?: Awaited<ReturnType<typeof getOrgSubscription>>
+) {
+  const stripeSubscriptionId = user.stripeSubscriptionId ?? orgSubscription?.stripeSubscriptionId ?? null;
+  const billingStatus = user.subscriptionStatus ?? orgSubscription?.status ?? null;
 
-  const orgSubscription = await getOrgSubscription(user.orgId);
-  const stripeSubscriptionId = orgSubscription.stripeSubscriptionId ?? null;
-
-  if (!stripeSubscriptionId || !hasActiveWorkspaceSubscription(orgSubscription.status ?? null)) {
-    throw new Error(WORKSPACE_UPGRADE_REQUIRED_MESSAGE);
+  if (!stripeSubscriptionId || !hasActiveWorkspaceSubscription(billingStatus)) {
+    return {
+      stripeSubscriptionId,
+      active: false,
+      quantity: 0,
+      itemId: null as string | null,
+    };
   }
 
   const secretKey = process.env.STRIPE_SECRET_KEY?.trim();
   if (!secretKey) {
+    return {
+      stripeSubscriptionId,
+      active: true,
+      quantity: 1,
+      itemId: null as string | null,
+    };
+  }
+
+  const stripe = new Stripe(secretKey, {
+    apiVersion: "2025-08-27.basil",
+  });
+
+  try {
+    const subscription = await stripe.subscriptions.retrieve(stripeSubscriptionId);
+    if (!hasActiveWorkspaceSubscription(subscription.status)) {
+      return {
+        stripeSubscriptionId,
+        active: false,
+        quantity: 0,
+        itemId: null as string | null,
+      };
+    }
+
+    const workspaceItem = subscription.items.data.find((item) => item.price?.id === WORKSPACE_MONTHLY_PRICE_ID) ?? null;
+
+    return {
+      stripeSubscriptionId,
+      active: Boolean(workspaceItem),
+      quantity: workspaceItem?.quantity ?? 0,
+      itemId: workspaceItem?.id ?? null,
+    };
+  } catch {
+    return {
+      stripeSubscriptionId,
+      active: true,
+      quantity: 1,
+      itemId: null as string | null,
+    };
+  }
+}
+
+async function ensureWorkspaceCreationBillingForUser(user: Awaited<ReturnType<typeof getBillingUserById>>, existingWorkspaces: number) {
+  if (existingWorkspaces < FREE_WORKSPACE_ALLOWANCE) {
+    return;
+  }
+
+  const orgSubscription = await getOrgSubscription(user.orgId);
+  const addonSubscription = await loadWorkspaceAddonSubscription(user, orgSubscription);
+
+  if (!addonSubscription.active || !addonSubscription.stripeSubscriptionId) {
+    throw new Error(WORKSPACE_UPGRADE_REQUIRED_MESSAGE);
+  }
+
+  const requiredAdditionalWorkspaces = Math.max(1, existingWorkspaces + 1 - FREE_WORKSPACE_ALLOWANCE);
+  if (addonSubscription.quantity >= requiredAdditionalWorkspaces) {
+    return;
+  }
+
+  const secretKey = process.env.STRIPE_SECRET_KEY?.trim();
+  if (!secretKey || !addonSubscription.itemId) {
     throw new Error(WORKSPACE_UPGRADE_REQUIRED_MESSAGE);
   }
 
@@ -99,17 +168,17 @@ async function ensureWorkspaceCreationBillingForUser(user: Awaited<ReturnType<ty
     apiVersion: "2025-08-27.basil",
   });
 
-  const subscription = await stripe.subscriptions.retrieve(stripeSubscriptionId);
+  const subscription = await stripe.subscriptions.retrieve(addonSubscription.stripeSubscriptionId);
   if (!hasActiveWorkspaceSubscription(subscription.status)) {
     throw new Error(WORKSPACE_UPGRADE_REQUIRED_MESSAGE);
   }
 
-  const item = subscription.items.data[0];
+  const item = subscription.items.data.find((entry) => entry.id === addonSubscription.itemId && entry.price?.id === WORKSPACE_MONTHLY_PRICE_ID);
   if (!item?.id) {
     throw new Error(WORKSPACE_UPGRADE_REQUIRED_MESSAGE);
   }
 
-  const targetQuantity = Math.max(1, existingWorkspaces);
+  const targetQuantity = requiredAdditionalWorkspaces;
   const currentQuantity = item.quantity ?? 1;
 
   if (currentQuantity !== targetQuantity) {
@@ -164,10 +233,9 @@ export async function getWorkspaceLimitStatus() {
   const orgSubscription = await getOrgSubscription(user.orgId);
   const orgFeatures = getOrgFeatures(orgSubscription.tier ?? "free");
   const ownedWorkspaceCount = await getOwnedWorkspaceCount(user.id);
-  const hasActiveSubscription = hasActiveWorkspaceSubscription(orgSubscription.status ?? null);
-
-  const maxOrgs = hasActiveSubscription ? -1 : 2;
-  const canCreate = ownedWorkspaceCount <= 1 || hasActiveSubscription;
+  const addonSubscription = await loadWorkspaceAddonSubscription(user, orgSubscription);
+  const maxOrgs = FREE_WORKSPACE_ALLOWANCE + (addonSubscription.active ? addonSubscription.quantity : 0);
+  const canCreate = ownedWorkspaceCount < maxOrgs;
 
   return {
     plan,
@@ -185,10 +253,9 @@ export async function getWorkspaceLimitStatusForUser(userId: string) {
   const orgSubscription = await getOrgSubscription(user.orgId);
   const orgFeatures = getOrgFeatures(orgSubscription.tier ?? "free");
   const ownedWorkspaceCount = await getOwnedWorkspaceCount(user.id);
-  const hasActiveSubscription = hasActiveWorkspaceSubscription(orgSubscription.status ?? null);
-
-  const maxOrgs = hasActiveSubscription ? -1 : 2;
-  const canCreate = ownedWorkspaceCount <= 1 || hasActiveSubscription;
+  const addonSubscription = await loadWorkspaceAddonSubscription(user, orgSubscription);
+  const maxOrgs = FREE_WORKSPACE_ALLOWANCE + (addonSubscription.active ? addonSubscription.quantity : 0);
+  const canCreate = ownedWorkspaceCount < maxOrgs;
 
   return {
     plan,

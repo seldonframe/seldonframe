@@ -210,13 +210,131 @@ function extractText(content: Array<{ type: string; text?: string }>) {
     .trim();
 }
 
-function parseJsonResponse(raw: string): ParsedSeldonResponse | null {
-  const cleaned = raw.replace(/```json|```/g, "").trim();
-  try {
-    return JSON.parse(cleaned) as ParsedSeldonResponse;
-  } catch {
-    return null;
+function stripMarkdownFences(raw: string) {
+  return raw
+    .replace(/```[a-z0-9_-]*\s*/gi, "")
+    .replace(/```/g, "")
+    .trim();
+}
+
+function inferActionFromParsedResponse(parsed: ParsedSeldonResponse): ParsedSeldonResponse["action"] {
+  if (parsed.action) {
+    return parsed.action;
   }
+
+  if (Array.isArray(parsed.updates) && parsed.updates.length > 0) {
+    return "update";
+  }
+
+  if (Array.isArray(parsed.creates) && parsed.creates.length > 0) {
+    return "create";
+  }
+
+  if (parsed.blueprint && typeof parsed.blueprint === "object") {
+    return "blueprint";
+  }
+
+  if (parsed.plan?.steps?.length) {
+    return "plan";
+  }
+
+  return undefined;
+}
+
+function buildParseFallbackMessage(raw: string) {
+  const cleaned = stripMarkdownFences(raw)
+    .replace(/failed to parse seldon response\.?/gi, "")
+    .replace(/^[\s\n]+|[\s\n]+$/g, "")
+    .trim();
+
+  if (!cleaned) {
+    return "I understood the request, but the response came back in the wrong format. Please try again and I’ll keep the next reply shorter and cleaner.";
+  }
+
+  return cleaned;
+}
+
+function collectBalancedJsonCandidates(raw: string) {
+  const candidates: string[] = [];
+  let depth = 0;
+  let start = -1;
+  let inString = false;
+  let escaping = false;
+
+  for (let index = 0; index < raw.length; index += 1) {
+    const char = raw[index];
+
+    if (escaping) {
+      escaping = false;
+      continue;
+    }
+
+    if (char === "\\") {
+      escaping = true;
+      continue;
+    }
+
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+
+    if (inString) {
+      continue;
+    }
+
+    if (char === "{") {
+      if (depth === 0) {
+        start = index;
+      }
+      depth += 1;
+      continue;
+    }
+
+    if (char === "}" && depth > 0) {
+      depth -= 1;
+      if (depth === 0 && start >= 0) {
+        candidates.push(raw.slice(start, index + 1).trim());
+        start = -1;
+      }
+    }
+  }
+
+  return candidates;
+}
+
+function parseJsonResponse(raw: string): ParsedSeldonResponse | null {
+  const cleaned = stripMarkdownFences(raw);
+  const candidates = [cleaned];
+
+  const fencedJsonBlocks = Array.from(raw.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi))
+    .map((match) => stripMarkdownFences(match[1] ?? ""))
+    .filter(Boolean);
+  candidates.push(...fencedJsonBlocks);
+
+  candidates.push(...collectBalancedJsonCandidates(cleaned));
+
+  const firstBrace = cleaned.indexOf("{");
+  const lastBrace = cleaned.lastIndexOf("}");
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    candidates.push(cleaned.slice(firstBrace, lastBrace + 1).trim());
+  }
+
+  for (const candidate of candidates) {
+    if (!candidate) {
+      continue;
+    }
+
+    try {
+      const parsed = JSON.parse(candidate) as ParsedSeldonResponse;
+      const inferredAction = inferActionFromParsedResponse(parsed);
+      return inferredAction ? { ...parsed, action: inferredAction } : parsed;
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
 }
 
 function slugify(text: string) {
@@ -1094,6 +1212,34 @@ export async function runSeldonItAction(_prev: SeldonRunState, formData: FormDat
     const parsed = parseJsonResponse(raw);
 
     if (!parsed?.action) {
+      const fallbackMessage = buildParseFallbackMessage(raw);
+      const nextMessages: SeldonSessionMessage[] = [
+        ...existingMessages,
+        { role: "user", content: description },
+        {
+          role: "assistant",
+          content: fallbackMessage,
+          ...(activePlan ? { plan: activePlan } : {}),
+        },
+      ];
+
+      let persistedSessionId = selectedSession?.id ?? "";
+      if (selectedSession?.id) {
+        await db.update(seldonSessions).set({ messages: nextMessages }).where(eq(seldonSessions.id, selectedSession.id));
+        persistedSessionId = selectedSession.id;
+      } else {
+        const [createdSession] = await db
+          .insert(seldonSessions)
+          .values({
+            orgId,
+            title: description.slice(0, 120),
+            messages: nextMessages,
+          })
+          .returning({ id: seldonSessions.id });
+
+        persistedSessionId = createdSession?.id ?? "";
+      }
+
       emitBrainEvent({
         status: "error",
         reason: "parse_failed",
@@ -1103,7 +1249,14 @@ export async function runSeldonItAction(_prev: SeldonRunState, formData: FormDat
         context_selected_articles: contextMetrics.selectedArticles,
         context_selected_personal_insights: contextMetrics.selectedPersonalInsights,
       });
-      return { ok: false, error: "Failed to parse Seldon response.", message: raw };
+      return {
+        ok: true,
+        action: activePlan ? "plan" : undefined,
+        message: fallbackMessage,
+        sessionId: persistedSessionId,
+        plan: activePlan,
+        results: [],
+      };
     }
 
     const results: SeldonRunResult[] = [];

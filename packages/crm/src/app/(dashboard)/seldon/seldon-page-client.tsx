@@ -15,6 +15,8 @@ import {
   PaperclipIcon,
   RefreshCw,
   SparklesIcon,
+  ThumbsDown,
+  ThumbsUp,
   WandSparklesIcon,
 } from "lucide-react";
 import {
@@ -25,6 +27,7 @@ import {
   type SeldonSavedBlock,
   type SeldonSessionItem,
 } from "@/lib/ai/seldon-actions";
+import { recordSeldonFeedbackAction } from "@/lib/ai/record-seldon-feedback";
 
 type ChatMessage = {
   id: string;
@@ -333,6 +336,26 @@ export function SeldonPageClient({
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [processingIndex, setProcessingIndex] = useState(0);
+  const [feedbackByMessage, setFeedbackByMessage] = useState<Record<string, -1 | 1>>({});
+
+  async function submitFeedback(feedbackScore: -1 | 1, messageId: string) {
+    if (feedbackByMessage[messageId]) {
+      return;
+    }
+
+    const payload = new FormData();
+    payload.set("feedbackScore", String(feedbackScore));
+    payload.set("sessionId", activeSessionId ?? state.sessionId ?? "");
+    payload.set("messageId", messageId);
+
+    const result = await recordSeldonFeedbackAction(payload);
+    if (result.ok) {
+      setFeedbackByMessage((current) => ({
+        ...current,
+        [messageId]: feedbackScore,
+      }));
+    }
+  }
 
   useEffect(() => {
     if (!pending) {
@@ -405,8 +428,9 @@ export function SeldonPageClient({
     chatMessages.length > 0 ||
     Boolean(activeSession);
 
-  const assistantContent = state.error
-    ? state.error
+  const sanitizedError = state.error?.includes("Failed to parse Seldon response") ? undefined : state.error;
+  const assistantContent = sanitizedError
+    ? sanitizedError
     : [
         state.message,
         ...(state.results ?? []).map((result) => `${result.blockName}: ${result.summary || "BLOCK.md generated successfully"}`),
@@ -606,6 +630,28 @@ export function SeldonPageClient({
                     <div className="rounded-xl border border-border dark:border-transparent bg-card dark:bg-secondary p-4 space-y-2">
                       <p className="text-xs uppercase tracking-wide text-muted-foreground">Seldon</p>
                       <p className="text-sm whitespace-pre-wrap leading-relaxed">{assistantContent}</p>
+                      {state.message ? (
+                        <div className="flex items-center gap-1.5 pt-1 text-muted-foreground">
+                          <button
+                            type="button"
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-accent"
+                            aria-label="Thumbs up"
+                            onClick={() => void submitFeedback(1, `builder-${activeSessionId ?? state.sessionId ?? "latest"}`)}
+                            disabled={Boolean(feedbackByMessage[`builder-${activeSessionId ?? state.sessionId ?? "latest"}`])}
+                          >
+                            <ThumbsUp className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-accent"
+                            aria-label="Thumbs down"
+                            onClick={() => void submitFeedback(-1, `builder-${activeSessionId ?? state.sessionId ?? "latest"}`)}
+                            disabled={Boolean(feedbackByMessage[`builder-${activeSessionId ?? state.sessionId ?? "latest"}`])}
+                          >
+                            <ThumbsDown className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 ) : null}

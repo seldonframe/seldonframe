@@ -1,6 +1,6 @@
 export const TIER_FEATURES = {
   free: {
-    maxWorkspaces: 999,
+    maxWorkspaces: 1,
     seldonIt: "byok",
     customDomains: false,
     whiteLabel: false,
