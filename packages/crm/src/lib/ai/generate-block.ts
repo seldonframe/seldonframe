@@ -55,6 +55,30 @@ const DEFAULT_QUESTIONS: ClarifyingQuestion[] = [
   { id: "success", question: "How should we measure success for this block?" },
 ];
 
+const DEFAULT_BLOCK_TEMPLATE = `# BLOCK: [Block Name]
+
+**Description**  
+[Clear one-sentence description]
+
+**Trigger Phrases**  
+- "..."
+- "..."
+
+**Behavior**  
+[Detailed expected behavior]
+
+**Integration Points**  
+- List of connected systems (CRM, Payments, Brain v2, etc.)
+
+**Self Improve**  
+self_improve: true
+
+**Karpathy Guidelines** (applied to all code and changes in this block)
+- Think Before Coding: explicit reasoning, surface assumptions, ask clarifying questions
+- Simplicity First: smallest solution that works, no unnecessary abstractions
+- Surgical Changes: touch only what is required
+- Goal-Driven Execution: define verifiable success criteria`;
+
 function extractText(content: Array<{ type: string; text?: string }>) {
   return content
     .map((part) => (part.type === "text" ? part.text ?? "" : ""))
@@ -95,34 +119,35 @@ function extractKeywords(input: string) {
 
 function fallbackBlockMd(description: string) {
   const title = description.split("\n")[0]?.slice(0, 72) || "Custom Block";
+  const normalizedTitle = title.replace(/^#\s*BLOCK:?\s*/i, "").trim() || "Custom Block";
+  const shortDescription = description.trim() || "A useful custom block for the current workspace.";
+  const blockLabel = normalizedTitle.toLowerCase();
 
-  return `---
-name: "${title}"
-version: "1.0.0"
-author: "Seldon It"
-framework: "custom"
-requires: ["crm"]
-integrations: []
----
+  return `# BLOCK: ${normalizedTitle}
 
-## Description
-${description}
+**Description**  
+${shortDescription}
 
-## Resources Created
-- custom_resource: ${title}
+**Trigger Phrases**  
+- "Create ${blockLabel}"
+- "Set up ${blockLabel}"
 
-## Configuration
-\`\`\`json
-{
-  "resource": {
-    "name": "${title}"
-  }
-}
-\`\`\`
+**Behavior**  
+Deliver the smallest useful version of ${normalizedTitle} for this workspace. Focus on a clear business outcome, define the expected workflow, and keep implementation details aligned with existing SeldonFrame patterns.
 
-## Install
-This block installs into an existing SeldonFrame workspace.
-Resources are created in the relevant tables.`;
+**Integration Points**  
+- CRM
+- Brain v2
+- Payments (if required by the block)
+
+**Self Improve**  
+self_improve: true
+
+**Karpathy Guidelines** (applied to all code and changes in this block)
+- Think Before Coding: explicit reasoning, surface assumptions, ask clarifying questions
+- Simplicity First: smallest solution that works, no unnecessary abstractions
+- Surgical Changes: touch only what is required
+- Goal-Driven Execution: define verifiable success criteria`;
 }
 
 function summarizeBlockMd(blockMd: string) {
@@ -395,7 +420,7 @@ export async function descriptionToBlockMd(orgId: string, description: string): 
   const response = await client.messages.create({
     model: SELDON_MODEL,
     max_tokens: 6000,
-    system: `You are creating a BLOCK.md specification for SeldonFrame. Output only valid BLOCK.md content and keep it concise (max 180 lines).\n\nWhen the user asks for multiple connected things (e.g., "build me an onboarding flow with intake form, welcome sequence, and booking page"), create ALL of them in a single response. List each created resource separately in the output. Connect them to each other — the form feeds the CRM, the CRM triggers the email sequence, the booking link goes in the email.\n\nAlways use this exact structure:\n---\nname: "[Block Name]"\nversion: "1.0.0"\nauthor: "[Author]"\nframework: "[framework]"\nrequires: ["crm"]\nintegrations: []\n---\n\n## Description\n[3-5 sentence description]\n\n## Resources Created\n- [resource_type]: [resource name] ([details])\n\n## Configuration\n\`\`\`json\n{\n  "resource": {}\n}\n\`\`\`\n\n## Install\nThis block installs into an existing SeldonFrame workspace.\nResources are created in the relevant tables.\n\nYou have access to this organization's soul:\n- Business type: {{soul.entity.type}}\n- Contact label: {{soul.entity.contactLabel}}\n- Voice: {{soul.voice.tone}}, {{soul.voice.personality}}\n- Services: {{soul.services}}\n- Pipeline: {{soul.journey.stages}}\n\nWhen creating resources, use these to set smart defaults:\n- Email tone matches soul.voice\n- Form fields are relevant to soul.entity.type\n- Booking durations match soul.services\n- Automation triggers align with soul.journey.stages\n- All {{variable}} placeholders use the soul's labels\n\nThe user should NOT have to specify that their booking is 30 minutes or their welcome email should sound warm — the soul already knows this. Use it.\n\nRules:\n- Use services only if connected in context\n- Include explicit connected flow relationships when multiple resources are created\n- Keep event names lowercase entity.action\n- Make the output previewable and reusable as a portable BLOCK.md package\n\n${context}`,
+    system: `You are creating a BLOCK.md specification for SeldonFrame. Output only valid BLOCK.md content and keep it concise (max 180 lines).\n\nWhen the user asks for multiple connected things (e.g., "build me an onboarding flow with intake form, welcome sequence, and booking page"), create ALL of them in a single response. Connect them as one cohesive workflow.\n\nUse this default BLOCK.md template as the baseline structure for every new block:\n${DEFAULT_BLOCK_TEMPLATE}\n\nRequirements:\n- Fill the template with concrete, high-signal details rather than placeholders\n- Keep behavior specific, actionable, and tied to business outcomes\n- Integration Points must list the connected systems actually involved\n- Keep event names lowercase entity.action when events are referenced\n- Apply the Karpathy Guidelines in the substance of the block, not as decoration\n- Make the output previewable and reusable as a portable BLOCK.md package\n\nYou have access to this organization's soul:\n- Business type: {{soul.entity.type}}\n- Contact label: {{soul.entity.contactLabel}}\n- Voice: {{soul.voice.tone}}, {{soul.voice.personality}}\n- Services: {{soul.services}}\n- Pipeline: {{soul.journey.stages}}\n\nWhen creating resources, use these to set smart defaults:\n- Email tone matches soul.voice\n- Form fields are relevant to soul.entity.type\n- Booking durations match soul.services\n- Automation triggers align with soul.journey.stages\n- All {{variable}} placeholders use the soul's labels\n\nThe user should NOT have to specify that their booking is 30 minutes or their welcome email should sound warm — the soul already knows this. Use it.\n\n${context}`,
     messages: [{ role: "user", content: source }],
   });
 
@@ -435,7 +460,10 @@ async function customizeInventoryBlockMd(params: {
   const response = await client.messages.create({
     model: SELDON_MODEL,
     max_tokens: 3500,
-    system: `Customize an existing BLOCK.md with minimal diffs. Preserve structure and reliability. Keep output under 150 lines. Output only BLOCK.md.\n\n${context}`,
+    system: `Customize an existing BLOCK.md with minimal diffs. Preserve reliable specifics, but normalize the output toward this default template when possible. Keep output under 150 lines. Output only BLOCK.md.\n\nDefault template:\n${DEFAULT_BLOCK_TEMPLATE}\n\nRules:\n- Keep changes surgical
+- Preserve the block's proven business logic and integrations
+- Favor specific, actionable behavior over generic category labels
+- Keep Karpathy Guidelines section present and intact\n\n${context}`,
     messages: [
       {
         role: "user",

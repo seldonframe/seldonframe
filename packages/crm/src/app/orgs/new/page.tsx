@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { auth } from "@/auth";
 import { SetupWizard } from "@/components/soul/setup-wizard";
+import { NewWorkspacePromptForm } from "@/components/orgs/new-workspace-prompt-form";
 import { getPlan } from "@/lib/billing/plans";
 import coachingFramework from "@/lib/frameworks/coaching.json";
 import agencyFramework from "@/lib/frameworks/agency.json";
@@ -10,6 +12,20 @@ import { getWorkspaceLimitStatus } from "@/lib/billing/orgs";
 import type { FrameworkOption } from "@/app/(onboarding)/setup/page";
 
 const allFrameworks = [coachingFramework, agencyFramework, saasFramework];
+const legacyWizard = false;
+
+type CreateWorkspaceState = {
+  error?: string;
+};
+
+function getAppBaseUrl(host: string) {
+  const configured = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (configured) {
+    return configured.replace(/\/$/, "");
+  }
+
+  return host.startsWith("http") ? host.replace(/\/$/, "") : `https://${host.replace(/\/$/, "")}`;
+}
 
 export default async function NewWorkspacePage() {
   const session = await auth();
@@ -28,6 +44,60 @@ export default async function NewWorkspacePage() {
 
   if (!limitStatus.canCreate) {
     redirect("/orgs?limit=1");
+  }
+
+  async function createWorkspaceAction(_prevState: CreateWorkspaceState, formData: FormData): Promise<CreateWorkspaceState> {
+    "use server";
+
+    const description = String(formData.get("description") ?? "").trim();
+    if (!description) {
+      return { error: "Describe your business or paste a URL." };
+    }
+
+    const claudeApiKey = process.env.ANTHROPIC_API_KEY?.trim();
+    if (!claudeApiKey) {
+      return { error: "Anthropic is not configured for workspace generation." };
+    }
+
+    const requestHeaders = await headers();
+    const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "app.seldonframe.com";
+    const protocol = requestHeaders.get("x-forwarded-proto") ?? "https";
+    const cookieHeader = requestHeaders.get("cookie") ?? "";
+    const appBaseUrl = getAppBaseUrl(`${protocol}://${host}`);
+
+    const response = await fetch(`${appBaseUrl}/api/v1/workspace/create`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: cookieHeader,
+        "x-claude-api-key": claudeApiKey,
+      },
+      body: JSON.stringify({ description }),
+      cache: "no-store",
+    });
+
+    const payload = (await response.json().catch(() => null)) as
+      | {
+          error?: string;
+          code?: string;
+          workspace?: { id?: string; url?: string };
+          dashboard_url?: string;
+        }
+      | null;
+
+    if (!response.ok) {
+      return {
+        error: payload?.error ?? "Failed to generate workspace.",
+      };
+    }
+
+    const destination = payload?.dashboard_url || (payload?.workspace?.id ? `/dashboard?workspace=${payload.workspace.id}` : payload?.workspace?.url);
+
+    if (!destination) {
+      return { error: "Workspace created, but no redirect destination was returned." };
+    }
+
+    redirect(destination);
   }
 
   const baseFrameworks: FrameworkOption[] = allFrameworks.map((fw) => ({
@@ -64,6 +134,27 @@ export default async function NewWorkspacePage() {
 
   const savedFrameworks = await listSavedFrameworkOptions();
   const frameworks: FrameworkOption[] = [...savedFrameworks, ...baseFrameworks.filter((fw) => !savedFrameworks.some((saved) => saved.id === fw.id))];
+
+  if (!legacyWizard) {
+    return (
+      <main className="animate-page-enter flex-1 overflow-auto bg-background p-3 sm:p-4 md:p-6 w-full min-h-svh">
+        <section className="mx-auto flex min-h-[70vh] max-w-4xl items-center justify-center">
+          <div className="glass-card w-full max-w-3xl rounded-2xl border border-border/70 p-6 sm:p-8 md:p-10">
+            <div className="space-y-3 text-center">
+              <h1 className="text-page-title">Create New Workspace</h1>
+              <p className="mx-auto max-w-2xl text-sm text-muted-foreground sm:text-base">
+                Tell Seldon what you do, or paste a URL, and it will generate your complete operating system.
+              </p>
+            </div>
+
+            <div className="mt-8">
+              <NewWorkspacePromptForm action={createWorkspaceAction} />
+            </div>
+          </div>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main className="animate-page-enter flex-1 overflow-auto p-3 sm:p-4 md:p-6 bg-background w-full min-h-svh">

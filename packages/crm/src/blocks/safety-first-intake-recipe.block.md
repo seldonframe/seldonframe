@@ -3,15 +3,29 @@ id: safety-first-intake-recipe
 scope: framework
 frameworks: coaching,consulting,agency
 ---
-# Safety-First Intake Recipe
+# BLOCK: Safety-First Intake Recipe
 
-## Purpose
-Provide a trust-forward intake pattern for sensitive client contexts.
+**Description**  
+Create a trust-forward intake flow for sensitive client contexts where clarity, consent, and psychological safety matter.
 
-## Default Behavior
-- Add consent-aware intake prompts and expectation-setting language.
-- Include boundary and support preference fields.
-- Emphasize respectful tone and escalation notes for follow-up.
+**Trigger Phrases**  
+- "Create a safety-first intake flow"
+- "Set up a more trust-forward client intake form"
 
-## Notes
-Best for service frameworks where psychological safety and clarity are essential.
+**Behavior**  
+Add consent-aware prompts, expectation-setting language, and support preference fields so new clients can share information comfortably and clearly. Capture boundary preferences, escalation notes, and context needed for respectful follow-up without making the intake flow feel heavy or clinical. Favor actionable business patterns such as where confusing questions reduce completion, which trust-building prompts increase qualified submissions, and how clearer expectations improve conversion into booked or retained clients.
+
+**Integration Points**  
+- CRM
+- Forms
+- Booking
+- Brain v2
+
+**Self Improve**  
+self_improve: true
+
+**Karpathy Guidelines** (applied to all code and changes in this block)
+- Think Before Coding: explicit reasoning, surface assumptions, ask clarifying questions
+- Simplicity First: smallest solution that works, no unnecessary abstractions
+- Surgical Changes: touch only what is required
+- Goal-Driven Execution: define verifiable success criteria
