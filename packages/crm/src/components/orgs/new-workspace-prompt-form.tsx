@@ -69,24 +69,29 @@ export function NewWorkspacePromptForm({ action }: NewWorkspacePromptFormProps) 
 
   if (state.upgradeRequired) {
     return (
-      <div className="mx-auto max-w-xl space-y-6 text-center">
-        <div className="space-y-3">
-          <h2 className="text-section-title">You&apos;ve used your free workspace</h2>
-          <p className="text-sm text-muted-foreground sm:text-base">
-            Each additional workspace is $9/month and unlocks more Brain intelligence for your OS.
-          </p>
-        </div>
+      <div className="mx-auto max-w-xl">
+        <div className="rounded-3xl border border-primary/20 bg-primary/6 px-6 py-8 text-center shadow-(--shadow-card) sm:px-8">
+          <div className="mx-auto mb-4 inline-flex h-11 items-center rounded-full border border-primary/20 bg-primary/10 px-4 text-sm font-medium text-primary">
+            Workspace limit reached
+          </div>
+          <div className="space-y-3">
+            <h2 className="text-section-title">You&apos;ve used your free workspace</h2>
+            <p className="text-sm text-muted-foreground sm:text-base">
+              Each additional workspace is $9/month and unlocks more Brain intelligence for your OS.
+            </p>
+          </div>
 
-        <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-          <Link href="/pricing" className="crm-button-primary h-11 px-5 inline-flex items-center justify-center">
-            Upgrade to unlock more workspaces
-          </Link>
-          <Link href="/orgs" className="crm-button-secondary h-11 px-5 inline-flex items-center justify-center">
-            Or use an existing workspace
-          </Link>
-        </div>
+          <div className="mt-6 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
+            <Link href="/pricing" className="crm-button-primary h-11 px-5 inline-flex items-center justify-center">
+              Upgrade to unlock more workspaces
+            </Link>
+            <Link href="/orgs" className="crm-button-secondary h-11 px-5 inline-flex items-center justify-center">
+              Or use an existing workspace
+            </Link>
+          </div>
 
-        {state.error ? <p className="text-sm text-muted-foreground">{state.error}</p> : null}
+          {state.error ? <p className="mt-4 text-sm text-muted-foreground">{state.error}</p> : null}
+        </div>
       </div>
     );
   }
