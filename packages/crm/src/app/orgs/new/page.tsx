@@ -17,6 +17,7 @@ const legacyWizard = false;
 
 type CreateWorkspaceState = {
   error?: string;
+  upgradeRequired?: boolean;
 };
 
 function getAppBaseUrl(host: string) {
@@ -83,8 +84,10 @@ export default async function NewWorkspacePage() {
       | null;
 
     if (!response.ok) {
+      const requiresUpgrade = payload?.code === "plan_required" || payload?.code === "workspace_limit_reached";
       return {
         error: payload?.error ?? "Failed to generate workspace.",
+        upgradeRequired: requiresUpgrade,
       };
     }
 
@@ -134,28 +137,28 @@ export default async function NewWorkspacePage() {
 
   if (!legacyWizard) {
     return (
-      <main className="animate-page-enter flex-1 overflow-auto bg-background p-3 sm:p-4 md:p-6 w-full min-h-svh">
-        <section className="mx-auto flex min-h-[70vh] max-w-4xl items-center justify-center">
-          <div className="glass-card w-full max-w-3xl rounded-2xl border border-border/70 p-6 sm:p-8 md:p-10">
+      <main className="animate-page-enter flex-1 overflow-auto bg-background p-4 sm:p-6 md:p-8 w-full min-h-svh">
+        <section className="mx-auto flex min-h-[74vh] max-w-5xl items-center justify-center">
+          <div className="glass-card w-full max-w-3xl border border-border/70 p-6 sm:p-8 md:p-10">
             {limitStatus.canCreate ? (
               <>
-                <div className="space-y-3 text-center">
+                <div className="space-y-4 text-center">
                   <h1 className="text-page-title">Create New Workspace</h1>
-                  <p className="mx-auto max-w-2xl text-sm text-muted-foreground sm:text-base">
+                  <p className="mx-auto max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
                     Tell Seldon what you do, or paste a URL, and it will generate your complete operating system.
                   </p>
                 </div>
 
-                <div className="mt-8">
+                <div className="mt-10">
                   <NewWorkspacePromptForm action={createWorkspaceAction} />
                 </div>
               </>
             ) : (
-              <div className="mx-auto max-w-xl space-y-5 text-center">
+              <div className="mx-auto max-w-xl space-y-6 text-center">
                 <div className="space-y-3">
                   <h1 className="text-page-title">You&apos;ve used your free workspace</h1>
                   <p className="text-sm text-muted-foreground sm:text-base">
-                    Each additional workspace is $9/month and unlocks more Brain intelligence.
+                    Each additional workspace is $9/month and unlocks more Brain intelligence for your OS.
                   </p>
                 </div>
 

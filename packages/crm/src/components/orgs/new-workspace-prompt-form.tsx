@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { LoaderCircle } from "lucide-react";
@@ -8,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 
 type CreateWorkspaceState = {
   error?: string;
+  upgradeRequired?: boolean;
 };
 
 type NewWorkspacePromptFormProps = {
@@ -65,14 +67,38 @@ export function NewWorkspacePromptForm({ action }: NewWorkspacePromptFormProps) 
   const [state, formAction] = useActionState(action, initialState);
   const [description, setDescription] = useState("");
 
+  if (state.upgradeRequired) {
+    return (
+      <div className="mx-auto max-w-xl space-y-6 text-center">
+        <div className="space-y-3">
+          <h2 className="text-section-title">You&apos;ve used your free workspace</h2>
+          <p className="text-sm text-muted-foreground sm:text-base">
+            Each additional workspace is $9/month and unlocks more Brain intelligence for your OS.
+          </p>
+        </div>
+
+        <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
+          <Link href="/pricing" className="crm-button-primary h-11 px-5 inline-flex items-center justify-center">
+            Upgrade to unlock more workspaces
+          </Link>
+          <Link href="/orgs" className="crm-button-secondary h-11 px-5 inline-flex items-center justify-center">
+            Or use an existing workspace
+          </Link>
+        </div>
+
+        {state.error ? <p className="text-sm text-muted-foreground">{state.error}</p> : null}
+      </div>
+    );
+  }
+
   return (
-    <form action={formAction} className="space-y-4">
+    <form action={formAction} className="space-y-5">
       <Textarea
         name="description"
         value={description}
         onChange={(event) => setDescription(event.target.value)}
         placeholder="Describe your business or paste a URL..."
-        className="min-h-48 resize-y px-4 py-3 text-sm sm:text-base"
+        className="min-h-52 resize-y border-border/80 bg-background/60 px-4 py-3 text-sm shadow-(--shadow-xs) sm:text-base"
         required
       />
 
@@ -81,7 +107,7 @@ export function NewWorkspacePromptForm({ action }: NewWorkspacePromptFormProps) 
           <button
             key={prompt}
             type="button"
-            className="rounded-full border border-border bg-background px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            className="rounded-full border border-border/80 bg-background/45 px-3 py-1.5 text-xs text-muted-foreground transition-all hover:border-border hover:bg-accent hover:text-foreground"
             onClick={() => setDescription(prompt)}
           >
             {prompt}

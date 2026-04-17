@@ -107,37 +107,38 @@ export function Sidebar(props: {
   function renderSidebarShell(isMobile = false) {
     return (
       <div className={isMobile ? "flex h-full w-full flex-col" : "flex w-full flex-col"}>
-        <div className="p-3 pb-0 sm:p-4 sm:pb-0 lg:p-5 lg:pb-0">
-          <div className="flex min-h-8 items-center gap-2">
-            <div className="flex size-5 items-center justify-center overflow-hidden rounded">
+        <div className="px-4 pb-0 pt-4 sm:px-5 sm:pt-5 lg:px-6 lg:pt-6">
+          <div className="flex min-h-8 items-center gap-3">
+            <div className="flex size-8 items-center justify-center overflow-hidden rounded-xl border border-border/80 bg-card/80 shadow-(--shadow-xs)">
               <Image src="/logo.svg" alt="SeldonFrame logo" width={20} height={20} />
             </div>
-            <p className="text-base font-semibold tracking-tight text-foreground">
-              SeldonFrame
-            </p>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold tracking-tight text-foreground">SeldonFrame</p>
+              <p className="text-[11px] text-muted-foreground">Operating system for modern teams</p>
+            </div>
           </div>
         </div>
 
-        <div className="px-3 sm:px-4 lg:px-5">
-          <div className="relative mb-3">
+        <div className="px-4 sm:px-5 lg:px-6">
+          <div className="relative mb-5 mt-5">
             <button
               type="button"
               onClick={() => setWorkspaceMenuOpen((open) => !open)}
-              className="flex w-full items-center gap-2 sm:gap-3 rounded-lg border border-border bg-muted/45 p-2 sm:p-3 text-left"
+              className="flex w-full items-center gap-3 rounded-2xl border border-border/80 bg-card/80 p-3 text-left shadow-(--shadow-xs) transition-all hover:border-border hover:bg-card"
             >
-              <div className="flex size-8 sm:size-[34px] items-center justify-center overflow-hidden rounded-lg shrink-0">
+              <div className="flex size-10 items-center justify-center overflow-hidden rounded-xl border border-border/70 bg-muted/30 shrink-0">
                 <Image src="/logo.svg" alt="SeldonFrame logo" width={34} height={34} className="h-full w-full" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-xs font-semibold sm:text-sm">{workspaceName}</p>
-                <p className="truncate text-[10px] text-muted-foreground sm:text-xs">Your workspace</p>
+                <p className="truncate text-sm font-semibold text-foreground">{workspaceName}</p>
+                <p className="truncate text-[11px] text-muted-foreground">Active workspace</p>
               </div>
               <ChevronsUpDown className="size-4 text-muted-foreground" />
             </button>
 
             {workspaceMenuOpen ? (
-              <div className="absolute left-0 right-0 top-full z-30 mt-2 rounded-lg border border-border bg-card p-2 shadow-lg">
-                <p className="px-2 pb-1 text-[10px] font-semibold tracking-[0.08em] text-muted-foreground">YOUR WORKSPACES</p>
+              <div className="absolute left-0 right-0 top-full z-30 mt-3 rounded-2xl border border-border/80 bg-card/96 p-2.5 shadow-(--shadow-dropdown) backdrop-blur-xl">
+                <p className="px-2 pb-1 text-[10px] font-semibold tracking-[0.16em] text-muted-foreground/80">YOUR WORKSPACES</p>
                 <div className="space-y-1">
                   {workspaceOptions.map((workspace) => (
                     <form key={workspace.id} action={switchWorkspaceAction}>
@@ -145,7 +146,7 @@ export function Sidebar(props: {
                       <input type="hidden" name="redirectTo" value={pathname || "/dashboard"} />
                       <button
                         type="submit"
-                        className="flex w-full items-start gap-2 rounded-md px-2 py-2 text-left hover:bg-accent/60"
+                        className="flex w-full items-start gap-2 rounded-xl px-2.5 py-2.5 text-left transition-colors hover:bg-accent/60"
                         onClick={() => setWorkspaceMenuOpen(false)}
                       >
                         <span className="mt-0.5 inline-flex size-4 items-center justify-center text-primary">
@@ -165,11 +166,11 @@ export function Sidebar(props: {
                 <div className="my-2 h-px bg-border" />
 
                 <div className="space-y-1">
-                  <Link href="/orgs/new" className="flex items-center gap-2 rounded-md px-2 py-2 text-xs font-medium text-foreground hover:bg-accent/60 sm:text-sm" onClick={() => setWorkspaceMenuOpen(false)}>
+                  <Link href="/orgs/new" className="flex items-center gap-2 rounded-xl px-2.5 py-2.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60 sm:text-sm" onClick={() => setWorkspaceMenuOpen(false)}>
                     <Plus className="size-3.5 text-primary" />
                     Create new workspace
                   </Link>
-                  <Link href="/orgs" className="flex items-center gap-2 rounded-md px-2 py-2 text-xs font-medium text-foreground hover:bg-accent/60 sm:text-sm" onClick={() => setWorkspaceMenuOpen(false)}>
+                  <Link href="/orgs" className="flex items-center gap-2 rounded-xl px-2.5 py-2.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60 sm:text-sm" onClick={() => setWorkspaceMenuOpen(false)}>
                     <Settings2 className="size-3.5 text-muted-foreground" />
                     Manage workspaces
                   </Link>
@@ -181,14 +182,14 @@ export function Sidebar(props: {
           <SidebarNav groups={navGroups} onNavigate={() => setMobileOpen(false)} />
         </div>
 
-        <div className="mt-auto px-3 pb-3 pt-4 sm:px-4 sm:pb-4 sm:pt-6 lg:px-5 lg:pb-5 lg:pt-8">
-          <button type="button" className="flex w-full items-center gap-2 rounded-lg p-2 transition-colors hover:bg-accent">
-            <div className="flex size-7 items-center justify-center rounded-md bg-muted text-xs font-semibold text-foreground">
+        <div className="mt-auto px-4 pb-4 pt-6 sm:px-5 sm:pb-5 lg:px-6 lg:pb-6 lg:pt-8">
+          <button type="button" className="flex w-full items-center gap-3 rounded-2xl border border-border/80 bg-card/72 p-3 text-left shadow-(--shadow-xs) transition-all hover:border-border hover:bg-card/92 hover:shadow-(--shadow-sm)">
+            <div className="flex size-9 items-center justify-center rounded-xl border border-border/70 bg-muted/30 text-xs font-semibold text-foreground">
               {avatarFallback}
             </div>
             <div className="min-w-0 flex-1 text-left">
-              <p className="truncate text-xs font-semibold text-foreground sm:text-sm">{userName}</p>
-              <p className="truncate text-[10px] text-muted-foreground sm:text-xs">{userEmail}</p>
+              <p className="truncate text-sm font-semibold text-foreground">{userName}</p>
+              <p className="truncate text-[11px] text-muted-foreground">{userEmail}</p>
             </div>
             <ChevronsUpDown className="size-4 text-muted-foreground" />
           </button>
@@ -199,13 +200,13 @@ export function Sidebar(props: {
 
   return (
     <>
-      <aside className="crm-sidebar hidden w-full flex-col border-0 bg-card md:sticky md:top-0 md:flex md:h-screen md:w-[220px] md:overflow-y-auto">
+      <aside className="crm-sidebar hidden w-full flex-col border-0 bg-card md:sticky md:top-0 md:flex md:h-screen md:w-[240px] md:overflow-y-auto">
         {renderSidebarShell()}
       </aside>
 
       <div className="md:hidden">
         <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-          <SheetContent side="left" className="w-[220px] max-w-[220px] p-0 [&>button]:hidden">
+          <SheetContent side="left" className="w-[240px] max-w-[240px] p-0 [&>button]:hidden">
             <aside className="crm-sidebar flex h-full w-full flex-col border-0 bg-card">{renderSidebarShell(true)}</aside>
           </SheetContent>
         </Sheet>

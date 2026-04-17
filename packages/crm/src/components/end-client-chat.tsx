@@ -1,8 +1,9 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { MessageCircle, Send, X } from "lucide-react";
+import { MessageCircle, Send, ThumbsDown, ThumbsUp, X } from "lucide-react";
 import { runSeldonItAction, type SeldonRunState } from "@/lib/ai/seldon-actions";
+import { recordSeldonFeedbackAction } from "@/lib/ai/record-seldon-feedback";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -24,6 +25,28 @@ export function EndClientChat({ orgSlug }: EndClientChatProps) {
   const [open, setOpen] = useState(false);
   const [description, setDescription] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [feedbackByMessage, setFeedbackByMessage] = useState<Record<string, -1 | 1>>({});
+
+  async function submitFeedback(feedbackScore: -1 | 1, messageId: string) {
+    if (feedbackByMessage[messageId]) {
+      return;
+    }
+
+    const payload = new FormData();
+    payload.set("feedbackScore", String(feedbackScore));
+    payload.set("sessionId", state.sessionId ?? "");
+    payload.set("messageId", messageId);
+    payload.set("end_client_mode", "true");
+    payload.set("orgSlug", orgSlug);
+
+    const result = await recordSeldonFeedbackAction(payload);
+    if (result.ok) {
+      setFeedbackByMessage((current) => ({
+        ...current,
+        [messageId]: feedbackScore,
+      }));
+    }
+  }
 
   function submitCurrentPrompt() {
     const trimmed = description.trim();
@@ -46,7 +69,7 @@ export function EndClientChat({ orgSlug }: EndClientChatProps) {
       <Button
         type="button"
         size="icon-lg"
-        className="fixed bottom-6 right-6 z-40 h-14 w-14 rounded-full shadow-lg"
+        className="fixed bottom-6 right-6 z-40 h-14 w-14 rounded-full border border-border/80 bg-card/92 text-foreground shadow-(--shadow-card) hover:-translate-y-0.5 hover:bg-card"
         onClick={() => setOpen(true)}
         aria-label="Ask Seldon"
       >
@@ -54,8 +77,8 @@ export function EndClientChat({ orgSlug }: EndClientChatProps) {
       </Button>
 
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="right" className="w-full max-w-md p-0">
-          <SheetHeader className="border-b border-border">
+        <SheetContent side="right" className="w-full max-w-md border-l border-border/80 bg-background/96 p-0 backdrop-blur-xl">
+          <SheetHeader className="border-b border-border/80 bg-card/80 px-5 py-4">
             <div className="flex items-center justify-between">
               <div>
                 <SheetTitle>Ask Seldon</SheetTitle>
@@ -68,9 +91,9 @@ export function EndClientChat({ orgSlug }: EndClientChatProps) {
           </SheetHeader>
 
           <div className="flex h-full min-h-0 flex-col">
-            <div className="flex-1 space-y-3 overflow-y-auto px-4 py-3">
+            <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
               {messages.length === 0 ? (
-                <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
+                <div className="rounded-2xl border border-border/80 bg-card/70 p-4 text-sm text-muted-foreground shadow-(--shadow-xs)">
                   Ask for changes like &quot;Show me only evening slots&quot; or &quot;Add a custom report for my account&quot;.
                 </div>
               ) : null}
@@ -78,8 +101,8 @@ export function EndClientChat({ orgSlug }: EndClientChatProps) {
               {messages.map((message) => (
                 <div
                   key={message.id}
-                  className={`max-w-[90%] rounded-lg px-3 py-2 text-sm ${
-                    message.role === "user" ? "ml-auto bg-primary text-primary-foreground" : "bg-muted text-foreground"
+                  className={`max-w-[90%] rounded-2xl px-4 py-3 text-sm shadow-(--shadow-xs) ${
+                    message.role === "user" ? "ml-auto bg-primary text-primary-foreground" : "border border-border/80 bg-card/80 text-foreground"
                   }`}
                 >
                   {message.content}
@@ -89,13 +112,39 @@ export function EndClientChat({ orgSlug }: EndClientChatProps) {
               {pending ? <div className="text-xs text-muted-foreground">Seldon is thinking...</div> : null}
 
               {!pending && (state.error || state.message) ? (
-                <div className="max-w-[90%] rounded-lg bg-muted px-3 py-2 text-sm text-foreground">
-                  {state.error ?? state.message}
+                <div className="max-w-[90%] space-y-2 rounded-2xl border border-border/80 bg-card/80 px-4 py-3 text-sm text-foreground shadow-(--shadow-xs)">
+                  <div>{state.error ?? state.message}</div>
+                  {state.message ? (
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        className="h-7 w-7"
+                        aria-label="Thumbs up"
+                        onClick={() => void submitFeedback(1, `end-client-${state.sessionId ?? "latest"}`)}
+                        disabled={Boolean(feedbackByMessage[`end-client-${state.sessionId ?? "latest"}`])}
+                      >
+                        <ThumbsUp className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        className="h-7 w-7"
+                        aria-label="Thumbs down"
+                        onClick={() => void submitFeedback(-1, `end-client-${state.sessionId ?? "latest"}`)}
+                        disabled={Boolean(feedbackByMessage[`end-client-${state.sessionId ?? "latest"}`])}
+                      >
+                        <ThumbsDown className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
             </div>
 
-            <div className="border-t border-border p-3">
+            <div className="border-t border-border/80 bg-card/70 p-4">
               <form
                 action={action}
                 className="space-y-2"
@@ -112,7 +161,7 @@ export function EndClientChat({ orgSlug }: EndClientChatProps) {
                   value={description}
                   onChange={(event) => setDescription(event.target.value)}
                   placeholder="Tell Seldon what to customize for you..."
-                  className="min-h-[88px]"
+                  className="min-h-[88px] border-border/80 bg-background/60 shadow-(--shadow-xs)"
                   required
                   onKeyDown={(event) => {
                     if (event.key === "Enter" && !event.shiftKey) {

@@ -126,8 +126,8 @@ export default async function DashboardLayout({
 
   return (
     <SoulProvider soul={soul}>
-      <div className="min-h-screen w-full lg:p-2">
-        <div className="bg-background lg:rounded-md lg:border flex min-h-screen w-full flex-col items-center justify-start">
+      <div className="min-h-screen w-full lg:p-3">
+        <div className="flex min-h-screen w-full flex-col items-center justify-start bg-background/95 lg:rounded-2xl lg:border lg:border-border/80 lg:shadow-(--shadow-card)">
           <div className="animate-page-enter flex min-h-screen w-full flex-col md:flex-row">
             <Sidebar
               blocks={blocks}
@@ -147,20 +147,25 @@ export default async function DashboardLayout({
               userEmail={user?.email || ""}
               avatarFallback={avatarFallback}
             />
-            <div className="min-w-0 flex-1 min-h-screen overflow-y-auto px-10 py-8 space-y-8">
+            <div className="min-h-screen min-w-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
               <DemoBanner />
               {isSwitchedOrg && activeOrg ? (
-                <div className="rounded-xl border border-border bg-[hsl(var(--muted)/0.22)] px-3 py-2 text-sm text-[hsl(var(--muted-foreground))]">
-                  <span className="text-foreground">{activeOrg.name}</span> active · <Link href="/orgs" className="text-primary underline underline-offset-4">Back to all organizations</Link>
+                <div className="mb-5 rounded-2xl border border-border/80 bg-card/75 px-4 py-3 text-sm text-muted-foreground shadow-(--shadow-xs)">
+                  <span className="font-medium text-foreground">{activeOrg.name}</span> active · {" "}
+                  <Link href="/orgs" className="text-primary underline underline-offset-4">
+                    Back to all organizations
+                  </Link>
                 </div>
               ) : null}
-              <DashboardTopbar
-                userName={user?.name || "Account"}
-                userEmail={user?.email || ""}
-                avatarFallback={avatarFallback}
-                canAccessSeldon={canAccessSeldon}
-              />
-              {children}
+              <div className="space-y-6 lg:space-y-8">
+                <DashboardTopbar
+                  userName={user?.name || "Account"}
+                  userEmail={user?.email || ""}
+                  avatarFallback={avatarFallback}
+                  canAccessSeldon={canAccessSeldon}
+                />
+                {children}
+              </div>
             </div>
           </div>
           <SeldonChat enabled={canAccessSeldon} />

@@ -469,9 +469,9 @@ export default async function DashboardPage({
   });
 
   return (
-    <main className="animate-page-enter flex-1 overflow-auto p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6 bg-background w-full">
+    <main className="animate-page-enter flex-1 overflow-auto w-full space-y-5 p-3 sm:space-y-6 sm:p-4 md:p-6">
       {showWorkspaceTabs ? (
-        <div className="inline-flex items-center rounded-lg border border-border bg-card p-1">
+        <div className="inline-flex items-center rounded-xl border border-border/80 bg-card/75 p-1 shadow-(--shadow-xs)">
           <Link
             href="/dashboard"
             className={`inline-flex h-8 items-center rounded-md px-3 text-xs font-medium transition-colors sm:text-sm ${
@@ -492,7 +492,7 @@ export default async function DashboardPage({
       ) : null}
 
       {activeDashboardView === "all" ? (
-        <section className="rounded-xl border bg-card p-4 sm:p-6 space-y-4">
+        <section className="crm-card space-y-5">
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="text-base sm:text-lg font-semibold">All Workspaces</h2>
@@ -531,7 +531,7 @@ export default async function DashboardPage({
                         <form action={setActiveOrgAction} className="inline-block">
                           <input type="hidden" name="orgId" value={workspace.id} />
                           <input type="hidden" name="redirectTo" value="/dashboard" />
-                          <button type="submit" className="inline-flex h-8 items-center rounded-md border border-border px-3 text-xs font-medium hover:bg-accent">
+                          <button type="submit" className="crm-button-secondary h-8 px-3 text-xs font-medium">
                             Open
                           </button>
                         </form>
@@ -552,13 +552,13 @@ export default async function DashboardPage({
       ) : (
         <>
       {typeof trialDaysRemaining === "number" ? (
-        <div className="rounded-xl border border-primary/30 bg-primary/10 px-4 py-3 text-sm text-primary">
+        <div className="rounded-2xl border border-primary/25 bg-primary/8 px-4 py-3.5 text-sm text-primary shadow-(--shadow-xs)">
           Trial: {trialDaysRemaining} day{trialDaysRemaining === 1 ? "" : "s"} remaining. Your plan activates on {formatLongDate(trialEndsAt!)}.
         </div>
       ) : null}
 
-      <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 sm:gap-6">
-        <div className="space-y-2 sm:space-y-5">
+      <header className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end sm:gap-8">
+        <div className="space-y-2 sm:space-y-4">
           <h1 className="text-lg sm:text-[22px] font-semibold leading-relaxed text-foreground">
             Good {timeOfDay()}, {firstName}
           </h1>
@@ -569,14 +569,14 @@ export default async function DashboardPage({
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
-          <button type="button" className="inline-flex items-center gap-2 sm:gap-3 h-8 sm:h-9 rounded-md border border-border bg-background px-3 text-xs sm:text-sm">
+          <button type="button" className="crm-button-secondary h-8 gap-2 px-3 text-xs sm:h-9 sm:gap-3 sm:text-sm">
             <span className="hidden xs:inline">Import/Export</span>
             <span className="xs:hidden">
               <Download className="size-4" />
             </span>
             <ChevronDown className="size-3 sm:size-4 text-muted-foreground" />
           </button>
-          <Link href="/contacts" className="inline-flex items-center gap-2 sm:gap-3 h-8 sm:h-9 rounded-md bg-linear-to-b from-foreground to-foreground/90 px-3 text-xs sm:text-sm text-background">
+          <Link href="/contacts" className="crm-button-primary h-8 gap-2 px-3 text-xs sm:h-9 sm:gap-3 sm:text-sm">
             <Plus className="size-3 sm:size-4" />
             <span className="hidden xs:inline">Create New</span>
             <span className="xs:hidden">New</span>
@@ -584,7 +584,7 @@ export default async function DashboardPage({
         </div>
       </header>
 
-      <section className="rounded-xl border bg-card p-4 sm:p-6 space-y-4">
+      <section className="crm-card space-y-5">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-base sm:text-lg font-semibold">Your Blocks</h2>
           <Link href="/seldon" className="crm-button-primary h-9 px-3 text-xs sm:text-sm">+ Seldon It</Link>
@@ -663,7 +663,7 @@ export default async function DashboardPage({
             <>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 {visibleBlocks.map((block) => (
-                  <div key={block.slug} className="relative rounded-lg border border-border p-3 hover:bg-accent/30 transition-colors space-y-1.5 group">
+                  <div key={block.slug} className="group relative space-y-1.5 rounded-2xl border border-border/80 bg-background/35 p-4 transition-all hover:border-border hover:bg-accent/35 hover:shadow-(--shadow-xs)">
                     <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
                       <BlockVisibilityToggle slug={block.slug} hidden={false} />
                     </div>
@@ -686,7 +686,7 @@ export default async function DashboardPage({
                   <p className="text-xs font-medium text-muted-foreground">Hidden blocks</p>
                   <div className="flex flex-wrap gap-2">
                     {hiddenBlockItems.map((block) => (
-                      <div key={block.slug} className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-border px-2.5 py-1.5 text-xs text-muted-foreground">
+                      <div key={block.slug} className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-border/80 bg-background/30 px-2.5 py-1.5 text-xs text-muted-foreground">
                         <span>{block.name}</span>
                         <BlockVisibilityToggle slug={block.slug} hidden={true} />
                       </div>
@@ -700,7 +700,7 @@ export default async function DashboardPage({
       </section>
 
       {contactRows.length === 0 ? (
-        <section className="rounded-xl border bg-card p-4 sm:p-6 space-y-4">
+        <section className="crm-card space-y-5">
           <div>
             <h2 className="text-base sm:text-lg font-semibold">Bring your clients into SeldonFrame</h2>
             <p className="text-sm text-muted-foreground">Import existing clients, sync from another CRM, or add one manually.</p>
@@ -713,7 +713,7 @@ export default async function DashboardPage({
           </div>
         </section>
       ) : !hasConnectedIntegrations ? (
-        <section className="rounded-xl border bg-card p-4 sm:p-6 space-y-4">
+        <section className="crm-card space-y-5">
           <div>
             <h2 className="text-base sm:text-lg font-semibold">Connect your existing tools</h2>
             <p className="text-sm text-muted-foreground">Connect the tools you already use so your blocks stay in sync.</p>
@@ -726,7 +726,7 @@ export default async function DashboardPage({
           </div>
         </section>
       ) : !bookingShared ? (
-        <section className="rounded-xl border bg-card p-4 sm:p-6 space-y-4">
+        <section className="crm-card space-y-5">
           <div>
             <h2 className="text-base sm:text-lg font-semibold">Share your booking page</h2>
             <p className="text-sm text-muted-foreground">Your booking page is live. Share it to start getting appointments.</p>
@@ -738,7 +738,7 @@ export default async function DashboardPage({
         </section>
       ) : null}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 p-3 sm:p-4 lg:p-6 rounded-xl border bg-card">
+      <div className="crm-card grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 sm:gap-5 sm:p-5 xl:grid-cols-4 xl:gap-6 xl:p-6">
         {stats.map((stat, index) => (
           <div key={stat.label} className="flex items-start">
             <StatCard
@@ -756,15 +756,15 @@ export default async function DashboardPage({
       </div>
 
       <div className="flex flex-col xl:flex-row gap-4 sm:gap-6">
-        <article className="flex flex-col gap-4 p-6 rounded-xl border bg-card w-full xl:w-[410px]">
+        <article className="crm-card flex w-full flex-col gap-4 xl:w-[410px]">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 sm:gap-2.5">
-              <button type="button" className="inline-flex size-8 items-center justify-center rounded-md border border-border bg-background">
+              <button type="button" className="crm-button-secondary size-8 p-0">
                 <ChartLine className="size-4 sm:size-[18px] text-muted-foreground" />
               </button>
               <span className="text-sm sm:text-base font-medium">Lead Sources</span>
             </div>
-            <button type="button" className="inline-flex size-8 items-center justify-center rounded-md hover:bg-accent">
+            <button type="button" className="crm-button-ghost size-8 p-0">
               <MoreHorizontal className="size-4 text-muted-foreground" />
             </button>
           </div>
@@ -798,10 +798,10 @@ export default async function DashboardPage({
           </div>
         </article>
 
-        <article className="flex-1 flex flex-col gap-4 sm:gap-6 p-6 rounded-xl border bg-card min-w-0">
+        <article className="crm-card min-w-0 flex-1 flex-col gap-4 sm:gap-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 sm:gap-2.5">
-              <button type="button" className="inline-flex size-8 items-center justify-center rounded-md border border-border bg-background">
+              <button type="button" className="crm-button-secondary size-8 p-0">
                 <BarChart2 className="size-4 sm:size-[18px] text-muted-foreground" />
               </button>
               <span className="text-sm sm:text-base font-medium">Revenue Flow</span>
@@ -811,7 +811,7 @@ export default async function DashboardPage({
                 <span className="inline-flex items-center gap-1"><span className="size-2 rounded-full bg-[#6e3ff3]" />This Year</span>
                 <span className="inline-flex items-center gap-1"><span className="size-2 rounded-full bg-[#e255f2]" />Prev Year</span>
               </div>
-              <button type="button" className="inline-flex size-8 items-center justify-center rounded-md hover:bg-accent">
+              <button type="button" className="crm-button-ghost size-8 p-0">
                 <MoreHorizontal className="size-4 text-muted-foreground" />
               </button>
             </div>
@@ -824,7 +824,7 @@ export default async function DashboardPage({
                 <p className="text-xs sm:text-sm text-muted-foreground">Total Revenue (Last 6 Months)</p>
               </div>
 
-              <div className="bg-muted/50 rounded-lg p-3 sm:p-4 space-y-3 sm:space-y-4">
+              <div className="rounded-2xl border border-border/70 bg-background/40 p-3 sm:p-4 space-y-3 sm:space-y-4">
                 <p className="text-xs sm:text-sm font-semibold">🏆 Best Performing Month</p>
                 <p className="text-[10px] sm:text-xs text-muted-foreground leading-relaxed">
                   {hasRevenueHistory
@@ -870,10 +870,10 @@ export default async function DashboardPage({
         </article>
       </div>
 
-      <article className="rounded-xl border bg-card">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 p-3 sm:px-6 sm:py-3.5">
+      <article className="crm-card overflow-hidden p-0">
+        <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:gap-4 sm:px-6 sm:py-4">
           <div className="flex items-center gap-2 sm:gap-2.5 flex-1">
-            <button type="button" className="inline-flex size-8 items-center justify-center rounded-md border border-border bg-background">
+            <button type="button" className="crm-button-secondary size-8 p-0">
               <ClipboardList className="size-4 sm:size-[18px] text-muted-foreground" />
             </button>
             <span className="text-sm sm:text-base font-medium">Active Deals</span>
@@ -885,13 +885,13 @@ export default async function DashboardPage({
           <div className="flex flex-wrap items-center gap-2">
             <label className="relative flex-1 sm:flex-none">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 sm:size-5 text-muted-foreground" />
-              <input placeholder="Search..." className="pl-9 sm:pl-10 w-full sm:w-[160px] lg:w-[200px] h-8 sm:h-9 text-sm rounded-md border border-border bg-background" />
+              <input placeholder="Search..." className="crm-input h-8 w-full pl-9 pr-3 text-sm sm:h-9 sm:w-[160px] sm:pl-10 lg:w-[200px]" />
             </label>
-            <button type="button" className="inline-flex h-8 sm:h-9 items-center gap-1.5 sm:gap-2 rounded-md border border-border bg-background px-3 text-xs sm:text-sm">
+            <button type="button" className="crm-button-secondary h-8 gap-1.5 px-3 text-xs sm:h-9 sm:gap-2 sm:text-sm">
               <Filter className="size-3.5 sm:size-4" />
               <span>Filter</span>
             </button>
-            <button type="button" className="inline-flex h-8 sm:h-9 items-center gap-1.5 sm:gap-2 rounded-md border border-border bg-background px-3 text-xs sm:text-sm">
+            <button type="button" className="crm-button-secondary h-8 gap-1.5 px-3 text-xs sm:h-9 sm:gap-2 sm:text-sm">
               <FileInput className="size-3.5 sm:size-4" />
               <span>Import</span>
             </button>
@@ -917,7 +917,7 @@ export default async function DashboardPage({
                   <td colSpan={4} className="py-8 text-center">
                     <div className="mx-auto flex max-w-sm flex-col items-center gap-3">
                       <p className="text-sm text-muted-foreground">No active deals yet.</p>
-                      <Link href="/deals" className="inline-flex h-9 items-center gap-2 rounded-md bg-foreground px-3 text-sm text-background transition-colors hover:bg-foreground/90">
+                      <Link href="/deals" className="crm-button-primary h-9 px-3 text-sm">
                         Create your first engagement
                       </Link>
                     </div>
@@ -950,14 +950,14 @@ export default async function DashboardPage({
       </article>
 
       {upcomingSessionRows.length > 0 ? (
-        <article className="rounded-xl border bg-card p-4 sm:p-6">
+        <article className="crm-card">
           <p className="mb-3 text-xs font-medium uppercase tracking-widest text-muted-foreground">Upcoming Sessions</p>
           <ul className="space-y-2">
             {upcomingSessionRows.slice(0, 3).map((booking) => {
               const linkedContact = booking.contactId ? contactById.get(booking.contactId) : null;
               const person = linkedContact ? `${linkedContact.firstName} ${linkedContact.lastName ?? ""}`.trim() : contactLabelSingular;
               return (
-                <li key={booking.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm">
+                <li key={booking.id} className="flex items-center justify-between rounded-xl border border-border/80 bg-background/35 px-4 py-3 text-sm">
                   <span className="text-foreground">{booking.title}</span>
                   <span className="text-muted-foreground">{person}</span>
                 </li>
