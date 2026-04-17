@@ -3,7 +3,7 @@ import fs from "fs/promises";
 import type { Dirent } from "node:fs";
 import path from "path";
 
-const BRAIN_ROOT = path.join(process.cwd(), "brain");
+const BRAIN_ROOT = path.join(process.cwd(), ".brain");
 const BRAIN_WIKI_ROOT = path.join(BRAIN_ROOT, "wiki");
 const WORKSPACES_ROOT = path.join(BRAIN_WIKI_ROOT, "workspaces");
 const PERSONAL_ROOT = path.join(BRAIN_WIKI_ROOT, "personal");

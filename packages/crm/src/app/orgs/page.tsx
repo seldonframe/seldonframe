@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
+import { UpgradePlanCheckoutButton } from "@/components/orgs/upgrade-plan-checkout-button";
 import { getWorkspaceLimitStatus, listManagedOrganizations, setActiveOrgAction } from "@/lib/billing/orgs";
 import { getPlan } from "@/lib/billing/plans";
 
@@ -83,9 +84,7 @@ export default async function OrganizationsPage({
               Back to dashboard
             </Link>
             {isLimited ? (
-              <Link href="/pricing" className="crm-button-secondary h-10 px-4 inline-flex items-center">
-                Upgrade Plan
-              </Link>
+              <UpgradePlanCheckoutButton />
             ) : (
               <Link href="/orgs/new" className="crm-button-primary h-10 px-4 inline-flex items-center">
                 Create Workspace

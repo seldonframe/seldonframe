@@ -9,7 +9,7 @@ import { proposeBlockRewrite, type BlockRewriteSuggestion } from "@/lib/brain";
 import { getBrainHealthSummary } from "@/lib/brain-health";
 import { regenerateBrainManifestForWorkspace } from "@/lib/brain-manifest";
 
-const BRAIN_ROOT = path.join(process.cwd(), "brain");
+const BRAIN_ROOT = path.join(process.cwd(), ".brain");
 const BRAIN_WIKI_ROOT = path.join(BRAIN_ROOT, "wiki");
 const WORKSPACES_ROOT = path.join(BRAIN_WIKI_ROOT, "workspaces");
 const PERSONAL_ROOT = path.join(BRAIN_WIKI_ROOT, "personal");
