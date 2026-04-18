@@ -256,6 +256,13 @@ export function DashboardTopbar({
       </div>
 
       <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
+        <Link
+          href="/docs"
+          className="hidden h-9 items-center rounded-xl border border-border/80 bg-background/70 px-3 text-sm font-medium text-muted-foreground shadow-(--shadow-xs) transition hover:border-border hover:bg-background hover:text-foreground lg:inline-flex"
+        >
+          Docs
+        </Link>
+
         <button type="button" className="crm-topbar-icon-btn" aria-label="Toggle theme" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
           {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </button>

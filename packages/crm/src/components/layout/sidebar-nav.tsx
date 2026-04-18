@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Briefcase, Building2, Calendar, ChevronRight, FileText, Layout, LayoutDashboard, Mail, Puzzle, Settings, Sparkles, Users, Zap } from "lucide-react";
+import { BookOpen, Briefcase, Building2, Calendar, ChevronRight, FileText, Layout, LayoutDashboard, Mail, Puzzle, Settings, Sparkles, Users, Zap } from "lucide-react";
 
 type NavItem = {
   href: string;
@@ -21,6 +21,7 @@ export type NavGroup = {
 const iconMap = {
   dashboard: LayoutDashboard,
   layoutdashboard: LayoutDashboard,
+  bookopen: BookOpen,
   contacts: Users,
   users: Users,
   deals: Briefcase,
