@@ -1,10 +1,12 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { MessageCircle, Send, ThumbsDown, ThumbsUp, X } from "lucide-react";
 import { runSeldonItAction, type SeldonRunState } from "@/lib/ai/seldon-actions";
 import { recordSeldonFeedbackAction } from "@/lib/ai/record-seldon-feedback";
+import { SELDON_CALM_PROGRESS_MESSAGES, SELDON_PROGRESS_INTERVAL_MS } from "@/lib/ai/progress-messages";
 import { Button } from "@/components/ui/button";
+import { SeldonResultActions } from "@/components/seldon-result-actions";
 import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 
@@ -19,6 +21,7 @@ type ChatMessage = {
 };
 
 const initialState: SeldonRunState = { ok: false };
+const processingSteps = [...SELDON_CALM_PROGRESS_MESSAGES];
 
 export function EndClientChat({ orgSlug }: EndClientChatProps) {
   const [state, action, pending] = useActionState(runSeldonItAction, initialState);
@@ -26,7 +29,24 @@ export function EndClientChat({ orgSlug }: EndClientChatProps) {
   const [description, setDescription] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [feedbackByMessage, setFeedbackByMessage] = useState<Record<string, -1 | 1>>({});
+  const [processingIndex, setProcessingIndex] = useState(0);
   const visibleError = state.error?.includes("Failed to parse Seldon response") ? undefined : state.error;
+
+  useEffect(() => {
+    if (!pending) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setProcessingIndex((current) => (current + 1) % processingSteps.length);
+    }, SELDON_PROGRESS_INTERVAL_MS);
+
+    return () => window.clearInterval(timer);
+  }, [pending]);
+
+  function fillPrompt(prompt: string) {
+    setDescription(prompt);
+  }
 
   async function submitFeedback(feedbackScore: -1 | 1, messageId: string) {
     if (feedbackByMessage[messageId]) {
@@ -110,7 +130,7 @@ export function EndClientChat({ orgSlug }: EndClientChatProps) {
                 </div>
               ))}
 
-              {pending ? <div className="text-xs text-muted-foreground">Seldon is thinking...</div> : null}
+              {pending ? <div className="text-xs text-muted-foreground">{processingSteps[processingIndex]}</div> : null}
 
               {!pending && (visibleError || state.message) ? (
                 <div className="max-w-[90%] space-y-2 rounded-2xl border border-border/80 bg-card/80 px-4 py-3 text-sm text-foreground shadow-(--shadow-xs)">
@@ -141,6 +161,18 @@ export function EndClientChat({ orgSlug }: EndClientChatProps) {
                       </Button>
                     </div>
                   ) : null}
+                </div>
+              ) : null}
+
+              {state.results?.length ? (
+                <div className="space-y-3">
+                  {state.results.map((result) => (
+                    <div key={result.blockId} className="max-w-[90%] space-y-2 rounded-2xl border border-border/80 bg-card/80 px-4 py-3 text-sm text-foreground shadow-(--shadow-xs)">
+                      <div className="font-medium">{result.blockName}</div>
+                      <div className="text-muted-foreground">{result.cardSummary ?? result.description ?? result.summary}</div>
+                      <SeldonResultActions actions={result.actions} onPrompt={fillPrompt} />
+                    </div>
+                  ))}
                 </div>
               ) : null}
             </div>

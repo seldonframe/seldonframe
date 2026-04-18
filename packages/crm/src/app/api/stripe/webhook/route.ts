@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { db } from "@/db";
 import { organizations, users } from "@/db/schema";
+import { isSelfServiceCheckoutPriceId } from "@/lib/billing/price-ids";
 import { getOrgSubscription, updateOrgSubscription } from "@/lib/billing/subscription";
 
 function getStripeClient() {
@@ -83,6 +84,50 @@ async function markStripeEventProcessed(orgId: string, eventId: string) {
   return true;
 }
 
+function isEnabledMetadataFlag(value: string | undefined) {
+  return value === "true" || value === "1";
+}
+
+async function updateSelfServiceWorkspaceState(params: {
+  orgId: string;
+  enabled: boolean;
+  priceId: string | null;
+  activatedAt?: string | null;
+  openClawEnabled?: boolean;
+  layer2Enabled?: boolean;
+}) {
+  const [org] = await db
+    .select({ settings: organizations.settings })
+    .from(organizations)
+    .where(eq(organizations.id, params.orgId))
+    .limit(1);
+
+  const currentSettings = (org?.settings as Record<string, unknown> | null) ?? {};
+  const currentSelfService =
+    currentSettings.selfService && typeof currentSettings.selfService === "object"
+      ? (currentSettings.selfService as Record<string, unknown>)
+      : {};
+
+  await db
+    .update(organizations)
+    .set({
+      settings: {
+        ...currentSettings,
+        selfService: {
+          ...currentSelfService,
+          enabled: params.enabled,
+          openClawEnabled: params.openClawEnabled ?? currentSelfService.openClawEnabled ?? false,
+          layer2Enabled: params.layer2Enabled ?? currentSelfService.layer2Enabled ?? false,
+          stripePriceId: params.priceId,
+          activatedAt: params.enabled ? params.activatedAt ?? currentSelfService.activatedAt ?? new Date().toISOString() : null,
+          updatedAt: new Date().toISOString(),
+        },
+      },
+      updatedAt: new Date(),
+    })
+    .where(eq(organizations.id, params.orgId));
+}
+
 export async function POST(req: NextRequest) {
   if (!process.env.STRIPE_SECRET_KEY || !process.env.STRIPE_WEBHOOK_SECRET) {
     return NextResponse.json({ error: "Stripe webhook not configured" }, { status: 400 });
@@ -125,13 +170,15 @@ export async function POST(req: NextRequest) {
         break;
       }
 
-      const shouldProcess = await markStripeEventProcessed(orgId, event.id);
+      const targetOrgId = session.metadata?.type === "self_service_workspace" ? session.metadata?.workspaceId?.trim() || orgId : orgId;
+
+      const shouldProcess = await markStripeEventProcessed(targetOrgId, event.id);
       if (!shouldProcess) {
-        console.info("[stripe-webhook] duplicate event ignored", { eventId: event.id, eventType: event.type, orgId });
+        console.info("[stripe-webhook] duplicate event ignored", { eventId: event.id, eventType: event.type, orgId: targetOrgId });
         break;
       }
 
-      const previousSubscription = await getOrgSubscription(orgId);
+      const previousSubscription = await getOrgSubscription(targetOrgId);
 
       const subscription = await stripe.subscriptions.retrieve(subscriptionId);
       const priceId = subscription.items.data[0]?.price?.id;
@@ -144,22 +191,40 @@ export async function POST(req: NextRequest) {
       const tier = price.metadata?.tier || "free";
       const maxWorkspaces = Number.parseInt(price.metadata?.workspaces || "1", 10);
       const currentPeriodEnd = (subscription as Stripe.Subscription & { current_period_end?: number }).current_period_end;
+      const selfServiceEnabled = isSelfServiceCheckoutPriceId(priceId);
+      const openClawEnabled = selfServiceEnabled && isEnabledMetadataFlag(price.metadata?.openclaw);
+      const layer2Enabled = selfServiceEnabled && isEnabledMetadataFlag(price.metadata?.layer2);
 
-      await updateOrgSubscription(orgId, {
+      await updateOrgSubscription(targetOrgId, {
         stripeCustomerId: customerId,
         stripeSubscriptionId: subscriptionId,
         stripePriceId: priceId,
         tier,
         maxWorkspaces: Number.isNaN(maxWorkspaces) ? 1 : maxWorkspaces,
+        selfServiceEnabled,
+        openClawEnabled,
+        layer2Enabled,
+        selfServiceActivatedAt: selfServiceEnabled ? new Date().toISOString() : null,
         status: subscription.status as "active" | "trialing" | "past_due" | "canceled" | "unpaid",
         trialEndsAt: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
         currentPeriodEnd: currentPeriodEnd ? new Date(currentPeriodEnd * 1000).toISOString() : null,
       });
 
-      const nextSubscription = await getOrgSubscription(orgId);
+      if (selfServiceEnabled) {
+        await updateSelfServiceWorkspaceState({
+          orgId: targetOrgId,
+          enabled: true,
+          priceId,
+          activatedAt: new Date().toISOString(),
+          openClawEnabled,
+          layer2Enabled,
+        });
+      }
+
+      const nextSubscription = await getOrgSubscription(targetOrgId);
       console.info("[stripe-webhook] checkout.session.completed applied", {
         eventId: event.id,
-        orgId,
+        orgId: targetOrgId,
         previousStatus: previousSubscription.status ?? null,
         nextStatus: nextSubscription.status ?? null,
         previousMaxWorkspaces: previousSubscription.maxWorkspaces ?? 1,
@@ -171,7 +236,7 @@ export async function POST(req: NextRequest) {
 
     case "customer.subscription.updated": {
       const subscription = event.data.object as Stripe.Subscription;
-      const orgId = subscription.metadata?.orgId;
+      const orgId = subscription.metadata?.type === "self_service_workspace" ? subscription.metadata?.workspaceId : subscription.metadata?.orgId;
       const priceId = subscription.items.data[0]?.price?.id;
 
       if (!orgId || !priceId) {
@@ -182,23 +247,41 @@ export async function POST(req: NextRequest) {
       const tier = price.metadata?.tier || "free";
       const maxWorkspaces = Number.parseInt(price.metadata?.workspaces || "1", 10);
       const currentPeriodEnd = (subscription as Stripe.Subscription & { current_period_end?: number }).current_period_end;
+      const selfServiceEnabled = isSelfServiceCheckoutPriceId(priceId);
+      const openClawEnabled = selfServiceEnabled && isEnabledMetadataFlag(price.metadata?.openclaw);
+      const layer2Enabled = selfServiceEnabled && isEnabledMetadataFlag(price.metadata?.layer2);
 
       await updateOrgSubscription(orgId, {
         stripeSubscriptionId: subscription.id,
         stripePriceId: priceId,
         tier,
         maxWorkspaces: Number.isNaN(maxWorkspaces) ? 1 : maxWorkspaces,
+        selfServiceEnabled,
+        openClawEnabled,
+        layer2Enabled,
+        selfServiceActivatedAt: selfServiceEnabled ? new Date().toISOString() : null,
         status: subscription.status as "active" | "trialing" | "past_due" | "canceled" | "unpaid",
         trialEndsAt: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
         currentPeriodEnd: currentPeriodEnd ? new Date(currentPeriodEnd * 1000).toISOString() : null,
       });
+
+      if (selfServiceEnabled) {
+        await updateSelfServiceWorkspaceState({
+          orgId,
+          enabled: true,
+          priceId,
+          activatedAt: new Date().toISOString(),
+          openClawEnabled,
+          layer2Enabled,
+        });
+      }
 
       break;
     }
 
     case "customer.subscription.deleted": {
       const subscription = event.data.object as Stripe.Subscription;
-      const orgId = subscription.metadata?.orgId;
+      const orgId = subscription.metadata?.type === "self_service_workspace" ? subscription.metadata?.workspaceId : subscription.metadata?.orgId;
 
       if (!orgId) {
         break;
@@ -209,6 +292,19 @@ export async function POST(req: NextRequest) {
         maxWorkspaces: 1,
         status: "canceled",
         stripeSubscriptionId: null,
+        selfServiceEnabled: false,
+        openClawEnabled: false,
+        layer2Enabled: false,
+        selfServiceActivatedAt: null,
+      });
+
+      await updateSelfServiceWorkspaceState({
+        orgId,
+        enabled: false,
+        priceId: null,
+        activatedAt: null,
+        openClawEnabled: false,
+        layer2Enabled: false,
       });
 
       break;
@@ -226,11 +322,13 @@ export async function POST(req: NextRequest) {
         break;
       }
 
-      const orgId = await resolveOrgIdForBillingEvent({
+      const resolvedOrgId = await resolveOrgIdForBillingEvent({
         metadata: invoice.metadata ?? undefined,
         customerId,
         subscriptionId,
       });
+
+      const orgId = invoice.metadata?.type === "self_service_workspace" ? invoice.metadata?.workspaceId ?? resolvedOrgId : resolvedOrgId;
 
       if (!orgId) {
         break;
@@ -247,6 +345,9 @@ export async function POST(req: NextRequest) {
       let stripePriceId: string | null = null;
       let maxWorkspaces = 1;
       let tier = "free";
+      let selfServiceEnabled = false;
+      let openClawEnabled = false;
+      let layer2Enabled = false;
 
       if (subscriptionId) {
         const subscription = await stripe.subscriptions.retrieve(subscriptionId);
@@ -257,6 +358,9 @@ export async function POST(req: NextRequest) {
           const parsedMaxWorkspaces = Number.parseInt(price.metadata?.workspaces || "1", 10);
           maxWorkspaces = Number.isNaN(parsedMaxWorkspaces) ? 1 : parsedMaxWorkspaces;
           tier = price.metadata?.tier || "pro";
+          selfServiceEnabled = isSelfServiceCheckoutPriceId(stripePriceId);
+          openClawEnabled = selfServiceEnabled && isEnabledMetadataFlag(price.metadata?.openclaw);
+          layer2Enabled = selfServiceEnabled && isEnabledMetadataFlag(price.metadata?.layer2);
         }
       }
 
@@ -266,8 +370,23 @@ export async function POST(req: NextRequest) {
         stripePriceId,
         tier,
         maxWorkspaces,
+        selfServiceEnabled,
+        openClawEnabled,
+        layer2Enabled,
+        selfServiceActivatedAt: selfServiceEnabled ? new Date().toISOString() : null,
         status: event.type === "invoice.payment_failed" ? "past_due" : "active",
       });
+
+      if (stripePriceId && selfServiceEnabled) {
+        await updateSelfServiceWorkspaceState({
+          orgId,
+          enabled: true,
+          priceId: stripePriceId,
+          activatedAt: new Date().toISOString(),
+          openClawEnabled,
+          layer2Enabled,
+        });
+      }
 
       const nextSubscription = await getOrgSubscription(orgId);
       console.info("[stripe-webhook] invoice status applied", {

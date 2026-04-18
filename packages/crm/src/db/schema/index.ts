@@ -26,3 +26,4 @@ export * from "./soul-sources";
 export * from "./seldon-patterns";
 export * from "./preview-sessions";
 export * from "./brain";
+export * from "./workspace-secrets";

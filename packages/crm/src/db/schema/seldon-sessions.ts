@@ -30,6 +30,24 @@ export type SeldonSessionMessage = {
     installMode: "instant" | "review";
     openPath: string;
     savePath: string;
+    description?: string;
+    status?: "live" | "draft" | "needs-integration" | "error";
+    integrationNote?: string;
+    changes?: string;
+    entityId?: string;
+    blockType?: "form" | "email" | "booking" | "page" | "automation";
+    publicUrl?: string | null;
+    adminUrl?: string;
+    editUrl?: string;
+    previewUrl?: string | null;
+    cardSummary?: string;
+    actions?: Array<{
+      label: string;
+      kind: "link" | "prompt";
+      href?: string;
+      prompt?: string;
+      primary?: boolean;
+    }>;
   }>;
 };
 

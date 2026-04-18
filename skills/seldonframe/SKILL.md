@@ -2,6 +2,19 @@
 
 You now have full control over SeldonFrame directly from Claude Code.
 
+## Secure API Key Management
+
+Seldon never asks you to paste secrets into normal chat.
+When a key is needed, I open a dedicated secure input flow (masked, not saved in history).
+
+Your keys are:
+- Stored encrypted and scoped only to this workspace
+- Never logged in plaintext
+- Decrypted only in memory for the exact operation needed
+- Fully auditable (you can see last used time and rotation history)
+
+Say: “Show me my connected keys” or “Rotate my Resend key” anytime.
+
 **Karpathy Best Practices** (applied to every block and change):
 - Think Before Coding: explicit reasoning, surface assumptions
 - Simplicity First: smallest solution that works
@@ -27,6 +40,10 @@ You now have full control over SeldonFrame directly from Claude Code.
 - `Connect myagency.com as custom domain for the current workspace`
 - `Export the current workspace as portable .agent/ folder`
 - `Show me Brain v2 insights for Indie SaaS Launch`
+- `Show me my connected keys`
+- `Rotate my Resend key`
+- `Invite Sarah into self-service mode for the Acme workspace`
+- `In end_client_mode: true, make the booking page show evening slots only`
 
 The web dashboard is now only for quick visual overviews. Do everything powerful from here in Claude Code.
 

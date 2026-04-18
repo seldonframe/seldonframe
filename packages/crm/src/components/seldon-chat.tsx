@@ -5,6 +5,7 @@ import { useActionState, useEffect, useState } from "react";
 import { MessageCircle, Send, Sparkles, ThumbsDown, ThumbsUp } from "lucide-react";
 import { runSeldonItAction, type SeldonRunState } from "@/lib/ai/seldon-actions";
 import { recordSeldonFeedbackAction } from "@/lib/ai/record-seldon-feedback";
+import { SELDON_CALM_PROGRESS_MESSAGES, SELDON_PROGRESS_INTERVAL_MS } from "@/lib/ai/progress-messages";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -20,6 +21,7 @@ type ChatMessage = {
 };
 
 const initialState: SeldonRunState = { ok: false };
+const processingSteps = [...SELDON_CALM_PROGRESS_MESSAGES];
 
 export function SeldonChat({ enabled }: SeldonChatProps) {
   const [state, action, pending] = useActionState(runSeldonItAction, initialState);
@@ -27,6 +29,7 @@ export function SeldonChat({ enabled }: SeldonChatProps) {
   const [description, setDescription] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [feedbackByMessage, setFeedbackByMessage] = useState<Record<string, -1 | 1>>({});
+  const [processingIndex, setProcessingIndex] = useState(0);
   const visibleError = state.error?.includes("Failed to parse Seldon response") ? undefined : state.error;
 
   async function submitFeedback(feedbackScore: -1 | 1, messageId: string) {
@@ -62,6 +65,18 @@ export function SeldonChat({ enabled }: SeldonChatProps) {
       window.removeEventListener("crm:builder-seldon-open", handleOpen);
     };
   }, [enabled]);
+
+  useEffect(() => {
+    if (!pending) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setProcessingIndex((current) => (current + 1) % processingSteps.length);
+    }, SELDON_PROGRESS_INTERVAL_MS);
+
+    return () => window.clearInterval(timer);
+  }, [pending]);
 
   function submitCurrentPrompt() {
     const trimmed = description.trim();
@@ -120,7 +135,7 @@ export function SeldonChat({ enabled }: SeldonChatProps) {
               </div>
             ))}
 
-            {pending ? <div className="text-xs text-muted-foreground">Seldon is designing your changes...</div> : null}
+            {pending ? <div className="text-xs text-muted-foreground">{processingSteps[processingIndex]}</div> : null}
 
             {!pending && (visibleError || state.message) ? (
               <div className="max-w-[90%] rounded-lg bg-muted px-3 py-2 text-sm text-foreground space-y-2">

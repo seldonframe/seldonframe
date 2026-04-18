@@ -1,7 +1,7 @@
 ---
 name: seldonframe
 description: Build a complete personalized business OS from one text or URL. First workspace free forever.
-version: 1.3.5
+version: 1.3.6
 user-invocable: true
 metadata:
   requires:
@@ -32,6 +32,12 @@ Send me a description of your business (or a URL) and I’ll generate a complete
 Pricing model:
 - First workspace is completely free forever.
 - Each additional workspace is $9/month per workspace.
+- Self-Service + Layer 2 is $29/month per workspace.
+- Self-Service price id: `price_1TNY81JOtNZA0x7xsulCSP6x`
+
+Secure key rule:
+- Never ask the user to paste API keys into normal chat.
+- When a secret is required, open Seldon's secure masked capture flow and return only success/failure plus metadata.
 
 ## Workflow
 1. Ask: “Tell me about your business or share your website URL.”
@@ -77,10 +83,61 @@ Pricing model:
        3. `Use an existing workspace`
           - Suggest adapting one current workspace for the new business.
 
+## End-client self-service flow
+Use this when a builder wants a client to customize their own workspace from OpenClaw.
+
+1. Create a scoped invite:
+   - Call `POST https://app.seldonframe.com/api/v1/portal/invite`
+   - Send headers:
+     - `x-seldon-api-key: {{SELDONFRAME_API_KEY}}`
+     - `x-claude-api-key: {{CLAUDE_API_KEY}}`
+   - Body:
+     - `{ "workspaceId": "<workspace-id>", "contactId": "<contact-id>" }`
+   - Expect:
+     - `invite_url`
+     - `portal_token`
+     - `end_client_mode: true`
+
+2. Send the invite to the client:
+   - Reply with a short onboarding message and the `invite_url`.
+   - Explain that the link opens their scoped self-service assistant.
+
+3. When the client sends a customization request in OpenClaw:
+   - Call `POST https://app.seldonframe.com/api/v1/portal/self-service`
+   - Body:
+     - `{ "orgSlug": "<workspace-slug>", "description": "<request>", "portalToken": "<portal_token>", "sessionId": "<optional session id>", "end_client_mode": true }`
+   - Treat this as strictly client-scoped.
+   - Never remove the `end_client_mode: true` behavior.
+
+4. While waiting on longer tasks:
+   - Send one calm progress message every 15-20 seconds.
+   - Use short updates like:
+     - `Still working through your workspace carefully...`
+     - `Checking what already exists so this stays clean and scoped...`
+     - `Applying the update and validating the result...`
+
+5. Render result cards using the response:
+   - Show `cards[]`
+   - Each card should include:
+     - title
+     - summary
+     - previewUrl
+     - buttons: `Apply`, `Edit`, `Undo`, `View live preview`
+
+6. If a request needs a secret:
+   - Do not ask for the key in chat.
+   - Tell the user you are opening Seldon's secure masked input flow.
+
 ## Error handling
 - `429`: “I hit a temporary rate limit. Try again in a few minutes.”
 - `401`: “Authentication failed. Check your Seldon API key (or login session) and try again.”
 - `500+`: “The builder engine had an issue. Try a shorter description or URL.”
+
+## Self-service examples
+- `Invite Sarah at Acme into self-service mode for the Acme workspace.`
+- `In end_client_mode: true, make the booking page show evening slots only.`
+- `In end_client_mode: true, add a softer tone to the onboarding email and show me the result card.`
+- `Rotate my Resend key using Seldon's secure key flow.`
 
 Be concise, energized, and outcome-focused.
 

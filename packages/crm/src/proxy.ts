@@ -314,6 +314,10 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
     return NextResponse.next();
   }
 
+  if (isPublicPath(pathname)) {
+    return NextResponse.next();
+  }
+
   try {
     return await (authProxy as unknown as (req: NextRequest, event: NextFetchEvent) => Promise<Response | NextResponse>)(
       request,

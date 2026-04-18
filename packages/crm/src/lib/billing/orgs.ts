@@ -13,13 +13,13 @@ import { contacts, orgMembers, organizations, users } from "@/db/schema";
 import { getOrgFeatures } from "@/lib/billing/features";
 import { assertWritable } from "@/lib/demo/server";
 import { getPlan } from "@/lib/billing/plans";
+import { WORKSPACE_ADDON_MONTHLY_PRICE_ID } from "@/lib/billing/price-ids";
 import { getOrgSubscription } from "@/lib/billing/subscription";
 import { installSoul, type FrameworkConfig } from "@/lib/soul/install";
 import { seedInitialBlocks } from "@/lib/soul-compiler/blocks";
 import type { SoulV4 } from "@/lib/soul-compiler/schema";
 
 const FREE_WORKSPACE_ALLOWANCE = 1;
-const WORKSPACE_MONTHLY_PRICE_ID = "price_1TMC7UJOtNZA0x7xNrl2VDVE";
 
 function slugify(value: string) {
   return value
@@ -124,7 +124,7 @@ async function loadWorkspaceAddonSubscription(
       };
     }
 
-    const workspaceItem = subscription.items.data.find((item) => item.price?.id === WORKSPACE_MONTHLY_PRICE_ID) ?? null;
+    const workspaceItem = subscription.items.data.find((item) => item.price?.id === WORKSPACE_ADDON_MONTHLY_PRICE_ID) ?? null;
 
     return {
       stripeSubscriptionId,
@@ -173,7 +173,7 @@ async function ensureWorkspaceCreationBillingForUser(user: Awaited<ReturnType<ty
     throw new Error(WORKSPACE_UPGRADE_REQUIRED_MESSAGE);
   }
 
-  const item = subscription.items.data.find((entry) => entry.id === addonSubscription.itemId && entry.price?.id === WORKSPACE_MONTHLY_PRICE_ID);
+  const item = subscription.items.data.find((entry) => entry.id === addonSubscription.itemId && entry.price?.id === WORKSPACE_ADDON_MONTHLY_PRICE_ID);
   if (!item?.id) {
     throw new Error(WORKSPACE_UPGRADE_REQUIRED_MESSAGE);
   }

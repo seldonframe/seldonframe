@@ -58,7 +58,7 @@ export default async function FormsPage() {
             Submissions become {labels.contact.plural.toLowerCase()} in your CRM automatically.
           </p>
         </div>
-        <FormsPageActions />
+        <FormsPageActions buttonLabel={`+ New ${labels.intakeForm.singular}`} />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -89,14 +89,18 @@ export default async function FormsPage() {
               Submissions become {labels.contact.plural.toLowerCase()} in your CRM automatically.
             </p>
             <div className="mt-5">
-              <FormsPageActions />
+              <FormsPageActions buttonLabel={`+ New ${labels.intakeForm.singular}`} />
             </div>
           </div>
         </article>
       ) : (
         <div className="rounded-xl border border-border bg-card overflow-hidden">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 border-b">
-            <h3 className="font-medium text-base">List Forms</h3>
+            <div>
+              <h3 className="font-medium text-base">Your forms</h3>
+              <p className="text-xs text-muted-foreground">Create, edit, and preview the forms your clients will actually complete.</p>
+            </div>
+            <FormsPageActions buttonLabel={`+ New ${labels.intakeForm.singular}`} />
           </div>
 
           <div className="hidden sm:grid grid-cols-[1fr_120px_140px_220px] gap-4 px-4 py-3 border-b bg-muted/50 text-xs font-medium text-muted-foreground">
@@ -125,7 +129,7 @@ export default async function FormsPage() {
                 <span className="hidden sm:block text-sm text-muted-foreground">0</span>
                 <div className="hidden sm:flex items-center gap-2">
                   <Link href={`/forms/${form.id}/edit`} className="crm-button-primary h-9 px-4 text-xs">
-                    Edit
+                    Edit form
                   </Link>
                   <Link href={`/forms/${orgSlug}/${form.slug}`} target="_blank" rel="noopener noreferrer" className="crm-button-secondary h-9 px-4 text-xs">
                     Preview

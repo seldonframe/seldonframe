@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { organizations } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth/helpers";
 import { listContacts } from "@/lib/contacts/actions";
+import { getIntegrationSettings } from "@/lib/integrations/actions";
 import { getLabels } from "@/lib/soul/labels";
 import { getSoul } from "@/lib/soul/server";
 import { BookingsPageContent } from "@/components/bookings/bookings-page-content";
@@ -20,13 +21,14 @@ import { BookingsPageContent } from "@/components/bookings/bookings-page-content
 */
 
 export default async function BookingsPage() {
-  const [user, labels, bookingTypes, bookings, contacts, soul] = await Promise.all([
+  const [user, labels, bookingTypes, bookings, contacts, soul, integrationSettings] = await Promise.all([
     getCurrentUser(),
     getLabels(),
     listAppointmentTypes(),
     listBookings(),
     listContacts(),
     getSoul(),
+    getIntegrationSettings(),
   ]);
 
   let orgSlug = "";
@@ -65,6 +67,8 @@ export default async function BookingsPage() {
         }))}
         suggestedServices={soul?.services ?? []}
         orgSlug={orgSlug}
+        calendarConnected={Boolean(integrationSettings?.google.calendarConnected)}
+        googleCalendarConnectUrl="/api/integrations/google-calendar?returnTo=%2Fbookings"
         createAppointmentTypeAction={createAppointmentTypeAction}
       />
     </section>

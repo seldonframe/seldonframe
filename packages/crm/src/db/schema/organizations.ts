@@ -45,6 +45,10 @@ export type OrganizationSubscription = {
   stripePriceId?: string | null;
   tier?: string;
   maxWorkspaces?: number;
+  selfServiceEnabled?: boolean;
+  openClawEnabled?: boolean;
+  layer2Enabled?: boolean;
+  selfServiceActivatedAt?: string | null;
   status?: "active" | "trialing" | "past_due" | "canceled" | "unpaid";
   trialEndsAt?: string | null;
   currentPeriodEnd?: string | null;

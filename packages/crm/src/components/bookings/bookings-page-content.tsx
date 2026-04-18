@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Search, Settings, SlidersHorizontal } from "lucide-react";
 
@@ -72,6 +73,8 @@ type BookingsPageContentProps = {
   contacts: ContactRow[];
   suggestedServices: SuggestedService[];
   orgSlug: string;
+  calendarConnected: boolean;
+  googleCalendarConnectUrl: string;
   createAppointmentTypeAction: (formData: FormData) => Promise<void>;
 };
 
@@ -135,7 +138,7 @@ const bookingBorderPalette = [
   "border-l-positive",
 ];
 
-export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, suggestedServices, orgSlug, createAppointmentTypeAction }: BookingsPageContentProps) {
+export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, suggestedServices, orgSlug, calendarConnected, googleCalendarConnectUrl, createAppointmentTypeAction }: BookingsPageContentProps) {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -250,6 +253,22 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
 
   return (
     <>
+      {!calendarConnected ? (
+        <article className="mx-3 rounded-xl border border-primary/20 bg-primary/6 p-4 shadow-(--shadow-xs) md:mx-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-foreground">Connect your real calendar</p>
+              <p className="text-sm text-muted-foreground">
+                Connect Google Calendar to sync availability, prevent double-booking, and push meetings onto your actual calendar.
+              </p>
+            </div>
+            <Link href={googleCalendarConnectUrl} className="crm-button-primary h-10 px-4 inline-flex items-center justify-center whitespace-nowrap">
+              Connect Google Calendar
+            </Link>
+          </div>
+        </article>
+      ) : null}
+
       <section className="space-y-4">
         <div className="px-3 md:px-6 py-4 border-b border-border">
           <div className="flex items-center gap-2 md:gap-3 flex-wrap">

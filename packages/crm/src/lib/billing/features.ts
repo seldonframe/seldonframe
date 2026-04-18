@@ -26,6 +26,15 @@ export const TIER_FEATURES = {
     marketplace: false,
     support: "priority",
   },
+  self_service: {
+    maxWorkspaces: 1,
+    seldonIt: "unlimited",
+    customDomains: true,
+    whiteLabel: false,
+    managedEmail: true,
+    marketplace: false,
+    support: "priority",
+  },
   pro_3: {
     maxWorkspaces: 3,
     seldonIt: "unlimited",

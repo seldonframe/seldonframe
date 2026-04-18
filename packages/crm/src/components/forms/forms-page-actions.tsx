@@ -11,7 +11,7 @@ const defaultFields = [
   { key: "message", label: "Message", type: "textarea", required: false },
 ];
 
-export function FormsPageActions() {
+export function FormsPageActions({ buttonLabel = "+ New Form" }: { buttonLabel?: string }) {
   const router = useRouter();
   const [showCreate, setShowCreate] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -21,7 +21,7 @@ export function FormsPageActions() {
   return (
     <>
       <button type="button" className="crm-button-primary h-9 px-6" onClick={() => setShowCreate(true)}>
-        Create Form
+        {buttonLabel}
       </button>
 
       <Sheet open={showCreate} onOpenChange={setShowCreate}>

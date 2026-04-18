@@ -23,6 +23,57 @@ async function getOrgBySlug(orgSlug: string) {
   return org ?? null;
 }
 
+function getAppOrigin() {
+  return (
+    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+    process.env.NEXTAUTH_URL?.trim() ||
+    process.env.APP_URL?.trim() ||
+    "http://localhost:3000"
+  );
+}
+
+async function setPortalSessionCookie(token: string) {
+  const cookieStore = await cookies();
+  cookieStore.set(PORTAL_SESSION_COOKIE, token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 7 * 24 * 60 * 60,
+  });
+}
+
+async function resolvePortalSessionByToken(orgSlug: string, token: string | null | undefined) {
+  const org = await getOrgBySlug(orgSlug);
+
+  if (!org) {
+    return null;
+  }
+
+  const session = verifyPortalSession(token);
+
+  if (!session || session.orgId !== org.id) {
+    return null;
+  }
+
+  const [contact] = await db
+    .select({ id: contacts.id, firstName: contacts.firstName, lastName: contacts.lastName, email: contacts.email })
+    .from(contacts)
+    .where(and(eq(contacts.orgId, org.id), eq(contacts.id, session.contactId)))
+    .limit(1);
+
+  if (!contact) {
+    return null;
+  }
+
+  return {
+    orgId: org.id,
+    orgSlug,
+    contact,
+    token,
+  };
+}
+
 export async function requestPortalAccessCodeAction(orgSlug: string, email: string) {
   assertWritable();
 
@@ -109,14 +160,7 @@ export async function verifyPortalAccessCodeAction(orgSlug: string, email: strin
     exp: Date.now() + 7 * 24 * 60 * 60 * 1000,
   });
 
-  const cookieStore = await cookies();
-  cookieStore.set(PORTAL_SESSION_COOKIE, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: 7 * 24 * 60 * 60,
-  });
+  await setPortalSessionCookie(token);
 
   await emitSeldonEvent("portal.login", { contactId: contact.id });
 
@@ -137,34 +181,89 @@ export async function clearPortalSessionAction(orgSlug: string) {
 }
 
 export async function getPortalSessionForOrg(orgSlug: string) {
-  const org = await getOrgBySlug(orgSlug);
-
-  if (!org) {
-    return null;
-  }
-
   const cookieStore = await cookies();
   const token = cookieStore.get(PORTAL_SESSION_COOKIE)?.value;
-  const session = verifyPortalSession(token);
+  return resolvePortalSessionByToken(orgSlug, token);
+}
 
-  if (!session || session.orgId !== org.id) {
-    return null;
+export async function getPortalSessionForToken(orgSlug: string, token: string) {
+  return resolvePortalSessionByToken(orgSlug, token);
+}
+
+export async function createPortalMagicLink(input: {
+  orgSlug: string;
+  contactId: string;
+  expiresInMinutes?: number;
+  redirectTo?: string;
+}) {
+  const org = await getOrgBySlug(input.orgSlug);
+
+  if (!org) {
+    throw new Error("Organization not found");
   }
 
   const [contact] = await db
     .select({ id: contacts.id, firstName: contacts.firstName, lastName: contacts.lastName, email: contacts.email })
     .from(contacts)
-    .where(and(eq(contacts.orgId, org.id), eq(contacts.id, session.contactId)))
+    .where(and(eq(contacts.orgId, org.id), eq(contacts.id, input.contactId)))
     .limit(1);
 
-  if (!contact) {
-    return null;
+  if (!contact?.id || !contact.email) {
+    throw new Error("Contact must have an email to receive a magic link");
+  }
+
+  const expiresAt = new Date(Date.now() + (input.expiresInMinutes ?? 30) * 60_000);
+  const token = signPortalSession({
+    orgId: org.id,
+    contactId: contact.id,
+    email: contact.email,
+    exp: expiresAt.getTime(),
+  });
+
+  const url = new URL(`/portal/${input.orgSlug}/magic`, getAppOrigin());
+  url.searchParams.set("token", token);
+  if (input.redirectTo?.trim()) {
+    url.searchParams.set("redirect", input.redirectTo.trim());
   }
 
   return {
-    orgId: org.id,
-    orgSlug,
-    contact,
+    token,
+    inviteUrl: url.toString(),
+    expiresAt: expiresAt.toISOString(),
+    contact: {
+      id: contact.id,
+      firstName: contact.firstName,
+      lastName: contact.lastName,
+      email: contact.email,
+    },
+  };
+}
+
+export async function establishPortalMagicSession(input: {
+  orgSlug: string;
+  token: string;
+  redirectTo?: string | null;
+}) {
+  const session = await resolvePortalSessionByToken(input.orgSlug, input.token);
+
+  if (!session) {
+    throw new Error("Invalid or expired portal magic link");
+  }
+
+  const refreshToken = signPortalSession({
+    orgId: session.orgId,
+    contactId: session.contact.id,
+    email: session.contact.email ?? "",
+    exp: Date.now() + 7 * 24 * 60 * 60 * 1000,
+  });
+
+  await setPortalSessionCookie(refreshToken);
+  await emitSeldonEvent("portal.login", { contactId: session.contact.id });
+
+  return {
+    orgSlug: session.orgSlug,
+    redirectTo: input.redirectTo?.trim() || `/portal/${session.orgSlug}?onboarding=1`,
+    contact: session.contact,
   };
 }
 

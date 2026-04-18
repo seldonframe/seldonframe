@@ -13,7 +13,8 @@
     "billing_upgrade",
     "multi_client_bulk",
     "inline_preview",
-    "auto_validation"
+    "auto_validation",
+    "secure_secret_management"
   ],
   "required_env": ["SELDONFRAME_API_KEY", "ANTHROPIC_API_KEY"],
   "tools": [
@@ -68,6 +69,18 @@
     {
       "name": "upgrade_plan",
       "description": "Upgrade to unlock more workspaces"
+    },
+    {
+      "name": "store_secret",
+      "description": "Open a secure masked flow to store a workspace-scoped API key"
+    },
+    {
+      "name": "list_secrets",
+      "description": "List connected secret metadata without exposing plaintext values"
+    },
+    {
+      "name": "rotate_secret",
+      "description": "Rotate or delete a workspace secret and trigger a fresh secure capture flow"
     },
     {
       "name": "get_inline_preview",

@@ -5,8 +5,12 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
-
-const WORKSPACE_MONTHLY_PRICE_ID = "price_1TMC7UJOtNZA0x7xNrl2VDVE";
+import {
+  SELF_SERVICE_WORKSPACE_MONTHLY_PRICE_ID,
+  WORKSPACE_ADDON_MONTHLY_PRICE_ID,
+  isAllowedCheckoutPriceId,
+  isSelfServiceCheckoutPriceId,
+} from "@/lib/billing/price-ids";
 
 function normalizeReturnPath(value: unknown, fallback: string) {
   if (typeof value !== "string") {
@@ -85,13 +89,24 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const body = (await req.json().catch(() => ({}))) as { quantity?: unknown; successPath?: unknown; cancelPath?: unknown };
+  const body = (await req.json().catch(() => ({}))) as {
+    quantity?: unknown;
+    successPath?: unknown;
+    cancelPath?: unknown;
+    priceId?: unknown;
+    workspaceId?: unknown;
+  };
   const quantity = typeof body.quantity === "number" ? body.quantity : 1;
   const successPath = normalizeReturnPath(body.successPath, "/dashboard?success=true&session_id={CHECKOUT_SESSION_ID}");
   const cancelPath = normalizeReturnPath(body.cancelPath, "/pricing");
+  const requestedPriceId = typeof body.priceId === "string" ? body.priceId.trim() : "";
 
   if (!Number.isInteger(quantity) || quantity < 1) {
     return NextResponse.json({ error: "quantity must be a positive integer" }, { status: 400 });
+  }
+
+  if (requestedPriceId && !isAllowedCheckoutPriceId(requestedPriceId)) {
+    return NextResponse.json({ error: "Unsupported priceId." }, { status: 400 });
   }
 
   const [dbUser] = await db
@@ -109,6 +124,15 @@ export async function POST(req: NextRequest) {
   }
 
   const orgId = apiKeyUserId ? dbUser.orgId : (await getOrgId()) ?? dbUser.orgId;
+  const resolvedPriceId = requestedPriceId || WORKSPACE_ADDON_MONTHLY_PRICE_ID;
+  const requestedWorkspaceId = typeof body.workspaceId === "string" ? body.workspaceId.trim() : "";
+  const targetWorkspaceId = requestedWorkspaceId || orgId || "";
+  const checkoutType = isSelfServiceCheckoutPriceId(resolvedPriceId) ? "self_service_workspace" : "workspace_addon";
+
+  if (resolvedPriceId === SELF_SERVICE_WORKSPACE_MONTHLY_PRICE_ID && !targetWorkspaceId) {
+    return NextResponse.json({ error: "workspaceId is required for the self-service tier." }, { status: 400 });
+  }
+
   const origin = getRequestOrigin(req);
 
   const checkoutSession = await stripe.checkout.sessions.create({
@@ -116,21 +140,25 @@ export async function POST(req: NextRequest) {
     mode: "subscription",
     payment_method_types: ["card"],
     client_reference_id: userId,
-    line_items: [{ price: WORKSPACE_MONTHLY_PRICE_ID, quantity }],
+    line_items: [{ price: resolvedPriceId, quantity }],
     success_url: `${origin}${successPath}`,
     cancel_url: `${origin}${cancelPath}`,
     metadata: {
       seldonframe_user_id: userId,
       userId,
       orgId: orgId ?? "",
-      type: "workspace_addon",
+      workspaceId: targetWorkspaceId,
+      priceId: resolvedPriceId,
+      type: checkoutType,
     },
     subscription_data: {
       metadata: {
         seldonframe_user_id: userId,
         userId,
         orgId: orgId ?? "",
-        type: "workspace_addon",
+        workspaceId: targetWorkspaceId,
+        priceId: resolvedPriceId,
+        type: checkoutType,
       },
     },
   });
