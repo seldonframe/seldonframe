@@ -1,8 +1,8 @@
-import { asc, desc, eq, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, or, sql } from "drizzle-orm";
 import Link from "next/link";
-import { DollarSign, Users, CalendarDays, Activity, Plus, ChartLine, MoreHorizontal, BarChart2, ClipboardList, Search, Filter, FileInput } from "lucide-react";
+import { DollarSign, Users, CalendarDays, Activity, Plus, ChartLine, MoreHorizontal, BarChart2, ClipboardList, Search, Filter, FileInput, Sparkles } from "lucide-react";
 import { db } from "@/db";
-import { activities, contacts as contactsTable, metricsSnapshots, organizations, orgMembers, paymentRecords, stripeConnections, type OrganizationIntegrations } from "@/db/schema";
+import { activities, bookings as bookingsTable, contacts as contactsTable, metricsSnapshots, organizations, orgMembers, paymentRecords, pipelines as pipelinesTable, stripeConnections, type OrganizationIntegrations, type PipelineStage } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth/helpers";
 import { listAppointmentTypes } from "@/lib/bookings/actions";
 import { listBookings } from "@/lib/bookings/actions";
@@ -303,7 +303,7 @@ export default async function DashboardPage({
   const showWorkspaceTabs = workspaceRows.length > 1;
   const activeDashboardView = showWorkspaceTabs ? (params?.view === "workspace" ? "workspace" : "all") : "workspace";
 
-  const [snapshotRowsRaw, activityRows, paymentRows, orgRow, stripeRow] = await Promise.all([
+  const [snapshotRowsRaw, activityRows, paymentRows, orgRow, stripeRow, bookingTemplateRow, defaultPipelineRow] = await Promise.all([
     db.select().from(metricsSnapshots).where(eq(metricsSnapshots.orgId, orgId)).orderBy(asc(metricsSnapshots.date)).limit(180),
     db.select().from(activities).where(eq(activities.orgId, orgId)).orderBy(desc(activities.createdAt)).limit(20),
     db
@@ -320,6 +320,33 @@ export default async function DashboardPage({
       .select({ id: stripeConnections.id })
       .from(stripeConnections)
       .where(eq(stripeConnections.orgId, orgId))
+      .limit(1)
+      .then((rows) => rows[0] ?? null),
+    // Booking template row (filtered out by listBookings, which only returns
+    // real scheduled bookings). We need the template for the preview card.
+    db
+      .select({
+        id: bookingsTable.id,
+        title: bookingsTable.title,
+        bookingSlug: bookingsTable.bookingSlug,
+        metadata: bookingsTable.metadata,
+        createdAt: bookingsTable.createdAt,
+      })
+      .from(bookingsTable)
+      .where(
+        and(eq(bookingsTable.orgId, orgId), eq(bookingsTable.status, "template"))
+      )
+      .limit(1)
+      .then((rows) => rows[0] ?? null),
+    db
+      .select({
+        stages: pipelinesTable.stages,
+        name: pipelinesTable.name,
+      })
+      .from(pipelinesTable)
+      .where(
+        and(eq(pipelinesTable.orgId, orgId), eq(pipelinesTable.isDefault, true))
+      )
       .limit(1)
       .then((rows) => rows[0] ?? null),
   ]);
@@ -339,6 +366,56 @@ export default async function DashboardPage({
   const bookingLinkSlug = appointmentTypeRows[0]?.bookingSlug || "default";
   const bookingPublicPath = orgRow?.slug ? `/book/${orgRow.slug}/${bookingLinkSlug}` : "/book";
   const bookingShared = appointmentTypeRows.length > 0 && bookingRows.length > 0;
+
+  // === Newly installed blocks strip ===
+  // Highlights freshly seeded blocks (booking template, intake form, deal
+  // pipeline) on first visit so the workspace doesn't look empty when nothing
+  // has been booked / submitted / closed yet. Each card pulls live row data
+  // and the "New" pill flips on for 7 days from createdAt — long enough that
+  // a builder coming back tomorrow still sees the upgrade narrative, short
+  // enough that established workspaces aren't shouting "new" forever.
+  const NEW_BADGE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+  const isFresh = (createdAt: Date | string | null | undefined) => {
+    if (!createdAt) return false;
+    const ts = createdAt instanceof Date ? createdAt.getTime() : new Date(createdAt).getTime();
+    return Number.isFinite(ts) && Date.now() - ts < NEW_BADGE_WINDOW_MS;
+  };
+
+  const defaultIntakeForm =
+    intakeFormRows.find((row) => row.slug === "intake") ?? intakeFormRows[0] ?? null;
+
+  const bookingTemplateMeta =
+    (bookingTemplateRow?.metadata ?? null) as
+      | { durationMinutes?: number; appointmentDescription?: string; theme?: string }
+      | null;
+
+  const bookingPreviewPath = orgRow?.slug
+    ? `/book/${orgRow.slug}/${bookingTemplateRow?.bookingSlug ?? "default"}`
+    : null;
+  const intakePreviewPath = orgRow?.slug
+    ? `/forms/${orgRow.slug}/${defaultIntakeForm?.slug ?? "intake"}`
+    : null;
+
+  // Pipeline visualization: count deals + sum value per stage. Uses the
+  // default pipeline's declared stage list (not just stages observed in deals)
+  // so an empty pipeline still renders the columns the builder will fill in.
+  const pipelineStages: PipelineStage[] = defaultPipelineRow?.stages ?? [];
+  const dealsByStage = new Map<string, { count: number; value: number }>();
+  for (const stage of pipelineStages) {
+    dealsByStage.set(stage.name, { count: 0, value: 0 });
+  }
+  for (const deal of dealRows) {
+    const bucket = dealsByStage.get(deal.stage) ?? { count: 0, value: 0 };
+    bucket.count += 1;
+    bucket.value += Number(deal.value);
+    dealsByStage.set(deal.stage, bucket);
+  }
+  const maxStageCount = Math.max(1, ...Array.from(dealsByStage.values()).map((b) => b.count));
+  const totalDealValue = dealRows.reduce((sum, d) => sum + Number(d.value), 0);
+
+  const intakeFieldList = Array.isArray(defaultIntakeForm?.fields)
+    ? (defaultIntakeForm!.fields as Array<{ key: string; label: string }>)
+    : [];
   const today = new Date();
   const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
   const startOfToday = new Date(today);
@@ -618,6 +695,138 @@ export default async function DashboardPage({
           </Link>
         </div>
       </header>
+
+      {(bookingTemplateRow || defaultIntakeForm || pipelineStages.length > 0) && (
+        <section className="crm-card space-y-5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <Sparkles className="size-4 text-foreground" />
+                <h2 className="text-base sm:text-lg font-semibold">Newly installed blocks</h2>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Live previews of what just shipped into this workspace. Share the public links or jump into the admin to customize.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+            {/* Cal.diy booking preview */}
+            {bookingTemplateRow ? (
+              <div className="rounded-2xl border border-border/80 bg-background/35 p-4 space-y-3 transition-all hover:border-border hover:bg-accent/35">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <CalendarDays className="size-4 text-muted-foreground" />
+                    <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Booking</span>
+                  </div>
+                  {isFresh(bookingTemplateRow.createdAt) && (
+                    <span className="rounded-full bg-foreground px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-background">
+                      New
+                    </span>
+                  )}
+                </div>
+                <div className="space-y-1">
+                  <p className="text-base font-semibold text-foreground">{bookingTemplateRow.title}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {bookingTemplateMeta?.durationMinutes ? `${bookingTemplateMeta.durationMinutes}-minute slot` : "Default availability"}
+                    {bookingTemplateMeta?.theme ? ` · ${bookingTemplateMeta.theme} theme` : ""}
+                  </p>
+                  {bookingTemplateMeta?.appointmentDescription && (
+                    <p className="text-xs text-muted-foreground line-clamp-2">{bookingTemplateMeta.appointmentDescription}</p>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {bookingPreviewPath && (
+                    <Link href={bookingPreviewPath} target="_blank" rel="noopener noreferrer" className="crm-button-primary h-8 px-3 text-xs">
+                      View public page
+                    </Link>
+                  )}
+                  <Link href="/bookings" className="crm-button-secondary h-8 px-3 text-xs">Open admin</Link>
+                </div>
+              </div>
+            ) : null}
+
+            {/* Formbricks intake preview */}
+            {defaultIntakeForm ? (
+              <div className="rounded-2xl border border-border/80 bg-background/35 p-4 space-y-3 transition-all hover:border-border hover:bg-accent/35">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <FileInput className="size-4 text-muted-foreground" />
+                    <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Intake form</span>
+                  </div>
+                  {isFresh(defaultIntakeForm.createdAt) && (
+                    <span className="rounded-full bg-foreground px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-background">
+                      New
+                    </span>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <p className="text-base font-semibold text-foreground">{defaultIntakeForm.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {intakeFieldList.length} {intakeFieldList.length === 1 ? "field" : "fields"} configured
+                  </p>
+                  {intakeFieldList.length > 0 && (
+                    <ul className="space-y-0.5 pt-0.5">
+                      {intakeFieldList.slice(0, 3).map((field) => (
+                        <li key={field.key} className="text-xs text-muted-foreground">· {field.label}</li>
+                      ))}
+                      {intakeFieldList.length > 3 && (
+                        <li className="text-xs text-muted-foreground/70">+ {intakeFieldList.length - 3} more</li>
+                      )}
+                    </ul>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {intakePreviewPath && (
+                    <Link href={intakePreviewPath} target="_blank" rel="noopener noreferrer" className="crm-button-primary h-8 px-3 text-xs">
+                      View public page
+                    </Link>
+                  )}
+                  <Link href="/forms" className="crm-button-secondary h-8 px-3 text-xs">Open admin</Link>
+                </div>
+              </div>
+            ) : null}
+
+            {/* CRM pipeline visualization */}
+            {pipelineStages.length > 0 ? (
+              <div className="rounded-2xl border border-border/80 bg-background/35 p-4 space-y-3 transition-all hover:border-border hover:bg-accent/35">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <BarChart2 className="size-4 text-muted-foreground" />
+                    <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Pipeline</span>
+                  </div>
+                  <span className="text-[10px] font-medium text-muted-foreground">
+                    {dealRows.length} {dealRows.length === 1 ? "deal" : "deals"} · {formatCurrency(totalDealValue)}
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {pipelineStages.slice(0, 5).map((stage) => {
+                    const bucket = dealsByStage.get(stage.name) ?? { count: 0, value: 0 };
+                    const widthPct = Math.round((bucket.count / maxStageCount) * 100);
+                    return (
+                      <div key={stage.name} className="space-y-1">
+                        <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                          <span className="font-medium truncate">{stage.name}</span>
+                          <span className="tabular-nums">{bucket.count}</span>
+                        </div>
+                        <div className="h-1.5 w-full rounded-full bg-muted/40 overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-foreground/70"
+                            style={{ width: `${Math.max(widthPct, bucket.count > 0 ? 6 : 0)}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <Link href="/deals" className="crm-button-secondary h-8 px-3 text-xs">Open pipeline →</Link>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </section>
+      )}
 
       <section className="crm-card space-y-5">
         <div className="flex items-center justify-between gap-3">
