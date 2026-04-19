@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { apiKeys } from "@/db/schema";
 import { resolveV1Identity } from "@/lib/auth/v1-identity";
 import { assertWritable, demoApiBlockedResponse, isDemoReadonly } from "@/lib/demo/server";
+import { logEvent } from "@/lib/observability/log";
 
 // Revokes workspace bearer tokens (kind='workspace') for a given workspace.
 //
@@ -154,6 +155,16 @@ export async function POST(
   const callerStillValid =
     identity.kind !== "workspace" ||
     (callerTokenId !== null && !deleted.some((d) => d.id === callerTokenId));
+
+  logEvent(
+    "revoke_bearer",
+    {
+      mode: tokenId ? "token_id" : allExceptCurrent ? "all_except_current" : "all",
+      revoked_count: deleted.length,
+      caller_still_valid: callerStillValid,
+    },
+    { request, identity, orgId: workspaceId, status: 200 }
+  );
 
   return NextResponse.json({
     ok: true,

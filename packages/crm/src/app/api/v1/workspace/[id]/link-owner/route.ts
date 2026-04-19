@@ -8,6 +8,7 @@ import { resolveUserIdFromSeldonApiKey } from "@/lib/auth/v1-identity";
 import { resolveWorkspaceBearer } from "@/lib/auth/workspace-token";
 import { buildWorkspaceUrls } from "@/lib/billing/anonymous-workspace";
 import { assertWritable, demoApiBlockedResponse, isDemoReadonly } from "@/lib/demo/server";
+import { logEvent } from "@/lib/observability/log";
 
 const WORKSPACE_BASE_DOMAIN =
   process.env.WORKSPACE_BASE_DOMAIN?.trim() || "app.seldonframe.com";
@@ -114,12 +115,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
             `/switch-workspace?to=${encodeURIComponent(workspaceId)}&next=/dashboard`
           );
         } catch (error) {
-          console.warn(
-            `[link-owner] magic link mint failed on re-link for ${workspaceId}:`,
-            error instanceof Error ? error.message : String(error)
+          logEvent(
+            "magic_link_mint_failed_on_relink",
+            {
+              error: error instanceof Error ? error.message : String(error),
+            },
+            { request, orgId: workspaceId, severity: "warn" }
           );
         }
       }
+      logEvent(
+        "link_owner_already_linked",
+        { via: claim.via },
+        { request, orgId: workspaceId, status: 200 }
+      );
       return NextResponse.json({
         ok: true,
         already_linked: true,
@@ -183,12 +192,24 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         `/switch-workspace?to=${encodeURIComponent(workspaceId)}&next=/dashboard`
       );
     } catch (error) {
-      console.warn(
-        `[link-owner] magic link mint failed for ${workspaceId}:`,
-        error instanceof Error ? error.message : String(error)
+      logEvent(
+        "magic_link_mint_failed",
+        {
+          error: error instanceof Error ? error.message : String(error),
+        },
+        { request, orgId: workspaceId, severity: "warn" }
       );
     }
   }
+
+  logEvent(
+    "link_owner_linked",
+    {
+      via: claim.via,
+      magic_link_minted: Boolean(claimMagicLink),
+    },
+    { request, orgId: workspaceId, status: 200 }
+  );
 
   const nextSteps = claimMagicLink
     ? [

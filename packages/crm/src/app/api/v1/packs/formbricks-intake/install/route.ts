@@ -6,6 +6,7 @@ import { resolveV1Identity } from "@/lib/auth/v1-identity";
 import { enableWorkspaceBlock } from "@/lib/blocks/install";
 import { createDefaultIntakeForm } from "@/lib/blocks/templates";
 import { requireManagedWorkspaceForUser } from "@/lib/openclaw/self-service";
+import { logEvent } from "@/lib/observability/log";
 
 const WORKSPACE_BASE_DOMAIN =
   process.env.WORKSPACE_BASE_DOMAIN?.trim() || "app.seldonframe.com";
@@ -64,6 +65,15 @@ export async function POST(request: Request) {
   const publicOrigin = `https://${result.slug}.${WORKSPACE_BASE_DOMAIN}`;
   const adminOrigin = "https://app.seldonframe.com";
   const wsQuery = `?workspace=${encodeURIComponent(orgId)}`;
+
+  logEvent(
+    "formbricks_intake_install",
+    {
+      already_enabled: result.alreadyEnabled,
+      template_already_existed: template.alreadyExisted,
+    },
+    { request, identity, orgId, status: 200 }
+  );
 
   return NextResponse.json({
     ok: true,

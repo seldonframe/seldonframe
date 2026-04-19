@@ -6,6 +6,7 @@ import {
 } from "@/lib/billing/anonymous-workspace";
 import { createWorkspaceFromSoulAction } from "@/lib/billing/orgs";
 import { demoApiBlockedResponse, isDemoReadonly } from "@/lib/demo/server";
+import { logEvent } from "@/lib/observability/log";
 import { getByokClaudeKeyFromHeaders } from "@/lib/soul-compiler/anthropic";
 import { compileSoulService } from "@/lib/soul-compiler/service";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
@@ -52,16 +53,6 @@ function resolveUserIdFromSeldonApiKey(headers: Headers): string | null {
   return match?.userId ?? null;
 }
 
-function logWorkspaceCompile(event: string, data: Record<string, unknown>) {
-  console.info(
-    JSON.stringify({
-      event,
-      at: new Date().toISOString(),
-      ...data,
-    })
-  );
-}
-
 function resolveRequestIp(headers: Headers): string {
   const forwarded = headers.get("x-forwarded-for");
   if (forwarded) {
@@ -91,10 +82,11 @@ async function handleAnonymousCreate(request: Request, body: WorkspaceCreateBody
   const dayOk = await checkRateLimit(`anon-workspace-create:day:${ip}`, 10, 24 * 60 * 60 * 1000);
 
   if (!hourOk || !dayOk) {
-    logWorkspaceCompile("anonymous_workspace_rate_limited", {
-      ip,
-      status: 429,
-    });
+    logEvent(
+      "anonymous_workspace_rate_limited",
+      { ip },
+      { request, status: 429 }
+    );
     return NextResponse.json(
       {
         status: "error",
@@ -110,13 +102,16 @@ async function handleAnonymousCreate(request: Request, body: WorkspaceCreateBody
     const result = await createAnonymousWorkspace({ name, source });
     const urls = buildWorkspaceUrls(result.slug, WORKSPACE_BASE_DOMAIN, result.orgId);
 
-    logWorkspaceCompile("anonymous_workspace_created", {
-      orgId: result.orgId,
-      slug: result.slug,
-      ip,
-      status: 200,
-      durationMs: Date.now() - startedAt,
-    });
+    logEvent(
+      "anonymous_workspace_created",
+      { slug: result.slug, ip },
+      {
+        request,
+        orgId: result.orgId,
+        status: 200,
+        durationMs: Date.now() - startedAt,
+      }
+    );
 
     return NextResponse.json(
       {
@@ -150,14 +145,21 @@ async function handleAnonymousCreate(request: Request, body: WorkspaceCreateBody
     const causeCode =
       cause && typeof cause === "object" && "code" in cause ? String(cause.code) : undefined;
 
-    logWorkspaceCompile("anonymous_workspace_create_failed", {
-      ip,
-      status: 500,
-      durationMs: Date.now() - startedAt,
-      error: message,
-      cause: causeMessage,
-      cause_code: causeCode,
-    });
+    logEvent(
+      "anonymous_workspace_create_failed",
+      {
+        ip,
+        error: message,
+        cause: causeMessage,
+        cause_code: causeCode,
+      },
+      {
+        request,
+        status: 500,
+        durationMs: Date.now() - startedAt,
+        severity: "error",
+      }
+    );
     return NextResponse.json(
       {
         status: "error",
@@ -211,16 +213,12 @@ export async function POST(request: Request) {
   const userId = apiKeyUserId ?? session?.user?.id ?? null;
 
   if (hasApiKeyHeader && !apiKeyUserId) {
-    logWorkspaceCompile("workspace_compile_invalid_api_key", {
-      status: 401,
-    });
+    logEvent("workspace_compile_invalid_api_key", {}, { request, status: 401 });
     return NextResponse.json({ error: "Invalid x-seldon-api-key." }, { status: 401 });
   }
 
   if (!userId) {
-    logWorkspaceCompile("workspace_compile_unauthorized", {
-      status: 401,
-    });
+    logEvent("workspace_compile_unauthorized", {}, { request, status: 401 });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -230,10 +228,11 @@ export async function POST(request: Request) {
   const allowed = await checkRateLimit(rateKey, rateLimitPerHour, 60 * 60 * 1000);
 
   if (!allowed) {
-    logWorkspaceCompile("workspace_compile_rate_limited", {
-      userId,
-      status: 429,
-    });
+    logEvent(
+      "workspace_compile_rate_limited",
+      { user_id: userId },
+      { request, status: 429 }
+    );
 
     return NextResponse.json(
       {
@@ -277,12 +276,11 @@ export async function POST(request: Request) {
           ? 422
           : 500;
 
-    logWorkspaceCompile("workspace_compile_error", {
-      userId,
-      compileCode: compileResult.code,
-      status,
-      durationMs: Date.now() - startedAt,
-    });
+    logEvent(
+      "workspace_compile_error",
+      { user_id: userId, compile_code: compileResult.code },
+      { request, status, durationMs: Date.now() - startedAt, severity: "error" }
+    );
 
     return NextResponse.json(
       {
@@ -295,13 +293,15 @@ export async function POST(request: Request) {
   }
 
   if (compileResult.status === "split_required") {
-    logWorkspaceCompile("workspace_compile_split_required", {
-      userId,
-      audienceType: compileResult.routing.audience_type,
-      baseFramework: compileResult.routing.base_framework,
-      status: 200,
-      durationMs: Date.now() - startedAt,
-    });
+    logEvent(
+      "workspace_compile_split_required",
+      {
+        user_id: userId,
+        audience_type: compileResult.routing.audience_type,
+        base_framework: compileResult.routing.base_framework,
+      },
+      { request, status: 200, durationMs: Date.now() - startedAt }
+    );
 
     return NextResponse.json(
       {
@@ -325,20 +325,24 @@ export async function POST(request: Request) {
     const subdomainUrl = `https://${subdomain}`;
     const dashboardUrl = `https://app.seldonframe.com/dashboard?workspace=${workspace.orgId}`;
 
-    console.info(`Subdomain assigned: ${subdomain}`);
-
-    logWorkspaceCompile("workspace_compile_ready", {
-      userId,
-      orgId: workspace.orgId,
-      slug: workspace.slug,
-      subdomain,
-      audienceType: compileResult.routing.audience_type,
-      baseFramework: compileResult.routing.base_framework,
-      attempts: compileResult.attempts,
-      inputType: compileResult.pagesUsed.length > 0 ? "url" : "description",
-      status: 200,
-      durationMs: Date.now() - startedAt,
-    });
+    logEvent(
+      "workspace_compile_ready",
+      {
+        user_id: userId,
+        slug: workspace.slug,
+        subdomain,
+        audience_type: compileResult.routing.audience_type,
+        base_framework: compileResult.routing.base_framework,
+        attempts: compileResult.attempts,
+        input_type: compileResult.pagesUsed.length > 0 ? "url" : "description",
+      },
+      {
+        request,
+        orgId: workspace.orgId,
+        status: 200,
+        durationMs: Date.now() - startedAt,
+      }
+    );
 
     return NextResponse.json(
       {
@@ -373,19 +377,18 @@ export async function POST(request: Request) {
         ? "workspace_limit_reached"
         : "workspace_create_failed";
 
-    logWorkspaceCompile("workspace_compile_workspace_create_failed", {
-      userId,
-      status,
-      durationMs: Date.now() - startedAt,
-      error: message,
-    });
+    logEvent(
+      "workspace_compile_workspace_create_failed",
+      { user_id: userId, error: message },
+      { request, status, durationMs: Date.now() - startedAt, severity: "error" }
+    );
 
     if (loweredMessage.includes("dns") || loweredMessage.includes("domain") || loweredMessage.includes("vercel") || loweredMessage.includes("nxdomain")) {
-      logWorkspaceCompile("workspace_compile_domain_routing_error", {
-        userId,
-        status,
-        error: message,
-      });
+      logEvent(
+        "workspace_compile_domain_routing_error",
+        { user_id: userId, error: message },
+        { request, status, severity: "error" }
+      );
     }
 
     return NextResponse.json(

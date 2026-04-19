@@ -7,6 +7,7 @@ import {
   resolveV1Identity,
 } from "@/lib/auth/v1-identity";
 import { assertWritable, demoApiBlockedResponse, isDemoReadonly } from "@/lib/demo/server";
+import { logEvent } from "@/lib/observability/log";
 
 type UpdateBody = {
   workspace_id?: unknown;
@@ -114,6 +115,12 @@ export async function POST(request: Request) {
       })
       .where(eq(landingPages.id, existing.id));
   }
+
+  logEvent(
+    "landing_update",
+    { created: !existing, theme },
+    { request, identity, orgId, status: 200 }
+  );
 
   return NextResponse.json({
     ok: true,

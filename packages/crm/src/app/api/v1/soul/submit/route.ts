@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { organizations } from "@/db/schema";
 import { resolveV1Identity } from "@/lib/auth/v1-identity";
 import { assertWritable, demoApiBlockedResponse, isDemoReadonly } from "@/lib/demo/server";
+import { logEvent } from "@/lib/observability/log";
 
 type SubmitSoulBody = {
   soul?: unknown;
@@ -68,6 +69,12 @@ export async function POST(request: Request) {
   if (!updated) {
     return NextResponse.json({ error: "Workspace not found." }, { status: 404 });
   }
+
+  logEvent(
+    "soul_submit",
+    { bytes: soulJson.length },
+    { request, identity, orgId, status: 200 }
+  );
 
   return NextResponse.json({
     ok: true,

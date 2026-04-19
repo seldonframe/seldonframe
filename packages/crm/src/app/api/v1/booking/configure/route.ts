@@ -7,6 +7,7 @@ import {
   resolveV1Identity,
 } from "@/lib/auth/v1-identity";
 import { assertWritable, demoApiBlockedResponse, isDemoReadonly } from "@/lib/demo/server";
+import { logEvent } from "@/lib/observability/log";
 
 type ConfigureBody = {
   workspace_id?: unknown;
@@ -112,6 +113,16 @@ export async function POST(request: Request) {
     (typeof prevMetadata.durationMinutes === "number"
       ? prevMetadata.durationMinutes
       : null);
+
+  logEvent(
+    "booking_configure",
+    {
+      updated_title: Boolean(newTitle),
+      updated_duration: newDuration !== null,
+      updated_description: Boolean(newDescription),
+    },
+    { request, identity, orgId, status: 200 }
+  );
 
   return NextResponse.json({
     ok: true,

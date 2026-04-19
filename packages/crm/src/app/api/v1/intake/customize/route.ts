@@ -7,6 +7,7 @@ import {
   resolveV1Identity,
 } from "@/lib/auth/v1-identity";
 import { assertWritable, demoApiBlockedResponse, isDemoReadonly } from "@/lib/demo/server";
+import { logEvent } from "@/lib/observability/log";
 
 type IntakeField = {
   key: string;
@@ -112,6 +113,15 @@ export async function POST(request: Request) {
     if (formName) patch.name = formName;
     await db.update(intakeForms).set(patch).where(eq(intakeForms.id, existing.id));
   }
+
+  logEvent(
+    "intake_customize",
+    {
+      created: !existing,
+      field_count: fields.length,
+    },
+    { request, identity, orgId, status: 200 }
+  );
 
   return NextResponse.json({
     ok: true,

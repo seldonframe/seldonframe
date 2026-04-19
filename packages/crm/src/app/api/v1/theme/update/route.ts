@@ -7,6 +7,7 @@ import {
   resolveV1Identity,
 } from "@/lib/auth/v1-identity";
 import { assertWritable, demoApiBlockedResponse, isDemoReadonly } from "@/lib/demo/server";
+import { logEvent } from "@/lib/observability/log";
 import { DEFAULT_ORG_THEME, type OrgTheme } from "@/lib/theme/types";
 
 type UpdateBody = {
@@ -97,6 +98,12 @@ export async function POST(request: Request) {
     .update(organizations)
     .set({ theme: base, updatedAt: new Date() })
     .where(eq(organizations.id, orgId));
+
+  logEvent(
+    "theme_update",
+    { applied_keys: Object.keys(applied) },
+    { request, identity, orgId, status: 200 }
+  );
 
   return NextResponse.json({
     ok: true,
