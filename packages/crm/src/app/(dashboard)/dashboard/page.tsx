@@ -180,9 +180,19 @@ function percentChange(current: number, previous: number) {
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ view?: string }>;
+  searchParams?: Promise<{ view?: string; workspace?: string }>;
 }) {
   const params = searchParams ? await searchParams : undefined;
+
+  // `?workspace=<id>` redirects through /switch-workspace so the active-org
+  // cookie is set before the layout reads it. Handles bookmarked admin URLs
+  // that bypass /switch-workspace directly.
+  if (params?.workspace) {
+    const { redirect } = await import("next/navigation");
+    redirect(
+      `/switch-workspace?to=${encodeURIComponent(params.workspace)}&next=/dashboard`
+    );
+  }
   const [user, contactRows, dealRows, bookingRows, appointmentTypeRows, emailTemplateRows, landingPageRows, intakeFormRows, soul, hiddenBlocks] = await Promise.all([
     getCurrentUser(),
     listContacts(),

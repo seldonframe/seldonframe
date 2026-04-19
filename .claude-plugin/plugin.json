@@ -1,8 +1,8 @@
 {
   "$schema": "https://claude.ai/schemas/plugin.json",
   "name": "seldonframe",
-  "version": "1.7.0",
-  "description": "SeldonFrame Business OS — CRM, Cal.diy booking, Formbricks intake, and Brain v2, all controllable from Claude. Zero config to try: guest mode simulates everything locally. Set SELDONFRAME_API_KEY to persist to app.seldonframe.com.",
+  "version": "2.0.0",
+  "description": "SeldonFrame Business OS — one command creates a real hosted workspace on *.app.seldonframe.com with CRM, Cal.diy booking, Formbricks intake, and Brain v2. No key, no signup, no setup. Set SELDONFRAME_API_KEY only to unlock Pro capabilities (second workspace, custom domains, full Brain v2).",
   "homepage": "https://seldonframe.com",
   "repository": "https://github.com/seldonframe/crm",
   "author": "SeldonFrame",
@@ -20,7 +20,7 @@
   },
   "env": {
     "SELDONFRAME_API_KEY": {
-      "description": "Optional. Unset = guest mode (local simulator). Set to promote to app.seldonframe.com. Get one at https://app.seldonframe.com/settings/api.",
+      "description": "Optional. The first workspace is free forever with no key. Set this only to unlock Pro capabilities: second workspace, custom domains, full Brain v2, publishing. Get a key at https://app.seldonframe.com/settings/api.",
       "required": false
     },
     "SELDONFRAME_API_BASE": {

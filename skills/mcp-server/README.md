@@ -2,7 +2,7 @@
 
 Official SeldonFrame MCP server for Claude Code and Claude Desktop.
 
-**Zero config to try.** The first time you run it, no API key is needed — the server boots in **guest mode** and simulates a full workspace (CRM, Cal.diy booking, Formbricks intake, Brain v2) locally. Build, explore, break things. Promote to the real `app.seldonframe.com` when you're ready.
+**One command, one real workspace.** The first time you run it, no API key is needed. Say `create_workspace({ name: "Dental Clinic Laval" })` and the server mints a real hosted workspace on `dental-clinic-laval.app.seldonframe.com` — with CRM, Cal.diy booking, Formbricks intake, and Brain v2 pre-installed — and returns live URLs. No signup wall, no "guest mode", no claim step.
 
 ## 60-second quickstart
 
@@ -10,35 +10,54 @@ Official SeldonFrame MCP server for Claude Code and Claude Desktop.
 # 1. From the repo root
 cd skills/mcp-server && npm install
 
-# 2. Register with Claude Code — no env vars
+# 2. Register with Claude Code — no env vars needed
 claude mcp add seldonframe -s user -- node "$(pwd)/src/index.js"
 
-# 3. In Claude Code, try:
+# 3. In Claude Code, just ask:
 #    create_workspace({ name: "My Business OS" })
-#    install_caldiy_booking({})
-#    install_formbricks_intake({})
-#    install_vertical_pack({ pack: "real-estate" })
-#    query_brain({ question: "What should I do first?" })
 ```
 
-That's it. Every tool returns a real, inspectable response backed by the actual `BLOCK.md` specs bundled with the server.
+That call returns something like:
 
-## Two modes
+```json
+{
+  "workspace": { "id": "wsp_…", "slug": "my-business-os", "tier": "free" },
+  "urls": {
+    "dashboard": "https://my-business-os.app.seldonframe.com",
+    "book": "https://my-business-os.app.seldonframe.com/book",
+    "intake": "https://my-business-os.app.seldonframe.com/intake"
+  },
+  "installed": ["crm", "caldiy-booking", "formbricks-intake", "brain-v2"],
+  "next": [ "…" ]
+}
+```
 
-| Mode | Triggered by | What it does |
-|---|---|---|
-| **Guest** | `SELDONFRAME_API_KEY` is **not set** | Runs a local simulator. State is JSON under `~/.seldonframe/guest/`. No network calls. Great for trying the system, writing integration tests, or working offline. |
-| **Connected** | `SELDONFRAME_API_KEY` is set | Every tool proxies to `https://app.seldonframe.com/api/v1`. Real persistence, real Brain, real domains, real billing. |
+Every subsequent tool response includes a `next:` array — follow the rails.
 
-Switching modes requires nothing but setting (or unsetting) the env var and restarting the MCP server.
+## How auth works
 
-## Promoting a guest workspace
+| Situation | What happens |
+|---|---|
+| First ever call | `create_workspace` POSTs with no auth. Server mints a workspace + bearer token. MCP stores the token in `~/.seldonframe/device.json`. |
+| Subsequent calls | MCP sends `Authorization: Bearer <workspace token>` automatically. |
+| `SELDONFRAME_API_KEY` set | Takes precedence over device tokens. Unlocks Pro capabilities. |
 
-When you're ready to go live:
+You never have to juggle modes. The first workspace is free forever.
 
-1. Get a key at <https://app.seldonframe.com/settings/api>.
-2. In guest mode, run `claim_guest_workspace({})`. It writes `~/.seldonframe/guest/<id>.claim.json`.
-3. Set `SELDONFRAME_API_KEY=sk_...`, restart the MCP, and upload that file via <https://app.seldonframe.com/settings/import> (or email it to `support@seldonframe.com`).
+## When you need `SELDONFRAME_API_KEY`
+
+- Adding a **second workspace**
+- Connecting a **custom domain**
+- **Full Brain v2** intelligence (heuristic Brain is always free)
+- Publishing, exporting, org-scoped secret rotation
+
+Get one at <https://app.seldonframe.com/settings/api>, then:
+
+```bash
+export SELDONFRAME_API_KEY=sk-…
+```
+
+Restart the MCP server. Your existing workspaces continue to work untouched.
 
 ## Install via plugin manifest (one-shot)
 
@@ -48,29 +67,41 @@ The repo ships a `.claude-plugin/plugin.json` at the root. From inside Claude Co
 /plugin install <path-to-repo>
 ```
 
-This registers the MCP server for you, with no env vars required for guest mode.
-
 ## Install via npm (once published)
 
 ```bash
 claude mcp add seldonframe -s user -- npx -y @seldonframe/mcp-server@latest
 ```
 
-Add `-e SELDONFRAME_API_KEY=sk_...` to start in connected mode immediately.
-
 ## Environment
 
-- `SELDONFRAME_API_KEY` (optional) — Unset for guest mode. Set to enable connected mode.
-- `SELDONFRAME_API_BASE` (optional) — Override the API base URL. Defaults to `https://app.seldonframe.com/api/v1`.
+- `SELDONFRAME_API_KEY` *(optional)* — Enables Pro capabilities (second workspace, custom domains, full Brain v2).
+- `SELDONFRAME_API_BASE` *(optional)* — Override the API base URL. Defaults to `https://app.seldonframe.com/api/v1`.
 
 ## Tools
 
-`create_workspace`, `list_workspaces`, `switch_workspace`, `clone_workspace`, `seldon_it`, `list_automations`, `install_vertical_pack`, `install_caldiy_booking`, `install_formbricks_intake`, `query_brain`, `connect_custom_domain`, `export_agent`, `store_secret`, `list_secrets`, `rotate_secret`, `claim_guest_workspace`.
+**Workspace:** `create_workspace`, `list_workspaces`, `switch_workspace`, `clone_workspace`, `link_workspace_owner`, `get_workspace_snapshot`.
+**Blocks:** `install_caldiy_booking`, `install_formbricks_intake`, `install_vertical_pack`.
+**Customize (typed, no backend LLM):** `update_landing_content`, `customize_intake_form`, `configure_booking`, `update_theme`.
+**Soul:** `fetch_source_for_soul`, `submit_soul`.
+**Ops:** `list_automations`, `connect_custom_domain`, `export_agent`, `store_secret`, `list_secrets`, `rotate_secret`.
+
+### Architecture: zero backend LLM cost
+
+Natural-language reasoning happens in the MCP session (Claude Code on the user's side). The backend only accepts **structured** commands and applies them deterministically. There is no `seldon_it` endpoint that parses prompts server-side; the old `query_brain` is replaced by `get_workspace_snapshot`, which returns raw state for Claude to reason over. Seldon spends $0 on LLM for the free tier — the user's Claude Code subscription is the reasoning engine.
+
+### Soul compilation (zero cost to Seldon)
+
+Soul compilation runs in **your** Claude Code session, not on Seldon's servers:
+
+1. `fetch_source_for_soul({ url })` — returns up to 256KB of normalized text.
+2. You (the agent) extract a structured Soul object.
+3. `submit_soul({ soul })` — persists it to the workspace.
 
 ## Troubleshooting
 
-**`Seldon API 401`** — Your `SELDONFRAME_API_KEY` is invalid or expired. Regenerate at <https://app.seldonframe.com/settings/api>, or unset the env var to fall back to guest mode.
+**`Seldon API 401`** — Your `SELDONFRAME_API_KEY` is invalid or expired. Regenerate at <https://app.seldonframe.com/settings/api>, or unset the env var to fall back to your device token.
 
-**"No active guest workspace"** — Call `create_workspace({name:'...'})` first, or pass `workspace_id` explicitly to subsequent tools.
+**`Seldon API 402`** — You tried a Pro capability without a key. Set `SELDONFRAME_API_KEY` and restart.
 
-**Want to reset guest state?** Delete `~/.seldonframe/guest/`.
+**Want to reset device state?** Delete `~/.seldonframe/device.json`. Your hosted workspaces stay live at `app.seldonframe.com`; only the local tokens are cleared.

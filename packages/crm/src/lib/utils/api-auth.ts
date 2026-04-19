@@ -14,7 +14,14 @@ export async function verifyApiKey(orgId: string, rawKey: string | null) {
   const [record] = await db
     .select()
     .from(apiKeys)
-    .where(and(eq(apiKeys.orgId, orgId), eq(apiKeys.keyPrefix, keyPrefix), eq(apiKeys.keyHash, keyHash)))
+    .where(
+      and(
+        eq(apiKeys.orgId, orgId),
+        eq(apiKeys.keyPrefix, keyPrefix),
+        eq(apiKeys.keyHash, keyHash),
+        eq(apiKeys.kind, "user")
+      )
+    )
     .limit(1);
 
   return Boolean(record);

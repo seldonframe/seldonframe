@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { eq, sql } from "drizzle-orm";
-import { auth } from "@/auth";
 import { db } from "@/db";
 import { soulSources } from "@/db/schema";
+import { resolveOrgIdFromIdentity, resolveV1Identity } from "@/lib/auth/v1-identity";
 import { assertWritable, demoApiBlockedResponse, isDemoReadonly } from "@/lib/demo/server";
 import { ingestSource } from "@/lib/soul-wiki/ingest";
 import { compileSoulWiki } from "@/lib/soul-wiki/compile";
@@ -28,9 +28,11 @@ export async function POST(req: Request) {
 
   assertWritable();
 
-  const session = await auth();
-  if (!session?.user?.id || !session.user.orgId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await resolveV1Identity(req);
+  if (!auth.ok) return auth.response;
+  const orgId = await resolveOrgIdFromIdentity(auth.identity);
+  if (!orgId) {
+    return NextResponse.json({ error: "No workspace associated with this identity." }, { status: 401 });
   }
 
   const body = (await req.json()) as {
@@ -69,7 +71,7 @@ export async function POST(req: Request) {
   const [sourceCount] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(soulSources)
-    .where(eq(soulSources.orgId, session.user.orgId));
+    .where(eq(soulSources.orgId, orgId));
 
   if (Number(sourceCount?.count ?? 0) >= MAX_SOURCES_PER_ORG) {
     return NextResponse.json({ error: `source limit reached (${MAX_SOURCES_PER_ORG})` }, { status: 400 });
@@ -80,7 +82,7 @@ export async function POST(req: Request) {
   let metadata: Record<string, unknown> = {};
 
   try {
-    const ingested = await ingestSource(session.user.orgId, {
+    const ingested = await ingestSource(orgId, {
       type,
       ...(url ? { url } : {}),
       ...(text ? { text } : {}),
@@ -98,7 +100,7 @@ export async function POST(req: Request) {
   const [source] = await db
     .insert(soulSources)
     .values({
-      orgId: session.user.orgId,
+      orgId: orgId,
       type,
       title: title || extractedTitle,
       sourceUrl: url || null,
@@ -108,7 +110,7 @@ export async function POST(req: Request) {
     })
     .returning();
 
-  void compileSoulWiki(session.user.orgId).catch(() => {
+  void compileSoulWiki(orgId).catch(() => {
     return;
   });
 

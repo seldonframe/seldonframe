@@ -23,7 +23,7 @@ function getRequestHost(request: NextRequest) {
 }
 
 function resolveWorkspaceSlugFromHost(host: string) {
-  const workspaceBaseDomain = (process.env.WORKSPACE_BASE_DOMAIN?.trim().toLowerCase() || "seldonframe.com")
+  const workspaceBaseDomain = (process.env.WORKSPACE_BASE_DOMAIN?.trim().toLowerCase() || "app.seldonframe.com")
     .replace(/^\.+/, "")
     .replace(/\.+$/, "");
 
@@ -70,7 +70,7 @@ function resolveWorkspaceRewritePath(
     return `/book/${slug}/${defaultBookingSlug}`;
   }
 
-  if (pathname === "/forms") {
+  if (pathname === "/forms" || pathname === "/intake") {
     return `/forms/${slug}/${defaultFormSlug}`;
   }
 
@@ -83,6 +83,10 @@ function resolveWorkspaceRewritePath(
   }
 
   if (pathname.startsWith("/forms/") && segments.length === 2) {
+    return `/forms/${slug}/${segments[1] || defaultFormSlug}`;
+  }
+
+  if (pathname.startsWith("/intake/") && segments.length === 2) {
     return `/forms/${slug}/${segments[1] || defaultFormSlug}`;
   }
 

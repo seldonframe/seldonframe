@@ -64,6 +64,13 @@
       "when": 1775551200000,
       "tag": "0014_workspace_secrets",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1776000000000,
+      "tag": "0015_workspace_bearer_tokens",
+      "breakpoints": true
     }
   ]
 }

@@ -10,7 +10,7 @@ function normalizeHost(host: string) {
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const host = normalizeHost(String(url.searchParams.get("host") ?? ""));
-  const workspaceBaseDomain = (process.env.WORKSPACE_BASE_DOMAIN?.trim().toLowerCase() || "seldonframe.app").replace(/^\.+/, "");
+  const workspaceBaseDomain = (process.env.WORKSPACE_BASE_DOMAIN?.trim().toLowerCase() || "app.seldonframe.com").replace(/^\.+/, "");
 
   if (!host) {
     return NextResponse.json({ ok: false, error: "missing_host" }, { status: 400 });

@@ -1,69 +1,54 @@
+import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { db } from "@/db";
+import { organizations } from "@/db/schema";
+import { resolveV1Identity } from "@/lib/auth/v1-identity";
 import { listManagedOrganizations } from "@/lib/billing/orgs";
 
-function resolveUserIdFromSeldonApiKey(headers: Headers): string | null {
-  const providedKey = headers.get("x-seldon-api-key")?.trim();
-  if (!providedKey) {
-    return null;
-  }
+const WORKSPACE_BASE_DOMAIN =
+  process.env.WORKSPACE_BASE_DOMAIN?.trim() || "app.seldonframe.com";
 
-  const configuredPairs = (process.env.SELDON_BUILDER_API_KEYS ?? "")
-    .split(",")
-    .map((pair) => pair.trim())
-    .filter(Boolean)
-    .map((pair) => {
-      const separator = pair.indexOf(":");
-      if (separator < 1) {
-        return null;
-      }
-
-      const key = pair.slice(0, separator).trim();
-      const userId = pair.slice(separator + 1).trim();
-      if (!key || !userId) {
-        return null;
-      }
-
-      return { key, userId };
-    })
-    .filter((entry): entry is { key: string; userId: string } => Boolean(entry));
-
-  const match = configuredPairs.find((entry) => entry.key === providedKey);
-  return match?.userId ?? null;
+function formatWorkspace(row: {
+  id: string;
+  name: string;
+  slug: string;
+  createdAt: Date;
+}) {
+  return {
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    subdomain: `${row.slug}.${WORKSPACE_BASE_DOMAIN}`,
+    created_at: new Date(row.createdAt).toISOString(),
+  };
 }
 
 export async function GET(request: Request) {
-  const apiKeyUserId = resolveUserIdFromSeldonApiKey(request.headers);
-  const hasApiKeyHeader = Boolean(request.headers.get("x-seldon-api-key")?.trim());
+  const auth = await resolveV1Identity(request);
+  if (!auth.ok) return auth.response;
+  const { identity } = auth;
 
-  const session = apiKeyUserId ? null : await auth();
-  const userId = apiKeyUserId ?? session?.user?.id ?? null;
+  if (identity.kind === "workspace") {
+    const [row] = await db
+      .select({
+        id: organizations.id,
+        name: organizations.name,
+        slug: organizations.slug,
+        createdAt: organizations.createdAt,
+      })
+      .from(organizations)
+      .where(eq(organizations.id, identity.orgId))
+      .limit(1);
 
-  if (hasApiKeyHeader && !apiKeyUserId) {
-    return NextResponse.json({ error: "Invalid x-seldon-api-key." }, { status: 401 });
+    return NextResponse.json({
+      status: "ok",
+      workspaces: row ? [formatWorkspace(row)] : [],
+    });
   }
 
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const rows = await listManagedOrganizations(userId);
-  const workspaceBaseDomain = process.env.WORKSPACE_BASE_DOMAIN?.trim() || "seldonframe.app";
-
-  const workspaces = rows.map((row) => {
-    const subdomain = `${row.slug}.${workspaceBaseDomain}`;
-
-    return {
-      id: row.id,
-      name: row.name,
-      slug: row.slug,
-      subdomain,
-      created_at: new Date(row.createdAt).toISOString(),
-    };
-  });
-
+  const rows = await listManagedOrganizations(identity.userId);
   return NextResponse.json({
     status: "ok",
-    workspaces,
+    workspaces: rows.map(formatWorkspace),
   });
 }

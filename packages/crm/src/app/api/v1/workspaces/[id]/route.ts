@@ -1,58 +1,28 @@
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
 import { db } from "@/db";
 import { organizations, users } from "@/db/schema";
-import { demoApiBlockedResponse, isDemoReadonly } from "@/lib/demo/server";
+import { resolveV1Identity } from "@/lib/auth/v1-identity";
 import { listManagedOrganizations } from "@/lib/billing/orgs";
-
-function resolveUserIdFromSeldonApiKey(headers: Headers): string | null {
-  const providedKey = headers.get("x-seldon-api-key")?.trim();
-  if (!providedKey) {
-    return null;
-  }
-
-  const configuredPairs = (process.env.SELDON_BUILDER_API_KEYS ?? "")
-    .split(",")
-    .map((pair) => pair.trim())
-    .filter(Boolean)
-    .map((pair) => {
-      const separator = pair.indexOf(":");
-      if (separator < 1) {
-        return null;
-      }
-
-      const key = pair.slice(0, separator).trim();
-      const userId = pair.slice(separator + 1).trim();
-      if (!key || !userId) {
-        return null;
-      }
-
-      return { key, userId };
-    })
-    .filter((entry): entry is { key: string; userId: string } => Boolean(entry));
-
-  const match = configuredPairs.find((entry) => entry.key === providedKey);
-  return match?.userId ?? null;
-}
+import { demoApiBlockedResponse, isDemoReadonly } from "@/lib/demo/server";
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   if (isDemoReadonly()) {
     return demoApiBlockedResponse();
   }
 
-  const apiKeyUserId = resolveUserIdFromSeldonApiKey(request.headers);
-  const hasApiKeyHeader = Boolean(request.headers.get("x-seldon-api-key")?.trim());
+  const auth = await resolveV1Identity(request);
+  if (!auth.ok) return auth.response;
+  const { identity } = auth;
 
-  const session = apiKeyUserId ? null : await auth();
-  const userId = apiKeyUserId ?? session?.user?.id ?? null;
-
-  if (hasApiKeyHeader && !apiKeyUserId) {
-    return NextResponse.json({ error: "Invalid x-seldon-api-key." }, { status: 401 });
-  }
-
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // Destructive action — require a user identity. Workspace bearer tokens
+  // are intentionally denied here: anonymous workspaces cannot delete themselves,
+  // and a bearer minted for one workspace should not delete its peer.
+  if (identity.kind !== "user") {
+    return NextResponse.json(
+      { error: "Deleting workspaces requires a user session or SELDONFRAME_API_KEY." },
+      { status: 403 }
+    );
   }
 
   const { id } = await params;
@@ -65,7 +35,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   const [caller] = await db
     .select({ orgId: users.orgId })
     .from(users)
-    .where(eq(users.id, userId))
+    .where(eq(users.id, identity.userId))
     .limit(1);
 
   if (!caller?.orgId) {
@@ -76,7 +46,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     return NextResponse.json({ error: "Cannot delete your primary workspace." }, { status: 400 });
   }
 
-  const managedOrgs = await listManagedOrganizations(userId);
+  const managedOrgs = await listManagedOrganizations(identity.userId);
   const targetOrg = managedOrgs.find((org) => org.id === targetOrgId);
 
   if (!targetOrg) {

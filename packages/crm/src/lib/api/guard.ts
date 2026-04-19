@@ -15,7 +15,7 @@ export async function guardApiRequest(request: Request) {
     return { error: NextResponse.json({ error: "Missing x-org-id" }, { status: 400 }) };
   }
 
-  if (!checkRateLimit(`${orgId}:${request.headers.get("x-forwarded-for") ?? "local"}`)) {
+  if (!(await checkRateLimit(`${orgId}:${request.headers.get("x-forwarded-for") ?? "local"}`))) {
     return { error: NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 }) };
   }
 

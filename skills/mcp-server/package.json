@@ -1,7 +1,7 @@
 {
   "name": "@seldonframe/mcp-server",
-  "version": "1.7.0",
-  "description": "Official SeldonFrame MCP server. Zero-config guest mode + connected mode for workspaces, blocks, Soul, Brain v2, Cal.diy, Formbricks, and vertical packs.",
+  "version": "2.1.0",
+  "description": "Official SeldonFrame MCP server. One command creates a real hosted workspace on *.app.seldonframe.com with CRM, Cal.diy booking, Formbricks intake, and Brain v2 — no key, no signup, no setup.",
   "type": "module",
   "bin": {
     "seldonframe-mcp": "src/index.js"
@@ -14,8 +14,7 @@
     "node": ">=18"
   },
   "scripts": {
-    "start": "node src/index.js",
-    "smoke": "node --input-type=module -e \"import('./src/guest/runtime.js').then(m=>console.log(JSON.stringify(m.handle('create_workspace',{name:'Smoke Test'}),null,2)))\""
+    "start": "node src/index.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4"

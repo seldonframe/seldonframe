@@ -343,7 +343,7 @@ export async function POST(request: Request) {
   }
 
   const ip = getClientIp(request);
-  if (!checkRateLimit(`public-url-analyze:${ip}`, RATE_LIMIT, RATE_WINDOW_MS)) {
+  if (!(await checkRateLimit(`public-url-analyze:${ip}`, RATE_LIMIT, RATE_WINDOW_MS))) {
     return withCors(NextResponse.json({ error: "Rate limit exceeded. Try again in about an hour." }, { status: 429 }));
   }
 
