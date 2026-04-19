@@ -7,8 +7,9 @@ with a checkable plan, gets ticked off as it ships, and ends with a review block
 
 ## In flight
 
-_(none — staging smoke passed 15/15 on 2026-04-19. Next up: decide
-promotion-to-production sequence; see priority block below.)_
+_(none — PRODUCTION smoke passed 17/17 on 2026-04-19 evening. Zero-friction
+first-run is live at app.seldonframe.com. Remaining items are post-launch
+polish; see queue below.)_
 
 ---
 
@@ -54,6 +55,21 @@ Ordered by staff-engineer priority after staging passes. Pick top-of-stack next.
 ---
 
 ## Shipped
+
+### 2026-04-19 (late evening) — 17/17 green in PRODUCTION 🎯
+
+- [x] Branch merged to main via fast-forward (commit 3d332c79)
+- [x] Vercel auto-deployed main → app.seldonframe.com now serves Path B
+- [x] Wildcard domain `*.app.seldonframe.com` added as Vercel project domain
+      → TLS cert provisioned → subdomain TLS handshake works
+- [x] Caught + fixed last bug: `/intake` missing from proxy.ts matcher
+      (commit 77b6b8eb). `/book` was in the matcher, `/intake` wasn't,
+      so /intake fell through to Next default router and 404'd even
+      though the proxy rewrite logic was correct.
+- [x] **Full 17-assertion smoke against app.seldonframe.com: 17/17 PASSED**
+- [x] Zero-friction first-run delivered: builder installs MCP → one NL command
+      → real hosted workspace on <slug>.app.seldonframe.com with CRM, booking,
+      intake, Brain v2, dark theme, sharable URLs. Zero backend LLM cost.
 
 ### 2026-04-19 (evening) — first real end-to-end green on staging
 
