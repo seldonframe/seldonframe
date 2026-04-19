@@ -144,6 +144,24 @@ Format: **Lesson** / **Trigger** / **Rule**
 
 ---
 
+## L-14 — Auth.js v5 hashes verification tokens; raw token goes in the URL
+
+- **Trigger:** Mint-magic-link helper inserted the raw token into
+  `verification_tokens.token` and put the same raw token in the callback URL.
+  Callback returned `Verification` error. Logs showed `useVerificationToken`
+  was looking up a *different* string than what was in the URL.
+- **Rule:** When writing directly to `verification_tokens` (bypassing the
+  Email/Resend provider's own send-token flow), mirror Auth.js's storage
+  shape: store `crypto.createHash("sha256").update(\`${rawToken}${AUTH_SECRET}\`).digest("hex")`,
+  put the raw `rawToken` in the URL. The callback hashes the URL token with
+  the same secret and looks it up — without that hash step, the lookup misses.
+  This applies to all Auth.js v5 email-style providers (Email, Resend,
+  SendGrid, etc.). The signing secret falls through `AUTH_SECRET` →
+  `NEXTAUTH_SECRET`; throw explicitly if neither is set rather than minting
+  tokens that will silently fail validation.
+
+---
+
 ## L-13 — Vercel cron auth is silently open when `CRON_SECRET` is unset
 
 - **Trigger:** Shipped `/api/cron/orphan-workspace-ttl` with a standard
