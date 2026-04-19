@@ -126,6 +126,45 @@ Format: **Lesson** / **Trigger** / **Rule**
 
 ---
 
+## L-12 — NextAuth callback path is the provider *id*, not the word "email"
+
+- **Trigger:** Built a magic-link helper that minted URLs pointing at
+  `/api/auth/callback/email`. The production NextAuth config registers
+  `Resend(...)` as the email-style provider, which NextAuth assigns id
+  `resend`. Clicking the link bounced through `/api/auth/error?error=Configuration`
+  with log `Provider with id "email" not found. Available providers: [google, resend]`.
+- **Rule:** The callback path must match the *registered provider id*, which
+  is the lowercased function name unless `id:` is explicitly set in the config.
+  `EmailProvider(...)` → `/api/auth/callback/email`. `Resend(...)` →
+  `/api/auth/callback/resend`. `SendGrid(...)` → `/api/auth/callback/sendgrid`.
+  Before writing hand-crafted NextAuth callback URLs, grep the auth config for
+  `providers/<name>` imports and match exactly. If the project changes email
+  providers, update the callback path in `packages/crm/src/lib/auth/magic-link.ts`
+  (single `EMAIL_PROVIDER_ID` constant at top of file).
+
+---
+
+## L-13 — Vercel cron auth is silently open when `CRON_SECRET` is unset
+
+- **Trigger:** Shipped `/api/cron/orphan-workspace-ttl` with a standard
+  `isAuthorized(request)` gate that returns `true` when
+  `process.env.CRON_SECRET` is unset. Assumed prod had the secret configured
+  (the pattern was cargo-copied from sibling cron routes). It didn't — no
+  `CRON_SECRET` existed in Vercel env, making the route publicly triggerable
+  by anyone who knew the URL. Discovered only when the user ran a `curl`
+  probe and got a 401 from a fake header value, then asked "what secret?".
+- **Rule:** When adopting the `if (!configuredSecret) return true;` pattern
+  for a new cron/metrics route, verify the env var is actually configured in
+  Vercel for **Production**, **Preview**, and **Development**. If unset, the
+  route is open to the internet. Add a one-line postcondition to the ship
+  checklist: "confirm `CRON_SECRET` is set in Vercel env, not just referenced
+  in code." Consider hardening the gate to `return false` when unset on
+  routes that do destructive work (the current open-when-unset behavior is
+  intentional for local dev — but surface a `console.warn` when serving a
+  request without a secret configured, so prod leaks don't stay silent).
+
+---
+
 ## Template for new entries
 
 ```
