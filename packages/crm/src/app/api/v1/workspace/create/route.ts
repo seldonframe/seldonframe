@@ -140,15 +140,40 @@ async function handleAnonymousCreate(request: Request, body: WorkspaceCreateBody
       { status: 200 }
     );
   } catch (error) {
+    // Surface the underlying driver error when available. Drizzle wraps PG
+    // errors and the `.cause` chain carries the real "relation does not exist"
+    // / "column does not exist" / connection messages that actually tell us
+    // what's wrong.
     const message = error instanceof Error ? error.message : "Failed to create workspace.";
+    const cause = error instanceof Error && error.cause;
+    const causeMessage = cause instanceof Error ? cause.message : undefined;
+    const causeCode =
+      cause && typeof cause === "object" && "code" in cause ? String(cause.code) : undefined;
+
     logWorkspaceCompile("anonymous_workspace_create_failed", {
       ip,
       status: 500,
       durationMs: Date.now() - startedAt,
       error: message,
+      cause: causeMessage,
+      cause_code: causeCode,
     });
     return NextResponse.json(
-      { status: "error", code: "workspace_create_failed", error: message },
+      {
+        status: "error",
+        code: "workspace_create_failed",
+        error: message,
+        cause: causeMessage ?? null,
+        cause_code: causeCode ?? null,
+        hint:
+          causeCode === "42P01"
+            ? "Postgres: relation does not exist. Run `pnpm db:migrate` on the staging DB."
+            : causeCode === "42703"
+              ? "Postgres: column does not exist. The schema is out of sync — run `pnpm db:migrate`."
+              : causeCode === "ECONNREFUSED" || causeCode === "ENOTFOUND"
+                ? "Database unreachable from the serverless function. Check DATABASE_URL and network."
+                : null,
+      },
       { status: 500 }
     );
   }
