@@ -7,7 +7,8 @@ with a checkable plan, gets ticked off as it ships, and ends with a review block
 
 ## In flight
 
-_(none — awaiting staging smoke result from the last autonomous run)_
+_(none — staging smoke passed 15/15 on 2026-04-19. Next up: decide
+promotion-to-production sequence; see priority block below.)_
 
 ---
 
@@ -15,27 +16,54 @@ _(none — awaiting staging smoke result from the last autonomous run)_
 
 Ordered by staff-engineer priority after staging passes. Pick top-of-stack next.
 
+**High priority (pre-production promotion):**
+
 - [ ] **MCP-side tool: `revoke_bearer`** — add to `skills/mcp-server/src/tools.js`,
-      mirrors the `/api/v1/workspace/[id]/revoke-bearer` endpoint.
-- [ ] **MCP-side tool: `soul_compile_status`** — polls
-      `/api/v1/workspace/[id]/soul-status`, for builders using URL-sourced create.
-- [ ] **NextAuth magic-link claim flow** — one-click post-claim sign-in. Current
-      UX requires manual login after `link_workspace_owner`.
-- [ ] **Orphan workspace TTL cron** — delete anonymous `ownerId IS NULL` workspaces
-      unclaimed for 30 days. Prevents row accumulation.
+      mirrors the `/api/v1/workspace/[id]/revoke-bearer` endpoint. Builders need
+      a way to rotate a leaked device token without SQL.
+- [ ] **Input sanitization audit** across the 4 typed customizer endpoints —
+      `landing/update`'s `contentHtml` is hand-escaped but worth a second pass;
+      `intake/customize` field `key` is regex-sanitized to snake_case; booking
+      `title`/`description` pass through to JSONB; theme colors are hex-regex.
+      Confirm nothing renders user input as unescaped HTML in the public pages.
+- [ ] **Orphan workspace TTL cron** — delete anonymous `ownerId IS NULL`
+      workspaces unclaimed for 30 days. Vercel cron at `/api/cron/orphan-ttl`.
+      Prevents row accumulation now that anyone can `create_workspace`.
+- [ ] **Drizzle journal drift on Seldon Frame DB** — `drizzle.__drizzle_migrations`
+      is empty even though 39 tables + migration 0015 are applied. Next
+      `pnpm db:migrate` will try to replay 0000–0014 and fail. Pick one:
+      (a) backfill journal with all applied migrations,
+      (b) switch to `drizzle-kit push` (no migration tracking),
+      (c) apply future schema changes via Neon MCP SQL only.
+
+**Medium priority (post-promotion):**
+
+- [ ] **NextAuth magic-link claim flow** — one-click post-claim sign-in.
+      Currently requires manual login after `link_workspace_owner`.
 - [ ] **Observability pass** — structured logs with `request_id`, `org_id`,
-      `identity_kind`; minimal dashboard for installs/day, claim rate, LLM spend.
-- [ ] **Expand Seldon It action surface** beyond the current 6 tools —
-      `add_booking_type`, `add_intake_form`, `configure_vertical_pack`.
-- [ ] **Input sanitization audit on Seldon It prompts** — before the prompt
-      reaches Anthropic and before any prompt text is persisted to
-      `settings.seldon_it_events`.
-- [ ] **Rotate the EXPIRE NX pattern** to `SET key 1 EX N NX` + `INCR` branching
-      if we observe stuck-TTL-less keys in prod.
+      `identity_kind`; minimal dashboard for installs/day, claim rate.
+- [ ] **Typed customizer expansion** — Path B left the surface at 4 customizers
+      + install endpoints. Candidates for the next wave based on real builder
+      needs: `add_booking_type` (multiple bookings per workspace),
+      `configure_vertical_pack` (edit a pack's fields), `add_automation`.
+      Don't ship speculatively — wait for a real "I can't do X" from a builder.
+- [ ] **Rotate EXPIRE NX pattern** to `SET key 1 EX N NX` + `INCR` branching
+      if we observe stuck-TTL-less keys in prod. Not urgent — failure mode
+      self-heals on next request.
 
 ---
 
 ## Shipped
+
+### 2026-04-19 (evening) — first real end-to-end green on staging
+
+- [x] Staging DB setup: Seldon Frame project, migration 0015 applied via Neon MCP
+- [x] Vercel preview env rotated + rebuilt on commit 668b9a27
+- [x] `pnpm test:first-run` against preview URL: 15/15 passed (1 public skip)
+      — proves: bearer auth, anonymous create, block install, 4 typed
+      customizers, snapshot, link-owner/revoke/switch auth gates, all green
+- [x] Path B architecture validated in production-shaped environment: backend
+      runs zero Anthropic calls, DB writes only
 
 ### 2026-04-19 — zero-friction first-run pipeline
 

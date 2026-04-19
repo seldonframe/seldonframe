@@ -45,6 +45,20 @@ export function setDefaultWorkspace(workspace_id) {
   saveDevice(d);
 }
 
+// Remove a workspace's bearer token from the local device store. If it was the
+// default, clear the default pointer too. Used by revoke_bearer when the call
+// revokes the caller's own token — the device can't keep pretending it has
+// access.
+export function forgetWorkspace(workspace_id) {
+  const d = loadDevice();
+  delete d.tokens[workspace_id];
+  if (d.default_workspace === workspace_id) {
+    const remaining = Object.keys(d.tokens);
+    d.default_workspace = remaining[0] ?? null;
+  }
+  saveDevice(d);
+}
+
 export function getDefaultWorkspace() {
   return loadDevice().default_workspace;
 }

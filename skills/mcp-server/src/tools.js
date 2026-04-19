@@ -1,6 +1,7 @@
 import {
   api,
   fetchText,
+  forgetWorkspace,
   htmlToText,
   rememberWorkspace,
   setDefaultWorkspace,
@@ -174,6 +175,70 @@ export const TOOLS = [
         note: result.already_linked
           ? "This workspace was already linked to your account. No change."
           : "Workspace linked. You can now sign in at the admin_dashboard URL to manage it in the browser. Your MCP bearer token continues to work — no rotation needed.",
+      };
+    },
+  },
+  {
+    name: "revoke_bearer",
+    description:
+      "Revoke workspace bearer tokens. Useful if a device token has leaked or if a builder wants to rotate. Modes (pick exactly one): `{}` revokes ALL tokens except the current device's (safe default — other devices kicked off, this device keeps working); `{ token_id }` revokes a specific token by its UUID; `{ all: true }` revokes every token including the current one — requires SELDONFRAME_API_KEY because it locks this device out. After revoking the current token the MCP clears the local entry from ~/.seldonframe/device.json.",
+    inputSchema: obj({
+      workspace_id: str("Optional workspace override. Defaults to active workspace."),
+      token_id: str("UUID of a specific token to revoke (from api_keys.id)."),
+      all: { type: "boolean", description: "Revoke ALL tokens including caller. Requires SELDONFRAME_API_KEY." },
+    }),
+    handler: async (a) => {
+      const workspaceId = a.workspace_id ?? getDefaultWorkspace();
+      if (!workspaceId) {
+        throw new Error(
+          "No workspace to revoke tokens for. Run create_workspace first, or pass workspace_id."
+        );
+      }
+      const bearer = getWorkspaceBearer(workspaceId);
+      const apiKey = getApiKey();
+      if (!bearer && !apiKey) {
+        throw new Error(
+          `No local bearer for workspace ${workspaceId} and no SELDONFRAME_API_KEY. Cannot authenticate.`
+        );
+      }
+      if (a.all === true && !apiKey) {
+        throw new Error(
+          "Revoking ALL tokens (including this device's) requires SELDONFRAME_API_KEY — bearer identity can't lock itself out. Either omit `all` to use all_except_current, or set SELDONFRAME_API_KEY."
+        );
+      }
+
+      let body;
+      if (a.token_id) {
+        body = { token_id: a.token_id };
+      } else if (a.all === true) {
+        body = { all: true };
+      } else {
+        body = { all_except_current: true };
+      }
+
+      // Prefer workspace bearer when present; fall back to api_key auth otherwise.
+      const useBearer = Boolean(bearer);
+      const result = await api(
+        "POST",
+        `/workspace/${encodeURIComponent(workspaceId)}/revoke-bearer`,
+        {
+          body,
+          workspace_id: workspaceId,
+          force_workspace_bearer: useBearer,
+          extra_headers: apiKey && !useBearer ? { "x-seldon-api-key": apiKey } : {},
+        },
+      );
+
+      // If the caller's own token got revoked, clear it from device.json so
+      // future tool calls don't authenticate with a dead token.
+      if (useBearer && result?.caller_still_valid === false) {
+        forgetWorkspace(workspaceId);
+      }
+
+      return {
+        ok: true,
+        ...result,
+        device_cleared: useBearer && result?.caller_still_valid === false,
       };
     },
   },

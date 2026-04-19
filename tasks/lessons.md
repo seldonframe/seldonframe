@@ -110,6 +110,22 @@ Format: **Lesson** / **Trigger** / **Rule**
 
 ---
 
+## L-11 — `curl` in PowerShell is an alias for `Invoke-WebRequest`, not real curl
+
+- **Trigger:** Gave user a bash-style `curl -sS URL -H "Authorization: Bearer …"`
+  command to probe a Vercel endpoint. PowerShell errored with `Invoke-WebRequest:
+  Cannot bind parameter 'Headers'. Cannot convert the "Authorization: Bearer ..."
+  value of type "System.String" to type "System.Collections.IDictionary"`.
+- **Rule:** On Windows, either:
+  1. Use `curl.exe` explicitly — Windows 10+ ships the real curl binary alongside
+     the PowerShell alias. `curl.exe -sS URL -H "Header: Value"` works as bash would.
+  2. Or use PowerShell-native `Invoke-WebRequest -Uri URL -Headers @{Header = "Value"}`
+     with the `-SkipHttpErrorCheck` flag if non-2xx responses shouldn't throw.
+  When giving users curl commands, default to `curl.exe` on Windows instructions;
+  Unix users tolerate it fine.
+
+---
+
 ## Template for new entries
 
 ```

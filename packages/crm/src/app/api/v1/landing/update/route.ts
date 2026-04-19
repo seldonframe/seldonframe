@@ -57,7 +57,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Workspace not found." }, { status: 404 });
   }
 
-  const theme = org.theme?.mode ?? "dark";
+  // Whitelist theme mode — even though theme/update validates on write,
+  // defend against any upstream path that might write an unvalidated theme.
+  const rawThemeMode = org.theme?.mode;
+  const theme = rawThemeMode === "light" ? "light" : "dark";
   const contentHtml =
     `<main data-theme="${theme}">` +
     `<section><h1>${escapeHtml(headline)}</h1>` +
