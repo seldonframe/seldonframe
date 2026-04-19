@@ -1,0 +1,31 @@
+{
+  "$schema": "https://claude.ai/schemas/plugin.json",
+  "name": "seldonframe",
+  "version": "1.7.0",
+  "description": "SeldonFrame Business OS — CRM, Cal.diy booking, Formbricks intake, and Brain v2, all controllable from Claude. Zero config to try: guest mode simulates everything locally. Set SELDONFRAME_API_KEY to persist to app.seldonframe.com.",
+  "homepage": "https://seldonframe.com",
+  "repository": "https://github.com/seldonframe/crm",
+  "author": "SeldonFrame",
+  "license": "MIT",
+  "keywords": ["crm", "business-os", "booking", "intake", "brain"],
+  "mcpServers": {
+    "seldonframe": {
+      "command": "node",
+      "args": ["skills/mcp-server/src/index.js"],
+      "env": {
+        "SELDONFRAME_API_KEY": "",
+        "SELDONFRAME_API_BASE": ""
+      }
+    }
+  },
+  "env": {
+    "SELDONFRAME_API_KEY": {
+      "description": "Optional. Unset = guest mode (local simulator). Set to promote to app.seldonframe.com. Get one at https://app.seldonframe.com/settings/api.",
+      "required": false
+    },
+    "SELDONFRAME_API_BASE": {
+      "description": "Optional override for the Seldon API base URL. Defaults to https://app.seldonframe.com/api/v1.",
+      "required": false
+    }
+  }
+}
