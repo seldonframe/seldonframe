@@ -169,12 +169,17 @@ export const TOOLS = [
           extra_headers: { "x-seldon-api-key": apiKey },
         },
       );
+      const magicLink = result?.urls?.claim_magic_link ?? null;
+      const baseNote = result.already_linked
+        ? "This workspace was already linked to your account."
+        : "Workspace linked to your account.";
+      const magicNote = magicLink
+        ? ` A one-click sign-in link is in urls.claim_magic_link — opens a browser session as the workspace owner, expires in 15 min, single-use.`
+        : " No magic link minted (user has no email on file); sign in the normal way at urls.admin_dashboard.";
       return {
         ok: true,
         ...result,
-        note: result.already_linked
-          ? "This workspace was already linked to your account. No change."
-          : "Workspace linked. You can now sign in at the admin_dashboard URL to manage it in the browser. Your MCP bearer token continues to work — no rotation needed.",
+        note: `${baseNote}${magicNote} Your MCP bearer token continues to work — no rotation needed.`,
       };
     },
   },

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { orgMembers, organizations, users } from "@/db/schema";
+import { mintClaimMagicLink } from "@/lib/auth/magic-link";
 import { resolveUserIdFromSeldonApiKey } from "@/lib/auth/v1-identity";
 import { resolveWorkspaceBearer } from "@/lib/auth/workspace-token";
 import { buildWorkspaceUrls } from "@/lib/billing/anonymous-workspace";
@@ -102,7 +103,23 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   if (org.ownerId) {
     if (org.ownerId === userRow.id) {
-      // Already linked to this user — idempotent success.
+      // Already linked to this user — idempotent success. Still mint a fresh
+      // magic link so the caller can one-click in; the original mint was on
+      // first claim and may have expired.
+      let existingClaimLink: { url: string; expires_at: string } | null = null;
+      if (userRow.email) {
+        try {
+          existingClaimLink = await mintClaimMagicLink(
+            userRow.email,
+            `/switch-workspace?to=${encodeURIComponent(workspaceId)}&next=/dashboard`
+          );
+        } catch (error) {
+          console.warn(
+            `[link-owner] magic link mint failed on re-link for ${workspaceId}:`,
+            error instanceof Error ? error.message : String(error)
+          );
+        }
+      }
       return NextResponse.json({
         ok: true,
         already_linked: true,
@@ -113,6 +130,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           owner_id: org.ownerId,
         },
         linked_to: { user_id: userRow.id, email: userRow.email ?? null, via: claim.via },
+        urls: { claim_magic_link: existingClaimLink?.url ?? null },
+        claim_magic_link_expires_at: existingClaimLink?.expires_at ?? null,
       });
     }
     return NextResponse.json(
@@ -153,6 +172,34 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const urls = buildWorkspaceUrls(updated.slug, WORKSPACE_BASE_DOMAIN, updated.id);
 
+  // One-click sign-in: mint a NextAuth verification token so the claimer can
+  // land on the admin dashboard without typing a password. Non-fatal if it
+  // fails — the claim already succeeded; caller falls back to manual login.
+  let claimMagicLink: { url: string; expires_at: string } | null = null;
+  if (userRow.email) {
+    try {
+      claimMagicLink = await mintClaimMagicLink(
+        userRow.email,
+        `/switch-workspace?to=${encodeURIComponent(workspaceId)}&next=/dashboard`
+      );
+    } catch (error) {
+      console.warn(
+        `[link-owner] magic link mint failed for ${workspaceId}:`,
+        error instanceof Error ? error.message : String(error)
+      );
+    }
+  }
+
+  const nextSteps = claimMagicLink
+    ? [
+        "Click the one-time claim_magic_link below to sign in automatically (expires in 15 min, single-use).",
+        "Your workspace bearer token continues to work for the MCP — no need to rotate.",
+      ]
+    : [
+        `Sign in at ${urls.admin_dashboard.split("?")[0]} to manage this workspace in the browser.`,
+        "Your workspace bearer token continues to work for the MCP — no need to rotate.",
+      ];
+
   return NextResponse.json({
     ok: true,
     linked_at: new Date().toISOString(),
@@ -167,10 +214,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       email: userRow.email ?? null,
       via: claim.via,
     },
-    urls,
-    next: [
-      `Sign in at ${urls.admin_dashboard.split("?")[0]} to manage this workspace in the browser.`,
-      "Your workspace bearer token continues to work for the MCP — no need to rotate.",
-    ],
+    urls: {
+      ...urls,
+      claim_magic_link: claimMagicLink?.url ?? null,
+    },
+    claim_magic_link_expires_at: claimMagicLink?.expires_at ?? null,
+    next: nextSteps,
   });
 }
