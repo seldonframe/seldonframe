@@ -80,6 +80,36 @@ Format: **Lesson** / **Trigger** / **Rule**
 
 ---
 
+## L-09 — Windows user, bash syntax: `export VAR=…` doesn't work
+
+- **Trigger:** Gave the user `export DATABASE_URL="…"` in a runbook. User is on
+  Windows PowerShell. `export` threw "not recognized", `DATABASE_URL` was never
+  set, `drizzle-kit migrate` failed with `url: ''`. Then the user pasted the
+  error screenshot which briefly exposed the password prefix.
+- **Rule:** The project's environment fingerprint in the system prompt is
+  `Platform: win32`, `Shell: bash (use Unix shell syntax)` — but the *user's*
+  terminal is Windows PowerShell. My bash shell is not theirs. Any time I give
+  a shell command the user will execute on their machine, include the shell
+  variant(s) that match their OS:
+    - `export FOO=bar && cmd`   (bash/zsh/WSL)
+    - `$env:FOO = "bar"; cmd`   (PowerShell)
+    - `set FOO=bar && cmd`      (cmd.exe)
+  When unsure, ask what shell they're in or give all three.
+
+## L-10 — Watch for secret leaks in pasted error screenshots
+
+- **Trigger:** Same turn as L-09. The shell echoed the beginning of the
+  DATABASE_URL (`postgresql://user:npg_abc...`) in its "command not recognized"
+  error. User pasted the screenshot; the password prefix was now in chat
+  history.
+- **Rule:** When the user pastes an error that contains any substring matching
+  `postgres://`, `postgresql://`, `sk-`, `sk_`, `wst_`, `ghp_`, `Bearer `, or
+  similar credential shapes — flag it immediately in the response and tell
+  them how to rotate. Don't echo the leaked value back in your own reply.
+  Conversation history persists; treat "the user pasted it" as "it's leaked."
+
+---
+
 ## Template for new entries
 
 ```

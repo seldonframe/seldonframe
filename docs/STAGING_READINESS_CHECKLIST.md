@@ -8,9 +8,26 @@ less infra to stand up.
 
 ## 1. Database ✅
 
-- [ ] Staging `DATABASE_URL` in hand
-- [ ] Ran `DATABASE_URL=… pnpm db:migrate` from `packages/crm`
-- [ ] Verified: `SELECT kind, COUNT(*) FROM api_keys GROUP BY kind;` — all rows `kind='user'`
+- [ ] Staging `DATABASE_URL` copied from Vercel env
+- [ ] Ran `pnpm db:migrate` from repo root with `DATABASE_URL` set in the shell
+- [ ] Verified: `SELECT kind, COUNT(*) FROM api_keys GROUP BY kind;` returns rows (no "column does not exist" error)
+
+**Shell-specific env syntax (pick one):**
+
+```bash
+# bash / zsh (macOS / Linux / WSL)
+export DATABASE_URL="<string>" && pnpm db:migrate
+```
+
+```powershell
+# Windows PowerShell
+$env:DATABASE_URL = "<string>"; pnpm db:migrate
+```
+
+```cmd
+:: Windows cmd.exe
+set DATABASE_URL=<string> && pnpm db:migrate
+```
 
 **If this fails** → every `create_workspace` call 500s.
 

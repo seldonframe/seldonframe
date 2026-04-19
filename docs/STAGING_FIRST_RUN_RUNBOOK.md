@@ -45,9 +45,29 @@ git status                  # clean or stable
 **One new migration since launch: `0015_workspace_bearer_tokens.sql`** — adds
 `api_keys.kind` column and backfills `'user'` on existing rows.
 
+**Before you start:** get your staging `DATABASE_URL` from Vercel → Project →
+Settings → Environment Variables. Treat it like a password — do not paste it
+into screenshots or chat.
+
+### bash / zsh (macOS, Linux, WSL)
+
 ```bash
-cd packages/crm
-DATABASE_URL="postgres://…staging…" pnpm db:migrate
+export DATABASE_URL="<paste-connection-string>"
+pnpm db:migrate
+```
+
+### Windows PowerShell
+
+```powershell
+$env:DATABASE_URL = "<paste-connection-string>"
+pnpm db:migrate
+```
+
+### Windows cmd.exe
+
+```cmd
+set DATABASE_URL=<paste-connection-string>
+pnpm db:migrate
 ```
 
 Expect:
@@ -56,11 +76,26 @@ Expect:
 0015_workspace_bearer_tokens ✓
 ```
 
+If you see `Please provide required params for Postgres driver: url: ''`, the
+env var wasn't set in this shell session — check the syntax for your shell
+above.
+
 ### Verify
+
+**bash / zsh:**
 
 ```bash
 psql "$DATABASE_URL" -c "SELECT kind, COUNT(*) FROM api_keys GROUP BY kind;"
 ```
+
+**PowerShell:**
+
+```powershell
+psql $env:DATABASE_URL -c "SELECT kind, COUNT(*) FROM api_keys GROUP BY kind;"
+```
+
+If `psql` isn't installed locally, run the same query in the Neon / Supabase
+SQL editor for your DB.
 
 All existing rows should report `kind = 'user'`. If the column doesn't exist,
 **stop** — the deploy will 500 on every `create_workspace`.
