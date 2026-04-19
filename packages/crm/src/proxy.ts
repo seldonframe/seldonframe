@@ -351,6 +351,8 @@ export const config = {
     "/l/:path*",
     "/book/:path*",
     "/forms/:path*",
+    "/intake",
+    "/intake/:path*",
     "/setup",
     "/welcome",
     "/orgs/:path*",
