@@ -10,6 +10,10 @@
     {
       "path": "/api/cron/brain-compile",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/orphan-workspace-ttl",
+      "schedule": "0 4 * * *"
     }
   ]
 }
