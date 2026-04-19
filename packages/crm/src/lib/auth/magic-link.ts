@@ -21,9 +21,19 @@ import { verificationTokens } from "@/db/schema";
 // The token is single-use: NextAuth deletes the row on successful validation.
 // Expiry is 15 minutes — long enough to click, short enough to contain leak
 // damage if the URL ends up in a chat transcript.
+//
+// Token storage: Auth.js v5 hashes verification tokens before persisting them
+// (sha256(rawToken + AUTH_SECRET)) and compares the hash on the callback. We
+// must mirror that here — store the hash, put the raw value in the URL —
+// otherwise the callback's `useVerificationToken` lookup misses and NextAuth
+// returns a `Verification` error.
 
 const TTL_MINUTES = 15;
 const EMAIL_PROVIDER_ID = "resend";
+
+function hashToken(rawToken: string, secret: string): string {
+  return crypto.createHash("sha256").update(`${rawToken}${secret}`).digest("hex");
+}
 
 export type MintedMagicLink = {
   url: string;
@@ -38,12 +48,21 @@ export async function mintClaimMagicLink(
     process.env.NEXTAUTH_URL?.trim() || "https://app.seldonframe.com"
   ).replace(/\/+$/, "");
 
+  const secret = (
+    process.env.AUTH_SECRET?.trim() || process.env.NEXTAUTH_SECRET?.trim() || ""
+  );
+  if (!secret) {
+    throw new Error(
+      "Cannot mint magic link: AUTH_SECRET (or NEXTAUTH_SECRET) is not set."
+    );
+  }
+
   const token = crypto.randomBytes(32).toString("hex");
   const expires = new Date(Date.now() + TTL_MINUTES * 60 * 1000);
 
   await db.insert(verificationTokens).values({
     identifier: userEmail,
-    token,
+    token: hashToken(token, secret),
     expires,
   });
 
