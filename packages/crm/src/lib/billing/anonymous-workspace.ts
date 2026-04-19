@@ -3,7 +3,11 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { organizations } from "@/db/schema";
 import { mintWorkspaceToken } from "@/lib/auth/workspace-token";
-import { createDefaultLandingPage } from "@/lib/blocks/templates";
+import {
+  createDefaultBookingTemplate,
+  createDefaultIntakeForm,
+  createDefaultLandingPage,
+} from "@/lib/blocks/templates";
 import { isReservedSlug } from "@/lib/utils/reserved-slugs";
 
 const DEFAULT_ENABLED_BLOCKS = [
@@ -93,18 +97,36 @@ export async function createAnonymousWorkspace(
 
   const minted = await mintWorkspaceToken(org.id, { name: "mcp:anonymous-create" });
 
-  // Seed a published landing page at slug "home" so the subdomain root
-  // renders something real instead of 404. Idempotent.
-  await createDefaultLandingPage(org.id, {
-    workspaceName: org.name,
-    theme: "dark",
-  }).catch((error) => {
-    // Non-fatal: the workspace exists; the landing page can be created later.
-    console.warn(
-      `[anonymous-workspace] landing-page seed failed for ${org.id}:`,
-      error instanceof Error ? error.message : String(error)
-    );
-  });
+  // Seed default templates for every block we mark as enabled. Without these
+  // rows the public subdomain routes (/, /book, /intake) point at the right
+  // pages but those pages 404 because the underlying record doesn't exist.
+  // All three helpers are idempotent — re-running on an existing workspace is
+  // a no-op. Failures are logged but non-fatal: the workspace itself succeeded
+  // and the typed customizers (landing/update, configure_booking,
+  // customize_intake_form) can still create or repair these rows on demand.
+  await Promise.all([
+    createDefaultLandingPage(org.id, {
+      workspaceName: org.name,
+      theme: "dark",
+    }).catch((error) => {
+      console.warn(
+        `[anonymous-workspace] landing-page seed failed for ${org.id}:`,
+        error instanceof Error ? error.message : String(error)
+      );
+    }),
+    createDefaultBookingTemplate(org.id, { theme: "dark" }).catch((error) => {
+      console.warn(
+        `[anonymous-workspace] booking-template seed failed for ${org.id}:`,
+        error instanceof Error ? error.message : String(error)
+      );
+    }),
+    createDefaultIntakeForm(org.id, { theme: "dark" }).catch((error) => {
+      console.warn(
+        `[anonymous-workspace] intake-form seed failed for ${org.id}:`,
+        error instanceof Error ? error.message : String(error)
+      );
+    }),
+  ]);
 
   return {
     orgId: org.id,
