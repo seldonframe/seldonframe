@@ -1,6 +1,6 @@
 "use server";
 
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import { organizations, seldonSessions, stripeConnections } from "@/db/schema";
@@ -18,6 +18,7 @@ import { querySoulWiki } from "@/lib/soul-wiki/query";
 import { fileSeldonOutputToSoul } from "@/lib/soul-wiki/output-filing";
 import { installBlock, updateBlock, type InstallResult, type SeldonBlockType, type UpdateResult } from "@/lib/seldon/block-installer";
 import { getPortalSessionForOrg, getPortalSessionForToken } from "@/lib/portal/auth";
+import { buildEndClientScopeContract, guardEndClientDescription } from "@/lib/openclaw/scope-guard";
 import type { OrgSoul } from "@/lib/soul/types";
 import type { OrgTheme } from "@/lib/theme/types";
 import type { OrganizationIntegrations } from "@/db/schema";
@@ -923,10 +924,30 @@ export async function runSeldonItAction(_prev: SeldonRunState, formData: FormDat
   const endClientMode = String(formData.get("end_client_mode") ?? "") === "true";
   const orgSlugFromForm = String(formData.get("orgSlug") ?? "").trim();
   const portalTokenFromForm = String(formData.get("portalToken") ?? "").trim();
+  const targetOrgIdFromForm = String(formData.get("target_org_id") ?? "").trim();
 
   let user = await getCurrentUser();
   let orgId = await getOrgId();
   let endClientSession: Awaited<ReturnType<typeof getPortalSessionForOrg>> | null = null;
+
+  if (!endClientMode && targetOrgIdFromForm && user?.id) {
+    const [managedOrg] = await db
+      .select({ id: organizations.id })
+      .from(organizations)
+      .where(
+        and(
+          eq(organizations.id, targetOrgIdFromForm),
+          or(eq(organizations.ownerId, user.id), eq(organizations.parentUserId, user.id))
+        )
+      )
+      .limit(1);
+
+    if (!managedOrg?.id) {
+      return { ok: false, error: "You do not manage this workspace." };
+    }
+
+    orgId = managedOrg.id;
+  }
 
   if (endClientMode) {
     endClientSession = portalTokenFromForm
@@ -953,8 +974,24 @@ export async function runSeldonItAction(_prev: SeldonRunState, formData: FormDat
   }
 
   const rawDescription = String(formData.get("description") ?? "").trim();
+
+  if (endClientMode && endClientSession) {
+    const guard = guardEndClientDescription(rawDescription);
+    if (!guard.allowed) {
+      void writeEvent(endClientSession.orgId, "openclaw_scope_denied", {
+        mode: "end_client",
+        client_id: endClientSession.contact.id,
+        category: guard.reason.category,
+        matched: guard.matched,
+        source: "server_action",
+        description_preview: rawDescription.slice(0, 200),
+      });
+      return { ok: false, error: guard.reason.message };
+    }
+  }
+
   const description = endClientMode && endClientSession
-    ? `[END_CLIENT_MODE]\nclient_id: ${endClientSession.contact.id}\n${rawDescription}`
+    ? `${buildEndClientScopeContract(endClientSession.contact.id)}\n\nrequest:\n${rawDescription}`
     : builderMode
       ? `[BUILDER_MODE]\n${rawDescription}`
       : rawDescription;

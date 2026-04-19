@@ -3,6 +3,8 @@ import { runSeldonItAction } from "@/lib/ai/seldon-actions";
 import { SELDON_CALM_PROGRESS_MESSAGES, SELDON_PROGRESS_INTERVAL_MS } from "@/lib/ai/progress-messages";
 import { getPortalSessionForToken } from "@/lib/portal/auth";
 import { toOpenClawCards } from "@/lib/openclaw/self-service";
+import { guardEndClientDescription } from "@/lib/openclaw/scope-guard";
+import { writeEvent } from "@/lib/brain";
 
 type SelfServiceBody = {
   orgSlug?: unknown;
@@ -25,6 +27,28 @@ export async function POST(request: Request) {
   const session = await getPortalSessionForToken(orgSlug, portalToken);
   if (!session) {
     return NextResponse.json({ error: "Invalid or expired portal token." }, { status: 401 });
+  }
+
+  const guard = guardEndClientDescription(description);
+  if (!guard.allowed) {
+    void writeEvent(session.orgId, "openclaw_scope_denied", {
+      mode: "end_client",
+      client_id: session.contact.id,
+      category: guard.reason.category,
+      matched: guard.matched,
+      description_preview: description.slice(0, 200),
+    });
+
+    return NextResponse.json(
+      {
+        ok: false,
+        end_client_mode: true,
+        blocked: true,
+        blocked_category: guard.reason.category,
+        error: guard.reason.message,
+      },
+      { status: 422 }
+    );
   }
 
   const formData = new FormData();

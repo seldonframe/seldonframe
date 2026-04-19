@@ -11,7 +11,12 @@ export type BrainEventType =
   | "booking_completed"
   | "payment_received"
   | "custom_block_applied"
-  | "seldon_it_applied";
+  | "seldon_it_applied"
+  | "openclaw_scope_denied"
+  | "vertical_pack_generated"
+  | "vertical_pack_installed"
+  | "caldiy_block_configured"
+  | "formbricks_block_configured";
 
 export type BlockRewriteSuggestion = {
   original_snippet: string;
