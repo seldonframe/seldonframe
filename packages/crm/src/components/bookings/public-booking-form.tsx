@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import { DayPicker } from "react-day-picker";
+import "react-day-picker/style.css";
 import { listPublicBookingSlotsAction, submitPublicBookingAction } from "@/lib/bookings/actions";
 import { isDemoBlockedError, isDemoReadonlyClient } from "@/lib/demo/client";
 import { useDemoToast } from "@/components/shared/demo-toast-provider";
@@ -15,6 +17,10 @@ function toDateOnly(date: Date) {
 function toTimeLabel(value: string) {
   const date = new Date(value);
   return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+function formatSelectedDateHeading(date: Date) {
+  return date.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
 }
 
 export function PublicBookingForm({
@@ -35,140 +41,245 @@ export function PublicBookingForm({
   const [confirmationMessage, setConfirmationMessage] = useState(confirmationFallback);
   const [slots, setSlots] = useState<string[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<string>("");
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [step, setStep] = useState<"pick-time" | "enter-details">("pick-time");
   const { showDemoToast } = useDemoToast();
 
-  const dateOptions = useMemo(() => {
-    const now = new Date();
-    return Array.from({ length: 14 }, (_, index) => {
-      const date = new Date(now);
-      date.setDate(now.getDate() + index);
-      return {
-        value: toDateOnly(date),
-        label: date.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }),
-      };
-    });
+  const today = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
   }, []);
+  const horizon = useMemo(() => {
+    const d = new Date(today);
+    d.setDate(d.getDate() + 60);
+    return d;
+  }, [today]);
 
-  const [selectedDate, setSelectedDate] = useState<string>(dateOptions[0]?.value ?? "");
+  // Default to today; user can pick any date in the allowed range.
+  const [selectedDate, setSelectedDate] = useState<Date>(today);
+  const selectedDateISO = useMemo(() => toDateOnly(selectedDate), [selectedDate]);
 
   const timezone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC", []);
 
   useEffect(() => {
-    if (!selectedDate) {
-      return;
-    }
+    if (!selectedDateISO) return;
 
     let cancelled = false;
+    setSlotsLoading(true);
 
     void (async () => {
       const result = await listPublicBookingSlotsAction({
         orgSlug,
         bookingSlug,
-        date: selectedDate,
+        date: selectedDateISO,
       });
 
-      if (cancelled) {
-        return;
-      }
+      if (cancelled) return;
 
       setSlots(result.slots);
-      setSelectedSlot((current) => (result.slots.includes(current) ? current : result.slots[0] ?? ""));
+      // Don't auto-select a slot — let the user tap one. Prevents "I didn't
+      // mean to pick that time" on the checkout step.
+      if (!result.slots.includes(selectedSlot)) {
+        setSelectedSlot("");
+      }
+      setSlotsLoading(false);
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [bookingSlug, orgSlug, selectedDate]);
+    // selectedSlot excluded on purpose — we only refetch on date change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookingSlug, orgSlug, selectedDateISO]);
+
+  if (success) {
+    return (
+      <div className="crm-card p-6 text-center">
+        <div className="mx-auto mb-4 inline-flex size-12 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--sf-primary,#21a38b)_15%,transparent)]">
+          <svg className="size-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: "var(--sf-primary, #21a38b)" }}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+        <p className="text-lg font-semibold" style={{ color: "var(--sf-text)" }}>You&apos;re booked.</p>
+        <p className="mt-2 text-sm" style={{ color: "var(--sf-muted)" }}>{confirmationMessage}</p>
+      </div>
+    );
+  }
 
   return (
-    <form
-      className="crm-card space-y-3 p-4"
-      action={(formData) => {
-        startTransition(async () => {
-          try {
-            if (isDemoReadonlyClient) {
-              showDemoToast();
-              return;
-            }
+    <div className="crm-card overflow-hidden p-0">
+      {/* ───── Step 1 — pick a date + time ───── */}
+      {step === "pick-time" ? (
+        <div className="grid gap-0 lg:grid-cols-[auto_1fr]">
+          {/* Calendar on the left */}
+          <div className="border-b p-4 lg:border-b-0 lg:border-r" style={{ borderColor: "var(--sf-border)" }}>
+            <DayPicker
+              mode="single"
+              required
+              selected={selectedDate}
+              onSelect={(day) => {
+                if (day) {
+                  const next = new Date(day);
+                  next.setHours(0, 0, 0, 0);
+                  setSelectedDate(next);
+                }
+              }}
+              disabled={{ before: today, after: horizon }}
+              showOutsideDays
+              classNames={{
+                // Minimal overrides — rely on the shipped default stylesheet
+                // for layout + accessibility, only re-theme colors via tokens.
+                today: "rdp-today",
+                selected: "rdp-selected",
+              }}
+              styles={{
+                caption_label: { fontWeight: 600, fontSize: "14px" },
+                day: { fontSize: "13px" },
+              }}
+            />
+          </div>
 
-            const response = await submitPublicBookingAction({
-              orgSlug,
-              bookingSlug,
-              fullName: String(formData.get("fullName") ?? ""),
-              email: String(formData.get("email") ?? ""),
-              startsAt: selectedSlot,
-              notes: String(formData.get("notes") ?? "") || undefined,
+          {/* Time slots on the right */}
+          <div className="flex min-w-0 flex-col">
+            <div className="border-b p-4" style={{ borderColor: "var(--sf-border)" }}>
+              <p className="text-sm font-semibold" style={{ color: "var(--sf-text)" }}>
+                {formatSelectedDateHeading(selectedDate)}
+              </p>
+              <p className="mt-0.5 text-xs" style={{ color: "var(--sf-muted)" }}>
+                {durationMinutes}-min slot · {timezone}
+              </p>
+            </div>
+
+            <div className="flex-1 p-4">
+              {slotsLoading ? (
+                <p className="text-sm" style={{ color: "var(--sf-muted)" }}>Loading available times…</p>
+              ) : slots.length === 0 ? (
+                <div className="flex h-full flex-col items-center justify-center rounded-lg border border-dashed py-8 text-center" style={{ borderColor: "var(--sf-border)" }}>
+                  <p className="text-sm font-medium" style={{ color: "var(--sf-text)" }}>No times available.</p>
+                  <p className="mt-1 text-xs" style={{ color: "var(--sf-muted)" }}>Try another day.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {slots.map((slot) => {
+                    const isSelected = slot === selectedSlot;
+                    return (
+                      <button
+                        key={slot}
+                        type="button"
+                        className="h-10 rounded-lg border text-sm font-medium transition-all"
+                        style={{
+                          borderColor: isSelected ? "var(--sf-primary, #21a38b)" : "var(--sf-border)",
+                          backgroundColor: isSelected
+                            ? "color-mix(in srgb, var(--sf-primary, #21a38b) 12%, transparent)"
+                            : "transparent",
+                          color: isSelected ? "var(--sf-primary, #21a38b)" : "var(--sf-text)",
+                        }}
+                        onClick={() => {
+                          setSelectedSlot(slot);
+                          setStep("enter-details");
+                        }}
+                      >
+                        {toTimeLabel(slot)}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* ───── Step 2 — enter details ───── */}
+      {step === "enter-details" && selectedSlot ? (
+        <form
+          className="flex flex-col gap-4 p-4"
+          action={(formData) => {
+            startTransition(async () => {
+              try {
+                if (isDemoReadonlyClient) {
+                  showDemoToast();
+                  return;
+                }
+
+                const response = await submitPublicBookingAction({
+                  orgSlug,
+                  bookingSlug,
+                  fullName: String(formData.get("fullName") ?? ""),
+                  email: String(formData.get("email") ?? ""),
+                  startsAt: selectedSlot,
+                  notes: String(formData.get("notes") ?? "") || undefined,
+                });
+
+                if (response.checkoutUrl) {
+                  window.location.assign(response.checkoutUrl);
+                  return;
+                }
+
+                setConfirmationMessage(response.confirmationMessage || confirmationFallback);
+                setSuccess(true);
+              } catch (error) {
+                if (isDemoBlockedError(error)) {
+                  showDemoToast();
+                  return;
+                }
+                throw error;
+              }
             });
+          }}
+        >
+          <div className="flex items-center justify-between gap-3 rounded-lg border p-3" style={{ borderColor: "var(--sf-border)", backgroundColor: "color-mix(in srgb, var(--sf-primary, #21a38b) 6%, transparent)" }}>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold" style={{ color: "var(--sf-text)" }}>
+                {formatSelectedDateHeading(selectedDate)} · {toTimeLabel(selectedSlot)}
+              </p>
+              <p className="mt-0.5 text-xs" style={{ color: "var(--sf-muted)" }}>
+                {durationMinutes} min · {timezone}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="shrink-0 text-xs font-medium underline underline-offset-2"
+              style={{ color: "var(--sf-muted)" }}
+              onClick={() => {
+                setStep("pick-time");
+                setSelectedSlot("");
+              }}
+            >
+              Change
+            </button>
+          </div>
 
-            if (response.checkoutUrl) {
-              window.location.assign(response.checkoutUrl);
-              return;
-            }
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="flex flex-col gap-1">
+              <label htmlFor="fullName" className="text-xs font-medium" style={{ color: "var(--sf-muted)" }}>
+                Your name
+              </label>
+              <input id="fullName" name="fullName" className="crm-input h-10 px-3" required autoFocus />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="email" className="text-xs font-medium" style={{ color: "var(--sf-muted)" }}>
+                Email
+              </label>
+              <input id="email" name="email" type="email" className="crm-input h-10 px-3" placeholder="you@example.com" required />
+            </div>
+          </div>
 
-            setConfirmationMessage(response.confirmationMessage || confirmationFallback);
-            setSuccess(true);
-          } catch (error) {
-            if (isDemoBlockedError(error)) {
-              showDemoToast();
-              return;
-            }
+          <div className="flex flex-col gap-1">
+            <label htmlFor="notes" className="text-xs font-medium" style={{ color: "var(--sf-muted)" }}>
+              Anything we should know? <span className="font-normal">(optional)</span>
+            </label>
+            <textarea id="notes" name="notes" className="crm-input min-h-20 w-full p-3" placeholder="Context, questions, links…" />
+          </div>
 
-            throw error;
-          }
-        });
-      }}
-    >
-      <div className="grid gap-3 md:grid-cols-2">
-        <input className="crm-input h-10 px-3" name="fullName" placeholder="Your name" required />
-        <input className="crm-input h-10 px-3" name="email" type="email" placeholder="you@example.com" required />
-      </div>
+          <input type="hidden" name="timezone" value={timezone} />
 
-      <div className="grid gap-3 md:grid-cols-2">
-        <div>
-          <label htmlFor="booking-date" className="text-label" style={{ color: "var(--sf-muted)" }}>Date</label>
-          <select
-            id="booking-date"
-            className="crm-input mt-1 h-10 w-full px-3"
-            value={selectedDate}
-            onChange={(event) => setSelectedDate(event.target.value)}
-          >
-            {dateOptions.map((date) => (
-              <option key={date.value} value={date.value}>
-                {date.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label htmlFor="booking-slot" className="text-label" style={{ color: "var(--sf-muted)" }}>Time slot</label>
-          <p className="mt-1 text-xs" style={{ color: "var(--sf-muted)" }}>Times shown in {timezone}</p>
-          <select
-            id="booking-slot"
-            className="crm-input mt-1 h-10 w-full px-3"
-            value={selectedSlot}
-            onChange={(event) => setSelectedSlot(event.target.value)}
-            required
-          >
-            {slots.length === 0 ? <option value="">No slots available</option> : null}
-            {slots.map((slot) => (
-              <option key={slot} value={slot}>
-                {toTimeLabel(slot)} ({durationMinutes} min)
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      <input type="hidden" name="timezone" value={timezone} />
-
-      <textarea className="crm-input min-h-20 w-full p-3" name="notes" placeholder="Anything we should know before the call?" />
-
-      <button type="submit" className="crm-button-primary h-10 px-4" disabled={pending || !selectedSlot}>
-        {pending ? "Booking..." : price > 0 ? `Pay & Book ($${price.toFixed(2)})` : "Book"}
-      </button>
-
-      {success ? <p className="text-sm" style={{ color: "var(--sf-accent)" }}>{confirmationMessage}</p> : null}
-    </form>
+          <button type="submit" className="crm-button-primary h-11 px-4 text-sm font-semibold" disabled={pending}>
+            {pending ? "Booking…" : price > 0 ? `Pay & book · $${price.toFixed(price % 1 === 0 ? 0 : 2)}` : "Book"}
+          </button>
+        </form>
+      ) : null}
+    </div>
   );
 }
