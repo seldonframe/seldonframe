@@ -15,6 +15,9 @@ import { getSoul } from "@/lib/soul/server";
 import { getHiddenBlocks } from "@/lib/blocks/visibility-actions";
 import { BlockVisibilityToggle } from "@/components/dashboard/block-visibility-toggle";
 import { setActiveOrgAction } from "@/lib/billing/orgs";
+import { DealsCrmSurface } from "@/components/crm/deals-crm-surface";
+import { getCrmSurfaceConfig } from "@/lib/crm/view-config";
+import { mapDealRowToCrmRecord } from "@/lib/crm/view-models";
 
 /*
   Square UI class reference (source of truth):
@@ -303,7 +306,7 @@ export default async function DashboardPage({
   const showWorkspaceTabs = workspaceRows.length > 1;
   const activeDashboardView = showWorkspaceTabs ? (params?.view === "workspace" ? "workspace" : "all") : "workspace";
 
-  const [snapshotRowsRaw, activityRows, paymentRows, orgRow, stripeRow, bookingTemplateRow, defaultPipelineRow] = await Promise.all([
+  const [snapshotRowsRaw, activityRows, paymentRows, orgRow, stripeRow, bookingTemplateRow, defaultPipelineRow, dealsSurface] = await Promise.all([
     db.select().from(metricsSnapshots).where(eq(metricsSnapshots.orgId, orgId)).orderBy(asc(metricsSnapshots.date)).limit(180),
     db.select().from(activities).where(eq(activities.orgId, orgId)).orderBy(desc(activities.createdAt)).limit(20),
     db
@@ -349,6 +352,13 @@ export default async function DashboardPage({
       )
       .limit(1)
       .then((rows) => rows[0] ?? null),
+    // Schema-driven deals surface config — gives us the BLOCK.md + scoped
+    // overrides the kanban renderer reads from. Sourced the same way as
+    // /deals/pipeline so the dashboard preview stays in lockstep with the
+    // full kanban surface (no drift in view metadata).
+    getCrmSurfaceConfig({ orgId, entity: "deals", clientId: null }).catch(
+      () => null
+    ),
   ]);
 
   const contactById = new Map(contactRows.map((contact) => [contact.id, contact]));
@@ -416,6 +426,36 @@ export default async function DashboardPage({
   const intakeFieldList = Array.isArray(defaultIntakeForm?.fields)
     ? (defaultIntakeForm!.fields as Array<{ key: string; label: string }>)
     : [];
+
+  // === Pipeline kanban embed ===
+  // Same data path as /deals/pipeline — schema-driven blockMd + scoped
+  // overrides + adapter-mapped CrmRecord[] — so the dashboard preview can't
+  // drift from the full surface. Stage colors come from the pipeline schema.
+  const stageColorMap = Object.fromEntries(
+    pipelineStages.filter((stage) => Boolean(stage.color)).map((stage) => [stage.name, stage.color])
+  );
+  const stageProbabilityMap = Object.fromEntries(
+    pipelineStages.map((stage) => [stage.name, stage.probability])
+  );
+  const contactNameById = new Map(
+    contactRows.map((contact) => [
+      contact.id,
+      `${contact.firstName} ${contact.lastName ?? ""}`.trim() || contactLabelSingular,
+    ])
+  );
+  const dealCrmRecords = dealRows.map((deal) =>
+    mapDealRowToCrmRecord({
+      row: deal,
+      contactName: contactNameById.get(deal.contactId) || contactLabelSingular,
+      href: `/deals/${deal.id}`,
+    })
+  );
+  // Resolve the kanban view defined for the pipeline route. If the BLOCK.md
+  // doesn't expose one we just hide the embed rather than render an empty box.
+  const kanbanPipelineView = dealsSurface?.parsed.views.find(
+    (candidate) => candidate.type === "kanban" && candidate.route === "/deals/pipeline"
+  );
+  const showPipelineEmbed = Boolean(dealsSurface && kanbanPipelineView);
   const today = new Date();
   const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
   const startOfToday = new Date(today);
@@ -827,6 +867,42 @@ export default async function DashboardPage({
           </div>
         </section>
       )}
+
+      {showPipelineEmbed && dealsSurface && kanbanPipelineView ? (
+        <section className="crm-card space-y-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <BarChart2 className="size-4 text-foreground" />
+                <h2 className="text-base sm:text-lg font-semibold">Pipeline</h2>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Live kanban from BLOCK.md view metadata — stage colors, WIP limits, and lane totals all come from the pipeline schema.
+              </p>
+            </div>
+            <Link
+              href="/deals/pipeline"
+              className="crm-button-secondary h-8 shrink-0 px-3 text-xs"
+            >
+              Open full kanban →
+            </Link>
+          </div>
+          {/* Constrain height so the embed doesn't dominate the dashboard. The
+              kanban itself is horizontally scrollable for >4 lanes. */}
+          <div className="max-h-[520px] overflow-auto">
+            <DealsCrmSurface
+              blockMd={dealsSurface.blockMd}
+              records={dealCrmRecords}
+              stageProbabilities={stageProbabilityMap}
+              stageColors={stageColorMap}
+              scopedOverride={dealsSurface.scopedOverride}
+              route="/deals/pipeline"
+              viewName={kanbanPipelineView.name}
+              readOnly
+            />
+          </div>
+        </section>
+      ) : null}
 
       <section className="crm-card space-y-5">
         <div className="flex items-center justify-between gap-3">

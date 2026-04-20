@@ -23,6 +23,8 @@ export function CrmViewRenderer({
   onBulkAction,
   onMoveCard,
   onQuickAction,
+  laneColors,
+  valueField,
 }: {
   blockMd?: string;
   parsedBlock?: ParsedBlockMd;
@@ -38,6 +40,10 @@ export function CrmViewRenderer({
   onBulkAction?: (payload: CrmBulkActionPayload) => void;
   onMoveCard?: (payload: CrmMoveCardPayload) => void;
   onQuickAction?: (payload: CrmQuickActionPayload) => void;
+  // Forwarded to KanbanView when the resolved view is a kanban. Ignored for
+  // table/record/timeline views.
+  laneColors?: Record<string, string>;
+  valueField?: string | null;
 }) {
   const resolvedBlock = useMemo(() => parsedBlock ?? (blockMd ? parseBlockMd(blockMd) : null), [blockMd, parsedBlock]);
   const resolvedView = resolvedBlock?.views.find((candidate) => (viewName ? candidate.name === viewName : route ? candidate.route === route : false)) ?? resolvedBlock?.views[0] ?? null;
@@ -61,7 +67,17 @@ export function CrmViewRenderer({
   }
 
   if (resolvedView.type === "kanban") {
-    return <KanbanView view={resolvedView} records={records} scopedOverride={scopedOverride} endClientMode={endClientMode} onMoveCard={onMoveCard} />;
+    return (
+      <KanbanView
+        view={resolvedView}
+        records={records}
+        scopedOverride={scopedOverride}
+        endClientMode={endClientMode}
+        onMoveCard={onMoveCard}
+        laneColors={laneColors}
+        valueField={valueField}
+      />
+    );
   }
 
   if (resolvedView.type === "record" && record) {

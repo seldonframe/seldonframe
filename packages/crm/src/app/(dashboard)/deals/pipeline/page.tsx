@@ -32,6 +32,11 @@ export default async function DealsPipelinePage({ searchParams }: { searchParams
       ? defaultPipeline.stages.map((stage) => [stage.name, stage.probability])
       : []
   );
+  const stageColors = Object.fromEntries(
+    Array.isArray(defaultPipeline?.stages)
+      ? defaultPipeline.stages.filter((stage) => Boolean(stage.color)).map((stage) => [stage.name, stage.color])
+      : []
+  );
 
   const crmRecords = dealRows.map((deal) =>
     mapDealRowToCrmRecord({
@@ -100,6 +105,7 @@ export default async function DealsPipelinePage({ searchParams }: { searchParams
         blockMd={dealsSurface.blockMd}
         records={crmRecords}
         stageProbabilities={stageProbabilities}
+        stageColors={stageColors}
         scopedOverride={dealsSurface.scopedOverride}
         endClientMode={Boolean(normalizedClientId)}
         route="/deals/pipeline"

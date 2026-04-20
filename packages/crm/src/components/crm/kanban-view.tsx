@@ -60,6 +60,15 @@ function DraggableCard({ record, view, active }: { record: CrmRecord; view: Bloc
   );
 }
 
+function formatCompactCurrency(value: number) {
+  if (!Number.isFinite(value) || value === 0) return null;
+  if (Math.abs(value) >= 1000) {
+    const k = value / 1000;
+    return `$${k % 1 === 0 ? k.toFixed(0) : k.toFixed(1)}k`;
+  }
+  return `$${Math.round(value).toLocaleString()}`;
+}
+
 function DroppableLane({
   lane,
   records,
@@ -67,6 +76,8 @@ function DroppableLane({
   activeRecordId,
   hoverLane,
   limit,
+  color,
+  laneValue,
 }: {
   lane: string;
   records: CrmRecord[];
@@ -74,19 +85,47 @@ function DroppableLane({
   activeRecordId: string | null;
   hoverLane: string | null;
   limit?: number;
+  color?: string;
+  laneValue?: number | null;
 }) {
   const { setNodeRef } = useDroppable({ id: lane });
   const overLimit = typeof limit === "number" && records.length > limit;
+  const valueLabel = typeof laneValue === "number" ? formatCompactCurrency(laneValue) : null;
 
   return (
-    <section ref={setNodeRef} className={cn("flex min-h-[320px] flex-col rounded-[24px] border border-border/80 bg-card/68 p-4 shadow-(--shadow-xs)", hoverLane === lane ? "border-dashed border-primary/40 bg-primary/5" : "") }>
+    <section
+      ref={setNodeRef}
+      className={cn(
+        "relative flex min-h-[320px] flex-col overflow-hidden rounded-[24px] border border-border/80 bg-card/68 p-4 pt-5 shadow-(--shadow-xs) transition-colors",
+        hoverLane === lane ? "border-dashed border-primary/40 bg-primary/5" : ""
+      )}
+    >
+      {/* Stage color accent bar — pulled from pipeline schema, falls back to neutral. */}
+      <span
+        aria-hidden
+        className="absolute inset-x-0 top-0 h-1"
+        style={{ backgroundColor: color || "hsl(var(--border))" }}
+      />
+
       <div className="mb-4 flex items-start justify-between gap-3">
-        <div>
-          <h3 className="text-sm font-semibold text-foreground">{lane}</h3>
-          <p className="mt-1 text-xs text-muted-foreground">{records.length} card{records.length === 1 ? "" : "s"}</p>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            {color ? (
+              <span aria-hidden className="size-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
+            ) : null}
+            <h3 className="truncate text-sm font-semibold text-foreground">{lane}</h3>
+          </div>
+          <p className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="tabular-nums">{records.length} card{records.length === 1 ? "" : "s"}</span>
+            {valueLabel ? (
+              <span className="rounded-full border border-border/70 bg-background/60 px-2 py-0.5 text-[10px] font-medium tabular-nums text-foreground/85">
+                {valueLabel}
+              </span>
+            ) : null}
+          </p>
         </div>
         {typeof limit === "number" ? (
-          <span className={cn("rounded-full border px-2.5 py-1 text-[11px]", overLimit ? "border-amber-400/30 bg-amber-400/10 text-amber-200" : "border-border/80 bg-background/70 text-muted-foreground")}>
+          <span className={cn("rounded-full border px-2.5 py-1 text-[11px] tabular-nums", overLimit ? "border-amber-400/30 bg-amber-400/10 text-amber-200" : "border-border/80 bg-background/70 text-muted-foreground")}>
             WIP {records.length}/{limit}
           </span>
         ) : null}
@@ -103,6 +142,11 @@ function DroppableLane({
         {records.map((record) => (
           <DraggableCard key={record.id} record={record} view={view} active={activeRecordId === record.id} />
         ))}
+        {records.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-border/60 bg-background/20 px-3 py-4 text-center text-[11px] text-muted-foreground">
+            Drop a card here
+          </div>
+        ) : null}
       </div>
     </section>
   );
@@ -115,6 +159,8 @@ export function KanbanView({
   endClientMode = false,
   onMoveCard,
   className,
+  laneColors,
+  valueField = "value",
 }: {
   view: BlockMdViewDefinition;
   records: CrmRecord[];
@@ -122,6 +168,14 @@ export function KanbanView({
   endClientMode?: boolean;
   onMoveCard?: (payload: CrmMoveCardPayload) => void;
   className?: string;
+  // Optional per-lane accent colors keyed by lane name. When omitted lanes use
+  // a neutral border. Sourced from the pipeline schema (pipelines.stages.color)
+  // so the kanban inherits the same palette the rest of the CRM uses.
+  laneColors?: Record<string, string>;
+  // Field on `record.values` to sum per lane for the lane-header $ chip.
+  // Defaults to "value" (deals); pass null to disable, or a different key for
+  // custom-object surfaces.
+  valueField?: string | null;
 }) {
   const { view: resolvedView, laneOrder, editableFields, readOnly } = applyScopedViewOverride(view, scopedOverride);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
@@ -257,17 +311,28 @@ export function KanbanView({
 
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
         <div className="grid gap-4 xl:grid-cols-4">
-          {grouped.map(({ lane, records: laneRecords }) => (
-            <DroppableLane
-              key={lane}
-              lane={lane}
-              records={laneRecords}
-              view={resolvedView}
-              activeRecordId={activeRecordId}
-              hoverLane={hoverLane}
-              limit={resolvedView.wipLimits[lane]}
-            />
-          ))}
+          {grouped.map(({ lane, records: laneRecords }) => {
+            const laneValue = valueField
+              ? laneRecords.reduce((sum, record) => {
+                  const raw = record.values[valueField];
+                  const num = typeof raw === "number" ? raw : Number(raw);
+                  return Number.isFinite(num) ? sum + num : sum;
+                }, 0)
+              : null;
+            return (
+              <DroppableLane
+                key={lane}
+                lane={lane}
+                records={laneRecords}
+                view={resolvedView}
+                activeRecordId={activeRecordId}
+                hoverLane={hoverLane}
+                limit={resolvedView.wipLimits[lane]}
+                color={laneColors?.[lane]}
+                laneValue={laneValue}
+              />
+            );
+          })}
         </div>
       </DndContext>
     </section>

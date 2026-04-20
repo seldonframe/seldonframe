@@ -12,18 +12,26 @@ export function DealsCrmSurface({
   blockMd,
   records,
   stageProbabilities,
+  stageColors,
   scopedOverride,
   endClientMode = false,
   route,
   viewName,
+  readOnly = false,
 }: {
   blockMd: string;
   records: CrmRecord[];
   stageProbabilities: Record<string, number>;
+  // Per-stage hex/CSS color, sourced from pipelines.stages so the CRM kanban
+  // shares the palette the rest of the app already uses for stage badges.
+  stageColors?: Record<string, string>;
   scopedOverride?: CrmScopedOverride;
   endClientMode?: boolean;
   route: string;
   viewName?: string;
+  // When true the embedded kanban renders without drag-and-drop — used for the
+  // dashboard preview where mutations would be unexpected.
+  readOnly?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
   const { showDemoToast } = useDemoToast();
@@ -45,26 +53,31 @@ export function DealsCrmSurface({
         records={records}
         scopedOverride={resolvedScopedOverride}
         endClientMode={endClientMode}
-        onMoveCard={({ recordId, toLane }) => {
-          startTransition(async () => {
-            try {
-              if (isDemoReadonlyClient) {
-                showDemoToast();
-                return;
-              }
+        laneColors={stageColors}
+        onMoveCard={
+          readOnly
+            ? undefined
+            : ({ recordId, toLane }) => {
+                startTransition(async () => {
+                  try {
+                    if (isDemoReadonlyClient) {
+                      showDemoToast();
+                      return;
+                    }
 
-              await moveDealStageAction(recordId, toLane, stageProbabilities[toLane] ?? 0);
-              router.refresh();
-            } catch (error) {
-              if (isDemoBlockedError(error)) {
-                showDemoToast();
-                return;
-              }
+                    await moveDealStageAction(recordId, toLane, stageProbabilities[toLane] ?? 0);
+                    router.refresh();
+                  } catch (error) {
+                    if (isDemoBlockedError(error)) {
+                      showDemoToast();
+                      return;
+                    }
 
-              throw error;
-            }
-          });
-        }}
+                    throw error;
+                  }
+                });
+              }
+        }
       />
     </div>
   );
