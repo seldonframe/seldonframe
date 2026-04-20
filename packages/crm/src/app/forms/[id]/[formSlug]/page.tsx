@@ -42,10 +42,13 @@ export default async function PublicIntakePage({
     <PublicThemeProvider theme={theme}>
       <main className="crm-page flex items-center justify-center">
         <div className="w-full max-w-xl space-y-4">
-          <h1 className="text-3xl font-light tracking-tight">{form.name}</h1>
+          {/* The form owns its own heading (welcome step) — no outer <h1>
+              needed. PublicForm renders a three-step flow: welcome → one
+              question per page → done. */}
           <PublicForm
             orgSlug={orgSlug}
             formSlug={formSlug}
+            formName={form.name}
             fields={Array.isArray(form.fields) ? (form.fields as Array<{ key: string; label: string; type: string; required: boolean; options?: string[] }>) : []}
           />
           {showBadge ? (
