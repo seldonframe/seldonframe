@@ -580,6 +580,267 @@ export const TOOLS = [
       });
     },
   },
+  // ════════════════════════════════════════════════════════════════════
+  // CRM tools — Phase 2.b per tasks/mcp-gap-audit.md
+  // Thin wrappers over v1 endpoints at /api/v1/{contacts,deals,activities}.
+  // Naming convention locked in the audit: list_/get_/create_/update_/
+  // delete_ for CRUD; verb_noun for state changes (move_deal_stage).
+  // ════════════════════════════════════════════════════════════════════
+
+  {
+    name: "list_contacts",
+    description:
+      "List contacts in the active workspace. Returns every contact the caller can read. Example: list_contacts({}).",
+    inputSchema: obj({
+      workspace_id: str("Optional. Falls back to the active workspace."),
+    }),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const result = await api("GET", "/contacts", { workspace_id: ws });
+      return { ok: true, contacts: result.data ?? [], meta: result.meta ?? null };
+    },
+  },
+  {
+    name: "get_contact",
+    description:
+      "Fetch one contact by id. Example: get_contact({ contact_id: 'abc-...' }).",
+    inputSchema: obj(
+      {
+        contact_id: str("UUID of the contact."),
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["contact_id"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const result = await api("GET", `/contacts/${encodeURIComponent(args.contact_id)}`, {
+        workspace_id: ws,
+      });
+      return { ok: true, contact: result.data ?? null };
+    },
+  },
+  {
+    name: "create_contact",
+    description:
+      "Create a new contact. Typical use: 'Add Jane Doe jane@acme.co as a lead'. Example: create_contact({ first_name: 'Jane', last_name: 'Doe', email: 'jane@acme.co', status: 'lead' }).",
+    inputSchema: obj(
+      {
+        first_name: str("Required. Contact's first name."),
+        last_name: str("Optional. Last name."),
+        email: str("Optional but strongly recommended — unlocks form auto-linking and email sends."),
+        status: str("Optional lifecycle stage (e.g., 'lead', 'prospect', 'customer'). Defaults to 'lead'."),
+        source: str("Optional source tag (e.g., 'manual', 'intake-form', 'import')."),
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["first_name"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const result = await api("POST", "/contacts", {
+        body: {
+          firstName: args.first_name,
+          lastName: args.last_name ?? "",
+          email: args.email ?? null,
+          status: args.status ?? "lead",
+          source: args.source ?? "mcp",
+        },
+        workspace_id: ws,
+      });
+      return { ok: true, contact: result.data };
+    },
+  },
+  {
+    name: "update_contact",
+    description:
+      "Update fields on an existing contact. Partial — omit fields you don't want to change. Example: update_contact({ contact_id: '...', status: 'customer' }).",
+    inputSchema: obj(
+      {
+        contact_id: str("UUID of the contact to update."),
+        first_name: str("Optional new first name."),
+        last_name: str("Optional new last name."),
+        email: str("Optional new email."),
+        status: str("Optional new lifecycle stage."),
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["contact_id"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const patch = {};
+      if (args.first_name !== undefined) patch.firstName = args.first_name;
+      if (args.last_name !== undefined) patch.lastName = args.last_name;
+      if (args.email !== undefined) patch.email = args.email;
+      if (args.status !== undefined) patch.status = args.status;
+      const result = await api("PATCH", `/contacts/${encodeURIComponent(args.contact_id)}`, {
+        body: patch,
+        workspace_id: ws,
+      });
+      return { ok: true, contact: result.data };
+    },
+  },
+  {
+    name: "delete_contact",
+    description:
+      "Delete a contact and all linked deals/activities (cascades via FK). Irreversible. Example: delete_contact({ contact_id: '...' }).",
+    inputSchema: obj(
+      {
+        contact_id: str("UUID of the contact to delete."),
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["contact_id"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      await api("DELETE", `/contacts/${encodeURIComponent(args.contact_id)}`, {
+        workspace_id: ws,
+      });
+      return { ok: true, deleted: args.contact_id };
+    },
+  },
+  {
+    name: "list_deals",
+    description: "List deals in the active workspace. Example: list_deals({}).",
+    inputSchema: obj({
+      workspace_id: str("Optional. Falls back to the active workspace."),
+    }),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const result = await api("GET", "/deals", { workspace_id: ws });
+      return { ok: true, deals: result.data ?? [] };
+    },
+  },
+  {
+    name: "get_deal",
+    description: "Fetch one deal by id. Example: get_deal({ deal_id: '...' }).",
+    inputSchema: obj(
+      {
+        deal_id: str("UUID of the deal."),
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["deal_id"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const result = await api("GET", `/deals/${encodeURIComponent(args.deal_id)}`, {
+        workspace_id: ws,
+      });
+      return { ok: true, deal: result.data ?? null };
+    },
+  },
+  {
+    name: "create_deal",
+    description:
+      "Create a new deal attached to a contact on the default pipeline. Typical use: 'Create a $5k deal for Jane Doe at the Discovery stage'. Example: create_deal({ contact_id: '...', title: 'Q2 retainer', value: 5000, stage: 'Discovery' }).",
+    inputSchema: obj(
+      {
+        contact_id: str("UUID of the contact this deal belongs to."),
+        title: str("Human-readable deal name."),
+        value: { type: "number", description: "Optional deal value in workspace's default currency. Defaults to 0." },
+        stage: str("Optional stage name (e.g. 'Discovery', 'Proposal'). Defaults to the first stage of the default pipeline."),
+        probability: { type: "number", description: "Optional win probability 0-100. Defaults to 0." },
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["contact_id", "title"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const result = await api("POST", "/deals", {
+        body: {
+          contactId: args.contact_id,
+          title: args.title,
+          value: args.value ?? 0,
+          stage: args.stage ?? "New",
+          probability: args.probability ?? 0,
+        },
+        workspace_id: ws,
+      });
+      return { ok: true, deal: result.data };
+    },
+  },
+  {
+    name: "update_deal",
+    description:
+      "Update a deal. Partial — omit fields to keep them. For stage-only moves prefer move_deal_stage (clearer intent). Example: update_deal({ deal_id: '...', value: 7500 }).",
+    inputSchema: obj(
+      {
+        deal_id: str("UUID of the deal."),
+        title: str("Optional new title."),
+        stage: str("Optional new stage."),
+        value: { type: "number", description: "Optional new value." },
+        probability: { type: "number", description: "Optional new probability (0-100)." },
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["deal_id"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const patch = {};
+      if (args.title !== undefined) patch.title = args.title;
+      if (args.stage !== undefined) patch.stage = args.stage;
+      if (args.value !== undefined) patch.value = args.value;
+      if (args.probability !== undefined) patch.probability = args.probability;
+      const result = await api("PATCH", `/deals/${encodeURIComponent(args.deal_id)}`, {
+        body: patch,
+        workspace_id: ws,
+      });
+      return { ok: true, deal: result.data };
+    },
+  },
+  {
+    name: "move_deal_stage",
+    description:
+      "Move a deal to a new stage. Same effect as dragging the card on the kanban. Example: move_deal_stage({ deal_id: '...', to_stage: 'Proposal' }).",
+    inputSchema: obj(
+      {
+        deal_id: str("UUID of the deal."),
+        to_stage: str("Destination stage name."),
+        probability: { type: "number", description: "Optional. Stage probability (0-100) if the workspace's pipeline has one defined for this stage." },
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["deal_id", "to_stage"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const body = { stage: args.to_stage };
+      if (args.probability !== undefined) body.probability = args.probability;
+      const result = await api("PATCH", `/deals/${encodeURIComponent(args.deal_id)}`, {
+        body,
+        workspace_id: ws,
+      });
+      return { ok: true, deal: result.data };
+    },
+  },
+  {
+    name: "delete_deal",
+    description: "Delete a deal. Irreversible. Example: delete_deal({ deal_id: '...' }).",
+    inputSchema: obj(
+      {
+        deal_id: str("UUID of the deal."),
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["deal_id"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      await api("DELETE", `/deals/${encodeURIComponent(args.deal_id)}`, {
+        workspace_id: ws,
+      });
+      return { ok: true, deleted: args.deal_id };
+    },
+  },
+  {
+    name: "list_activities",
+    description:
+      "List activity log entries (tasks, notes, email sent, booking created, etc.) across the workspace. Example: list_activities({}).",
+    inputSchema: obj({
+      workspace_id: str("Optional. Falls back to the active workspace."),
+    }),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const result = await api("GET", "/activities", { workspace_id: ws });
+      return { ok: true, activities: result.data ?? [] };
+    },
+  },
 ];
 
 export const TOOL_MAP = Object.fromEntries(TOOLS.map((t) => [t.name, t]));
