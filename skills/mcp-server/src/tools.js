@@ -313,31 +313,12 @@ export const TOOLS = [
       });
     },
   },
-  {
-    name: "configure_booking",
-    description:
-      "Edit the default booking template at /book — title, duration (5-240 min), description. Provide only the fields you want to change.",
-    inputSchema: obj(
-      {
-        title: str("Booking title (e.g. 'Initial consultation')."),
-        duration_minutes: { type: "integer", minimum: 5, maximum: 240 },
-        description: str("Booking description shown to the prospect."),
-        workspace_id: str("Optional workspace override."),
-      },
-    ),
-    handler: async (a) => {
-      const ws = wsOrDefault(a.workspace_id);
-      return api("POST", "/booking/configure", {
-        body: {
-          title: a.title,
-          duration_minutes: a.duration_minutes,
-          description: a.description,
-          workspace_id: ws,
-        },
-        workspace_id: ws,
-      });
-    },
-  },
+  // Note: `configure_booking` used to live here pointing at POST
+  // /api/v1/booking/configure. Phase 2.c unified it under
+  // update_appointment_type; the alias that preserves the old name now
+  // lives at the bottom of this file (end of Phase 2.c block). The POST
+  // /booking/configure endpoint still exists server-side for backwards
+  // compatibility until Phase 11 cleanup.
   {
     name: "update_theme",
     description:
@@ -839,6 +820,134 @@ export const TOOLS = [
       const ws = wsOrDefault(args.workspace_id);
       const result = await api("GET", "/activities", { workspace_id: ws });
       return { ok: true, activities: result.data ?? [] };
+    },
+  },
+
+  // ════════════════════════════════════════════════════════════════════
+  // Booking tools — Phase 2.c per tasks/mcp-gap-audit.md
+  // CRUD for appointment types (template rows in the bookings table).
+  // The v1 endpoints at /api/v1/booking/appointment-types[/<slug>] enforce
+  // `status='template'` so tools here cannot accidentally touch real
+  // scheduled bookings. Cancel / reschedule / list_bookings are deferred
+  // until bookings block has real scheduled data to test against.
+  // ════════════════════════════════════════════════════════════════════
+
+  {
+    name: "list_appointment_types",
+    description:
+      "List all appointment types (bookable templates) in the workspace. Example: list_appointment_types({}).",
+    inputSchema: obj({
+      workspace_id: str("Optional. Falls back to the active workspace."),
+    }),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const result = await api("GET", "/booking/appointment-types", { workspace_id: ws });
+      return { ok: true, appointment_types: result.appointment_types ?? [] };
+    },
+  },
+  {
+    name: "create_appointment_type",
+    description:
+      "Create a new appointment type with its own public /book/<slug> URL. Defaults availability to Mon–Fri 9am–5pm (edit on /bookings to change). Example: create_appointment_type({ title: 'Strategy call', duration_minutes: 45, price: 150 }).",
+    inputSchema: obj(
+      {
+        title: str("Required. Human-readable name, e.g., 'Strategy call'."),
+        booking_slug: str("Optional. URL-safe slug. Auto-derived from title if omitted."),
+        duration_minutes: { type: "number", description: "Optional. 5–240. Defaults to 30." },
+        description: str("Optional. Up to 800 chars. Shown on the public booking page."),
+        price: { type: "number", description: "Optional. Defaults to 0 (free). Non-zero prices route through Stripe checkout on submit (requires Stripe connected)." },
+        buffer_before_minutes: { type: "number", description: "Optional. 0–120. Defaults to 0." },
+        buffer_after_minutes: { type: "number", description: "Optional. 0–120. Defaults to 0." },
+        max_bookings_per_day: { type: "number", description: "Optional. Hard daily cap (1–100). Omit for unlimited." },
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["title"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const result = await api("POST", "/booking/appointment-types", {
+        body: {
+          title: args.title,
+          booking_slug: args.booking_slug,
+          duration_minutes: args.duration_minutes,
+          description: args.description,
+          price: args.price,
+          buffer_before_minutes: args.buffer_before_minutes,
+          buffer_after_minutes: args.buffer_after_minutes,
+          max_bookings_per_day: args.max_bookings_per_day,
+        },
+        workspace_id: ws,
+      });
+      return {
+        ok: true,
+        appointment_type: result.appointment_type,
+        public_url: result.public_url,
+      };
+    },
+  },
+  {
+    name: "update_appointment_type",
+    description:
+      "Update an existing appointment type. Partial — omit fields to keep them. Example: update_appointment_type({ booking_slug: 'default', duration_minutes: 60, price: 200 }). Pass booking_slug='default' to edit the auto-seeded 'Book a call' template.",
+    inputSchema: obj(
+      {
+        booking_slug: str("Slug of the appointment type. Use 'default' for the auto-seeded template."),
+        title: str("Optional new title."),
+        duration_minutes: { type: "number", description: "Optional new duration (5–240)." },
+        description: str("Optional new description (≤800 chars). Empty string clears it."),
+        price: { type: "number", description: "Optional new price. 0 = free." },
+        buffer_before_minutes: { type: "number", description: "Optional. 0–120." },
+        buffer_after_minutes: { type: "number", description: "Optional. 0–120." },
+        max_bookings_per_day: { type: "number", description: "Optional. 1–100. Pass null to remove cap." },
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["booking_slug"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const result = await api(
+        "PATCH",
+        `/booking/appointment-types/${encodeURIComponent(args.booking_slug)}`,
+        {
+          body: {
+            title: args.title,
+            duration_minutes: args.duration_minutes,
+            description: args.description,
+            price: args.price,
+            buffer_before_minutes: args.buffer_before_minutes,
+            buffer_after_minutes: args.buffer_after_minutes,
+            max_bookings_per_day: args.max_bookings_per_day,
+          },
+          workspace_id: ws,
+        },
+      );
+      return result;
+    },
+  },
+  {
+    name: "configure_booking",
+    description:
+      "DEPRECATED alias for update_appointment_type({ booking_slug: 'default', ... }). Kept so existing Claude Code sessions don't break. Prefer update_appointment_type for new scripts.",
+    inputSchema: obj(
+      {
+        title: str("Optional new title."),
+        duration_minutes: { type: "number", description: "Optional new duration in minutes." },
+        description: str("Optional description."),
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      [],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const result = await api("PATCH", "/booking/appointment-types/default", {
+        body: {
+          title: args.title,
+          duration_minutes: args.duration_minutes,
+          description: args.description,
+        },
+        workspace_id: ws,
+      });
+      return result;
     },
   },
 ];
