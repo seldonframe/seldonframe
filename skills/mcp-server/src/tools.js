@@ -273,46 +273,11 @@ export const TOOLS = [
       });
     },
   },
-  {
-    name: "customize_intake_form",
-    description:
-      "Replace the default intake form's fields. Provide 1-8 fields appropriate to the workspace. Field shape: { key, label, type, required, options? }. type in {text, email, tel, textarea, select}. Use select + options for dropdowns.",
-    inputSchema: obj(
-      {
-        fields: {
-          type: "array",
-          minItems: 1,
-          maxItems: 8,
-          description: "Array of field objects.",
-          items: {
-            type: "object",
-            properties: {
-              key: { type: "string", description: "Machine key, e.g. 'full_name'." },
-              label: { type: "string" },
-              type: { type: "string", enum: ["text", "email", "tel", "textarea", "select"] },
-              required: { type: "boolean" },
-              options: {
-                type: "array",
-                items: { type: "string" },
-                description: "Only for type=select.",
-              },
-            },
-            required: ["key", "label", "type", "required"],
-          },
-        },
-        form_name: str("Optional new display name for the form."),
-        workspace_id: str("Optional workspace override."),
-      },
-      ["fields"],
-    ),
-    handler: async (a) => {
-      const ws = wsOrDefault(a.workspace_id);
-      return api("POST", "/intake/customize", {
-        body: { fields: a.fields, form_name: a.form_name, workspace_id: ws },
-        workspace_id: ws,
-      });
-    },
-  },
+  // Note: `customize_intake_form` used to live here pointing at POST
+  // /api/v1/intake/customize. Phase 2.d unified it under update_form; the
+  // alias that preserves the old name now lives in the Phase 2.d block at
+  // the bottom of this file. The POST /intake/customize endpoint still
+  // exists server-side for backwards compatibility until Phase 11 cleanup.
   // Note: `configure_booking` used to live here pointing at POST
   // /api/v1/booking/configure. Phase 2.c unified it under
   // update_appointment_type; the alias that preserves the old name now
@@ -945,6 +910,177 @@ export const TOOLS = [
           duration_minutes: args.duration_minutes,
           description: args.description,
         },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
+  // ════════════════════════════════════════════════════════════════════
+  // Intake forms tools — Phase 2.d per tasks/mcp-gap-audit.md
+  // CRUD on intake_forms + list_submissions read path. Template-backed
+  // create_form uses the 6 templates from lib/forms/templates.ts. The old
+  // `customize_intake_form` is kept as a deprecated alias for the default
+  // 'intake' form; new code should use update_form.
+  // ════════════════════════════════════════════════════════════════════
+
+  {
+    name: "list_forms",
+    description:
+      "List intake forms in the workspace. Example: list_forms({}).",
+    inputSchema: obj({
+      workspace_id: str("Optional. Falls back to the active workspace."),
+    }),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const result = await api("GET", "/forms", { workspace_id: ws });
+      return { ok: true, forms: result.forms ?? [] };
+    },
+  },
+  {
+    name: "get_form",
+    description:
+      "Fetch one form by id or slug. Example: get_form({ form: 'contact' }) or get_form({ form: 'uuid…' }).",
+    inputSchema: obj(
+      {
+        form: str("Form id (uuid) or slug (e.g., 'contact', 'intake')."),
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["form"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const result = await api("GET", `/forms/${encodeURIComponent(args.form)}`, {
+        workspace_id: ws,
+      });
+      return { ok: true, form: result.form ?? null };
+    },
+  },
+  {
+    name: "create_form",
+    description:
+      "Create a new intake form. Pass template_id to pre-fill fields from a built-in template (contact, lead-qualification, booking-request, nps-feedback, event-registration, blank). Example: create_form({ template_id: 'contact' }) → uses 'Contact us' template. Or pass explicit fields: create_form({ name: 'Intake', fields: [{ key: 'email', label: 'Email', type: 'email', required: true }] }).",
+    inputSchema: obj(
+      {
+        template_id: str("Optional. One of: blank, contact, lead-qualification, booking-request, nps-feedback, event-registration."),
+        name: str("Optional. Falls back to template name or 'New intake form'."),
+        slug: str("Optional URL-safe slug. Falls back to template defaultSlug or slugified name."),
+        fields: {
+          type: "array",
+          description: "Optional field list. Overrides template fields. Each: { key, label, type ('text'|'email'|'tel'|'textarea'|'select'), required, options? }.",
+          items: { type: "object" },
+        },
+        is_active: { type: "boolean", description: "Optional. Defaults to true." },
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      [],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const result = await api("POST", "/forms", {
+        body: {
+          template_id: args.template_id,
+          name: args.name,
+          slug: args.slug,
+          fields: args.fields,
+          is_active: args.is_active,
+        },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+  {
+    name: "update_form",
+    description:
+      "Update a form. Partial — omit fields to keep them. Replacing `fields` replaces the whole array (each field: { key, label, type, required, options? }). Example: update_form({ form: 'intake', fields: [...] }).",
+    inputSchema: obj(
+      {
+        form: str("Form id (uuid) or slug."),
+        name: str("Optional new name."),
+        slug: str("Optional new slug (URL-safe)."),
+        fields: {
+          type: "array",
+          description: "Optional new field array. Whole replacement.",
+          items: { type: "object" },
+        },
+        is_active: { type: "boolean", description: "Optional. Toggle publish state." },
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["form"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const result = await api("PATCH", `/forms/${encodeURIComponent(args.form)}`, {
+        body: {
+          name: args.name,
+          slug: args.slug,
+          fields: args.fields,
+          is_active: args.is_active,
+        },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+  {
+    name: "delete_form",
+    description:
+      "Delete a form. Irreversible. Submissions are NOT deleted (form_submissions has ON DELETE SET NULL on form_id). Example: delete_form({ form: 'old-survey' }).",
+    inputSchema: obj(
+      {
+        form: str("Form id (uuid) or slug."),
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["form"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      await api("DELETE", `/forms/${encodeURIComponent(args.form)}`, { workspace_id: ws });
+      return { ok: true, deleted: args.form };
+    },
+  },
+  {
+    name: "list_submissions",
+    description:
+      "List submissions for a form. Example: list_submissions({ form_id: 'uuid…' }).",
+    inputSchema: obj(
+      {
+        form_id: str("UUID of the form. Slug lookup not supported on this endpoint — use get_form first if you only have the slug."),
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["form_id"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const result = await api(
+        "GET",
+        `/forms/${encodeURIComponent(args.form_id)}/submissions`,
+        { workspace_id: ws },
+      );
+      return { ok: true, submissions: result.data ?? result.submissions ?? [] };
+    },
+  },
+  {
+    name: "customize_intake_form",
+    description:
+      "DEPRECATED alias for update_form({ form: 'intake', fields }). Only edits the auto-seeded default form; prefer update_form for new scripts so you can target any form in the workspace.",
+    inputSchema: obj(
+      {
+        fields: {
+          type: "array",
+          description: "Replacement field list.",
+          items: { type: "object" },
+        },
+        form_name: str("Optional new display name for the default form."),
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      [],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const result = await api("PATCH", "/forms/intake", {
+        body: { name: args.form_name, fields: args.fields },
         workspace_id: ws,
       });
       return result;
