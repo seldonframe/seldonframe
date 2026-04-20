@@ -1,10 +1,8 @@
 import Link from "next/link";
 import { auth } from "@/auth";
 import { createBillingPortalSessionAction } from "@/lib/billing/actions";
-import { getOrgFeatures } from "@/lib/billing/features";
 import { listManagedOrganizations } from "@/lib/billing/orgs";
 import { getOrgSubscription } from "@/lib/billing/subscription";
-import { getSeldonUsageStats } from "@/lib/ai/client";
 import { getOrgId } from "@/lib/auth/helpers";
 
 /*
@@ -30,18 +28,31 @@ function formatDate(value: string | null | undefined) {
   return date.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
 }
 
-function getTierLabel(tier: string) {
-  const labels: Record<string, string> = {
-    free: "Self-hosted / Free",
-    starter: "Starter",
-    cloud_pro: "Cloud Pro",
-    pro_3: "Pro 3",
-    pro_5: "Pro 5",
-    pro_10: "Pro 10",
-    pro_20: "Pro 20",
-  };
-
-  return labels[tier] ?? tier;
+// Maps legacy backend subscription tiers to the two-plan model advertised on
+// /pricing. Anything with maxWorkspaces > 1 or a paid stripe tier becomes
+// "Pro"; everything else becomes "Free". Legacy tier strings (cloud_pro,
+// pro_3, pro_5, etc.) still exist in subscriptions for users who signed up
+// before the model simplified — we surface them in a footer note but lead
+// with Free/Pro to keep the UI honest.
+function getTierLabel(tier: string): { label: string; legacy: string | null } {
+  const normalized = tier.toLowerCase();
+  const paidTiers = new Set([
+    "pro",
+    "starter",
+    "cloud_starter",
+    "cloud_pro",
+    "pro_3",
+    "pro_5",
+    "pro_10",
+    "pro_20",
+  ]);
+  if (paidTiers.has(normalized)) {
+    return {
+      label: "Pro",
+      legacy: normalized === "pro" ? null : normalized.replace(/_/g, " "),
+    };
+  }
+  return { label: "Free", legacy: null };
 }
 
 export default async function BillingSettingsPage() {
@@ -55,12 +66,15 @@ export default async function BillingSettingsPage() {
   const activeOrgId = orgId ?? session.user.orgId ?? null;
   const subscription = await getOrgSubscription(activeOrgId);
   const tier = subscription.tier ?? "free";
-  const features = getOrgFeatures(tier);
   const trialEndsAt = subscription.trialEndsAt ?? null;
   const status = subscription.status ?? "trialing";
   const billingPeriod = subscription.stripePriceId?.includes("year") ? "yearly" : "monthly";
-  const managedOrgs = features.maxWorkspaces > 1 ? await listManagedOrganizations(session.user.id) : [];
-  const usageStats = activeOrgId ? await getSeldonUsageStats({ orgId: activeOrgId, userId: session.user.id }) : null;
+  const managedOrgs = await listManagedOrganizations(session.user.id);
+  // Per CLAUDE.md: first workspace is free forever; each additional = $9/mo.
+  const ADDITIONAL_WORKSPACE_PRICE = 9;
+  const additionalWorkspaces = Math.max(0, managedOrgs.length - 1);
+  const estimatedMonthly = additionalWorkspaces * ADDITIONAL_WORKSPACE_PRICE;
+  const tierDisplay = getTierLabel(tier);
 
   return (
     <section className="animate-page-enter space-y-4 sm:space-y-6">
@@ -70,107 +84,110 @@ export default async function BillingSettingsPage() {
       </div>
 
       <div className="rounded-xl border bg-card space-y-4 p-5">
-        <div className="grid gap-2 md:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-3">
           <div>
             <p className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Current plan</p>
-            <p className="text-lg font-semibold text-foreground">{getTierLabel(tier)}</p>
+            <p className="text-lg font-semibold text-foreground">{tierDisplay.label}</p>
+            {tierDisplay.legacy ? (
+              <p className="mt-0.5 text-xs text-muted-foreground">Legacy: {tierDisplay.legacy}</p>
+            ) : null}
           </div>
           <div>
-            <p className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Subscription status</p>
-            <p className="text-lg font-semibold capitalize text-foreground">{status.replace("_", " ")}</p>
+            <p className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Workspaces</p>
+            <p className="text-lg font-semibold text-foreground">{managedOrgs.length}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {additionalWorkspaces === 0
+                ? "Just your free workspace"
+                : `1 free + ${additionalWorkspaces} paid`}
+            </p>
           </div>
           <div>
-            <p className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Billing period</p>
-            <p className="text-foreground capitalize">{billingPeriod}</p>
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Trial end</p>
-            <p className="text-foreground">{formatDate(trialEndsAt)}</p>
+            <p className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Estimated monthly</p>
+            <p className="text-lg font-semibold text-foreground">
+              ${estimatedMonthly}
+              <span className="ml-1 text-xs font-normal text-muted-foreground">/ mo</span>
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {additionalWorkspaces === 0
+                ? "First workspace is free forever"
+                : `${additionalWorkspaces} × $${ADDITIONAL_WORKSPACE_PRICE}`}
+            </p>
           </div>
         </div>
+
+        {status !== "trialing" && status !== "active" ? (
+          <div className="rounded-lg border border-caution/30 bg-caution/10 px-3 py-2 text-xs text-caution">
+            Subscription status: <span className="font-medium capitalize">{status.replace("_", " ")}</span>
+          </div>
+        ) : null}
 
         <div className="flex flex-wrap gap-2">
           <form action={createBillingPortalSessionAction}>
             <button type="submit" className="crm-button-primary h-10 px-4">
-              Manage Subscription
+              Manage subscription
             </button>
           </form>
           <Link href="/pricing" className="crm-button-secondary inline-flex h-10 items-center px-4">
-            Change Plan
+            See pricing
           </Link>
         </div>
+        <p className="text-xs text-muted-foreground">
+          Billing via Stripe · {billingPeriod} cycle
+          {trialEndsAt ? ` · Trial ends ${formatDate(trialEndsAt)}` : ""}
+        </p>
       </div>
 
-      {usageStats ? (
-        <div className="rounded-xl border bg-card space-y-4 p-5">
-          <h2 className="text-section-title">Seldon AI Usage</h2>
-          <div className="grid gap-2 md:grid-cols-3">
-            <div>
-              <p className="text-xs uppercase tracking-[0.08em] text-muted-foreground">
-                Included runs
-              </p>
-              <p className="text-lg font-semibold text-foreground">
-                {usageStats.includedUsed}{Number.isFinite(usageStats.includedLimit) ? ` / ${usageStats.includedLimit}` : " / ∞"}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-[0.08em] text-muted-foreground">
-                Metered runs
-              </p>
-              <p className="text-lg font-semibold text-foreground">{usageStats.meteredUsed}</p>
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-[0.08em] text-muted-foreground">
-                BYOK runs
-              </p>
-              <p className="text-lg font-semibold text-foreground">{usageStats.byokUsed}</p>
-            </div>
-          </div>
-          {Number.isFinite(usageStats.includedLimit) && usageStats.includedLimit > 0 ? (
-            <div className="space-y-1">
-              <div className="h-2 w-full overflow-hidden rounded-full bg-border">
-                <div
-                  className="h-full rounded-full bg-[hsl(var(--primary))]"
-                  style={{ width: `${Math.min(100, (usageStats.includedUsed / usageStats.includedLimit) * 100)}%` }}
-                />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {usageStats.totalThisMonth} total this month
-                {usageStats.mode === "metered" ? " · You have exceeded your included quota" : ""}
-              </p>
-            </div>
-          ) : null}
-          <div className="flex gap-2">
-            <Link href="/settings/integrations" className="crm-button-secondary inline-flex h-10 items-center px-4">
-              Add Your Own API Key
-            </Link>
-          </div>
-        </div>
-      ) : null}
-
-      {features.maxWorkspaces > 1 ? (
+      {managedOrgs.length > 0 ? (
         <div className="rounded-xl border bg-card space-y-4 p-5">
           <div className="flex items-center justify-between gap-2">
-            <h2 className="text-section-title">Client Organizations</h2>
+            <h2 className="text-section-title">Your workspaces</h2>
             <p className="text-sm text-muted-foreground">
-              {managedOrgs.length} of {features.maxWorkspaces} used
+              {managedOrgs.length} {managedOrgs.length === 1 ? "workspace" : "workspaces"}
             </p>
           </div>
 
           <ul className="space-y-2 text-sm text-muted-foreground">
-            {managedOrgs.map((org) => (
-              <li key={org.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
-                <span className="text-foreground">{org.name}</span>
-                <span>/{org.slug}</span>
-              </li>
-            ))}
+            {managedOrgs.map((org, index) => {
+              const isFree = index === 0;
+              return (
+                <li key={org.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-foreground">{org.name}</span>
+                    <span className="text-xs">/{org.slug}</span>
+                  </div>
+                  <span
+                    className={
+                      isFree
+                        ? "rounded-full border border-border bg-background/70 px-2 py-0.5 text-[11px] text-muted-foreground"
+                        : "rounded-full bg-primary/15 px-2 py-0.5 text-[11px] text-primary"
+                    }
+                  >
+                    {isFree ? "Free" : `$${ADDITIONAL_WORKSPACE_PRICE}/mo`}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
 
-          <p className="text-sm text-muted-foreground">
-            Need more capacity? Upgrade to a higher Pro tier from the pricing page.
+          <p className="text-xs text-muted-foreground">
+            Your first workspace is always free. Each additional workspace adds ${ADDITIONAL_WORKSPACE_PRICE}/month.
+            Delete a workspace and the charge stops on the next billing cycle.
           </p>
         </div>
       ) : null}
+
+      <div className="rounded-xl border border-dashed border-border bg-card/30 p-5">
+        <h2 className="text-section-title mb-2">Seldon It &amp; Brain v2 inference</h2>
+        <p className="text-sm text-muted-foreground">
+          Seldon It runs through your own Claude API key via the MCP server — we don&apos;t meter or
+          cap requests on our side. Usage is billed directly by Anthropic against your key.
+        </p>
+        <div className="mt-3">
+          <Link href="/settings/integrations" className="crm-button-secondary inline-flex h-9 items-center px-3 text-xs">
+            Manage API keys
+          </Link>
+        </div>
+      </div>
     </section>
   );
 }

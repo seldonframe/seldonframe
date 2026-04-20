@@ -366,8 +366,11 @@ export function SeldonPageClient({
   const statePlan = state.plan as SessionPlan | null | undefined;
   const activeSessionPlan = useMemo(() => (activeSession ? getSessionPlan(activeSession) : null), [activeSession]);
   const activeSessionCreatedCount = useMemo(() => (activeSession ? getSessionCreatedEntityCount(activeSession) : 0), [activeSession]);
-  const isFreeTier = !planId || planId === "free" || planId === "starter";
-  const includedLimitLabel = Number.isFinite(usage.includedLimit) ? usage.includedLimit : 50;
+  // Seldon It now runs through the builder's own Claude API key via the MCP
+  // server — no server-side included/metered quota. The usage counters live
+  // on for legacy data but we don't display a "you have N runs left" gate.
+  void planId;
+  void usage;
 
   const customizeExamples = [
     {
@@ -787,14 +790,9 @@ export function SeldonPageClient({
                   ))}
                 </div>
 
-                {isFreeTier ? (
-                  <p className="mt-3 text-center text-xs text-muted-foreground">
-                    {usage.includedUsed}/{includedLimitLabel} this month
-                    {usage.includedUsed >= Math.floor(includedLimitLabel * 0.8) ? (
-                      <span className="text-amber-500"> · Running low</span>
-                    ) : null}
-                  </p>
-                ) : null}
+                <p className="mt-3 text-center text-xs text-muted-foreground">
+                  Powered by your Claude API key · No usage cap from us
+                </p>
               </div>
             </div>
           </div>
