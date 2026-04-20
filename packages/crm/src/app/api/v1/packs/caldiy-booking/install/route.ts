@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { organizations } from "@/db/schema";
 import { resolveV1Identity } from "@/lib/auth/v1-identity";
 import { enableWorkspaceBlock } from "@/lib/blocks/install";
-import { createDefaultBookingTemplate } from "@/lib/blocks/templates";
+import { createDefaultBookingTemplate, createDefaultLandingPage } from "@/lib/blocks/templates";
 import { requireManagedWorkspaceForUser } from "@/lib/openclaw/self-service";
 import { logEvent } from "@/lib/observability/log";
 
@@ -54,6 +54,17 @@ export async function POST(request: Request) {
   const theme =
     config?.theme === "dark" || config?.theme === "light" ? (config.theme as "dark" | "light") : "dark";
   const template = await createDefaultBookingTemplate(orgId, { theme });
+
+  // Side effect: ensure the workspace landing page is healthy. Idempotent
+  // for already-seeded workspaces; triggers the repair branch for pre-fix
+  // workspaces whose landing row has contentCss=null (rendered blank).
+  // Non-fatal — a landing-page glitch shouldn't block a booking install.
+  await createDefaultLandingPage(orgId, { theme }).catch((error) => {
+    console.warn(
+      `[caldiy install] landing repair failed for ${orgId}:`,
+      error instanceof Error ? error.message : String(error)
+    );
+  });
 
   const publicOrigin = `https://${result.slug}.${WORKSPACE_BASE_DOMAIN}`;
   const adminOrigin = "https://app.seldonframe.com";
