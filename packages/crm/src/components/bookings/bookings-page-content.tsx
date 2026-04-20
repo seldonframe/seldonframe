@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Search, Settings, SlidersHorizontal } from "lucide-react";
+import { Calendar as CalendarIcon, Check, ChevronLeft, ChevronRight, Copy, Link as LinkIcon, Pencil, Search, Settings, SlidersHorizontal, Trash2 } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 
 /*
@@ -393,77 +393,127 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
         </div>
       </section>
 
-      <section className="space-y-4">
-        <div className="border-b border-border px-3 md:px-6 py-4">
-          <div className="flex items-center gap-2 md:gap-3 flex-wrap">
-          <div>
-            <p className="text-sm md:text-base lg:text-lg font-semibold text-foreground truncate">Appointment Types</p>
-            <p className="mt-1 text-xs text-muted-foreground">Share the link and let {labels.contact.plural.toLowerCase()} book with you.</p>
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-center gap-3 border-b border-border/70 px-3 py-3 md:px-6">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-foreground">Appointment Types</p>
+            <p className="text-xs text-muted-foreground">
+              Share the link and let {labels.contact.plural.toLowerCase()} book with you.
+            </p>
           </div>
-          <div className="ml-auto" />
-          <button type="button" className="crm-button-primary h-10 px-6" onClick={() => setIsPanelOpen(true)}>
-            Create Type
-          </button>
-        </div>
+          <div className="ml-auto flex items-center gap-2">
+            <span className="hidden text-xs tabular-nums text-muted-foreground sm:inline">
+              {bookingTypes.length} {bookingTypes.length === 1 ? "type" : "types"}
+            </span>
+            <button type="button" className="crm-button-primary h-8 px-4 text-xs" onClick={() => setIsPanelOpen(true)}>
+              Create Type
+            </button>
+          </div>
         </div>
 
         {bookingTypes.length === 0 ? (
-          <article className="rounded-xl border bg-card flex min-h-52 flex-col items-center justify-center p-8 text-center">
-            <p className="text-3xl">📅</p>
-            <p className="mt-3 text-lg font-medium text-foreground">Create your first appointment type</p>
-            <p className="mt-1 text-xs text-muted-foreground">Share the link and let {labels.contact.plural.toLowerCase()} book with you.</p>
-            <button type="button" className="crm-button-primary mt-5 h-10 px-6" onClick={() => setIsPanelOpen(true)}>
-              Create Type
-            </button>
-          </article>
+          <div className="px-3 pb-3 md:px-6">
+            <article className="mx-auto max-w-md rounded-xl border border-dashed border-border/80 bg-background/35 px-5 py-8 text-center">
+              <p className="text-sm font-medium text-foreground">Create your first appointment type</p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Share the link and let {labels.contact.plural.toLowerCase()} book time with you.
+              </p>
+              <button type="button" className="crm-button-primary mt-4 h-9 px-5 text-xs" onClick={() => setIsPanelOpen(true)}>
+                Create Type
+              </button>
+            </article>
+          </div>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-3 px-3 pb-3 md:grid-cols-2 md:px-6 xl:grid-cols-3">
             {bookingTypes.map((row) => {
               const metadata = (row.metadata as AppointmentTypeMeta | null) ?? null;
               const publicUrl = orgSlug ? `/book/${orgSlug}/${row.bookingSlug}` : "";
+              const duration = metadata?.durationMinutes ?? 30;
+              const price = Number(metadata?.price ?? 0);
+              const bufferBefore = metadata?.bufferBeforeMinutes ?? 0;
+              const bufferAfter = metadata?.bufferAfterMinutes ?? 0;
+              const maxPerDay = metadata?.maxBookingsPerDay;
 
               return (
-                <article key={row.id} className="rounded-xl border bg-card p-5">
-                  <div className="mb-3 flex items-start justify-between gap-2">
-                    <h3 className="text-base font-medium text-foreground">{row.title}</h3>
-                    <span className="rounded-full bg-muted/50 px-2 py-1 text-xs text-muted-foreground">{metadata?.durationMinutes ?? 30} min</span>
+                <article
+                  key={row.id}
+                  className="group/card rounded-xl border border-border/80 bg-card/70 p-4 transition-all hover:border-border hover:bg-card hover:shadow-(--shadow-sm)"
+                >
+                  {/* Header: title + duration/price meta-line. No floating
+                      duration chip — it's part of the metadata row. */}
+                  <div className="min-w-0">
+                    <h3 className="truncate text-sm font-semibold text-foreground">{row.title}</h3>
+                    <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0 text-xs text-muted-foreground">
+                      <span className="tabular-nums">{duration} min</span>
+                      <span aria-hidden>·</span>
+                      <span className="tabular-nums">{price > 0 ? `$${price.toFixed(price % 1 === 0 ? 0 : 2)}` : "Free"}</span>
+                      {(bufferBefore > 0 || bufferAfter > 0) ? (
+                        <>
+                          <span aria-hidden>·</span>
+                          <span className="tabular-nums">
+                            buffer {bufferBefore}/{bufferAfter}m
+                          </span>
+                        </>
+                      ) : null}
+                      {maxPerDay ? (
+                        <>
+                          <span aria-hidden>·</span>
+                          <span className="tabular-nums">max {maxPerDay}/day</span>
+                        </>
+                      ) : null}
+                    </p>
                   </div>
 
-                  <p className="text-sm text-muted-foreground">{metadata?.description || "No description added."}</p>
-                  <p className="mt-2 text-sm font-semibold text-foreground">${Number(metadata?.price ?? 0).toFixed(2)}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Buffer {metadata?.bufferBeforeMinutes ?? 0}m before / {metadata?.bufferAfterMinutes ?? 0}m after
-                    {metadata?.maxBookingsPerDay ? ` • Max ${metadata.maxBookingsPerDay}/day` : ""}
-                  </p>
+                  {metadata?.description ? (
+                    <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">{metadata.description}</p>
+                  ) : null}
 
-                  <div className="mt-4 rounded-lg border border-border bg-muted/30 p-3">
-                    <p className="text-xs uppercase tracking-wider text-muted-foreground">Public URL</p>
-                    <p className="mt-1 truncate text-sm text-foreground">{publicUrl || "Set org slug to enable"}</p>
-                    <div className="mt-3 flex gap-2">
-                      <button
-                        type="button"
-                        className="crm-button-secondary h-9 px-4 text-xs"
-                        onClick={() => {
-                          if (!publicUrl) {
-                            return;
-                          }
+                  {/* Public URL row — single-line field with an inline Copy
+                      affordance. No inset card-in-card. */}
+                  <div className="mt-3 flex items-center gap-2 rounded-lg border border-border/60 bg-background/40 px-2.5 py-1.5">
+                    <LinkIcon className="size-3 shrink-0 text-muted-foreground" />
+                    <p className="min-w-0 flex-1 truncate font-mono text-[11px] text-foreground">
+                      {publicUrl || <span className="italic text-muted-foreground">Set org slug to enable</span>}
+                    </p>
+                    <button
+                      type="button"
+                      className="inline-flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-background hover:text-foreground disabled:opacity-40"
+                      disabled={!publicUrl}
+                      aria-label="Copy public URL"
+                      onClick={() => {
+                        if (!publicUrl) return;
+                        startTransition(async () => {
+                          await navigator.clipboard.writeText(publicUrl);
+                          setCopiedSlug(row.bookingSlug);
+                          setTimeout(() => setCopiedSlug(null), 1200);
+                        });
+                      }}
+                    >
+                      {copiedSlug === row.bookingSlug ? (
+                        <Check className="size-3.5 text-positive" />
+                      ) : (
+                        <Copy className="size-3.5" />
+                      )}
+                    </button>
+                  </div>
 
-                          startTransition(async () => {
-                            await navigator.clipboard.writeText(publicUrl);
-                            setCopiedSlug(row.bookingSlug);
-                            setTimeout(() => setCopiedSlug(null), 1200);
-                          });
-                        }}
-                      >
-                        {copiedSlug === row.bookingSlug ? "Copied" : "Copy URL"}
-                      </button>
-                      <button type="button" className="crm-button-ghost h-9 px-4 text-xs">
-                        Edit
-                      </button>
-                      <button type="button" className="crm-button-ghost h-9 px-4 text-xs text-caution hover:text-caution/80">
-                        Delete
-                      </button>
-                    </div>
+                  {/* Edit / Delete as icon buttons — fade in on hover. Keeps
+                      the card dense at rest. */}
+                  <div className="mt-3 flex items-center justify-end gap-1 opacity-0 transition-opacity group-hover/card:opacity-100 focus-within:opacity-100">
+                    <button
+                      type="button"
+                      className="inline-flex h-7 items-center gap-1 rounded-md border border-border/60 bg-background/60 px-2 text-[11px] text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+                    >
+                      <Pencil className="size-3" />
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      className="inline-flex h-7 items-center gap-1 rounded-md border border-border/60 bg-background/60 px-2 text-[11px] text-muted-foreground transition-colors hover:border-negative/40 hover:bg-negative/10 hover:text-negative"
+                    >
+                      <Trash2 className="size-3" />
+                      Delete
+                    </button>
                   </div>
                 </article>
               );
@@ -472,35 +522,58 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
         )}
       </section>
 
-      <section className="space-y-4">
-        <div className="border-b border-border px-3 md:px-6 py-4">
-          <p className="text-sm md:text-base lg:text-lg font-semibold text-foreground truncate">Upcoming {labels.activity.plural}</p>
+      <section className="space-y-3">
+        <div className="flex items-center gap-3 border-b border-border/70 px-3 py-3 md:px-6">
+          <p className="truncate text-sm font-semibold text-foreground">
+            Upcoming {labels.activity.plural}
+          </p>
+          <span className="text-xs tabular-nums text-muted-foreground">
+            {upcomingGrouped.reduce((sum, group) => sum + group.rows.length, 0)}
+          </span>
         </div>
 
         {upcomingGrouped.length === 0 ? (
-          <article className="rounded-xl border bg-card p-6 text-sm text-muted-foreground">No upcoming {labels.activity.plural.toLowerCase()} yet.</article>
+          <div className="px-3 pb-3 md:px-6">
+            <article className="mx-auto max-w-md rounded-xl border border-dashed border-border/80 bg-background/35 px-5 py-6 text-center text-sm text-muted-foreground">
+              No upcoming {labels.activity.plural.toLowerCase()} yet.
+            </article>
+          </div>
         ) : (
-          <article className="rounded-xl border bg-card p-4 sm:p-6">
-            <div className="space-y-4">
+          <article className="mx-3 rounded-xl border border-border/80 bg-card/60 shadow-(--shadow-xs) md:mx-6">
+            <div className="divide-y divide-border/60">
               {upcomingGrouped.map((group) => (
-                <div key={group.key}>
-                  <p className="mb-2 text-xs text-muted-foreground">{group.label}</p>
-                  <ul className="space-y-2">
+                <div key={group.key} className="p-3">
+                  <p className="mb-2 px-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    {group.label}
+                  </p>
+                  <ul className="space-y-1">
                     {group.rows.map((row) => {
                       const startsAt = new Date(row.startsAt);
                       const linkedContact = row.contactId ? contactsById.get(row.contactId) : null;
-                      const person = linkedContact ? `${linkedContact.firstName} ${linkedContact.lastName ?? ""}`.trim() : labels.contact.singular;
-                      const borderClass = bookingTypeBorderByTitle.get(row.title.trim().toLowerCase()) ?? "border-l-primary";
+                      const person = linkedContact
+                        ? `${linkedContact.firstName} ${linkedContact.lastName ?? ""}`.trim()
+                        : labels.contact.singular;
+                      const borderClass =
+                        bookingTypeBorderByTitle.get(row.title.trim().toLowerCase()) ?? "border-l-primary";
 
                       return (
-                        <li key={row.id} className={`flex items-center justify-between gap-3 rounded-lg border border-border border-l-4 ${borderClass} bg-card px-3 py-3 hover:bg-muted transition-colors`}>
-                          <div className="min-w-0">
-                            <p className="text-sm text-foreground">{row.title}</p>
-                            <p className="text-xs text-muted-foreground">{person}</p>
+                        <li
+                          key={row.id}
+                          className={`flex items-center gap-3 rounded-lg border border-border/60 border-l-[3px] ${borderClass} bg-background/40 px-3 py-2 transition-colors hover:bg-accent/30`}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium text-foreground">{row.title}</p>
+                            <p className="truncate text-xs text-muted-foreground">{person}</p>
                           </div>
-                          <div className="flex items-center gap-3">
-                            <p className="text-sm text-primary">{startsAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</p>
-                            <span className={`rounded-full px-2 py-1 text-xs ${statusClass(row.status)}`}>{row.status}</span>
+                          <div className="flex shrink-0 items-center gap-3">
+                            <p className="text-xs tabular-nums text-foreground/85">
+                              {startsAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                            </p>
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-[10px] font-medium capitalize ${statusClass(row.status)}`}
+                            >
+                              {row.status}
+                            </span>
                           </div>
                         </li>
                       );
