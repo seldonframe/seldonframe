@@ -3,7 +3,7 @@ import { and, eq, or } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
-import { orgMembers, organizations } from "@/db/schema";
+import { orgMembers, organizations, users } from "@/db/schema";
 
 export async function getCurrentUser() {
   const session = await auth();
@@ -55,4 +55,26 @@ export async function requireAuth() {
   }
 
   return session;
+}
+
+export async function getCurrentWorkspaceRole() {
+  const user = await getCurrentUser();
+  const orgId = await getOrgId();
+
+  if (!user?.id || !orgId) {
+    return null;
+  }
+
+  if (user.orgId === orgId) {
+    const [dbUser] = await db.select({ role: users.role }).from(users).where(eq(users.id, user.id)).limit(1);
+    return dbUser?.role ?? user.role ?? "member";
+  }
+
+  const [member] = await db
+    .select({ role: orgMembers.role })
+    .from(orgMembers)
+    .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.userId, user.id)))
+    .limit(1);
+
+  return member?.role ?? user.role ?? "member";
 }
