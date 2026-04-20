@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Search, Settings, SlidersHorizontal } from "lucide-react";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 
 /*
   Square UI class reference (source of truth):
@@ -512,21 +513,19 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
         )}
       </section>
 
-      {isPanelOpen ? (
-        <div className="fixed inset-0 z-50 flex">
-          <button
-            type="button"
-            aria-label="Close panel"
-            className="h-full flex-1 bg-muted-foreground/45"
-            onClick={() => setIsPanelOpen(false)}
-          />
-          <aside className="h-full w-full max-w-md border-l border-border bg-background p-6 shadow-2xl">
-            <div className="mb-5 flex items-center justify-between">
-              <h2 className="text-xl font-medium text-foreground">Create appointment type</h2>
-              <button type="button" className="crm-button-ghost h-9 px-4" onClick={() => setIsPanelOpen(false)}>
-                Close
-              </button>
-            </div>
+      {/* Sheet replaces the previous hand-rolled `fixed inset-0` drawer. Wins
+          from the swap: Radix-style focus trap, ESC-to-close, overlay click,
+          portal render (no z-index clashes with filter notice), and built-in
+          slide-in animation. Keeping max-w-md on the content (wider than the
+          Sheet default sm:max-w-sm) so the booking form doesn't feel cramped. */}
+      <Sheet open={isPanelOpen} onOpenChange={setIsPanelOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto p-6">
+          <div className="mb-5 flex items-center justify-between">
+            <SheetTitle className="text-xl font-medium">Create appointment type</SheetTitle>
+            {/* Sheet ships its own X close button at top-right; the explicit
+                "Close" link is kept as a secondary affordance for keyboard
+                users who don't know about the X. */}
+          </div>
 
             <form
               action={async (formData) => {
@@ -686,9 +685,8 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
                 </button>
               </div>
             </form>
-          </aside>
-        </div>
-      ) : null}
+        </SheetContent>
+      </Sheet>
 
       {showFilterNotice ? (
         <div className="fixed bottom-4 right-4 z-70 rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground shadow-sm">Coming soon</div>
