@@ -12,7 +12,7 @@ export function MrrChartCard({ data, total }: { data: MrrPoint[]; total: number 
     <article className="crm-card">
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-[16px] font-semibold">Monthly Recurring Revenue</h3>
-        <span className="inline-flex rounded-md border border-border bg-[hsl(var(--primary)/0.1)] px-2 py-1 text-xs font-medium text-primary">
+        <span className="inline-flex rounded-md border border-border bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
           ${total.toLocaleString()}
         </span>
       </div>
@@ -22,8 +22,8 @@ export function MrrChartCard({ data, total }: { data: MrrPoint[]; total: number 
           <AreaChart data={data} margin={{ top: 6, right: 10, left: -8, bottom: 0 }}>
             <defs>
               <linearGradient id="mrrGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.4} />
-                <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0.04} />
+                <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.4} />
+                <stop offset="100%" stopColor="var(--primary)" stopOpacity={0.04} />
               </linearGradient>
             </defs>
             <CartesianGrid stroke="var(--border)" strokeOpacity={0.4} vertical={false} />
@@ -36,7 +36,7 @@ export function MrrChartCard({ data, total }: { data: MrrPoint[]; total: number 
               tickFormatter={(value) => `$${Math.round(Number(value) / 1000)}k`}
             />
             <Tooltip
-              cursor={{ stroke: "hsl(var(--primary))", strokeOpacity: 0.35 }}
+              cursor={{ stroke: "var(--primary)", strokeOpacity: 0.35 }}
               formatter={(value) => [`$${Number(value ?? 0).toLocaleString()}`, "MRR"]}
               contentStyle={{
                 borderRadius: 10,
@@ -48,11 +48,11 @@ export function MrrChartCard({ data, total }: { data: MrrPoint[]; total: number 
             <Area
               type="monotone"
               dataKey="value"
-              stroke="hsl(var(--primary))"
+              stroke="var(--primary)"
               strokeWidth={3}
               fill="url(#mrrGradient)"
               dot={false}
-              activeDot={{ r: 4, fill: "hsl(var(--primary))" }}
+              activeDot={{ r: 4, fill: "var(--primary)" }}
             />
           </AreaChart>
         </ResponsiveContainer>

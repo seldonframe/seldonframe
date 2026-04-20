@@ -78,24 +78,24 @@
     gap: 0.5rem;
     white-space: nowrap;
     border-radius: 0.75rem;
-    border: 1px solid hsl(var(--primary) / 0.32);
-    background: hsl(var(--primary));
-    color: hsl(var(--primary-foreground));
+    border: 1px solid color-mix(in srgb, var(--primary) 32%, transparent);
+    background: var(--primary);
+    color: var(--primary-foreground);
     font-size: 0.875rem;
     font-weight: 500;
-    box-shadow: 0 10px 24px hsl(var(--primary) / 0.16);
+    box-shadow: 0 10px 24px color-mix(in srgb, var(--primary) 16%, transparent);
     transition: transform var(--transition-fast), box-shadow var(--transition-fast), background-color var(--transition-fast), border-color var(--transition-fast);
     outline: none;
   }
 
   .crm-button-primary:hover {
-    background: hsl(var(--primary) / 0.9);
-    box-shadow: 0 14px 30px hsl(var(--primary) / 0.2);
+    background: color-mix(in srgb, var(--primary) 90%, transparent);
+    box-shadow: 0 14px 30px color-mix(in srgb, var(--primary) 20%, transparent);
     transform: translateY(-1px);
   }
 
   .crm-button-primary:focus-visible {
-    box-shadow: 0 0 0 3px hsl(var(--ring) / 0.5);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 50%, transparent);
   }
 
   .crm-button-primary:disabled {
@@ -121,14 +121,14 @@
   }
 
   .crm-button-secondary:hover {
-    background: hsl(var(--accent));
-    color: hsl(var(--accent-foreground));
+    background: var(--accent);
+    color: var(--accent-foreground);
     border-color: color-mix(in srgb, var(--border) 100%, transparent);
     transform: translateY(-1px);
   }
 
   .crm-button-secondary:focus-visible {
-    box-shadow: 0 0 0 3px hsl(var(--ring) / 0.5);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 50%, transparent);
   }
 
   .crm-button-secondary:disabled {
@@ -153,13 +153,13 @@
   }
 
   .crm-button-ghost:hover {
-    background: hsl(var(--accent));
-    color: hsl(var(--accent-foreground));
+    background: var(--accent);
+    color: var(--accent-foreground);
     transform: translateY(-1px);
   }
 
   .crm-button-ghost:focus-visible {
-    box-shadow: 0 0 0 3px hsl(var(--ring) / 0.5);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 50%, transparent);
   }
 
   .crm-button-ghost:disabled {
@@ -187,9 +187,9 @@
   }
 
   .crm-input:focus-visible {
-    border-color: hsl(var(--ring));
+    border-color: var(--ring);
     background: color-mix(in srgb, var(--card) 88%, transparent);
-    box-shadow: 0 0 0 3px hsl(var(--ring) / 0.22), var(--shadow-xs);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 22%, transparent), var(--shadow-xs);
   }
 
   .crm-input:disabled {
@@ -244,15 +244,15 @@
   }
 
   .crm-table-row[data-selected="true"] {
-    background: hsl(var(--primary) / 0.08);
+    background: color-mix(in srgb, var(--primary) 8%, transparent);
   }
 
   .crm-badge {
     display: inline-flex;
     align-items: center;
     border-radius: 6px;
-    background: hsl(var(--primary) / 0.1);
-    color: hsl(var(--primary));
+    background: color-mix(in srgb, var(--primary) 10%, transparent);
+    color: var(--primary);
     font-size: 12px;
     font-weight: 500;
     line-height: 1.2;
@@ -323,7 +323,7 @@
   }
 
   .crm-sidebar-link:hover {
-    background: hsl(var(--sidebar-accent) / 0.55);
+    background: color-mix(in srgb, var(--sidebar-accent) 55.00%, transparent);
     border-color: var(--sidebar-border);
     color: var(--foreground);
     transform: translateY(-1px);
@@ -338,7 +338,7 @@
   }
 
   .crm-sidebar-link[data-active="true"] {
-    background: linear-gradient(180deg, hsl(var(--sidebar-accent) / 0.88) 0%, hsl(var(--sidebar-accent) / 0.72) 100%);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--sidebar-accent) 88%, transparent) 0%, color-mix(in srgb, var(--sidebar-accent) 72%, transparent) 100%);
     border-color: var(--sidebar-border);
     box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 10px 24px rgb(0 0 0 / 0.18);
     color: var(--foreground);
@@ -389,7 +389,7 @@
   }
 
   .crm-topbar-icon-btn:hover {
-    background: hsl(var(--accent));
+    background: var(--accent);
     border-color: color-mix(in srgb, var(--border) 100%, transparent);
     color: var(--foreground);
     transform: translateY(-1px);

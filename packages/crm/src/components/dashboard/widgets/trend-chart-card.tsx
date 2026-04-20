@@ -38,8 +38,8 @@ export function TrendChartCard({
             <AreaChart data={data} margin={{ top: 6, right: 10, left: -8, bottom: 0 }}>
               <defs>
                 <linearGradient id={`trend-${title.replace(/\s+/g, "-")}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.4} />
-                  <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0.04} />
+                  <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.4} />
+                  <stop offset="100%" stopColor="var(--primary)" stopOpacity={0.04} />
                 </linearGradient>
               </defs>
               <CartesianGrid stroke="var(--border)" strokeOpacity={0.35} vertical={false} />
@@ -54,7 +54,7 @@ export function TrendChartCard({
                 }
               />
               <Tooltip
-                cursor={{ stroke: "hsl(var(--primary))", strokeOpacity: 0.35 }}
+                cursor={{ stroke: "var(--primary)", strokeOpacity: 0.35 }}
                 formatter={(value) => [formatter(Number(value ?? 0)), title]}
                 contentStyle={{
                   borderRadius: 10,
@@ -66,7 +66,7 @@ export function TrendChartCard({
               <Area
                 type="monotone"
                 dataKey="value"
-                stroke="hsl(var(--primary))"
+                stroke="var(--primary)"
                 strokeWidth={2.5}
                 fill={`url(#trend-${title.replace(/\s+/g, "-")})`}
                 dot={false}
@@ -86,7 +86,7 @@ export function TrendChartCard({
                 }
               />
               <Tooltip
-                cursor={{ stroke: "hsl(var(--primary))", strokeOpacity: 0.35 }}
+                cursor={{ stroke: "var(--primary)", strokeOpacity: 0.35 }}
                 formatter={(value) => [formatter(Number(value ?? 0)), title]}
                 contentStyle={{
                   borderRadius: 10,
@@ -98,10 +98,10 @@ export function TrendChartCard({
               <Line
                 type="monotone"
                 dataKey="value"
-                stroke="hsl(var(--primary))"
+                stroke="var(--primary)"
                 strokeWidth={2.5}
                 dot={false}
-                activeDot={{ r: 4, fill: "hsl(var(--primary))" }}
+                activeDot={{ r: 4, fill: "var(--primary)" }}
               />
             </LineChart>
           )}

@@ -130,7 +130,7 @@ export default async function BillingSettingsPage() {
             <div className="space-y-1">
               <div className="h-2 w-full overflow-hidden rounded-full bg-border">
                 <div
-                  className="h-full rounded-full bg-[hsl(var(--primary))]"
+                  className="h-full rounded-full bg-primary"
                   style={{ width: `${Math.min(100, (usageStats.includedUsed / usageStats.includedLimit) * 100)}%` }}
                 />
               </div>

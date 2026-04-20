@@ -174,7 +174,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
             <ul className="space-y-2">
               {timeline.map((item) => (
                 <li key={item.id} className="crm-table-row flex items-center gap-3 rounded-md px-2 py-2 text-label">
-                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[hsl(var(--primary)/0.14)] text-xs font-semibold text-primary">
+                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-primary/[0.14] text-xs font-semibold text-primary">
                     {(row.firstName || "C").charAt(0).toUpperCase()}
                   </span>
                   <div className="min-w-0 flex-1">
