@@ -555,7 +555,7 @@ export default async function DashboardPage({
             return `${row.color} ${start.toFixed(2)}% ${donutOffset.toFixed(2)}%`;
           })
           .join(", ")
-      : "hsl(var(--muted)) 0% 100%";
+      : "var(--muted) 0% 100%";
 
   const stats = [
     {

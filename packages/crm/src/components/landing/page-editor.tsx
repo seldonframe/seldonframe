@@ -91,8 +91,8 @@ export function PageEditor({ initialHTML, initialCSS, editorData, onSave }: Page
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between rounded-xl border border-border bg-[hsl(var(--muted)/0.2)] p-3">
-        <p className="text-xs text-[hsl(var(--muted-foreground))]">{ready ? "Visual editor ready" : "Loading visual editor..."}</p>
+      <div className="flex items-center justify-between rounded-xl border border-border bg-muted/20 p-3">
+        <p className="text-xs text-muted-foreground">{ready ? "Visual editor ready" : "Loading visual editor..."}</p>
         <button type="button" onClick={handleSave} className="crm-button-primary h-9 px-4" disabled={!ready}>
           Save
         </button>

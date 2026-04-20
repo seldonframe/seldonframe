@@ -48,9 +48,9 @@ export default async function OrganizationsPage({
             <article key={org.id} className="space-y-3 rounded-xl border bg-card p-5">
               <div>
                 <p className="text-card-title">{org.name}</p>
-                <p className="text-xs text-[hsl(var(--muted-foreground))]">/{org.slug}</p>
+                <p className="text-xs text-muted-foreground">/{org.slug}</p>
               </div>
-              <div className="text-sm text-[hsl(var(--muted-foreground))]">
+              <div className="text-sm text-muted-foreground">
                 <p>Soul: {org.soulId ?? "not set"}</p>
                 <p>Contacts: {org.contactCount}</p>
               </div>
@@ -76,11 +76,11 @@ export default async function OrganizationsPage({
 
         <section className="rounded-xl border bg-card p-5">
           <h2 className="text-section-title">Create New Workspace</h2>
-          <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
+          <p className="mt-2 text-sm text-muted-foreground">
             Use the guided 4-step onboarding flow to create and launch a new client workspace.
           </p>
           <div className="mt-4 flex items-center justify-between gap-3">
-            <Link href="/dashboard" className="text-sm text-[hsl(var(--muted-foreground))] underline underline-offset-4">
+            <Link href="/dashboard" className="text-sm text-muted-foreground underline underline-offset-4">
               Back to dashboard
             </Link>
             {isLimited ? (

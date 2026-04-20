@@ -80,8 +80,8 @@ export function SignupForm({ token = "" }: { token?: string }) {
       </button>
 
       <div className="relative flex items-center justify-center py-1">
-        <span className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-[hsl(var(--border))]" />
-        <span className="relative bg-[hsl(var(--card))] px-3 text-xs uppercase tracking-[0.08em] text-[hsl(var(--muted-foreground))]">
+        <span className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-border" />
+        <span className="relative bg-card px-3 text-xs uppercase tracking-[0.08em] text-muted-foreground">
           or
         </span>
       </div>
@@ -125,7 +125,7 @@ export function SignupForm({ token = "" }: { token?: string }) {
               Open Email Inbox
             </a>
           ) : (
-            <p className="text-xs text-[hsl(var(--muted-foreground))]">Check your inbox.</p>
+            <p className="text-xs text-muted-foreground">Check your inbox.</p>
           )}
         </div>
       ) : null}

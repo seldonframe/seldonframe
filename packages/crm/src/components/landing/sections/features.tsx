@@ -9,7 +9,7 @@ export function FeaturesSection({ headline, features, image }: FeaturesSectionCo
           <h2 className="text-3xl font-semibold text-foreground md:text-4xl">{headline}</h2>
           <div className="mt-6 flex flex-wrap gap-2.5">
             {features.map((feature, index) => (
-              <span key={`${feature}-${index}`} className="rounded-full border border-border bg-[hsl(var(--muted)/0.45)] px-3.5 py-1.5 text-sm font-medium text-foreground">
+              <span key={`${feature}-${index}`} className="rounded-full border border-border bg-muted/45 px-3.5 py-1.5 text-sm font-medium text-foreground">
                 {feature}
               </span>
             ))}
@@ -19,7 +19,7 @@ export function FeaturesSection({ headline, features, image }: FeaturesSectionCo
           {image ? (
             <Image src={image} alt={headline} width={960} height={720} className="h-full w-full rounded-2xl object-cover" />
           ) : (
-            <div className="flex min-h-64 items-center justify-center rounded-2xl bg-[hsl(var(--muted)/0.35)] text-sm text-[hsl(var(--muted-foreground))]">
+            <div className="flex min-h-64 items-center justify-center rounded-2xl bg-muted/35 text-sm text-muted-foreground">
               Feature image
             </div>
           )}

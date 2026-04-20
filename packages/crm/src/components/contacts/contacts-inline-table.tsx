@@ -131,7 +131,7 @@ export function ContactsInlineTable({ rows }: { rows: ContactRow[] }) {
                         disabled={pending}
                       />
                     ) : (
-                      <button type="button" className="rounded px-1 text-foreground hover:bg-[hsl(var(--muted)/0.45)]" onClick={() => beginEdit(row, "firstName")}>
+                      <button type="button" className="rounded px-1 text-foreground hover:bg-muted/45" onClick={() => beginEdit(row, "firstName")}>
                         {row.firstName}
                       </button>
                     )}
@@ -156,7 +156,7 @@ export function ContactsInlineTable({ rows }: { rows: ContactRow[] }) {
                         disabled={pending}
                       />
                     ) : (
-                      <button type="button" className="rounded px-1 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted)/0.45)]" onClick={() => beginEdit(row, "lastName")}>
+                      <button type="button" className="rounded px-1 text-muted-foreground hover:bg-muted/45" onClick={() => beginEdit(row, "lastName")}>
                         {row.lastName ?? "—"}
                       </button>
                     )}
@@ -197,7 +197,7 @@ export function ContactsInlineTable({ rows }: { rows: ContactRow[] }) {
                       disabled={pending}
                     />
                   ) : (
-                    <button type="button" className="w-full rounded px-1 text-left text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted)/0.45)]" onClick={() => beginEdit(row, "email")}>
+                    <button type="button" className="w-full rounded px-1 text-left text-muted-foreground hover:bg-muted/45" onClick={() => beginEdit(row, "email")}>
                       {row.email ?? "—"}
                     </button>
                   )}

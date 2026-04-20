@@ -72,19 +72,19 @@ export default async function BillingSettingsPage() {
       <div className="rounded-xl border bg-card space-y-4 p-5">
         <div className="grid gap-2 md:grid-cols-2">
           <div>
-            <p className="text-xs uppercase tracking-[0.08em] text-[hsl(var(--muted-foreground))]">Current plan</p>
+            <p className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Current plan</p>
             <p className="text-lg font-semibold text-foreground">{getTierLabel(tier)}</p>
           </div>
           <div>
-            <p className="text-xs uppercase tracking-[0.08em] text-[hsl(var(--muted-foreground))]">Subscription status</p>
+            <p className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Subscription status</p>
             <p className="text-lg font-semibold capitalize text-foreground">{status.replace("_", " ")}</p>
           </div>
           <div>
-            <p className="text-xs uppercase tracking-[0.08em] text-[hsl(var(--muted-foreground))]">Billing period</p>
+            <p className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Billing period</p>
             <p className="text-foreground capitalize">{billingPeriod}</p>
           </div>
           <div>
-            <p className="text-xs uppercase tracking-[0.08em] text-[hsl(var(--muted-foreground))]">Trial end</p>
+            <p className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Trial end</p>
             <p className="text-foreground">{formatDate(trialEndsAt)}</p>
           </div>
         </div>
@@ -106,7 +106,7 @@ export default async function BillingSettingsPage() {
           <h2 className="text-section-title">Seldon AI Usage</h2>
           <div className="grid gap-2 md:grid-cols-3">
             <div>
-              <p className="text-xs uppercase tracking-[0.08em] text-[hsl(var(--muted-foreground))]">
+              <p className="text-xs uppercase tracking-[0.08em] text-muted-foreground">
                 Included runs
               </p>
               <p className="text-lg font-semibold text-foreground">
@@ -114,13 +114,13 @@ export default async function BillingSettingsPage() {
               </p>
             </div>
             <div>
-              <p className="text-xs uppercase tracking-[0.08em] text-[hsl(var(--muted-foreground))]">
+              <p className="text-xs uppercase tracking-[0.08em] text-muted-foreground">
                 Metered runs
               </p>
               <p className="text-lg font-semibold text-foreground">{usageStats.meteredUsed}</p>
             </div>
             <div>
-              <p className="text-xs uppercase tracking-[0.08em] text-[hsl(var(--muted-foreground))]">
+              <p className="text-xs uppercase tracking-[0.08em] text-muted-foreground">
                 BYOK runs
               </p>
               <p className="text-lg font-semibold text-foreground">{usageStats.byokUsed}</p>
@@ -128,13 +128,13 @@ export default async function BillingSettingsPage() {
           </div>
           {Number.isFinite(usageStats.includedLimit) && usageStats.includedLimit > 0 ? (
             <div className="space-y-1">
-              <div className="h-2 w-full overflow-hidden rounded-full bg-[hsl(var(--border))]">
+              <div className="h-2 w-full overflow-hidden rounded-full bg-border">
                 <div
                   className="h-full rounded-full bg-[hsl(var(--primary))]"
                   style={{ width: `${Math.min(100, (usageStats.includedUsed / usageStats.includedLimit) * 100)}%` }}
                 />
               </div>
-              <p className="text-xs text-[hsl(var(--muted-foreground))]">
+              <p className="text-xs text-muted-foreground">
                 {usageStats.totalThisMonth} total this month
                 {usageStats.mode === "metered" ? " · You have exceeded your included quota" : ""}
               </p>
@@ -152,12 +152,12 @@ export default async function BillingSettingsPage() {
         <div className="rounded-xl border bg-card space-y-4 p-5">
           <div className="flex items-center justify-between gap-2">
             <h2 className="text-section-title">Client Organizations</h2>
-            <p className="text-sm text-[hsl(var(--muted-foreground))]">
+            <p className="text-sm text-muted-foreground">
               {managedOrgs.length} of {features.maxWorkspaces} used
             </p>
           </div>
 
-          <ul className="space-y-2 text-sm text-[hsl(var(--muted-foreground))]">
+          <ul className="space-y-2 text-sm text-muted-foreground">
             {managedOrgs.map((org) => (
               <li key={org.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
                 <span className="text-foreground">{org.name}</span>
@@ -166,7 +166,7 @@ export default async function BillingSettingsPage() {
             ))}
           </ul>
 
-          <p className="text-sm text-[hsl(var(--muted-foreground))]">
+          <p className="text-sm text-muted-foreground">
             Need more capacity? Upgrade to a higher Pro tier from the pricing page.
           </p>
         </div>

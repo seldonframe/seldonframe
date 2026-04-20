@@ -32,22 +32,22 @@ export function FooterSection({ businessName, description, links = [], socials =
   }
 
   return (
-    <footer className="border-t border-border bg-[hsl(var(--muted)/0.2)] px-5 py-12">
+    <footer className="border-t border-border bg-muted/20 px-5 py-12">
       <div className="mx-auto grid w-full max-w-6xl gap-6 md:grid-cols-[1fr,auto,auto] md:items-start">
         <div>
           <p className="text-sm font-semibold text-foreground">{businessName}</p>
-          {description ? <p className="mt-2 max-w-sm text-xs text-[hsl(var(--muted-foreground))]">{description}</p> : null}
+          {description ? <p className="mt-2 max-w-sm text-xs text-muted-foreground">{description}</p> : null}
         </div>
         <div className="flex flex-wrap gap-3">
           {resolvedLinks.map((link) => (
-            <Link key={`${link.label}-${link.href}`} href={link.href} className="text-xs text-[hsl(var(--muted-foreground))] hover:text-foreground">
+            <Link key={`${link.label}-${link.href}`} href={link.href} className="text-xs text-muted-foreground hover:text-foreground">
               {link.label}
             </Link>
           ))}
         </div>
         <div className="flex flex-wrap gap-3">
           {resolvedSocials.map((social) => (
-            <Link key={`${social.label}-${social.href}`} href={social.href} className="inline-flex items-center gap-1.5 text-xs text-[hsl(var(--muted-foreground))] hover:text-foreground">
+            <Link key={`${social.label}-${social.href}`} href={social.href} className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground">
               <SocialIcon label={social.label} />
               <span>{social.label}</span>
             </Link>

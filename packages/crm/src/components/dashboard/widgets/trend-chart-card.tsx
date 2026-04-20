@@ -42,7 +42,7 @@ export function TrendChartCard({
                   <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0.04} />
                 </linearGradient>
               </defs>
-              <CartesianGrid stroke="hsl(var(--border))" strokeOpacity={0.35} vertical={false} />
+              <CartesianGrid stroke="var(--border)" strokeOpacity={0.35} vertical={false} />
               <XAxis dataKey="label" stroke="hsl(var(--color-text-muted))" tickLine={false} axisLine={false} fontSize={12} />
               <YAxis
                 stroke="hsl(var(--color-text-muted))"
@@ -58,9 +58,9 @@ export function TrendChartCard({
                 formatter={(value) => [formatter(Number(value ?? 0)), title]}
                 contentStyle={{
                   borderRadius: 10,
-                  border: "1px solid hsl(var(--border))",
-                  background: "hsl(var(--card))",
-                  color: "hsl(var(--foreground))",
+                  border: "1px solid var(--border)",
+                  background: "var(--card)",
+                  color: "var(--foreground)",
                 }}
               />
               <Area
@@ -74,7 +74,7 @@ export function TrendChartCard({
             </AreaChart>
           ) : (
             <LineChart data={data} margin={{ top: 6, right: 10, left: -8, bottom: 0 }}>
-              <CartesianGrid stroke="hsl(var(--border))" strokeOpacity={0.35} vertical={false} />
+              <CartesianGrid stroke="var(--border)" strokeOpacity={0.35} vertical={false} />
               <XAxis dataKey="label" stroke="hsl(var(--color-text-muted))" tickLine={false} axisLine={false} fontSize={12} />
               <YAxis
                 stroke="hsl(var(--color-text-muted))"
@@ -90,9 +90,9 @@ export function TrendChartCard({
                 formatter={(value) => [formatter(Number(value ?? 0)), title]}
                 contentStyle={{
                   borderRadius: 10,
-                  border: "1px solid hsl(var(--border))",
-                  background: "hsl(var(--card))",
-                  color: "hsl(var(--foreground))",
+                  border: "1px solid var(--border)",
+                  background: "var(--card)",
+                  color: "var(--foreground)",
                 }}
               />
               <Line

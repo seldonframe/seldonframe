@@ -106,7 +106,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
                   if (field.type === "url" && formatted !== "—") {
                     return (
                       <div key={field.key} className="grid grid-cols-[160px_1fr] gap-3 text-sm">
-                        <p className="text-[hsl(var(--muted-foreground))]">{field.label}</p>
+                        <p className="text-muted-foreground">{field.label}</p>
                         <a href={String(rawValue)} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
                           {String(rawValue)}
                         </a>
@@ -117,7 +117,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
                   if (field.type === "email" && formatted !== "—") {
                     return (
                       <div key={field.key} className="grid grid-cols-[160px_1fr] gap-3 text-sm">
-                        <p className="text-[hsl(var(--muted-foreground))]">{field.label}</p>
+                        <p className="text-muted-foreground">{field.label}</p>
                         <a href={`mailto:${String(rawValue)}`} className="text-primary hover:underline">
                           {String(rawValue)}
                         </a>
@@ -128,7 +128,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
                   if (field.type === "phone" && formatted !== "—") {
                     return (
                       <div key={field.key} className="grid grid-cols-[160px_1fr] gap-3 text-sm">
-                        <p className="text-[hsl(var(--muted-foreground))]">{field.label}</p>
+                        <p className="text-muted-foreground">{field.label}</p>
                         <a href={`tel:${String(rawValue)}`} className="text-primary hover:underline">
                           {String(rawValue)}
                         </a>
@@ -138,7 +138,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
 
                   return (
                     <div key={field.key} className="grid grid-cols-[160px_1fr] gap-3 text-sm">
-                      <p className="text-[hsl(var(--muted-foreground))]">{field.label}</p>
+                      <p className="text-muted-foreground">{field.label}</p>
                       <p className="text-foreground">{formatted}</p>
                     </div>
                   );

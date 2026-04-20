@@ -13,7 +13,7 @@ export default async function AdminBlockReviewPage() {
       </div>
 
       {queue.length === 0 ? (
-        <article className="rounded-xl border bg-card p-6 text-sm text-[hsl(var(--muted-foreground))]">No blocks awaiting admin merge.</article>
+        <article className="rounded-xl border bg-card p-6 text-sm text-muted-foreground">No blocks awaiting admin merge.</article>
       ) : (
         <div className="space-y-3">
           {queue.map((item) => {
@@ -24,7 +24,7 @@ export default async function AdminBlockReviewPage() {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <h2 className="text-card-title">{item.name}</h2>
-                    <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                    <p className="text-sm text-muted-foreground">
                       {item.blockId} • Seller: {item.sellerName}
                     </p>
                   </div>
@@ -32,7 +32,7 @@ export default async function AdminBlockReviewPage() {
                 </div>
 
                 <div className="mt-3">
-                  <p className="text-xs uppercase tracking-[0.08em] text-[hsl(var(--muted-foreground))]">Generated files</p>
+                  <p className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Generated files</p>
                   <ul className="mt-2 space-y-2">
                     {files.map((file, index) => {
                       const entry = file as { path?: string };

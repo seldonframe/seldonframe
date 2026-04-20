@@ -26,7 +26,7 @@ export function MrrChartCard({ data, total }: { data: MrrPoint[]; total: number 
                 <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0.04} />
               </linearGradient>
             </defs>
-            <CartesianGrid stroke="hsl(var(--border))" strokeOpacity={0.4} vertical={false} />
+            <CartesianGrid stroke="var(--border)" strokeOpacity={0.4} vertical={false} />
             <XAxis dataKey="month" stroke="hsl(var(--color-text-muted))" tickLine={false} axisLine={false} fontSize={12} />
             <YAxis
               stroke="hsl(var(--color-text-muted))"
@@ -40,9 +40,9 @@ export function MrrChartCard({ data, total }: { data: MrrPoint[]; total: number 
               formatter={(value) => [`$${Number(value ?? 0).toLocaleString()}`, "MRR"]}
               contentStyle={{
                 borderRadius: 10,
-                border: "1px solid hsl(var(--border))",
-                background: "hsl(var(--card))",
-                color: "hsl(var(--foreground))",
+                border: "1px solid var(--border)",
+                background: "var(--card)",
+                color: "var(--foreground)",
               }}
             />
             <Area

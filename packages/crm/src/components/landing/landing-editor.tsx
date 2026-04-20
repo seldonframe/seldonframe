@@ -125,15 +125,15 @@ export function LandingEditor({
       </div>
 
       <div className="grid gap-3 rounded-xl border border-border p-3 md:grid-cols-2">
-        <label className="text-xs text-[hsl(var(--muted-foreground))]">
+        <label className="text-xs text-muted-foreground">
           Title
           <input className="crm-input mt-1 h-10 w-full px-3" value={pageTitle} onChange={(event) => setPageTitle(event.target.value)} />
         </label>
-        <label className="text-xs text-[hsl(var(--muted-foreground))]">
+        <label className="text-xs text-muted-foreground">
           Slug
           <input className="crm-input mt-1 h-10 w-full px-3" value={pageSlug} onChange={(event) => setPageSlug(event.target.value)} />
         </label>
-        <label className="text-xs text-[hsl(var(--muted-foreground))] md:col-span-2">
+        <label className="text-xs text-muted-foreground md:col-span-2">
           SEO description
           <textarea className="crm-input mt-1 min-h-20 w-full p-3" value={pageSeoDescription} onChange={(event) => setPageSeoDescription(event.target.value)} />
         </label>

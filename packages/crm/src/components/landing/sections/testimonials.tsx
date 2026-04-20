@@ -24,13 +24,13 @@ export function TestimonialsSection({ headline, testimonials }: TestimonialsSect
                 {item.avatar ? (
                   <Image src={item.avatar} alt={item.author} width={40} height={40} className="h-10 w-10 rounded-full object-cover" />
                 ) : (
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[hsl(var(--muted)/0.6)] text-xs font-medium text-[hsl(var(--muted-foreground))]">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/60 text-xs font-medium text-muted-foreground">
                     {item.author.slice(0, 2).toUpperCase()}
                   </div>
                 )}
                 <div>
                   <p className="text-sm font-medium text-foreground">{item.author}</p>
-                  <p className="text-xs text-[hsl(var(--muted-foreground))]">{item.role}</p>
+                  <p className="text-xs text-muted-foreground">{item.role}</p>
                 </div>
               </div>
             </article>

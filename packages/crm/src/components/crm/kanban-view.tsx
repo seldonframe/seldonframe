@@ -104,7 +104,7 @@ function DroppableLane({
       <span
         aria-hidden
         className="absolute inset-x-0 top-0 h-1"
-        style={{ backgroundColor: color || "hsl(var(--border))" }}
+        style={{ backgroundColor: color || "var(--border)" }}
       />
 
       <div className="mb-4 flex items-start justify-between gap-3">

@@ -9,7 +9,7 @@ export function FAQSection({ headline, faqs }: FAQSectionContent) {
           {faqs.map((item, index) => (
             <details key={`${item.question}-${index}`} className="rounded-xl border bg-card p-5">
               <summary className="cursor-pointer text-base font-medium text-foreground">{item.question}</summary>
-              <p className="mt-3 text-base text-[hsl(var(--muted-foreground))]">{item.answer}</p>
+              <p className="mt-3 text-base text-muted-foreground">{item.answer}</p>
             </details>
           ))}
         </div>

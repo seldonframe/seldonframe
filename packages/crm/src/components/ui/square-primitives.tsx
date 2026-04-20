@@ -42,7 +42,7 @@ export function SquareEmptyState({ className, ...props }: React.HTMLAttributes<H
 }
 
 export function SquareBadge({ className, ...props }: React.HTMLAttributes<HTMLSpanElement>) {
-  return <span className={cn("inline-flex items-center rounded-md border border-border px-2 py-1 text-xs text-[hsl(var(--muted-foreground))]", className)} {...props} />;
+  return <span className={cn("inline-flex items-center rounded-md border border-border px-2 py-1 text-xs text-muted-foreground", className)} {...props} />;
 }
 
 export function SquareInput({ className, ...props }: React.InputHTMLAttributes<HTMLInputElement>) {

@@ -67,7 +67,7 @@ export default async function MarketplacePage({
       {blocks.length === 0 ? (
         <article className="rounded-xl border bg-card p-8 text-center">
           <p className="text-base font-medium text-foreground">No blocks match your filters</p>
-          <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">Try a different category, clear search, or submit your own block.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Try a different category, clear search, or submit your own block.</p>
         </article>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -75,12 +75,12 @@ export default async function MarketplacePage({
             <article key={block.blockId} className="rounded-xl border bg-card p-5">
               <div className="mb-2 flex items-start justify-between gap-2">
                 <h2 className="text-card-title">{block.name}</h2>
-                <span className="rounded-full bg-[hsl(var(--muted)/0.6)] px-2 py-1 text-xs text-[hsl(var(--muted-foreground))]">
+                <span className="rounded-full bg-muted/60 px-2 py-1 text-xs text-muted-foreground">
                   {block.price && Number(block.price) > 0 ? `$${Number(block.price).toFixed(0)}` : "Free"}
                 </span>
               </div>
-              <p className="text-sm text-[hsl(var(--muted-foreground))]">{block.description}</p>
-              <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">
+              <p className="text-sm text-muted-foreground">{block.description}</p>
+              <p className="mt-2 text-xs text-muted-foreground">
                 ★ {Number(block.ratingAverage ?? 0).toFixed(1)} ({block.ratingCount ?? 0}) · {block.installCount ?? 0} installs
               </p>
               <div className="mt-4">
@@ -96,14 +96,14 @@ export default async function MarketplacePage({
       <article className="rounded-xl border bg-card p-5">
         <h2 className="text-card-title">My Blocks</h2>
         {myBlocks.length === 0 ? (
-          <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">No submissions yet. Publish your first BLOCK.md to start selling.</p>
+          <p className="mt-2 text-sm text-muted-foreground">No submissions yet. Publish your first BLOCK.md to start selling.</p>
         ) : (
           <ul className="mt-3 space-y-2 text-sm">
             {myBlocks.map((item) => (
               <li key={item.blockId} className="flex items-center justify-between gap-2 rounded border border-border px-3 py-2">
                 <div>
                   <p className="font-medium text-foreground">{item.name}</p>
-                  <p className="text-xs text-[hsl(var(--muted-foreground))]">{item.blockId}</p>
+                  <p className="text-xs text-muted-foreground">{item.blockId}</p>
                 </div>
                 <Link href={`/marketplace/review/${item.blockId}`} className="rounded border border-border px-3 py-1.5 text-xs">
                   {item.status}

@@ -73,7 +73,7 @@ export function CommandPalette({ items }: { items: CommandPaletteItem[] }) {
                       .map((item) => (
                         <Command.Item
                           key={`${item.group}-${item.href}`}
-                          className="cursor-pointer rounded-md px-3 py-2 text-sm transition-colors data-[selected=true]:bg-[hsl(var(--muted))]"
+                          className="cursor-pointer rounded-md px-3 py-2 text-sm transition-colors data-[selected=true]:bg-muted"
                           onSelect={() => {
                             router.push(item.href);
                             setOpen(false);
@@ -90,7 +90,7 @@ export function CommandPalette({ items }: { items: CommandPaletteItem[] }) {
                       .map((item) => (
                         <Command.Item
                           key={`${item.group}-${item.href}`}
-                          className="cursor-pointer rounded-md px-3 py-2 text-sm transition-colors data-[selected=true]:bg-[hsl(var(--muted))]"
+                          className="cursor-pointer rounded-md px-3 py-2 text-sm transition-colors data-[selected=true]:bg-muted"
                           onSelect={() => {
                             router.push(item.href);
                             setOpen(false);
@@ -107,7 +107,7 @@ export function CommandPalette({ items }: { items: CommandPaletteItem[] }) {
                       .map((item) => (
                         <Command.Item
                           key={`${item.group}-${item.href}`}
-                          className="cursor-pointer rounded-md px-3 py-2 text-sm transition-colors data-[selected=true]:bg-[hsl(var(--muted))]"
+                          className="cursor-pointer rounded-md px-3 py-2 text-sm transition-colors data-[selected=true]:bg-muted"
                           onSelect={() => {
                             router.push(item.href);
                             setOpen(false);
@@ -124,7 +124,7 @@ export function CommandPalette({ items }: { items: CommandPaletteItem[] }) {
                       .map((item) => (
                         <Command.Item
                           key={`${item.group}-${item.href}`}
-                          className="cursor-pointer rounded-md px-3 py-2 text-sm transition-colors data-[selected=true]:bg-[hsl(var(--muted))]"
+                          className="cursor-pointer rounded-md px-3 py-2 text-sm transition-colors data-[selected=true]:bg-muted"
                           onSelect={() => {
                             router.push(item.href);
                             setOpen(false);
@@ -141,7 +141,7 @@ export function CommandPalette({ items }: { items: CommandPaletteItem[] }) {
                       .map((item) => (
                         <Command.Item
                           key={`${item.group}-${item.href}`}
-                          className="cursor-pointer rounded-md px-3 py-2 text-sm transition-colors data-[selected=true]:bg-[hsl(var(--muted))]"
+                          className="cursor-pointer rounded-md px-3 py-2 text-sm transition-colors data-[selected=true]:bg-muted"
                           onSelect={() => {
                             router.push(item.href);
                             setOpen(false);

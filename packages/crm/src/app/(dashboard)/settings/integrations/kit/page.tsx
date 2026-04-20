@@ -30,7 +30,7 @@ export default async function KitIntegrationPage({
       {saved ? <p className="rounded-md border border-positive/30 bg-positive/10 px-3 py-2 text-sm text-positive">{saved}</p> : null}
       {tested ? <p className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary">{tested}</p> : null}
 
-      <div className="rounded-md border border-border bg-[hsl(var(--muted)/0.2)] px-3 py-2 text-xs text-[hsl(var(--muted-foreground))]">
+      <div className="rounded-md border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
         API Version: {settings?.version ?? "v4"} · Token stored encrypted at rest
         {settings?.apiTokenHint ? ` (${settings.apiTokenHint})` : ""}
       </div>

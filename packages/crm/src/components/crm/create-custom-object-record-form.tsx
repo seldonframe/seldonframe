@@ -71,7 +71,7 @@ export function CreateCustomObjectRecordForm({
 
         return (
           <div key={field.name} className={isLongText ? "md:col-span-2 xl:col-span-4" : undefined}>
-            <label htmlFor={`cof-${field.name}`} className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">{field.label}</label>
+            <label htmlFor={`cof-${field.name}`} className="mb-1 block text-sm text-muted-foreground">{field.label}</label>
             {isRelation ? (
               <select id={`cof-${field.name}`} name={field.name} className="crm-input h-10 w-full truncate px-3" defaultValue={clientId && /^contact$/i.test(field.relation ?? "") ? clientId : ""}>
                 <option value="">Select {field.relation ?? field.label}</option>

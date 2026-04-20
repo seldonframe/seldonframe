@@ -21,7 +21,7 @@ export default async function MarketplaceReviewPage({ params }: { params: Promis
 
       <article className="rounded-xl border bg-card p-5">
         <h2 className="text-card-title">Preview</h2>
-        <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
+        <p className="mt-2 text-sm text-muted-foreground">
           Open the temporary preview route for this block in your org:
         </p>
         <Link href={`/${block.blockId}`} className="mt-3 inline-flex rounded-md border border-border px-3 py-2 text-sm">
@@ -32,7 +32,7 @@ export default async function MarketplaceReviewPage({ params }: { params: Promis
       <article className="rounded-xl border bg-card p-5">
         <h2 className="text-card-title">Generated files</h2>
         {files.length === 0 ? (
-          <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">No generated files yet.</p>
+          <p className="mt-2 text-sm text-muted-foreground">No generated files yet.</p>
         ) : (
           <ul className="mt-3 space-y-2 text-sm">
             {files.map((file, index) => {

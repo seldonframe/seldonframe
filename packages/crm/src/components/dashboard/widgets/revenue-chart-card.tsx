@@ -104,10 +104,10 @@ export function RevenueChartCard({ title, data, ranges }: RevenueChartCardProps)
               dataKey="label"
               axisLine={false}
               tickLine={false}
-              tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }}
+              tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
               dy={10}
             />
-            <Tooltip cursor={{ stroke: "hsl(var(--muted-foreground))", strokeWidth: 1 }} content={<RevenueTooltip />} />
+            <Tooltip cursor={{ stroke: "var(--muted-foreground)", strokeWidth: 1 }} content={<RevenueTooltip />} />
             <Area
               type="monotone"
               dataKey="value"
@@ -115,7 +115,7 @@ export function RevenueChartCard({ title, data, ranges }: RevenueChartCardProps)
               strokeWidth={2}
               fill="url(#revenueGradient)"
               dot={false}
-              activeDot={{ r: 4, stroke: "hsl(var(--primary))", strokeWidth: 2, fill: "hsl(var(--background))" }}
+              activeDot={{ r: 4, stroke: "hsl(var(--primary))", strokeWidth: 2, fill: "var(--background)" }}
             />
           </AreaChart>
         </ResponsiveContainer>

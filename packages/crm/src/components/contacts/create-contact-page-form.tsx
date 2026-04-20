@@ -43,27 +43,27 @@ export function CreateContactPageForm({ stageOptions }: { stageOptions: string[]
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
-          <label htmlFor="firstName" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">First Name</label>
+          <label htmlFor="firstName" className="mb-1 block text-sm text-muted-foreground">First Name</label>
           <input id="firstName" name="firstName" required className="crm-input h-10 w-full px-3" placeholder="Jane" />
         </div>
 
         <div>
-          <label htmlFor="lastName" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Last Name</label>
+          <label htmlFor="lastName" className="mb-1 block text-sm text-muted-foreground">Last Name</label>
           <input id="lastName" name="lastName" className="crm-input h-10 w-full px-3" placeholder="Doe" />
         </div>
 
         <div>
-          <label htmlFor="email" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Email</label>
+          <label htmlFor="email" className="mb-1 block text-sm text-muted-foreground">Email</label>
           <input id="email" name="email" type="email" className="crm-input h-10 w-full px-3" placeholder="jane@example.com" />
         </div>
 
         <div>
-          <label htmlFor="phone" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Phone</label>
+          <label htmlFor="phone" className="mb-1 block text-sm text-muted-foreground">Phone</label>
           <input id="phone" name="phone" className="crm-input h-10 w-full px-3" placeholder="(555) 123-4567" />
         </div>
 
         <div className="sm:col-span-2">
-          <label htmlFor="status" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Stage</label>
+          <label htmlFor="status" className="mb-1 block text-sm text-muted-foreground">Stage</label>
           <select id="status" name="status" className="crm-input h-10 w-full px-3" defaultValue={stageOptions[0] ?? "lead"}>
             {stageOptions.map((stage) => (
               <option key={stage} value={stage}>
@@ -74,7 +74,7 @@ export function CreateContactPageForm({ stageOptions }: { stageOptions: string[]
         </div>
 
         <div className="sm:col-span-2">
-          <label htmlFor="notes" className="mb-1 block text-sm text-[hsl(var(--muted-foreground))]">Notes</label>
+          <label htmlFor="notes" className="mb-1 block text-sm text-muted-foreground">Notes</label>
           <textarea id="notes" name="notes" className="crm-input min-h-[110px] w-full px-3 py-2" placeholder="Add context about this contact..." />
         </div>
       </div>

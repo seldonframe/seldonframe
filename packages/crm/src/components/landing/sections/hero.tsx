@@ -18,7 +18,7 @@ export function HeroSection({
         <div>
           {kicker ? <p className="text-tiny text-primary">{kicker}</p> : null}
           <h1 className="mt-3 text-4xl font-semibold tracking-tight text-foreground md:text-6xl">{headline}</h1>
-          <p className="mt-5 max-w-2xl text-base text-[hsl(var(--muted-foreground))] md:text-lg">{subheadline}</p>
+          <p className="mt-5 max-w-2xl text-base text-muted-foreground md:text-lg">{subheadline}</p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link href={ctaLink} className="crm-button-primary h-11 px-6">
               {ctaText}
@@ -37,7 +37,7 @@ export function HeroSection({
           ) : heroImage ? (
             <Image src={heroImage} alt={headline} width={960} height={720} className="h-full w-full rounded-2xl object-cover" />
           ) : (
-            <div className="flex min-h-72 items-center justify-center rounded-2xl bg-[hsl(var(--muted)/0.35)] text-sm text-[hsl(var(--muted-foreground))]">
+            <div className="flex min-h-72 items-center justify-center rounded-2xl bg-muted/35 text-sm text-muted-foreground">
               Add hero media
             </div>
           )}
