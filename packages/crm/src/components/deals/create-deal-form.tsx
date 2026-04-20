@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { createDealAction } from "@/lib/deals/actions";
 import { isDemoBlockedError, isDemoReadonlyClient } from "@/lib/demo/client";
@@ -8,6 +9,7 @@ import { useDemoToast } from "@/components/shared/demo-toast-provider";
 export function CreateDealForm({ contacts }: { contacts: Array<{ id: string; firstName: string; lastName: string | null }> }) {
   const [pending, startTransition] = useTransition();
   const { showDemoToast } = useDemoToast();
+  const router = useRouter();
 
   return (
     <form
@@ -21,7 +23,7 @@ export function CreateDealForm({ contacts }: { contacts: Array<{ id: string; fir
             }
 
             await createDealAction(formData);
-            window.location.reload();
+            router.refresh();
           } catch (error) {
             if (isDemoBlockedError(error)) {
               showDemoToast();
