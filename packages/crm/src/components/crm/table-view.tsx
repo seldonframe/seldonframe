@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { ArrowUpDown, CheckSquare, Command, Pencil, Search, Square } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronRight, Command, Pencil, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -42,7 +42,7 @@ export function TableView({
   const visibleColumns = getVisibleColumns(resolvedView, records, hiddenFields);
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<Record<string, string>>(() => Object.fromEntries(resolvedView.filters.map((filter) => [filter.field, filter.value])));
-  const [sortField, setSortField] = useState(resolvedView.sorting[0]?.field ?? visibleColumns[0] ?? "");
+  const [sortField, setSortField] = useState(resolvedView.sorting[0]?.field ?? "");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">(resolvedView.sorting[0]?.direction ?? "asc");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -72,11 +72,10 @@ export function TableView({
   })();
 
   const allSelected = filteredRecords.length > 0 && filteredRecords.every((record) => selectedIds.includes(record.id));
+  const someSelected = selectedIds.length > 0 && !allSelected;
   const canInlineEdit = !readOnly && (!endClientMode || editableFields.size > 0);
   const hasInlineEdit = typeof onInlineEdit === "function";
   const savedViewChips = resolvedView.savedViews.slice(0, 2);
-  const scopeLabel = endClientMode ? "Client-specific surface" : "Org-wide surface";
-  const interactionLabel = readOnly ? "Read-only" : hasInlineEdit ? "Inline edits enabled" : "View only";
   const hasAnyRecords = records.length > 0;
 
   function openCommandPalette() {
@@ -119,163 +118,253 @@ export function TableView({
     onInlineEdit?.({ recordId, field, value: nextValue });
   }
 
+  function cancelEdit(recordId: string, field: string) {
+    const key = `${recordId}:${field}`;
+    setDrafts((current) => {
+      if (!(key in current)) return current;
+      const { [key]: _omit, ...rest } = current;
+      void _omit;
+      return rest;
+    });
+  }
+
   return (
-    <section className={cn("rounded-[28px] border border-border/80 bg-card/72 p-5 shadow-(--shadow-card)", className)}>
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-        <div>
-          <h2 className="text-card-title">{resolvedView.name}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Schema-driven table view with sorting, filters, inline edits, and fast navigation.
-          </p>
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span className="rounded-full border border-border/80 bg-background/70 px-2.5 py-1">{scopeLabel}</span>
-            <span className="rounded-full border border-border/80 bg-background/70 px-2.5 py-1">{interactionLabel}</span>
-            {savedViewChips.map((savedView) => (
-              <span key={`${savedView.visibility}:${savedView.label}`} className="rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-primary">
-                {savedView.label}
-              </span>
-            ))}
-          </div>
+    <section className={cn("rounded-2xl border border-border/80 bg-card/60 shadow-(--shadow-xs)", className)}>
+      {/* Top bar — search + saved views + actions. Kept compact; header chrome
+          should never feel heavier than the data. */}
+      <div className="flex flex-col gap-3 border-b border-border/70 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
+          <h2 className="truncate text-sm font-semibold text-foreground">{resolvedView.name}</h2>
+          <span className="text-xs tabular-nums text-muted-foreground">
+            {filteredRecords.length}
+            {filteredRecords.length !== records.length ? ` of ${records.length}` : ""}
+          </span>
+          {savedViewChips.length > 0 ? (
+            <div className="hidden items-center gap-1.5 sm:flex">
+              {savedViewChips.map((savedView) => (
+                <span
+                  key={`${savedView.visibility}:${savedView.label}`}
+                  className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[11px] text-primary"
+                >
+                  {savedView.label}
+                </span>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative min-w-[220px] flex-1 xl:max-w-[280px]">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input value={search} onChange={(event) => setSearch(event.target.value)} className="h-10 rounded-xl border-border/80 bg-background/70 pl-9" placeholder="Search this view" />
+          <div className="relative min-w-[200px] flex-1 lg:max-w-[260px]">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              className="h-8 rounded-lg border-border/80 bg-background/70 pl-8 text-sm"
+              placeholder="Search"
+            />
           </div>
 
-          <Button type="button" variant="outline" size="lg" onClick={openCommandPalette}>
-            <Command className="size-4" />
-            Ctrl/Cmd K
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={openCommandPalette}
+            className="h-8 text-xs"
+          >
+            <Command className="size-3.5" />
+            Cmd K
           </Button>
 
           {bulkActions.map((action) => (
             <Button
               key={action.id}
               variant={action.variant ?? "outline"}
-              size="lg"
+              size="sm"
+              className="h-8 text-xs"
               disabled={selectedIds.length === 0 || (endClientMode && readOnly)}
               onClick={() => onBulkAction?.({ actionId: action.id, recordIds: selectedIds })}
             >
               {action.label}
+              {selectedIds.length > 0 ? (
+                <span className="ml-1 rounded-full bg-primary/20 px-1.5 text-[10px] tabular-nums">
+                  {selectedIds.length}
+                </span>
+              ) : null}
             </Button>
           ))}
         </div>
       </div>
 
       {resolvedView.filters.length > 0 ? (
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2 border-b border-border/70 bg-background/30 px-4 py-2">
+          <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Filter</span>
           {resolvedView.filters.map((filter) => (
             <Input
               key={filter.field}
               value={filters[filter.field] ?? ""}
               onChange={(event) => setFilters((current) => ({ ...current, [filter.field]: event.target.value }))}
-              className="h-9 w-[190px] rounded-xl border-border/80 bg-background/60"
-              placeholder={`Filter ${resolveFieldLabel(filter.field, scopedOverride, resolvedView.name)}`}
+              className="h-7 w-[160px] rounded-md border-border/80 bg-background/70 text-xs"
+              placeholder={resolveFieldLabel(filter.field, scopedOverride, resolvedView.name)}
             />
           ))}
         </div>
       ) : null}
 
-      <div className="mt-4 text-xs text-muted-foreground">
-        Tip: use the command palette to jump between contacts, deals, and pipeline views without leaving this surface.
-      </div>
-
-      <div className="mt-5 overflow-hidden rounded-2xl border border-border/80 bg-background/35">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] text-sm">
-            <thead>
-              <tr className="border-b border-border/70 bg-background/70">
-                <th className="w-12 px-3 py-3 text-left">
-                  <Checkbox checked={allSelected} onCheckedChange={(checked) => toggleAll(Boolean(checked))} />
-                </th>
-                {visibleColumns.map((field) => (
-                  <th key={field} className="px-3 py-3 text-left align-middle text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                    <button type="button" className="inline-flex items-center gap-2 text-left hover:text-foreground" onClick={() => handleSort(field)}>
+      {/* Table — edge to edge, tight rows (~36px), sticky header, hover
+          affordance on row + on editable cell. */}
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[640px] text-sm">
+          <thead>
+            <tr className="sticky top-0 z-10 border-b border-border/70 bg-card/95 backdrop-blur">
+              <th className="w-10 px-3 py-2.5 text-left">
+                <Checkbox
+                  checked={allSelected}
+                  // Indeterminate styling when partial selection — gives a
+                  // visual hint that "select all" is a toggle.
+                  data-state={someSelected ? "indeterminate" : undefined}
+                  onCheckedChange={(checked) => toggleAll(Boolean(checked))}
+                />
+              </th>
+              {visibleColumns.map((field) => {
+                const isSortField = sortField === field;
+                return (
+                  <th
+                    key={field}
+                    scope="col"
+                    className="group/col whitespace-nowrap px-3 py-2.5 text-left align-middle text-xs font-medium text-muted-foreground"
+                  >
+                    <button
+                      type="button"
+                      className={cn(
+                        "inline-flex items-center gap-1.5 text-left transition-colors",
+                        isSortField ? "text-foreground" : "hover:text-foreground"
+                      )}
+                      onClick={() => handleSort(field)}
+                    >
                       {resolveFieldLabel(field, scopedOverride, resolvedView.name)}
-                      <ArrowUpDown className="size-3.5" />
+                      {isSortField ? (
+                        sortDirection === "asc" ? (
+                          <ArrowUp className="size-3" />
+                        ) : (
+                          <ArrowDown className="size-3" />
+                        )
+                      ) : (
+                        <ArrowUpDown className="size-3 opacity-0 transition-opacity group-hover/col:opacity-60" />
+                      )}
                     </button>
                   </th>
-                ))}
-                <th className="w-24 px-3 py-3 text-right text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Open</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredRecords.length === 0 ? (
-                <tr>
-                  <td colSpan={visibleColumns.length + 2} className="px-4 py-10 text-center text-sm text-muted-foreground">
-                    <div className="mx-auto max-w-lg rounded-2xl border border-dashed border-border/80 bg-background/35 px-5 py-6 text-left sm:text-center">
-                      <p className="text-sm font-medium text-foreground">
-                        {hasAnyRecords ? "No records match this view right now." : "This CRM surface is ready for its first record."}
-                      </p>
-                      <p className="mt-2 text-sm text-muted-foreground">
-                        {hasAnyRecords
-                          ? "Try clearing the search, adjusting filters, or opening the command palette to jump to another CRM surface."
-                          : "Create a record from the page actions or use Seldon It to generate a new CRM view for this workspace."}
-                      </p>
-                      <div className="mt-4 flex flex-wrap justify-center gap-2">
-                        <Button type="button" variant="outline" size="sm" onClick={openCommandPalette}>
-                          <Command className="size-4" />
-                          Open command palette
-                        </Button>
-                      </div>
+                );
+              })}
+              <th className="w-10 px-3 py-2.5 text-right text-xs text-muted-foreground" aria-label="Open" />
+            </tr>
+          </thead>
+          <tbody>
+            {filteredRecords.length === 0 ? (
+              <tr>
+                <td colSpan={visibleColumns.length + 2} className="px-4 py-12 text-center text-sm text-muted-foreground">
+                  <div className="mx-auto max-w-md rounded-xl border border-dashed border-border/80 bg-background/35 px-5 py-6 text-left sm:text-center">
+                    <p className="text-sm font-medium text-foreground">
+                      {hasAnyRecords ? "No records match this view." : "This surface is ready for its first record."}
+                    </p>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {hasAnyRecords
+                        ? "Try clearing the search or adjusting filters."
+                        : "Create a record from the page actions, or open the command palette to jump elsewhere."}
+                    </p>
+                    <div className="mt-4 flex flex-wrap justify-center gap-2">
+                      <Button type="button" variant="outline" size="sm" onClick={openCommandPalette}>
+                        <Command className="size-3.5" />
+                        Command palette
+                      </Button>
                     </div>
-                  </td>
-                </tr>
-              ) : (
-                filteredRecords.map((record) => (
-                  <tr key={record.id} className="border-b border-border/60 transition-colors hover:bg-background/55">
-                    <td className="px-3 py-3 align-top">
-                      <Checkbox checked={selectedIds.includes(record.id)} onCheckedChange={(checked) => toggleRow(record.id, Boolean(checked))} />
+                  </div>
+                </td>
+              </tr>
+            ) : (
+              filteredRecords.map((record) => {
+                const isSelected = selectedIds.includes(record.id);
+                return (
+                  <tr
+                    key={record.id}
+                    className={cn(
+                      "group/row relative border-b border-border/50 transition-colors",
+                      isSelected ? "bg-primary/5 hover:bg-primary/8" : "hover:bg-accent/30"
+                    )}
+                  >
+                    {/* Left selection accent when row is picked — subtle 2px bar. */}
+                    {isSelected ? (
+                      <span aria-hidden className="absolute inset-y-0 left-0 w-0.5 bg-primary" />
+                    ) : null}
+                    <td className="w-10 px-3 py-2 align-middle">
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={(checked) => toggleRow(record.id, Boolean(checked))}
+                      />
                     </td>
                     {visibleColumns.map((field) => {
                       const editable = hasInlineEdit && canInlineEdit && (editableFields.size === 0 ? !endClientMode : editableFields.has(field));
                       const draftKey = `${record.id}:${field}`;
+                      const isTitleField = field === resolvedView.titleField;
                       return (
-                        <td key={`${record.id}:${field}`} className="px-3 py-3 align-top">
-                          <div className="group/cell flex min-h-9 items-start gap-2 rounded-lg px-2 py-1.5 transition hover:bg-background/70">
+                        <td key={`${record.id}:${field}`} className="px-3 py-1.5 align-middle">
+                          <div
+                            className={cn(
+                              "group/cell flex min-h-8 items-center gap-2 rounded-md px-2 py-1 transition",
+                              editable ? "hover:bg-background/80 hover:ring-1 hover:ring-inset hover:ring-border/80" : ""
+                            )}
+                          >
                             {editable ? (
-                              <Input
-                                value={drafts[draftKey] ?? String(record.values[field] ?? "")}
-                                onChange={(event) => handleDraftChange(record.id, field, event.target.value)}
-                                onBlur={() => commitEdit(record.id, field)}
-                                onKeyDown={(event) => {
-                                  if (event.key === "Enter") {
-                                    event.preventDefault();
-                                    commitEdit(record.id, field);
-                                  }
-                                }}
-                                className="h-8 border-transparent bg-transparent px-0 text-sm shadow-none focus-visible:border-border focus-visible:bg-background/70 focus-visible:px-2"
-                              />
+                              <>
+                                <Input
+                                  value={drafts[draftKey] ?? String(record.values[field] ?? "")}
+                                  onChange={(event) => handleDraftChange(record.id, field, event.target.value)}
+                                  onBlur={() => commitEdit(record.id, field)}
+                                  onKeyDown={(event) => {
+                                    if (event.key === "Enter") {
+                                      event.preventDefault();
+                                      commitEdit(record.id, field);
+                                      (event.currentTarget as HTMLInputElement).blur();
+                                    } else if (event.key === "Escape") {
+                                      event.preventDefault();
+                                      cancelEdit(record.id, field);
+                                      (event.currentTarget as HTMLInputElement).blur();
+                                    }
+                                  }}
+                                  className="h-7 border-transparent bg-transparent px-0 text-sm shadow-none focus-visible:border-border/80 focus-visible:bg-background focus-visible:px-2 focus-visible:ring-1 focus-visible:ring-primary/40"
+                                />
+                                <Pencil className="size-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/cell:opacity-50" />
+                              </>
                             ) : (
                               <div className="min-w-0 flex-1">
-                                <p className="truncate text-sm text-foreground">{field === resolvedView.titleField ? resolveRecordTitle(record, resolvedView) : formatCrmValue(record.values[field])}</p>
-                                {field === resolvedView.titleField && record.subtitle ? <p className="mt-1 truncate text-xs text-muted-foreground">{record.subtitle}</p> : null}
+                                <p className={cn("truncate text-sm", isTitleField ? "font-medium text-foreground" : "text-foreground")}>
+                                  {isTitleField ? resolveRecordTitle(record, resolvedView) : formatCrmValue(record.values[field])}
+                                </p>
+                                {isTitleField && record.subtitle ? (
+                                  <p className="mt-0.5 truncate text-xs text-muted-foreground">{record.subtitle}</p>
+                                ) : null}
                               </div>
                             )}
-                            {editable ? <Pencil className="mt-1 hidden size-3.5 text-muted-foreground group-hover/cell:block" /> : null}
                           </div>
                         </td>
                       );
                     })}
-                    <td className="px-3 py-3 text-right align-top">
+                    <td className="w-10 px-3 py-1.5 text-right align-middle">
                       {record.href ? (
-                        <Link href={record.href} className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
-                          Open
+                        <Link
+                          href={record.href}
+                          className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-background/80 hover:text-foreground group-hover/row:opacity-100 focus-visible:opacity-100"
+                          aria-label="Open record"
+                        >
+                          <ChevronRight className="size-4" />
                         </Link>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                          {selectedIds.includes(record.id) ? <CheckSquare className="size-3.5" /> : <Square className="size-3.5" />}
-                          Row
-                        </span>
-                      )}
+                      ) : null}
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                );
+              })
+            )}
+          </tbody>
+        </table>
       </div>
     </section>
   );
