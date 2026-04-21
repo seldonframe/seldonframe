@@ -1086,6 +1086,176 @@ export const TOOLS = [
       return result;
     },
   },
+
+  // ===== Phase 3 — Email + conversation tools =====
+
+  {
+    name: "send_email",
+    description:
+      "Send a one-off email through the workspace's configured provider (Resend by default). Checks the suppression list before sending and skips with {suppressed: true} if the recipient has opted out. Example: send_email({ to: 'alex@acme.com', subject: 'Welcome', body: 'Thanks for signing up', contact_id: 'ctc_123' })",
+    inputSchema: obj(
+      {
+        to: str("Recipient email address."),
+        subject: str("Email subject line."),
+        body: str("Plain-text body — rendered into the default HTML shell."),
+        contact_id: str("Optional. Links the email to a CRM contact for threading."),
+        provider: str("Optional. Force a specific provider (default: resend)."),
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["to", "subject", "body"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const result = await api("POST", "/emails", {
+        body: {
+          to: args.to,
+          subject: args.subject,
+          body: args.body,
+          contactId: args.contact_id ?? null,
+          provider: args.provider ?? null,
+        },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+  {
+    name: "list_emails",
+    description:
+      "List recent emails sent from the workspace, newest first. Useful for checking delivery status before following up.",
+    inputSchema: obj(
+      {
+        limit: {
+          type: "number",
+          description: "Max rows to return (default 50, max 200).",
+        },
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      [],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const qs = typeof args.limit === "number" ? `?limit=${Math.min(args.limit, 200)}` : "";
+      const result = await api("GET", `/emails${qs}`, { workspace_id: ws });
+      return result;
+    },
+  },
+  {
+    name: "get_email",
+    description:
+      "Fetch a single email with its full provider-event history (sent / delivered / opened / clicked / bounced).",
+    inputSchema: obj(
+      {
+        email_id: str("Email ID returned from send_email or list_emails."),
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["email_id"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const result = await api("GET", `/emails/${encodeURIComponent(args.email_id)}`, {
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+  {
+    name: "list_suppressions",
+    description:
+      "List all suppressed email addresses for the workspace — who is opted out and why (manual / unsubscribe / bounce / complaint).",
+    inputSchema: obj(
+      {
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      [],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const result = await api("GET", "/emails/suppressions", { workspace_id: ws });
+      return result;
+    },
+  },
+  {
+    name: "suppress_email",
+    description:
+      "Add an email address to the workspace suppression list so future sends skip it. Use for manual unsubscribes or policy blocks.",
+    inputSchema: obj(
+      {
+        email: str("Email address to suppress."),
+        reason: str(
+          "Reason code: 'manual' | 'unsubscribe' | 'bounce' | 'complaint'. Default: 'manual'.",
+        ),
+        source: str("Optional free-form provenance tag."),
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["email"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const result = await api("POST", "/emails/suppressions", {
+        body: {
+          email: args.email,
+          reason: args.reason ?? "manual",
+          source: args.source ?? null,
+        },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+  {
+    name: "unsuppress_email",
+    description:
+      "Remove an email address from the workspace suppression list so future sends go through again.",
+    inputSchema: obj(
+      {
+        email: str("Email address to un-suppress."),
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["email"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const result = await api(
+        "DELETE",
+        `/emails/suppressions/${encodeURIComponent(args.email)}`,
+        { workspace_id: ws },
+      );
+      return result;
+    },
+  },
+  {
+    name: "send_conversation_turn",
+    description:
+      "Route an incoming message through the Conversation Primitive runtime. Loads prior turns for (contact, channel), generates a Soul-aware reply with Claude, writes both inbound + outbound turns, and emits conversation.turn.received / sent events. Use when building an always-on conversational agent (speed-to-lead, qualification chatbot). Example: send_conversation_turn({ contact_id: 'ctc_123', channel: 'sms', message: 'Do you have Saturday appointments?' })",
+    inputSchema: obj(
+      {
+        contact_id: str("CRM contact to converse with."),
+        channel: str("Transport channel: 'email' | 'sms'."),
+        message: str("Incoming message content to reason about."),
+        conversation_id: str(
+          "Optional existing conversation id. Omit to let the runtime reuse the most recent active thread or open a new one.",
+        ),
+        subject: str("Optional subject for email threads."),
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["contact_id", "channel", "message"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const result = await api("POST", "/conversations/turn", {
+        body: {
+          contactId: args.contact_id,
+          channel: args.channel,
+          message: args.message,
+          conversationId: args.conversation_id ?? null,
+          subject: args.subject ?? null,
+        },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
 ];
 
 export const TOOL_MAP = Object.fromEntries(TOOLS.map((t) => [t.name, t]));
