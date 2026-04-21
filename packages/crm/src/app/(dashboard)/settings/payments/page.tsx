@@ -44,6 +44,21 @@ export default async function PaymentsSettingsPage() {
           <p className="text-xs text-[hsl(var(--color-text-muted))]">Upgrade to Cloud to unlock platform-managed payment flows and billing tools.</p>
         ) : null}
       </div>
+
+      {status ? (
+        <div className="crm-card space-y-2 p-4">
+          <p className="text-[11px] uppercase tracking-[0.08em] text-[hsl(var(--color-text-muted))]">Connect webhook</p>
+          <p className="text-sm text-muted-foreground">
+            Register this URL as a <span className="font-medium text-foreground">Connect</span> webhook endpoint in your Stripe dashboard (Developers → Webhooks → Add endpoint → Connect). Subscribe to <code className="text-foreground">payment_intent.*</code>, <code className="text-foreground">charge.refunded</code>, <code className="text-foreground">charge.dispute.*</code>, <code className="text-foreground">invoice.*</code>, and <code className="text-foreground">customer.subscription.*</code> events.
+          </p>
+          <code className="block break-all rounded bg-muted/40 px-2 py-1 text-[11px] text-foreground">
+            {`${process.env.NEXT_PUBLIC_APP_URL ?? "https://app.seldonframe.com"}/api/webhooks/stripe/connect`}
+          </code>
+          <p className="text-xs text-muted-foreground">
+            Set <code className="text-foreground">STRIPE_CONNECT_WEBHOOK_SECRET</code> in your environment to the signing secret Stripe shows after creating the endpoint. This is distinct from the platform webhook used for SeldonFrame&apos;s own billing.
+          </p>
+        </div>
+      ) : null}
     </section>
   );
 }
