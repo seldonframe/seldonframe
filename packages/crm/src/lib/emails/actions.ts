@@ -15,6 +15,7 @@ import {
   resolveDefaultFromEmail,
   resolveEmailProvider,
 } from "./providers";
+import { isEmailSuppressed, normalizeEmail } from "./suppression";
 import { renderPlainEmailTemplate } from "./templates";
 
 type EmailTemplate = {
@@ -131,6 +132,18 @@ async function sendEmailForOrg(params: {
   providerOverride?: string | null;
   metadata?: Record<string, unknown>;
 }) {
+  const toEmail = normalizeEmail(params.toEmail);
+
+  const suppression = await isEmailSuppressed(params.orgId, toEmail);
+  if (suppression) {
+    await emitSeldonEvent("email.suppressed", {
+      email: toEmail,
+      reason: suppression.reason,
+      contactId: params.contactId,
+    });
+    return { emailId: null, contactId: params.contactId, suppressed: true as const };
+  }
+
   const provider = await resolveEmailProvider(params.providerOverride || null);
 
   await assertEmailSendLimit(params.orgId);
@@ -229,7 +242,7 @@ async function sendEmailForOrg(params: {
     },
   });
 
-  return { emailId: created.id, contactId: created.contactId };
+  return { emailId: created.id, contactId: created.contactId, suppressed: false as const };
 }
 
 export async function listEmails() {
