@@ -71,6 +71,13 @@
       "when": 1776000000000,
       "tag": "0015_workspace_bearer_tokens",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1776700000000,
+      "tag": "0016_phase3_email_conversations_suppression",
+      "breakpoints": true
     }
   ]
 }
