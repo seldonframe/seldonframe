@@ -24,11 +24,29 @@ const outDir = path.resolve(repoRoot, "tasks/phase-7-synthesis-spike");
 // 0. Fail-early environment check.
 // ---------------------------------------------------------------------------
 
+// Optionally load .env.local from the repo root so Vercel-managed keys
+// work without hand-exporting. `vercel env pull` writes to .env.local
+// by default; process.loadEnvFile is native in Node 20.12+.
+const envFileCandidates = [path.resolve(repoRoot, ".env.local"), path.resolve(repoRoot, ".env")];
+for (const candidate of envFileCandidates) {
+  try {
+    if (typeof process.loadEnvFile === "function") {
+      process.loadEnvFile(candidate);
+      break;
+    }
+  } catch {
+    // file missing or unreadable — try next candidate
+  }
+}
+
 if (!process.env.ANTHROPIC_API_KEY) {
   console.error(
     "\nError: ANTHROPIC_API_KEY is not set.\n" +
-      "This script runs live Claude calls; fixture mode is not supported here.\n" +
-      "Export the key and retry:\n" +
+      "This script runs live Claude calls; fixture mode is not supported here.\n\n" +
+      "Option 1 — pull the key from Vercel (recommended if it lives there):\n" +
+      "  vercel env pull .env.local\n" +
+      "  node scripts/phase-7-spike/run-live.mjs\n\n" +
+      "Option 2 — export the key for this shell:\n" +
       "  export ANTHROPIC_API_KEY=sk-ant-...\n" +
       "  node scripts/phase-7-spike/run-live.mjs\n"
   );
