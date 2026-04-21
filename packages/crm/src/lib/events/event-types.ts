@@ -8,8 +8,14 @@ export const BUILT_IN_EVENT_TYPE_SUGGESTIONS = [
   "booking.cancelled",
   "booking.no_show",
   "email.sent",
+  "email.delivered",
   "email.opened",
   "email.clicked",
+  "email.bounced",
+  "email.replied",
+  "email.suppressed",
+  "conversation.turn.received",
+  "conversation.turn.sent",
   "landing.visited",
   "landing.converted",
   "payment.completed",
@@ -22,7 +28,7 @@ export const BUILT_IN_EVENT_TYPE_SUGGESTIONS = [
   "portal.resource_viewed",
 ] as const;
 
-const EVENT_TYPE_PATTERN = /^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$/;
+const EVENT_TYPE_PATTERN = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/;
 
 export function isValidEventType(value: string) {
   return EVENT_TYPE_PATTERN.test(value.trim());

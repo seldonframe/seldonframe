@@ -8,8 +8,14 @@ export type SeldonEvent =
   | { type: "booking.cancelled"; data: { appointmentId: string; contactId: string } }
   | { type: "booking.no_show"; data: { appointmentId: string; contactId: string } }
   | { type: "email.sent"; data: { emailId: string; contactId: string } }
+  | { type: "email.delivered"; data: { emailId: string; contactId: string | null } }
   | { type: "email.opened"; data: { emailId: string; contactId: string } }
   | { type: "email.clicked"; data: { emailId: string; contactId: string; url: string } }
+  | { type: "email.bounced"; data: { emailId: string; contactId: string | null; reason: string } }
+  | { type: "email.replied"; data: { emailId: string; contactId: string | null; conversationId: string | null } }
+  | { type: "email.suppressed"; data: { email: string; reason: string; contactId: string | null } }
+  | { type: "conversation.turn.received"; data: { conversationId: string; turnId: string; contactId: string; channel: "email" | "sms" } }
+  | { type: "conversation.turn.sent"; data: { conversationId: string; turnId: string; contactId: string; channel: "email" | "sms" } }
   | { type: "landing.visited"; data: { pageId: string; visitorId: string } }
   | { type: "landing.converted"; data: { pageId: string; contactId: string } }
   | { type: "payment.completed"; data: { contactId: string; amount: number; currency: string; source: string } }
