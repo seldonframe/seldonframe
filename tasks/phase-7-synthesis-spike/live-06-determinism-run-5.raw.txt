@@ -1,20 +1,22 @@
 {
-  "name": "New-patient intake → SMS follow-up → booking link + confirmation email",
-  "description": "When the new-patient intake form is submitted, wait 2 minutes, then text the contact by name to thank them, have a short SMS conversation to confirm insurance and preferred visit time, and finally email them a confirmation with the clinic address and the new-patient consultation booking link.",
+  "name": "New patient speed-to-lead: SMS then book + email confirm",
+  "description": "When a new-patient intake form is submitted, text the lead within 2 minutes to thank them by name, have a short SMS conversation to confirm insurance and capture preferred time, book them into the next new-patient consultation, then email a confirmation with the clinic address.",
   "trigger": {
     "type": "event",
     "event": "form.submitted",
     "filter": { "form_id": "form_new_patient_intake" }
   },
   "variables": {
-    "contact_id": "contact.id",
-    "first_name": "contact.firstName",
-    "phone": "contact.phone",
-    "email": "contact.email"
+    "contact_id": "submission.contact.id",
+    "first_name": "submission.contact.firstName",
+    "phone": "submission.contact.phone",
+    "email": "submission.contact.email",
+    "reason_for_visit": "submission.answers.reason_for_visit",
+    "intake_insurance": "submission.answers.has_insurance"
   },
   "steps": [
     {
-      "id": "wait_2min",
+      "id": "wait_two_minutes",
       "type": "wait",
       "seconds": 120,
       "next": "sms_conversation"
@@ -23,30 +25,38 @@
       "id": "sms_conversation",
       "type": "conversation",
       "channel": "sms",
-      "initial_message": "Hi {{first_name}}, it's Bright Smile Dental 🦷 Thanks so much for reaching out — we're looking forward to meeting you. When would be a good day and time for your free new-patient consultation? Also, just to confirm: do you have dental insurance (yes / no / unsure)? No pressure either way, we'll take great care of you.",
-      "exit_when": "contact has shared a preferred visit time AND confirmed insurance status (yes/no/unsure)",
+      "initial_message": "Hi {{first_name}}, it's Bright Smile Dental 🦷 Thanks so much for reaching out — we're glad you did. No pressure at all, just wanted to say hi and help get you in for your free new-patient consultation. When would work best for you to come in? Also, quick one: do you have dental insurance, or would you rather we sort that out in person?",
+      "exit_when": "The patient has shared a preferred day/time window AND confirmed whether they have insurance (yes / no / unsure).",
       "on_exit": {
         "extract": {
-          "preferred_time": "string — contact's preferred day/time for the consultation",
-          "insurance_status": "one of: yes | no | unsure"
+          "preferred_time_iso": "The patient's preferred appointment start time, resolved to an ISO 8601 datetime in the clinic's local timezone. If they gave a vague window, pick the earliest reasonable slot inside it.",
+          "has_insurance": "One of 'yes' | 'no' | 'unsure' based on the patient's reply."
         },
-        "next": "send_confirmation_email"
+        "next": "book_consultation"
       }
     },
     {
-      "id": "send_confirmation_email",
+      "id": "book_consultation",
+      "type": "mcp_tool_call",
+      "tool": "create_booking",
+      "args": {
+        "appointment_type_id": "appt_new_patient_consult",
+        "contact_id": "{{contact_id}}",
+        "start_time": "{{preferred_time_iso}}",
+        "notes": "Reason for visit: {{reason_for_visit}}. Insurance: {{has_insurance}} (intake said: {{intake_insurance}})."
+      },
+      "next": "email_confirmation"
+    },
+    {
+      "id": "email_confirmation",
       "type": "mcp_tool_call",
       "tool": "send_email",
       "args": {
         "to": "{{email}}",
-        "subject": "Your Bright Smile new-patient consultation — next steps 🦷",
-        "body": "Hi {{first_name}},\n\nThanks again for getting in touch with Bright Smile Dental — we can't wait to meet you.\n\nYou mentioned you'd like to come in around: {{preferred_time}}.\nInsurance on file: {{insurance_status}} (totally fine either way — the new-patient consultation is free).\n\nTo lock in the exact slot, pick a time that works for you here:\nhttps://brightsmile.app.seldonframe.com/book/appt_new_patient_consult\n\nWhere to find us:\nBright Smile Dental\n(Your clinic address here — please update in workspace settings)\n\nIf anything comes up or you'd rather we just pick a time for you, reply to this email or text us back — we're happy to handle it.\n\nTalk soon,\nThe Bright Smile team"
+        "subject": "You're booked, {{first_name}} — see you soon at Bright Smile Dental",
+        "body": "Hi {{first_name}},\n\nYou're all set for your free new-patient consultation at Bright Smile Dental on {{preferred_time_iso}}. It's a relaxed 45-minute visit — no drills, no pressure, just a chance to meet the team and talk through what you need.\n\nWhere to find us:\nBright Smile Dental\n(Our clinic address will be shared here — please reply to this email if you need directions or parking info.)\n\nA few gentle notes:\n• If anything changes, just reply to this email or text us back and we'll reschedule, no problem.\n• Insurance on file: {{has_insurance}}. If that changes before your visit, let us know and we'll handle the rest.\n• Feel free to arrive 5 minutes early so we can get you comfy.\n\nWe're really looking forward to meeting you.\n\nWarmly,\nThe Bright Smile Dental team"
       },
-      "next": "done"
-    },
-    {
-      "id": "done",
-      "type": "end"
+      "next": null
     }
   ]
 }

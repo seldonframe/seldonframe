@@ -1,83 +1,60 @@
 {
-  "name": "New-patient intake → SMS speed-to-lead → booking + email confirmation",
-  "description": "When a new patient submits the intake form, text them within 2 minutes to greet by name, have a short SMS conversation to confirm insurance and preferred time, then email a confirmation with the clinic address and a link to book their new-patient consultation.",
+  "name": "New-patient intake → SMS thank-you, insurance check, auto-book consult, email confirmation",
+  "description": "When a new-patient intake form is submitted, wait ~2 minutes, then text the lead by name to thank them and open a short SMS conversation to confirm their preferred time and insurance status. Book them into the next available new-patient consultation slot, then email a warm confirmation with the clinic address.",
   "trigger": {
     "type": "event",
     "event": "form.submitted",
     "filter": {
-      "form.slug": "form_new_patient_intake"
+      "form_id": "form_new_patient_intake"
     }
   },
   "variables": {
     "contactId": "contact.id",
     "firstName": "contact.firstName",
-    "email": "contact.email",
     "phone": "contact.phone",
-    "patientName": "submission.data.name",
-    "reasonForVisit": "submission.data.reason_for_visit",
-    "hasInsuranceFromForm": "submission.data.has_insurance"
+    "email": "contact.email"
   },
   "steps": [
     {
       "id": "wait_two_minutes",
       "type": "wait",
       "seconds": 120,
-      "next": "sms_speed_to_lead"
+      "next": "sms_conversation"
     },
     {
-      "id": "sms_speed_to_lead",
-      "type": "mcp_tool_call",
-      "tool": "send_sms",
-      "args": {
-        "to": "{{phone}}",
-        "body": "Hi {{firstName}}, this is Bright Smile Dental — thanks so much for reaching out! We'd love to get you in for a free new-patient consultation. No pressure and no rush. What day/time works best for you this week or next? And just to confirm — do you have dental insurance? (yes / no / unsure)"
-      },
-      "next": "conversation_confirm_details"
-    },
-    {
-      "id": "conversation_confirm_details",
+      "id": "sms_conversation",
       "type": "conversation",
       "channel": "sms",
-      "initial_message": "Hi {{firstName}}, this is Bright Smile Dental — thanks so much for reaching out! We'd love to get you in for a free new-patient consultation. What day and time works best for you this week or next, and do you have dental insurance (yes / no / unsure)?",
-      "exit_when": "The patient has shared a preferred day/time AND confirmed their insurance status (yes, no, or unsure).",
+      "initial_message": "Hi {{firstName}}, it's Bright Smile Dental 👋 Thanks so much for reaching out — we'd love to welcome you in for a free new-patient consultation (no pressure, just a friendly chat and a look around). What day and time usually work best for you? And quick heads-up question: do you currently have dental insurance (yes / no / not sure)? No wrong answer either way.",
+      "exit_when": "The contact has shared a preferred day/time for their new-patient consultation AND answered whether they have dental insurance (yes, no, or unsure).",
       "on_exit": {
         "extract": {
-          "preferredTime": "string — the day/time window the patient said works for them",
-          "insuranceStatus": "one of: yes | no | unsure"
+          "preferred_time": "ISO-8601 datetime the contact said they'd like to come in, snapped to the next available new-patient consultation slot",
+          "has_insurance": "one of: yes | no | unsure"
         },
-        "next": "update_contact_with_insurance"
+        "next": "book_consultation"
       }
     },
     {
-      "id": "update_contact_with_insurance",
+      "id": "book_consultation",
       "type": "mcp_tool_call",
-      "tool": "update_contact",
+      "tool": "create_booking",
       "args": {
+        "appointment_type_id": "appt_new_patient_consult",
         "contact_id": "{{contactId}}",
-        "notes": "New-patient intake. Reason: {{reasonForVisit}}. Insurance: {{insuranceStatus}}. Preferred time (via SMS): {{preferredTime}}."
+        "start_time": "{{preferred_time}}",
+        "notes": "Auto-booked from new-patient intake. Insurance: {{has_insurance}}."
       },
-      "next": "send_confirmation_email"
+      "next": "email_confirmation"
     },
     {
-      "id": "send_confirmation_email",
+      "id": "email_confirmation",
       "type": "mcp_tool_call",
       "tool": "send_email",
       "args": {
         "to": "{{email}}",
-        "subject": "Your Bright Smile Dental visit — booking link + what to expect",
-        "body": "Hi {{firstName}},\n\nThanks again for reaching out to Bright Smile Dental — we're really glad you did, and we'll make this as easy and comfortable as possible.\n\nBased on our text, you're looking at: {{preferredTime}}. To lock in the exact slot, please pick a time on our booking page for the free new-patient consultation (45 min, no cost, no pressure):\n\n→ https://brightsmile.app.seldonframe.com/book/appt_new_patient_consult\n\nA few notes so there are no surprises:\n• Your consultation is completely free.\n• Insurance on file: {{insuranceStatus}} — we'll sort out any details when you arrive, nothing for you to do now.\n• If you'd rather reply to this email or text us back with another time, that works too.\n\nWe're looking forward to meeting you.\n\nWarmly,\nThe Bright Smile Dental team"
-      },
-      "next": "log_followup_activity"
-    },
-    {
-      "id": "log_followup_activity",
-      "type": "mcp_tool_call",
-      "tool": "create_deal",
-      "args": {
-        "contact_id": "{{contactId}}",
-        "title": "New-patient consultation — {{patientName}}",
-        "value": 0,
-        "stage": "Lead"
+        "subject": "You're booked, {{firstName}} — see you at Bright Smile Dental 🦷",
+        "body": "Hi {{firstName}},\n\nYou're all set for your free new-patient consultation at Bright Smile Dental — we can't wait to meet you. No needles, no sales pitch, just a warm hello and a look at how we can help.\n\n📍 Clinic address: Bright Smile Dental — please reply to this email if you need the exact street address or directions and we'll send them straight over.\n\nA few things that might help you feel relaxed before your visit:\n• The consult is 45 minutes and completely free.\n• If you're nervous about the dentist, just tell us at the door — we go at your pace.\n• Insurance status on file: {{has_insurance}} (totally fine either way — we'll walk you through options).\n\nIf anything changes, just reply to this email or text us back — we'll take care of it.\n\nWarmly,\nThe Bright Smile Dental team"
       },
       "next": "done"
     },

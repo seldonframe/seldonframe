@@ -155,6 +155,7 @@ crm, caldiy-booking, formbricks-intake, sms, email
 - move_deal_stage: Move a deal to a new stage. Same effect as dragging the card on the kanban. Example: move_deal_stage({ deal_id: '...', to_stage: 'Proposal' }).
 - delete_deal: Delete a deal. Irreversible. Example: delete_deal({ deal_id: '...' }).
 - list_activities: List activity log entries (tasks, notes, email sent, booking created, etc.) across the workspace. Example: list_activities({}).
+- create_booking: Schedule a real booking against an existing appointment type. Looks up the template by id, creates a scheduled row on the workspace calendar, stamps the contact's name + email, emits booking.created, and — if the appointment type has a pric
 - list_appointment_types: List all appointment types (bookable templates) in the workspace. Example: list_appointment_types({}).
 - create_appointment_type: Create a new appointment type with its own public /book/<slug> URL. Defaults availability to Mon–Fri 9am–5pm (edit on /bookings to change). Example: create_appointment_type({ title: 'Strategy call', duration_minutes: 45, price: 150 }).
 - update_appointment_type: Update an existing appointment type. Partial — omit fields to keep them. Example: update_appointment_type({ booking_slug: 'default', duration_minutes: 60, price: 200 }). Pass booking_slug='default' to edit the auto-seeded 'Book a call' temp

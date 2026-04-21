@@ -6,9 +6,9 @@
     "event": "form.submitted"
   },
   "variables": {
-    "contactId": "form.submission.contact_id",
-    "firstName": "contact.firstName",
-    "phone": "contact.phone"
+    "contact_id": "event.contact.id",
+    "first_name": "event.contact.firstName",
+    "phone": "event.contact.phone"
   },
   "steps": [
     {
@@ -17,7 +17,7 @@
       "tool": "send_sms",
       "args": {
         "to": "{{phone}}",
-        "body": "Hi {{firstName}}, it's Bright Smile Dental — thanks for reaching out! We got your info and someone from our team will follow up shortly to find a time that works for you. No pressure, no sales pitch — just here to make dental care feel easy. 🦷"
+        "body": "Hi {{first_name}}, it's the team at Bright Smile Dental 🦷 Thanks for reaching out — we got your info and we'll be in touch shortly to get you booked. No pressure, no sales pitch, just friendly care. Reply STOP to opt out."
       },
       "next": "done"
     },

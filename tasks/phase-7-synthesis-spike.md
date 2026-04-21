@@ -382,3 +382,45 @@ Recommendation: **Option C for v1**, with Option B as the V1.1 implementation (k
 **New V1.1 items surfaced:**
 - `trigger.type: "schedule"` in AgentSpec (via synthetic-event pattern in runtime). See Option B above.
 - Brain v2 `contact.inactive_Nd` synthetic event emitter (prerequisite for re-engagement agents).
+
+---
+
+### Post-7.h re-run (2026-04-21, same day)
+
+Ran `scripts/phase-7-spike/run-live.mjs` again after 7.h shipped the `create_booking` MCP tool + API route + server helper. Same prompts, same probes, same fixture Soul. Total spend: $0.7614 across 11 calls, basically unchanged. Classifier output: `needs prompt engineering` (the pre-approved new label per the patched verdict logic).
+
+**Key results:**
+- Grounding rate: **100%** (all 3 declines cited real missing infrastructure)
+- Hallucination rate: **0%** (zero fabricated tools / events / blocks across 11 calls)
+- Produced specs: **8 / 11** (up from 7/11 pre-7.h)
+- Grounded declines: **3 / 11** (down from 5/11 — two former `create_booking` declines flipped to produced specs)
+
+**Per-probe delta from the pre-7.h run:**
+
+| Probe | Pre-7.h | Post-7.h |
+|---|---|---|
+| 01 happy-path | declined (missing `create_booking`) | **PASS — 7-step spec including `tool: create_booking`** |
+| 06-determinism runs 1–5 | 4 PASS + 1 declined | **5 PASS, all 5 include `tool: create_booking`** |
+| 02, 04, 07 (hallucinated block / FedEx / yoga) | declined cleanly | declined cleanly (unchanged, all still correct refusals) |
+| 03 vague, 05 ambiguous-route | produced spec silently | produced spec silently (unchanged — this is the 7.d scope) |
+
+**Structural determinism across the 5 happy-path repeats:**
+
+- run 1: `wait | conv:sms | tool:create_booking | tool:send_email | end`
+- run 2: `wait | conv:sms | tool:create_booking | tool:send_email | end` *(identical skeleton to run 1)*
+- run 3: `wait | conv:sms | tool:update_contact | tool:create_booking | tool:send_sms | tool:send_email | end`
+- run 4: `wait | conv:sms | tool:create_booking | tool:update_contact | tool:send_email | tool:send_sms | end`
+- run 5: `wait | conv:sms | tool:create_booking | tool:send_email`
+
+Still shape-variable (2 unique skeletons across 5 runs), but the core primitive — `conv:sms → create_booking → send_email` — is now **100% consistent**. The "minimal vs thorough" variance from pre-7.h narrowed; the "must-have" steps are locked.
+
+**Minor arg-name drift noted.** Probe 01 called `create_booking({ start_time: ... })` instead of the documented `starts_at`. The API route accepts `startsAt` or `starts_at` — `start_time` would return 400 at execution time. Validator doesn't catch this today (it only checks tool name + presence of `args`, not arg keys). **Two fixes:**
+
+1. **Immediate (v1):** extend the API route to also accept `start_time` as an alias. Defensive-coding patch, 2 lines. Ship with 7.c or earlier.
+2. **Long-term (V1.1):** the existing "composition contract schema v2" queue item (typed tool inputs) lets the prompt carry each tool's arg schema so Claude has canonical names. Subsumes the alias.
+
+**Novel yoga-recovery probe** declined with a sharper explanation this time — cites the lack of an "attendance" event in any installed block's produces list AND the absence of a "query attendance" tool. Reinforces the cron/scheduled-trigger V1.1 queue item.
+
+**Verdict interpretation.** The patched classifier's `needs prompt engineering` label is **the correct blocker for GA, not for 7.c onward.** 7.c (archetype library) can proceed — archetypes ship as validated templates with no vague-prompt risk at the synthesis layer. 7.d (NL compose engine) is the phase where the clarifying-questions loop must land before ship.
+
+**7.h is validated.** Pending Max's approval of the post-ship results + the scheduled-trigger scope decision for 7.c, the resequenced plan proceeds with 7.c next.

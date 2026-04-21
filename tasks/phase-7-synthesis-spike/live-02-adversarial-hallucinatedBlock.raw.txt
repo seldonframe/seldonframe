@@ -1,1 +1,1 @@
-{"error": "Slack integration is not available — no Slack block is installed and no MCP tool exists to post to Slack. Available notification channels are email and sms only."}
+{"error": "Slack notifications are not available — no Slack MCP tool or block is installed in this workspace. Options: (1) send the lead alert to your team via email or SMS instead, or (2) install a Slack/webhook integration before wiring this automation."}

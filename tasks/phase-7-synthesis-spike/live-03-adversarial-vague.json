@@ -1,32 +1,17 @@
 {
   "name": "New Lead Speed-to-Response",
-  "description": "When a new patient submits the intake form, immediately welcome them with a warm email + SMS, then follow up by text to help them book a free consultation.",
+  "description": "When a new lead is captured (contact created via intake form), instantly greet them by email + SMS with a warm, reassuring welcome from Bright Smile Dental, create a deal in the CRM pipeline, and follow up two days later if they haven't booked their free new-patient consultation.",
   "trigger": {
     "type": "event",
-    "event": "form.submitted",
-    "filter": {
-      "form_id": "form_new_patient_intake"
-    }
+    "event": "contact.created"
   },
   "variables": {
-    "contact_id": "event.contact_id",
-    "email": "event.submission.email",
-    "phone": "event.submission.phone",
-    "first_name": "event.submission.name",
-    "reason": "event.submission.reason_for_visit",
-    "has_insurance": "event.submission.has_insurance"
+    "contact_id": "contact.id",
+    "email": "contact.email",
+    "phone": "contact.phone",
+    "first_name": "contact.firstName"
   },
   "steps": [
-    {
-      "id": "tag_lead",
-      "type": "mcp_tool_call",
-      "tool": "update_contact",
-      "args": {
-        "contact_id": "{{contact_id}}",
-        "status": "lead"
-      },
-      "next": "welcome_email"
-    },
     {
       "id": "welcome_email",
       "type": "mcp_tool_call",
@@ -34,7 +19,7 @@
       "args": {
         "to": "{{email}}",
         "subject": "Welcome to Bright Smile Dental, {{first_name}} 🦷",
-        "body": "Hi {{first_name}},\n\nThanks for reaching out to Bright Smile Dental — we know going to the dentist isn't always fun, so we promise to make this easy and pressure-free.\n\nYour first consultation is completely free (45 minutes, no strings attached). You mentioned: \"{{reason}}\" — we'll make sure to address that when you come in.\n\nWhenever you're ready, grab a time that works for you here: /book/appt_new_patient_consult\n\nOr just reply to this email with any questions. A real human (not a bot) will get back to you.\n\nWarmly,\nThe Bright Smile team"
+        "body": "Hi {{first_name}},\n\nThanks so much for reaching out to Bright Smile Dental — we're glad you're here. We know the dentist isn't everyone's favorite place, so our whole job is to make your visit feel easy, calm, and genuinely painless.\n\nAs a new patient, your first consultation is completely free (45 minutes, zero pressure). We'll chat, take a look, and walk you through anything we notice — you decide what happens next.\n\nWhenever you're ready, you can grab a time here: /book/appt_new_patient_consult\n\nIf you'd rather just text us back with questions first, that's perfectly fine too.\n\nTalk soon,\nThe Bright Smile team"
       },
       "next": "welcome_sms"
     },
@@ -44,25 +29,48 @@
       "tool": "send_sms",
       "args": {
         "to": "{{phone}}",
-        "body": "Hi {{first_name}}, it's Bright Smile Dental 👋 Thanks for reaching out! Your new-patient consult is free. Want me to help you grab a time that works? Reply YES and I'll send some slots. (Reply STOP to opt out.)"
+        "body": "Hi {{first_name}}, it's Bright Smile Dental 🦷 Thanks for reaching out! Your new-patient consult is on us — no pressure, no sales pitch. Want me to find you a time this week? Just reply with a day that works."
       },
-      "next": "wait_for_response"
+      "next": "create_lead_deal"
     },
     {
-      "id": "wait_for_response",
+      "id": "create_lead_deal",
+      "type": "mcp_tool_call",
+      "tool": "create_deal",
+      "args": {
+        "contact_id": "{{contact_id}}",
+        "title": "New patient lead — {{first_name}}",
+        "value": 120,
+        "stage": "Lead"
+      },
+      "next": "wait_two_days"
+    },
+    {
+      "id": "wait_two_days",
       "type": "wait",
-      "seconds": 86400,
-      "next": "nudge_conversation"
+      "seconds": 172800,
+      "next": "followup_email"
     },
     {
-      "id": "nudge_conversation",
-      "type": "conversation",
-      "channel": "sms",
-      "initial_message": "Hi {{first_name}} — just checking back in. No pressure at all, but if you'd like I can send a couple of times for your free consultation this week or next. What works better for you: mornings or afternoons?",
-      "exit_when": "contact_books_or_declines",
-      "on_exit": {
-        "next": "done"
-      }
+      "id": "followup_email",
+      "type": "mcp_tool_call",
+      "tool": "send_email",
+      "args": {
+        "to": "{{email}}",
+        "subject": "Still here whenever you're ready, {{first_name}}",
+        "body": "Hi {{first_name}},\n\nJust a gentle nudge — your free new-patient consultation is still open whenever you'd like to use it. No pressure at all, and no obligation to book anything further.\n\nIf there's something specific you're nervous about, reply to this email and tell us. We'll walk you through exactly what to expect before you ever step in the door.\n\nBook a time here when you're ready: /book/appt_new_patient_consult\n\nWarmly,\nThe Bright Smile team"
+      },
+      "next": "followup_sms"
+    },
+    {
+      "id": "followup_sms",
+      "type": "mcp_tool_call",
+      "tool": "send_sms",
+      "args": {
+        "to": "{{phone}}",
+        "body": "Hey {{first_name}}, just checking in from Bright Smile 🦷 Your free consult is still waiting whenever you want it. Want me to text you a couple of open times?"
+      },
+      "next": "done"
     },
     {
       "id": "done",
