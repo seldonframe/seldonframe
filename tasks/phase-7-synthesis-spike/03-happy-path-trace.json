@@ -1,0 +1,42 @@
+[
+  {
+    "step": "wait-two-minutes",
+    "action": "wait 120s"
+  },
+  {
+    "step": "opening-sms",
+    "action": "call send_sms",
+    "args": {
+      "to": "{{phone}}",
+      "body": "Hi {{name}}, it's Bright Smile Dental — thanks for reaching out! Happy to get you in soon. Can I ask a couple quick questions to find the best time?",
+      "contact_id": "{{contactId}}"
+    }
+  },
+  {
+    "step": "qualify-conversation",
+    "action": "conversation (sms) until: The prospect has confirmed whether they have insurance, and stated at least one day/time that works for them."
+  },
+  {
+    "step": "branch-on-ready",
+    "action": "branch on: insurance_status is 'yes' or 'self-pay / no' and preferred_time is provided → on_true"
+  },
+  {
+    "step": "create-booking",
+    "action": "call create_booking",
+    "args": {
+      "contact_id": "{{contactId}}",
+      "appointment_type_id": "appt_new_patient_consult",
+      "starts_at": "{{preferred_time}}"
+    }
+  },
+  {
+    "step": "send-confirmation-email",
+    "action": "call send_email",
+    "args": {
+      "to": "{{email}}",
+      "subject": "You're booked at Bright Smile Dental",
+      "body": "Hi {{name}}, we're confirmed for your new-patient consultation. Clinic address: 123 Main St, Laval. See you soon!",
+      "contact_id": "{{contactId}}"
+    }
+  }
+]

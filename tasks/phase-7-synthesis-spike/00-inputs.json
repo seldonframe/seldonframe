@@ -1,0 +1,392 @@
+{
+  "soul": {
+    "businessName": "Bright Smile Dental",
+    "industry": "dental clinic",
+    "mission": "Make dental care feel less scary, one patient at a time.",
+    "offer": "Free new-patient consultations + painless cleanings + modern tech",
+    "tone": "warm, reassuring, no sales pressure",
+    "services": [
+      {
+        "name": "New-patient consultation",
+        "duration": "45 min",
+        "price": 0
+      },
+      {
+        "name": "Cleaning",
+        "duration": "60 min",
+        "price": 120
+      },
+      {
+        "name": "Emergency visit",
+        "duration": "30 min",
+        "price": 180
+      }
+    ]
+  },
+  "installed": [
+    "crm",
+    "caldiy-booking",
+    "formbricks-intake",
+    "sms",
+    "email"
+  ],
+  "contracts": {
+    "crm": {
+      "slug": "crm",
+      "description": "Core CRM primitive auto-installed on every SeldonFrame workspace. Contacts, deals, pipelines, activities — the foundation every other block links against. Not optional; cannot be uninstalled.",
+      "contract": {
+        "produces": [
+          "contact.created",
+          "contact.updated",
+          "deal.stage_changed"
+        ],
+        "consumes": [
+          "workspace.soul.business_type",
+          "workspace.soul.customer_fields",
+          "workspace.soul.pipeline_stages",
+          "contact.email"
+        ],
+        "verbs": [
+          "track",
+          "remember",
+          "save",
+          "store",
+          "record",
+          "contact",
+          "deal",
+          "pipeline",
+          "stage",
+          "move",
+          "assign",
+          "tag",
+          "lead",
+          "customer",
+          "crm"
+        ],
+        "composeWith": [
+          "caldiy-booking",
+          "formbricks-intake",
+          "email",
+          "sms",
+          "payments",
+          "landing-pages",
+          "automation",
+          "brain-v2"
+        ]
+      }
+    },
+    "email": {
+      "slug": "email",
+      "description": "Transactional + conversational email block. BYOK Resend (with NextAuth owner-key fallback for platform sends). Send one-off emails, route inbound replies through the Conversation Primitive runtime, track opens/clicks/bounces, and auto-suppress hard bounces + complaints.",
+      "contract": {
+        "produces": [
+          "email.sent",
+          "email.delivered",
+          "email.opened",
+          "email.clicked",
+          "email.bounced",
+          "email.replied",
+          "email.suppressed",
+          "conversation.turn.received",
+          "conversation.turn.sent"
+        ],
+        "consumes": [
+          "workspace.soul.business_type",
+          "workspace.soul.tone",
+          "workspace.soul.mission",
+          "workspace.soul.offer",
+          "contact.id",
+          "contact.email",
+          "contact.firstName"
+        ],
+        "verbs": [
+          "send",
+          "email",
+          "reply",
+          "notify",
+          "message",
+          "conversation",
+          "qualify",
+          "nurture",
+          "reach out",
+          "speed to lead",
+          "follow up",
+          "welcome"
+        ],
+        "composeWith": [
+          "crm",
+          "caldiy-booking",
+          "formbricks-intake",
+          "sms",
+          "automation",
+          "brain-v2",
+          "payments"
+        ]
+      }
+    },
+    "sms": {
+      "slug": "sms",
+      "description": "Transactional + conversational SMS block. BYOK Twilio. Send one-off texts, route inbound replies through the Conversation Primitive runtime (same module as email), track delivery + failures, and auto-suppress on STOP / carrier permanent-failure codes.",
+      "contract": {
+        "produces": [
+          "sms.sent",
+          "sms.delivered",
+          "sms.replied",
+          "sms.failed",
+          "sms.suppressed",
+          "conversation.turn.received",
+          "conversation.turn.sent"
+        ],
+        "consumes": [
+          "workspace.soul.business_type",
+          "workspace.soul.tone",
+          "workspace.soul.mission",
+          "workspace.soul.offer",
+          "contact.id",
+          "contact.phone",
+          "contact.firstName"
+        ],
+        "verbs": [
+          "text",
+          "sms",
+          "message",
+          "reply",
+          "chat",
+          "qualify",
+          "speed to lead",
+          "follow up",
+          "reminder",
+          "confirm",
+          "book via text"
+        ],
+        "composeWith": [
+          "crm",
+          "formbricks-intake",
+          "caldiy-booking",
+          "email",
+          "automation",
+          "brain-v2",
+          "payments"
+        ]
+      }
+    },
+    "caldiy-booking": {
+      "slug": "caldiy-booking",
+      "description": "Drop-in replacement for the basic SeldonFrame booking form with a full Cal.diy-parity scheduling system: multiple event types, availability schedules, round-robin / collective hosts, calendar sync, custom booking fields, confirmations, reschedules, cancellations, payments, webhooks, and recurring bookings — all schema-driven through this BLOCK.md, installable via the existing block installer, and client-scopable via `end_client_mode`.",
+      "contract": {
+        "produces": [
+          "booking.created",
+          "booking.completed",
+          "booking.cancelled",
+          "booking.no_show"
+        ],
+        "consumes": [
+          "workspace.soul.business_type",
+          "workspace.soul.availability_timezone",
+          "workspace.soul.team_members",
+          "contact.id"
+        ],
+        "verbs": [
+          "book",
+          "schedule",
+          "appointment",
+          "availability",
+          "meeting",
+          "calendar",
+          "consultation",
+          "discovery call"
+        ],
+        "composeWith": [
+          "crm",
+          "formbricks-intake",
+          "email",
+          "sms",
+          "payments",
+          "automation",
+          "brain-v2"
+        ]
+      }
+    },
+    "formbricks-intake": {
+      "slug": "formbricks-intake",
+      "description": "Drop-in replacement for the basic SeldonFrame intake form with a full Formbricks-parity survey/intake system: 15 question types, conditional logic, multi-step branching, hidden fields, variables, quotas, link + in-app surveys, webhooks, embed SDK, and response analytics — all schema-driven through this BLOCK.md, installable via the existing block installer (`blockType: \"form\"`), client-scopable via `end_client_mode`, and Brain-integrated.",
+      "contract": {
+        "produces": [
+          "form.submitted",
+          "contact.created"
+        ],
+        "consumes": [
+          "workspace.soul.business_type",
+          "workspace.soul.customer_fields",
+          "contact.id",
+          "contact.email"
+        ],
+        "verbs": [
+          "intake",
+          "capture",
+          "collect",
+          "qualify",
+          "survey",
+          "ask",
+          "onboard",
+          "nps",
+          "feedback"
+        ],
+        "composeWith": [
+          "crm",
+          "caldiy-booking",
+          "email",
+          "sms",
+          "automation",
+          "brain-v2"
+        ]
+      }
+    },
+    "landing-pages": {
+      "slug": "landing-pages",
+      "description": "Puck-based landing-page editor + public renderer + Claude-powered generator. Pages are JSON (Puck's `{content, root, zones}` shape), validated against a typed component registry before save, statically rendered via Next ISR at `/l/<orgSlug>/<pageSlug>`, and tracked via client-side visit beacons so ISR caching doesn't skip analytics.",
+      "contract": {
+        "produces": [
+          "landing.published",
+          "landing.unpublished",
+          "landing.updated",
+          "landing.visited",
+          "landing.converted"
+        ],
+        "consumes": [
+          "workspace.soul.business_type",
+          "workspace.soul.services",
+          "workspace.soul.tone",
+          "workspace.soul.mission",
+          "workspace.soul.offer",
+          "workspace.soul.entity_labels",
+          "workspace.soul.journey_stages",
+          "workspace.theme.primary_color",
+          "contact.id"
+        ],
+        "verbs": [
+          "page",
+          "landing",
+          "website",
+          "publish",
+          "generate page",
+          "copy",
+          "homepage",
+          "squeeze",
+          "hero",
+          "cta",
+          "funnel",
+          "optin"
+        ],
+        "composeWith": [
+          "formbricks-intake",
+          "crm",
+          "caldiy-booking",
+          "email",
+          "sms",
+          "payments",
+          "automation",
+          "brain-v2"
+        ]
+      }
+    },
+    "payments": {
+      "slug": "payments",
+      "description": "Invoicing + one-off payments + recurring subscriptions via Stripe Connect Standard. Each SMB connects their own Stripe account once (OAuth); every subsequent API call routes funds, invoices, customers, and payouts to the SMB's account via the `Stripe-Account` header. SeldonFrame never holds the SMB's secret key. SMB keeps 100% of their revenue — we don't take an application fee in v1.",
+      "contract": {
+        "produces": [
+          "payment.completed",
+          "payment.failed",
+          "payment.refunded",
+          "payment.disputed",
+          "invoice.created",
+          "invoice.sent",
+          "invoice.paid",
+          "invoice.past_due",
+          "invoice.voided",
+          "subscription.created",
+          "subscription.updated",
+          "subscription.renewed",
+          "subscription.cancelled",
+          "subscription.trial_will_end"
+        ],
+        "consumes": [
+          "workspace.soul.business_type",
+          "workspace.soul.default_currency",
+          "contact.id",
+          "contact.email",
+          "contact.firstName",
+          "booking.id",
+          "booking.amount"
+        ],
+        "verbs": [
+          "invoice",
+          "bill",
+          "charge",
+          "collect",
+          "payment",
+          "subscribe",
+          "subscription",
+          "recurring",
+          "refund",
+          "cancel",
+          "dunning",
+          "past due",
+          "failed payment"
+        ],
+        "composeWith": [
+          "crm",
+          "caldiy-booking",
+          "email",
+          "sms",
+          "automation",
+          "brain-v2"
+        ]
+      }
+    }
+  },
+  "toolCount": 75,
+  "tools": [
+    {
+      "name": "create_workspace",
+      "description": "Create a real, hosted workspace on <slug>.app.seldonframe.com with CRM, Cal.diy booking, Formbricks intake, and Brain v2 pre-installed. The first workspace requires no API key. Example: create_workspace({ name: 'Dental Clinic Laval', source"
+    },
+    {
+      "name": "list_workspaces",
+      "description": "List all workspaces known to this device (plus any Pro workspaces if SELDONFRAME_API_KEY is set)."
+    },
+    {
+      "name": "switch_workspace",
+      "description": "Set the active workspace. Subsequent tool calls act on it by default."
+    },
+    {
+      "name": "clone_workspace",
+      "description": "Clone an existing workspace as a template. Example: clone_workspace({ source_workspace_id: 'wsp_x', name: 'Copy' })"
+    },
+    {
+      "name": "link_workspace_owner",
+      "description": "Claim an anonymously-created workspace under your real account. After linking, the admin URLs (dashboard, contacts, deals) become usable once you sign in at app.seldonframe.com. Requires SELDONFRAME_API_KEY to be set in the MCP environment."
+    },
+    {
+      "name": "revoke_bearer",
+      "description": "Revoke workspace bearer tokens. Useful if a device token has leaked or if a builder wants to rotate. Modes (pick exactly one): `{}` revokes ALL tokens except the current device's (safe default — other devices kicked off, this device keeps w"
+    },
+    {
+      "name": "update_landing_content",
+      "description": "Rewrite the workspace's public landing page at / — headline, subhead, and primary CTA label. YOU decide the copy based on the user's request + the workspace Soul; this tool persists it."
+    },
+    {
+      "name": "update_theme",
+      "description": "Change workspace theme: mode (dark|light), primary_color (#hex), accent_color (#hex), font_family. Any subset. Available fonts: Inter, DM Sans, Playfair Display, Space Grotesk, Lora, Outfit."
+    },
+    {
+      "name": "list_automations",
+      "description": "List automations configured in the active (or specified) workspace."
+    },
+    {
+      "name": "install_vertical_pack",
+      "description": "Install a vertical pack (e.g. 'real-estate', 'dental', 'legal'). Adds domain-specific objects, fields, views."
+    }
+  ],
+  "userPrompt": "When someone submits the new-patient intake form, text them within 2 minutes to thank them by name and ask when they'd like to come in. Have a short SMS conversation to confirm they have insurance, then book them into the next available new-patient consultation slot. Email a confirmation with the clinic address."
+}

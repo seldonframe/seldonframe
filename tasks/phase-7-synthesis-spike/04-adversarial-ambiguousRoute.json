@@ -1,0 +1,37 @@
+{
+  "name": "Speed-to-Lead — New Patient Intake",
+  "description": "When a new-patient intake form is submitted, text the prospect within 2 minutes, run a short SMS conversation to confirm insurance, book them into the next new-patient consultation slot if qualified, and email a confirmation.",
+  "trigger": {
+    "type": "event",
+    "event": "form.submitted",
+    "filter": {
+      "formId": "form_new_patient_intake"
+    }
+  },
+  "variables": {
+    "contactId": "trigger.contactId",
+    "phone": "trigger.data.phone",
+    "name": "trigger.data.name",
+    "email": "trigger.data.email",
+    "hasInsurance": "trigger.data.has_insurance"
+  },
+  "steps": [
+    {
+      "id": "wait-two-minutes",
+      "type": "wait",
+      "seconds": 120,
+      "next": "opening-sms"
+    },
+    {
+      "id": "send-sms",
+      "type": "mcp_tool_call",
+      "tool": "send_sms",
+      "args": {
+        "to": "{{phone}}",
+        "body": "Hi {{name}} — thanks!",
+        "contact_id": "{{contactId}}"
+      },
+      "next": null
+    }
+  ]
+}
