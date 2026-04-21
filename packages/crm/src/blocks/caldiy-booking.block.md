@@ -220,6 +220,14 @@ consumes: [workspace.soul.business_type, workspace.soul.availability_timezone, w
 verbs: [book, schedule, appointment, availability, meeting, calendar, consultation, discovery call]
 compose_with: [crm, formbricks-intake, email, sms, payments, automation, brain-v2]
 
+### MCP tools that emit these events
+
+Phase 7 synthesis uses this pointer to wire agents that need to schedule an appointment on behalf of a contact. Added 2026-04-21 (Phase 7.h) after the 7.a live run confirmed the gap was blocking Speed-to-Lead synthesis end-to-end.
+
+- `create_booking({contact_id, appointment_type_id, starts_at, notes?})` → `booking.created`. Reads the appointment-type template (duration + price), schedules a real booking on the workspace calendar, stamps contact name + email, emits the event, and — when the appointment type has a price — returns a Stripe Checkout URL routed through the SMB's connected Stripe account so the agent can text or email the payment link.
+- `create_appointment_type` / `update_appointment_type` / `list_appointment_types` manage the templates; `create_booking` is the one that actually schedules against them.
+- `configure_booking` updates workspace-level booking defaults (no event emission).
+
 ---
 
 ## Pages

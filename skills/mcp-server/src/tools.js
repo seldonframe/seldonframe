@@ -798,6 +798,33 @@ export const TOOLS = [
   // ════════════════════════════════════════════════════════════════════
 
   {
+    name: "create_booking",
+    description:
+      "Schedule a real booking against an existing appointment type. Looks up the template by id, creates a scheduled row on the workspace calendar, stamps the contact's name + email, emits booking.created, and — if the appointment type has a price > 0 — returns a Stripe Checkout URL routed to the SMB's connected Stripe account so the builder / agent can text or email the payment link to the contact. Example: create_booking({ contact_id: 'ctc_...', appointment_type_id: 'appt_...', starts_at: '2026-05-01T15:00:00Z' })",
+    inputSchema: obj(
+      {
+        contact_id: str("Required. CRM contact being booked."),
+        appointment_type_id: str("Required. Appointment-type template id from list_appointment_types."),
+        starts_at: str("Required. ISO 8601 timestamp for the appointment start (e.g. 2026-05-01T15:00:00Z). Duration is read from the appointment type."),
+        notes: str("Optional free-form booking notes."),
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["contact_id", "appointment_type_id", "starts_at"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      return api("POST", "/bookings", {
+        body: {
+          contact_id: args.contact_id,
+          appointment_type_id: args.appointment_type_id,
+          starts_at: args.starts_at,
+          notes: args.notes ?? null,
+        },
+        workspace_id: ws,
+      });
+    },
+  },
+  {
     name: "list_appointment_types",
     description:
       "List all appointment types (bookable templates) in the workspace. Example: list_appointment_types({}).",
