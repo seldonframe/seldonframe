@@ -207,6 +207,31 @@ Format: **Lesson** / **Trigger** / **Rule**
 
 ---
 
+## L-16 — Don't encode subagent findings into an audit without source-spot-checking the specific claims the audit will rest on
+
+- **Trigger:** Dispatched an Explore subagent to survey the 2b.1 audit source material.
+  Subagent returned a thorough report; I paraphrased it into the audit doc.
+  Self-review afterward caught four factual errors the subagent had in its
+  summary: a CRM MCP tool list that invented three non-existent tools
+  (`add_tag`, `remove_tag`, `merge_contacts`) and missed three real ones
+  (`delete_deal`, `list_activities`, `create_activity`); a parseCompositionLine
+  line number off by 3; an LOC estimate that didn't account for interpolation
+  resolver work; and a missed runtime-not-yet-shipped caveat on the `capture`
+  feature (the archetype README explicitly says "7.e runtime not yet shipped"
+  but the subagent didn't surface it).
+- **Rule:** When a subagent's report will be encoded into a plan/audit/spec
+  that another human (or agent) will read as authoritative, **source-verify
+  the specific claims the document will rest on** before locking them in. For
+  each load-bearing fact (counts, file paths, line numbers, type-existence
+  claims, "X doesn't exist today" claims), run the direct lookup (Grep, Read,
+  Bash-count) before paraphrasing. Subagent summaries are good scaffolding
+  for *what to look at* but not *ground truth on what's there*. The cost of a
+  direct verification is 10–30 seconds per claim; the cost of shipping an
+  audit with wrong facts is one revision round with the user. Budget the
+  verification time; don't trust-and-paraphrase.
+
+---
+
 ## Template for new entries
 
 ```

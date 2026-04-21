@@ -236,10 +236,12 @@ consumes:
 
 Plus **typed tool-call captures** — the Win-Back `capture: "coupon"` binding (`packages/crm/src/lib/agents/archetypes/types.ts` line 25–32) that lets downstream steps reference `{{coupon.code}}` needs a typed output schema on the tool declaration (2.a's `returns:` field). Without it, `{{coupon.couponCode}}` (wrong field name) compiles today but fails at runtime.
 
-**What it fixes.**
+**Important runtime caveat.** The archetype README explicitly notes: *"The 7.e runtime (not yet shipped) will honor this; the validator accepts the field as-is."* (`packages/crm/src/lib/agents/archetypes/README.md` line 147.) There is **no agent runtime in the repo today** — archetype specs are authored + validated at synthesis time + exported, but nothing executes them yet. This means 2b.1's typed-I/O benefit is **synthesis-time only**: the agent-spec validator catches `{{coupon.code}}` vs `{{coupon.couponCode}}` drift and refuses the spec, but the runtime enforcer lands with 7.e. The audit's "no runtime changes" constraint (§4 Totals) is consistent with this — 2b.1 does not need runtime work to deliver value, because catching drift at synthesis time is the failure mode that matters for agent generation quality.
+
+**What it fixes (at synthesis time).**
 - A block that `consumes: [form.submitted]` and a block that `produces: [form.submitted]` validate end-to-end: the consumer's expected `formId: string` matches the producer's emitted `formId: string`.
 - The 7.h-era "MCP tools that emit these events" prose-pointer becomes machine-checked.
-- Win-Back's `capture: "coupon"` gains a type — validator catches `{{coupon.code}}` vs `{{coupon.couponCode}}` drift at synthesis time.
+- Win-Back's `capture: "coupon"` gains a type — validator rejects specs that reference `{{coupon.couponCode}}` when the tool declares `couponId` + `code` (the drift we'd otherwise only discover once 7.e executes).
 - Agent-spec validator can propagate types through: trigger payload → conversation extract → tool-call arg → tool output capture → downstream tool-call arg, refusing any step where the type chain breaks.
 
 ---
@@ -270,7 +272,7 @@ Backward-compat is the right call because the sprint plan already commits to "mi
 
 ### 4.1 Parser — `packages/crm/src/lib/blocks/block-md.ts`
 
-- **Current state:** 913 LOC. Parser is one file; composition-contract parsing is ~60 LOC (`parseCompositionLine` lines 683–706, `parseCompositionContract` lines 708–745). Type definition `BlockMdCompositionContract` at lines 75–91.
+- **Current state:** 913 LOC. Parser is one file; composition-contract parsing is ~60 LOC (`parseCompositionLine` lines 686–706, `parseCompositionContract` lines 708–745). Type definition `BlockMdCompositionContract` at lines 75–91.
 - **v2 additions:**
   - Extend `BlockMdCompositionContract` with optional v2-shaped fields (`producesTyped?`, `consumesTyped?`, `tools?`). Keep `produces: string[]` etc. populated even when the v2 form is present, so downstream code that only needs names keeps working without a branching read.
   - Add a YAML/nested-list detector inside `parseCompositionContract`: if a field starts with a `-` nested bullet shape, dispatch to a v2 sub-parser rather than `splitCommaList`.
@@ -298,14 +300,14 @@ Backward-compat is the right call because the sprint plan already commits to "mi
   - For each `ConversationStep`, validate `on_exit.extract` fields against the typed-exit shape (§2.b).
   - For `capture:` bindings, validate that downstream `{{<name>.<field>}}` references resolve against the tool's typed `returns:` shape (§2.a).
   - Return a list of violations with step id + path + message. Zero violations = spec is type-clean.
-- **Estimated LOC:** ~200 LOC for the first cut. Intentionally narrow: only checks 2b.1's three type additions. Doesn't type-check `branch.condition.type: "external_state"` (that's 2e) or `await_event` (2c). Doesn't validate schedules (2d).
+- **Estimated LOC:** **~300–400 LOC for the first cut** (revised up from an initial ~200 estimate after factoring in interpolation resolution — parsing `{{var.path}}` expressions, resolving `var` to its declaring source, walking `.path.parts` against the declared type — is ~100 LOC on its own). Intentionally narrow: only checks 2b.1's three type additions. Doesn't type-check `branch.condition.type: "external_state"` (that's 2e) or `await_event` (2c). Doesn't validate schedules (2d).
 
 ### 4.4 Totals
 
 - Parser + composition validator: +~340 LOC inside `block-md.ts` (or split, see 4.1).
-- New agent-spec validator: +~200 LOC in a new file.
+- New agent-spec validator: +~300–400 LOC in a new file.
 - No runtime changes. No new MCP tools. No UI changes.
-- **Net estimate: ~540 LOC code + ~250 LOC test + docs for the slice.**
+- **Net estimate: ~640–740 LOC code + ~300 LOC test + docs for the slice.** (Prior estimate was 540 + 250; revised after self-review factored in interpolation-resolver cost.)
 
 ---
 
@@ -323,10 +325,10 @@ CRM is the simplest shipped block (fewest entities, fewest events, no external i
 If v2 can express CRM cleanly, the shape holds for the 6 downstream migrations in 2b.2. If it can't, we catch the schema problem at slice-1 rather than 5 slices deep with a half-migrated codebase.
 
 **What the CRM v2 migration includes:**
-1. Rewrite `crm.block.md` `## Composition Contract` to v2 shape — typed `produces` referencing the `SeldonEvent` union, typed `consumes` for soul fields and contact shape, and a `tools:` section for the 12 CRM MCP tools (list_contacts, create_contact, update_contact, delete_contact, get_contact, add_tag, remove_tag, merge_contacts, list_deals, create_deal, update_deal, move_deal_stage).
+1. Rewrite `crm.block.md` `## Composition Contract` to v2 shape — typed `produces` referencing the `SeldonEvent` union, typed `consumes` for soul fields and contact shape, and a `tools:` section for the **13 CRM MCP tools** (enumerated directly from `skills/mcp-server/src/tools.js`): 5 contact tools (`list_contacts`, `get_contact`, `create_contact`, `update_contact`, `delete_contact`), 6 deal tools (`list_deals`, `get_deal`, `create_deal`, `update_deal`, `move_deal_stage`, `delete_deal`), 2 activity tools (`list_activities`, `create_activity`).
 2. Keep v1 fields populated (per backward-compat rule above) so any legacy consumer keeps working during the sprint.
 3. Run the new composition-contract validator — CRM block should report zero errors, zero warnings.
-4. Run the new agent-spec validator against Speed-to-Lead / Win-Back / Review Requester — each of these archetypes references `create_contact` / `create_deal` / `create_activity` indirectly, and the validator should confirm the arg shapes line up.
+4. Run the new agent-spec validator against Speed-to-Lead / Win-Back / Review Requester — each of these archetypes uses `create_activity` directly and references `contact.*` fields indirectly via trigger payloads. The validator should confirm the arg shapes line up.
 
 **Gate:** CRM migration proves the pattern holds. If a v2-specific shape issue surfaces (e.g., the typed `consumes: [contact.email]` doesn't cleanly express that some consumers want the email string and others want the full contact record), **stop and fix the schema before advancing to 2b.2.**
 
@@ -380,13 +382,25 @@ Three plausible shapes for typed tool inputs / block I/O:
 
 | Approach | Shape | Pros | Cons |
 |---|---|---|---|
-| **Zod** | `z.object({ first_name: z.string(), email: z.string().email().optional() })` | Single source of truth — same schema validates at synthesis AND runtime. Excellent TypeScript inference. Battle-tested in the project (already used in `packages/crm/src/lib/utils/validators.ts`). | Zod is JS — the BLOCK.md has to reference schemas by name, not embed them. Means schemas live in code, not in the block's markdown. |
-| **JSON Schema** | `{ "type": "object", "properties": { "first_name": {"type": "string"} }, "required": ["first_name"] }` | Embeds in the BLOCK.md directly (YAML/JSON block). Language-agnostic — third-party tooling can consume. | Verbose. No TypeScript inference. Need a separate compiler to Zod for runtime enforcement. |
+| **Pure Zod (schemas-in-code)** | `z.object({ first_name: z.string(), email: z.string().email().optional() })` | Single source of truth — same schema validates at synthesis AND runtime. Excellent TypeScript inference. Battle-tested in the project (already used in 6 files: `packages/crm/src/lib/utils/validators.ts`, `lib/soul-compiler/schema.ts`, and 4 others). | Zod is JS — the BLOCK.md has to reference schemas by name, not embed them. Means schemas live in code, not in the block's markdown. Third-party blocks need to ship both .block.md AND a JS module. |
+| **JSON Schema embedded in BLOCK.md** | `{ "type": "object", "properties": { "first_name": {"type": "string"} }, "required": ["first_name"] }` | Embeds in the BLOCK.md directly. Language-agnostic — third-party tooling can consume. | Verbose. No TypeScript inference at authoring time. Need a separate compiler to Zod for runtime enforcement. |
 | **TypeScript-string DSL** | `first_name: string, email?: email` in BLOCK.md; parser translates to Zod at load time | Most readable in BLOCK.md. Compact. | Another parser to build + maintain. Non-standard — third parties can't consume without our parser. |
+| **Zod-authored, JSON-Schema-emitted (bidirectional)** | Author Zod in `<block>.tools.ts`; a build step calls `z.toJSONSchema()` and emits JSON-Schema blocks into `<block>.block.md` automatically. BLOCK.md shows the JSON-Schema for third-party readers; runtime + validator use the Zod source. | Single source of truth like pure Zod. BLOCK.md stays self-contained like JSON-Schema. Zod v4's `z.toJSONSchema()` is stable and lossless for the subset we'd use (primitives, unions, objects, enums). | Build step must run on every block edit or BLOCK.md drifts from the code. Fails closed when drift detected (test that diffs emitted vs committed). |
 
-**Recommendation:** JSON Schema in BLOCK.md, with a small compiler that emits Zod at load time. Rationale: BLOCK.md must be self-contained for third-party block authoring (V1.1 GTM), which rules out Zod-in-code. DSL would be cleaner to read but another parser is unjustified scope for 2b.1. Once we have Zod at runtime, agent-spec validator + composition-contract validator share the same type machinery.
+**Recommendation — revised after self-review:** the **fourth option, Zod-authored with JSON-Schema emitted into BLOCK.md**, is the cleanest architecture and what I'd recommend now. Original recommendation was "JSON Schema in BLOCK.md with a load-time Zod compiler"; the author-in-Zod path is strictly better because:
 
-**Gate item:** Max to confirm JSON Schema approach, or overrule with a different choice. The other two sections of this audit assume JSON Schema; a different choice pushes ~60 LOC of diff.
+1. Single source of truth — Zod in code is the canonical definition; JSON-Schema is the published rendering.
+2. No new parser — `z.toJSONSchema()` is provided by the library.
+3. BLOCK.md stays self-contained for third parties — they read the JSON-Schema and don't need Zod.
+4. Runtime enforcement (when 7.e ships) uses the same Zod the validator already parses.
+5. Drift is caught by a CI test that re-emits and diffs — build-time guarantee, not a runtime risk.
+
+The load-time-compile path (original recommendation) forces us to write a JSON-Schema-→-Zod compiler, which is strictly more work than using `z.toJSONSchema()` from upstream.
+
+**Gate item:** Max to confirm the Zod-authored / JSON-Schema-emitted approach. This is the biggest architectural flip in the audit; I want explicit approval before other sections proceed on this assumption. Implications if approved:
+- Delete the JSON-Schema-to-Zod compiler from scope; replace with a BLOCK.md emit step in the build.
+- Add a CI test that runs the emit and diffs against committed BLOCK.md (drift detector).
+- Total LOC goes **down** versus the original recommendation — rough estimate -50 to -100 LOC net.
 
 ### 7.2 Where do typed conversation exit predicates live?
 
@@ -421,6 +435,34 @@ Two paths:
 **Recommendation:** multiple PRs. Sprint discipline from §0.5: "If 2b.1 surfaces schema problems, they get fixed before 5 more blocks migrate." Splitting the PR means (a) lands and runs in production-ish shape before (c) — if (a) breaks existing v1-only synthesis, we catch it with the Speed-to-Lead probe before the CRM migration even starts. Atomicity of a single PR has no business-continuity benefit because 2b.1 doesn't change the user-facing surface.
 
 **Gate item:** confirm the 3-PR split. If Max wants one PR, shrink the regression suite (still non-negotiable at the slice end).
+
+### 7.5 The 11 non-core BLOCK.md files without composition contracts
+
+Beyond the 7 core blocks (§1), `packages/crm/src/blocks/` contains 11 additional `.block.md` files that **do not carry a `## Composition Contract` section**:
+
+- `ai-video-hooks-optimizer.block.md`
+- `bulk-video-generation-performance-tracker.block.md`
+- `client-dashboard-progress-analytics.block.md`
+- `client-intake-onboarding-portal.block.md`
+- `membership-tiered-service-portal.block.md`
+- `multi-product-analytics-dashboard.block.md`
+- `og-image-generator.block.md`
+- `product-launch-os.block.md`
+- `safety-first-intake-recipe.block.md`
+- `simple-membership-community-site.block.md`
+- `waitlist-form.block.md`
+
+These are "recipe" blocks — small (30–33 LOC each) skill files that describe vertical-specific compositions. Today they're invisible to agent synthesis because `parseCompositionContract` returns empty arrays when the section is absent (parser treats them as "no known composition", synthesis won't auto-use them — this is the existing behavior documented at `block-md.ts:73`).
+
+**Three paths under v2:**
+
+- **(a) Stay invisible forever.** Recipe blocks are documentation / starter-content, not synthesis-eligible blocks. v2 migration applies only to the 7 core blocks. Pro: smallest scope. Con: builders who install a recipe block can't have agents auto-route to it.
+- **(b) Add minimal v1 contracts in 2b.2.** Extend the per-block migration work in 2b.2 to include adding a minimal `## Composition Contract` (just verbs + compose_with, leave produces/consumes empty) to each of the 11 recipes. Pro: recipes become synthesis-discoverable. Con: +11 migration slices beyond the 6 already planned.
+- **(c) Add a "recipe" block type.** Schema-level distinction — `type: recipe` in frontmatter — so the parser knows to skip them without a warning and synthesis treats them differently (e.g., "you can install a recipe, but I won't auto-generate an agent that uses one"). Pro: cleanest semantic. Con: new frontmatter field, new synthesis-path discrimination.
+
+**Recommendation:** (a) for v1 — scope-preserving, and the recipe files are small enough that (b) could happen in a later sprint (V1.1 GTM slice) without re-designing the contract. If Max disagrees, (c) is the architecturally cleanest answer but pushes ~40 LOC of parser/validator changes.
+
+**Gate item:** confirm v2 migration scope stays at the 7 core blocks; 11 recipe blocks keep their "invisible to synthesis" status until a later slice explicitly addresses them.
 
 ---
 
@@ -473,6 +515,10 @@ This keeps 2b.1's typed-exits work self-contained while leaving 2e's scope clear
 
 So Review Requester's upgrade waits on 2e, not 2b.1. 2b.1 ships the typed exits for conversation steps (Speed-to-Lead and future Appointment Confirmer are the main users). Review Requester's remaining limitation stays limitation-flagged until 2e lands.
 
+### 9.5 Implication for v1 ship criterion
+
+The master plan §0.5 ship criterion reads: *"7 archetypes shipped, **zero V1.1 footnotes** anywhere in their docs."* Review Requester currently ships with a loud "SMS fires unconditionally" limitation (the exact thing 2e's `external_state` branch removes). Given §9.4 above, the v1 ship criterion is **load-bearing on 2e actually landing** — if 2e slips, Review Requester's V1.1 footnote stays, which fails the zero-footnote bar. This isn't a 2b.1 issue per se, but the audit should note the dependency so 2e isn't treated as optional or deferrable later in the sprint.
+
 ---
 
 ## 10. Implementation plan (post-approval)
@@ -498,10 +544,28 @@ This audit is the gate. **No code until approved.** Expected flow:
 3. On approval, PR 1 of Section 10's plan starts. Not before.
 
 Questions surfaced above that explicitly need Max input:
-- §7.1 — JSON Schema vs Zod vs DSL
+- §7.1 — Schema approach: **Zod-authored / JSON-Schema-emitted (new recommendation after self-review)** vs JSON-Schema-in-BLOCK.md vs pure Zod vs DSL
 - §7.2 — Predicate primitive location (packages/core vs packages/crm)
 - §7.3 — Event-registry resolution approach (codegen)
 - §7.4 — Single PR vs 3 PRs
+- §7.5 — v2 migration scope: 7 core blocks only (recommended) vs all 18 `.block.md` files vs add a "recipe" block type
 - §9.4 — Confirmation that Review Requester's SMS-suppression upgrade waits on 2e, not 2b.1
+- §9.5 — Acknowledgement that v1 ship criterion is load-bearing on 2e landing (Review Requester's V1.1 footnote clears only when 2e ships)
 
 All other decisions in this audit are my defaults; Max can overrule any before implementation starts.
+
+---
+
+## 12. Self-review changelog (2026-04-21, post-draft)
+
+Critical self-review after initial draft found four factual errors and three substantive gaps. All fixed in-place:
+
+1. **§5 — CRM tool count corrected: 12 → 13.** Original list invented `add_tag`, `remove_tag`, `merge_contacts` (don't exist) and missed `delete_deal`, `list_activities`, `create_activity`. Enumerated directly from `skills/mcp-server/src/tools.js`.
+2. **§4.1 — parseCompositionLine line number corrected: 683 → 686.**
+3. **§2.c — runtime caveat added.** The `capture` mechanism has no agent runtime yet (README line 147: "7.e runtime not yet shipped"). 2b.1's typed-I/O benefit is synthesis-time only. The audit's "no runtime changes" constraint is consistent with this, but needed explicit acknowledgement.
+4. **§4.3 — LOC estimate bumped: ~200 → ~300–400.** Original estimate didn't factor in the interpolation-resolver logic (`{{var.path}}` parsing, resolution, walking). Total slice estimate revised from 540+250 LOC to 640–740+300 LOC.
+5. **§7.1 — new recommended option: Zod-authored with JSON-Schema emitted.** Original recommendation (JSON-Schema-in-BLOCK.md + load-time compiler to Zod) requires writing a compiler we don't need. Zod v4's `z.toJSONSchema()` emits JSON-Schema bidirectionally; single source of truth stays in code, BLOCK.md shows the rendering. Cleaner architecture, less LOC.
+6. **§7.5 — new open decision: what to do with the 11 non-contract BLOCK.md files.** 18 `.block.md` files exist; only 7 carry composition contracts. Recipe blocks (`waitlist-form`, `og-image-generator`, etc.) are currently invisible to synthesis. Recommendation: stay invisible for v1. Max confirms.
+7. **§9.5 — new implication: v1 ship criterion is load-bearing on 2e.** Review Requester's V1.1 footnote only clears when 2e ships; "zero V1.1 footnotes" ship bar requires 2e actually landing, not just being planned.
+
+Result: audit is more honest about scope/cost, catches the architectural flip on schema approach before Max reads it, and surfaces the 2e dependency before it becomes a late-sprint surprise.
