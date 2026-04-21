@@ -1,0 +1,1 @@
+{"error": "No MCP tool exists to create a booking for a contact — the catalog only exposes list/create/update_appointment_type (templates), not a way to schedule an actual appointment on a contact's behalf. The best we can do is text them a booking link so they self-book; if that's acceptable, reissue the request and I'll build it."}

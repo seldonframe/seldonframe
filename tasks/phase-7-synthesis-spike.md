@@ -250,6 +250,8 @@ Rationale for the reordering:
 | **Canvas editing** (drag to rearrange, draw new edges) | net-new | 7.f ships read-only; authoring-via-canvas is V1.1. |
 | **`on_error` per step** | net-new | Step-level `retry | skip | halt` with exponential-backoff settings. v1 halts on any tool-call failure. |
 | **Stripe application-fee knob** | net-new | From Phase 5. v1 = 0% platform fee; V1.1 optional. |
+| **Scheduled / cron triggers in AgentSpec** | net-new *(surfaced by 2026-04-21 live run)* | v1 ships with event-only triggers. V1.1 adds `trigger.type: "schedule"` implemented via synthetic-event emission from a nightly cron (keeps the spec schema stable, moves the complexity to the runtime). Unblocks re-engagement / inactivity / daily-report agents. |
+| **Brain v2 `contact.inactive_Nd` synthetic event** | net-new *(surfaced by 2026-04-21 live run)* | Prerequisite for the V1.1 re-engagement / churn-save agents that need "60 days since last attendance"-style triggers. |
 
 Rationale for consolidating the three contract gaps: migrating BLOCK.md files is a coordinated change — doing it once for three additions is cheaper than three separate migrations. The schema-v2 rollout plans the parser change + backfill of all 7 blocks + updated validator in one sweep.
 
@@ -299,15 +301,84 @@ For the 5x determinism + novel-prompt additions, add a small wrapper that runs t
 
 ### Live-run status
 
-**Not yet executed — blocked by environment.** `ANTHROPIC_API_KEY` is masked from this agent's shell + child-process context (standard Claude Code sandboxing), so I cannot run the live portion from my session. **Max to kick off locally with the command above and paste findings here.**
+**Executed 2026-04-21.** `$0.7233 / $5.00 budget` across 11 calls, 177s wall-clock. Full raw artifacts in `tasks/phase-7-synthesis-spike/live-*`. Summary rendered to `live-run-report.md`.
 
-### Findings (to be appended)
+### Findings (2026-04-21 live run)
 
-_Placeholder. Append live-run results here once available. Structure:_
+#### Correcting the auto-verdict
 
-- **Per-run:** spec valid? / token in / token out / dollar cost / validator issues
-- **Determinism across 5 runs:** step count variance, ID-shape variance, tool-selection variance, copy-content variance (expected high)
-- **Vague prompt:** did Claude decline, fabricate a generic agent, or ask clarifying questions?
-- **Novel prompt:** what shape did it produce? Did it compose existing blocks sensibly?
-- **Total API spend:** $X.XX
-- **Overall verdict:** does the live-run evidence support proceeding with 7.h, or does it reveal a blocker requiring re-architecture?
+The `run-live.mjs` script emitted `fundamentally unreliable for archetypal prompts`. **This label is misleading** — my verdict logic treated "Claude declined the happy path" as a synthesis failure, but reading the actual decline text shows the opposite. Claude correctly identified that `create_booking` doesn't exist in the MCP catalog and declined rather than fabricating a call to a non-existent tool. That's the ideal behavior, not a failure. The verdict derivation has been left as-is in the script as a reminder that auto-verdicts over-simplify; the narrative below is the correct read.
+
+**Corrected verdict: synthesis is production-ready for archetypal prompts once two gaps are closed.**
+- `create_booking` MCP tool lands in 7.h. *(already planned.)*
+- Clarifying-questions loop in 7.d is mandatory, not optional — see the vague-prompt finding below.
+
+#### Probe-by-probe interpretation
+
+| Probe | Outcome | Interpretation |
+|---|---|---|
+| **01 — happy path (Speed-to-Lead)** | Declined, citing `create_booking` missing | Exactly the right behavior. Decline text: *"Cannot auto-book the patient into a consultation slot — the MCP catalog has no create_booking tool (only appointment-type CRUD). I can text them, have a conversation, and email a confirmation, but assigning them to a specific slot requires either a create_booking tool or sending them the /book/<slug> link so they self-schedule."* Claude offered a workaround (send booking link) and asked for confirmation before proceeding. This is the behavior we want from synthesis on any missing-capability case. |
+| **02 — hallucinated block (Slack)** | Declined cleanly | *"Slack integration is not available — no Slack block is installed and no MCP tool exists to post to Slack. Available notification channels are email and sms only."* Specific, grounded in the catalog. No hallucination risk. |
+| **03 — vague prompt ("help with leads")** | PASS — Claude fabricated a full 6-step welcome-series agent | **This is the real UX problem.** Claude didn't decline, didn't ask for clarification — it inferred from Soul + installed form that the builder wanted a welcome + SMS speed-to-lead flow, and shipped a coherent, plausible spec. The inference was reasonable, but the builder never signed off on "welcome vs qualification vs speed-to-lead" — Claude picked silently. **Clarifying-questions loop in 7.d is mandatory.** |
+| **04 — impossible capability (FedEx)** | Declined cleanly | *"No FedEx or physical mail/shipping tool is available in the MCP catalog; cannot send a physical welcome kit."* Perfect. |
+| **05 — ambiguous route (SMS or email, your choice)** | PASS — picked SMS, single-step | Claude made a unilateral choice without asking. Reasonable default (SMS has higher open rates for speed-to-lead), but silent. Same UX concern as probe 03 — synthesis-without-review is risky. |
+| **06 — determinism (5 repeats of happy-path prompt)** | 4 of 5 produced valid specs, 1 of 5 declined on `create_booking` | Structural variance across the 4 valid runs: runs 1 + 5 produced 4-step specs (wait → conversation → email + booking link), run 4 produced 6 steps, run 2 produced 7 steps (added `update_contact` + `create_deal`). All coherent; none nonsense. Each run is a plausible agent for the prompt — just a different plausible agent. See determinism section below. |
+| **07 — novel (yoga-studio recovery)** | Declined cleanly, and surfaced a real schema gap | Decline cited three things: (a) Soul is dental clinic, prompt is yoga studio (contradiction), (b) no attendance-tracking event in the block system, (c) **AgentSpec only supports event triggers, not scheduled/cron triggers** — can't express "60 days since last attendance" as a trigger. **The last point is a real v1 schema gap that the happy-path prompt didn't exercise.** See below. |
+
+#### Decline quality is excellent
+
+Across 5 declines, Claude's reasoning was consistently grounded in the actual MCP catalog + installed blocks + Soul. Not a single hallucinated capability. Decline text is the kind of thing an engineer would write in a PR review. This is a *very* strong signal for the archetype-picker UX — when an archetype's template references a missing tool, synthesis will fail gracefully with an actionable explanation rather than silently bad output.
+
+#### Determinism is shape-variable, not content-variable
+
+Structural fingerprints across the 5 runs on the same prompt:
+
+- run 1: `trigger=form.submitted | count=4 | wait | conv:sms | tool:send_email | end`
+- run 2: `trigger=form.submitted | count=7 | wait | tool:send_sms | conv:sms | tool:update_contact | tool:send_email | tool:create_deal | end`
+- run 3: `__error__` (declined on create_booking)
+- run 4: `trigger=form.submitted | count=6 | wait | conv:sms | tool:update_contact | tool:send_sms | tool:send_email | end`
+- run 5: `trigger=form.submitted | count=4 | wait | conv:sms | tool:send_email | end`
+
+Runs 1 + 5 are identical-shape (4-step minimal); runs 2 + 4 are thorough (6-7 step variants adding CRM hygiene like `update_contact` + `create_deal`); run 3 declined. All 4 valid specs are *coherent agents for the same prompt* — they just reflect different opinions about "minimal vs thorough." **Implications for the product UX:**
+
+1. **Archetype-first is vindicated.** If two workspaces type the same NL prompt into a blank synthesis box, they'd get meaningfully different agent shapes. The archetype-picker pins the shape to a canonical skeleton; Claude only varies copy + placeholders.
+2. **Eval harness (7.g) must be lenient on step count.** A `≥60% archetype match` gate that requires exact step count is too strict; it'd fail runs 2 + 4 here even though they're legitimately good agents.
+3. **"Regenerate" button is useful.** Showing the user a spec + letting them say "try again" gives them access to the structural variance rather than hiding it.
+
+#### Vague-prompt handling requires the clarifying-questions loop
+
+Probe 03 confirms the hypothesis from the fixture-mode spike: Claude does NOT decline on vague prompts. It reads Soul + installed blocks + installed forms and infers what the builder probably wants. The inferred agent was plausible; the issue is the inference was silent. A builder typing "help with leads" might want: (a) welcome-nurture, (b) speed-to-lead qualification, (c) follow-up on stale leads, or (d) review solicitation from old leads. Claude picked (a) without asking.
+
+**Conclusion:** the `lib/agents/synthesize.ts` clarifying-questions pre-pass in 7.d is load-bearing. It should trigger whenever the prompt doesn't commit to a specific outcome verb (book / qualify / welcome / re-engage / collect / notify). If the prompt names a verb, synthesize directly; if it doesn't, ask up to 3 structured questions (channel / trigger / outcome-verb / qualification-criteria).
+
+#### New schema gap: scheduled/cron triggers
+
+Probe 07 surfaced this cleanly. AgentSpec's `trigger` field is typed as `type: "event"` with an `event` string. There's no way to express "fire this agent once per day" or "fire when a contact hasn't engaged in N days." Yoga-studio recovery, dunning-at-day-3, re-engagement-after-60d-inactive all want this.
+
+**Option A:** add `trigger.type: "schedule"` with `cron: string` in v1. Archetypes for dunning + churn-save would use it.
+
+**Option B:** model time-based triggers as event-driven, e.g. emit a synthetic `contact.inactive_60d` event from a nightly cron in the workspace. Keeps the spec schema simple; moves complexity to the runtime.
+
+**Option C:** punt entirely to V1.1. Ship v1 with event-only triggers; archetypes that need "N days after X" use `wait` steps after an event trigger.
+
+Recommendation: **Option C for v1**, with Option B as the V1.1 implementation (keeps the spec schema stable). Day-3 dunning = `invoice.past_due` trigger → `wait: 3 days` → send reminder. Appointment reminder 24h before = `booking.created` trigger → calculate wait-until-1-day-before → send. Re-engagement-after-60d = V1.1 (needs a real "inactive since X" event, which needs the Brain v2 dreaming loop the master plan already has planned).
+
+#### Cost profile
+
+- $0.0411 to $0.0954 per call, average ~$0.066.
+- Thinking-enabled (adaptive) outputs range 50-2210 output tokens; declines are ~50-160 tokens, full specs are ~1300-2200.
+- Input is stable at ~8000 tokens (the schema + 75-tool catalog + Soul + form + prompt).
+- 50 syntheses/month free-tier COGS ≈ $3.30. Comfortably profitable on a $9/mo platform subscription.
+- Latency: ~2.3s on declines, 11-31s on full specs. Users will need a "synthesizing…" state.
+
+#### Updated verdict
+
+**Production-ready for archetypal prompts after 7.h lands.** The live-run evidence supports proceeding with the resequenced Phase 7 plan with three refinements:
+
+1. **7.h is genuinely blocking.** 2 of 11 calls declined specifically on `create_booking` missing. Ship it first.
+2. **7.d clarifying-questions loop is mandatory, not a nice-to-have.** Probe 03's fabrication confirms that silent inference on underspecified prompts is a real UX hazard. Budget for the loop from day one, not as a V1.1 polish item.
+3. **7.g eval harness must be lenient on step count.** The 4-to-7-step variance on the same prompt is legitimate synthesis diversity, not drift. The gate should check for required-step presence (has a conversation? has a send_email? has a wait?), not exact step count.
+
+**New V1.1 items surfaced:**
+- `trigger.type: "schedule"` in AgentSpec (via synthetic-event pattern in runtime). See Option B above.
+- Brain v2 `contact.inactive_Nd` synthetic event emitter (prerequisite for re-engagement agents).

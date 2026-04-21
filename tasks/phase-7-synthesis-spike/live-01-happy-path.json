@@ -1,0 +1,3 @@
+{
+  "error": "Cannot auto-book the patient into a consultation slot — the MCP catalog has no create_booking tool (only appointment-type CRUD). I can text them, have a conversation, and email a confirmation, but assigning them to a specific slot requires either a create_booking tool or sending them the /book/<slug> link so they self-schedule. Want me to generate that variant instead?"
+}

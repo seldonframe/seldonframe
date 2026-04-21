@@ -1,0 +1,75 @@
+{
+  "name": "New patient intake → SMS concierge → email confirmation",
+  "description": "When a new-patient intake form is submitted, wait 2 minutes, open a warm SMS thread to thank the patient by name, confirm insurance and preferred time, then email a confirmation with the clinic address and a link to book a new-patient consultation.",
+  "trigger": {
+    "type": "event",
+    "event": "form.submitted",
+    "filter": { "form_id": "form_new_patient_intake" }
+  },
+  "variables": {
+    "contact_id": "$.contact.id",
+    "first_name": "$.contact.firstName",
+    "phone": "$.contact.phone",
+    "email": "$.contact.email",
+    "has_insurance_hint": "$.submission.data.has_insurance",
+    "reason_for_visit": "$.submission.data.reason_for_visit"
+  },
+  "steps": [
+    {
+      "id": "wait_two_minutes",
+      "type": "wait",
+      "seconds": 120,
+      "next": "sms_concierge"
+    },
+    {
+      "id": "sms_concierge",
+      "type": "conversation",
+      "channel": "sms",
+      "initial_message": "Hi {{first_name}}, this is Bright Smile Dental 🙂 Thanks so much for reaching out — we know the dentist isn't everyone's favorite place, so we'll make this easy. When would you like to come in for your free new-patient consultation? Mornings, afternoons, or evenings work best?",
+      "exit_when": "We have (a) a preferred time window and (b) a clear yes/no/unsure on whether they have dental insurance. Be warm, reassuring, zero sales pressure. If they already indicated insurance on the intake form ({{has_insurance_hint}}), confirm gently rather than asking cold.",
+      "on_exit": {
+        "extract": {
+          "preferred_time": "string — the patient's preferred day/time window in their own words",
+          "has_insurance": "one of: yes | no | unsure",
+          "notes": "string — anything else useful for the front desk (anxiety, specific tooth pain, etc.)"
+        },
+        "next": "log_insurance_on_contact"
+      }
+    },
+    {
+      "id": "log_insurance_on_contact",
+      "type": "mcp_tool_call",
+      "tool": "update_contact",
+      "args": {
+        "contact_id": "{{contact_id}}",
+        "notes": "New patient intake follow-up:\nPreferred time: {{preferred_time}}\nInsurance: {{has_insurance}}\nReason for visit: {{reason_for_visit}}\nSMS notes: {{notes}}"
+      },
+      "next": "send_booking_link_sms"
+    },
+    {
+      "id": "send_booking_link_sms",
+      "type": "mcp_tool_call",
+      "tool": "send_sms",
+      "args": {
+        "to": "{{phone}}",
+        "body": "Perfect, {{first_name}}. Here's the link to lock in your free new-patient consultation — pick any slot that works: https://app.seldonframe.com/book/new-patient-consultation — I'll email you a confirmation with our address now too. 💙"
+      },
+      "next": "send_confirmation_email"
+    },
+    {
+      "id": "send_confirmation_email",
+      "type": "mcp_tool_call",
+      "tool": "send_email",
+      "args": {
+        "to": "{{email}}",
+        "subject": "Welcome to Bright Smile Dental, {{first_name}} 🦷",
+        "body": "Hi {{first_name}},\n\nThanks so much for reaching out to Bright Smile Dental — we're really glad you did. Our whole mission is to make dental care feel less scary, and that starts with your first visit being on us.\n\nHere's what to expect:\n• Your new-patient consultation is 45 minutes and completely free\n• No sales pressure — just a friendly look, a conversation, and a plan\n• Modern, gentle tech the whole way through\n\nBook the time that works best for you here:\nhttps://app.seldonframe.com/book/new-patient-consultation\n\nWhere to find us:\nBright Smile Dental\n(Address on file — please reply to this email if you need directions and we'll send them right over.)\n\nIf anything comes up before your visit — nerves, questions, insurance stuff — just reply. A real human reads every message.\n\nSee you soon,\nThe Bright Smile team"
+      },
+      "next": "done"
+    },
+    {
+      "id": "done",
+      "type": "end"
+    }
+  ]
+}

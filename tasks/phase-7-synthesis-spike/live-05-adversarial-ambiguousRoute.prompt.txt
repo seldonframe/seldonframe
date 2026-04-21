@@ -1,0 +1,232 @@
+You are synthesizing an AgentSpec for a SeldonFrame workspace.
+
+## Workspace Soul
+{
+  "businessName": "Bright Smile Dental",
+  "industry": "dental clinic",
+  "mission": "Make dental care feel less scary, one patient at a time.",
+  "offer": "Free new-patient consultations + painless cleanings + modern tech",
+  "tone": "warm, reassuring, no sales pressure",
+  "services": [
+    {
+      "name": "New-patient consultation",
+      "duration": "45 min",
+      "price": 0
+    },
+    {
+      "name": "Cleaning",
+      "duration": "60 min",
+      "price": 120
+    },
+    {
+      "name": "Emergency visit",
+      "duration": "30 min",
+      "price": 180
+    }
+  ]
+}
+
+## Installed blocks
+crm, caldiy-booking, formbricks-intake, sms, email
+
+## Block composition contracts (ONLY use these blocks)
+- crm: Core CRM primitive auto-installed on every SeldonFrame workspace. Contacts, deals, pipelines, activities — the foundation every other block links against. Not optional; cannot be uninstalled.
+    produces: [contact.created, contact.updated, deal.stage_changed]
+    consumes: [workspace.soul.business_type, workspace.soul.customer_fields, workspace.soul.pipeline_stages, contact.email]
+    verbs: [track, remember, save, store, record, contact, deal, pipeline, stage, move, assign, tag, lead, customer, crm]
+    compose_with: [caldiy-booking, formbricks-intake, email, sms, payments, landing-pages, automation, brain-v2]
+- email: Transactional + conversational email block. BYOK Resend (with NextAuth owner-key fallback for platform sends). Send one-off emails, route inbound replies through the Conversation Primitive runtime, track opens/clicks/bounces, and auto-suppress hard bounces + complaints.
+    produces: [email.sent, email.delivered, email.opened, email.clicked, email.bounced, email.replied, email.suppressed, conversation.turn.received, conversation.turn.sent]
+    consumes: [workspace.soul.business_type, workspace.soul.tone, workspace.soul.mission, workspace.soul.offer, contact.id, contact.email, contact.firstName]
+    verbs: [send, email, reply, notify, message, conversation, qualify, nurture, reach out, speed to lead, follow up, welcome]
+    compose_with: [crm, caldiy-booking, formbricks-intake, sms, automation, brain-v2, payments]
+- sms: Transactional + conversational SMS block. BYOK Twilio. Send one-off texts, route inbound replies through the Conversation Primitive runtime (same module as email), track delivery + failures, and auto-suppress on STOP / carrier permanent-failure codes.
+    produces: [sms.sent, sms.delivered, sms.replied, sms.failed, sms.suppressed, conversation.turn.received, conversation.turn.sent]
+    consumes: [workspace.soul.business_type, workspace.soul.tone, workspace.soul.mission, workspace.soul.offer, contact.id, contact.phone, contact.firstName]
+    verbs: [text, sms, message, reply, chat, qualify, speed to lead, follow up, reminder, confirm, book via text]
+    compose_with: [crm, formbricks-intake, caldiy-booking, email, automation, brain-v2, payments]
+- caldiy-booking: Drop-in replacement for the basic SeldonFrame booking form with a full Cal.diy-parity scheduling system: multiple event types, availability schedules, round-robin / collective hosts, calendar sync, custom booking fields, confirmations, reschedules, cancellations, payments, webhooks, and recurring bookings — all schema-driven through this BLOCK.md, installable via the existing block installer, and client-scopable via `end_client_mode`.
+    produces: [booking.created, booking.completed, booking.cancelled, booking.no_show]
+    consumes: [workspace.soul.business_type, workspace.soul.availability_timezone, workspace.soul.team_members, contact.id]
+    verbs: [book, schedule, appointment, availability, meeting, calendar, consultation, discovery call]
+    compose_with: [crm, formbricks-intake, email, sms, payments, automation, brain-v2]
+- formbricks-intake: Drop-in replacement for the basic SeldonFrame intake form with a full Formbricks-parity survey/intake system: 15 question types, conditional logic, multi-step branching, hidden fields, variables, quotas, link + in-app surveys, webhooks, embed SDK, and response analytics — all schema-driven through this BLOCK.md, installable via the existing block installer (`blockType: "form"`), client-scopable via `end_client_mode`, and Brain-integrated.
+    produces: [form.submitted, contact.created]
+    consumes: [workspace.soul.business_type, workspace.soul.customer_fields, contact.id, contact.email]
+    verbs: [intake, capture, collect, qualify, survey, ask, onboard, nps, feedback]
+    compose_with: [crm, caldiy-booking, email, sms, automation, brain-v2]
+- landing-pages: Puck-based landing-page editor + public renderer + Claude-powered generator. Pages are JSON (Puck's `{content, root, zones}` shape), validated against a typed component registry before save, statically rendered via Next ISR at `/l/<orgSlug>/<pageSlug>`, and tracked via client-side visit beacons so ISR caching doesn't skip analytics.
+    produces: [landing.published, landing.unpublished, landing.updated, landing.visited, landing.converted]
+    consumes: [workspace.soul.business_type, workspace.soul.services, workspace.soul.tone, workspace.soul.mission, workspace.soul.offer, workspace.soul.entity_labels, workspace.soul.journey_stages, workspace.theme.primary_color, contact.id]
+    verbs: [page, landing, website, publish, generate page, copy, homepage, squeeze, hero, cta, funnel, optin]
+    compose_with: [formbricks-intake, crm, caldiy-booking, email, sms, payments, automation, brain-v2]
+- payments: Invoicing + one-off payments + recurring subscriptions via Stripe Connect Standard. Each SMB connects their own Stripe account once (OAuth); every subsequent API call routes funds, invoices, customers, and payouts to the SMB's account via the `Stripe-Account` header. SeldonFrame never holds the SMB's secret key. SMB keeps 100% of their revenue — we don't take an application fee in v1.
+    produces: [payment.completed, payment.failed, payment.refunded, payment.disputed, invoice.created, invoice.sent, invoice.paid, invoice.past_due, invoice.voided, subscription.created, subscription.updated, subscription.renewed, subscription.cancelled, subscription.trial_will_end]
+    consumes: [workspace.soul.business_type, workspace.soul.default_currency, contact.id, contact.email, contact.firstName, booking.id, booking.amount]
+    verbs: [invoice, bill, charge, collect, payment, subscribe, subscription, recurring, refund, cancel, dunning, past due, failed payment]
+    compose_with: [crm, caldiy-booking, email, sms, automation, brain-v2]
+
+## Existing intake forms
+[
+  {
+    "id": "form_new_patient_intake",
+    "name": "New patient intake",
+    "fields": [
+      {
+        "name": "name",
+        "type": "text",
+        "required": true
+      },
+      {
+        "name": "email",
+        "type": "email",
+        "required": true
+      },
+      {
+        "name": "phone",
+        "type": "tel",
+        "required": true
+      },
+      {
+        "name": "reason_for_visit",
+        "type": "textarea",
+        "required": false
+      },
+      {
+        "name": "has_insurance",
+        "type": "select",
+        "required": true,
+        "options": [
+          "yes",
+          "no",
+          "unsure"
+        ]
+      }
+    ]
+  }
+]
+
+## Existing appointment types
+[
+  {
+    "id": "appt_new_patient_consult",
+    "name": "New-patient consultation",
+    "duration": 45,
+    "price": 0
+  },
+  {
+    "id": "appt_cleaning",
+    "name": "Cleaning",
+    "duration": 60,
+    "price": 120
+  }
+]
+
+## MCP tool catalog (ONLY use tools from this list)
+- create_workspace: Create a real, hosted workspace on <slug>.app.seldonframe.com with CRM, Cal.diy booking, Formbricks intake, and Brain v2 pre-installed. The first workspace requires no API key. Example: create_workspace({ name: 'Dental Clinic Laval', source
+- list_workspaces: List all workspaces known to this device (plus any Pro workspaces if SELDONFRAME_API_KEY is set).
+- switch_workspace: Set the active workspace. Subsequent tool calls act on it by default.
+- clone_workspace: Clone an existing workspace as a template. Example: clone_workspace({ source_workspace_id: 'wsp_x', name: 'Copy' })
+- link_workspace_owner: Claim an anonymously-created workspace under your real account. After linking, the admin URLs (dashboard, contacts, deals) become usable once you sign in at app.seldonframe.com. Requires SELDONFRAME_API_KEY to be set in the MCP environment.
+- revoke_bearer: Revoke workspace bearer tokens. Useful if a device token has leaked or if a builder wants to rotate. Modes (pick exactly one): `{}` revokes ALL tokens except the current device's (safe default — other devices kicked off, this device keeps w
+- update_landing_content: Rewrite the workspace's public landing page at / — headline, subhead, and primary CTA label. YOU decide the copy based on the user's request + the workspace Soul; this tool persists it.
+- update_theme: Change workspace theme: mode (dark|light), primary_color (#hex), accent_color (#hex), font_family. Any subset. Available fonts: Inter, DM Sans, Playfair Display, Space Grotesk, Lora, Outfit.
+- list_automations: List automations configured in the active (or specified) workspace.
+- install_vertical_pack: Install a vertical pack (e.g. 'real-estate', 'dental', 'legal'). Adds domain-specific objects, fields, views.
+- install_caldiy_booking: Install the Cal.diy booking block (event types, availability, bookings). Example: install_caldiy_booking({})
+- install_formbricks_intake: Install a Formbricks intake form (surveys, conditional logic, contact sync). Example: install_formbricks_intake({})
+- get_workspace_snapshot: Return a structured read-only snapshot of workspace state: workspace metadata, Soul (if submitted), theme, enabled blocks with configs, entity counts (contacts/bookings/intake forms/submissions), recent Seldon It events, and public URLs. YO
+- fetch_source_for_soul: Fetch a URL and return normalized text (headings + body, up to 256KB). Use this to gather raw content; then you (the caller) extract a structured Soul and submit it with submit_soul. Zero LLM cost to Seldon — extraction runs in this session
+- submit_soul: Submit a compiled Soul object to the active workspace. The caller is expected to have produced the structured Soul from fetch_source_for_soul output or user conversation.
+- connect_custom_domain: Connect + verify a custom domain. Pro capability — requires SELDONFRAME_API_KEY. Example: connect_custom_domain({ domain: 'app.mysite.com' })
+- export_agent: Export the current workspace as a portable .agent/ bundle.
+- store_secret: Store a workspace-scoped secret (encrypted at rest). Example: store_secret({ key: 'STRIPE_API_KEY', value: 'sk_…' })
+- list_secrets: List secret metadata (names, timestamps) without exposing plaintext.
+- rotate_secret: Rotate or delete a workspace secret. Omit new_value to delete.
+- list_contacts: List contacts in the active workspace. Returns every contact the caller can read. Example: list_contacts({}).
+- get_contact: Fetch one contact by id. Example: get_contact({ contact_id: 'abc-...' }).
+- create_contact: Create a new contact. Typical use: 'Add Jane Doe jane@acme.co as a lead'. Example: create_contact({ first_name: 'Jane', last_name: 'Doe', email: 'jane@acme.co', status: 'lead' }).
+- update_contact: Update fields on an existing contact. Partial — omit fields you don't want to change. Example: update_contact({ contact_id: '...', status: 'customer' }).
+- delete_contact: Delete a contact and all linked deals/activities (cascades via FK). Irreversible. Example: delete_contact({ contact_id: '...' }).
+- list_deals: List deals in the active workspace. Example: list_deals({}).
+- get_deal: Fetch one deal by id. Example: get_deal({ deal_id: '...' }).
+- create_deal: Create a new deal attached to a contact on the default pipeline. Typical use: 'Create a $5k deal for Jane Doe at the Discovery stage'. Example: create_deal({ contact_id: '...', title: 'Q2 retainer', value: 5000, stage: 'Discovery' }).
+- update_deal: Update a deal. Partial — omit fields to keep them. For stage-only moves prefer move_deal_stage (clearer intent). Example: update_deal({ deal_id: '...', value: 7500 }).
+- move_deal_stage: Move a deal to a new stage. Same effect as dragging the card on the kanban. Example: move_deal_stage({ deal_id: '...', to_stage: 'Proposal' }).
+- delete_deal: Delete a deal. Irreversible. Example: delete_deal({ deal_id: '...' }).
+- list_activities: List activity log entries (tasks, notes, email sent, booking created, etc.) across the workspace. Example: list_activities({}).
+- list_appointment_types: List all appointment types (bookable templates) in the workspace. Example: list_appointment_types({}).
+- create_appointment_type: Create a new appointment type with its own public /book/<slug> URL. Defaults availability to Mon–Fri 9am–5pm (edit on /bookings to change). Example: create_appointment_type({ title: 'Strategy call', duration_minutes: 45, price: 150 }).
+- update_appointment_type: Update an existing appointment type. Partial — omit fields to keep them. Example: update_appointment_type({ booking_slug: 'default', duration_minutes: 60, price: 200 }). Pass booking_slug='default' to edit the auto-seeded 'Book a call' temp
+- configure_booking: DEPRECATED alias for update_appointment_type({ booking_slug: 'default', ... }). Kept so existing Claude Code sessions don't break. Prefer update_appointment_type for new scripts.
+- list_forms: List intake forms in the workspace. Example: list_forms({}).
+- get_form: Fetch one form by id or slug. Example: get_form({ form: 'contact' }) or get_form({ form: 'uuid…' }).
+- create_form: Create a new intake form. Pass template_id to pre-fill fields from a built-in template (contact, lead-qualification, booking-request, nps-feedback, event-registration, blank). Example: create_form({ template_id: 'contact' }) → uses 'Contact
+- update_form: Update a form. Partial — omit fields to keep them. Replacing `fields` replaces the whole array (each field: { key, label, type, required, options? }). Example: update_form({ form: 'intake', fields: [...] }).
+- delete_form: Delete a form. Irreversible. Submissions are NOT deleted (form_submissions has ON DELETE SET NULL on form_id). Example: delete_form({ form: 'old-survey' }).
+- list_submissions: List submissions for a form. Example: list_submissions({ form_id: 'uuid…' }).
+- customize_intake_form: DEPRECATED alias for update_form({ form: 'intake', fields }). Only edits the auto-seeded default form; prefer update_form for new scripts so you can target any form in the workspace.
+- send_email: Send a one-off email through the workspace's configured provider (Resend by default). Checks the suppression list before sending and skips with {suppressed: true} if the recipient has opted out. Example: send_email({ to: 'alex@acme.com', su
+- list_emails: List recent emails sent from the workspace, newest first. Useful for checking delivery status before following up.
+- get_email: Fetch a single email with its full provider-event history (sent / delivered / opened / clicked / bounced).
+- list_suppressions: List all suppressed email addresses for the workspace — who is opted out and why (manual / unsubscribe / bounce / complaint).
+- suppress_email: Add an email address to the workspace suppression list so future sends skip it. Use for manual unsubscribes or policy blocks.
+- unsuppress_email: Remove an email address from the workspace suppression list so future sends go through again.
+- send_sms: Send an SMS via the workspace's Twilio integration. Checks the SMS suppression list first (STOP keyword + carrier blocks + manual opt-outs) and skips with {suppressed: true} if the recipient has opted out. Example: send_sms({ to: '+15551234
+- list_sms: List recent SMS messages (inbound + outbound) for the workspace, newest first.
+- get_sms: Fetch a single SMS with its full provider-event history (queued / sent / delivered / failed / undelivered).
+- list_sms_suppressions: List all suppressed phone numbers for the workspace — who is opted out and why (manual / stop_keyword / carrier_block / complaint).
+- suppress_phone: Add a phone number to the SMS suppression list so future SMS sends skip it. STOP replies + carrier permanent-failure codes auto-suppress via the Twilio webhook; use this for manual opt-outs.
+- unsuppress_phone: Remove a phone number from the SMS suppression list so future sends go through again.
+- create_invoice: Draft a Stripe invoice on the workspace's connected Stripe account. Invoice is created but not sent — call send_invoice separately so agents can review before dispatch. Contact must have an email. Example: create_invoice({ contact_id: 'ctc_
+- list_invoices: List workspace invoices (draft + sent + paid + past_due + voided), newest first.
+- get_invoice: Fetch an invoice + its line items + hosted invoice URL (for payment).
+- send_invoice: Dispatch a draft invoice to the contact via Stripe (Stripe emails the invoice + provides a hosted pay page).
+- void_invoice: Void an invoice (undo a billing error). Only valid for draft / open invoices; paid invoices must be refunded instead.
+- create_subscription: Start a recurring subscription for a contact against a Stripe Price id. The Price must already exist in the workspace's Stripe dashboard — v1 does not create Prices. Example: create_subscription({ contact_id: 'ctc_123', price_id: 'price_1AB
+- list_subscriptions: List workspace subscriptions (active + trialing + past_due + canceled), newest first.
+- cancel_subscription: Cancel a subscription. Default: cancel at period end (contact keeps access until renewal date). Pass immediate=true for an instant termination + prorated refund.
+- list_payments: List recent payments (completed + failed + refunded + disputed) across the workspace, newest first.
+- get_payment: Fetch a single payment record with status + refund/dispute state.
+- refund_payment: Refund a payment. Omit amount to refund the full payment; pass amount for a partial refund. reason should be 'duplicate' | 'fraudulent' | 'requested_by_customer'.
+- list_landing_pages: List the workspace's landing pages (draft + published), newest-updated first.
+- get_landing_page: Fetch a single landing page with its full Puck payload + metadata.
+- create_landing_page: Create a landing page from an optional Puck payload. Without puck_data, creates a blank draft. With puck_data, validates the payload against the Puck schema and rejects on mismatch. Set published=true to publish immediately.
+- update_landing_page: Update a landing page's title and/or Puck payload. Validates puck_data on the way through. Does not change publish status — use publish_landing_page for that.
+- publish_landing_page: Flip a landing page between draft and published. Publishing busts the public-URL cache immediately and emits landing.published. Pass published=false to unpublish.
+- list_landing_templates: List the pre-built vertical landing-page templates. Each has a validated Puck payload ready to seed a new page via create_landing_page({puck_data: template.payload}).
+- get_landing_template: Fetch a single landing-page template including its Puck payload. Pair with create_landing_page to seed a new page from the template.
+- generate_landing_page: Generate a Puck landing-page payload from a natural-language prompt using Claude + the workspace's Soul + theme. Returns the payload (validated against the Puck schema) but does NOT persist — pair with create_landing_page to save the result
+- send_conversation_turn: Route an incoming message through the Conversation Primitive runtime. Loads prior turns for (contact, channel), generates a Soul-aware reply with Claude, writes both inbound + outbound turns, and emits conversation.turn.received / sent even
+
+## Output schema
+AgentSpec JSON shape:
+{
+  "name": string,
+  "description": string,
+  "trigger": {
+    "type": "event",
+    "event": string,                     // must be in the SeldonEvent vocabulary
+    "filter": { ... }                    // optional
+  },
+  "variables": { "<varName>": "<path>" },
+  "steps": [
+    { "id": string, "type": "mcp_tool_call" | "wait" | "conversation" | "branch" | "end", ... }
+  ]
+}
+
+Step types:
+- mcp_tool_call: { tool: string, args: {...}, next: string | null }
+- wait: { seconds: number, next: string }
+- conversation: { channel: "email" | "sms", initial_message: string, exit_when: string, on_exit: { extract?: {...}, next: string } }
+- branch: { condition: string, on_true: string, on_false: string }   // binary only
+- end: {} (terminal)
+
+Return ONLY the AgentSpec JSON. No markdown fences, no commentary. If the user's request requires a capability that isn't available, return {"error": "<short explanation>"} instead of guessing.
+
+## User request
+"""
+When a lead submits the form, send them a message. Just one message. Your choice whether SMS or email.
+"""
+
+Produce the AgentSpec now. Every step's tool must exist in the catalog. Every event must exist in a block's produces list. Every block referenced must be in the installed list.

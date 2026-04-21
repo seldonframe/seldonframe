@@ -1,0 +1,1 @@
+{"error": "Slack integration is not available — no Slack block is installed and no MCP tool exists to post to Slack. Available notification channels are email and sms only."}

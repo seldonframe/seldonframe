@@ -1,0 +1,56 @@
+{
+  "name": "New-patient intake → SMS follow-up → booking + email confirmation",
+  "description": "When a new-patient intake form is submitted, wait 2 minutes, start a warm SMS conversation to thank the patient by name, confirm their insurance status, and capture their preferred time. Then send an email confirmation with the clinic address and the new-patient consultation booking link. Note: Seldon does not currently expose an MCP tool to create a booking on a patient's behalf, so the agent sends the public Cal.diy booking link instead of hard-booking the slot.",
+  "trigger": {
+    "type": "event",
+    "event": "form.submitted",
+    "filter": {
+      "form.slug": "new-patient-intake"
+    }
+  },
+  "variables": {
+    "contact_id": "event.contact.id",
+    "first_name": "event.contact.firstName",
+    "phone": "event.contact.phone",
+    "email": "event.contact.email",
+    "reason_for_visit": "event.submission.reason_for_visit",
+    "has_insurance_form": "event.submission.has_insurance"
+  },
+  "steps": [
+    {
+      "id": "wait_two_minutes",
+      "type": "wait",
+      "seconds": 120,
+      "next": "sms_conversation"
+    },
+    {
+      "id": "sms_conversation",
+      "type": "conversation",
+      "channel": "sms",
+      "initial_message": "Hi {{first_name}}, it's Bright Smile Dental 🦷 Thanks so much for reaching out — we'll take great care of you, no pressure and no judgment. When would you ideally like to come in for your free new-patient consultation? Also, just to confirm: do you have dental insurance (yes / no / not sure)?",
+      "exit_when": "The patient has shared (a) a preferred day or time window AND (b) confirmed whether they have insurance (yes, no, or unsure).",
+      "on_exit": {
+        "extract": {
+          "preferred_time": "string — patient's stated preferred day/time window for the consultation",
+          "has_insurance": "one of: yes | no | unsure"
+        },
+        "next": "send_confirmation_email"
+      }
+    },
+    {
+      "id": "send_confirmation_email",
+      "type": "mcp_tool_call",
+      "tool": "send_email",
+      "args": {
+        "to": "{{email}}",
+        "subject": "Your Bright Smile visit — next steps",
+        "body": "Hi {{first_name}},\n\nThanks again for reaching out to Bright Smile Dental — we're looking forward to meeting you.\n\nBased on our text chat, you're looking to come in around: {{preferred_time}}. Insurance on file: {{has_insurance}}.\n\nTo lock in the exact slot that works best for you, please pick a time on our new-patient consultation calendar here:\nhttps://brightsmile.app.seldonframe.com/book/new-patient-consultation\n\nYour first consultation is completely free, and cleanings use the latest painless tech — so you can relax.\n\n📍 Clinic address: Bright Smile Dental — please see the address and parking details on our site: https://brightsmile.app.seldonframe.com\n\nAny questions, just reply to this email or text us back.\n\nWarmly,\nThe Bright Smile team"
+      },
+      "next": "done"
+    },
+    {
+      "id": "done",
+      "type": "end"
+    }
+  ]
+}
