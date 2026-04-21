@@ -708,3 +708,56 @@ Per the major strategic conversation summarized at the top of the Phase 7 sectio
 - Phase 7 — gates the viral demo milestone.
 
 **Stop. Awaiting approval of the amended plan before any Phase 2.75 or Phase 3 work starts.**
+
+---
+
+## Post-v1 roadmap — x402 / Agentic Market *(2026-04-20 addition)*
+
+Not a v1 phase. A **design-principles layer** applied during v1 work at near-zero cost, plus a small post-v1 launch slice. The goal is to keep the option open for per-call agent payments via x402 on Base without building anything that competes with v1 priorities.
+
+### V1.1 — x402 readiness design principles
+
+Applied *during* v1 build. Zero extra implementation work; just discipline on four axes as we ship Phases 3–12.
+
+1. **Every MCP tool has a corresponding REST endpoint.** Already true for most tools shipped in Phase 2.b/c/d — the MCP tool is a thin wrapper over `/api/v1/<resource>`. Hold the line: a new MCP tool that can only be called by its handler and has no REST equivalent is a policy violation. Cost today: near-zero (we're doing it anyway). Payoff later: x402 charges per HTTP call, not per MCP call, so REST parity is mandatory.
+
+2. **Each endpoint declares a per-call price in metadata.** Add a `price` field (cents, or micro-USDC, format TBD at V1.2 kickoff) to the endpoint's exported metadata or a central `lib/api/pricing.ts` registry. **Unused today** — no runtime reads it, no bill is generated, no header is returned. Exists purely so the metadata is ready to surface when x402 ships. Cost: ~5 LOC per endpoint + one registry file. No perf impact.
+
+3. **Authentication is pluggable.** Today's auth resolver is `resolveV1Identity(request)` (workspace-bearer → `x-seldon-api-key` → NextAuth session → 401). Design new auth paths to slot into the same resolver's fall-through chain, so adding x402-payment-header later is "add one branch to `resolveV1Identity`, no touches elsewhere." Concretely: **don't** hard-code bearer-only auth in new endpoints — route every new endpoint through the existing helper, even if it feels like overkill.
+
+4. **Per-request logging captures who called what.** Already true via the `logEvent` helper shipped in `84069df4` (Phase 0.5.c observability). Discipline: every v1 endpoint emits an `api_call` event with `{ route, identity_kind, org_id, status, duration_ms }`. For x402 later, add `payment_hash` + `amount` fields to the same event shape. No DB change needed today.
+
+**None of these change v1's critical path.** If an implementer pushes back on one as "extra work," they're right to push back on (2) — but (1), (3), (4) are patterns we should already be following.
+
+### V1.2 — Agentic Market launch
+
+One focused slice, post-v1-ship. Not a phase, because it doesn't gate anything else.
+
+**Scope:**
+- Expose 10–15 SeldonFrame endpoints via x402 on Base. Pick the ones that are most agent-useful: Brain v2 queries, agent synthesis (`POST /api/v1/agents/synthesize`), composition-contract manifests (`GET /api/v1/blocks/composition-manifest`), Soul queries, snapshot install. Cheap-to-serve reads get per-call prices in the single-digit cents range; expensive-to-serve writes (synthesize, snapshot install) get priced in the tens of cents.
+- List as a coherent service family on **agentic.market** under the SeldonFrame brand. Not individual endpoints — the family narrative is "memory + action layer for AI agents."
+- **Single big launch post** — coordinate HN, X, relevant Discords, agent-framework maintainers (CrewAI / LangGraph / OpenAI Agents SDK) in one beat. Not daily micro-launches.
+- **Prioritize** (in rough order of per-call agent-market value):
+  1. Brain v2 queries — "what does this workspace know?"
+  2. Agent synthesis — "build me a speed-to-lead agent for a dental clinic"
+  3. Composition-contract manifests — block registry introspection (the 2.75 output surface)
+  4. Soul retrieval — workspace-context-as-a-service
+  5. Snapshot install — deploy a pre-built vertical to a new workspace
+
+**Explicitly NOT v1 work:**
+- No x402 middleware in the v1 endpoint chain.
+- No Base wallet integration in v1.
+- No paywall on any v1 endpoint.
+- No Agentic-Market-specific routing or response shape.
+
+**Prerequisite (admin work, Max's side, not engineering):**
+- Set up a **Coinbase Developer Platform (CDP) wallet** to receive x402 payments on Base.
+- Set up an **off-ramp** from Base-USDC → fiat. Options: Coinbase Exchange, Privy / Stripe Connect for crypto, or hold in CDP until withdrawal needed.
+
+**Gate for V1.2 launch:** CDP wallet + off-ramp live, v1 shipped + at least 10 real agency workspaces in production using SeldonFrame day-to-day (dogfooding proof), 14-day synthesis-reliability eval pass rate ≥ 95% (Phase 7 D-13 metric — we don't monetize an unreliable endpoint).
+
+**Open decisions parked until V1.2 kickoff** (not v1 concerns):
+- Exact price per endpoint type.
+- Whether x402-paid calls get faster infra (separate compute pool) or shared.
+- Rate limit per payment-header vs per-wallet.
+- Whether `agentic.market` hosting is their platform or our page (SEO + branding question).
