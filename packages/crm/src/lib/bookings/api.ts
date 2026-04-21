@@ -1,7 +1,8 @@
 import { and, eq, ne } from "drizzle-orm";
 import { db } from "@/db";
-import { activities, bookings, contacts, stripeConnections, users } from "@/db/schema";
+import { activities, bookings, contacts, paymentRecords, stripeConnections, users } from "@/db/schema";
 import { emitSeldonEvent } from "@/lib/events/bus";
+import { deleteGoogleCalendarBookingEvent } from "@/lib/bookings/google-calendar-sync";
 import { createBookingCheckoutSession } from "@/lib/payments/actions";
 import { dispatchWebhook } from "@/lib/utils/webhooks";
 
@@ -307,5 +308,95 @@ export async function getBookingFromApi(input: GetBookingInput): Promise<Booking
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     metadata: row.metadata ?? {},
+  };
+}
+
+// Cancel a scheduled booking. Idempotent by design per the 2a audit:
+// already-cancelled bookings return a 200 no-op with alreadyCancelled=true,
+// the Google Calendar delete does NOT re-run, booking.cancelled does NOT
+// re-emit, and no webhook fires. This matters because agents retry and we
+// don't want doubled event-bus traffic or "already gone" Calendar errors.
+//
+// Payment records linked to this booking via payment_records.bookingId are
+// NOT touched (refund is a separate, composable action). linkedPaymentIds
+// is returned so agents can decide to call refund_payment next if the
+// business rule is "cancel AND refund the deposit".
+//
+// Past-time bookings ARE cancellable (legitimate retroactive-cleanup use
+// case). markBookingNoShow is the different semantic for missed
+// appointments; both are kept.
+
+export type CancelBookingInput = {
+  orgId: string;
+  bookingId: string;
+};
+
+export type CancelBookingResult = {
+  booking: BookingDetail;
+  alreadyCancelled: boolean;
+  linkedPaymentIds: string[];
+};
+
+async function loadLinkedPaymentIds(orgId: string, bookingId: string): Promise<string[]> {
+  const rows = await db
+    .select({ id: paymentRecords.id })
+    .from(paymentRecords)
+    .where(and(eq(paymentRecords.orgId, orgId), eq(paymentRecords.bookingId, bookingId)));
+  return rows.map((r) => r.id);
+}
+
+export async function cancelBookingFromApi(input: CancelBookingInput): Promise<CancelBookingResult | null> {
+  // Load first so we can branch on already-cancelled before mutating.
+  // Reuses the read path to guarantee identical scoping rules (org-scoped,
+  // templates excluded, wrong-org surfaces as null → 404).
+  const current = await getBookingFromApi({ orgId: input.orgId, bookingId: input.bookingId });
+  if (!current) return null;
+
+  const linkedPaymentIds = await loadLinkedPaymentIds(input.orgId, current.id);
+
+  if (current.status === "cancelled") {
+    return { booking: current, alreadyCancelled: true, linkedPaymentIds };
+  }
+
+  const now = new Date();
+  const [updated] = await db
+    .update(bookings)
+    .set({ status: "cancelled", cancelledAt: now, updatedAt: now })
+    .where(and(eq(bookings.orgId, input.orgId), eq(bookings.id, current.id)))
+    .returning({
+      userId: bookings.userId,
+      externalEventId: bookings.externalEventId,
+    });
+
+  if (updated) {
+    await deleteGoogleCalendarBookingEvent({
+      userId: updated.userId,
+      externalEventId: updated.externalEventId,
+    });
+  }
+
+  if (current.contactId) {
+    await emitSeldonEvent("booking.cancelled", {
+      appointmentId: current.id,
+      contactId: current.contactId,
+    });
+  }
+
+  await dispatchWebhook({
+    orgId: input.orgId,
+    event: "booking.cancelled",
+    payload: {
+      bookingId: current.id,
+      contactId: current.contactId,
+      startsAt: current.startsAt,
+      cancelledAt: now.toISOString(),
+    },
+  });
+
+  const refreshed = await getBookingFromApi({ orgId: input.orgId, bookingId: current.id });
+  return {
+    booking: refreshed ?? { ...current, status: "cancelled", cancelledAt: now.toISOString(), updatedAt: now.toISOString() },
+    alreadyCancelled: false,
+    linkedPaymentIds,
   };
 }

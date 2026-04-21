@@ -945,6 +945,25 @@ export const TOOLS = [
     },
   },
   {
+    name: "cancel_booking",
+    description:
+      "Cancel a scheduled booking. Sets status to 'cancelled', stamps cancelledAt, deletes the Google Calendar event, and emits booking.cancelled. Idempotent — re-cancelling an already-cancelled booking is a 200 no-op with alreadyCancelled=true (no duplicate events, no calendar errors). Past-dated bookings CAN be cancelled (legitimate retroactive cleanup). Does NOT touch linked payments — linkedPaymentIds is returned so the agent can compose refund_payment explicitly if the business rule is 'cancel AND refund'. Example: cancel_booking({ booking_id: 'bkg_...' }).",
+    inputSchema: obj(
+      {
+        booking_id: str("Required. UUID of the booking to cancel."),
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["booking_id"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const result = await api("POST", `/bookings/${encodeURIComponent(args.booking_id)}/cancel`, {
+        workspace_id: ws,
+      });
+      return { ok: true, ...result.data };
+    },
+  },
+  {
     name: "list_appointment_types",
     description:
       "List all appointment types (bookable templates) in the workspace. Example: list_appointment_types({}).",

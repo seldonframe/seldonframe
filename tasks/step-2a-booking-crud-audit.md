@@ -20,7 +20,7 @@
 | `create_booking` | ✅ | 7.h — `d6692737` |
 | **`list_bookings`** | ✅ **already shipped** | pre-7.c micro-slice — `bb328ced` |
 | `get_booking` | ✅ **shipped 2a.1** | this slice |
-| `cancel_booking` | ❌ missing | 2a.2 scope |
+| `cancel_booking` | ✅ **shipped 2a.2** | this slice |
 | `reschedule_booking` | ❌ missing | 2a.3 scope |
 
 **2a scope is 3 tools, not 4.** `list_bookings` was shipped in the pre-7.c micro-slice. Confirmed via `grep` on `skills/mcp-server/src/tools.js`.
