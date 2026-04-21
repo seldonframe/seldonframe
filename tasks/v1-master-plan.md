@@ -48,14 +48,15 @@ The strategic brief was written against an earlier session state. Current truth 
 | 0.5 — "truthing pass" (not in briefing) | n/a | **Shipped.** Blank landing seed fix + repair hook, `/pricing` rewrite, `/settings/billing` rewrite, stale `seldon-it-50-limit` removed, 6 intake form templates. Commits `ec58dda7`, `150ba951`, `29a24b36`, `ea706162`, `739ae8cb`. |
 | Phase 1.a — TableView Twenty polish | n/a | **Shipped** as `036b2e9a` — before the strategic update arrived. Assumption: kept as-is (it directly serves the now-explicit Phase 1 "Twenty-grade first-impression polish" goal). If the brief intended to redirect this, say so; I'll revert or redirect. |
 
-**Net state (updated 2026-04-20 after autonomous run + strategic amendment):**
+**Net state (updated 2026-04-21 after Phase 3 ship):**
 - Phase 0: ✅ **Complete.** 0a merged to main as `5dd33c68`. Tokens unified on oklch.
 - Phase 0.5 (truthing): ✅ **Complete.** Landing seed fix + repair hook, /pricing rewrite, /settings/billing rewrite, stale seldon-it limit removed, 6 form templates.
 - Phase 1 (CRM / Booking / Intake polish): ✅ **Complete.** 1.a TableView + 1.b KanbanView + 1.c booking admin + 1.d booking public (react-day-picker) + 1.e intake Typeform-style + 1.f intake admin editor.
 - Phase 2 (MCP surface for existing blocks): ✅ **Complete.** 2.a audit + 2.b 12 CRM tools + 2.c 4 booking tools + appointment-type CRUD + 2.d 7 intake tools + forms CRUD. Tool count: 22 → 43.
 - Phase 2.5 (substrate audits): ✅ **Partial / Complete as scoped.** 2.5.a event-bus audit shipped (Verdict A). 2.5.d secrets audit shipped (solid). 2.5.b deferred (near-no-op). 2.5.c deferred into Phase 3.
-- Phase 2.75 (BLOCK.md composition contract): **NEW — added in this amendment. Hard blocker for Phase 3.**
-- Phase 3+ : not started. Phase 3 gated on amended plan approval + Phase 2.75 completion.
+- Phase 2.75 (BLOCK.md composition contract): ✅ **Shipped** as `447ffec8`. Parser extension (+170 LOC) + backfill of caldiy-booking + formbricks-intake + net-new crm.block.md + L-15 lessons entry. Validator surfaces 5 warning codes (empty_contract, no_verbs, malformed_produces, unknown_compose_with, verbose_verb); non-fatal today, CI-gating in Phase 12.
+- Phase 3 (Email + Conversation Primitive): ✅ **Shipped 2026-04-21** across 10 commits (`9ee1f2ea` → `87a7efc9`). All build-green.
+- Phase 4+ : not started. **Phase 4 gated on this amendment approval** — contract schema is locked by Phase 3 authoring, and the SMS block writes against the same format.
 
 ---
 
@@ -116,8 +117,9 @@ The strategic brief was written against an earlier session state. Current truth 
 - **External deps:** possibly `emittery` (MIT, tiny) if we go minimal; otherwise none (hand-rolled emitter + pg-backed persistence).
 - **Unknowns (will resolve in 2.5.a):** existing pattern (D-4); secret encryption-at-rest model (D-10); whether any existing block can serve as a reference emitter (observability `logEvent` helper, shipped in `84069df4`, is a candidate — logs events but doesn't notify subscribers; distinct concern).
 
-### Phase 2.75 — BLOCK.md composition contract *(approved addition 2026-04-20)*
-**Dependencies:** Phase 2 (audit done). **Hard blocker for Phase 3** — email's BLOCK.md must ship with the new contract fields from day one so the format is locked before more blocks are written against it.
+### Phase 2.75 — BLOCK.md composition contract *(shipped 2026-04-20 — `447ffec8`)*
+**Status:** ✅ Shipped. Parser extension + 3 BLOCK.md backfills + L-15 lesson. See "Composition Contract — observations from Phase 3 authoring" under Decisions locked 2026-04-21 for refinement queue.
+**Dependencies:** Phase 2 (audit done). **Was a hard blocker for Phase 3** — email's BLOCK.md had to ship with the new contract fields from day one so the format was locked before more blocks were written against it.
 **Why:** Phase 7 "Agent Engine" (see below) generates synthesized agents by composing blocks. Without a machine-readable semantic contract per block — what each block *consumes*, *produces*, which natural-language *verbs* route to it, and which other blocks it *composes cleanly with* — synthesis degrades to "prompt Claude and hope." The contract is the primary mitigation for D-13 (agent synthesis reliability).
 **Scope:**
 - **Schema extension on BLOCK.md** — formalize a `## Composition Contract` section with four typed fields:
@@ -151,7 +153,19 @@ The strategic brief was written against an earlier session state. Current truth 
 
 **Risks:** Low. Additive to parser (existing BLOCK.md stay valid). Biggest risk is drift — if future blocks don't include the section, agent synthesis gets unreliable. Mitigated by: the validator + CI gate + L-XX lesson.
 
-### Phase 3 — Email sending block *(transactional + conversational)*
+### Phase 3 — Email sending block *(shipped 2026-04-21 — `9ee1f2ea` → `87a7efc9`)*
+**Status:** ✅ Shipped across 10 slices (3.a audit → 3.j UI). Build green on every slice; all pushed to `origin/main`.
+- 3.a — audit (`9ee1f2ea`): inventoried existing emails table + lib/emails/* + resolved NextAuth vs per-workspace key coexistence.
+- 3.b — DB (`a5bd7365`): 4 tables (`email_events`, `conversations`, `conversation_turns`, `suppression_list`) + migration 0016.
+- 3.c — events (`a86f291c`): 6 email events (delivered/bounced/replied/suppressed + conversation.turn.received/sent) added to `SeldonEvent` union; regex widened for 3-segment event names.
+- 3.d — providers (`9c64e1e5`): typed `EmailProvider` interface + `providers/resend.ts` extracted from inline fetch in actions.ts.
+- 3.e — suppression (`89cf33ae`): pre-send hook + `isEmailSuppressed` + `/api/v1/emails/suppressions` GET/POST/DELETE.
+- 3.f — Resend webhook (`382f3741`): `/api/webhooks/resend` with Svix HMAC verify, idempotent via unique(provider, providerEventId), auto-suppress on bounce/complaint.
+- 3.g — conversation runtime (`b43e7ae0`): channel-agnostic `handleIncomingTurn` in `lib/conversation/runtime.ts`. Phase 4 SMS reuses verbatim.
+- 3.h — MCP tools (`3ec83707`): 7 tools (send_email, list_emails, get_email, list_suppressions, suppress_email, unsuppress_email, send_conversation_turn) + matching v1 endpoints. Tool count: 43 → 50.
+- 3.i — BLOCK.md (`a677c28c`): `email.block.md` with composition contract on day 1 (9 produces × 7 consumes × 12 verbs × 7 compose_with).
+- 3.j — UI (`87a7efc9`): `/settings/suppression` + Resend webhook URL hint on integrations page. Compose drawer + threaded conversation view deferred to a later slice; `/emails` dashboard + per-contact activity feed cover core flows.
+
 **Dependencies:** Phase 2.5 (event bus exists per audit) + **Phase 2.75 (BLOCK.md composition contract locked, including this block's own contract shipped on day 1)**. Phase 0 substrate.
 **Scope:** Two modes share one infrastructure:
 1. **Transactional** — send one email to one contact, fire-and-forget. Template variables from Soul + contact context. Emits `email.sent`, and on provider-webhook receipt: `email.delivered`, `email.opened`, `email.clicked`, `email.bounced` through the event bus.
@@ -184,7 +198,8 @@ Transactional mode bypasses the runtime (no reasoning needed). Phase 4 SMS inbou
 - **Unknowns:** NextAuth workspace-owner Resend key vs per-workspace builder Resend key — verify at slice kickoff that they can coexist in the same process (different env var vs BYO secret).
 
 ### Phase 4 — SMS sending block *(transactional + conversational — reuses Phase 3 runtime)*
-**Dependencies:** Phase 3 (share secret-storage + events plumbing + the **Conversation Primitive runtime built in Phase 3**).
+**Dependencies:** Phase 3 ✅ shipped — shares secret-storage + events plumbing + the **Conversation Primitive runtime built in Phase 3** (`lib/conversation/runtime.ts::handleIncomingTurn`, already channel-agnostic: pass `channel: "sms"` and it works).
+**Gating:** Phase 4 is **gated on this 2026-04-21 amendment approval**. The composition contract schema was locked by Phase 3 authoring; SMS writes against the same format without refinements for v1 (see "Composition Contract — observations" under Decisions locked 2026-04-21).
 **Scope:** BYO Twilio key. Same two-mode shape as email: transactional send vs conversational turn. Twilio inbound SMS webhook routes through `lib/conversation/runtime.ts` with `channel: "sms"` — the reasoning layer is reused verbatim, only the provider adapter (Twilio SDK calls) is new. Emits `sms.sent`, `sms.delivered`, `sms.replied`, `sms.failed` events + the same `conversation.turn.*` events as email.
 **GHL differentiators served:** (g) agent synthesis (SMS is the primary conversational channel for Corey-Ganim-style speed-to-lead agents), (c) legible automations.
 **Journey stages served:** 2 (hero moment for a synthesized speed-to-lead agent: form submission → SMS qualifier chat in minutes), 5, 6.
@@ -700,14 +715,48 @@ Per the major strategic conversation summarized at the top of the Phase 7 sectio
 | 2.5.b — Event bus scaffold | **Deferred** (confirmed 2026-04-20 by user) | Near-no-op per 2.5.a Verdict A. New event types (`sms.*`, `payment.stripe.*`, `conversation.turn.*`) get added to the `SeldonEvent` union by the phase that needs them, as part of that phase's own scope. Phase 3 already plans to add `email.replied`, `email.bounced`, `email.suppressed`, `conversation.turn.received`, `conversation.turn.sent`. |
 | 2.5.c — Unified integration UX | **Deferred** (confirmed 2026-04-20 by user) | Best absorbed into Phase 3 kickoff — Phase 3 is the first block that needs a new integration card (Resend). Building speculative UI for blocks that don't exist yet is premature. |
 
+### 2026-04-21 (Phase 3 ship + composition contract schema lock)
+
+17. ✅ **Phase 3 shipped.** 10 slices (3.a–3.j), 10 commits on `origin/main`, build-green every step. See §A Phase 3 status line for the per-slice table.
+18. ✅ **Phase 2.75 shipped** (`447ffec8`) ahead of Phase 3 so the email BLOCK.md was written against a concrete, parser-validated schema rather than a sketch.
+19. ✅ **Composition contract schema locked for v1.** Four fields (`produces`, `consumes`, `verbs`, `compose_with`) are final for v1. Phase 4 sms.block.md writes against the exact same format with no refinements. Any additions below are tracked as post-v1 refinements, not v1-blockers.
+20. ✅ **Conversation Primitive runtime positioning upgraded.** Built in Phase 3.g at `lib/conversation/runtime.ts` — deliberately **not** inside `lib/emails/`. It's a load-bearing primitive shared by email (today) and SMS (Phase 4 reuse verbatim), and will be the substrate Phase 7 Agent Engine composes conversational agents on top of. Treat it as core infrastructure, not an email-block implementation detail.
+21. ✅ **x402 discipline reminder applied to Phase 4+.** Continue building thin HTTP endpoints (no tight coupling between MCP tool and server logic — both hit the same v1 route, which is what Phase 3 shipped). Keep per-endpoint "would cost roughly $X per call" metadata in mind when naming + scoping, even though we don't surface prices until V1.2. See §H V1.1 — x402 readiness design principles.
+
+### Composition Contract — observations from Phase 3 authoring
+
+Authoring `email.block.md` against the Phase 2.75 schema surfaced the following tensions. None block v1 — the schema as-shipped is sufficient. These are queued as **post-v1 refinements** so Phase 4 can write against the locked format without diverging.
+
+| Observation | Impact in v1 | Action for v1 | Action post-v1 |
+|---|---|---|---|
+| `produces` list gets long (email: 9 events). Single comma-separated line is hard to scan. | Cosmetic only. | Leave as-is — both `key: [a, b, c]` and `key: a, b, c` forms are valid per the parser. | Consider pretty-formatting convention in docs: multi-event producers use bracketed + newline-split form for readability. No parser change needed. |
+| `consumes` dot-paths (`workspace.soul.tone`, `contact.firstName`) are un-schema'd. Synthesis has to pattern-match; if the DB column is `contact.first_name` but the contract says `contact.firstName`, synthesis may not connect them. | Low — blocks author against TypeScript types, which are stable. | Document in `email.block.md` Notes that consumes strings match TS property names, not DB column names. | Add optional `consumes_schema_ref` pointing at `packages/core/src/schema/*.d.ts` paths so synthesis can type-check consumes at authoring time. |
+| `verbs` mixes single-word tokens (`send`, `reply`) with short phrases (`reach out`, `speed to lead`). Validator `verbose_verb` warning caps at 40 chars multi-word / 30 chars single-word — all email verbs passed. | None — the mix is intentional and useful for routing. | Keep the validator thresholds; document in L-15 that short phrases are fine when they're canonical routing intents. | Potentially split into `verbs` (imperative action tokens) + `intents` (noun phrases) if synthesis routing gets noisy — not needed at current block count. |
+| `compose_with` is one-directional. `email.block` lists crm; `crm.block` must independently list email for synthesis to see the pairing as "known-good both ways." Drift possible. | Low — 4 blocks today; manual audit trivial. | Accept asymmetry for v1. | Add a cross-block symmetry check to `validateCompositionContract` in Phase 12 CI gate — warn when A lists B but B doesn't list A. |
+| No declarative `requires_secret` field. email.block silently needs `resend` key (or env fallback). Synthesis can't prompt "connect Resend first" before proposing an email-sending agent. | Non-blocking — failed sends surface `no_ai_client` / provider errors through runtime `skipped` field, but the proactive-prompt UX is absent. | Document in `email.block.md` Integration Points that Resend key is required for live sends. | Add `requires_secrets: [resend]` to the contract schema in V1.1. Synthesis checks `workspace_secrets` before proposing the block; if missing, emits a `setup_required` step in the synthesized agent trace. |
+| No `cost_signal` field. Blocks don't declare expected cost-per-invocation (Claude calls vs Resend API vs free compute). Relevant for V1.2 Agentic Market x402 pricing. | None for v1 — we don't price anything yet. | Leave unaddressed. | Add `cost_signal: {llm_calls: N, api_calls: [{provider, count}], compute: "cheap" \| "expensive"}` in V1.1, populated from direct measurement. |
+| No typed `side_effects` beyond events. `send_email` writes to `emails`, `activities`, and may mutate `suppression_list` — none are "events" in the SeldonEvent sense. Matters for reasoning about rollback in automations. | None for v1 — Phase 7 doesn't attempt rollback. | Leave unaddressed. | Post-v1, when automations gain transactional guarantees. |
+
+**Verdict: schema is frozen for v1.** Phase 4 sms.block.md writes against the exact 4-field format. Refinements above ship in V1.1 or later.
+
+### Phase 3 email design calls (retrospective — locked calls held up)
+
+| Decision | Stated | Held up in Phase 3 ship? |
+|---|---|---|
+| Provider priority: Resend-first | yes | ✅ `providers/resend.ts` is the only impl; interface designed for SendGrid/Postmark later |
+| Inbound email: send-only in v1 | yes | ✅ No MX setup per workspace; runtime channel is wired for email but relies on manual forwarding or agent-paste for now |
+| Tracking pixel: default-on | yes | ✅ Every send injects the pixel; webhook path tracks opens too (idempotent via `unique(provider, provider_event_id)`) |
+| Unsubscribe: separate `suppression_list` table | yes | ✅ Separate table; pre-send hook; auto-populated by webhook on bounce/complaint |
+
 ### Next action gates
 
-- Phase 2.75 (BLOCK.md composition contract) — gates Phase 3.
-- Phase 3 (Email) — gates Phase 4.
-- Phase 4 (SMS) — gates Phase 7 (the synthesized-agent demos need SMS as the conversational channel).
+- Phase 2.75 (BLOCK.md composition contract) — **✅ shipped** (`447ffec8`).
+- Phase 3 (Email) — **✅ shipped** (`9ee1f2ea` → `87a7efc9`).
+- **Phase 4 (SMS) — gated on this 2026-04-21 amendment approval.** Composition contract schema is locked; sms.block.md writes against the exact same 4-field format. Runtime already supports `channel: "sms"` with zero changes needed.
+- Phase 4 — gates Phase 7 (synthesized-agent demos need SMS as the conversational channel).
 - Phase 7 — gates the viral demo milestone.
 
-**Stop. Awaiting approval of the amended plan before any Phase 2.75 or Phase 3 work starts.**
+**Stop. Awaiting approval of the 2026-04-21 amendment before any Phase 4 work starts.**
 
 ---
 
