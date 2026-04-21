@@ -78,6 +78,13 @@
       "when": 1776700000000,
       "tag": "0016_phase3_email_conversations_suppression",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1776786400000,
+      "tag": "0017_phase4_sms_messages_events",
+      "breakpoints": true
     }
   ]
 }

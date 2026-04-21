@@ -12,6 +12,8 @@ export * from "./email-events";
 export * from "./conversations";
 export * from "./conversation-turns";
 export * from "./suppression-list";
+export * from "./sms-messages";
+export * from "./sms-events";
 export * from "./landing-pages";
 export * from "./portal-access-codes";
 export * from "./portal-messages";

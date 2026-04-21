@@ -19,7 +19,13 @@ export async function isEmailSuppressed(orgId: string, email: string) {
       createdAt: suppressionList.createdAt,
     })
     .from(suppressionList)
-    .where(and(eq(suppressionList.orgId, orgId), eq(suppressionList.email, normalized)))
+    .where(
+      and(
+        eq(suppressionList.orgId, orgId),
+        eq(suppressionList.channel, "email"),
+        eq(suppressionList.email, normalized)
+      )
+    )
     .limit(1);
 
   return row ?? null;
@@ -43,6 +49,7 @@ export async function addSuppression(params: {
     .insert(suppressionList)
     .values({
       orgId: params.orgId,
+      channel: "email",
       email: normalized,
       reason: params.reason ?? "manual",
       source: params.source ?? null,
@@ -62,14 +69,20 @@ export async function removeSuppression(params: { orgId: string; email: string }
 
   const deleted = await db
     .delete(suppressionList)
-    .where(and(eq(suppressionList.orgId, params.orgId), eq(suppressionList.email, normalized)))
+    .where(
+      and(
+        eq(suppressionList.orgId, params.orgId),
+        eq(suppressionList.channel, "email"),
+        eq(suppressionList.email, normalized)
+      )
+    )
     .returning({ id: suppressionList.id });
 
   return deleted.length;
 }
 
 export async function listSuppressions(orgId: string, limit = 200) {
-  return db
+  const rows = await db
     .select({
       id: suppressionList.id,
       email: suppressionList.email,
@@ -78,7 +91,11 @@ export async function listSuppressions(orgId: string, limit = 200) {
       createdAt: suppressionList.createdAt,
     })
     .from(suppressionList)
-    .where(eq(suppressionList.orgId, orgId))
+    .where(and(eq(suppressionList.orgId, orgId), eq(suppressionList.channel, "email")))
     .orderBy(desc(suppressionList.createdAt))
     .limit(limit);
+
+  // Channel filter guarantees email is non-null; narrow the type for
+  // consumers so they don't each have to handle the nullable case.
+  return rows.filter((row): row is typeof row & { email: string } => row.email !== null);
 }
