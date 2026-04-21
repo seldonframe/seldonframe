@@ -1,0 +1,136 @@
+{
+  "content": [
+    {
+      "type": "Hero",
+      "props": {
+        "id": "Hero-abc123",
+        "headline": "Bright Smile Dental",
+        "subheadline": "Now accepting new patients in Laval — free consultations this month.",
+        "ctaText": "Book My Free Consultation",
+        "ctaLink": "#consult",
+        "alignment": "left",
+        "showCta": "yes"
+      }
+    },
+    {
+      "type": "Section",
+      "props": {
+        "id": "Section-services",
+        "heading": "Our services",
+        "description": "Everything you need to keep your smile bright.",
+        "backgroundColor": "transparent",
+        "paddingY": "py-24"
+      }
+    },
+    {
+      "type": "TestimonialCard",
+      "props": {
+        "id": "TestimonialCard-jane",
+        "quote": "Friendly team, modern office, painless cleaning.",
+        "authorName": "Jane D.",
+        "authorRole": "Patient since 2023",
+        "rating": 5
+      }
+    },
+    {
+      "type": "FAQ",
+      "props": {
+        "id": "FAQ-main",
+        "items": [
+          {
+            "question": "Do you accept walk-ins?",
+            "answer": "By appointment only."
+          },
+          {
+            "question": "Do you take our insurance?",
+            "answer": "Most major plans — call to confirm."
+          },
+          {
+            "question": "Cleaning cost?",
+            "answer": "$120 for new patients."
+          }
+        ]
+      }
+    },
+    {
+      "type": "FormContainer",
+      "props": {
+        "id": "FormContainer-lead",
+        "formName": "New patient",
+        "submitButtonText": "Request appointment",
+        "successMessage": "We'll call you within one business day.",
+        "enableScoring": "none",
+        "scoreThreshold": 0,
+        "qualifiedRedirectUrl": "",
+        "unqualifiedRedirectUrl": ""
+      }
+    }
+  ],
+  "root": {
+    "props": {}
+  },
+  "zones": {
+    "Section-services:content": [
+      {
+        "type": "IconText",
+        "props": {
+          "id": "IconText-cleaning",
+          "icon": "check",
+          "title": "Cleanings",
+          "description": "Gentle, thorough, fast.",
+          "layout": "flex-row"
+        }
+      },
+      {
+        "type": "IconText",
+        "props": {
+          "id": "IconText-cosmetic",
+          "icon": "star",
+          "title": "Cosmetic",
+          "description": "Whitening + veneers.",
+          "layout": "flex-row"
+        }
+      },
+      {
+        "type": "IconText",
+        "props": {
+          "id": "IconText-emergency",
+          "icon": "zap",
+          "title": "Emergency",
+          "description": "Same-day pain relief.",
+          "layout": "flex-row"
+        }
+      }
+    ],
+    "FormContainer-lead:content": [
+      {
+        "type": "TextInput",
+        "props": {
+          "id": "TextInput-name",
+          "label": "Your name",
+          "placeholder": "Jane Smith",
+          "fieldName": "name",
+          "required": "yes"
+        }
+      },
+      {
+        "type": "EmailInput",
+        "props": {
+          "id": "EmailInput-email",
+          "label": "Email",
+          "fieldName": "email"
+        }
+      },
+      {
+        "type": "TextInput",
+        "props": {
+          "id": "TextInput-phone",
+          "label": "Phone",
+          "placeholder": "(514) 555-0100",
+          "fieldName": "phone",
+          "required": "yes"
+        }
+      }
+    ]
+  }
+}

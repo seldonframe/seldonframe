@@ -1,0 +1,83 @@
+{
+  "startedAt": "2026-04-21T11:10:06.283Z",
+  "mode": "fixture",
+  "steps": [
+    {
+      "step": "generate",
+      "ok": true,
+      "source": "fixture"
+    },
+    {
+      "step": "validate-initial",
+      "issues": []
+    },
+    {
+      "step": "editor-edit",
+      "issues": [],
+      "diffFromInitial": {
+        "idsLost": [],
+        "idsAdded": [],
+        "topLevelContentLengthChange": 0,
+        "zoneCountChange": 0
+      }
+    },
+    {
+      "step": "claude-revise",
+      "ok": true,
+      "source": "fixture"
+    },
+    {
+      "step": "validate-revised",
+      "issues": [],
+      "diffFromEdited": {
+        "idsLost": [],
+        "idsAdded": [],
+        "topLevelContentLengthChange": 0,
+        "zoneCountChange": 0
+      }
+    }
+  ],
+  "verdict": {
+    "cleanSchemaThroughout": true,
+    "revisionPreservedIds": true,
+    "revisionPreservedStructure": true,
+    "diffFromEdited": {
+      "idsLost": [],
+      "idsAdded": [],
+      "topLevelContentLengthChange": 0,
+      "zoneCountChange": 0
+    }
+  },
+  "adversarial": {
+    "wrongEnumValue": {
+      "caught": true,
+      "issues": [
+        "Hero.alignment enum violation: \"middle\""
+      ]
+    },
+    "missingId": {
+      "caught": true,
+      "issues": [
+        "content[0]: props.id missing"
+      ]
+    },
+    "unknownComponent": {
+      "caught": true,
+      "issues": [
+        "content[5]: type \"FancyMarquee\" is outside the allowed component list"
+      ]
+    },
+    "malformedZoneKey": {
+      "caught": true,
+      "issues": [
+        "zone key \"Section-services/content\" does not match \"<parentId>:<slotName>\" shape"
+      ]
+    },
+    "extraUndocumentedProp": {
+      "caught": true,
+      "issues": [
+        "Hero.animationPreset is not a documented prop"
+      ]
+    }
+  }
+}
