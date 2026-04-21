@@ -1601,6 +1601,151 @@ export const TOOLS = [
     },
   },
 
+  // ===== Phase 6 — Landing Pages tools =====
+
+  {
+    name: "list_landing_pages",
+    description:
+      "List the workspace's landing pages (draft + published), newest-updated first.",
+    inputSchema: obj(
+      {
+        limit: { type: "number", description: "Max rows (default 50, max 200)." },
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      [],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const qs = typeof args.limit === "number" ? `?limit=${Math.min(args.limit, 200)}` : "";
+      return api("GET", `/landing${qs}`, { workspace_id: ws });
+    },
+  },
+  {
+    name: "get_landing_page",
+    description:
+      "Fetch a single landing page with its full Puck payload + metadata.",
+    inputSchema: obj(
+      {
+        page_id: str("Landing page ID from list_landing_pages."),
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["page_id"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      return api("GET", `/landing/${encodeURIComponent(args.page_id)}`, { workspace_id: ws });
+    },
+  },
+  {
+    name: "create_landing_page",
+    description:
+      "Create a landing page from an optional Puck payload. Without puck_data, creates a blank draft. With puck_data, validates the payload against the Puck schema and rejects on mismatch. Set published=true to publish immediately.",
+    inputSchema: obj(
+      {
+        title: str("Page title (used for the dashboard; not the public URL)."),
+        slug: str("Optional URL slug. Derived from title if omitted."),
+        puck_data: {
+          type: "object",
+          description: "Optional Puck payload { content: [], root: {props}, zones: {} }.",
+        },
+        published: {
+          type: "boolean",
+          description: "If true, publish the page immediately. Default: draft.",
+        },
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["title"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      return api("POST", "/landing", {
+        body: {
+          title: args.title,
+          slug: args.slug,
+          puckData: args.puck_data,
+          published: Boolean(args.published),
+        },
+        workspace_id: ws,
+      });
+    },
+  },
+  {
+    name: "update_landing_page",
+    description:
+      "Update a landing page's title and/or Puck payload. Validates puck_data on the way through. Does not change publish status — use publish_landing_page for that.",
+    inputSchema: obj(
+      {
+        page_id: str("Landing page to update."),
+        title: str("Optional new title."),
+        puck_data: {
+          type: "object",
+          description: "Optional new Puck payload. Pass null to clear.",
+        },
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["page_id"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const bodyObj = {};
+      if (typeof args.title === "string") bodyObj.title = args.title;
+      if (args.puck_data !== undefined) bodyObj.puckData = args.puck_data;
+      return api("PATCH", `/landing/${encodeURIComponent(args.page_id)}`, {
+        body: bodyObj,
+        workspace_id: ws,
+      });
+    },
+  },
+  {
+    name: "publish_landing_page",
+    description:
+      "Flip a landing page between draft and published. Publishing busts the public-URL cache immediately and emits landing.published. Pass published=false to unpublish.",
+    inputSchema: obj(
+      {
+        page_id: str("Landing page to publish."),
+        published: {
+          type: "boolean",
+          description: "true = publish (default), false = unpublish.",
+        },
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["page_id"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      return api("POST", `/landing/${encodeURIComponent(args.page_id)}/publish`, {
+        body: { published: args.published !== false },
+        workspace_id: ws,
+      });
+    },
+  },
+  {
+    name: "generate_landing_page",
+    description:
+      "Generate a Puck landing-page payload from a natural-language prompt using Claude + the workspace's Soul + theme. Returns the payload (validated against the Puck schema) but does NOT persist — pair with create_landing_page to save the result. Example: generate_landing_page({ prompt: 'A landing for a Laval dental clinic, focus on new-patient consultations' })",
+    inputSchema: obj(
+      {
+        prompt: str("One-sentence page description. The more specific, the better."),
+        existing: {
+          type: "object",
+          description: "Optional existing Puck payload to revise rather than start fresh.",
+        },
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["prompt"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      return api("POST", "/landing/generate", {
+        body: {
+          prompt: args.prompt,
+          existing: args.existing,
+        },
+        workspace_id: ws,
+      });
+    },
+  },
+
   {
     name: "send_conversation_turn",
     description:
