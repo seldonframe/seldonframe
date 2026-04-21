@@ -1358,6 +1358,249 @@ export const TOOLS = [
     },
   },
 
+  // ===== Phase 5 — Payments tools (Stripe Connect Standard) =====
+
+  {
+    name: "create_invoice",
+    description:
+      "Draft a Stripe invoice on the workspace's connected Stripe account. Invoice is created but not sent — call send_invoice separately so agents can review before dispatch. Contact must have an email. Example: create_invoice({ contact_id: 'ctc_123', items: [{ description: '1 hr consulting', quantity: 1, unit_amount: 200 }], due_at: '2026-05-21T00:00:00Z' })",
+    inputSchema: obj(
+      {
+        contact_id: str("CRM contact to bill."),
+        items: {
+          type: "array",
+          description: "Line items. Each: {description, quantity, unit_amount} (unit_amount in the workspace's currency).",
+          items: { type: "object" },
+        },
+        currency: str("3-letter ISO currency code. Defaults to USD."),
+        due_at: str("ISO timestamp for invoice due date. Defaults to 30 days out."),
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["contact_id", "items"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const normalizedItems = (args.items ?? []).map((item) => ({
+        description: item.description,
+        quantity: item.quantity ?? 1,
+        unitAmount: item.unit_amount ?? item.unitAmount,
+        currency: item.currency,
+      }));
+      const result = await api("POST", "/invoices", {
+        body: {
+          contactId: args.contact_id,
+          items: normalizedItems,
+          currency: args.currency ?? null,
+          dueAt: args.due_at ?? null,
+        },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+  {
+    name: "list_invoices",
+    description:
+      "List workspace invoices (draft + sent + paid + past_due + voided), newest first.",
+    inputSchema: obj(
+      {
+        limit: {
+          type: "number",
+          description: "Max rows (default 50, max 200).",
+        },
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      [],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const qs = typeof args.limit === "number" ? `?limit=${Math.min(args.limit, 200)}` : "";
+      return api("GET", `/invoices${qs}`, { workspace_id: ws });
+    },
+  },
+  {
+    name: "get_invoice",
+    description:
+      "Fetch an invoice + its line items + hosted invoice URL (for payment).",
+    inputSchema: obj(
+      {
+        invoice_id: str("Invoice ID returned from create_invoice or list_invoices."),
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["invoice_id"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      return api("GET", `/invoices/${encodeURIComponent(args.invoice_id)}`, { workspace_id: ws });
+    },
+  },
+  {
+    name: "send_invoice",
+    description:
+      "Dispatch a draft invoice to the contact via Stripe (Stripe emails the invoice + provides a hosted pay page).",
+    inputSchema: obj(
+      {
+        invoice_id: str("Invoice to send."),
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["invoice_id"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      return api("POST", `/invoices/${encodeURIComponent(args.invoice_id)}/send`, { workspace_id: ws });
+    },
+  },
+  {
+    name: "void_invoice",
+    description:
+      "Void an invoice (undo a billing error). Only valid for draft / open invoices; paid invoices must be refunded instead.",
+    inputSchema: obj(
+      {
+        invoice_id: str("Invoice to void."),
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["invoice_id"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      return api("POST", `/invoices/${encodeURIComponent(args.invoice_id)}/void`, { workspace_id: ws });
+    },
+  },
+  {
+    name: "create_subscription",
+    description:
+      "Start a recurring subscription for a contact against a Stripe Price id. The Price must already exist in the workspace's Stripe dashboard — v1 does not create Prices. Example: create_subscription({ contact_id: 'ctc_123', price_id: 'price_1ABCxyz', trial_days: 14 })",
+    inputSchema: obj(
+      {
+        contact_id: str("CRM contact to subscribe."),
+        price_id: str("Stripe Price id (e.g., 'price_1ABC...') from the workspace's Stripe dashboard."),
+        trial_days: {
+          type: "number",
+          description: "Optional free trial days before first charge.",
+        },
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["contact_id", "price_id"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      return api("POST", "/subscriptions", {
+        body: {
+          contactId: args.contact_id,
+          priceId: args.price_id,
+          trialDays: args.trial_days,
+        },
+        workspace_id: ws,
+      });
+    },
+  },
+  {
+    name: "list_subscriptions",
+    description:
+      "List workspace subscriptions (active + trialing + past_due + canceled), newest first.",
+    inputSchema: obj(
+      {
+        limit: {
+          type: "number",
+          description: "Max rows (default 50, max 200).",
+        },
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      [],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const qs = typeof args.limit === "number" ? `?limit=${Math.min(args.limit, 200)}` : "";
+      return api("GET", `/subscriptions${qs}`, { workspace_id: ws });
+    },
+  },
+  {
+    name: "cancel_subscription",
+    description:
+      "Cancel a subscription. Default: cancel at period end (contact keeps access until renewal date). Pass immediate=true for an instant termination + prorated refund.",
+    inputSchema: obj(
+      {
+        subscription_id: str("Subscription to cancel."),
+        immediate: {
+          type: "boolean",
+          description: "If true, terminate now. Default: cancel at period end.",
+        },
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["subscription_id"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      return api("POST", `/subscriptions/${encodeURIComponent(args.subscription_id)}/cancel`, {
+        body: { immediate: Boolean(args.immediate) },
+        workspace_id: ws,
+      });
+    },
+  },
+  {
+    name: "list_payments",
+    description:
+      "List recent payments (completed + failed + refunded + disputed) across the workspace, newest first.",
+    inputSchema: obj(
+      {
+        limit: {
+          type: "number",
+          description: "Max rows (default 50, max 200).",
+        },
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      [],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const qs = typeof args.limit === "number" ? `?limit=${Math.min(args.limit, 200)}` : "";
+      return api("GET", `/payments${qs}`, { workspace_id: ws });
+    },
+  },
+  {
+    name: "get_payment",
+    description:
+      "Fetch a single payment record with status + refund/dispute state.",
+    inputSchema: obj(
+      {
+        payment_id: str("Payment ID from list_payments."),
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["payment_id"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      return api("GET", `/payments/${encodeURIComponent(args.payment_id)}`, { workspace_id: ws });
+    },
+  },
+  {
+    name: "refund_payment",
+    description:
+      "Refund a payment. Omit amount to refund the full payment; pass amount for a partial refund. reason should be 'duplicate' | 'fraudulent' | 'requested_by_customer'.",
+    inputSchema: obj(
+      {
+        payment_id: str("Payment to refund."),
+        amount: {
+          type: "number",
+          description: "Optional partial-refund amount in the payment's currency. Omit to refund in full.",
+        },
+        reason: str("'duplicate' | 'fraudulent' | 'requested_by_customer'. Default: requested_by_customer."),
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["payment_id"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      return api("POST", `/payments/${encodeURIComponent(args.payment_id)}/refund`, {
+        body: {
+          amount: args.amount,
+          reason: args.reason ?? "requested_by_customer",
+        },
+        workspace_id: ws,
+      });
+    },
+  },
+
   {
     name: "send_conversation_turn",
     description:
