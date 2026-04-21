@@ -151,6 +151,18 @@ export default async function IntegrationsSettingsPage({
               </button>
             </div>
           </form>
+          <div className="mt-4 rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground space-y-1">
+            <p className="font-medium text-foreground">Webhook URL</p>
+            <p>
+              Point your Twilio Messaging webhook here — both inbound SMS and status callbacks land on the same endpoint:
+            </p>
+            <code className="block break-all rounded bg-muted/40 px-2 py-1 text-[11px] text-foreground">
+              {`${process.env.NEXT_PUBLIC_APP_URL ?? "https://app.seldonframe.com"}/api/webhooks/twilio/sms`}
+            </code>
+            <p>
+              Signature verification uses your stored Twilio auth token — no extra env var needed. STOP replies are auto-suppressed per carrier rules.
+            </p>
+          </div>
         </article>
 
         <article className="rounded-xl border bg-card p-5">
