@@ -3,6 +3,13 @@ id: bulk-video-generation-performance-tracker
 scope: universal
 frameworks:
 ---
+
+<!--
+  No composition contract. Intentionally invisible to agent
+  synthesis. Adding a contract here requires real semantic
+  work — see tasks/step-2b-1-contract-v2-audit.md §7.5.
+-->
+
 # BLOCK: Bulk Video Generation & Performance Tracker
 
 **Description**  

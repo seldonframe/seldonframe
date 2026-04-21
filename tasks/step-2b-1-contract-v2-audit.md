@@ -306,8 +306,12 @@ Backward-compat is the right call because the sprint plan already commits to "mi
 
 - Parser + composition validator: +~340 LOC inside `block-md.ts` (or split, see 4.1).
 - New agent-spec validator: +~300–400 LOC in a new file.
+- Zod-authored schemas for the 7 core blocks (§7.1 approved path): ~50–80 LOC per block × 7 = +~350–560 LOC of Zod, of which CRM's ~50–80 LOC ships in PR 3 and the remaining 6 blocks ship in 2b.2.
+- BLOCK.md emit step + drift-detector CI test: +~80 LOC.
 - No runtime changes. No new MCP tools. No UI changes.
-- **Net estimate: ~640–740 LOC code + ~300 LOC test + docs for the slice.** (Prior estimate was 540 + 250; revised after self-review factored in interpolation-resolver cost.)
+- **Net estimate for 2b.1: ~640–740 LOC code + CRM Zod schemas (~50–80 LOC) + emit step (~80 LOC) + ~300 LOC test + docs.** Rounding up: **~1,000 LOC 2b.1 ceiling.**
+
+**Stop-and-reassess trigger (approved 2026-04-21):** if implementation exceeds this estimate, **stop and surface for review before continuing.** A >30% overrun means the schema design has an unseen complexity we didn't catch at audit time, and shipping through it creates a bigger problem for 2b.2's six downstream block migrations. The right action is to pause, write a brief diagnosis, and either adjust scope or iterate the schema before continuing — not to push through and discover the issue mid-2b.2.
 
 ---
 
@@ -376,31 +380,42 @@ Each touched file is an amendment, not a rewrite. No migrations drop or rename a
 
 ## 7. Open decisions to gate before code ships
 
-### 7.1 Zod vs JSON Schema vs TypeScript-string DSL
+### 7.1 Schema approach — LOCKED: Zod-authored, JSON-Schema-emitted
 
-Three plausible shapes for typed tool inputs / block I/O:
+**Status: approved 2026-04-21.** This is the canonical approach. The three alternatives surveyed during audit drafting are preserved as decision lineage in Appendix A below.
 
-| Approach | Shape | Pros | Cons |
-|---|---|---|---|
-| **Pure Zod (schemas-in-code)** | `z.object({ first_name: z.string(), email: z.string().email().optional() })` | Single source of truth — same schema validates at synthesis AND runtime. Excellent TypeScript inference. Battle-tested in the project (already used in 6 files: `packages/crm/src/lib/utils/validators.ts`, `lib/soul-compiler/schema.ts`, and 4 others). | Zod is JS — the BLOCK.md has to reference schemas by name, not embed them. Means schemas live in code, not in the block's markdown. Third-party blocks need to ship both .block.md AND a JS module. |
-| **JSON Schema embedded in BLOCK.md** | `{ "type": "object", "properties": { "first_name": {"type": "string"} }, "required": ["first_name"] }` | Embeds in the BLOCK.md directly. Language-agnostic — third-party tooling can consume. | Verbose. No TypeScript inference at authoring time. Need a separate compiler to Zod for runtime enforcement. |
-| **TypeScript-string DSL** | `first_name: string, email?: email` in BLOCK.md; parser translates to Zod at load time | Most readable in BLOCK.md. Compact. | Another parser to build + maintain. Non-standard — third parties can't consume without our parser. |
-| **Zod-authored, JSON-Schema-emitted (bidirectional)** | Author Zod in `<block>.tools.ts`; a build step calls `z.toJSONSchema()` and emits JSON-Schema blocks into `<block>.block.md` automatically. BLOCK.md shows the JSON-Schema for third-party readers; runtime + validator use the Zod source. | Single source of truth like pure Zod. BLOCK.md stays self-contained like JSON-Schema. Zod v4's `z.toJSONSchema()` is stable and lossless for the subset we'd use (primitives, unions, objects, enums). | Build step must run on every block edit or BLOCK.md drifts from the code. Fails closed when drift detected (test that diffs emitted vs committed). |
+**Canonical shape.** Author Zod schemas for each tool's args + returns in a TypeScript source file per block (e.g., `packages/crm/src/blocks/crm.tools.ts`). A build step calls `z.toJSONSchema()` and emits JSON-Schema blocks into the corresponding `<block>.block.md` under the `## Composition Contract` section. Runtime + validator consume the Zod source directly. BLOCK.md shows the JSON-Schema rendering for third-party readers.
 
-**Recommendation — revised after self-review:** the **fourth option, Zod-authored with JSON-Schema emitted into BLOCK.md**, is the cleanest architecture and what I'd recommend now. Original recommendation was "JSON Schema in BLOCK.md with a load-time Zod compiler"; the author-in-Zod path is strictly better because:
+**Approved reasoning (capture from approval message, 2026-04-21):**
 
-1. Single source of truth — Zod in code is the canonical definition; JSON-Schema is the published rendering.
-2. No new parser — `z.toJSONSchema()` is provided by the library.
-3. BLOCK.md stays self-contained for third parties — they read the JSON-Schema and don't need Zod.
-4. Runtime enforcement (when 7.e ships) uses the same Zod the validator already parses.
-5. Drift is caught by a CI test that re-emits and diffs — build-time guarantee, not a runtime risk.
+1. **Single source of truth.** Zod schemas in TypeScript compile-check at build time, preventing BLOCK.md ↔ runtime drift. If the TS code refactors a field name, both the schema and the emitted BLOCK.md update atomically on next build.
+2. **Bidirectional emission via `z.toJSONSchema()`** preserves third-party consumption — external agent authors read the emitted JSON-Schema in BLOCK.md without needing Zod as a dep.
+3. **Runtime validation for free when 7.e ships.** The same Zod object the synthesis-time validator parses becomes the runtime enforcer once the agent runtime lands. No duplicate schema to maintain.
+4. **Matches the existing Zod-heavy stack.** Zod already has 6 consumers in the repo (`packages/crm/src/lib/utils/validators.ts`, `lib/soul-compiler/schema.ts`, `lib/soul-compiler/anthropic.ts`, `lib/ai/soul-conversation.ts`, `lib/auth/actions.ts`, `app/(auth)/signup/actions.ts`). Adding this pattern reuses known idioms.
+5. **Better error messages for non-technical users.** Zod's `z.string().email()` produces "Invalid email" by default and is customizable with `.describe()` / `.message()`; JSON-Schema error messages are more verbose and structural. The builder-facing UX matters because synthesis surfaces validator errors to block authors.
 
-The load-time-compile path (original recommendation) forces us to write a JSON-Schema-→-Zod compiler, which is strictly more work than using `z.toJSONSchema()` from upstream.
+**Tradeoff accepted (from approval message):** BLOCK.md is not fully self-contained for third-party block authors — they need the TS source to edit a schema, only the rendered JSON-Schema to read one. Mitigated by the emission step: the BLOCK.md carries a complete, human-readable JSON-Schema artifact so third-party readers can inspect exactly what a tool expects without ever opening the TS file.
 
-**Gate item:** Max to confirm the Zod-authored / JSON-Schema-emitted approach. This is the biggest architectural flip in the audit; I want explicit approval before other sections proceed on this assumption. Implications if approved:
-- Delete the JSON-Schema-to-Zod compiler from scope; replace with a BLOCK.md emit step in the build.
-- Add a CI test that runs the emit and diffs against committed BLOCK.md (drift detector).
-- Total LOC goes **down** versus the original recommendation — rough estimate -50 to -100 LOC net.
+**Implementation implications (locked for PR 1):**
+
+- Each of the 7 core blocks gets a `<block>.tools.ts` companion file that exports one Zod schema per tool + its output shape. CRM is the pattern validator per §5.
+- A build step runs `z.toJSONSchema()` on each exported schema and writes the result into the BLOCK.md's `## Composition Contract` section between `<!-- TOOLS:START -->` / `<!-- TOOLS:END -->` markers.
+- A CI test runs the emit and diffs the working tree against committed BLOCK.md — drift fails CI. (Build-time guarantee, not a runtime risk.)
+- Net LOC vs. the original load-time-compiler recommendation: −50 to −100 LOC (we don't write a JSON-Schema-→-Zod compiler because `z.toJSONSchema()` is provided by the library).
+
+**Implications rejected:** options requiring schema parsers we'd write ourselves (load-time JSON-Schema-to-Zod compiler; TypeScript-string DSL parser). Never write a parser upstream already provides.
+
+---
+
+**Appendix A — decision lineage for §7.1 (alternatives considered, archived).**
+
+During audit drafting the following three paths were evaluated and rejected:
+
+| Approach (archived) | Rejected because |
+|---|---|
+| **JSON Schema authored directly in BLOCK.md** (no Zod source). | No compile-time check that schemas match the TS types the runtime uses. Drift risk. No inference. |
+| **TypeScript types authored in BLOCK.md via a custom string DSL** (`first_name: string, email?: email`). | Requires writing and maintaining a custom parser. Non-standard — third parties can't consume without our parser. Scope creep. |
+| **JSON Schema authored in BLOCK.md with a separate load-time Zod compiler.** | Forces us to write a JSON-Schema-→-Zod compiler. `z.toJSONSchema()` from the Zod library inverts this direction and is strictly less work. Was the initial audit recommendation; self-review replaced it. |
 
 ### 7.2 Where do typed conversation exit predicates live?
 
@@ -436,7 +451,21 @@ Two paths:
 
 **Gate item:** confirm the 3-PR split. If Max wants one PR, shrink the regression suite (still non-negotiable at the slice end).
 
-### 7.5 The 11 non-core BLOCK.md files without composition contracts
+### 7.5 The 11 non-core BLOCK.md files — LOCKED: invisible for v1, stamped with explicit markers
+
+**Status: approved 2026-04-21.** The 7 core blocks migrate to v2; the 11 legacy blocks stay invisible to synthesis. Each of the 11 non-contract `.block.md` files is stamped with an explicit HTML-comment marker so future contributors don't silently add bad contracts.
+
+**Required marker format (from approval message, verbatim):**
+
+```html
+<!-- 
+  No composition contract. Intentionally invisible to agent 
+  synthesis. Adding a contract here requires real semantic 
+  work — see tasks/step-2b-1-contract-v2-audit.md §7.5.
+-->
+```
+
+The marker is added to each of the 11 files in the same commit as this audit approval (below the frontmatter, above the first heading). This prevents a future contributor from assuming the 11 blocks need contracts and silently adding bad ones.
 
 Beyond the 7 core blocks (§1), `packages/crm/src/blocks/` contains 11 additional `.block.md` files that **do not carry a `## Composition Contract` section**:
 
@@ -460,9 +489,7 @@ These are "recipe" blocks — small (30–33 LOC each) skill files that describe
 - **(b) Add minimal v1 contracts in 2b.2.** Extend the per-block migration work in 2b.2 to include adding a minimal `## Composition Contract` (just verbs + compose_with, leave produces/consumes empty) to each of the 11 recipes. Pro: recipes become synthesis-discoverable. Con: +11 migration slices beyond the 6 already planned.
 - **(c) Add a "recipe" block type.** Schema-level distinction — `type: recipe` in frontmatter — so the parser knows to skip them without a warning and synthesis treats them differently (e.g., "you can install a recipe, but I won't auto-generate an agent that uses one"). Pro: cleanest semantic. Con: new frontmatter field, new synthesis-path discrimination.
 
-**Recommendation:** (a) for v1 — scope-preserving, and the recipe files are small enough that (b) could happen in a later sprint (V1.1 GTM slice) without re-designing the contract. If Max disagrees, (c) is the architecturally cleanest answer but pushes ~40 LOC of parser/validator changes.
-
-**Gate item:** confirm v2 migration scope stays at the 7 core blocks; 11 recipe blocks keep their "invisible to synthesis" status until a later slice explicitly addresses them.
+**Approved path: (a).** v2 migration applies only to the 7 core blocks for v1. Recipe blocks stay invisible and get the explicit HTML-comment marker above. Paths (b) and (c) are archived decision lineage; they remain viable for a later sprint if synthesis discoverability of recipes becomes a user-facing ask.
 
 ---
 
@@ -521,38 +548,51 @@ The master plan §0.5 ship criterion reads: *"7 archetypes shipped, **zero V1.1 
 
 ---
 
-## 10. Implementation plan (post-approval)
+## 10. Implementation plan — APPROVED 3-PR sequence
 
-After audit approval:
+**Status: approved 2026-04-21.** Each PR ships to `main` with live probes passing before the next PR starts. The archetype library's probe discipline applies: 3× runs with same inputs, deterministic output confirmed, and no regressions on the 3 shipped archetypes (Speed-to-Lead, Win-Back, Review Requester) when CRM migrates.
 
-- **PR 1 — Schema + parser + composition validator** (`7.i.1.a`): v2 type definitions, extended `parseCompositionContract`, extended `validateCompositionContract`, JSON Schema → Zod compiler. No BLOCK.md changes. Green: all 7 blocks parse clean with a single `legacy_contract` warning each; seeded-bad test fixtures produce targeted validator errors.
+- **PR 1 — Zod schemas + BLOCK.md parser extension + JSON-Schema emission** (`7.i.1.a`):
+  - `packages/crm/src/blocks/crm.tools.ts` — Zod authored schemas for the 13 CRM MCP tool args + returns.
+  - Extend `packages/crm/src/lib/blocks/block-md.ts` — v2-shaped `BlockMdCompositionContract`, v2 parser branch, extended `validateCompositionContract`. v1 blocks continue to parse; each reports one `legacy_contract` informational warning.
+  - Build step: `pnpm build` (or equivalent hook) runs `z.toJSONSchema()` on each `<block>.tools.ts` export and writes the result between `<!-- TOOLS:START -->` / `<!-- TOOLS:END -->` markers in the corresponding `<block>.block.md`.
+  - CI drift-detector test: run the emit in a tmpdir, diff against committed BLOCK.md, fail on drift.
+  - **Green bar:** all 7 core blocks parse clean under v2 parser; 11 recipe blocks parse unchanged (markers present, no `## Composition Contract` expected); drift-detector reports zero diffs; seeded-bad test fixtures (malformed event name, unknown-event reference, tools-emit-missing-from-produces) produce targeted validator errors; `typecheck_errors == 4` baseline.
+  - **Live probe:** Speed-to-Lead / Win-Back / Review Requester run 3× each and pass with no degradation on cost / latency / determinism (their v1 contracts drive synthesis unchanged at this point because CRM's BLOCK.md `## Composition Contract` hasn't been rewritten yet — Zod schemas are authored but not yet *consumed* by synthesis).
 
-- **PR 2 — Agent-spec validator** (`7.i.1.b`): new `packages/crm/src/lib/agents/validator.ts`, typed AgentSpec / ConversationExit / Predicate primitives in `agents/types.ts`, Predicate as the shared primitive exported for 2e. Green: seeded-good AgentSpec fixtures from all 3 shipped archetypes validate clean; seeded-bad fixtures fail with specific messages.
+- **PR 2 — Agent-spec validator** (`7.i.1.b`):
+  - New `packages/crm/src/lib/agents/validator.ts` — 300–400 LOC as revised in §4.3.
+  - New `packages/crm/src/lib/agents/types.ts` — typed `AgentSpec`, `ConversationExit`, `Predicate` primitives. `Predicate` is exported as the shared primitive 2e's `external_state` branch condition will extend later (per §9.3).
+  - **Green bar:** each of the 3 shipped archetype spec templates validates clean under the new validator; seeded-bad fixtures (wrong arg name, wrong enum value, unresolved `{{interpolation}}`) fail with step-id + path-level error messages; `typecheck_errors == 4` baseline.
+  - **Live probe:** same 3× determinism + grounding run per archetype. Validator runs before each synthesis to confirm the filled spec passes its own type check.
 
-- **PR 3 — CRM migration + regression pass** (`7.i.1.c`): rewrite `crm.block.md` Composition Contract + add `tools:` section. Re-run probe-archetype for Speed-to-Lead / Win-Back / Review Requester 3× each. Green: zero degradation on all metrics; ship criteria §8 all satisfied.
+- **PR 3 — CRM block migration + regression probes** (`7.i.1.c`):
+  - Rewrite `packages/crm/src/blocks/crm.block.md` `## Composition Contract` section to v2 shape (typed `produces` / `consumes` referencing `SeldonEvent` union + typed soul/trigger-payload shapes; `<!-- TOOLS:START -->…<!-- TOOLS:END -->` block populated by the PR-1 emit step).
+  - Update synthesis prompt (`scripts/phase-7-spike/synthesis.mjs`) to surface v2 schemas for blocks that have them — CRM in this PR, the remaining 6 core blocks come in 2b.2.
+  - **Green bar:** ship criteria §8 all satisfied. CRM parses clean with zero warnings (`legacy_contract` cleared). The 6 remaining core blocks still on v1 each report exactly one `legacy_contract` warning. Drift-detector remains green. `typecheck_errors == 4` baseline.
+  - **Live probe — this is the load-bearing regression gate:** Speed-to-Lead / Win-Back / Review Requester run 3× each and pass with no degradation on any of (cost +15% ceiling, latency +20% ceiling, determinism — step-sequence hash stable, grounding — 100% bar held). If any archetype degrades, stop, diagnose (§4.4 stop-and-reassess trigger applies), and iterate the v2 schema before 2b.2 kicks off.
 
-Stop after PR 3 lands + all probes green. Await Max's approval of 2b.1 results before starting 2b.2 (remaining 5 blocks).
+After PR 3 lands + all probes green, 2b.1 is complete. Await Max's approval of 2b.1 results before starting 2b.2 (remaining 5 core blocks + Appointment Confirmer archetype path to full scope).
 
 ---
 
-## 11. Stop-gate
+## 11. Stop-gate — audit approved 2026-04-21
 
-This audit is the gate. **No code until approved.** Expected flow:
+**This audit is approved.** The final gate before PR 1 kicks off is this approved version landing in `main`. After that, the 3-PR sequence in §10 starts.
 
-1. Max reviews this document.
-2. Revision rounds (Max estimated 1–2) adjust the schema shape, open-decision answers, or section boundaries.
-3. On approval, PR 1 of Section 10's plan starts. Not before.
+Gate items — resolution status:
 
-Questions surfaced above that explicitly need Max input:
-- §7.1 — Schema approach: **Zod-authored / JSON-Schema-emitted (new recommendation after self-review)** vs JSON-Schema-in-BLOCK.md vs pure Zod vs DSL
-- §7.2 — Predicate primitive location (packages/core vs packages/crm)
-- §7.3 — Event-registry resolution approach (codegen)
-- §7.4 — Single PR vs 3 PRs
-- §7.5 — v2 migration scope: 7 core blocks only (recommended) vs all 18 `.block.md` files vs add a "recipe" block type
-- §9.4 — Confirmation that Review Requester's SMS-suppression upgrade waits on 2e, not 2b.1
-- §9.5 — Acknowledgement that v1 ship criterion is load-bearing on 2e landing (Review Requester's V1.1 footnote clears only when 2e ships)
+| Item | Status | Resolution |
+|---|---|---|
+| §7.1 — schema approach | ✅ APPROVED | Zod-authored, JSON-Schema-emitted via `z.toJSONSchema()`. 3 alternatives archived in Appendix A. |
+| §7.2 — Predicate primitive location | ⚪ Default stands | `packages/crm/src/lib/agents/types.ts` for 2b.1; promote to `packages/core` lazily if 2c needs it. Max did not overrule the default; proceeding on this. |
+| §7.3 — event-registry resolution | ⚪ Default stands | Build-time codegen emits `event-registry.json` from the `SeldonEvent` union. Max did not overrule; proceeding on this. |
+| §7.4 — PR split | ✅ APPROVED | 3 PRs as detailed in §10; each ships to `main` with live probes before the next starts. |
+| §7.5 — scope of v2 migration | ✅ APPROVED | 7 core blocks only. 11 recipe blocks stamped with the explicit `<!-- No composition contract. Intentionally invisible… -->` marker. |
+| §9.4 — Review Requester waits on 2e | ✅ CONFIRMED | SMS-suppression upgrade is a branch-step concern, not a conversation-exit concern. 2b.1 ships typed exits for conversations; Review Requester's V1.1 footnote clears when 2e lands. |
+| §9.5 — 2e critical-path for ship criterion | ✅ ACKNOWLEDGED | Propagated to `tasks/v1-master-plan.md` §0.5 (Scope 3 amendment header) in the same commit as this audit approval. |
 
-All other decisions in this audit are my defaults; Max can overrule any before implementation starts.
+No open gate items remain.
 
 ---
 
@@ -569,3 +609,17 @@ Critical self-review after initial draft found four factual errors and three sub
 7. **§9.5 — new implication: v1 ship criterion is load-bearing on 2e.** Review Requester's V1.1 footnote only clears when 2e ships; "zero V1.1 footnotes" ship bar requires 2e actually landing, not just being planned.
 
 Result: audit is more honest about scope/cost, catches the architectural flip on schema approach before Max reads it, and surfaces the 2e dependency before it becomes a late-sprint surprise.
+
+---
+
+## 13. Post-approval changelog (2026-04-21, Max-approved)
+
+Max reviewed the self-reviewed audit and approved it with the following explicit resolutions. All fixed in-place above:
+
+1. **§7.1 locked — Zod-authored / JSON-Schema-emitted** is the canonical schema approach. Max's approved reasoning captured verbatim: single source of truth with compile-time type-checking, bidirectional emission via `z.toJSONSchema()`, runtime validation for free when 7.e ships, matches existing Zod-heavy stack, better user-facing error messages. Tradeoff accepted: BLOCK.md not fully self-contained for third-party authors (mitigated by the JSON-Schema artifact emission). Three alternative paths archived in Appendix A as decision lineage.
+2. **§7.5 locked — 7 core blocks migrate; 11 recipe blocks stamped.** Each non-contract BLOCK.md file gets the explicit HTML-comment marker specified verbatim in the approval message. Marker stamping ships in the same commit as this audit approval.
+3. **§4.4 LOC ceiling bumped and committed.** Net estimate: ~1,000 LOC for 2b.1 (640–740 validator/parser + ~80 emit + ~80 CRM Zod + ~300 tests). Stop-and-reassess trigger: if implementation exceeds this, pause and diagnose before continuing. A >30% overrun means unseen schema complexity that must not propagate into 2b.2.
+4. **§2.c runtime caveat preserved.** 2b.1's benefit is framed as synthesis-time only; runtime benefits compound once 7.e ships post-launch. This framing stays.
+5. **§9.5 acknowledged + propagated.** Master plan §0.5 (Scope 3 amendment) gains an explicit flag: "2e is critical path for v1 ship criteria. If 2e gets deferred, Review Requester's V1.1 footnote returns, violating the zero-footnote commitment." Changed in the same commit as this audit approval.
+6. **§10 3-PR sequence approved.** Each PR ships to `main` with live probes passing before the next starts. Archetype probe discipline applies: 3× same-input runs, deterministic step-sequence hash, zero regression on Speed-to-Lead / Win-Back / Review Requester when CRM migrates in PR 3.
+7. **L-16 discipline confirmed.** The "direct-verify load-bearing facts before paraphrasing subagent output into shipped docs" rule from `tasks/lessons.md` stays in force for all future audit/plan work.
