@@ -211,6 +211,17 @@ Links a Booking to external artifacts (calendar event ids, meeting urls).
 
 ---
 
+## Composition Contract
+
+Machine-readable contract consumed by Phase 7 agent synthesis. Event names use the canonical dot-notation vocabulary from `packages/core/src/events/index.ts` (`SeldonEvent` union) — distinct from the `BrainEventType` names in the `## Events` section above, which are the legacy Brain v2 operator-log names. Both coexist; synthesis reads only this section.
+
+produces: [booking.created, booking.completed, booking.cancelled, booking.no_show]
+consumes: [workspace.soul.business_type, workspace.soul.availability_timezone, workspace.soul.team_members, contact.id]
+verbs: [book, schedule, appointment, availability, meeting, calendar, consultation, discovery call]
+compose_with: [crm, formbricks-intake, email, sms, payments, automation, brain-v2]
+
+---
+
 ## Pages
 
 ### Admin pages

@@ -183,6 +183,30 @@ Format: **Lesson** / **Trigger** / **Rule**
 
 ---
 
+## L-15 — Every new BLOCK.md must include a Composition Contract section
+
+- **Trigger:** Phase 2.75 reframed Phase 7 around agent synthesis with
+  BLOCK.md as the machine-readable input. The parser was extended to read
+  `## Composition Contract` (produces / consumes / verbs / compose_with),
+  and three existing blocks (`caldiy-booking`, `formbricks-intake`, new
+  `crm`) were backfilled. Without this section, agent synthesis is blind to
+  the block: it can't route prompts to it by verb, can't chain it by event,
+  and won't auto-pair it with compatible blocks. A block shipped without
+  a contract is invisible to synthesis, which silently degrades the
+  headline differentiator (§0 of `v1-master-plan.md`).
+- **Rule:** Every new BLOCK.md ships with a `## Composition Contract`
+  section containing four typed lines: `produces: [event.name, ...]`,
+  `consumes: [workspace.soul.key, ...]`, `verbs: [short, lowercase, tokens]`,
+  `compose_with: [other-block-slug, ...]`. Use dot-notation for event
+  names (`contact.created`, not `ContactCreated`). Use dot-paths for Soul
+  consumes (`workspace.soul.business_type`). Keep verbs short imperative
+  tokens — long verbs will trip the `verbose_verb` validator warning.
+  `validateCompositionContract()` in `packages/crm/src/lib/blocks/block-md.ts`
+  emits non-fatal warnings today; Phase 12 turns these into a blocking
+  CI gate, so get it right at authoring time.
+
+---
+
 ## Template for new entries
 
 ```

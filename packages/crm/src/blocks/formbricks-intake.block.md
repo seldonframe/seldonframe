@@ -115,6 +115,17 @@ Do NOT emit events not listed above from this block.
 
 ---
 
+## Composition Contract
+
+Machine-readable contract consumed by Phase 7 agent synthesis. Event names use the canonical dot-notation vocabulary from `packages/core/src/events/index.ts` (`SeldonEvent` union) — distinct from the `BrainEventType` names in the `## Events` section above, which are the legacy Brain v2 operator-log names. Both coexist; synthesis reads only this section.
+
+produces: [form.submitted, contact.created]
+consumes: [workspace.soul.business_type, workspace.soul.customer_fields, contact.id, contact.email]
+verbs: [intake, capture, collect, qualify, survey, ask, onboard, nps, feedback]
+compose_with: [crm, caldiy-booking, email, sms, automation, brain-v2]
+
+---
+
 ## Pages
 
 ### Admin (builder_mode)

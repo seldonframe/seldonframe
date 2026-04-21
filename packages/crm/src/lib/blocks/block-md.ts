@@ -62,11 +62,40 @@ export type BlockMdViewDefinition = {
   raw: string[];
 };
 
+// Added Phase 2.75 (2026-04-20). The composition contract is the
+// machine-readable input to agent synthesis (Phase 7): given a prompt + Soul
+// + registry of blocks with contracts, Claude picks blocks by matching
+// natural-language `verbs`, chains them via `produces` → `consumes`, and
+// only composes blocks that list each other in `composeWith`.
+//
+// Contract lives in the BLOCK.md under `## Composition Contract` as four
+// typed key:[array] lines. Missing section is OK — parser returns empty
+// arrays so un-amended blocks don't crash anything; synthesis just treats
+// them as "no known composition" and won't auto-use them.
+export type BlockMdCompositionContract = {
+  // Event names this block emits (read by downstream blocks' consumes).
+  // Format: "namespace.verb" e.g. "contact.created", "form.submitted".
+  produces: string[];
+  // Soul / workspace context keys this block reads at runtime.
+  // Format: dot-path e.g. "workspace.soul.business_type".
+  consumes: string[];
+  // Natural-language intents that route to this block. Lowercase, no
+  // punctuation. e.g. "intake", "capture", "qualify", "schedule a call".
+  verbs: string[];
+  // Other block slugs this composes cleanly with. Used by synthesis to
+  // prefer known-good pairings over hallucinated ones.
+  composeWith: string[];
+  // Original lines from the section — retained for debugging + future
+  // extension without breaking the typed surface.
+  raw: string[];
+};
+
 export type ParsedBlockMd = {
   title: string | null;
   purpose: string;
   entities: BlockMdEntityDefinition[];
   views: BlockMdViewDefinition[];
+  composition: BlockMdCompositionContract;
   sections: Record<string, string>;
 };
 
@@ -651,6 +680,70 @@ export function serializeBlockMdViews(views: BlockMdViewDefinition[]) {
   return serializeViewsSection(views);
 }
 
+// Parse a single `key: [a, b, c]` OR `key: a, b, c` line from the
+// Composition Contract section. Returns null for malformed lines so the
+// caller can collect them into `raw` without losing structured data.
+function parseCompositionLine(line: string): { key: string; values: string[] } | null {
+  const trimmed = line.trim();
+  if (!trimmed || trimmed.startsWith("#") || trimmed.startsWith("//")) return null;
+
+  // Accept:
+  //   - `key: [a, b, c]`
+  //   - `key: a, b, c`
+  //   - `- key: [a, b, c]` (dash-prefix bullet)
+  //   - `- key: a, b, c`
+  const match = trimmed.replace(/^-\s+/, "").match(/^([a-z_][a-z0-9_]*)\s*:\s*(.+)$/i);
+  if (!match) return null;
+
+  const key = match[1].toLowerCase();
+  let valuePart = match[2].trim();
+  // Strip outer brackets if present.
+  if (valuePart.startsWith("[") && valuePart.endsWith("]")) {
+    valuePart = valuePart.slice(1, -1);
+  }
+  const values = splitCommaList(valuePart);
+  return { key, values };
+}
+
+function parseCompositionContract(section: string): BlockMdCompositionContract {
+  const empty: BlockMdCompositionContract = {
+    produces: [],
+    consumes: [],
+    verbs: [],
+    composeWith: [],
+    raw: [],
+  };
+  if (!section) return empty;
+
+  const raw = section.split("\n");
+  const result: BlockMdCompositionContract = { ...empty, raw };
+
+  for (const line of raw) {
+    const parsed = parseCompositionLine(line);
+    if (!parsed) continue;
+    switch (parsed.key) {
+      case "produces":
+        result.produces = parsed.values;
+        break;
+      case "consumes":
+        result.consumes = parsed.values;
+        break;
+      case "verbs":
+        result.verbs = parsed.values.map((v) => v.toLowerCase());
+        break;
+      case "compose_with":
+      case "composewith":
+        result.composeWith = parsed.values;
+        break;
+      // Unknown keys are silently ignored to allow future extension
+      // without breaking existing callers. The raw lines are still
+      // retained on the `raw` field for debugging.
+    }
+  }
+
+  return result;
+}
+
 export function parseBlockMd(blockMd: string): ParsedBlockMd {
   const normalized = blockMd.replace(/\r\n/g, "\n").trim();
   const titleMatch = normalized.match(/^#\s*BLOCK(?:\.md)?\s*:\s*(.+)$/im);
@@ -661,8 +754,85 @@ export function parseBlockMd(blockMd: string): ParsedBlockMd {
     purpose: sections.purpose ?? "",
     entities: parseEntities(sections.entities ?? ""),
     views: parseViews(sections.views ?? ""),
+    composition: parseCompositionContract(sections["composition contract"] ?? ""),
     sections,
   };
+}
+
+// Synthesis reliability check (D-13 mitigation). Runs after parse. Returns
+// a list of human-readable warnings — empty array means the contract looks
+// well-formed and composable with the current block registry. Warnings are
+// non-fatal; agent synthesis may still use the block, just with a lower
+// confidence signal. The Phase 12 CI gate turns warnings into errors.
+export type CompositionContractWarning = {
+  code: string;
+  message: string;
+};
+
+export function validateCompositionContract(
+  parsed: ParsedBlockMd,
+  knownBlockSlugs: string[] = [],
+): CompositionContractWarning[] {
+  const warnings: CompositionContractWarning[] = [];
+  const c = parsed.composition;
+
+  // A block with no contract is "opaque" to synthesis. Flag once per block.
+  if (c.produces.length === 0 && c.consumes.length === 0 && c.verbs.length === 0) {
+    warnings.push({
+      code: "empty_contract",
+      message:
+        "Composition contract is missing or empty. Agent synthesis won't auto-use this block. Add a `## Composition Contract` section with produces / consumes / verbs / compose_with.",
+    });
+    return warnings;
+  }
+
+  // verbs must exist — they're how a prompt routes to the block.
+  if (c.verbs.length === 0) {
+    warnings.push({
+      code: "no_verbs",
+      message: "`verbs: []` is empty. Without verbs, natural-language prompts can't route to this block.",
+    });
+  }
+
+  // Event-name sanity check.
+  const eventNamePattern = /^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$/;
+  for (const event of c.produces) {
+    if (!eventNamePattern.test(event)) {
+      warnings.push({
+        code: "malformed_produces",
+        message: `produces event "${event}" doesn't match expected shape "namespace.verb" (lowercase, dot-separated).`,
+      });
+    }
+  }
+
+  // Compose-with references should point at real block slugs when the
+  // caller passes the known registry. Skip this check if registry is empty
+  // (e.g., in tests or during bootstrap).
+  if (knownBlockSlugs.length > 0) {
+    const slugSet = new Set(knownBlockSlugs);
+    for (const slug of c.composeWith) {
+      if (!slugSet.has(slug)) {
+        warnings.push({
+          code: "unknown_compose_with",
+          message: `composeWith references "${slug}" which is not a known block slug in the registry.`,
+        });
+      }
+    }
+  }
+
+  // Verbs should be short lowercase tokens, not full sentences. Flag long
+  // verbs — they usually indicate someone wrote a description instead of a
+  // routing keyword.
+  for (const verb of c.verbs) {
+    if (verb.length > 40 || verb.includes(" ") === false && verb.length > 30) {
+      warnings.push({
+        code: "verbose_verb",
+        message: `verb "${verb}" looks long. Prefer short imperative tokens like "intake", "schedule", "send reminder".`,
+      });
+    }
+  }
+
+  return warnings;
 }
 
 export function normalizeGeneratedBlockMd(blockMd: string) {
