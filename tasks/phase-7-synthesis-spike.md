@@ -1,7 +1,8 @@
 # Phase 7.a — Agent Synthesis architectural spike
 
 **Date:** 2026-04-21
-**Gate:** Phase 7.b cannot start until this spike's architectural recommendations are approved.
+**Updated:** 2026-04-21 (post-approval adjustments)
+**Gate:** Phase 7.h cannot start until the live run below is complete and reviewed.
 **Spike script:** [scripts/phase-7-spike/synthesis.mjs](../scripts/phase-7-spike/synthesis.mjs)
 **Artifacts:** [tasks/phase-7-synthesis-spike/](./phase-7-synthesis-spike/)
 
@@ -9,11 +10,12 @@
 
 ## TL;DR
 
-- **NL-prompt → AgentSpec is viable** for archetypal agents (Speed-to-Lead, welcome-email, dunning) but **not reliable as a one-shot for open-ended prompts.**
-- **Composition contract schema is mostly sufficient** — the 4 fields carry the semantic metadata Claude needs to route verbs to blocks and chain events. Three concrete gaps surfaced (below), already queued as V1.1 candidates.
-- **A real MCP-surface gap was discovered**: no `create_booking` tool exists. Speed-to-Lead can't ship end-to-end until it's added.
+- **Archetype + NL-customization is the product surface**, not NL-from-scratch. The "synthesize from one sentence" demo applies to archetypal prompts where Claude knows the shape. This is stronger PMF for agency / solopreneur builders who want starter templates they can tune — not blank-canvas magic.
+- **Composition contract schema is mostly sufficient** — the 4 fields carry the semantic metadata Claude needs to route verbs to blocks and chain events. Three gaps consolidate into a single "composition contract schema v2" V1.1 item.
+- **A real MCP-surface gap was discovered**: no `create_booking` tool exists. Speed-to-Lead can't ship end-to-end until it's added — this is slice 7.h, resequenced to run first.
+- **Phase 2 MCP gap audit was incomplete**: it only tracked dashboard actions, not archetype requirements. Before the archetype library lands, re-run the audit against all 7 archetypes.
 - **Validator works**: structural + semantic validation caught every adversarial failure shape the fixture could produce.
-- **Architecture recommendation: structured IR + canvas + multi-turn clarification, not one-shot.**
+- **Architecture recommendation: structured IR + archetype picker + multi-turn clarification + read-only canvas, not one-shot NL.**
 
 ---
 
@@ -83,7 +85,7 @@ type AgentSpec = {
 - `mcp_tool_call` — deterministic work (send email, create contact, etc.). Every block exposes tools through the MCP surface; this is the execution atom.
 - `wait` — speed-to-lead needs a 2-minute delay. Cron-scheduled.
 - `conversation` — Claude-driven multi-turn with exit-condition. Delegates to the existing Phase 3 Conversation Primitive runtime. Exit condition + variable extraction are NL strings that the runtime evaluates per-turn.
-- `branch` — routing based on extracted variables. NL condition, runtime evaluates.
+- `branch` — **binary only** (`on_true` / `on_false`). No AND/OR trees, no N-way switches. Complex routing = two branch nodes chained. Scope-creep check: the spec explicitly does NOT model decision trees in one node; agents that need N-way routing compose it. Keeping this restriction deliberately simple means the runtime evaluator is one NL→boolean call per branch; anything richer becomes a prompt-engineering rabbit hole we don't need to fall into in v1.
 - `end` — terminal node. Omitted in most specs because `next: null` implies it.
 
 **Why not a typed DAG like Node-RED / Temporal?** Because conversational steps are intrinsically non-deterministic — their "output" is a free-form extraction whose type depends on what the contact said. A strict type system over NL variable extraction is the wrong abstraction for v1. NL-typed variables + runtime eval is what matches reality.
@@ -165,31 +167,48 @@ The spike tested four failure modes against the validator (with fixture-synthesi
 
 ## Is one natural-language prompt enough?
 
-**No, not for v1 quality — but it's the right front door.**
+**Reframed from the v0 of this doc.** The original wording — "one-shot NL → spec is not viable for open-ended prompts" — was correct but missed the product-market-fit framing. The right framing:
 
-- **Archetypal agents** (speed-to-lead, welcome series, appointment reminders, dunning, churn save, review requests): one-shot is plausible because the shape is stereotyped. The prompt fills a template; Claude's job is filling blanks, not inventing structure.
-- **Open-ended agents** ("help me with onboarding", "automate my client workflow"): one-shot is unreliable. Too many unspecified choices (which channel? which trigger? which qualification criteria?). The model will silently pick defaults that may or may not match user intent.
+**Archetype + NL-customization is the primary UX. "Synthesize from one sentence" applies to archetypal prompts where Claude already knows the shape — it's filling blanks, not inventing structure.**
 
-**Recommended UX:** hybrid with three entry points:
-1. **Archetype picker** — "start from a template" (speed-to-lead, welcome series, etc.). Template is a pre-synthesized spec with `$placeholder` fields. Claude fills in placeholders from the prompt + Soul. Low-variance, high-reliability path.
-2. **NL compose** — "describe what you want." Claude asks up to 3 clarifying questions before synthesizing. If context is sufficient, synthesizes directly. Clarifying questions are themselves Claude-generated and structured ("Which channel? [email/SMS/both]").
-3. **Canvas from spec** — every synthesis emits an AgentSpec that renders in a React Flow canvas. User tweaks nodes/edges. Changes re-validate + re-save. No "black box" synthesis.
+This is a stronger PMF signal than the blank-canvas "describe anything" pitch. Solopreneurs and agency builders (the Corey-Ganim-style ICP) want *starter templates they can tune*, not magic that writes arbitrary agents. "Pick an archetype, customize in Claude Code in real time" matches how they already work — they steal a proven playbook and tune it to their business.
+
+Two entry points, ranked by expected reliability:
+
+1. **Archetype picker (primary UX).** "Start from a template." Ships 6 archetypes (speed-to-lead, welcome series, appointment reminders, dunning, churn save, review requests). Each is a validated AgentSpec skeleton with `$placeholder` fields for copy / channel / timing. Claude fills placeholders from the user's Soul + one-sentence NL description. Low variance, high reliability, cheap to run (small prompt, mostly string substitution).
+
+2. **NL compose (secondary UX).** "Describe what you want from scratch." Clarifying-questions loop — Claude returns `{complete: false, questions: [...]}` up to 3 rounds, then `{complete: true, spec}`. Questions are structured ("Which channel? [email / SMS / both]"), not open-ended. On the novel-prompt path (genuinely new agent shapes), this is where the live-run behavior below becomes load-bearing.
+
+Both paths emit an AgentSpec that renders in a read-only canvas (see 7.f below). The canvas is *visualization*, not the primary authoring surface; full-canvas editing is V1.1.
 
 ---
 
-## Proposed Phase 7 architecture (7.b onward)
+## Proposed Phase 7 architecture (approved 2026-04-21 — resequenced)
+
+**New sequence:** 7.h → 7.c → 7.b → 7.d → 7.g → 7.e → 7.f
+
+Rationale for the reordering:
+- **7.h first** — Speed-to-Lead can't demo without `create_booking`. Single ~80 LOC slice; running it first unblocks the eval harness (7.g) and end-to-end runtime validation (7.e).
+- **7.c before 7.b** — the archetype library defines the shapes the DB schema must support. Designing `agents`+`agent_runs` tables around concrete archetypes is safer than around the abstract IR.
+- **7.g before 7.e** — eval harness is a **go/no-go gate**. If synthesis is <60% reliable on archetypal prompts, we pause and prompt-engineer before building the runtime. Shipping a runtime on top of an unreliable synthesizer multiplies the problem.
+
+### 7.h — `create_booking` MCP gap closure *(first, unblocks everything downstream)*
+- Identified by this spike. Unblocks the Speed-to-Lead archetype end-to-end.
+- Single slice: `create_booking({contact_id, appointment_type_id, starts_at, notes?})` + server action + API route. ~80 LOC.
+- **Prerequisite:** re-run the MCP gap audit against all 7 archetypes (see V1.1 queue) to catch any other missing tools before 7.c. Phase 2.a audited dashboard actions; archetypes demand different coverage.
+
+### 7.c — Archetype library *(second, before schema so schema reflects real shapes)*
+- `lib/agents/archetypes/{speed-to-lead,welcome-series,appointment-reminder,dunning,churn-save,review-request}.ts`
+- Each archetype is a validated AgentSpec skeleton with `$placeholder` fields for copy / timing / channel selection.
+- Synthesis from archetype: interpolate placeholders. No Claude needed for structure, only for copy fill-in.
+- **Gate:** don't start 7.c until the MCP-gap audit against these 7 archetypes is complete. Archetypes that reference missing tools get held until the gap is closed (inline, or via Phase 11).
 
 ### 7.b — AgentSpec DB + lifecycle
 - New `agents` table (`id`, `orgId`, `name`, `description`, `spec` JSONB, `status` (draft / active / paused), `archetype` nullable, `createdFrom` ("archetype" | "nl_prompt" | "canvas"), `createdBy`, `createdAt`, `updatedAt`).
 - New `agent_runs` table for execution traces (one row per trigger firing; status, started/ended, steps completed, outcome).
 - `/api/v1/agents` CRUD + `/api/v1/agents/[id]/activate` + `/api/v1/agents/[id]/runs`.
 - Validator from the spike moves into `lib/agents/validator.ts` with tests.
-
-### 7.c — Archetype library
-- `lib/agents/archetypes/{speed-to-lead,welcome-series,appointment-reminder,dunning,churn-save,review-request}.ts`
-- Each archetype is a templated AgentSpec with `$placeholder` refs.
-- Synthesis path "from archetype" just interpolates — no Claude needed for structure, only for copy fill-in (subject lines, message body).
-- Ships with Phase 7.b — low-risk, high-leverage.
+- Schema choices informed by the 6 archetype shapes shipped in 7.c.
 
 ### 7.d — Synthesis engine (NL compose path)
 - `lib/agents/synthesize.ts` — the production version of the spike script.
@@ -197,56 +216,98 @@ The spike tested four failure modes against the validator (with fixture-synthesi
 - Post-synthesis: validate + sanitize + surface issues to UI. Reject on invalid_schema; accept with warnings on missing_soul_refs.
 - Endpoint: `POST /api/v1/agents/synthesize` returns `{spec, validationIssues, suggestedName}` without persisting — caller reviews + calls `POST /api/v1/agents` to save.
 
-### 7.e — Execution runtime
+### 7.g — Eval harness *(gates 7.e — do not build runtime until evals pass)*
+- D-13 mitigation. `tasks/phase-7-evals/{archetype}.jsonl` — per-archetype test cases. Each case is `{prompt, soul_context, expected_spec_skeleton}`.
+- **Go/no-go gate:** must exceed 60% archetype-match reliability across 10+ cases per archetype before 7.e ships. Below threshold → pause + prompt-engineer, don't build the runtime on an unreliable synthesizer.
+- Runs nightly via a GitHub Action once the runtime ships; fails PRs that drift from expected skeletons.
+
+### 7.e — Execution runtime *(conditional on 7.g passing)*
 - `lib/agents/runtime.ts` — walks an AgentSpec step-by-step.
 - Triggered by subscribing to the event bus (Phase 2.5 InMemorySeldonEventBus). Each active agent registers its trigger event once; event fires → spawn a run.
 - State persisted per-run (variables dict, current step, last-update timestamp) so SMS-conversation gaps of hours/days work.
-- Per-step error handling: tool-call failure → `on_error: retry | skip | halt` (V1.1 adds this field; v1 halts).
+- Per-step error handling: tool-call failure → halt in v1; `on_error: retry | skip | halt` field lands in V1.1.
 
-### 7.f — React Flow canvas
+### 7.f — React Flow canvas *(read-only for v1)*
 - `/agents/[id]` renders the AgentSpec as a read-only canvas with step nodes + edges.
 - Editing v0: click node → side panel with fields → save. No drag-to-rearrange in v1 (the spec structure is linear enough that side-panel edits cover it).
 - Writing a new spec from canvas (drawing edges first) is V1.1.
 
-### 7.g — Eval harness
-- D-13 mitigation. `tasks/phase-7-evals/{archetype}.jsonl` — per-archetype test cases. Each case is `{prompt, soul_context, expected_spec_skeleton}`.
-- Runs nightly via a GitHub Action; fails if synthesis drifts from expected skeleton.
-- Not a blocker for 7.b; lands in parallel.
+---
 
-### 7.h — `create_booking` MCP gap closure
-- Identified by this spike. Unblocks Speed-to-Lead.
-- Single slice: `create_booking({contact_id, appointment_type_id, starts_at, notes?})` + server action + API route. ~80 LOC.
-- Can be done in Phase 7.h or back-ported to a Phase 11 micro-slice ahead of time.
+## Open design calls (decided 2026-04-21)
+
+- **Canvas scope for v1: read-only visualization** in 7.f. Authoring-via-canvas (drag edges) moves to V1.1. Rationale: "see your agent as a diagram" is part of the headline-differentiator pitch, but authoring-via-canvas is ~2 weeks of UI work that adds power-user value without unlocking net-new agents.
+- **Archetype templates: JSON fixtures, not Claude-generated.** Generating an archetype from Claude on first use doubles the token cost per workspace, introduces structural variance across workspaces, and makes evolution harder. One canonical shape per archetype, placeholders filled from Soul + prompt.
 
 ---
 
-## What this spike recommends we STOP and reconsider
+## V1.1 queue additions *(consolidated 2026-04-21)*
 
-### Should we defer the canvas (7.f) to V1.1?
+| Item | Replaces / merges | Notes |
+|---|---|---|
+| **Composition contract schema v2** | (typed tool inputs) + (typed conversation exit conditions) + (typed block I/O) | Single V1.1 item. Adds `inputs`, `outputs`, `ui_components` to contracts; migrates the 7 existing BLOCK.md files. Carries most of the schema evolution in one coordinated bump. |
+| **MCP gap audit v2 — against archetypes, not dashboards** | net-new | Phase 2.a audited dashboard actions and missed `create_booking`. Before 7.c ships, re-run the audit with every archetype as an input. Output: `tasks/mcp-gap-audit-v2.md` with a per-archetype tool-requirement matrix + gap list. Block 7.c on completion. |
+| **Canvas editing** (drag to rearrange, draw new edges) | net-new | 7.f ships read-only; authoring-via-canvas is V1.1. |
+| **`on_error` per step** | net-new | Step-level `retry | skip | halt` with exponential-backoff settings. v1 halts on any tool-call failure. |
+| **Stripe application-fee knob** | net-new | From Phase 5. v1 = 0% platform fee; V1.1 optional. |
 
-The spike suggests most v1 value comes from archetype + NL compose. The canvas is heavy UI work (~2 weeks) that adds power-user value but doesn't unlock net-new agents. If ship velocity is the priority, **defer the canvas to V1.1** and ship 7.b + 7.c + 7.d + 7.e + 7.g only. Agents would be edit-in-JSON for v1 power users.
-
-**Counter-argument:** "see your agent as a diagram" is part of the headline-differentiator pitch (§0 in master plan). Shipping without it would dilute the demo.
-
-**Recommendation:** ship a **read-only canvas** in 7.f (visualize the spec, no editing). Editing via side-panel forms. Pure-canvas editing (drag edges) is V1.1.
-
-### Should archetype templates be JSON fixtures or Claude-generated on first use?
-
-Spike's recommendation: **JSON fixtures.** Generating an archetype with Claude on first use is:
-- 2x the token cost per workspace (synthesis + customize, not just customize)
-- Higher variance in structure (two workspaces get different archetype shapes)
-- Harder to evolve (editing a template means re-generating many possible outputs)
-
-Fixture archetypes: one canonical shape per archetype, placeholders filled by Claude from Soul + prompt. Cheaper, more consistent, easier to iterate on.
+Rationale for consolidating the three contract gaps: migrating BLOCK.md files is a coordinated change — doing it once for three additions is cheaper than three separate migrations. The schema-v2 rollout plans the parser change + backfill of all 7 blocks + updated validator in one sweep.
 
 ---
 
 ## Decision request
 
-Approve:
-1. **AgentSpec shape** as specified (5 step types). Locks the v1 IR.
-2. **Phase 7 slicing**: 7.b schema + 7.c archetypes + 7.d synthesis + 7.e runtime + 7.f read-only canvas + 7.g evals + 7.h `create_booking` gap fix.
-3. **V1.1 queue additions**: typed tool inputs/outputs in contracts, typed conversation exit conditions, pure-canvas editing, `on_error` per step, application-fee knob on payments.
-4. **Run the spike live** with `ANTHROPIC_API_KEY` before 7.b starts — the open questions (vague-prompt handling, token cost per synthesis) need answers in actual model output, not fixture.
+Approved 2026-04-21:
 
-If any of the four don't land, 7.b is blocked.
+1. **AgentSpec shape** — 5 step types, branch is binary-only (no AND/OR trees). Locked.
+2. **Resequenced Phase 7 slicing** — `7.h → 7.c → 7.b → 7.d → 7.g → 7.e → 7.f`. 7.g is a go/no-go gate: synthesis must exceed 60% archetype-match reliability before 7.e ships.
+3. **V1.1 queue (consolidated above)** — composition contract schema v2, MCP gap audit v2, canvas editing, on_error, Stripe app-fee knob.
+4. **Live run required before 7.h starts** — plan + findings below.
+
+---
+
+## Live-run plan + findings
+
+### Plan (approved 2026-04-21)
+
+- Set `ANTHROPIC_API_KEY` in worktree env.
+- Run the Speed-to-Lead prompt live.
+- Record: spec validity, token in/out, dollar cost per call.
+- Run the same prompt 5x → measure determinism. Non-determinism across runs = risk for version control + diff review; note if observed.
+- Run the vague prompt ("make me a thing that handles leads") → confirm Claude declines rather than fabricates.
+- Run one genuinely novel prompt that doesn't match any archetype → record behavior.
+- Budget: **$5 max** in API usage across all runs. Stop if exceeded.
+- Append findings below this section (don't create a new file).
+
+### How to execute the live run
+
+The spike script detects `ANTHROPIC_API_KEY` automatically and switches from fixture to live mode. To run:
+
+```bash
+# From the worktree root:
+export ANTHROPIC_API_KEY=sk-ant-...
+node scripts/phase-7-spike/synthesis.mjs
+```
+
+The script writes artifacts to `tasks/phase-7-synthesis-spike/`:
+- `02-happy-path-spec.json` — live Speed-to-Lead synthesis result
+- `02-happy-path-spec.raw.txt` — raw Claude response (before JSON parsing)
+- `04-adversarial-*.json` — each adversarial case's response
+- `report.json` — structured summary with validation results + token usage
+
+For the 5x determinism + novel-prompt additions, add a small wrapper that runs the happy-path prompt 5 times and a custom prompt once. Budget check after each call (~$0.06-0.10 each = 7 calls ≈ $0.50-0.80 total, well under $5).
+
+### Live-run status
+
+**Not yet executed — blocked by environment.** `ANTHROPIC_API_KEY` is masked from this agent's shell + child-process context (standard Claude Code sandboxing), so I cannot run the live portion from my session. **Max to kick off locally with the command above and paste findings here.**
+
+### Findings (to be appended)
+
+_Placeholder. Append live-run results here once available. Structure:_
+
+- **Per-run:** spec valid? / token in / token out / dollar cost / validator issues
+- **Determinism across 5 runs:** step count variance, ID-shape variance, tool-selection variance, copy-content variance (expected high)
+- **Vague prompt:** did Claude decline, fabricate a generic agent, or ask clarifying questions?
+- **Novel prompt:** what shape did it produce? Did it compose existing blocks sensibly?
+- **Total API spend:** $X.XX
+- **Overall verdict:** does the live-run evidence support proceeding with 7.h, or does it reveal a blocker requiring re-architecture?

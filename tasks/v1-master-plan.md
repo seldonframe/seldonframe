@@ -15,7 +15,7 @@ Post-2026-04-20 that framing is subsumed by the real bet: **(g) agent synthesis 
 
 | # | Differentiator | Pre-reframe framing | Now |
 |---|---|---|---|
-| **g** | **Agent synthesis** | "AI-native foundation" | **Headline — #1 moat.** Given a one-sentence prompt + Soul + block registry, produce a working personalized agent in <60s. No competitor does this. Delivered by Phase 7 Agent Engine. |
+| **g** | **Agent synthesis** | "AI-native foundation" | **Headline — #1 moat.** Builder picks an archetype (speed-to-lead, welcome series, dunning, etc.), adds one-sentence NL customization; Claude Code + Soul + block registry fill in a working personalized agent in <60s. No competitor does this. Delivered by Phase 7 Agent Engine. Framing updated 2026-04-21 after the 7.a spike — original "one sentence → working agent from scratch" was honest only for archetypal prompts; "archetype + NL customization" is the correct product UX and stronger PMF for agency / solopreneur builders. |
 | c | Legible + testable automations | GHL has silent misfires | Strong #2. Phase 7 canvas makes every agent visually inspectable. |
 | d | Snapshots updatable + forkable | Static snapshots vs living | Strong #3. Phase 9. |
 | a | Transparent pricing | No agency-wallet surprise | Strong #4. Already shipped in 0.5. |
@@ -503,9 +503,9 @@ Matrix: phase × journey stage. `●` = primarily serves, `◐` = partially serv
 | 11 Cross-block MCP | | | | ● | | | | |
 | 12 Testing + polish | ● | ● | ● | ● | ● | ● | ● | ● |
 
-**Stage-coverage check (updated post-reframe):**
-- **Stage 0 (discovery / Twitter)** and **Stage 2 (hero moment)**: the *headline* demo is now agent synthesis — "dental clinic Soul + one sentence → working speed-to-lead agent in 60s." Phase 7 is where that lands. Phase 7.a (read-only canvas, absorbed from old 6.5) ships the visual artifact *earlier in the phase sequence* than the full synthesis layer — same phase, first slice. Phase 4 SMS gets a `◐` on Stage 0 because the first viable synthesized agent demo is SMS-based (speed-to-lead SMS qualifier — Phase 4's conversational mode is the payload).
-- **Stage 2 (hero moment)** — previously "polished CRM loads." **Now specifically "watch a dental speed-to-lead agent get built from one sentence in 60 seconds."** Phase 3 + 4 contribute the send-email / send-SMS primitives the hero-moment agent composes; Phase 7 does the synthesis; Phase 6 (landing pages) contributes the landing that hosts the intake form. The hero moment is a multi-phase pay-off, not a single surface.
+**Stage-coverage check (updated post-reframe; Stage 2 reframed again 2026-04-21 after Phase 7.a spike):**
+- **Stage 0 (discovery / Twitter)** and **Stage 2 (hero moment)**: the *headline* demo is agent synthesis — archetype picker + NL customization, not NL-from-scratch. Phase 7 is where that lands. Phase 7.f (read-only canvas) ships the visual artifact. Phase 4 SMS gets a `◐` on Stage 0 because the first viable synthesized-agent demo is SMS-based (speed-to-lead SMS qualifier — Phase 4's conversational mode is the payload).
+- **Stage 2 (hero moment)** — reframed 2026-04-21 per the Phase 7.a spike findings. **Old framing:** "watch a dental speed-to-lead agent get built from one sentence in 60 seconds." Phase 7.a evidence says one-sentence-from-blank is unreliable for open-ended prompts. **New framing:** "pick an archetype, customize in Claude Code in real time — from `speed-to-lead` starter template to a dental clinic's working SMS qualifier in 60 seconds." Stronger PMF for agency / solopreneur builders who want starter templates they can tune, not blank-canvas magic. Phase 3 + 4 contribute the send-email / send-SMS primitives; Phase 7.c ships the archetype library; Phase 7.d handles the NL-customization fill-in; Phase 6 (landing) contributes the landing that hosts the intake form that fires the agent. Multi-phase pay-off, not a single surface.
 - **Stage 6 (second client)**: still served ONLY by Phase 9 (snapshots). Agency aha moment unchanged.
 - **Stage 7 (tweets)**: served by **Phase 7** (synthesis demo — this is THE tweet), Phase 9 (snapshot-deploy video), Phase 12 polish. Dropped the dedicated 6.5 tweet row — same visual, same phase.
 - Phase 2.75's `◐` on Stage 3 reflects composition contracts being part of what makes "Claude Code composes blocks" work, though the user doesn't see it directly.
@@ -635,7 +635,7 @@ Any step failing unreliably tanks the demo. Prompt-only approaches drift — Cla
 
 **Honest dogfooding milestones (updated post-reframe):**
 - **Phase 5** — Max can run ONE client end-to-end (intake → booking → email send → invoice). Internal only. No agents yet.
-- **Phase 7** — **The real viral demo unlock.** Max records a 60-second screen capture: types one sentence in Claude Code, watches Soul + blocks synthesize into a working agent on the canvas, toggles it on, demonstrates the first SMS reply arriving. This is THE tweet. Phase 7.a (read-only canvas shipped first within the phase, former 6.5) gives an earlier screenshot-ready artifact but the synthesis reveal is the sharp moment.
+- **Phase 7** — **The real viral demo unlock.** Max records a 60-second screen capture: picks the `speed-to-lead` archetype in Claude Code, types one sentence to customize it for a dental clinic, watches Soul + archetype + blocks synthesize into a working agent on the canvas, toggles it on, demonstrates the first SMS reply arriving. This is THE tweet. The archetype-picker framing (locked 2026-04-21 per Phase 7.a spike) makes the demo more honest and more sellable than "type one sentence into the void" — every SMB starts from a template.
 - **Phase 8** — Max can hand a client a white-labeled OS on their own domain. First shippable agency deliverable.
 - **Phase 9** — Max can scale to multiple clients without re-building each one. True agency value. "Dental-clinic snapshot" exported + re-imported shows the agents travel with the config.
 
