@@ -1720,6 +1720,37 @@ export const TOOLS = [
     },
   },
   {
+    name: "list_landing_templates",
+    description:
+      "List the pre-built vertical landing-page templates. Each has a validated Puck payload ready to seed a new page via create_landing_page({puck_data: template.payload}).",
+    inputSchema: obj(
+      {
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      [],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      return api("GET", "/landing/templates", { workspace_id: ws });
+    },
+  },
+  {
+    name: "get_landing_template",
+    description:
+      "Fetch a single landing-page template including its Puck payload. Pair with create_landing_page to seed a new page from the template.",
+    inputSchema: obj(
+      {
+        template_id: str("Template ID from list_landing_templates."),
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["template_id"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      return api("GET", `/landing/templates/${encodeURIComponent(args.template_id)}`, { workspace_id: ws });
+    },
+  },
+  {
     name: "generate_landing_page",
     description:
       "Generate a Puck landing-page payload from a natural-language prompt using Claude + the workspace's Soul + theme. Returns the payload (validated against the Puck schema) but does NOT persist — pair with create_landing_page to save the result. Example: generate_landing_page({ prompt: 'A landing for a Laval dental clinic, focus on new-patient consultations' })",
