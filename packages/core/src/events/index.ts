@@ -25,9 +25,18 @@ export type SeldonEvent =
   | { type: "landing.converted"; data: { pageId: string; contactId: string } }
   | { type: "payment.completed"; data: { contactId: string; amount: number; currency: string; source: string } }
   | { type: "payment.failed"; data: { contactId: string; amount: number; reason: string } }
+  | { type: "payment.refunded"; data: { contactId: string | null; paymentId: string; amount: number; currency: string } }
+  | { type: "payment.disputed"; data: { contactId: string | null; paymentId: string; amount: number; reason: string } }
   | { type: "subscription.created"; data: { contactId: string; planId: string } }
+  | { type: "subscription.updated"; data: { contactId: string | null; subscriptionId: string; status: string } }
+  | { type: "subscription.renewed"; data: { contactId: string | null; subscriptionId: string; amount: number; currency: string } }
   | { type: "subscription.cancelled"; data: { contactId: string; planId: string } }
+  | { type: "subscription.trial_will_end"; data: { contactId: string | null; subscriptionId: string; trialEnd: string } }
   | { type: "invoice.created"; data: { contactId: string; invoiceId: string; amount: number } }
+  | { type: "invoice.sent"; data: { contactId: string | null; invoiceId: string } }
+  | { type: "invoice.paid"; data: { contactId: string | null; invoiceId: string; amount: number; currency: string } }
+  | { type: "invoice.past_due"; data: { contactId: string | null; invoiceId: string; amountDue: number } }
+  | { type: "invoice.voided"; data: { contactId: string | null; invoiceId: string } }
   | { type: "portal.login"; data: { contactId: string } }
   | { type: "portal.message_sent"; data: { contactId: string; messageId: string } }
   | { type: "portal.resource_viewed"; data: { contactId: string; resourceId: string } };
