@@ -926,6 +926,25 @@ export const TOOLS = [
     },
   },
   {
+    name: "get_booking",
+    description:
+      "Fetch one scheduled booking by id. Returns the full detail (contact, times, status, notes, meeting URL, cancellation timestamp, metadata). Appointment-type templates are NOT returned here — use list_appointment_types for those. 404s if the id is unknown OR belongs to a different workspace. Example: get_booking({ booking_id: 'bkg_...' }).",
+    inputSchema: obj(
+      {
+        booking_id: str("Required. UUID of the booking."),
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["booking_id"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const result = await api("GET", `/bookings/${encodeURIComponent(args.booking_id)}`, {
+        workspace_id: ws,
+      });
+      return { ok: true, booking: result.data ?? null };
+    },
+  },
+  {
     name: "list_appointment_types",
     description:
       "List all appointment types (bookable templates) in the workspace. Example: list_appointment_types({}).",

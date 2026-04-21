@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { activities, bookings, contacts, stripeConnections, users } from "@/db/schema";
 import { emitSeldonEvent } from "@/lib/events/bus";
@@ -219,5 +219,93 @@ export async function createBookingFromApi(input: CreateBookingInput): Promise<C
       email: created.email,
     },
     checkout,
+  };
+}
+
+// Fetch a single scheduled booking scoped to the caller's org. Excludes
+// appointment-type templates (status='template') so this surface stays
+// focused on real appointments; templates have their own get endpoint
+// via /api/v1/booking/appointment-types/[slug].
+//
+// Wrong-org ids and unknown ids are both reported as "not found" — the
+// API route surfaces that as 404 without leaking whether the id exists
+// in another workspace. Part of the 2a audit's cross-org safety rule.
+
+export type GetBookingInput = {
+  orgId: string;
+  bookingId: string;
+};
+
+export type BookingDetail = {
+  id: string;
+  contactId: string | null;
+  title: string;
+  bookingSlug: string;
+  status: string;
+  startsAt: string;
+  endsAt: string;
+  fullName: string | null;
+  email: string | null;
+  notes: string | null;
+  provider: string;
+  meetingUrl: string | null;
+  cancelledAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  metadata: Record<string, unknown>;
+};
+
+export async function getBookingFromApi(input: GetBookingInput): Promise<BookingDetail | null> {
+  const [row] = await db
+    .select({
+      id: bookings.id,
+      contactId: bookings.contactId,
+      title: bookings.title,
+      bookingSlug: bookings.bookingSlug,
+      status: bookings.status,
+      startsAt: bookings.startsAt,
+      endsAt: bookings.endsAt,
+      fullName: bookings.fullName,
+      email: bookings.email,
+      notes: bookings.notes,
+      provider: bookings.provider,
+      meetingUrl: bookings.meetingUrl,
+      cancelledAt: bookings.cancelledAt,
+      completedAt: bookings.completedAt,
+      createdAt: bookings.createdAt,
+      updatedAt: bookings.updatedAt,
+      metadata: bookings.metadata,
+    })
+    .from(bookings)
+    .where(
+      and(
+        eq(bookings.orgId, input.orgId),
+        eq(bookings.id, input.bookingId),
+        ne(bookings.status, "template"),
+      ),
+    )
+    .limit(1);
+
+  if (!row) return null;
+
+  return {
+    id: row.id,
+    contactId: row.contactId,
+    title: row.title,
+    bookingSlug: row.bookingSlug,
+    status: row.status,
+    startsAt: row.startsAt.toISOString(),
+    endsAt: row.endsAt.toISOString(),
+    fullName: row.fullName,
+    email: row.email,
+    notes: row.notes,
+    provider: row.provider,
+    meetingUrl: row.meetingUrl,
+    cancelledAt: row.cancelledAt ? row.cancelledAt.toISOString() : null,
+    completedAt: row.completedAt ? row.completedAt.toISOString() : null,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    metadata: row.metadata ?? {},
   };
 }
