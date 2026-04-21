@@ -304,14 +304,27 @@ Backward-compat is the right call because the sprint plan already commits to "mi
 
 ### 4.4 Totals
 
-- Parser + composition validator: +~340 LOC inside `block-md.ts` (or split, see 4.1).
-- New agent-spec validator: +~300–400 LOC in a new file.
-- Zod-authored schemas for the 7 core blocks (§7.1 approved path): ~50–80 LOC per block × 7 = +~350–560 LOC of Zod, of which CRM's ~50–80 LOC ships in PR 3 and the remaining 6 blocks ship in 2b.2.
-- BLOCK.md emit step + drift-detector CI test: +~80 LOC.
-- No runtime changes. No new MCP tools. No UI changes.
-- **Net estimate for 2b.1: ~640–740 LOC code + CRM Zod schemas (~50–80 LOC) + emit step (~80 LOC) + ~300 LOC test + docs.** Rounding up: **~1,000 LOC 2b.1 ceiling.**
+**Corrected 2026-04-21 to align with §10.** Original draft allocated CRM Zod to PR 3; §10's per-PR scope is authoritative and puts CRM's `crm.tools.ts` in PR 1 (so the emit step has real input to operate on for tests). This table now matches §10.
 
-**Stop-and-reassess trigger (approved 2026-04-21):** if implementation exceeds this estimate, **stop and surface for review before continuing.** A >30% overrun means the schema design has an unseen complexity we didn't catch at audit time, and shipping through it creates a bigger problem for 2b.2's six downstream block migrations. The right action is to pause, write a brief diagnosis, and either adjust scope or iterate the schema before continuing — not to push through and discover the issue mid-2b.2.
+**Per-PR breakdown:**
+
+- **PR 1** (`7.i.1.a`): parser extension + Zod primitives + CRM Zod + emit step
+  - Parser + composition validator extensions: +~340 LOC inside `block-md.ts`.
+  - Zod primitive types (Predicate, ConversationExit, ExtractField, typed I/O primitives): ~80 LOC in new files.
+  - CRM Zod schemas (13 tools × args + returns): ~50–80 LOC in new `crm.tools.ts`.
+  - BLOCK.md emit step + drift-detector CI test: +~80 LOC.
+  - **PR 1 net: ~640–820 LOC code + ~300 LOC tests.**
+- **PR 2** (`7.i.1.b`): agent-spec validator
+  - New `packages/crm/src/lib/agents/validator.ts`: +~300–400 LOC (interpolation resolver + step-type validators).
+  - **PR 2 net: ~300–400 LOC code + ~150 LOC tests.**
+- **PR 3** (`7.i.1.c`): CRM BLOCK.md migration + probe regression
+  - Rewrite `crm.block.md` `## Composition Contract` to v2 shape (uses the Zod schemas authored in PR 1; no new Zod code).
+  - Update synthesis prompt to surface v2 schemas for CRM.
+  - **PR 3 net: ~100 LOC BLOCK.md + synthesis prompt + probe fixtures.**
+- **Across 2b.1 total: ~1,000–1,300 LOC code + ~500 LOC tests.** No runtime changes. No new MCP tools. No UI changes.
+- **2b.2 (out of scope):** authors `.tools.ts` for the other 6 core blocks (~300–500 LOC Zod) + migrates their BLOCK.md contracts.
+
+**Stop-and-reassess trigger (approved 2026-04-21, baseline refreshed for PR 1):** PR 1's ceiling is **~690–820 LOC of code** (code only, tests excluded per the 30% rule being about design-complexity signal, not test verbosity). If PR 1 implementation exceeds that ceiling by >30% (i.e., >1,065 LOC of non-test code), **stop and surface for review before continuing.** A >30% overrun means the schema design has an unseen complexity we didn't catch at audit time, and shipping through it creates a bigger problem for 2b.2's six downstream block migrations. The right action is to pause, write a brief diagnosis, and either adjust scope or iterate the schema before continuing — not to push through and discover the issue mid-2b.2.
 
 ---
 
