@@ -85,6 +85,13 @@
       "when": 1776786400000,
       "tag": "0017_phase4_sms_messages_events",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1776873200000,
+      "tag": "0018_phase5_invoices_subscriptions",
+      "breakpoints": true
     }
   ]
 }

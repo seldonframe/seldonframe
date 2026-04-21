@@ -91,6 +91,21 @@ export async function createBookingCheckoutSession(params: {
     throw new Error("Stripe secret key is not configured");
   }
 
+  // Connect Standard: look up the workspace's connected Stripe account
+  // and route the charge there. Without this the checkout session is
+  // created on SeldonFrame's platform account and the SMB never sees
+  // the funds — the pre-Phase-5 bug the audit surfaced.
+  const [connection] = await db
+    .select({ stripeAccountId: stripeConnections.stripeAccountId })
+    .from(stripeConnections)
+    .where(and(eq(stripeConnections.orgId, params.orgId), eq(stripeConnections.isActive, true)))
+    .orderBy(desc(stripeConnections.connectedAt))
+    .limit(1);
+
+  if (!connection?.stripeAccountId) {
+    throw new Error("Stripe Connect account is not configured for this workspace");
+  }
+
   const session = await createCheckoutSession({
     orgId: params.orgId,
     contactId: params.contactId,
@@ -103,7 +118,9 @@ export async function createBookingCheckoutSession(params: {
     customerEmail: params.customerEmail,
     metadata: {
       bookingId: params.bookingId,
+      stripeAccountId: connection.stripeAccountId,
     },
+    stripeAccount: connection.stripeAccountId,
   });
 
   return {
@@ -172,6 +189,7 @@ export async function handleStripeCheckoutCompleted(session: {
     contactId: contactId || booking?.contactId || null,
     bookingId,
     stripePaymentIntentId: paymentIntentId,
+    stripeAccountId: metadata.stripeAccountId ?? null,
     amount: amount.toFixed(2),
     currency,
     status: "completed",

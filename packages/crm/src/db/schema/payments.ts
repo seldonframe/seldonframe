@@ -36,6 +36,15 @@ export const paymentRecords = pgTable(
     contactId: uuid("contact_id").references(() => contacts.id, { onDelete: "set null" }),
     bookingId: uuid("booking_id").references(() => bookings.id, { onDelete: "set null" }),
     stripePaymentIntentId: text("stripe_payment_intent_id"),
+    // Connect Standard: payment is on the SMB's connected account.
+    // Persist account id so webhook handlers can look up the connection
+    // even after a workspace has disconnected + reconnected.
+    stripeAccountId: text("stripe_account_id"),
+    stripeChargeId: text("stripe_charge_id"),
+    refundedAmount: numeric("refunded_amount", { precision: 12, scale: 2 }).notNull().default("0"),
+    refundedAt: timestamp("refunded_at", { withTimezone: true }),
+    disputedAt: timestamp("disputed_at", { withTimezone: true }),
+    stripeDisputeId: text("stripe_dispute_id"),
     amount: numeric("amount", { precision: 12, scale: 2 }).notNull().default("0"),
     currency: text("currency").notNull().default("USD"),
     status: text("status").notNull().default("pending"),

@@ -9,8 +9,8 @@ export async function createCheckoutSession(input: CreateCheckoutSessionInput) {
     throw new Error("Stripe is not configured.");
   }
 
-  return stripe.checkout.sessions.create({
-    mode: "payment",
+  const params = {
+    mode: "payment" as const,
     success_url: payload.successUrl,
     cancel_url: payload.cancelUrl,
     customer_email: payload.customerEmail,
@@ -33,5 +33,14 @@ export async function createCheckoutSession(input: CreateCheckoutSessionInput) {
       sourceId: payload.sourceId ?? "",
       ...(payload.metadata ?? {}),
     },
-  });
+  };
+
+  // Per Connect Standard: passing `stripeAccount` creates the session
+  // on the connected SMB's Stripe account so funds route directly.
+  // Prior to Phase 5.b this argument was missing, silently routing
+  // every workspace booking payment into SeldonFrame's platform
+  // account — a P1 bug fixed here.
+  return payload.stripeAccount
+    ? stripe.checkout.sessions.create(params, { stripeAccount: payload.stripeAccount })
+    : stripe.checkout.sessions.create(params);
 }
