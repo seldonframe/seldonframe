@@ -251,7 +251,7 @@ Rationale for the reordering:
 | **`on_error` per step** | net-new | Step-level `retry | skip | halt` with exponential-backoff settings. v1 halts on any tool-call failure. |
 | **Stripe application-fee knob** | net-new | From Phase 5. v1 = 0% platform fee; V1.1 optional. |
 | **Scheduled / cron triggers in AgentSpec** | net-new *(surfaced by 2026-04-21 live run)* | v1 ships with event-only triggers. V1.1 adds `trigger.type: "schedule"` implemented via synthetic-event emission from a nightly cron (keeps the spec schema stable, moves the complexity to the runtime). Unblocks re-engagement / inactivity / daily-report agents. |
-| **Brain v2 `contact.inactive_Nd` synthetic event** | net-new *(surfaced by 2026-04-21 live run)* | Prerequisite for the V1.1 re-engagement / churn-save agents that need "60 days since last attendance"-style triggers. |
+| **Brain v2 `contact.inactive_Nd` synthetic event** | net-new *(surfaced by 2026-04-21 live run)* | Prerequisite for V1.1 re-engagement / churn-save agents that need "60 days since last attendance"-style triggers. **Dependency:** yoga-studio / gym / attendance-based SMB Win-Back agents **require this emitter**. Ships with Brain v2, not before. Agency users with attendance-based verticals need this flagged in the Win-Back archetype docs when 7.c ships so they understand which Win-Back shapes work at launch (subscription-cancelled event+wait) and which are Q2+ (inactivity-based). |
 
 Rationale for consolidating the three contract gaps: migrating BLOCK.md files is a coordinated change — doing it once for three additions is cheaper than three separate migrations. The schema-v2 rollout plans the parser change + backfill of all 7 blocks + updated validator in one sweep.
 
@@ -424,3 +424,19 @@ Still shape-variable (2 unique skeletons across 5 runs), but the core primitive 
 **Verdict interpretation.** The patched classifier's `needs prompt engineering` label is **the correct blocker for GA, not for 7.c onward.** 7.c (archetype library) can proceed — archetypes ship as validated templates with no vague-prompt risk at the synthesis layer. 7.d (NL compose engine) is the phase where the clarifying-questions loop must land before ship.
 
 **7.h is validated.** Pending Max's approval of the post-ship results + the scheduled-trigger scope decision for 7.c, the resequenced plan proceeds with 7.c next.
+
+---
+
+## Known limitations (called out loudly, not silently)
+
+### Validator checks tool names, not argument keys
+
+`validateAgentSpec` in the spike script verifies that every `mcp_tool_call.tool` value is a real tool from the MCP catalog, but it does **not** check that `mcp_tool_call.args` uses the documented argument keys for that tool. A well-structured-but-non-executing spec — correct tool, wrong arg names — passes validation today and 400s at runtime.
+
+**Surfaced by:** 7.h post-ship probe 01 called `create_booking({ start_time: ... })` instead of the documented `starts_at`. Validator passed; API route would have 400'd at execution.
+
+**Mitigation shipped:** defensive argument-name alias in `POST /api/v1/bookings` — accepts `starts_at`, `startsAt`, and `start_time` all resolving to the same field. Commit lands in the same sweep as this doc update. Repeats for other high-risk arg-name drifts can ship reactively as they're observed in probes.
+
+**Structural fix:** V1.1 "composition contract schema v2" (typed tool inputs) carries each tool's canonical arg schema into the synthesis prompt, so Claude has documented names to match against. Once that ships, alias tolerance becomes redundant.
+
+**Principle this follows:** *if a failure mode is known and not fixed now, document it loudly. Silent known-issues erode trust when they surface as user-reported bugs; loud known-issues with a mitigation path preserve it.*

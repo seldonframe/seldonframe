@@ -15,6 +15,13 @@ export async function POST(request: Request) {
     appointment_type_id?: unknown;
     startsAt?: unknown;
     starts_at?: unknown;
+    // `start_time` is a defensive alias added 2026-04-21 after the 7.h
+    // post-ship probe showed Claude-synthesized specs sometimes using
+    // `start_time` instead of the documented `starts_at`. The
+    // V1.1 composition-contract-schema-v2 (typed tool inputs) will
+    // subsume this alias by giving the synthesis prompt canonical
+    // arg names; until then, tolerate the drift at the API boundary.
+    start_time?: unknown;
     notes?: unknown;
   };
 
@@ -25,7 +32,14 @@ export async function POST(request: Request) {
       : typeof body.appointment_type_id === "string"
         ? body.appointment_type_id
         : null;
-  const startsAtRaw = typeof body.startsAt === "string" ? body.startsAt : typeof body.starts_at === "string" ? body.starts_at : null;
+  const startsAtRaw =
+    typeof body.startsAt === "string"
+      ? body.startsAt
+      : typeof body.starts_at === "string"
+        ? body.starts_at
+        : typeof body.start_time === "string"
+          ? body.start_time
+          : null;
 
   if (!contactId) {
     return NextResponse.json({ error: "contact_id is required" }, { status: 400 });
