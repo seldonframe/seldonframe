@@ -1224,6 +1224,140 @@ export const TOOLS = [
       return result;
     },
   },
+  // ===== Phase 4 — SMS tools =====
+
+  {
+    name: "send_sms",
+    description:
+      "Send an SMS via the workspace's Twilio integration. Checks the SMS suppression list first (STOP keyword + carrier blocks + manual opt-outs) and skips with {suppressed: true} if the recipient has opted out. Example: send_sms({ to: '+15551234567', body: 'Your appointment is confirmed for Tuesday 2pm', contact_id: 'ctc_123' })",
+    inputSchema: obj(
+      {
+        to: str("Recipient phone number. E.164 or 10-digit US will be normalized."),
+        body: str("SMS body. Twilio will segment if over 160 chars; charges per segment."),
+        contact_id: str("Optional. Links the message to a CRM contact for threading."),
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["to", "body"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const result = await api("POST", "/sms", {
+        body: {
+          to: args.to,
+          body: args.body,
+          contactId: args.contact_id ?? null,
+        },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+  {
+    name: "list_sms",
+    description:
+      "List recent SMS messages (inbound + outbound) for the workspace, newest first.",
+    inputSchema: obj(
+      {
+        limit: {
+          type: "number",
+          description: "Max rows to return (default 50, max 200).",
+        },
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      [],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const qs = typeof args.limit === "number" ? `?limit=${Math.min(args.limit, 200)}` : "";
+      const result = await api("GET", `/sms${qs}`, { workspace_id: ws });
+      return result;
+    },
+  },
+  {
+    name: "get_sms",
+    description:
+      "Fetch a single SMS with its full provider-event history (queued / sent / delivered / failed / undelivered).",
+    inputSchema: obj(
+      {
+        sms_id: str("SMS ID returned from send_sms or list_sms."),
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["sms_id"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const result = await api("GET", `/sms/${encodeURIComponent(args.sms_id)}`, {
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+  {
+    name: "list_sms_suppressions",
+    description:
+      "List all suppressed phone numbers for the workspace — who is opted out and why (manual / stop_keyword / carrier_block / complaint).",
+    inputSchema: obj(
+      {
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      [],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const result = await api("GET", "/sms/suppressions", { workspace_id: ws });
+      return result;
+    },
+  },
+  {
+    name: "suppress_phone",
+    description:
+      "Add a phone number to the SMS suppression list so future SMS sends skip it. STOP replies + carrier permanent-failure codes auto-suppress via the Twilio webhook; use this for manual opt-outs.",
+    inputSchema: obj(
+      {
+        phone: str("Phone number to suppress. E.164 or 10-digit US will be normalized."),
+        reason: str(
+          "Reason code: 'manual' | 'stop_keyword' | 'carrier_block' | 'complaint'. Default: 'manual'.",
+        ),
+        source: str("Optional free-form provenance tag."),
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["phone"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const result = await api("POST", "/sms/suppressions", {
+        body: {
+          phone: args.phone,
+          reason: args.reason ?? "manual",
+          source: args.source ?? null,
+        },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+  {
+    name: "unsuppress_phone",
+    description:
+      "Remove a phone number from the SMS suppression list so future sends go through again.",
+    inputSchema: obj(
+      {
+        phone: str("Phone number to un-suppress."),
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["phone"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const result = await api(
+        "DELETE",
+        `/sms/suppressions/${encodeURIComponent(args.phone)}`,
+        { workspace_id: ws },
+      );
+      return result;
+    },
+  },
+
   {
     name: "send_conversation_turn",
     description:
