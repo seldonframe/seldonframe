@@ -617,7 +617,7 @@ async function main() {
   await fs.writeFile(path.join(outDir, "live-run-raw.json"), JSON.stringify(raw, null, 2));
 
   // Render the markdown report.
-  await writeMarkdownReport({ probes, determinism, budget: budget.summary(), totalElapsedMs });
+  await writeMarkdownReport({ probes, determinism, budget: budget.summary(), totalElapsedMs, contracts, tools, installed: FIXTURE_INSTALLED_BLOCKS });
 
   console.log(`\nTotal spend: $${budget.spent.toFixed(4)} (${budget.calls} calls, ${totalElapsedMs}ms)`);
   console.log(`Report: ${path.relative(process.cwd(), path.join(outDir, "live-run-report.md"))}`);
@@ -651,64 +651,161 @@ function renderProbeRow(p) {
   return `| ${p.label} | ${validityCell} | ${p.usage.inputTokens} | ${p.usage.outputTokens} | $${p.usage.cost.toFixed(4)} | ${p.elapsedMs}ms | ${renderIssueList(p.validation)} |`;
 }
 
-function deriveVerdict({ probes, determinism }) {
-  const happy = probes.find((p) => p.kind === "happy");
-  const determinismProbes = probes.filter((p) => p.kind === "determinism" && !p.skipped);
-  const adversarial = probes.filter((p) => p.kind === "adversarial");
-  const novel = probes.find((p) => p.kind === "novel");
+// Classify each probe into one of four outcome classes. A decline is
+// "grounded" when the model's decline text cites real missing
+// infrastructure — a tool name, a block slug, or a phrase indicating
+// catalog/registry awareness ("no X tool", "not installed",
+// "not in the catalog", etc.). Ungrounded declines are refusals without
+// evidence — the failure mode we actually worry about (model declining
+// because of a misread rather than a real gap).
+//
+// A "hallucinated" outcome is when the model produced a spec but the
+// validator found unknown tools / unknown trigger events / tools from
+// uninstalled blocks. That's the spec-fabrication failure mode.
+function classifyProbe(probe, { contracts, tools, installed }) {
+  if (probe.skipped || !probe.ok) return { class: "error", grounded: null };
+  if (probe.parseError) return { class: "hallucinated", grounded: null, reason: "parse_error" };
 
-  const happyPassed = happy && happy.ok && !happy.parseError && happy.validation?.length === 0;
-  const vagueDeclined = adversarial.some((p) => p.adversarialKey === "vague" && p.validation?.[0]?.code === "model_declined");
-  const hallucinatedCaught = adversarial.some((p) => p.adversarialKey === "hallucinatedBlock" && (p.validation?.length ?? 0) > 0);
-  const determinismPassRate = determinismProbes.length
-    ? determinismProbes.filter((p) => !p.parseError && p.validation?.length === 0).length / determinismProbes.length
-    : 0;
-  const structurallyEquivalent = determinism?.structurallyEquivalentCount ?? 0;
-  const determinismProbeCount = determinismProbes.length;
+  const spec = probe.parsed;
+  if (spec?.error) {
+    const text = String(spec.error).toLowerCase();
+    const toolNames = tools.map((t) => t.name.toLowerCase());
+    const blockSlugs = Object.keys(contracts).map((s) => s.toLowerCase());
+    const installedSlugs = installed.map((s) => s.toLowerCase());
+    const groundingPhrases = [
+      "no such tool",
+      "no create_",
+      "not in the catalog",
+      "not in the mcp",
+      "not installed",
+      "no block",
+      "no mcp tool",
+      "is not available",
+      "does not exist",
+      "not supported",
+      "catalog only exposes",
+      "catalog has no",
+      "no integration",
+    ];
+    const grounded =
+      toolNames.some((n) => n.length > 3 && text.includes(n)) ||
+      blockSlugs.some((s) => text.includes(s)) ||
+      installedSlugs.some((s) => text.includes(s)) ||
+      groundingPhrases.some((phrase) => text.includes(phrase));
+    return { class: grounded ? "declined_grounded" : "declined_ungrounded", grounded };
+  }
 
-  if (!happyPassed) {
+  // Produced a spec. Now decide: is it real synthesis, or hallucination?
+  const issues = probe.validation ?? [];
+  const hallucinationCodes = new Set(["unknown_tool", "unknown_trigger_event", "uninstalled_block_tool"]);
+  const hasHallucination = issues.some((i) => hallucinationCodes.has(i.code));
+  if (hasHallucination) {
+    return { class: "hallucinated", grounded: false, reason: "unknown_tool_or_event" };
+  }
+  return { class: "produced_spec", grounded: null };
+}
+
+function deriveVerdict({ probes, determinism, contracts, tools, installed }) {
+  const counted = probes.map((probe) => ({ probe, cls: classifyProbe(probe, { contracts, tools, installed }) }));
+
+  const produced = counted.filter((x) => x.cls.class === "produced_spec").length;
+  const groundedDeclines = counted.filter((x) => x.cls.class === "declined_grounded").length;
+  const ungroundedDeclines = counted.filter((x) => x.cls.class === "declined_ungrounded").length;
+  const hallucinated = counted.filter((x) => x.cls.class === "hallucinated").length;
+  const total = produced + groundedDeclines + ungroundedDeclines + hallucinated;
+
+  const hallucinationRate = total > 0 ? hallucinated / total : 0;
+  const totalDeclines = groundedDeclines + ungroundedDeclines;
+  const groundingRate = totalDeclines > 0 ? groundedDeclines / totalDeclines : 1;
+
+  // Vague-prompt handling: did Claude respond with clarifying questions,
+  // or did it produce a spec / decline ungroundedly? A clarifying
+  // response would arrive as {questions: [...]} or similar. For now we
+  // treat "produced a spec on a vague prompt" as the failure mode
+  // flagged by the 2026-04-21 live run.
+  const vagueProbe = probes.find((p) => p.adversarialKey === "vague");
+  const vagueProducedSpec =
+    vagueProbe && vagueProbe.ok && vagueProbe.parsed && !vagueProbe.parsed.error &&
+    !vagueProbe.parseError && !vagueProbe.parsed.questions;
+  const vagueHadClarifyingQuestions = vagueProbe?.parsed?.questions != null;
+
+  const classificationSummary = {
+    produced,
+    grounded_declines: groundedDeclines,
+    ungrounded_declines: ungroundedDeclines,
+    hallucinated,
+    total,
+    hallucination_rate: hallucinationRate,
+    grounding_rate: groundingRate,
+    vague_produced_spec_without_clarification: Boolean(vagueProducedSpec),
+    vague_had_clarifying_questions: Boolean(vagueHadClarifyingQuestions),
+  };
+
+  // Verdict ladder. Per the 2026-04-21 semantics:
+  if (hallucinationRate > 0) {
     return {
       label: "fundamentally unreliable for archetypal prompts",
       detail:
-        "The happy-path Speed-to-Lead synthesis did not produce a valid AgentSpec. Synthesis cannot ship until this round-trip works; prompt engineering alone is unlikely to close the gap without investigating the validator failures first.",
+        `${hallucinated} of ${total} calls produced a spec with unknown tools / trigger events / uninstalled-block tool calls. Any hallucination rate > 0 is disqualifying — synthesis cannot ship while the model invents capabilities that don't exist. Tighten the system prompt with catalog evidence + re-test before proceeding.`,
+      classification: classificationSummary,
     };
   }
-  if (determinismProbeCount >= 2 && (determinismPassRate < 0.6 || structurallyEquivalent / determinismProbeCount < 0.8)) {
+  if (groundingRate < 0.8) {
+    return {
+      label: "fundamentally unreliable for archetypal prompts",
+      detail:
+        `Grounding rate ${(groundingRate * 100).toFixed(0)}% is below the 80% threshold. ${ungroundedDeclines} of ${totalDeclines} declines cited no real missing infrastructure — the model is refusing for reasons unrelated to the actual catalog. Investigate why the model is ungrounded before shipping.`,
+      classification: classificationSummary,
+    };
+  }
+  if (vagueProducedSpec) {
     return {
       label: "needs prompt engineering",
       detail:
-        `Happy path works once but determinism is too low (pass rate ${(determinismPassRate * 100).toFixed(0)}%, structural match ${structurallyEquivalent}/${determinismProbeCount}). Do not build the runtime yet — invest in prompt shaping + few-shot examples first.`,
-    };
-  }
-  if (!vagueDeclined || !hallucinatedCaught) {
-    return {
-      label: "needs prompt engineering",
-      detail:
-        `Adversarial handling leaked: vague-prompt ${vagueDeclined ? "declined" : "did NOT decline cleanly"}, hallucinated-block ${hallucinatedCaught ? "caught" : "NOT caught by validator as a synthesis signal"}. Tighten the system prompt + refusal instructions before runtime.`,
-    };
-  }
-  if (novel && novel.ok && !novel.parseError && novel.validation?.length === 0) {
-    return {
-      label: "production-ready for archetypal + archetypal-adjacent prompts",
-      detail:
-        "Happy path + adversarial + determinism + novel-prompt all pass. Proceed to 7.h with confidence; monitor the eval harness (7.g) for regression.",
+        `Hallucination rate is 0% and grounding rate is ${(groundingRate * 100).toFixed(0)}%, but the vague-prompt adversarial probe produced a spec without asking clarifying questions. Ship 7.d's clarifying-questions loop before the synthesis engine goes into general availability.`,
+      classification: classificationSummary,
     };
   }
   return {
-    label: "production-ready for archetypal prompts only",
+    label: "production-ready for archetypal prompts",
     detail:
-      "Happy path + adversarial + determinism pass, but the novel (archetype-adjacent) prompt did not round-trip cleanly. Proceed to 7.h scoped to the 6 archetype shapes; flag genuinely-novel prompts for V1.1 after eval harness tunes the synthesizer.",
+      `${produced}/${total} produced specs, ${groundedDeclines}/${totalDeclines} declines grounded in real catalog evidence (${(groundingRate * 100).toFixed(0)}%), 0 hallucinations, vague prompt handled with clarifying questions. Proceed with 7.h / archetype library shipping plan.`,
+    classification: classificationSummary,
   };
 }
 
-async function writeMarkdownReport({ probes, determinism, budget, totalElapsedMs }) {
-  const verdict = deriveVerdict({ probes, determinism });
+async function writeMarkdownReport({ probes, determinism, budget, totalElapsedMs, contracts, tools, installed }) {
+  const verdict = deriveVerdict({ probes, determinism, contracts, tools, installed });
+
+  // Per-probe classification map, used to annotate the results table.
+  const classByLabel = new Map();
+  for (const probe of probes) {
+    classByLabel.set(probe.label, classifyProbe(probe, { contracts, tools, installed }));
+  }
 
   const perProbeTable = [
-    "| Probe | Validity | In tok | Out tok | Cost | Latency | Issues |",
-    "|---|---|---|---|---|---|---|",
-    ...probes.map(renderProbeRow),
+    "| Probe | Class | Validity | In tok | Out tok | Cost | Latency | Issues |",
+    "|---|---|---|---|---|---|---|---|",
+    ...probes.map((p) => {
+      const cls = classByLabel.get(p.label)?.class ?? "—";
+      return renderProbeRow(p).replace(/^\| ([^|]+) \|/, (_, label) => `| ${label} | ${cls} |`);
+    }),
   ].join("\n");
+
+  const c = verdict.classification;
+  const classificationBlock = c
+    ? [
+        "## Classification summary",
+        "",
+        `- Produced specs: **${c.produced} / ${c.total}**`,
+        `- Grounded declines (cited real missing catalog/registry): **${c.grounded_declines} / ${c.total}**`,
+        `- Ungrounded declines (no catalog evidence in refusal text): **${c.ungrounded_declines} / ${c.total}**`,
+        `- Hallucinated specs (unknown tools / unknown events / uninstalled-block tools): **${c.hallucinated} / ${c.total}**`,
+        `- **Grounding rate:** ${(c.grounding_rate * 100).toFixed(0)}% (threshold: ≥80%)`,
+        `- **Hallucination rate:** ${(c.hallucination_rate * 100).toFixed(1)}% (threshold: =0%)`,
+        `- Vague prompt produced a spec without clarifying questions: **${c.vague_produced_spec_without_clarification ? "yes (UX failure — 7.d clarifying-questions loop required)" : "no"}**`,
+      ].join("\n")
+    : "";
 
   const novelProbe = probes.find((p) => p.kind === "novel");
   const novelSummary = novelProbe
@@ -752,6 +849,8 @@ async function writeMarkdownReport({ probes, determinism, budget, totalElapsedMs
     `**${verdict.label}**`,
     "",
     verdict.detail,
+    "",
+    classificationBlock,
     "",
     "## Per-probe results",
     "",
