@@ -39,7 +39,7 @@ Post-2026-04-20 that framing is subsumed by the real bet: **(g) agent synthesis 
 
 ### Principle
 
-**The archetype library and the architecture are co-developed, not sequential. Each archetype is a teacher — when it surfaces an architectural gap, we ship the architecture that closes it, then complete the archetype on the upgraded surface. v1 ships when all 7 archetypes synthesize cleanly against the completed composition contract.**
+**The archetype library and the architecture are co-developed, not sequential. Each archetype is a teacher — when it surfaces an architectural gap, we ship the architecture that closes it, then complete the archetype on the upgraded surface. v1 ships when all 7 archetypes synthesize cleanly against the completed composition contract. This discipline generalizes — future phases that consume the composition surface will apply the same co-development pattern (e.g., Phase 9 snapshots, Phase 10 marketplace, third-party block authoring post-v1).**
 
 ### What changed
 
@@ -86,8 +86,22 @@ Architecture work ships in dependency order before the archetype library resumes
 - **2a — Booking CRUD** (~1 week) · 7.h.2
   Tools: `cancel_booking`, `reschedule_booking`, `get_booking`, `list_bookings` (already shipped in the pre-7.c micro-slice — confirm). Follows the 7.h `create_booking` pattern. Tool count: 79 → ~82.
 
-- **2b — Composition contract v2** (~2 weeks) · 7.i · **CRITICAL: incremental, not big-bang**
-  Typed tool inputs (prevents starts_at/start_time drift), typed conversation exits, typed block I/O (producers declare output shapes, consumers declare expected input shapes). Migrate each of the 6 existing blocks one at a time with regression tests passing before moving to the next. Update `validateCompositionContract` + `validateAgentSpec` to enforce typed schemas at synthesis. Update every BLOCK.md. This is a refactor of shipped code — ship incrementally.
+- **2b — Composition contract v2** (~2 weeks total, split into two gated sub-slices) · 7.i · **CRITICAL: incremental, not big-bang**
+  Split 2026-04-21 to reduce regression risk on the highest-risk work in the sprint: if 2b.1 surfaces schema problems, they get fixed before 5 more blocks migrate. If 2b.1 holds, 2b.2 is routine pattern application.
+
+  - **2b.1 — Schema design + CRM block migration** (~1 week) · 7.i.1
+    - Design the typed schema: typed tool inputs (prevents `starts_at` / `start_time` drift), typed conversation exits, typed block I/O (producers declare output shapes, consumers declare expected input shapes).
+    - Update `parseBlockMd` + `validateCompositionContract` to parse + enforce v2.
+    - Update `validateAgentSpec` (synthesis-time) to type-check tool calls against v2 contracts.
+    - Migrate the **CRM block** as the pattern-validator — simplest + most-used block, so pattern issues surface cleanly here before compounding.
+    - Regression test: CRM block reads cleanly under v2; every existing test that touched the old contract still green; synthesis probes against CRM-referencing archetypes (Speed-to-Lead / Win-Back / Review Requester — all three reference CRM) still PASS.
+    - **Gate:** CRM migration proves the pattern holds. If it surfaces schema problems, fix in this slice before advancing.
+
+  - **2b.2 — Remaining 5 blocks migration** (~1 week) · 7.i.2
+    - Migrate Booking, Email, SMS, Payments, Intake, Landing one at a time with regression tests between each.
+    - Each block: parse under v2 → validate → regression-probe any archetype that references it.
+    - **Stop and flag** if any block surfaces schema issues that 2b.1 didn't catch. Schema drift at this stage means 2b.1 validated an insufficient pattern and needs iteration.
+    - Once all 6 blocks migrated + regression-clean, update every BLOCK.md with the v2 shape. This is the structural finish-line for the contract work.
 
 - **2c — Mid-flow event subscriptions** (~1–2 weeks) · 7.j
   AgentSpec gets new step type `await_event` that pauses execution until a specified event fires. Runtime needs durable pause-and-resume that survives deploys + restarts. Timeout handling: configurable; default 30 days with explicit timeout-event emission. Live-probe against synthesis before declaring shipped.
@@ -107,6 +121,7 @@ Architecture work ships in dependency order before the archetype library resumes
   - Speed-to-Lead: validate, minor tweaks.
   - Win-Back: validate, minor tweaks.
   - Review Requester: **UPGRADE** to use `external_state` branch (suppress SMS when `review.submitted` event query returns a hit).
+  - **Archetype JSON retrofit includes updating the 3 archetype specs themselves (Speed-to-Lead, Win-Back, Review Requester) to reference contract v2 schema — not just their block dependencies.** Placeholder definitions, `capture` type hints, conversation `extract` typings all migrate to v2 shape where applicable. Re-probe each archetype 3× against the upgraded synthesis surface to confirm determinism held and validator PASS remains clean. If any archetype degrades under v2, that signals a schema mismatch caught late and should stop the sprint for investigation before 3b ships.
 
 - **3b — Ship remaining archetypes** on the upgraded surface.
   - Client Onboarding: **full flow** using `await_event` (welcome → share form URL → await `form.submitted` → schedule kickoff → confirm).
@@ -134,7 +149,7 @@ Previously-used ship criteria (e.g., "6 archetypes with Support Deflection scope
 Every prior stop-gate the archetype library used still applies:
 - Per-step live-probe (3× per archetype) before commit.
 - Per-step validator PASS required.
-- Max explicit approval between architecture slices (2a → 2b → … → 3c).
+- Max explicit approval between architecture slices (2a → 2b.1 → 2b.2 → 2c → 2d → 2e → 2f → 3a → 3b → 3c).
 
 The Scope 3 sprint does not relax the "ship one at a time, prove, advance" cadence.
 
@@ -350,7 +365,7 @@ Transactional mode bypasses the runtime (no reasoning needed). Phase 4 SMS inbou
 
 ### Phase 7 — **Agent Engine** *(renamed 2026-04-20; expanded 2026-04-21 Scope 3)*
 **Dependencies:** Phases 3, 4, 5, 6 shipped (action primitives exist). **Phase 2.75 BLOCK.md composition contract locked** (synthesis depends on it). Phase 2 MCP tools + Phase 2.5 event bus.
-**Scope 3 expansion (2026-04-21):** this phase now carries the architecture work previously queued for V1.1 — booking CRUD completion, composition contract v2, mid-flow event subscriptions, scheduled triggers, external-state branching, and the KB block. See §0.5 for the principle and the 2a–2f / 3a–3c sprint ordering. Slices 7.h.2 / 7.i / 7.j / 7.k / 7.l / 7.m are the architecture layer; 7.c resumes on the upgraded surface.
+**Scope 3 expansion (2026-04-21):** this phase now carries the architecture work previously queued for V1.1 — booking CRUD completion, composition contract v2 (split into 7.i.1 + 7.i.2 per the 2026-04-21 second amendment), mid-flow event subscriptions, scheduled triggers, external-state branching, and the KB block. See §0.5 for the principle and the 2a → 2b.1 → 2b.2 → 2c → 2d → 2e → 2f → 3a → 3b → 3c sprint ordering. Slices 7.h.2 / 7.i.1 / 7.i.2 / 7.j / 7.k / 7.l / 7.m are the architecture layer; 7.c resumes on the upgraded surface.
 
 **Phase 6.5 "Static automation preview" is absorbed here.** The read-only visualization is simply the canvas's read-only mode — no separate phase. Ship read-only first in slice 7.a (unblocks Stage 0 viral demos earlier than full edit) then the edit layer in subsequent slices.
 
@@ -866,7 +881,7 @@ Authoring `email.block.md` against the Phase 2.75 schema surfaced the following 
 
 22. ✅ **Scope 3 commitment locked.** Every architectural gap the archetype library surfaced moves into v1 scope rather than shipping the remaining 4 archetypes with V1.1 footnotes. See §0.5 for the full principle, item list, sprint ordering, and updated ship criteria.
 
-23. ✅ **Six architecture items promoted into v1 scope:** booking CRUD (7.h.2), composition contract v2 (7.i), mid-flow event subscriptions (7.j), scheduled triggers (7.k), conditional-on-external-state branching (7.l), Knowledge Base block (7.m). Ship in dependency order; each gated on live probe + explicit approval.
+23. ✅ **Six architecture items promoted into v1 scope:** booking CRUD (7.h.2), composition contract v2 (7.i — split into 7.i.1 schema+CRM and 7.i.2 remaining-5-blocks per the 2026-04-21 second amendment), mid-flow event subscriptions (7.j), scheduled triggers (7.k), conditional-on-external-state branching (7.l), Knowledge Base block (7.m). Ship in dependency order (2a → 2b.1 → 2b.2 → 2c → 2d → 2e → 2f); each gated on live probe + explicit approval.
 
 24. ✅ **Phase 7.c paused mid-flight.** 3 archetypes shipped + probe-validated (Speed-to-Lead, Win-Back, Review Requester). Library resumes in Scope 3 Step 3 after architecture lands. On resumption: retrofit the 3 shipped archetypes against contract v2, ship the remaining 4 (Client Onboarding, Proposal Follow-Up, Support Deflection, **Appointment Confirmer** — back in v1 as the 7th archetype), validate all 7 on the upgraded architecture.
 
@@ -878,6 +893,11 @@ Authoring `email.block.md` against the Phase 2.75 schema surfaced the following 
 
 28. ✅ **Principle locked: archetype library and architecture are co-developed, not sequential.** When an archetype surfaces an architectural gap, we ship the architecture, then complete the archetype on the upgraded surface. v1 ships when all 7 archetypes synthesize cleanly against the completed composition contract.
 
+29. ✅ **(2026-04-21 second amendment — Scope 3 refinements)** Three refinements to the sprint plan, all plan-only:
+    - **Co-development principle generalized** — extended with one sentence to cover future phases that consume the composition surface (Phase 9 snapshots, Phase 10 marketplace, third-party block authoring post-v1). Same discipline applies; not just an archetype-library construct.
+    - **Step 2b split into 2b.1 + 2b.2** — schema design + CRM migration as the pattern-validator in 2b.1; remaining 5 blocks migrated one-at-a-time in 2b.2. Reduces regression risk on the highest-risk sprint item; if 2b.1 surfaces schema problems they get fixed before 5 more blocks migrate. Sprint totals 7 slices (2a → 2b.1 → 2b.2 → 2c → 2d → 2e → 2f) before the 3a–3c completion wave.
+    - **Step 3a archetype retrofit explicit about spec updates** — not just block-dependency validation; the 3 archetype JSONs (Speed-to-Lead, Win-Back, Review Requester) update their own placeholder definitions, `capture` type hints, and conversation `extract` typings to reference v2 schema. Re-probed 3× each against upgraded synthesis; degradation stops the sprint for investigation before 3b ships.
+
 ### Next action gates *(updated 2026-04-21 for Scope 3)*
 
 - Phase 2.75 (BLOCK.md composition contract v1) — **✅ shipped** (`447ffec8`). Will be superseded by contract v2 in Scope 3 step 2b.
@@ -885,7 +905,7 @@ Authoring `email.block.md` against the Phase 2.75 schema surfaced the following 
 - Phase 7.a (synthesis spike) — **✅ live-run validated**.
 - Phase 7.h (`create_booking` MCP gap) — **✅ shipped + post-ship probe green**.
 - Phase 7.c — **🟡 paused** mid-flight (3 of 6 archetypes shipped). Resumes in Scope 3 Step 3.
-- **Scope 3 sprint — gated on this 2026-04-21 amendment approval.** See §0.5 for the full phase ordering (2a → 2b → 2c → 2d → 2e → 2f → 3a → 3b → 3c).
+- **Scope 3 sprint — gated on this 2026-04-21 amendment (+ the 2026-04-21 second amendment splitting 2b) approval.** See §0.5 for the full phase ordering (2a → 2b.1 → 2b.2 → 2c → 2d → 2e → 2f → 3a → 3b → 3c).
 - Scope 3 gates the v1 viral-demo milestone — every archetype must ship without footnotes before demo recording.
 
 **Stop. Awaiting approval of the Scope 3 amendment before any architecture work (2a onward) starts.**
