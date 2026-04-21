@@ -35,6 +35,111 @@ Post-2026-04-20 that framing is subsumed by the real bet: **(g) agent synthesis 
 
 ---
 
+## §0.5 — Scope 3: archetype-driven architecture sprint *(2026-04-21 amendment)*
+
+### Principle
+
+**The archetype library and the architecture are co-developed, not sequential. Each archetype is a teacher — when it surfaces an architectural gap, we ship the architecture that closes it, then complete the archetype on the upgraded surface. v1 ships when all 7 archetypes synthesize cleanly against the completed composition contract.**
+
+### What changed
+
+Phase 7.c (archetype library) shipped 3 of 6 planned archetypes before surfacing architectural gaps the workaround docs could no longer hide:
+
+- **Appointment Confirmer** (originally deferred to V1.1): blocked by missing booking CRUD *and* dynamic-wait expressions.
+- **Review Requester**: shipped with a loud "SMS fires unconditionally" limitation because `branch` can't read external state.
+- **Client Onboarding**: would need mid-flow event subscription (welcome → await `form.submitted` → schedule kickoff) that AgentSpec doesn't support.
+- **Support Deflection**: shipped Soul-scoped because no KB block exists.
+- **Win-Back, Proposal Follow-Up**: full-scope versions want typed contract schema v2 for safer synthesis.
+
+Shipping the remaining 4 archetypes with V1.1 footnotes would teach users the product has holes and train them to expect workarounds. **Scope 3 is the decision to stop shipping footnotes and ship the architecture instead.** The 6 architectural items below move into v1 scope; the archetype library pauses mid-flight and resumes on the upgraded surface.
+
+### Moving into v1 scope (was V1.1)
+
+| Item | Current state | Phase-7 label |
+|---|---|---|
+| **Booking CRUD** — cancel / reschedule / get / list_bookings | only `create_booking` ships (7.h) | **7.h.2** |
+| **Composition contract v2** — typed tool inputs, typed conversation exits, typed block I/O | Phase 2.75 shipped 4-field contract; v2 adds types | **7.i** |
+| **Mid-flow event subscriptions** — `await_event` step type + durable pause/resume | trigger-only events today | **7.j** |
+| **Scheduled triggers** — `trigger.type: "schedule"` with cron + workspace timezone | event-only triggers today | **7.k** |
+| **Conditional-on-external-state branching** — `branch.condition.type: "external_state"` with safe query shapes | NL conditions only, runtime-evaluated | **7.l** |
+| **Knowledge Base block** — full block following Email/SMS/Payments pattern | not started | **7.m** |
+
+### Still deferred to V1.1 proper
+
+The following stay post-launch because they depend on real usage data, separate GTM work, or aren't on the archetype-library critical path:
+
+- **Brain v2 + `contact.inactive_Nd` synthetic event emitter.** Waits for 100+ workspaces with 60+ days of real data before it's meaningful. Without data the emitter fires noise.
+- **TypeScript / Python SDKs.** REST + MCP cover v1.
+- **REST API for non-MCP clients.** Same reason — MCP + internal REST serve v1.
+- **Developer sandbox / playground.** Blocks third-party agent-developer GTM which is a V1.1+ track anyway.
+- **Status page + SLA machinery.** Needs incident history to be meaningful.
+- **Third-party block authoring path.** Requires a review + marketplace pipeline that's a separate workstream.
+- **Full observability surface beyond current `logEvent` output.** Logs + Vercel monitoring cover v1.
+- **x402 readiness design principles** (see §Post-v1 roadmap below — still applied during v1 build at near-zero cost; launch itself is V1.2).
+
+### Scope 3 sprint — phase ordering
+
+Architecture work ships in dependency order before the archetype library resumes. Each step is independently validatable; no step blocks on a later one.
+
+**Step 2 — Architecture (ships first):**
+
+- **2a — Booking CRUD** (~1 week) · 7.h.2
+  Tools: `cancel_booking`, `reschedule_booking`, `get_booking`, `list_bookings` (already shipped in the pre-7.c micro-slice — confirm). Follows the 7.h `create_booking` pattern. Tool count: 79 → ~82.
+
+- **2b — Composition contract v2** (~2 weeks) · 7.i · **CRITICAL: incremental, not big-bang**
+  Typed tool inputs (prevents starts_at/start_time drift), typed conversation exits, typed block I/O (producers declare output shapes, consumers declare expected input shapes). Migrate each of the 6 existing blocks one at a time with regression tests passing before moving to the next. Update `validateCompositionContract` + `validateAgentSpec` to enforce typed schemas at synthesis. Update every BLOCK.md. This is a refactor of shipped code — ship incrementally.
+
+- **2c — Mid-flow event subscriptions** (~1–2 weeks) · 7.j
+  AgentSpec gets new step type `await_event` that pauses execution until a specified event fires. Runtime needs durable pause-and-resume that survives deploys + restarts. Timeout handling: configurable; default 30 days with explicit timeout-event emission. Live-probe against synthesis before declaring shipped.
+
+- **2d — Scheduled triggers** (~1–2 weeks) · 7.k
+  AgentSpec trigger schema gets `trigger.type: "schedule"` with a cron expression. Runtime fires reliably with workspace-timezone awareness (not system time). Handle missed firings on deploy restarts — fire on catchup if within a reasonable window, drop if too stale. DST awareness documented.
+
+- **2e — Conditional-on-external-state branching** (~3–5 days) · 7.l
+  Branch step schema: `condition.type` can be `"external_state"`. Synthesis engine updated to generate external-state conditions safely — known query shapes only, no arbitrary SQL / arbitrary field reads. Small scope; mostly validator + synthesis-prompt work.
+
+- **2f — Knowledge Base block** (~2 weeks) · 7.m
+  Full block following the Email / SMS / Payments pattern. 10 slices: audit → schema → events → provider (embedding + retrieval) → ingestion → query → webhook (document updates) → MCP tools → BLOCK.md → UI. Storage: Postgres with `pgvector`. BYO embedding-provider API keys (OpenAI / Cohere / Voyage). Tool count: ~82 → ~90–92.
+
+**Step 3 — Archetype library completion (resumes after 2a–2f):**
+
+- **3a — Retrofit shipped archetypes** against contract v2.
+  - Speed-to-Lead: validate, minor tweaks.
+  - Win-Back: validate, minor tweaks.
+  - Review Requester: **UPGRADE** to use `external_state` branch (suppress SMS when `review.submitted` event query returns a hit).
+
+- **3b — Ship remaining archetypes** on the upgraded surface.
+  - Client Onboarding: **full flow** using `await_event` (welcome → share form URL → await `form.submitted` → schedule kickoff → confirm).
+  - Proposal Follow-Up: full composition as originally scoped.
+  - Support Deflection: full Q&A against the KB block.
+  - **Appointment Confirmer — back in v1** (was V1.1): uses scheduled triggers + booking CRUD. Seventh archetype.
+
+- **3c — Validate the library.**
+  Live-probe all 7 archetypes on the upgraded architecture. Confirm determinism, cost, and quality held under schema v2. Update archetype-library docs: **zero "V1.1 footnotes"**. Update marketing copy: "7 production-grade archetypes, complete composition surface."
+
+### Updated v1 ship criteria
+
+v1 ships when ALL of the following hold:
+
+- 7 archetypes shipped, **zero V1.1 footnotes** anywhere in their docs.
+- Composition contract v2 is stable and typed; `validateCompositionContract` enforces typed schemas.
+- All existing blocks (CRM, Booking, Email, SMS, Payments, Intake, Landing, + the new KB block) migrated to contract v2 with regression tests passing.
+- Agent synthesis cost remains **<$0.10/call average**, with **100% grounding** and high determinism across all 7 archetypes per the `probe-archetype.mjs` battery.
+- All other Phase 3 → 6 + 7.a / 7.h / 7.c-partial ship criteria from the earlier plan remain satisfied.
+
+Previously-used ship criteria (e.g., "6 archetypes with Support Deflection scope-flagged") are **superseded by this Scope 3 commitment** and retained in the plan history only as decision lineage.
+
+### Stop-gate discipline inherited
+
+Every prior stop-gate the archetype library used still applies:
+- Per-step live-probe (3× per archetype) before commit.
+- Per-step validator PASS required.
+- Max explicit approval between architecture slices (2a → 2b → … → 3c).
+
+The Scope 3 sprint does not relax the "ship one at a time, prove, advance" cadence.
+
+---
+
 ## Preamble — Status truthing
 
 The strategic brief was written against an earlier session state. Current truth on `origin/main`:
@@ -48,15 +153,23 @@ The strategic brief was written against an earlier session state. Current truth 
 | 0.5 — "truthing pass" (not in briefing) | n/a | **Shipped.** Blank landing seed fix + repair hook, `/pricing` rewrite, `/settings/billing` rewrite, stale `seldon-it-50-limit` removed, 6 intake form templates. Commits `ec58dda7`, `150ba951`, `29a24b36`, `ea706162`, `739ae8cb`. |
 | Phase 1.a — TableView Twenty polish | n/a | **Shipped** as `036b2e9a` — before the strategic update arrived. Assumption: kept as-is (it directly serves the now-explicit Phase 1 "Twenty-grade first-impression polish" goal). If the brief intended to redirect this, say so; I'll revert or redirect. |
 
-**Net state (updated 2026-04-21 after Phase 3 ship):**
+**Net state (updated 2026-04-21 after Scope 3 pivot):**
 - Phase 0: ✅ **Complete.** 0a merged to main as `5dd33c68`. Tokens unified on oklch.
 - Phase 0.5 (truthing): ✅ **Complete.** Landing seed fix + repair hook, /pricing rewrite, /settings/billing rewrite, stale seldon-it limit removed, 6 form templates.
 - Phase 1 (CRM / Booking / Intake polish): ✅ **Complete.** 1.a TableView + 1.b KanbanView + 1.c booking admin + 1.d booking public (react-day-picker) + 1.e intake Typeform-style + 1.f intake admin editor.
 - Phase 2 (MCP surface for existing blocks): ✅ **Complete.** 2.a audit + 2.b 12 CRM tools + 2.c 4 booking tools + appointment-type CRUD + 2.d 7 intake tools + forms CRUD. Tool count: 22 → 43.
 - Phase 2.5 (substrate audits): ✅ **Partial / Complete as scoped.** 2.5.a event-bus audit shipped (Verdict A). 2.5.d secrets audit shipped (solid). 2.5.b deferred (near-no-op). 2.5.c deferred into Phase 3.
-- Phase 2.75 (BLOCK.md composition contract): ✅ **Shipped** as `447ffec8`. Parser extension (+170 LOC) + backfill of caldiy-booking + formbricks-intake + net-new crm.block.md + L-15 lessons entry. Validator surfaces 5 warning codes (empty_contract, no_verbs, malformed_produces, unknown_compose_with, verbose_verb); non-fatal today, CI-gating in Phase 12.
-- Phase 3 (Email + Conversation Primitive): ✅ **Shipped 2026-04-21** across 10 commits (`9ee1f2ea` → `87a7efc9`). All build-green.
-- Phase 4+ : not started. **Phase 4 gated on this amendment approval** — contract schema is locked by Phase 3 authoring, and the SMS block writes against the same format.
+- Phase 2.75 (BLOCK.md composition contract v1): ✅ **Shipped** as `447ffec8`. 4-field contract (produces / consumes / verbs / compose_with). **Superseded by contract v2 in the Scope 3 sprint** — see §0.5.
+- Phase 3 (Email + Conversation Primitive): ✅ **Shipped 2026-04-21** across 10 commits (`9ee1f2ea` → `87a7efc9`).
+- Phase 4 (SMS + runtime reuse): ✅ **Shipped 2026-04-21** across 10 commits (`8d2d0c4a` → `2d0653e7`).
+- Phase 5 (Payments + Stripe Connect): ✅ **Shipped 2026-04-21** across 8 commits (`8dbbc696` → `96b936bc`). P1 booking-checkout Connect routing bug fixed en route.
+- Phase 6 (Landing Pages + Puck): ✅ **Shipped 2026-04-21** across 7 commits (`bc74325e` → `0449e2c6`).
+- Phase 7.a (synthesis spike): ✅ Shipped + live-run validated.
+- Phase 7.h (create_booking MCP gap fix): ✅ Shipped (`d6692737`) + post-ship probe validated (100% grounding, 0% hallucination, 5/5 determinism includes `create_booking`).
+- Phase 7.c pre-micro-slice (create_activity / list_bookings / get_form public_url / create_coupon): ✅ Shipped (`bb328ced`). Tool count: 76 → 79.
+- Phase 7.c (archetype library): 🟡 **PAUSED mid-flight per Scope 3 pivot.** 3 of 6 originally-scoped archetypes shipped + 3× probe-validated: Speed-to-Lead (`a2175015`), Win-Back (`accb80bd`), Review Requester (`ccd284d1`). **Resumes in Scope 3 Step 3** after architecture ships.
+- **Scope 3 sprint (2a – 2f)**: ⏳ **Not started. Gated on this amendment approval.** See §0.5 for full commitment + phase ordering.
+- Phases 8 – 12: not started. Dependencies on Scope 3 architecture (Phase 7.k scheduled triggers overlaps with Phase 8 custom-domain work) flagged for later review.
 
 ---
 
@@ -235,8 +348,9 @@ Transactional mode bypasses the runtime (no reasoning needed). Phase 4 SMS inbou
 - **External deps:** none new; Puck already installed.
 - **Unknowns:** D-5 — does Puck's JSON round-trip cleanly with AI-generated content?
 
-### Phase 7 — **Agent Engine** *(renamed 2026-04-20; was "Automation canvas" + "Static preview")*
+### Phase 7 — **Agent Engine** *(renamed 2026-04-20; expanded 2026-04-21 Scope 3)*
 **Dependencies:** Phases 3, 4, 5, 6 shipped (action primitives exist). **Phase 2.75 BLOCK.md composition contract locked** (synthesis depends on it). Phase 2 MCP tools + Phase 2.5 event bus.
+**Scope 3 expansion (2026-04-21):** this phase now carries the architecture work previously queued for V1.1 — booking CRUD completion, composition contract v2, mid-flow event subscriptions, scheduled triggers, external-state branching, and the KB block. See §0.5 for the principle and the 2a–2f / 3a–3c sprint ordering. Slices 7.h.2 / 7.i / 7.j / 7.k / 7.l / 7.m are the architecture layer; 7.c resumes on the upgraded surface.
 
 **Phase 6.5 "Static automation preview" is absorbed here.** The read-only visualization is simply the canvas's read-only mode — no separate phase. Ship read-only first in slice 7.a (unblocks Stage 0 viral demos earlier than full edit) then the edit layer in subsequent slices.
 
@@ -748,21 +862,50 @@ Authoring `email.block.md` against the Phase 2.75 schema surfaced the following 
 | Tracking pixel: default-on | yes | ✅ Every send injects the pixel; webhook path tracks opens too (idempotent via `unique(provider, provider_event_id)`) |
 | Unsubscribe: separate `suppression_list` table | yes | ✅ Separate table; pre-send hook; auto-populated by webhook on bounce/complaint |
 
-### Next action gates
+### 2026-04-21 (Scope 3 — archetype-driven architecture sprint)
 
-- Phase 2.75 (BLOCK.md composition contract) — **✅ shipped** (`447ffec8`).
-- Phase 3 (Email) — **✅ shipped** (`9ee1f2ea` → `87a7efc9`).
-- **Phase 4 (SMS) — gated on this 2026-04-21 amendment approval.** Composition contract schema is locked; sms.block.md writes against the exact same 4-field format. Runtime already supports `channel: "sms"` with zero changes needed.
-- Phase 4 — gates Phase 7 (synthesized-agent demos need SMS as the conversational channel).
-- Phase 7 — gates the viral demo milestone.
+22. ✅ **Scope 3 commitment locked.** Every architectural gap the archetype library surfaced moves into v1 scope rather than shipping the remaining 4 archetypes with V1.1 footnotes. See §0.5 for the full principle, item list, sprint ordering, and updated ship criteria.
 
-**Stop. Awaiting approval of the 2026-04-21 amendment before any Phase 4 work starts.**
+23. ✅ **Six architecture items promoted into v1 scope:** booking CRUD (7.h.2), composition contract v2 (7.i), mid-flow event subscriptions (7.j), scheduled triggers (7.k), conditional-on-external-state branching (7.l), Knowledge Base block (7.m). Ship in dependency order; each gated on live probe + explicit approval.
+
+24. ✅ **Phase 7.c paused mid-flight.** 3 archetypes shipped + probe-validated (Speed-to-Lead, Win-Back, Review Requester). Library resumes in Scope 3 Step 3 after architecture lands. On resumption: retrofit the 3 shipped archetypes against contract v2, ship the remaining 4 (Client Onboarding, Proposal Follow-Up, Support Deflection, **Appointment Confirmer** — back in v1 as the 7th archetype), validate all 7 on the upgraded architecture.
+
+25. ✅ **"Composition Contract — observations from Phase 3 authoring" (above) supersedes itself.** The 3 consolidated contract gaps (typed tool inputs, typed conversation exits, typed block I/O) move from V1.1 queue into v1 scope as step 2b. The remaining observations (symmetry check, `requires_secrets`, `cost_signal`, typed `side_effects`) stay V1.1-queued except where Scope 3 step 2b naturally absorbs them.
+
+26. ✅ **V1.1 queue trimmed.** The following STAY post-launch: Brain v2 + `contact.inactive_Nd` emitter (needs real data at scale), TypeScript/Python SDKs, REST API for non-MCP clients, developer sandbox/playground, status page + SLA machinery, third-party block authoring path, observability beyond `logEvent`, x402 launch (principles applied during v1 — launch itself is V1.2).
+
+27. ✅ **v1 ship criteria updated.** 7 archetypes with zero V1.1 footnotes; composition contract v2 stable + typed; all 8 blocks (CRM, Booking, Email, SMS, Payments, Intake, Landing, KB) migrated to v2 with regression tests green; agent synthesis <$0.10/call avg with 100% grounding + high determinism across all 7 archetypes.
+
+28. ✅ **Principle locked: archetype library and architecture are co-developed, not sequential.** When an archetype surfaces an architectural gap, we ship the architecture, then complete the archetype on the upgraded surface. v1 ships when all 7 archetypes synthesize cleanly against the completed composition contract.
+
+### Next action gates *(updated 2026-04-21 for Scope 3)*
+
+- Phase 2.75 (BLOCK.md composition contract v1) — **✅ shipped** (`447ffec8`). Will be superseded by contract v2 in Scope 3 step 2b.
+- Phase 3 (Email), Phase 4 (SMS), Phase 5 (Payments), Phase 6 (Landing) — **✅ all shipped** on 2026-04-21.
+- Phase 7.a (synthesis spike) — **✅ live-run validated**.
+- Phase 7.h (`create_booking` MCP gap) — **✅ shipped + post-ship probe green**.
+- Phase 7.c — **🟡 paused** mid-flight (3 of 6 archetypes shipped). Resumes in Scope 3 Step 3.
+- **Scope 3 sprint — gated on this 2026-04-21 amendment approval.** See §0.5 for the full phase ordering (2a → 2b → 2c → 2d → 2e → 2f → 3a → 3b → 3c).
+- Scope 3 gates the v1 viral-demo milestone — every archetype must ship without footnotes before demo recording.
+
+**Stop. Awaiting approval of the Scope 3 amendment before any architecture work (2a onward) starts.**
 
 ---
 
-## Post-v1 roadmap — x402 / Agentic Market *(2026-04-20 addition)*
+## Post-v1 roadmap — x402 / Agentic Market + remaining V1.1 queue *(2026-04-20 addition; trimmed 2026-04-21 for Scope 3)*
 
-Not a v1 phase. A **design-principles layer** applied during v1 work at near-zero cost, plus a small post-v1 launch slice. The goal is to keep the option open for per-call agent payments via x402 on Base without building anything that competes with v1 priorities.
+The **2026-04-21 Scope 3 commitment** (see §0.5) pulled six architectural items out of the V1.1 queue and into v1. The Post-v1 roadmap below carries what remains: the x402 discipline layer applied during v1 build, the V1.2 Agentic Market launch slice, and the V1.1 items that genuinely wait for real data, separate GTM work, or aren't on the archetype-library critical path.
+
+**V1.1 items that stayed deferred** (enumerated in decisions-locked item 26 above):
+
+- **Brain v2 + `contact.inactive_Nd` synthetic event emitter** — waits for 100+ workspaces with 60+ days of real data before the emitter fires meaningful (vs. noisy) signals. Unblocks attendance-based Win-Back (yoga / gym / fitness studios) post-launch.
+- **TypeScript / Python SDKs** — REST + MCP cover v1.
+- **REST API for non-MCP clients** — same reason; MCP + internal REST serve v1.
+- **Developer sandbox / playground** — blocks third-party agent-developer GTM, a V1.1+ track.
+- **Status page + SLA machinery** — needs incident history to be meaningful.
+- **Third-party block authoring path** — requires a separate review + marketplace pipeline.
+- **Full observability surface beyond current `logEvent`** — logs + Vercel monitoring cover v1.
+- **Composition-contract refinements not covered by Scope 3 step 2b:** cross-block `compose_with` symmetry check, `requires_secrets` declarations, `cost_signal` metadata, typed `side_effects`. Step 2b absorbs the three core type additions (inputs, exits, block I/O); the rest ride post-launch.
 
 ### V1.1 — x402 readiness design principles
 
