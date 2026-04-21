@@ -199,6 +199,18 @@ export default async function IntegrationsSettingsPage({
               </button>
             </div>
           </form>
+          <div className="mt-4 rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground space-y-1">
+            <p className="font-medium text-foreground">Webhook URL</p>
+            <p>
+              Point your Resend webhook here to capture delivery, open, click, and bounce events:
+            </p>
+            <code className="block break-all rounded bg-muted/40 px-2 py-1 text-[11px] text-foreground">
+              {`${process.env.NEXT_PUBLIC_APP_URL ?? "https://app.seldonframe.com"}/api/webhooks/resend`}
+            </code>
+            <p>
+              Signing secret: set <code className="text-foreground">RESEND_WEBHOOK_SECRET</code> in your environment.
+            </p>
+          </div>
         </article>
 
         <article className="rounded-xl border bg-card p-5">
