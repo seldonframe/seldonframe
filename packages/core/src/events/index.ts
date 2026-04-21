@@ -23,6 +23,9 @@ export type SeldonEvent =
   | { type: "conversation.turn.sent"; data: { conversationId: string; turnId: string; contactId: string; channel: "email" | "sms" } }
   | { type: "landing.visited"; data: { pageId: string; visitorId: string } }
   | { type: "landing.converted"; data: { pageId: string; contactId: string } }
+  | { type: "landing.published"; data: { pageId: string; slug: string; orgId: string } }
+  | { type: "landing.unpublished"; data: { pageId: string; orgId: string } }
+  | { type: "landing.updated"; data: { pageId: string; orgId: string } }
   | { type: "payment.completed"; data: { contactId: string; amount: number; currency: string; source: string } }
   | { type: "payment.failed"; data: { contactId: string; amount: number; reason: string } }
   | { type: "payment.refunded"; data: { contactId: string | null; paymentId: string; amount: number; currency: string } }

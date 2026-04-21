@@ -289,13 +289,36 @@ export async function publishLandingPageAction(pageId: string, published: boolea
     throw new Error("Unauthorized");
   }
 
-  await db
+  const [row] = await db
     .update(landingPages)
     .set({
       status: published ? "published" : "draft",
       updatedAt: new Date(),
     })
-    .where(and(eq(landingPages.orgId, orgId), eq(landingPages.id, pageId)));
+    .where(and(eq(landingPages.orgId, orgId), eq(landingPages.id, pageId)))
+    .returning({ id: landingPages.id, slug: landingPages.slug });
+
+  if (!row) {
+    return;
+  }
+
+  if (published) {
+    await emitSeldonEvent("landing.published", {
+      pageId: row.id,
+      slug: row.slug,
+      orgId,
+    });
+    await dispatchWebhook({
+      orgId,
+      event: "landing.published",
+      payload: { pageId: row.id, slug: row.slug },
+    });
+  } else {
+    await emitSeldonEvent("landing.unpublished", {
+      pageId: row.id,
+      orgId,
+    });
+  }
 }
 
 export async function getPublicLandingPage(orgSlug: string, slug: string) {
