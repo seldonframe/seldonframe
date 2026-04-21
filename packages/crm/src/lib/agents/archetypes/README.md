@@ -48,7 +48,7 @@ Two conventions → two resolution paths → clean separation of "filled once pe
 
 1. ✅ **Speed-to-Lead** — reference implementation.
 2. ✅ **Win-Back** — event+wait shape with `create_coupon`.
-3. ⏳ **Review Requester**.
+3. ✅ **Review Requester**.
 4. ⏳ **Client Onboarding**.
 5. ⏳ **Proposal Follow-Up**.
 6. ⏳ **Support Deflection** (Soul-scoped).
@@ -151,4 +151,66 @@ The `create_invoice` tool exists (Phase 5.f) and Win-Back looks superficially li
 - Shared expiry window — every contact gets a unique code but all share `$couponDurationDays` from agent-fire time. Per-contact custom expiry is V1.1.
 - **Inactivity-based Win-Back (yoga / gym / fitness studios)** — requires Brain v2's `contact.inactive_Nd` synthetic event emitter. Not available in v1; attendance-based verticals get a "Coming V1.1" flag in the archetype library UI.
 
-**Live probe evidence:** pending — see `tasks/phase-7-archetype-probes/win-back.report.md` after the 3× probe run.
+**Live probe evidence:** `tasks/phase-7-archetype-probes/win-back.report.md` — 3× PASS, 0 hallucinations, `capture` threading verified across 6 references in 4 distinct step types.
+
+---
+
+## Archetype: Review Requester
+
+**ID:** `review-requester`
+**Shipped:** 2026-04-21
+**Blocks required:** `crm`, `email`, `sms`, `caldiy-booking`
+**Events used:** trigger = `booking.completed`; produces `email.sent`, `sms.sent`.
+**Tools used:** `send_email`, `send_sms`, `create_activity`.
+
+**What it does.** Fires on `booking.completed`. Waits a short reflect window (default 2 days), sends a warm email asking for a review with the configured URL, waits 5 days, sends a shorter SMS reminder with the same URL, logs a sequence-complete activity.
+
+**Flow (5 steps):**
+
+```
+trigger (booking.completed)
+  → wait $initialDelaySeconds (default 2 days)
+  → send_email (includes $reviewLink)
+  → wait $reminderDelaySeconds (default 5 days)
+  → send_sms (includes $reviewLink, shorter)
+  → create_activity (type: review_request, sequence complete)
+```
+
+**Placeholders the user provides:**
+- `$reviewLink` — URL where reviews land. Full `https://` URL. Embedded verbatim in email + SMS copy.
+- `$initialDelaySeconds` — delay before the email. Default 172800 (2 days).
+- `$reminderDelaySeconds` — delay before the SMS reminder. Default 432000 (5 days).
+
+**Placeholders Claude fills from Soul:**
+- `$reviewEmailSubject` / `$reviewEmailBody` — warm, on-brand, includes `$reviewLink` inline, offers a reply-path for customers who had issues.
+- `$reviewSmsBody` — shorter (<200 chars), less formal, includes `$reviewLink`.
+
+### SMS reminder behavior — honest upfront disclosure
+
+This archetype sends the SMS reminder 3–7 days after the email, **regardless of whether the customer has already submitted a review**. V1 has no `review.submitted` event in the SeldonEvent vocabulary; V1.1 will add a conditional branch that suppresses the reminder when the review is detected as submitted, once the `branch` step type supports external-state checks.
+
+**Workarounds available today:**
+- Manually deactivate the agent for customers you've already received reviews from (one-click on the agent page per contact).
+- Pair with a custom block that emits `review.submitted` events scraped from whichever review destination you use — then rewrite the archetype to use a `branch` step reading those.
+
+**Don't let users discover the duplicate-ask issue at use-time.** The archetype detail pane surfaces this known-limitation up front per the `knownLimitations` array.
+
+### `$reviewLink` flexibility note
+
+`$reviewLink` can point anywhere:
+
+- **Google Business Profile review URL** (recommended for local SEO value — reviews rank the business in Google Maps + search).
+- **Yelp or industry-specific review sites** (Avvo for lawyers, Healthgrades for medical practices, etc.).
+- **An internal form** — a SeldonFrame intake form that captures rating + feedback.
+
+Sophisticated implementations use an internal form that asks "how was your experience?" first, then:
+- **Positive responses (4–5 stars)** → redirect to the public review site (Google / Yelp) to capture the public review.
+- **Negative responses (1–3 stars)** → captures the feedback privately for the business to respond before it goes public.
+
+**Compliance flag — review gating.** The pattern above (filtering which customers get directed to public review sites based on predicted sentiment) is known as "review gating" and has compliance considerations in some jurisdictions. The FTC in the United States has been increasingly active on this since 2019; Google's review policies explicitly prohibit it; some industries (medical, legal) have additional regulation. **Users should consult local regulations + platform terms if implementing this pattern.** The archetype itself doesn't enforce or forbid it — we teach the pattern, surface the flag, and leave the decision to the user.
+
+**Known limitations:**
+- SMS reminder fires unconditionally (see above).
+- `$reviewLink` is treated as opaque — the archetype doesn't know whether you're pointing at Google, Yelp, or an internal form. Copy in email + SMS is generic enough to work with any destination, but builders who want destination-specific copy ("leave us a Google review!") can hand-edit after synthesis.
+
+**Live probe evidence:** pending — see `tasks/phase-7-archetype-probes/review-requester.report.md` after the 3× probe run.

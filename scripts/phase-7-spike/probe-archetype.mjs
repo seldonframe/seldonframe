@@ -238,6 +238,9 @@ const FIXTURE_SOUL = {
 
 const FIXTURE_FORM_ID = "form_new_patient_intake";
 const FIXTURE_APPOINTMENT_TYPE_ID = "appt_new_patient_consult";
+// Review-Requester fixture — Google Business Profile URL shape. Any
+// archetype using $reviewLink during synthesis gets this value.
+const FIXTURE_REVIEW_LINK = "https://g.page/r/Ca-example-business/review";
 
 // ---------------------------------------------------------------------------
 // 4. Build the synthesis prompt — give Claude the archetype template,
@@ -278,9 +281,10 @@ ${contractLines.join("\n")}
 ## MCP tool catalog (all tools currently present)
 ${toolLines.join("\n")}
 
-## Fixture IDs (use these literal values for user_input placeholders)
+## Fixture IDs (use these literal values for user_input placeholders — ignore any that don't appear in this archetype's placeholder set)
 - $formId → "${FIXTURE_FORM_ID}"
 - $appointmentTypeId → "${FIXTURE_APPOINTMENT_TYPE_ID}"
+- $reviewLink → "${FIXTURE_REVIEW_LINK}"
 
 ## Customization (optional NL guidance; ignore if empty)
 ${customization || "(none — use Soul-only tone for copy fields)"}
