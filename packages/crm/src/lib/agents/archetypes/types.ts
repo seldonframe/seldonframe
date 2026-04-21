@@ -7,12 +7,32 @@
 // - `$placeholderName` — resolved at SYNTHESIS TIME. Either user-provided
 //   (e.g., $formId, $appointmentTypeId) or Soul-derived (copy fields:
 //   $opening_message, $confirmation_subject).
-// - `{{expression}}` — resolved at RUNTIME, not synthesis. Refers to
-//   trigger-payload data (e.g., {{contact.id}}, {{preferred_start}})
-//   or to variables extracted by a conversation step.
+// - `{{expression}}` — resolved at RUNTIME, not synthesis. Three
+//   sources feed runtime bindings:
+//   1. Trigger-payload data — {{contact.firstName}}, {{trigger.data.name}}
+//   2. Conversation extractions — {{preferred_start}} (from on_exit.extract)
+//   3. Captured step outputs — {{coupon.code}} when an earlier
+//      mcp_tool_call step has `capture: "coupon"` binding its response
+//      to the `coupon` namespace. See the `capture` field below.
 //
 // Two conventions → two resolution paths → clean separation of "filled
 // once per deploy" vs "filled every time the agent fires".
+//
+// ---
+//
+// `capture` field on mcp_tool_call steps (added 2026-04-21 for Win-Back
+// archetype support):
+//
+//   { id: "create_coupon_step", type: "mcp_tool_call", tool: "create_coupon",
+//     args: {...}, capture: "coupon", next: "..." }
+//
+// The runtime binds the step's response `data` field to the named
+// variable. Downstream steps can then reference {{coupon.<key>}} in
+// any string value. Without capture, tool-call outputs vanish after
+// the call completes.
+//
+// For tools that return { data: { ... } }, the inner data object is
+// what gets captured. Non-{data: ...} responses are captured as-is.
 
 export type ArchetypePlaceholderKind = "user_input" | "soul_copy";
 

@@ -31,6 +31,12 @@ type CreateCouponBody = {
   max_redemptions?: unknown;
   expiresAt?: unknown;
   expires_at?: unknown;
+  // Relative-expiry alias computed at call time. Useful for archetype
+  // templates that need to outlive any single synthesis — "14 days from
+  // now" stays meaningful six months into agent deployment, whereas a
+  // hardcoded expires_at baked at synthesis would already be stale.
+  expiresInDays?: unknown;
+  expires_in_days?: unknown;
 };
 
 function getStripeClient() {
@@ -85,9 +91,19 @@ export async function POST(request: Request) {
   const providedCode = typeof body.code === "string" ? body.code.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "").slice(0, 40) : null;
   const maxRedemptions = typeof body.maxRedemptions === "number" ? body.maxRedemptions : typeof body.max_redemptions === "number" ? body.max_redemptions : 1;
   const expiresAtRaw = typeof body.expiresAt === "string" ? body.expiresAt : typeof body.expires_at === "string" ? body.expires_at : null;
-  const expiresAt = expiresAtRaw ? new Date(expiresAtRaw) : null;
+  const expiresInDaysRaw = typeof body.expiresInDays === "number" ? body.expiresInDays : typeof body.expires_in_days === "number" ? body.expires_in_days : null;
+  let expiresAt: Date | null = expiresAtRaw ? new Date(expiresAtRaw) : null;
   if (expiresAt && Number.isNaN(expiresAt.getTime())) {
     return NextResponse.json({ error: "expires_at must be a valid ISO timestamp" }, { status: 400 });
+  }
+  // Relative expiry wins if both are provided — it's the less
+  // surprise-prone option for archetype templates that don't want to
+  // bake stale timestamps at synthesis.
+  if (expiresInDaysRaw !== null) {
+    if (expiresInDaysRaw <= 0 || expiresInDaysRaw > 365) {
+      return NextResponse.json({ error: "expires_in_days must be between 1 and 365" }, { status: 400 });
+    }
+    expiresAt = new Date(Date.now() + expiresInDaysRaw * 24 * 60 * 60 * 1000);
   }
 
   try {

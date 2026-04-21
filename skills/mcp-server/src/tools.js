@@ -876,7 +876,8 @@ export const TOOLS = [
         name: str("Optional display name for the coupon (≤60 chars)."),
         code: str("Optional fixed redeemable code string. If omitted, Stripe auto-generates one."),
         max_redemptions: { type: "number", description: "Max total redemptions. Default 1 — per-contact unique code." },
-        expires_at: str("Optional ISO timestamp. Code becomes invalid after this moment."),
+        expires_at: str("Optional ISO timestamp. Code becomes invalid after this moment. Prefer expires_in_days for agent archetypes."),
+        expires_in_days: { type: "number", description: "Relative expiry: code becomes invalid N days after this call fires (1–365). Preferred over expires_at for agent archetypes so the window stays meaningful no matter when the agent was last deployed." },
         workspace_id: str("Optional. Falls back to the active workspace."),
       },
       [],
@@ -893,6 +894,7 @@ export const TOOLS = [
       if (args.code) body.code = args.code;
       if (typeof args.max_redemptions === "number") body.max_redemptions = args.max_redemptions;
       if (args.expires_at) body.expires_at = args.expires_at;
+      if (typeof args.expires_in_days === "number") body.expires_in_days = args.expires_in_days;
       return api("POST", "/coupons", { body, workspace_id: ws });
     },
   },

@@ -1,5 +1,6 @@
 import type { Archetype } from "./types";
 import { speedToLeadArchetype } from "./speed-to-lead";
+import { winBackArchetype } from "./win-back";
 
 // Archetype registry. One export per archetype file; adding a new
 // archetype is a new file + one import + one entry here. Keeps the
@@ -8,6 +9,7 @@ import { speedToLeadArchetype } from "./speed-to-lead";
 
 export const archetypes: Record<string, Archetype> = {
   "speed-to-lead": speedToLeadArchetype,
+  "win-back": winBackArchetype,
 };
 
 export function listArchetypes(): Archetype[] {

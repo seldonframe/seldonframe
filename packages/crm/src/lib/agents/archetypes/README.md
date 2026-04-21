@@ -47,7 +47,7 @@ Two conventions → two resolution paths → clean separation of "filled once pe
 ## Ship order (for 7.c — from `tasks/mcp-gap-audit-v2.md`)
 
 1. ✅ **Speed-to-Lead** — reference implementation.
-2. ⏳ **Win-Back** — event+wait shape with `create_coupon`.
+2. ✅ **Win-Back** — event+wait shape with `create_coupon`.
 3. ⏳ **Review Requester**.
 4. ⏳ **Client Onboarding**.
 5. ⏳ **Proposal Follow-Up**.
@@ -88,3 +88,67 @@ Each archetype ships with:
 - Booking assumes standard business-hours availability. `create_booking` schedules against the existing appointment type's availability window (Mon–Fri 9–5 by default, editable on `/bookings`). If the extracted `preferred_start` is outside that window, the booking create call 422s and the agent logs a fallback activity.
 
 **Live probe evidence:** see `tasks/phase-7-synthesis-spike/live-01-happy-path.json` from the 2026-04-21 post-7.h run. 5/5 determinism repeats converged on the same skeleton (`wait → conv:sms → create_booking → send_email`) with 0 hallucinations and 100% grounding.
+
+---
+
+## Archetype: Win-Back
+
+**ID:** `win-back`
+**Shipped:** 2026-04-21
+**Blocks required:** `crm`, `email`, `sms`, `payments`
+**Events used:** trigger = `subscription.cancelled`; produces `email.sent`, `sms.sent`.
+**Tools used:** `create_coupon`, `create_activity` (×2 — initiated + complete), `send_email`, `send_sms`.
+
+**What it does.** When a customer cancels their subscription, the agent immediately creates a per-contact unique Stripe promotion code (14-day expiry by default) on the workspace's connected Stripe account. It logs the initiation with the code captured in the activity metadata, waits 3 days, sends a warm brand-matched email referencing the code, waits 4 more days, sends a shorter SMS reminder with the same code, and logs sequence complete. The customer redeems the code at checkout if they come back — no auto-invoicing.
+
+**Flow (7 steps):**
+
+```
+trigger (subscription.cancelled)
+  ↓
+create_coupon (capture → coupon)
+  ↓
+create_activity (type: agent_action, includes {{coupon.code}})
+  ↓
+wait $initialDelaySeconds (default 3 days)
+  ↓
+send_email (references {{coupon.code}})
+  ↓
+wait $reminderDelaySeconds (default 4 days)
+  ↓
+send_sms (references {{coupon.code}}, shorter/less formal)
+  ↓
+create_activity (type: agent_action, sequence complete)
+```
+
+**Placeholders the user provides:**
+- `$discountPercent` — discount percentage (1–100). Common Win-Back range: 15–30.
+- `$couponDurationDays` — how many days the code stays redeemable. Default 14.
+- `$initialDelaySeconds` — delay before first email. Default 259200 (3 days).
+- `$reminderDelaySeconds` — delay before SMS reminder. Default 345600 (4 days).
+
+**Placeholders Claude fills from Soul:**
+- `$couponName` — human-readable coupon name for the Stripe dashboard.
+- `$winBackEmailSubject` / `$winBackEmailBody` — warm, on-brand, references `{{coupon.code}}`.
+- `$winBackSmsBody` — shorter, less formal, references `{{coupon.code}}` and the imminent expiry.
+
+**Why no `create_invoice` at the end (intentional omission).**
+
+The `create_invoice` tool exists (Phase 5.f) and Win-Back looks superficially like a flow that should end by sending the ex-customer an invoice pre-discounted with their coupon. The archetype deliberately stops at the SMS reminder and lets the customer self-serve via the coupon. Three reasons:
+
+1. **Chargeback risk.** Auto-billing a customer who just cancelled dramatically increases the odds of a dispute. Stripe's chargeback threshold is 1% — a single Win-Back-triggered chargeback per 100 customers tanks the SMB's processing risk rating.
+2. **Trust cost.** The customer cancelled. Sending a pre-filled invoice reads as hostile — "we didn't hear no." The coupon-plus-reminder pattern lets the customer *opt back in*, which preserves the relationship for the next cycle even if this one doesn't convert.
+3. **Attribution integrity.** A Win-Back redeemed at checkout carries the promotion code, which surfaces cleanly on the resulting `payment.completed` event for attribution. An auto-invoice doesn't require the code, so redemption-via-agent can't be cleanly distinguished from organic re-signup.
+
+`create_invoice` is still available to agents that genuinely need it (dunning, mid-cycle upgrades, etc.). It's specifically wrong for Win-Back's "offer, don't bill" shape.
+
+**Note on per-contact uniqueness.** The `create_coupon` tool (shipped in the pre-7.c micro-slice) creates a Stripe `Coupon` + a matching `PromotionCode` with `max_redemptions: 1` by default. Each call produces a new redeemable code string. Stripe natively supports this pattern — shared codes with per-contact redemption caps aren't needed. The returned `data.code` is the string agents embed in outgoing messages; the `data.couponId` + `data.promotionCodeId` are stored for audit.
+
+**New template feature used: `capture`.** The `create_coupon` step carries `capture: "coupon"`, which binds the tool's response `data` object to the `coupon` runtime variable. Downstream steps reference `{{coupon.code}}`, `{{coupon.couponId}}`, etc. The 7.e runtime (not yet shipped) will honor this; the validator accepts the field as-is. First use of `capture` in the archetype library — documented in `types.ts`.
+
+**Known limitations:**
+- Single-event trigger (`subscription.cancelled`). For `payment.failed`-triggered variant, clone + swap the trigger event. Multi-event triggers are V1.1.
+- Shared expiry window — every contact gets a unique code but all share `$couponDurationDays` from agent-fire time. Per-contact custom expiry is V1.1.
+- **Inactivity-based Win-Back (yoga / gym / fitness studios)** — requires Brain v2's `contact.inactive_Nd` synthetic event emitter. Not available in v1; attendance-based verticals get a "Coming V1.1" flag in the archetype library UI.
+
+**Live probe evidence:** pending — see `tasks/phase-7-archetype-probes/win-back.report.md` after the 3× probe run.
