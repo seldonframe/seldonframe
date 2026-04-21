@@ -5,13 +5,16 @@ import { db } from "@/db";
 import { activities, contacts, emails, organizations, users } from "@/db/schema";
 import { getCurrentUser, getOrgId } from "@/lib/auth/helpers";
 import { assertWritable } from "@/lib/demo/server";
-import { decryptValue } from "@/lib/encryption";
 import { emitSeldonEvent } from "@/lib/events/bus";
 import { isValidEventType } from "@/lib/events/event-types";
 import { recordEmailOpenedLearning, recordEmailSentLearning } from "@/lib/soul/learning";
 import { assertEmailSendLimit, incrementEmailSendUsage } from "@/lib/tier/limits";
 import { dispatchWebhook } from "@/lib/utils/webhooks";
-import { resolveDefaultFromEmail, resolveEmailProvider } from "./providers";
+import {
+  getEmailProvider,
+  resolveDefaultFromEmail,
+  resolveEmailProvider,
+} from "./providers";
 import { renderPlainEmailTemplate } from "./templates";
 
 type EmailTemplate = {
@@ -91,65 +94,6 @@ function buildTrackingPixel(emailId: string) {
   return `${baseUrl}/api/email/open/${emailId}`;
 }
 
-async function sendViaResend(params: {
-  orgId: string;
-  fromEmail: string;
-  toEmail: string;
-  subject: string;
-  html: string;
-  text: string;
-}) {
-  const apiKey = await resolveResendApiKey(params.orgId);
-
-  if (!apiKey) {
-    return null;
-  }
-
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from: params.fromEmail,
-      to: [params.toEmail],
-      subject: params.subject,
-      html: params.html,
-      text: params.text,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error("Resend send failed");
-  }
-
-  const payload = (await response.json()) as { id?: string };
-  return payload.id ?? null;
-}
-
-async function resolveResendApiKey(orgId: string) {
-  const [org] = await db
-    .select({ integrations: organizations.integrations })
-    .from(organizations)
-    .where(eq(organizations.id, orgId))
-    .limit(1);
-
-  const integrations = (org?.integrations ?? {}) as Record<string, unknown>;
-  const resend = integrations.resend as Record<string, unknown> | undefined;
-  const rawOrgKey = typeof resend?.apiKey === "string" ? resend.apiKey.trim() : "";
-
-  if (rawOrgKey) {
-    if (rawOrgKey.startsWith("v1.")) {
-      return decryptValue(rawOrgKey);
-    }
-
-    return rawOrgKey;
-  }
-
-  return process.env.RESEND_API_KEY?.trim() || "";
-}
-
 async function getOrgOwnerUserId(orgId: string) {
   const [owner] = await db.select({ id: users.id }).from(users).where(eq(users.orgId, orgId)).limit(1);
   return owner?.id ?? null;
@@ -225,19 +169,18 @@ async function sendEmailForOrg(params: {
 
   let externalMessageId = `${provider}-${Date.now()}`;
 
-  if (provider === "resend") {
-    const resendId = await sendViaResend({
+  const impl = getEmailProvider(provider);
+  if (impl) {
+    const result = await impl.send({
       orgId: params.orgId,
-      fromEmail: resolveDefaultFromEmail(),
-      toEmail: params.toEmail,
+      from: resolveDefaultFromEmail(),
+      to: params.toEmail,
       subject: params.subject,
       html: trackedHtml,
       text: rendered.text,
+      tags: [{ name: "email_id", value: created.id }],
     });
-
-    if (resendId) {
-      externalMessageId = resendId;
-    }
+    externalMessageId = result.externalMessageId;
   }
 
   await db
