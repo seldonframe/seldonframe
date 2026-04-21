@@ -12,7 +12,7 @@ export default function AuthLayout({
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            "radial-gradient(circle at 50% 30%, hsl(var(--primary) / 0.14) 0%, hsl(var(--primary) / 0.06) 28%, transparent 64%)",
+            "radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--primary) 14.00%, transparent) 0%, color-mix(in srgb, var(--primary) 6%, transparent) 28%, transparent 64%)",
         }}
       />
       <div className="relative w-full max-w-md rounded-2xl border border-border bg-card/95 p-6 shadow-sm backdrop-blur">

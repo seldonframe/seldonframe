@@ -6,36 +6,36 @@
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: 166 72% 40%;
-  --primary-foreground: 0 0% 100%;
+  --primary: oklch(0.675 0.126 171.53);              /* was hsl(166 72% 40%) — brand teal, canonical */
+  --primary-foreground: oklch(1 0 0);                /* was hsl(0 0% 100%) */
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
   --muted-foreground: oklch(0.556 0 0);
-  --accent: 166 22% 94%;
-  --accent-foreground: 166 40% 20%;
+  --accent: oklch(0.959 0.007 180.74);               /* was hsl(166 22% 94%) */
+  --accent-foreground: oklch(0.367 0.049 176.09);    /* was hsl(166 40% 20%) */
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.985 0 0);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
-  --ring: 166 72% 40%;
+  --ring: oklch(0.675 0.126 171.53);                 /* was hsl(166 72% 40%) — matches --primary */
 
-  --positive: 152 60% 42%;
-  --caution: 38 92% 50%;
-  --negative: 0 72% 51%;
+  --positive: oklch(0.660 0.141 157.72);             /* was hsl(152 60% 42%) */
+  --caution: oklch(0.770 0.165 70.61);               /* was hsl(38 92% 50%) */
+  --negative: oklch(0.579 0.214 27.17);              /* was hsl(0 72% 51%) */
 
-  --chart-1: 166 72% 40%;
-  --chart-2: 38 92% 50%;
-  --chart-3: 152 60% 42%;
-  --chart-4: 0 72% 51%;
-  --chart-5: 220 70% 55%;
+  --chart-1: oklch(0.675 0.126 171.53);              /* was hsl(166 72% 40%) — teal */
+  --chart-2: oklch(0.770 0.165 70.61);               /* was hsl(38 92% 50%) — amber */
+  --chart-3: oklch(0.660 0.141 157.72);              /* was hsl(152 60% 42%) — green */
+  --chart-4: oklch(0.579 0.214 27.17);               /* was hsl(0 72% 51%) — red */
+  --chart-5: oklch(0.572 0.174 262.35);              /* was hsl(220 70% 55%) — blue */
 
   --sidebar: oklch(1 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: 166 72% 40%;
-  --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 166 22% 94%;
-  --sidebar-accent-foreground: 166 40% 20%;
+  --sidebar-primary: oklch(0.675 0.126 171.53);      /* was hsl(166 72% 40%) */
+  --sidebar-primary-foreground: oklch(1 0 0);        /* was hsl(0 0% 100%) */
+  --sidebar-accent: oklch(0.959 0.007 180.74);       /* was hsl(166 22% 94%) */
+  --sidebar-accent-foreground: oklch(0.367 0.049 176.09); /* was hsl(166 40% 20%) */
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
 
@@ -58,36 +58,36 @@
   --card-foreground: oklch(0.975 0 0);
   --popover: oklch(0.175 0.002 286);
   --popover-foreground: oklch(0.975 0 0);
-  --primary: 170 72% 52%;
-  --primary-foreground: 0 0% 100%;
+  --primary: oklch(0.806 0.141 177.85);              /* was hsl(170 72% 52%) — dark-variant teal */
+  --primary-foreground: oklch(1 0 0);                /* was hsl(0 0% 100%) */
   --secondary: oklch(0.215 0.002 286);
   --secondary-foreground: oklch(0.975 0 0);
   --muted: oklch(0.205 0.002 286);
   --muted-foreground: oklch(0.72 0 0);
-  --accent: 170 18% 16%;
-  --accent-foreground: 170 20% 94%;
+  --accent: oklch(0.296 0.020 183.54);               /* was hsl(170 18% 16%) */
+  --accent-foreground: oklch(0.959 0.007 185.27);    /* was hsl(170 20% 94%) */
   --destructive: oklch(0.704 0.191 22.216);
   --destructive-foreground: oklch(0.985 0 0);
   --border: oklch(1 0 0 / 0.09);
   --input: oklch(1 0 0 / 0.12);
-  --ring: 170 72% 52%;
+  --ring: oklch(0.806 0.141 177.85);                 /* was hsl(170 72% 52%) — matches --primary */
 
-  --positive: 152 60% 46%;
-  --caution: 38 92% 56%;
-  --negative: 0 72% 62%;
+  --positive: oklch(0.705 0.152 157.63);             /* was hsl(152 60% 46%) */
+  --caution: oklch(0.793 0.158 74.65);               /* was hsl(38 92% 56%) */
+  --negative: oklch(0.644 0.174 23.34);              /* was hsl(0 72% 62%) */
 
-  --chart-1: 166 72% 46%;
-  --chart-2: 38 92% 56%;
-  --chart-3: 152 60% 46%;
-  --chart-4: 0 72% 62%;
-  --chart-5: 220 70% 62%;
+  --chart-1: oklch(0.749 0.141 171.39);              /* was hsl(166 72% 46%) */
+  --chart-2: oklch(0.793 0.158 74.65);               /* was hsl(38 92% 56%) */
+  --chart-3: oklch(0.705 0.152 157.63);              /* was hsl(152 60% 46%) */
+  --chart-4: oklch(0.644 0.174 23.34);               /* was hsl(0 72% 62%) */
+  --chart-5: oklch(0.635 0.145 262.87);              /* was hsl(220 70% 62%) */
 
   --sidebar: oklch(0.14 0.002 286);
   --sidebar-foreground: oklch(0.975 0 0);
-  --sidebar-primary: 170 72% 52%;
-  --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 170 16% 18%;
-  --sidebar-accent-foreground: 170 20% 94%;
+  --sidebar-primary: oklch(0.806 0.141 177.85);      /* was hsl(170 72% 52%) */
+  --sidebar-primary-foreground: oklch(1 0 0);        /* was hsl(0 0% 100%) */
+  --sidebar-accent: oklch(0.316 0.020 183.70);       /* was hsl(170 16% 18%) */
+  --sidebar-accent-foreground: oklch(0.959 0.007 185.27); /* was hsl(170 20% 94%) */
   --sidebar-border: oklch(1 0 0 / 0.08);
   --sidebar-ring: oklch(0.62 0 0);
 

@@ -161,38 +161,38 @@
   }
 
   .text-positive {
-    color: hsl(var(--positive));
+    color: var(--positive);
   }
 
   .text-caution {
-    color: hsl(var(--caution));
+    color: var(--caution);
   }
 
   .text-negative {
-    color: hsl(var(--negative));
+    color: var(--negative);
   }
 
   .bg-positive\/10 {
-    background-color: hsl(var(--positive) / 0.1);
+    background-color: color-mix(in srgb, var(--positive) 10%, transparent);
   }
 
   .bg-caution\/10 {
-    background-color: hsl(var(--caution) / 0.1);
+    background-color: color-mix(in srgb, var(--caution) 10%, transparent);
   }
 
   .bg-negative\/10 {
-    background-color: hsl(var(--negative) / 0.1);
+    background-color: color-mix(in srgb, var(--negative) 10%, transparent);
   }
 
   .border-positive\/20 {
-    border-color: hsl(var(--positive) / 0.2);
+    border-color: color-mix(in srgb, var(--positive) 20%, transparent);
   }
 
   .border-caution\/20 {
-    border-color: hsl(var(--caution) / 0.2);
+    border-color: color-mix(in srgb, var(--caution) 20%, transparent);
   }
 
   .border-negative\/20 {
-    border-color: hsl(var(--negative) / 0.2);
+    border-color: color-mix(in srgb, var(--negative) 20%, transparent);
   }
 }

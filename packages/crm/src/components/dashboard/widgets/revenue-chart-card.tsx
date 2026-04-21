@@ -95,8 +95,8 @@ export function RevenueChartCard({ title, data, ranges }: RevenueChartCardProps)
           <AreaChart data={filteredData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.2} />
-                <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.2} />
+                <stop offset="100%" stopColor="var(--primary)" stopOpacity={0} />
               </linearGradient>
             </defs>
             <CartesianGrid vertical={false} horizontal={false} />
@@ -111,11 +111,11 @@ export function RevenueChartCard({ title, data, ranges }: RevenueChartCardProps)
             <Area
               type="monotone"
               dataKey="value"
-              stroke="hsl(var(--primary))"
+              stroke="var(--primary)"
               strokeWidth={2}
               fill="url(#revenueGradient)"
               dot={false}
-              activeDot={{ r: 4, stroke: "hsl(var(--primary))", strokeWidth: 2, fill: "var(--background)" }}
+              activeDot={{ r: 4, stroke: "var(--primary)", strokeWidth: 2, fill: "var(--background)" }}
             />
           </AreaChart>
         </ResponsiveContainer>
