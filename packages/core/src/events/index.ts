@@ -14,6 +14,11 @@ export type SeldonEvent =
   | { type: "email.bounced"; data: { emailId: string; contactId: string | null; reason: string } }
   | { type: "email.replied"; data: { emailId: string; contactId: string | null; conversationId: string | null } }
   | { type: "email.suppressed"; data: { email: string; reason: string; contactId: string | null } }
+  | { type: "sms.sent"; data: { smsMessageId: string; contactId: string | null } }
+  | { type: "sms.delivered"; data: { smsMessageId: string; contactId: string | null } }
+  | { type: "sms.replied"; data: { smsMessageId: string; contactId: string | null; conversationId: string | null } }
+  | { type: "sms.failed"; data: { smsMessageId: string; contactId: string | null; reason: string } }
+  | { type: "sms.suppressed"; data: { phone: string; reason: string; contactId: string | null } }
   | { type: "conversation.turn.received"; data: { conversationId: string; turnId: string; contactId: string; channel: "email" | "sms" } }
   | { type: "conversation.turn.sent"; data: { conversationId: string; turnId: string; contactId: string; channel: "email" | "sms" } }
   | { type: "landing.visited"; data: { pageId: string; visitorId: string } }
