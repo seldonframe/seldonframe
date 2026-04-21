@@ -1,12 +1,19 @@
-name: Deploy Demo
+name: CI
+
+# Runs on every PR and every push to main. Fails closed on unit-test
+# failures so specs can't silently rot. Added 2026-04-21 as part of
+# Scope 3 Step 2b.1 PR 1 — before this, the repo had only a deploy
+# workflow (deploy-demo.yml) that ran on push-to-main without a test
+# gate.
 
 on:
-  workflow_dispatch:
+  pull_request:
+    branches: [main]
   push:
     branches: [main]
 
 jobs:
-  deploy:
+  unit-tests:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -28,12 +35,3 @@ jobs:
 
       - name: Unit tests
         run: pnpm test:unit
-
-      - name: Build
-        run: pnpm build
-
-      - name: Deploy to Vercel
-        run: npx vercel --prod --token=${{ secrets.VERCEL_TOKEN }}
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
