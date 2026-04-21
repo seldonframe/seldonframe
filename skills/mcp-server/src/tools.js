@@ -798,6 +798,105 @@ export const TOOLS = [
   // ════════════════════════════════════════════════════════════════════
 
   {
+    name: "create_activity",
+    description:
+      "Append an activity-log entry to a contact (and/or deal). Use this instead of stuffing agent reminders into contacts.notes — notes gets overwritten on updates; activities are append-only. Valid types: task, note, email, sms, call, meeting, stage_change, payment, review_request, agent_action. Example: create_activity({ contact_id: 'ctc_...', type: 'agent_action', subject: 'Speed-to-Lead agent booked consult', body: 'Scheduled for 2026-05-01' })",
+    inputSchema: obj(
+      {
+        contact_id: str("Contact to log against. Either contact_id or deal_id is required."),
+        deal_id: str("Deal to log against. Either contact_id or deal_id is required."),
+        type: str("task | note | email | sms | call | meeting | stage_change | payment | review_request | agent_action"),
+        subject: str("One-line title (≤200 chars). Either subject or body is required."),
+        body: str("Optional multi-line detail (≤4000 chars)."),
+        scheduled_at: str("Optional ISO timestamp if the activity is planned for a future time (e.g., a task)."),
+        completed_at: str("Optional ISO timestamp if logging a completed past action."),
+        metadata: {
+          type: "object",
+          description: "Optional JSON metadata — e.g., { agentId: 'agt_...', confidence: 0.87 }",
+        },
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["type"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      return api("POST", "/activities", {
+        body: {
+          contact_id: args.contact_id ?? null,
+          deal_id: args.deal_id ?? null,
+          type: args.type,
+          subject: args.subject ?? null,
+          body: args.body ?? null,
+          scheduled_at: args.scheduled_at ?? null,
+          completed_at: args.completed_at ?? null,
+          metadata: args.metadata ?? {},
+        },
+        workspace_id: ws,
+      });
+    },
+  },
+  {
+    name: "list_bookings",
+    description:
+      "List scheduled bookings (not appointment-type templates — see list_appointment_types for those). Supports filtering by contact, status, and date range. Default sort: most-recent-first; if `from` is set, switches to earliest-upcoming-first for reminder flows. Example: list_bookings({ from: '2026-04-22T00:00:00Z', limit: 20 })",
+    inputSchema: obj(
+      {
+        contact_id: str("Optional. Filter to a specific contact's bookings."),
+        status: str("Optional. Filter by status (scheduled | completed | cancelled | no_show)."),
+        from: str("Optional ISO timestamp. Only bookings starting at or after this moment."),
+        to: str("Optional ISO timestamp. Only bookings starting at or before this moment."),
+        limit: { type: "number", description: "Max rows (default 50, max 200)." },
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      [],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const params = new URLSearchParams();
+      if (args.contact_id) params.set("contact_id", args.contact_id);
+      if (args.status) params.set("status", args.status);
+      if (args.from) params.set("from", args.from);
+      if (args.to) params.set("to", args.to);
+      if (typeof args.limit === "number") params.set("limit", String(Math.min(args.limit, 200)));
+      const qs = params.toString();
+      return api("GET", `/bookings${qs ? `?${qs}` : ""}`, { workspace_id: ws });
+    },
+  },
+  {
+    name: "create_coupon",
+    description:
+      "Create a Stripe coupon + matching per-contact redeemable promotion code on the workspace's connected Stripe account. Use for Win-Back / retention agents that need UNIQUE codes per recipient (shared codes are vulnerable to abuse + lose attribution signal). Default max_redemptions=1 + auto-generated code string. Requires the workspace to have completed Stripe Connect onboarding. Example: create_coupon({ percent_off: 20, duration: 'once', name: 'Win-Back 20% off' })",
+    inputSchema: obj(
+      {
+        percent_off: { type: "number", description: "Discount percentage (0 < n ≤ 100). Either percent_off or amount_off is required." },
+        amount_off: { type: "number", description: "Flat discount in the currency's major unit (e.g., 25.00 for $25 off). Either percent_off or amount_off is required." },
+        currency: str("Only used with amount_off. 3-letter ISO code. Defaults to usd."),
+        duration: str("'once' (default) | 'forever' | 'repeating'. 'repeating' requires duration_in_months."),
+        duration_in_months: { type: "number", description: "Required when duration='repeating'." },
+        name: str("Optional display name for the coupon (≤60 chars)."),
+        code: str("Optional fixed redeemable code string. If omitted, Stripe auto-generates one."),
+        max_redemptions: { type: "number", description: "Max total redemptions. Default 1 — per-contact unique code." },
+        expires_at: str("Optional ISO timestamp. Code becomes invalid after this moment."),
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      [],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const body = {};
+      if (typeof args.percent_off === "number") body.percent_off = args.percent_off;
+      if (typeof args.amount_off === "number") body.amount_off = args.amount_off;
+      if (args.currency) body.currency = args.currency;
+      if (args.duration) body.duration = args.duration;
+      if (typeof args.duration_in_months === "number") body.duration_in_months = args.duration_in_months;
+      if (args.name) body.name = args.name;
+      if (args.code) body.code = args.code;
+      if (typeof args.max_redemptions === "number") body.max_redemptions = args.max_redemptions;
+      if (args.expires_at) body.expires_at = args.expires_at;
+      return api("POST", "/coupons", { body, workspace_id: ws });
+    },
+  },
+  {
     name: "create_booking",
     description:
       "Schedule a real booking against an existing appointment type. Looks up the template by id, creates a scheduled row on the workspace calendar, stamps the contact's name + email, emits booking.created, and — if the appointment type has a price > 0 — returns a Stripe Checkout URL routed to the SMB's connected Stripe account so the builder / agent can text or email the payment link to the contact. Example: create_booking({ contact_id: 'ctc_...', appointment_type_id: 'appt_...', starts_at: '2026-05-01T15:00:00Z' })",

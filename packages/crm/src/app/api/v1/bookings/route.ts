@@ -1,8 +1,65 @@
+import { and, asc, desc, eq, gte, lte, ne } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { db } from "@/db";
+import { bookings } from "@/db/schema";
 import { guardApiRequest } from "@/lib/api/guard";
 import { createBookingFromApi } from "@/lib/bookings/api";
 
 export const runtime = "nodejs";
+
+// GET shipped in 2026-04-21 pre-7.c micro-slice. Completes the
+// booking CRUD surface alongside create_booking (7.h). Appointment-
+// type templates (status='template') are excluded — this route only
+// returns real scheduled bookings.
+export async function GET(request: Request) {
+  const guard = await guardApiRequest(request);
+  if ("error" in guard) return guard.error;
+
+  const url = new URL(request.url);
+  const limit = Math.min(Number(url.searchParams.get("limit") ?? "50"), 200);
+  const contactId = url.searchParams.get("contact_id");
+  const status = url.searchParams.get("status");
+  const fromRaw = url.searchParams.get("from");
+  const toRaw = url.searchParams.get("to");
+
+  const filters = [eq(bookings.orgId, guard.orgId), ne(bookings.status, "template")];
+  if (contactId) filters.push(eq(bookings.contactId, contactId));
+  if (status) filters.push(eq(bookings.status, status));
+  if (fromRaw) {
+    const from = new Date(fromRaw);
+    if (!Number.isNaN(from.getTime())) filters.push(gte(bookings.startsAt, from));
+  }
+  if (toRaw) {
+    const to = new Date(toRaw);
+    if (!Number.isNaN(to.getTime())) filters.push(lte(bookings.startsAt, to));
+  }
+
+  // Future bookings sorted earliest-first is the more-useful default
+  // for reminder-style agents; past bookings are reverse-chronological.
+  // Sort by startsAt asc when a future filter is in play, desc otherwise.
+  const orderCol = fromRaw ? asc(bookings.startsAt) : desc(bookings.startsAt);
+
+  const rows = await db
+    .select({
+      id: bookings.id,
+      contactId: bookings.contactId,
+      title: bookings.title,
+      bookingSlug: bookings.bookingSlug,
+      status: bookings.status,
+      startsAt: bookings.startsAt,
+      endsAt: bookings.endsAt,
+      fullName: bookings.fullName,
+      email: bookings.email,
+      meetingUrl: bookings.meetingUrl,
+      createdAt: bookings.createdAt,
+    })
+    .from(bookings)
+    .where(and(...filters))
+    .orderBy(orderCol)
+    .limit(limit);
+
+  return NextResponse.json({ data: rows });
+}
 
 export async function POST(request: Request) {
   const guard = await guardApiRequest(request);

@@ -1,10 +1,21 @@
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { intakeForms } from "@/db/schema";
+import { intakeForms, organizations } from "@/db/schema";
 import { resolveOrgIdForWrite, resolveV1Identity } from "@/lib/auth/v1-identity";
 import { assertWritable, demoApiBlockedResponse, isDemoReadonly } from "@/lib/demo/server";
 import { logEvent } from "@/lib/observability/log";
+
+// Public-URL pattern lives at packages/crm/src/app/forms/[id]/[formSlug]/page.tsx
+// — despite the dir name, `[id]` is the org slug and `[formSlug]` is the form's
+// slug. Encapsulating that knowledge here prevents every archetype / agent
+// spec from depending on the internal route shape. Shipped 2026-04-21 in the
+// pre-7.c micro-slice after MCP gap audit v2.
+function buildPublicFormUrl(orgSlug: string | null, formSlug: string) {
+  const origin = (process.env.NEXT_PUBLIC_APP_URL ?? "https://app.seldonframe.com").replace(/\/+$/, "");
+  if (!orgSlug) return null;
+  return `${origin}/forms/${orgSlug}/${formSlug}`;
+}
 
 // The `id` segment accepts EITHER the uuid primary key OR the slug. Slug
 // lookups are the common MCP case (`update_form({ form_slug: 'intake' })`);
@@ -81,6 +92,12 @@ export async function GET(
   const form = await findForm(resolved.orgId, id);
   if (!form) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+  const [org] = await db
+    .select({ slug: organizations.slug })
+    .from(organizations)
+    .where(eq(organizations.id, resolved.orgId))
+    .limit(1);
+
   return NextResponse.json({
     ok: true,
     form: {
@@ -90,6 +107,7 @@ export async function GET(
       fields: form.fields,
       settings: form.settings,
       is_active: form.isActive,
+      public_url: buildPublicFormUrl(org?.slug ?? null, form.slug),
     },
   });
 }
