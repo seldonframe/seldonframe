@@ -456,11 +456,16 @@ async function main() {
   await fs.writeFile(path.join(outDir, `${archetypeId}.report.md`), md);
 
   console.log(`\nReport: ${path.relative(process.cwd(), path.join(outDir, `${archetypeId}.report.md`))}`);
-  process.exit(passed ? 0 : 1);
+  // Set exitCode and let Node drain the event loop naturally. Using
+  // process.exit() here races libuv's cleanup of the Anthropic SDK's
+  // keep-alive HTTPS sockets on Windows, triggering a cosmetic
+  // "UV_HANDLE_CLOSING" assertion after the report is already written.
+  // Natural exit avoids it.
+  process.exitCode = passed ? 0 : 1;
 }
 
 main().catch((err) => {
   console.error("\nFatal error during archetype probe:");
   console.error(err);
-  process.exit(1);
+  process.exitCode = 1;
 });
