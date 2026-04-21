@@ -48,7 +48,7 @@
 
 - **`payment_records.bookingId`** — foreign key with `ON DELETE SET NULL`. A booking can have one or more payment records linked by this FK. Booking deletion leaves payment rows intact (FK nulls out); booking cancellation today does not touch payments.
 - **`createBookingCheckoutSession`** + **`handleStripeCheckoutCompleted`** (`packages/crm/src/lib/payments/actions.ts`) — on a paid booking, the Stripe checkout flow sets `bookings.metadata.paymentStatus = "paid"` + `checkoutSessionId`. Cancel/reschedule logic must not silently invalidate these fields.
-- **Google Calendar sync** — `deleteGoogleCalendarBookingEvent` on cancel, `syncBookingWithGoogleCalendar` on create. Reschedule needs an analog: either delete-and-recreate or a true move.
+- **Google Calendar sync** — `deleteGoogleCalendarBookingEvent` on cancel, `syncBookingWithGoogleCalendar` on create. Reschedule uses **true-move** (see semantics decisions): `syncBookingWithGoogleCalendar` with the existing `externalEventId` PATCHes the event in place, preserving the Calendar event id.
 
 ---
 
@@ -65,7 +65,7 @@ Rationale:
 
 **What 2a DOES do:**
 - `cancel_booking` → sets `bookings.status = 'cancelled'`, sets `cancelledAt`, deletes Google Calendar event, emits `booking.cancelled`. Does NOT touch payments. Response payload includes `linkedPaymentIds: string[]` so agents can see which payments remain if they want to refund.
-- `reschedule_booking` → updates `bookings.startsAt` + `bookings.endsAt`, updates Google Calendar event (delete + recreate for simplicity; true move is future work), emits `booking.rescheduled`. Does NOT touch payments. Payment records keep their `bookingId` FK — the deposit stays linked.
+- `reschedule_booking` → updates `bookings.startsAt` + `bookings.endsAt`, updates Google Calendar event via **true-move** (PATCH through `syncBookingWithGoogleCalendar` with the existing `externalEventId` — event id preserved; attendee invites update in place rather than blinking off and on), emits `booking.rescheduled`. Does NOT touch payments. Payment records keep their `bookingId` FK — the deposit stays linked.
 
 **What's explicitly NOT in 2a scope:**
 - Automatic refund on cancel.
@@ -152,8 +152,8 @@ After 2a.3 ships + BLOCK.md update lands. Await Max's approval of 2a results bef
 
 ## Open questions (surface now, not mid-implementation)
 
-1. **Google Calendar reschedule — true-move vs delete-recreate?**
-   Delete-recreate is simpler + matches existing cancel logic. True-move preserves the Calendar event id (better UX for attendees with the event on their calendars). **Decision: delete-recreate for v1**, flagged as V1.1 polish. If Max prefers true-move, add ~1 day of scope.
+1. **Google Calendar reschedule — true-move (canonical spec).**
+   On implementation we found `syncBookingWithGoogleCalendar` already PATCHes the event in place when `externalEventId` is set — true-move costs zero additional code on top of the existing sync helper. The event id is preserved, attendees' invites update in place rather than blinking off and on, and delete-recreate has no remaining advantage. **Decision: true-move is the canonical reschedule approach.** Delete-recreate is removed as an option. 2a.3 shipped on this spec (commit `a2397b64`).
 2. **Reschedule changing the appointment type?**
    The archetype-confirmer use case wants "move from 30-min consult to 60-min emergency visit." Reschedule API signature: just `starts_at`, or also optional `appointment_type_id`? **Decision: `starts_at` only for 2a.** Changing appointment type is a different composition (cancel + create). Keeps 2a.3 tight.
 3. **Bulk reschedule / cancel?**
