@@ -215,16 +215,20 @@ Links a Booking to external artifacts (calendar event ids, meeting urls).
 
 Machine-readable contract consumed by Phase 7 agent synthesis. Event names use the canonical dot-notation vocabulary from `packages/core/src/events/index.ts` (`SeldonEvent` union) — distinct from the `BrainEventType` names in the `## Events` section above, which are the legacy Brain v2 operator-log names. Both coexist; synthesis reads only this section.
 
-produces: [booking.created, booking.completed, booking.cancelled, booking.no_show]
+produces: [booking.created, booking.completed, booking.cancelled, booking.rescheduled, booking.no_show]
 consumes: [workspace.soul.business_type, workspace.soul.availability_timezone, workspace.soul.team_members, contact.id]
-verbs: [book, schedule, appointment, availability, meeting, calendar, consultation, discovery call]
+verbs: [book, schedule, appointment, availability, meeting, calendar, consultation, discovery call, reschedule, cancel, move, fetch]
 compose_with: [crm, formbricks-intake, email, sms, payments, automation, brain-v2]
 
 ### MCP tools that emit these events
 
-Phase 7 synthesis uses this pointer to wire agents that need to schedule an appointment on behalf of a contact. Added 2026-04-21 (Phase 7.h) after the 7.a live run confirmed the gap was blocking Speed-to-Lead synthesis end-to-end.
+Phase 7 synthesis uses this pointer to wire agents that need to schedule, read, move, or cancel an appointment on behalf of a contact. The full booking CRUD surface landed in Scope 3 Step 2a (2026-04-21) on top of the 7.h `create_booking` baseline — all four mutation/read tools are now available for composition.
 
 - `create_booking({contact_id, appointment_type_id, starts_at, notes?})` → `booking.created`. Reads the appointment-type template (duration + price), schedules a real booking on the workspace calendar, stamps contact name + email, emits the event, and — when the appointment type has a price — returns a Stripe Checkout URL routed through the SMB's connected Stripe account so the agent can text or email the payment link.
+- `list_bookings({contact_id?, status?, from?, to?, limit?})` — read-only enumeration. Filters by contact, status, date range; sort flips to earliest-upcoming-first when `from` is set (useful for reminder agents).
+- `get_booking({booking_id})` — single-row fetch with full detail (contact, times, status, notes, meeting URL, cancellation stamp, metadata). 404s across workspaces (cross-org ids are indistinguishable from unknown ids).
+- `cancel_booking({booking_id})` → `booking.cancelled`. Idempotent: second cancel returns `alreadyCancelled: true` with no duplicate events. Returns `linkedPaymentIds` so the agent can compose `refund_payment` if the business rule is "cancel AND refund the deposit" — cancel by itself does NOT touch payments.
+- `reschedule_booking({booking_id, starts_at})` → `booking.rescheduled`. Preserves duration (so a 30-min consult stays 30 mins at the new time) and updates the Google Calendar event in place (event id preserved). Event payload carries both `previousStartsAt` and `newStartsAt` so follow-up agents can describe the change. Rejects past-dated `starts_at` (400) and refuses to reschedule a cancelled booking (422 — start a new booking instead). Does NOT change appointment type; does NOT touch linked payments.
 - `create_appointment_type` / `update_appointment_type` / `list_appointment_types` manage the templates; `create_booking` is the one that actually schedules against them.
 - `configure_booking` updates workspace-level booking defaults (no event emission).
 

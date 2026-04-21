@@ -6,6 +6,7 @@ export const BUILT_IN_EVENT_TYPE_SUGGESTIONS = [
   "booking.created",
   "booking.completed",
   "booking.cancelled",
+  "booking.rescheduled",
   "booking.no_show",
   "email.sent",
   "email.delivered",

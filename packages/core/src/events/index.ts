@@ -6,6 +6,7 @@ export type SeldonEvent =
   | { type: "booking.created"; data: { appointmentId: string; contactId: string } }
   | { type: "booking.completed"; data: { appointmentId: string; contactId: string } }
   | { type: "booking.cancelled"; data: { appointmentId: string; contactId: string } }
+  | { type: "booking.rescheduled"; data: { appointmentId: string; contactId: string | null; previousStartsAt: string; newStartsAt: string } }
   | { type: "booking.no_show"; data: { appointmentId: string; contactId: string } }
   | { type: "email.sent"; data: { emailId: string; contactId: string } }
   | { type: "email.delivered"; data: { emailId: string; contactId: string | null } }

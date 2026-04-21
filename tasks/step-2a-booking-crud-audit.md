@@ -21,7 +21,9 @@
 | **`list_bookings`** | ✅ **already shipped** | pre-7.c micro-slice — `bb328ced` |
 | `get_booking` | ✅ **shipped 2a.1** | this slice |
 | `cancel_booking` | ✅ **shipped 2a.2** | this slice |
-| `reschedule_booking` | ❌ missing | 2a.3 scope |
+| `reschedule_booking` | ✅ **shipped 2a.3** | this slice |
+
+**Step 2a complete as of 2026-04-21.** Tool count: 79 → 82. Event vocabulary gained `booking.rescheduled`. Composition contract updated. Ready for Max's validation before advancing to Scope 3 Step 2b.1 (composition contract v2 schema design + CRM block migration).
 
 **2a scope is 3 tools, not 4.** `list_bookings` was shipped in the pre-7.c micro-slice. Confirmed via `grep` on `skills/mcp-server/src/tools.js`.
 
