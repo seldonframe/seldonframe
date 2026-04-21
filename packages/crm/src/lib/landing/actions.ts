@@ -1,6 +1,7 @@
 "use server";
 
 import { and, eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import { contacts, landingPages, organizations } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
@@ -300,6 +301,18 @@ export async function publishLandingPageAction(pageId: string, published: boolea
 
   if (!row) {
     return;
+  }
+
+  // Bust ISR cache for the public URL so the change is visible
+  // immediately — `export const revalidate = 3600` on the page route
+  // otherwise serves stale content until the window expires.
+  const [org] = await db
+    .select({ slug: organizations.slug })
+    .from(organizations)
+    .where(eq(organizations.id, orgId))
+    .limit(1);
+  if (org?.slug) {
+    revalidatePath(`/l/${org.slug}/${row.slug}`);
   }
 
   if (published) {

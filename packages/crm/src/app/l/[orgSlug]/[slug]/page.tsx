@@ -1,11 +1,19 @@
 import { notFound } from "next/navigation";
 import { PoweredByBadge } from "@seldonframe/core/virality";
 import { PageRenderer } from "@/components/landing/page-renderer";
+import { VisitBeacon } from "@/components/landing/visit-beacon";
 import { PublicThemeProvider } from "@/components/theme/public-theme-provider";
 import { shouldShowPoweredByBadgeForOrg } from "@/lib/billing/public";
-import { getPublicLandingPage, trackLandingVisitAction } from "@/lib/landing/actions";
+import { getPublicLandingPage } from "@/lib/landing/actions";
 import { getPublicOrgThemeById } from "@/lib/theme/actions";
 import type { LandingSection } from "@/lib/landing/types";
+
+// Enable ISR with a 1-hour default revalidation window. On explicit
+// publish we also call revalidatePath from publishLandingPageAction
+// to bust the cache immediately. Visit tracking moved to a client
+// beacon (see VisitBeacon) so the cached page still emits one
+// landing.visited event per real browser view.
+export const revalidate = 3600;
 
 export default async function PublicLandingPage({
   params,
@@ -22,11 +30,6 @@ export default async function PublicLandingPage({
   const showBadge = await shouldShowPoweredByBadgeForOrg(payload.orgId);
   const theme = await getPublicOrgThemeById(payload.orgId);
 
-  await trackLandingVisitAction({
-    pageId: payload.page.id,
-    visitorId: `${orgSlug}:${slug}`,
-  });
-
   if (payload.page.contentHtml && payload.page.contentCss) {
     return (
       <PublicThemeProvider theme={theme}>
@@ -38,6 +41,7 @@ export default async function PublicLandingPage({
               <PoweredByBadge />
             </div>
           ) : null}
+          <VisitBeacon pageId={payload.page.id} />
         </main>
       </PublicThemeProvider>
     );
@@ -52,6 +56,7 @@ export default async function PublicLandingPage({
             <PoweredByBadge />
           </div>
         ) : null}
+        <VisitBeacon pageId={payload.page.id} />
       </main>
     </PublicThemeProvider>
   );
