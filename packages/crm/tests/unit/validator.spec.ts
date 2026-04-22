@@ -386,3 +386,69 @@ describe("validateAgentSpec — bad_capture_name", () => {
     assert.ok(!issues.some((i) => i.code === "bad_capture_name"));
   });
 });
+
+// ---------------------------------------------------------------------
+// M4 — conversation step (on_exit.extract shape)
+// ---------------------------------------------------------------------
+
+describe("validateAgentSpec — bad_extract_shape", () => {
+  test("flags extract keys that are not lowercase identifiers", () => {
+    const spec = {
+      name: "x",
+      description: "x",
+      trigger: { type: "event", event: "form.submitted" },
+      steps: [
+        {
+          id: "qualify",
+          type: "conversation",
+          channel: "sms",
+          initial_message: "Hi",
+          exit_when: "done",
+          on_exit: {
+            extract: {
+              "Bad-Key": "oops",
+              "1starts": "also oops",
+              "preferred.start": "dot in key",
+            },
+            next: null,
+          },
+        },
+      ],
+    };
+    const issues = validateAgentSpec(spec, makeRegistryWithCreateContact(), testEventRegistry);
+    const matches = issues.filter((i) => i.code === "bad_extract_shape");
+    assert.equal(matches.length, 3, `expected 3 bad_extract_shape issues, got ${matches.length}`);
+  });
+
+  test("accepts extract keys that ARE lowercase identifiers", () => {
+    const spec = {
+      name: "x",
+      description: "x",
+      trigger: { type: "event", event: "form.submitted" },
+      steps: [
+        {
+          id: "qualify",
+          type: "conversation",
+          channel: "sms",
+          initial_message: "Hi",
+          exit_when: "done",
+          on_exit: {
+            extract: {
+              preferred_start: "ISO datetime",
+              insurance_status: "yes|no|unsure",
+            },
+            next: null,
+          },
+        },
+      ],
+    };
+    const issues = validateAgentSpec(spec, makeRegistryWithCreateContact(), testEventRegistry);
+    assert.ok(!issues.some((i) => i.code === "bad_extract_shape"));
+  });
+
+  test("speed-to-lead fixture has valid extract keys", () => {
+    const spec = loadFixture("speed-to-lead.valid.json");
+    const issues = validateAgentSpec(spec, makeRegistryWithCreateContact(), testEventRegistry);
+    assert.ok(!issues.some((i) => i.code === "bad_extract_shape"));
+  });
+});

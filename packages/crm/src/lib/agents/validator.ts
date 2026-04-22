@@ -195,11 +195,13 @@ export function validateAgentSpec(
 
   // Build next-step reference set for unknown_step_next checks.
   const stepIds = new Set(spec.steps.map((s) => s.id));
-  // Capture bindings accumulate as we walk steps in declaration order.
-  // M5's interpolation resolver reads this to check {{capture.field}}.
+  // Capture + extract bindings accumulate as we walk steps in
+  // declaration order. M5's interpolation resolver reads both to
+  // check {{capture.field}} and {{extract}} references.
   const capturedBindings = new Set<string>();
+  const extractBindings = new Set<string>();
   for (const step of spec.steps) {
-    validateStep(step, spec, stepIds, registry, capturedBindings, issues);
+    validateStep(step, spec, stepIds, registry, capturedBindings, extractBindings, issues);
   }
 
   return issues;
@@ -215,6 +217,7 @@ function validateStep(
   stepIds: Set<string>,
   registry: BlockRegistry,
   capturedBindings: Set<string>,
+  extractBindings: Set<string>,
   issues: ValidationIssue[],
 ): void {
   // `next` reference check applies uniformly across step types.
@@ -237,8 +240,7 @@ function validateStep(
       validateMcpToolCallStep(step as McpToolCallStep, registry, capturedBindings, issues);
       return;
     case "conversation":
-      // M4 fills this in — on_exit.extract shape + exit_when predicate
-      // surface.
+      validateConversationStep(step as ConversationStep, extractBindings, issues);
       return;
     default:
       issues.push({
@@ -301,5 +303,40 @@ function validateMcpToolCallStep(
     } else {
       capturedBindings.add(step.capture);
     }
+  }
+}
+
+// ---------------------------------------------------------------------
+// conversation validation (M4)
+// ---------------------------------------------------------------------
+
+// Extract-field names follow the same identifier rules as captures so
+// downstream {{field_name}} references parse unambiguously. The shape
+// of the value (NL description today, typed ExtractField shape once
+// conversations migrate to typed exits per audit §2.b) is future-
+// proofed here: string values are NL descriptions and pass through;
+// the typed migration will layer an additional check when it lands.
+const EXTRACT_KEY_PATTERN = /^[a-z][a-zA-Z0-9_]*$/;
+
+function validateConversationStep(
+  step: ConversationStep,
+  extractBindings: Set<string>,
+  issues: ValidationIssue[],
+): void {
+  for (const key of Object.keys(step.on_exit.extract)) {
+    if (!EXTRACT_KEY_PATTERN.test(key)) {
+      issues.push({
+        code: "bad_extract_shape",
+        stepId: step.id,
+        path: `on_exit.extract.${key}`,
+        message: `extract key "${key}" must be a lowercase identifier matching /^[a-z][a-zA-Z0-9_]*$/ so downstream {{${key}}} references are unambiguous`,
+      });
+      continue;
+    }
+    // Track as an interpolation source for M5's resolver. We don't
+    // error on collision across conversations in the same spec —
+    // current archetypes never hit it, and runtime semantics for
+    // cross-conversation shadowing aren't in 2b.1 scope.
+    extractBindings.add(key);
   }
 }
