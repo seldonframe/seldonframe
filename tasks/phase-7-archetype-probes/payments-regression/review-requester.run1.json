@@ -25,7 +25,7 @@
       "args": {
         "to": "{{email}}",
         "subject": "Thanks for visiting Bright Smile — how did we do?",
-        "body": "Hi {{firstName}},\n\nThanks so much for coming in to see us. We know a trip to the dentist isn't everyone's favourite thing, so it genuinely means a lot that you trusted us with your smile.\n\nIf you have 30 seconds, we'd really appreciate a quick review — honest words from patients like you are how other nervous folks find us and decide to book their first visit:\n\nhttps://g.page/r/Ca-example-business/review\n\nAnd if something wasn't quite right — anything at all — just hit reply. We'd rather hear it from you directly so we can make it right.\n\nThanks again,\nThe Bright Smile Dental team",
+        "body": "Hi {{firstName}},\n\nThanks so much for coming in to see us at Bright Smile Dental. We know the dentist isn't everyone's favorite stop on the calendar, so it genuinely means a lot that you trusted us with your visit.\n\nIf you have 30 seconds, a quick review helps other folks who are nervous about finding a dentist know what to expect:\n\nhttps://g.page/r/Ca-example-business/review\n\nAnd if something wasn't quite right — please just hit reply. We'd rather hear it from you directly so we can make it right.\n\nThanks again, and take care of those teeth.\n\n— The Bright Smile team",
         "contactId": "{{contactId}}"
       },
       "next": "wait_before_sms"
@@ -42,7 +42,7 @@
       "tool": "send_sms",
       "args": {
         "to": "{{phone}}",
-        "body": "Hi {{firstName}}, it's Bright Smile Dental — quick follow-up: if you have 30 seconds, we'd love a short review. It really helps other patients find us: https://g.page/r/Ca-example-business/review. Thank you!",
+        "body": "Hi {{firstName}}, it's Bright Smile Dental — quick follow-up: if you have 30 seconds, we'd really appreciate a short review. Thank you! https://g.page/r/Ca-example-business/review",
         "contact_id": "{{contactId}}"
       },
       "next": "log_review_request_complete"

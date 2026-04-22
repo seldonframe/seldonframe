@@ -42,7 +42,7 @@ describe("core blocks — v1 parse + v2 parse coexistence", () => {
     { name: "caldiy-booking", produces: 5, composeMin: 6, isV2: true },
     { name: "email", produces: 9, composeMin: 6, isV2: true },
     { name: "sms", produces: 7, composeMin: 6, isV2: true },
-    { name: "payments", produces: 14, composeMin: 5, isV2: false },
+    { name: "payments", produces: 14, composeMin: 5, isV2: true },
     { name: "formbricks-intake", produces: 2, composeMin: 5, isV2: false },
     { name: "landing-pages", produces: 5, composeMin: 7, isV2: false },
   ];
@@ -62,7 +62,7 @@ describe("core blocks — v1 parse + v2 parse coexistence", () => {
 });
 
 describe("validator — v1 blocks get legacy_contract; v2 blocks don't", () => {
-  for (const name of ["crm", "caldiy-booking", "email", "sms"]) {
+  for (const name of ["crm", "caldiy-booking", "email", "sms", "payments"]) {
     test(`${name} (v2-migrated) does NOT surface legacy_contract`, () => {
       const parsed = parseBlockMd(readBlock(name));
       const warnings = validateCompositionContract(parsed);
@@ -74,7 +74,7 @@ describe("validator — v1 blocks get legacy_contract; v2 blocks don't", () => {
     });
   }
 
-  for (const name of ["payments", "formbricks-intake", "landing-pages"]) {
+  for (const name of ["formbricks-intake", "landing-pages"]) {
     test(`${name} (still on v1) surfaces exactly one legacy_contract warning and no errors`, () => {
       const parsed = parseBlockMd(readBlock(name));
       const warnings = validateCompositionContract(parsed);

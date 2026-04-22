@@ -213,7 +213,7 @@ Requires installed: crm, email, sms, payments
     produces: [landing.published, landing.unpublished, landing.updated, landing.visited, landing.converted]
     verbs: [page, landing, website, publish, generate page, copy, homepage, squeeze, hero, cta, funnel, optin]
 - payments:
-    produces: [payment.completed, payment.failed, payment.refunded, payment.disputed, invoice.created, invoice.sent, invoice.paid, invoice.past_due, invoice.voided, subscription.created, subscription.updated, subscription.renewed, subscription.cancelled, subscription.trial_will_end]
+    produces: [{"event": "payment.completed"}, {"event": "payment.failed"}, {"event": "payment.refunded"}, {"event": "payment.disputed"}, {"event": "invoice.created"}, {"event": "invoice.sent"}, {"event": "invoice.paid"}, {"event": "invoice.past_due"}, {"event": "invoice.voided"}, {"event": "subscription.created"}, {"event": "subscription.updated"}, {"event": "subscription.renewed"}, {"event": "subscription.cancelled"}, {"event": "subscription.trial_will_end"}]
     verbs: [invoice, bill, charge, collect, payment, subscribe, subscription, recurring, refund, cancel, dunning, past due, failed payment]
 
 ## MCP tool catalog (all tools currently present)

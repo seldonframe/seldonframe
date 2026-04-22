@@ -57,8 +57,8 @@
       "tool": "send_email",
       "args": {
         "to": "{{email}}",
-        "subject": "A small thank-you from Bright Smile — 20% off when you're ready",
-        "body": "Hi {{firstName}},\n\nWe noticed you stepped away from your subscription with us at Bright Smile Dental — no guilt, no pressure. Life gets full, and dental care should never feel like one more thing weighing on you.\n\nIf you ever want to come back, here's a little something to make it easier — 20% off your next visit:\n\n{{coupon.code}}\n\nIt's good for the next 14 days. Just use it at checkout when you book.\n\nAnd if something about your last experience wasn't quite right, I'd really like to hear it — hit reply and it comes straight to us. We read every one.\n\nTake care of yourself,\nThe Bright Smile Dental team",
+        "subject": "A little something from Bright Smile — 20% off whenever you're ready",
+        "body": "Hi {{firstName}},\n\nWe saw you cancelled your plan with us — no hard feelings, life gets busy and teeth can wait (well, sort of).\n\nIf you ever want to come back for a cleaning or just a check-in, here's a small thank-you for being part of Bright Smile: 20% off your next visit with this code.\n\n{{coupon.code}}\n\nIt's good for the next 14 days, and you can use it at checkout when you book.\n\nAnd if something about your experience wasn't quite right, I'd genuinely love to hear about it — just hit reply. We're always trying to make dental care feel less scary, and honest feedback is how we get there.\n\nTake care,\nThe Bright Smile Dental team",
         "contactId": "{{contactId}}"
       },
       "next": "wait_before_reminder"
@@ -75,7 +75,7 @@
       "tool": "send_sms",
       "args": {
         "to": "{{phone}}",
-        "body": "Hi {{firstName}}, it's Bright Smile Dental — just a gentle heads up that your 20% off code {{coupon.code}} is still good for about a week. No pressure, here whenever you're ready.",
+        "body": "Hey {{firstName}}, quick note from Bright Smile Dental — your 20% off code {{coupon.code}} is still good for a few more days if you'd like to book a cleaning. No pressure either way!",
         "contact_id": "{{contactId}}"
       },
       "next": "log_winback_complete"

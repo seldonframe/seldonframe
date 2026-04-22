@@ -714,6 +714,7 @@ describe("validateAgentSpec — capture field resolution (the audit's named bug 
 // ---------------------------------------------------------------------
 
 import { CRM_TOOLS } from "../../src/blocks/crm.tools";
+import { PAYMENTS_TOOLS } from "../../src/blocks/payments.tools";
 
 /** Test-only stub for tools not yet Zod-schema'd (ships in 2b.2). */
 function stubTool(name: string, args: z.ZodType, returns: z.ZodType, emits: string[] = []): ToolDefinition {
@@ -757,24 +758,15 @@ function makeIntegrationRegistry(): BlockRegistry {
       ["sms.sent"],
     ),
   });
-  tools.set("create_coupon", {
-    blockSlug: "payments",
-    tool: stubTool(
-      "create_coupon",
-      z.object({
-        percent_off: z.number().optional(),
-        amount_off: z.number().optional(),
-        duration: z.string().optional(),
-        name: z.string().optional(),
-        max_redemptions: z.number().optional(),
-        expires_in_days: z.number().optional(),
-      }),
-      z.object({
-        data: z.object({ couponId: z.string(), promotionCodeId: z.string(), code: z.string() }),
-      }),
-      [],
-    ),
-  });
+  // Real Payments tools from 2b.2 block 4 (replaces the 2b.1 stub).
+  // create_coupon's `returns` shape preserves `{data: {couponId,
+  // promotionCodeId, code}}` exactly — Win-Back archetype threads
+  // {{coupon.code}} through multiple downstream steps, and the
+  // validator's namesake test ({{coupon.couponCode}} mistyped) relies
+  // on `code` living at the top level of `data`.
+  for (const tool of PAYMENTS_TOOLS) {
+    tools.set(tool.name, { blockSlug: "payments", tool });
+  }
 
   return {
     tools,
@@ -783,7 +775,25 @@ function makeIntegrationRegistry(): BlockRegistry {
       ["caldiy-booking", new Set(["booking.created"])],
       ["email", new Set(["email.sent"])],
       ["sms", new Set(["sms.sent"])],
-      ["payments", new Set()],
+      [
+        "payments",
+        new Set([
+          "payment.completed",
+          "payment.failed",
+          "payment.refunded",
+          "payment.disputed",
+          "invoice.created",
+          "invoice.sent",
+          "invoice.paid",
+          "invoice.past_due",
+          "invoice.voided",
+          "subscription.created",
+          "subscription.updated",
+          "subscription.renewed",
+          "subscription.cancelled",
+          "subscription.trial_will_end",
+        ]),
+      ],
     ]),
   };
 }
@@ -959,6 +969,29 @@ describe("2b.2 Email regression — 9 live-probe outputs validate clean", () => 
 // regression below catches it.
 describe("2b.2 SMS regression — 9 live-probe outputs validate clean", () => {
   const regressionDir = path.join(PROBES_DIR, "sms-regression");
+  for (const arch of ["speed-to-lead", "win-back", "review-requester"]) {
+    for (const run of [1, 2, 3]) {
+      test(`${arch} run${run}: zero audit-critical validator issues`, () => {
+        const spec = JSON.parse(readFileSync(path.join(regressionDir, `${arch}.run${run}.json`), "utf8"));
+        const issues = validateAgentSpec(spec, makeIntegrationRegistry(), integrationEventRegistry);
+        const critical = issues.filter((i) => CRITICAL_CODES.has(i.code));
+        assert.deepEqual(critical, [], `${arch} run${run}:\n${JSON.stringify(critical, null, 2)}`);
+      });
+    }
+  }
+});
+
+// 2b.2 Payments migration — 9 live probes re-run after payments block
+// migrated to v2 shape (block 4 of 6). Per Max's Payments-migration
+// directive: Win-Back is the critical archetype — it threads
+// {{coupon.code}} / {{coupon.couponId}} / {{coupon.promotionCodeId}}
+// through multiple downstream steps and is the exact bug class the
+// validator was built to catch ({{coupon.couponCode}} typo catching).
+// The Payments Zod schema preserves the `{data: {couponId,
+// promotionCodeId, code}}` return shape exactly so this threading
+// stays valid through migration.
+describe("2b.2 Payments regression — 9 live-probe outputs validate clean", () => {
+  const regressionDir = path.join(PROBES_DIR, "payments-regression");
   for (const arch of ["speed-to-lead", "win-back", "review-requester"]) {
     for (const run of [1, 2, 3]) {
       test(`${arch} run${run}: zero audit-critical validator issues`, () => {
