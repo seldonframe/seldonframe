@@ -36,3 +36,7 @@ export * from "./seldon-patterns";
 export * from "./preview-sessions";
 export * from "./brain";
 export * from "./workspace-secrets";
+// Scope 3 Step 2c PR 1 — durable workflow runtime state.
+export * from "./workflow-runs";
+export * from "./workflow-waits";
+export * from "./workflow-event-log";
