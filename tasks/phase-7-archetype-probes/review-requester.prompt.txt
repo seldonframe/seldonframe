@@ -159,7 +159,7 @@ Requires installed: crm, email, sms, caldiy-booking
     produces: [{"event": "booking.created"}, {"event": "booking.completed"}, {"event": "booking.cancelled"}, {"event": "booking.rescheduled"}, {"event": "booking.no_show"}]
     verbs: [book, schedule, appointment, availability, meeting, calendar, consultation, discovery call, reschedule, cancel, move, fetch]
 - formbricks-intake:
-    produces: [form.submitted, contact.created]
+    produces: [{"event": "form.submitted"}, {"event": "contact.created"}]
     verbs: [intake, capture, collect, qualify, survey, ask, onboard, nps, feedback]
 - landing-pages:
     produces: [landing.published, landing.unpublished, landing.updated, landing.visited, landing.converted]

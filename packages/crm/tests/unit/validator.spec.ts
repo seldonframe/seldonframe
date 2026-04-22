@@ -715,6 +715,7 @@ describe("validateAgentSpec — capture field resolution (the audit's named bug 
 
 import { CRM_TOOLS } from "../../src/blocks/crm.tools";
 import { PAYMENTS_TOOLS } from "../../src/blocks/payments.tools";
+import { INTAKE_TOOLS } from "../../src/blocks/intake.tools";
 
 /** Test-only stub for tools not yet Zod-schema'd (ships in 2b.2). */
 function stubTool(name: string, args: z.ZodType, returns: z.ZodType, emits: string[] = []): ToolDefinition {
@@ -767,6 +768,13 @@ function makeIntegrationRegistry(): BlockRegistry {
   for (const tool of PAYMENTS_TOOLS) {
     tools.set(tool.name, { blockSlug: "payments", tool });
   }
+  // Real Intake tools from 2b.2 block 5. No stub existed pre-migration
+  // (no archetype directly calls intake tools — Speed-to-Lead only
+  // TRIGGERS on form.submitted). Wiring them in keeps the registry
+  // in lock-step with what emit:blocks declares in BLOCK.md.
+  for (const tool of INTAKE_TOOLS) {
+    tools.set(tool.name, { blockSlug: "formbricks-intake", tool });
+  }
 
   return {
     tools,
@@ -794,6 +802,7 @@ function makeIntegrationRegistry(): BlockRegistry {
           "subscription.trial_will_end",
         ]),
       ],
+      ["formbricks-intake", new Set(["form.submitted", "contact.created"])],
     ]),
   };
 }
@@ -992,6 +1001,26 @@ describe("2b.2 SMS regression — 9 live-probe outputs validate clean", () => {
 // stays valid through migration.
 describe("2b.2 Payments regression — 9 live-probe outputs validate clean", () => {
   const regressionDir = path.join(PROBES_DIR, "payments-regression");
+  for (const arch of ["speed-to-lead", "win-back", "review-requester"]) {
+    for (const run of [1, 2, 3]) {
+      test(`${arch} run${run}: zero audit-critical validator issues`, () => {
+        const spec = JSON.parse(readFileSync(path.join(regressionDir, `${arch}.run${run}.json`), "utf8"));
+        const issues = validateAgentSpec(spec, makeIntegrationRegistry(), integrationEventRegistry);
+        const critical = issues.filter((i) => CRITICAL_CODES.has(i.code));
+        assert.deepEqual(critical, [], `${arch} run${run}:\n${JSON.stringify(critical, null, 2)}`);
+      });
+    }
+  }
+});
+
+// 2b.2 Intake migration — 9 live probes re-run after formbricks-intake
+// migrated to v2 shape (block 5 of 6). No shipped archetype DIRECTLY
+// calls an intake tool; Speed-to-Lead TRIGGERS on form.submitted
+// (intake's produces) with a filter.formId. Regression is therefore a
+// trigger-resolution + hash-preservation check rather than a direct
+// tool-call validation.
+describe("2b.2 Intake regression — 9 live-probe outputs validate clean", () => {
+  const regressionDir = path.join(PROBES_DIR, "intake-regression");
   for (const arch of ["speed-to-lead", "win-back", "review-requester"]) {
     for (const run of [1, 2, 3]) {
       test(`${arch} run${run}: zero audit-critical validator issues`, () => {

@@ -25,8 +25,8 @@
       "id": "qualify_conversation",
       "type": "conversation",
       "channel": "sms",
-      "initial_message": "Hi {{contact.firstName}}, it's Bright Smile Dental — thanks for reaching out about a free new-patient consult! Happy to get you in. Any preferred day/time that works for you? And do you have dental insurance you'd like us to check?",
-      "exit_when": "The prospect has shared a preferred appointment day/time for their new-patient consultation AND confirmed their dental insurance status (yes / no / unsure).",
+      "initial_message": "Hi {{contact.firstName}}, it's Bright Smile Dental — thanks for reaching out about a new-patient visit! Your consultation is on us. Any preferred day/time that works for you? And do you have dental insurance we should check, or not sure yet?",
+      "exit_when": "The prospect has shared a preferred appointment day/time AND indicated their insurance status (yes / no / unsure). No pressure — if they seem hesitant, reassure them the consult is free and painless before pushing for details.",
       "on_exit": {
         "extract": {
           "preferred_start": "ISO-8601 datetime for the preferred appointment start, snapped to the next available slot in the clinic's business hours (Mon–Fri 9am–5pm local time).",
@@ -69,8 +69,8 @@
       "tool": "send_email",
       "args": {
         "to": "{{email}}",
-        "subject": "You're booked with Bright Smile Dental",
-        "body": "Hi {{contact.firstName}},\n\nYou're all set for {{preferred_start}} — we're looking forward to meeting you.\n\nWhat to expect: a relaxed 45-minute new-patient visit, zero pressure, and plenty of time for any questions. No surprises, no hard sell — just a friendly hello and a clear look at your smile.\n\nNeed to reschedule or have a question before you come in? Just reply to this email or text us back — we'll take care of it.\n\nSee you soon,\nThe Bright Smile Dental team",
+        "subject": "You're booked with Bright Smile Dental 🪥",
+        "body": "Hi {{contact.firstName}},\n\nYou're all set for {{preferred_start}} — we're so glad you reached out. Here's what to expect: a relaxed 45-minute new-patient consultation, a gentle look around, and plenty of time for your questions. No pressure, no surprises — just a friendly visit on us.\n\nA few things that help first-timers feel at home:\n• Arrive 5 minutes early so we can get you settled\n• Bring your insurance card if you have one (totally fine if you don't)\n• Let us know anything that's been on your mind about your smile\n\nNeed to reschedule? Just reply to this email or text us back — we'll take care of it, no fuss.\n\nCan't wait to meet you,\nThe Bright Smile Dental team",
         "contactId": "{{contactId}}"
       },
       "next": null

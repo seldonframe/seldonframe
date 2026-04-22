@@ -12,6 +12,7 @@ import { BOOKING_TOOLS } from "../packages/crm/src/blocks/caldiy-booking.tools";
 import { EMAIL_TOOLS } from "../packages/crm/src/blocks/email.tools";
 import { SMS_TOOLS } from "../packages/crm/src/blocks/sms.tools";
 import { PAYMENTS_TOOLS } from "../packages/crm/src/blocks/payments.tools";
+import { INTAKE_TOOLS } from "../packages/crm/src/blocks/intake.tools";
 import {
   applyToolsToMarkdown,
   emitToolEntries,
@@ -29,13 +30,14 @@ interface BlockEmitTarget {
 }
 
 // Registry of blocks whose tools emit to BLOCK.md. 2b.2 adds the
-// remaining core blocks (intake, landing) here as each one migrates.
+// remaining core block (landing) here when it migrates.
 const TARGETS: BlockEmitTarget[] = [
   { slug: "crm", tools: CRM_TOOLS },
   { slug: "caldiy-booking", tools: BOOKING_TOOLS },
   { slug: "email", tools: EMAIL_TOOLS },
   { slug: "sms", tools: SMS_TOOLS },
   { slug: "payments", tools: PAYMENTS_TOOLS },
+  { slug: "formbricks-intake", tools: INTAKE_TOOLS },
 ];
 
 let driftDetected = false;
