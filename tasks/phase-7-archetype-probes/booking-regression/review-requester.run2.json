@@ -25,7 +25,7 @@
       "args": {
         "to": "{{email}}",
         "subject": "Thanks for visiting Bright Smile — how did we do?",
-        "body": "Hi {{firstName}},\n\nThanks so much for coming in to see us at Bright Smile Dental. We know a trip to the dentist isn't always the easiest thing, and we really appreciate you trusting us with your care.\n\nIf you have 30 seconds, we'd be so grateful if you'd share a quick review. Honest feedback helps other folks who are nervous about finding a dentist feel a little more at ease about booking their first visit:\n\nhttps://g.page/r/Ca-example-business/review\n\nAnd if something wasn't quite right during your visit, please just hit reply — we'd genuinely like to hear about it and make it better.\n\nThanks again,\nThe Bright Smile Dental team",
+        "body": "Hi {{firstName}},\n\nThanks so much for coming in to Bright Smile Dental. We hope your visit felt calm, comfortable, and maybe even a little less scary than you expected.\n\nIf you have 30 seconds, we'd really appreciate a quick review. Honest words from real patients are how other people who've been putting off the dentist find us:\n\nhttps://g.page/r/Ca-example-business/review\n\nAnd if something wasn't quite right — please just hit reply and let us know. We read every message, and we'd rather hear it from you than not at all.\n\nThanks again for trusting us with your smile.\n\n— The Bright Smile team",
         "contactId": "{{contactId}}"
       },
       "next": "wait_before_sms"
@@ -42,7 +42,7 @@
       "tool": "send_sms",
       "args": {
         "to": "{{phone}}",
-        "body": "Hi {{firstName}}, it's Bright Smile Dental — quick follow-up: if you have 30 seconds, a short review would mean a lot to us: https://g.page/r/Ca-example-business/review. Thanks!",
+        "body": "Hi {{firstName}}, it's Bright Smile Dental — quick follow-up: if you have 30 seconds, a short review really helps us out. https://g.page/r/Ca-example-business/review Thanks so much!",
         "contact_id": "{{contactId}}"
       },
       "next": "log_review_request_complete"

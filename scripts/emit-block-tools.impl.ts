@@ -8,6 +8,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { CRM_TOOLS } from "../packages/crm/src/blocks/crm.tools";
+import { BOOKING_TOOLS } from "../packages/crm/src/blocks/caldiy-booking.tools";
 import {
   applyToolsToMarkdown,
   emitToolEntries,
@@ -24,10 +25,12 @@ interface BlockEmitTarget {
   tools: readonly ToolDefinition[];
 }
 
-// Registry of blocks whose tools emit to BLOCK.md. 2b.2 adds the other
-// 6 core blocks (booking, email, sms, payments, intake, landing) here.
+// Registry of blocks whose tools emit to BLOCK.md. 2b.2 adds the
+// remaining core blocks (email, sms, payments, intake, landing)
+// here as each one migrates.
 const TARGETS: BlockEmitTarget[] = [
   { slug: "crm", tools: CRM_TOOLS },
+  { slug: "caldiy-booking", tools: BOOKING_TOOLS },
 ];
 
 let driftDetected = false;

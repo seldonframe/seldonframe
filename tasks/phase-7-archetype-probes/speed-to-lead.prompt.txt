@@ -175,7 +175,7 @@ Requires installed: crm, formbricks-intake, sms, caldiy-booking, email
     produces: [sms.sent, sms.delivered, sms.replied, sms.failed, sms.suppressed, conversation.turn.received, conversation.turn.sent]
     verbs: [text, sms, message, reply, chat, qualify, speed to lead, follow up, reminder, confirm, book via text]
 - caldiy-booking:
-    produces: [booking.created, booking.completed, booking.cancelled, booking.rescheduled, booking.no_show]
+    produces: [{"event": "booking.created"}, {"event": "booking.completed"}, {"event": "booking.cancelled"}, {"event": "booking.rescheduled"}, {"event": "booking.no_show"}]
     verbs: [book, schedule, appointment, availability, meeting, calendar, consultation, discovery call, reschedule, cancel, move, fetch]
 - formbricks-intake:
     produces: [form.submitted, contact.created]

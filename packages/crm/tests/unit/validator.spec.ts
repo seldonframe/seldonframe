@@ -874,7 +874,19 @@ describe("validateAgentSpec — integration against 2 broken fixtures", () => {
 // gates.
 // ---------------------------------------------------------------------
 
-const PR3_REGRESSION_DIR = path.resolve(
+const CRITICAL_CODES = new Set([
+  "spec_malformed",
+  "unknown_tool",
+  "unresolved_interpolation",
+  "unknown_event",
+  "unknown_step_next",
+  "bad_capture_name",
+  "bad_extract_shape",
+  "bad_tool_args",
+  "malformed_tools",
+]);
+
+const PROBES_DIR = path.resolve(
   __dirname,
   "..",
   "..",
@@ -882,34 +894,37 @@ const PR3_REGRESSION_DIR = path.resolve(
   "..",
   "tasks",
   "phase-7-archetype-probes",
-  "pr3-regression",
 );
 
 describe("PR 3 regression — 9 live-probe outputs validate clean against PR 2 validator", () => {
-  const CRITICAL_CODES = new Set([
-    "spec_malformed",
-    "unknown_tool",
-    "unresolved_interpolation",
-    "unknown_event",
-    "unknown_step_next",
-    "bad_capture_name",
-    "bad_extract_shape",
-    "bad_tool_args",
-    "malformed_tools",
-  ]);
-
+  const regressionDir = path.join(PROBES_DIR, "pr3-regression");
   for (const arch of ["speed-to-lead", "win-back", "review-requester"]) {
     for (const run of [1, 2, 3]) {
       test(`${arch} run${run}: zero audit-critical validator issues`, () => {
-        const filePath = path.join(PR3_REGRESSION_DIR, `${arch}.run${run}.json`);
-        const spec = JSON.parse(readFileSync(filePath, "utf8"));
+        const spec = JSON.parse(readFileSync(path.join(regressionDir, `${arch}.run${run}.json`), "utf8"));
         const issues = validateAgentSpec(spec, makeIntegrationRegistry(), integrationEventRegistry);
         const critical = issues.filter((i) => CRITICAL_CODES.has(i.code));
-        assert.deepEqual(
-          critical,
-          [],
-          `${arch} run${run} surfaced audit-critical issues:\n${JSON.stringify(critical, null, 2)}`,
-        );
+        assert.deepEqual(critical, [], `${arch} run${run}:\n${JSON.stringify(critical, null, 2)}`);
+      });
+    }
+  }
+});
+
+// 2b.2 Booking migration — 9 live probes re-run after caldiy-booking
+// migrated to v2 shape. Same gate as PR 3: zero audit-critical issues
+// on every filled spec proves the Booking migration didn't introduce
+// validator false positives. Per Max's 2b.2 directive for Booking
+// specifically: same 9-probe rigor as PR 3 because Booking is in all
+// 3 archetypes' compose_with.
+describe("2b.2 Booking regression — 9 live-probe outputs validate clean", () => {
+  const regressionDir = path.join(PROBES_DIR, "booking-regression");
+  for (const arch of ["speed-to-lead", "win-back", "review-requester"]) {
+    for (const run of [1, 2, 3]) {
+      test(`${arch} run${run}: zero audit-critical validator issues`, () => {
+        const spec = JSON.parse(readFileSync(path.join(regressionDir, `${arch}.run${run}.json`), "utf8"));
+        const issues = validateAgentSpec(spec, makeIntegrationRegistry(), integrationEventRegistry);
+        const critical = issues.filter((i) => CRITICAL_CODES.has(i.code));
+        assert.deepEqual(critical, [], `${arch} run${run}:\n${JSON.stringify(critical, null, 2)}`);
       });
     }
   }
