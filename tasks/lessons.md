@@ -284,6 +284,35 @@ Format: **Lesson** / **Trigger** / **Rule**
   validator weaker. Don't promise the audit a 5-LOC/tool number you
   can't deliver against a real validator.
 
+### L-17 addendum — Distinguish architectural vs horizontal-infrastructure overruns when the trigger fires
+
+- **Trigger:** 2c PR 3 hit the stop-and-reassess trigger at M3 close
+  (1,230 LOC vs 1,170). The remaining audit-spec'd scope was a
+  Playwright e2e suite, which on inspection would require ~200-400
+  LOC of infrastructure setup (devDep, config, browser binaries, CI
+  integration, test DB seeding, auth bypass) BEFORE a single line of
+  the walkthrough spec could run.
+- **Rule:** When the stop-and-reassess trigger fires, ask one
+  question: **is the overrun coming from the capability work the
+  audit asked for, or from horizontal infrastructure that's
+  scope-adjacent to the slice?**
+  - **Capability overrun → Option A (accept + calibrate).** The work
+    maps to audit scope; the audit's LOC estimate was wrong.
+    Recalibrate and document so the next audit lands closer to
+    actuals. L-17 baselines exist for this reason.
+  - **Horizontal-infrastructure overrun → Option B (scope-cut + file
+    a follow-up).** Infrastructure benefits multiple future
+    consumers; bolting it into one slice forces a narrow design and
+    under-amortizes the setup cost. Defer to its own focused slice
+    with explicit multi-consumer scope.
+  In the 2c PR 3 case: Playwright serves workflow runs, onboarding
+  flows, landing page previews, portal flows, and any future builder-
+  mode UI. A workflow-runs-only e2e is a bolt-on; a shared Playwright
+  slice with 4-5 multi-surface specs is the right scope.
+  **Red flag for mis-scoped infrastructure:** if a "test setup"
+  section of a PR grows larger than the feature code it's meant to
+  cover, stop and extract.
+
 ---
 
 ## L-18 — Server-side imports of client-only modules fail at build time, not dev time
