@@ -452,3 +452,251 @@ describe("validateAgentSpec — bad_extract_shape", () => {
     assert.ok(!issues.some((i) => i.code === "bad_extract_shape"));
   });
 });
+
+// ---------------------------------------------------------------------
+// M5 — interpolation resolver
+// ---------------------------------------------------------------------
+
+/**
+ * Registry with a tool whose returns has a `data` key — exercises the
+ * archetype-convention capture-unwrap (per types.ts:35).
+ */
+function makeRegistryWithCouponTool(): BlockRegistry {
+  const createCoupon: ToolDefinition = {
+    name: "create_coupon",
+    description: "x",
+    args: z.object({ percent_off: z.number() }),
+    returns: z.object({
+      data: z.object({
+        code: z.string(),
+        couponId: z.string(),
+        promotionCodeId: z.string(),
+      }),
+    }),
+    emits: [],
+  };
+  return {
+    tools: new Map([["create_coupon", { blockSlug: "payments", tool: createCoupon }]]),
+    producesByBlock: new Map([["payments", new Set()]]),
+  };
+}
+
+describe("validateAgentSpec — unresolved_interpolation (variable / extract / capture resolution)", () => {
+  test("passes {{variable}} that is declared in spec.variables", () => {
+    const spec = {
+      name: "x",
+      description: "x",
+      trigger: { type: "event", event: "contact.created" },
+      variables: { contactId: "trigger.contactId" },
+      steps: [
+        {
+          id: "a",
+          type: "mcp_tool_call",
+          tool: "create_contact",
+          args: { first_name: "{{contactId}}" },
+          next: null,
+        },
+      ],
+    };
+    const issues = validateAgentSpec(spec, makeRegistryWithCreateContact(), testEventRegistry);
+    assert.ok(!issues.some((i) => i.code === "unresolved_interpolation"));
+  });
+
+  test("flags {{undeclared_var}} that doesn't resolve to anything", () => {
+    const spec = {
+      name: "x",
+      description: "x",
+      trigger: { type: "event", event: "contact.created" },
+      variables: { contactId: "trigger.contactId" },
+      steps: [
+        {
+          id: "a",
+          type: "mcp_tool_call",
+          tool: "create_contact",
+          args: { first_name: "{{ghostVar}}" },
+          next: null,
+        },
+      ],
+    };
+    const issues = validateAgentSpec(spec, makeRegistryWithCreateContact(), testEventRegistry);
+    const match = issues.find((i) => i.code === "unresolved_interpolation");
+    assert.ok(match, "expected unresolved_interpolation");
+    assert.ok(match!.message.includes("ghostVar"));
+  });
+
+  test("passes reserved-namespace refs (trigger.*, contact.*, agent.*, workspace.*)", () => {
+    const spec = {
+      name: "x",
+      description: "x",
+      trigger: { type: "event", event: "contact.created" },
+      steps: [
+        {
+          id: "a",
+          type: "mcp_tool_call",
+          tool: "create_contact",
+          args: {
+            first_name: "{{trigger.data.foo}}",
+            email: "{{contact.email}}",
+          },
+          next: null,
+        },
+      ],
+    };
+    const issues = validateAgentSpec(spec, makeRegistryWithCreateContact(), testEventRegistry);
+    assert.ok(!issues.some((i) => i.code === "unresolved_interpolation"));
+  });
+
+  test("passes {{extract}} from an earlier conversation step", () => {
+    const spec = {
+      name: "x",
+      description: "x",
+      trigger: { type: "event", event: "form.submitted" },
+      steps: [
+        {
+          id: "qualify",
+          type: "conversation",
+          channel: "sms",
+          initial_message: "Hi",
+          exit_when: "done",
+          on_exit: {
+            extract: { preferred_start: "ISO datetime" },
+            next: "book",
+          },
+        },
+        {
+          id: "book",
+          type: "mcp_tool_call",
+          tool: "create_contact",
+          args: { first_name: "{{preferred_start}}" },
+          next: null,
+        },
+      ],
+    };
+    const issues = validateAgentSpec(spec, makeRegistryWithCreateContact(), testEventRegistry);
+    assert.ok(!issues.some((i) => i.code === "unresolved_interpolation"));
+  });
+
+  test("flags variable with sub-path — variables don't support .field access", () => {
+    const spec = {
+      name: "x",
+      description: "x",
+      trigger: { type: "event", event: "contact.created" },
+      variables: { contactId: "trigger.contactId" },
+      steps: [
+        {
+          id: "a",
+          type: "mcp_tool_call",
+          tool: "create_contact",
+          args: { first_name: "{{contactId.foo}}" },
+          next: null,
+        },
+      ],
+    };
+    const issues = validateAgentSpec(spec, makeRegistryWithCreateContact(), testEventRegistry);
+    const match = issues.find((i) => i.code === "unresolved_interpolation");
+    assert.ok(match);
+    assert.ok(match!.message.includes("variables are string aliases"));
+  });
+});
+
+describe("validateAgentSpec — capture field resolution (the audit's named bug class)", () => {
+  test("passes {{coupon.code}} when create_coupon returns {data:{code,...}}", () => {
+    const spec = {
+      name: "x",
+      description: "x",
+      trigger: { type: "event", event: "subscription.cancelled" },
+      variables: {},
+      steps: [
+        {
+          id: "make",
+          type: "mcp_tool_call",
+          tool: "create_coupon",
+          args: { percent_off: 15 },
+          capture: "coupon",
+          next: "log",
+        },
+        {
+          id: "log",
+          type: "mcp_tool_call",
+          tool: "create_coupon",
+          args: { percent_off: 0 },
+          next: null,
+        },
+      ],
+    };
+    const registry = makeRegistryWithCouponTool();
+    const issues = validateAgentSpec(spec, registry, {
+      events: [{ type: "subscription.cancelled", fields: {} }],
+    });
+    assert.ok(!issues.some((i) => i.code === "unresolved_interpolation"));
+  });
+
+  test("flags {{coupon.couponCode}} when returns has `code` but not `couponCode`", () => {
+    const spec = {
+      name: "x",
+      description: "x",
+      trigger: { type: "event", event: "subscription.cancelled" },
+      variables: {},
+      steps: [
+        {
+          id: "make",
+          type: "mcp_tool_call",
+          tool: "create_coupon",
+          args: { percent_off: 15 },
+          capture: "coupon",
+          next: "log",
+        },
+        {
+          id: "log",
+          type: "mcp_tool_call",
+          tool: "create_coupon",
+          args: { percent_off: 0, name: "see {{coupon.couponCode}}" },
+          next: null,
+        },
+      ],
+    };
+    const registry = makeRegistryWithCouponTool();
+    const issues = validateAgentSpec(spec, registry, {
+      events: [{ type: "subscription.cancelled", fields: {} }],
+    });
+    const match = issues.find((i) => i.code === "unresolved_interpolation" && i.stepId === "log");
+    assert.ok(match, "expected unresolved_interpolation for {{coupon.couponCode}}");
+    assert.ok(match!.message.includes("couponCode"));
+    assert.ok(match!.message.includes("code"), "message should list available fields (code is one)");
+  });
+
+  test("broken-capture-typo.invalid.json fixture surfaces unresolved_interpolation on {{newContact.fullName}}", () => {
+    const spec = loadFixture("broken-capture-typo.invalid.json");
+    const issues = validateAgentSpec(spec, makeRegistryWithCreateContact(), testEventRegistry);
+    const match = issues.find(
+      (i) => i.code === "unresolved_interpolation" && i.message.includes("fullName"),
+    );
+    assert.ok(match, `expected unresolved_interpolation on fullName; got: ${JSON.stringify(issues, null, 2)}`);
+  });
+
+  test("step cannot reference its own capture — capture is only visible to LATER steps", () => {
+    const spec = {
+      name: "x",
+      description: "x",
+      trigger: { type: "event", event: "subscription.cancelled" },
+      steps: [
+        {
+          id: "make",
+          type: "mcp_tool_call",
+          tool: "create_coupon",
+          args: { percent_off: 15, name: "{{coupon.code}}" }, // self-ref, not yet in scope
+          capture: "coupon",
+          next: null,
+        },
+      ],
+    };
+    const registry = makeRegistryWithCouponTool();
+    const issues = validateAgentSpec(spec, registry, {
+      events: [{ type: "subscription.cancelled", fields: {} }],
+    });
+    assert.ok(
+      issues.some((i) => i.code === "unresolved_interpolation" && i.message.includes("coupon")),
+      "expected self-capture ref to flag as unresolved",
+    );
+  });
+});

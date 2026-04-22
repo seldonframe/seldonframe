@@ -196,12 +196,37 @@ export function validateAgentSpec(
   // Build next-step reference set for unknown_step_next checks.
   const stepIds = new Set(spec.steps.map((s) => s.id));
   // Capture + extract bindings accumulate as we walk steps in
-  // declaration order. M5's interpolation resolver reads both to
+  // declaration order. The interpolation resolver reads both to
   // check {{capture.field}} and {{extract}} references.
   const capturedBindings = new Set<string>();
   const extractBindings = new Set<string>();
+
+  // Scope seeds — variables apply to every step.
+  const variableNames = new Set(Object.keys(spec.variables ?? {}));
+  const captureShapes = new Map<string, z.ZodType>();
+
   for (const step of spec.steps) {
+    // Interpolation check runs BEFORE this step's own captures/extracts
+    // are added to scope — a step cannot self-reference its own capture.
+    const scope: InterpolationScope = {
+      variables: variableNames,
+      captures: new Map(captureShapes),
+      extracts: new Set(extractBindings),
+    };
+    validateInterpolationsInStep(step, scope, issues);
+
     validateStep(step, spec, stepIds, registry, capturedBindings, extractBindings, issues);
+
+    // After validation, record this step's bindings for downstream
+    // interpolations. Capture shapes come from the tool's returns
+    // schema (unwrapped via captureAccessibleShape for the data-key
+    // convention).
+    if (step.type === "mcp_tool_call" && step.capture) {
+      const entry = registry.tools.get(step.tool);
+      if (entry && !captureShapes.has(step.capture)) {
+        captureShapes.set(step.capture, captureAccessibleShape(entry.tool.returns));
+      }
+    }
   }
 
   return issues;
@@ -304,6 +329,239 @@ function validateMcpToolCallStep(
       capturedBindings.add(step.capture);
     }
   }
+}
+
+// ---------------------------------------------------------------------
+// Interpolation resolver (M5)
+//
+// Walks every string value in the spec, extracts {{var.path}} refs,
+// and verifies each resolves against the scope available at the
+// referencing step. The scope at step N contains:
+//   - Variables declared on the spec (top-level aliases).
+//   - Extract bindings from conversations that run STRICTLY BEFORE N.
+//   - Capture bindings from mcp_tool_call steps that run STRICTLY
+//     BEFORE N (linear execution order via `next` chains is not
+//     validated here — 2b.1 assumes declaration order matches linear
+//     execution for validation purposes; branch steps in 2e will
+//     tighten this).
+//   - Reserved namespaces: `trigger`, `contact` (shorthand for
+//     trigger.contact), `agent`, `workspace`. Path resolution for
+//     reserved namespaces is not type-checked (runtime provides the
+//     shape); the names just pass through.
+//
+// For captures specifically — the audit-named bug class — the
+// validator walks the tool's returns Zod schema and checks that
+// every path segment resolves. Supports the archetype convention
+// of "capture unwraps `data` key if present" (see
+// lib/agents/archetypes/types.ts:35). For CRM-style returns without
+// a `data` key, the walk starts at the full returns shape.
+// ---------------------------------------------------------------------
+
+const INTERPOLATION_RE = /\{\{\s*([^}]+?)\s*\}\}/g;
+const RESERVED_NAMESPACES = new Set(["trigger", "contact", "agent", "workspace"]);
+
+type ParsedInterpolation = {
+  raw: string;
+  varName: string;
+  path: string[];
+};
+
+function parseInterpolations(text: string): ParsedInterpolation[] {
+  const found: ParsedInterpolation[] = [];
+  INTERPOLATION_RE.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = INTERPOLATION_RE.exec(text)) !== null) {
+    const body = match[1].trim();
+    if (!body) continue;
+    const segments = body.split(".");
+    const [varName, ...path] = segments;
+    if (!varName) continue;
+    found.push({ raw: match[0], varName, path });
+  }
+  return found;
+}
+
+// Walk a Zod schema down `path` and return { ok } or detailed failure.
+// Unwraps ZodOptional / ZodNullable on the way to reach inner shapes.
+// Returns `{kind: "unknown_shape"}` when the schema isn't a ZodObject
+// at a point where path-walking is required — we treat that as "can't
+// type-check, don't emit an issue" rather than failing optimistically.
+type WalkResult =
+  | { kind: "ok" }
+  | { kind: "fail"; badSegment: string; availableFields: string[] }
+  | { kind: "unknown_shape" };
+
+function unwrapZodWrapper(schema: z.ZodType): z.ZodType {
+  let current: z.ZodType = schema;
+  // Unwrap optional / nullable recursively.
+  while (true) {
+    const def = (current as unknown as { def?: { type?: string; innerType?: z.ZodType } }).def;
+    if (!def) return current;
+    if ((def.type === "optional" || def.type === "nullable") && def.innerType) {
+      current = def.innerType;
+      continue;
+    }
+    return current;
+  }
+}
+
+function walkSchemaPath(schema: z.ZodType, path: string[]): WalkResult {
+  let current: z.ZodType = unwrapZodWrapper(schema);
+  for (const segment of path) {
+    // Zod v4 exposes .shape on ZodObject. Guard with a runtime check.
+    const shape = (current as unknown as { shape?: Record<string, z.ZodType> }).shape;
+    if (!shape || typeof shape !== "object") {
+      return { kind: "unknown_shape" };
+    }
+    const next = shape[segment];
+    if (!next) {
+      return {
+        kind: "fail",
+        badSegment: segment,
+        availableFields: Object.keys(shape),
+      };
+    }
+    current = unwrapZodWrapper(next);
+  }
+  return { kind: "ok" };
+}
+
+// If the tool's returns shape is `{ data: <inner> }`, treat the capture
+// as binding to `<inner>` directly (archetype convention — see
+// archetypes/types.ts:35). Otherwise the capture binds to the full
+// returns shape.
+function captureAccessibleShape(returns: z.ZodType): z.ZodType {
+  const shape = (unwrapZodWrapper(returns) as unknown as { shape?: Record<string, z.ZodType> }).shape;
+  if (shape && shape.data) {
+    return unwrapZodWrapper(shape.data);
+  }
+  return returns;
+}
+
+type InterpolationScope = {
+  variables: Set<string>;
+  // Capture name → accessible shape (already data-unwrapped where
+  // appropriate).
+  captures: Map<string, z.ZodType>;
+  // Extract name (from conversation on_exit.extract).
+  extracts: Set<string>;
+};
+
+function validateInterpolationsInStep(
+  step: Step,
+  scope: InterpolationScope,
+  issues: ValidationIssue[],
+): void {
+  const stepId = step.id;
+  // Collect every string that may contain interpolations. Shallow walk
+  // on step-type-specific fields that carry user content; deep walks
+  // apply to mcp_tool_call.args which can carry nested objects.
+  const stringPaths: Array<{ path: string; text: string }> = [];
+
+  if (step.type === "mcp_tool_call") {
+    walkObjectStrings(step.args, "args", stringPaths);
+  } else if (step.type === "conversation") {
+    stringPaths.push({ path: "initial_message", text: step.initial_message });
+    stringPaths.push({ path: "exit_when", text: step.exit_when });
+    for (const [key, description] of Object.entries(step.on_exit.extract)) {
+      stringPaths.push({ path: `on_exit.extract.${key}`, text: description });
+    }
+  }
+  // wait / unknown step types have no interpolatable user content.
+
+  for (const { path, text } of stringPaths) {
+    for (const ref of parseInterpolations(text)) {
+      resolveOneInterpolation(stepId, path, ref, scope, issues);
+    }
+  }
+}
+
+function walkObjectStrings(
+  obj: unknown,
+  basePath: string,
+  out: Array<{ path: string; text: string }>,
+): void {
+  if (typeof obj === "string") {
+    out.push({ path: basePath, text: obj });
+    return;
+  }
+  if (Array.isArray(obj)) {
+    obj.forEach((item, i) => walkObjectStrings(item, `${basePath}[${i}]`, out));
+    return;
+  }
+  if (obj && typeof obj === "object") {
+    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+      walkObjectStrings(value, `${basePath}.${key}`, out);
+    }
+  }
+  // numbers / booleans / null: no interpolations possible.
+}
+
+function resolveOneInterpolation(
+  stepId: string,
+  path: string,
+  ref: ParsedInterpolation,
+  scope: InterpolationScope,
+  issues: ValidationIssue[],
+): void {
+  const { raw, varName, path: refPath } = ref;
+
+  // 1. Reserved namespaces pass through without path validation.
+  if (RESERVED_NAMESPACES.has(varName)) return;
+
+  // 2. Variables resolve on name only (they're string-aliases to
+  // trigger paths; the alias itself can't carry further .path).
+  if (scope.variables.has(varName)) {
+    if (refPath.length > 0) {
+      issues.push({
+        code: "unresolved_interpolation",
+        stepId,
+        path,
+        message: `interpolation ${raw} references variable "${varName}" with sub-path ".${refPath.join(".")}" — variables are string aliases and don't support field access; declare the needed value as a separate variable or capture its source explicitly`,
+      });
+    }
+    return;
+  }
+
+  // 3. Extract names pass through without path validation (extract
+  // values are scalars today — NL descriptions that resolve to
+  // strings / numbers / enums at runtime per conversation semantics).
+  if (scope.extracts.has(varName)) {
+    if (refPath.length > 0) {
+      issues.push({
+        code: "unresolved_interpolation",
+        stepId,
+        path,
+        message: `interpolation ${raw} references extract "${varName}" with sub-path ".${refPath.join(".")}" — extracts are scalar values, not objects`,
+      });
+    }
+    return;
+  }
+
+  // 4. Captures — walk the Zod returns shape.
+  const captureShape = scope.captures.get(varName);
+  if (captureShape) {
+    if (refPath.length === 0) return;
+    const result = walkSchemaPath(captureShape, refPath);
+    if (result.kind === "fail") {
+      issues.push({
+        code: "unresolved_interpolation",
+        stepId,
+        path,
+        message: `interpolation ${raw} cannot resolve ".${result.badSegment}" on capture "${varName}" — available fields at that level: [${result.availableFields.join(", ")}]`,
+      });
+    }
+    // kind: "ok" or "unknown_shape" — no issue.
+    return;
+  }
+
+  // 5. Nothing matched → unresolved_interpolation with a guess.
+  issues.push({
+    code: "unresolved_interpolation",
+    stepId,
+    path,
+    message: `interpolation ${raw} references "${varName}" which is not a declared variable, extract, capture, or reserved namespace (trigger / contact / agent / workspace)`,
+  });
 }
 
 // ---------------------------------------------------------------------
