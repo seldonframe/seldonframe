@@ -24,8 +24,8 @@
       "tool": "send_email",
       "args": {
         "to": "{{email}}",
-        "subject": "Thanks for visiting Bright Smile — mind sharing how it went?",
-        "body": "Hi {{firstName}},\n\nThanks so much for coming in to see us at Bright Smile Dental. We know the dentist isn't everyone's favourite place to be, so it really means a lot that you trusted us with your smile.\n\nIf you have 30 seconds, we'd be so grateful if you'd share a quick review — honest words from patients like you are how other nervous folks find us and decide to finally book that appointment they've been putting off:\n\nhttps://g.page/r/Ca-example-business/review\n\nAnd if something didn't feel right during your visit, please just hit reply — we'd much rather hear from you directly so we can make it right.\n\nThanks again, and take good care of that smile.\n\n— The Bright Smile team",
+        "subject": "Thanks for visiting Bright Smile — how did we do?",
+        "body": "Hi {{firstName}},\n\nThanks so much for coming in to see us at Bright Smile Dental. We hope the visit felt calm, comfortable, and maybe even a little less scary than you expected — that's always the goal.\n\nIf you have 30 seconds, we'd really appreciate a quick review. Honest feedback from patients like you is how other folks in the area find a dentist they can actually relax with:\n\nhttps://g.page/r/Ca-example-business/review\n\nAnd if something wasn't quite right, please just hit reply — we'd much rather hear about it directly so we can make it right.\n\nThanks again, and take care of those teeth.\n\n— The team at Bright Smile Dental",
         "contactId": "{{contactId}}"
       },
       "next": "wait_before_sms"
@@ -42,7 +42,7 @@
       "tool": "send_sms",
       "args": {
         "to": "{{phone}}",
-        "body": "Hi {{firstName}}, it's Bright Smile Dental — just a quick follow-up. If you have 30 seconds, a short review would mean the world: https://g.page/r/Ca-example-business/review . Thanks!",
+        "body": "Hi {{firstName}}, it's Bright Smile Dental — quick follow-up! If you have 30 seconds, we'd really appreciate a review: https://g.page/r/Ca-example-business/review. Thanks so much!",
         "contact_id": "{{contactId}}"
       },
       "next": "log_review_request_complete"

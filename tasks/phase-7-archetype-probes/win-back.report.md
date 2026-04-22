@@ -1,8 +1,8 @@
 # Archetype probe: Win-Back (win-back)
 
-**Generated:** 2026-04-22T18:52:13.894Z
+**Generated:** 2026-04-22T20:11:45.088Z
 **Model:** claude-opus-4-7
-**Input tokens:** 9538 · **Output tokens:** 1495 · **Cost:** $0.0851 · **Latency:** 19453ms
+**Input tokens:** 9538 · **Output tokens:** 1467 · **Cost:** $0.0844 · **Latency:** 19049ms
 **Customization prompt:** (none)
 
 ## Verdict: PASS
