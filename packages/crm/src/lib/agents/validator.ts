@@ -127,6 +127,11 @@ const ConversationStepSchema = z.object({
 
 // Open-ended fallback for unknown step types. Parse succeeds; the
 // step dispatcher surfaces `unsupported_step_type` against it.
+// Kept as a separate schema (not in the discriminated union) so TS
+// can narrow the three known step types cleanly on `step.type`
+// checks. At the type level, Step is the union of the three known
+// types + the unknown fallback; runtime parse accepts all four via
+// z.union (tried in order).
 const UnknownStepSchema = z
   .object({
     id: z.string().min(1),
@@ -134,12 +139,13 @@ const UnknownStepSchema = z
   })
   .passthrough();
 
-const StepSchema: z.ZodType<
-  | z.infer<typeof WaitStepSchema>
-  | z.infer<typeof McpToolCallStepSchema>
-  | z.infer<typeof ConversationStepSchema>
-  | z.infer<typeof UnknownStepSchema>
-> = z.union([WaitStepSchema, McpToolCallStepSchema, ConversationStepSchema, UnknownStepSchema]);
+const KnownStepSchema = z.discriminatedUnion("type", [
+  WaitStepSchema,
+  McpToolCallStepSchema,
+  ConversationStepSchema,
+]);
+
+const StepSchema = z.union([KnownStepSchema, UnknownStepSchema]);
 
 export const AgentSpecSchema = z.object({
   name: z.string().min(1),
@@ -150,10 +156,28 @@ export const AgentSpecSchema = z.object({
 });
 
 export type AgentSpec = z.infer<typeof AgentSpecSchema>;
-export type Step = z.infer<typeof StepSchema>;
 export type WaitStep = z.infer<typeof WaitStepSchema>;
 export type McpToolCallStep = z.infer<typeof McpToolCallStepSchema>;
 export type ConversationStep = z.infer<typeof ConversationStepSchema>;
+export type UnknownStep = z.infer<typeof UnknownStepSchema>;
+// Discriminated-union narrowing on `.type` for the three known step
+// types; UnknownStep is the runtime fallthrough for unsupported
+// types (branch / await_event) and carries `type: string`.
+export type Step = WaitStep | McpToolCallStep | ConversationStep | UnknownStep;
+
+// Type guards — TypeScript can't narrow Step by `step.type === "..."`
+// alone because UnknownStep has `type: string` which overlaps every
+// literal. These guards check both the type literal AND a distinguishing
+// field so TS narrows to the exact known-step shape.
+function isWaitStep(step: Step): step is WaitStep {
+  return step.type === "wait" && typeof (step as Partial<WaitStep>).seconds === "number";
+}
+function isMcpToolCallStep(step: Step): step is McpToolCallStep {
+  return step.type === "mcp_tool_call" && typeof (step as Partial<McpToolCallStep>).tool === "string";
+}
+function isConversationStep(step: Step): step is ConversationStep {
+  return step.type === "conversation" && typeof (step as Partial<ConversationStep>).initial_message === "string";
+}
 
 // ---------------------------------------------------------------------
 // Public entry point
@@ -221,7 +245,7 @@ export function validateAgentSpec(
     // interpolations. Capture shapes come from the tool's returns
     // schema (unwrapped via captureAccessibleShape for the data-key
     // convention).
-    if (step.type === "mcp_tool_call" && step.capture) {
+    if (isMcpToolCallStep(step) && step.capture) {
       const entry = registry.tools.get(step.tool);
       if (entry && !captureShapes.has(step.capture)) {
         captureShapes.set(step.capture, captureAccessibleShape(entry.tool.returns));
@@ -246,7 +270,7 @@ function validateStep(
   issues: ValidationIssue[],
 ): void {
   // `next` reference check applies uniformly across step types.
-  const next = "next" in step ? step.next : ("on_exit" in step ? step.on_exit.next : null);
+  const next = extractNext(step);
   if (next !== null && next !== undefined && !stepIds.has(next)) {
     issues.push({
       code: "unknown_step_next",
@@ -256,25 +280,37 @@ function validateStep(
     });
   }
 
-  switch (step.type) {
-    case "wait":
-      // No further per-step validation. seconds is already a
-      // nonnegative int via schema.
-      return;
-    case "mcp_tool_call":
-      validateMcpToolCallStep(step as McpToolCallStep, registry, capturedBindings, issues);
-      return;
-    case "conversation":
-      validateConversationStep(step as ConversationStep, extractBindings, issues);
-      return;
-    default:
-      issues.push({
-        code: "unsupported_step_type",
-        stepId: step.id,
-        path: "type",
-        message: `step type "${step.type}" is not supported by this validator (PR 2 handles wait / mcp_tool_call / conversation; branch + await_event ship with 2e / 2c)`,
-      });
+  if (isWaitStep(step)) {
+    // No further per-step validation. seconds is already a
+    // nonnegative int via schema.
+    return;
   }
+  if (isMcpToolCallStep(step)) {
+    validateMcpToolCallStep(step, registry, capturedBindings, issues);
+    return;
+  }
+  if (isConversationStep(step)) {
+    validateConversationStep(step, extractBindings, issues);
+    return;
+  }
+  issues.push({
+    code: "unsupported_step_type",
+    stepId: step.id,
+    path: "type",
+    message: `step type "${step.type}" is not supported by this validator (PR 2 handles wait / mcp_tool_call / conversation; branch + await_event ship with 2e / 2c)`,
+  });
+}
+
+// Pull the `next` reference out of a step regardless of shape.
+// Wait / mcp_tool_call / UnknownStep-with-next expose `next` at the
+// top level; Conversation carries it on `on_exit.next`.
+function extractNext(step: Step): string | null | undefined {
+  if (isConversationStep(step)) return step.on_exit.next;
+  if (isWaitStep(step) || isMcpToolCallStep(step)) return step.next;
+  // UnknownStep may or may not have `next` — best-effort.
+  const candidate = (step as { next?: unknown }).next;
+  if (typeof candidate === "string" || candidate === null) return candidate;
+  return undefined;
 }
 
 // ---------------------------------------------------------------------
@@ -458,9 +494,9 @@ function validateInterpolationsInStep(
   // apply to mcp_tool_call.args which can carry nested objects.
   const stringPaths: Array<{ path: string; text: string }> = [];
 
-  if (step.type === "mcp_tool_call") {
+  if (isMcpToolCallStep(step)) {
     walkObjectStrings(step.args, "args", stringPaths);
-  } else if (step.type === "conversation") {
+  } else if (isConversationStep(step)) {
     stringPaths.push({ path: "initial_message", text: step.initial_message });
     stringPaths.push({ path: "exit_when", text: step.exit_when });
     for (const [key, description] of Object.entries(step.on_exit.extract)) {
