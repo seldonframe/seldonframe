@@ -1,9 +1,9 @@
 # Archetype probe: Win-Back (win-back)
 
-**Generated:** 2026-04-21T21:41:41.811Z
+**Generated:** 2026-04-22T11:38:54.855Z
 **Model:** claude-opus-4-7
-**Input tokens:** 8865 · **Output tokens:** 1473 · **Cost:** $0.0811 · **Latency:** 20727ms
-**Customization prompt:** "15% off, target SaaS customers, tone should be sincere not desperate"
+**Input tokens:** 9244 · **Output tokens:** 1485 · **Cost:** $0.0833 · **Latency:** 19173ms
+**Customization prompt:** (none)
 
 ## Verdict: PASS
 

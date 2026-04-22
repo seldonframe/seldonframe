@@ -17,9 +17,9 @@
       "type": "mcp_tool_call",
       "tool": "create_coupon",
       "args": {
-        "percent_off": 15,
+        "percent_off": 20,
         "duration": "once",
-        "name": "Bright Smile Dental — Win-Back 15% off",
+        "name": "Bright Smile Dental — Win-Back 20% off",
         "max_redemptions": 1,
         "expires_in_days": 14
       },
@@ -57,8 +57,8 @@
       "tool": "send_email",
       "args": {
         "to": "{{email}}",
-        "subject": "A small thank-you from Bright Smile — 15% off whenever you're ready",
-        "body": "Hi {{firstName}},\n\nWe saw you cancelled recently, and that's completely okay — no guilt, no sales pitch. We started Bright Smile to make dental care feel less scary, and that mission doesn't come with fine print.\n\nIf it ever feels like the right time to come back for a cleaning or a free new-patient consultation, here's 15% off on us:\n\n{{coupon.code}}\n\nIt's good for the next 14 days at checkout.\n\nAnd if something about your last experience didn't sit right, I'd genuinely like to hear it — just hit reply. A real person on our team reads every message.\n\nTake care either way,\nThe Bright Smile Dental team",
+        "subject": "A little something from Bright Smile — 20% off, whenever you're ready",
+        "body": "Hi {{firstName}},\n\nWe noticed you cancelled recently, and that's completely okay — no guilt trip, no hard sell. We just wanted you to know the door is open whenever you'd like to come back.\n\nDental visits shouldn't feel scary, and if something about your experience didn't land right, we'd genuinely love to hear about it. Just hit reply — a real person on our team reads every message.\n\nIf you'd like to give us another try, here's 20% off your next visit (cleaning, consult, whatever you need):\n\n{{coupon.code}}\n\nIt's good for the next 14 days. Use it when you book online or mention it at the front desk.\n\nTake care either way,\nThe Bright Smile Dental team",
         "contactId": "{{contactId}}"
       },
       "next": "wait_before_reminder"
@@ -75,7 +75,7 @@
       "tool": "send_sms",
       "args": {
         "to": "{{phone}}",
-        "body": "Hi {{firstName}}, it's Bright Smile Dental — just a quick heads up that your 15% off code {{coupon.code}} expires in a few days. Use it if it's helpful, ignore if not. Take care!",
+        "body": "Hi {{firstName}}, it's Bright Smile Dental — just a friendly heads up your 20% off code {{coupon.code}} expires in about a week. No pressure at all, just didn't want you to miss it. :)",
         "contact_id": "{{contactId}}"
       },
       "next": "log_winback_complete"

@@ -24,8 +24,8 @@
       "tool": "send_email",
       "args": {
         "to": "{{email}}",
-        "subject": "Thanks for coming in — how was your visit?",
-        "body": "Hi {{firstName}},\n\nThanks for coming in to Bright Smile Dental. We hope the visit felt calm and easy — that's always what we're aiming for.\n\nIf you have a minute, we'd really appreciate a short review on Yelp. Honest feedback helps other folks who are nervous about the dentist find us and know what to expect:\n\nhttps://www.yelp.com/writeareview/biz/bright-smile-dental\n\nAnd if anything didn't sit right, just hit reply — we'd rather hear it from you directly so we can make it right.\n\nThanks again,\nThe Bright Smile Dental team",
+        "subject": "Thanks for visiting Bright Smile — how was your appointment?",
+        "body": "Hi {{firstName}},\n\nThanks so much for coming in to see us at Bright Smile Dental. We hope the visit felt easy and painless — that's what we're here for.\n\nIf you have 30 seconds, a quick review would mean a lot. It helps other folks who are nervous about the dentist find a clinic that takes the stress out of it:\n\nhttps://g.page/r/Ca-example-business/review\n\nAnd if anything didn't feel right, just hit reply and let us know — we'd rather hear it from you directly so we can make it better.\n\nTake care,\nThe Bright Smile team",
         "contactId": "{{contactId}}"
       },
       "next": "wait_before_sms"
@@ -42,7 +42,7 @@
       "tool": "send_sms",
       "args": {
         "to": "{{phone}}",
-        "body": "Hi {{firstName}}, it's Bright Smile Dental — just a quick nudge in case our email got buried. If you have 30 seconds, a short Yelp review would mean a lot: https://www.yelp.com/writeareview/biz/bright-smile-dental",
+        "body": "Hey {{firstName}}, it's Bright Smile Dental — quick nudge: if you have 30 seconds, we'd really appreciate a short review. It helps a lot: https://g.page/r/Ca-example-business/review — thank you!",
         "contact_id": "{{contactId}}"
       },
       "next": "log_review_request_complete"
@@ -55,7 +55,7 @@
         "contact_id": "{{contactId}}",
         "type": "review_request",
         "subject": "Review Requester agent sequence complete",
-        "body": "Sent review request email + SMS reminder. Review destination: https://www.yelp.com/writeareview/biz/bright-smile-dental. NOTE: reminder fired unconditionally — v1 has no review.submitted event; check the configured review URL manually to see if this customer responded.",
+        "body": "Sent review request email + SMS reminder. Review destination: https://g.page/r/Ca-example-business/review. NOTE: reminder fired unconditionally — v1 has no review.submitted event; check the configured review URL manually to see if this customer responded.",
         "metadata": {
           "source": "review-requester",
           "stage": "complete"

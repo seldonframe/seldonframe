@@ -864,3 +864,53 @@ describe("validateAgentSpec — integration against 2 broken fixtures", () => {
     assert.ok(match, `expected unresolved_interpolation on fullName\nall issues: ${JSON.stringify(issues, null, 2)}`);
   });
 });
+
+// ---------------------------------------------------------------------
+// PR 3 regression — run the PR 2 validator against the 9 filled
+// AgentSpec outputs from the 3x live probes captured in
+// tasks/phase-7-archetype-probes/pr3-regression/*.runN.json. Zero
+// audit-critical issues on all 9 means the validator has no false
+// positives on valid synthesis output — one of Max's explicit PR 3
+// gates.
+// ---------------------------------------------------------------------
+
+const PR3_REGRESSION_DIR = path.resolve(
+  __dirname,
+  "..",
+  "..",
+  "..",
+  "..",
+  "tasks",
+  "phase-7-archetype-probes",
+  "pr3-regression",
+);
+
+describe("PR 3 regression — 9 live-probe outputs validate clean against PR 2 validator", () => {
+  const CRITICAL_CODES = new Set([
+    "spec_malformed",
+    "unknown_tool",
+    "unresolved_interpolation",
+    "unknown_event",
+    "unknown_step_next",
+    "bad_capture_name",
+    "bad_extract_shape",
+    "bad_tool_args",
+    "malformed_tools",
+  ]);
+
+  for (const arch of ["speed-to-lead", "win-back", "review-requester"]) {
+    for (const run of [1, 2, 3]) {
+      test(`${arch} run${run}: zero audit-critical validator issues`, () => {
+        const filePath = path.join(PR3_REGRESSION_DIR, `${arch}.run${run}.json`);
+        const spec = JSON.parse(readFileSync(filePath, "utf8"));
+        const issues = validateAgentSpec(spec, makeIntegrationRegistry(), integrationEventRegistry);
+        const critical = issues.filter((i) => CRITICAL_CODES.has(i.code));
+        assert.deepEqual(
+          critical,
+          [],
+          `${arch} run${run} surfaced audit-critical issues:\n${JSON.stringify(critical, null, 2)}`,
+        );
+      });
+    }
+  }
+});

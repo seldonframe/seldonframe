@@ -57,8 +57,8 @@
       "tool": "send_email",
       "args": {
         "to": "{{email}}",
-        "subject": "A little something from Bright Smile — 20% off, whenever you're ready",
-        "body": "Hi {{firstName}},\n\nWe noticed you cancelled recently, and that's completely okay — no guilt trip, no hard sell. We just wanted you to know the door is open whenever you'd like to come back.\n\nDental visits shouldn't feel scary, and if something about your experience didn't land right, we'd genuinely love to hear about it. Just hit reply — a real person on our team reads every message.\n\nIf you'd like to give us another try, here's 20% off your next visit (cleaning, consult, whatever you need):\n\n{{coupon.code}}\n\nIt's good for the next 14 days. Use it when you book online or mention it at the front desk.\n\nTake care either way,\nThe Bright Smile Dental team",
+        "subject": "A little something from Bright Smile — 20% off whenever you're ready",
+        "body": "Hi {{firstName}},\n\nWe noticed you cancelled recently, and that's totally okay — no pressure, no guilt trip. Life gets busy, and dental care shouldn't feel like one more thing weighing on you.\n\nIf you ever do want to come back, here's a little welcome-back gift — 20% off your next visit:\n\n{{coupon.code}}\n\nGood for the next 14 days. Just mention it (or enter it at checkout) when you book a cleaning or consultation.\n\nAnd if there was something about your last experience that didn't feel right, I'd genuinely love to hear it — just hit reply. We read every message, and we're always trying to make dental care feel a little less scary for everyone who walks through our door.\n\nWarmly,\nThe Bright Smile Dental team",
         "contactId": "{{contactId}}"
       },
       "next": "wait_before_reminder"
@@ -75,7 +75,7 @@
       "tool": "send_sms",
       "args": {
         "to": "{{phone}}",
-        "body": "Hi {{firstName}}, it's Bright Smile Dental — just a friendly heads up your 20% off code {{coupon.code}} expires in about a week. No pressure at all, just didn't want you to miss it. :)",
+        "body": "Hey {{firstName}} — quick note from Bright Smile Dental. Your 20% off code {{coupon.code}} is still good for a few more days if you'd like to come back for a cleaning. No pressure either way!",
         "contact_id": "{{contactId}}"
       },
       "next": "log_winback_complete"

@@ -1,9 +1,9 @@
 # Archetype probe: Review Requester (review-requester)
 
-**Generated:** 2026-04-21T21:51:16.271Z
+**Generated:** 2026-04-22T11:39:54.151Z
 **Model:** claude-opus-4-7
-**Input tokens:** 8171 · **Output tokens:** 1060 · **Cost:** $0.0674 · **Latency:** 14306ms
-**Customization prompt:** "Point review link at Yelp; tone warm but not sycophantic"
+**Input tokens:** 8503 · **Output tokens:** 1041 · **Cost:** $0.0685 · **Latency:** 14686ms
+**Customization prompt:** (none)
 
 ## Verdict: PASS
 
