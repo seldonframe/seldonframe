@@ -195,10 +195,11 @@ export function validateAgentSpec(
 
   // Build next-step reference set for unknown_step_next checks.
   const stepIds = new Set(spec.steps.map((s) => s.id));
+  // Capture bindings accumulate as we walk steps in declaration order.
+  // M5's interpolation resolver reads this to check {{capture.field}}.
+  const capturedBindings = new Set<string>();
   for (const step of spec.steps) {
-    // Skeleton in M2: dispatch by type, record unsupported. M3+ fill
-    // the real per-step validation.
-    validateStep(step, spec, stepIds, registry, issues);
+    validateStep(step, spec, stepIds, registry, capturedBindings, issues);
   }
 
   return issues;
@@ -212,7 +213,8 @@ function validateStep(
   step: Step,
   _spec: AgentSpec,
   stepIds: Set<string>,
-  _registry: BlockRegistry,
+  registry: BlockRegistry,
+  capturedBindings: Set<string>,
   issues: ValidationIssue[],
 ): void {
   // `next` reference check applies uniformly across step types.
@@ -228,12 +230,11 @@ function validateStep(
 
   switch (step.type) {
     case "wait":
-      // No further per-step validation in M2. seconds is already a
+      // No further per-step validation. seconds is already a
       // nonnegative int via schema.
       return;
     case "mcp_tool_call":
-      // M3 fills this in — tool resolution + args Zod check + capture
-      // cross-ref.
+      validateMcpToolCallStep(step as McpToolCallStep, registry, capturedBindings, issues);
       return;
     case "conversation":
       // M4 fills this in — on_exit.extract shape + exit_when predicate
@@ -246,5 +247,59 @@ function validateStep(
         path: "type",
         message: `step type "${step.type}" is not supported by this validator (PR 2 handles wait / mcp_tool_call / conversation; branch + await_event ship with 2e / 2c)`,
       });
+  }
+}
+
+// ---------------------------------------------------------------------
+// mcp_tool_call validation (M3)
+// ---------------------------------------------------------------------
+
+const CAPTURE_NAME_PATTERN = /^[a-z][a-zA-Z0-9_]*$/;
+
+function validateMcpToolCallStep(
+  step: McpToolCallStep,
+  registry: BlockRegistry,
+  capturedBindings: Set<string>,
+  issues: ValidationIssue[],
+): void {
+  // Tool name resolution — must exist in the registry.
+  const entry = registry.tools.get(step.tool);
+  if (!entry) {
+    issues.push({
+      code: "unknown_tool",
+      stepId: step.id,
+      path: "tool",
+      message: `tool "${step.tool}" is not registered in any block's tools surface`,
+    });
+    // Don't short-circuit — still validate capture name shape so we
+    // surface multiple independent issues per step in one pass.
+  }
+
+  // Full args-shape Zod check lives in M5 (interpolation-resolver-
+  // aware). M3 catches the shape-free failures: unknown tool + bad
+  // capture identifier + duplicate capture binding. Args values with
+  // `{{interpolation}}` strings would choke a naive Zod parse (a uuid
+  // field can't accept "{{contactId}}" as valid text), so proper
+  // type-checked arg validation threads through the interpolation
+  // resolver — which doesn't exist until M5.
+
+  if (step.capture !== undefined) {
+    if (!CAPTURE_NAME_PATTERN.test(step.capture)) {
+      issues.push({
+        code: "bad_capture_name",
+        stepId: step.id,
+        path: "capture",
+        message: `capture="${step.capture}" must be a lowercase identifier matching /^[a-z][a-zA-Z0-9_]*$/ so downstream {{${step.capture}.field}} references are unambiguous`,
+      });
+    } else if (capturedBindings.has(step.capture)) {
+      issues.push({
+        code: "bad_capture_name",
+        stepId: step.id,
+        path: "capture",
+        message: `capture="${step.capture}" is already bound by an earlier step; capture names must be unique within a spec`,
+      });
+    } else {
+      capturedBindings.add(step.capture);
+    }
   }
 }

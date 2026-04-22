@@ -207,6 +207,182 @@ describe("validateAgentSpec — fixture shape smoke", () => {
   }
 });
 
-// Stub used in M3+ — keeps z in import so the import isn't unused-
-// flagged by stricter lint in the meantime.
-void z;
+// ---------------------------------------------------------------------
+// M3 — mcp_tool_call validation (tool resolution + capture shape)
+// ---------------------------------------------------------------------
+
+/**
+ * Synthetic test registry with one real-shaped tool (create_contact
+ * with Zod args + returns) so unknown_tool + good-tool paths both
+ * exercise. M5 will expand this to the full CRM surface when the
+ * interpolation resolver needs return-shape access.
+ */
+function makeRegistryWithCreateContact(): BlockRegistry {
+  const createContact: ToolDefinition = {
+    name: "create_contact",
+    description: "x",
+    args: z.object({
+      first_name: z.string().min(1),
+      email: z.string().email().optional(),
+    }),
+    returns: z.object({
+      ok: z.literal(true),
+      contact: z.object({ id: z.string().uuid(), firstName: z.string() }),
+    }),
+    emits: ["contact.created"],
+  };
+  return {
+    tools: new Map([["create_contact", { blockSlug: "crm", tool: createContact }]]),
+    producesByBlock: new Map([["crm", new Set(["contact.created"])]]),
+  };
+}
+
+describe("validateAgentSpec — unknown_tool", () => {
+  test("flags a tool call against a name not in the registry", () => {
+    const spec = {
+      name: "x",
+      description: "x",
+      trigger: { type: "event", event: "contact.created" },
+      steps: [
+        {
+          id: "a",
+          type: "mcp_tool_call",
+          tool: "ghost_tool",
+          args: {},
+          next: null,
+        },
+      ],
+    };
+    const issues = validateAgentSpec(spec, makeRegistryWithCreateContact(), testEventRegistry);
+    const match = issues.find((i) => i.code === "unknown_tool");
+    assert.ok(match, "expected unknown_tool issue");
+    assert.equal(match!.stepId, "a");
+    assert.ok(match!.message.includes("ghost_tool"));
+  });
+
+  test("broken-unresolved-tool.invalid.json fixture surfaces unknown_tool", () => {
+    const spec = loadFixture("broken-unresolved-tool.invalid.json");
+    const issues = validateAgentSpec(spec, makeRegistryWithCreateContact(), testEventRegistry);
+    const match = issues.find((i) => i.code === "unknown_tool");
+    assert.ok(match);
+    assert.ok(match!.message.includes("magic_unicorn_tool_that_does_not_exist"));
+  });
+
+  test("does NOT surface unknown_tool when the tool IS registered", () => {
+    const spec = {
+      name: "x",
+      description: "x",
+      trigger: { type: "event", event: "contact.created" },
+      steps: [
+        {
+          id: "a",
+          type: "mcp_tool_call",
+          tool: "create_contact",
+          args: { first_name: "Jane" },
+          next: null,
+        },
+      ],
+    };
+    const issues = validateAgentSpec(spec, makeRegistryWithCreateContact(), testEventRegistry);
+    assert.ok(!issues.some((i) => i.code === "unknown_tool"));
+  });
+});
+
+describe("validateAgentSpec — bad_capture_name", () => {
+  test("flags a capture name that is not a lowercase identifier", () => {
+    const spec = {
+      name: "x",
+      description: "x",
+      trigger: { type: "event", event: "contact.created" },
+      steps: [
+        {
+          id: "a",
+          type: "mcp_tool_call",
+          tool: "create_contact",
+          args: { first_name: "Jane" },
+          capture: "NewContact", // PascalCase — rejected
+          next: null,
+        },
+      ],
+    };
+    const issues = validateAgentSpec(spec, makeRegistryWithCreateContact(), testEventRegistry);
+    const match = issues.find((i) => i.code === "bad_capture_name");
+    assert.ok(match);
+    assert.ok(match!.message.includes("NewContact"));
+  });
+
+  test("flags capture with leading digit / hyphen", () => {
+    const specTemplate = (capture: string) => ({
+      name: "x",
+      description: "x",
+      trigger: { type: "event", event: "contact.created" },
+      steps: [
+        {
+          id: "a",
+          type: "mcp_tool_call",
+          tool: "create_contact",
+          args: { first_name: "Jane" },
+          capture,
+          next: null,
+        },
+      ],
+    });
+    for (const bad of ["1coupon", "coupon-new", "coupon.code"]) {
+      const issues = validateAgentSpec(specTemplate(bad), makeRegistryWithCreateContact(), testEventRegistry);
+      assert.ok(
+        issues.some((i) => i.code === "bad_capture_name"),
+        `expected bad_capture_name for "${bad}"`,
+      );
+    }
+  });
+
+  test("flags duplicate capture names across steps", () => {
+    const spec = {
+      name: "x",
+      description: "x",
+      trigger: { type: "event", event: "contact.created" },
+      steps: [
+        {
+          id: "a",
+          type: "mcp_tool_call",
+          tool: "create_contact",
+          args: { first_name: "A" },
+          capture: "contact",
+          next: "b",
+        },
+        {
+          id: "b",
+          type: "mcp_tool_call",
+          tool: "create_contact",
+          args: { first_name: "B" },
+          capture: "contact",
+          next: null,
+        },
+      ],
+    };
+    const issues = validateAgentSpec(spec, makeRegistryWithCreateContact(), testEventRegistry);
+    const match = issues.find((i) => i.code === "bad_capture_name" && i.stepId === "b");
+    assert.ok(match, "expected duplicate-capture issue on step b");
+    assert.ok(match!.message.includes("already bound"));
+  });
+
+  test("accepts a valid lowercase capture name", () => {
+    const spec = {
+      name: "x",
+      description: "x",
+      trigger: { type: "event", event: "contact.created" },
+      steps: [
+        {
+          id: "a",
+          type: "mcp_tool_call",
+          tool: "create_contact",
+          args: { first_name: "Jane" },
+          capture: "newContact",
+          next: null,
+        },
+      ],
+    };
+    const issues = validateAgentSpec(spec, makeRegistryWithCreateContact(), testEventRegistry);
+    assert.ok(!issues.some((i) => i.code === "bad_capture_name"));
+  });
+});
