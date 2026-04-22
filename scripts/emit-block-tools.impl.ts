@@ -9,6 +9,7 @@ import path from "node:path";
 
 import { CRM_TOOLS } from "../packages/crm/src/blocks/crm.tools";
 import { BOOKING_TOOLS } from "../packages/crm/src/blocks/caldiy-booking.tools";
+import { EMAIL_TOOLS } from "../packages/crm/src/blocks/email.tools";
 import {
   applyToolsToMarkdown,
   emitToolEntries,
@@ -31,6 +32,7 @@ interface BlockEmitTarget {
 const TARGETS: BlockEmitTarget[] = [
   { slug: "crm", tools: CRM_TOOLS },
   { slug: "caldiy-booking", tools: BOOKING_TOOLS },
+  { slug: "email", tools: EMAIL_TOOLS },
 ];
 
 let driftDetected = false;

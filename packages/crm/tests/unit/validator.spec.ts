@@ -929,3 +929,23 @@ describe("2b.2 Booking regression — 9 live-probe outputs validate clean", () =
     }
   }
 });
+
+// 2b.2 Email migration — 9 live probes re-run after email block
+// migrated to v2 shape (block 2 of 6). Email is referenced by all 3
+// archetypes' compose_with and owns the Conversation Primitive tool
+// declaration (send_conversation_turn) that SMS will reference in
+// block 3. Regression-level rigor to catch any v2-shape-induced
+// synthesis shift before SMS starts.
+describe("2b.2 Email regression — 9 live-probe outputs validate clean", () => {
+  const regressionDir = path.join(PROBES_DIR, "email-regression");
+  for (const arch of ["speed-to-lead", "win-back", "review-requester"]) {
+    for (const run of [1, 2, 3]) {
+      test(`${arch} run${run}: zero audit-critical validator issues`, () => {
+        const spec = JSON.parse(readFileSync(path.join(regressionDir, `${arch}.run${run}.json`), "utf8"));
+        const issues = validateAgentSpec(spec, makeIntegrationRegistry(), integrationEventRegistry);
+        const critical = issues.filter((i) => CRITICAL_CODES.has(i.code));
+        assert.deepEqual(critical, [], `${arch} run${run}:\n${JSON.stringify(critical, null, 2)}`);
+      });
+    }
+  }
+});

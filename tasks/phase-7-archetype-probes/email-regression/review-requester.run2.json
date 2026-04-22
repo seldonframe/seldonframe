@@ -24,8 +24,8 @@
       "tool": "send_email",
       "args": {
         "to": "{{email}}",
-        "subject": "Thanks for visiting Bright Smile — how did we do?",
-        "body": "Hi {{firstName}},\n\nThanks so much for coming in to see us at Bright Smile Dental. We know the dentist isn't everyone's favourite place, so it really does mean a lot that you trusted us with your smile.\n\nIf you have 30 seconds, we'd be so grateful if you shared a quick review — honest words from real patients are what help other nervous folks find a clinic they can feel comfortable at:\n\nhttps://g.page/r/Ca-example-business/review\n\nAnd if something wasn't quite right during your visit, please just hit reply — we'd much rather hear it from you first so we can make it right.\n\nWarmly,\nThe Bright Smile Dental team",
+        "subject": "Thanks for visiting Bright Smile — mind sharing how it went?",
+        "body": "Hi {{firstName}},\n\nThanks for coming in to see us at Bright Smile Dental. We hope the visit felt calm, comfortable, and maybe even a little less scary than you were expecting.\n\nIf you have 30 seconds, we'd be really grateful if you'd share your experience here:\n\nhttps://g.page/r/Ca-example-business/review\n\nHonest reviews help other nervous patients feel okay about booking their first visit — which is kind of the whole point of what we do.\n\nAnd if something didn't sit right, please just hit reply and tell us. We'd much rather hear it from you directly so we can make it right.\n\nThanks again,\nThe Bright Smile team",
         "contactId": "{{contactId}}"
       },
       "next": "wait_before_sms"
@@ -42,7 +42,7 @@
       "tool": "send_sms",
       "args": {
         "to": "{{phone}}",
-        "body": "Hi {{firstName}}, it's Bright Smile Dental — just a quick nudge in case our email got buried. If you have 30 seconds, a short review would mean the world: https://g.page/r/Ca-example-business/review — thank you!",
+        "body": "Hi {{firstName}}, it's Bright Smile Dental — quick follow-up: if you have 30 seconds, a short review would mean a lot and helps other patients find us: https://g.page/r/Ca-example-business/review",
         "contact_id": "{{contactId}}"
       },
       "next": "log_review_request_complete"

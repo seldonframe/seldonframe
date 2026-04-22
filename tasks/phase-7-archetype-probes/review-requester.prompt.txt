@@ -150,7 +150,7 @@ Requires installed: crm, email, sms, caldiy-booking
     produces: [{"event": "contact.created"}, {"event": "contact.updated"}, {"event": "deal.stage_changed"}]
     verbs: [track, remember, save, store, record, contact, deal, pipeline, stage, move, assign, tag, lead, customer, crm]
 - email:
-    produces: [email.sent, email.delivered, email.opened, email.clicked, email.bounced, email.replied, email.suppressed, conversation.turn.received, conversation.turn.sent]
+    produces: [{"event": "email.sent"}, {"event": "email.delivered"}, {"event": "email.opened"}, {"event": "email.clicked"}, {"event": "email.bounced"}, {"event": "email.replied"}, {"event": "email.suppressed"}, {"event": "conversation.turn.received"}, {"event": "conversation.turn.sent"}]
     verbs: [send, email, reply, notify, message, conversation, qualify, nurture, reach out, speed to lead, follow up, welcome]
 - sms:
     produces: [sms.sent, sms.delivered, sms.replied, sms.failed, sms.suppressed, conversation.turn.received, conversation.turn.sent]

@@ -25,8 +25,8 @@
       "id": "qualify_conversation",
       "type": "conversation",
       "channel": "sms",
-      "initial_message": "Hi {{contact.firstName}}, it's Bright Smile Dental — thanks for reaching out about a new-patient visit! We'd love to get you booked (it's on us). Any preferred day/time that works? And do you have dental insurance you'd like us to check?",
-      "exit_when": "The prospect has shared a preferred appointment day/time AND confirmed their insurance status (yes / no / unsure).",
+      "initial_message": "Hi {{contact.firstName}}, it's Bright Smile Dental — thanks for reaching out about a new-patient visit! Your consultation is on us. What day/time works best for you? And do you have dental insurance you'd like us to check?",
+      "exit_when": "The prospect has shared a preferred day/time for their new-patient consultation AND confirmed their dental insurance status (yes / no / unsure).",
       "on_exit": {
         "extract": {
           "preferred_start": "ISO-8601 datetime for the preferred appointment start, snapped to the next available slot in the clinic's business hours (Mon–Fri 9am–5pm local time).",
@@ -69,8 +69,8 @@
       "tool": "send_email",
       "args": {
         "to": "{{email}}",
-        "subject": "You're booked with Bright Smile Dental 🦷",
-        "body": "Hi {{contact.firstName}},\n\nYou're all set for {{preferred_start}} — we're looking forward to meeting you.\n\nHere's what to expect: a relaxed 45-minute new-patient visit, no pressure, no surprise bills, and plenty of time for any questions you have. Our whole goal is to make dental care feel a little less scary.\n\nNeed to reschedule or have something to tell us ahead of time? Just reply to this email or text us back — we're easy to reach.\n\nSee you soon,\nThe Bright Smile Dental team",
+        "subject": "You're booked with Bright Smile Dental",
+        "body": "Hi {{contact.firstName}},\n\nYou're all set for {{preferred_start}} — we're looking forward to meeting you.\n\nHere's what to expect: a relaxed 45-minute new-patient consultation, zero pressure, and plenty of time for your questions. No charge for this visit — it's on us.\n\nNeed to move things around? Just reply to this email or text us back and we'll take care of it.\n\nSee you soon,\nThe Bright Smile Dental team",
         "contactId": "{{contactId}}"
       },
       "next": null
