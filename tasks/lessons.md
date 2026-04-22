@@ -232,22 +232,49 @@ Format: **Lesson** / **Trigger** / **Rule**
 
 ---
 
-## L-17 — Zod schema LOC estimates for non-trivial tools need a ~25 LOC/tool baseline, not 5-10
+## L-17 — Zod schema + validator LOC estimates (confirmed across two PRs)
 
-- **Trigger:** PR 1 of Scope 3 Step 2b.1 shipped contract v2 CRM tools
-  at 344 LOC across 13 tools (~26 LOC/tool) vs the audit's 50-80 LOC
-  estimate for the whole block (~4-6 LOC/tool). Aggregate PR 1 overrun:
-  1,484 LOC non-test vs 690-820 estimated. Stop-and-reassess trigger
-  fired on C8 verification. Max approved Option A (accept) after
-  tracing the overrun to line-items and confirming it was audit-
-  estimation miss, not schema-design complexity.
-- **Rule:** Zod schemas for tools that downstream validators consume
-  require args schema + returns schema + `.describe()` strings +
-  cross-field `.refine()` guards — thin estimates reflect thin schemas
-  that can't serve the validator's needs. Apply **~25-30 LOC/tool** to
-  2b.2 planning and any future block Zod migrations. When you hear
-  "per-tool Zod LOC" in a sizing conversation, your reflex should be
-  ~25, not ~5. Under the v2 shape specifically, each tool needs:
+- **Trigger:** Two independent under-sizing events in consecutive PRs:
+  - **PR 1 (Scope 3 Step 2b.1):** CRM tools shipped 344 LOC across 13
+    tools (~26 LOC/tool) vs audit's 50–80 LOC estimate for the whole
+    block (~4–6 LOC/tool). Aggregate PR 1 overrun: 1,484 LOC non-test
+    vs 690–820 estimated.
+  - **PR 2 (Scope 3 Step 2b.1):** `validator.ts` shipped 600 LOC vs
+    audit's 300–400 estimate. Resolver layer alone was ~200 LOC vs
+    audit's "~100 LOC on its own". Stop-and-reassess trigger fired at
+    600 LOC (15% past 520).
+
+  Both overruns trace to the same class of under-sizing: **Zod schema
+  + walker + resolver code has more ceremony than typical business
+  logic** because Zod's wrapper unwrapping, typed shape traversal, and
+  descriptive error generation each cost 50–100 LOC independently.
+  Both times Max approved Option A (accept) after line-item trace
+  confirmed each component mapped to audit scope, not design drift.
+- **Rule:** Three calibrated baselines, each validated against a
+  concrete shipped PR rather than an initial estimate:
+  - **~25–30 LOC per MCP tool** for Zod schemas (args + returns +
+    `.describe()` strings + cross-field `.refine()` guards) — not 5–10.
+  - **~200+ LOC for interpolation / path resolvers** in validators —
+    not ~100. Zod v4 wrapper unwrapping (ZodOptional / ZodNullable at
+    every step), `.shape` introspection, and tailored per-case error
+    messages each take 50–70 LOC independently.
+  - **~100+ LOC of inline documentation** for non-obvious invariants
+    (scope-builder ordering, data-unwrap conventions, reserved
+    namespaces, capture-visibility rules) is load-bearing, not
+    padding — budget it explicitly.
+
+  Apply these baselines to 2b.2 planning: 6 blocks × ~25 LOC/tool × (tool
+  count per block) for Zod work, plus any per-block validator extensions.
+  When sizing future validator-class work, lead with these numbers;
+  don't re-estimate from memory or from "it's just a walker".
+  When you hear any of "per-tool Zod LOC", "resolver LOC", or "how much
+  doc is too much" in a sizing conversation, your reflex should be the
+  numbers above — both now validated across two PRs rather than one.
+  Stop-and-reassess trigger stays meaningful by calibrating against
+  real data rather than initial estimates.
+
+  (Legacy v2-shape detail retained below for PR 1 context — each tool
+  under the v2 shape needs:)
     - 1 Zod object for args with per-field `.describe()`
     - 1 Zod shape for returns (share record primitives across tools to
       avoid repetition — helps but doesn't erase the per-tool cost)
