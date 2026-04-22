@@ -1,8 +1,8 @@
 # Archetype probe: Speed-to-Lead (speed-to-lead)
 
-**Generated:** 2026-04-22T16:58:06.867Z
+**Generated:** 2026-04-22T17:13:27.370Z
 **Model:** claude-opus-4-7
-**Input tokens:** 8976 · **Output tokens:** 1251 · **Cost:** $0.0762 · **Latency:** 17506ms
+**Input tokens:** 9011 · **Output tokens:** 1250 · **Cost:** $0.0763 · **Latency:** 17451ms
 **Customization prompt:** (none)
 
 ## Verdict: PASS

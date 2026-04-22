@@ -33,10 +33,9 @@ function readBlock(name: string): string {
 // ---------------------------------------------------------------------
 
 describe("core blocks — v1 parse + v2 parse coexistence", () => {
-  // CRM migrated to v2 in Scope 3 Step 2b.1 PR 3 (2026-04-22) as the
-  // pattern-validator. Booking migrated as first 2b.2 block (2026-04-22,
-  // risk-front-loaded — highest archetype coverage). The remaining 5
-  // core blocks stay on v1 until their 2b.2 migrations.
+  // 2b.2 COMPLETE 2026-04-22 — all 7 core blocks migrated to v2.
+  // CRM migrated in PR 3 as the pattern-validator. Booking / Email /
+  // SMS / Payments / Intake / Landing migrated in 2b.2 blocks 1-6.
   const cases: Array<{ name: string; produces: number; composeMin: number; isV2: boolean }> = [
     { name: "crm", produces: 3, composeMin: 7, isV2: true },
     { name: "caldiy-booking", produces: 5, composeMin: 6, isV2: true },
@@ -44,7 +43,7 @@ describe("core blocks — v1 parse + v2 parse coexistence", () => {
     { name: "sms", produces: 7, composeMin: 6, isV2: true },
     { name: "payments", produces: 14, composeMin: 5, isV2: true },
     { name: "formbricks-intake", produces: 2, composeMin: 5, isV2: true },
-    { name: "landing-pages", produces: 5, composeMin: 7, isV2: false },
+    { name: "landing-pages", produces: 5, composeMin: 7, isV2: true },
   ];
 
   for (const { name, produces, composeMin, isV2 } of cases) {
@@ -62,7 +61,7 @@ describe("core blocks — v1 parse + v2 parse coexistence", () => {
 });
 
 describe("validator — v1 blocks get legacy_contract; v2 blocks don't", () => {
-  for (const name of ["crm", "caldiy-booking", "email", "sms", "payments", "formbricks-intake"]) {
+  for (const name of ["crm", "caldiy-booking", "email", "sms", "payments", "formbricks-intake", "landing-pages"]) {
     test(`${name} (v2-migrated) does NOT surface legacy_contract`, () => {
       const parsed = parseBlockMd(readBlock(name));
       const warnings = validateCompositionContract(parsed);
@@ -73,18 +72,7 @@ describe("validator — v1 blocks get legacy_contract; v2 blocks don't", () => {
       assert.ok(!codes.includes("malformed_tools"));
     });
   }
-
-  for (const name of ["landing-pages"]) {
-    test(`${name} (still on v1) surfaces exactly one legacy_contract warning and no errors`, () => {
-      const parsed = parseBlockMd(readBlock(name));
-      const warnings = validateCompositionContract(parsed);
-      const codes = warnings.map((w) => w.code);
-      assert.equal(codes.filter((c) => c === "legacy_contract").length, 1);
-      assert.ok(!codes.includes("empty_contract"));
-      assert.ok(!codes.includes("mixed_v1_v2"));
-      assert.ok(!codes.includes("malformed_tools"));
-    });
-  }
+  // 2b.2 COMPLETE — no core blocks remain on v1.
 });
 
 // ---------------------------------------------------------------------

@@ -25,7 +25,7 @@
       "args": {
         "to": "{{email}}",
         "subject": "Thanks for visiting Bright Smile — how did we do?",
-        "body": "Hi {{firstName}},\n\nThanks so much for coming in to see us at Bright Smile Dental. We know the dentist isn't everyone's favorite place to be, so it genuinely means a lot that you trusted us with your smile.\n\nIf you have 30 seconds, we'd be really grateful if you shared a quick review. Honest feedback helps other folks in the neighborhood find us when they're nervous about finding a dentist they can trust:\n\nhttps://g.page/r/Ca-example-business/review\n\nAnd if something about your visit didn't feel right — just hit reply. We'd rather hear it from you directly so we can make it better.\n\nThanks again,\nThe Bright Smile team",
+        "body": "Hi {{firstName}},\n\nThanks so much for coming in to see us at Bright Smile Dental. We know the dentist isn't everyone's favourite appointment, so it genuinely means a lot that you trusted us with your smile.\n\nIf you have 30 seconds, we'd really appreciate a quick review — honest feedback helps other nervous patients find a practice where they'll feel looked after:\n\nhttps://g.page/r/Ca-example-business/review\n\nAnd if something didn't feel quite right during your visit, please just hit reply — we'd much rather hear it from you directly so we can make it right.\n\nThanks again,\nThe Bright Smile team",
         "contactId": "{{contactId}}"
       },
       "next": "wait_before_sms"
@@ -42,7 +42,7 @@
       "tool": "send_sms",
       "args": {
         "to": "{{phone}}",
-        "body": "Hey {{firstName}}, it's Bright Smile Dental — quick nudge in case our email got buried. If you have 30 seconds, a short review really helps us out: https://g.page/r/Ca-example-business/review 🙏",
+        "body": "Hi {{firstName}}, it's Bright Smile Dental — quick follow-up: if you have 30 seconds, a short review would really help other patients find us. https://g.page/r/Ca-example-business/review Thanks!",
         "contact_id": "{{contactId}}"
       },
       "next": "log_review_request_complete"

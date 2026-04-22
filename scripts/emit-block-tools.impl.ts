@@ -13,6 +13,7 @@ import { EMAIL_TOOLS } from "../packages/crm/src/blocks/email.tools";
 import { SMS_TOOLS } from "../packages/crm/src/blocks/sms.tools";
 import { PAYMENTS_TOOLS } from "../packages/crm/src/blocks/payments.tools";
 import { INTAKE_TOOLS } from "../packages/crm/src/blocks/intake.tools";
+import { LANDING_TOOLS } from "../packages/crm/src/blocks/landing.tools";
 import {
   applyToolsToMarkdown,
   emitToolEntries,
@@ -29,8 +30,8 @@ interface BlockEmitTarget {
   tools: readonly ToolDefinition[];
 }
 
-// Registry of blocks whose tools emit to BLOCK.md. 2b.2 adds the
-// remaining core block (landing) here when it migrates.
+// Registry of blocks whose tools emit to BLOCK.md. 2b.2 COMPLETE —
+// all 7 core blocks migrated to v2.
 const TARGETS: BlockEmitTarget[] = [
   { slug: "crm", tools: CRM_TOOLS },
   { slug: "caldiy-booking", tools: BOOKING_TOOLS },
@@ -38,6 +39,7 @@ const TARGETS: BlockEmitTarget[] = [
   { slug: "sms", tools: SMS_TOOLS },
   { slug: "payments", tools: PAYMENTS_TOOLS },
   { slug: "formbricks-intake", tools: INTAKE_TOOLS },
+  { slug: "landing-pages", tools: LANDING_TOOLS },
 ];
 
 let driftDetected = false;
