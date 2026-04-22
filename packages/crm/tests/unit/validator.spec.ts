@@ -164,7 +164,8 @@ describe("validateAgentSpec — unknown_step_next", () => {
 });
 
 // ---------------------------------------------------------------------
-// Unsupported step types (branch / await_event — future scope)
+// Unsupported step types (branch — future 2e scope; await_event moved
+// to known-steps in 2c PR 1 M1)
 // ---------------------------------------------------------------------
 
 describe("validateAgentSpec — unsupported_step_type", () => {
@@ -183,6 +184,180 @@ describe("validateAgentSpec — unsupported_step_type", () => {
     assert.ok(match);
     assert.equal(match!.stepId, "a");
     assert.ok(match!.message.includes("branch"));
+  });
+});
+
+// ---------------------------------------------------------------------
+// 2c PR 1 M1 — await_event schema shape
+//
+// Tests the Zod schema behavior via validateAgentSpec:
+//   - Valid await_event shapes parse cleanly (no spec_malformed).
+//   - Missing required fields / malformed predicate / bad Duration all
+//     surface spec_malformed at parse time (schema guards catch
+//     authoring mistakes without reaching the dispatcher).
+// Dispatcher-level checks (event-in-registry, predicate-paths-typed,
+// next-refs-resolve, timeout-ceiling, capture-identifier, no-capture-
+// on-timeout) are M2 concerns — those tests ship in the next commit.
+// ---------------------------------------------------------------------
+
+describe("validateAgentSpec — await_event schema shape (2c PR 1 M1)", () => {
+  const spec = (step: Record<string, unknown>) => ({
+    name: "x",
+    description: "x",
+    trigger: { type: "event", event: "contact.created" },
+    steps: [step, { id: "resume_target", type: "wait", seconds: 0, next: null }, { id: "timeout_target", type: "wait", seconds: 0, next: null }],
+  });
+
+  test("minimal valid await_event parses without spec_malformed", () => {
+    const issues = validateAgentSpec(
+      spec({
+        id: "wait_form",
+        type: "await_event",
+        event: "form.submitted",
+        on_resume: { next: "resume_target" },
+        on_timeout: { next: "timeout_target" },
+      }),
+      emptyRegistry,
+      testEventRegistry,
+    );
+    assert.ok(!issues.some((i) => i.code === "spec_malformed"), `unexpected spec_malformed: ${JSON.stringify(issues.filter((i) => i.code === "spec_malformed"))}`);
+  });
+
+  test("full-featured await_event (match + timeout + capture) parses without spec_malformed", () => {
+    const issues = validateAgentSpec(
+      spec({
+        id: "wait_form",
+        type: "await_event",
+        event: "form.submitted",
+        match: {
+          kind: "all",
+          of: [
+            { kind: "field_equals", field: "data.formId", value: "onboarding_intake" },
+            { kind: "field_exists", field: "data.contactId" },
+          ],
+        },
+        timeout: "P7D",
+        on_resume: { capture: "submission", next: "resume_target" },
+        on_timeout: { next: "timeout_target" },
+      }),
+      emptyRegistry,
+      testEventRegistry,
+    );
+    assert.ok(!issues.some((i) => i.code === "spec_malformed"), `unexpected spec_malformed: ${JSON.stringify(issues.filter((i) => i.code === "spec_malformed"))}`);
+  });
+
+  test("missing event surfaces spec_malformed", () => {
+    const issues = validateAgentSpec(
+      spec({
+        id: "wait_form",
+        type: "await_event",
+        on_resume: { next: "resume_target" },
+        on_timeout: { next: "timeout_target" },
+      }),
+      emptyRegistry,
+      testEventRegistry,
+    );
+    // Malformed await_event shapes fall through the discriminated union
+    // to UnknownStepSchema (existing validator.ts design) and surface
+    // via the dispatcher's unsupported_step_type path. M2 will upgrade
+    // these to specific spec_malformed issues when the dispatcher lands.
+    // Core invariant we check at M1: the step is NOT silently accepted.
+    assert.ok(issues.some((i) => i.stepId === "wait_form"), `expected at least one issue on wait_form; got: ${JSON.stringify(issues)}`);
+  });
+
+  test("missing on_resume surfaces spec_malformed", () => {
+    const issues = validateAgentSpec(
+      spec({
+        id: "wait_form",
+        type: "await_event",
+        event: "form.submitted",
+        on_timeout: { next: "timeout_target" },
+      }),
+      emptyRegistry,
+      testEventRegistry,
+    );
+    // Malformed await_event shapes fall through the discriminated union
+    // to UnknownStepSchema (existing validator.ts design) and surface
+    // via the dispatcher's unsupported_step_type path. M2 will upgrade
+    // these to specific spec_malformed issues when the dispatcher lands.
+    // Core invariant we check at M1: the step is NOT silently accepted.
+    assert.ok(issues.some((i) => i.stepId === "wait_form"), `expected at least one issue on wait_form; got: ${JSON.stringify(issues)}`);
+  });
+
+  test("missing on_timeout surfaces spec_malformed", () => {
+    const issues = validateAgentSpec(
+      spec({
+        id: "wait_form",
+        type: "await_event",
+        event: "form.submitted",
+        on_resume: { next: "resume_target" },
+      }),
+      emptyRegistry,
+      testEventRegistry,
+    );
+    // Malformed await_event shapes fall through the discriminated union
+    // to UnknownStepSchema (existing validator.ts design) and surface
+    // via the dispatcher's unsupported_step_type path. M2 will upgrade
+    // these to specific spec_malformed issues when the dispatcher lands.
+    // Core invariant we check at M1: the step is NOT silently accepted.
+    assert.ok(issues.some((i) => i.stepId === "wait_form"), `expected at least one issue on wait_form; got: ${JSON.stringify(issues)}`);
+  });
+
+  test("malformed match (bad predicate kind) surfaces spec_malformed", () => {
+    const issues = validateAgentSpec(
+      spec({
+        id: "wait_form",
+        type: "await_event",
+        event: "form.submitted",
+        match: { kind: "invalid_kind", field: "x", value: "y" },
+        on_resume: { next: "resume_target" },
+        on_timeout: { next: "timeout_target" },
+      }),
+      emptyRegistry,
+      testEventRegistry,
+    );
+    // Malformed await_event shapes fall through the discriminated union
+    // to UnknownStepSchema (existing validator.ts design) and surface
+    // via the dispatcher's unsupported_step_type path. M2 will upgrade
+    // these to specific spec_malformed issues when the dispatcher lands.
+    // Core invariant we check at M1: the step is NOT silently accepted.
+    assert.ok(issues.some((i) => i.stepId === "wait_form"), `expected at least one issue on wait_form; got: ${JSON.stringify(issues)}`);
+  });
+
+  test("non-ISO8601 timeout string surfaces spec_malformed", () => {
+    const issues = validateAgentSpec(
+      spec({
+        id: "wait_form",
+        type: "await_event",
+        event: "form.submitted",
+        timeout: "7 days", // invalid — must be ISO 8601 like "P7D"
+        on_resume: { next: "resume_target" },
+        on_timeout: { next: "timeout_target" },
+      }),
+      emptyRegistry,
+      testEventRegistry,
+    );
+    // Malformed await_event shapes fall through the discriminated union
+    // to UnknownStepSchema (existing validator.ts design) and surface
+    // via the dispatcher's unsupported_step_type path. M2 will upgrade
+    // these to specific spec_malformed issues when the dispatcher lands.
+    // Core invariant we check at M1: the step is NOT silently accepted.
+    assert.ok(issues.some((i) => i.stepId === "wait_form"), `expected at least one issue on wait_form; got: ${JSON.stringify(issues)}`);
+  });
+
+  test("null next values in on_resume/on_timeout parse cleanly (null is valid terminator)", () => {
+    const issues = validateAgentSpec(
+      spec({
+        id: "wait_form",
+        type: "await_event",
+        event: "form.submitted",
+        on_resume: { next: null },
+        on_timeout: { next: null },
+      }),
+      emptyRegistry,
+      testEventRegistry,
+    );
+    assert.ok(!issues.some((i) => i.code === "spec_malformed"), `unexpected spec_malformed: ${JSON.stringify(issues.filter((i) => i.code === "spec_malformed"))}`);
   });
 });
 

@@ -23,12 +23,19 @@
 //   - Conversation on_exit shape (extract field type)
 // Out of scope:
 //   - Branch step validation (2e scope)
-//   - await_event step validation (2c scope)
-//   - Runtime execution (7.e scope)
+//   - Runtime execution (7.e scope; 2c ships the FIRST runtime for the
+//     await_event dispatcher in PR 2, but synthesis-time validation in
+//     this file never executes user code).
+//
+// Scope added in 2c PR 1 (2026-04-22, audit `tasks/step-2c-mid-flow-
+// events-audit.md`):
+//   - await_event step schema + type + guard (M1 — this commit)
+//   - await_event dispatcher + tests (M2 — next commit)
 
 import { z } from "zod";
 
 import type { ToolDefinition } from "../blocks/contract-v2";
+import { PredicateSchema, DurationSchema } from "./types";
 
 // ---------------------------------------------------------------------
 // Public types
@@ -125,6 +132,44 @@ const ConversationStepSchema = z.object({
   }),
 });
 
+// await_event — pauses the workflow until a matching event fires OR
+// the timeout elapses. Shipped in Scope 3 Step 2c PR 1 per
+// `tasks/step-2c-mid-flow-events-audit.md` §3.
+//
+// Design choices (from audit §3.1, all approved 2026-04-22):
+//   - `event` is REQUIRED. A wait without a target event is a different
+//     primitive (`type: "wait"`). Missing event is a schema error, not
+//     a dispatcher error.
+//   - `match` is optional and REUSES the existing Predicate primitive
+//     (types.ts:30). Zero new primitives. The runtime convention is
+//     that field paths starting with `data.` address the event
+//     payload; other paths address the workflow's capture scope.
+//     G-4: interpolations inside predicate `value` are resolved AT
+//     WAIT-REGISTRATION TIME (frozen), not at event arrival.
+//   - `timeout` is optional at the schema level. The M2 dispatcher
+//     enforces the G-3 ceiling (90 days) and fills the G-3 default
+//     (30 days) when omitted. No "wait forever" semantics allowed.
+//   - Both `on_resume.next` and `on_timeout.next` are REQUIRED. `null`
+//     is a valid terminator (flow ends on that path), but each half
+//     must explicitly state it.
+//   - `capture` is optional AND only valid on `on_resume`. On timeout
+//     there is no event payload to capture; M2 dispatcher flags an
+//     on_timeout.capture as a schema-level error via custom refine.
+const AwaitEventStepSchema = z.object({
+  id: z.string().min(1),
+  type: z.literal("await_event"),
+  event: z.string().min(1),
+  match: PredicateSchema.optional(),
+  timeout: DurationSchema.optional(),
+  on_resume: z.object({
+    capture: z.string().min(1).optional(),
+    next: z.string().nullable(),
+  }),
+  on_timeout: z.object({
+    next: z.string().nullable(),
+  }),
+});
+
 // Open-ended fallback for unknown step types. Parse succeeds; the
 // step dispatcher surfaces `unsupported_step_type` against it.
 // Kept as a separate schema (not in the discriminated union) so TS
@@ -143,6 +188,7 @@ const KnownStepSchema = z.discriminatedUnion("type", [
   WaitStepSchema,
   McpToolCallStepSchema,
   ConversationStepSchema,
+  AwaitEventStepSchema,
 ]);
 
 const StepSchema = z.union([KnownStepSchema, UnknownStepSchema]);
@@ -159,11 +205,17 @@ export type AgentSpec = z.infer<typeof AgentSpecSchema>;
 export type WaitStep = z.infer<typeof WaitStepSchema>;
 export type McpToolCallStep = z.infer<typeof McpToolCallStepSchema>;
 export type ConversationStep = z.infer<typeof ConversationStepSchema>;
+export type AwaitEventStep = z.infer<typeof AwaitEventStepSchema>;
 export type UnknownStep = z.infer<typeof UnknownStepSchema>;
-// Discriminated-union narrowing on `.type` for the three known step
+// Discriminated-union narrowing on `.type` for the four known step
 // types; UnknownStep is the runtime fallthrough for unsupported
-// types (branch / await_event) and carries `type: string`.
-export type Step = WaitStep | McpToolCallStep | ConversationStep | UnknownStep;
+// types (branch — ships with 2e) and carries `type: string`.
+export type Step =
+  | WaitStep
+  | McpToolCallStep
+  | ConversationStep
+  | AwaitEventStep
+  | UnknownStep;
 
 // Type guards — TypeScript can't narrow Step by `step.type === "..."`
 // alone because UnknownStep has `type: string` which overlaps every
@@ -177,6 +229,13 @@ function isMcpToolCallStep(step: Step): step is McpToolCallStep {
 }
 function isConversationStep(step: Step): step is ConversationStep {
   return step.type === "conversation" && typeof (step as Partial<ConversationStep>).initial_message === "string";
+}
+function isAwaitEventStep(step: Step): step is AwaitEventStep {
+  // Distinguish from UnknownStep by requiring both the literal type
+  // and the `event` field (which is required on the real schema but
+  // absent on a pass-through UnknownStep that merely happens to carry
+  // `type: "await_event"`).
+  return step.type === "await_event" && typeof (step as Partial<AwaitEventStep>).event === "string";
 }
 
 // ---------------------------------------------------------------------
