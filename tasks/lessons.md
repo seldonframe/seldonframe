@@ -285,6 +285,31 @@ Format: **Lesson** / **Trigger** / **Rule**
 
 ---
 
+## L-19 — Windows `core.autocrlf` rewrites emitted artifacts on checkout, causing silent drift-detector failures
+
+- **Trigger:** `pnpm emit:event-registry:check` failed on the rebased
+  PR 1 branch. The emitted `packages/core/src/events/event-registry.json`
+  was LF when committed (via Node's `JSON.stringify(...) + "\n"`), but
+  Windows' default `core.autocrlf=true` rewrites text files as CRLF in
+  the working tree on checkout. The drift detector compared the fresh
+  emit (LF) against the working-tree file (CRLF) byte-for-byte and
+  flagged drift that wasn't semantically real.
+- **Rule:** Any emitted artifact that gets committed and diff-checked
+  must pin its line endings via `.gitattributes`. Pattern:
+  ```
+  packages/core/src/events/event-registry.json eol=lf
+  packages/crm/src/blocks/*.tools.json eol=lf
+  ```
+  When adding a new `emit:X:check` step, add the corresponding
+  `.gitattributes` entry in the same commit — otherwise the failure
+  mode is "drift detected" when content is identical, which is
+  misdiagnosable as a real emit regression and burns triage time
+  tracking down a phantom. Same logic applies to future code-
+  generators; Node-written files default to LF, so `.gitattributes`
+  is the knob that keeps them LF through Windows checkouts.
+
+---
+
 ## Template for new entries
 
 ```
