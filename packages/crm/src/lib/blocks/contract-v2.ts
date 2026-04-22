@@ -36,8 +36,10 @@ import { z } from "zod";
 // event.name` entries validate against the same shape constraint.
 // ---------------------------------------------------------------------
 
-export const EventNameSchema = z.string().regex(/^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$/, {
-  message: 'Event name must be "namespace.verb" lowercase (e.g., "contact.created")',
+// Accepts two-or-more dot-separated lowercase segments. `contact.created`
+// (2 segments) and `conversation.turn.received` (3 segments) both pass.
+export const EventNameSchema = z.string().regex(/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/, {
+  message: 'Event name must be "namespace.verb[.subverb]" lowercase (e.g., "contact.created" or "conversation.turn.received")',
 });
 
 // ---------------------------------------------------------------------

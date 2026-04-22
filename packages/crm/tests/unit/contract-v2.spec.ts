@@ -15,17 +15,21 @@ import {
 } from "../../src/lib/blocks/contract-v2";
 
 describe("EventNameSchema", () => {
-  test("accepts namespace.verb lowercase with underscores", () => {
+  test("accepts two-segment dot-notation", () => {
     assert.equal(EventNameSchema.safeParse("contact.created").success, true);
     assert.equal(EventNameSchema.safeParse("booking.no_show").success, true);
     assert.equal(EventNameSchema.safeParse("conversation.turn_received").success, true);
   });
 
-  test("rejects wrong casing, missing dot, extra segments", () => {
+  test("accepts three-segment dot-notation (real events like conversation.turn.received)", () => {
+    assert.equal(EventNameSchema.safeParse("conversation.turn.received").success, true);
+    assert.equal(EventNameSchema.safeParse("conversation.turn.sent").success, true);
+  });
+
+  test("rejects wrong casing, missing dot, or hyphens", () => {
     assert.equal(EventNameSchema.safeParse("ContactCreated").success, false);
     assert.equal(EventNameSchema.safeParse("contact").success, false);
     assert.equal(EventNameSchema.safeParse("contact-created").success, false);
-    assert.equal(EventNameSchema.safeParse("foo.bar.baz").success, false);
   });
 });
 

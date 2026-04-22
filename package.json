@@ -16,6 +16,8 @@
     "test:unit": "node scripts/run-unit-tests.js",
     "emit:blocks": "node scripts/emit-block-tools.js",
     "emit:blocks:check": "node scripts/emit-block-tools.js --check",
+    "emit:event-registry": "node scripts/emit-event-registry.js",
+    "emit:event-registry:check": "node scripts/emit-event-registry.js --check",
     "db:generate": "pnpm --filter @seldonframe/crm db:generate",
     "db:migrate": "pnpm --filter @seldonframe/crm db:migrate",
     "db:push": "pnpm --filter @seldonframe/crm db:push",

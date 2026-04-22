@@ -55,8 +55,10 @@ export const PredicateSchema: z.ZodType<Predicate> = z.lazy(() =>
     }),
     z.object({
       kind: z.literal("event_emitted"),
-      eventType: z.string().regex(/^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$/, {
-        message: 'eventType must be "namespace.verb" lowercase (e.g., "booking.created")',
+      // Allows two-or-more dot-separated lowercase segments — handles
+      // both "booking.created" and "conversation.turn.received".
+      eventType: z.string().regex(/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/, {
+        message: 'eventType must be "namespace.verb[.subverb]" lowercase (e.g., "booking.created" or "conversation.turn.received")',
       }),
     }),
     z.object({

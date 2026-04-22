@@ -32,6 +32,9 @@ jobs:
       - name: BLOCK.md emit drift-detector
         run: pnpm emit:blocks:check
 
+      - name: Event-registry drift-detector
+        run: pnpm emit:event-registry:check
+
       - name: Build
         run: pnpm build
 

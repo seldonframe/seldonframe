@@ -1051,8 +1051,10 @@ export function validateCompositionContract(
     });
   }
 
-  // Event-name sanity check.
-  const eventNamePattern = /^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$/;
+  // Event-name sanity check. Allows one-or-more dot-separated lowercase
+  // segments — e.g. "contact.created" (2 segments) and
+  // "conversation.turn.received" (3 segments) are both valid.
+  const eventNamePattern = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/;
   for (const event of c.produces) {
     if (!eventNamePattern.test(event)) {
       warnings.push({
