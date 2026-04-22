@@ -25,7 +25,7 @@
       "id": "qualify_conversation",
       "type": "conversation",
       "channel": "sms",
-      "initial_message": "Hi {{contact.firstName}}, it's Bright Smile Dental — thanks for reaching out about a new-patient visit! We'd love to get you in for a free consultation. Any day/time that works best for you? And do you have dental insurance you'd like us to check?",
+      "initial_message": "Hi {{contact.firstName}}, it's the team at Bright Smile Dental — thanks for reaching out about a new-patient visit! We'd love to get you in. Any preferred day/time that works for you? And do you have dental insurance you'd like us to check, or are you paying out of pocket?",
       "exit_when": "The prospect has shared a preferred appointment day/time for their new-patient consultation AND confirmed their insurance status (yes / no / unsure).",
       "on_exit": {
         "extract": {
@@ -69,8 +69,8 @@
       "tool": "send_email",
       "args": {
         "to": "{{email}}",
-        "subject": "You're booked with Bright Smile Dental",
-        "body": "Hi {{contact.firstName}},\n\nYou're all set for {{preferred_start}} — we're looking forward to meeting you. Here's what to expect: a relaxed 45-minute new-patient visit with zero pressure, modern tech, and plenty of time for any questions you have. Our whole goal is to make this feel easy.\n\nNeed to move it? Just reply to this email or text us back — no problem at all.\n\nSee you soon,\nThe Bright Smile Dental team",
+        "subject": "You're booked with Bright Smile Dental 🦷",
+        "body": "Hi {{contact.firstName}},\n\nYou're all set for your free new-patient consultation at Bright Smile Dental on {{preferred_start}}. We're looking forward to meeting you!\n\nHere's what to expect: a relaxed 45-minute visit with our team — no pressure, no judgement, just a friendly chat about your smile and plenty of time for your questions. We use modern, gentle tech so you can actually relax in the chair (promise).\n\nNeed to reschedule or have a question before your visit? Just reply to this email or text us back — a real person will get back to you.\n\nSee you soon,\nThe Bright Smile Dental team",
         "contactId": "{{contactId}}"
       },
       "next": null

@@ -25,8 +25,8 @@
       "id": "qualify_conversation",
       "type": "conversation",
       "channel": "sms",
-      "initial_message": "Hi {{contact.firstName}}, it's Bright Smile Dental — thanks for reaching out about a new-patient visit! We'd love to get you in for a free consultation. Any day/time that works best for you? And do you have dental insurance you'd like us to check?",
-      "exit_when": "The prospect has shared a preferred appointment day/time for their new-patient consultation AND confirmed their insurance status (yes / no / unsure).",
+      "initial_message": "Hi {{contact.firstName}}, it's Bright Smile Dental — thanks for reaching out about a new-patient visit! Your consultation is on us. What day/time works best for you, and do you have dental insurance you'd like us to check?",
+      "exit_when": "The prospect has shared a preferred appointment day/time AND confirmed their insurance status (yes / no / unsure) for their new-patient consultation or cleaning.",
       "on_exit": {
         "extract": {
           "preferred_start": "ISO-8601 datetime for the preferred appointment start, snapped to the next available slot in the clinic's business hours (Mon–Fri 9am–5pm local time).",
@@ -69,8 +69,8 @@
       "tool": "send_email",
       "args": {
         "to": "{{email}}",
-        "subject": "You're booked with Bright Smile Dental",
-        "body": "Hi {{contact.firstName}},\n\nYou're all set for {{preferred_start}} — we're looking forward to meeting you. Here's what to expect: a relaxed 45-minute new-patient visit with zero pressure, modern tech, and plenty of time for any questions you have. Our whole goal is to make this feel easy.\n\nNeed to move it? Just reply to this email or text us back — no problem at all.\n\nSee you soon,\nThe Bright Smile Dental team",
+        "subject": "You're booked with Bright Smile Dental 🦷",
+        "body": "Hi {{contact.firstName}},\n\nYou're all set for {{preferred_start}} — we're looking forward to meeting you. Here's what to expect: a relaxed 45-minute new-patient consultation, zero pressure, and plenty of time to answer your questions. No scary dentist vibes, promise.\n\nNeed to move the time or have a question before your visit? Just reply to this email or text us back — we'll take care of it.\n\nSee you soon,\nThe Bright Smile Dental team",
         "contactId": "{{contactId}}"
       },
       "next": null

@@ -949,3 +949,24 @@ describe("2b.2 Email regression — 9 live-probe outputs validate clean", () => 
     }
   }
 });
+
+// 2b.2 SMS migration — 9 live probes re-run after sms block
+// migrated to v2 shape (block 3 of 6). Per Max's SMS-migration
+// directive: SMS tests whether the Conversation Primitive cross-
+// block convention generalizes. sms.tools.ts intentionally does NOT
+// re-declare send_conversation_turn; the tool lives on email.tools.ts.
+// If this convention breaks synthesis for any archetype, the
+// regression below catches it.
+describe("2b.2 SMS regression — 9 live-probe outputs validate clean", () => {
+  const regressionDir = path.join(PROBES_DIR, "sms-regression");
+  for (const arch of ["speed-to-lead", "win-back", "review-requester"]) {
+    for (const run of [1, 2, 3]) {
+      test(`${arch} run${run}: zero audit-critical validator issues`, () => {
+        const spec = JSON.parse(readFileSync(path.join(regressionDir, `${arch}.run${run}.json`), "utf8"));
+        const issues = validateAgentSpec(spec, makeIntegrationRegistry(), integrationEventRegistry);
+        const critical = issues.filter((i) => CRITICAL_CODES.has(i.code));
+        assert.deepEqual(critical, [], `${arch} run${run}:\n${JSON.stringify(critical, null, 2)}`);
+      });
+    }
+  }
+});

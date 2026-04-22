@@ -24,8 +24,8 @@
       "tool": "send_email",
       "args": {
         "to": "{{email}}",
-        "subject": "Thanks for visiting Bright Smile — how did we do?",
-        "body": "Hi {{firstName}},\n\nThank you for trusting us with your smile. We hope your visit felt calm, comfortable, and maybe even a little less scary than you expected — that's exactly what we're working toward, one patient at a time.\n\nIf you have 30 seconds, we'd be so grateful if you'd share a quick review. Honest words from real patients are how other people in the neighborhood find us and feel okay walking through the door:\n\nhttps://g.page/r/Ca-example-business/review\n\nAnd if something wasn't quite right, please just hit reply — we'd rather hear it from you directly so we can make it right.\n\nWarmly,\nThe Bright Smile Dental team",
+        "subject": "Thanks for visiting Bright Smile — mind sharing how it went?",
+        "body": "Hi {{firstName}},\n\nThank you for trusting us with your smile. We know dental visits aren't anyone's favourite thing, so it genuinely means a lot that you came in.\n\nIf you have 30 seconds, we'd really appreciate a short review — it helps other nervous patients feel okay about booking their first visit with us:\n\nhttps://g.page/r/Ca-example-business/review\n\nAnd if something didn't feel right during your appointment, please just hit reply — we'd much rather hear about it directly so we can make it right.\n\nThanks again,\nThe team at Bright Smile Dental",
         "contactId": "{{contactId}}"
       },
       "next": "wait_before_sms"
@@ -42,7 +42,7 @@
       "tool": "send_sms",
       "args": {
         "to": "{{phone}}",
-        "body": "Hi {{firstName}}, it's Bright Smile Dental — quick follow-up: if you have 30 seconds, a short review really helps folks find us. Thanks so much! https://g.page/r/Ca-example-business/review",
+        "body": "Hey {{firstName}}, it's Bright Smile Dental — quick follow-up: if you have 30 seconds, a short review would really help us out. https://g.page/r/Ca-example-business/review  Thanks!",
         "contact_id": "{{contactId}}"
       },
       "next": "log_review_request_complete"

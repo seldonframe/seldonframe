@@ -201,7 +201,7 @@ Requires installed: crm, email, sms, payments
     produces: [{"event": "email.sent"}, {"event": "email.delivered"}, {"event": "email.opened"}, {"event": "email.clicked"}, {"event": "email.bounced"}, {"event": "email.replied"}, {"event": "email.suppressed"}, {"event": "conversation.turn.received"}, {"event": "conversation.turn.sent"}]
     verbs: [send, email, reply, notify, message, conversation, qualify, nurture, reach out, speed to lead, follow up, welcome]
 - sms:
-    produces: [sms.sent, sms.delivered, sms.replied, sms.failed, sms.suppressed, conversation.turn.received, conversation.turn.sent]
+    produces: [{"event": "sms.sent"}, {"event": "sms.delivered"}, {"event": "sms.replied"}, {"event": "sms.failed"}, {"event": "sms.suppressed"}, {"event": "conversation.turn.received"}, {"event": "conversation.turn.sent"}]
     verbs: [text, sms, message, reply, chat, qualify, speed to lead, follow up, reminder, confirm, book via text]
 - caldiy-booking:
     produces: [{"event": "booking.created"}, {"event": "booking.completed"}, {"event": "booking.cancelled"}, {"event": "booking.rescheduled"}, {"event": "booking.no_show"}]
