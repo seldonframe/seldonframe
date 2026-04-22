@@ -310,6 +310,31 @@ Format: **Lesson** / **Trigger** / **Rule**
 
 ---
 
+## L-20 — Audit is authoritative, memory is not
+
+- **Trigger:** PR 2 kickoff message (2026-04-22) gave the LOC ceiling as
+  ~200, citing the audit from memory. Audit at HEAD read 300–400 after
+  a 2b.1 self-review bump that specifically added ~100 LOC for the
+  interpolation resolver. Claude Code caught the discrepancy via L-16
+  discipline (direct-verify load-bearing facts) before proceeding. The
+  200 number would have forced a scope cut of the validator's core
+  capability (without interpolation resolution it can't type-check
+  `{{coupon.code}}` vs `{{coupon.couponCode}}` drift — exactly the bug
+  the audit says this validator exists to catch).
+- **Rule:** When a message from Max references a specific audit number
+  or decision, verify against the audit at HEAD before acting. L-16
+  applies to ALL secondhand sources, including Max's messages
+  paraphrased from his own memory. Max rereads audits when needed just
+  like Claude Code does. If Max's stated number conflicts with the
+  audit at HEAD, flag it and cite both sources verbatim — don't
+  reconcile silently, and don't assume memory won.
+  This generalizes L-16: any secondhand source, including the primary
+  user, is scaffolding for what to look at, not ground truth.
+  **Audit > message > memory. Always.** When in doubt, read the audit,
+  quote the exact passage, and ask which applies.
+
+---
+
 ## Template for new entries
 
 ```
