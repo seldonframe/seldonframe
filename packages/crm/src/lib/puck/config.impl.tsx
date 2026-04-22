@@ -50,7 +50,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
+
+
+import { componentFieldRegistry } from "./config-fields";
 
 const icons = {
   check: Check,
@@ -93,14 +95,7 @@ export const puckConfig: Config = {
   components: {
     Hero: {
       label: "Hero",
-      fields: {
-        headline: { type: "text" },
-        subheadline: { type: "textarea" },
-        ctaText: { type: "text" },
-        ctaLink: { type: "text" },
-        alignment: { type: "select", options: [{ label: "Left", value: "left" }, { label: "Center", value: "center" }] },
-        showCta: { type: "radio", options: [{ label: "Yes", value: "yes" }, { label: "No", value: "no" }] },
-      },
+      fields: componentFieldRegistry.Hero.fields,
       defaultProps: {
         headline: "Premium Business OS",
         subheadline: "Build your entire service business on a foundation of speed and elegance.",
@@ -129,28 +124,7 @@ export const puckConfig: Config = {
 
     Section: {
       label: "Section",
-      fields: {
-        heading: { type: "text" },
-        description: { type: "textarea" },
-        backgroundColor: {
-          type: "select",
-          options: [
-            { label: "Default", value: "transparent" },
-            { label: "Subtle", value: "subtle" },
-            { label: "Primary", value: "primary" },
-          ],
-        },
-        paddingY: {
-          type: "select",
-          options: [
-            { label: "Small", value: "py-8" },
-            { label: "Medium", value: "py-16" },
-            { label: "Large", value: "py-24" },
-            { label: "Extra Large", value: "py-32" },
-          ],
-        },
-        content: { type: "slot" },
-      },
+      fields: componentFieldRegistry.Section.fields,
       defaultProps: {
         heading: "Section Heading",
         description: "Add a brief description.",
@@ -187,28 +161,7 @@ export const puckConfig: Config = {
 
     TwoColumn: {
       label: "Two Column",
-      fields: {
-        ratio: {
-          type: "select",
-          options: [
-            { label: "50-50", value: "md:grid-cols-2" },
-            { label: "60-40", value: "md:grid-cols-[1.5fr_1fr]" },
-            { label: "40-60", value: "md:grid-cols-[1fr_1.5fr]" },
-            { label: "70-30", value: "md:grid-cols-[2fr_1fr]" },
-          ],
-        },
-        gap: {
-          type: "select",
-          options: [
-            { label: "Small", value: "gap-4" },
-            { label: "Medium", value: "gap-8" },
-            { label: "Large", value: "gap-16" },
-          ],
-        },
-        reverseOnMobile: { type: "radio", options: [{ label: "Yes", value: "flex-col-reverse" }, { label: "No", value: "" }] },
-        left: { type: "slot" },
-        right: { type: "slot" },
-      },
+      fields: componentFieldRegistry.TwoColumn.fields,
       defaultProps: { ratio: "md:grid-cols-2", gap: "gap-8", reverseOnMobile: "" },
       render: ({ ratio, gap, reverseOnMobile, left, right }) => (
         <div className={`grid grid-cols-1 ${ratio} ${gap} ${reverseOnMobile} items-center py-8`}>
@@ -220,49 +173,14 @@ export const puckConfig: Config = {
 
     Grid: {
       label: "Grid",
-      fields: {
-        columns: {
-          type: "select",
-          options: [
-            { label: "2", value: "md:grid-cols-2" },
-            { label: "3", value: "md:grid-cols-3" },
-            { label: "4", value: "md:grid-cols-4" },
-          ],
-        },
-        gap: {
-          type: "select",
-          options: [
-            { label: "Small", value: "gap-4" },
-            { label: "Medium", value: "gap-8" },
-            { label: "Large", value: "gap-12" },
-          ],
-        },
-        content: { type: "slot" },
-      },
+      fields: componentFieldRegistry.Grid.fields,
       defaultProps: { columns: "md:grid-cols-3", gap: "gap-8" },
       render: ({ columns, gap, content }) => <div className={`grid grid-cols-1 ${columns} ${gap} py-8`}>{content}</div>,
     },
 
     Divider: {
       label: "Divider",
-      fields: {
-        style: {
-          type: "select",
-          options: [
-            { label: "Solid", value: "border-solid" },
-            { label: "Dashed", value: "border-dashed" },
-            { label: "Gradient", value: "gradient" },
-          ],
-        },
-        spacing: {
-          type: "select",
-          options: [
-            { label: "Small", value: "my-4" },
-            { label: "Medium", value: "my-8" },
-            { label: "Large", value: "my-16" },
-          ],
-        },
-      },
+      fields: componentFieldRegistry.Divider.fields,
       defaultProps: { style: "border-solid", spacing: "my-8" },
       render: ({ style, spacing }) =>
         style === "gradient" ? (
@@ -274,18 +192,7 @@ export const puckConfig: Config = {
 
     Heading: {
       label: "Heading",
-      fields: {
-        text: { type: "text" },
-        level: { type: "select", options: [{ label: "h1", value: "h1" }, { label: "h2", value: "h2" }, { label: "h3", value: "h3" }, { label: "h4", value: "h4" }] },
-        alignment: {
-          type: "select",
-          options: [
-            { label: "Left", value: "text-left" },
-            { label: "Center", value: "text-center" },
-            { label: "Right", value: "text-right" },
-          ],
-        },
-      },
+      fields: componentFieldRegistry.Heading.fields,
       defaultProps: { text: "Headline", level: "h2", alignment: "text-left" },
       render: ({ text, level, alignment }) => {
         const Tag = level as React.ElementType;
@@ -305,7 +212,7 @@ export const puckConfig: Config = {
 
     RichText: {
       label: "Rich Text",
-      fields: { content: { type: "textarea" } },
+      fields: componentFieldRegistry.RichText.fields,
       defaultProps: { content: "<p>Standard body text...</p>" },
       render: ({ content }) => (
         <div
@@ -318,13 +225,7 @@ export const puckConfig: Config = {
 
     Image: {
       label: "Image",
-      fields: {
-        src: { type: "text" },
-        alt: { type: "text" },
-        caption: { type: "text" },
-        width: { type: "select", options: [{ label: "Small", value: "max-w-sm" }, { label: "Medium", value: "max-w-2xl" }, { label: "Full", value: "w-full" }] },
-        rounded: { type: "radio", options: [{ label: "Yes", value: "yes" }, { label: "No", value: "no" }] },
-      },
+      fields: componentFieldRegistry.Image.fields,
       defaultProps: {
         src: "https://images.unsplash.com/photo-1497215728101-856f4ea42174?w=1000",
         alt: "Office",
@@ -345,11 +246,7 @@ export const puckConfig: Config = {
 
     Video: {
       label: "Video",
-      fields: {
-        url: { type: "text" },
-        title: { type: "text" },
-        aspectRatio: { type: "select", options: [{ label: "16:9", value: "aspect-video" }, { label: "1:1", value: "aspect-square" }] },
-      },
+      fields: componentFieldRegistry.Video.fields,
       defaultProps: { url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ", title: "Product Walkthrough", aspectRatio: "aspect-video" },
       render: ({ url, title, aspectRatio }) => {
         const id = url.split("v=")[1]?.split("&")[0] || url.split("/").pop();
@@ -369,30 +266,14 @@ export const puckConfig: Config = {
 
     Spacer: {
       label: "Spacer",
-      fields: {
-        height: {
-          type: "select",
-          options: [
-            { label: "XS", value: "h-4" },
-            { label: "SM", value: "h-8" },
-            { label: "MD", value: "h-12" },
-            { label: "LG", value: "h-16" },
-            { label: "XL", value: "h-24" },
-          ],
-        },
-      },
+      fields: componentFieldRegistry.Spacer.fields,
       defaultProps: { height: "h-12" },
       render: ({ height }) => <div className={height} />,
     },
 
     IconText: {
       label: "Icon Text",
-      fields: {
-        icon: { type: "select", options: Object.keys(icons).map((k) => ({ label: k, value: k })) },
-        title: { type: "text" },
-        description: { type: "textarea" },
-        layout: { type: "select", options: [{ label: "Horizontal", value: "flex-row" }, { label: "Vertical", value: "flex-col" }] },
-      },
+      fields: componentFieldRegistry.IconText.fields,
       defaultProps: { icon: "zap", title: "Feature Title", description: "Feature description goes here.", layout: "flex-row" },
       render: ({ icon, title, description, layout }) => {
         const Icon = icons[icon as IconName] || Zap;
@@ -414,22 +295,7 @@ export const puckConfig: Config = {
 
     FormContainer: {
       label: "Form Container",
-      fields: {
-        formName: { type: "text" },
-        submitButtonText: { type: "text" },
-        successMessage: { type: "text" },
-        enableScoring: {
-          type: "select",
-          options: [
-            { label: "No scoring", value: "none" },
-            { label: "Score and redirect by threshold", value: "score" },
-          ],
-        },
-        scoreThreshold: { type: "number" },
-        qualifiedRedirectUrl: { type: "text" },
-        unqualifiedRedirectUrl: { type: "text" },
-        content: { type: "slot" },
-      },
+      fields: componentFieldRegistry.FormContainer.fields,
       defaultProps: {
         formName: "Lead Capture",
         submitButtonText: "Submit",
@@ -532,12 +398,7 @@ export const puckConfig: Config = {
 
     TextInput: {
       label: "Text Input",
-      fields: {
-        label: { type: "text" },
-        placeholder: { type: "text" },
-        fieldName: { type: "text" },
-        required: { type: "radio", options: [{ label: "Yes", value: "yes" }, { label: "No", value: "no" }] },
-      },
+      fields: componentFieldRegistry.TextInput.fields,
       defaultProps: { label: "Label", placeholder: "Enter text...", fieldName: "field", required: "no" },
       render: ({ label, placeholder, fieldName, required }) => (
         <div className="space-y-2">
@@ -551,7 +412,7 @@ export const puckConfig: Config = {
 
     EmailInput: {
       label: "Email Input",
-      fields: { label: { type: "text" }, fieldName: { type: "text" } },
+      fields: componentFieldRegistry.EmailInput.fields,
       defaultProps: { label: "Email", fieldName: "email" },
       render: ({ label, fieldName }) => (
         <div className="space-y-2">
@@ -563,7 +424,7 @@ export const puckConfig: Config = {
 
     TextAreaInput: {
       label: "TextArea Input",
-      fields: { label: { type: "text" }, fieldName: { type: "text" }, rows: { type: "number" } },
+      fields: componentFieldRegistry.TextAreaInput.fields,
       defaultProps: { label: "Message", fieldName: "message", rows: 4 },
       render: ({ label, fieldName, rows }) => (
         <div className="space-y-2">
@@ -575,11 +436,7 @@ export const puckConfig: Config = {
 
     SelectInput: {
       label: "Select Input",
-      fields: {
-        label: { type: "text" },
-        fieldName: { type: "text" },
-        options: { type: "array", arrayFields: { label: { type: "text" }, value: { type: "text" } } },
-      },
+      fields: componentFieldRegistry.SelectInput.fields,
       defaultProps: { label: "Choose", fieldName: "choice", options: [{ label: "Option 1", value: "1" }] },
       render: ({ label, fieldName, options }) => (
         <div className="space-y-2">
@@ -602,21 +459,7 @@ export const puckConfig: Config = {
 
     ScoreSelect: {
       label: "Score Select",
-      fields: {
-        label: { type: "text" },
-        fieldName: { type: "text" },
-        required: {
-          type: "radio",
-          options: [
-            { label: "Yes", value: "yes" },
-            { label: "No", value: "no" },
-          ],
-        },
-        options: {
-          type: "array",
-          arrayFields: { label: { type: "text" }, value: { type: "text" }, points: { type: "number" } },
-        },
-      },
+      fields: componentFieldRegistry.ScoreSelect.fields,
       defaultProps: {
         label: "How ready are you?",
         fieldName: "readiness",
@@ -647,7 +490,7 @@ export const puckConfig: Config = {
 
     CheckboxInput: {
       label: "Checkbox",
-      fields: { label: { type: "text" }, description: { type: "text" }, fieldName: { type: "text" } },
+      fields: componentFieldRegistry.CheckboxInput.fields,
       render: ({ label, description, fieldName }) => (
         <div className="flex items-start gap-3">
           <Checkbox name={fieldName} id={fieldName} />
@@ -663,13 +506,7 @@ export const puckConfig: Config = {
 
     ServiceCard: {
       label: "Service Card",
-      fields: {
-        name: { type: "text" },
-        description: { type: "textarea" },
-        price: { type: "text" },
-        duration: { type: "text" },
-        ctaText: { type: "text" },
-      },
+      fields: componentFieldRegistry.ServiceCard.fields,
       defaultProps: { name: "Service", description: "Details...", price: "$99", duration: "1hr", ctaText: "Book" },
       render: ({ name, description, price, duration, ctaText }) => (
         <Card style={{ backgroundColor: "var(--sf-card-bg)" }}>
@@ -696,19 +533,7 @@ export const puckConfig: Config = {
 
     PricingTable: {
       label: "Pricing Table",
-      fields: {
-        plans: {
-          type: "array",
-          arrayFields: {
-            name: { type: "text" },
-            price: { type: "text" },
-            period: { type: "text" },
-            highlighted: { type: "radio", options: [{ label: "Yes", value: "yes" }, { label: "No", value: "no" }] },
-            features: { type: "array", arrayFields: { text: { type: "text" } } },
-            ctaText: { type: "text" },
-          },
-        },
-      },
+      fields: componentFieldRegistry.PricingTable.fields,
       render: ({ plans = [] }) => (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 py-8">
           {plans.map((p: any, i: number) => (
@@ -743,7 +568,7 @@ export const puckConfig: Config = {
 
     TestimonialCard: {
       label: "Testimonial",
-      fields: { quote: { type: "textarea" }, authorName: { type: "text" }, authorRole: { type: "text" }, rating: { type: "number" } },
+      fields: componentFieldRegistry.TestimonialCard.fields,
       render: ({ quote, authorName, authorRole, rating }) => (
         <Card className="border-none shadow-sm" style={{ backgroundColor: "var(--sf-card-bg)" }}>
           <CardContent className="pt-8">
@@ -764,7 +589,7 @@ export const puckConfig: Config = {
 
     FAQ: {
       label: "FAQ",
-      fields: { items: { type: "array", arrayFields: { question: { type: "text" }, answer: { type: "textarea" } } } },
+      fields: componentFieldRegistry.FAQ.fields,
       render: ({ items = [] }) => (
         <Accordion className="w-full">
           {items.map((item: any, i: number) => (
@@ -779,7 +604,7 @@ export const puckConfig: Config = {
 
     TeamMember: {
       label: "Team Member",
-      fields: { name: { type: "text" }, role: { type: "text" }, photoUrl: { type: "text" } },
+      fields: componentFieldRegistry.TeamMember.fields,
       render: ({ name, role, photoUrl }) => (
         <div className="text-center p-6 border shadow-sm rounded-xl bg-card">
           <div className="w-24 h-24 mx-auto mb-4 overflow-hidden rounded-full bg-slate-100 flex items-center justify-center">
@@ -795,7 +620,7 @@ export const puckConfig: Config = {
 
     ContactInfo: {
       label: "Contact Info",
-      fields: { email: { type: "text" }, phone: { type: "text" }, address: { type: "textarea" } },
+      fields: componentFieldRegistry.ContactInfo.fields,
       render: ({ email, phone, address }) => (
         <div className="space-y-4">
           <div className="flex items-center gap-3">
@@ -816,7 +641,7 @@ export const puckConfig: Config = {
 
     LogoBar: {
       label: "Logo Bar",
-      fields: { heading: { type: "text" }, logos: { type: "array", arrayFields: { src: { type: "text" } } } },
+      fields: componentFieldRegistry.LogoBar.fields,
       render: ({ heading, logos = [] }) => (
         <div className="py-12 text-center">
           <p className="uppercase text-xs font-bold tracking-widest mb-8 opacity-50">{heading}</p>
@@ -831,7 +656,7 @@ export const puckConfig: Config = {
 
     CountdownTimer: {
       label: "Countdown",
-      fields: { targetDate: { type: "text" }, heading: { type: "text" } },
+      fields: componentFieldRegistry.CountdownTimer.fields,
       render: ({ targetDate, heading }) => {
         const [time, setTime] = useState({ d: 0, h: 0, m: 0, s: 0 });
         useEffect(() => {
@@ -868,7 +693,7 @@ export const puckConfig: Config = {
 
     BookingWidget: {
       label: "Booking",
-      fields: { heading: { type: "text" }, bookingUrl: { type: "text" }, buttonText: { type: "text" } },
+      fields: componentFieldRegistry.BookingWidget.fields,
       render: ({ heading, bookingUrl, buttonText }) => (
         <Card className="text-center p-8 border-2 border-dashed">
           <Calendar className="mx-auto mb-4" size={40} style={{ color: "var(--sf-primary)" }} />
@@ -882,7 +707,7 @@ export const puckConfig: Config = {
 
     PaymentButton: {
       label: "Payment",
-      fields: { amount: { type: "text" }, paymentUrl: { type: "text" } },
+      fields: componentFieldRegistry.PaymentButton.fields,
       render: ({ amount, paymentUrl }) => (
         <Card className="p-6 text-center">
           <CreditCard className="mx-auto mb-4" style={{ color: "var(--sf-primary)" }} />
@@ -896,7 +721,7 @@ export const puckConfig: Config = {
 
     ProgressBar: {
       label: "Progress Bar",
-      fields: { currentStep: { type: "number" }, totalSteps: { type: "number" } },
+      fields: componentFieldRegistry.ProgressBar.fields,
       render: ({ currentStep, totalSteps }) => (
         <div className="w-full py-4">
           <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden flex">
@@ -910,20 +735,7 @@ export const puckConfig: Config = {
 
     ConditionalBlock: {
       label: "Conditional Block",
-      fields: {
-        condition: {
-          type: "select",
-          options: [
-            { label: "Always", value: "always" },
-            { label: "Authenticated", value: "auth" },
-            { label: "Paid Member", value: "paid" },
-            { label: "Score", value: "score" },
-          ],
-        },
-        threshold: { type: "number" },
-        content: { type: "slot" },
-        fallbackContent: { type: "slot" },
-      },
+      fields: componentFieldRegistry.ConditionalBlock.fields,
       render: ({ condition, threshold, content, fallbackContent, puck }) => {
         const [isMet, setIsMet] = useState(false);
         const [loading, setLoading] = useState(condition !== "always");
@@ -962,7 +774,7 @@ export const puckConfig: Config = {
 
     GatedContent: {
       label: "Gated Content",
-      fields: { content: { type: "slot" }, loginHeading: { type: "text" } },
+      fields: componentFieldRegistry.GatedContent.fields,
       render: ({ content, loginHeading, puck }) => {
         const [isAuth, setIsAuth] = useState(false);
         const [loading, setLoading] = useState(true);
@@ -992,17 +804,7 @@ export const puckConfig: Config = {
 
     QuizResults: {
       label: "Quiz Results",
-      fields: {
-        qualifiedHeadline: { type: "text" },
-        qualifiedMessage: { type: "textarea" },
-        qualifiedCtaText: { type: "text" },
-        qualifiedCtaLink: { type: "text" },
-        unqualifiedHeadline: { type: "text" },
-        unqualifiedMessage: { type: "textarea" },
-        unqualifiedCtaText: { type: "text" },
-        unqualifiedCtaLink: { type: "text" },
-        threshold: { type: "number" },
-      },
+      fields: componentFieldRegistry.QuizResults.fields,
       defaultProps: {
         qualifiedHeadline: "You're a great fit!",
         qualifiedMessage: "Based on your answers, we recommend booking a discovery call.",
