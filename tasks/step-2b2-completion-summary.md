@@ -21,14 +21,14 @@ Claude synthesis of the 3 shipped archetypes.
 | sms | 3/6 | `d88596d5` | 6 | 198 | ±0.9% | none |
 | payments | 4/6 | `b30bfee7` | 12 | 424 | ±1.2% | none |
 | formbricks-intake | 5/6 | `508d899c` | 7 | 263 | ±0.4% | none |
-| landing-pages | 6/6 | **this commit** | 8 | 257 | ±0.6% | none |
+| landing-pages | 6/6 | `8a0a0c8e` | 8 | 257 | ±0.6% | none |
 
 **Total core-block tools.ts: 1,655 LOC across 7 files, 62 tools.**
 
 ## 2b.2 commit range
 
 - First: `6100ebaa` (Booking, 2026-04-22)
-- Last: this commit (Landing, 2026-04-22)
+- Last: `8a0a0c8e` (Landing, 2026-04-22)
 - Intervening infrastructure: drift-detector fixes (`046ea09f`,
   `880b3982`), L-19 `.gitattributes` for LF stability, L-18 fix for
   the puck server-client boundary (`fix/puck-server-client-boundary`
