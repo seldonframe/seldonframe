@@ -101,6 +101,30 @@ export type EventLogInput = {
   payload: Record<string, unknown>;
 };
 
+// 2c PR 3: step trace row. One per dispatcher call. Surfaces in
+// the admin drawer at /agents/runs/[runId].
+export type StepResultInput = {
+  runId: string;
+  stepId: string;
+  stepType: string;
+  outcome: "advanced" | "paused" | "failed";
+  captureValue: Record<string, unknown> | null;
+  errorMessage: string | null;
+  durationMs: number;
+};
+
+export type StoredStepResult = {
+  id: string;
+  runId: string;
+  stepId: string;
+  stepType: string;
+  outcome: string;
+  captureValue: Record<string, unknown> | null;
+  errorMessage: string | null;
+  durationMs: number;
+  createdAt: Date;
+};
+
 export interface RuntimeStorage {
   /** Insert a run and return its id. */
   createRun(input: NewRunInput): Promise<string>;
@@ -136,6 +160,12 @@ export interface RuntimeStorage {
 
   /** Append to the event log. Returns the inserted id. */
   appendEventLog(input: EventLogInput): Promise<string>;
+
+  /** 2c PR 3: append a step-result row for admin observability. */
+  appendStepResult(input: StepResultInput): Promise<string>;
+
+  /** 2c PR 3: list step results for a run, newest first. */
+  listStepResults(runId: string): Promise<StoredStepResult[]>;
 }
 
 // ---------------------------------------------------------------------

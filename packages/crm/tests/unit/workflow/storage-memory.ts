@@ -12,7 +12,9 @@ import type {
   NewRunInput,
   NewWaitInput,
   RuntimeStorage,
+  StepResultInput,
   StoredRun,
+  StoredStepResult,
   StoredWait,
 } from "../../../src/lib/workflow/types";
 
@@ -34,6 +36,7 @@ export class InMemoryRuntimeStorage implements RuntimeStorage {
   readonly runs = new Map<string, StoredRun>();
   readonly waits = new Map<string, StoredWait>();
   readonly eventLog: StoredEventLog[] = [];
+  readonly stepResults: StoredStepResult[] = [];
 
   async createRun(input: NewRunInput): Promise<string> {
     const id = nextId("run");
@@ -145,5 +148,28 @@ export class InMemoryRuntimeStorage implements RuntimeStorage {
       emittedAt: new Date(),
     });
     return id;
+  }
+
+  async appendStepResult(input: StepResultInput): Promise<string> {
+    const id = nextId("sr");
+    this.stepResults.push({
+      id,
+      runId: input.runId,
+      stepId: input.stepId,
+      stepType: input.stepType,
+      outcome: input.outcome,
+      captureValue: input.captureValue,
+      errorMessage: input.errorMessage,
+      durationMs: input.durationMs,
+      createdAt: new Date(),
+    });
+    return id;
+  }
+
+  async listStepResults(runId: string): Promise<StoredStepResult[]> {
+    return this.stepResults
+      .filter((r) => r.runId === runId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .map((r) => ({ ...r }));
   }
 }

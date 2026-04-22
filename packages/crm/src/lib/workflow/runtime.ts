@@ -180,7 +180,25 @@ export async function advanceRun(context: RuntimeContext, runId: string): Promis
       return;
     }
 
+    const dispatchStart = Date.now();
     const action = await dispatchStep(run, step, context);
+    const durationMs = Date.now() - dispatchStart;
+    // PR 3 M1: write step-result row for the admin drawer's trace
+    // view. Outcome maps from the NextAction kind; errors surface
+    // via applyAction's fail branch (markRunFailed appends another
+    // row).
+    await context.storage.appendStepResult({
+      runId: run.id,
+      stepId: step.id,
+      stepType: step.type,
+      outcome: stepResultOutcome(action),
+      captureValue:
+        action.kind === "advance" && action.capture
+          ? { [action.capture.name]: action.capture.value }
+          : null,
+      errorMessage: action.kind === "fail" ? action.reason : null,
+      durationMs,
+    });
     const done = await applyAction(context, run, action);
     if (done) return;
   }
@@ -278,6 +296,18 @@ export async function resumeWait(
 // ---------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------
+
+function stepResultOutcome(action: NextAction): "advanced" | "paused" | "failed" {
+  switch (action.kind) {
+    case "advance":
+      return "advanced";
+    case "pause_event":
+    case "pause_timer":
+      return "paused";
+    case "fail":
+      return "failed";
+  }
+}
 
 async function dispatchStep(
   run: StoredRun,

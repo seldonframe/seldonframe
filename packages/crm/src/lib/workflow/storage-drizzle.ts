@@ -10,17 +10,24 @@
 // that transitions a wait from unresolved to resolved. The UPDATE's
 // `WHERE ... AND resumed_at IS NULL` clause is the atomic gate.
 
-import { and, eq, isNull, lte } from "drizzle-orm";
+import { and, desc, eq, isNull, lte } from "drizzle-orm";
 
 import type { DbClient } from "@/db";
-import { workflowRuns, workflowWaits, workflowEventLog } from "@/db/schema";
+import {
+  workflowRuns,
+  workflowWaits,
+  workflowEventLog,
+  workflowStepResults,
+} from "@/db/schema";
 import type { AgentSpec } from "../agents/validator";
 import type {
   EventLogInput,
   NewRunInput,
   NewWaitInput,
   RuntimeStorage,
+  StepResultInput,
   StoredRun,
+  StoredStepResult,
   StoredWait,
 } from "./types";
 
@@ -178,5 +185,40 @@ export class DrizzleRuntimeStorage implements RuntimeStorage {
       })
       .returning({ id: workflowEventLog.id });
     return row.id;
+  }
+
+  async appendStepResult(input: StepResultInput): Promise<string> {
+    const [row] = await this.db
+      .insert(workflowStepResults)
+      .values({
+        runId: input.runId,
+        stepId: input.stepId,
+        stepType: input.stepType,
+        outcome: input.outcome,
+        captureValue: input.captureValue,
+        errorMessage: input.errorMessage,
+        durationMs: input.durationMs,
+      })
+      .returning({ id: workflowStepResults.id });
+    return row.id;
+  }
+
+  async listStepResults(runId: string): Promise<StoredStepResult[]> {
+    const rows = await this.db
+      .select()
+      .from(workflowStepResults)
+      .where(eq(workflowStepResults.runId, runId))
+      .orderBy(desc(workflowStepResults.createdAt));
+    return rows.map((row) => ({
+      id: row.id,
+      runId: row.runId,
+      stepId: row.stepId,
+      stepType: row.stepType,
+      outcome: row.outcome,
+      captureValue: row.captureValue,
+      errorMessage: row.errorMessage,
+      durationMs: row.durationMs,
+      createdAt: row.createdAt,
+    }));
   }
 }

@@ -447,6 +447,123 @@ describe("runtime — conversation step (stub)", () => {
 });
 
 // ---------------------------------------------------------------------
+// step-result write-through (2c PR 3 M1)
+// ---------------------------------------------------------------------
+
+describe("runtime — step-result trace (2c PR 3 M1)", () => {
+  test("appends one row per dispatcher call with outcome + durationMs", async () => {
+    const context = makeContext({
+      toolResults: { create_coupon: { data: { couponId: "c_1", code: "X" } } },
+    });
+    const spec: AgentSpec = {
+      name: "Trace test",
+      description: "x",
+      trigger: { type: "event", event: "contact.created" },
+      steps: [
+        {
+          id: "make_coupon",
+          type: "mcp_tool_call",
+          tool: "create_coupon",
+          args: { percent_off: 15 },
+          capture: "coupon",
+          next: "log",
+        },
+        {
+          id: "log",
+          type: "mcp_tool_call",
+          tool: "create_activity",
+          args: { note: "done" },
+          next: null,
+        },
+      ],
+    };
+    const runId = await startRun(context, {
+      orgId: ORG_ID,
+      archetypeId: "test",
+      spec,
+      triggerEventId: null,
+      triggerPayload: {},
+    });
+
+    const memory = context.storage as InMemoryRuntimeStorage;
+    const results = memory.stepResults.filter((r) => r.runId === runId);
+    assert.equal(results.length, 2);
+    // newest-first ordering via listStepResults; raw array is insertion order
+    const byStep = new Map(results.map((r) => [r.stepId, r]));
+    assert.equal(byStep.get("make_coupon")!.outcome, "advanced");
+    assert.equal(byStep.get("make_coupon")!.stepType, "mcp_tool_call");
+    assert.deepEqual(byStep.get("make_coupon")!.captureValue, {
+      coupon: { couponId: "c_1", code: "X" },
+    });
+    assert.equal(byStep.get("log")!.outcome, "advanced");
+    // durationMs is a non-negative integer — mock tool invoker resolves
+    // immediately so we just assert >= 0.
+    for (const r of results) {
+      assert.ok(r.durationMs >= 0, `durationMs >= 0 for ${r.stepId}`);
+    }
+  });
+
+  test("failed step surfaces outcome=failed + errorMessage", async () => {
+    const context: RuntimeContext = {
+      storage: new InMemoryRuntimeStorage(),
+      invokeTool: async () => {
+        throw new Error("boom");
+      },
+      now: () => new Date(),
+    };
+    const spec: AgentSpec = {
+      name: "Fail trace",
+      description: "x",
+      trigger: { type: "event", event: "contact.created" },
+      steps: [
+        { id: "bad", type: "mcp_tool_call", tool: "create_coupon", args: {}, next: null },
+      ],
+    };
+    const runId = await startRun(context, {
+      orgId: ORG_ID,
+      archetypeId: "test",
+      spec,
+      triggerEventId: null,
+      triggerPayload: {},
+    });
+    const memory = context.storage as InMemoryRuntimeStorage;
+    const failed = memory.stepResults.find((r) => r.runId === runId && r.outcome === "failed");
+    assert.ok(failed);
+    assert.ok(failed!.errorMessage?.includes("boom"));
+  });
+
+  test("await_event dispatch writes outcome=paused", async () => {
+    const context = makeContext();
+    const spec: AgentSpec = {
+      name: "Await trace",
+      description: "x",
+      trigger: { type: "event", event: "contact.created" },
+      steps: [
+        {
+          id: "wait",
+          type: "await_event",
+          event: "form.submitted",
+          on_resume: { next: null },
+          on_timeout: { next: null },
+        },
+      ],
+    };
+    const runId = await startRun(context, {
+      orgId: ORG_ID,
+      archetypeId: "test",
+      spec,
+      triggerEventId: null,
+      triggerPayload: {},
+    });
+    const memory = context.storage as InMemoryRuntimeStorage;
+    const results = memory.stepResults.filter((r) => r.runId === runId);
+    assert.equal(results.length, 1);
+    assert.equal(results[0].outcome, "paused");
+    assert.equal(results[0].stepType, "await_event");
+  });
+});
+
+// ---------------------------------------------------------------------
 // advanceRun loop safety
 // ---------------------------------------------------------------------
 

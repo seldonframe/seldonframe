@@ -40,3 +40,5 @@ export * from "./workspace-secrets";
 export * from "./workflow-runs";
 export * from "./workflow-waits";
 export * from "./workflow-event-log";
+// Scope 3 Step 2c PR 3 — step trace for observability.
+export * from "./workflow-step-results";
