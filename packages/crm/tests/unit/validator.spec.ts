@@ -362,6 +362,201 @@ describe("validateAgentSpec — await_event schema shape (2c PR 1 M1)", () => {
 });
 
 // ---------------------------------------------------------------------
+// 2c PR 1 M2 — validateAwaitEventStep dispatcher behavior
+// ---------------------------------------------------------------------
+
+describe("validateAgentSpec — await_event dispatcher (2c PR 1 M2)", () => {
+  const spec = (step: Record<string, unknown>) => ({
+    name: "x",
+    description: "x",
+    trigger: { type: "event", event: "contact.created" },
+    steps: [step, { id: "resume_target", type: "wait", seconds: 0, next: null }, { id: "timeout_target", type: "wait", seconds: 0, next: null }],
+  });
+
+  test("unknown_event fires for event not in the SeldonEvent registry", () => {
+    const issues = validateAgentSpec(
+      spec({
+        id: "wait_form",
+        type: "await_event",
+        event: "no.such.event",
+        on_resume: { next: "resume_target" },
+        on_timeout: { next: "timeout_target" },
+      }),
+      emptyRegistry,
+      testEventRegistry,
+    );
+    const match = issues.find((i) => i.code === "unknown_event" && i.stepId === "wait_form");
+    assert.ok(match, `expected unknown_event on wait_form; got: ${JSON.stringify(issues)}`);
+    assert.ok(match!.message.includes("no.such.event"));
+  });
+
+  test("unknown_step_next fires when on_resume.next references a missing step", () => {
+    const issues = validateAgentSpec(
+      spec({
+        id: "wait_form",
+        type: "await_event",
+        event: "form.submitted",
+        on_resume: { next: "missing_step" },
+        on_timeout: { next: "timeout_target" },
+      }),
+      emptyRegistry,
+      testEventRegistry,
+    );
+    const match = issues.find((i) => i.code === "unknown_step_next" && i.path === "on_resume.next");
+    assert.ok(match, `expected unknown_step_next on on_resume.next; got: ${JSON.stringify(issues)}`);
+  });
+
+  test("unknown_step_next fires when on_timeout.next references a missing step", () => {
+    const issues = validateAgentSpec(
+      spec({
+        id: "wait_form",
+        type: "await_event",
+        event: "form.submitted",
+        on_resume: { next: "resume_target" },
+        on_timeout: { next: "missing_step" },
+      }),
+      emptyRegistry,
+      testEventRegistry,
+    );
+    const match = issues.find((i) => i.code === "unknown_step_next" && i.path === "on_timeout.next");
+    assert.ok(match);
+  });
+
+  test("timeout exceeding 90-day ceiling surfaces spec_malformed (G-3)", () => {
+    const issues = validateAgentSpec(
+      spec({
+        id: "wait_form",
+        type: "await_event",
+        event: "form.submitted",
+        timeout: "P1Y", // ~365 days, well over 90-day ceiling
+        on_resume: { next: "resume_target" },
+        on_timeout: { next: "timeout_target" },
+      }),
+      emptyRegistry,
+      testEventRegistry,
+    );
+    const match = issues.find((i) => i.code === "spec_malformed" && i.path === "timeout");
+    assert.ok(match, `expected spec_malformed on timeout; got: ${JSON.stringify(issues)}`);
+    assert.ok(match!.message.includes("90-day"));
+  });
+
+  test("timeout at exactly 90 days (P90D) is accepted", () => {
+    const issues = validateAgentSpec(
+      spec({
+        id: "wait_form",
+        type: "await_event",
+        event: "form.submitted",
+        timeout: "P90D",
+        on_resume: { next: "resume_target" },
+        on_timeout: { next: "timeout_target" },
+      }),
+      emptyRegistry,
+      testEventRegistry,
+    );
+    assert.ok(
+      !issues.some((i) => i.code === "spec_malformed" && i.path === "timeout"),
+      `P90D must be accepted as edge-of-ceiling; got: ${JSON.stringify(issues)}`,
+    );
+  });
+
+  test("bad_capture_name fires when on_resume.capture isn't a valid identifier", () => {
+    const issues = validateAgentSpec(
+      spec({
+        id: "wait_form",
+        type: "await_event",
+        event: "form.submitted",
+        on_resume: { capture: "Bad Name!", next: "resume_target" },
+        on_timeout: { next: "timeout_target" },
+      }),
+      emptyRegistry,
+      testEventRegistry,
+    );
+    const match = issues.find((i) => i.code === "bad_capture_name");
+    assert.ok(match);
+  });
+
+  test("capture-on-timeout surfaces spec_malformed (no event payload to bind)", () => {
+    const issues = validateAgentSpec(
+      spec({
+        id: "wait_form",
+        type: "await_event",
+        event: "form.submitted",
+        on_resume: { next: "resume_target" },
+        on_timeout: { next: "timeout_target", capture: "timed_out" },
+      }),
+      emptyRegistry,
+      testEventRegistry,
+    );
+    // Zod's strict-object violation surfaces at the parent key path
+    // ("on_timeout") with message "Unrecognized key: \"capture\"".
+    const match = issues.find((i) => i.code === "spec_malformed" && i.path.startsWith("on_timeout") && i.message.includes("capture"));
+    assert.ok(match, `expected spec_malformed on on_timeout for extra 'capture' key; got: ${JSON.stringify(issues)}`);
+  });
+
+  test("predicate field 'data.X' where X is not on event.data fires unresolved_interpolation", () => {
+    const issues = validateAgentSpec(
+      spec({
+        id: "wait_form",
+        type: "await_event",
+        event: "form.submitted",
+        match: {
+          kind: "field_equals",
+          field: "data.notARealField",
+          value: "foo",
+        },
+        on_resume: { next: "resume_target" },
+        on_timeout: { next: "timeout_target" },
+      }),
+      emptyRegistry,
+      testEventRegistry,
+    );
+    const match = issues.find((i) => i.code === "unresolved_interpolation" && i.path.startsWith("match"));
+    assert.ok(match, `expected unresolved_interpolation on match.field; got: ${JSON.stringify(issues)}`);
+    assert.ok(match!.message.includes("notARealField"));
+  });
+
+  test("predicate field 'data.X' where X IS on event.data passes", () => {
+    const issues = validateAgentSpec(
+      spec({
+        id: "wait_form",
+        type: "await_event",
+        event: "form.submitted",
+        match: {
+          kind: "field_equals",
+          field: "data.formId",
+          value: "onboarding_intake",
+        },
+        on_resume: { next: "resume_target" },
+        on_timeout: { next: "timeout_target" },
+      }),
+      emptyRegistry,
+      testEventRegistry,
+    );
+    assert.ok(
+      !issues.some((i) => i.code === "unresolved_interpolation"),
+      `expected no unresolved_interpolation; got: ${JSON.stringify(issues)}`,
+    );
+  });
+
+  test("unsupported_step_type message drops 'await_event' — branch-only now", () => {
+    const issues = validateAgentSpec(
+      {
+        name: "x",
+        description: "x",
+        trigger: { type: "event", event: "contact.created" },
+        steps: [{ id: "a", type: "branch", condition: { type: "external_state" }, next: null }],
+      },
+      emptyRegistry,
+      testEventRegistry,
+    );
+    const match = issues.find((i) => i.code === "unsupported_step_type");
+    assert.ok(match);
+    assert.ok(match!.message.includes("branch"));
+    assert.ok(!match!.message.includes("await_event ship"), "await_event is shipped now; message should not reference it as future scope");
+  });
+});
+
+// ---------------------------------------------------------------------
 // Fixture smoke — the 3 valid archetype specs parse cleanly through
 // the schema. M3 will verify tool references resolve; for now we only
 // confirm the spec shape is acceptable to the schema.

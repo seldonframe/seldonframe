@@ -165,7 +165,10 @@ const AwaitEventStepSchema = z.object({
     capture: z.string().min(1).optional(),
     next: z.string().nullable(),
   }),
-  on_timeout: z.object({
+  // .strict() rejects unknown keys — explicitly rejects on_timeout.capture
+  // (audit §3.1 point 5: there's no event payload to bind on timeout,
+  // so capture is invalid). Surfaces as spec_malformed at parse time.
+  on_timeout: z.strictObject({
     next: z.string().nullable(),
   }),
 });
@@ -298,16 +301,25 @@ export function validateAgentSpec(
     };
     validateInterpolationsInStep(step, scope, issues);
 
-    validateStep(step, spec, stepIds, registry, capturedBindings, extractBindings, issues);
+    validateStep(step, spec, stepIds, registry, capturedBindings, extractBindings, eventRegistry, issues);
 
     // After validation, record this step's bindings for downstream
     // interpolations. Capture shapes come from the tool's returns
     // schema (unwrapped via captureAccessibleShape for the data-key
-    // convention).
+    // convention) OR — for await_event — the event's data payload
+    // shape built from the EventRegistry.
     if (isMcpToolCallStep(step) && step.capture) {
       const entry = registry.tools.get(step.tool);
       if (entry && !captureShapes.has(step.capture)) {
         captureShapes.set(step.capture, captureAccessibleShape(entry.tool.returns));
+      }
+    } else if (isAwaitEventStep(step)) {
+      // Re-parse to access on_resume.capture safely — type guard is
+      // loose (checks only type + event). Matches dispatcher pattern.
+      const parsed = AwaitEventStepSchema.safeParse(step);
+      if (parsed.success && parsed.data.on_resume.capture && !captureShapes.has(parsed.data.on_resume.capture)) {
+        const eventShape = buildEventDataShape(parsed.data.event, eventRegistry);
+        captureShapes.set(parsed.data.on_resume.capture, eventShape);
       }
     }
   }
@@ -326,17 +338,22 @@ function validateStep(
   registry: BlockRegistry,
   capturedBindings: Set<string>,
   extractBindings: Set<string>,
+  eventRegistry: EventRegistry,
   issues: ValidationIssue[],
 ): void {
-  // `next` reference check applies uniformly across step types.
-  const next = extractNext(step);
-  if (next !== null && next !== undefined && !stepIds.has(next)) {
-    issues.push({
-      code: "unknown_step_next",
-      stepId: step.id,
-      path: "next",
-      message: `step "${step.id}" references next="${next}" which is not a declared step id`,
-    });
+  // `next` reference check. wait / mcp_tool_call / conversation each
+  // have a single `next`; await_event has TWO (on_resume.next and
+  // on_timeout.next), handled inside validateAwaitEventStep.
+  if (!isAwaitEventStep(step)) {
+    const next = extractNext(step);
+    if (next !== null && next !== undefined && !stepIds.has(next)) {
+      issues.push({
+        code: "unknown_step_next",
+        stepId: step.id,
+        path: "next",
+        message: `step "${step.id}" references next="${next}" which is not a declared step id`,
+      });
+    }
   }
 
   if (isWaitStep(step)) {
@@ -352,11 +369,15 @@ function validateStep(
     validateConversationStep(step, extractBindings, issues);
     return;
   }
+  if (isAwaitEventStep(step)) {
+    validateAwaitEventStep(step, stepIds, capturedBindings, eventRegistry, issues);
+    return;
+  }
   issues.push({
     code: "unsupported_step_type",
     stepId: step.id,
     path: "type",
-    message: `step type "${step.type}" is not supported by this validator (PR 2 handles wait / mcp_tool_call / conversation; branch + await_event ship with 2e / 2c)`,
+    message: `step type "${step.type}" is not supported by this validator (wait / mcp_tool_call / conversation / await_event are the four known types; branch ships with 2e)`,
   });
 }
 
@@ -561,6 +582,17 @@ function validateInterpolationsInStep(
     for (const [key, description] of Object.entries(step.on_exit.extract)) {
       stringPaths.push({ path: `on_exit.extract.${key}`, text: description });
     }
+  } else if (isAwaitEventStep(step)) {
+    // Predicate value strings can carry {{capture.field}} / {{variable}}
+    // refs. Per G-4, these resolve at wait-registration time; the
+    // validator's job is to confirm each reference resolves within the
+    // current scope. walkObjectStrings recurses into `all`/`any` children
+    // since the predicate shape nests. Guard against UnknownStep
+    // fallthrough by accessing match via an any-cast + shape check.
+    const match = (step as { match?: unknown }).match;
+    if (match && typeof match === "object") {
+      walkObjectStrings(match, "match", stringPaths);
+    }
   }
   // wait / unknown step types have no interpolatable user content.
 
@@ -691,5 +723,259 @@ function validateConversationStep(
     // current archetypes never hit it, and runtime semantics for
     // cross-conversation shadowing aren't in 2b.1 scope.
     extractBindings.add(key);
+  }
+}
+
+// ---------------------------------------------------------------------
+// await_event dispatcher (2c PR 1 M2)
+//
+// Synthesis-time checks:
+//   1. `event` is in the SeldonEvent registry (unknown_event).
+//   2. `match` predicate's field paths starting with `data.` resolve
+//      against the event's declared data shape (unresolved_interpolation
+//      reused — same issue code family as the capture-field walker).
+//   3. Both `on_resume.next` and `on_timeout.next` resolve to real step
+//      ids (unknown_step_next).
+//   4. `on_resume.capture` (if present) is a valid identifier and
+//      doesn't shadow a prior capture (bad_capture_name).
+//   5. `timeout` (if present) is within the 90-day ceiling set by G-3
+//      approved 2026-04-22. Durations beyond 90 days are rejected at
+//      synthesis time — runtime retention on `workflow_event_log` is
+//      90 days, so longer waits could never match an event anyway.
+//   6. Audit §3.1 point 5: `on_timeout.capture` is INVALID (no event
+//      payload to capture on timeout). Current Zod schema doesn't
+//      declare capture on on_timeout, but UnknownStepSchema fallthrough
+//      could absorb a malformed shape with capture on timeout — we
+//      check the raw step object defensively here.
+// ---------------------------------------------------------------------
+
+// G-3 approved ceiling: 90 days. Approximate-ms computation — we're
+// comparing against a generous ceiling, not scheduling precisely, so
+// treating months as 30 days and years as 365 days is fine for the
+// synthesis-time guard.
+const AWAIT_EVENT_TIMEOUT_CEILING_MS = 90 * 24 * 60 * 60 * 1000;
+
+function durationToApproxMs(duration: string): number | null {
+  // Matches DurationSchema regex in types.ts:110. Forms:
+  //   PT<n>S | PT<n>M | PT<n>H    (sub-day)
+  //   P<n>D  | P<n>W  | P<n>M  | P<n>Y    (day-and-up)
+  const subDayMatch = /^PT(\d+)([SMH])$/.exec(duration);
+  if (subDayMatch) {
+    const n = Number(subDayMatch[1]);
+    switch (subDayMatch[2]) {
+      case "S": return n * 1000;
+      case "M": return n * 60 * 1000;
+      case "H": return n * 60 * 60 * 1000;
+    }
+  }
+  const dayPlusMatch = /^P(\d+)([DWMY])$/.exec(duration);
+  if (dayPlusMatch) {
+    const n = Number(dayPlusMatch[1]);
+    const day = 24 * 60 * 60 * 1000;
+    switch (dayPlusMatch[2]) {
+      case "D": return n * day;
+      case "W": return n * 7 * day;
+      case "M": return n * 30 * day;
+      case "Y": return n * 365 * day;
+    }
+  }
+  return null;
+}
+
+function validateAwaitEventStep(
+  step: AwaitEventStep | UnknownStep,
+  stepIds: Set<string>,
+  capturedBindings: Set<string>,
+  eventRegistry: EventRegistry,
+  issues: ValidationIssue[],
+): void {
+  // The type guard isAwaitEventStep only confirms type+event — it
+  // doesn't validate nested shape. UnknownStep-absorbed malformed
+  // shapes (missing on_resume, bad predicate kind, etc.) reach here.
+  // Re-parse defensively: spec_malformed with specific path is a
+  // better UX than a TypeError or a silent pass.
+  const parsed = AwaitEventStepSchema.safeParse(step);
+  if (!parsed.success) {
+    for (const err of parsed.error.issues) {
+      issues.push({
+        code: "spec_malformed",
+        stepId: step.id,
+        path: err.path.join(".") || "$",
+        message: err.message,
+      });
+    }
+    return;
+  }
+  const validated = parsed.data;
+
+  // 1. event must exist in the SeldonEvent registry.
+  const knownEvents = new Set(eventRegistry.events.map((e) => e.type));
+  if (!knownEvents.has(validated.event)) {
+    issues.push({
+      code: "unknown_event",
+      stepId: validated.id,
+      path: "event",
+      message: `await_event references event "${validated.event}" which is not in the SeldonEvent registry`,
+    });
+    // Continue — subsequent checks give independent value.
+  }
+
+  // 2. match predicate's `data.*` paths resolve against the event's
+  // data shape. Other paths (no `data.` prefix) address the workflow's
+  // interpolation scope — those are validated by
+  // validateInterpolationsInStep, not here.
+  if (validated.match) {
+    const eventEntry = eventRegistry.events.find((e) => e.type === validated.event);
+    if (eventEntry) {
+      validatePredicateDataPaths(validated.id, "match", validated.match, eventEntry.fields, issues);
+    }
+  }
+
+  // 3. Both next refs must resolve (unknown_step_next). Null is a
+  // valid terminator.
+  for (const branch of ["on_resume", "on_timeout"] as const) {
+    const next = validated[branch].next;
+    if (next !== null && !stepIds.has(next)) {
+      issues.push({
+        code: "unknown_step_next",
+        stepId: validated.id,
+        path: `${branch}.next`,
+        message: `await_event "${validated.id}" references ${branch}.next="${next}" which is not a declared step id`,
+      });
+    }
+  }
+
+  // 4. Capture identifier shape + no-shadow check.
+  if (validated.on_resume.capture !== undefined) {
+    const name = validated.on_resume.capture;
+    if (!CAPTURE_NAME_PATTERN.test(name)) {
+      issues.push({
+        code: "bad_capture_name",
+        stepId: validated.id,
+        path: "on_resume.capture",
+        message: `capture="${name}" must be a lowercase identifier matching /^[a-z][a-zA-Z0-9_]*$/ so downstream {{${name}.field}} references are unambiguous`,
+      });
+    } else if (capturedBindings.has(name)) {
+      issues.push({
+        code: "bad_capture_name",
+        stepId: validated.id,
+        path: "on_resume.capture",
+        message: `capture="${name}" is already bound by an earlier step; capture names must be unique within a spec`,
+      });
+    } else {
+      capturedBindings.add(name);
+    }
+  }
+
+  // 5. Timeout ceiling (G-3, approved 90 days).
+  if (validated.timeout !== undefined) {
+    const ms = durationToApproxMs(validated.timeout);
+    if (ms !== null && ms > AWAIT_EVENT_TIMEOUT_CEILING_MS) {
+      issues.push({
+        code: "spec_malformed",
+        stepId: validated.id,
+        path: "timeout",
+        message: `timeout "${validated.timeout}" exceeds the 90-day ceiling (audit G-3). Event log retention is 90 days; longer waits could never match an event.`,
+      });
+    }
+  }
+
+  // 6. Defensive: reject capture-on-timeout if a raw object leaked
+  // through. AwaitEventStepSchema.on_timeout is `{next: ...}` without
+  // capture, so a well-formed step has this guaranteed — but runtime
+  // data can carry passthrough keys that the defensive safeParse
+  // above might preserve. Check the original step (not `validated`)
+  // because Zod strips non-schema keys.
+  const rawTimeout = (step as { on_timeout?: { capture?: unknown } }).on_timeout;
+  if (rawTimeout && rawTimeout.capture !== undefined) {
+    issues.push({
+      code: "spec_malformed",
+      stepId: validated.id,
+      path: "on_timeout.capture",
+      message: `await_event does not support capture on the timeout path (there is no event payload to bind when the wait times out). Remove on_timeout.capture; bind captures only on on_resume.`,
+    });
+  }
+}
+
+// Build a Zod shape for an event's data payload from the EventRegistry.
+// Used to:
+//   - Bind the shape for {{capture.field}} resolution when an
+//     await_event captures the resumed event.
+//   - Drive predicate data-path validation in
+//     validatePredicateDataPaths (scan-only; we never execute).
+// The mapping from `rawType` strings to Zod types is intentionally
+// narrow — covers the variants that actually appear in the emitted
+// registry (string, string | null, number, Record<string, unknown>).
+function buildEventDataShape(
+  eventType: string,
+  eventRegistry: EventRegistry,
+): z.ZodType {
+  const entry = eventRegistry.events.find((e) => e.type === eventType);
+  if (!entry) return z.unknown();
+  const shape: Record<string, z.ZodType> = {};
+  for (const [fieldName, fieldMeta] of Object.entries(entry.fields)) {
+    let fieldSchema: z.ZodType;
+    const baseType = fieldMeta.rawType.replace(/\s*\|\s*null\s*$/, "");
+    switch (baseType) {
+      case "string":
+        fieldSchema = z.string();
+        break;
+      case "number":
+        fieldSchema = z.number();
+        break;
+      case "boolean":
+        fieldSchema = z.boolean();
+        break;
+      case "Record<string, unknown>":
+        fieldSchema = z.record(z.string(), z.unknown());
+        break;
+      default:
+        // Conservative: unknown types parse as z.unknown() so
+        // downstream walks don't emit false positives.
+        fieldSchema = z.unknown();
+    }
+    if (fieldMeta.nullable || fieldMeta.rawType.includes("| null")) {
+      fieldSchema = fieldSchema.nullable();
+    }
+    shape[fieldName] = fieldSchema;
+  }
+  return z.object(shape);
+}
+
+// Walk predicate nodes and emit issues for any `data.X` field path
+// whose X isn't declared on the event's data shape. Other path prefixes
+// (without `data.`) address the workflow's interpolation scope and
+// are validated by validateInterpolationsInStep — not this walker.
+function validatePredicateDataPaths(
+  stepId: string,
+  basePath: string,
+  predicate: unknown,
+  eventFields: Record<string, { rawType: string; nullable: boolean }>,
+  issues: ValidationIssue[],
+): void {
+  if (!predicate || typeof predicate !== "object") return;
+  const p = predicate as { kind?: string; field?: string; of?: unknown[] };
+  if (p.kind === "all" || p.kind === "any") {
+    const children = Array.isArray(p.of) ? p.of : [];
+    children.forEach((child, i) => {
+      validatePredicateDataPaths(stepId, `${basePath}.of[${i}]`, child, eventFields, issues);
+    });
+    return;
+  }
+  if (typeof p.field !== "string") return;
+  if (!p.field.startsWith("data.")) return; // address to workflow scope, not event payload
+  const fieldName = p.field.slice(5); // strip "data."
+  // Only flag top-level field mismatches. Nested object fields on the
+  // event payload (e.g., data.data.someSubkey for form.submitted)
+  // require deeper walking that we defer — Record<string, unknown>
+  // is the registry's representation and doesn't carry inner keys.
+  const firstSegment = fieldName.split(".")[0];
+  if (!Object.prototype.hasOwnProperty.call(eventFields, firstSegment)) {
+    issues.push({
+      code: "unresolved_interpolation",
+      stepId,
+      path: `${basePath}.field`,
+      message: `predicate field "${p.field}" references event payload field "${firstSegment}" which is not declared on event — expected one of: ${Object.keys(eventFields).sort().join(", ")}`,
+    });
   }
 }
