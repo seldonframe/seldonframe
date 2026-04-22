@@ -259,6 +259,32 @@ Format: **Lesson** / **Trigger** / **Rule**
 
 ---
 
+## L-18 — Server-side imports of client-only modules fail at build time, not dev time
+
+- **Trigger:** `packages/crm/src/lib/puck/validator.ts` (server-side, used
+  by API routes) imported `puckConfig` from `config.impl.tsx` (a React
+  component file with `useState`/`useEffect` at module top level). `pnpm
+  dev` worked fine; Vercel production builds failed the moment
+  `/api/v1/portal/self-service` (a server route) pulled through the chain
+  `self-service → seldon-actions → landing/actions → landing/api →
+  puck/validator → puck/config.impl`. 15+ deployments on `main` broke
+  silently for 14+ hours before the screenshot arrived.
+- **Rule:** Any file imported by a route handler, API endpoint, or
+  server action must **not** transitively import a React component with
+  client-only hooks. When a module has both "data" and "rendering"
+  responsibilities, split them: pure data in a `.ts` with no React
+  imports; rendering in a `.tsx` with `"use client"`. Before adding a new
+  import into server code, trace the chain and check every file for
+  module-level `useState` / `useEffect` / `useRef` / `use` / `useContext`
+  — if any of those live at module top of a transitively-imported file,
+  the server build fails.
+  Dev mode does not catch this (Turbopack's strict-boundary check only
+  fires on `next build`), so "works on my machine" is not evidence the
+  deploy will succeed. Always verify via `pnpm build` (or the equivalent
+  Vercel build) when touching server-imported modules.
+
+---
+
 ## Template for new entries
 
 ```
