@@ -32,9 +32,11 @@ function readBlock(name: string): string {
 // parser gets reworked.
 // ---------------------------------------------------------------------
 
-describe("v1 regression — core blocks parse with their expected contract fields", () => {
-  const cases: Array<{ name: string; produces: number; composeMin: number; isV2: false }> = [
-    { name: "crm", produces: 3, composeMin: 7, isV2: false },
+describe("core blocks — v1 parse + v2 parse coexistence", () => {
+  // CRM migrated to v2 in Scope 3 Step 2b.1 PR 3 (2026-04-22) as the
+  // pattern-validator. The other 6 core blocks stay on v1 until 2b.2.
+  const cases: Array<{ name: string; produces: number; composeMin: number; isV2: boolean }> = [
+    { name: "crm", produces: 3, composeMin: 7, isV2: true }, // migrated in PR 3
     { name: "caldiy-booking", produces: 5, composeMin: 6, isV2: false },
     { name: "email", produces: 9, composeMin: 6, isV2: false },
     { name: "sms", produces: 7, composeMin: 6, isV2: false },
@@ -57,17 +59,24 @@ describe("v1 regression — core blocks parse with their expected contract field
   }
 });
 
-describe("v1 regression — validator emits legacy_contract for v1-only core blocks", () => {
-  for (const name of ["crm", "caldiy-booking", "email", "sms", "payments", "formbricks-intake", "landing-pages"]) {
-    test(`${name} surfaces exactly one legacy_contract warning and no errors`, () => {
+describe("validator — v1 blocks get legacy_contract; v2 blocks don't", () => {
+  test("crm (v2-migrated) does NOT surface legacy_contract", () => {
+    const parsed = parseBlockMd(readBlock("crm"));
+    const warnings = validateCompositionContract(parsed);
+    const codes = warnings.map((w) => w.code);
+    assert.ok(!codes.includes("legacy_contract"), `expected no legacy_contract on v2 crm block; got: ${codes.join(", ")}`);
+    assert.ok(!codes.includes("empty_contract"));
+    assert.ok(!codes.includes("mixed_v1_v2"));
+    assert.ok(!codes.includes("malformed_tools"));
+  });
+
+  for (const name of ["caldiy-booking", "email", "sms", "payments", "formbricks-intake", "landing-pages"]) {
+    test(`${name} (still on v1) surfaces exactly one legacy_contract warning and no errors`, () => {
       const parsed = parseBlockMd(readBlock(name));
       const warnings = validateCompositionContract(parsed);
       const codes = warnings.map((w) => w.code);
-      // Must include exactly one legacy_contract.
       assert.equal(codes.filter((c) => c === "legacy_contract").length, 1);
-      // Must NOT include empty_contract (these have real contracts).
       assert.ok(!codes.includes("empty_contract"));
-      // Must NOT include mixed_v1_v2 or malformed_tools.
       assert.ok(!codes.includes("mixed_v1_v2"));
       assert.ok(!codes.includes("malformed_tools"));
     });
