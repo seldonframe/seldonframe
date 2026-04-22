@@ -25,7 +25,7 @@
       "args": {
         "to": "{{email}}",
         "subject": "Thanks for visiting Bright Smile — how did we do?",
-        "body": "Hi {{firstName}},\n\nThanks so much for coming in to see us at Bright Smile Dental. We hope the visit felt calm, comfortable, and maybe even a little less scary than you expected.\n\nIf you have 30 seconds, we'd really appreciate a quick review. Honest feedback from patients like you is how other folks in the area find a dentist they can actually trust:\n\nhttps://g.page/r/Ca-example-business/review\n\nAnd if something wasn't quite right, please just hit reply — we'd much rather hear about it directly so we can make it right.\n\nThanks again for trusting us with your smile.\n\n— The Bright Smile Dental team",
+        "body": "Hi {{firstName}},\n\nThanks so much for coming in to see us at Bright Smile Dental. We hope your visit felt calm, comfortable, and nothing like the dental appointments you might remember from years ago — that's what we're here for.\n\nIf you have 30 seconds, we'd really appreciate a quick review. Honest feedback helps other folks who are nervous about the dentist find a practice they can trust:\n\nhttps://g.page/r/Ca-example-business/review\n\nAnd if something wasn't quite right, please just hit reply — we'd rather hear from you directly so we can make it right.\n\nThanks again for trusting us with your smile.\n\n— The team at Bright Smile Dental",
         "contactId": "{{contactId}}"
       },
       "next": "wait_before_sms"
@@ -42,7 +42,7 @@
       "tool": "send_sms",
       "args": {
         "to": "{{phone}}",
-        "body": "Hi {{firstName}}, it's Bright Smile Dental — quick follow-up: if you have 30 seconds, a short review would mean a lot to us. https://g.page/r/Ca-example-business/review — thank you!",
+        "body": "Hi {{firstName}}, it's Bright Smile Dental — just a quick nudge: if you have 30 seconds, a short review would mean a lot to us: https://g.page/r/Ca-example-business/review. Thanks!",
         "contact_id": "{{contactId}}"
       },
       "next": "log_review_request_complete"
