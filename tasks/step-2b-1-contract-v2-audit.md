@@ -322,7 +322,13 @@ Backward-compat is the right call because the sprint plan already commits to "mi
   - Update synthesis prompt to surface v2 schemas for CRM.
   - **PR 3 net: ~100 LOC BLOCK.md + synthesis prompt + probe fixtures.**
 - **Across 2b.1 total: ~1,000–1,300 LOC code + ~500 LOC tests.** No runtime changes. No new MCP tools. No UI changes.
-- **2b.2 (out of scope):** authors `.tools.ts` for the other 6 core blocks (~300–500 LOC Zod) + migrates their BLOCK.md contracts.
+- **2b.2 (out of scope — see correction below for updated LOC):** authors `.tools.ts` for the other 6 core blocks + migrates their BLOCK.md contracts.
+
+### Post-PR 1 correction (2026-04-21, after PR 1 shipped as `625ec168`)
+
+PR 1 actual: 1,484 LOC vs estimate 690–820. Primary miss: per-tool Zod LOC estimated at ~6 LOC (thin schemas) vs actual ~26 LOC (full schemas with args + returns + describes + refines). For 2b.2 scope planning, use **~25–30 LOC per MCP tool** as the baseline. 2b.2 LOC estimate corrected from ~300–500 LOC to **~1,600–2,400 LOC for Zod work alone** across 6 remaining blocks. Stop-and-reassess trigger recalibrated accordingly.
+
+The stop-and-reassess discipline worked as intended: the trigger fired on C8 verification, I traced the overrun to line-items (primary miss = crm.tools.ts at 344 LOC), confirmed each component was the work §10 asked for (no scope drift), and surfaced the findings for approval before pushing. Max approved Option A (accept the overrun) because the miss was audit-estimation, not schema-design complexity. See L-17 in `tasks/lessons.md` for the durable takeaway.
 
 **Stop-and-reassess trigger (approved 2026-04-21, baseline refreshed for PR 1):** PR 1's ceiling is **~690–820 LOC of code** (code only, tests excluded per the 30% rule being about design-complexity signal, not test verbosity). If PR 1 implementation exceeds that ceiling by >30% (i.e., >1,065 LOC of non-test code), **stop and surface for review before continuing.** A >30% overrun means the schema design has an unseen complexity we didn't catch at audit time, and shipping through it creates a bigger problem for 2b.2's six downstream block migrations. The right action is to pause, write a brief diagnosis, and either adjust scope or iterate the schema before continuing — not to push through and discover the issue mid-2b.2.
 
