@@ -300,7 +300,7 @@ Backward-compat is the right call because the sprint plan already commits to "mi
   - For each `ConversationStep`, validate `on_exit.extract` fields against the typed-exit shape (§2.b).
   - For `capture:` bindings, validate that downstream `{{<name>.<field>}}` references resolve against the tool's typed `returns:` shape (§2.a).
   - Return a list of violations with step id + path + message. Zero violations = spec is type-clean.
-- **Estimated LOC:** **~300–400 LOC for the first cut** (revised up from an initial ~200 estimate after factoring in interpolation resolution — parsing `{{var.path}}` expressions, resolving `var` to its declaring source, walking `.path.parts` against the declared type — is ~100 LOC on its own). Intentionally narrow: only checks 2b.1's three type additions. Doesn't type-check `branch.condition.type: "external_state"` (that's 2e) or `await_event` (2c). Doesn't validate schedules (2d).
+- **Estimated LOC:** ~300–400 LOC for the first cut (revised up from an initial ~200 estimate after factoring in interpolation resolution). **Re-corrected 2026-04-22 after PR 2 shipped:** the resolver alone is ~200+ LOC — validated by PR 2's implementation (walkSchemaPath with Zod wrapper unwrapping ~55 LOC, resolveOneInterpolation across 4 source kinds ~70 LOC, walkObjectStrings for nested args ~20 LOC, plus supporting scope/dispatch ~55 LOC = ~200 LOC on resolver alone). The original "~100 LOC on its own" estimate under-sized Zod's ceremony (ZodOptional/ZodNullable unwrapping, .shape introspection, 4 resolver cases with tailored error messages). Validator scope is still intentionally narrow: only checks 2b.1's three type additions. Doesn't type-check `branch.condition.type: "external_state"` (that's 2e) or `await_event` (2c). Doesn't validate schedules (2d).
 
 ### 4.4 Totals
 
@@ -331,6 +331,27 @@ PR 1 actual: 1,484 LOC vs estimate 690–820. Primary miss: per-tool Zod LOC est
 The stop-and-reassess discipline worked as intended: the trigger fired on C8 verification, I traced the overrun to line-items (primary miss = crm.tools.ts at 344 LOC), confirmed each component was the work §10 asked for (no scope drift), and surfaced the findings for approval before pushing. Max approved Option A (accept the overrun) because the miss was audit-estimation, not schema-design complexity. See L-17 in `tasks/lessons.md` for the durable takeaway.
 
 **Stop-and-reassess trigger (approved 2026-04-21, baseline refreshed for PR 1):** PR 1's ceiling is **~690–820 LOC of code** (code only, tests excluded per the 30% rule being about design-complexity signal, not test verbosity). If PR 1 implementation exceeds that ceiling by >30% (i.e., >1,065 LOC of non-test code), **stop and surface for review before continuing.** A >30% overrun means the schema design has an unseen complexity we didn't catch at audit time, and shipping through it creates a bigger problem for 2b.2's six downstream block migrations. The right action is to pause, write a brief diagnosis, and either adjust scope or iterate the schema before continuing — not to push through and discover the issue mid-2b.2.
+
+### Post-PR 2 correction (2026-04-22, after PR 2 shipped as `3a11186d`)
+
+**PR 2 (`7.i.1.b`) actual: `validator.ts` at 600 LOC vs 300–400 estimate.** Primary miss: the Zod-shape walker (`walkSchemaPath` + `unwrapZodWrapper`) was under-sized. Audit said "~100 LOC on its own" for interpolation resolution; actual breakdown:
+
+- `walkSchemaPath` + Zod wrapper unwrapping: ~55 LOC (ZodOptional / ZodNullable require explicit unwrap at every step; Zod v4 doesn't expose a single-shot helper).
+- `resolveOneInterpolation` across 4 source kinds: ~70 LOC (each branch has a tailored error message because the audit named message quality as the validator's user-facing value).
+- `walkObjectStrings` for nested args: ~20 LOC (Win-Back's `args.metadata.couponId` requires deep traversal).
+- Scope-building + dispatch infrastructure: ~55 LOC.
+- **Resolver layer total: ~200 LOC** (vs ~100 LOC audit estimate).
+
+Additional miss: inline documentation (~140 LOC) was not budgeted but is load-bearing for future contributors reading the scope-builder ordering and data-unwrap conventions. Not padding — documentation of non-obvious invariants that prevent regression.
+
+Stop-and-reassess trigger fired at 600 LOC (15% past the 520 threshold). Max approved Option A (accept the overrun) after line-item trace confirmed every component mapped to audit §2.a/§2.b/§2.c scope. Same pattern as PR 1: audit-estimation miss, not design complexity.
+
+For 2b.2 scope planning, use as baselines:
+- **~25–30 LOC per MCP tool** for Zod schemas (from PR 1).
+- **~200+ LOC for interpolation / path resolvers** in validators (from PR 2).
+- **~100+ LOC of inline documentation** for non-obvious invariants (scope ordering, data-unwrap conventions, reserved namespaces).
+
+Validated against two PRs now rather than one. See L-17 in `tasks/lessons.md` for the extended lesson (two-PR confirmation).
 
 ---
 
