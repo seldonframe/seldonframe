@@ -14,6 +14,8 @@
     "test:cross-block": "pnpm --filter @seldonframe/crm test:cross-block",
     "test:first-run": "node scripts/run-tsx.js packages/crm/tests/integration/first-run.spec.ts",
     "test:unit": "node scripts/run-unit-tests.js",
+    "emit:blocks": "node scripts/emit-block-tools.js",
+    "emit:blocks:check": "node scripts/emit-block-tools.js --check",
     "db:generate": "pnpm --filter @seldonframe/crm db:generate",
     "db:migrate": "pnpm --filter @seldonframe/crm db:migrate",
     "db:push": "pnpm --filter @seldonframe/crm db:push",

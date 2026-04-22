@@ -29,6 +29,9 @@ jobs:
       - name: Unit tests
         run: pnpm test:unit
 
+      - name: BLOCK.md emit drift-detector
+        run: pnpm emit:blocks:check
+
       - name: Build
         run: pnpm build
 
