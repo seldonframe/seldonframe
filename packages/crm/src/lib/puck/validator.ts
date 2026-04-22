@@ -1,4 +1,9 @@
-import { puckConfig } from "./config.impl";
+// Server-safe fields import — puck/config.impl.tsx is a client boundary
+// (uses React hooks) and would pull useState/useEffect into any
+// server-runtime bundle transitively importing it (see the 2026-04-21
+// Vercel deploy-failure fix). config-fields.ts carries the same fields
+// data as pure JSON, importable from anywhere.
+import { componentFieldRegistry } from "./config-fields";
 
 // Pre-save validator for Puck payloads. Closes the D-5 risk surface:
 // when Claude (or any other generator) produces a Puck JSON blob, we
@@ -49,8 +54,7 @@ function getComponentFields(type: string): {
   fields: Record<string, { type: string; options?: Array<{ value: string | number }> }>;
   hasSlot: boolean;
 } | null {
-  const components = puckConfig.components as Record<string, { fields?: Record<string, unknown> } | undefined>;
-  const component = components[type];
+  const component = componentFieldRegistry[type];
   if (!component || !component.fields) return null;
   const fields = component.fields as Record<string, { type: string; options?: Array<{ value: string | number }> }>;
   const hasSlot = Object.values(fields).some((field) => field?.type === "slot");

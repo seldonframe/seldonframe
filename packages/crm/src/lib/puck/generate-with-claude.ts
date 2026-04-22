@@ -1,7 +1,11 @@
 import { getAIClient } from "@/lib/ai/client";
 import type { OrgSoul } from "@/lib/soul/types";
 import type { OrgTheme } from "@/lib/theme/types";
-import { puckConfig } from "./config.impl";
+// Server-safe fields import — see validator.ts for the same rationale.
+// config.impl.tsx is now a "use client" boundary (2026-04-21) and
+// cannot be imported from an API route. config-fields.ts mirrors the
+// same field data as pure JSON.
+import { componentFieldRegistry } from "./config-fields";
 import {
   validatePuckPayload,
   sanitizePuckPayload,
@@ -48,9 +52,8 @@ export type ClaudeGenerateFailure = {
 export type ClaudeGenerateResult = ClaudeGenerateSuccess | ClaudeGenerateFailure;
 
 function buildSchemaSummary() {
-  const components = puckConfig.components as Record<string, { fields?: Record<string, unknown> } | undefined>;
   const lines: string[] = [];
-  for (const [name, component] of Object.entries(components)) {
+  for (const [name, component] of Object.entries(componentFieldRegistry)) {
     if (!component?.fields) continue;
     const fieldDescriptors: string[] = [];
     for (const [fieldName, raw] of Object.entries(component.fields)) {

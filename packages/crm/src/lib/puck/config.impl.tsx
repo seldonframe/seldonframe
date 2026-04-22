@@ -1,3 +1,23 @@
+"use client";
+
+// Puck editor component config — the React rendering layer. Uses
+// client-only hooks (useState, useEffect) inside component render
+// functions, so this file is a client boundary per Next.js App Router.
+//
+// Server-runtime importers must NOT reach this file. Use
+// `./config-fields.ts` instead — it mirrors the fields structure as
+// pure data (no React) so server code can validate Puck payloads
+// without pulling React hooks into the server bundle.
+//
+// Fix landed 2026-04-21 after the Turbopack build flagged the
+// transitive import chain: self-service/route.ts → seldon-actions.ts →
+// landing/actions.ts → landing/api.ts → puck/validator.ts →
+// puck/config.impl.tsx. Breaking the chain: validator.ts + generate-
+// with-claude.ts now import from config-fields.ts; `"use client"` on
+// this file is the explicit boundary marker so a future accidental
+// server import fails with a clear "cannot import client module" error
+// at the importing file, not a confusing hook-in-server error here.
+
 import React, { useState, useEffect } from "react";
 import type { Config } from "@puckeditor/core";
 import {
