@@ -232,6 +232,33 @@ Format: **Lesson** / **Trigger** / **Rule**
 
 ---
 
+## L-17 — Zod schema LOC estimates for non-trivial tools need a ~25 LOC/tool baseline, not 5-10
+
+- **Trigger:** PR 1 of Scope 3 Step 2b.1 shipped contract v2 CRM tools
+  at 344 LOC across 13 tools (~26 LOC/tool) vs the audit's 50-80 LOC
+  estimate for the whole block (~4-6 LOC/tool). Aggregate PR 1 overrun:
+  1,484 LOC non-test vs 690-820 estimated. Stop-and-reassess trigger
+  fired on C8 verification. Max approved Option A (accept) after
+  tracing the overrun to line-items and confirming it was audit-
+  estimation miss, not schema-design complexity.
+- **Rule:** Zod schemas for tools that downstream validators consume
+  require args schema + returns schema + `.describe()` strings +
+  cross-field `.refine()` guards — thin estimates reflect thin schemas
+  that can't serve the validator's needs. Apply **~25-30 LOC/tool** to
+  2b.2 planning and any future block Zod migrations. When you hear
+  "per-tool Zod LOC" in a sizing conversation, your reflex should be
+  ~25, not ~5. Under the v2 shape specifically, each tool needs:
+    - 1 Zod object for args with per-field `.describe()`
+    - 1 Zod shape for returns (share record primitives across tools to
+      avoid repetition — helps but doesn't erase the per-tool cost)
+    - Cross-field refines where the API enforces "either A or B" rules
+    - Event emits array
+  That surface is the validator's input; cutting any piece makes the
+  validator weaker. Don't promise the audit a 5-LOC/tool number you
+  can't deliver against a real validator.
+
+---
+
 ## Template for new entries
 
 ```
