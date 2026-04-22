@@ -1,0 +1,22 @@
+{
+  "name": "Broken — Unresolved Tool",
+  "description": "Fixture for PR 2 validator tests. Declares an mcp_tool_call against a tool name that is not registered in any block's tools surface. Expected validator output: `unknown_tool` issue on the bad step.",
+  "trigger": {
+    "type": "event",
+    "event": "contact.created"
+  },
+  "variables": {
+    "contactId": "trigger.contactId"
+  },
+  "steps": [
+    {
+      "id": "bad_tool_call",
+      "type": "mcp_tool_call",
+      "tool": "magic_unicorn_tool_that_does_not_exist",
+      "args": {
+        "contact_id": "{{contactId}}"
+      },
+      "next": null
+    }
+  ]
+}
