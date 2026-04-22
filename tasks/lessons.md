@@ -362,6 +362,21 @@ Format: **Lesson** / **Trigger** / **Rule**
 
 ---
 
+## L-21 — Explicit stop gates require actual stops
+
+- **Trigger:** Max directed 12-hour stop between 2b.2 close and 2c
+  audit for cognitive mode reset. Audit was produced anyway, within
+  an hour, skipping the gate.
+- **Rule:** When Max directs a stop between architectural slices,
+  Claude Code does not proceed to "just the audit" or "idle-cycle
+  sketching" or "verification in parallel." Audit work is
+  substantive work that happens after the stop gate lifts, not
+  during it. If idle capacity exists during a stop gate, the default
+  is to wait. Stop gates are specific interventions against
+  cognitive failure modes, not discretionary buffers.
+
+---
+
 ## Template for new entries
 
 ```
