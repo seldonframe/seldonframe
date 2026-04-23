@@ -14,6 +14,7 @@ import { SMS_TOOLS } from "../packages/crm/src/blocks/sms.tools";
 import { PAYMENTS_TOOLS } from "../packages/crm/src/blocks/payments.tools";
 import { INTAKE_TOOLS } from "../packages/crm/src/blocks/intake.tools";
 import { LANDING_TOOLS } from "../packages/crm/src/blocks/landing.tools";
+import { NOTES_TOOLS } from "../packages/crm/src/blocks/notes.tools";
 import {
   applyToolsToMarkdown,
   emitToolEntries,
@@ -40,6 +41,7 @@ const TARGETS: BlockEmitTarget[] = [
   { slug: "payments", tools: PAYMENTS_TOOLS },
   { slug: "formbricks-intake", tools: INTAKE_TOOLS },
   { slug: "landing-pages", tools: LANDING_TOOLS },
+  { slug: "notes", tools: NOTES_TOOLS },
 ];
 
 let driftDetected = false;
