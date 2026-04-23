@@ -201,6 +201,17 @@ export type RuntimeContext = {
    * with runtime contexts constructed before SLICE 3.
    */
   soulStore?: SoulStore;
+  /**
+   * SeldonEvent emitter — consumed by the emit_event dispatcher
+   * (SLICE 3 C3). Injectable so tests can spy without loading the
+   * real bus. Production wraps `emitSeldonEvent` from
+   * lib/events/bus.ts. Optional for backward-compat.
+   */
+  emitSeldonEvent?: (
+    type: string,
+    data: Record<string, unknown>,
+    options: { orgId: string },
+  ) => Promise<void>;
 };
 
 // ---------------------------------------------------------------------

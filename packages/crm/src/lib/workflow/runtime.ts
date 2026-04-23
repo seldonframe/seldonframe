@@ -32,6 +32,7 @@ import type {
   AgentSpec,
   AwaitEventStep,
   ConversationStep,
+  EmitEventStep,
   McpToolCallStep,
   ReadStateStep,
   Step,
@@ -44,6 +45,7 @@ import { dispatchConversation } from "./step-dispatchers/conversation";
 import { dispatchAwaitEvent } from "./step-dispatchers/await-event";
 import { dispatchReadState } from "./step-dispatchers/read-state";
 import { dispatchWriteState } from "./step-dispatchers/write-state";
+import { dispatchEmitEvent } from "./step-dispatchers/emit-event";
 import type { NextAction, RuntimeContext, StoredRun, StoredWait } from "./types";
 import { findStep, RuntimeError, TIMER_EVENT_TYPE } from "./types";
 
@@ -76,6 +78,10 @@ function isReadStateStep(step: Step): step is ReadStateStep {
 function isWriteStateStep(step: Step): step is WriteStateStep {
   const s = step as Partial<WriteStateStep>;
   return step.type === "write_state" && typeof s.path === "string";
+}
+function isEmitEventStep(step: Step): step is EmitEventStep {
+  const s = step as Partial<EmitEventStep>;
+  return step.type === "emit_event" && typeof s.event === "string";
 }
 function isAwaitEventStep(step: Step): step is AwaitEventStep {
   const s = step as Partial<AwaitEventStep>;
@@ -337,6 +343,7 @@ async function dispatchStep(
   if (isAwaitEventStep(step)) return dispatchAwaitEvent(run, step, context);
   if (isReadStateStep(step)) return dispatchReadState(run, step, context);
   if (isWriteStateStep(step)) return dispatchWriteState(run, step, context);
+  if (isEmitEventStep(step)) return dispatchEmitEvent(run, step, context);
   return { kind: "fail", reason: `Unsupported step type "${step.type}" at runtime` };
 }
 

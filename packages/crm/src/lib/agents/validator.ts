@@ -234,6 +234,17 @@ const WriteStateStepSchema = z.object({
   next: z.string().nullable(),
 });
 
+// emit_event step — SLICE 3 C3 per audit §3.3 + G-3-2 (restricted-
+// shape with registry cross-check at parse time; runtime type-check
+// at emit time for interpolated values).
+const EmitEventStepSchema = z.object({
+  id: z.string().min(1),
+  type: z.literal("emit_event"),
+  event: z.string().min(1),
+  data: z.record(z.string(), z.unknown()).default({}),
+  next: z.string().nullable(),
+});
+
 const UnknownStepSchema = z
   .object({
     id: z.string().min(1),
@@ -248,6 +259,7 @@ const KnownStepSchema = z.discriminatedUnion("type", [
   AwaitEventStepSchema,
   ReadStateStepSchema,
   WriteStateStepSchema,
+  EmitEventStepSchema,
 ]);
 
 const StepSchema = z.union([KnownStepSchema, UnknownStepSchema]);
@@ -267,6 +279,7 @@ export type ConversationStep = z.infer<typeof ConversationStepSchema>;
 export type AwaitEventStep = z.infer<typeof AwaitEventStepSchema>;
 export type ReadStateStep = z.infer<typeof ReadStateStepSchema>;
 export type WriteStateStep = z.infer<typeof WriteStateStepSchema>;
+export type EmitEventStep = z.infer<typeof EmitEventStepSchema>;
 export type UnknownStep = z.infer<typeof UnknownStepSchema>;
 // Discriminated-union narrowing on `.type` for the four known step
 // types; UnknownStep is the runtime fallthrough for unsupported
@@ -278,6 +291,7 @@ export type Step =
   | AwaitEventStep
   | ReadStateStep
   | WriteStateStep
+  | EmitEventStep
   | UnknownStep;
 
 // Type guards — TypeScript can't narrow Step by `step.type === "..."`
@@ -457,11 +471,16 @@ function validateStep(
     validateWriteStateStep(step, issues);
     return;
   }
+  // Handle emit_event — G-3-2 registry cross-check at parse time.
+  if (step.type === "emit_event") {
+    validateEmitEventStep(step, eventRegistry, issues);
+    return;
+  }
   issues.push({
     code: "unsupported_step_type",
     stepId: step.id,
     path: "type",
-    message: `step type "${step.type}" is not supported by this validator (wait / mcp_tool_call / conversation / await_event / read_state / write_state are the six known types; branch ships with 2e)`,
+    message: `step type "${step.type}" is not supported by this validator (wait / mcp_tool_call / conversation / await_event / read_state / write_state / emit_event are the seven known types; branch ships with 2e)`,
   });
 }
 
@@ -1153,5 +1172,103 @@ function validateWriteStateStep(step: Step, issues: ValidationIssue[]): void {
         `Paths must be explicitly added to packages/crm/src/lib/workflow/state-access/allowlist.ts ` +
         `with an accompanying PR documenting the use case + idempotency guarantees.`,
     });
+  }
+}
+
+// ---------------------------------------------------------------------
+// emit_event validation (SLICE 3 C3 — G-3-2 registry cross-check)
+//
+// Checks:
+//   1. Event name exists in the SeldonEvent registry.
+//   2. Every declared `data.*` key is a known field on the event.
+//   3. Non-interpolated literal values type-match the field's rawType.
+//   4. Interpolated values (strings containing `{{...}}`) pass at
+//      parse — the dispatcher type-checks at emit time.
+// ---------------------------------------------------------------------
+
+const INTERPOLATION_TOKEN_RE = /\{\{\s*[^}]+?\s*\}\}/;
+
+function validateEmitEventStep(
+  step: Step,
+  eventRegistry: EventRegistry,
+  issues: ValidationIssue[],
+): void {
+  const parsed = EmitEventStepSchema.safeParse(step);
+  if (!parsed.success) {
+    for (const err of parsed.error.issues) {
+      issues.push({
+        code: "spec_malformed",
+        stepId: step.id,
+        path: err.path.join(".") || "$",
+        message: err.message,
+      });
+    }
+    return;
+  }
+  const validated = parsed.data;
+
+  // 1. Event name in registry.
+  const eventEntry = eventRegistry.events.find((e) => e.type === validated.event);
+  if (!eventEntry) {
+    issues.push({
+      code: "unknown_event",
+      stepId: validated.id,
+      path: "event",
+      message: `emit_event "${validated.event}" is not in the SeldonEvent registry`,
+    });
+    return;
+  }
+
+  // 2 + 3. Validate each data key + type.
+  for (const [key, value] of Object.entries(validated.data)) {
+    const field = eventEntry.fields[key];
+    if (!field) {
+      issues.push({
+        code: "spec_malformed",
+        stepId: validated.id,
+        path: `data.${key}`,
+        message: `emit_event data field "${key}" is not declared on "${validated.event}" — expected one of: ${Object.keys(eventEntry.fields).sort().join(", ") || "(none)"}`,
+      });
+      continue;
+    }
+    // 4. Interpolated strings pass at parse; runtime checks.
+    if (typeof value === "string" && INTERPOLATION_TOKEN_RE.test(value)) continue;
+
+    const baseType = field.rawType.replace(/\s*\|\s*(null|undefined)\s*$/, "").trim();
+    const isNullable = field.nullable || /\|\s*(null|undefined)\b/.test(field.rawType);
+    if (value === null) {
+      if (!isNullable) {
+        issues.push({
+          code: "spec_malformed",
+          stepId: validated.id,
+          path: `data.${key}`,
+          message: `emit_event data.${key} is null but field is non-nullable (${field.rawType})`,
+        });
+      }
+      continue;
+    }
+    if (!matchesLiteralType(value, baseType)) {
+      issues.push({
+        code: "spec_malformed",
+        stepId: validated.id,
+        path: `data.${key}`,
+        message: `emit_event data.${key} (${typeof value}) does not match declared type "${field.rawType}"`,
+      });
+    }
+  }
+}
+
+function matchesLiteralType(value: unknown, baseType: string): boolean {
+  switch (baseType) {
+    case "string": return typeof value === "string";
+    case "number": return typeof value === "number";
+    case "boolean": return typeof value === "boolean";
+    case "Record<string, unknown>":
+      return typeof value === "object" && value !== null && !Array.isArray(value);
+    default:
+      // Unknown rawType — permit. Conservative: avoid false
+      // positives on niche types. Runtime will surface via
+      // typecheck at delivery.
+      return true;
   }
 }
