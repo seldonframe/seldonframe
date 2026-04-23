@@ -206,4 +206,14 @@ export class DrizzleSubscriptionStorage implements SubscriptionStorage {
       .set({ active, updatedAt: sql`now()` })
       .where(eq(blockSubscriptionRegistry.id, subscriptionId));
   }
+
+  async listDeliveriesBySubscription(
+    subscriptionId: string,
+  ): Promise<StoredBlockSubscriptionDelivery[]> {
+    return this.db
+      .select()
+      .from(blockSubscriptionDeliveries)
+      .where(eq(blockSubscriptionDeliveries.subscriptionId, subscriptionId))
+      .orderBy(sql`${blockSubscriptionDeliveries.createdAt} desc`);
+  }
 }

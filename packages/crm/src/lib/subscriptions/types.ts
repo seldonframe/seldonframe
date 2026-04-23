@@ -137,6 +137,15 @@ export interface SubscriptionStorage {
 
   /** G-4 auto-flip: atomic activate/deactivate for a subscription. */
   setSubscriptionActive(subscriptionId: string, active: boolean): Promise<void>;
+
+  /**
+   * Deliveries for one subscription, newest-createdAt first. Used by
+   * the C5 observability summary (and by the polish follow-up's
+   * full-history view).
+   */
+  listDeliveriesBySubscription(
+    subscriptionId: string,
+  ): Promise<StoredBlockSubscriptionDelivery[]>;
 }
 
 // Re-exports so callers needing both the types + the store symbols

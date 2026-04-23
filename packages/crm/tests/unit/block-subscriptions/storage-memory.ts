@@ -161,6 +161,14 @@ export class InMemorySubscriptionStorage implements SubscriptionStorage {
     }
   }
 
+  async listDeliveriesBySubscription(
+    subscriptionId: string,
+  ): Promise<StoredBlockSubscriptionDelivery[]> {
+    return this.deliveries
+      .filter((d) => d.subscriptionId === subscriptionId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
   // -------------------------------------------------------------------
   // Test helpers (underscore-prefixed — NOT on the interface).
   // -------------------------------------------------------------------
