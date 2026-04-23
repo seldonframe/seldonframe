@@ -456,6 +456,47 @@ exceeds production-LOC by >50%, check for a hidden validation
 harness. If one exists, re-categorize it out of test-LOC into
 artifact-LOC, re-project the total, and flag to the reviewer.
 
+### L-17 addendum — Audit-time trigger overshoot
+
+Observation from SLICE 3 audit (2026-04-23): projected ~1,350
+LOC vs 1,275 stop-trigger (6% over). Flagged at audit time BEFORE
+any code was written. The L-17 stop-trigger is approximate, not a
+hard ceiling — measurement noise matters.
+
+**Decision framework when the trigger is exceeded at audit time
+(vs mid-implementation):**
+
+1. **Can the overshoot be absorbed by scope-cutting without
+   defeating the slice's purpose?** If yes, cut. If no, accept.
+2. **Is the overshoot within L-17 measurement noise (±5-7%)?**
+   If yes, the trigger is approximate; accept with explicit
+   acknowledgment. If material (>15%), force a decision.
+3. **Is every LOC in the projection defensible against a specific
+   purpose?** If yes, the audit is well-specified; accept. If
+   padding is visible, cut the padding.
+
+**Rule:** audit-time flags are the best place for the trigger
+conversation because there are no sunk costs. Scope-cutting at
+this stage is cheap; accepting is also cheap. The decision should
+be made on **quality grounds**, not LOC-discipline grounds.
+
+**Versus mid-implementation overshoot:** when the trigger fires
+mid-PR, there IS a sunk cost. The decision gets harder (throw
+away work or accept a bigger number). L-21 "stops are stops"
+applies literally there — stop and re-flag. At audit time, the
+stop is just a pause for thought.
+
+**SLICE 3 example:** 6% overshoot driven by the 10-case comparison
+harness. Scope-cutting would defeat the slice's evaluation
+purpose (the harness IS the product-validation moment). Overshoot
+is within measurement noise (5-7%). Accept with explicit flag.
+
+**Rule (calibration):** every audit's §9 LOC section should state
+where the projection lands relative to the stop-trigger. When
+the projection is within measurement noise, label it so the
+reviewer doesn't have to re-compute. When materially over, list
+the three decision-framework questions inline with the recommendation.
+
 ---
 
 ## L-18 — Server-side imports of client-only modules fail at build time, not dev time
