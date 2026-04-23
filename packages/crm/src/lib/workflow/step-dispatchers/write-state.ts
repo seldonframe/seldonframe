@@ -27,43 +27,7 @@ import type { WriteStateStep } from "../../agents/validator";
 import type { NextAction, RuntimeContext, StoredRun } from "../types";
 import { splitWorkspacePath } from "../state-access/soul-store";
 import { isAgentWritablePath } from "../state-access/allowlist";
-
-const INTERPOLATION_RE = /\{\{\s*([^}]+?)\s*\}\}/g;
-
-function resolveInterpolationsInValue(value: unknown, run: StoredRun): unknown {
-  if (typeof value === "string") {
-    return value.replace(INTERPOLATION_RE, (raw, bodyRaw) => {
-      const body = String(bodyRaw).trim();
-      const [varName, ...pathSegs] = body.split(".");
-      if (Object.prototype.hasOwnProperty.call(run.variableScope, varName)) {
-        return String(run.variableScope[varName]);
-      }
-      if (Object.prototype.hasOwnProperty.call(run.captureScope, varName)) {
-        let current: unknown = run.captureScope[varName];
-        for (const seg of pathSegs) {
-          if (current && typeof current === "object" && seg in (current as Record<string, unknown>)) {
-            current = (current as Record<string, unknown>)[seg];
-          } else {
-            return raw;
-          }
-        }
-        return String(current);
-      }
-      return raw;
-    });
-  }
-  if (Array.isArray(value)) {
-    return value.map((v) => resolveInterpolationsInValue(v, run));
-  }
-  if (value && typeof value === "object") {
-    const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      out[k] = resolveInterpolationsInValue(v, run);
-    }
-    return out;
-  }
-  return value;
-}
+import { resolveInterpolations, resolveInterpolationsInString } from "../interpolate";
 
 export async function dispatchWriteState(
   run: StoredRun,
@@ -90,25 +54,7 @@ export async function dispatchWriteState(
   // Resolve interpolations in path (for targeting the write) and
   // in value (for the content). The allowlist check above used
   // the template; SoulStore uses the resolved path.
-  const resolvedPath = step.path.replace(INTERPOLATION_RE, (raw, bodyRaw) => {
-    const body = String(bodyRaw).trim();
-    const [varName, ...pathSegs] = body.split(".");
-    if (Object.prototype.hasOwnProperty.call(run.variableScope, varName)) {
-      return String(run.variableScope[varName]);
-    }
-    if (Object.prototype.hasOwnProperty.call(run.captureScope, varName)) {
-      let current: unknown = run.captureScope[varName];
-      for (const seg of pathSegs) {
-        if (current && typeof current === "object" && seg in (current as Record<string, unknown>)) {
-          current = (current as Record<string, unknown>)[seg];
-        } else {
-          return raw;
-        }
-      }
-      return String(current);
-    }
-    return raw;
-  });
+  const resolvedPath = resolveInterpolationsInString(step.path, run);
 
   const split = splitWorkspacePath(resolvedPath);
   if (!split) {
@@ -118,7 +64,7 @@ export async function dispatchWriteState(
     };
   }
 
-  const resolvedValue = resolveInterpolationsInValue(step.value, run);
+  const resolvedValue = resolveInterpolations(step.value, run);
 
   try {
     await context.soulStore.writePath(run.orgId, split.innerPath, resolvedValue, split.slice);

@@ -456,6 +456,60 @@ exceeds production-LOC by >50%, check for a hidden validation
 harness. If one exists, re-categorize it out of test-LOC into
 artifact-LOC, re-project the total, and flag to the reviewer.
 
+### L-17 addendum — Dispatcher-heavy slices need higher test-LOC budgets than parallel-path count implies
+
+Observation from SLICE 3 PR 1 mid-implementation (2026-04-23):
+audit applied the 1.3x test multiplier (single/two-path category,
+three parallel dispatchers). Actual test LOC ran **~3x the
+projection** across the three new step type dispatchers
+(read_state / write_state / emit_event).
+
+**Root cause:** each dispatcher is a complete validated primitive,
+not a shared-runtime modification. Each requires:
+
+- Schema definition (~20 LOC).
+- Step type + guard + KnownStepSchema union entry (~10 LOC).
+- `validate<X>Step` function with semantic cross-checks (~30-80
+  LOC — the emit_event validator ran the longest at ~80 LOC for
+  registry lookup + per-field type-check).
+- Import wiring across validator / runtime / types.ts (~20 LOC).
+
+**Production subtotal per dispatcher: ~80 LOC.** Tests for each
+dispatcher cover happy path + interpolation + error branches +
+defense-in-depth (~200 LOC per dispatcher on average).
+Parallel-path classification missed that N dispatchers = N× test
+surface, not shared test surface.
+
+**SLICE 3 evidence:** C1 (read_state) ~720 LOC, C2 (write_state)
+~550 LOC, C3 (emit_event) ~440 LOC. Total ~1,710 vs audit's ~840
+projection for the same 3 commits. 2.0x on test-LOC alone.
+
+**Rule:** when audit §8 shows N new dispatchers (not shared
+runtime modifications), estimate at minimum:
+- **~80 LOC production per dispatcher**
+- **~200 LOC tests per dispatcher**
+
+Multi-dispatcher slices have **N× test surface**, not shared
+test surface. Budget each dispatcher as its own complete feature
+for LOC purposes.
+
+**Relation to the three-level spectrum:** this is an ADDITIONAL
+axis beyond the 1.3x / 1.6x / 2.0x path-interaction spectrum.
+The spectrum captures path-interaction complexity; this captures
+dispatcher-count scaling. Both compose:
+
+- N parallel dispatchers with no interaction: `N × 200 LOC tests`
+  (dispatcher axis) × 1.3x (path axis) = effectively 1.3x × N.
+- N parallel dispatchers with sequential-pipeline interaction
+  between them: apply 1.6x instead of 1.3x to the dispatcher-axis
+  total.
+
+**For SLICE 4+ audits:** count dispatchers in §8 explicitly.
+State the dispatcher-count multiplier AND the path-interaction
+multiplier separately in §11's LOC table. Future audits that
+skip this step will reliably undershoot on dispatcher-heavy
+slices.
+
 ### L-17 addendum — Audit-time trigger overshoot
 
 Observation from SLICE 3 audit (2026-04-23): projected ~1,350

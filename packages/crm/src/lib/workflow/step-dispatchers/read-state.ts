@@ -19,30 +19,7 @@
 import type { ReadStateStep } from "../../agents/validator";
 import type { NextAction, RuntimeContext, StoredRun } from "../types";
 import { splitWorkspacePath } from "../state-access/soul-store";
-
-const INTERPOLATION_RE = /\{\{\s*([^}]+?)\s*\}\}/g;
-
-function resolveInterpolations(value: string, run: StoredRun): string {
-  return value.replace(INTERPOLATION_RE, (raw, bodyRaw) => {
-    const body = String(bodyRaw).trim();
-    const [varName, ...pathSegs] = body.split(".");
-    if (Object.prototype.hasOwnProperty.call(run.variableScope, varName)) {
-      return String(run.variableScope[varName]);
-    }
-    if (Object.prototype.hasOwnProperty.call(run.captureScope, varName)) {
-      let current: unknown = run.captureScope[varName];
-      for (const seg of pathSegs) {
-        if (current && typeof current === "object" && seg in (current as Record<string, unknown>)) {
-          current = (current as Record<string, unknown>)[seg];
-        } else {
-          return raw;
-        }
-      }
-      return String(current);
-    }
-    return raw;
-  });
-}
+import { resolveInterpolationsInString } from "../interpolate";
 
 export async function dispatchReadState(
   run: StoredRun,
@@ -56,7 +33,7 @@ export async function dispatchReadState(
     };
   }
 
-  const resolvedPath = resolveInterpolations(step.path, run);
+  const resolvedPath = resolveInterpolationsInString(step.path, run);
   const split = splitWorkspacePath(resolvedPath);
   if (!split) {
     return {
