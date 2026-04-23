@@ -31,6 +31,13 @@ import { db } from "@/db";
 import { resumeWait } from "@/lib/workflow/runtime";
 import { DrizzleRuntimeStorage } from "@/lib/workflow/storage-drizzle";
 import { notImplementedToolInvoker, type RuntimeContext } from "@/lib/workflow/types";
+import { runSubscriptionTick } from "@/lib/subscriptions/dispatcher";
+import { DrizzleSubscriptionStorage } from "@/lib/subscriptions/storage-drizzle";
+import { getSubscriptionHandlerRegistry } from "@/lib/subscriptions/handler-registry";
+// Side-effect import: registers block-owned subscription handlers
+// into the module-level registry. Route imports run at boot so the
+// registry is populated before the first tick.
+import "@/lib/subscriptions/register-all-handlers";
 
 export const runtime = "nodejs";
 
@@ -96,11 +103,37 @@ export async function GET(request: Request) {
     }
   }
 
+  // SLICE 1 PR 2 C3: subscription delivery sweep. Runs AFTER
+  // workflow_waits per audit §4.4 ordering note ("subscriptions
+  // first, so handler-emitted downstream events have time to
+  // propagate before their dependent waits sweep") — actually the
+  // reverse: waits first to resume any pending runs; subs second
+  // so a handler emitting a downstream event doesn't starve waits
+  // in the same tick. Both orderings are valid; locking to
+  // waits-first matches the existing runtime's "timeouts before
+  // new work" cadence.
+  const subStorage = new DrizzleSubscriptionStorage(db);
+  let subscriptionResult = { scanned: 0, claimed: 0, delivered: 0, failed: 0, dead: 0 };
+  try {
+    subscriptionResult = await runSubscriptionTick({
+      storage: subStorage,
+      handlers: getSubscriptionHandlerRegistry(),
+      now: new Date(),
+      batchLimit: BATCH_LIMIT,
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("[workflow-tick] subscription tick failed", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
   return NextResponse.json({
     ok: true,
     tickMs: Date.now() - startedAt,
     scanned: dueWaits.length,
     claimed,
     failed,
+    subscriptions: subscriptionResult,
   });
 }

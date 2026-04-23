@@ -9,6 +9,7 @@ import type {
   StoredBlockSubscriptionDelivery,
 } from "../../../src/db/schema";
 import type {
+  EventEnvelopeSnapshot,
   NewSubscriptionInput,
   NewDeliveryInput,
   SubscriptionStorage,
@@ -17,6 +18,11 @@ import type {
 export class InMemorySubscriptionStorage implements SubscriptionStorage {
   subscriptions: StoredBlockSubscription[] = [];
   deliveries: StoredBlockSubscriptionDelivery[] = [];
+  /**
+   * Synthetic event-log map for tests — the real impl joins to
+   * workflow_event_log. Test helpers populate this via _seedEventLog.
+   */
+  eventLog = new Map<string, EventEnvelopeSnapshot>();
 
   async registerSubscription(input: NewSubscriptionInput): Promise<string> {
     const id = randomUUID();
@@ -75,5 +81,105 @@ export class InMemorySubscriptionStorage implements SubscriptionStorage {
       createdAt: now,
     });
     return id;
+  }
+
+  // -------------------------------------------------------------------
+  // Dispatcher-side methods (C3).
+  // -------------------------------------------------------------------
+
+  async findPendingDeliveries(
+    now: Date,
+    limit: number,
+  ): Promise<StoredBlockSubscriptionDelivery[]> {
+    return this.deliveries
+      .filter(
+        (d) =>
+          (d.status === "pending" || d.status === "failed") &&
+          d.nextAttemptAt.getTime() <= now.getTime() &&
+          d.claimedAt === null,
+      )
+      .sort((a, b) => a.nextAttemptAt.getTime() - b.nextAttemptAt.getTime())
+      .slice(0, limit);
+  }
+
+  async claimDelivery(deliveryId: string, now: Date): Promise<boolean> {
+    const d = this.deliveries.find((x) => x.id === deliveryId);
+    if (!d) return false;
+    if (d.claimedAt !== null) return false;
+    d.claimedAt = now;
+    d.status = "in_flight";
+    return true;
+  }
+
+  async getSubscription(subscriptionId: string): Promise<StoredBlockSubscription | null> {
+    return this.subscriptions.find((s) => s.id === subscriptionId) ?? null;
+  }
+
+  async getEventForDelivery(eventLogId: string): Promise<EventEnvelopeSnapshot | null> {
+    return this.eventLog.get(eventLogId) ?? null;
+  }
+
+  async markDelivered(deliveryId: string, now: Date): Promise<void> {
+    const d = this.deliveries.find((x) => x.id === deliveryId);
+    if (!d) return;
+    d.status = "delivered";
+    d.deliveredAt = now;
+  }
+
+  async markFailed(
+    deliveryId: string,
+    error: string,
+    nextAttemptAt: Date,
+    attempt: number,
+  ): Promise<void> {
+    const d = this.deliveries.find((x) => x.id === deliveryId);
+    if (!d) return;
+    d.status = "failed";
+    d.lastError = error;
+    d.nextAttemptAt = nextAttemptAt;
+    d.attempt = attempt;
+    // Release the claim so the next tick can re-claim.
+    d.claimedAt = null;
+  }
+
+  async markDead(deliveryId: string, error: string): Promise<void> {
+    const d = this.deliveries.find((x) => x.id === deliveryId);
+    if (!d) return;
+    d.status = "dead";
+    d.lastError = error;
+  }
+
+  // -------------------------------------------------------------------
+  // Test helpers (underscore-prefixed — NOT on the interface).
+  // -------------------------------------------------------------------
+
+  _seedEventLog(input: {
+    orgId: string;
+    eventType: string;
+    payload: Record<string, unknown>;
+    emittedAt?: Date;
+  }): string {
+    const id = randomUUID();
+    this.eventLog.set(id, {
+      eventLogId: id,
+      orgId: input.orgId,
+      type: input.eventType,
+      emittedAt: input.emittedAt ?? new Date(),
+      data: input.payload,
+    });
+    return id;
+  }
+
+  _setAttempt(deliveryId: string, attempt: number): void {
+    const d = this.deliveries.find((x) => x.id === deliveryId);
+    if (d) d.attempt = attempt;
+  }
+
+  _setStatus(
+    deliveryId: string,
+    status: StoredBlockSubscriptionDelivery["status"],
+  ): void {
+    const d = this.deliveries.find((x) => x.id === deliveryId);
+    if (d) d.status = status;
   }
 }

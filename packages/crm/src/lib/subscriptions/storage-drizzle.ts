@@ -17,17 +17,20 @@
 // PR 2 Commit 3 extends this class with the dispatcher-side CAS +
 // retry methods.
 
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lte, sql } from "drizzle-orm";
 
 import type { DbClient } from "@/db";
 import {
   blockSubscriptionRegistry,
   blockSubscriptionDeliveries,
+  workflowEventLog,
 } from "@/db/schema";
 import type {
+  EventEnvelopeSnapshot,
   NewDeliveryInput,
   NewSubscriptionInput,
   StoredBlockSubscription,
+  StoredBlockSubscriptionDelivery,
   SubscriptionStorage,
 } from "./types";
 
@@ -89,5 +92,100 @@ export class DrizzleSubscriptionStorage implements SubscriptionStorage {
       })
       .returning({ id: blockSubscriptionDeliveries.id });
     return rows.length > 0 ? rows[0].id : null;
+  }
+
+  // -------------------------------------------------------------------
+  // Dispatcher-side methods (C3).
+  // -------------------------------------------------------------------
+
+  async findPendingDeliveries(
+    now: Date,
+    limit: number,
+  ): Promise<StoredBlockSubscriptionDelivery[]> {
+    return this.db
+      .select()
+      .from(blockSubscriptionDeliveries)
+      .where(
+        and(
+          inArray(blockSubscriptionDeliveries.status, ["pending", "failed"]),
+          lte(blockSubscriptionDeliveries.nextAttemptAt, now),
+          isNull(blockSubscriptionDeliveries.claimedAt),
+        ),
+      )
+      .orderBy(asc(blockSubscriptionDeliveries.nextAttemptAt))
+      .limit(limit);
+  }
+
+  async claimDelivery(deliveryId: string, now: Date): Promise<boolean> {
+    const rows = await this.db
+      .update(blockSubscriptionDeliveries)
+      .set({ claimedAt: now, status: "in_flight" })
+      .where(
+        and(
+          eq(blockSubscriptionDeliveries.id, deliveryId),
+          isNull(blockSubscriptionDeliveries.claimedAt),
+        ),
+      )
+      .returning({ id: blockSubscriptionDeliveries.id });
+    return rows.length > 0;
+  }
+
+  async getSubscription(subscriptionId: string): Promise<StoredBlockSubscription | null> {
+    const rows = await this.db
+      .select()
+      .from(blockSubscriptionRegistry)
+      .where(eq(blockSubscriptionRegistry.id, subscriptionId))
+      .limit(1);
+    return rows[0] ?? null;
+  }
+
+  async getEventForDelivery(eventLogId: string): Promise<EventEnvelopeSnapshot | null> {
+    const rows = await this.db
+      .select()
+      .from(workflowEventLog)
+      .where(eq(workflowEventLog.id, eventLogId))
+      .limit(1);
+    if (rows.length === 0) return null;
+    const row = rows[0];
+    return {
+      eventLogId: row.id,
+      orgId: row.orgId,
+      type: row.eventType,
+      data: (row.payload ?? {}) as Record<string, unknown>,
+      emittedAt: row.emittedAt,
+    };
+  }
+
+  async markDelivered(deliveryId: string, now: Date): Promise<void> {
+    await this.db
+      .update(blockSubscriptionDeliveries)
+      .set({ status: "delivered", deliveredAt: now })
+      .where(eq(blockSubscriptionDeliveries.id, deliveryId));
+  }
+
+  async markFailed(
+    deliveryId: string,
+    error: string,
+    nextAttemptAt: Date,
+    attempt: number,
+  ): Promise<void> {
+    await this.db
+      .update(blockSubscriptionDeliveries)
+      .set({
+        status: "failed",
+        lastError: error,
+        nextAttemptAt,
+        attempt,
+        // Release the claim so the next tick can re-claim for retry.
+        claimedAt: null,
+      })
+      .where(eq(blockSubscriptionDeliveries.id, deliveryId));
+  }
+
+  async markDead(deliveryId: string, error: string): Promise<void> {
+    await this.db
+      .update(blockSubscriptionDeliveries)
+      .set({ status: "dead", lastError: error })
+      .where(eq(blockSubscriptionDeliveries.id, deliveryId));
   }
 }

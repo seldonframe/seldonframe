@@ -50,6 +50,22 @@ export type NewDeliveryInput = {
 // Storage interface
 // ---------------------------------------------------------------------
 
+/**
+ * Minimal view of the event that triggered a delivery. Shape mirrors
+ * the SeldonEvent union convention from packages/core/src/events:
+ *   { type, data } — so handlers destructure the same way they
+ *   would when consuming SeldonEvent directly.
+ * Plus envelope metadata (eventLogId / orgId / emittedAt) for
+ * handlers that need workspace scoping or event-log cross-reference.
+ */
+export type EventEnvelopeSnapshot = {
+  type: string;
+  data: Record<string, unknown>;
+  eventLogId: string;
+  orgId: string;
+  emittedAt: Date;
+};
+
 export interface SubscriptionStorage {
   /**
    * Install-time registration. Returns the new subscription id.
@@ -70,6 +86,47 @@ export interface SubscriptionStorage {
    * semantics at the storage level.
    */
   insertDelivery(input: NewDeliveryInput): Promise<string | null>;
+
+  // -------------------------------------------------------------------
+  // Dispatcher-side methods (C3).
+  // -------------------------------------------------------------------
+
+  /**
+   * Cron sweep: pending or failed deliveries whose nextAttemptAt <=
+   * now, bounded by `limit`. Filtered / delivered / dead rows are
+   * skipped — they're never candidates for dispatch.
+   */
+  findPendingDeliveries(
+    now: Date,
+    limit: number,
+  ): Promise<StoredBlockSubscriptionDelivery[]>;
+
+  /**
+   * Compare-and-swap claim: UPDATE SET claimedAt=now, status='in_flight'
+   * WHERE id=? AND claimedAt IS NULL. Returns true if THIS call
+   * claimed the row; false if someone else already did. Drives
+   * at-most-once dispatch (§4.4).
+   */
+  claimDelivery(deliveryId: string, now: Date): Promise<boolean>;
+
+  /** Fetch a subscription by id; null if not found (cascade deleted). */
+  getSubscription(subscriptionId: string): Promise<StoredBlockSubscription | null>;
+
+  /**
+   * Load the event envelope the delivery references. Null if the
+   * event log row was cleaned up (retention window). Handlers must
+   * not be invoked when this returns null — the event is gone.
+   */
+  getEventForDelivery(eventLogId: string): Promise<EventEnvelopeSnapshot | null>;
+
+  markDelivered(deliveryId: string, now: Date): Promise<void>;
+  markFailed(
+    deliveryId: string,
+    error: string,
+    nextAttemptAt: Date,
+    attempt: number,
+  ): Promise<void>;
+  markDead(deliveryId: string, error: string): Promise<void>;
 }
 
 // Re-exports so callers needing both the types + the store symbols
