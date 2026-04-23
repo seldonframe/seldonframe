@@ -188,4 +188,22 @@ export class DrizzleSubscriptionStorage implements SubscriptionStorage {
       .set({ status: "dead", lastError: error })
       .where(eq(blockSubscriptionDeliveries.id, deliveryId));
   }
+
+  // -------------------------------------------------------------------
+  // Install-time methods (C4).
+  // -------------------------------------------------------------------
+
+  async listSubscriptionsByOrg(orgId: string): Promise<StoredBlockSubscription[]> {
+    return this.db
+      .select()
+      .from(blockSubscriptionRegistry)
+      .where(eq(blockSubscriptionRegistry.orgId, orgId));
+  }
+
+  async setSubscriptionActive(subscriptionId: string, active: boolean): Promise<void> {
+    await this.db
+      .update(blockSubscriptionRegistry)
+      .set({ active, updatedAt: sql`now()` })
+      .where(eq(blockSubscriptionRegistry.id, subscriptionId));
+  }
 }

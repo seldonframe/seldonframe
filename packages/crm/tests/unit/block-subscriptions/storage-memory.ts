@@ -149,6 +149,18 @@ export class InMemorySubscriptionStorage implements SubscriptionStorage {
     d.lastError = error;
   }
 
+  async listSubscriptionsByOrg(orgId: string): Promise<StoredBlockSubscription[]> {
+    return this.subscriptions.filter((s) => s.orgId === orgId);
+  }
+
+  async setSubscriptionActive(subscriptionId: string, active: boolean): Promise<void> {
+    const s = this.subscriptions.find((x) => x.id === subscriptionId);
+    if (s) {
+      s.active = active;
+      s.updatedAt = new Date();
+    }
+  }
+
   // -------------------------------------------------------------------
   // Test helpers (underscore-prefixed — NOT on the interface).
   // -------------------------------------------------------------------

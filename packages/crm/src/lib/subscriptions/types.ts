@@ -127,6 +127,16 @@ export interface SubscriptionStorage {
     attempt: number,
   ): Promise<void>;
   markDead(deliveryId: string, error: string): Promise<void>;
+
+  // -------------------------------------------------------------------
+  // Install-time methods (C4).
+  // -------------------------------------------------------------------
+
+  /** All subscriptions for an org (active + dormant). Admin + reconcile. */
+  listSubscriptionsByOrg(orgId: string): Promise<StoredBlockSubscription[]>;
+
+  /** G-4 auto-flip: atomic activate/deactivate for a subscription. */
+  setSubscriptionActive(subscriptionId: string, active: boolean): Promise<void>;
 }
 
 // Re-exports so callers needing both the types + the store symbols
