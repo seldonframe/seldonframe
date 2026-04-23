@@ -25,8 +25,8 @@
       "id": "qualify_conversation",
       "type": "conversation",
       "channel": "sms",
-      "initial_message": "Hi {{contact.firstName}}, it's Bright Smile Dental — thanks for reaching out about a free new-patient consultation! Happy to get you on the books. Any preference on day/time? And do you have dental insurance you'd like us to check?",
-      "exit_when": "The prospect has shared a preferred appointment day/time for their new-patient consultation AND confirmed their dental insurance status (yes / no / unsure).",
+      "initial_message": "Hi {{contact.firstName}}, it's Bright Smile Dental — thanks for reaching out about a free new-patient consult! Happy to get you on the schedule. Any preferred day/time that works for you? And do you have dental insurance you'd like us to check?",
+      "exit_when": "The prospect has shared a preferred appointment day/time for a new-patient consultation AND confirmed their insurance status (yes / no / unsure).",
       "on_exit": {
         "extract": {
           "preferred_start": "ISO-8601 datetime for the preferred appointment start, snapped to the next available slot in the clinic's business hours (Mon–Fri 9am–5pm local time).",
@@ -70,7 +70,7 @@
       "args": {
         "to": "{{email}}",
         "subject": "You're booked with Bright Smile Dental 🦷",
-        "body": "Hi {{contact.firstName}},\n\nYou're confirmed for {{preferred_start}} at Bright Smile Dental — we can't wait to meet you.\n\nWhat to expect: a relaxed 45-minute new-patient visit, zero sales pressure, and plenty of time for your questions. We'll take a look, chat through any concerns, and only recommend what you actually need.\n\nNeed to move things around? Just reply to this email or text us back — no stress.\n\nSee you soon,\nThe Bright Smile Dental team",
+        "body": "Hi {{contact.firstName}},\n\nYou're all set for {{preferred_start}} — we're looking forward to meeting you.\n\nHere's what to expect: a relaxed 45-minute new-patient visit, zero sales pressure, and plenty of time for your questions. Our team will take care of the rest using the modern, gentle tech we're known for.\n\nNeed to reschedule or have a question before your visit? Just reply to this email or text us back — we're happy to help.\n\nSee you soon,\nThe Bright Smile Dental team",
         "contactId": "{{contactId}}"
       },
       "next": null

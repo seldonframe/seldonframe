@@ -24,8 +24,8 @@
       "tool": "send_email",
       "args": {
         "to": "{{email}}",
-        "subject": "Thanks for visiting Bright Smile — mind sharing a quick word?",
-        "body": "Hi {{firstName}},\n\nThanks so much for coming in to see us at Bright Smile Dental — it was a pleasure taking care of you.\n\nWe know the dentist isn't everyone's favourite errand, so we work hard to make visits feel calm and painless. If we got that right for you, would you take 30 seconds to share your experience? Honest reviews from real patients are how nervous folks in our community find us and finally book that appointment they've been putting off.\n\nHere's the link:\nhttps://g.page/r/Ca-example-business/review\n\nAnd if something wasn't quite right, please just hit reply — we'd rather hear it from you directly so we can make it right.\n\nThanks again,\nThe Bright Smile team",
+        "subject": "Thanks for visiting Bright Smile — how did we do?",
+        "body": "Hi {{firstName}},\n\nThanks so much for coming in to see us at Bright Smile Dental. We know the dentist isn't everyone's favorite place, so it genuinely means a lot that you trusted us with your smile.\n\nIf you have 30 seconds, we'd really appreciate a quick review — it helps other folks who are nervous about finding a dentist know they're in good hands:\n\nhttps://g.page/r/Ca-example-business/review\n\nAnd if something wasn't quite right during your visit, please just hit reply and let us know directly. We'd much rather hear from you so we can make it right.\n\nTake care,\nThe Bright Smile team",
         "contactId": "{{contactId}}"
       },
       "next": "wait_before_sms"
@@ -42,7 +42,7 @@
       "tool": "send_sms",
       "args": {
         "to": "{{phone}}",
-        "body": "Hey {{firstName}}, it's Bright Smile Dental — quick nudge in case our email got buried. If you have 30 seconds, a short review really helps us out: https://g.page/r/Ca-example-business/review. Thank you!",
+        "body": "Hi {{firstName}}, it's Bright Smile Dental — quick follow-up. If you have 30 seconds, a short review would really help us out: https://g.page/r/Ca-example-business/review  Thanks!",
         "contact_id": "{{contactId}}"
       },
       "next": "log_review_request_complete"
