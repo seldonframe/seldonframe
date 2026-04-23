@@ -1,4 +1,6 @@
 import {
+  SubscriptionEntry,
+  SubscriptionEntrySchema,
   ToolEntry,
   ToolEntrySchema,
   TypedConsumesEntry,
@@ -117,6 +119,14 @@ export type BlockMdCompositionContract = {
   // marker block. Each entry is JSON-Schema-shaped (emitted by C6's
   // `z.toJSONSchema()` pass over a `<block>.tools.ts` module).
   tools?: ToolEntry[];
+  // SLICE 1 PR 1 (2026-04-23): block-level reactive subscriptions.
+  // Authored under a `## Subscriptions` section with a marker pair
+  // `<!-- SUBSCRIPTIONS:START --> [JSON array] <!-- SUBSCRIPTIONS:END -->`
+  // mirroring the existing TOOLS pattern. Each entry validates
+  // against SubscriptionEntrySchema from contract-v2.ts. Audit
+  // §3.2's "strawman" YAML-ish syntax was non-binding; the marker-
+  // based JSON shape reuses parser idioms operators already know.
+  subscriptions?: SubscriptionEntry[];
   // True when any v2 field is populated. Synthesis + validator use this
   // to decide whether to apply the v2 type-check surface or treat the
   // block as legacy-contract.
@@ -847,6 +857,59 @@ function parseToolsSection(blockMd: string): { tools?: ToolEntry[]; malformed: b
   return { tools: validated, malformed: false };
 }
 
+// SLICE 1 PR 1 (2026-04-23): `## Subscriptions` section parser.
+// Marker-based JSON array, matching the TOOLS pattern.
+//
+// Return shape mirrors parseToolsSection:
+//   - { subscriptions: [...], malformed: false } — present + valid
+//   - { subscriptions: [], malformed: false }    — present but empty
+//   - { malformed: true }                        — markers present,
+//     JSON doesn't parse OR an entry fails SubscriptionEntrySchema
+//   - { malformed: false }                       — markers absent
+//
+// G-3 defaults (`{{id}}` idempotency key, retry policy) applied by
+// SubscriptionEntrySchema's parse-time defaults. Authors can omit
+// those fields and get safe defaults.
+const SUBSCRIPTIONS_START = "<!-- SUBSCRIPTIONS:START -->";
+const SUBSCRIPTIONS_END = "<!-- SUBSCRIPTIONS:END -->";
+
+function parseSubscriptionsSection(
+  blockMd: string,
+): { subscriptions?: SubscriptionEntry[]; malformed: boolean } {
+  const startIdx = blockMd.indexOf(SUBSCRIPTIONS_START);
+  const endIdx = blockMd.indexOf(SUBSCRIPTIONS_END);
+  if (startIdx === -1 || endIdx === -1 || endIdx < startIdx) {
+    return { malformed: false };
+  }
+
+  const inner = blockMd.slice(startIdx + SUBSCRIPTIONS_START.length, endIdx).trim();
+  if (!inner) {
+    return { subscriptions: [], malformed: false };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(inner);
+  } catch {
+    return { malformed: true };
+  }
+
+  if (!Array.isArray(parsed)) {
+    return { malformed: true };
+  }
+
+  const validated: SubscriptionEntry[] = [];
+  for (const entry of parsed) {
+    const result = SubscriptionEntrySchema.safeParse(entry);
+    if (!result.success) {
+      return { malformed: true };
+    }
+    validated.push(result.data);
+  }
+
+  return { subscriptions: validated, malformed: false };
+}
+
 // Detect the "intentionally invisible" HTML-comment marker added to the
 // 11 non-contract recipe BLOCK.md files in Scope 3 Step 2b.1 §7.5. When
 // present, the validator returns zero warnings (these blocks are
@@ -860,6 +923,7 @@ function detectIntentionallyInvisible(blockMd: string): boolean {
 function parseCompositionContract(
   section: string,
   toolsResult: { tools?: ToolEntry[]; malformed: boolean } = { malformed: false },
+  subscriptionsResult: { subscriptions?: SubscriptionEntry[]; malformed: boolean } = { malformed: false },
 ): BlockMdCompositionContract {
   const empty: BlockMdCompositionContract = {
     produces: [],
@@ -870,7 +934,7 @@ function parseCompositionContract(
     isV2: false,
     mixedShapeFields: [],
   };
-  if (!section && !toolsResult.tools) return empty;
+  if (!section && !toolsResult.tools && !subscriptionsResult.subscriptions) return empty;
 
   const raw = section.split("\n");
   const result: BlockMdCompositionContract = { ...empty, raw };
@@ -881,6 +945,15 @@ function parseCompositionContract(
   if (toolsResult.tools) {
     result.tools = toolsResult.tools;
     if (toolsResult.tools.length > 0) result.isV2 = true;
+  }
+
+  // SLICE 1 PR 1: subscriptions from the <!-- SUBSCRIPTIONS --> block.
+  // Parsed independently of the `## Composition Contract` section;
+  // malformed blocks surface as validator warnings via the M3
+  // validator (malformed_subscriptions).
+  if (subscriptionsResult.subscriptions) {
+    result.subscriptions = subscriptionsResult.subscriptions;
+    if (subscriptionsResult.subscriptions.length > 0) result.isV2 = true;
   }
 
   for (const line of raw) {
@@ -946,6 +1019,33 @@ function parseCompositionContract(
     }
   }
 
+  // SLICE 1 PR 1 audit §3.4: subscriptions auto-populate corresponding
+  // `consumes: {kind: "event", event: "X"}` entries (deduped) so
+  // authors don't hand-write the consumes entry for every subscribed
+  // event. The event name is the raw part AFTER the `<block-slug>:`
+  // prefix (consumes entries don't carry the source-block qualifier).
+  if (result.subscriptions && result.subscriptions.length > 0) {
+    const existingConsumesEvents = new Set(
+      (result.consumesTyped ?? [])
+        .filter((e) => e.kind === "event")
+        .map((e) => (e as { kind: "event"; event: string }).event),
+    );
+    const consumesFromSubs: TypedConsumesEntry[] = [];
+    for (const sub of result.subscriptions) {
+      // event shape: "<block-slug>:<event.name>" — split on first colon.
+      const colon = sub.event.indexOf(":");
+      if (colon === -1) continue; // schema rejects this shape; defensive
+      const bareEvent = sub.event.slice(colon + 1);
+      if (existingConsumesEvents.has(bareEvent)) continue;
+      existingConsumesEvents.add(bareEvent);
+      consumesFromSubs.push({ kind: "event", event: bareEvent });
+    }
+    if (consumesFromSubs.length > 0) {
+      result.consumesTyped = [...(result.consumesTyped ?? []), ...consumesFromSubs];
+      result.consumes = [...result.consumes, ...consumesFromSubs.map(flattenTypedConsumes)];
+    }
+  }
+
   return result;
 }
 
@@ -954,11 +1054,13 @@ export function parseBlockMd(blockMd: string): ParsedBlockMd {
   const titleMatch = normalized.match(/^#\s*BLOCK(?:\.md)?\s*:\s*(.+)$/im);
   const sections = extractSections(normalized);
   const toolsResult = parseToolsSection(normalized);
+  const subscriptionsResult = parseSubscriptionsSection(normalized);
   const intentionallyInvisible = detectIntentionallyInvisible(normalized);
 
   const composition = parseCompositionContract(
     sections["composition contract"] ?? "",
     toolsResult,
+    subscriptionsResult,
   );
 
   // Stash the malformed-tools signal on the composition so the validator
@@ -967,6 +1069,9 @@ export function parseBlockMd(blockMd: string): ParsedBlockMd {
   // tools live inside the contract conceptually.
   if (toolsResult.malformed) {
     composition.mixedShapeFields.push("__tools_malformed__");
+  }
+  if (subscriptionsResult.malformed) {
+    composition.mixedShapeFields.push("__subscriptions_malformed__");
   }
 
   return {
