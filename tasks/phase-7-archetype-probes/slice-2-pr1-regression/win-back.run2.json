@@ -58,7 +58,7 @@
       "args": {
         "to": "{{email}}",
         "subject": "A little something from Bright Smile — 20% off whenever you're ready",
-        "body": "Hi {{firstName}},\n\nWe noticed your subscription with Bright Smile Dental wrapped up recently — no worries at all, life gets busy and teeth can wait (a little).\n\nIf you ever want to come back for a painless cleaning or a no-pressure consultation, here's 20% off on us:\n\n{{coupon.code}}\n\nThe code is good for the next 14 days at checkout. If something about your last visit wasn't quite right, I'd genuinely love to hear about it — just hit reply, I read every message myself.\n\nEither way, we're rooting for your smile.\n\nWarmly,\nThe Bright Smile Dental team",
+        "body": "Hi {{firstName}},\n\nWe noticed you cancelled recently, and that's completely okay — no guilt trip here. We just wanted to quietly leave the door open.\n\nIf you'd ever like to come back for a cleaning, a check-up, or even just a no-pressure consultation, here's 20% off on us:\n\n{{coupon.code}}\n\nIt's good for the next 14 days at checkout. Our goal has always been to make dental care feel less scary, not to push anyone — so use it if it helps, and ignore it if now isn't the time.\n\nAnd if something about your last experience didn't sit right, I'd genuinely like to hear it. Just hit reply — a real person reads these.\n\nTake care of yourself,\nThe Bright Smile Dental team",
         "contactId": "{{contactId}}"
       },
       "next": "wait_before_reminder"
@@ -75,7 +75,7 @@
       "tool": "send_sms",
       "args": {
         "to": "{{phone}}",
-        "body": "Hi {{firstName}}, it's Bright Smile Dental — just a friendly heads up that your 20% off code {{coupon.code}} expires in about a week. Grab it whenever you're ready. No pressure!",
+        "body": "Hi {{firstName}}, it's Bright Smile Dental — just a quick heads up your 20% off code {{coupon.code}} expires in a few days. Use it whenever you're ready, no pressure either way.",
         "contact_id": "{{contactId}}"
       },
       "next": "log_winback_complete"
