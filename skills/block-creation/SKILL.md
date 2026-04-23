@@ -81,7 +81,42 @@ needed to translate NL confidently.
 - `tools`: array of tool definitions: `{ name, description, args: [...], returns: [...], emits: [...] }`.
 - `subscriptions`: array of `{ event, handlerName, description, idempotencyKey }` reactive handlers. `event` is fully-qualified: `"<source-block>:<event.name>"`.
 
-### 2. Clarify rarely (three-tier policy per audit G-4)
+### 2. Pre-classify the intent (deterministic safety check)
+
+Before translating NL → BlockSpec, call the deterministic
+classifier once to sanity-check the intent:
+
+```ts
+import { classifyIntent } from "@/lib/scaffolding/nl/intent-classifier";
+
+const classification = classifyIntent(nlIntent);
+// { tier: 1 | 2 | 3, issues: string[], suggestedAction: string }
+```
+
+Behavior by tier:
+
+- **Tier 3** — the intent is destructive / modifies an existing
+  core block. Refuse by default. If the builder explicitly
+  confirms (e.g., "yes, this is an admin-only tool with
+  safeguards"), the scaffold may proceed; otherwise relay the
+  specific risk and stop.
+- **Tier 1** — the intent is empty, trivially short, or
+  self-contradictory. Ask ONE focused clarifying question
+  (`suggestedAction` points at what to ask). Wait for a reply.
+  Re-classify after the reply; proceed only when classification
+  is no longer tier 1.
+- **Tier 2** — the common case. Proceed with scaffold generation.
+  Fill sensible defaults for under-specified fields; mark each
+  default with `TODO (scaffold-default)` comments the builder
+  can grep post-scaffold.
+
+The classifier's heuristics are loose — false-negative tier-2
+intents are acceptable (downstream BlockSpec validation catches
+structural problems). False-positive tier-3 decisions are
+preferred over false-negative — better to refuse once and require
+confirmation than scaffold a destructive tool silently.
+
+### 3. Clarify rarely (three-tier policy per audit G-4)
 
 - **Tier 1 — Ask once** only when the intent is genuinely meaningless
   (zero description, or internally contradictory type declarations).
@@ -95,7 +130,7 @@ needed to translate NL confidently.
   - Destructive tools without explicit confirmation.
   - Modifications to existing blocks (scope limits to NEW blocks).
 
-### 3. Run the scaffold
+### 4. Run the scaffold
 
 Once the BlockSpec is constructed, write it to a temporary file and
 invoke the scaffold CLI:
@@ -117,7 +152,7 @@ The scaffold will:
 5. On success, print the created-files list and next-step hints.
 6. On failure, print the orphan report with `git clean` recovery commands.
 
-### 4. Relay results
+### 5. Relay results
 
 After the scaffold succeeds, tell the builder:
 
