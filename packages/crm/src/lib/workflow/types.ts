@@ -177,6 +177,8 @@ export interface RuntimeStorage {
 // mock invoker) drive the same code path as production.
 // ---------------------------------------------------------------------
 
+import type { SoulStore } from "./state-access/soul-store";
+
 export type ToolInvoker = (toolName: string, args: Record<string, unknown>) => Promise<unknown>;
 
 export const notImplementedToolInvoker: ToolInvoker = async (toolName) => {
@@ -192,6 +194,13 @@ export type RuntimeContext = {
   invokeTool: ToolInvoker;
   /** Current time — overridable in tests for deterministic timeouts. */
   now: () => Date;
+  /**
+   * SoulStore — workspace-scoped state read/write. Consumed by the
+   * SLICE 3 state-access dispatchers (read_state, write_state).
+   * Existing dispatchers ignore it. Optional for backward-compat
+   * with runtime contexts constructed before SLICE 3.
+   */
+  soulStore?: SoulStore;
 };
 
 // ---------------------------------------------------------------------

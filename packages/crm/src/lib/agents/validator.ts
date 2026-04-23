@@ -180,6 +180,38 @@ const AwaitEventStepSchema = z.object({
 // checks. At the type level, Step is the union of the three known
 // types + the unknown fallback; runtime parse accepts all four via
 // z.union (tried in order).
+// read_state step — SLICE 3 C1 per audit §3.1 + G-3-1 (Zod enum,
+// "soul"-only MVP). Reads a value from the workspace's Soul state
+// and binds it to a capture.
+//
+// Source is a Zod ENUM — not a free-form string — so future
+// extensions (event_log, block_data) add as new enum variants.
+// L-22 structural enforcement: unknown sources are rejected at
+// parse time, not failed silently at runtime.
+//
+// Path must start with `workspace.soul.` or `workspace.theme.`.
+// The dispatcher strips the `workspace.<slice>.` prefix before
+// calling the SoulStore.
+const ReadStateSourceKind = z.enum(["soul"]);
+const WorkspacePathPattern = /^workspace\.(soul|theme)(\.[^.][^{}]*)?$/;
+const ReadStateStepSchema = z.object({
+  id: z.string().min(1),
+  type: z.literal("read_state"),
+  source: ReadStateSourceKind,
+  /**
+   * `workspace.soul.<path>` or `workspace.theme.<path>`. Path segments
+   * may include `{{interpolation}}` tokens — the dispatcher resolves
+   * them against the run's scope before reading. The `{{}}` escape
+   * above deliberately permits interpolation anywhere after the
+   * workspace-scope prefix.
+   */
+  path: z.string().regex(WorkspacePathPattern, {
+    message: 'read_state.path must start with "workspace.soul." or "workspace.theme."',
+  }),
+  capture: z.string().min(1),
+  next: z.string().nullable(),
+});
+
 const UnknownStepSchema = z
   .object({
     id: z.string().min(1),
@@ -192,6 +224,7 @@ const KnownStepSchema = z.discriminatedUnion("type", [
   McpToolCallStepSchema,
   ConversationStepSchema,
   AwaitEventStepSchema,
+  ReadStateStepSchema,
 ]);
 
 const StepSchema = z.union([KnownStepSchema, UnknownStepSchema]);
@@ -209,6 +242,7 @@ export type WaitStep = z.infer<typeof WaitStepSchema>;
 export type McpToolCallStep = z.infer<typeof McpToolCallStepSchema>;
 export type ConversationStep = z.infer<typeof ConversationStepSchema>;
 export type AwaitEventStep = z.infer<typeof AwaitEventStepSchema>;
+export type ReadStateStep = z.infer<typeof ReadStateStepSchema>;
 export type UnknownStep = z.infer<typeof UnknownStepSchema>;
 // Discriminated-union narrowing on `.type` for the four known step
 // types; UnknownStep is the runtime fallthrough for unsupported
@@ -218,6 +252,7 @@ export type Step =
   | McpToolCallStep
   | ConversationStep
   | AwaitEventStep
+  | ReadStateStep
   | UnknownStep;
 
 // Type guards — TypeScript can't narrow Step by `step.type === "..."`
@@ -232,6 +267,17 @@ function isMcpToolCallStep(step: Step): step is McpToolCallStep {
 }
 function isConversationStep(step: Step): step is ConversationStep {
   return step.type === "conversation" && typeof (step as Partial<ConversationStep>).initial_message === "string";
+}
+function isReadStateStep(step: Step): step is ReadStateStep {
+  // Distinguish from UnknownStep by the `source` + `path` + `capture`
+  // fields being present as strings. If those are absent (or typed
+  // wrong) the validator treats it as an UnknownStep and surfaces
+  // spec_malformed via the re-parse in validateReadStateStep.
+  return (
+    step.type === "read_state" &&
+    typeof (step as Partial<ReadStateStep>).path === "string" &&
+    typeof (step as Partial<ReadStateStep>).capture === "string"
+  );
 }
 function isAwaitEventStep(step: Step): step is AwaitEventStep {
   // Distinguish from UnknownStep by requiring both the literal type
@@ -373,11 +419,18 @@ function validateStep(
     validateAwaitEventStep(step, stepIds, capturedBindings, eventRegistry, issues);
     return;
   }
+  // Handle read_state — catches both well-formed + UnknownStep-
+  // absorbed malformed read_state shapes (source not in enum, path
+  // wrong, missing capture).
+  if (step.type === "read_state") {
+    validateReadStateStep(step, capturedBindings, issues);
+    return;
+  }
   issues.push({
     code: "unsupported_step_type",
     stepId: step.id,
     path: "type",
-    message: `step type "${step.type}" is not supported by this validator (wait / mcp_tool_call / conversation / await_event are the four known types; branch ships with 2e)`,
+    message: `step type "${step.type}" is not supported by this validator (wait / mcp_tool_call / conversation / await_event / read_state are the five known types; branch ships with 2e)`,
   });
 }
 
@@ -977,5 +1030,53 @@ function validatePredicateDataPaths(
       path: `${basePath}.field`,
       message: `predicate field "${p.field}" references event payload field "${firstSegment}" which is not declared on event — expected one of: ${Object.keys(eventFields).sort().join(", ")}`,
     });
+  }
+}
+
+// ---------------------------------------------------------------------
+// read_state validation (SLICE 3 C1 — G-3-1 enforcement)
+//
+// AgentSpecSchema.safeParse accepts malformed read_state shapes via
+// the UnknownStep fallthrough (z.union pattern). This validator
+// re-parses under ReadStateStepSchema and surfaces every violation
+// as spec_malformed. Same pattern validateAwaitEventStep uses.
+// ---------------------------------------------------------------------
+
+function validateReadStateStep(
+  step: Step,
+  capturedBindings: Set<string>,
+  issues: ValidationIssue[],
+): void {
+  const parsed = ReadStateStepSchema.safeParse(step);
+  if (!parsed.success) {
+    for (const err of parsed.error.issues) {
+      issues.push({
+        code: "spec_malformed",
+        stepId: step.id,
+        path: err.path.join(".") || "$",
+        message: err.message,
+      });
+    }
+    return;
+  }
+  const validated = parsed.data;
+
+  // Capture identifier + no-shadow check.
+  if (!CAPTURE_NAME_PATTERN.test(validated.capture)) {
+    issues.push({
+      code: "bad_capture_name",
+      stepId: validated.id,
+      path: "capture",
+      message: `capture="${validated.capture}" must be a lowercase identifier matching /^[a-z][a-zA-Z0-9_]*$/`,
+    });
+  } else if (capturedBindings.has(validated.capture)) {
+    issues.push({
+      code: "bad_capture_name",
+      stepId: validated.id,
+      path: "capture",
+      message: `capture="${validated.capture}" is already bound by an earlier step; capture names must be unique within a spec`,
+    });
+  } else {
+    capturedBindings.add(validated.capture);
   }
 }

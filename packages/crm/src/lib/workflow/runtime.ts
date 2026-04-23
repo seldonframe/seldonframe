@@ -33,6 +33,7 @@ import type {
   AwaitEventStep,
   ConversationStep,
   McpToolCallStep,
+  ReadStateStep,
   Step,
   WaitStep,
 } from "../agents/validator";
@@ -40,6 +41,7 @@ import { dispatchWait } from "./step-dispatchers/wait";
 import { dispatchMcpToolCall } from "./step-dispatchers/mcp-tool-call";
 import { dispatchConversation } from "./step-dispatchers/conversation";
 import { dispatchAwaitEvent } from "./step-dispatchers/await-event";
+import { dispatchReadState } from "./step-dispatchers/read-state";
 import type { NextAction, RuntimeContext, StoredRun, StoredWait } from "./types";
 import { findStep, RuntimeError, TIMER_EVENT_TYPE } from "./types";
 
@@ -59,6 +61,15 @@ function isMcpToolCallStep(step: Step): step is McpToolCallStep {
 }
 function isConversationStep(step: Step): step is ConversationStep {
   return step.type === "conversation" && typeof (step as Partial<ConversationStep>).initial_message === "string";
+}
+function isReadStateStep(step: Step): step is ReadStateStep {
+  const s = step as Partial<ReadStateStep>;
+  return (
+    step.type === "read_state" &&
+    typeof s.source === "string" &&
+    typeof s.path === "string" &&
+    typeof s.capture === "string"
+  );
 }
 function isAwaitEventStep(step: Step): step is AwaitEventStep {
   const s = step as Partial<AwaitEventStep>;
@@ -318,6 +329,7 @@ async function dispatchStep(
   if (isMcpToolCallStep(step)) return dispatchMcpToolCall(run, step, context);
   if (isConversationStep(step)) return dispatchConversation(run, step, context);
   if (isAwaitEventStep(step)) return dispatchAwaitEvent(run, step, context);
+  if (isReadStateStep(step)) return dispatchReadState(run, step, context);
   return { kind: "fail", reason: `Unsupported step type "${step.type}" at runtime` };
 }
 
