@@ -385,6 +385,41 @@ multiplier was applied. Future audits that skip this step are
 reverting to the unreliable 1.3x default and will likely
 undershoot.
 
+### L-17 addendum — Artifact categories need separate LOC estimation
+
+Observation from SLICE 2 PR 1 (2026-04-23): ~350 LOC of overrun
+traced to SKILL.md + example-artifact output getting folded into
+renderer-line estimates. Those categories have different LOC
+characteristics than renderer code:
+
+- **Renderers** (template fn → string): ~25-40 LOC per unit.
+  Scales linearly with template complexity. Well-behaved estimator.
+- **SKILL.md content** (builder-facing instructions): varies widely,
+  typically **200-600 LOC**. Driven by how many workflow branches
+  the skill needs to cover, not by renderer count.
+- **Example artifacts** (scaffolded sample blocks / probe fixtures
+  / doc artifacts): **50-200 LOC per example**. Cost is
+  "surface area demonstrated," not "path count."
+
+SLICE 2 PR 1's audit §11 table combined "MCP tool wiring" (100)
+with the SKILL.md line — under-counting SKILL.md at ~180 LOC of
+actual cost. Plus the `notes` smoke-test block's 159 LOC of
+scaffolded output wasn't itemized at all; it was absorbed into
+C7's "close-out" budget.
+
+**Rule:** when audit §8 scope includes any of:
+- "skill infrastructure" (SKILL.md / CLAUDE.md-level docs)
+- "reference examples" (sample configs / worked-example blocks)
+- "builder-facing documentation" (not the audit itself)
+
+...list them as distinct line items in the §11 LOC table with
+their own estimates, separately from renderer / dispatcher / write
+code. Don't fold them into existing categories.
+
+**Rule (calibration):** before signing an audit, scan §8 for any
+of the three artifact types above. If present and not separately
+itemized in §11, flag it explicitly before approval.
+
 ---
 
 ## L-18 — Server-side imports of client-only modules fail at build time, not dev time
