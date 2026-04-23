@@ -36,6 +36,8 @@ import { resumeWait } from "@/lib/workflow/runtime";
 import { DrizzleRuntimeStorage } from "@/lib/workflow/storage-drizzle";
 import { evaluatePredicate } from "@/lib/workflow/predicate-eval";
 import { notImplementedToolInvoker, type RuntimeContext } from "@/lib/workflow/types";
+import { enqueueSubscriptionDeliveriesForEventInContext } from "@/lib/subscriptions/bus-extension";
+import { DrizzleSubscriptionStorage } from "@/lib/subscriptions/storage-drizzle";
 
 export type EmitOptions = {
   /**
@@ -99,6 +101,29 @@ export async function emitSeldonEvent<T extends EventType>(
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error("[emitSeldonEvent] sync resume scan failed", {
+      type,
+      orgId: options.orgId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  // 4. SLICE 1 PR 2 C2: subscription enqueue scan. Matches active
+  // subscriptions for (orgId, eventType), evaluates filter, inserts
+  // delivery rows (pending or filtered per G-6). Handler invocation
+  // is deferred to the cron dispatcher (G-2 async). Best-effort like
+  // the workflow_waits scan: failures log + continue.
+  try {
+    const subStorage = new DrizzleSubscriptionStorage(db);
+    await enqueueSubscriptionDeliveriesForEventInContext(
+      { storage: subStorage },
+      options.orgId,
+      type,
+      data as Record<string, unknown>,
+      eventLogId,
+    );
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("[emitSeldonEvent] subscription enqueue scan failed", {
       type,
       orgId: options.orgId,
       error: err instanceof Error ? err.message : String(err),
