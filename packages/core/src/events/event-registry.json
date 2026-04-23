@@ -697,6 +697,44 @@
           "nullable": false
         }
       }
+    },
+    {
+      "type": "vehicle.added",
+      "fields": {
+        "vehicleId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "contactId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "vin": {
+          "rawType": "string | null",
+          "nullable": true
+        }
+      }
+    },
+    {
+      "type": "service.logged",
+      "fields": {
+        "serviceEventId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "vehicleId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "contactId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "serviceType": {
+          "rawType": "string",
+          "nullable": false
+        }
+      }
     }
   ]
 }

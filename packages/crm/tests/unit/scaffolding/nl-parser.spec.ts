@@ -39,6 +39,7 @@ describe("extractBlockAnatomyExcerpt", () => {
     // The notes block was scaffolded in PR 1 C7 — use it as a test
     // fixture so the reference loader runs against real output.
     const excerpt = extractBlockAnatomyExcerpt(NOTES_BLOCK_MD);
+    assert.ok(excerpt, "expected notes.block.md to be present for this test");
     assert.equal(excerpt.slug, "notes");
     assert.equal(excerpt.title, "Notes");
     assert.match(excerpt.description, /note-taking/i);

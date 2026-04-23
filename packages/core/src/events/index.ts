@@ -43,7 +43,9 @@ export type SeldonEvent =
   | { type: "invoice.voided"; data: { contactId: string | null; invoiceId: string } }
   | { type: "portal.login"; data: { contactId: string } }
   | { type: "portal.message_sent"; data: { contactId: string; messageId: string } }
-  | { type: "portal.resource_viewed"; data: { contactId: string; resourceId: string } };
+  | { type: "portal.resource_viewed"; data: { contactId: string; resourceId: string } }
+  | { type: "vehicle.added"; data: { vehicleId: string; contactId: string; vin: string | null } }
+  | { type: "service.logged"; data: { serviceEventId: string; vehicleId: string; contactId: string; serviceType: string } };
 
 export type BuiltInEventType = SeldonEvent["type"];
 export type EventType = BuiltInEventType | `${string}.${string}`;
