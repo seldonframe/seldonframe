@@ -27,6 +27,34 @@ Keeping these distinct matters because:
 - Subscriptions are per-block, owned by the block author. Archetypes are per-workspace, composed by the builder.
 - A block without subscriptions can still compose via archetypes (today's reality). A block with subscriptions composes autonomously (the gap this closes).
 
+### 1.2.1 Side benefit: closes a silent-event-loss reliability gap
+
+Shipping subscriptions via `workflow_event_log` + the durable
+delivery path also closes a pre-existing reliability gap. Today's
+listeners.ts fires handlers only when the process happens to have
+rendered the dashboard layout (guarded `registerCrmEventListeners`
+call). Events emitted from:
+
+- Cron handlers (`/api/cron/*` — 4 handlers today).
+- Webhook handlers (Resend, Stripe, Twilio — events arrive
+  outbound of any dashboard request).
+- MCP tool server calls (the MCP server is a separate process;
+  emissions there NEVER reach the CRM's in-memory bus).
+
+... can silently miss handlers registered in listeners.ts if the
+CRM process hasn't rendered a dashboard page since its last cold
+start. This is not documented as a known gap in the codebase, but
+follows directly from the `registerCrmEventListeners` invocation
+site at `app/(dashboard)/layout.tsx:32`. The subscription primitive
+reads from `workflow_event_log` which is written on every
+`emitSeldonEvent({orgId})` call — independent of request lifecycle.
+Shipping this slice makes these emission sites reliably deliverable
+for the first time.
+
+Framed as reliability-gap closure in addition to new capability:
+builders who today assume `bus.on(...)` reliably fires from cron
+handlers are silently wrong. Subscriptions fix that.
+
 ### 1.3 Ground-truth findings at HEAD (L-16 / L-20 verification)
 
 Verified 2026-04-22 against files on `claude/fervent-hermann-84055b`:
@@ -131,19 +159,19 @@ Rationale:
 - The parser can auto-populate `consumes:{kind:"event"}` entries from `subscribes_to` declarations — so authors don't duplicate.
 - Gate G-1 calls out the alternative (extend `consumes`) for explicit review.
 
-### 3.2 Strawman syntax (refined from the rescope message)
+### 3.2 Strawman syntax (refined from the rescope message + G-1 approval)
 
 ```markdown
 ## Subscriptions
 
 subscribes_to:
-  - event: "booking.created"
+  - event: "caldiy-booking:booking.created"
     handler: "logActivityOnBookingCreate"
     idempotency_key: "{{data.contactId}}:{{data.appointmentId}}"
     retry: { max: 3, backoff: "exponential", initial_delay_ms: 1000 }
     filter: { kind: "field_exists", field: "data.contactId" }
 
-  - event: "form.submitted"
+  - event: "formbricks-intake:form.submitted"
     handler: "createContactFromForm"
     idempotency_key: "{{id}}"
     retry: { max: 5, backoff: "exponential", initial_delay_ms: 2000 }
@@ -151,7 +179,7 @@ subscribes_to:
 
 Per-field contract:
 
-- **`event` (required, string)** — a `SeldonEvent` name. Validator checks against the event registry (same pattern as `await_event` step validation).
+- **`event` (required, string)** — a fully-qualified event name in the shape `<block-slug>:<event.name>` per G-1 approval (2026-04-22). The `<block-slug>` disambiguates when multiple installed blocks declare similarly-named events (e.g., two blocks both emitting `booking.created` with different payload shapes). Validator confirms (a) `<block-slug>` is an installed block's slug, (b) `<event.name>` appears in that block's `produces` list, (c) `<event.name>` is in the `SeldonEvent` registry. Same pattern as `await_event` step validation plus the block-slug disambiguation layer.
 - **`handler` (required, string)** — a function name exported from `packages/crm/src/blocks/<block-slug>/subscriptions.ts`. Validator loads the module at parse time (build step) and confirms the export exists + has the expected signature.
 - **`idempotency_key` (required, string template)** — an interpolation template that resolves against the event envelope at delivery time. Special variable: `{{id}}` = event log row id (guaranteed unique; default for "at-most-once" semantics).
 - **`retry` (optional, object)** — retry policy. Defaults: `{ max: 3, backoff: "exponential", initial_delay_ms: 1000 }`. After `max` attempts, delivery marked dead.
@@ -269,7 +297,7 @@ Indexes:
 
 ### 4.3 Sync vs async delivery (Gate G-2)
 
-**Recommendation: async — defer handler invocation to the cron tick.**
+**APPROVED 2026-04-22 — async via cron tick.**
 
 Rationale:
 - Handlers may call external services (HTTP out, DB ops), taking 100ms to seconds. Blocking the emit-caller's request for every subscription is unacceptable at scale.
@@ -277,7 +305,24 @@ Rationale:
 - Async simplifies the retry loop: the same cron that claims failed deliveries handles first attempts. Single code path.
 - Async isolates the emit-caller from handler failures. A handler that throws can't corrupt the emit-caller's request.
 
-**Tradeoff:** first-attempt latency. Events emitted at t=0 reach their handler at t ∈ [0, 60s]. Cron-tick cadence governs it. Acceptable because Client Onboarding and sibling archetypes' business-level SLAs are minutes-scale, not sub-second.
+**Accepted v1 tradeoff:** first-attempt latency floor ≈ 60s.
+Events emitted at t=0 reach their handler at t ∈ [0, 60s] depending
+on cron-tick alignment. Documented as v1-acceptable — Client
+Onboarding and sibling archetypes' business-level SLAs are
+minutes-scale, not sub-second.
+
+**Post-launch option (NOT built now, per G-2 refinement):** per-
+subscription `sync: true` opt-in could route specific low-latency-
+required subscriptions through the emit-caller's request (with the
+same try/catch isolation as 2c's await_event sync resume). Adds
+complexity and re-introduces G-2 instrumentation concerns. Only
+justify if production metrics show:
+- Measurable builder complaints about 60s latency.
+- Specific subscriptions where <1s delivery is load-bearing.
+- The latency floor being a launch-blocker, not a polish item.
+
+File as follow-up ticket at launch if either surfaces. Don't
+pre-build.
 
 ### 4.4 Cron integration
 
@@ -347,9 +392,14 @@ DB uniqueness constraint on `(subscriptionId, idempotencyKey)`:
 - First delivery for a new key → INSERT succeeds → delivery proceeds.
 - Subsequent delivery for same key → INSERT fails with unique-violation → treated as "already delivered or in flight" → no-op.
 
-### 5.3 Recommendation: required, not optional
+### 5.3 APPROVED 2026-04-22 — required, with default + composite fallback
 
-**Recommendation: idempotency key is REQUIRED on every subscription.** Default when authors omit: `{{id}}` (one delivery per unique event_log row).
+**Idempotency key is REQUIRED on every subscription.** Resolution
+order when the author omits an explicit key:
+
+1. **Default: `{{id}}`** — the event_log row id, guaranteed unique per emission. Covers the "don't retry this specific event twice" case cleanly.
+2. **Composite fallback:** if an event's envelope lacks an `id` field (shouldn't happen — `workflow_event_log.id` is always populated — but defensive), the validator emits a `{{eventType}}:{{emittedAt}}:{{orgId}}` composite instead. Still deterministic, still keyed per emission, still unique enough for dedup under normal operation.
+3. **Validator refusal:** if neither `{{id}}` nor composite fields resolve against the event's declared shape at parse time (e.g., a malformed SeldonEvent registry entry), the subscription declaration fails validation. **No silent non-idempotent handlers.** G-3 refinement (2026-04-22) is explicit about this: "no silent non-idempotent handlers."
 
 Rationale:
 - At-least-once delivery is the model; without a key, retries cause duplicate external effects.
@@ -402,21 +452,83 @@ v2 does NOT give us payload shape declaration separate from `SeldonEvent` — th
 
 ### 7.1 Admin surfaces
 
-**Primary: new `/blocks/subscriptions` page.**
+**G-5 APPROVED 2026-04-22 refinement:** dead-letter deliveries
+surface under `/agents/runs` as a "Failed deliveries" section —
+NOT a new top-level route. Keeps operator observability unified;
+builders already know to check `/agents/runs` when something
+isn't happening.
+
+**Primary: new `/blocks/subscriptions` page (for subscription
+configuration + per-subscription metrics).**
 
 - List view: one row per subscription (grouped by block). Columns:
   - Block + handler name.
-  - Event type.
+  - Event type (fully-qualified `<block-slug>:<event.name>` per G-1).
   - Active/paused/inactive (with reason).
-  - Recent delivery stats (last 24h: success, failed, dead).
+  - Recent delivery stats: 24h (success / failed / dead) AND 7d aggregates.
+  - Success rate (% delivered on first attempt).
+  - Avg delivery latency (ms, from event_log.emittedAt to delivery completion).
   - Last delivery attempt timestamp.
 - Row-click → subscription detail drawer:
   - Full config (idempotency template, filter predicate, retry policy).
+  - Recent failures with error messages (top 10 by recency).
   - Deliveries table: event id, attempt, status, timestamp, last error.
   - Actions: "Pause subscription", "Retry all dead deliveries", "Dismiss all dead deliveries".
-- Dead-letter filter: only rows with dead deliveries in last 7 days.
+  - Per-delivery "Retry now" button on dead-lettered rows.
 
-**Secondary: extend `/agents/runs` or a combined `/operations` hub.** Not scope for this slice.
+**Dead-letter section at `/agents/runs`** (G-5 refinement):
+- New "Failed deliveries" panel on the existing page, below the
+  run list.
+- Shows subscription_deliveries with `status='dead'` across the
+  workspace (not grouped by subscription — flat list by most
+  recent).
+- Each row: block / handler / event type / attempt count / last
+  error / Retry / Dismiss buttons.
+- Same polling refresh cadence as the run list (2s).
+
+Rationale for the split: `/blocks/subscriptions` is the "manage
+subscriptions" surface (builder-time config); `/agents/runs` is
+the "what's happening right now" surface (operator-time). Dead
+deliveries are operator-time concerns — they live with the runs
+they're conceptually siblings to.
+
+### 7.1.1 Per-subscription metrics requirements (addition #1)
+
+Part of "subscription is usable," not out-of-scope. The
+subscription detail drawer MUST surface:
+
+| Metric | Definition | Window |
+|---|---|---|
+| Success rate | `delivered / (delivered + dead)` | 24h AND 7d |
+| Avg delivery latency | Mean of `deliveredAt - eventLog.emittedAt` for successful deliveries | 24h AND 7d |
+| Failure count | Count of deliveries with `status='failed'` (currently in retry) | 24h |
+| Dead count | Count of deliveries with `status='dead'` | 7d |
+| Recent errors | Last 10 `lastError` strings with timestamps | 7d |
+| Manual retry button | One per dead-lettered delivery row | — |
+
+These ship in PR 2 alongside the runtime delivery layer —
+otherwise the subscription primitive isn't observable enough for
+debugging. Quoting the approval: "not out-of-scope — part of
+subscription being usable."
+
+### 7.1.2 Auto-flip observability (G-4 refinement)
+
+When an inactive subscription flips to active because its
+producer block just installed, log a structured event + surface
+in the admin UI:
+
+- Structured log: `{ event: "subscription_auto_activated",
+  subscriptionId, blockSlug, eventType, triggeredBy:
+  "producer_install" }`.
+- Admin UI: the subscription's recent activity timeline shows
+  "Activated on <date> — <producer-block-slug> installed."
+- Makes the dependency edge visible so builders understand why a
+  previously-inert subscription started firing.
+
+### 7.1.3 Other surfaces (deferred)
+
+Per-block view under `/blocks/<slug>`, combined `/operations`
+hub, alert rules — NOT in this slice.
 
 ### 7.2 Logging per delivery
 
@@ -605,22 +717,44 @@ From the L-17 addendum (this sprint's capture): if the trigger fires on infrastr
 
 ---
 
-## 13. Stop-gate — audit pending review
+## 13. Stop-gate — APPROVED 2026-04-22 with refinements
 
-Six gate items pending resolution:
+All six gate items approved with the recommendations as drafted
+plus specific refinements. PR 1 unblocked once (a) both local
+commits + this doc commit reach origin and (b) the
+workflow_event_log coverage audit (§15, addition #3) completes
+clean.
 
-| Item | Status | Recommendation |
+| Item | Status | Resolution + refinement |
 |---|---|---|
-| G-1 — declaration shape (`## Subscriptions` vs extended `consumes`) | 🟡 Pending | new `## Subscriptions` section |
-| G-2 — delivery mode (sync vs async) | 🟡 Pending | async (cron tick) |
-| G-3 — idempotency key required vs optional | 🟡 Pending | required (default `{{id}}`) |
-| G-4 — install-time cross-block failure mode | 🟡 Pending | `active: false`, auto-flip on producer install |
-| G-5 — dead-letter retention | 🟡 Pending | operator-managed, 30-day archive after dismiss |
-| G-6 — filter-skipped deliveries as distinct status | 🟡 Pending | `status='filtered'` (not collapsed into delivered/failed) |
+| G-1 — declaration shape | ✅ APPROVED 2026-04-22 | New `## Subscriptions` section. **Refinement:** fully-qualified event names in the shape `<block-slug>:<event.name>` disambiguate when multiple installed blocks declare similarly-named events. Validator enforces both the block-slug and the event name independently. See §3.2. |
+| G-2 — delivery mode | ✅ APPROVED 2026-04-22 | Async via cron tick. **Refinement:** document the ~60s first-attempt latency floor as accepted v1 tradeoff. Do NOT build per-subscription sync opt-in now. File as post-launch option if production metrics justify. See §4.3. |
+| G-3 — idempotency key | ✅ APPROVED 2026-04-22 | Required with `{{id}}` default. **Refinement:** if `id` isn't resolvable at validation time, fall back to composite `{{eventType}}:{{emittedAt}}:{{orgId}}`. If neither resolves, subscription FAILS validation — no silent non-idempotent handlers. See §5.3. |
+| G-4 — install-time cross-block failure | ✅ APPROVED 2026-04-22 | `active: false` on parse; auto-flip on producer install. **Refinement:** log the auto-flip observably so builders see "subscription now active" in the admin surface. See §7.1.2. |
+| G-5 — dead-letter retention | ✅ APPROVED 2026-04-22 | Operator-managed with 30-day archive after dismiss. **Refinement:** surface dead deliveries under `/agents/runs` as a "Failed deliveries" section — NOT a new top-level route. Keep operator observability unified. See §7.1. |
+| G-6 — filter-skipped deliveries | ✅ APPROVED 2026-04-22 | Distinct `status='filtered'` value. No refinement. See §4. |
 
-All gates resolve in the same approval pass. PR 1 kicks off only after every gate is approved or overridden AND this audit commits to main.
+**Three additions folded into audit body:**
 
-Expected review rounds per the rescope discipline: 1-2. The audit ships to `claude/fervent-hermann-84055b` first; Max reviews, responds with gate decisions; audit revises if needed; audit commits to main; PR 1 starts.
+1. **Per-subscription observability requirements** (addition #1)
+   — success rate, avg delivery latency, recent failures, manual
+   retry. Ships with PR 2's runtime delivery layer. §7.1.1.
+2. **Silent-event-loss reliability gap closure** (addition #2)
+   — today's listeners.ts handlers silently miss events emitted
+   from cron / webhook / MCP-server contexts. Subscriptions
+   reading from `workflow_event_log` close this gap as a side
+   benefit. §1.2.1.
+3. **Ground-truth prerequisite: workflow_event_log coverage
+   audit** (addition #3) — verify every emission site writes to
+   `workflow_event_log` before PR 1 starts. See §15.
+
+No open gate items remain. Proceeding with the sequence per the
+approval message:
+1. ✅ Both local commits pushed to origin (`2d832081` + `09f4fdb3`).
+2. ⏳ This doc-commit with gate approvals + refinements + additions.
+3. ⏳ 30-minute workflow_event_log coverage audit (§15). Report
+   findings before PR 1.
+4. ⏳ Max confirms go → PR 1 starts.
 
 ---
 
@@ -644,4 +778,60 @@ Expected review rounds per the rescope discipline: 1-2. The audit ships to `clau
 
 ---
 
-*Audit drafted: Claude Opus 4.7 (1M context). Awaiting Max's review — no code until gates resolve.*
+*Audit drafted: Claude Opus 4.7 (1M context). Gate approvals
++ refinements + additions folded in 2026-04-22.*
+
+---
+
+## 15. Prerequisite — workflow_event_log coverage audit (addition #3)
+
+Before PR 1 kicks off, verify that EVERY emission site in the
+codebase writes to `workflow_event_log`. If any emission path
+bypasses the log, subscriptions will be lossy from that path —
+the new primitive reads from the log, so any source that skips
+writing there is invisible to subscribers.
+
+The 2c bus.ts extension made the log write conditional on
+`options.orgId`. Call sites that don't pass `orgId` still
+dispatch in-memory but don't write to the durable log.
+
+### 15.1 Audit methodology
+
+1. `grep -rn "emitSeldonEvent\|bus.emit\|bus\.onAny" packages/ skills/`
+   — enumerate every call site.
+2. For each call site:
+   - Does it pass `options.orgId`? If yes, log write is engaged.
+   - If no, flag the site + classify:
+     - Legacy dashboard path (acceptable for v1 — dashboard
+       handlers run in-memory and listeners.ts fires).
+     - Cron handler / webhook / MCP tool — PROBLEM. These
+       emissions need `orgId` threaded.
+3. Additional check: the MCP server process
+   (`skills/mcp-server/`) emits events via HTTP into the CRM's
+   API. Verify whether those API routes forward to
+   `emitSeldonEvent` with `orgId`, or whether the MCP tool
+   handlers embed event emission directly (which wouldn't reach
+   `workflow_event_log` because the MCP process is separate).
+
+### 15.2 Expected outcomes
+
+- **Clean:** all non-dashboard emission sites pass `orgId`. PR 1
+  unblocks; subscription primitive is reliable from day one.
+- **Gaps found:** document each gap with (a) call site, (b)
+  whether orgId is available in the context, (c) proposed fix.
+  If gaps are trivial (1-2 sites needing orgId threaded), fold
+  into PR 1's scope. If gaps are material (e.g., MCP-server
+  emissions need architectural change), surface to Max before
+  PR 1 starts — this is an L-20 stop-and-flag moment.
+
+### 15.3 Reporting
+
+Findings commit as an addendum to this audit (new §15.4) before
+PR 1 opens. Max approves the findings → PR 1 starts. If Max
+wants the gaps fixed in a separate preparation slice before PR 1,
+that's a scope decision this audit defers to.
+
+---
+
+*Ready to run the §15 coverage audit. No PR 1 code until findings
+report + Max's go signal.*
