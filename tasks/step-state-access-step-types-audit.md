@@ -301,7 +301,41 @@ type RuntimeContext = {
 
 SLICE 3 adds a `soulStore: SoulStore` field. Existing dispatchers ignore it. Backward compatible — tests that construct a context with a dummy SoulStore can do so without touching existing suites.
 
-### 7.6 Zod validator surface
+### 7.6 Soul storage pattern (G-3-3 conditional resolution)
+
+`packages/crm/src/db/schema/organizations.ts:67`:
+```ts
+soul: jsonb("soul").$type<OrgSoul | null>().default(null),
+```
+
+**CONFIRMED JSONB.** G-3-3 Option B is viable with **zero DB migration.** The `OrgSoul` interface (`packages/crm/src/lib/soul/types.ts:66`) is the TypeScript type of the JSONB blob; extending it with an additional metadata shape (an allowlist of agent-writable paths, or per-field `agent_writable` flags) is a type-level change only.
+
+**Implementation note for C2:** the agent-writable declaration can live in one of two places:
+- **Option B-1 — embedded in OrgSoul:** each top-level field carries an optional `agent_writable?: boolean`. Introspection at runtime via the existing JSONB read.
+- **Option B-2 — separate allowlist config:** a static `const AGENT_WRITABLE_SOUL_PATHS = new Set<string>([...])` somewhere in `lib/workflow/state-access/` that the `write_state` dispatcher consults. No Soul mutation; new paths added via code change + PR review.
+
+**Audit sub-recommendation for C2:** Option B-2 (static allowlist). Simpler to reason about, no runtime Soul inspection required on every write, easier to audit via grep. If a future slice wants dynamic per-workspace allowlists, the allowlist can move into OrgSoul at that point.
+
+### 7.7 Current interpolation resolver capabilities (baseline for C4 extraction)
+
+Verified by reading `packages/crm/src/lib/workflow/step-dispatchers/mcp-tool-call.ts:22-61`:
+
+| Capability | Behavior | Notes |
+|---|---|---|
+| Syntax | `{{VAR}}` or `{{VAR.path.segments}}` — trimmed | Regex: `/\{\{\s*([^}]+?)\s*\}\}/g` |
+| Variables (string aliases) | Resolved by name only | Sub-path access unsupported — `{{v.field}}` leaves raw token |
+| Captures (object bindings) | Dotted-path walk via own-property check | Missing segment → raw token preserved (not an error) |
+| Reserved namespaces (`trigger`, `contact`, `agent`, `workspace`) | Pass through as literal | Tool handler resolves; validator whitelists at synthesis time |
+| `{{now}}` / date helpers | **NOT supported** | Would pass through via reserved-namespace fallback |
+| Array indexing (`{{capture.items[0]}}`) | **NOT supported** | `"items[0]"` treated as literal segment name; misses |
+| Type coercion | Result always `String(current)` | Numbers / booleans stringified |
+| Object / array recursion | Yes — deep walk through objects + arrays | Strings resolved in place |
+
+**C4 extraction invariant:** preserve exact current behavior, no new capabilities, no regressions. "Leaves unresolved on miss" semantics are load-bearing — downstream consumers (mcp-tool-call handlers, validator error messages) rely on the raw token passing through for debuggability.
+
+**Implication for C1-C3 dispatchers:** the three new step types use the SAME resolver. `read_state.source`, `write_state.path`, `write_state.value`, `emit_event.data` all go through `resolveInterpolations(value, run)`. Same semantics, no surprises.
+
+### 7.8 Zod validator surface
 
 `packages/crm/src/lib/agents/validator.ts` has:
 - `KnownStepSchema` (discriminated union on `type`) — where the three new schemas slot in
@@ -312,37 +346,56 @@ Integration point is clean: each new step type adds one schema + one guard + one
 
 ---
 
-## 8. Gate items — OPEN
+## 8. Gate items — all APPROVED 2026-04-23
 
-### G-3-1 — Multiple source types for `read_state`
+### G-3-1 — APPROVED: Soul-only MVP, `source` as Zod enum
 
-**Option A (narrow, ship faster):** Soul-only. `source` is a string `workspace.soul.<key>` or `workspace.theme.<key>`. The 1-sprint MVP; event-log reads and block-data reads are follow-ups.
+**Resolution:** `read_state.source` is a Zod **enum** (not a free-form string) with a single allowed value `"soul"` for v1. Future sources (event_log, block_data) added as **new enum variants**, not by loosening the validation.
 
-**Option B (richer, more scope):** Discriminated union over Soul / event_log / block_data from day one. Bigger schema, bigger synthesis prompt surface, but more use cases handled in one pass.
+**Schema shape:**
+```ts
+const ReadStateSourceKind = z.enum(["soul"]); // v1 — extensible
+type ReadStateStep = z.infer<...>; // source: "soul"; path: string; capture: string; next: string | null
+```
 
-**Audit recommendation: Option A.** Soul reads cover the immediate gap ("read `workspace.soul.customer_fields` at step N and branch on it"). Event-log reads open a can of worms — "which events, over what window, aggregated how" is its own design problem. Scope-discipline + YAGNI argue for Soul-only.
+**Why enum over string:** a free-form string would accept `source: "event_log"` even when event_log reads aren't implemented — the validator would pass, the dispatcher would fail at runtime with a confusing error. An enum rejects unknown sources at parse time (L-22 structural enforcement).
 
-**Decision needed:** A or B.
+**Extensibility note:** adding `"event_log"` later is a one-line Zod change + one-line dispatcher branch. The enum keeps the shape honest without blocking future expansion.
 
-### G-3-2 — `emit_event` payload shape
+### G-3-2 — APPROVED: Restricted-shape payload with registry cross-check
 
-**Option A (full-interpolation):** `data: Record<string, unknown>` with free-form values. Synthesis-time validator checks that referenced events exist in the registry; doesn't enforce payload shape match. Runtime interpolates + fires.
+**Resolution:** `emit_event.data` fields validated against the declared SeldonEvent payload shape **at parse time**. Interpolation tokens allowed in values (they pass validation as strings), but the VALIDATOR confirms:
+1. The event name exists in the registry.
+2. Every `data.*` key the spec declares is a known field of that event.
+3. Non-interpolated literal values type-match the field declaration (e.g., `rating: "5"` is rejected when the event declares `rating: number`; `rating: 5` passes).
+4. Interpolated values (`{{capture.rating}}`) pass parse-time shape check (string slot); runtime type-checks at emit time against resolved value.
 
-**Option B (restricted-payload):** `data` must match the event's declared SeldonEvent data shape field-for-field. Synthesis-time validator cross-checks against the event registry; any mismatch is a spec_malformed error.
+**Why restricted + registry:** consistency with the subscription primitive (SLICE 1 PR 1 M3 validator already cross-checks `filter` against event payload shape). Early error detection — catching "emit an event with field names that don't exist" at synthesis time beats debugging at runtime.
 
-**Audit recommendation: Option B.** Consistency with the subscription primitive (SLICE 1 already validates `filter` against event payload shape) + early error detection. Cost: the registry must be accessible at synthesis time (already is — `emit:event-registry` produces the JSON).
+**Cost:** the event registry JSON must be loadable at validation time. Already is — `emit:event-registry` writes `packages/core/src/events/event-registry.json` (47 events as of SLICE 2 PR 2).
 
-**Decision needed:** A or B.
+### G-3-3 — APPROVED (conditional resolved): Option B-2, static allowlist config
 
-### G-3-3 — `write_state` safety
+**Conditional resolution:** §7.6 verified Soul is JSONB-stored (`organizations.soul: jsonb("soul").$type<OrgSoul | null>`). Option B is feasible with **zero DB migration**. Proceeding with Option B.
 
-**Option A (open-by-default):** any `workspace.soul.*` / `workspace.theme.*` path writable. Audit trail via step-trace + admin surface flags "unusual" writes post-hoc.
+**Sub-recommendation adopted:** Option B-2 — static allowlist config in `lib/workflow/state-access/allowlist.ts`:
+```ts
+export const AGENT_WRITABLE_SOUL_PATHS: ReadonlySet<string> = new Set([
+  // v1 initial allowlist — every path below is a documented
+  // agent-managed state field. New additions require PR review.
+  "workspace.soul.onboarding_stage",
+  "workspace.soul.last_contact_at",
+  // ... more as the runtime-writable surface grows
+]);
+```
 
-**Option B (explicit agent-writable declaration):** Soul schema adds `agent_writable: boolean` flag per top-level key. `write_state` refuses non-allowlisted paths at synthesis time. Requires Soul schema update + migration for existing workspaces.
+**`write_state` dispatcher behavior:**
+- At parse time, the validator refuses paths not in the allowlist (`spec_malformed` error with a clear message).
+- At runtime, the dispatcher double-checks (defense-in-depth) and fails loud if the validator path was somehow bypassed.
 
-**Audit recommendation: Option B if the Soul schema can take the additive field without migrations.** Check at PR kickoff — if Soul is stored as JSONB in `organizations.settings.soul`, no migration needed (just document new field). If Soul is typed via drizzle schemas with hard columns, Option B costs a migration and becomes scope-heavy. Default to Option A when in doubt; capture a follow-up for Option B's safety tightening.
+**Why static allowlist over OrgSoul-embedded flag:** simpler to reason about, no runtime Soul inspection on every write, easier to audit via grep. Dynamic per-workspace allowlists (OrgSoul-embedded) are a later-slice concern.
 
-**Decision needed:** A or B, with the Soul-storage-check as a clarifier.
+**v1 initial allowlist:** start EMPTY. Every path added in C2's allowlist requires explicit review. Current archetypes don't need `write_state` — retrofitting is out of slice per §11. The first real additions will come from future archetypes or NL-scaffolded workflows.
 
 ---
 
@@ -350,39 +403,104 @@ Integration point is clean: each new step type adds one schema + one guard + one
 
 **Runtime-path count:** 3 independent dispatchers (read_state, write_state, emit_event). They don't interact at runtime — each receives its own step, executes, returns. No CAS-race surface, no pair-combination semantics. Classification: **single-path category**.
 
-**Multiplier applied:** 1.3x (L-17 original) on both production + test LOC. Sequential-pipeline (1.6x) and concurrent-multipath (2.0x) don't apply — these three dispatchers share an interpolation helper and a SoulStore abstraction, but runtime-wise they're parallel peers, not chained paths.
+**Multiplier applied:** 1.3x (L-17 original) on production + dispatcher / validator test LOC. Sequential-pipeline (1.6x) and concurrent-multipath (2.0x) don't apply.
 
-### PR 1 table (production + tests + scaffolded output + doc)
+**Validation-harness LOC (new L-17 category anchored post-approval):** the 10-scenario synthesis comparison harness is **not** multiplied — it's an artifact category per the L-17 validation-harness addendum (2026-04-23). Each scenario artifact ~20 LOC; harness runner + metrics ~80 LOC.
 
-| Component | Production LOC | Test LOC (1.3x) |
-|---|---|---|
-| Three Zod schemas in validator.ts + guards | 120 | 60 |
-| Three dispatchers (read / write / emit) | 240 | 220 |
-| Shared interpolation helper (extract from mcp-tool-call) | 60 | 30 |
-| SoulStore interface + in-memory impl + Drizzle impl | 150 | 80 |
-| RuntimeContext extension + per-run dispatch wiring | 40 | 0 |
-| Synthesis comparison test harness | 0 | 280 (10 cases × ~28 LOC/case) |
-| **Subtotal** | **610** | **670** |
-| **PR 1 total** | | **~1,280** |
+### PR 1 table (production + tests + harness artifact)
 
-L-17 artifact-category line items (separate per post-SLICE-2 refinement):
-- SKILL.md changes: none (no new user-facing skill).
-- Example artifacts: none for PR 1.
-- Builder-facing doc: none for PR 1 (runtime concern; no new authoring surface that needs SKILL documentation).
+| Component | Production | Test LOC (1.3x) | Artifact LOC |
+|---|---|---|---|
+| Three Zod schemas in validator.ts + guards | 120 | 60 | — |
+| Three dispatchers (read / write / emit) | 240 | 220 | — |
+| Shared interpolation helper (extract from mcp-tool-call) | 60 | 30 | — |
+| SoulStore interface + in-memory impl + Drizzle impl | 150 | 80 | — |
+| `write_state` allowlist config + loader | 40 | 30 | — |
+| RuntimeContext extension + per-run dispatch wiring | 40 | 0 | — |
+| Synthesis comparison runner + metrics aggregation | — | — | 80 |
+| 10 scenario artifacts (~20 LOC each) | — | — | 200 |
+| **Subtotal** | **650** | **420** | **280** |
+| **PR 1 total** | | | **~1,350** |
 
-**Slice total:** ~1,280 LOC.
-**Max-stated target:** 700-980 LOC.
-**Max-stated trigger:** 1,275 LOC.
+Hmm — 1,350 after moving the harness out of test-LOC-times-1.3x. Let me re-check: the old math put harness at 280 (10×28 counted as test), artifact-recategorized drops it to 200 + 80 = **280 artifact**. Same total LOC. The re-categorization doesn't shrink the PR — it just labels the line accurately so the next audit's calibration feedback is correct.
 
-**GAP.** The production estimate hits the 500-700 production Max stated (610), but tests project higher (670 vs 200-280). The delta is the 10-case synthesis comparison harness (~280 LOC) — not a per-dispatcher test, a stand-alone comparison rig. Two paths to reconcile:
+**Revised reconciliation (correct math):** moving the harness to artifact-category is a LABELING change, not a LOC reduction. The PR lands at **~1,350 LOC regardless**. Two options remain:
 
-**Path 1:** The comparison harness is a test-category artifact closer to a smoke-test artifact (per L-17 addendum). Estimate it as artifact-category (50-400 LOC), not raw test-LOC × 1.3x. With harness at ~200 LOC (the lower end of the artifact range), test-LOC drops to ~470, PR total ~1,080 — inside the 1,275 trigger.
+**Path 1 — Accept the ~1,350 LOC projection:** 6% over the 1,275 trigger. Max's trigger was stated as "stop-and-reassess," not a hard ceiling. Surfacing the overrun at audit time (now) rather than mid-PR follows L-21 discipline. Flag explicitly to Max: "projected total is 1,350 — 6% over the stated trigger. Approve this overage up-front, or scope-cut."
 
-**Path 2:** The 10-case comparison is scope-cut to 5 cases (half the diversity), harness lands ~140 LOC, test-LOC ~410, PR total ~1,020 — inside both Max's target AND trigger.
+**Path 2 — Scope-cut to 5 scenarios:** halves the scenario artifacts (200 → 100), saves 100 LOC. New total ~1,250 — inside the trigger. Cost: less diversity in the synthesis comparison; weaker evidence of the new step types' impact across varied inputs.
 
-**Audit recommendation:** proceed with Path 1 — full 10-case comparison with the harness counted as an artifact (~200 LOC) rather than unit-test-multiplier-inflated (~280). PR projected at ~1,080 LOC. Cite this at audit approval so the multiplier-vs-artifact split is explicit pre-implementation.
+**Audit recommendation: Path 1.** The trigger is 6% off; scope-cutting the harness undercuts the synthesis-evaluation bar. The L-17 validation-harness addendum documented that these artifacts are load-bearing for future audits' calibration — trimming them is a false economy. Surfacing the overage at gate-resolution time is the discipline-correct path.
 
-**Stop-and-reassess trigger:** 1,275 LOC per Max. Above 1,275, stop + re-flag.
+**Decision needed:** accept ~1,350 LOC projection (Path 1) or scope-cut to 5 scenarios (Path 2). The audit marked approval requires a call here before C1 starts.
+
+### 9.1 Synthesis comparison harness — methodology spec
+
+**Input set (10 scenarios):** diversified along three axes:
+
+| Axis | Values exercised |
+|---|---|
+| State-access pattern | read-only / write-only / read-then-write / emit-without-state |
+| Step count | small (3-step) / medium (6-step) / large (12-step) |
+| Event emission count | zero / one / multi (3+) |
+
+The 10 scenarios cover the Cartesian corners + middle:
+1. read-only, small, zero
+2. write-only, small, one
+3. read-then-write, medium, zero
+4. emit-without-state, small, one
+5. read-only, medium, one
+6. write-only, medium, multi
+7. read-then-write, large, one
+8. emit-without-state, medium, multi
+9. read-then-write, small, multi
+10. combined (read + write + emit), large, multi
+
+**Each scenario ships as a fixture:**
+```ts
+// tests/harness/scenarios/<NN>-<shortname>.ts
+export const scenario: ComparisonScenario = {
+  id: "07-read-then-write-large",
+  description: "...",
+  nlIntent: "...",
+  stateAccessPatternExpected: "read-then-write",
+  stepCountExpected: { min: 10, max: 14 },
+};
+```
+
+**Correctness measurement (rigorous, gate-worthy):**
+1. Both synthesis paths (baseline: mcp_tool_call-only; candidate: with new step types) produce specs that validate via `AgentSpecSchema.safeParse`.
+2. Generated step types match the expected pattern:
+   - baseline: 100% mcp_tool_call
+   - candidate: scenario-expected distribution (e.g., "read-then-write, large" expects ≥1 `read_state` and ≥1 `write_state`)
+3. Agent runs to completion in the test harness without dispatcher errors (uses in-memory SoulStore + mock ToolInvoker for baseline path).
+
+**Readability measurement (structural, diagnostic):**
+- Total step count per path.
+- Number of semantically distinct step types used per path.
+- Depth of nested conditions (count of `conversation.on_exit` branches + `await_event` chains).
+
+**Output format:** per-scenario comparison (10 rows) + aggregate summary (avg step count Δ, type-distribution shift, correctness pass rate).
+
+**Subjective readability:** noted in the close-out report but NOT a primary gate. The structural metrics are the gate-worthy signal.
+
+**Gate-worthy outcomes (PR close criteria):**
+- All 10 scenarios pass correctness on both paths.
+- Candidate path's step-type distribution matches the expected pattern for ≥8 of 10 scenarios (allows 2 cases where Claude chooses to stick with mcp_tool_call for reasons the synthesis prompt can't anticipate).
+- If <8 pass the distribution match, flag as "feature needs prompt-engineering iteration" but do NOT block PR — the readability evidence is enough even when adoption is uneven.
+
+### 9.2 Containment
+
+- Zero changes to `lib/agents/types.ts`.
+- RuntimeContext gains one field (`soulStore`) — additive; existing dispatchers ignore it.
+- Zero changes to SeldonEvent union (emit_event cross-checks against the existing registry).
+- Zero changes to 7 core blocks.
+- Zero changes to subscription primitive, scaffolding primitive, or any SLICE 1 / SLICE 2 code.
+- Only additions to `lib/workflow/step-dispatchers/` + new `lib/workflow/state-access/` for the SoulStore abstraction + allowlist.
+
+### 9.3 Stop-and-reassess trigger
+
+**1,275 LOC per Max's original statement. With Path 1 accepted, the projection is 1,350 (~6% over). The trigger is formally exceeded at audit time rather than mid-PR — Max's approval of Path 1 is the audit-time reassessment.** Mid-PR, if actuals trend past ~1,400, stop and re-flag.
 
 ---
 
@@ -457,20 +575,33 @@ Mini-commits (suggested):
 
 ## 14. Stop-gate
 
-**AUDIT ONLY.** No code until:
-- G-3-1, G-3-2, G-3-3 all resolve (§8).
-- Max confirms LOC projection + L-17 multiplier choice (§9).
-- Soul-storage-shape clarification on G-3-3 (JSONB column = Option B feasible; typed columns = Option A default).
-- Ground-truth §7 acknowledged.
+**APPROVED 2026-04-23.** All three gates resolved (§8) with refinements. Conditional on G-3-3 (Soul JSONB) confirmed in §7.6.
 
-Expected revision rounds: 1-2. Highest-leverage decision is G-3-3 (safety posture).
+**Outstanding decision:** Path 1 (accept ~1,350 LOC projection, 6% over trigger) vs Path 2 (scope-cut comparison to 5 scenarios, ~1,250 LOC). Audit recommends Path 1; Max's sign-off on the path needed before C1 starts.
+
+**PR 1 begins immediately after Path 1 / Path 2 call.** 6 mini-commits per §13.
+
+**Stop after PR 1 green bar + push. Await Max approval for SLICE 4.**
 
 ---
 
-## 15. Self-review changelog (2026-04-23, pre-approval)
+## 15. Self-review changelog
 
-- §7 verifies every audit claim (step dispatcher files + LOC; mcp_tool_call count by archetype + tool breakdown; runtime scope types; NextAction surface) by direct HEAD read. L-20 compliance logged.
-- §9 surfaces a projected LOC overrun vs Max's stated 700-980 target. Two reconciliation paths offered: (1) count the 10-case comparison harness as an artifact per the post-SLICE-2 L-17 refinement (~1,080 total), or (2) scope-cut to 5 cases (~1,020 total). Audit recommends Path 1 — documented so the split is explicit before implementation.
-- L-17 multiplier choice: 1.3x on both production + test LOC. Three dispatchers are parallel peers with no runtime interaction (no CAS, no pipeline). Classified under the "single/two-path" category per the three-level spectrum validated across SLICE 2. Explicitly called out so the next audit's calibration feedback has a clear reference.
-- §3 keeps shape definitions narrow; richer discriminated-union alternatives for `read_state` surfaced as G-3-1 Option B rather than baked in. Same pattern SLICE 1 + SLICE 2 used.
-- §11 excludes branch + streaming reads + cross-workspace + batching. Each exclusion has a rationale; the branch exclusion points at 2e as the next natural follow-up.
+**2026-04-23, pre-approval draft:**
+- §7 verifies every audit claim (step dispatcher files + LOC; mcp_tool_call count by archetype + tool breakdown; runtime scope types; NextAction surface) by direct HEAD read.
+- §9 surfaces a projected LOC overrun vs Max's stated 700-980 target. Two reconciliation paths offered. Audit recommends Path 1 — documented so the split is explicit before implementation.
+- L-17 multiplier choice: 1.3x on both production + test LOC. Three dispatchers are parallel peers (single-path category per the three-level spectrum validated across SLICE 2).
+- §3 keeps shape definitions narrow; richer discriminated-union alternatives surfaced as gate items rather than baked in.
+- §11 excludes branch + streaming reads + cross-workspace + batching.
+
+**2026-04-23, post-gate-resolution revision:**
+- §7.6 added — Soul storage confirmed JSONB (`organizations.soul: jsonb(...).$type<OrgSoul|null>()`). G-3-3 Option B is viable without migration. Sub-recommendation for Option B-2 (static allowlist config) over B-1 (OrgSoul-embedded flag) — simpler to audit via grep.
+- §7.7 added — current interpolation resolver behavior catalogued as baseline for C4 extraction. Preserves exact current behavior: variables no-path, captures dotted-walk, reserved-namespaces pass-through, no `{{now}}`, no array indexing, always-stringified. C1-C3 dispatchers use the same resolver semantics.
+- §8 resolves all three gates with Max's refinements:
+  - G-3-1: Zod enum (not string) with single allowed value `"soul"` for v1
+  - G-3-2: registry cross-check at parse time; interpolated values type-checked at runtime against resolved values
+  - G-3-3: Option B-2 (static allowlist config), empty v1 allowlist — archetypes added explicitly as they need write access
+- §9 revised: moved the 10-case harness to artifact category per the new L-17 addendum (2026-04-23). Math corrected — re-categorization doesn't shrink LOC, just labels accurately. New projection: ~1,350 LOC (6% over the 1,275 trigger). Two paths: accept the overage at audit time (Path 1, recommended) or scope-cut (Path 2).
+- §9.1 added — comparison harness methodology spec. 10 scenarios diversified across state-access pattern × step count × event count. Correctness metrics (gate-worthy) + readability metrics (structural, diagnostic).
+- §13 PR structure updated to include the new allowlist config line item in C2's LOC.
+- §14 stop-gate set to APPROVED; remaining decision is Path 1 vs Path 2 only.
