@@ -165,3 +165,110 @@ export const ToolEntrySchema = z.object({
 });
 
 export type ToolEntry = z.infer<typeof ToolEntrySchema>;
+
+// ---------------------------------------------------------------------
+// Subscriptions — SLICE 1 PR 1 (2026-04-23). Block-level reactive
+// handlers: "when event X arrives in this workspace, run handler Y."
+//
+// BLOCK.md `## Subscriptions` section carries one entry per
+// subscription. Parser (block-md.ts) populates `subscriptions:
+// SubscriptionEntry[]` on the parsed contract. Validator
+// (SLICE 1 PR 1 M3) cross-checks event names against the SeldonEvent
+// registry, handler names against module exports, and idempotency
+// key templates against resolvable interpolation paths.
+//
+// Design rationale in tasks/step-subscription-audit.md §3. Gate
+// decisions applied here:
+//   G-1 (fully-qualified event): `event` is `<block-slug>:<event.name>`.
+//   G-3 (idempotency required): `idempotency_key` defaults to `{{id}}`
+//        when omitted; composite fallback + validator-refusal in the
+//        dispatcher.
+//   G-6 (filtered status): delivery status enum includes "filtered"
+//        as distinct terminal state (not collapsed into delivered/
+//        failed).
+// Predicate primitive reused from lib/agents/types.ts — NOT extended
+// per the containment principle (validated 12 times across 2b.2 +
+// 2c + SLICE 1-a).
+// ---------------------------------------------------------------------
+
+// G-1: fully-qualified event name in `<block-slug>:<event.name>`
+// form. Block slug is lowercase-with-hyphens (matches existing
+// BLOCK.md id conventions like `caldiy-booking`). Event name is
+// the two-or-more-dot-separated-lowercase-segments shape used
+// elsewhere.
+export const FullyQualifiedEventSchema = z
+  .string()
+  .regex(/^[a-z][a-z0-9-]*:[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/, {
+    message:
+      'Event must be "<block-slug>:<event.name>" (e.g., "caldiy-booking:booking.created")',
+  });
+
+// G-6: dispatcher outcome enum. `filtered` is distinct from
+// `delivered` / `failed` so the admin surface can show "the
+// predicate rejected this event" as its own state. `pending` /
+// `in_flight` / `dead` ship with PR 2 runtime; defined here so
+// the full enum is discoverable alongside the contract.
+export const SubscriptionDeliveryStatusSchema = z.enum([
+  "pending",
+  "in_flight",
+  "delivered",
+  "failed",
+  "filtered",
+  "dead",
+]);
+
+export type SubscriptionDeliveryStatus = z.infer<
+  typeof SubscriptionDeliveryStatusSchema
+>;
+
+// Retry policy. Defaults applied by the parser when the field is
+// omitted entirely; per-field defaults applied when the object is
+// partial. Ceiling on `max` enforced at validation time (recommend
+// 10 per audit §3.2 + §4.7).
+export const RetryPolicySchema = z.object({
+  max: z.number().int().positive().max(10).default(3),
+  backoff: z.enum(["exponential", "linear", "fixed"]).default("exponential"),
+  initial_delay_ms: z.number().int().positive().default(1000),
+});
+
+export type RetryPolicy = z.infer<typeof RetryPolicySchema>;
+
+// Handler name — JavaScript identifier shape, consistent with the
+// `export function <name>(...)` convention in block subscriptions.ts
+// files. Validator cross-checks that a matching export exists at
+// parse time (SLICE 1 PR 1 M3).
+export const HandlerNameSchema = z
+  .string()
+  .regex(/^[a-z][a-zA-Z0-9_]*$/, {
+    message:
+      "Handler name must be a lowerCamelCase identifier (e.g., logActivityOnBookingCreate)",
+  });
+
+// Idempotency key template. Accepts literal characters + `{{...}}`
+// interpolations. G-3 defaults to `{{id}}` at parse time; the
+// composite fallback + validator-refusal paths live in the M3
+// validator.
+export const IdempotencyKeyTemplateSchema = z.string().min(1);
+
+// A subscription entry. Authored in BLOCK.md under `## Subscriptions`.
+// Filter uses the existing Predicate primitive from
+// lib/agents/types.ts — reused, NOT extended, per the containment
+// principle. Authors writing a BLOCK.md don't import Zod; the parser
+// reconstructs the object from YAML-ish syntax (see block-md.ts).
+export const SubscriptionEntrySchema = z.object({
+  event: FullyQualifiedEventSchema,
+  handler: HandlerNameSchema,
+  idempotency_key: IdempotencyKeyTemplateSchema.default("{{id}}"),
+  retry: RetryPolicySchema.default({
+    max: 3,
+    backoff: "exponential",
+    initial_delay_ms: 1000,
+  }),
+  // `filter` intentionally unknown shape here — validator (M3)
+  // parses it against PredicateSchema. Keeping it `unknown` at the
+  // contract-v2 layer preserves the separation: contract-v2 knows
+  // contract shapes; lib/agents/types.ts owns the Predicate primitive.
+  filter: z.unknown().optional(),
+});
+
+export type SubscriptionEntry = z.infer<typeof SubscriptionEntrySchema>;
