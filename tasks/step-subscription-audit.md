@@ -833,5 +833,143 @@ that's a scope decision this audit defers to.
 
 ---
 
-*Ready to run the §15 coverage audit. No PR 1 code until findings
-report + Max's go signal.*
+### 15.4 Coverage audit findings (2026-04-22)
+
+**Finding: 0 of 68 emission sites pass `orgId` today.**
+
+Executed the audit per §15.1. Enumerated every `emitSeldonEvent(...)`
+call site via AST-aware arg parsing. Classified each by whether the
+third argument (`options: { orgId }`) is provided.
+
+Results:
+
+| Metric | Count |
+|---|---|
+| Total emission sites (excluding bus.ts + tests) | **68** |
+| Sites passing `orgId` (durable log write engaged) | **0** |
+| Sites NOT passing `orgId` (in-memory dispatch only) | **68** |
+| Files affected | 23 |
+
+**This is an L-20 stop-and-flag moment.** The subscription primitive
+reads from `workflow_event_log`, which only receives writes when
+`emitSeldonEvent(type, data, { orgId })` is called. If subscriptions
+ship against the current emission surface, **0% of emissions reach
+subscriptions**. The primitive would be inert from day one.
+
+#### 15.4.1 Classification of emission sites
+
+Three categories of impact for subscriptions:
+
+| Category | Sites | Risk |
+|---|---|---|
+| **Webhook handlers** (resend / stripe / twilio) | 13 | Events fire outside dashboard lifecycle. No listeners.ts fallback works reliably either. Double failure today. |
+| **API routes + server actions** (form submit, landing track-visit, bookings, contacts, deals, emails, landing, payments, portal, sms) | 50 | Most call sites. Most events. Most impact. |
+| **Conversation runtime + custom objects** | 5 | Runtime helpers that emit from within other operations. Require orgId to be plumbed through their call chains. |
+
+#### 15.4.2 Historical context — known carryover from 2c
+
+This is NOT a new finding. 2c PR 1 M4's commit message explicitly
+documented:
+
+> "Call-site migration to pass orgId happens in PR 2 as the runtime
+> needs each event persisted for wake-up scans to work. For PR 1
+> M4, new code passes orgId; legacy code remains on the in-memory-
+> only path."
+
+2c PR 2 did NOT actually migrate the call sites — it added the cron
+tick, synchronous resume scaffolding in bus.ts (which short-circuits
+when `orgId` is absent), the admin surface, and the integration test.
+The call-site migration was silently carried forward.
+
+Consequence: 2c's synchronous wake-up scan is effectively dead code
+in production. The cron-tick timeout path works (timeouts fire from
+`workflow_waits` rows written directly by `dispatchAwaitEvent`,
+independent of the bus path). But event-match resume has never
+fired because `if (!options?.orgId) return;` short-circuits 100% of
+call sites.
+
+This doesn't break 2c's Client Onboarding integration test — that
+test uses `InMemoryRuntimeStorage` and explicit `resumePendingWaitsForEventInContext`
+invocations, not the production emit path.
+
+**Implication:** the "subscriptions close a reliability gap" framing
+(§1.2.1) is correct AND understates the gap. Today, BOTH
+subscriptions (not shipped) AND 2c's synchronous resume (shipped but
+inert) need this migration.
+
+#### 15.4.3 Proposed path forward
+
+Three options:
+
+**Option A — SLICE 1-a preparatory sub-slice (recommended).**
+
+Ship `orgId` threading across all 68 call sites as a standalone
+preparatory slice BEFORE SLICE 1 PR 1 starts.
+
+- Scope: mechanical threading. Each call site adds a third argument
+  `{ orgId }`. Most sites already have `orgId` in scope (webhook
+  handlers load it from the affected record; server actions call
+  `getOrgId()`; API routes have it from auth). A few helper
+  functions may need orgId plumbed through their signatures.
+- LOC estimate: ~500-800 LOC across 23 files. Per L-17 calibration:
+  ~10-30 LOC per site depending on whether orgId is locally
+  available.
+- Testing: unit tests per affected module verify orgId gets passed.
+  Integration test that emits an event and verifies a
+  `workflow_event_log` row lands.
+- Side benefit: 2c's synchronous resume path becomes live for the
+  first time.
+- Dependencies: independent. No gate items.
+- Stop-and-reassess trigger: 30% over 800 = ~1,040 LOC.
+
+**Option B — Fold orgId threading into SLICE 1 PR 1.**
+
+Add 500-800 LOC of threading to PR 1's 600-900 estimate → 1,100-1,700
+LOC combined. Per L-17 addendum this is architectural work (Option
+A profile), but it bloats PR 1 significantly beyond its charter.
+
+Rejected unless Max explicitly prefers a single PR over a
+preparatory slice.
+
+**Option C — Partial coverage.**
+
+Thread orgId only into emission sites whose events have declared
+subscribers at ship time. Other sites stay in-memory-only. Rejected
+because:
+- Fragile: adding a new subscription later means re-threading orgId
+  at the relevant emission sites, which is error-prone.
+- Silent data loss: events without threaded orgId won't appear in
+  `workflow_event_log`, so future debugging queries will be
+  systematically incomplete.
+- Contradicts the "subscriptions close a reliability gap" framing.
+
+#### 15.4.4 Recommendation
+
+**Option A — SLICE 1-a preparatory sub-slice.**
+
+New slice tasks/step-slice-1a-orgid-threading-audit.md (tiny audit,
+mostly mechanical). Ships before SLICE 1 PR 1. After its green bar
++ Max approval, SLICE 1 PR 1 starts against a codebase where the
+log coverage gap is closed.
+
+Alternative decision point: Max may judge the 500-800 LOC
+mechanical threading doesn't warrant its own slice + audit + green
+bar cycle, in which case fold into SLICE 1 PR 1 (Option B) and
+accept the bloat with explicit approval.
+
+Either way, **SLICE 1 PR 1 cannot safely proceed on the current
+emission surface**. Flagging per L-20 before any code ships.
+
+#### 15.4.5 Gate to resolve before PR 1
+
+**GATE G-7 (new, added by this coverage finding):** decision on
+Option A vs Option B.
+- Recommendation: Option A (preparatory slice).
+- Alternative: Option B (fold into PR 1, ~1,700 LOC).
+
+No PR 1 code until G-7 resolves.
+
+---
+
+*Coverage audit complete. Findings committed as audit addendum.
+Awaiting Max's resolution of G-7 before PR 1 starts.*
