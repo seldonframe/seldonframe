@@ -36,6 +36,7 @@ import { z } from "zod";
 
 import type { ToolDefinition } from "../blocks/contract-v2";
 import { PredicateSchema, DurationSchema } from "./types";
+import { isAgentWritablePath } from "../workflow/state-access/allowlist";
 
 // ---------------------------------------------------------------------
 // Public types
@@ -212,6 +213,27 @@ const ReadStateStepSchema = z.object({
   next: z.string().nullable(),
 });
 
+// write_state step — SLICE 3 C2 per audit §3.2 + G-3-3 Option B-2.
+// Writes a value to a workspace-scoped path. Safety: path must be
+// in the AGENT_WRITABLE_SOUL_PATHS allowlist — validated at parse
+// time via validateWriteStateStep (UnknownStep fallthrough + re-
+// parse), enforced again at runtime by the dispatcher
+// (defense-in-depth).
+const WriteStateStepSchema = z.object({
+  id: z.string().min(1),
+  type: z.literal("write_state"),
+  path: z.string().regex(WorkspacePathPattern, {
+    message: 'write_state.path must start with "workspace.soul." or "workspace.theme."',
+  }),
+  /**
+   * Value to write. String values carrying `{{interpolation}}` are
+   * resolved against the run's scope before writing. Non-string
+   * values pass through verbatim.
+   */
+  value: z.unknown(),
+  next: z.string().nullable(),
+});
+
 const UnknownStepSchema = z
   .object({
     id: z.string().min(1),
@@ -225,6 +247,7 @@ const KnownStepSchema = z.discriminatedUnion("type", [
   ConversationStepSchema,
   AwaitEventStepSchema,
   ReadStateStepSchema,
+  WriteStateStepSchema,
 ]);
 
 const StepSchema = z.union([KnownStepSchema, UnknownStepSchema]);
@@ -243,6 +266,7 @@ export type McpToolCallStep = z.infer<typeof McpToolCallStepSchema>;
 export type ConversationStep = z.infer<typeof ConversationStepSchema>;
 export type AwaitEventStep = z.infer<typeof AwaitEventStepSchema>;
 export type ReadStateStep = z.infer<typeof ReadStateStepSchema>;
+export type WriteStateStep = z.infer<typeof WriteStateStepSchema>;
 export type UnknownStep = z.infer<typeof UnknownStepSchema>;
 // Discriminated-union narrowing on `.type` for the four known step
 // types; UnknownStep is the runtime fallthrough for unsupported
@@ -253,6 +277,7 @@ export type Step =
   | ConversationStep
   | AwaitEventStep
   | ReadStateStep
+  | WriteStateStep
   | UnknownStep;
 
 // Type guards — TypeScript can't narrow Step by `step.type === "..."`
@@ -426,11 +451,17 @@ function validateStep(
     validateReadStateStep(step, capturedBindings, issues);
     return;
   }
+  // Handle write_state — G-3-3 Option B-2 allowlist enforcement at
+  // synthesis time. Runtime dispatcher double-checks.
+  if (step.type === "write_state") {
+    validateWriteStateStep(step, issues);
+    return;
+  }
   issues.push({
     code: "unsupported_step_type",
     stepId: step.id,
     path: "type",
-    message: `step type "${step.type}" is not supported by this validator (wait / mcp_tool_call / conversation / await_event / read_state are the five known types; branch ships with 2e)`,
+    message: `step type "${step.type}" is not supported by this validator (wait / mcp_tool_call / conversation / await_event / read_state / write_state are the six known types; branch ships with 2e)`,
   });
 }
 
@@ -1078,5 +1109,49 @@ function validateReadStateStep(
     });
   } else {
     capturedBindings.add(validated.capture);
+  }
+}
+
+// ---------------------------------------------------------------------
+// write_state validation (SLICE 3 C2 — G-3-3 Option B-2 allowlist)
+//
+// Consults the static AGENT_WRITABLE_SOUL_PATHS allowlist. Every
+// path not on the list fails spec_malformed with a clear message.
+// The runtime dispatcher re-checks (defense-in-depth) — both gates
+// must open for a write to land.
+// ---------------------------------------------------------------------
+
+function validateWriteStateStep(step: Step, issues: ValidationIssue[]): void {
+  const parsed = WriteStateStepSchema.safeParse(step);
+  if (!parsed.success) {
+    for (const err of parsed.error.issues) {
+      issues.push({
+        code: "spec_malformed",
+        stepId: step.id,
+        path: err.path.join(".") || "$",
+        message: err.message,
+      });
+    }
+    return;
+  }
+  const validated = parsed.data;
+
+  // Path resolution note: interpolation tokens (`{{...}}`) in the
+  // path are NOT resolved at validation time — the allowlist check
+  // happens against the LITERAL path template. A path like
+  // `workspace.soul.contact.{{id}}.stage` would need the template
+  // form `workspace.soul.contact.{{id}}.stage` on the allowlist.
+  // This is intentional: allowing dynamic paths to bypass the
+  // allowlist via interpolation defeats the safety posture.
+  if (!isAgentWritablePath(validated.path)) {
+    issues.push({
+      code: "spec_malformed",
+      stepId: validated.id,
+      path: "path",
+      message:
+        `write_state.path "${validated.path}" is not in the agent-writable allowlist. ` +
+        `Paths must be explicitly added to packages/crm/src/lib/workflow/state-access/allowlist.ts ` +
+        `with an accompanying PR documenting the use case + idempotency guarantees.`,
+    });
   }
 }
