@@ -25,7 +25,7 @@
       "args": {
         "to": "{{email}}",
         "subject": "Thanks for visiting Bright Smile — how did we do?",
-        "body": "Hi {{firstName}},\n\nThanks so much for coming in to see us at Bright Smile Dental. We know the dentist isn't always the easiest appointment to look forward to, and we really appreciate you trusting us with your care.\n\nIf you have 30 seconds, we'd be grateful if you shared a quick review. Honest feedback helps other folks in the area feel a little less nervous about finding a dentist — which is kind of the whole reason we do this:\n\nhttps://g.page/r/Ca-example-business/review\n\nAnd if something wasn't quite right during your visit, just hit reply — we'd much rather hear from you directly so we can make it right.\n\nTake care,\nThe Bright Smile Dental team",
+        "body": "Hi {{firstName}},\n\nThanks so much for coming in to see us at Bright Smile Dental. We know the dentist isn't everyone's favourite place to be, so it really does mean a lot that you trusted us with your smile.\n\nIf you have 30 seconds, we'd be hugely grateful if you shared a quick word about your visit. Honest reviews help other nervous patients find us and feel a little less scared about booking their first appointment:\n\nhttps://g.page/r/Ca-example-business/review\n\nAnd if something wasn't quite right — please just hit reply and tell us. We'd rather hear it from you than read it anywhere else, and we'll make it right.\n\nThanks again, and take care of that smile.\n\n— The team at Bright Smile Dental",
         "contactId": "{{contactId}}"
       },
       "next": "wait_before_sms"
@@ -42,7 +42,7 @@
       "tool": "send_sms",
       "args": {
         "to": "{{phone}}",
-        "body": "Hi {{firstName}}, it's Bright Smile Dental — quick follow-up: if you have 30 seconds, a short review would mean a lot to us: https://g.page/r/Ca-example-business/review. Thanks!",
+        "body": "Hi {{firstName}}, it's Bright Smile Dental — quick follow-up: if you have 30 seconds, a short review really helps other nervous patients find us. No pressure 💙 https://g.page/r/Ca-example-business/review",
         "contact_id": "{{contactId}}"
       },
       "next": "log_review_request_complete"
