@@ -58,7 +58,7 @@
       "args": {
         "to": "{{email}}",
         "subject": "A little something from Bright Smile — 20% off whenever you're ready",
-        "body": "Hi {{firstName}},\n\nWe noticed you cancelled recently — totally no pressure, life gets busy and we get it. We just wanted you to know the door is always open here at Bright Smile Dental.\n\nIf and when you're ready to come back, here's 20% off your next visit:\n\n{{coupon.code}}\n\nIt's good for the next 14 days — just mention it (or enter it at checkout) when you book.\n\nAnd if something about your last experience wasn't quite right, we'd genuinely love to hear it. Hit reply — a real person reads every note, and we'd rather know than not.\n\nTake care of those teeth either way,\nThe Bright Smile Dental team",
+        "body": "Hi {{firstName}},\n\nWe noticed you cancelled recently, and that's completely okay — life happens, and there's no pressure here.\n\nIf you ever want to come back for a cleaning or just a check-in, here's 20% off on us:\n\n{{coupon.code}}\n\nThe code is good for the next 14 days. Use it when you book your next visit.\n\nAnd if something about your last experience didn't feel right, I'd genuinely like to hear about it — just hit reply. We're always trying to make dental care feel a little less scary, and your honest feedback helps.\n\nTake care,\nThe Bright Smile Dental team",
         "contactId": "{{contactId}}"
       },
       "next": "wait_before_reminder"
@@ -75,7 +75,7 @@
       "tool": "send_sms",
       "args": {
         "to": "{{phone}}",
-        "body": "Hey {{firstName}}, quick note from Bright Smile Dental — your 20% off code {{coupon.code}} expires in a few days. Use it whenever you're ready, no pressure either way!",
+        "body": "Hi {{firstName}} — quick note from Bright Smile Dental: your {{coupon.code}} code for 20% off is still good for a few more days if you'd like to book a cleaning. No pressure either way!",
         "contact_id": "{{contactId}}"
       },
       "next": "log_winback_complete"

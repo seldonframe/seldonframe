@@ -58,7 +58,7 @@
       "args": {
         "to": "{{email}}",
         "subject": "A little something from Bright Smile — 20% off whenever you're ready",
-        "body": "Hi {{firstName}},\n\nWe noticed you cancelled recently, and I just wanted to say — no pressure, no hard feelings. Dental care should feel easy, and sometimes the timing just isn't right.\n\nIf you ever want to come back for a painless cleaning or a free new-patient check-in, here's 20% off on us:\n\n{{coupon.code}}\n\nGood for the next 14 days at checkout or when you book.\n\nAnd if something about your last visit didn't sit right, I'd genuinely love to hear about it — just hit reply. I read every one.\n\nWarmly,\nThe Bright Smile Dental team",
+        "body": "Hi {{firstName}},\n\nWe noticed you cancelled recently — totally no pressure, life gets busy and we get it. We just wanted you to know the door is always open here at Bright Smile Dental.\n\nIf and when you're ready to come back, here's 20% off your next visit:\n\n{{coupon.code}}\n\nIt's good for the next 14 days — just mention it (or enter it at checkout) when you book.\n\nAnd if something about your last experience wasn't quite right, we'd genuinely love to hear it. Hit reply — a real person reads every note, and we'd rather know than not.\n\nTake care of those teeth either way,\nThe Bright Smile Dental team",
         "contactId": "{{contactId}}"
       },
       "next": "wait_before_reminder"
@@ -75,7 +75,7 @@
       "tool": "send_sms",
       "args": {
         "to": "{{phone}}",
-        "body": "Hi {{firstName}}, it's Bright Smile Dental — just a quick heads up that your 20% off code {{coupon.code}} expires in a few days. Use it whenever you're ready, no pressure either way :)",
+        "body": "Hey {{firstName}}, quick note from Bright Smile Dental — your 20% off code {{coupon.code}} expires in a few days. Use it whenever you're ready, no pressure either way!",
         "contact_id": "{{contactId}}"
       },
       "next": "log_winback_complete"
