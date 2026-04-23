@@ -42,3 +42,6 @@ export * from "./workflow-waits";
 export * from "./workflow-event-log";
 // Scope 3 Step 2c PR 3 — step trace for observability.
 export * from "./workflow-step-results";
+// SLICE 1 PR 2 — block-level reactive subscriptions.
+export * from "./block-subscription-registry";
+export * from "./block-subscription-deliveries";
