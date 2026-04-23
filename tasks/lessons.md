@@ -313,6 +313,35 @@ Format: **Lesson** / **Trigger** / **Rule**
   section of a PR grows larger than the feature code it's meant to
   cover, stop and extract.
 
+### L-17 addendum — Migration-slice calibration note
+
+Audit LOC estimates for migration slices (uniform per-site
+transformations with no per-site design decisions) tend to
+overshoot actual LOC. SLICE 1-a estimated 1,900-2,200; shipped
+720, ~65% under.
+
+The pattern: when each site is "same change, different file," a
+shared helper + bulk edit compresses what would look like N
+separate tasks into one. The reflex to estimate "N sites ×
+per-site LOC" overestimates because per-site LOC trends toward
+zero as the helper absorbs shared logic.
+
+Calibration: for migration slices where >80% of sites are the
+same category (Category A-only, no boundary threading, no
+per-site design), estimate at 40-60% of the "N × per-site"
+naive calculation. For heterogeneous migrations (multiple
+categories, varying threading depth), the naive calculation is
+more accurate.
+
+SLICE 1-a passed this test: ground-truth §2 identified 100%
+Category A. Audit should have applied migration-compression
+factor and estimated ~800-1,200 LOC. It didn't, and came in at
+720.
+
+**Rule:** when audit §2 identifies uniform migration category,
+apply migration-compression factor to estimate. Don't rely
+purely on naive site-count multiplication.
+
 ---
 
 ## L-18 — Server-side imports of client-only modules fail at build time, not dev time
