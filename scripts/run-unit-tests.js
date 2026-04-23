@@ -24,12 +24,14 @@ const repoRoot = path.resolve(__dirname, "..");
 // live in another package, that package must declare tsx as a devDep too
 // and this runner must iterate per-package.
 const crmRoot = path.join(repoRoot, "packages", "crm");
-const pattern = "tests/unit/**/*.spec.ts";
+// SLICE 4a adds .spec.tsx for React component tests (renderToString-
+// based — no jsdom). tsx handles both extensions; glob both patterns.
+const patterns = ["tests/unit/**/*.spec.ts", "tests/unit/**/*.spec.tsx"];
 
-const files = globSync(pattern, { cwd: crmRoot });
+const files = patterns.flatMap((p) => globSync(p, { cwd: crmRoot }));
 
 if (files.length === 0) {
-  console.error(`No unit test files matched ${pattern} under ${crmRoot}`);
+  console.error(`No unit test files matched ${patterns.join(" / ")} under ${crmRoot}`);
   process.exit(1);
 }
 
