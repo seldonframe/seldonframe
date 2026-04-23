@@ -391,6 +391,37 @@ Format: **Lesson** / **Trigger** / **Rule**
 
 ---
 
+## L-22 — Deferred work is invisible to green-bar checks unless the green bar tests for it directly
+
+- **Trigger:** 2c PR 1 M4 commit message noted "call-site migration
+  happens in PR 2." 2c PR 2 implemented wake-up scan against
+  workflow_event_log but did not migrate the 68 emitSeldonEvent
+  call sites to thread orgId. The deferred work was silently
+  skipped. Green bar at 2c close was fully green because (a)
+  synthesis-layer probes don't touch emissions, (b) in-memory
+  emission still worked, (c) sync wake-up scan had no events to
+  match against so never visibly failed.
+
+  Discovered during SLICE 1 subscription audit's ground-truth
+  verification: 0 of 68 emission sites thread orgId;
+  workflow_event_log receives zero writes in production.
+- **Rule:** when a PR defers work to a later PR, capture the
+  deferred work as an explicit item in the later PR's definition
+  of done. When the later PR closes, verify the deferred work
+  actually landed — not just "feature works end-to-end in tests"
+  but "the specific line-item marked as deferred is now present
+  in the shipped code."
+
+  Additionally, close-out summaries should include a "verification
+  of deferred items" section when any prior PR deferred work to
+  the current one.
+
+  Future mechanism: audit docs should maintain a "deferred from
+  prior slice" explicit list that must be checked off before the
+  current slice closes.
+
+---
+
 ## L-21 — Explicit stop gates require actual stops
 
 - **Trigger:** Max directed 12-hour stop between 2b.2 close and 2c
