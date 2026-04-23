@@ -411,14 +411,50 @@ C7's "close-out" budget.
 - "skill infrastructure" (SKILL.md / CLAUDE.md-level docs)
 - "reference examples" (sample configs / worked-example blocks)
 - "builder-facing documentation" (not the audit itself)
+- "validation harnesses" (synthesis comparisons, end-to-end
+  scenario libraries, benchmark suites) — see L-17 addendum below
 
 ...list them as distinct line items in the §11 LOC table with
 their own estimates, separately from renderer / dispatcher / write
 code. Don't fold them into existing categories.
 
 **Rule (calibration):** before signing an audit, scan §8 for any
-of the three artifact types above. If present and not separately
+of the four artifact types above. If present and not separately
 itemized in §11, flag it explicitly before approval.
+
+### L-17 addendum — Validation harnesses count as artifacts, not test code
+
+Observation from SLICE 3 audit (2026-04-23): the 10-case synthesis
+comparison harness proposed for PR 1 is conceptually 10 scenario
+artifacts (input + expected output pairs) with assertions, not
+traditional unit tests. Applying the 1.3x test multiplier to
+harness LOC inflated the estimate misleadingly — ~280 LOC
+projected vs ~200 LOC that's actually the artifact reality.
+
+**Rule:** validation harnesses — synthesis comparisons, end-to-end
+scenario libraries, benchmark suites — are artifact categories.
+Estimate separately from dispatcher / validator / orchestrator
+test LOC. Each scenario artifact is typically **20-40 LOC**
+(input fixture + expected output + one-line assertion per metric).
+
+**Updated L-17 artifact categories (complete list):**
+- **Renderers:** 25-40 LOC per unit. Scales linearly with
+  template complexity.
+- **SKILL.md content:** 200-600 LOC. Driven by workflow branches.
+- **Example artifacts:** 50-400 LOC per example. Complex blocks
+  (3+ tools + subscriptions) land toward the upper end.
+- **Validation harnesses:** 20-40 LOC per scenario. 10 scenarios
+  → ~200-400 LOC total, NOT multiplied by the test-LOC factor.
+
+**Why the distinction matters:** unit tests exercise ONE behavior
+with setup + act + assert. A scenario artifact in a comparison
+harness exercises an input through an entire pipeline and compares
+aggregate metrics. Count them like examples, not like tests.
+
+**Rule (calibration):** when an audit's test-LOC projection
+exceeds production-LOC by >50%, check for a hidden validation
+harness. If one exists, re-categorize it out of test-LOC into
+artifact-LOC, re-project the total, and flag to the reviewer.
 
 ---
 
