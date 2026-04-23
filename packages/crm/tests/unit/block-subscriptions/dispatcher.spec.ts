@@ -110,7 +110,9 @@ describe("runSubscriptionTick — failure + retry", () => {
       }],
     ]);
 
-    const now = new Date("2026-04-23T12:00:00Z");
+    // Pin now to at-or-after seed time so the sweep finds the row
+    // regardless of wall-clock when the test runs.
+    const now = new Date(Date.now() + 1000);
     const result = await runSubscriptionTick({
       storage,
       handlers,
@@ -125,8 +127,7 @@ describe("runSubscriptionTick — failure + retry", () => {
     assert.equal(delivery.status, "failed");
     assert.equal(delivery.attempt, 2, "attempt incremented for next try");
     assert.equal(delivery.lastError, "boom");
-    // Attempt 2 of exponential = 2^(2-1) × 1000 = 2000ms (we compute
-    // delay for the NEXT attempt on failure — post-increment).
+    // Attempt 2 of exponential = 2^(2-1) × 1000 = 2000ms.
     assert.equal(delivery.nextAttemptAt.getTime() - now.getTime(), 2000);
   });
 

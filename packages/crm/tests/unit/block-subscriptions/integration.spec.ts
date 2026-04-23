@@ -183,7 +183,8 @@ describe("SLICE 1 PR 2 — integration: retry", () => {
     ]);
 
     // Tick 1: handler throws, status→failed, nextAttempt scheduled.
-    const t1 = new Date("2026-04-23T12:00:00Z");
+    // Pin tick time to >= seed time (seedDelivery uses new Date()).
+    const t1 = new Date(Date.now() + 1000);
     const result1 = await runSubscriptionTick({ storage, handlers, now: t1, batchLimit: 100 });
     assert.equal(result1.failed, 1);
     assert.equal(result1.delivered, 0);
