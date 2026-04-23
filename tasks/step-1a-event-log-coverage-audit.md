@@ -377,20 +377,49 @@ No ordering dependency with follow-ups (`tasks/follow-up-workflow-runs-e2e.md`, 
 
 ---
 
-## 13. Stop-gate — audit pending review
+## 13. Stop-gate — APPROVED 2026-04-22
 
-Four gate items pending resolution:
+All four gate items approved with refinements. PR 1 unblocked.
 
-| Item | Status | Recommendation |
+| Item | Status | Resolution + refinement |
 |---|---|---|
-| G-1a-1 — migration strategy | 🟡 Pending | Option 1 (required parameter) |
-| G-1a-2 — test coverage bar | 🟡 Pending | per-site unit + 1 integration |
-| G-1a-3 — PR split | 🟡 Pending | single PR, 7 mini-commits |
-| G-1a-4 — observability scope in this slice | 🟡 Pending | defer metrics to SLICE 1 PR 2 |
+| G-1a-1 — migration strategy | ✅ APPROVED 2026-04-22 | Option 1 (orgId required, TypeScript-enforced). No alternatives. |
+| G-1a-2 — test coverage bar | ✅ APPROVED 2026-04-22 | Per-site unit tests verify BOTH signature correctness AND `workflow_event_log` persistence (not signature-only). Refinement adds ~5-10 LOC per site (350-700 total). |
+| G-1a-3 — PR split | ✅ APPROVED 2026-04-22 | Single PR, 7 mini-commits with explicit structure (see §13.1). Each mini-commit must leave codebase compiling + tests passing. No dangling overloads. |
+| G-1a-4 — observability scope | ✅ APPROVED 2026-04-22 | Defer metrics/dashboards to SLICE 1 PR 2. SLICE 1-a ships one documented SQL health-check query for post-deploy verification of log writes. No dashboard, no alerting — just ops-query docs (5-10 LOC). |
 
-All gates resolve in the same approval pass. PR 1 of SLICE 1-a kicks off only after every gate is approved or overridden AND this audit commits to main.
+### 13.1 Mini-commit structure (G-1a-3 refinement)
 
-Expected review rounds per rescope discipline: 1-2. The audit ships to `claude/fervent-hermann-84055b` first; Max reviews, responds with gate decisions; audit revises if needed; audit commits; PR 1 starts.
+- **Commit 1:** `bus.ts` signature change + all 68 call-site migrations + category-1 per-site tests. The signature change is atomic with the site migrations — Option 1's compile-time enforcement means any unmigrated site breaks typecheck, so the full refactor must land in one commit. Mini-commits 2-6 are test additions, not additional migrations.
+- **Commits 2-6:** per-category per-site persistence tests (5 categories; ~13-14 sites per commit).
+- **Commit 7:** end-to-end integration test (emit → persist → 2c sync wake-up fires → workflow advances) + regression smoke + documented SQL health-check query + L-22 verification of deferred items from 2c.
+
+Each mini-commit: typecheck clean, `pnpm test:unit` green, no dangling overloads.
+
+### 13.2 Three additions folded into PR scope (per approval message)
+
+1. **L-22 addendum** to `tasks/lessons.md`: "Prefer structural enforcement over process discipline." Captured alongside gate decisions (landed in same or adjacent commit as this audit update).
+
+2. **2c sync wake-up explicit verification** (test-addition beyond baseline):
+   - Integration test emits event from migrated site.
+   - Verifies `workflow_event_log` receives the row.
+   - Verifies that a pre-seeded waiting run with matching predicate fires via the sync wake-up path and advances.
+   - Turns "2c sync wake-up becomes live" from audit assumption into test-verified fact.
+
+3. **L-22 explicit verification in close-out summary:**
+   - Grep for remaining `emitSeldonEvent(` calls without `orgId` (expect zero).
+   - Verify TypeScript compiler accepts new signature only (overloads/fallbacks removed).
+   - Close-out summary includes "verification of deferred items from 2c" section listing each item + its resolution.
+
+### 13.3 Updated LOC estimate with refinements
+
+Per G-1a-2 refinement (persistence tests + signature-correctness, not signature-only): additional ~5-10 LOC per site × 68 sites = ~350-700 LOC added to §8's base estimate.
+
+**Revised total:** ~1,900-2,200 LOC midpoint (vs §8's 1,600 midpoint).
+
+**Stop-and-reassess trigger (revised):** 30% over upper bound = **~2,860 LOC**.
+
+No open gate items remain. Proceeding with the 7-mini-commit PR per §13.1.
 
 ---
 

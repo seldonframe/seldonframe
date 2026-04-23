@@ -420,6 +420,25 @@ Format: **Lesson** / **Trigger** / **Rule**
   prior slice" explicit list that must be checked off before the
   current slice closes.
 
+### L-22 addendum — Prefer structural enforcement over process discipline
+
+When the 2c deferred-work pattern surfaced as G-1a-1, three
+migration options were on the table: (1) required parameter,
+compile-time enforced; (2) optional parameter with runtime
+assertion; (3) context-based resolution. Option 1 was correct
+because it makes the bug structurally impossible to recur — the
+TypeScript compiler rejects `emitSeldonEvent` calls without
+`orgId`.
+
+Process discipline (the L-22 rule about explicit done criteria
+for deferred work) is necessary but insufficient. Where possible,
+add structural enforcement that makes the bug impossible to
+write, not just easier to catch in review.
+
+**Rule:** when resolving a bug caused by missed process, ask
+"can the type system or build system enforce this?" before
+reaching for "we'll be more careful next time."
+
 ---
 
 ## L-21 — Explicit stop gates require actual stops
