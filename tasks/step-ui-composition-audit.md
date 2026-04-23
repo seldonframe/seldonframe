@@ -2,8 +2,12 @@
 
 **Draft:** 2026-04-23
 **Sprint:** Scope 3 rescope, SLICE 4 of 9 (primitive-completion)
-**Status:** AUDIT ONLY. No code until every gate in §8 resolves.
+**Status:** APPROVED 2026-04-23. Split per G-4-1 into **SLICE 4a (this audit) + SLICE 4b (drafted post-4a close)**.
 **Inputs:** Scope 3 rescope message (2026-04-22), `tasks/lessons.md` L-15 through L-22 + all L-17 addenda (incl. the SLICE 3 dispatcher-count rule), SLICE 1/2/3 audits + close-outs.
+
+**Scope split (G-4-1 Option C resolved):**
+- **SLICE 4a:** admin composition patterns + scaffold → UI bridge + proof migration. Estimated ~3,350-4,000 LOC; stop-trigger 5,200. Three PRs.
+- **SLICE 4b:** customer-facing patterns + BookingWidget / IntakeForm migrations + customer auth surface + deeper integration harness. Audit drafted AFTER 4a ships, using empirical UI-multiplier data from 4a PR 1's calibration checkpoint (§11).
 
 ---
 
@@ -45,40 +49,66 @@ What SLICE 4 ADDS on top: composition patterns, scaffold→UI bridge, theme-awar
 
 Eight composition patterns total — **5 admin + 3 customer-facing**.
 
-### 2.1 Admin patterns (5)
+### 2.1 Admin patterns (5) — SLICE 4a
+
+Aligned with Max's gate-resolution naming:
 
 | Pattern | Purpose | Shadcn primitives it composes | Approx LOC |
 |---|---|---|---|
-| `<EntityTable>` | Tabular list with filter + sort + pagination | table + input + button + select | 180 |
-| `<EntityForm>` | Create/edit form derived from Zod schema | form + input + select + textarea + button | 200 |
-| `<EntityDetail>` | Side-drawer or page detail view | sheet + dialog + card + tabs | 150 |
-| `<EntityKanban>` | Drag-drop kanban for stage-tracked entities | card + dnd-kit + badge | 180 |
-| `<PageShell>` | Admin page wrapper: title + breadcrumbs + actions | button + separator + dropdown | 120 |
+| `<PageShell>` + `<BlockListPage>` | Admin list-page wrapper: title + breadcrumbs + actions + filter bar. `BlockListPage` = `PageShell` wrapping an `<EntityTable>` with sensible defaults for a block's primary entity. | button + separator + dropdown + table + input | 220 |
+| `<EntityTable>` | Tabular list primitive — auto-derives columns from the entity's Zod schema. Sort, filter, pagination, row-select. Used inside `BlockListPage` and standalone. | table + input + button + select + dropdown | 200 |
+| `<BlockDetailPage>` | Admin detail-page wrapper: breadcrumb + entity-title + action bar + tabbed content area. Wraps `<CompositionCard>` panels. | tabs + card + button + separator | 170 |
+| `<EntityFormDrawer>` | Create/edit form in a side-sheet drawer. Auto-derives fields from Zod schema; honors `required` / `nullable`. | sheet + input + select + textarea + button | 200 |
+| `<ActivityFeed>` | Activity timeline (mirrors `components/crm/activity-timeline.tsx` pattern, generalized). Grouping by day, avatar, action + target summary. | scroll-area + avatar + card | 160 |
+| `<CompositionCard>` | Generic card primitive for detail-page sections. Title + optional badge + content slot + optional action row. Replaces the ad-hoc card wrappers in hub/dashboard/crm surfaces. | card + badge + button | 100 |
 
-**Total admin patterns:** ~830 LOC production.
+**Total admin primitives:** ~1,050 LOC production.
 
-### 2.2 Customer-facing patterns (3)
+Note: `<PageShell>` + `<BlockListPage>` are counted as one primitive because `BlockListPage` is a typed preset of `PageShell`. They ship as one module with two entry points.
+
+### 2.2 Customer-facing patterns — **DEFERRED TO SLICE 4b**
+
+Per G-4-1 Option C, these 3 patterns move to SLICE 4b. Included here as a scope marker — the audit draft is frozen at estimate level; concrete 4b audit runs after 4a close with empirical UI-multiplier data.
 
 | Pattern | Purpose | Approx LOC |
 |---|---|---|
-| `<BookingWidget>` | Cal.com-style time-picker + confirmation | 250 |
-| `<IntakeForm>` | Themed form derived from intake-form schema | 180 |
-| `<CustomerShell>` | Customer-facing layout with brand applied | 120 |
+| `<PortalLayout>` / `<CustomerShell>` | Customer-facing layout with brand applied | ~120 |
+| `<CustomerDataView>` | Read-only data display for customer portal — activity feed, resources, messages | ~200 |
+| `<CustomerActionForm>` | Themed form for customer-initiated actions (booking creation, intake submission) | ~230 |
 
-**Total customer patterns:** ~550 LOC production.
+**Estimated 4b total:** ~2,265 LOC (will refine post-4a with UI calibration data).
 
-### 2.3 Supporting primitives
+See §12 "SLICE 4b deferred scope" for the full 4b frame.
+
+### 2.3 Supporting primitives — SLICE 4a
 
 | Component | Purpose | Approx LOC |
 |---|---|---|
-| Typed design-token wrapper | `tokens.spacing[4]` etc. instead of raw strings | 80 |
-| Theme bridge (admin) | Apply OrgTheme to admin surface (was public-only) | 60 |
-| Scaffold→UI bridge | Generate admin page stubs from BlockSpec | 250 |
-| Composition test harness | Render+snapshot tests for all 8 patterns | (test-only) |
+| Typed design-token wrapper (functional API per G-4-4) | `tokens.color.primary()`, `tokens.space("md")`, `tokens.shadow("card")`, `tokens.radius("md")`. L-22 structural enforcement: typos caught at typecheck. | 120 |
+| Admin theme bridge | Apply OrgTheme to admin surface (existing public-theme-provider covers customer-only today) | 80 |
+| Scaffold→UI bridge | Generate admin page + component stubs from BlockSpec. Automatic-default per G-4-2. | 300 |
+| Composition test harness (shallow per G-4-6) | Render smoke + theme-flow + scaffold-mount smoke tests | ~100 (test) |
 
-**Total supporting:** ~390 LOC production.
+**Total supporting:** ~500 LOC production.
 
-**Grand total production (new code):** ~1,770 LOC. Tests ~2.5x per Max's directive: ~4,425 LOC. Add integration harness (artifact ~300 LOC). **Grand total ~6,495 LOC.**
+### 2.4 SLICE 4a totals
+
+| Class | Prod LOC | Tests LOC (2.5x) |
+|---|---|---|
+| Admin patterns (§2.1) | 1,050 | 2,625 |
+| Supporting primitives (§2.3) | 500 | 750 |
+| **Subtotal** | **1,550** | **3,375** |
+
+Plus artifact categories:
+- Shallow integration harness: ~100 LOC artifact
+- CRM proof migration (modifies existing files, new LOC ~150)
+- SKILL.md scaffold-UI extension: ~60 LOC
+
+**SLICE 4a total projection: ~5,235 LOC.**
+
+This exceeds Max's "~3,350-4,000" estimated envelope. The 2.5x UI multiplier drives the difference — SLICE 4a PR 1 will produce the first calibration data point (§11) and may revise downward if the multiplier runs lower in practice.
+
+**Stop-and-reassess trigger (Max-set):** 5,200 LOC. Audit projection is ~35 LOC below trigger — right at the edge. §11 calibration is load-bearing for deciding whether to continue past PR 1.
 
 ---
 
@@ -218,16 +248,33 @@ This is the **first demo-visible slice**. Quality standard is higher than invisi
 - **Linear** — command palette, keyboard-first navigation, table density.
 - **Existing SeldonFrame blocks** — the CRM surface is the current quality floor; SLICE 4 must at least match it.
 
-**Quality gates at PR close:**
+**Quality gates at PR close (expanded per Max's gate decisions):**
 
-1. Every new component renders without console warnings in dev mode.
-2. Every component is accessible: keyboard navigation, ARIA labels on interactive primitives, focus-visible states.
-3. Dark mode works for every admin component; light mode works for every customer component.
+Display + layout:
+1. **Typography reads correctly** — consistent scale (page-title → section-title → card-title → body → label → data → tiny), consistent line heights, no ad-hoc text sizes.
+2. **Spacing consistent** — no ad-hoc pixel values. All spacing from the token scale via the typed functional API (`tokens.space("sm" | "md" | "lg")`).
+3. **Mobile breakpoints functional** — components don't break below the current responsive minimum (sm breakpoint = 640px). Not a mobile-first redesign; just "doesn't visibly break."
 4. Components compose without z-index / portal conflicts.
-5. Motion is restrained — use existing `transitionTimingFunction.premium` + `transitionDuration.fast/normal/slow`.
-6. No new custom fonts. Use Geist (already loaded).
-7. No inline styles outside theme application. All styling through Tailwind utilities + design tokens.
-8. Storybook / visual-regression suite is OUT OF SCOPE for this slice (adds multi-day tooling setup) — manual QA checklist in the close-out report instead.
+
+States:
+5. **Empty states with intentional copy + CTAs** — every list / feed / table has a non-empty empty state, not a blank area.
+6. **Loading states as skeletons, not spinners** — use the `skeleton-shimmer` animation already in `tailwind.config.ts`.
+7. **Error states distinguishable from empty states** — different visual + copy.
+
+Technical:
+8. Every new component renders without console warnings in dev mode.
+9. Keyboard navigation + ARIA labels on interactive primitives + focus-visible states.
+10. Dark + light mode work.
+11. Motion restrained — use existing `transitionTimingFunction.premium` + `transitionDuration.fast/normal/slow`.
+12. No new custom fonts. Geist is loaded.
+13. No inline styles outside theme application.
+
+Out of scope for SLICE 4a:
+- Storybook / Chromatic / visual-regression tooling.
+- Full WCAG audit. Keyboard + ARIA + focus are enforced; automated axe-core integration is post-launch.
+- Visual snapshot testing.
+
+Manual QA checklist ships in PR 3 close-out (per G-4-6 shallow harness).
 
 ---
 
@@ -311,132 +358,126 @@ The UI surface has tests that are genuinely different from dispatcher tests — 
 
 ---
 
-## 7. Proposed PR split
+## 7. PR split — SLICE 4a (3 PRs)
 
-Per Max: "may be more than 3 if the work wants 4 or 5."
-
-### 7.1 PR 1 — Composition foundation (~1,400 LOC)
+### 7.1 PR 1 — Foundation + proof migration (~1,350 LOC)
 
 Scope:
-- Typed design-token wrapper (`lib/ui/tokens.ts`) + TS exports mirroring CSS vars.
-- 2 admin composition patterns: `<PageShell>` + `<EntityTable>` (enough to refactor one existing block as a smoke test).
-- Refactor ONE existing block surface (e.g., `activities` — currently the smallest/simplest) to use the new patterns as the proof artifact.
-- Shadcn component install: any of `command / calendar / skeleton` missing.
-- Component tests for the 2 patterns + refactor smoke tests.
-- Theme bridge (admin) — admin surface becomes OrgTheme-aware.
+- Typed design-token wrapper (`lib/ui/tokens.ts`) — functional API per G-4-4.
+- Admin theme bridge — workspace OrgTheme flows to admin surfaces.
+- `<PageShell>` + `<BlockListPage>` pattern.
+- `<EntityTable>` pattern — auto-derives columns from Zod schemas.
+- **CRM block admin UI migrated to new patterns** (G-4-3 proof migration) — the reference validation.
+- Shadcn component install: add `command` + `skeleton` if missing (check at PR kickoff).
+- Unit + component tests per 2.5x UI multiplier (will calibrate at PR 1 close per §11).
 
-**Estimate:** ~1,350 LOC (300 prod + 750 tests + ~300 refactor). Runs well below the rescope PR cap.
+**Est. LOC:** ~1,350 (300 prod + 750 tests + ~300 CRM refactor).
+**Stop-and-reassess trigger PR 1:** 1,750 LOC (30% over).
 
-### 7.2 PR 2 — Remaining admin patterns + customer shell (~1,800 LOC)
-
-Scope:
-- Remaining 3 admin patterns: `<EntityForm>`, `<EntityDetail>`, `<EntityKanban>`.
-- `<CustomerShell>` customer-facing layout unifier.
-- Migrate 2 existing customer routes (booking OR intake OR landing) to `<CustomerShell>`.
-- Tests per pattern.
-
-**Estimate:** ~1,800 LOC (600 prod + 1,200 tests).
-
-### 7.3 PR 3 — Customer patterns + scaffold → UI bridge (~2,000 LOC)
+### 7.2 PR 2 — Remaining patterns + scaffold → UI bridge (~2,500 LOC)
 
 Scope:
-- `<BookingWidget>` + `<IntakeForm>` customer patterns (the remaining 2 of 3).
-- Scaffold → UI bridge: new `--emit-admin-ui` CLI flag, `lib/scaffolding/render/admin-ui/` renderers, SKILL.md extension.
-- Scaffold example output: one block fully regenerated with admin UI, committed byte-for-byte (mirrors SLICE 2 C7's `notes` block).
+- `<BlockDetailPage>` — admin detail wrapper.
+- `<EntityFormDrawer>` — side-sheet create/edit form.
+- `<ActivityFeed>` — generalizes `components/crm/activity-timeline.tsx`.
+- `<CompositionCard>` — generic detail-page card primitive.
+- Scaffold → UI bridge (G-4-2 automatic-default): `lib/scaffolding/render/admin-ui/` renderers + CLI detection heuristic + `--no-admin-ui` opt-out.
+- SKILL.md extension documenting the admin-UI generation behavior.
+- Component tests per each pattern.
 
-**Estimate:** ~2,000 LOC (700 prod + 1,100 tests + ~200 artifacts).
+**Est. LOC:** ~2,500 (700 prod + 1,600 tests + ~200 scaffold-bridge code + ~80 SKILL + ~50 artifacts).
 
-### 7.4 PR 4 — Integration harness + polish + close-out (~1,100 LOC)
+Contingent on §11 calibration: if PR 1's actual UI multiplier diverges materially from 2.5x, this estimate is revised before PR 2 starts.
+
+### 7.3 PR 3 — Integration harness + QA + close-out (~1,400 LOC)
 
 Scope:
-- Composition integration harness: 8 scenarios × per-pattern render tests + aggregate readability metrics.
-- Manual QA checklist document for demo readiness.
-- Dark/light mode verification across every pattern.
-- Accessibility sweep (keyboard + focus + ARIA).
-- 9-probe regression + close-out report + push.
+- Shallow composition integration harness (G-4-6): 5 pattern smoke tests + 2 scaffold-bridge smoke tests.
+- Scaffold-bridge artifact: one block regenerated with admin UI, committed byte-for-byte.
+- Manual QA checklist document (markdown) for preview-URL visual verification.
+- Dark/light mode sweep across all 5 patterns.
+- Keyboard + focus sweep.
+- 9-probe regression probes.
+- Close-out report with **UI Multiplier Calibration Analysis** (per §11) — the first UI LOC data point for future audits.
 
-**Estimate:** ~1,100 LOC (100 prod + 700 tests/harness + ~300 close-out artifacts).
+**Est. LOC:** ~1,400 (100 prod + 700 harness + ~600 close-out artifacts + scaffold example).
 
-### 7.5 Total: 4 PRs projected
+### 7.4 Total: 3 PRs
 
-Sum: 1,350 + 1,800 + 2,000 + 1,100 = **~6,250 LOC.** Matches §6.2 estimate.
+Sum: 1,350 + 2,500 + 1,400 = **~5,250 LOC.** Matches §2.4 projection (5,235) within 0.3%.
 
-**Why 4 PRs not 3:** the rescope message's 3-PR estimate didn't explicitly include the scaffold→UI bridge OR the composition integration harness. Separating them into PR 3 and PR 4 keeps each PR reviewable + testable independently.
+**Stop-trigger for the slice:** 5,200 LOC per Max's gate-resolution message. Projection is 50 LOC over. §11 calibration is load-bearing for whether PR 2 stays at 2,500 or adjusts.
 
 ---
 
-## 8. Gate items — OPEN
+## 8. Gate items — all APPROVED 2026-04-23
 
-### G-4-1 — Scope envelope decision
+### G-4-1 — APPROVED: Option C (hybrid split into SLICE 4a + 4b)
 
-**Context:** audit projects ~6,250 LOC, 57% above the rescope message's 4,000 LOC upper bound.
+**Rationale:** 6,265 LOC projection is two slices worth of work. Natural seam between admin patterns + scaffold bridge (4a) and customer-facing patterns + migrations (4b). Splitting lets each unit ship with focused attention, produces UI calibration data from 4a that improves 4b's estimation, honors audit-time trigger discipline without forcing quality cuts.
 
-**Option A:** Accept the expanded envelope. Rationale: rescope pre-dated the L-17 UI calibration + didn't explicitly price the scaffold→UI bridge. Ship all 4 PRs at projected LOC.
+**SLICE 4a = admin + scaffold bridge.** Estimate refined per §2.4: ~5,235 LOC (with stop-trigger 5,200 — right at the edge; §11 calibration is load-bearing).
 
-**Option B:** Scope-cut to fit the original envelope.
-- B-1: drop the scaffold→UI bridge (defer to follow-up slice). Saves ~900 LOC. Final ~5,350.
-- B-2: drop the 3 customer-facing patterns (defer to follow-up). Saves ~1,700 LOC. Final ~4,550.
-- B-3: ship 5 admin patterns only; defer customer + scaffold bridge. Saves ~2,600 LOC. Final ~3,650.
+**SLICE 4b = customer-facing + deeper integration.** Audit drafted AFTER 4a ships with empirical UI multiplier data. Estimate ~2,265 LOC (will refine with 4a data).
 
-**Option C:** Hybrid — ship PR 1 + PR 2 (admin patterns + theme bridge) as SLICE 4 proper. Split scaffold→UI and customer patterns into a follow-up SLICE 4b.
+### G-4-2 — APPROVED: Scaffold → UI automatic default with smart skip
 
-**Audit recommendation:** Option A. The scaffold→UI bridge is the primary builder-facing payoff of the slice — scaffolding without admin UI generation is half-done. Customer-facing patterns without scaffold→UI means two builder-visible gaps. A and C both ship the full vision; A is simpler.
+**Resolution:** scaffold generates admin UI files automatically when the block has primary entities + CRUD tools. Skips UI generation for blocks with no user-facing entities (subscription-only, scheduled-triggers-only). Builders can delete or customize generated files.
 
-**Decision needed:** A / B-1 / B-2 / B-3 / C.
+**Detection heuristic (proposed; refine during PR 2):**
+- Generate admin UI when: spec has ≥1 tool with `emits` OR ≥1 tool that appears to be CRUD-shaped (name starts with `create_` / `list_` / `get_` / `update_` / `delete_`).
+- Skip when: spec has only subscription handlers and zero primary tools.
 
-### G-4-2 — Scaffold → UI bridge opt-in vs automatic
+Fall-through: when in doubt, generate. Easier to delete than to discover missing files.
 
-**Option A:** Opt-in via `--emit-admin-ui` CLI flag. Builders explicitly request it.
+`--no-admin-ui` CLI flag opts out when the heuristic guesses wrong.
 
-**Option B:** Automatic by default; `--no-admin-ui` opts out. Most scaffolded blocks are user-visible so this is the common case.
+### G-4-3 — APPROVED: Proof-only migration — CRM block as the reference
 
-**Audit recommendation:** Option B (automatic). Mirrors the SKILL.md G-4 tier 2 default-with-TODO posture: generate sensible defaults + let builders grep TODO markers if they want to strip UI.
+**Resolution:** migrate ONE block (**CRM** — the most complex existing admin UI, per Max) in PR 1 as pattern validation + visual reference. Systematic migration of the remaining 12 blocks becomes a follow-up ticket (not a separate audited slice).
 
-**Decision needed:** A or B.
+**Why CRM over the originally-proposed `activities`:** CRM exercises every pattern at scale — multiple entity types (contacts, deals, activities, custom objects), the activity timeline (which becomes `<ActivityFeed>` in PR 2), rich detail pages (become `<BlockDetailPage>` in PR 2). Proving patterns work on CRM validates them for every smaller block automatically.
 
-### G-4-3 — Existing block UI migration
+**Follow-up ticket:** `tasks/follow-up-block-ui-migration.md` captures the 12 remaining blocks + estimated ~1,500-2,500 LOC of migration work. Not in SLICE 4a / 4b scope.
 
-**Option A (opportunistic):** existing hand-authored block UIs are NOT migrated to new composition patterns in this slice. They continue working. Each block migrates opportunistically (when someone touches it for another reason).
+### G-4-4 — APPROVED: Typed functional API
 
-**Option B (PR 1 proof migration):** one existing block (`activities` proposed) is migrated to `<PageShell> + <EntityTable>` in PR 1 as a proof artifact + visual reference. Other blocks remain opportunistic.
+**Resolution:** `tokens.color.primary()`, `tokens.space("md")`, `tokens.shadow("card")`, `tokens.radius("md")` — every call is a typed function. Typos caught at `tsc --noEmit`. Centralized override points for future theme work.
 
-**Option C (systematic migration):** all 13 block surfaces migrated to the new patterns as part of SLICE 4. Massive scope — adds 1,500-2,500 LOC alone. Not recommended without separate sprint.
+**Why not the mirror-CSS-vars approach:** raw string constants like `tokens.background` don't prevent `tokens.backgrund` typos. Functional API exposes arg-literal enums → typos fail typecheck. L-22 structural enforcement applied.
 
-**Audit recommendation:** Option B. One proof migration validates the patterns work on real data; staying opt-in for the rest keeps scope contained.
+**Implementation sketch:**
+```ts
+// lib/ui/tokens.ts
+type ColorRole = "primary" | "accent" | "secondary" | "muted" | "card" | "destructive" | ...;
+type SpaceStep = "xs" | "sm" | "md" | "lg" | "xl";
+type ShadowKind = "card" | "modal" | "dropdown" | "xs" | "sm";
+type RadiusStep = "sm" | "md" | "lg" | "xl";
 
-**Decision needed:** A, B, or C.
+export const tokens = {
+  color: (role: ColorRole) => `var(--${role})`,
+  space: (step: SpaceStep) => `var(--space-${step})`,
+  shadow: (kind: ShadowKind) => `var(--shadow-${kind})`,
+  radius: (step: RadiusStep) => `var(--radius-${step})`,
+};
+```
 
-### G-4-4 — Typed design-token wrapper scope
+Consumers pass the result as a Tailwind arbitrary value: `className={`bg-[${tokens.color("primary")}]`}`. Or (preferred) via a helper wrapper: `className={bg(tokens.color("primary"))}`. PR 1 picks the ergonomic shape.
 
-**Option A:** mirror CSS var names as TS constants. `tokens.background`, `tokens.primary`, etc. No invariants beyond "name matches".
+### G-4-5 — DEFERRED to SLICE 4b
 
-**Option B:** richer API — `tokens.color(role: "primary" | "accent" | ...)`, `tokens.spacing(n: 0 | 1 | 2 | 4 | 6 | 8)`, `tokens.shadow(kind: "card" | "modal" | ...)`. Enforces structured usage.
+Customer auth surface is customer-facing work, belongs in 4b alongside `<PortalLayout>` / `<CustomerShell>`. 4a explicitly does not modify `portal/[orgSlug]/login/page.tsx`.
 
-**Audit recommendation:** Option B. L-22 structural enforcement: functions > raw strings. Prevents typos at compile time + gives centralized override points.
+### G-4-6 — APPROVED: Shallow harness for SLICE 4a
 
-**Decision needed:** A or B.
+**Resolution:** smoke tests — patterns render without crash, theme flows through via CSS vars, scaffolded block UI mounts successfully on a representative BlockSpec. No interaction scripting, no axe-core accessibility audits, no visual snapshots.
 
-### G-4-5 — Customer-facing auth surface
+**Deep harness deferred to post-launch** (as its own tooling slice or opportunistic polish). Tooling setup (Storybook, Chromatic, axe-core, Playwright) is multi-day work and not on the critical path for primitive completion.
 
-Context: magic-link auth is shipped (§7.5). The UI side exists as `portal/[orgSlug]/login/page.tsx` (15 LOC — minimal).
-
-**Option A:** leave the auth UI as-is. SLICE 4 customer patterns (`<BookingWidget>`, `<IntakeForm>`) don't need auth; the portal has its own flow.
-
-**Option B:** ship a themed `<CustomerLogin>` component that the portal's login page adopts. Small LOC (~100) + aligns the authenticated-customer entry with SLICE 4's theming.
-
-**Audit recommendation:** Option B if PR budget permits (~100 LOC in PR 3 addition). Option A if not.
-
-**Decision needed:** A or B (contingent on G-4-1 decision).
-
-### G-4-6 — Composition integration harness depth
-
-Option A (deep): 8 scenarios × full render assertion + snapshot + accessibility probe. ~500 LOC harness.
-
-Option B (shallow): 8 scenarios × render-without-crash + primary interaction test. ~300 LOC harness.
-
-**Audit recommendation:** Option B. First UI slice; shallow coverage is enough to catch regressions. Deep accessibility tooling (axe-core integration, contrast probing) can follow in a polish slice.
-
-**Decision needed:** A or B.
+**Harness scope in PR 3:**
+- 5 smoke tests (one per admin pattern): component mounts, renders expected DOM landmarks, applies theme CSS vars.
+- 2 scaffold-bridge smoke tests: scaffold a test block → admin UI files generated → `pnpm build` succeeds on the output.
+- Manual QA checklist document in the close-out report for human visual verification at preview URL.
 
 ---
 
@@ -465,7 +506,86 @@ Option B (shallow): 8 scenarios × render-without-crash + primary interaction te
 
 ---
 
-## 11. End-to-End Flow continuity (per Max's §8 requirement)
+## 11. UI Test Multiplier Calibration Checkpoint
+
+SLICE 4a is the first UI-heavy slice in the sprint. The 2.5x test multiplier used in §2.4 + §6 is informed by industry patterns but **not empirically validated** against SeldonFrame's own UI work.
+
+**At PR 1 close**, compare actual test LOC vs audit projection for the PageShell + EntityTable + CRM proof migration components. Calculate the effective UI test multiplier:
+
+```
+effective_multiplier = actual_test_LOC / actual_prod_LOC
+```
+
+### 11.1 Decision rules
+
+**Within ±15% of 2.5x** (i.e., 2.125x to 2.875x): proceed with PR 2 unchanged.
+
+**Materially different (>15%)**:
+1. Recalculate PR 2 and PR 3 estimates using the corrected multiplier.
+2. If corrected total still lands ≤5,200 LOC (the stop trigger): proceed with PR 2, note recalibration in PR 1 close-out.
+3. If corrected total exceeds the trigger: **stop → audit-time conversation → Max decides whether to accept or scope-cut**. L-21 discipline: stops are stops.
+
+### 11.2 Artifacts
+
+PR 1's close-out report ships a "**UI Multiplier Calibration Analysis**" section documenting:
+- Actual PR 1 prod LOC per component + aggregate.
+- Actual PR 1 test LOC per component + aggregate.
+- Computed effective multiplier.
+- Recalibrated PR 2 + PR 3 estimates if applicable.
+- L-17 addendum proposal if the multiplier lands systematically off (e.g., "UI components consistently run 3.5x test multiplier, not 2.5x — update the three-level spectrum").
+
+### 11.3 Why this matters beyond SLICE 4a
+
+The first empirical UI LOC data point calibrates:
+- **SLICE 4b audit** — customer-facing patterns estimated using the validated multiplier.
+- **Future UI work** — scaffolding UI improvements, post-launch polish slices.
+- **The L-17 addendum set** — currently captures dispatcher-heavy slices (SLICE 3) + artifact categories (SLICE 2+). SLICE 4a adds the UI-component axis.
+
+Skipping the calibration checkpoint means SLICE 4b re-runs the SLICE 3 overshoot problem — audit estimates based on unvalidated multipliers. L-20 ground-truth + L-17 calibration are both about replacing guesses with evidence.
+
+---
+
+## 12. SLICE 4b deferred scope
+
+Documented here so nothing is lost between SLICE 4a close and SLICE 4b audit kickoff.
+
+### 12.1 In SLICE 4b scope
+
+| Component / surface | Reason deferred |
+|---|---|
+| `<PortalLayout>` / `<CustomerShell>` | Customer-facing layout unifier. Scope-split to land with other customer work. |
+| `<CustomerDataView>` | Customer portal data display (activity feed, resources, messages). |
+| `<CustomerActionForm>` | Themed form for customer-initiated actions (booking, intake). |
+| `<BookingWidget>` migration | Move existing `book/[orgSlug]/[bookingSlug]/page.tsx` to the composed `<CustomerShell>` + `<CustomerActionForm>` pattern. |
+| `<IntakeForm>` migration | Move existing `forms/[id]/[formSlug]/page.tsx` similarly. |
+| Customer auth surface (G-4-5 deferred) | Optional themed `<CustomerLogin>` wrapper. Portal auth mechanism unchanged. |
+| Scaffold → Customer UI bridge extension | Scaffolded blocks with customer-facing surfaces (booking-shaped, intake-shaped) get customer UI files automatically. |
+| Customer-facing integration harness | Shallow smoke tests mirroring 4a's harness, scoped to customer patterns. |
+
+### 12.2 Estimate frame
+
+**Current rough estimate:** ~2,265 LOC (using the un-calibrated 2.5x multiplier). Will refine with 4a data.
+
+If 4a's calibrated multiplier runs higher (say 3.0x): 4b projection rises to ~2,600 LOC.
+If lower (2.0x): falls to ~1,850 LOC.
+
+### 12.3 Audit timing
+
+Draft SLICE 4b audit **after** SLICE 4a's PR 3 close-out ships — the multiplier + the actual patterns exercised in 4a both inform 4b's design decisions. Drafting 4b now would be re-running the pre-calibration estimation error.
+
+### 12.4 Dependencies carried forward
+
+SLICE 4b builds on SLICE 4a's:
+- Typed design-token API (`lib/ui/tokens.ts`).
+- Admin theme bridge pattern → becomes the template for customer theme improvements.
+- 5 admin patterns (some compose directly — `<CompositionCard>` reusable in customer surfaces).
+- Scaffold → UI bridge architecture → extend for customer-facing generation.
+
+**Zero customer-facing code** ships in 4a. Portal login, booking widget, intake form, landing pages all remain exactly as they are post-4a close.
+
+---
+
+## 13. End-to-End Flow continuity (per Max's §8 requirement)
 
 ### 11.1 Scaffolded blocks gain admin UIs automatically (G-4-2 contingent)
 
@@ -499,45 +619,73 @@ Flow unchanged from today (§7.5). SLICE 4 optionally adds `<CustomerLogin>` com
 
 ---
 
-## 12. Reference
+## 14. Reference
 
-### 12.1 Builds on SLICE 2 scaffolding
+### 14.1 Builds on SLICE 2 scaffolding
 
 - `packages/crm/src/lib/scaffolding/render/*` — existing template renderers. Bridge adds `admin-ui/` subdirectory with page-renderer + component-renderer.
 - `packages/crm/src/lib/scaffolding/spec.ts` — BlockSpec interface. Bridge reads `tools` + `produces` fields.
-- CLI wrapper (`scripts/scaffold-block.js` + `.impl.ts`) — bridge adds `--emit-admin-ui` flag + wiring.
+- CLI wrapper (`scripts/scaffold-block.js` + `.impl.ts`) — bridge wires the automatic-default generation (G-4-2) + `--no-admin-ui` opt-out.
 
-### 12.2 Informs future SLICE 9 (worked example + composability validation)
+### 14.2 Informs SLICE 4b
 
-SLICE 9 ships a full worked demo exercising the primitive stack end-to-end. SLICE 4 gives it the UI — without SLICE 4, SLICE 9 would be CLI-only.
+See §12 for full scope. Calibration data from 4a PR 1 (§11) refines 4b's LOC estimates.
 
-### 12.3 Informs future "SLICE 4b" polish
+### 14.3 Informs future SLICE 9 (worked example + composability validation)
 
-If G-4-1 resolves to Option C (split), the second half becomes SLICE 4b. Otherwise SLICE 4 is self-contained and SLICE 5 (scheduled triggers) follows.
+SLICE 9 ships a full worked demo exercising the primitive stack end-to-end. SLICE 4 (a + b combined) gives it the UI — without SLICE 4, SLICE 9 would be CLI-only.
 
----
+### 14.4 Deferred follow-ups
 
-## 13. Stop-gate
-
-**AUDIT ONLY.** No code until:
-- G-4-1 through G-4-6 all resolve (§8).
-- Max confirms LOC envelope decision per G-4-1.
-- Ground-truth §3 acknowledged, including the magic-link auth already-shipped finding (reduces original supporting-primitives scope).
-- Quality bar §4 acknowledged.
-
-**Expected revision rounds: 1-2.** Highest-leverage decision is G-4-1 (scope envelope).
+- `tasks/follow-up-block-ui-migration.md` (to be written in SLICE 4a PR 3 close-out): the 12 remaining blocks that didn't get the CRM proof migration. ~1,500-2,500 LOC across the set. Opportunistic.
 
 ---
 
-## 14. Self-review changelog (2026-04-23, pre-approval)
+## 15. Stop-gate
 
+**APPROVED 2026-04-23** for SLICE 4a. All six gates resolved (§8). Scope envelope accepted per G-4-1 Option C. LOC projection ~5,250, stop-trigger 5,200.
+
+**PR 1 begins immediately after this audit revision commits + pushes.** Expected 3-6 mini-commits:
+1. Typed design-token wrapper + tests
+2. Admin theme bridge
+3. `<PageShell>` + `<BlockListPage>` + tests
+4. `<EntityTable>` + tests
+5. CRM proof migration
+6. PR 1 close-out + §11 calibration analysis
+
+**Stop after PR 1 green bar + push + §11 calibration.** If multiplier materially off, audit-time conversation before PR 2. Otherwise proceed to PR 2.
+
+---
+
+## 16. Self-review changelog
+
+**2026-04-23, pre-approval draft:**
 - §3.5 surfaces magic-link auth as ALREADY SHIPPED — reduces SLICE 4 scope vs the rescope message's assumption.
 - §3.7 surfaces scaffold → UI bridge as the LARGEST net-new code area.
 - §6 applies the post-SLICE-3 corrected L-17 methodology: 2.5x UI test multiplier + dispatcher-count scaling on the 8 composition patterns. Projection ~6,265 LOC.
 - §6.3 explicitly notes the ~57% overrun vs the rescope message's 4,000 LOC upper bound. Forces G-4-1 decision at audit time per L-17 audit-time-trigger addendum.
-- §6.5 acknowledges UI LOC calibration data doesn't yet exist. The 2.5x multiplier is a first estimate; SLICE 4 close-out will produce calibration evidence.
 - §7 proposes 4 PRs instead of the rescope's 3 — the scaffold→UI bridge + composition harness each deserve their own PR for review focus.
-- §11 end-to-end flow per Max's §8 requirement.
 - §4 quality bar explicit — shadcn aesthetic, Twenty/Cal/Linear references, 8 quality gates for PR close.
 
 **Open self-critique:** UI LOC estimates are the weakest part of this audit. Without prior UI-heavy slice data, the 2.5x multiplier is informed guess, not calibrated pattern. SLICE 4 close-out will generate the first UI calibration data point.
+
+**2026-04-23, post-gate-resolution revision (G-4-1 Option C):**
+- §1 / title updated: audit is now SLICE 4a + 4b split. 4a is admin + scaffold bridge; 4b drafted after 4a close with empirical multiplier data.
+- §2.1 admin pattern names aligned with Max's naming: `<PageShell>` + `<BlockListPage>`, `<BlockDetailPage>`, `<EntityFormDrawer>`, `<ActivityFeed>`, `<CompositionCard>`. Replaces the earlier generic `<EntityForm> / <EntityDetail> / <EntityKanban>` set.
+- §2.2 customer patterns explicitly deferred to SLICE 4b with estimate frame + scope pointer.
+- §2.4 added — SLICE 4a totals (~5,235 LOC projected). Notes that stop-trigger is 5,200 (Max-set) — 35 LOC margin makes §11 calibration load-bearing.
+- §4 quality bar expanded per Max's additions — typography / spacing / empty states / loading as skeletons / error states / mobile breakpoints.
+- §7 PR split: 3 PRs for 4a (Max's specified structure).
+- §8 all gates resolved:
+  - G-4-1: Option C (hybrid split into 4a + 4b)
+  - G-4-2: scaffold → UI automatic-default with smart skip (heuristic on tool shape)
+  - G-4-3: proof-only migration — CRM as the reference (not activities)
+  - G-4-4: typed functional API (`tokens.color.primary()`)
+  - G-4-5: DEFERRED to SLICE 4b
+  - G-4-6: shallow harness for 4a
+- §11 NEW: UI Test Multiplier Calibration Checkpoint. First empirical UI LOC data point from PR 1 close calibrates PR 2/3 + SLICE 4b estimates.
+- §12 NEW: SLICE 4b deferred scope — full frame so nothing lost between 4a close and 4b audit.
+- §13 → renumber of previous §11 End-to-End Flow.
+- §14 Reference renumbered + updated subsections.
+- §15 Stop-gate set to APPROVED with PR 1 mini-commit plan.
+- §16 self-review changelog split into pre-approval + post-gate-resolution entries.
