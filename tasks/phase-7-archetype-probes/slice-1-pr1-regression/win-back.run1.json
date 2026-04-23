@@ -57,8 +57,8 @@
       "tool": "send_email",
       "args": {
         "to": "{{email}}",
-        "subject": "A little something from Bright Smile — 20% off whenever you're ready",
-        "body": "Hi {{firstName}},\n\nWe saw you cancelled recently — no pressure at all, and no hard feelings. Life happens, and taking care of your teeth shouldn't feel like one more thing to stress about.\n\nIf you ever want to come back for a painless cleaning or a free new-patient consult, here's 20% off on us:\n\n{{coupon.code}}\n\nIt's good for the next 14 days — just use it when you book.\n\nAnd if something about your last visit didn't sit right, I'd genuinely love to hear it. Just hit reply — a real person reads every one.\n\nWarmly,\nThe Bright Smile Dental team",
+        "subject": "A thought from Bright Smile — 20% off whenever you're ready",
+        "body": "Hi {{firstName}},\n\nWe saw you cancelled recently, and that's totally okay — no guilt trips here. We just wanted you to know the door's always open, and your smile is always welcome back.\n\nIf and when the timing feels right, here's 20% off your next visit:\n\n{{coupon.code}}\n\nIt's good for the next 14 days, and you can use it on a cleaning, a check-up, or even a new-patient consult (those are still free, by the way).\n\nIf something about your last experience didn't feel right, I'd genuinely like to hear it — just hit reply. We read every message, and we're always trying to make dental care feel a little less scary.\n\nTake care of yourself,\nThe Bright Smile Dental team",
         "contactId": "{{contactId}}"
       },
       "next": "wait_before_reminder"
@@ -75,7 +75,7 @@
       "tool": "send_sms",
       "args": {
         "to": "{{phone}}",
-        "body": "Hi {{firstName}}, it's Bright Smile Dental — quick heads up your 20% off code {{coupon.code}} expires in a few days. Happy to see you back whenever you're ready, no pressure.",
+        "body": "Hey {{firstName}}, it's Bright Smile Dental — quick heads up that your 20% off code {{coupon.code}} expires in a few days. No pressure at all, just didn't want you to miss it if you'd been thinking about coming back.",
         "contact_id": "{{contactId}}"
       },
       "next": "log_winback_complete"

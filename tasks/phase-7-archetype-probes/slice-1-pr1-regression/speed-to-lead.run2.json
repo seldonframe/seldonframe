@@ -25,7 +25,7 @@
       "id": "qualify_conversation",
       "type": "conversation",
       "channel": "sms",
-      "initial_message": "Hi {{contact.firstName}}, it's Bright Smile Dental — thanks for reaching out about a new-patient consultation (it's on us). Any day/time that works best for you? And do you have dental insurance you'd like us to check, or not sure yet?",
+      "initial_message": "Hi {{contact.firstName}}, it's Bright Smile Dental — thanks for reaching out about a new-patient visit! Happy to get you booked (consultation is on us). Any preferred day/time that works? And do you have dental insurance you'd like us to check?",
       "exit_when": "The prospect has shared a preferred appointment day/time for their new-patient consultation AND confirmed their insurance status (yes / no / unsure).",
       "on_exit": {
         "extract": {
@@ -70,7 +70,7 @@
       "args": {
         "to": "{{email}}",
         "subject": "You're booked with Bright Smile Dental 🦷",
-        "body": "Hi {{contact.firstName}},\n\nYou're all set for your free new-patient consultation at Bright Smile Dental on {{preferred_start}}. We're looking forward to meeting you.\n\nWhat to expect: a relaxed 45-minute visit with modern, gentle tech — no pressure, no judgment, just plenty of time for your questions. If you mentioned insurance, we'll verify your coverage before you arrive so there are no surprises.\n\nNeed to reschedule or have a question before your visit? Just reply to this email or text us back — we're happy to help.\n\nSee you soon,\nThe Bright Smile Dental team",
+        "body": "Hi {{contact.firstName}},\n\nYou're all set for {{preferred_start}} — we're looking forward to meeting you.\n\nWhat to expect: a relaxed 45-minute new-patient consultation, zero pressure, and plenty of time for questions. Our goal is simple — make dental care feel less scary, one visit at a time.\n\nNeed to move things around? Just reply to this email or text us back and we'll take care of it.\n\nSee you soon,\nThe Bright Smile Dental team",
         "contactId": "{{contactId}}"
       },
       "next": null

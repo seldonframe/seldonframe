@@ -57,8 +57,8 @@
       "tool": "send_email",
       "args": {
         "to": "{{email}}",
-        "subject": "A little something from Bright Smile — 20% off whenever you're ready",
-        "body": "Hi {{firstName}},\n\nWe saw you cancelled recently — no pressure at all, and no hard feelings. Life happens, and taking care of your teeth shouldn't feel like one more thing to stress about.\n\nIf you ever want to come back for a painless cleaning or a free new-patient consult, here's 20% off on us:\n\n{{coupon.code}}\n\nIt's good for the next 14 days — just use it when you book.\n\nAnd if something about your last visit didn't sit right, I'd genuinely love to hear it. Just hit reply — a real person reads every one.\n\nWarmly,\nThe Bright Smile Dental team",
+        "subject": "A small thank-you from Bright Smile — 20% off whenever you're ready",
+        "body": "Hi {{firstName}},\n\nWe saw you cancelled your plan with Bright Smile Dental — totally okay, no pressure at all. Taking care of your teeth shouldn't feel stressful, and neither should coming back.\n\nIf you ever want to pick up where we left off, here's 20% off your next visit (cleaning, check-up, or a fresh new-patient consult — your call):\n\n{{coupon.code}}\n\nIt's good for the next 14 days. Just mention it when you book, or apply it at checkout.\n\nAnd if something about your last experience didn't sit right, I'd really like to hear about it — just hit reply. A real person reads every message.\n\nTake care either way,\nThe Bright Smile Dental team",
         "contactId": "{{contactId}}"
       },
       "next": "wait_before_reminder"
@@ -75,7 +75,7 @@
       "tool": "send_sms",
       "args": {
         "to": "{{phone}}",
-        "body": "Hi {{firstName}}, it's Bright Smile Dental — quick heads up your 20% off code {{coupon.code}} expires in a few days. Happy to see you back whenever you're ready, no pressure.",
+        "body": "Hi {{firstName}}, it's Bright Smile Dental — just a quick heads up your 20% off code {{coupon.code}} expires in a few days. Use it whenever you're ready, no pressure. Reply STOP to opt out.",
         "contact_id": "{{contactId}}"
       },
       "next": "log_winback_complete"

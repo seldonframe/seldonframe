@@ -25,7 +25,7 @@
       "id": "qualify_conversation",
       "type": "conversation",
       "channel": "sms",
-      "initial_message": "Hi {{contact.firstName}}, it's Bright Smile Dental — thanks for reaching out about a new-patient consultation (it's on us). Any day/time that works best for you? And do you have dental insurance you'd like us to check, or not sure yet?",
+      "initial_message": "Hi {{contact.firstName}}, it's Bright Smile Dental — thanks for reaching out about a new-patient visit! Your consultation is on us. Any day/time that works best for you? And do you have dental insurance you'd like us to check, or not sure yet?",
       "exit_when": "The prospect has shared a preferred appointment day/time for their new-patient consultation AND confirmed their insurance status (yes / no / unsure).",
       "on_exit": {
         "extract": {
@@ -69,8 +69,8 @@
       "tool": "send_email",
       "args": {
         "to": "{{email}}",
-        "subject": "You're booked with Bright Smile Dental 🦷",
-        "body": "Hi {{contact.firstName}},\n\nYou're all set for your free new-patient consultation at Bright Smile Dental on {{preferred_start}}. We're looking forward to meeting you.\n\nWhat to expect: a relaxed 45-minute visit with modern, gentle tech — no pressure, no judgment, just plenty of time for your questions. If you mentioned insurance, we'll verify your coverage before you arrive so there are no surprises.\n\nNeed to reschedule or have a question before your visit? Just reply to this email or text us back — we're happy to help.\n\nSee you soon,\nThe Bright Smile Dental team",
+        "subject": "You're booked with Bright Smile Dental — see you soon",
+        "body": "Hi {{contact.firstName}},\n\nYou're all set for {{preferred_start}} at Bright Smile Dental — we're so glad you're coming in.\n\nHere's what to expect: a relaxed 45-minute new-patient visit, a gentle look around, and plenty of time for any questions. No pressure, no upsell — just a proper introduction to your smile.\n\nNeed to move things around? Just reply to this email or text us back and we'll sort it.\n\nSee you soon,\nThe Bright Smile Dental team",
         "contactId": "{{contactId}}"
       },
       "next": null
