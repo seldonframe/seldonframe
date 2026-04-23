@@ -44,6 +44,30 @@ is a code-gen assistant here, not a platform admin.
 Claude Code reads the builder's natural-language intent and
 constructs a `BlockSpec` JSON object matching the shape below.
 
+**Before constructing the spec, Claude should Read:**
+
+1. Reference anatomies — the composition-contract shape of two
+   existing blocks. These show the canonical layout for produces /
+   consumes / tools / subscriptions:
+   - `packages/crm/src/blocks/notes.block.md` (simple tool-only
+     block — the PR 1 C7 smoke-test)
+   - `packages/crm/src/blocks/crm.block.md` (real-world anatomy
+     with `## Subscriptions` declaring a reactive handler)
+2. Canonical NL → BlockSpec examples (these are hand-curated
+   translation lessons in code form):
+   - `packages/crm/src/lib/scaffolding/nl/example-specs.ts` —
+     EXAMPLE_SPECS export. Two examples: tool-only (contact-notes)
+     + reactive-with-subscription (auto-activity-log).
+3. Hard constraints on BlockSpec shape (the schema Claude must
+   honor):
+   - `packages/crm/src/lib/scaffolding/spec.ts` — BlockSpecSchema
+     + field patterns (slug, tool name, handler name, event name,
+     subscription event).
+
+Reading order: anatomies first → schema → examples. Each reads in
+under 30 seconds; together they give Claude the concrete pattern
+needed to translate NL confidently.
+
 **Required fields:**
 - `slug`: kebab-case lowercase, e.g. `"notes"`, `"client-satisfaction"`. Cannot collide with reserved core blocks: `crm`, `caldiy-booking`, `email`, `sms`, `payments`, `formbricks-intake`, `landing-pages`.
 - `title`: human-readable title, e.g. `"Notes"`, `"Client Satisfaction"`.
