@@ -39,7 +39,7 @@ export async function sendEmailFromApi(params: {
       email: toEmail,
       reason: suppression.reason,
       contactId: params.contactId,
-    });
+    }, { orgId: params.orgId });
     return { emailId: null, contactId: params.contactId, suppressed: true, reason: suppression.reason };
   }
 
@@ -105,7 +105,7 @@ export async function sendEmailFromApi(params: {
     await emitSeldonEvent("email.sent", {
       emailId: created.id,
       contactId: created.contactId,
-    });
+    }, { orgId: params.orgId });
   }
 
   await incrementEmailSendUsage(params.orgId);

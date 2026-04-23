@@ -28,8 +28,8 @@ function withFreshBus(): void {
   setSeldonEventBus(createInMemoryEventBus());
 }
 
-describe("emitSeldonEvent — in-memory dispatch (pre-2c behavior preserved)", () => {
-  test("fires registered listeners when called without options", async () => {
+describe("emitSeldonEvent — in-memory dispatch (preserved across SLICE 1-a)", () => {
+  test("fires registered listeners when called with required orgId", async () => {
     withFreshBus();
     const received: Array<{ type: string; data: unknown }> = [];
     const bus = getSeldonEventBus();
@@ -37,34 +37,35 @@ describe("emitSeldonEvent — in-memory dispatch (pre-2c behavior preserved)", (
       received.push(event);
     });
 
-    await emitSeldonEvent("contact.created", { contactId: "ctc_123" });
+    await emitSeldonEvent(
+      "contact.created",
+      { contactId: "ctc_123" },
+      { orgId: "00000000-0000-0000-0000-000000000000" },
+    );
 
     assert.equal(received.length, 1);
     assert.equal(received[0].type, "contact.created");
     assert.equal((received[0].data as { contactId: string }).contactId, "ctc_123");
   });
 
-  test("fires registered listeners when called WITH options.orgId (additive, not replacing)", async () => {
+  test("orgId being required is a compile-time invariant (SLICE 1-a G-1a-1)", async () => {
+    // SLICE 1-a (2026-04-22) made `options: { orgId }` required. A
+    // caller passing only (type, data) now fails typecheck — the
+    // green bar catches the bug the 2c optional shape hid from L-22.
+    // This test is a runtime anchor for the invariant; the real
+    // enforcement is `pnpm typecheck`.
     withFreshBus();
-    const received: Array<{ type: string; data: unknown }> = [];
-    const bus = getSeldonEventBus();
-    bus.on("form.submitted", (event) => {
-      received.push(event);
-    });
-
     await emitSeldonEvent(
       "form.submitted",
       { formId: "f_intake", contactId: "ctc_123", data: {} },
       { orgId: "00000000-0000-0000-0000-000000000000" },
     );
-
-    assert.equal(received.length, 1, "in-memory listener must still fire when orgId is provided");
-    assert.equal(received[0].type, "form.submitted");
+    assert.ok(true, "3-arg signature resolves without throwing");
   });
 });
 
 describe("emitSeldonEvent — durable write (best-effort per audit §4.3)", () => {
-  test("does not throw when DB is unreachable + orgId is provided", async () => {
+  test("does not throw when DB is unreachable", async () => {
     withFreshBus();
     // Test env has no DATABASE_URL → neon() points at localhost which
     // doesn't exist → insert rejects → bus.ts try/catch swallows.
@@ -76,14 +77,5 @@ describe("emitSeldonEvent — durable write (best-effort per audit §4.3)", () =
       { orgId: "00000000-0000-0000-0000-000000000000" },
     );
     assert.ok(true, "emitSeldonEvent resolved without throwing");
-  });
-
-  test("does not attempt DB write when orgId is omitted", async () => {
-    withFreshBus();
-    // Without orgId, the DB path is skipped entirely. This test
-    // verifies the in-memory-only path still works in test envs
-    // that have no DB infrastructure at all.
-    await emitSeldonEvent("contact.updated", { contactId: "ctc_456" });
-    assert.ok(true, "emitSeldonEvent (no orgId) resolved without touching DB");
   });
 });

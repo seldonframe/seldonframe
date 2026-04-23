@@ -118,7 +118,7 @@ async function handleStatusCallback(params: {
       await emitSeldonEvent("sms.delivered", {
         smsMessageId: row.id,
         contactId: row.contactId,
-      });
+      }, { orgId: params.orgId });
       break;
 
     case "failed":
@@ -136,7 +136,7 @@ async function handleStatusCallback(params: {
         smsMessageId: row.id,
         contactId: row.contactId,
         reason: params.errorMessage ?? params.errorCode ?? params.status,
-      });
+      }, { orgId: params.orgId });
       // Carrier-reported permanent failures (error code 30003, 30005,
       // 30006) imply the number is bad. Auto-suppress so future sends
       // skip it.
@@ -239,7 +239,7 @@ export async function POST(request: Request) {
       phone: fromNumber,
       reason: "stop_keyword",
       contactId: null,
-    });
+    }, { orgId: orgId });
     return NextResponse.json({ ok: true, action: "auto_suppressed" });
   }
 
@@ -259,7 +259,7 @@ export async function POST(request: Request) {
     smsMessageId: inbound.id,
     contactId,
     conversationId: null,
-  });
+  }, { orgId: orgId });
 
   // If we know which contact this is from, route through the runtime
   // for a Soul-aware reply. Anonymous inbound (phone not in CRM) is

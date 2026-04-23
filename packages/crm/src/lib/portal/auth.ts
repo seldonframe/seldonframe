@@ -162,7 +162,7 @@ export async function verifyPortalAccessCodeAction(orgSlug: string, email: strin
 
   await setPortalSessionCookie(token);
 
-  await emitSeldonEvent("portal.login", { contactId: contact.id });
+  await emitSeldonEvent("portal.login", { contactId: contact.id }, { orgId: org.id });
 
   return { success: true };
 }
@@ -258,7 +258,7 @@ export async function establishPortalMagicSession(input: {
   });
 
   await setPortalSessionCookie(refreshToken);
-  await emitSeldonEvent("portal.login", { contactId: session.contact.id });
+  await emitSeldonEvent("portal.login", { contactId: session.contact.id }, { orgId: session.orgId });
 
   return {
     orgSlug: session.orgSlug,

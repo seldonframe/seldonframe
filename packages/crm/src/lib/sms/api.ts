@@ -59,7 +59,7 @@ export async function sendSmsFromApi(params: {
       phone: toNumber,
       reason: suppression.reason,
       contactId: params.contactId,
-    });
+    }, { orgId: params.orgId });
     return {
       smsId: null,
       contactId: params.contactId,
@@ -122,7 +122,7 @@ export async function sendSmsFromApi(params: {
       await emitSeldonEvent("sms.sent", {
         smsMessageId: created.id,
         contactId: created.contactId,
-      });
+      }, { orgId: params.orgId });
     }
 
     if (params.userId && created.contactId) {
@@ -179,7 +179,7 @@ export async function sendSmsFromApi(params: {
       smsMessageId: created.id,
       contactId: created.contactId,
       reason,
-    });
+    }, { orgId: params.orgId });
 
     throw error;
   }

@@ -705,7 +705,7 @@ export async function createBookingAction(formData: FormData) {
     await emitSeldonEvent("booking.created", {
       appointmentId: created.id,
       contactId: created.contactId,
-    });
+    }, { orgId: orgId });
   }
 
   return { id: created.id };
@@ -751,7 +751,7 @@ export async function completeBookingAction(bookingId: string) {
     await emitSeldonEvent("booking.completed", {
       appointmentId: row.id,
       contactId: row.contactId,
-    });
+    }, { orgId: orgId });
   }
 
   if (row) {
@@ -789,7 +789,7 @@ export async function cancelBookingAction(bookingId: string) {
     await emitSeldonEvent("booking.cancelled", {
       appointmentId: row.id,
       contactId: row.contactId,
-    });
+    }, { orgId: orgId });
   }
 }
 
@@ -833,7 +833,7 @@ export async function markBookingNoShowAction(bookingId: string) {
     await emitSeldonEvent("booking.no_show", {
       appointmentId: row.id,
       contactId: row.contactId,
-    });
+    }, { orgId: orgId });
   }
 
   if (row) {
@@ -891,7 +891,7 @@ export async function submitPublicBookingAction({
     contactId = createdContact?.id ?? null;
 
     if (contactId) {
-      await emitSeldonEvent("contact.created", { contactId });
+      await emitSeldonEvent("contact.created", { contactId }, { orgId: bookingContext.orgId });
     }
   }
 
@@ -1001,7 +1001,7 @@ export async function submitPublicBookingAction({
       await emitSeldonEvent("booking.created", {
         appointmentId: createdBooking.id,
         contactId,
-      });
+      }, { orgId: bookingContext.orgId });
 
       const [owner] = await db
         .select({ id: users.id })

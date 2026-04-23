@@ -1,15 +1,22 @@
 // Event bus — thin wrapper around the in-memory SeldonEventBus plus
-// (as of 2c PR 1 M4 / PR 2 M3) persistent side-effects for durable
-// workflow resolution.
+// (as of 2c PR 1 M4 / PR 2 M3, hardened in SLICE 1-a 2026-04-22)
+// persistent side-effects for durable workflow resolution.
+//
+// SLICE 1-a signature change: `orgId` is now REQUIRED (Option 1,
+// TypeScript-enforced per G-1a-1 approval 2026-04-22). Every
+// emission writes to `workflow_event_log` and runs the synchronous
+// wake-up scan. The pre-2c "optional orgId → in-memory only" path
+// is retired — it was silently bypassing 100% of durable writes
+// (see §15.4 of tasks/step-subscription-audit.md and L-22 in
+// tasks/lessons.md).
 //
 // Design (per 2c audit §4.3 + G-2 approved 2026-04-22):
-//   1. In-memory dispatch is unchanged. Existing listeners (Brain v2,
+//   1. In-memory dispatch unchanged. Existing listeners (Brain v2,
 //      test fixtures) continue to receive events.
-//   2. When `options.orgId` is provided, the emission ALSO appends a
-//      row to `workflow_event_log` (PR 1 M4) and synchronously scans
-//      `workflow_waits` for matching waits (PR 2 M3). Matching waits
-//      are claimed (CAS) and their runs advance via resumeWait inside
-//      the emit-caller's request.
+//   2. Every emission appends a row to `workflow_event_log` AND
+//      synchronously scans `workflow_waits` for matching waits.
+//      Matching waits are claimed (CAS) and their runs advance via
+//      resumeWait inside the emit-caller's request.
 //   3. Log-write + sync-resume are BEST-EFFORT. Failures log but do
 //      not throw — the in-memory dispatch has already succeeded and
 //      swallowing preserves the caller's control flow. Timeout path
@@ -23,7 +30,6 @@
 // instrumentation log line at the bottom of emitSeldonEvent.
 
 import { db } from "@/db";
-import { workflowEventLog } from "@/db/schema";
 import { getSeldonEventBus, type EventPayload, type EventType } from "@seldonframe/core/events";
 
 import { resumeWait } from "@/lib/workflow/runtime";
@@ -33,26 +39,25 @@ import { notImplementedToolInvoker, type RuntimeContext } from "@/lib/workflow/t
 
 export type EmitOptions = {
   /**
-   * Workspace (organization) id this event belongs to. When provided,
-   * the emission is persisted to `workflow_event_log` AND synchronously
-   * resolves any matching pending waits. When omitted, only the
-   * in-memory dispatch runs (pre-2c behavior).
+   * Workspace (organization) id this event belongs to. REQUIRED.
+   * Every emission persists to `workflow_event_log` and triggers
+   * the synchronous wake-up scan. Required by Option 1 of G-1a-1
+   * (2026-04-22) to structurally prevent the silent-log-skip bug
+   * that 2c's optional shape allowed.
    */
-  orgId?: string;
+  orgId: string;
 };
 
 export async function emitSeldonEvent<T extends EventType>(
   type: T,
   data: EventPayload<T>,
-  options?: EmitOptions,
+  options: EmitOptions,
 ): Promise<void> {
   const startedAt = Date.now();
 
   // 1. In-memory dispatch (unchanged). Existing listeners fire here.
   const bus = getSeldonEventBus();
   await bus.emit(type, data);
-
-  if (!options?.orgId) return;
 
   // 2. Durable persistence to workflow_event_log.
   let eventLogId: string | null = null;

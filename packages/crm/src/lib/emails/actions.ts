@@ -140,7 +140,7 @@ async function sendEmailForOrg(params: {
       email: toEmail,
       reason: suppression.reason,
       contactId: params.contactId,
-    });
+    }, { orgId: params.orgId });
     return { emailId: null, contactId: params.contactId, suppressed: true as const };
   }
 
@@ -211,7 +211,7 @@ async function sendEmailForOrg(params: {
     await emitSeldonEvent("email.sent", {
       emailId: created.id,
       contactId: created.contactId,
-    });
+    }, { orgId: params.orgId });
   }
 
   await createEmailTimelineActivity({
@@ -711,7 +711,7 @@ export async function markEmailOpenedAction(emailId: string) {
     await emitSeldonEvent("email.opened", {
       emailId: row.id,
       contactId: row.contactId,
-    });
+    }, { orgId });
   }
 
   await recordEmailOpenedLearning(orgId);
@@ -732,7 +732,7 @@ export async function markEmailOpenedByPixelAction(emailId: string) {
     await emitSeldonEvent("email.opened", {
       emailId: row.id,
       contactId: row.contactId,
-    });
+    }, { orgId: row.orgId });
   }
 
   if (row?.orgId) {
@@ -762,6 +762,6 @@ export async function markEmailClickedAction(emailId: string, url: string) {
       emailId: row.id,
       contactId: row.contactId,
       url,
-    });
+    }, { orgId });
   }
 }

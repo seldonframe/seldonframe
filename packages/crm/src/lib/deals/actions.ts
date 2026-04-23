@@ -147,5 +147,5 @@ export async function moveDealStageAction(dealId: string, stage: string, probabi
     dealId,
     from: existingDeal.stage,
     to: stage,
-  });
+  }, { orgId: orgId });
 }

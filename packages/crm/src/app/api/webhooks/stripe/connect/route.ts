@@ -269,7 +269,7 @@ export async function POST(request: Request) {
             contactId: existing.contactId,
             amount: Number(existing.amount),
             reason: pi.last_payment_error?.message ?? "payment_intent.payment_failed",
-          });
+          }, { orgId: orgId });
         }
       }
       break;
@@ -307,7 +307,7 @@ export async function POST(request: Request) {
           paymentId: existing.id,
           amount: Number(refundedAmount),
           currency: existing.currency,
-        });
+        }, { orgId: orgId });
       }
       break;
     }
@@ -350,7 +350,7 @@ export async function POST(request: Request) {
           paymentId: existing.id,
           amount: Number(existing.amount),
           reason: dispute.reason ?? "dispute",
-        });
+        }, { orgId: orgId });
       }
       break;
     }
@@ -376,25 +376,25 @@ export async function POST(request: Request) {
 
       if (event.type === "invoice.sent") {
         await db.update(invoices).set({ sentAt: new Date() }).where(eq(invoices.stripeInvoiceId, invoice.id!));
-        await emitSeldonEvent("invoice.sent", { contactId: null, invoiceId: localId ?? invoice.id! });
+        await emitSeldonEvent("invoice.sent", { contactId: null, invoiceId: localId ?? invoice.id! }, { orgId: orgId });
       } else if (event.type === "invoice.paid") {
         await emitSeldonEvent("invoice.paid", {
           contactId: null,
           invoiceId: localId ?? invoice.id!,
           amount: (invoice.amount_paid ?? 0) / 100,
           currency: (invoice.currency ?? "usd").toUpperCase(),
-        });
+        }, { orgId: orgId });
       } else if (event.type === "invoice.payment_failed") {
         await emitSeldonEvent("invoice.past_due", {
           contactId: null,
           invoiceId: localId ?? invoice.id!,
           amountDue: (invoice.amount_due ?? 0) / 100,
-        });
+        }, { orgId: orgId });
       } else if (event.type === "invoice.voided") {
         await emitSeldonEvent("invoice.voided", {
           contactId: null,
           invoiceId: localId ?? invoice.id!,
-        });
+        }, { orgId: orgId });
       }
       break;
     }
@@ -420,13 +420,13 @@ export async function POST(request: Request) {
           contactId: null,
           subscriptionId: localId ?? subscription.id,
           status: subscription.status,
-        });
+        }, { orgId: orgId });
       } else if (event.type === "customer.subscription.trial_will_end") {
         await emitSeldonEvent("subscription.trial_will_end", {
           contactId: null,
           subscriptionId: localId ?? subscription.id,
           trialEnd: stripeUnixToDate(subscription.trial_end)?.toISOString() ?? "",
-        });
+        }, { orgId: orgId });
       }
       break;
     }

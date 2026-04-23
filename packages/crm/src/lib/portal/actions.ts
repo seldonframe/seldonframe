@@ -79,7 +79,7 @@ export async function sendPortalMessageAction(orgSlug: string, formData: FormDat
     await emitSeldonEvent("portal.message_sent", {
       contactId: session.contact.id,
       messageId: created.id,
-    });
+    }, { orgId: session.orgId });
   }
 
   const [owner] = await db
@@ -156,6 +156,6 @@ export async function markPortalResourceViewedAction(orgSlug: string, resourceId
     await emitSeldonEvent("portal.resource_viewed", {
       contactId: session.contact.id,
       resourceId: resource.id,
-    });
+    }, { orgId: session.orgId });
   }
 }

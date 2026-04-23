@@ -92,7 +92,7 @@ export async function createInvoiceFromApi(input: CreateInvoiceApiInput) {
     contactId: input.contactId,
     invoiceId: row.id,
     amount: result.total,
-  });
+  }, { orgId: input.orgId });
 
   return row;
 }
@@ -115,7 +115,7 @@ export async function sendInvoiceFromApi(orgId: string, invoiceId: string) {
     .set({ status: result.status, sentAt: result.sentAt, updatedAt: new Date() })
     .where(eq(invoices.id, invoiceId));
 
-  await emitSeldonEvent("invoice.sent", { contactId: row.contactId, invoiceId: row.id });
+  await emitSeldonEvent("invoice.sent", { contactId: row.contactId, invoiceId: row.id }, { orgId: orgId });
   return { status: result.status, sentAt: result.sentAt.toISOString() };
 }
 
@@ -137,7 +137,7 @@ export async function voidInvoiceFromApi(orgId: string, invoiceId: string) {
     .set({ status: result.status, voidedAt: result.voidedAt, updatedAt: new Date() })
     .where(eq(invoices.id, invoiceId));
 
-  await emitSeldonEvent("invoice.voided", { contactId: row.contactId, invoiceId: row.id });
+  await emitSeldonEvent("invoice.voided", { contactId: row.contactId, invoiceId: row.id }, { orgId: orgId });
   return { status: result.status, voidedAt: result.voidedAt.toISOString() };
 }
 
@@ -214,7 +214,7 @@ export async function createSubscriptionFromApi(input: CreateSubscriptionApiInpu
   await emitSeldonEvent("subscription.created", {
     contactId: input.contactId,
     planId: input.priceId,
-  });
+  }, { orgId: input.orgId });
 
   return row;
 }
@@ -253,7 +253,7 @@ export async function cancelSubscriptionFromApi(params: {
   await emitSeldonEvent("subscription.cancelled", {
     contactId: row.contactId ?? "",
     planId: row.stripePriceId ?? "",
-  });
+  }, { orgId: params.orgId });
 
   return result;
 }

@@ -233,7 +233,7 @@ export async function submitPublicIntakeAction({
       contactId = created?.id ?? null;
 
       if (created?.id) {
-        await emitSeldonEvent("contact.created", { contactId: created.id });
+        await emitSeldonEvent("contact.created", { contactId: created.id }, { orgId: form.orgId });
       }
     }
   }
@@ -256,7 +256,7 @@ export async function submitPublicIntakeAction({
       formId: form.id,
       contactId,
       data,
-    });
+    }, { orgId: form.orgId });
   }
 
   return { success: true };

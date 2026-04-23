@@ -144,7 +144,7 @@ export async function createBookingFromApi(input: CreateBookingInput): Promise<C
   await emitSeldonEvent("booking.created", {
     appointmentId: created.id,
     contactId: contact.id,
-  });
+  }, { orgId: input.orgId });
 
   await dispatchWebhook({
     orgId: input.orgId,
@@ -379,7 +379,7 @@ export async function cancelBookingFromApi(input: CancelBookingInput): Promise<C
     await emitSeldonEvent("booking.cancelled", {
       appointmentId: current.id,
       contactId: current.contactId,
-    });
+    }, { orgId: input.orgId });
   }
 
   await dispatchWebhook({
@@ -503,7 +503,7 @@ export async function rescheduleBookingFromApi(input: RescheduleBookingInput): P
     contactId: current.contactId,
     previousStartsAt,
     newStartsAt: input.startsAt.toISOString(),
-  });
+  }, { orgId: input.orgId });
 
   await dispatchWebhook({
     orgId: input.orgId,

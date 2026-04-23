@@ -320,7 +320,7 @@ export async function publishLandingPageAction(pageId: string, published: boolea
       pageId: row.id,
       slug: row.slug,
       orgId,
-    });
+    }, { orgId });
     await dispatchWebhook({
       orgId,
       event: "landing.published",
@@ -330,7 +330,7 @@ export async function publishLandingPageAction(pageId: string, published: boolea
     await emitSeldonEvent("landing.unpublished", {
       pageId: row.id,
       orgId,
-    });
+    }, { orgId });
   }
 }
 
@@ -368,7 +368,7 @@ export async function trackLandingVisitAction({ pageId, visitorId }: { pageId: s
   await emitSeldonEvent("landing.visited", {
     pageId,
     visitorId,
-  });
+  }, { orgId: page.orgId });
 
   await dispatchWebhook({
     orgId: page.orgId,
@@ -429,7 +429,7 @@ export async function submitLandingLeadAction({
     contactId = created?.id ?? null;
 
     if (contactId) {
-      await emitSeldonEvent("contact.created", { contactId });
+      await emitSeldonEvent("contact.created", { contactId }, { orgId: org.id });
     }
   }
 
@@ -437,7 +437,7 @@ export async function submitLandingLeadAction({
     await emitSeldonEvent("landing.converted", {
       pageId: page.id,
       contactId,
-    });
+    }, { orgId: org.id });
   }
 
   await dispatchWebhook({
