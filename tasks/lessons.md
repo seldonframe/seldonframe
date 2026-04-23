@@ -342,6 +342,49 @@ factor and estimated ~800-1,200 LOC. It didn't, and came in at
 apply migration-compression factor to estimate. Don't rely
 purely on naive site-count multiplication.
 
+### L-17 addendum — Test-LOC calibration for multi-path architectural PRs
+
+Observation from SLICE 1 PR 2 (2026-04-23): architectural PRs
+that ship multiple runtime paths (emit + cron + install +
+handler + observability in this case) consistently run ~2x
+the audit's test-LOC estimate, not the 1.3x the
+architectural-work pattern assumes.
+
+**Explanation:** each runtime path needs its own unit tests
+(happy path, failure modes, edge cases) AND the integration
+test exercising combinations of paths. Test-LOC scales
+multiplicatively with path count, not linearly. A single new
+path adds one set of unit tests; a second path adds its own
+unit tests PLUS pair-integration scenarios; a third path adds
+its own unit tests PLUS triple-combo integration scenarios.
+The combinatorial edge multiplier is real even for small N.
+
+**Calibration rule:** when audit §8 shows a PR with 3+ distinct
+runtime paths, apply 2.0x multiplier to the **test-LOC portion**
+of the estimate (not the production-code portion). Production
+code scales more linearly — the combinatorial blow-up lives in
+the coverage layer.
+
+**Evidence:** SLICE 1 PR 2 audit estimated ~1,500 test LOC
+across 4+ paths (emit enqueue + cron dispatch + install reconcile
++ handler invocation + observability). Actual was ~3,000 test
+LOC. The 1.3x architectural multiplier projected ~2,000, which
+put the 2,600 stop-trigger at a false sense of headroom. 2.0x
+test-multiplier applied at audit time would have projected
+~3,000 and the stop-trigger conversation would have happened
+pre-implementation, with different scope-shaping options
+available (slim C3, batch C2+C3, defer C5 entirely, etc.).
+
+**For SLICE 2+ audits:** count distinct runtime paths in §8
+explicitly. Multi-path (3+) PRs get 2.0x test-LOC multiplier.
+Single-path or two-path PRs continue to use the existing 1.3x
+(no combinatorial coverage burden).
+
+**Rule:** audit §8 must state runtime-path count AND which
+multiplier was applied. Future audits that skip this step are
+reverting to the unreliable 1.3x default and will likely
+undershoot.
+
 ---
 
 ## L-18 — Server-side imports of client-only modules fail at build time, not dev time
