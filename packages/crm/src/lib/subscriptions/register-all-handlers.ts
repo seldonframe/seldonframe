@@ -12,6 +12,10 @@
 // file imports each of those so the cron route has a single entry
 // point.
 //
-// Intentionally empty on C3. Populated in C7.
+// Populated in C6+C7 merged (2026-04-23): CRM's first subscription
+// handler — logActivityOnBookingCreate.
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import "@/blocks/crm/subscriptions/logActivityOnBookingCreate";
 
 export {};

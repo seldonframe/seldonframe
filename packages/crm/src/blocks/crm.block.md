@@ -1529,6 +1529,25 @@ compose_with: [caldiy-booking, formbricks-intake, email, sms, payments, landing-
 
 ---
 
+## Subscriptions
+
+Block-level reactive handlers — "when event X arrives in this workspace,
+run handler Y". Introduced in SLICE 1 PR 2 (2026-04-23). The parser
+materializes each entry into `block_subscription_registry` at workspace
+install time; the cron dispatcher drives delivery with at-least-once
+semantics + retry + dead-letter.
+
+CRM's first adopter: log a `booking_created` system activity on the
+contact whenever a booking.created event fires in the workspace. See
+`packages/crm/src/blocks/crm/subscriptions/logActivityOnBookingCreate.ts`
+for the handler implementation.
+
+<!-- SUBSCRIPTIONS:START -->
+[{"event": "caldiy-booking:booking.created", "handler": "logActivityOnBookingCreate", "idempotency_key": "{{data.contactId}}:{{data.appointmentId}}"}]
+<!-- SUBSCRIPTIONS:END -->
+
+---
+
 ## Notes for agent synthesis
 
 When composing an agent that "remembers" things about a person — lead qualification state, last outreach date, pipeline stage, custom attributes — CRM contact or deal custom_fields are the default persistence target. Don't invent a parallel store. When the agent reasons about a person, load from `contact` + `deal.active_for(contactId)` + last N `activities`; write updates back via `update_contact` / `update_deal` / `create_activity` MCP tools.
