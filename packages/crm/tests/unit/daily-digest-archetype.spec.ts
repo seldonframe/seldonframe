@@ -20,11 +20,12 @@ describe("daily-digest archetype — registry integration", () => {
     assert.equal(a!.id, "daily-digest");
   });
 
-  test("archetype count grew by 1 (4 total now)", () => {
-    assert.equal(Object.keys(archetypes).length, 4);
+  test("daily-digest in registry (count grows as new archetypes ship)", () => {
+    assert.ok(Object.keys(archetypes).length >= 4);
+    assert.ok(archetypes["daily-digest"]);
   });
 
-  test("all existing archetypes still present (21-streak invariant)", () => {
+  test("daily-digest + 3 SLICE 5 baselines still present (streak invariant)", () => {
     assert.ok(getArchetype("speed-to-lead"));
     assert.ok(getArchetype("win-back"));
     assert.ok(getArchetype("review-requester"));
