@@ -34,7 +34,7 @@
         },
         "response_path": "forecast.forecastday[0].day.daily_chance_of_rain",
         "operator": "gte",
-        "expected": 60,
+        "expected": "60",
         "timeout_behavior": "fail"
       },
       "on_match_next": "offer_reschedule",
@@ -47,7 +47,7 @@
       "args": {
         "contact_id": "{{contactId}}",
         "to": "{{phone}}",
-        "body": "Hi {{firstName}}, it's Bright Smile Dental — no pressure, just a heads up: the forecast looks rough for your visit on {{bookingStartsAt}}. Want us to move you to a calmer day this week? Reply YES and we'll find a time that works."
+        "body": "Hi {{firstName}}, it's Bright Smile Dental. The forecast looks rough on your appointment day — happy to move you to a sunnier slot if that's easier. Reply YES and we'll find a better time, no pressure."
       },
       "next": null
     },
@@ -68,9 +68,8 @@
       "tool": "send_email",
       "args": {
         "to": "{{email}}",
-        "subject": "You're all set — see you at Bright Smile Dental",
-        "body": "Hi {{firstName}},\n\nYour visit at Bright Smile Dental is confirmed for {{bookingStartsAt}}. The weather looks clear, so travel should be easy.\n\nA few friendly reminders:\n• Arrive 5 minutes early so we can get you settled.\n• Nothing to prepare — we'll walk you through everything.\n• If anything changes, just reply to this email and we'll take care of it.\n\nWe're looking forward to meeting you. Take care,\nThe Bright Smile Dental team",
-        "contact_id": "{{contactId}}"
+        "subject": "Your Bright Smile visit is confirmed",
+        "body": "Hi {{firstName}},\n\nYou're all set for {{bookingStartsAt}} — the forecast looks clear, so we'll see you then. No paperwork stress, no surprise fees: just a relaxed visit with our team.\n\nIf anything comes up, reply to this email and we'll sort it out.\n\nWarmly,\nThe Bright Smile Dental team"
       },
       "next": null
     }
