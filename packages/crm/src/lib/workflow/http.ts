@@ -19,6 +19,8 @@
 // Types
 // ---------------------------------------------------------------------
 
+import { retryWithBackoff, classifyRetriable, type RetryOptions } from "./retry";
+
 export type FetchResult = {
   ok: boolean;
   status: number;
@@ -34,6 +36,11 @@ export type FetchOptions = {
 
 export type FetchCause = "timeout" | "network" | "body_too_large";
 
+/** Retry + future extras. Omit the whole arg to get single-attempt semantics. */
+export type FetchExtras = {
+  retry?: RetryOptions;
+};
+
 const MAX_BODY_BYTES = 1 * 1024 * 1024; // 1MB
 
 // ---------------------------------------------------------------------
@@ -41,6 +48,50 @@ const MAX_BODY_BYTES = 1 * 1024 * 1024; // 1MB
 // ---------------------------------------------------------------------
 
 export async function fetchWithTimeout(
+  url: string,
+  options: FetchOptions,
+  timeoutMs: number,
+  extras?: FetchExtras,
+): Promise<FetchResult> {
+  if (!extras?.retry) {
+    return fetchSingleAttempt(url, options, timeoutMs);
+  }
+  // With retry: the inner call throws on RETRIABLE HTTP responses so
+  // retryWithBackoff can catch + classify. Non-retriable HTTP responses
+  // return normally (caller inspects ok/status). After exhaustion,
+  // the last HTTP response is returned (not re-thrown) so the caller
+  // still sees ok=false + status.
+  let lastHttpResult: FetchResult | null = null;
+  try {
+    return await retryWithBackoff(async () => {
+      const result = await fetchSingleAttempt(url, options, timeoutMs);
+      lastHttpResult = result;
+      if (!result.ok) {
+        const cls = classifyRetriable({ kind: "http", status: result.status });
+        if (cls === "retriable") {
+          // Throw to trigger retry; preserve shape for classifyError.
+          throw Object.assign(new Error(`http ${result.status}`), {
+            kind: "http",
+            status: result.status,
+          });
+        }
+      }
+      return result;
+    }, extras.retry);
+  } catch (err) {
+    // If the last observed state was a retriable HTTP response that
+    // exhausted attempts, return it (not-ok but structured). Otherwise
+    // the error was a thrown Error (network/timeout/body_too_large) —
+    // re-throw so the caller can classify.
+    const e = err as { kind?: string; status?: number };
+    if (e.kind === "http" && typeof e.status === "number" && lastHttpResult !== null) {
+      return lastHttpResult;
+    }
+    throw err;
+  }
+}
+
+async function fetchSingleAttempt(
   url: string,
   options: FetchOptions,
   timeoutMs: number,
