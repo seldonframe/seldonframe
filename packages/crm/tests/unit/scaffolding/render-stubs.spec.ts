@@ -30,6 +30,7 @@ function spec(): BlockSpec {
       },
     ],
     entities: [],
+    customer_surfaces: { display: [], actions: [] },
   };
 }
 

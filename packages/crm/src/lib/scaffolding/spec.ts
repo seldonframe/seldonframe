@@ -193,6 +193,64 @@ const EntitySchema = z.object({
 });
 
 // ---------------------------------------------------------------------
+// Customer-surfaces schemas (SLICE 4b PR 2 C1 — scaffold → customer UI)
+// ---------------------------------------------------------------------
+//
+// Optional. When a block declares customer_surfaces, the scaffold
+// emits customer-facing component files under
+// `blocks/<slug>/customer/` using the SLICE 4b patterns:
+//   - <CustomerDataView>       for each display entry (read-only)
+//   - <CustomerActionForm>     for each opt-in action entry (write)
+//
+// Design choices per audit §14 (gate G-4b-3 hybrid policy):
+//
+//   1. display auto-generates — low risk, read-only, scoped by filter.
+//   2. actions REQUIRE opt_in: true at schema level (z.literal(true)).
+//      Scaffolded customer forms cannot ship without the builder
+//      explicitly acknowledging customer-data-collection intent.
+//      L-22 structural enforcement: opt_in: false or missing REJECTS
+//      at parse time (not filtered downstream).
+//   3. rate_limit is optional metadata. Schema validates format
+//      ("5/minute" / "100/hour" etc.); runtime enforcement lands
+//      later.
+//   4. filter is an interpolation string matching existing conventions
+//      (subscriptions.idempotencyKey uses the same shape).
+//   5. Absence of customer_surfaces = admin-only block (backward-compat
+//      default { display: [], actions: [] }).
+
+const CustomerDisplaySurfaceSchema = z.object({
+  entity: z.string().regex(/^[a-z][a-zA-Z0-9_]*$/, {
+    message: "display.entity must be lowerCamelCase singular; it must reference a declared entity under BlockSpec.entities",
+  }),
+  filter: z.string().min(1, {
+    message: "display.filter must be a non-empty interpolation string (e.g. \"{{customer_id}}\" or \"*\")",
+  }),
+  fields: z.array(z.string().min(1)).min(1, {
+    message: "display.fields must list at least one field name from the referenced entity",
+  }),
+});
+
+const CustomerActionSurfaceSchema = z.object({
+  tool: z.string().regex(TOOL_NAME_PATTERN, {
+    message: "actions.tool must be snake_case; it must reference a declared tool under BlockSpec.tools",
+  }),
+  opt_in: z.literal(true, {
+    message: "actions.opt_in MUST be true — scaffolded customer forms require explicit opt-in (L-22 structural enforcement)",
+  }),
+  rate_limit: z
+    .string()
+    .regex(/^\d+\/(second|minute|hour|day)$/, {
+      message: 'actions.rate_limit must match "<count>/<unit>" with unit in {second, minute, hour, day}',
+    })
+    .optional(),
+});
+
+const CustomerSurfacesSchema = z.object({
+  display: z.array(CustomerDisplaySurfaceSchema).default([]),
+  actions: z.array(CustomerActionSurfaceSchema).default([]),
+});
+
+// ---------------------------------------------------------------------
 // Root BlockSpec schema with cross-references
 // ---------------------------------------------------------------------
 
@@ -216,6 +274,7 @@ export const BlockSpecSchema = z
     tools: z.array(ToolSchema).default([]),
     subscriptions: z.array(SubscriptionSchema).default([]),
     entities: z.array(EntitySchema).default([]),
+    customer_surfaces: CustomerSurfacesSchema.default({ display: [], actions: [] }),
   })
   .superRefine((spec, ctx) => {
     // Cross-ref: every tool's `emits` must reference a declared event.
@@ -245,6 +304,30 @@ export const BlockSpecSchema = z
       }
       handlerNames.add(sub.handlerName);
     });
+
+    // Cross-ref: customer_surfaces.display.entity must match a declared entity.
+    const declaredEntityNames = new Set(spec.entities.map((e) => e.name));
+    spec.customer_surfaces.display.forEach((display, idx) => {
+      if (!declaredEntityNames.has(display.entity)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["customer_surfaces", "display", idx, "entity"],
+          message: `customer_surfaces.display[${idx}].entity "${display.entity}" is not declared in BlockSpec.entities. Add an entity declaration first.`,
+        });
+      }
+    });
+
+    // Cross-ref: customer_surfaces.actions.tool must match a declared tool.
+    const declaredToolNames = new Set(spec.tools.map((t) => t.name));
+    spec.customer_surfaces.actions.forEach((action, idx) => {
+      if (!declaredToolNames.has(action.tool)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["customer_surfaces", "actions", idx, "tool"],
+          message: `customer_surfaces.actions[${idx}].tool "${action.tool}" is not declared in BlockSpec.tools. Add a tool declaration first.`,
+        });
+      }
+    });
   });
 
 export type BlockSpec = z.infer<typeof BlockSpecSchema>;
@@ -255,3 +338,6 @@ export type BlockSpecFieldType = z.infer<typeof FieldTypeSchema>;
 export type BlockSpecArgField = z.infer<typeof ToolArgFieldSchema>;
 export type BlockSpecEntity = z.infer<typeof EntitySchema>;
 export type BlockSpecEntityField = z.infer<typeof EntityFieldSchema>;
+export type BlockSpecCustomerDisplay = z.infer<typeof CustomerDisplaySurfaceSchema>;
+export type BlockSpecCustomerAction = z.infer<typeof CustomerActionSurfaceSchema>;
+export type BlockSpecCustomerSurfaces = z.infer<typeof CustomerSurfacesSchema>;

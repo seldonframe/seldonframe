@@ -24,6 +24,7 @@ function specWithTools(tools: BlockSpec["tools"]): BlockSpec {
     tools,
     subscriptions: [],
     entities: [],
+    customer_surfaces: { display: [], actions: [] },
   };
 }
 

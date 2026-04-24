@@ -57,6 +57,7 @@ function smokeSpec(): BlockSpec {
         ],
       },
     ],
+    customer_surfaces: { display: [], actions: [] },
   };
 }
 

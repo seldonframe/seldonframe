@@ -24,6 +24,7 @@ function minimalSpec(): BlockSpec {
     tools: [],
     subscriptions: [],
     entities: [],
+    customer_surfaces: { display: [], actions: [] },
   };
 }
 

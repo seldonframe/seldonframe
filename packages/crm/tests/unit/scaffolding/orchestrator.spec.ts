@@ -35,6 +35,7 @@ function minimalSpec(overrides: Partial<BlockSpec> = {}): BlockSpec {
     tools: [],
     subscriptions: [],
     entities: [],
+    customer_surfaces: { display: [], actions: [] },
     ...overrides,
   };
 }

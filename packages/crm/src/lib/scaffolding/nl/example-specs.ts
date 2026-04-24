@@ -69,6 +69,7 @@ export const EXAMPLE_SPECS: NLExample[] = [
       ],
       subscriptions: [],
       entities: [],
+      customer_surfaces: { display: [], actions: [] },
     },
   },
   {
@@ -97,6 +98,7 @@ export const EXAMPLE_SPECS: NLExample[] = [
         },
       ],
       entities: [],
+      customer_surfaces: { display: [], actions: [] },
     },
   },
 ];
