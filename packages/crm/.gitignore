@@ -4,3 +4,5 @@
 
 # SLICE 4a PR 2 C6 — scaffold bridge smoke-test temp dir (cleaned by the test).
 tests/_scaffold-smoke/
+# SLICE 4b PR 2 C3 — customer bridge smoke-test temp dir.
+tests/_customer-bridge-smoke/

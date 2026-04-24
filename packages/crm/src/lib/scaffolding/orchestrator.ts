@@ -28,6 +28,8 @@ import { renderHandlerStub } from "./render/handler-stub";
 import { renderTestStub } from "./render/test-stub";
 import { renderAdminSchemaTs } from "./render/admin-schema-ts";
 import { renderAdminPageTsx } from "./render/admin-page-tsx";
+import { renderCustomerDisplayViewTsx } from "./render/customer-display-view-tsx";
+import { renderCustomerActionFormTsx } from "./render/customer-action-form-tsx";
 import { executeScaffold, type ScaffoldFileWrite } from "./writer";
 
 export type ScaffoldBlockInput = {
@@ -130,6 +132,30 @@ function buildFilePlan(
     plan.push({
       path: path.join(blocksDir, spec.slug, "admin", `${entity.pluralSlug}.page.tsx`),
       content: renderAdminPageTsx(entity),
+    });
+  }
+
+  // Customer UI (SLICE 4b PR 2 C3 — scaffold → customer UI bridge).
+  // Emitted AFTER admin files so file-plan order stays stable across
+  // slices. Display surfaces emit before action forms.
+  const entitiesByName = new Map(spec.entities.map((e) => [e.name, e]));
+  const toolsByName = new Map(spec.tools.map((t) => [t.name, t]));
+
+  for (const display of spec.customer_surfaces.display) {
+    const entity = entitiesByName.get(display.entity);
+    if (!entity) continue; // Already rejected at schema-parse time; belt + suspenders.
+    plan.push({
+      path: path.join(blocksDir, spec.slug, "customer", `${entity.pluralSlug}.view.tsx`),
+      content: renderCustomerDisplayViewTsx(entity, display),
+    });
+  }
+
+  for (const action of spec.customer_surfaces.actions) {
+    const tool = toolsByName.get(action.tool);
+    if (!tool) continue; // Already rejected at schema-parse time.
+    plan.push({
+      path: path.join(blocksDir, spec.slug, "customer", `${action.tool}.form.tsx`),
+      content: renderCustomerActionFormTsx(tool, action),
     });
   }
 
