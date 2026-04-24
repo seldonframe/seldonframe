@@ -551,6 +551,78 @@ the projection is within measurement noise, label it so the
 reviewer doesn't have to re-compute. When materially over, list
 the three decision-framework questions inline with the recommendation.
 
+### L-17 addendum — UI composition on mature component library: 0.94x test multiplier empirically validated (SLICE 4a PR 1)
+
+Observation from SLICE 4a PR 1 (2026-04-23): projected 2.5x UI
+test multiplier. Actual landed at **0.94x aggregate** — 62%
+under projection. Consistent across PageShell, EntityTable,
+deriveColumns, BlockListPage, and the CRM activities proof
+migration (not anomalous on a single commit).
+
+**Per-commit multipliers:**
+- C1 tokens (pure-logic): 1.00x
+- C2 admin-theme (pure data + tiny server wrapper): 1.46x
+- C3 PageShell (first React component, renderToString smoke): 1.11x
+- C4 EntityTable + deriveColumns + BlockListPage: 1.11x
+- C5 activities proof migration: 0.00x (integration-covered)
+
+**Root causes:**
+
+1. **shadcn/ui upstream tests cover component behavior;**
+   SeldonFrame-specific tests only cover composition-specific
+   logic (schema derivation, prop pass-through, theme
+   integration). No need to re-test Button keyboard focus,
+   Table ARIA compliance, or Dialog focus-trap — upstream owns
+   it.
+2. **Typed functional design token API moves validation from
+   runtime tests to typecheck.** `tokens.color('primary')`
+   rejects typos at compile time; no runtime "unknown role"
+   branch to test.
+3. **UI components have less branching logic than
+   dispatchers/validators.** A table renders N columns with M
+   rows — two loops, one empty-state branch. Compare to a
+   validator unwrapping ZodOptional(ZodNullable(ZodDefault(...))).
+4. **Pattern-level composition** (rather than component-level
+   implementation) has smaller test surface. PageShell wraps
+   Next layout conventions; it doesn't invent them.
+
+**Calibration rule:** UI composition work on a mature component
+library uses **0.9x-1.1x test multiplier**, NOT the 1.3x/1.6x/2.0x
+architectural spectrum or the 2.5x conservative UI estimate.
+
+**Distinct L-17 category — "composition on external foundation"
+vs "novel architectural work."** Characterized by:
+
+- External library handles behavior correctness
+- SeldonFrame code is composition/integration glue
+- Type system catches most invalid inputs at compile time
+- Branching logic is minimal
+
+**Applies to:** shadcn/ui composition, adapter patterns on
+external APIs, MCP tool wrappers over existing SDKs.
+
+**Does NOT apply to:** from-scratch UI frameworks, component
+primitives without upstream coverage, novel runtime behavior
+(e.g. a custom drag-and-drop engine, a bespoke virtualization
+algorithm). Those still fall under the 1.3x-2.0x architectural
+spectrum or the DEEP-harness 2.5x regime (jsdom +
+testing-library + axe-core).
+
+**For SLICE 4a PR 2+ audits:** apply 0.9x-1.1x multiplier on
+UI composition. Reserve +20% buffer for pattern complexity
+depth (schema-driven form generation, cross-block embedding).
+If PR 2's aggregate lands materially above 1.2x, re-examine
+whether the pattern is genuinely "novel architectural work"
+rather than "composition on foundation." If it lands below
+0.9x, check for missing edge-case coverage.
+
+**Second calibration event:** SLICE 4a PR 2 is the pattern-depth
+test. Validates whether 0.94x generalizes across pattern
+complexity or was PR-1-specific (PageShell + EntityTable are
+relatively shallow layout/list primitives; EntityFormDrawer +
+CompositionCard go deeper into Zod-driven rendering and
+cross-block data).
+
 ---
 
 ## L-18 — Server-side imports of client-only modules fail at build time, not dev time
