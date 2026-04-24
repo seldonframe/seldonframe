@@ -62,6 +62,13 @@ function resolveTokensInString(s: string, run: StoredRun): string {
   return s.replace(INTERPOLATION_RE, (raw, bodyRaw) => {
     const body = String(bodyRaw).trim();
     const [varName, ...pathSegs] = body.split(".");
+    // 0. Reserved tokens — SLICE 6 PR 2 C3. Highest precedence:
+    //    {{runId}} / {{orgId}} / {{now}} resolve from run context
+    //    rather than scope, so scope entries can't shadow them.
+    //    Sub-path segments ignored (runId/orgId/now are scalars).
+    if (varName === "runId") return run.id;
+    if (varName === "orgId") return run.orgId;
+    if (varName === "now") return new Date().toISOString();
     // 1. Variable scope — resolves by name; sub-path segments
     // are IGNORED (matches the legacy mcp-tool-call resolver
     // behavior; see audit §7.7 clarification — the inline
@@ -86,7 +93,8 @@ function resolveTokensInString(s: string, run: StoredRun): string {
       }
       return String(current);
     }
-    // 3. Reserved namespaces + unknown roots — pass-through raw.
+    // 3. Other reserved namespaces (trigger / contact / agent /
+    //    workspace / secrets) + unknown roots — pass-through raw.
     return raw;
   });
 }

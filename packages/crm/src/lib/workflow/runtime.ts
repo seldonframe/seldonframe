@@ -31,6 +31,7 @@
 import type {
   AgentSpec,
   AwaitEventStep,
+  BranchStep,
   ConversationStep,
   EmitEventStep,
   McpToolCallStep,
@@ -46,6 +47,7 @@ import { dispatchAwaitEvent } from "./step-dispatchers/await-event";
 import { dispatchReadState } from "./step-dispatchers/read-state";
 import { dispatchWriteState } from "./step-dispatchers/write-state";
 import { dispatchEmitEvent } from "./step-dispatchers/emit-event";
+import { dispatchBranch } from "./step-dispatchers/branch";
 import type { NextAction, RuntimeContext, StoredRun, StoredWait } from "./types";
 import { findStep, RuntimeError, TIMER_EVENT_TYPE } from "./types";
 
@@ -82,6 +84,15 @@ function isWriteStateStep(step: Step): step is WriteStateStep {
 function isEmitEventStep(step: Step): step is EmitEventStep {
   const s = step as Partial<EmitEventStep>;
   return step.type === "emit_event" && typeof s.event === "string";
+}
+function isBranchStep(step: Step): step is BranchStep {
+  const s = step as Partial<BranchStep>;
+  return (
+    step.type === "branch" &&
+    typeof s.condition === "object" && s.condition !== null &&
+    "on_match_next" in step &&
+    "on_no_match_next" in step
+  );
 }
 function isAwaitEventStep(step: Step): step is AwaitEventStep {
   const s = step as Partial<AwaitEventStep>;
@@ -344,6 +355,24 @@ async function dispatchStep(
   if (isReadStateStep(step)) return dispatchReadState(run, step, context);
   if (isWriteStateStep(step)) return dispatchWriteState(run, step, context);
   if (isEmitEventStep(step)) return dispatchEmitEvent(run, step, context);
+  if (isBranchStep(step)) {
+    // SLICE 6 PR 2 C3 — wire dispatchBranch into the runtime dispatch
+    // switch. Construct BranchDispatchContext from RuntimeContext's
+    // optional resolveSecret + onBranchEvaluated fields. When
+    // resolveSecret is unset (pre-SLICE-6 callers), any external_state
+    // branch with auth fails-closed via evaluateExternalState's secret
+    // resolution failure path.
+    return dispatchBranch(run, step, {
+      resolveSecret:
+        context.resolveSecret ??
+        (async () => {
+          throw new Error(
+            "resolveSecret not configured on RuntimeContext; external_state branches with auth cannot resolve",
+          );
+        }),
+      onEvaluated: context.onBranchEvaluated,
+    });
+  }
   return { kind: "fail", reason: `Unsupported step type "${step.type}" at runtime` };
 }
 

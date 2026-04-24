@@ -212,6 +212,30 @@ export type RuntimeContext = {
     data: Record<string, unknown>,
     options: { orgId: string },
   ) => Promise<void>;
+  /**
+   * Workspace-scoped secret resolver — consumed by the branch
+   * dispatcher (SLICE 6) when evaluating external_state conditions
+   * with auth. Production binds to (orgId, db) via
+   * `makeWorkspaceSecretResolver`. Optional for backward-compat
+   * with pre-SLICE-6 runtime contexts.
+   */
+  resolveSecret?: (secretName: string) => Promise<string>;
+  /**
+   * Observability hook — fires on every branch evaluation. SLICE 6
+   * PR 2 C4 wires this to emit workflow.external_state.evaluated
+   * events into workflow_event_log. Optional; no-op when unset.
+   */
+  onBranchEvaluated?: (entry: {
+    runId: string;
+    stepId: string;
+    conditionType: "predicate" | "external_state";
+    url?: string;
+    method?: string;
+    responseStatus?: number;
+    matched: boolean;
+    elapsedMs: number;
+    error?: string;
+  }) => void;
 };
 
 // ---------------------------------------------------------------------

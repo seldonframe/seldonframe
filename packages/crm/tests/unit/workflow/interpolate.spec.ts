@@ -108,9 +108,11 @@ describe("resolveInterpolations — reserved namespaces pass-through", () => {
 });
 
 describe("resolveInterpolations — unsupported features (left raw)", () => {
-  test("{{now}} / date helpers are NOT supported — left raw", () => {
+  test("{{now}} resolves to ISO 8601 UTC timestamp (SLICE 6 PR 2 C3 addition)", () => {
     const run = makeRun();
-    assert.equal(resolveInterpolations("{{now}}", run), "{{now}}");
+    const out = String(resolveInterpolations("{{now}}", run));
+    // ISO 8601 with Z suffix
+    assert.match(out, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/);
   });
 
   test("array indexing syntax is NOT supported — left raw", () => {
