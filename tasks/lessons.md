@@ -707,6 +707,88 @@ support:
 
 The rule is durable enough to plan SLICE 4b estimates with.
 
+### L-17 addendum — State-machine sub-category split by testing methodology (SLICE 4b close, 3-datapoint support)
+
+Confirmed across SLICE 4b with a third state-machine datapoint:
+the 1.7x-2.0x multiplier only applies to state-machine
+components whose transitions are tested THROUGH rendering.
+Components that extract their reducer as a pure function and
+test transitions via direct invocation land at **~1.0-1.3x** —
+closer to composition baseline than to state-machine band.
+
+**Empirical data across SLICE 4a + 4b:**
+
+| Component | Style | Multiplier | Reducer extracted? |
+|---|---|---|---|
+| BlockDetailPage (4a PR 2 C1) | tabs navigation | 1.74x | No — transitions via activeTab prop only |
+| CustomerActionForm (4b PR 1 C3) | multi-step form | 1.21x | **Yes** — `customerActionFormReducer` |
+| CustomerLogin (4b PR 1 C4) | OTC request → verify | 0.87x | No reducer, but narrow 2-stage space |
+
+Three data points, two testing methodologies:
+- **Reducer-extracted (1.0-1.3x):** `useReducer` + pure exported
+  reducer fn. Transitions tested as pure functions (direct
+  invocation, no rendering). renderToString only verifies
+  per-state initial render. Works when transitions are
+  deterministic-on-state (no async side effects in the
+  reducer; server actions + async lives in the component's
+  effect/handler layer, not the reducer).
+- **Render-integrated (1.7-2.0x):** State spread across
+  multiple useState calls; transitions only exercisable via
+  rendering. Each test case needs renderToString setup +
+  assertions (~30 LOC each vs 10 LOC for a reducer case).
+
+CustomerLogin at 0.87x is a narrow-state-space outlier (2
+stages × stable props), not a third methodology class. It
+confirms that even render-integrated state-machine components
+can approach composition baseline when the transition matrix
+is small.
+
+**Refined rule (3-datapoint settled):**
+
+When auditing UI components for a slice's §9 LOC table:
+
+1. **Identify state-machine components.** A component owns a
+   state machine if its rendering branches on a prop or
+   internal state representing "current state" plus a set of
+   transitions.
+
+2. **Classify by testing methodology:**
+   - **If the transition logic is extractable as a pure
+     reducer:** project **1.0-1.3x** multiplier.
+   - **If transitions require rendering to exercise:** project
+     **1.7-2.0x** multiplier.
+   - **If the transition matrix is very narrow (≤ 3 states ×
+     ≤ 2 transitions each):** project **0.9-1.2x** regardless
+     of extraction approach.
+
+3. **Prefer reducer extraction when possible.** It both reduces
+   test LOC AND improves testability (each transition is a
+   unit-tested pure function). The design pattern:
+   ```
+   export function componentReducer(state, action) { ... }
+   export function initialComponentState(opts) { ... }
+   // component body:
+   const [state, dispatch] = useReducer(componentReducer, opts, initialComponentState);
+   ```
+   Applies when transitions are deterministic-on-state. When
+   transitions depend on async side effects (e.g. "next step
+   is dictated by a server-action return value"), accept the
+   1.7-2.0x multiplier — the side effect boundary can't move
+   into the reducer without making it impure.
+
+4. **Apply 0.94x to remaining composition work.** Unchanged.
+
+5. **Scaffold / schema / renderer / validator extensions**
+   remain at L-17 original spectrum (1.3x / 1.6x / 2.0x).
+
+**Design-guidance corollary:** when designing new state-machine
+components, ask up-front: "can the transition logic live in a
+pure reducer?" If yes, extract it. This is architecturally
+principled (separation of state transition from side effects)
+AND saves test LOC. Don't extract reducers for <3-state
+components where the ceremony overhead exceeds the LOC
+savings.
+
 ---
 
 ## L-18 — Server-side imports of client-only modules fail at build time, not dev time

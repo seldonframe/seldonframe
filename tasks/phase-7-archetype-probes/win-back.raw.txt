@@ -57,8 +57,8 @@
       "tool": "send_email",
       "args": {
         "to": "{{email}}",
-        "subject": "A small thank-you from Bright Smile — 20% off whenever you're ready",
-        "body": "Hi {{firstName}},\n\nWe noticed you cancelled recently, and that's completely okay — life gets busy, and we never want dental care to feel like pressure.\n\nIf you ever decide to come back for a cleaning or a check-in, here's 20% off on us:\n\n{{coupon.code}}\n\nThis code is good for the next 14 days. Use it the next time you book — no strings, no awkward follow-ups.\n\nAnd if there was something about your last visit that didn't feel right, I'd genuinely love to hear about it. Just reply to this email — a real person reads every one.\n\nTake care of yourself,\nThe Bright Smile Dental team",
+        "subject": "A little something from Bright Smile — 20% off when you're ready",
+        "body": "Hi {{firstName}},\n\nWe saw you cancelled your subscription with Bright Smile Dental — no hard feelings at all, life gets busy and dental care shouldn't feel like pressure.\n\nIf you ever want to come back for a cleaning or a check-in, here's a little thank-you for giving us a try in the first place: 20% off your next visit with code {{coupon.code}}.\n\nIt's good for the next 14 days. Just mention it (or pop it in at checkout) the next time you book.\n\nAnd if something about your last experience didn't sit right, I'd genuinely love to hear about it — hit reply and it comes straight to us. We read every message.\n\nTake care of those teeth,\nThe Bright Smile Dental team",
         "contactId": "{{contactId}}"
       },
       "next": "wait_before_reminder"
@@ -75,7 +75,7 @@
       "tool": "send_sms",
       "args": {
         "to": "{{phone}}",
-        "body": "Hi {{firstName}}, it's Bright Smile Dental — just a quick note that your 20% off code {{coupon.code}} expires in a few days. Use it whenever you're ready, no pressure 🙂",
+        "body": "Hi {{firstName}}, it's Bright Smile Dental — quick heads up, your 20% off code {{coupon.code}} is only good for a few more days. Use it whenever you're ready, no pressure either way!",
         "contact_id": "{{contactId}}"
       },
       "next": "log_winback_complete"
