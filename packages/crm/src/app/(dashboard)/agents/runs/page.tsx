@@ -22,6 +22,7 @@ import {
 import { getOrgId } from "@/lib/auth/helpers";
 import { RunsClient } from "./runs-client";
 import { SubscriptionsSection } from "./subscriptions-section";
+import { SchedulesSection } from "./schedules-section";
 
 export const dynamic = "force-dynamic";
 
@@ -85,6 +86,7 @@ export default async function WorkflowRunsPage() {
         initialWaits={allWaits.map(serializeWait)}
         initialStepResults={allResults.map(serializeStepResult)}
       />
+      <SchedulesSection orgId={orgId} />
       <SubscriptionsSection orgId={orgId} />
     </div>
   );
