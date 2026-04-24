@@ -550,3 +550,109 @@ Audit drafted. Stopping per instructions; no code until Max resolves the four ga
 - `<CustomerLogin>` scope boundary — "does it also handle session-expiry redirect UX?" If yes, +LOC; if no (current recommendation), +1 follow-up ticket.
 
 Awaiting gate resolution. No implementation until approved.
+
+---
+
+## §14 customer_surfaces BlockSpec extension (gates resolved — refined schema)
+
+Added 2026-04-24 after Max's gate resolution. **Supersedes the `CustomerSurfaceSchema` sketch in §8.3** — the structured `display + actions` split below is the PR 2 ship target.
+
+### Schema
+
+```yaml
+customer_surfaces:
+  display:
+    - entity: string           # which block entity to render
+      filter: string           # expression (e.g., "{{customer_id}}")
+      fields: string[]         # ordered subset of entity fields to display
+  actions:
+    - tool: string             # MCP tool name the action wraps
+      opt_in: boolean          # REQUIRED true — action surfaces do not auto-generate without it
+      rate_limit?: string      # optional (e.g., "5/hour")
+```
+
+Equivalent Zod shape (for PR 2 implementation):
+
+```typescript
+const CustomerDisplaySurfaceSchema = z.object({
+  entity: z.string().regex(/^[a-z][a-zA-Z0-9_]*$/, {
+    message: "display.entity must reference an entity declared under BlockSpec.entities",
+  }),
+  filter: z.string().min(1),   // interpolation string; validated downstream
+  fields: z.array(z.string().min(1)).min(1),
+});
+
+const CustomerActionSurfaceSchema = z.object({
+  tool: z.string().regex(TOOL_NAME_PATTERN),
+  opt_in: z.literal(true),     // ONLY true is accepted at schema level (L-22 structural enforcement)
+  rate_limit: z.string().regex(/^\d+\/(second|minute|hour|day)$/).optional(),
+});
+
+const CustomerSurfacesSchema = z.object({
+  display: z.array(CustomerDisplaySurfaceSchema).default([]),
+  actions: z.array(CustomerActionSurfaceSchema).default([]),
+});
+
+// Added to BlockSpecSchema:
+//   customer_surfaces: CustomerSurfacesSchema.default({ display: [], actions: [] })
+```
+
+### Design rationale
+
+1. **Display surfaces auto-generate** (low risk, read-only). Scaffold emits `blocks/<slug>/customer/<entity>.view.tsx` using `<CustomerDataView>` + the referenced entity's schema.
+
+2. **Action surfaces require `opt_in: true` at the schema level, not runtime** (L-22 structural enforcement). The Zod literal `z.literal(true)` rejects any spec with `opt_in: false` or `opt_in` omitted — so scaffolded customer forms can't ship without the builder explicitly acknowledging customer-data-collection intent. `false`-valued opt-ins are REJECTED at parse; they're not just filtered at the emitter.
+
+3. **`filter` is an interpolation string**, matching the existing convention for `subscriptions.idempotencyKey`. Common patterns:
+   - `"{{customer_id}}"` — show only the viewing customer's rows
+   - `"{{session.orgSlug}}"` — scope to workspace
+   - `"*"` — all rows (rare; used for public catalogs)
+
+4. **`rate_limit` is optional metadata** in PR 2. The SCHEMA accepts it; RUNTIME enforcement may or may not land in PR 2 depending on budget. If it lands: typical Upstash/Vercel KV-backed counter pattern. If deferred: flagged as a post-launch follow-up ticket, with the schema already in place so no breaking change.
+
+5. **Absence of `customer_surfaces` = admin-only block.** A scaffolded block without this field emits exactly the same output as a pre-4b scaffold (backward-compat default).
+
+### PR 2 scope (derived from schema above)
+
+- Extend `packages/crm/src/lib/scaffolding/spec.ts`:
+  - Add `CustomerDisplaySurfaceSchema`, `CustomerActionSurfaceSchema`, `CustomerSurfacesSchema`
+  - Add `customer_surfaces` field to `BlockSpecSchema` with default
+  - Export `BlockSpecCustomerDisplay`, `BlockSpecCustomerAction` types
+  - SuperRefine cross-check: each `display.entity` must match a declared `entities[*].name`; each `actions.tool` must match a declared `tools[*].name`
+- Add renderers:
+  - `renderCustomerDisplayViewTsx(entity, displaySurface)` → wraps `<CustomerDataView>` with the entity schema + field subset + filter
+  - `renderCustomerActionFormTsx(tool, actionSurface)` → wraps `<CustomerActionForm>` with the tool's arg schema + rate_limit hint
+- Orchestrator wiring:
+  - For each `display` entry, emit `blocks/<slug>/customer/<entity>.view.tsx`
+  - For each `actions` entry (auto-filtered by `opt_in: true` at schema level), emit `blocks/<slug>/customer/<tool>.form.tsx`
+- Smoke test: dynamic-import + renderToString one of each emitted file; assert structural markers
+- Backward-compat fixture updates: add `customer_surfaces: { display: [], actions: [] }` to ~6 existing BlockSpec fixtures (matching the 4a `entities: []` churn pattern)
+
+**Runtime rate_limit enforcement:** budget PR 2 targets the schema + scaffold emission path only. If rate_limit enforcement runtime fits in PR 2's ~1,480 LOC envelope, it lands; otherwise it becomes a PR 2 close-out follow-up ticket with the schema field already validated.
+
+### Future extensions (post-launch; schema designed to accommodate)
+
+1. **Derived-value filtering.** Today filter is a simple interpolation string. Future: computed expressions (e.g., `"status=='active' AND customer_id=='{{customer_id}}'"`) with a safe expression evaluator.
+
+2. **Action approval workflows.** Today customer actions submit directly via the wrapped tool. Future: `actions[*].requires_approval: boolean` + a staff-approval queue surface in admin.
+
+3. **Webhook notifications.** Customer form submit fires a workflow event; today that's handled by the tool itself. Future: declarative `actions[*].notify: string[]` (list of handler names) routed through the subscription primitive.
+
+4. **Multi-entity display compositions.** Today display is per-entity. Future: `display[*].compose: Array<{entity, relation}>` for "my bookings + the related therapist details."
+
+Each extension is additive — schema grows, existing fixtures don't churn.
+
+---
+
+## §15 Gate resolution record (2026-04-24)
+
+Max approved all four gate recommendations with refinements:
+
+| Gate | Decision | Refinement |
+|---|---|---|
+| G-4b-1 auth UX | **B** (themed CustomerLogin) | Explicit composition-only framing: wraps existing OTC + JWT unchanged. Reads workspace branding via PublicThemeProvider. ~100-150 LOC @ 0.94x composition multiplier. |
+| G-4b-2 migration scope | **B** (BookingWidget only) | **Invariant:** existing BookingWidget tests must pass against migrated version (zero behavior regression). IntakeForm migration → post-launch follow-up ticket (~2-3 days). |
+| G-4b-3 bridge policy | **C** (hybrid, form opt-in) | Schema shape refined per §14 above: structured `display + actions` split with `opt_in: true` enforced at schema level (L-22). |
+| G-4b-4 harness depth | **B** (shallow-plus) | Three specific additions: (1) magic-link flow smoke (request → verify → JWT → protected route), (2) theme 9-var propagation on public routes snapshot-level, (3) form submission paths per pattern with happy + error + rate-limit-if-configured. |
+
+Implementation starts at PR 1 per Max's gate-resolution message. No further audit revisions anticipated.
