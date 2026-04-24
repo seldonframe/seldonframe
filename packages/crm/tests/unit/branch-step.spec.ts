@@ -213,7 +213,7 @@ describe("BranchStepSchema — rejects malformed shapes", () => {
     assert.ok(res.length > 0);
   });
 
-  test("rejects external_state condition in C1 (will land in C2)", () => {
+  test("accepts external_state condition (shipped in C2)", () => {
     const spec = baseSpec([
       {
         id: "b1",
@@ -230,9 +230,8 @@ describe("BranchStepSchema — rejects malformed shapes", () => {
       },
     ]);
     const res = validateAgentSpec(spec, emptyBlockRegistry, { events: [{ type: "test.event", fields: {} }] });
-    // ConditionSchema in C1 only accepts "predicate" — external_state
-    // rejects. C2 will accept.
-    assert.ok(res.length > 0);
+    const malformed = res.filter((i) => i.code === "spec_malformed" && i.stepId === "b1");
+    assert.equal(malformed.length, 0, `expected external_state to validate post-C2; got ${JSON.stringify(malformed)}`);
   });
 });
 

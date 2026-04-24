@@ -276,15 +276,102 @@ const EmitEventStepSchema = z.object({
 });
 
 // Branch step — SLICE 6 PR 1 C1 per audit §3.1 + gate G-6-7 + G-6-8.
-// ConditionSchema is a discriminated union. C1 ships the "predicate"
-// branch only; C2 adds the "external_state" second branch.
+// ConditionSchema is a discriminated union. C1 shipped the "predicate"
+// branch; C2 (this commit) adds the "external_state" second branch.
 const InternalPredicateConditionSchema = z.object({
   type: z.literal("predicate"),
   predicate: PredicateSchema,
 });
 
+// SLICE 6 PR 1 C2 — external_state condition + HTTP + auth schemas.
+// Per audit §3.2/§3.3/§3.4 + Max's additional interpolation-scope
+// specification (handled downstream in validateBranchInterpolations).
+
+const NoneAuthSchema = z.object({
+  type: z.literal("none"),
+});
+
+const BearerAuthSchema = z.object({
+  type: z.literal("bearer"),
+  // secret_name cross-refs workspace_secrets.serviceName at synthesis
+  // time (full cross-check when the registry is provided; v1 ships
+  // without a synchronous registry check and relies on runtime
+  // resolution to fail-closed if the secret is missing).
+  secret_name: z.string().min(1),
+});
+
+const HeaderAuthSchema = z.object({
+  type: z.literal("header"),
+  header_name: z.string().min(1),
+  secret_name: z.string().min(1),
+});
+
+const AuthConfigSchema = z.discriminatedUnion("type", [
+  NoneAuthSchema,
+  BearerAuthSchema,
+  HeaderAuthSchema,
+]);
+
+const HttpRequestConfigSchema = z
+  .object({
+    url: z.string().url({ message: "http.url must be a valid absolute URL" }),
+    method: z.enum(["GET", "POST"]).default("GET"),
+    headers: z.record(z.string(), z.string()).optional(),
+    query: z.record(z.string(), z.string()).optional(),
+    body: z.string().optional(),
+    auth: AuthConfigSchema.optional(),
+    timeout_ms: z.number().int().min(1000).max(30000).default(5000),
+  })
+  .refine(
+    (c) => c.method !== "POST" || c.body === undefined || c.body.length > 0,
+    { message: "POST with empty string body is likely a mistake" },
+  );
+
+// Operators per audit §3.2. "exists" / "truthy" don't require
+// `expected`; all others do — enforced via superRefine.
+const OperatorEnum = z.enum([
+  "equals",
+  "not_equals",
+  "contains",
+  "gt",
+  "lt",
+  "gte",
+  "lte",
+  "exists",
+  "truthy",
+]);
+const OperatorsRequiringExpected = new Set([
+  "equals",
+  "not_equals",
+  "contains",
+  "gt",
+  "lt",
+  "gte",
+  "lte",
+]);
+
+const ExternalStateConditionSchema = z
+  .object({
+    type: z.literal("external_state"),
+    http: HttpRequestConfigSchema,
+    response_path: z.string().min(1),
+    operator: OperatorEnum,
+    expected: z.unknown().optional(),
+    timeout_behavior: z.enum(["fail", "false_on_timeout"]).default("fail"),
+  })
+  .superRefine((cond, ctx) => {
+    if (OperatorsRequiringExpected.has(cond.operator) && cond.expected === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["expected"],
+        message: `operator "${cond.operator}" requires an "expected" value`,
+      });
+    }
+  });
+
 const ConditionSchema = z.discriminatedUnion("type", [
   InternalPredicateConditionSchema,
+  ExternalStateConditionSchema,
 ]);
 
 const BranchStepSchema = z.object({
@@ -881,11 +968,32 @@ function validateInterpolationsInStep(
     if (match && typeof match === "object") {
       walkObjectStrings(match, "match", stringPaths);
     }
+  } else if (isBranchStep(step)) {
+    // SLICE 6 PR 1 C2 — external_state conditions interpolate URL,
+    // headers, query, body. Walk all strings in the http config so
+    // interpolation references resolve against the run scope.
+    // The interpolation-scope rejection for {{secrets.*}} is enforced
+    // as a SEPARATE pass below (not a scope-miss; an explicit reject).
+    if (step.condition.type === "external_state") {
+      walkObjectStrings(step.condition.http, "condition.http", stringPaths);
+    }
   }
   // wait / unknown step types have no interpolatable user content.
 
   for (const { path, text } of stringPaths) {
     for (const ref of parseInterpolations(text)) {
+      // Max's additional spec: interpolation scope for external_state
+      // EXCLUDES workspace_secrets. Auth goes through secret_name
+      // lookup in AuthConfigSchema, never through interpolation.
+      if (ref.varName === "secrets") {
+        issues.push({
+          code: "unresolved_interpolation",
+          stepId,
+          path,
+          message: `interpolation "${ref.raw}" references workspace secrets; secrets must flow through AuthConfigSchema.secret_name, not interpolation`,
+        });
+        continue;
+      }
       resolveOneInterpolation(stepId, path, ref, scope, issues);
     }
   }
