@@ -51,7 +51,8 @@ export type ValidationIssueCode =
   | "bad_extract_shape"
   | "bad_capture_name"
   | "unknown_step_next"
-  | "unsupported_step_type";
+  | "unsupported_step_type"
+  | "graph_cycle";
 
 export type ValidationIssue = {
   code: ValidationIssueCode;
@@ -274,6 +275,27 @@ const EmitEventStepSchema = z.object({
   next: z.string().nullable(),
 });
 
+// Branch step — SLICE 6 PR 1 C1 per audit §3.1 + gate G-6-7 + G-6-8.
+// ConditionSchema is a discriminated union. C1 ships the "predicate"
+// branch only; C2 adds the "external_state" second branch.
+const InternalPredicateConditionSchema = z.object({
+  type: z.literal("predicate"),
+  predicate: PredicateSchema,
+});
+
+const ConditionSchema = z.discriminatedUnion("type", [
+  InternalPredicateConditionSchema,
+]);
+
+const BranchStepSchema = z.object({
+  id: z.string().min(1),
+  type: z.literal("branch"),
+  condition: ConditionSchema,
+  // 2-way branch per G-6-7 A. N-way switch is a post-launch extension.
+  on_match_next: z.string().nullable(),
+  on_no_match_next: z.string().nullable(),
+});
+
 const UnknownStepSchema = z
   .object({
     id: z.string().min(1),
@@ -289,6 +311,7 @@ const KnownStepSchema = z.discriminatedUnion("type", [
   ReadStateStepSchema,
   WriteStateStepSchema,
   EmitEventStepSchema,
+  BranchStepSchema,
 ]);
 
 const StepSchema = z.union([KnownStepSchema, UnknownStepSchema]);
@@ -309,10 +332,12 @@ export type AwaitEventStep = z.infer<typeof AwaitEventStepSchema>;
 export type ReadStateStep = z.infer<typeof ReadStateStepSchema>;
 export type WriteStateStep = z.infer<typeof WriteStateStepSchema>;
 export type EmitEventStep = z.infer<typeof EmitEventStepSchema>;
+export type BranchStep = z.infer<typeof BranchStepSchema>;
+export type Condition = z.infer<typeof ConditionSchema>;
 export type UnknownStep = z.infer<typeof UnknownStepSchema>;
-// Discriminated-union narrowing on `.type` for the four known step
-// types; UnknownStep is the runtime fallthrough for unsupported
-// types (branch — ships with 2e) and carries `type: string`.
+// Discriminated-union narrowing on `.type`. UnknownStep is the runtime
+// fallthrough for unsupported types (none currently unshipped — all
+// SLICE-6-era step types are Known).
 export type Step =
   | WaitStep
   | McpToolCallStep
@@ -321,6 +346,7 @@ export type Step =
   | ReadStateStep
   | WriteStateStep
   | EmitEventStep
+  | BranchStep
   | UnknownStep;
 
 // Type guards — TypeScript can't narrow Step by `step.type === "..."`
@@ -353,6 +379,21 @@ function isAwaitEventStep(step: Step): step is AwaitEventStep {
   // absent on a pass-through UnknownStep that merely happens to carry
   // `type: "await_event"`).
   return step.type === "await_event" && typeof (step as Partial<AwaitEventStep>).event === "string";
+}
+
+function isBranchStep(step: Step): step is BranchStep {
+  // Distinguish from UnknownStep by requiring both the literal type
+  // + the two next-pointers (both keys must be present on the real
+  // schema; absence means malformed → caught at schema parse or
+  // unsupported_step_type).
+  const s = step as Partial<BranchStep>;
+  return (
+    step.type === "branch" &&
+    typeof s.condition === "object" &&
+    s.condition !== null &&
+    "on_match_next" in step &&
+    "on_no_match_next" in step
+  );
 }
 
 // ---------------------------------------------------------------------
@@ -441,7 +482,84 @@ export function validateAgentSpec(
     }
   }
 
+  // SLICE 6 PR 1 C1 — graph cycle detection (G-6-8 A). Walk every
+  // step as a potential entry point; DFS with a "currently-visiting"
+  // set rejects any edge that revisits a step in the current path.
+  detectGraphCycles(spec, issues);
+
   return issues;
+}
+
+// ---------------------------------------------------------------------
+// Graph cycle detection (G-6-8 A) — SLICE 6 PR 1 C1.
+// ---------------------------------------------------------------------
+
+function detectGraphCycles(spec: AgentSpec, issues: ValidationIssue[]): void {
+  const stepById = new Map<string, Step>();
+  for (const s of spec.steps) stepById.set(s.id, s);
+
+  const reportedCycles = new Set<string>();
+  const globallyVisited = new Set<string>();
+
+  for (const step of spec.steps) {
+    if (globallyVisited.has(step.id)) continue;
+    const pathStack = new Set<string>();
+    dfs(step.id, pathStack, stepById, globallyVisited, reportedCycles, issues);
+  }
+}
+
+function dfs(
+  stepId: string,
+  pathStack: Set<string>,
+  stepById: Map<string, Step>,
+  globallyVisited: Set<string>,
+  reportedCycles: Set<string>,
+  issues: ValidationIssue[],
+): void {
+  if (pathStack.has(stepId)) {
+    if (!reportedCycles.has(stepId)) {
+      reportedCycles.add(stepId);
+      issues.push({
+        code: "graph_cycle",
+        stepId,
+        path: "next",
+        message: `step "${stepId}" participates in a cyclic reference chain; all paths from root must eventually terminate (null next) or await (await_event)`,
+      });
+    }
+    return;
+  }
+  if (globallyVisited.has(stepId)) return;
+
+  const step = stepById.get(stepId);
+  if (!step) return; // unknown_step_next surfaces elsewhere
+
+  pathStack.add(stepId);
+  for (const nextId of successorsOf(step)) {
+    dfs(nextId, pathStack, stepById, globallyVisited, reportedCycles, issues);
+  }
+  pathStack.delete(stepId);
+  globallyVisited.add(stepId);
+}
+
+function successorsOf(step: Step): string[] {
+  if (isBranchStep(step)) {
+    return [step.on_match_next, step.on_no_match_next].filter(
+      (n): n is string => n !== null && n !== undefined,
+    );
+  }
+  if (isAwaitEventStep(step)) {
+    const out: string[] = [];
+    // Defensive: await_event fields may be missing on malformed input
+    // (surfaces as spec_malformed elsewhere; cycle detector shouldn't
+    // throw on them).
+    const resumeNext = step.on_resume?.next;
+    if (typeof resumeNext === "string") out.push(resumeNext);
+    const timeoutNext = step.on_timeout?.next;
+    if (typeof timeoutNext === "string") out.push(timeoutNext);
+    return out;
+  }
+  const next = extractNext(step);
+  return typeof next === "string" ? [next] : [];
 }
 
 // ---------------------------------------------------------------------
@@ -460,8 +578,23 @@ function validateStep(
 ): void {
   // `next` reference check. wait / mcp_tool_call / conversation each
   // have a single `next`; await_event has TWO (on_resume.next and
-  // on_timeout.next), handled inside validateAwaitEventStep.
-  if (!isAwaitEventStep(step)) {
+  // on_timeout.next), handled inside validateAwaitEventStep; branch
+  // has TWO (on_match_next and on_no_match_next), handled inline below.
+  if (isBranchStep(step)) {
+    for (const [field, value] of [
+      ["on_match_next", step.on_match_next],
+      ["on_no_match_next", step.on_no_match_next],
+    ] as const) {
+      if (value !== null && !stepIds.has(value)) {
+        issues.push({
+          code: "unknown_step_next",
+          stepId: step.id,
+          path: field,
+          message: `step "${step.id}" references ${field}="${value}" which is not a declared step id`,
+        });
+      }
+    }
+  } else if (!isAwaitEventStep(step)) {
     const next = extractNext(step);
     if (next !== null && next !== undefined && !stepIds.has(next)) {
       issues.push({
@@ -508,11 +641,31 @@ function validateStep(
     validateEmitEventStep(step, eventRegistry, issues);
     return;
   }
+  // Handle branch — SLICE 6 PR 1 C1. Malformed branch steps
+  // (bad condition discriminator, missing successors) fall through
+  // to UnknownStep because z.union evaluates BranchStepSchema, fails,
+  // then accepts the permissive UnknownStepSchema. Re-parse here so
+  // malformed branches surface as a proper spec_malformed issue
+  // rather than silently passing through.
+  if (step.type === "branch") {
+    const parsed = BranchStepSchema.safeParse(step);
+    if (!parsed.success) {
+      for (const err of parsed.error.issues) {
+        issues.push({
+          code: "spec_malformed",
+          stepId: step.id,
+          path: err.path.join(".") || "$",
+          message: err.message,
+        });
+      }
+    }
+    return;
+  }
   issues.push({
     code: "unsupported_step_type",
     stepId: step.id,
     path: "type",
-    message: `step type "${step.type}" is not supported by this validator (wait / mcp_tool_call / conversation / await_event / read_state / write_state / emit_event are the seven known types; branch ships with 2e)`,
+    message: `step type "${step.type}" is not supported by this validator (wait / mcp_tool_call / conversation / await_event / read_state / write_state / emit_event / branch are the eight known types)`,
   });
 }
 

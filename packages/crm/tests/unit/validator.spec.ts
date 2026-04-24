@@ -170,12 +170,14 @@ describe("validateAgentSpec — unknown_step_next", () => {
 
 describe("validateAgentSpec — unsupported_step_type", () => {
   test("surfaces unsupported_step_type for an unknown type string", () => {
+    // "branch" is now a known step type (SLICE 6 PR 1 C1). Use a
+    // genuinely-unknown type string to test the fallthrough path.
     const issues = validateAgentSpec(
       {
         name: "x",
         description: "x",
         trigger: { type: "event", event: "contact.created" },
-        steps: [{ id: "a", type: "branch", condition: { type: "external_state" }, next: null }],
+        steps: [{ id: "a", type: "future_step_type_not_yet_shipped", next: null }],
       },
       emptyRegistry,
       testEventRegistry,
@@ -183,7 +185,7 @@ describe("validateAgentSpec — unsupported_step_type", () => {
     const match = issues.find((i) => i.code === "unsupported_step_type");
     assert.ok(match);
     assert.equal(match!.stepId, "a");
-    assert.ok(match!.message.includes("branch"));
+    assert.ok(match!.message.includes("future_step_type_not_yet_shipped"));
   });
 });
 
@@ -538,21 +540,23 @@ describe("validateAgentSpec — await_event dispatcher (2c PR 1 M2)", () => {
     );
   });
 
-  test("unsupported_step_type message drops 'await_event' — branch-only now", () => {
+  test("unsupported_step_type message lists shipped types (SLICE 6: branch is now among them)", () => {
+    // branch was previously the future-scope placeholder; SLICE 6 ships
+    // it. Only truly-unshipped types hit this error now.
     const issues = validateAgentSpec(
       {
         name: "x",
         description: "x",
         trigger: { type: "event", event: "contact.created" },
-        steps: [{ id: "a", type: "branch", condition: { type: "external_state" }, next: null }],
+        steps: [{ id: "a", type: "future_step_type_not_yet_shipped", next: null }],
       },
       emptyRegistry,
       testEventRegistry,
     );
     const match = issues.find((i) => i.code === "unsupported_step_type");
     assert.ok(match);
-    assert.ok(match!.message.includes("branch"));
-    assert.ok(!match!.message.includes("await_event ship"), "await_event is shipped now; message should not reference it as future scope");
+    assert.ok(match!.message.includes("branch"), "message should list branch as a known type now");
+    assert.ok(!match!.message.includes("branch ships with 2e"), "branch is shipped; message must not reference future scope");
   });
 });
 
