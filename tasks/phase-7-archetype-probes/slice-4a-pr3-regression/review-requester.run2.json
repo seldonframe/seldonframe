@@ -25,7 +25,7 @@
       "args": {
         "to": "{{email}}",
         "subject": "Thanks for visiting Bright Smile — how did we do?",
-        "body": "Hi {{firstName}},\n\nThank you for trusting us with your smile. We hope the visit felt calm, comfortable, and maybe even a little less scary than you expected — that's always our goal.\n\nIf you have 30 seconds, we'd be so grateful if you'd share your experience. Honest reviews help other nervous patients find a dental home where they can relax:\n\nhttps://g.page/r/Ca-example-business/review\n\nAnd if something didn't feel right during your visit, please just hit reply — we'd rather hear it from you first so we can make it right.\n\nWarmly,\nThe Bright Smile Dental team",
+        "body": "Hi {{firstName}},\n\nThanks for coming in to see us at Bright Smile Dental. We hope the visit felt calm and easy — that's always the goal here.\n\nIf you have 30 seconds, a quick review would mean a lot. Honest feedback helps other folks who are nervous about the dentist find a practice they can trust:\n\nhttps://g.page/r/Ca-example-business/review\n\nAnd if something didn't sit right, just hit reply — we'd rather hear it from you directly so we can make it right.\n\nTake care,\nThe Bright Smile Dental team",
         "contactId": "{{contactId}}"
       },
       "next": "wait_before_sms"
@@ -42,7 +42,7 @@
       "tool": "send_sms",
       "args": {
         "to": "{{phone}}",
-        "body": "Hi {{firstName}}, it's Bright Smile Dental — just a quick nudge. If you have 30 seconds, a short review really helps other patients find us: https://g.page/r/Ca-example-business/review Thank you!",
+        "body": "Hey {{firstName}}, quick note from Bright Smile Dental — if you have 30 seconds, we'd really appreciate a short review: https://g.page/r/Ca-example-business/review. Thanks!",
         "contact_id": "{{contactId}}"
       },
       "next": "log_review_request_complete"

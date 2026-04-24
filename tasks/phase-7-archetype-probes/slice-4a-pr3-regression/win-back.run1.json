@@ -58,7 +58,7 @@
       "args": {
         "to": "{{email}}",
         "subject": "A small thank-you from Bright Smile — 20% off whenever you're ready",
-        "body": "Hi {{firstName}},\n\nWe saw that you recently cancelled, and we just wanted to say — no pressure, no hard feelings. Dental care should feel easy, not pushy.\n\nIf you ever decide to come back for a painless cleaning or a free new-patient consultation, here's 20% off to make it a little easier:\n\n{{coupon.code}}\n\nIt's good for the next 14 days at checkout.\n\nAnd if something about your last experience wasn't quite right, we'd genuinely love to know — just hit reply. A real person on our team reads every message.\n\nTake care of those teeth,\nThe Bright Smile Dental team",
+        "body": "Hi {{firstName}},\n\nWe saw you cancelled recently, and that's completely okay — no pressure at all. We just wanted you to know the door is always open at Bright Smile Dental, and we'd love to keep making dental care feel a little less scary for you.\n\nIf you ever want to come back for a painless cleaning or a free new-patient consultation, here's 20% off on us:\n\n{{coupon.code}}\n\nIt's good for the next 14 days — just use it the next time you book.\n\nIf something didn't feel right the first time around, we'd genuinely like to hear it. Hit reply — a real person on our team reads every message.\n\nWarmly,\nThe Bright Smile Dental team",
         "contactId": "{{contactId}}"
       },
       "next": "wait_before_reminder"
@@ -75,7 +75,7 @@
       "tool": "send_sms",
       "args": {
         "to": "{{phone}}",
-        "body": "Hi {{firstName}}, it's Bright Smile Dental — just a gentle heads up that your 20% off code {{coupon.code}} expires in a few days. Here if you need us, no pressure either way!",
+        "body": "Hey {{firstName}}, it's Bright Smile Dental — just a gentle heads up that your 20% off code {{coupon.code}} expires in a few days. No pressure, just didn't want you to miss it if you'd like to come back.",
         "contact_id": "{{contactId}}"
       },
       "next": "log_winback_complete"
