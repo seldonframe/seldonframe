@@ -57,8 +57,8 @@
       "tool": "send_email",
       "args": {
         "to": "{{email}}",
-        "subject": "A little something from Bright Smile — 20% off whenever you're ready",
-        "body": "Hi {{firstName}},\n\nWe noticed you cancelled recently — totally no pressure, life gets busy and we get it. We just wanted you to know the door is always open here at Bright Smile Dental.\n\nIf and when you're ready to come back, here's 20% off your next visit:\n\n{{coupon.code}}\n\nIt's good for the next 14 days — just mention it (or enter it at checkout) when you book.\n\nAnd if something about your last experience wasn't quite right, we'd genuinely love to hear it. Hit reply — a real person reads every note, and we'd rather know than not.\n\nTake care of those teeth either way,\nThe Bright Smile Dental team",
+        "subject": "A small thank-you from Bright Smile — 20% off whenever you're ready",
+        "body": "Hi {{firstName}},\n\nWe saw that you recently cancelled, and I just wanted to say — no hard feelings at all. Dental care should feel easy, not like one more thing to manage.\n\nIf you ever want to come back for a painless cleaning or a free new-patient consultation, here's 20% off on us:\n\n{{coupon.code}}\n\nIt's good for the next 14 days. Just mention it (or enter it at checkout) when you book.\n\nAnd if something about your last experience didn't feel right, I'd really like to know. Hit reply — it comes straight to our team, and we read every one.\n\nTake care of those teeth,\nThe Bright Smile Dental team",
         "contactId": "{{contactId}}"
       },
       "next": "wait_before_reminder"
@@ -75,7 +75,7 @@
       "tool": "send_sms",
       "args": {
         "to": "{{phone}}",
-        "body": "Hey {{firstName}}, quick note from Bright Smile Dental — your 20% off code {{coupon.code}} expires in a few days. Use it whenever you're ready, no pressure either way!",
+        "body": "Hi {{firstName}}, it's Bright Smile Dental — quick heads up that your 20% off code {{coupon.code}} expires in a few days. Use it whenever you're ready, no pressure either way :)",
         "contact_id": "{{contactId}}"
       },
       "next": "log_winback_complete"

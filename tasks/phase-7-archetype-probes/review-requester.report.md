@@ -1,8 +1,8 @@
 # Archetype probe: Review Requester (review-requester)
 
-**Generated:** 2026-04-23T22:30:26.688Z
+**Generated:** 2026-04-24T02:48:56.586Z
 **Model:** claude-opus-4-7
-**Input tokens:** 8797 · **Output tokens:** 1050 · **Cost:** $0.0702 · **Latency:** 14928ms
+**Input tokens:** 8797 · **Output tokens:** 1061 · **Cost:** $0.0705 · **Latency:** 14670ms
 **Customization prompt:** (none)
 
 ## Verdict: PASS

@@ -1,12 +1,27 @@
-# SLICE 4a PR 2 close-out report — 4 UI patterns + scaffold bridge + smoke test
+# SLICE 4a PR 2 close-out report — 4 UI patterns + scaffold bridge + smoke test + 9-probe regression
 
-**Date:** 2026-04-23
-**Scope:** SLICE 4a PR 2 (four admin patterns + scaffold → UI bridge + end-to-end smoke).
-**Commits:** C1 `f577752f` → C2 `e0bf1d8d` → C3 `f1e5b006` → C4 `d1978fa4` → C5 `2b38958e` → C6 `19ed399a` → C7 `[this commit]`.
+**Date:** 2026-04-23 (probes re-run 2026-04-24 after credit top-up)
+**Scope:** SLICE 4a PR 2 (four admin patterns + scaffold → UI bridge + end-to-end smoke + 9-probe regression).
+**Commits:** C1 `f577752f` → C2 `e0bf1d8d` → C3 `f1e5b006` → C4 `d1978fa4` → C5 `2b38958e` → C6 `19ed399a` → C7 `eed09a24` (initial close-out) → C8 `[this commit]` (probe artifacts + verification extension).
+**Probe model:** `claude-opus-4-7`
 
 ---
 
-## Status: **PR 2 complete + green bar — 9-probe regression BLOCKED on API credits**
+## Verdict: **9/9 PASS — 17-in-a-row hash streak extended**
+
+| Archetype | Cost sample | PR 1 baseline | Δ | Hash |
+|---|---|---|---|---|
+| speed-to-lead | ~$0.0763 | $0.0767 | −0.5% | `735f9299ff111080` |
+| win-back | ~$0.0839 | $0.0841 | −0.2% | `72ea1438d6c4a691` |
+| review-requester | ~$0.0702 | $0.0701 | +0.1% | `4464ec782dfd7bad` |
+
+**17-in-a-row** hash preservation streak:
+
+  PR 3 → 2b.2 (6 blocks) → 2c (PR 1/2/3) → SLICE 1-a →
+  SLICE 1 PR 1 / PR 2 → SLICE 2 PR 1 / PR 2 → SLICE 3 PR 1 →
+  SLICE 4a PR 1 → **SLICE 4a PR 2**
+
+**Confirmed expectation:** PR 2 ships UI composition primitives + admin page generation + an additive BlockSpec.entities field (defaulted to `[]`). Synthesis doesn't read UI files; archetype hashes are driven by BlockSpec manifests + tool schemas + event registry — all unchanged. Zero drift materialized, as predicted.
 
 | Gate | Status |
 |---|---|
@@ -16,33 +31,16 @@
 | `pnpm emit:blocks:check` | ✅ clean |
 | `pnpm emit:event-registry:check` | ✅ clean |
 | End-to-end smoke test | ✅ scaffold → compile → render → assert |
-| 9-probe archetype regression | ❌ **blocked** — Anthropic API credit balance too low |
-| 16-in-a-row hash streak | ⏸ **pending** probe run |
+| 9-probe archetype regression | ✅ **9/9 PASS** with hash preservation |
+| 17-in-a-row hash streak | ✅ **extended** |
 
-**Anthropic error (from probe attempt):**
+### Probe re-run note
 
-> `invalid_request_error — Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.` (`request_id: req_011CaMfJGsySmgoYA8KkC7Uu`)
-
-**To resume the probe step** once credits are topped up:
-
-```bash
-unset ANTHROPIC_API_KEY
-for arch in speed-to-lead win-back review-requester; do
-  for run in 1 2 3; do
-    node scripts/phase-7-spike/probe-archetype.mjs $arch
-    cp tasks/phase-7-archetype-probes/$arch.filled.json \
-       tasks/phase-7-archetype-probes/slice-4a-pr2-regression/$arch.run$run.json
-  done
-done
-node scripts/phase-7-spike/structural-hash.mjs \
-  tasks/phase-7-archetype-probes/slice-4a-pr2-regression/*.json
-# Expected baseline hashes (from SLICE 4a PR 1):
-#   speed-to-lead:    735f9299ff111080
-#   win-back:         72ea1438d6c4a691
-#   review-requester: 4464ec782dfd7bad
-```
-
-**Why the streak is expected to hold:** PR 2 touches UI composition primitives + admin page generation + a Zod schema extension in BlockSpec (additive, defaulted). Synthesis doesn't read UI files; archetype hashes are driven by BlockSpec manifests + tool schemas + event registry — all unchanged in PR 2. Zero change to `lib/agents/types.ts`, zero change to `SeldonEvent` union, zero change to subscription primitive or scaffolding core pipeline. The only BlockSpec change is a new optional `entities` field (defaulted to `[]`) which the archetype prompts don't consume.
+Initial probe attempt on 2026-04-23 hit
+`invalid_request_error — Your credit balance is too low` (`request_id: req_011CaMfJGsySmgoYA8KkC7Uu`).
+Max opted for Path 1 (top up + run) per rescope discipline — "break the pattern
+weakens the claim; credit cost is trivial vs architectural work at stake." Credits
+topped up, probes run clean.
 
 ---
 
@@ -176,7 +174,8 @@ Manual QA checklist moves to PR 3 close-out per G-4-6.
 Per PR split in audit §7:
 - Shallow integration harness covering all PR 1 + PR 2 patterns together.
 - Manual QA checklist against the preview URL.
-- 9-probe regression (blocked on credits in PR 2; can retry in PR 3 naturally).
+- Final 9-probe regression to close the SLICE 4a arc (PR 2's 9-probe already PASS
+  per §above).
 - Close-out report with full SLICE 4a wrap-up + L-17 confirmation of the 0.94x
   addendum from both PR 1 and PR 2 data.
 
@@ -189,14 +188,18 @@ end-to-end smoke). L-17 UI composition addendum's 0.94x multiplier is confirmed 
 two independent PRs with 7 distinct patterns — the claim isn't a single-datapoint
 coincidence.
 
-**Blocker:** 9-probe archetype regression needs live API access; credit balance is
-currently exhausted. The probe-run command sequence is above for a quick resume once
-credits land.
+**9/9 probes PASS with 17-in-a-row hash preservation streak.** All three archetypes
+produced byte-identical structural hashes to their PR 1 baselines across three
+independent runs each. Cost deltas within ±0.5% of PR 1 samples — no measurable
+synthesis drift.
 
-**Per rescope discipline:** do NOT start PR 3 until
-  1. Max approves the PR 2 close-out as-is, OR
-  2. API credits are topped up + the 9-probe regression runs + the hash streak is
-     confirmed, at which point PR 3 starts against a complete baseline.
+**Per rescope discipline:** stopping here per L-21. Do NOT start PR 3 until Max
+approves this extended close-out.
 
-If Max prefers, the probes can also be deferred into PR 3's regression run — the
-harness + QA + 9-probe already live in PR 3 scope, so bundling them is a natural fit.
+When approved, PR 3 proceeds as specced:
+  - Shallow integration harness covering all PR 1 + PR 2 patterns.
+  - Manual QA checklist execution against preview URL.
+  - Final 9-probe regression (post-PR-3) to close the SLICE 4a arc.
+  - SLICE 4a close-out report with PR 1 + PR 2 + PR 3 LOC totals + UI multiplier
+    final calibration + refined L-17 addendum capturing the "composition vs
+    state-machine" distinction + SLICE 4b audit preparation notes.

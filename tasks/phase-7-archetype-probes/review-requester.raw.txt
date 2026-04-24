@@ -25,7 +25,7 @@
       "args": {
         "to": "{{email}}",
         "subject": "Thanks for visiting Bright Smile — how did we do?",
-        "body": "Hi {{firstName}},\n\nThanks so much for coming in to see us at Bright Smile Dental. We hope the visit felt easy and stress-free — that's always our goal.\n\nIf you have 30 seconds, we'd really appreciate it if you left us a quick review. Honest feedback helps other folks who are nervous about the dentist find a practice they can trust:\n\nhttps://g.page/r/Ca-example-business/review\n\nAnd if something didn't sit right, please just hit reply and let us know directly — we'd rather hear from you first and make it right.\n\nThanks again for trusting us with your smile.\n\n— The Bright Smile Dental team",
+        "body": "Hi {{firstName}},\n\nThanks so much for coming in to see us at Bright Smile Dental. We hope the visit felt calm and easy — that's always the goal around here.\n\nIf you have 30 seconds, we'd be really grateful for a quick review. Honest feedback helps other folks who are nervous about the dentist find a practice they can trust:\n\nhttps://g.page/r/Ca-example-business/review\n\nAnd if anything didn't feel right, please just hit reply — we'd genuinely rather hear it from you first so we can make it better.\n\nThanks again for trusting us with your smile.\n\n— The team at Bright Smile Dental",
         "contactId": "{{contactId}}"
       },
       "next": "wait_before_sms"
@@ -42,7 +42,7 @@
       "tool": "send_sms",
       "args": {
         "to": "{{phone}}",
-        "body": "Hi {{firstName}}, it's Bright Smile Dental — quick follow-up: if you have 30 seconds, a short review really helps us out. https://g.page/r/Ca-example-business/review — thanks!",
+        "body": "Hey {{firstName}}, it's Bright Smile Dental — quick follow-up: if you have 30 seconds, a short review would mean a lot: https://g.page/r/Ca-example-business/review. And if anything wasn't right, just reply here.",
         "contact_id": "{{contactId}}"
       },
       "next": "log_review_request_complete"

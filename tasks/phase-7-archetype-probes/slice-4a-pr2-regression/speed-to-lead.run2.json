@@ -25,8 +25,8 @@
       "id": "qualify_conversation",
       "type": "conversation",
       "channel": "sms",
-      "initial_message": "Hi {{contact.firstName}}, it's Bright Smile Dental — thanks for reaching out about a new-patient visit! Happy to get you booked (it's on us). Any preferred day/time that works for you? And do you have dental insurance you'd like us to check?",
-      "exit_when": "The prospect has shared a preferred appointment day/time for a new-patient consultation AND confirmed their insurance status (yes / no / unsure).",
+      "initial_message": "Hi {{contact.firstName}}, it's Bright Smile Dental — thanks so much for reaching out about a new-patient visit! We'd love to get you booked (it's on us). Any day/time that works best for you? And do you have dental insurance you'd like us to check?",
+      "exit_when": "The prospect has shared a preferred appointment day/time AND confirmed their insurance status (yes / no / unsure).",
       "on_exit": {
         "extract": {
           "preferred_start": "ISO-8601 datetime for the preferred appointment start, snapped to the next available slot in the clinic's business hours (Mon–Fri 9am–5pm local time).",
@@ -70,7 +70,7 @@
       "args": {
         "to": "{{email}}",
         "subject": "You're booked with Bright Smile Dental 🦷",
-        "body": "Hi {{contact.firstName}},\n\nYou're all set for {{preferred_start}} — we're looking forward to meeting you.\n\nHere's what to expect: a relaxed 45-minute new-patient visit, zero sales pressure, and plenty of time for your questions. Our goal is simple — make dental care feel less scary, one visit at a time.\n\nNeed to reschedule? Just reply to this email or text us back and we'll sort it out.\n\nSee you soon,\nThe Bright Smile Dental team",
+        "body": "Hi {{contact.firstName}},\n\nYou're all set for {{preferred_start}} — we can't wait to meet you. Here's what to expect: a relaxed 45-minute visit, zero pressure, and plenty of time for any questions you have. Our team uses modern, gentle tech to keep things painless from start to finish.\n\nNeed to move things around? Just reply to this email or text us back — no stress, no fees.\n\nSee you soon,\nThe Bright Smile Dental team",
         "contactId": "{{contactId}}"
       },
       "next": null
