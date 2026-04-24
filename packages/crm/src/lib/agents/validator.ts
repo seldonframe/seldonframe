@@ -99,16 +99,40 @@ export type EventRegistry = {
 // `unsupported_step_type` via the step dispatcher.
 // ---------------------------------------------------------------------
 
-// TriggerSchema — discriminated union on `type`. SLICE 5 PR 1 C1
-// introduces the union shape. The event branch is unchanged from the
-// pre-SLICE-5 schema; the schedule branch lands in C2.
+// TriggerSchema — discriminated union on `type`.
+// SLICE 5 PR 1 C1 introduced the union shape (event branch).
+// SLICE 5 PR 1 C2 adds the schedule branch with cron + timezone +
+// catchup + concurrency (per audit §3.1 + gates G-5-1..G-5-5).
+import { isValidCronExpression, isValidIanaTimezone } from "./cron";
+
 const EventTriggerSchema = z.object({
   type: z.literal("event"),
   event: z.string().min(1),
   filter: z.record(z.string(), z.unknown()).optional(),
 });
 
-const TriggerSchema = z.discriminatedUnion("type", [EventTriggerSchema]);
+const ScheduleTriggerSchema = z.object({
+  type: z.literal("schedule"),
+  cron: z
+    .string()
+    .min(1)
+    .refine(isValidCronExpression, {
+      message: 'cron must be a valid POSIX 5-field expression (e.g., "0 9 * * *")',
+    }),
+  timezone: z
+    .string()
+    .refine(isValidIanaTimezone, {
+      message: 'timezone must be a valid IANA zone (e.g., "America/New_York")',
+    })
+    .optional(),
+  catchup: z.enum(["skip", "fire_all", "fire_one"]).default("skip"),
+  concurrency: z.enum(["skip", "concurrent"]).default("skip"),
+});
+
+const TriggerSchema = z.discriminatedUnion("type", [
+  EventTriggerSchema,
+  ScheduleTriggerSchema,
+]);
 
 const WaitStepSchema = z.object({
   id: z.string().min(1),
@@ -358,15 +382,18 @@ export function validateAgentSpec(
 
   const spec = parsed.data;
 
-  // Trigger event must exist in the SeldonEvent union.
-  const knownEvents = new Set(eventRegistry.events.map((e) => e.type));
-  if (!knownEvents.has(spec.trigger.event)) {
-    issues.push({
-      code: "unknown_event",
-      stepId: null,
-      path: "trigger.event",
-      message: `trigger event "${spec.trigger.event}" is not in the SeldonEvent registry`,
-    });
+  // Trigger event must exist in the SeldonEvent union. Only applies to
+  // event triggers; schedule triggers are standalone (no event cross-ref).
+  if (spec.trigger.type === "event") {
+    const knownEvents = new Set(eventRegistry.events.map((e) => e.type));
+    if (!knownEvents.has(spec.trigger.event)) {
+      issues.push({
+        code: "unknown_event",
+        stepId: null,
+        path: "trigger.event",
+        message: `trigger event "${spec.trigger.event}" is not in the SeldonEvent registry`,
+      });
+    }
   }
 
   // Build next-step reference set for unknown_step_next checks.

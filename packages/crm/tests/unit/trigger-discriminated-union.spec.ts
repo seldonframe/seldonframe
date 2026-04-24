@@ -133,15 +133,15 @@ describe("TriggerSchema refactor — discriminated-union shape", () => {
     assert.ok(triggerIssues.length > 0, "expected trigger issues for unknown type");
   });
 
-  test("type='schedule' rejected in C1 (branch lands in C2)", () => {
+  test("type='schedule' with valid cron accepted (post-C2 behavior)", () => {
     const spec = baseSpec({
       type: "schedule",
       cron: "0 9 * * *",
     });
     const result = validateAgentSpec(spec, testBlockRegistry, testEventRegistry);
     const triggerIssues = result.filter((i) => i.path.startsWith("trigger"));
-    assert.ok(triggerIssues.length > 0,
-      "C1 has no schedule branch — type='schedule' must reject");
+    assert.equal(triggerIssues.length, 0,
+      `schedule trigger should be accepted post-C2; got ${JSON.stringify(triggerIssues)}`);
   });
 });
 
