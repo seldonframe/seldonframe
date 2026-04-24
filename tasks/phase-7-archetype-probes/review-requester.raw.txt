@@ -24,8 +24,8 @@
       "tool": "send_email",
       "args": {
         "to": "{{email}}",
-        "subject": "Thanks for visiting Bright Smile — mind sharing a quick note?",
-        "body": "Hi {{firstName}},\n\nThanks so much for coming in to see us at Bright Smile Dental. We hope the visit felt easy and painless — that's always the goal.\n\nIf you have 30 seconds, we'd really appreciate a quick review. Honest words from real patients are what help other folks (especially the nervous ones) feel comfortable enough to book their first visit with us:\n\nhttps://g.page/r/Ca-example-business/review\n\nAnd if something wasn't quite right, please just hit reply and let us know — we'd much rather hear from you directly so we can make it right.\n\nThanks again for trusting us with your smile.\n\n— The Bright Smile Dental team",
+        "subject": "Thanks for visiting Bright Smile — how did we do?",
+        "body": "Hi {{firstName}},\n\nThanks so much for coming in to see us at Bright Smile Dental. We hope the visit felt calm, comfortable, and maybe even a little less scary than you expected — that's always the goal.\n\nIf you have 30 seconds, we'd really appreciate a quick review. Honest feedback from patients like you is how other nervous folks find a dentist they can trust:\n\nhttps://g.page/r/Ca-example-business/review\n\nAnd if something wasn't quite right, please just hit reply — we'd much rather hear it directly so we can make it right.\n\nThanks again for trusting us with your smile.\n\n— The team at Bright Smile Dental",
         "contactId": "{{contactId}}"
       },
       "next": "wait_before_sms"
@@ -42,7 +42,7 @@
       "tool": "send_sms",
       "args": {
         "to": "{{phone}}",
-        "body": "Hi {{firstName}}, it's Bright Smile Dental — quick follow-up in case our email got buried. If you have 30 seconds, a short review really helps us out: https://g.page/r/Ca-example-business/review 🦷",
+        "body": "Hi {{firstName}}, it's Bright Smile Dental — quick follow-up: if you have 30 seconds, a short review would mean a lot to us. https://g.page/r/Ca-example-business/review  Thanks!",
         "contact_id": "{{contactId}}"
       },
       "next": "log_review_request_complete"
