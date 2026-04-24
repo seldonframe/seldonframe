@@ -68,6 +68,7 @@ export const EXAMPLE_SPECS: NLExample[] = [
         },
       ],
       subscriptions: [],
+      entities: [],
     },
   },
   {
@@ -95,6 +96,7 @@ export const EXAMPLE_SPECS: NLExample[] = [
           idempotencyKey: "{{id}}",
         },
       ],
+      entities: [],
     },
   },
 ];

@@ -163,6 +163,36 @@ const SubscriptionSchema = z.object({
 });
 
 // ---------------------------------------------------------------------
+// Entity schemas (SLICE 4a PR 2 C5 — scaffold → UI bridge)
+// ---------------------------------------------------------------------
+//
+// Optional. When a block declares an entity, the scaffold emits
+// `blocks/<slug>/admin/<entityName>.schema.ts` + `admin/<pluralSlug>.page.tsx`
+// wired to <BlockListPage>. Backward-compat: omitted entities → no
+// admin files, same output shape as pre-4a scaffold.
+
+const EntityFieldSchema = z.object({
+  name: z.string().regex(/^[a-z][a-zA-Z0-9_]*$/, {
+    message: "Entity field name must be lowerCamelCase",
+  }),
+  type: FieldTypeSchema,
+  nullable: z.boolean().default(false),
+  required: z.boolean().default(true),
+});
+
+const EntitySchema = z.object({
+  name: z.string().regex(/^[a-z][a-zA-Z0-9_]*$/, {
+    message: "Entity name must be lowerCamelCase singular (e.g., note, ticket)",
+  }),
+  pluralSlug: z.string().regex(BLOCK_SLUG_PATTERN, {
+    message: "Entity pluralSlug must be kebab-case (e.g., notes, tickets)",
+  }),
+  fields: z.array(EntityFieldSchema).min(1, {
+    message: "Entity must declare at least one field",
+  }),
+});
+
+// ---------------------------------------------------------------------
 // Root BlockSpec schema with cross-references
 // ---------------------------------------------------------------------
 
@@ -185,6 +215,7 @@ export const BlockSpecSchema = z
     consumes: z.array(ConsumesEntrySchema).default([]),
     tools: z.array(ToolSchema).default([]),
     subscriptions: z.array(SubscriptionSchema).default([]),
+    entities: z.array(EntitySchema).default([]),
   })
   .superRefine((spec, ctx) => {
     // Cross-ref: every tool's `emits` must reference a declared event.
@@ -222,3 +253,5 @@ export type BlockSpecTool = z.infer<typeof ToolSchema>;
 export type BlockSpecSubscription = z.infer<typeof SubscriptionSchema>;
 export type BlockSpecFieldType = z.infer<typeof FieldTypeSchema>;
 export type BlockSpecArgField = z.infer<typeof ToolArgFieldSchema>;
+export type BlockSpecEntity = z.infer<typeof EntitySchema>;
+export type BlockSpecEntityField = z.infer<typeof EntityFieldSchema>;

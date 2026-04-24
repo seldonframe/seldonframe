@@ -31,6 +31,7 @@ function minimalSpec(): BlockSpec {
     consumes: [],
     tools: [],
     subscriptions: [],
+    entities: [],
   };
 }
 

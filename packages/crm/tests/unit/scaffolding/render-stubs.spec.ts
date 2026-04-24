@@ -29,6 +29,7 @@ function spec(): BlockSpec {
         idempotencyKey: "{{id}}",
       },
     ],
+    entities: [],
   };
 }
 

@@ -23,6 +23,7 @@ function specWithTools(tools: BlockSpec["tools"]): BlockSpec {
     consumes: [],
     tools,
     subscriptions: [],
+    entities: [],
   };
 }
 

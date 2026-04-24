@@ -26,6 +26,8 @@ import { renderBlockMd } from "./render/block-md";
 import { renderToolsTs } from "./render/tools-ts";
 import { renderHandlerStub } from "./render/handler-stub";
 import { renderTestStub } from "./render/test-stub";
+import { renderAdminSchemaTs } from "./render/admin-schema-ts";
+import { renderAdminPageTsx } from "./render/admin-page-tsx";
 import { executeScaffold, type ScaffoldFileWrite } from "./writer";
 
 export type ScaffoldBlockInput = {
@@ -117,6 +119,19 @@ function buildFilePlan(
     path: path.join(testsDir, `${spec.slug}.spec.ts`),
     content: renderTestStub(spec),
   });
+
+  // Admin UI (SLICE 4a PR 2 C5 — scaffold → UI bridge). Only emitted
+  // when entities are declared; backward-compatible with pre-4a specs.
+  for (const entity of spec.entities) {
+    plan.push({
+      path: path.join(blocksDir, spec.slug, "admin", `${entity.name}.schema.ts`),
+      content: renderAdminSchemaTs(entity),
+    });
+    plan.push({
+      path: path.join(blocksDir, spec.slug, "admin", `${entity.pluralSlug}.page.tsx`),
+      content: renderAdminPageTsx(entity),
+    });
+  }
 
   return plan;
 }

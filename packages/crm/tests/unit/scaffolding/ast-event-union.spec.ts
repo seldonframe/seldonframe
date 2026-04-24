@@ -162,5 +162,6 @@ function makeSpec(produces: Array<{ name: string; fields: Array<{ name: string; 
     consumes: [],
     tools: [],
     subscriptions: [],
+    entities: [],
   };
 }
