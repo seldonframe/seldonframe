@@ -26,14 +26,18 @@
 //     and no archetype ships yet that would hit this path).
 
 import { NextResponse } from "next/server";
+import { and, eq } from "drizzle-orm";
 
 import { db } from "@/db";
+import { workflowRuns } from "@/db/schema/workflow-runs";
 import { resumeWait } from "@/lib/workflow/runtime";
 import { DrizzleRuntimeStorage } from "@/lib/workflow/storage-drizzle";
 import { notImplementedToolInvoker, type RuntimeContext } from "@/lib/workflow/types";
 import { runSubscriptionTick } from "@/lib/subscriptions/dispatcher";
 import { DrizzleSubscriptionStorage } from "@/lib/subscriptions/storage-drizzle";
 import { getSubscriptionHandlerRegistry } from "@/lib/subscriptions/handler-registry";
+import { dispatchScheduledTriggerTick } from "@/lib/agents/schedule-dispatcher";
+import { DrizzleScheduledTriggerStore } from "@/lib/agents/schedule-dispatcher-drizzle";
 // Side-effect import: registers block-owned subscription handlers
 // into the module-level registry. Route imports run at boot so the
 // registry is populated before the first tick.
@@ -128,6 +132,59 @@ export async function GET(request: Request) {
     });
   }
 
+  // SLICE 5 PR 1 C5 — scheduled-trigger dispatch. Runs AFTER
+  // subscription tick so synthetic "scheduled_trigger.fired" events
+  // (if later added) don't starve the same tick. onFire is a log-
+  // only stub in PR 1; PR 2 C4 ships the archetype template + wires
+  // archetype-run dispatch here.
+  const scheduleStore = new DrizzleScheduledTriggerStore(db);
+  let scheduleOutcome = {
+    scanned: 0,
+    dispatched: 0,
+    skippedByConcurrency: 0,
+    skippedByIdempotency: 0,
+    failed: 0,
+  };
+  try {
+    scheduleOutcome = await dispatchScheduledTriggerTick({
+      store: scheduleStore,
+      now: new Date(),
+      batchLimit: BATCH_LIMIT,
+      onFire: async (trigger, fireTime) => {
+        // PR 1 stub: log only. PR 2 wires archetype-run dispatch
+        // (create workflow_runs row, invoke first step, etc.).
+        // eslint-disable-next-line no-console
+        console.info("[workflow-tick] scheduled_trigger.fired (stub)", {
+          triggerId: trigger.id,
+          orgId: trigger.orgId,
+          archetypeId: trigger.archetypeId,
+          fireTime: fireTime.toISOString(),
+        });
+      },
+      isArchetypeRunInFlight: async (orgId, archetypeId) => {
+        // Concurrency=skip check: any running/waiting workflow_runs
+        // for (orgId, archetypeId) counts as in-flight.
+        const rows = await db
+          .select({ id: workflowRuns.id })
+          .from(workflowRuns)
+          .where(
+            and(
+              eq(workflowRuns.orgId, orgId),
+              eq(workflowRuns.archetypeId, archetypeId),
+              eq(workflowRuns.status, "running"),
+            ),
+          )
+          .limit(1);
+        return rows.length > 0;
+      },
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("[workflow-tick] scheduled-trigger tick failed", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
   return NextResponse.json({
     ok: true,
     tickMs: Date.now() - startedAt,
@@ -135,5 +192,6 @@ export async function GET(request: Request) {
     claimed,
     failed,
     subscriptions: subscriptionResult,
+    schedules: scheduleOutcome,
   });
 }
