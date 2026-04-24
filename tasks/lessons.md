@@ -623,6 +623,90 @@ relatively shallow layout/list primitives; EntityFormDrawer +
 CompositionCard go deeper into Zod-driven rendering and
 cross-block data).
 
+### L-17 addendum — UI composition multiplier refined: composition 0.94x vs state-machine 1.74x (SLICE 4a close)
+
+SLICE 4a complete — 7 patterns + scaffold bridge + CRM proof
+migration + integration harness, verified end-to-end. Refinement
+to the UI composition addendum: the 0.94x baseline holds, AND
+there's a distinct sub-category at ~1.7x-2.0x for components
+with embedded state machines.
+
+**Empirical data at SLICE 4a close:**
+
+Pure composition on mature component library:
+- PR 1 aggregate:       ~0.94x (5 commits)
+- PR 2 C2+C3+C4:        780/830 = 0.94x (3 commits)
+- **Combined aggregate: 0.94x** across 8 composition commits
+
+State-machine-embedded components:
+- PR 2 C1 BlockDetailPage: 115/200 = 1.74x (1 commit)
+
+**Distinction characterization:**
+
+| Trait | Pure composition (0.94x) | State-machine component (1.74x) |
+|---|---|---|
+| Internal state | none (pure function of props) | URL-driven or client state w/ transitions |
+| Test surface | prop-shape + render assertions | state × transition matrix |
+| Example | PageShell, EntityTable, ActivityFeed, CompositionCard | BlockDetailPage tabs (active / inactive / no-active / URL-link), multi-step wizards, interactive widgets with branching internal state |
+| Typical LOC ratio | 0.9x-1.1x | 1.7x-2.0x |
+
+**Refined calibration rule:**
+
+When auditing UI components for a slice's §9 LOC table:
+
+1. **Identify embedded state machines explicitly.** A component
+   owns a state machine if its rendering branches on a prop that
+   represents a current state plus a set of transitions between
+   states (active tab, wizard step, drawer-open-state, drag-
+   preview mode). Tabs are the archetypal example: the rendering
+   differs for the active tab vs inactive tabs vs no-active-
+   fallback, and the component owns the rule that maps the
+   `activeTab` prop to visual state.
+
+2. **Count state-machine components separately.** Apply the
+   **1.7x-2.0x multiplier** to their test LOC. The tests
+   enumerate the state-transition matrix (per-state rendering +
+   per-transition behavior), which dominates LOC.
+
+3. **Apply 0.94x to remaining composition work.** Patterns that
+   are pure functions of props (list renderer, timeline, card,
+   form drawer driven by Zod inference) test at the
+   composition baseline.
+
+4. **Scaffold / schema / renderer work stays at L-17 original
+   spectrum.** SLICE 4a C5 scaffold bridge landed at 1.63x —
+   matches the Zod-schema-heavy original L-17 baseline (~1.6x for
+   validator + walker work). The UI composition addendum does
+   NOT apply to schema/renderer depth, even when co-shipped in a
+   UI slice.
+
+**Audit application for SLICE 4b+:**
+
+- UI composition patterns: 0.94x base.
+- State-machine components (if any): 1.7x-2.0x per component
+  explicitly counted.
+- Scaffold / schema / renderer / validator extensions: L-17
+  original baseline (1.3x / 1.6x / 2.0x spectrum).
+- Integration harness: artifact (not multiplier-inflated).
+- QA checklist + close-out reports: artifact.
+
+**Why this refinement lands now, not after PR 1:**
+
+After PR 1 alone, 0.94x was a single-datapoint projection. PR 2
+was the second calibration event. C2 + C3 + C4 confirmed 0.94x
+generalizes across pattern-complexity depth (Zod inference,
+date grouping, schema validation, state discrimination all hit
+0.88-1.18x, aggregating to exactly 0.94x). C1 BlockDetailPage
+isolated the state-machine outlier: 1.74x wasn't drift, it was a
+distinct sub-category. Both claims now have two-datapoint
+support:
+- Composition baseline: 8 commits across 2 PRs aggregate to 0.94x.
+- State-machine outlier: 1 commit at 1.74x (BlockDetailPage);
+  anchored against the original L-17 "1.6x-2.0x for sequential
+  pipelines" which describes analogous state-transition complexity.
+
+The rule is durable enough to plan SLICE 4b estimates with.
+
 ---
 
 ## L-18 — Server-side imports of client-only modules fail at build time, not dev time
