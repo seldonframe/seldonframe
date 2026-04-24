@@ -99,11 +99,16 @@ export type EventRegistry = {
 // `unsupported_step_type` via the step dispatcher.
 // ---------------------------------------------------------------------
 
-const TriggerSchema = z.object({
+// TriggerSchema — discriminated union on `type`. SLICE 5 PR 1 C1
+// introduces the union shape. The event branch is unchanged from the
+// pre-SLICE-5 schema; the schedule branch lands in C2.
+const EventTriggerSchema = z.object({
   type: z.literal("event"),
   event: z.string().min(1),
   filter: z.record(z.string(), z.unknown()).optional(),
 });
+
+const TriggerSchema = z.discriminatedUnion("type", [EventTriggerSchema]);
 
 const WaitStepSchema = z.object({
   id: z.string().min(1),
