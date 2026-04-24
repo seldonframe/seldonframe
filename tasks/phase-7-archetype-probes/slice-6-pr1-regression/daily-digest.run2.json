@@ -21,7 +21,7 @@
       "args": {
         "to": "owner@example.com",
         "subject": "Your morning update from {{orgName}}",
-        "body": "Good morning {{firstName}},\n\nJust a gentle check-in before the day gets going. Yesterday brought a few new faces our way and some appointments on the books — nothing that needs your attention right this second, just wanted you to have the lay of the land with your coffee.\n\nEverything's running smoothly on our end. If anything needs a closer look, it'll be waiting for you in the dashboard whenever you're ready.\n\nWarmly,\nBright Smile Dental"
+        "body": "Good morning {{firstName}},\n\nHere's a gentle check-in on how things looked at {{orgName}} yesterday. A few new faces reached out, some appointments moved through the calendar, and the day closed out without anything urgent waiting for you.\n\nNo action needed on our end — just wanted you to have the picture before patients start arriving. We'll keep things running smoothly on this side.\n\nWarmly,\n— Bright Smile Dental"
       },
       "next": null
     }
