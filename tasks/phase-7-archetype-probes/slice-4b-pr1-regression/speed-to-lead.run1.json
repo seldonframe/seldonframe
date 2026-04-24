@@ -25,7 +25,7 @@
       "id": "qualify_conversation",
       "type": "conversation",
       "channel": "sms",
-      "initial_message": "Hi {{contact.firstName}}, it's Bright Smile Dental — thanks so much for reaching out about a new-patient visit! Your consultation is on us. Any preferred day/time that works for you? And do you have dental insurance you'd like us to check?",
+      "initial_message": "Hi {{contact.firstName}}, it's Bright Smile Dental — thanks for reaching out about a new-patient visit! Your consultation is on us. Any preferred day/time that works for you? And do you have dental insurance you'd like us to check?",
       "exit_when": "The prospect has shared a preferred appointment day/time for their new-patient consultation AND confirmed their dental insurance status (yes / no / unsure).",
       "on_exit": {
         "extract": {
@@ -70,7 +70,7 @@
       "args": {
         "to": "{{email}}",
         "subject": "You're booked with Bright Smile Dental 🦷",
-        "body": "Hi {{contact.firstName}},\n\nYou're all set for {{preferred_start}} — we're really looking forward to meeting you.\n\nHere's what to expect: a relaxed 45-minute new-patient visit, zero sales pressure, and plenty of time to answer any questions you have. Our goal is to make dental care feel easy and comfortable from the very first visit.\n\nNeed to reschedule or have a question before you come in? Just reply to this email or text us back — a real person will get right back to you.\n\nSee you soon,\nThe Bright Smile Dental team",
+        "body": "Hi {{contact.firstName}},\n\nYou're all set for {{preferred_start}} — we're looking forward to meeting you.\n\nHere's what to expect: a relaxed 45-minute new-patient consultation with zero pressure. We'll take a gentle look, answer every question you have, and walk you through anything we find together. No surprises, no upsell.\n\nNeed to reschedule or have a question before your visit? Just reply to this email or text us back — a real person will get right back to you.\n\nSee you soon,\nThe Bright Smile Dental team",
         "contactId": "{{contactId}}"
       },
       "next": null

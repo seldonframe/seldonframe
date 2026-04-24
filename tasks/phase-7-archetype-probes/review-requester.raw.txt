@@ -24,8 +24,8 @@
       "tool": "send_email",
       "args": {
         "to": "{{email}}",
-        "subject": "Thanks for visiting Bright Smile — how did we do?",
-        "body": "Hi {{firstName}},\n\nThank you for trusting us with your smile. We hope the visit felt calm, comfortable, and maybe even a little less scary than you expected — that's always our goal.\n\nIf you have 30 seconds, we'd be so grateful if you'd share your experience. Honest reviews help other nervous patients find a dental home where they can relax:\n\nhttps://g.page/r/Ca-example-business/review\n\nAnd if something didn't feel right during your visit, please just hit reply — we'd rather hear it from you first so we can make it right.\n\nWarmly,\nThe Bright Smile Dental team",
+        "subject": "Thanks for visiting Bright Smile — mind sharing a quick note?",
+        "body": "Hi {{firstName}},\n\nThanks so much for coming in to see us at Bright Smile Dental. We hope the visit felt calm and easy — that's always what we're aiming for.\n\nIf you have 30 seconds, we'd really appreciate a short review. Honest words from real patients help other people (especially the nervous ones) feel okay about booking their first visit with us:\n\nhttps://g.page/r/Ca-example-business/review\n\nAnd if something didn't feel right during your visit, please just hit reply — we'd rather hear it from you directly so we can make it better.\n\nThanks again,\nThe Bright Smile team",
         "contactId": "{{contactId}}"
       },
       "next": "wait_before_sms"
@@ -42,7 +42,7 @@
       "tool": "send_sms",
       "args": {
         "to": "{{phone}}",
-        "body": "Hi {{firstName}}, it's Bright Smile Dental — just a quick nudge. If you have 30 seconds, a short review really helps other patients find us: https://g.page/r/Ca-example-business/review Thank you!",
+        "body": "Hey {{firstName}}, it's Bright Smile Dental — quick follow-up: if your visit felt good, a short review would mean a lot. https://g.page/r/Ca-example-business/review (and if anything was off, just reply here)",
         "contact_id": "{{contactId}}"
       },
       "next": "log_review_request_complete"

@@ -24,8 +24,8 @@
       "tool": "send_email",
       "args": {
         "to": "{{email}}",
-        "subject": "Thanks for visiting Bright Smile — mind sharing a quick note?",
-        "body": "Hi {{firstName}},\n\nThanks so much for coming in to see us at Bright Smile Dental. We hope the visit felt calm and easy — that's always what we're aiming for.\n\nIf you have 30 seconds, we'd really appreciate a short review. Honest words from real patients help other people (especially the nervous ones) feel okay about booking their first visit with us:\n\nhttps://g.page/r/Ca-example-business/review\n\nAnd if something didn't feel right during your visit, please just hit reply — we'd rather hear it from you directly so we can make it better.\n\nThanks again,\nThe Bright Smile team",
+        "subject": "Thanks for visiting Bright Smile — how did we do?",
+        "body": "Hi {{firstName}},\n\nThanks so much for coming in to see us at Bright Smile Dental. We hope the visit felt calm and easy — that's what we're always trying to do: make dental care feel less scary, one patient at a time.\n\nIf you have 30 seconds, we'd really appreciate a quick review. Honest feedback helps other nervous patients find us and decide to book their first visit:\n\nhttps://g.page/r/Ca-example-business/review\n\nAnd if anything didn't feel quite right, just hit reply — we'd genuinely rather hear from you directly so we can make it better.\n\nThanks again,\nThe team at Bright Smile Dental",
         "contactId": "{{contactId}}"
       },
       "next": "wait_before_sms"
@@ -42,7 +42,7 @@
       "tool": "send_sms",
       "args": {
         "to": "{{phone}}",
-        "body": "Hey {{firstName}}, it's Bright Smile Dental — quick follow-up: if your visit felt good, a short review would mean a lot. https://g.page/r/Ca-example-business/review (and if anything was off, just reply here)",
+        "body": "Hi {{firstName}}, it's Bright Smile Dental — quick nudge in case you missed our email. If you have 30 seconds, we'd really appreciate a review: https://g.page/r/Ca-example-business/review. Thank you!",
         "contact_id": "{{contactId}}"
       },
       "next": "log_review_request_complete"
