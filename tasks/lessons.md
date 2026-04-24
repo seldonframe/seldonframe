@@ -789,6 +789,167 @@ AND saves test LOC. Don't extract reducers for <3-state
 components where the ceremony overhead exceeds the LOC
 savings.
 
+### L-17 addendum — Cross-ref Zod validators test at 2.5-3.0x multiplier (2-datapoint support, SLICE 5 PR 1 close)
+
+Second datapoint confirms the 1-datapoint observation from SLICE 4b.
+Cross-ref Zod validators land inside the 2.5-3.0x band consistently.
+
+Data points:
+
+| Slice | Validator | Prod | Tests | Multiplier |
+|---|---|---|---|---|
+| SLICE 4b | `customer_surfaces` schema + opt_in literal(true) + entity/tool cross-refs | 85 | 250 | **2.94x** |
+| SLICE 5 PR 1 | `ScheduleTriggerSchema` cron + IANA tz + catchup/concurrency enums + discriminator | 215 | 565 | **2.63x** |
+
+Both inside predicted 2.5-3.0x window. **Rule elevated from 1-datapoint
+observation to 2-datapoint support.**
+
+**Refined rule:**
+
+Cross-ref Zod validators (schemas with `.refine()` cross-validation +
+`superRefine` cross-table cross-refs + enum enforcement + discriminated-
+union branches) test at **2.5-3.0x multiplier**. Driven by the fan-out
+of rejection variants: each cross-ref edge generates 2-4 test cases
+(happy path + 1-3 rejection variants per guard).
+
+**How to recognize at audit time:** count the validation edges.
+- Discriminated-union branch → 3-5 tests (happy path per branch + reject-discriminator + reject-shared-field-missing)
+- `.refine()` with external check (e.g., `isValidCronExpression`) → 4-6 tests (happy path + 2-4 malformed variants + boundary + empty)
+- `z.literal(true)` opt-in → 2-3 tests (accept / reject false / reject missing)
+- Enum field → 1-2 tests (accept all / reject unknown)
+- `superRefine` cross-table cross-ref → 2-3 tests (resolve / reject with-nothing-declared)
+
+**Apply this multiplier at audit time when the schema under design has
+2+ cross-ref guards.** For schemas with 0-1 cross-refs, the standard
+1.6-2.0x Zod baseline applies.
+
+**Worked example (audit use):**
+
+```
+SLICE 5 audit projected ScheduleTriggerSchema as a single Zod schema.
+Count the guards:
+  - Discriminator (schedule branch) ............ 1 edge
+  - cron .refine() via isValidCronExpression ... 1 edge (fan-out ≈4)
+  - timezone .refine() via isValidIanaTimezone . 1 edge (fan-out ≈3)
+  - catchup enum ............................... 1 edge (fan-out ≈2)
+  - concurrency enum (with "queue" rejected) ... 1 edge (fan-out ≈2)
+Total: 5 cross-ref edges × ~2-4 tests each ≈ 15-20 test cases
+    → project ~2.7-2.9x test multiplier
+    → actual 2.63x (inside predicted band)
+```
+
+Third datapoint recalibrates downward if it lands below 2.5x; recalibrates
+upward if above 3.0x. Both outcomes are acceptable — the goal is durable
+predictions at audit time.
+
+### L-17 addendum — Runtime dispatcher with policy matrix scales multiplicatively, not additively (SLICE 5 PR 1)
+
+When a dispatcher ships N policies × M concurrency modes × idempotency
++ catchup, the test surface is N × M × idempotency combinations, not
+the sum. Each combination typically needs:
+
+- Happy path test (1)
+- Edge case at transition boundary (1)
+- Race condition test (1-2)
+- Error recovery test (1)
+
+**Minimum LOC for dispatcher with policies:**
+
+| Component | Prod | Tests |
+|---|---|---|
+| Dispatcher core (findDue + orchestrator) | ~150 | ~200 |
+| Each catchup/policy variant | ~50-80 | ~80-120 |
+| Concurrency control branch | ~50-80 | ~100-150 |
+| Idempotency enforcement | ~30-50 | ~80-120 |
+
+**Rule:** when audit §8 shows a dispatcher with 2+ policies or 2+
+concurrency modes, multiply the base dispatcher estimate by
+`(policies + concurrency_modes + 1)`. Cross-ref matrix tests compound
+on top.
+
+**SLICE 5 PR 1 worked example:**
+
+```
+Audit projection:      350 LOC for dispatcher (§7.1 C5 budget)
+Actual LOC:            560 LOC
+  - Dispatcher core:   140 prod + 200 tests = 340
+  - 3 catchup variants (skip/fire_all/fire_one): (3 × 65) prod-ish
+  - 2 concurrency modes (skip/concurrent): already counted above
+  - Idempotency (UNIQUE + advance discipline): ~50 prod + ~80 tests
+  - Route wiring + Drizzle store: ~90 prod
+
+Applying the refined rule retroactively:
+  base (~150 prod + ~200 tests = 350) × (3 + 2 + 1) = 2,100 LOC ceiling
+Actual landed at ~560 LOC — under the refined ceiling.
+
+Audit UNDERSCOPED because it used the additive mental model
+(base + catchup + concurrency + idempotency) = ~350.
+Refined multiplicative model would have projected ~800-1,000 LOC
+minimum for this dispatcher shape.
+
+Future audits with similar shapes project via the refined model.
+```
+
+**Corollary:** when a dispatcher grows a new policy variant POST-ship
+(e.g., SLICE 5 PR 2 adds `concurrency: "queue"`), expect each added
+variant to cost ~50-80 prod + ~80-120 tests. Budget accordingly at
+PR-boundary.
+
+### L-17 addendum — Blocked external dependencies require inline implementation budget (SLICE 5 PR 1)
+
+Several slices have encountered cases where a planned external
+dependency cannot be installed and requires inline implementation.
+
+**Pattern observed:**
+
+| Slice | Planned dep | Actual | Delta |
+|---|---|---|---|
+| SLICE 2 PR 2 | `ts-morph` (AST editor) | Inline TypeScript compiler-API wrapper (~400 LOC) | ~150 planned → ~400 actual |
+| SLICE 5 PR 1 | `croner` (cron + tz) | Inline cron utility (~365 LOC) | ~100 planned → ~365 actual |
+
+**Root cause:** worktree `pnpm` virtual-store isolation rejects new deps
+without a full `pnpm install` reinstall. The parent repo's virtual
+store doesn't include transitive deps for the target package either.
+So deps that weren't in the workspace pre-slice require inline
+implementation.
+
+**Rule:** when audit §3 names an external dependency, check at audit
+time whether worktree pnpm virtual-store constraints will block
+installation. If so, budget **200-400 LOC for inline implementation**
+instead of 40-150 LOC for a thin adapter wrapper.
+
+**Indicators that suggest inline will be required:**
+
+- Package not in `packages/crm/pnpm-lock.yaml` at HEAD
+- Package requires transitive deps not already installed in the
+  parent's `.pnpm/` virtual store
+- Worktree is running in the `.claude/worktrees/` isolated mode
+
+**Pre-audit verification command:**
+
+```bash
+# From worktree root:
+ls /c/Users/maxim/CascadeProjects/Seldon\ Frame/node_modules/.pnpm/ | grep -i "<pkg-pattern>"
+# If no match, inline budget applies.
+```
+
+**Complementary observation:** inline implementations are often
+GOOD-ENOUGH for v1 scope. `croner` supports quartz-style cron,
+shorthand aliases (@daily), and named days — features SLICE 5 doesn't
+need. The inline utility covers POSIX 5-field + IANA tz in ~180 LOC.
+Don't over-build the inline replacement; ship the minimum surface the
+slice actually uses.
+
+**When inline IS worth it vs holding for a dep install:**
+
+- Inline is worth it when: (a) the dep has >N transitive deps, (b)
+  the scope uses <30% of the dep's API surface, (c) the worktree is
+  time-boxed and can't burn a reinstall cycle.
+- Hold for real dep install when: (a) the dep is load-bearing for
+  production reliability (e.g., a date-math library for billing), (b)
+  the inline implementation would exceed ~400 LOC, (c) correctness
+  risk outweighs budget risk.
+
 ---
 
 ## L-18 — Server-side imports of client-only modules fail at build time, not dev time
