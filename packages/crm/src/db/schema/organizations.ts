@@ -77,6 +77,12 @@ export const organizations = pgTable("organizations", {
   emailSendsThisMonth: integer("email_sends_this_month").notNull().default(0),
   aiCallsToday: integer("ai_calls_today").notNull().default(0),
   usageResetAt: timestamp("usage_reset_at", { withTimezone: true }),
+  // SLICE 5 PR 1 C3 — workspace IANA timezone. Drives scheduled-trigger
+  // next-fire computation when the trigger itself doesn't specify a
+  // timezone (per G-5-1: workspace default + per-trigger override).
+  // Default "UTC" so all existing workspaces have valid state; operators
+  // edit in a later admin-UI slice.
+  timezone: text("timezone").notNull().default("UTC"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
