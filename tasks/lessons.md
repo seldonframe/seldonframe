@@ -950,6 +950,78 @@ slice actually uses.
   the inline implementation would exceed ~400 LOC, (c) correctness
   risk outweighs budget risk.
 
+### L-17 addendum — Cross-ref Zod validator multiplier scales with edge count (3-datapoint observation, SLICE 6 PR 1)
+
+Refines the prior 2-datapoint rule from SLICE 5 PR 1. The 2.5-3.0x
+multiplier was a "cross-ref validators are more expensive than non-
+cross-ref" baseline. Third datapoint (SLICE 6 PR 1) surfaces a scaling
+pattern: **multiplier grows with cross-ref edge count**, not just
+with the presence of cross-refs.
+
+**Empirical data:**
+
+| Slice | Validator | Edges | Multiplier |
+|---|---|---|---|
+| SLICE 4b | `customer_surfaces` | 4 | **2.94x** |
+| SLICE 5 PR 1 | `ScheduleTriggerSchema` | 5 | **2.63x** |
+| SLICE 6 PR 1 | `BranchStepSchema` + `ExternalStateConditionSchema` | 10 | **3.30x** |
+
+**Empirically supported bands:**
+
+- **4-6 edges → 2.5-3.0x** (2-datapoint settled: 4b at 2.94x, 5 at 2.63x)
+- **10+ edges → 3.0-3.5x** (1-datapoint observation: 6 PR 1 at 3.30x;
+  pending confirmation on next 7+ edge schema)
+- **7-9 edges → no direct data.** Apply the upper end of the 4-6 band
+  (~3.0x) or the lower end of the 10+ band (~3.0x). Recalibrate as soon
+  as a 7-9 edge schema ships.
+
+**Edge-counting rule of thumb:**
+
+Count 1 edge for each:
+- discriminated-union branch (each branch adds a test variant × "accept"
+  and "reject unknown discriminator")
+- `.refine()` with an external check (e.g., `isValidCronExpression`)
+- `z.literal(T)` opt-in (e.g., `opt_in: z.literal(true)`)
+- enum field with 3+ values
+- `superRefine` cross-table cross-ref
+- bounds / range check (one edge per bound; `min(1000).max(30000)` = 2 edges)
+
+**How to apply at audit time:**
+
+1. In the §3 schema section of the audit, enumerate cross-ref edges
+   under the rule-of-thumb above.
+2. Apply the multiplier from the band:
+   - 4-6 edges: pick 2.8x as the midpoint projection
+   - 10+ edges: pick 3.2x as the midpoint projection
+3. For mixed-complexity schemas (e.g., 8 edges where half are refines
+   + half are discriminators), use the upper end of the interpolated
+   band (3.0x for 7-9, 3.3x for 10-12, 3.5x for 13+).
+
+**Worked example (SLICE 6 PR 1 retroactive fit):**
+
+```
+ExternalStateConditionSchema had 10 cross-ref edges:
+  discriminator (ConditionSchema)            = 1
+  predicate branch + existing PredicateSchema = 1
+  url .url() refine                          = 1
+  operator enum (9 values)                   = 1
+  expected-required-by-operator superRefine  = 1
+  timeout_ms bounds (min + max)              = 2
+  AuthConfigSchema discriminator             = 1
+  POST-with-empty-body superRefine           = 1
+  Interpolation-scope rejection              = 1
+  -------
+  Total                                       10
+
+  Projected multiplier: 3.2x (10+ edge band midpoint)
+  Actual: 3.30x ← inside predicted band
+```
+
+**Status:** the 4-6 band is empirically settled (2 datapoints). The
+10+ band is 1-datapoint; confirmation pending on the next 7+ edge
+schema. The edge-count rule of thumb is structural (shape of the
+schema, not content) so it should generalize.
+
 ---
 
 ## L-18 — Server-side imports of client-only modules fail at build time, not dev time
