@@ -1,11 +1,46 @@
 "use client";
 
+// PublicBookingForm — migrated to SLICE 4b patterns.
+//
+// Step 1 (pick-time) retains its specialized DayPicker + clickable
+// slot-grid implementation — no SLICE 4b pattern covers interactive
+// slot selection (CustomerDataView is read-only). Only token-level
+// styling is shared (--sf-* tokens unchanged).
+//
+// Step 2 (enter-details) replaced: the hand-rolled <form> + inputs +
+// submit button now delegates to <CustomerActionForm mode="single">.
+// The form reads its fields via Zod-driven inference from
+// BookingDetailsSchema below.
+//
+// Invariants preserved:
+//   - 2-step flow (pick-time → enter-details → success)
+//   - calls listPublicBookingSlotsAction + submitPublicBookingAction
+//     unchanged
+//   - demo-readonly + demo-blocked-error handling via showDemoToast
+//   - Stripe checkout redirect via response.checkoutUrl
+//   - hidden timezone passed through on submit
+//   - "Change" button to go back to step 1 and clear selectedSlot
+//   - price-aware submit label ($X or "Book")
+//   - success confirmation screen with checkmark + message
+//
+// Migrated in SLICE 4b PR 1 C5 per audit §5.6 + G-4b-2 invariant.
+
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { DayPicker } from "react-day-picker";
 import "react-day-picker/style.css";
+import { z } from "zod";
+
 import { listPublicBookingSlotsAction, submitPublicBookingAction } from "@/lib/bookings/actions";
 import { isDemoBlockedError, isDemoReadonlyClient } from "@/lib/demo/client";
 import { useDemoToast } from "@/components/shared/demo-toast-provider";
+import { CustomerActionForm } from "@/components/ui-customer/customer-action-form";
+
+// Schema drives step-2 field generation via <CustomerActionForm>.
+const BookingDetailsSchema = z.object({
+  fullName: z.string(),
+  email: z.string().email(),
+  notes: z.string().optional(),
+});
 
 function toDateOnly(date: Date) {
   const year = date.getFullYear();
@@ -56,7 +91,6 @@ export function PublicBookingForm({
     return d;
   }, [today]);
 
-  // Default to today; user can pick any date in the allowed range.
   const [selectedDate, setSelectedDate] = useState<Date>(today);
   const selectedDateISO = useMemo(() => toDateOnly(selectedDate), [selectedDate]);
 
@@ -78,8 +112,6 @@ export function PublicBookingForm({
       if (cancelled) return;
 
       setSlots(result.slots);
-      // Don't auto-select a slot — let the user tap one. Prevents "I didn't
-      // mean to pick that time" on the checkout step.
       if (!result.slots.includes(selectedSlot)) {
         setSelectedSlot("");
       }
@@ -89,9 +121,42 @@ export function PublicBookingForm({
     return () => {
       cancelled = true;
     };
-    // selectedSlot excluded on purpose — we only refetch on date change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bookingSlug, orgSlug, selectedDateISO]);
+
+  function handleDetailsSubmit(formData: FormData) {
+    startTransition(async () => {
+      try {
+        if (isDemoReadonlyClient) {
+          showDemoToast();
+          return;
+        }
+
+        const response = await submitPublicBookingAction({
+          orgSlug,
+          bookingSlug,
+          fullName: String(formData.get("fullName") ?? ""),
+          email: String(formData.get("email") ?? ""),
+          startsAt: selectedSlot,
+          notes: String(formData.get("notes") ?? "") || undefined,
+        });
+
+        if (response.checkoutUrl) {
+          window.location.assign(response.checkoutUrl);
+          return;
+        }
+
+        setConfirmationMessage(response.confirmationMessage || confirmationFallback);
+        setSuccess(true);
+      } catch (error) {
+        if (isDemoBlockedError(error)) {
+          showDemoToast();
+          return;
+        }
+        throw error;
+      }
+    });
+  }
 
   if (success) {
     return (
@@ -107,12 +172,17 @@ export function PublicBookingForm({
     );
   }
 
+  const submitLabel = pending
+    ? "Booking…"
+    : price > 0
+    ? `Pay & book · $${price.toFixed(price % 1 === 0 ? 0 : 2)}`
+    : "Book";
+
   return (
     <div className="crm-card overflow-hidden p-0">
       {/* ───── Step 1 — pick a date + time ───── */}
       {step === "pick-time" ? (
         <div className="grid gap-0 lg:grid-cols-[auto_1fr]">
-          {/* Calendar on the left */}
           <div className="border-b p-4 lg:border-b-0 lg:border-r" style={{ borderColor: "var(--sf-border)" }}>
             <DayPicker
               mode="single"
@@ -127,12 +197,7 @@ export function PublicBookingForm({
               }}
               disabled={{ before: today, after: horizon }}
               showOutsideDays
-              classNames={{
-                // Minimal overrides — rely on the shipped default stylesheet
-                // for layout + accessibility, only re-theme colors via tokens.
-                today: "rdp-today",
-                selected: "rdp-selected",
-              }}
+              classNames={{ today: "rdp-today", selected: "rdp-selected" }}
               styles={{
                 caption_label: { fontWeight: 600, fontSize: "14px" },
                 day: { fontSize: "13px" },
@@ -140,7 +205,6 @@ export function PublicBookingForm({
             />
           </div>
 
-          {/* Time slots on the right */}
           <div className="flex min-w-0 flex-col">
             <div className="border-b p-4" style={{ borderColor: "var(--sf-border)" }}>
               <p className="text-sm font-semibold" style={{ color: "var(--sf-text)" }}>
@@ -191,45 +255,17 @@ export function PublicBookingForm({
         </div>
       ) : null}
 
-      {/* ───── Step 2 — enter details ───── */}
+      {/* ───── Step 2 — enter details (MIGRATED to <CustomerActionForm>) ───── */}
       {step === "enter-details" && selectedSlot ? (
-        <form
-          className="flex flex-col gap-4 p-4"
-          action={(formData) => {
-            startTransition(async () => {
-              try {
-                if (isDemoReadonlyClient) {
-                  showDemoToast();
-                  return;
-                }
-
-                const response = await submitPublicBookingAction({
-                  orgSlug,
-                  bookingSlug,
-                  fullName: String(formData.get("fullName") ?? ""),
-                  email: String(formData.get("email") ?? ""),
-                  startsAt: selectedSlot,
-                  notes: String(formData.get("notes") ?? "") || undefined,
-                });
-
-                if (response.checkoutUrl) {
-                  window.location.assign(response.checkoutUrl);
-                  return;
-                }
-
-                setConfirmationMessage(response.confirmationMessage || confirmationFallback);
-                setSuccess(true);
-              } catch (error) {
-                if (isDemoBlockedError(error)) {
-                  showDemoToast();
-                  return;
-                }
-                throw error;
-              }
-            });
-          }}
-        >
-          <div className="flex items-center justify-between gap-3 rounded-lg border p-3" style={{ borderColor: "var(--sf-border)", backgroundColor: "color-mix(in srgb, var(--sf-primary, #21a38b) 6%, transparent)" }}>
+        <div className="flex flex-col gap-4 p-4">
+          {/* Date+time summary + Change button — stays outside CustomerActionForm */}
+          <div
+            className="flex items-center justify-between gap-3 rounded-lg border p-3"
+            style={{
+              borderColor: "var(--sf-border)",
+              backgroundColor: "color-mix(in srgb, var(--sf-primary, #21a38b) 6%, transparent)",
+            }}
+          >
             <div className="min-w-0">
               <p className="text-sm font-semibold" style={{ color: "var(--sf-text)" }}>
                 {formatSelectedDateHeading(selectedDate)} · {toTimeLabel(selectedSlot)}
@@ -251,34 +287,13 @@ export function PublicBookingForm({
             </button>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-2">
-            <div className="flex flex-col gap-1">
-              <label htmlFor="fullName" className="text-xs font-medium" style={{ color: "var(--sf-muted)" }}>
-                Your name
-              </label>
-              <input id="fullName" name="fullName" className="crm-input h-10 px-3" required autoFocus />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label htmlFor="email" className="text-xs font-medium" style={{ color: "var(--sf-muted)" }}>
-                Email
-              </label>
-              <input id="email" name="email" type="email" className="crm-input h-10 px-3" placeholder="you@example.com" required />
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <label htmlFor="notes" className="text-xs font-medium" style={{ color: "var(--sf-muted)" }}>
-              Anything we should know? <span className="font-normal">(optional)</span>
-            </label>
-            <textarea id="notes" name="notes" className="crm-input min-h-20 w-full p-3" placeholder="Context, questions, links…" />
-          </div>
-
-          <input type="hidden" name="timezone" value={timezone} />
-
-          <button type="submit" className="crm-button-primary h-11 px-4 text-sm font-semibold" disabled={pending}>
-            {pending ? "Booking…" : price > 0 ? `Pay & book · $${price.toFixed(price % 1 === 0 ? 0 : 2)}` : "Book"}
-          </button>
-        </form>
+          <CustomerActionForm
+            mode="single"
+            schema={BookingDetailsSchema}
+            action={handleDetailsSubmit}
+            submitLabel={submitLabel}
+          />
+        </div>
       ) : null}
     </div>
   );
