@@ -25,8 +25,8 @@
       "id": "qualify_conversation",
       "type": "conversation",
       "channel": "sms",
-      "initial_message": "Hi {{contact.firstName}}, it's Bright Smile Dental — thanks so much for reaching out about a new-patient consultation! Happy to get you in. Any preferred day/time that works best? And do you have dental insurance you'd like us to check, or not sure?",
-      "exit_when": "The prospect has shared a preferred day/time for their new-patient consultation AND confirmed their insurance status (yes / no / unsure).",
+      "initial_message": "Hi {{contact.firstName}}, it's Bright Smile Dental — thanks for reaching out about a new-patient consultation! It's on us, and we'll make it easy. What day/time generally works best for you? And do you have dental insurance you'd like us to check (yes/no/unsure)?",
+      "exit_when": "The prospect has shared a preferred appointment day/time for their new-patient consultation AND confirmed their insurance status (yes / no / unsure).",
       "on_exit": {
         "extract": {
           "preferred_start": "ISO-8601 datetime for the preferred appointment start, snapped to the next available slot in the clinic's business hours (Mon–Fri 9am–5pm local time).",
@@ -69,8 +69,8 @@
       "tool": "send_email",
       "args": {
         "to": "{{email}}",
-        "subject": "You're booked with Bright Smile Dental 🦷",
-        "body": "Hi {{contact.firstName}},\n\nYou're all set for {{preferred_start}} — we're so glad you're coming in.\n\nHere's what to expect: a relaxed 45-minute new-patient visit with zero pressure. We'll get to know you, take a gentle look, and answer every question you have — no judgment, no upsell.\n\nNeed to reschedule or have a question before then? Just reply to this email or text us back and we'll take care of it.\n\nCan't wait to meet you,\nThe Bright Smile Dental team",
+        "subject": "You're booked with Bright Smile Dental — see you soon",
+        "body": "Hi {{contact.firstName}},\n\nYou're all set for your free new-patient consultation at Bright Smile Dental on {{preferred_start}}. We're looking forward to meeting you.\n\nWhat to expect: a relaxed 45-minute visit with modern, gentle tech — no pressure, no scary surprises, and plenty of time for your questions. We'll take care of the rest.\n\nNeed to reschedule or have something to share ahead of time? Just reply to this email or text us back — we'll make it easy.\n\nWarmly,\nThe Bright Smile Dental team",
         "contactId": "{{contactId}}"
       },
       "next": null
