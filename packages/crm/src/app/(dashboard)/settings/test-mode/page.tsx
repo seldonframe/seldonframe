@@ -113,6 +113,51 @@ export default async function TestModeSettingsPage() {
           <li>Test events are tagged with <code>testMode: true</code> in workflow_event_log for observability.</li>
         </ul>
       </div>
+
+      {/* SLICE 9 PR 2 C11 — vertical-archetype guidance for test mode.
+          Surfaces concretely what test mode does for the HVAC archetype
+          set so an operator running through the launch demo knows what
+          to expect when they fire a workflow with test mode on. */}
+      <div className="crm-card space-y-2 p-4">
+        <h2 className="text-sm font-medium">Running an HVAC archetype in test mode</h2>
+        <p className="text-xs text-muted-foreground">
+          The vertical archetypes shipped in <code>hvac-arizona</code>{" "}
+          honor workspace test mode out of the box:
+        </p>
+        <ul className="list-disc pl-5 text-sm text-muted-foreground space-y-1">
+          <li>
+            <strong>Heat Advisory Outreach</strong> — schedule + external
+            weather check still runs at 5am Phoenix time, but the
+            outbound SMS to vulnerable customers routes to your Twilio
+            sandbox numbers. Real customers do not receive the text.
+          </li>
+          <li>
+            <strong>Emergency SMS Triage</strong> — inbound message
+            triggers fire normally so you can replay an EMERGENCY text
+            from a sandbox number; the priority acknowledgment SMS
+            routes to sandbox; the on-call paging emit_event still fires
+            so you can see the dispatch decision in the dashboard.
+          </li>
+          <li>
+            <strong>Post-Service Follow-Up</strong> — the
+            <code>payment.completed</code> subscription still fires on
+            test-mode payments (note: Stripe test-mode workspace scoping
+            is SLICE 8b), the 24h wait still elapses, satisfaction +
+            review-request SMSes route to sandbox.
+          </li>
+          <li>
+            <strong>Pre-Season Maintenance</strong> — the daily schedule
+            still scans your customer book; reminder SMSes route to
+            sandbox.
+          </li>
+        </ul>
+        <p className="text-xs text-muted-foreground">
+          Tip: when running the launch walkthrough, leave test mode
+          ON until you&apos;ve replayed each archetype and confirmed
+          the workflow_runs table shows the expected step trace —
+          then disable to go live.
+        </p>
+      </div>
     </div>
   );
 }

@@ -53,8 +53,9 @@ const noopCtx = {
   resolveSecret: async () => "",
 };
 
-function findBranch(spec: { steps: Array<{ id: string; type: string }> }, id: string): BranchStep {
-  const step = spec.steps.find((s) => s.id === id);
+function findBranch(spec: unknown, id: string): BranchStep {
+  const steps = (spec as { steps: Array<{ id: string; type: string }> }).steps;
+  const step = steps.find((s) => s.id === id);
   assert.ok(step, `step ${id} not found`);
   return step as unknown as BranchStep;
 }
