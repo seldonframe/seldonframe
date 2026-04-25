@@ -1461,6 +1461,69 @@ boundaries) and lands higher, refines.
   to verifications by direct observation OR honestly mark them as
   inferred-only.
 
+### L-17 addendum — SLICE 8 hypothesis-validation expectations (single-PR)
+
+SLICE 8 ships TWO L-17 hypothesis-validation candidates simultaneously,
+both flowing from SLICE 7's two open hypotheses (cross-ref Zod
+gate-breadth + dispatcher policy interleaving).
+
+**Cross-ref Zod gate-breadth — 5th datapoint control:**
+
+`TestModeConfigSchema` (per audit §3.2) ships with **5-6 cross-ref
+edges and 1 gate** (test-credential validation). Per the SLICE 7 PR 2
+hypothesis (now 5-datapoint with PR 2 loop-guard):
+```
+expected_ratio = base(edges) × gate_breadth(gates)
+                = 2.85 (4-6 band midpoint) × 1.0 (single gate)
+                = 2.5-3.0x
+```
+
+**At SLICE 8 PR close, document:**
+- Actual edge count
+- Actual gate count
+- Actual test/prod ratio
+- Verdict: confirms / refines / contradicts hypothesis
+
+If `TestModeConfigSchema` lands in 2.5-3.0x, this is the **second
+single-gate datapoint** alongside SLICE 7 PR 2 loop-guard (2.79x at
+3 edges). Two single-gate controls in two different edge-count bands
+strongly validates the formula.
+
+**Dispatcher orthogonal interleaving — 3rd datapoint:**
+
+SLICE 8 ships `resolveTwilioConfig` + `resolveResendConfig` as
+**independent per-provider helpers** (zero policy interleaving — each
+resolver consults `org.testMode` and returns the appropriate config).
+Per the SLICE 7 PR 1 hypothesis:
+- Interleaved policies: 3.0-4.0x
+- Orthogonal policies: 1.5-2.0x
+
+**At SLICE 8 PR close, document:**
+- Actual ratio for the resolver helpers
+- Verdict: confirms / refines / contradicts hypothesis
+
+If resolvers land in 1.5-2.0x, this is the **3rd datapoint** for the
+interleaving hypothesis (SLICE 5 schedule dispatcher 3.5x interleaved
++ SLICE 7 message dispatcher 1.75x orthogonal). Three datapoints
+across both branches of the interleaving spectrum promotes the rule
+from hypothesis to settled.
+
+**UI composition multiplier — applying SLICE 4a 0.94x baseline:**
+
+SLICE 8's admin UI (toggle + banner) and customer-facing UI (badge)
+are **composition over existing primitives**. Per SLICE 4a's 0.94x
+test/prod ratio for composition-heavy UI work, expect:
+- Admin toggle + server action: ~0.9-1.0x
+- Banner adaptation (DemoBanner → TestModeBanner): ~0.9-1.0x
+- Customer badge composition: ~0.9-1.0x
+
+**Tracking obligation:** SLICE 8 close-out includes the L-17
+calibration table extending the prior 5-datapoint cross-ref Zod
+table + the prior 2-datapoint dispatcher table. If all three
+hypotheses land inside their predicted bands, this is a **major
+calibration milestone** — three independent rules validated
+sufficiently to promote from hypothesis to settled.
+
 ---
 
 ## Template for new entries
