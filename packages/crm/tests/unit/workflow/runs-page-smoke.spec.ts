@@ -46,6 +46,10 @@ describe("runs-page — serializer smoke (2c PR 3 M4)", () => {
         name: "Client Onboarding",
         steps: [{ id: "welcome", type: "mcp_tool_call" }],
       },
+      // SLICE 9 PR 2 C5 — cost observability fields added to SerializedRun
+      totalTokensInput: 0,
+      totalTokensOutput: 0,
+      totalCostUsdEstimate: "0",
       createdAt: "2026-04-22T00:00:00.000Z",
       updatedAt: "2026-04-22T00:05:00.000Z",
     };

@@ -68,6 +68,10 @@ export async function GET() {
       captureScope: row.captureScope,
       variableScope: row.variableScope,
       specSnapshot: row.specSnapshot,
+      // SLICE 9 PR 2 C5 — cost observability surfacing (mirrors page.tsx).
+      totalTokensInput: row.totalTokensInput,
+      totalTokensOutput: row.totalTokensOutput,
+      totalCostUsdEstimate: row.totalCostUsdEstimate,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     })),

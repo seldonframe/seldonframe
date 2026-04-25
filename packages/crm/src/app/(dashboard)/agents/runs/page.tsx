@@ -111,6 +111,11 @@ function serializeRun(row: RunRow) {
     captureScope: row.captureScope,
     variableScope: row.variableScope,
     specSnapshot: row.specSnapshot as { name: string; steps: Array<{ id: string; type: string }> },
+    // SLICE 9 PR 2 C5 — cost observability surfacing.
+    // Drizzle returns decimal columns as strings; the formatter coerces.
+    totalTokensInput: row.totalTokensInput,
+    totalTokensOutput: row.totalTokensOutput,
+    totalCostUsdEstimate: row.totalCostUsdEstimate,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { formatLlmCost, formatTokenCount } from "@/lib/utils/format-llm-cost";
 
 import type { SerializedRun, SerializedStepResult, SerializedWait } from "./page";
 
@@ -131,13 +132,14 @@ export function RunsClient({ initialRuns, initialWaits, initialStepResults }: Pr
             <TableHead>Status</TableHead>
             <TableHead>Current step</TableHead>
             <TableHead>Waiting for</TableHead>
+            <TableHead className="text-right">Cost</TableHead>
             <TableHead>Updated</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {runs.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+              <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                 No runs yet. Trigger an archetype to see it here.
               </TableCell>
             </TableRow>
@@ -166,6 +168,9 @@ export function RunsClient({ initialRuns, initialWaits, initialStepResults }: Pr
                     ) : (
                       <span className="text-muted-foreground">—</span>
                     )}
+                  </TableCell>
+                  <TableCell className="text-right font-mono text-xs tabular-nums">
+                    {formatLlmCost(run.totalCostUsdEstimate)}
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">
                     {new Date(run.updatedAt).toLocaleString()}
@@ -198,6 +203,17 @@ export function RunsClient({ initialRuns, initialWaits, initialStepResults }: Pr
                 <dd className="text-xs">{new Date(selectedRun.createdAt).toLocaleString()}</dd>
                 <dt className="text-muted-foreground">Updated</dt>
                 <dd className="text-xs">{new Date(selectedRun.updatedAt).toLocaleString()}</dd>
+                {/* SLICE 9 PR 2 C5 — cost observability detail rows */}
+                <dt className="text-muted-foreground">LLM cost</dt>
+                <dd className="font-mono text-xs tabular-nums">
+                  {formatLlmCost(selectedRun.totalCostUsdEstimate)}
+                </dd>
+                <dt className="text-muted-foreground">Tokens</dt>
+                <dd className="font-mono text-xs tabular-nums">
+                  {formatTokenCount(selectedRun.totalTokensInput)} in
+                  <span className="text-muted-foreground"> · </span>
+                  {formatTokenCount(selectedRun.totalTokensOutput)} out
+                </dd>
               </dl>
 
               {selectedPendingWait ? (
