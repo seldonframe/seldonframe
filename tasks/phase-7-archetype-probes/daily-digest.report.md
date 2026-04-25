@@ -1,8 +1,8 @@
 # Archetype probe: Daily Digest (daily-digest)
 
-**Generated:** 2026-04-25T10:57:04.199Z
+**Generated:** 2026-04-25T11:21:09.577Z
 **Model:** claude-opus-4-7
-**Input tokens:** 7948 · **Output tokens:** 447 · **Cost:** $0.0509 · **Latency:** 8001ms
+**Input tokens:** 7948 · **Output tokens:** 460 · **Cost:** $0.0512 · **Latency:** 8338ms
 **Customization prompt:** (none)
 
 ## Verdict: PASS

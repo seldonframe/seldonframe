@@ -58,7 +58,7 @@
       "args": {
         "to": "{{email}}",
         "subject": "A small thank-you from Bright Smile — 20% off whenever you're ready",
-        "body": "Hi {{firstName}},\n\nWe noticed your subscription with Bright Smile Dental wrapped up — no pressure at all, life gets busy and we get it.\n\nIf you ever feel like coming back for a cleaning or a check-in, here's a little thank-you for being part of our practice: 20% off your next visit with this code:\n\n{{coupon.code}}\n\nIt's good for the next 14 days, just mention it (or enter it at checkout) when you book.\n\nAnd if something about your last experience didn't sit right, I'd genuinely like to hear it — just hit reply. We read every message, and we're always trying to make dental care feel a little less scary.\n\nWarmly,\nThe Bright Smile Dental team",
+        "body": "Hi {{firstName}},\n\nWe noticed you stepped away from your subscription with Bright Smile Dental — totally okay, no pressure at all. We just want dental care to feel less stressful, and that includes leaving when it's the right call.\n\nIf you ever want to come back for a cleaning or a check-in, here's 20% off on us:\n\n{{coupon.code}}\n\nIt's good for the next 14 days — just use it when you book your next visit.\n\nAnd if something about your experience didn't sit right, I'd genuinely like to hear about it. Hit reply — a real person reads every one.\n\nTake care of those teeth,\nThe Bright Smile Dental team",
         "contactId": "{{contactId}}"
       },
       "next": "wait_before_reminder"
@@ -75,7 +75,7 @@
       "tool": "send_sms",
       "args": {
         "to": "{{phone}}",
-        "body": "Hi {{firstName}}, it's Bright Smile Dental — just a friendly heads up that your 20% off code {{coupon.code}} expires in about a week. Use it whenever you're ready, no pressure either way :)",
+        "body": "Hi {{firstName}}, it's Bright Smile Dental — quick heads up that your 20% off code {{coupon.code}} expires in about a week if you'd like to book a cleaning. No pressure either way!",
         "contact_id": "{{contactId}}"
       },
       "next": "log_winback_complete"

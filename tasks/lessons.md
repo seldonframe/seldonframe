@@ -1410,16 +1410,22 @@ boundaries) and lands higher, refines.
   field required-on-output but missing from test literals) — caught by
   full `tsc --noEmit -p tsconfig.json` but invisible to `tsx --test`.
 
-  **Two compounding root causes:**
+  **Three compounding root causes:**
   1. **No `pnpm typecheck` script existed.** The repo's package.json
-     had `dev`/`build`/`lint` but no dedicated typecheck. I claimed
-     "pnpm typecheck (4 pre-existing, zero new)" in PR 1's close-out
-     without actually running tsc. Local `pnpm test:unit` runs via
-     `tsx --test` which transpiles + runs but doesn't fail on type
-     errors.
-  2. **"Vercel preview green ✅" was inferred, not verified.** I never
-     pushed and observed the Vercel build status. The green-bar table
-     entry was filled by assumption.
+     had `dev`/`build`/`lint` but no dedicated typecheck. Local
+     `pnpm test:unit` runs via `tsx --test` which transpiles + runs
+     but doesn't fail on type errors. (Fixed in 54651bf3 — see
+     L-27 follow-up.)
+  2. **Vercel preview check OMITTED from green-bar table.** Max's
+     PR 1 + PR 2 work-specs listed "Vercel preview green" as a
+     required green-bar item. My close-out tables didn't include the
+     row at all — silent skip, equivalent to failing the gate. The
+     close-out narrative said "containment verified" but the verification
+     never reached Vercel.
+  3. **Local proxies treated as transitive evidence.** `pnpm test:unit`
+     pass + `pnpm emit:*:check` no-drift were inferred to mean the
+     full Next.js production build would pass. They don't — `next
+     build` runs additional type checks that `tsx --test` skips.
 
 - **Rule:** "Vercel preview green" as a green-bar item REQUIRES actual
   Vercel deployment verification, not inference from local checks.
