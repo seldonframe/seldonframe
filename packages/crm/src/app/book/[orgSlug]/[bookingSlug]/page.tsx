@@ -1,6 +1,10 @@
+import { eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { PoweredByBadge } from "@seldonframe/core/virality";
+import { db } from "@/db";
+import { organizations } from "@/db/schema";
 import { PublicBookingForm } from "@/components/bookings/public-booking-form";
+import { TestModePublicBadge } from "@/components/layout/test-mode-public-badge";
 import { PublicThemeProvider } from "@/components/theme/public-theme-provider";
 import { shouldShowPoweredByBadgeForOrg } from "@/lib/billing/public";
 import { getPublicBookingContext } from "@/lib/bookings/actions";
@@ -21,6 +25,14 @@ export default async function PublicBookingPage({
   const showBadge = await shouldShowPoweredByBadgeForOrg(bookingContext.orgId);
   const theme = await getPublicOrgThemeBySlug(orgSlug);
 
+  // SLICE 8 G-8-3 (Option B): customer-facing test-mode indicator.
+  const [orgTestMode] = await db
+    .select({ testMode: organizations.testMode })
+    .from(organizations)
+    .where(eq(organizations.id, bookingContext.orgId))
+    .limit(1);
+  const isTestMode = orgTestMode?.testMode ?? false;
+
   return (
     <PublicThemeProvider theme={theme}>
       <main className="crm-page flex items-center justify-center">
@@ -34,9 +46,10 @@ export default async function PublicBookingPage({
             confirmationFallback={bookingContext.confirmationMessage}
             price={bookingContext.price}
           />
-          {showBadge ? (
-            <div className="flex justify-center pt-2">
-              <PoweredByBadge />
+          {(showBadge || isTestMode) ? (
+            <div className="flex flex-col items-center gap-2 pt-2">
+              {isTestMode ? <TestModePublicBadge testMode={true} /> : null}
+              {showBadge ? <PoweredByBadge /> : null}
             </div>
           ) : null}
         </div>
