@@ -10,6 +10,7 @@ import { findContactByPhone, persistInboundSms } from "@/lib/sms/api";
 import { toE164 } from "@/lib/sms/providers";
 import { addPhoneSuppression, isStopKeyword } from "@/lib/sms/suppression";
 import { verifyTwilioSignature } from "@/lib/sms/webhook-verify";
+import { dispatchTwilioInboundForMessageTriggers } from "@/lib/agents/message-trigger-wiring";
 
 export const runtime = "nodejs";
 
@@ -253,6 +254,24 @@ export async function POST(request: Request) {
     body: inboundBody,
     externalMessageId,
     metadata: { twilio: body },
+  });
+
+  // SLICE 7 PR 1 C6: dispatch matching message-triggered agents.
+  // Best-effort: errors are caught + logged inside the wrapper; never
+  // propagate to the webhook response. PR 1 dispatcher is no-op until
+  // message_triggers rows exist (PR 2 ships the first archetype +
+  // installer + real runtime startRun wiring). Runs BEFORE handleIncomingTurn
+  // so message-triggered agents can run concurrently with the Soul-aware
+  // reply path.
+  await dispatchTwilioInboundForMessageTriggers({
+    orgId,
+    from: fromNumber,
+    to: toNumber,
+    body: inboundBody,
+    externalMessageId,
+    receivedAt: new Date(),
+    contactId,
+    conversationId: null,
   });
 
   await emitSeldonEvent("sms.replied", {
