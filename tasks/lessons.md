@@ -1165,6 +1165,50 @@ reaching for "we'll be more careful next time."
 
 ---
 
+## L-23 — New archetype baselines require 3-run durability check before locking
+
+- **Trigger:** SLICE 6 PR 2 weather-aware-booking archetype baseline
+  was generated from a single C5 probe run (`0556da0125927c36`). The
+  PR 2 C7 regression run produced a different hash three runs in a
+  row (`f330b46ca684ac2b`), forcing a recalibration commit.
+  Diff analysis confirmed the variance was type coercion only
+  (`"60"` string vs. `60` number for the `gte` operator's `expected`
+  field) — semantic equivalence preserved, but the C5 single-run
+  baseline locked in a non-canonical representation.
+
+  The 4 pre-existing archetypes (speed-to-lead, win-back,
+  review-requester, daily-digest) all held their baselines because
+  they had been re-probed across multiple slices and converged to
+  durable hashes. The newest archetype was the only one that drifted.
+
+- **Rule:** When a new archetype is introduced (SLICE 5 daily-digest,
+  SLICE 6 weather-aware-booking, future archetypes), the baseline
+  hash MUST be generated from at least 3 consecutive probe runs
+  producing identical hashes. Single-run baselines risk locking in
+  non-canonical representations that fail durability on future runs.
+
+  **Procedure:**
+  1. First probe run produces candidate hash H1
+  2. Second run produces H2
+  3. Third run produces H3
+  4. If H1 = H2 = H3, lock baseline as that hash
+  5. If any divergence, investigate root cause (type coercion,
+     non-deterministic synthesis ordering, scope leak from prior
+     runs) and fix before locking
+
+  **SLICE 6 PR 2 example:** weather-aware-booking generated H1 from
+  a single run, locked too early. 3-run check on next slice surfaced
+  type-coercion drift; recalibrated to canonical form. Cost: one
+  re-run cycle plus one commit. Avoidable with the rule above.
+
+  **How to apply:** the introducing PR's archetype-baseline commit
+  (typically C5-class in a multi-commit PR) does the 3-run check
+  inline before locking. The probe artifact directory keeps all
+  three runs (`run1.json`, `run2.json`, `run3.json`) alongside the
+  filled top-level artifact, providing audit trail.
+
+---
+
 ## Template for new entries
 
 ```
