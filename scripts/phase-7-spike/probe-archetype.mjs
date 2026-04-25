@@ -302,7 +302,18 @@ Do NOT change step ids, tool names, step types, or structural keys. Return ONLY 
 // 5. Validator — mirrors the run-live.mjs / synthesis.mjs rules.
 // ---------------------------------------------------------------------------
 
-const VALID_STEP_TYPES = new Set(["mcp_tool_call", "wait", "conversation", "branch", "end"]);
+const VALID_STEP_TYPES = new Set([
+  "mcp_tool_call",
+  "wait",
+  "conversation",
+  "branch",
+  "end",
+  // SLICE 3 (state-access) and 2c (mid-flow events).
+  "read_state",
+  "write_state",
+  "await_event",
+  "emit_event",
+]);
 
 function validateAgentSpec(spec, { tools }) {
   const issues = [];

@@ -14,8 +14,9 @@ describe("weather-aware-booking archetype — registry integration", () => {
     assert.equal(a!.id, "weather-aware-booking");
   });
 
-  test("archetype count now 5", () => {
-    assert.equal(Object.keys(archetypes).length, 5);
+  test("weather-aware-booking in registry (count grows as new archetypes ship)", () => {
+    assert.ok(Object.keys(archetypes).length >= 5);
+    assert.ok(archetypes["weather-aware-booking"]);
   });
 
   test("all existing archetypes still present (baseline streak invariant)", () => {

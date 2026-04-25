@@ -1,4 +1,5 @@
 import type { Archetype } from "./types";
+import { appointmentConfirmSmsArchetype } from "./appointment-confirm-sms";
 import { dailyDigestArchetype } from "./daily-digest";
 import { reviewRequesterArchetype } from "./review-requester";
 import { speedToLeadArchetype } from "./speed-to-lead";
@@ -16,6 +17,7 @@ export const archetypes: Record<string, Archetype> = {
   "review-requester": reviewRequesterArchetype,
   "daily-digest": dailyDigestArchetype,
   "weather-aware-booking": weatherAwareBookingArchetype,
+  "appointment-confirm-sms": appointmentConfirmSmsArchetype,
 };
 
 export function listArchetypes(): Archetype[] {
