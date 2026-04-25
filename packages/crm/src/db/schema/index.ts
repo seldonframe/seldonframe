@@ -47,3 +47,5 @@ export * from "./block-subscription-registry";
 export * from "./block-subscription-deliveries";
 // SLICE 7 PR 1 — message triggers (inbound SMS pattern matching).
 export * from "./message-triggers";
+// SLICE 10 PR 1 C2 — request_approval persistence.
+export * from "./workflow-approvals";
