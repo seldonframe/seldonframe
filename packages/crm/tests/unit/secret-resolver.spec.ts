@@ -42,14 +42,18 @@ function makeStore(
 // Tests
 // ---------------------------------------------------------------------
 
+// Test fixtures use clearly-fake secret values to avoid false positives
+// in GitHub Secret Scanner. Real secret format patterns (sk_live_*,
+// sk_test_<long>, AC[0-9a-f]{32}, AKIA[A-Z0-9]{16}, etc.) are
+// intentionally avoided. See lessons.md L-28.
 describe("makeWorkspaceSecretResolver — happy path", () => {
   test("resolves secret_name for the bound orgId", async () => {
     const store = makeStore([
-      { orgId: "org_acme", serviceName: "my_api_key", plaintext: "sk_live_abc" },
+      { orgId: "org_acme", serviceName: "my_api_key", plaintext: "FAKE_TEST_SECRET_NOT_REAL_KEY" },
     ]);
     const resolver = makeWorkspaceSecretResolver({ orgId: "org_acme", store });
     const value = await resolver("my_api_key");
-    assert.equal(value, "sk_live_abc");
+    assert.equal(value, "FAKE_TEST_SECRET_NOT_REAL_KEY");
   });
 
   test("binds to orgId — different org can't access", async () => {

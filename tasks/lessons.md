@@ -1523,6 +1523,34 @@ boundaries) and lands higher, refines.
   L-28" as an explicit design choice, not implicit. Pre-empts the
   push-time discovery of the same false positive.
 
+  **L-28 addendum — retroactive scope (added during Scope 3 merge self-review):**
+
+  The format-breaking rule applies retroactively. Discipline rules
+  authored mid-sprint must be applied to the entire codebase at the
+  next merge boundary, not just to new fixtures authored after the
+  rule.
+
+  **Mechanism:** at every PR-to-main self-review, grep for real-secret
+  format patterns across the diff AND across the existing codebase.
+  Fix any matches before merge.
+
+  **Discovered:** SLICE 6 fixture `sk_live_abc` in
+  `packages/crm/tests/unit/secret-resolver.spec.ts` survived from
+  the pre-L-28 era; caught at the Scope 3 merge self-review (pre-PR
+  diff scan). Rewritten to `FAKE_TEST_SECRET_NOT_REAL_KEY` matching
+  the SLICE 8 ACFAKE precedent + L-28 documentation comment added at
+  the fixture block. Fix shipped as commit C14 before the Scope 3
+  PR/merge. Future merges should include format-pattern grep as a
+  self-review step.
+
+  **Why retroactive matters:** the rule says "we don't author
+  fixtures matching real-secret prefixes." Letting an existing
+  violation through at the same merge that codifies the rule
+  silently degrades the rule from day one — future engineers will
+  find the contradiction (rule says X, codebase has !X) and lose
+  trust in the discipline framework. The merge boundary is the
+  cleanest possible enforcement point.
+
 ---
 
 ### L-17 addendum — SLICE 8 hypothesis-validation expectations (single-PR)
