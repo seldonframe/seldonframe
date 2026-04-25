@@ -1,12 +1,11 @@
 // Production wiring for the message-trigger dispatcher.
-// SLICE 7 PR 1 C6 + PR 2 C1 (loop-guard wiring) + PR 2 C2 (startRun wiring).
+// SLICE 7 PR 1 C6 + PR 2 C1 (loop-guard) + PR 2 C2 (startRun + spec resolver).
 //
-// PR 2 C1 (this commit): loopGuardCheck stub replaced with real
-// makeProductionLoopGuardCheck — queries DB for recent fires, emits
-// workflow.message_trigger.loop_guard_engaged on halt, logs warn at
-// workspace threshold.
-//
-// loadSpec + startRun remain stubbed (PR 2 C2 ships those).
+// All four DispatchContext slots now wired to production:
+//   - store: DrizzleMessageTriggerStore
+//   - loadSpec: archetype-registry resolver (placeholder-free archetypes)
+//   - startRun: real workflow/runtime.startRun
+//   - loopGuardCheck: makeProductionLoopGuardCheck
 //
 // Failures in dispatch never propagate to the webhook response (would
 // cause Twilio retry storms). The wrapper catches + logs and returns
@@ -14,7 +13,9 @@
 
 import { db, type DbClient } from "@/db";
 import { logEvent } from "@/lib/observability/log";
+import { startRun as runtimeStartRun } from "@/lib/workflow/runtime";
 import { DrizzleRuntimeStorage } from "@/lib/workflow/storage-drizzle";
+import { notImplementedToolInvoker, type RuntimeContext } from "@/lib/workflow/types";
 
 import { makeProductionLoopGuardCheck } from "./loop-guard-wiring";
 import {
@@ -23,6 +24,10 @@ import {
   type DispatchSummary,
   type InboundMessage,
 } from "./message-trigger-dispatcher";
+import {
+  buildMessageTriggerSpecResolver,
+  buildMessageTriggerStartRun,
+} from "./message-trigger-runtime-wiring";
 import { DrizzleMessageTriggerStore } from "./message-trigger-storage-drizzle";
 
 export type DispatchTwilioInboundInput = Omit<InboundMessage, "channel">;
@@ -49,23 +54,18 @@ export function buildProductionDispatchContext(
 ): DispatchContext {
   const store = new DrizzleMessageTriggerStore(client);
   const storage = new DrizzleRuntimeStorage(client);
+  const runtimeContext: RuntimeContext = {
+    storage,
+    invokeTool: notImplementedToolInvoker,
+    now: () => new Date(),
+  };
   return {
     store,
-    loadSpec: async (archetypeId: string) => {
-      throw new Error(
-        `loadSpec("${archetypeId}") — PR 2 C2 wires real archetype resolver`,
-      );
-    },
-    startRun: async (input) => {
-      const stubRunId = `pr2c1-stub-${input.archetypeId}-${Date.now()}`;
-      logEvent("message_trigger_startrun_stub", {
-        org_id: input.orgId,
-        archetype_id: input.archetypeId,
-        trigger_event_id: input.triggerEventId,
-        stub_run_id: stubRunId,
-      });
-      return stubRunId;
-    },
+    loadSpec: buildMessageTriggerSpecResolver(),
+    startRun: buildMessageTriggerStartRun({
+      runtimeContext,
+      runtimeStartRun,
+    }),
     loopGuardCheck: makeProductionLoopGuardCheck({
       db: client,
       storage,

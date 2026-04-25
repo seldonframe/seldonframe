@@ -1,12 +1,13 @@
-// Tests for the production wiring (post PR 2 C1).
-// SLICE 7 PR 1 C6 + PR 2 C1 swap-in.
+// Tests for the production wiring after PR 2 C1 + C2 swap-in.
+// All four DispatchContext slots wired to production:
+//   - store: DrizzleMessageTriggerStore
+//   - loadSpec: archetype-registry resolver
+//   - startRun: real runtime.startRun
+//   - loopGuardCheck: makeProductionLoopGuardCheck
 //
-// Wiring exposes buildProductionDispatchContext(client, orgId).
-// PR 2 C1 wired the real loop guard. PR 2 C2 will wire real
-// startRun + loadSpec.
-//
-// These tests pin the current stub posture so PR 2 C2 swap-in
-// is a known contract change.
+// These tests verify the wiring constructs typecheck-correct
+// callbacks. Real DB integration is exercised via the integration
+// harness (C4) + E2E test (C5).
 
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
@@ -15,34 +16,32 @@ import { buildProductionDispatchContext } from "../../src/lib/agents/message-tri
 
 const FAKE_ORG = "org_test";
 
-describe("buildProductionDispatchContext — current stub posture", () => {
-  test("loadSpec throws (PR 2 C2 will wire real resolver)", async () => {
+describe("buildProductionDispatchContext — fully production-wired", () => {
+  test("loadSpec resolves a known archetype from the registry", async () => {
+    const ctx = buildProductionDispatchContext({} as never, FAKE_ORG);
+    const spec = await ctx.loadSpec("weather-aware-booking");
+    assert.ok(spec);
+  });
+
+  test("loadSpec throws on unknown archetype", async () => {
     const ctx = buildProductionDispatchContext({} as never, FAKE_ORG);
     await assert.rejects(
-      () => ctx.loadSpec("any-archetype"),
-      /PR 2 C2|archetype resolver/i,
+      () => ctx.loadSpec("does-not-exist"),
+      /unknown archetype|not found/i,
     );
   });
 
-  test("startRun returns a synthetic stub run id (PR 2 C2 swaps to real)", async () => {
+  test("startRun is a function (real runtime invocation tested in E2E)", () => {
     const ctx = buildProductionDispatchContext({} as never, FAKE_ORG);
-    const runId = await ctx.startRun({
-      orgId: "org_a",
-      archetypeId: "test-arch",
-      spec: { name: "x", description: "y", trigger: { type: "message" }, variables: {}, steps: [] } as never,
-      triggerEventId: "fire_1",
-      triggerPayload: {},
-    });
-    assert.match(runId, /^pr2c1-stub-test-arch-/);
+    assert.equal(typeof ctx.startRun, "function");
   });
 
-  test("loopGuardCheck is the production wrapper (typecheck — accepts inputs)", () => {
+  test("loopGuardCheck is a function (real DB query tested in E2E)", () => {
     const ctx = buildProductionDispatchContext({} as never, FAKE_ORG);
-    // Just check it's a function — invoking would hit the DB.
     assert.equal(typeof ctx.loopGuardCheck, "function");
   });
 
-  test("store is a real DrizzleMessageTriggerStore", () => {
+  test("store is the production DrizzleMessageTriggerStore", () => {
     const ctx = buildProductionDispatchContext({} as never, FAKE_ORG);
     assert.ok(ctx.store);
     assert.equal(typeof ctx.store.insert, "function");
