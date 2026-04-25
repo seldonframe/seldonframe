@@ -20,8 +20,8 @@
       "tool": "send_email",
       "args": {
         "to": "owner@example.com",
-        "subject": "Your morning at {{orgName}}",
-        "body": "Good morning {{firstName}},\n\nHere's a gentle look at what came through Bright Smile yesterday. A few new patients reached out, some appointments were booked, and the team kept things moving — nothing that needs your attention right now.\n\nSip your coffee, ease into the day, and we'll keep taking good care of everyone who walks through the door.\n\n— Bright Smile Dental"
+        "subject": "Your morning update from {{orgName}}",
+        "body": "Good morning {{firstName}},\n\nHere's a gentle look at how things moved at {{orgName}} yesterday. A few new faces reached out, some appointments got booked, and the day rolled along nicely — nothing that needs a fire drill from you.\n\nIf anything stands out when you skim the dashboard, it'll be ready when you are. Otherwise, no rush — we've got the front desk handled.\n\nWarmly,\nBright Smile Dental"
       },
       "next": null
     }

@@ -25,7 +25,7 @@
       "args": {
         "to": "{{email}}",
         "subject": "Thanks for visiting Bright Smile — how did we do?",
-        "body": "Hi {{firstName}},\n\nThanks so much for coming in to see us at Bright Smile Dental. We hope the visit felt easier than you expected — that's the whole reason we do this.\n\nIf you have 30 seconds, we'd really appreciate a quick review. Honest feedback helps other folks who are nervous about the dentist find a place where they'll be looked after:\n\nhttps://g.page/r/Ca-example-business/review\n\nAnd if something didn't sit right, please just hit reply — we'd much rather hear it from you directly so we can make it right.\n\nThanks again,\nThe Bright Smile Dental team",
+        "body": "Hi {{firstName}},\n\nThanks so much for coming in to see us at Bright Smile Dental. We hope the visit felt easy and stress-free — that's what we're here for.\n\nIf you have 30 seconds, we'd really appreciate a quick review. Honest feedback from patients like you helps other people who are nervous about the dentist find a clinic where they'll feel looked after:\n\nhttps://g.page/r/Ca-example-business/review\n\nAnd if anything wasn't quite right, please just hit reply — we'd genuinely rather hear from you directly so we can make it right.\n\nThanks again,\nThe Bright Smile Dental team",
         "contactId": "{{contactId}}"
       },
       "next": "wait_before_sms"

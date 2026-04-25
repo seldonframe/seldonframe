@@ -1,0 +1,55 @@
+{
+  "runDate": "2026-04-25T03:32:10.878Z",
+  "hashFunction": "structural (scripts/phase-7-spike/structural-hash.mjs convention)",
+  "baselines": {
+    "speed-to-lead": "735f9299ff111080",
+    "win-back": "72ea1438d6c4a691",
+    "review-requester": "4464ec782dfd7bad",
+    "daily-digest": "6e2e04637b8e0e49",
+    "weather-aware-booking": "f330b46ca684ac2b"
+  },
+  "results": {
+    "speed-to-lead": {
+      "hashes": [
+        "735f9299ff111080",
+        "735f9299ff111080",
+        "735f9299ff111080"
+      ],
+      "baseline": "735f9299ff111080"
+    },
+    "win-back": {
+      "hashes": [
+        "72ea1438d6c4a691",
+        "72ea1438d6c4a691",
+        "72ea1438d6c4a691"
+      ],
+      "baseline": "72ea1438d6c4a691"
+    },
+    "review-requester": {
+      "hashes": [
+        "4464ec782dfd7bad",
+        "4464ec782dfd7bad",
+        "4464ec782dfd7bad"
+      ],
+      "baseline": "4464ec782dfd7bad"
+    },
+    "daily-digest": {
+      "hashes": [
+        "6e2e04637b8e0e49",
+        "6e2e04637b8e0e49",
+        "6e2e04637b8e0e49"
+      ],
+      "baseline": "6e2e04637b8e0e49"
+    },
+    "weather-aware-booking": {
+      "hashes": [
+        "f330b46ca684ac2b",
+        "f330b46ca684ac2b",
+        "f330b46ca684ac2b"
+      ],
+      "baseline": "f330b46ca684ac2b"
+    }
+  },
+  "totalMatches": 15,
+  "totalRuns": 15
+}

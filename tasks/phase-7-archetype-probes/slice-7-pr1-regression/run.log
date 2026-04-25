@@ -1,0 +1,39 @@
+
+[speed-to-lead] running 3 probes...
+  run 1/3... hash=5c3cf70a731101da
+  run 2/3... hash=7b1e61dccafebba4
+  run 3/3... hash=346c97282287a308
+
+[win-back] running 3 probes...
+  run 1/3... hash=fc9bec303b3550ac
+  run 2/3... hash=1a3ba70c8c39ad9d
+  run 3/3... hash=cf53bc8751e0488a
+
+[review-requester] running 3 probes...
+  run 1/3... hash=7e0bf4974c8b0996
+  run 2/3... hash=fba8fa04cf076629
+  run 3/3... hash=ee824449aa9bea58
+
+[daily-digest] running 3 probes...
+  run 1/3... hash=d967f9a138ccfc98
+  run 2/3... hash=7c18b68893adc8eb
+  run 3/3... hash=b25726a08fea01e1
+
+[weather-aware-booking] running 3 probes...
+  run 1/3... hash=d4bba0ca9d330e9b
+  run 2/3... hash=119b23e341d411d9
+  run 3/3... hash=3c8a77daf1228210
+
+=== RESULTS ===
+
+Archetype                | Baseline           | run1               | run2               | run3               | Verdict
+------------------------|--------------------|--------------------|--------------------|--------------------|-------
+speed-to-lead           | 735f9299ff111080   | 5c3cf70a731101da   | 7b1e61dccafebba4   | 346c97282287a308   | ❌ unstable
+win-back                | 72ea1438d6c4a691   | fc9bec303b3550ac   | 1a3ba70c8c39ad9d   | cf53bc8751e0488a   | ❌ unstable
+review-requester        | 4464ec782dfd7bad   | 7e0bf4974c8b0996   | fba8fa04cf076629   | ee824449aa9bea58   | ❌ unstable
+daily-digest            | 6e2e04637b8e0e49   | d967f9a138ccfc98   | 7c18b68893adc8eb   | b25726a08fea01e1   | ❌ unstable
+weather-aware-booking   | f330b46ca684ac2b   | d4bba0ca9d330e9b   | 119b23e341d411d9   | 3c8a77daf1228210   | ❌ unstable
+
+Total: 0/15 baseline matches
+
+Summary written to tasks\phase-7-archetype-probes\slice-7-pr1-regression\_summary.json
