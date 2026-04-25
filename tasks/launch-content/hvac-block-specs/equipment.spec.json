@@ -1,0 +1,112 @@
+{
+  "slug": "hvac-equipment",
+  "title": "HVAC Equipment",
+  "description": "Tracks HVAC equipment installed at customer sites. Each piece carries type, brand, model, serial number, install date, last service date, and warranty expiration. Powers per-customer equipment lists, replacement-candidate flags (>15 years old), and the pre-season-maintenance archetype's Soul query for due customers.",
+  "frameworks": ["hvac-arizona"],
+  "triggerPhrases": [
+    "track HVAC equipment per customer",
+    "I need to see what AC units each customer has installed",
+    "log when equipment was installed and when it was last serviced"
+  ],
+  "produces": [
+    {
+      "name": "equipment.installed",
+      "fields": [
+        { "name": "equipmentId", "type": "string" },
+        { "name": "customerId", "type": "string" },
+        { "name": "brand", "type": "string" },
+        { "name": "model", "type": "string" },
+        { "name": "type", "type": "string" }
+      ]
+    },
+    {
+      "name": "equipment.serviced",
+      "fields": [
+        { "name": "equipmentId", "type": "string" },
+        { "name": "customerId", "type": "string" },
+        { "name": "servicedAt", "type": "string" },
+        { "name": "technicianId", "type": "string" }
+      ]
+    }
+  ],
+  "consumes": [
+    {
+      "kind": "soul_field",
+      "soul_field": "workspace.soul.technicians",
+      "type": "array"
+    }
+  ],
+  "tools": [
+    {
+      "name": "list_equipment_for_customer",
+      "description": "List all HVAC equipment installed at a given customer site, including age in years and last-service date.",
+      "args": [
+        { "name": "customerId", "type": "string", "required": true }
+      ],
+      "returns": [
+        { "name": "equipmentJson", "type": "string" }
+      ],
+      "emits": []
+    },
+    {
+      "name": "create_equipment_record",
+      "description": "Add a new equipment record to a customer site. Used when a tech installs new equipment after a quote-to-install workflow.",
+      "args": [
+        { "name": "customerId", "type": "string", "required": true },
+        { "name": "brand", "type": "string", "required": true },
+        { "name": "model", "type": "string", "required": true },
+        { "name": "type", "type": "string", "required": true },
+        { "name": "serialNumber", "type": "string", "required": true },
+        { "name": "installDate", "type": "string", "required": true },
+        { "name": "warrantyYears", "type": "integer", "required": false }
+      ],
+      "returns": [
+        { "name": "equipmentId", "type": "string" }
+      ],
+      "emits": ["equipment.installed"]
+    },
+    {
+      "name": "update_service_record",
+      "description": "Mark an equipment record as serviced. Updates last_service_at + emits equipment.serviced for downstream subscriptions.",
+      "args": [
+        { "name": "equipmentId", "type": "string", "required": true },
+        { "name": "technicianId", "type": "string", "required": true },
+        { "name": "servicedAt", "type": "string", "required": true },
+        { "name": "notes", "type": "string", "required": false }
+      ],
+      "returns": [
+        { "name": "ok", "type": "boolean" }
+      ],
+      "emits": ["equipment.serviced"]
+    }
+  ],
+  "subscriptions": [],
+  "entities": [
+    {
+      "name": "equipment",
+      "pluralSlug": "equipment",
+      "fields": [
+        { "name": "customerId", "type": "string", "required": true },
+        { "name": "brand", "type": "string", "required": true },
+        { "name": "model", "type": "string", "required": true },
+        { "name": "type", "type": "string", "required": true },
+        { "name": "serialNumber", "type": "string", "required": true },
+        { "name": "installDate", "type": "string", "required": true },
+        { "name": "lastServiceAt", "type": "string", "required": false, "nullable": true },
+        { "name": "warrantyExpiresAt", "type": "string", "required": false, "nullable": true },
+        { "name": "ageYears", "type": "integer", "required": false, "nullable": true },
+        { "name": "notes", "type": "string", "required": false, "nullable": true }
+      ]
+    }
+  ],
+  "customer_surfaces": {
+    "display": [
+      {
+        "entity": "equipment",
+        "filter": "{{customer_id}}",
+        "fields": ["type", "brand", "model", "installDate", "lastServiceAt", "warrantyExpiresAt"]
+      }
+    ],
+    "actions": []
+  }
+}
