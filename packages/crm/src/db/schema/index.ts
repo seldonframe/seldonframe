@@ -45,3 +45,5 @@ export * from "./workflow-step-results";
 // SLICE 1 PR 2 — block-level reactive subscriptions.
 export * from "./block-subscription-registry";
 export * from "./block-subscription-deliveries";
+// SLICE 7 PR 1 — message triggers (inbound SMS pattern matching).
+export * from "./message-triggers";
