@@ -5,6 +5,7 @@ import { getSoul } from "@/lib/soul/server";
 import { Sidebar } from "@/components/layout/sidebar";
 import { CommandPalette } from "@/components/layout/command-palette";
 import { DemoBanner } from "@/components/layout/demo-banner";
+import { TestModeBanner } from "@/components/layout/test-mode-banner";
 import { DashboardTopbar } from "@/components/layout/dashboard-topbar";
 import { SeldonChat } from "@/components/seldon-chat";
 import { registerCrmEventListeners } from "@/lib/events/listeners";
@@ -50,7 +51,7 @@ export default async function DashboardLayout({
 
   const [activeOrg, orgMemberCount] = orgId
     ? await Promise.all([
-        db.select({ id: organizations.id, name: organizations.name }).from(organizations).where(eq(organizations.id, orgId)).limit(1).then((rows) => rows[0] ?? null),
+        db.select({ id: organizations.id, name: organizations.name, testMode: organizations.testMode }).from(organizations).where(eq(organizations.id, orgId)).limit(1).then((rows) => rows[0] ?? null),
         db
           .select({ count: sql<number>`count(*)` })
           .from(users)
@@ -149,6 +150,7 @@ export default async function DashboardLayout({
             />
             <div className="min-h-screen min-w-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
               <DemoBanner />
+              <TestModeBanner testMode={activeOrg?.testMode ?? false} />
               {isSwitchedOrg && activeOrg ? (
                 <div className="mb-5 rounded-2xl border border-border/80 bg-card/75 px-4 py-3 text-sm text-muted-foreground shadow-(--shadow-xs)">
                   <span className="font-medium text-foreground">{activeOrg.name}</span> active · {" "}
