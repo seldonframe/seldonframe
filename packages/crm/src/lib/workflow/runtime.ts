@@ -36,6 +36,7 @@ import type {
   EmitEventStep,
   McpToolCallStep,
   ReadStateStep,
+  RequestApprovalStep,
   Step,
   WaitStep,
   WriteStateStep,
@@ -48,6 +49,7 @@ import { dispatchReadState } from "./step-dispatchers/read-state";
 import { dispatchWriteState } from "./step-dispatchers/write-state";
 import { dispatchEmitEvent } from "./step-dispatchers/emit-event";
 import { dispatchBranch } from "./step-dispatchers/branch";
+import { dispatchRequestApproval } from "./step-dispatchers/request-approval";
 import type { NextAction, RuntimeContext, StoredRun, StoredWait } from "./types";
 import { findStep, RuntimeError, TIMER_EVENT_TYPE } from "./types";
 
@@ -101,6 +103,16 @@ function isAwaitEventStep(step: Step): step is AwaitEventStep {
     typeof s.event === "string" &&
     typeof s.on_resume === "object" && s.on_resume !== null &&
     typeof s.on_timeout === "object" && s.on_timeout !== null
+  );
+}
+function isRequestApprovalStep(step: Step): step is RequestApprovalStep {
+  const s = step as Partial<RequestApprovalStep>;
+  return (
+    step.type === "request_approval" &&
+    typeof s.approver === "object" && s.approver !== null &&
+    typeof s.context === "object" && s.context !== null &&
+    "next_on_approve" in step &&
+    "next_on_reject" in step
   );
 }
 
@@ -337,6 +349,7 @@ function stepResultOutcome(action: NextAction): "advanced" | "paused" | "failed"
       return "advanced";
     case "pause_event":
     case "pause_timer":
+    case "pause_approval":
       return "paused";
     case "fail":
       return "failed";
@@ -371,6 +384,28 @@ async function dispatchStep(
           );
         }),
       onEvaluated: context.onBranchEvaluated,
+    });
+  }
+  if (isRequestApprovalStep(step)) {
+    // SLICE 10 PR 1 C4 — request_approval dispatcher. Requires the
+    // RuntimeContext to carry approvalStorage + resolveApprover +
+    // getWorkspaceMagicLinkSecret. When unset (pre-SLICE-10 callers),
+    // fail-closed with a clear error so the gap is visible at runtime
+    // instead of silently dropping the approval request.
+    if (!context.approvalStorage) {
+      return { kind: "fail", reason: "request_approval: RuntimeContext.approvalStorage not configured" };
+    }
+    if (!context.resolveApprover) {
+      return { kind: "fail", reason: "request_approval: RuntimeContext.resolveApprover not configured" };
+    }
+    if (!context.getWorkspaceMagicLinkSecret) {
+      return { kind: "fail", reason: "request_approval: RuntimeContext.getWorkspaceMagicLinkSecret not configured" };
+    }
+    return dispatchRequestApproval(run, step, {
+      storage: context.approvalStorage,
+      resolveApprover: context.resolveApprover,
+      getWorkspaceMagicLinkSecret: context.getWorkspaceMagicLinkSecret,
+      now: context.now,
     });
   }
   return { kind: "fail", reason: `Unsupported step type "${step.type}" at runtime` };
@@ -414,6 +449,33 @@ async function applyAction(
         eventType: TIMER_EVENT_TYPE,
         matchPredicate: null,
         timeoutAt: action.timeoutAt,
+      });
+      await context.storage.updateRun(run.id, { status: "waiting" });
+      return true;
+    }
+    case "pause_approval": {
+      // SLICE 10 PR 1 C4 — persist the approval row + flip run to
+      // "waiting". approvalStorage is guaranteed present by the
+      // dispatcher's pre-flight check (otherwise dispatchStep would
+      // have returned a fail action).
+      if (!context.approvalStorage) {
+        await markRunFailed(context, run.id, "pause_approval: approvalStorage missing at applyAction (should be unreachable)");
+        return true;
+      }
+      await context.approvalStorage.createApproval({
+        runId: run.id,
+        stepId: run.currentStepId ?? "unknown",
+        orgId: run.orgId,
+        approverType: action.approverType,
+        approverUserId: action.approverUserId,
+        contextTitle: action.contextTitle,
+        contextSummary: action.contextSummary,
+        contextPreview: action.contextPreview,
+        contextMetadata: action.contextMetadata,
+        timeoutAction: action.timeoutAction,
+        timeoutAt: action.timeoutAt,
+        magicLinkTokenHash: action.magicLinkTokenHash,
+        magicLinkExpiresAt: action.magicLinkExpiresAt,
       });
       await context.storage.updateRun(run.id, { status: "waiting" });
       return true;
