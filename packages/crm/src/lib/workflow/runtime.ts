@@ -340,6 +340,51 @@ export async function resumeWait(
 }
 
 // ---------------------------------------------------------------------
+// SLICE 10 PR 1 C5 — request_approval resume wrapper for the API layer.
+//
+// Parallel to resumeWait: claims the approval row via CAS, advances
+// the run to next_on_approve / next_on_reject, then drives the
+// dispatch loop. The pure `resumeApproval` helper in
+// step-dispatchers/request-approval.ts handles the CAS + the next-step
+// decision (no dispatch loop dependency, so it stays unit-testable
+// in isolation). This wrapper layers `advanceRun` on top so the API
+// endpoint can call ONE thing and have the run progress to its next
+// pause / completion.
+// ---------------------------------------------------------------------
+
+import { resumeApproval as resumeApprovalPure } from "./step-dispatchers/request-approval";
+import type { ResumeApprovalInput } from "./step-dispatchers/request-approval";
+
+export async function runtimeResumeApproval(
+  context: RuntimeContext,
+  input: ResumeApprovalInput,
+): Promise<{ resumed: boolean; runId: string | null }> {
+  if (!context.approvalStorage) {
+    throw new RuntimeError("runtimeResumeApproval requires context.approvalStorage", "");
+  }
+  const result = await resumeApprovalPure(
+    {
+      storage: context.approvalStorage,
+      loadRun: (runId) => context.storage.getRun(runId),
+      advanceTo: (runId, nextStepId) => advanceTo(context, runId, nextStepId),
+      now: context.now,
+    },
+    input,
+  );
+  // If the resume claimed the row AND the run was advanced (not
+  // terminal), drive the dispatch loop. The pure resumeApproval
+  // returned resumed=true for both "advanced" and "terminal-no-op"
+  // cases; we re-load the run to distinguish.
+  if (result.resumed && result.runId) {
+    const run = await context.storage.getRun(result.runId);
+    if (run && (run.status === "running" || run.status === "waiting")) {
+      await advanceRun(context, result.runId);
+    }
+  }
+  return result;
+}
+
+// ---------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------
 
