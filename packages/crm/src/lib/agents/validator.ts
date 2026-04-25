@@ -130,9 +130,101 @@ const ScheduleTriggerSchema = z.object({
   concurrency: z.enum(["skip", "concurrent"]).default("skip"),
 });
 
+// MessageTriggerSchema — third branch of TriggerSchema, SLICE 7 PR 1 C2
+// per audit §3.1-3.3 + gates G-7-1, G-7-1b, G-7-2, G-7-3.
+//
+// Cross-ref edges enumerated for L-17 calibration (see C1 datapoint note):
+//   1. pattern.kind === "regex" must compile (inline superRefine on pattern)
+//   2. binding.kind === "phone" requires valid E.164 number (refine on number)
+//   3. pattern.kind === "any" + binding.kind === "any" rejected (top-level
+//      superRefine — G-7-1b foot-gun guardrail)
+//   4. pattern.kind != "any" requires non-empty value (encoded structurally
+//      via per-variant z.object — empty/missing value caught at parse)
+//   5. channel ⊂ {"sms"} in v1 (z.enum constraint; G-7-2 reserves "email"
+//      for SLICE 7b additively)
+//   6. binding.kind ⊂ {"any","phone"} in v1 (z.discriminatedUnion; G-7-3
+//      reserves "email" for SLICE 7b additively)
+// Total: 6 edges. Lands at lower edge of L-17 7-9 interpolated band.
+
+const E164Regex = /^\+[1-9]\d{1,14}$/;
+
+const MessagePatternSchema = z
+  .discriminatedUnion("kind", [
+    z.object({
+      kind: z.literal("exact"),
+      value: z.string().min(1),
+      caseSensitive: z.boolean().default(false),
+    }),
+    z.object({
+      kind: z.literal("contains"),
+      value: z.string().min(1),
+      caseSensitive: z.boolean().default(false),
+    }),
+    z.object({
+      kind: z.literal("starts_with"),
+      value: z.string().min(1),
+      caseSensitive: z.boolean().default(false),
+    }),
+    z.object({
+      kind: z.literal("regex"),
+      value: z.string().min(1),
+      flags: z.string().optional(),
+    }),
+    z.object({ kind: z.literal("any") }),
+  ])
+  .superRefine((p, ctx) => {
+    if (p.kind === "regex") {
+      try {
+        new RegExp(p.value, p.flags);
+      } catch (e) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["value"],
+          message: `invalid regex: ${(e as Error).message}`,
+        });
+      }
+    }
+  });
+
+const ChannelBindingSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("any") }),
+  z.object({
+    kind: z.literal("phone"),
+    number: z
+      .string()
+      .min(1)
+      .refine((n) => E164Regex.test(n), {
+        message: "binding.number must be a valid E.164 phone (e.g., +15551234567)",
+      }),
+  }),
+]);
+
+const MessageTriggerSchema = z
+  .object({
+    type: z.literal("message"),
+    channel: z.enum(["sms"]),
+    channelBinding: ChannelBindingSchema,
+    pattern: MessagePatternSchema,
+    matchTarget: z.enum(["body"]).default("body"),
+  })
+  .superRefine((trig, ctx) => {
+    // G-7-1b: pattern.any + binding.any is a foot-gun (fires on every
+    // inbound in the workspace). Reject at parse time with a specific
+    // error message.
+    if (trig.pattern.kind === "any" && trig.channelBinding.kind === "any") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["pattern"],
+        message:
+          'pattern.kind="any" combined with channelBinding.kind="any" is forbidden (would match every inbound message in the workspace). Constrain at least one: pick a specific pattern OR a specific phone binding.',
+      });
+    }
+  });
+
 const TriggerSchema = z.discriminatedUnion("type", [
   EventTriggerSchema,
   ScheduleTriggerSchema,
+  MessageTriggerSchema,
 ]);
 
 const WaitStepSchema = z.object({
@@ -412,6 +504,12 @@ export const AgentSpecSchema = z.object({
 });
 
 export type AgentSpec = z.infer<typeof AgentSpecSchema>;
+export type Trigger = z.infer<typeof TriggerSchema>;
+export type EventTrigger = z.infer<typeof EventTriggerSchema>;
+export type ScheduleTrigger = z.infer<typeof ScheduleTriggerSchema>;
+export type MessageTrigger = z.infer<typeof MessageTriggerSchema>;
+export type MessagePattern = z.infer<typeof MessagePatternSchema>;
+export type ChannelBinding = z.infer<typeof ChannelBindingSchema>;
 export type WaitStep = z.infer<typeof WaitStepSchema>;
 export type McpToolCallStep = z.infer<typeof McpToolCallStepSchema>;
 export type ConversationStep = z.infer<typeof ConversationStepSchema>;
