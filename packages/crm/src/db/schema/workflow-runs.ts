@@ -20,7 +20,7 @@
 //     set once at start from spec.variables.
 
 import { sql, desc } from "drizzle-orm";
-import { index, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { decimal, index, integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 import { organizations } from "./organizations";
 
@@ -62,6 +62,19 @@ export const workflowRuns = pgTable(
     // exceeds the configured ceiling (runtime constant, PR 2), the
     // run is marked failed.
     failureCount: jsonb("failure_count").$type<Record<string, number>>().notNull().default(sql`'{}'::jsonb`),
+    // SLICE 9 PR 2 C4 — cost observability aggregates.
+    //
+    // Incremented by recordLlmUsage() at each LLM call site that runs
+    // within a workflow run's execution. Defaults to 0 so existing
+    // rows + non-LLM-using runs (every SLICE 9 archetype) record
+    // zero cost cleanly. Per Max's PR 2 spec: token counts come
+    // straight from Claude SDK responses; cost is computed via
+    // packages/crm/src/lib/ai/pricing.ts at capture time.
+    totalTokensInput: integer("total_tokens_input").notNull().default(0),
+    totalTokensOutput: integer("total_tokens_output").notNull().default(0),
+    totalCostUsdEstimate: decimal("total_cost_usd_estimate", { precision: 10, scale: 4 })
+      .notNull()
+      .default("0"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
