@@ -19,14 +19,16 @@ const ARCHETYPES = [
   "review-requester",
   "daily-digest",
   "weather-aware-booking",
+  "appointment-confirm-sms",
 ];
 
 const BASELINES = {
-  "speed-to-lead":          "735f9299ff111080",
-  "win-back":               "72ea1438d6c4a691",
-  "review-requester":       "4464ec782dfd7bad",
-  "daily-digest":           "6e2e04637b8e0e49",
-  "weather-aware-booking":  "f330b46ca684ac2b",
+  "speed-to-lead":           "735f9299ff111080",
+  "win-back":                "72ea1438d6c4a691",
+  "review-requester":        "4464ec782dfd7bad",
+  "daily-digest":            "6e2e04637b8e0e49",
+  "weather-aware-booking":   "f330b46ca684ac2b",
+  "appointment-confirm-sms": "ef6060d76c617b04",
 };
 
 function canonicalTrigger(t) {

@@ -58,7 +58,7 @@
       "args": {
         "to": "{{email}}",
         "subject": "A small thank-you from Bright Smile — 20% off whenever you're ready",
-        "body": "Hi {{firstName}},\n\nWe noticed your subscription with Bright Smile Dental wrapped up — no pressure at all, life gets busy and we get it.\n\nIf you ever feel like coming back for a cleaning or a check-in, here's a little thank-you for being part of our practice: 20% off your next visit with this code:\n\n{{coupon.code}}\n\nIt's good for the next 14 days, just mention it (or enter it at checkout) when you book.\n\nAnd if something about your last experience didn't sit right, I'd genuinely like to hear it — just hit reply. We read every message, and we're always trying to make dental care feel a little less scary.\n\nWarmly,\nThe Bright Smile Dental team",
+        "body": "Hi {{firstName}},\n\nWe noticed you cancelled recently, and that's completely okay — no pressure at all. We started Bright Smile to make dental care feel less scary, and the last thing we want is for any visit to feel like a sales pitch.\n\nIf the timing wasn't right, or something about the experience didn't sit well, I'd genuinely like to hear about it. Just hit reply — a real person on our team reads every note.\n\nAnd if you'd like to come back when the moment feels right, here's 20% off your next cleaning or visit:\n\n{{coupon.code}}\n\nIt's good for the next 14 days — use it at checkout when you book. Free new-patient consultations are still on us, too.\n\nTake care of yourself,\nThe Bright Smile Dental team",
         "contactId": "{{contactId}}"
       },
       "next": "wait_before_reminder"
@@ -75,7 +75,7 @@
       "tool": "send_sms",
       "args": {
         "to": "{{phone}}",
-        "body": "Hi {{firstName}}, it's Bright Smile Dental — just a friendly heads up that your 20% off code {{coupon.code}} expires in about a week. Use it whenever you're ready, no pressure either way :)",
+        "body": "Hi {{firstName}}, it's Bright Smile Dental — quick heads up that your 20% off code {{coupon.code}} expires in a few days. Use it whenever feels right, no pressure either way.",
         "contact_id": "{{contactId}}"
       },
       "next": "log_winback_complete"

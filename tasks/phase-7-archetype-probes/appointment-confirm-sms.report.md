@@ -1,8 +1,8 @@
 # Archetype probe: Appointment Confirm via SMS (appointment-confirm-sms)
 
-**Generated:** 2026-04-25T10:33:25.451Z
+**Generated:** 2026-04-25T10:58:23.455Z
 **Model:** claude-opus-4-7
-**Input tokens:** 7837 · **Output tokens:** 773 · **Cost:** $0.0585 · **Latency:** 9322ms
+**Input tokens:** 7837 · **Output tokens:** 773 · **Cost:** $0.0585 · **Latency:** 9512ms
 **Customization prompt:** (none)
 
 ## Verdict: PASS

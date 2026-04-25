@@ -5,7 +5,7 @@
   "trigger": {
     "type": "schedule",
     "cron": "0 8 * * *",
-    "timezone": "America/New_York",
+    "timezone": "America/Toronto",
     "catchup": "skip",
     "concurrency": "skip"
   },
@@ -19,9 +19,9 @@
       "type": "mcp_tool_call",
       "tool": "send_email",
       "args": {
-        "to": "owner@example.com",
+        "to": "owner@brightsmiledental.com",
         "subject": "Your morning at {{orgName}}",
-        "body": "Good morning {{firstName}},\n\nHere's a gentle look at what came through Bright Smile yesterday. A few new patients reached out, some appointments were booked, and the team kept things moving — nothing that needs your attention right now.\n\nSip your coffee, ease into the day, and we'll keep taking good care of everyone who walks through the door.\n\n— Bright Smile Dental"
+        "body": "Morning {{firstName}},\n\nA quick look at how yesterday went at {{orgName}}. A few new patients reached out, some appointments got booked, and the chairs stayed busy — nothing on fire, just steady care happening.\n\nNo action needed from you right now. Just wanted you to have the picture before the day starts so you can walk in calm.\n\nTake it easy out there,\n— Bright Smile Dental"
       },
       "next": null
     }
