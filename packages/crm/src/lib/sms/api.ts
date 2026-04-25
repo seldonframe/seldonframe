@@ -8,6 +8,9 @@ import {
   smsMessages,
 } from "@/db/schema";
 import { emitSeldonEvent } from "@/lib/events/bus";
+import { decryptValue } from "@/lib/encryption";
+import { resolveTwilioConfig } from "@/lib/test-mode/resolvers";
+import { DrizzleWorkspaceTestModeStore } from "@/lib/test-mode/store-drizzle";
 import { dispatchWebhook } from "@/lib/utils/webhooks";
 import { getSmsProvider, SmsProviderSendError, toE164 } from "./providers";
 import { isPhoneSuppressed, normalizePhone } from "./suppression";
@@ -27,7 +30,7 @@ export type SendSmsResult =
       reason: string;
     };
 
-async function resolveFromNumber(orgId: string) {
+async function resolveLiveTwilio(orgId: string) {
   const [org] = await db
     .select({ integrations: organizations.integrations })
     .from(organizations)
@@ -35,9 +38,27 @@ async function resolveFromNumber(orgId: string) {
     .limit(1);
 
   const integrations = (org?.integrations ?? {}) as Record<string, unknown>;
-  const twilio = (integrations.twilio ?? {}) as { fromNumber?: string };
-  const from = twilio.fromNumber?.trim() ?? "";
-  return from ? toE164(from) : "";
+  const twilio = (integrations.twilio ?? {}) as {
+    accountSid?: string;
+    authToken?: string;
+    fromNumber?: string;
+  };
+  const fromRaw = twilio.fromNumber?.trim() ?? "";
+  const accountSid = twilio.accountSid?.trim() ?? "";
+  const rawToken = twilio.authToken?.trim() ?? "";
+  let authToken = rawToken;
+  if (rawToken.startsWith("v1.")) {
+    try {
+      authToken = decryptValue(rawToken);
+    } catch {
+      authToken = "";
+    }
+  }
+  return {
+    accountSid,
+    authToken,
+    fromNumber: fromRaw ? toE164(fromRaw) : "",
+  };
 }
 
 export async function sendSmsFromApi(params: {
@@ -68,10 +89,26 @@ export async function sendSmsFromApi(params: {
     };
   }
 
-  const fromNumber = await resolveFromNumber(params.orgId);
-  if (!fromNumber) {
+  // SLICE 8 G-8-7: resolve test mode at dispatch time. If workspace
+  // testMode=true with valid test creds, the resolver returns the
+  // test config; otherwise live config. Fail-fast if testMode=true
+  // with no test config (G-8-4) — error propagates out cleanly.
+  const liveTwilio = await resolveLiveTwilio(params.orgId);
+  if (!liveTwilio.fromNumber) {
     throw new Error("Twilio fromNumber not configured for this workspace");
   }
+  const testStore = new DrizzleWorkspaceTestModeStore(db);
+  const resolved = await resolveTwilioConfig({
+    orgId: params.orgId,
+    liveConfig: {
+      accountSid: liveTwilio.accountSid,
+      authToken: liveTwilio.authToken,
+      fromNumber: liveTwilio.fromNumber,
+    },
+    store: testStore,
+  });
+  const fromNumber = resolved.fromNumber;
+  const isTestMode = resolved.mode === "test";
 
   const provider = params.provider?.trim() || "twilio";
   const impl = getSmsProvider(provider);
@@ -91,7 +128,7 @@ export async function sendSmsFromApi(params: {
       toNumber,
       body: params.body,
       status: "queued",
-      metadata: { source: "api" },
+      metadata: { source: "api", testMode: isTestMode },
     })
     .returning({ id: smsMessages.id, contactId: smsMessages.contactId });
 
@@ -105,6 +142,9 @@ export async function sendSmsFromApi(params: {
       from: fromNumber,
       to: toNumber,
       body: params.body,
+      authOverride: isTestMode
+        ? { accountSid: resolved.accountSid, authToken: resolved.authToken }
+        : undefined,
     });
 
     await db
@@ -122,6 +162,9 @@ export async function sendSmsFromApi(params: {
       await emitSeldonEvent("sms.sent", {
         smsMessageId: created.id,
         contactId: created.contactId,
+        // SLICE 8 G-8-5: tag test-mode events for observability
+        // (workflow_event_log + /agents/runs distinction).
+        ...(isTestMode ? { testMode: true } : {}),
       }, { orgId: params.orgId });
     }
 

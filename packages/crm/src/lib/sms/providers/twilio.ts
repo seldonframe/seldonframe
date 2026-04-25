@@ -51,7 +51,12 @@ export const twilioProvider: SmsProvider = {
   },
 
   async send(request: SmsSendRequest): Promise<SmsSendResult> {
-    const { accountSid, authToken } = await resolveTwilioAuth(request.orgId);
+    // SLICE 8 G-8-7: resolver-driven test-mode dispatch passes
+    // authOverride with test credentials. When unset, fall through
+    // to the workspace's stored live credentials.
+    const { accountSid, authToken } = request.authOverride
+      ? request.authOverride
+      : await resolveTwilioAuth(request.orgId);
     if (!accountSid || !authToken) {
       throw new SmsProviderSendError("twilio", "Twilio credentials not configured", {
         retriable: false,
