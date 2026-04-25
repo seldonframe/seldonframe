@@ -1022,6 +1022,35 @@ ExternalStateConditionSchema had 10 cross-ref edges:
 schema. The edge-count rule of thumb is structural (shape of the
 schema, not content) so it should generalize.
 
+### L-17 addendum — SLICE 7 4th-datapoint expectation (MessageTriggerSchema)
+
+SLICE 7 PR 1 ships `MessageTriggerSchema` with cross-ref edges projected
+at 5-7 (per audit §3.2 enumeration: regex-compile refine, channel→binding
+compatibility, channel→matchTarget compatibility, E.164 format refine,
+foot-gun guardrail, plus 1-2 channel-pattern coverage cases). This lands
+in the **interpolated 7-9 edge band** (no direct data point) or the **upper
+edge of the 4-6 band** depending on final count.
+
+**Pre-PR projection:**
+- 5 edges → use 4-6 band: 2.8x projected
+- 6 edges → use 4-6 band upper: 2.9x projected
+- 7 edges → use 7-9 interpolated: 3.0x projected
+- 8 edges → use 7-9 interpolated: 3.1x projected
+
+**At PR 1 close:**
+- Record actual edge count after C2 lands
+- Record actual test-LOC ratio
+- If 7-9 edge band gets a direct datapoint, document it; this would
+  make the band 4-datapoint stable (4b @ 4 edges, SLICE 5 @ 5 edges,
+  SLICE 7 @ 5-8 edges, SLICE 6 PR 1 @ 10 edges)
+- If the actual ratio is within ±0.2x of projection, projection
+  methodology is validated
+- If outside ±0.2x, document deviation and consider band recalibration
+
+**How to apply at SLICE 7 close:** the close-out report includes a
+calibration section with the 4-datapoint table and a "band stability"
+verdict.
+
 ---
 
 ## L-18 — Server-side imports of client-only modules fail at build time, not dev time
