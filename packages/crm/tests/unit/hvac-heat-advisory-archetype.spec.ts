@@ -26,8 +26,9 @@ describe("heat-advisory archetype — registry isolation (G-9-7)", () => {
     assert.equal(Object.keys(archetypes).length, 6);
   });
 
-  test("hvac-archetypes registry has 3 (pre-season + emergency + heat-advisory)", () => {
-    assert.equal(Object.keys(hvacArchetypes).length, 3);
+  test("hvac-archetypes registry includes heat-advisory (count grows as PR 2 ships more)", () => {
+    assert.ok(Object.keys(hvacArchetypes).length >= 3);
+    assert.ok(hvacArchetypes["hvac-heat-advisory-outreach"]);
   });
 });
 
