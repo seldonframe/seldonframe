@@ -1,0 +1,102 @@
+{
+  "name": "Win-Back",
+  "description": "Offer a unique per-contact discount code to recently-cancelled subscribers via email + SMS.",
+  "trigger": {
+    "type": "event",
+    "event": "subscription.cancelled"
+  },
+  "variables": {
+    "contactId": "trigger.contactId",
+    "firstName": "trigger.contact.firstName",
+    "email": "trigger.contact.email",
+    "phone": "trigger.contact.phone"
+  },
+  "steps": [
+    {
+      "id": "create_winback_coupon",
+      "type": "mcp_tool_call",
+      "tool": "create_coupon",
+      "args": {
+        "percent_off": 20,
+        "duration": "once",
+        "name": "Bright Smile Dental — Win-Back 20% off",
+        "max_redemptions": 1,
+        "expires_in_days": 14
+      },
+      "capture": "coupon",
+      "next": "log_winback_initiated"
+    },
+    {
+      "id": "log_winback_initiated",
+      "type": "mcp_tool_call",
+      "tool": "create_activity",
+      "args": {
+        "contact_id": "{{contactId}}",
+        "type": "agent_action",
+        "subject": "Win-Back agent initiated",
+        "body": "Created unique coupon code {{coupon.code}} — valid for 14 days.",
+        "metadata": {
+          "source": "win-back",
+          "stage": "initiated",
+          "couponId": "{{coupon.couponId}}",
+          "promotionCodeId": "{{coupon.promotionCodeId}}",
+          "code": "{{coupon.code}}"
+        }
+      },
+      "next": "wait_before_email"
+    },
+    {
+      "id": "wait_before_email",
+      "type": "wait",
+      "seconds": 259200,
+      "next": "send_winback_email"
+    },
+    {
+      "id": "send_winback_email",
+      "type": "mcp_tool_call",
+      "tool": "send_email",
+      "args": {
+        "to": "{{email}}",
+        "subject": "A small thank-you from Bright Smile — 20% off whenever you're ready",
+        "body": "Hi {{firstName}},\n\nWe noticed you recently cancelled, and we just wanted to say thank you for giving Bright Smile Dental a try — no pressure, no hard feelings.\n\nIf life brings you back our way, here's 20% off your next visit:\n\n{{coupon.code}}\n\nIt's good for the next 14 days, and you can use it on a cleaning or any visit at checkout. Our new-patient consultations are always free, and we'll keep things painless and modern — same as always.\n\nIf something didn't feel right last time, I'd genuinely love to hear about it. Just hit reply — a real person reads every note.\n\nWarmly,\nThe Bright Smile Dental team",
+        "contactId": "{{contactId}}"
+      },
+      "next": "wait_before_reminder"
+    },
+    {
+      "id": "wait_before_reminder",
+      "type": "wait",
+      "seconds": 345600,
+      "next": "send_winback_sms"
+    },
+    {
+      "id": "send_winback_sms",
+      "type": "mcp_tool_call",
+      "tool": "send_sms",
+      "args": {
+        "to": "{{phone}}",
+        "body": "Hi {{firstName}}, it's Bright Smile Dental — just a quick note that your 20% off code {{coupon.code}} is good for a few more days if you'd like to come back. No pressure either way :)",
+        "contact_id": "{{contactId}}"
+      },
+      "next": "log_winback_complete"
+    },
+    {
+      "id": "log_winback_complete",
+      "type": "mcp_tool_call",
+      "tool": "create_activity",
+      "args": {
+        "contact_id": "{{contactId}}",
+        "type": "agent_action",
+        "subject": "Win-Back agent sequence complete",
+        "body": "Delivered email + SMS with coupon {{coupon.code}}. Redemption (if any) will surface as a payment event on the workspace's Stripe Connect account.",
+        "metadata": {
+          "source": "win-back",
+          "stage": "complete",
+          "couponId": "{{coupon.couponId}}",
+          "code": "{{coupon.code}}"
+        }
+      },
+      "next": null
+    }
+  ]
+}

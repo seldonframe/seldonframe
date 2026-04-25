@@ -33,7 +33,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, matched: false });
   }
 
-  await emitSeldonEvent("landing.visited", { pageId, visitorId });
+  await emitSeldonEvent("landing.visited", { pageId, visitorId }, { orgId: page.orgId });
   await dispatchWebhook({
     orgId: page.orgId,
     event: "landing.visited",

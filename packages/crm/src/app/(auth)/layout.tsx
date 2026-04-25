@@ -17,7 +17,8 @@ export default function AuthLayout({
       />
       <div className="relative w-full max-w-md rounded-2xl border border-border bg-card/95 p-6 shadow-sm backdrop-blur">
         <div className="mb-5 flex justify-center">
-          <Image src="/logo.svg" alt="SeldonFrame logo" width={56} height={56} priority />
+          {/* SLICE 9 PR 2 C1: wordmark on auth surfaces per brand README */}
+          <Image src="/brand/seldonframe-wordmark.svg" alt="SeldonFrame" width={180} height={36} priority />
         </div>
         {children}
       </div>

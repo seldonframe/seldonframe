@@ -1,7 +1,8 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { db } from "@/db";
-import { activities, bookings, contacts, stripeConnections, users } from "@/db/schema";
+import { activities, bookings, contacts, paymentRecords, stripeConnections, users } from "@/db/schema";
 import { emitSeldonEvent } from "@/lib/events/bus";
+import { deleteGoogleCalendarBookingEvent, syncBookingWithGoogleCalendar } from "@/lib/bookings/google-calendar-sync";
 import { createBookingCheckoutSession } from "@/lib/payments/actions";
 import { dispatchWebhook } from "@/lib/utils/webhooks";
 
@@ -143,7 +144,7 @@ export async function createBookingFromApi(input: CreateBookingInput): Promise<C
   await emitSeldonEvent("booking.created", {
     appointmentId: created.id,
     contactId: contact.id,
-  });
+  }, { orgId: input.orgId });
 
   await dispatchWebhook({
     orgId: input.orgId,
@@ -219,5 +220,308 @@ export async function createBookingFromApi(input: CreateBookingInput): Promise<C
       email: created.email,
     },
     checkout,
+  };
+}
+
+// Fetch a single scheduled booking scoped to the caller's org. Excludes
+// appointment-type templates (status='template') so this surface stays
+// focused on real appointments; templates have their own get endpoint
+// via /api/v1/booking/appointment-types/[slug].
+//
+// Wrong-org ids and unknown ids are both reported as "not found" — the
+// API route surfaces that as 404 without leaking whether the id exists
+// in another workspace. Part of the 2a audit's cross-org safety rule.
+
+export type GetBookingInput = {
+  orgId: string;
+  bookingId: string;
+};
+
+export type BookingDetail = {
+  id: string;
+  contactId: string | null;
+  title: string;
+  bookingSlug: string;
+  status: string;
+  startsAt: string;
+  endsAt: string;
+  fullName: string | null;
+  email: string | null;
+  notes: string | null;
+  provider: string;
+  meetingUrl: string | null;
+  cancelledAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  metadata: Record<string, unknown>;
+};
+
+export async function getBookingFromApi(input: GetBookingInput): Promise<BookingDetail | null> {
+  const [row] = await db
+    .select({
+      id: bookings.id,
+      contactId: bookings.contactId,
+      title: bookings.title,
+      bookingSlug: bookings.bookingSlug,
+      status: bookings.status,
+      startsAt: bookings.startsAt,
+      endsAt: bookings.endsAt,
+      fullName: bookings.fullName,
+      email: bookings.email,
+      notes: bookings.notes,
+      provider: bookings.provider,
+      meetingUrl: bookings.meetingUrl,
+      cancelledAt: bookings.cancelledAt,
+      completedAt: bookings.completedAt,
+      createdAt: bookings.createdAt,
+      updatedAt: bookings.updatedAt,
+      metadata: bookings.metadata,
+    })
+    .from(bookings)
+    .where(
+      and(
+        eq(bookings.orgId, input.orgId),
+        eq(bookings.id, input.bookingId),
+        ne(bookings.status, "template"),
+      ),
+    )
+    .limit(1);
+
+  if (!row) return null;
+
+  return {
+    id: row.id,
+    contactId: row.contactId,
+    title: row.title,
+    bookingSlug: row.bookingSlug,
+    status: row.status,
+    startsAt: row.startsAt.toISOString(),
+    endsAt: row.endsAt.toISOString(),
+    fullName: row.fullName,
+    email: row.email,
+    notes: row.notes,
+    provider: row.provider,
+    meetingUrl: row.meetingUrl,
+    cancelledAt: row.cancelledAt ? row.cancelledAt.toISOString() : null,
+    completedAt: row.completedAt ? row.completedAt.toISOString() : null,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    metadata: row.metadata ?? {},
+  };
+}
+
+// Cancel a scheduled booking. Idempotent by design per the 2a audit:
+// already-cancelled bookings return a 200 no-op with alreadyCancelled=true,
+// the Google Calendar delete does NOT re-run, booking.cancelled does NOT
+// re-emit, and no webhook fires. This matters because agents retry and we
+// don't want doubled event-bus traffic or "already gone" Calendar errors.
+//
+// Payment records linked to this booking via payment_records.bookingId are
+// NOT touched (refund is a separate, composable action). linkedPaymentIds
+// is returned so agents can decide to call refund_payment next if the
+// business rule is "cancel AND refund the deposit".
+//
+// Past-time bookings ARE cancellable (legitimate retroactive-cleanup use
+// case). markBookingNoShow is the different semantic for missed
+// appointments; both are kept.
+
+export type CancelBookingInput = {
+  orgId: string;
+  bookingId: string;
+};
+
+export type CancelBookingResult = {
+  booking: BookingDetail;
+  alreadyCancelled: boolean;
+  linkedPaymentIds: string[];
+};
+
+async function loadLinkedPaymentIds(orgId: string, bookingId: string): Promise<string[]> {
+  const rows = await db
+    .select({ id: paymentRecords.id })
+    .from(paymentRecords)
+    .where(and(eq(paymentRecords.orgId, orgId), eq(paymentRecords.bookingId, bookingId)));
+  return rows.map((r) => r.id);
+}
+
+export async function cancelBookingFromApi(input: CancelBookingInput): Promise<CancelBookingResult | null> {
+  // Load first so we can branch on already-cancelled before mutating.
+  // Reuses the read path to guarantee identical scoping rules (org-scoped,
+  // templates excluded, wrong-org surfaces as null → 404).
+  const current = await getBookingFromApi({ orgId: input.orgId, bookingId: input.bookingId });
+  if (!current) return null;
+
+  const linkedPaymentIds = await loadLinkedPaymentIds(input.orgId, current.id);
+
+  if (current.status === "cancelled") {
+    return { booking: current, alreadyCancelled: true, linkedPaymentIds };
+  }
+
+  const now = new Date();
+  const [updated] = await db
+    .update(bookings)
+    .set({ status: "cancelled", cancelledAt: now, updatedAt: now })
+    .where(and(eq(bookings.orgId, input.orgId), eq(bookings.id, current.id)))
+    .returning({
+      userId: bookings.userId,
+      externalEventId: bookings.externalEventId,
+    });
+
+  if (updated) {
+    await deleteGoogleCalendarBookingEvent({
+      userId: updated.userId,
+      externalEventId: updated.externalEventId,
+    });
+  }
+
+  if (current.contactId) {
+    await emitSeldonEvent("booking.cancelled", {
+      appointmentId: current.id,
+      contactId: current.contactId,
+    }, { orgId: input.orgId });
+  }
+
+  await dispatchWebhook({
+    orgId: input.orgId,
+    event: "booking.cancelled",
+    payload: {
+      bookingId: current.id,
+      contactId: current.contactId,
+      startsAt: current.startsAt,
+      cancelledAt: now.toISOString(),
+    },
+  });
+
+  const refreshed = await getBookingFromApi({ orgId: input.orgId, bookingId: current.id });
+  return {
+    booking: refreshed ?? { ...current, status: "cancelled", cancelledAt: now.toISOString(), updatedAt: now.toISOString() },
+    alreadyCancelled: false,
+    linkedPaymentIds,
+  };
+}
+
+// Reschedule a scheduled booking to a new starts_at. Preserves the original
+// duration (reads endsAt - startsAt from the current row rather than re-
+// resolving against the appointment-type template), so the new endsAt
+// tracks the move cleanly even if the template's duration was edited.
+//
+// Validation per the 2a audit:
+// - new starts_at must be in the future → 400 "starts_at must be in the future"
+// - the current booking must NOT be cancelled → 422 "cannot reschedule a
+//   cancelled booking" (reviving a cancellation should be a new create_booking)
+// - nonexistent / wrong-org id → 404 via null return (same rule as 2a.1/2a.2)
+//
+// Google Calendar: we use syncBookingWithGoogleCalendar which PATCHes the
+// existing event in place when externalEventId is already set. This is a
+// true-move: the event id is preserved, attendees' invites don't blink
+// off-and-on. The 2a audit flagged delete-recreate as V1.1 polish noting
+// "~1 day of scope for true-move"; on closer inspection the PATCH path is
+// already built into the sync helper, so true-move is the cleaner choice
+// here at no additional cost.
+//
+// Payments stay untouched: same composability principle as cancel. If the
+// business charges a reschedule fee, that's a composed create_invoice call.
+//
+// Changing appointment type on reschedule is explicitly out of scope —
+// use cancel_booking + create_booking to switch types.
+
+export class RescheduleValidationError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
+export type RescheduleBookingInput = {
+  orgId: string;
+  bookingId: string;
+  startsAt: Date;
+};
+
+export type RescheduleBookingResult = {
+  booking: BookingDetail;
+  previousStartsAt: string;
+  newStartsAt: string;
+};
+
+export async function rescheduleBookingFromApi(input: RescheduleBookingInput): Promise<RescheduleBookingResult | null> {
+  if (Number.isNaN(input.startsAt.getTime())) {
+    throw new RescheduleValidationError("starts_at is not a valid ISO 8601 timestamp", 400);
+  }
+  if (input.startsAt.getTime() <= Date.now()) {
+    throw new RescheduleValidationError("starts_at must be in the future", 400);
+  }
+
+  const current = await getBookingFromApi({ orgId: input.orgId, bookingId: input.bookingId });
+  if (!current) return null;
+
+  if (current.status === "cancelled") {
+    throw new RescheduleValidationError("cannot reschedule a cancelled booking", 422);
+  }
+
+  const previousStartsAt = current.startsAt;
+  const previousStartsAtDate = new Date(previousStartsAt);
+  const previousEndsAtDate = new Date(current.endsAt);
+  const durationMs = previousEndsAtDate.getTime() - previousStartsAtDate.getTime();
+  const newEndsAt = new Date(input.startsAt.getTime() + durationMs);
+
+  const now = new Date();
+  const [updated] = await db
+    .update(bookings)
+    .set({ startsAt: input.startsAt, endsAt: newEndsAt, updatedAt: now })
+    .where(and(eq(bookings.orgId, input.orgId), eq(bookings.id, current.id)))
+    .returning({
+      userId: bookings.userId,
+      externalEventId: bookings.externalEventId,
+      title: bookings.title,
+      notes: bookings.notes,
+    });
+
+  if (updated) {
+    const synced = await syncBookingWithGoogleCalendar({
+      bookingId: current.id,
+      userId: updated.userId,
+      title: updated.title,
+      notes: updated.notes,
+      startsAt: input.startsAt,
+      endsAt: newEndsAt,
+      externalEventId: updated.externalEventId,
+    });
+    if (synced?.externalEventId && synced.externalEventId !== updated.externalEventId) {
+      await db
+        .update(bookings)
+        .set({ externalEventId: synced.externalEventId, meetingUrl: synced.meetingUrl ?? null })
+        .where(and(eq(bookings.orgId, input.orgId), eq(bookings.id, current.id)));
+    }
+  }
+
+  await emitSeldonEvent("booking.rescheduled", {
+    appointmentId: current.id,
+    contactId: current.contactId,
+    previousStartsAt,
+    newStartsAt: input.startsAt.toISOString(),
+  }, { orgId: input.orgId });
+
+  await dispatchWebhook({
+    orgId: input.orgId,
+    event: "booking.rescheduled",
+    payload: {
+      bookingId: current.id,
+      contactId: current.contactId,
+      previousStartsAt,
+      newStartsAt: input.startsAt.toISOString(),
+    },
+  });
+
+  const refreshed = await getBookingFromApi({ orgId: input.orgId, bookingId: current.id });
+  return {
+    booking:
+      refreshed ??
+      { ...current, startsAt: input.startsAt.toISOString(), endsAt: newEndsAt.toISOString(), updatedAt: now.toISOString() },
+    previousStartsAt,
+    newStartsAt: input.startsAt.toISOString(),
   };
 }

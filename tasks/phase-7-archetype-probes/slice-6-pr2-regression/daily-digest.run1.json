@@ -1,0 +1,29 @@
+{
+  "id": "daily-digest",
+  "name": "Daily Digest",
+  "description": "Daily morning email summary of yesterday's workspace activity, sent to the owner at a scheduled time.",
+  "trigger": {
+    "type": "schedule",
+    "cron": "0 8 * * *",
+    "timezone": "America/New_York",
+    "catchup": "skip",
+    "concurrency": "skip"
+  },
+  "variables": {
+    "orgName": "trigger.orgName",
+    "firstName": "trigger.ownerFirstName"
+  },
+  "steps": [
+    {
+      "id": "send_digest",
+      "type": "mcp_tool_call",
+      "tool": "send_email",
+      "args": {
+        "to": "owner@brightsmiledental.com",
+        "subject": "Your morning check-in from {{orgName}}",
+        "body": "Good morning {{firstName}},\n\nJust a gentle heads-up before the chairs fill up. A few new faces reached out yesterday, and a handful of cleanings and consults moved through the books. Nothing that needs firefighting — just wanted you to walk in with the picture already in your head.\n\nIf anything looks off when you peek at the dashboard, it's probably worth a quick look before the 9am. Otherwise, enjoy the coffee.\n\nWarmly,\nBright Smile Dental"
+      },
+      "next": null
+    }
+  ]
+}

@@ -7,6 +7,13 @@ export type EmailSendRequest = {
   text: string;
   headers?: Record<string, string>;
   tags?: Array<{ name: string; value: string }>;
+  /**
+   * SLICE 8: optional API key override. When set, the provider uses
+   * this key INSTEAD of looking up the workspace's stored creds.
+   * Resolver-driven test-mode dispatch sets this with a re_test_ key;
+   * live mode dispatches leave it undefined and the provider self-resolves.
+   */
+  apiKeyOverride?: string;
 };
 
 export type EmailSendResult = {

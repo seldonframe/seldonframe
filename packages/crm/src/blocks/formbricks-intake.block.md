@@ -119,10 +119,954 @@ Do NOT emit events not listed above from this block.
 
 Machine-readable contract consumed by Phase 7 agent synthesis. Event names use the canonical dot-notation vocabulary from `packages/core/src/events/index.ts` (`SeldonEvent` union) — distinct from the `BrainEventType` names in the `## Events` section above, which are the legacy Brain v2 operator-log names. Both coexist; synthesis reads only this section.
 
-produces: [form.submitted, contact.created]
-consumes: [workspace.soul.business_type, workspace.soul.customer_fields, contact.id, contact.email]
+Migrated to v2 (Scope 3 Step 2b.2 block 5) — `produces` + `consumes`
+are JSON arrays of typed objects. `verbs` + `compose_with` remain
+string arrays (v1 shape intentionally preserved — they're
+human-authored hints, not type-checked).
+
+**Return-shape note** — Intake's runtime tools return
+`{ok: true, forms: [...]}` / `{ok: true, form: {...}}` / etc. rather
+than the `{data: {...}}` convention used by CRM / Booking / Email /
+SMS / Payments. The Zod schemas in `intake.tools.ts` preserve this
+exactly: the validator's capture-unwrap heuristic (types.ts:35)
+binds `{{capture}}` to `data` when present and to the full returns
+otherwise, so an intake-composed archetype addresses
+`{{forms.forms}}`, not `{{forms.data.forms}}`.
+
+**Containment:** Formbricks-specific complexity (15 question types,
+logic operators, webhooks, ActionClasses, display options) does NOT
+leak into `lib/agents/types.ts` or into these tool schemas — it
+lives in this BLOCK.md for agent-synthesis reference and in the
+runtime API. The MCP tool surface exposes only the simple SMB-facing
+form primitive (name / slug / fields / is_active), which is what
+agents touch through MCP.
+
+**Archetype coverage:** None of the 3 shipped archetypes
+(Speed-to-Lead, Win-Back, Review-Requester) directly call intake
+tools. Speed-to-Lead triggers on `form.submitted` (below) with a
+`filter.formId`. Hash preservation on the 9-probe regression is a
+trigger-resolution check, not a direct tool-call validation.
+
+produces: [{"event": "form.submitted"}, {"event": "contact.created"}]
+consumes: [{"kind": "soul_field", "soul_field": "workspace.soul.business_type", "type": "string"}, {"kind": "soul_field", "soul_field": "workspace.soul.customer_fields", "type": "string"}, {"kind": "event", "event": "contact.created"}, {"kind": "event", "event": "booking.created"}]
 verbs: [intake, capture, collect, qualify, survey, ask, onboard, nps, feedback]
 compose_with: [crm, caldiy-booking, email, sms, automation, brain-v2]
+
+<!-- TOOLS:START -->
+[
+  {
+    "name": "list_forms",
+    "description": "List intake forms in the workspace.",
+    "args": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "workspace_id": {
+          "description": "Optional. Falls back to the active workspace.",
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "returns": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "forms": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "name": {
+                "type": "string"
+              },
+              "slug": {
+                "type": "string"
+              },
+              "fields": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string",
+                      "description": "Stable field key (used as the keys in Submission.data)."
+                    },
+                    "label": {
+                      "type": "string",
+                      "description": "Display label shown on the rendered form."
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "text",
+                        "email",
+                        "tel",
+                        "textarea",
+                        "select"
+                      ]
+                    },
+                    "required": {
+                      "type": "boolean"
+                    },
+                    "options": {
+                      "description": "Only meaningful for type='select'. Each entry is a selectable value.",
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "label",
+                    "type",
+                    "required"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "isActive": {
+                "type": "boolean"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "slug",
+              "fields",
+              "isActive",
+              "createdAt",
+              "updatedAt"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "ok",
+        "forms"
+      ],
+      "additionalProperties": false
+    },
+    "emits": []
+  },
+  {
+    "name": "get_form",
+    "description": "Fetch one form by id or slug.",
+    "args": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "form": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Form id (uuid) or slug (e.g., 'contact', 'intake')."
+        },
+        "workspace_id": {
+          "description": "Optional. Falls back to the active workspace.",
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        }
+      },
+      "required": [
+        "form"
+      ],
+      "additionalProperties": false
+    },
+    "returns": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "form": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "slug": {
+                  "type": "string"
+                },
+                "fields": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "key": {
+                        "type": "string",
+                        "description": "Stable field key (used as the keys in Submission.data)."
+                      },
+                      "label": {
+                        "type": "string",
+                        "description": "Display label shown on the rendered form."
+                      },
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "text",
+                          "email",
+                          "tel",
+                          "textarea",
+                          "select"
+                        ]
+                      },
+                      "required": {
+                        "type": "boolean"
+                      },
+                      "options": {
+                        "description": "Only meaningful for type='select'. Each entry is a selectable value.",
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "required": [
+                      "key",
+                      "label",
+                      "type",
+                      "required"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "isActive": {
+                  "type": "boolean"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                },
+                "updatedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "slug",
+                "fields",
+                "isActive",
+                "createdAt",
+                "updatedAt"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "ok",
+        "form"
+      ],
+      "additionalProperties": false
+    },
+    "emits": []
+  },
+  {
+    "name": "create_form",
+    "description": "Create a new intake form. Pass template_id to pre-fill fields from a built-in template (contact, lead-qualification, booking-request, nps-feedback, event-registration, blank), or pass explicit fields to define the shape from scratch.",
+    "args": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "template_id": {
+          "description": "Optional. Pre-fills fields from a built-in template.",
+          "type": "string",
+          "enum": [
+            "blank",
+            "contact",
+            "lead-qualification",
+            "booking-request",
+            "nps-feedback",
+            "event-registration"
+          ]
+        },
+        "name": {
+          "description": "Optional. Falls back to template name or 'New intake form'.",
+          "type": "string"
+        },
+        "slug": {
+          "description": "Optional URL-safe slug. Falls back to template defaultSlug or slugified name.",
+          "type": "string"
+        },
+        "fields": {
+          "description": "Optional field list. Overrides template fields when both are provided.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string",
+                "description": "Stable field key (used as the keys in Submission.data)."
+              },
+              "label": {
+                "type": "string",
+                "description": "Display label shown on the rendered form."
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "text",
+                  "email",
+                  "tel",
+                  "textarea",
+                  "select"
+                ]
+              },
+              "required": {
+                "type": "boolean"
+              },
+              "options": {
+                "description": "Only meaningful for type='select'. Each entry is a selectable value.",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "key",
+              "label",
+              "type",
+              "required"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "is_active": {
+          "description": "Optional. Defaults to true.",
+          "type": "boolean"
+        },
+        "workspace_id": {
+          "description": "Optional. Falls back to the active workspace.",
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "returns": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "form": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "name": {
+              "type": "string"
+            },
+            "slug": {
+              "type": "string"
+            },
+            "fields": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "key": {
+                    "type": "string",
+                    "description": "Stable field key (used as the keys in Submission.data)."
+                  },
+                  "label": {
+                    "type": "string",
+                    "description": "Display label shown on the rendered form."
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "text",
+                      "email",
+                      "tel",
+                      "textarea",
+                      "select"
+                    ]
+                  },
+                  "required": {
+                    "type": "boolean"
+                  },
+                  "options": {
+                    "description": "Only meaningful for type='select'. Each entry is a selectable value.",
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "key",
+                  "label",
+                  "type",
+                  "required"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "isActive": {
+              "type": "boolean"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+            },
+            "updatedAt": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "slug",
+            "fields",
+            "isActive",
+            "createdAt",
+            "updatedAt"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "ok",
+        "form"
+      ],
+      "additionalProperties": false
+    },
+    "emits": []
+  },
+  {
+    "name": "update_form",
+    "description": "Update a form. Partial — omit fields to keep them. Replacing `fields` replaces the whole array.",
+    "args": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "form": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Form id (uuid) or slug (e.g., 'contact', 'intake')."
+        },
+        "name": {
+          "description": "Optional new name.",
+          "type": "string"
+        },
+        "slug": {
+          "description": "Optional new slug (URL-safe).",
+          "type": "string"
+        },
+        "fields": {
+          "description": "Optional new field array. Whole replacement.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string",
+                "description": "Stable field key (used as the keys in Submission.data)."
+              },
+              "label": {
+                "type": "string",
+                "description": "Display label shown on the rendered form."
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "text",
+                  "email",
+                  "tel",
+                  "textarea",
+                  "select"
+                ]
+              },
+              "required": {
+                "type": "boolean"
+              },
+              "options": {
+                "description": "Only meaningful for type='select'. Each entry is a selectable value.",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "key",
+              "label",
+              "type",
+              "required"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "is_active": {
+          "description": "Optional. Toggle publish state.",
+          "type": "boolean"
+        },
+        "workspace_id": {
+          "description": "Optional. Falls back to the active workspace.",
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        }
+      },
+      "required": [
+        "form"
+      ],
+      "additionalProperties": false
+    },
+    "returns": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "form": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "name": {
+              "type": "string"
+            },
+            "slug": {
+              "type": "string"
+            },
+            "fields": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "key": {
+                    "type": "string",
+                    "description": "Stable field key (used as the keys in Submission.data)."
+                  },
+                  "label": {
+                    "type": "string",
+                    "description": "Display label shown on the rendered form."
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "text",
+                      "email",
+                      "tel",
+                      "textarea",
+                      "select"
+                    ]
+                  },
+                  "required": {
+                    "type": "boolean"
+                  },
+                  "options": {
+                    "description": "Only meaningful for type='select'. Each entry is a selectable value.",
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "key",
+                  "label",
+                  "type",
+                  "required"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "isActive": {
+              "type": "boolean"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+            },
+            "updatedAt": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "slug",
+            "fields",
+            "isActive",
+            "createdAt",
+            "updatedAt"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "ok",
+        "form"
+      ],
+      "additionalProperties": false
+    },
+    "emits": []
+  },
+  {
+    "name": "delete_form",
+    "description": "Delete a form. Irreversible. Submissions are NOT deleted (form_submissions has ON DELETE SET NULL on form_id).",
+    "args": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "form": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Form id (uuid) or slug (e.g., 'contact', 'intake')."
+        },
+        "workspace_id": {
+          "description": "Optional. Falls back to the active workspace.",
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        }
+      },
+      "required": [
+        "form"
+      ],
+      "additionalProperties": false
+    },
+    "returns": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "deleted": {
+          "type": "string",
+          "description": "Echoes the input `form` identifier."
+        }
+      },
+      "required": [
+        "ok",
+        "deleted"
+      ],
+      "additionalProperties": false
+    },
+    "emits": []
+  },
+  {
+    "name": "list_submissions",
+    "description": "List submissions for a form. Slug lookup is NOT supported on this endpoint — pass the form's UUID. Call get_form first if you only have a slug.",
+    "args": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "form_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+          "description": "UUID of the form."
+        },
+        "workspace_id": {
+          "description": "Optional. Falls back to the active workspace.",
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        }
+      },
+      "required": [
+        "form_id"
+      ],
+      "additionalProperties": false
+    },
+    "returns": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "submissions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "formId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "contactId": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "data": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {},
+                "description": "Map of FormField.key → submitted value."
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+              }
+            },
+            "required": [
+              "id",
+              "formId",
+              "contactId",
+              "data",
+              "createdAt"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "ok",
+        "submissions"
+      ],
+      "additionalProperties": false
+    },
+    "emits": []
+  },
+  {
+    "name": "customize_intake_form",
+    "description": "DEPRECATED alias for update_form({form: 'intake', fields}). Only edits the auto-seeded default form; prefer update_form for new scripts so you can target any form in the workspace.",
+    "args": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "fields": {
+          "description": "Replacement field list for the default 'intake' form.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string",
+                "description": "Stable field key (used as the keys in Submission.data)."
+              },
+              "label": {
+                "type": "string",
+                "description": "Display label shown on the rendered form."
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "text",
+                  "email",
+                  "tel",
+                  "textarea",
+                  "select"
+                ]
+              },
+              "required": {
+                "type": "boolean"
+              },
+              "options": {
+                "description": "Only meaningful for type='select'. Each entry is a selectable value.",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "key",
+              "label",
+              "type",
+              "required"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "form_name": {
+          "description": "Optional new display name for the default form.",
+          "type": "string"
+        },
+        "workspace_id": {
+          "description": "Optional. Falls back to the active workspace.",
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "returns": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "form": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "name": {
+              "type": "string"
+            },
+            "slug": {
+              "type": "string"
+            },
+            "fields": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "key": {
+                    "type": "string",
+                    "description": "Stable field key (used as the keys in Submission.data)."
+                  },
+                  "label": {
+                    "type": "string",
+                    "description": "Display label shown on the rendered form."
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "text",
+                      "email",
+                      "tel",
+                      "textarea",
+                      "select"
+                    ]
+                  },
+                  "required": {
+                    "type": "boolean"
+                  },
+                  "options": {
+                    "description": "Only meaningful for type='select'. Each entry is a selectable value.",
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "key",
+                  "label",
+                  "type",
+                  "required"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "isActive": {
+              "type": "boolean"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+            },
+            "updatedAt": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "slug",
+            "fields",
+            "isActive",
+            "createdAt",
+            "updatedAt"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "ok",
+        "form"
+      ],
+      "additionalProperties": false
+    },
+    "emits": []
+  }
+]
+<!-- TOOLS:END -->
 
 ---
 

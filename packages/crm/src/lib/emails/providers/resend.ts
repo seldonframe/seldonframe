@@ -44,7 +44,10 @@ export const resendProvider: EmailProvider = {
   },
 
   async send(request: EmailSendRequest): Promise<EmailSendResult> {
-    const apiKey = await resolveResendApiKey(request.orgId);
+    // SLICE 8 G-8-7: resolver-driven test-mode dispatch passes
+    // apiKeyOverride with the test key. When unset, fall through
+    // to the workspace's stored live credentials.
+    const apiKey = request.apiKeyOverride ?? (await resolveResendApiKey(request.orgId));
     if (!apiKey) {
       throw new EmailProviderSendError("resend", "Resend API key not configured", { retriable: false });
     }

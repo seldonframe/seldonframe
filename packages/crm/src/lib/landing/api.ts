@@ -96,7 +96,7 @@ export async function createLandingPageFromApi(input: CreateLandingInput): Promi
       pageId: created.id,
       slug: created.slug,
       orgId: input.orgId,
-    });
+    }, { orgId: input.orgId });
     await dispatchWebhook({
       orgId: input.orgId,
       event: "landing.published",
@@ -159,7 +159,7 @@ export async function updateLandingPageFromApi(input: UpdateLandingInput): Promi
   await emitSeldonEvent("landing.updated", {
     pageId: row.id,
     orgId: input.orgId,
-  });
+  }, { orgId: input.orgId });
 
   if (row.status === "published") {
     const [org] = await db
@@ -207,14 +207,14 @@ export async function publishLandingPageFromApi(params: {
       pageId: row.id,
       slug: row.slug,
       orgId: params.orgId,
-    });
+    }, { orgId: params.orgId });
     await dispatchWebhook({
       orgId: params.orgId,
       event: "landing.published",
       payload: { pageId: row.id, slug: row.slug },
     });
   } else {
-    await emitSeldonEvent("landing.unpublished", { pageId: row.id, orgId: params.orgId });
+    await emitSeldonEvent("landing.unpublished", { pageId: row.id, orgId: params.orgId }, { orgId: params.orgId });
   }
 
   return { ok: true as const, page: row };

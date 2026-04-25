@@ -206,7 +206,7 @@ export async function handleStripeCheckoutCompleted(session: {
     await emitSeldonEvent("booking.created", {
       appointmentId: bookingId,
       contactId: resolvedContactId,
-    });
+    }, { orgId: orgId });
 
     const [owner] = await db.select({ id: users.id }).from(users).where(eq(users.orgId, orgId)).limit(1);
 
@@ -231,7 +231,7 @@ export async function handleStripeCheckoutCompleted(session: {
       amount,
       currency,
       source: "booking",
-    });
+    }, { orgId: orgId });
   }
 }
 

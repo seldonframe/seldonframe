@@ -1,0 +1,10 @@
+# Emitted files — drift-detectors compare byte-for-byte against fresh
+# output, which always uses LF (JSON.stringify + "\n"). Without eol=lf,
+# Windows `core.autocrlf=true` rewrites checkouts as CRLF and the
+# drift check false-positives on otherwise-clean working trees.
+#
+# Added 2026-04-22 during Scope 3 Step 2b.1 PR 1 green-bar verification
+# after `pnpm emit:event-registry:check` failed with a spurious drift
+# report on Windows. The underlying fix is keeping these generated
+# files at LF wherever they live.
+packages/core/src/events/event-registry.json eol=lf

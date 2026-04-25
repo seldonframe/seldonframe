@@ -1,0 +1,21 @@
+{
+  "name": "SeldonFrame",
+  "short_name": "SeldonFrame",
+  "description": "MCP-native agent platform for SMB agency operators",
+  "icons": [
+    {
+      "src": "/brand/favicon-180.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "/brand/favicon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "theme_color": "#1FAE85",
+  "background_color": "#0A0A0A",
+  "display": "standalone"
+}

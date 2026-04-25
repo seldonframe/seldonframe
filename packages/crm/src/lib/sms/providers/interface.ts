@@ -4,6 +4,16 @@ export type SmsSendRequest = {
   to: string;
   body: string;
   statusCallback?: string;
+  /**
+   * SLICE 8: optional auth override. When set, the provider uses these
+   * credentials INSTEAD of looking up the workspace's stored creds.
+   * Resolver-driven test-mode dispatch sets this with test creds; live
+   * mode dispatches leave it undefined and the provider self-resolves.
+   */
+  authOverride?: {
+    accountSid: string;
+    authToken: string;
+  };
 };
 
 export type SmsSendResult = {

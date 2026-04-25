@@ -926,6 +926,65 @@ export const TOOLS = [
     },
   },
   {
+    name: "get_booking",
+    description:
+      "Fetch one scheduled booking by id. Returns the full detail (contact, times, status, notes, meeting URL, cancellation timestamp, metadata). Appointment-type templates are NOT returned here — use list_appointment_types for those. 404s if the id is unknown OR belongs to a different workspace. Example: get_booking({ booking_id: 'bkg_...' }).",
+    inputSchema: obj(
+      {
+        booking_id: str("Required. UUID of the booking."),
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["booking_id"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const result = await api("GET", `/bookings/${encodeURIComponent(args.booking_id)}`, {
+        workspace_id: ws,
+      });
+      return { ok: true, booking: result.data ?? null };
+    },
+  },
+  {
+    name: "cancel_booking",
+    description:
+      "Cancel a scheduled booking. Sets status to 'cancelled', stamps cancelledAt, deletes the Google Calendar event, and emits booking.cancelled. Idempotent — re-cancelling an already-cancelled booking is a 200 no-op with alreadyCancelled=true (no duplicate events, no calendar errors). Past-dated bookings CAN be cancelled (legitimate retroactive cleanup). Does NOT touch linked payments — linkedPaymentIds is returned so the agent can compose refund_payment explicitly if the business rule is 'cancel AND refund'. Example: cancel_booking({ booking_id: 'bkg_...' }).",
+    inputSchema: obj(
+      {
+        booking_id: str("Required. UUID of the booking to cancel."),
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["booking_id"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const result = await api("POST", `/bookings/${encodeURIComponent(args.booking_id)}/cancel`, {
+        workspace_id: ws,
+      });
+      return { ok: true, ...result.data };
+    },
+  },
+  {
+    name: "reschedule_booking",
+    description:
+      "Move a scheduled booking to a new starts_at. Preserves the original duration — endsAt tracks the move so a 30-min consult stays 30 mins at the new time. Updates the Google Calendar event in place (event id preserved; attendees see the time change on their existing invite) and emits booking.rescheduled with both previousStartsAt and newStartsAt so follow-up agents can describe the change. Rejects past-dated new starts_at (400) and refuses to reschedule a cancelled booking (422 — reviving a cancellation should be a new create_booking). Does NOT change appointment type; does NOT touch linked payments. Example: reschedule_booking({ booking_id: 'bkg_...', starts_at: '2026-05-02T15:00:00Z' }).",
+    inputSchema: obj(
+      {
+        booking_id: str("Required. UUID of the booking to move."),
+        starts_at: str("Required. New ISO 8601 timestamp. Must be in the future. Duration is preserved from the current booking."),
+        workspace_id: str("Optional. Falls back to the active workspace."),
+      },
+      ["booking_id", "starts_at"],
+    ),
+    handler: async (args) => {
+      const ws = wsOrDefault(args.workspace_id);
+      const result = await api("POST", `/bookings/${encodeURIComponent(args.booking_id)}/reschedule`, {
+        body: { starts_at: args.starts_at },
+        workspace_id: ws,
+      });
+      return { ok: true, ...result.data };
+    },
+  },
+  {
     name: "list_appointment_types",
     description:
       "List all appointment types (bookable templates) in the workspace. Example: list_appointment_types({}).",

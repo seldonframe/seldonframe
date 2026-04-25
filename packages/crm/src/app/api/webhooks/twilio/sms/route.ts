@@ -10,6 +10,7 @@ import { findContactByPhone, persistInboundSms } from "@/lib/sms/api";
 import { toE164 } from "@/lib/sms/providers";
 import { addPhoneSuppression, isStopKeyword } from "@/lib/sms/suppression";
 import { verifyTwilioSignature } from "@/lib/sms/webhook-verify";
+import { dispatchTwilioInboundForMessageTriggers } from "@/lib/agents/message-trigger-wiring";
 
 export const runtime = "nodejs";
 
@@ -118,7 +119,7 @@ async function handleStatusCallback(params: {
       await emitSeldonEvent("sms.delivered", {
         smsMessageId: row.id,
         contactId: row.contactId,
-      });
+      }, { orgId: params.orgId });
       break;
 
     case "failed":
@@ -136,7 +137,7 @@ async function handleStatusCallback(params: {
         smsMessageId: row.id,
         contactId: row.contactId,
         reason: params.errorMessage ?? params.errorCode ?? params.status,
-      });
+      }, { orgId: params.orgId });
       // Carrier-reported permanent failures (error code 30003, 30005,
       // 30006) imply the number is bad. Auto-suppress so future sends
       // skip it.
@@ -239,7 +240,7 @@ export async function POST(request: Request) {
       phone: fromNumber,
       reason: "stop_keyword",
       contactId: null,
-    });
+    }, { orgId: orgId });
     return NextResponse.json({ ok: true, action: "auto_suppressed" });
   }
 
@@ -255,11 +256,29 @@ export async function POST(request: Request) {
     metadata: { twilio: body },
   });
 
+  // SLICE 7 PR 1 C6: dispatch matching message-triggered agents.
+  // Best-effort: errors are caught + logged inside the wrapper; never
+  // propagate to the webhook response. PR 1 dispatcher is no-op until
+  // message_triggers rows exist (PR 2 ships the first archetype +
+  // installer + real runtime startRun wiring). Runs BEFORE handleIncomingTurn
+  // so message-triggered agents can run concurrently with the Soul-aware
+  // reply path.
+  await dispatchTwilioInboundForMessageTriggers({
+    orgId,
+    from: fromNumber,
+    to: toNumber,
+    body: inboundBody,
+    externalMessageId,
+    receivedAt: new Date(),
+    contactId,
+    conversationId: null,
+  });
+
   await emitSeldonEvent("sms.replied", {
     smsMessageId: inbound.id,
     contactId,
     conversationId: null,
-  });
+  }, { orgId: orgId });
 
   // If we know which contact this is from, route through the runtime
   // for a Soul-aware reply. Anonymous inbound (phone not in CRM) is

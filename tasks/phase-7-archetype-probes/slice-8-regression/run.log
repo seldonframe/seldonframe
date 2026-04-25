@@ -1,0 +1,56 @@
+
+[speed-to-lead] running 3 probes...
+  run 1/3... hash=735f9299ff111080
+  run 2/3... hash=735f9299ff111080
+  run 3/3... hash=735f9299ff111080
+
+[win-back] running 3 probes...
+  run 1/3... hash=72ea1438d6c4a691
+  run 2/3... FAILED: probe exited 1: 
+Fatal error during archetype probe:
+Error: UNKNOWN: unknown error, open 'C:\Users\maxim\CascadeProjects\Seldon Frame\.claude\worktrees\fervent-hermann-84055b\tasks\phase-7-archetype-probes\win-back.raw.txt'
+    at async open (node:internal/fs/promises:642:25)
+    at async Object.writeFile (node:internal/fs/promises:1249:14)
+    at async main (file:///C:/Users/maxim/CascadeProjects/Seldon%20Frame/.claude/worktrees/fervent-hermann-84055b/scripts/phase-7-spike/probe-archetype.mjs:432:3) {
+  errno: -4094,
+  code: 'UNKNOWN',
+  syscall: 'open',
+  path: 'C:\\Users\\maxim\\CascadeProjects\\Seldon Frame\\.claude\\worktrees\\fervent-hermann-84055b\\tasks\\phase-7-archetype-probes\\win-back.raw.txt'
+}
+
+  run 3/3... hash=72ea1438d6c4a691
+
+[review-requester] running 3 probes...
+  run 1/3... hash=4464ec782dfd7bad
+  run 2/3... hash=4464ec782dfd7bad
+  run 3/3... hash=4464ec782dfd7bad
+
+[daily-digest] running 3 probes...
+  run 1/3... hash=6e2e04637b8e0e49
+  run 2/3... hash=6e2e04637b8e0e49
+  run 3/3... hash=6e2e04637b8e0e49
+
+[weather-aware-booking] running 3 probes...
+  run 1/3... hash=f330b46ca684ac2b
+  run 2/3... hash=f330b46ca684ac2b
+  run 3/3... hash=f330b46ca684ac2b
+
+[appointment-confirm-sms] running 3 probes...
+  run 1/3... hash=ef6060d76c617b04
+  run 2/3... hash=ef6060d76c617b04
+  run 3/3... hash=ef6060d76c617b04
+
+=== RESULTS ===
+
+Archetype                | Baseline           | run1               | run2               | run3               | Verdict
+------------------------|--------------------|--------------------|--------------------|--------------------|-------
+speed-to-lead           | 735f9299ff111080   | 735f9299ff111080   | 735f9299ff111080   | 735f9299ff111080   | ✅ 3/3 PASS
+win-back                | 72ea1438d6c4a691   | 72ea1438d6c4a691   | fail               | 72ea1438d6c4a691   | ❌ unstable
+review-requester        | 4464ec782dfd7bad   | 4464ec782dfd7bad   | 4464ec782dfd7bad   | 4464ec782dfd7bad   | ✅ 3/3 PASS
+daily-digest            | 6e2e04637b8e0e49   | 6e2e04637b8e0e49   | 6e2e04637b8e0e49   | 6e2e04637b8e0e49   | ✅ 3/3 PASS
+weather-aware-booking   | f330b46ca684ac2b   | f330b46ca684ac2b   | f330b46ca684ac2b   | f330b46ca684ac2b   | ✅ 3/3 PASS
+appointment-confirm-sms | ef6060d76c617b04   | ef6060d76c617b04   | ef6060d76c617b04   | ef6060d76c617b04   | ✅ 3/3 PASS
+
+Total: 17/18 baseline matches
+
+Summary written to tasks\phase-7-archetype-probes\slice-8-regression\_summary.json

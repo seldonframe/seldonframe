@@ -4,6 +4,8 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { organizations } from "@/db/schema";
 import type { SoulV4 } from "@/lib/soul-compiler/schema";
+import { reconcileBlockSubscriptions } from "@/lib/subscriptions/installer";
+import { DrizzleSubscriptionStorage } from "@/lib/subscriptions/storage-drizzle";
 
 type BlockScope = "universal" | "framework";
 
@@ -185,6 +187,29 @@ export async function seedInitialBlocks(orgId: string, baseFramework: SoulV4["ba
       updatedAt: new Date(),
     })
     .where(eq(organizations.id, orgId));
+
+  // SLICE 1 PR 2 C4: install-time subscription reconciliation. Reads
+  // `## Subscriptions` sections from the seeded BLOCK.md files and
+  // materializes rows into block_subscription_registry, handling G-4
+  // auto-flip for subscriptions whose producer block just arrived.
+  // Best-effort: a thrown error is logged so the block seeding itself
+  // isn't blocked by a subscription-registration hiccup.
+  try {
+    const storage = new DrizzleSubscriptionStorage(db);
+    const allSeededBlocks = [...existingSeeded, ...seededEntries].flatMap((entry) => {
+      const id = typeof entry.id === "string" ? entry.id : null;
+      const blockMd = typeof entry.blockMd === "string" ? entry.blockMd : null;
+      if (!id || !blockMd) return [];
+      return [{ id, blockMd }];
+    });
+    await reconcileBlockSubscriptions(orgId, allSeededBlocks, storage);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("[seedInitialBlocks] subscription reconcile failed", {
+      orgId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 
   return selected.map((recipe) => recipe.id);
 }

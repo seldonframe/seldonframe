@@ -1,0 +1,740 @@
+{
+  "$comment": "Generated from packages/core/src/events/index.ts SeldonEvent union. Edit the union, not this file. Run `pnpm emit:event-registry` to regenerate.",
+  "events": [
+    {
+      "type": "contact.created",
+      "fields": {
+        "contactId": {
+          "rawType": "string",
+          "nullable": false
+        }
+      }
+    },
+    {
+      "type": "contact.updated",
+      "fields": {
+        "contactId": {
+          "rawType": "string",
+          "nullable": false
+        }
+      }
+    },
+    {
+      "type": "deal.stage_changed",
+      "fields": {
+        "dealId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "from": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "to": {
+          "rawType": "string",
+          "nullable": false
+        }
+      }
+    },
+    {
+      "type": "form.submitted",
+      "fields": {
+        "formId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "contactId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "data": {
+          "rawType": "Record<string, unknown>",
+          "nullable": false
+        }
+      }
+    },
+    {
+      "type": "booking.created",
+      "fields": {
+        "appointmentId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "contactId": {
+          "rawType": "string",
+          "nullable": false
+        }
+      }
+    },
+    {
+      "type": "booking.completed",
+      "fields": {
+        "appointmentId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "contactId": {
+          "rawType": "string",
+          "nullable": false
+        }
+      }
+    },
+    {
+      "type": "booking.cancelled",
+      "fields": {
+        "appointmentId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "contactId": {
+          "rawType": "string",
+          "nullable": false
+        }
+      }
+    },
+    {
+      "type": "booking.rescheduled",
+      "fields": {
+        "appointmentId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "contactId": {
+          "rawType": "string | null",
+          "nullable": true
+        },
+        "previousStartsAt": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "newStartsAt": {
+          "rawType": "string",
+          "nullable": false
+        }
+      }
+    },
+    {
+      "type": "booking.no_show",
+      "fields": {
+        "appointmentId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "contactId": {
+          "rawType": "string",
+          "nullable": false
+        }
+      }
+    },
+    {
+      "type": "email.sent",
+      "fields": {
+        "emailId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "contactId": {
+          "rawType": "string",
+          "nullable": false
+        }
+      }
+    },
+    {
+      "type": "email.delivered",
+      "fields": {
+        "emailId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "contactId": {
+          "rawType": "string | null",
+          "nullable": true
+        }
+      }
+    },
+    {
+      "type": "email.opened",
+      "fields": {
+        "emailId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "contactId": {
+          "rawType": "string",
+          "nullable": false
+        }
+      }
+    },
+    {
+      "type": "email.clicked",
+      "fields": {
+        "emailId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "contactId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "url": {
+          "rawType": "string",
+          "nullable": false
+        }
+      }
+    },
+    {
+      "type": "email.bounced",
+      "fields": {
+        "emailId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "contactId": {
+          "rawType": "string | null",
+          "nullable": true
+        },
+        "reason": {
+          "rawType": "string",
+          "nullable": false
+        }
+      }
+    },
+    {
+      "type": "email.replied",
+      "fields": {
+        "emailId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "contactId": {
+          "rawType": "string | null",
+          "nullable": true
+        },
+        "conversationId": {
+          "rawType": "string | null",
+          "nullable": true
+        }
+      }
+    },
+    {
+      "type": "email.suppressed",
+      "fields": {
+        "email": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "reason": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "contactId": {
+          "rawType": "string | null",
+          "nullable": true
+        }
+      }
+    },
+    {
+      "type": "sms.sent",
+      "fields": {
+        "smsMessageId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "contactId": {
+          "rawType": "string | null",
+          "nullable": true
+        }
+      }
+    },
+    {
+      "type": "sms.delivered",
+      "fields": {
+        "smsMessageId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "contactId": {
+          "rawType": "string | null",
+          "nullable": true
+        }
+      }
+    },
+    {
+      "type": "sms.replied",
+      "fields": {
+        "smsMessageId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "contactId": {
+          "rawType": "string | null",
+          "nullable": true
+        },
+        "conversationId": {
+          "rawType": "string | null",
+          "nullable": true
+        }
+      }
+    },
+    {
+      "type": "sms.failed",
+      "fields": {
+        "smsMessageId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "contactId": {
+          "rawType": "string | null",
+          "nullable": true
+        },
+        "reason": {
+          "rawType": "string",
+          "nullable": false
+        }
+      }
+    },
+    {
+      "type": "sms.suppressed",
+      "fields": {
+        "phone": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "reason": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "contactId": {
+          "rawType": "string | null",
+          "nullable": true
+        }
+      }
+    },
+    {
+      "type": "conversation.turn.received",
+      "fields": {
+        "conversationId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "turnId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "contactId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "channel": {
+          "rawType": "\"email\" | \"sms\"",
+          "nullable": false
+        }
+      }
+    },
+    {
+      "type": "conversation.turn.sent",
+      "fields": {
+        "conversationId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "turnId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "contactId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "channel": {
+          "rawType": "\"email\" | \"sms\"",
+          "nullable": false
+        }
+      }
+    },
+    {
+      "type": "landing.visited",
+      "fields": {
+        "pageId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "visitorId": {
+          "rawType": "string",
+          "nullable": false
+        }
+      }
+    },
+    {
+      "type": "landing.converted",
+      "fields": {
+        "pageId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "contactId": {
+          "rawType": "string",
+          "nullable": false
+        }
+      }
+    },
+    {
+      "type": "landing.published",
+      "fields": {
+        "pageId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "slug": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "orgId": {
+          "rawType": "string",
+          "nullable": false
+        }
+      }
+    },
+    {
+      "type": "landing.unpublished",
+      "fields": {
+        "pageId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "orgId": {
+          "rawType": "string",
+          "nullable": false
+        }
+      }
+    },
+    {
+      "type": "landing.updated",
+      "fields": {
+        "pageId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "orgId": {
+          "rawType": "string",
+          "nullable": false
+        }
+      }
+    },
+    {
+      "type": "payment.completed",
+      "fields": {
+        "contactId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "amount": {
+          "rawType": "number",
+          "nullable": false
+        },
+        "currency": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "source": {
+          "rawType": "string",
+          "nullable": false
+        }
+      }
+    },
+    {
+      "type": "payment.failed",
+      "fields": {
+        "contactId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "amount": {
+          "rawType": "number",
+          "nullable": false
+        },
+        "reason": {
+          "rawType": "string",
+          "nullable": false
+        }
+      }
+    },
+    {
+      "type": "payment.refunded",
+      "fields": {
+        "contactId": {
+          "rawType": "string | null",
+          "nullable": true
+        },
+        "paymentId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "amount": {
+          "rawType": "number",
+          "nullable": false
+        },
+        "currency": {
+          "rawType": "string",
+          "nullable": false
+        }
+      }
+    },
+    {
+      "type": "payment.disputed",
+      "fields": {
+        "contactId": {
+          "rawType": "string | null",
+          "nullable": true
+        },
+        "paymentId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "amount": {
+          "rawType": "number",
+          "nullable": false
+        },
+        "reason": {
+          "rawType": "string",
+          "nullable": false
+        }
+      }
+    },
+    {
+      "type": "subscription.created",
+      "fields": {
+        "contactId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "planId": {
+          "rawType": "string",
+          "nullable": false
+        }
+      }
+    },
+    {
+      "type": "subscription.updated",
+      "fields": {
+        "contactId": {
+          "rawType": "string | null",
+          "nullable": true
+        },
+        "subscriptionId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "status": {
+          "rawType": "string",
+          "nullable": false
+        }
+      }
+    },
+    {
+      "type": "subscription.renewed",
+      "fields": {
+        "contactId": {
+          "rawType": "string | null",
+          "nullable": true
+        },
+        "subscriptionId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "amount": {
+          "rawType": "number",
+          "nullable": false
+        },
+        "currency": {
+          "rawType": "string",
+          "nullable": false
+        }
+      }
+    },
+    {
+      "type": "subscription.cancelled",
+      "fields": {
+        "contactId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "planId": {
+          "rawType": "string",
+          "nullable": false
+        }
+      }
+    },
+    {
+      "type": "subscription.trial_will_end",
+      "fields": {
+        "contactId": {
+          "rawType": "string | null",
+          "nullable": true
+        },
+        "subscriptionId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "trialEnd": {
+          "rawType": "string",
+          "nullable": false
+        }
+      }
+    },
+    {
+      "type": "invoice.created",
+      "fields": {
+        "contactId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "invoiceId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "amount": {
+          "rawType": "number",
+          "nullable": false
+        }
+      }
+    },
+    {
+      "type": "invoice.sent",
+      "fields": {
+        "contactId": {
+          "rawType": "string | null",
+          "nullable": true
+        },
+        "invoiceId": {
+          "rawType": "string",
+          "nullable": false
+        }
+      }
+    },
+    {
+      "type": "invoice.paid",
+      "fields": {
+        "contactId": {
+          "rawType": "string | null",
+          "nullable": true
+        },
+        "invoiceId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "amount": {
+          "rawType": "number",
+          "nullable": false
+        },
+        "currency": {
+          "rawType": "string",
+          "nullable": false
+        }
+      }
+    },
+    {
+      "type": "invoice.past_due",
+      "fields": {
+        "contactId": {
+          "rawType": "string | null",
+          "nullable": true
+        },
+        "invoiceId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "amountDue": {
+          "rawType": "number",
+          "nullable": false
+        }
+      }
+    },
+    {
+      "type": "invoice.voided",
+      "fields": {
+        "contactId": {
+          "rawType": "string | null",
+          "nullable": true
+        },
+        "invoiceId": {
+          "rawType": "string",
+          "nullable": false
+        }
+      }
+    },
+    {
+      "type": "portal.login",
+      "fields": {
+        "contactId": {
+          "rawType": "string",
+          "nullable": false
+        }
+      }
+    },
+    {
+      "type": "portal.message_sent",
+      "fields": {
+        "contactId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "messageId": {
+          "rawType": "string",
+          "nullable": false
+        }
+      }
+    },
+    {
+      "type": "portal.resource_viewed",
+      "fields": {
+        "contactId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "resourceId": {
+          "rawType": "string",
+          "nullable": false
+        }
+      }
+    },
+    {
+      "type": "vehicle.added",
+      "fields": {
+        "vehicleId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "contactId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "vin": {
+          "rawType": "string | null",
+          "nullable": true
+        }
+      }
+    },
+    {
+      "type": "service.logged",
+      "fields": {
+        "serviceEventId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "vehicleId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "contactId": {
+          "rawType": "string",
+          "nullable": false
+        },
+        "serviceType": {
+          "rawType": "string",
+          "nullable": false
+        }
+      }
+    }
+  ]
+}

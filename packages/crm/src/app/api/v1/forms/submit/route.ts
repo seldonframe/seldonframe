@@ -120,7 +120,7 @@ export async function POST(request: Request) {
 
       if (contactId) {
         try {
-          await emitSeldonEvent("contact.created", { contactId });
+          await emitSeldonEvent("contact.created", { contactId }, { orgId: orgId });
         } catch {
           // Non-blocking for public form submission path.
         }
@@ -139,7 +139,7 @@ export async function POST(request: Request) {
           scoredFields,
           ...(email ? { email } : {}),
         },
-      });
+      }, { orgId: orgId });
     } catch {
       // Non-blocking for public form submission path.
     }

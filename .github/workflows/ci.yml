@@ -1,0 +1,43 @@
+name: CI
+
+# Runs on every PR and every push to main. Fails closed on unit-test
+# failures so specs can't silently rot. Added 2026-04-21 as part of
+# Scope 3 Step 2b.1 PR 1 — before this, the repo had only a deploy
+# workflow (deploy-demo.yml) that ran on push-to-main without a test
+# gate.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Unit tests
+        run: pnpm test:unit
+
+      - name: BLOCK.md emit drift-detector
+        run: pnpm emit:blocks:check
+
+      - name: Event-registry drift-detector
+        run: pnpm emit:event-registry:check

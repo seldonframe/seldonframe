@@ -1,0 +1,29 @@
+{
+  "id": "daily-digest",
+  "name": "Daily Digest",
+  "description": "Daily morning email summary of yesterday's workspace activity, sent to the owner at a scheduled time.",
+  "trigger": {
+    "type": "schedule",
+    "cron": "0 8 * * *",
+    "timezone": "America/New_York",
+    "catchup": "skip",
+    "concurrency": "skip"
+  },
+  "variables": {
+    "orgName": "trigger.orgName",
+    "firstName": "trigger.ownerFirstName"
+  },
+  "steps": [
+    {
+      "id": "send_digest",
+      "type": "mcp_tool_call",
+      "tool": "send_email",
+      "args": {
+        "to": "owner@example.com",
+        "subject": "Your morning update from {{orgName}}",
+        "body": "Good morning {{firstName}},\n\nHere's a gentle catch-up on what came through the practice yesterday. A few new patients reached out, some appointments got booked, and the day moved along nicely — nothing that needs your attention before coffee.\n\nWe'll keep things running smoothly today too. If anything pops up that needs a human touch, you'll be the first to know.\n\nWarmly,\nBright Smile Dental"
+      },
+      "next": null
+    }
+  ]
+}

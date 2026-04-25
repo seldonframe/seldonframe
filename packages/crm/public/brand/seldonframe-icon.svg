@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <title>SeldonFrame</title>
+  <line x1="22" y1="22" x2="58" y2="22" stroke="#1FAE85" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="78" y1="42" x2="78" y2="78" stroke="#1FAE85" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="78" y1="78" x2="22" y2="78" stroke="#1FAE85" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="22" y1="78" x2="22" y2="22" stroke="#1FAE85" stroke-width="2.5" stroke-linecap="round"/>
+  <circle cx="22" cy="22" r="6" fill="#1FAE85"/>
+  <circle cx="78" cy="22" r="6" fill="none" stroke="#1FAE85" stroke-width="2.5"/>
+  <circle cx="78" cy="78" r="6" fill="#1FAE85"/>
+  <circle cx="22" cy="78" r="6" fill="#1FAE85"/>
+</svg>

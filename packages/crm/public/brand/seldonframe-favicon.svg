@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <title>SeldonFrame</title>
+  <line x1="18" y1="18" x2="58" y2="18" stroke="#1FAE85" stroke-width="10" stroke-linecap="square"/>
+  <line x1="82" y1="42" x2="82" y2="82" stroke="#1FAE85" stroke-width="10" stroke-linecap="square"/>
+  <line x1="82" y1="82" x2="18" y2="82" stroke="#1FAE85" stroke-width="10" stroke-linecap="square"/>
+  <line x1="18" y1="82" x2="18" y2="18" stroke="#1FAE85" stroke-width="10" stroke-linecap="square"/>
+  <circle cx="18" cy="18" r="14" fill="#1FAE85"/>
+  <circle cx="82" cy="82" r="14" fill="#1FAE85"/>
+  <circle cx="18" cy="82" r="14" fill="#1FAE85"/>
+</svg>

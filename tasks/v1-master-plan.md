@@ -37,6 +37,12 @@ Post-2026-04-20 that framing is subsumed by the real bet: **(g) agent synthesis 
 
 ## §0.5 — Scope 3: archetype-driven architecture sprint *(2026-04-21 amendment)*
 
+### Critical-path flag — 2e is load-bearing for v1 ship criteria *(2026-04-21, per 2b.1 audit §9.5)*
+
+> **2e is critical path for v1 ship criteria. If 2e gets deferred, Review Requester's V1.1 footnote returns, violating the zero-footnote commitment.**
+
+Review Requester's "SMS fires unconditionally" limitation can only be removed by 2e's `branch.condition.type: "external_state"` — no other Scope 3 slice closes it. The ship criterion "7 archetypes shipped, zero V1.1 footnotes" is therefore load-bearing on 2e actually landing in v1, not just being planned. If sprint pressure threatens to defer 2e, the consequence is a v1 ship-criterion failure; scope has to trade down elsewhere (another Scope 3 slice or an archetype scope reduction) rather than deferring 2e specifically.
+
 ### Principle
 
 **The archetype library and the architecture are co-developed, not sequential. Each archetype is a teacher — when it surfaces an architectural gap, we ship the architecture that closes it, then complete the archetype on the upgraded surface. v1 ships when all 7 archetypes synthesize cleanly against the completed composition contract. This discipline generalizes — future phases that consume the composition surface will apply the same co-development pattern (e.g., Phase 9 snapshots, Phase 10 marketplace, third-party block authoring post-v1).**

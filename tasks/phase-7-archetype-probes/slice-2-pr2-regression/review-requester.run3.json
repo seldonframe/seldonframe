@@ -1,0 +1,67 @@
+{
+  "name": "Review Requester",
+  "description": "Request a review from a customer via email 2 days after their booking completes, with an SMS reminder 5 days after the email.",
+  "trigger": {
+    "type": "event",
+    "event": "booking.completed"
+  },
+  "variables": {
+    "contactId": "trigger.contactId",
+    "firstName": "trigger.contact.firstName",
+    "email": "trigger.contact.email",
+    "phone": "trigger.contact.phone"
+  },
+  "steps": [
+    {
+      "id": "wait_before_email",
+      "type": "wait",
+      "seconds": 172800,
+      "next": "send_review_email"
+    },
+    {
+      "id": "send_review_email",
+      "type": "mcp_tool_call",
+      "tool": "send_email",
+      "args": {
+        "to": "{{email}}",
+        "subject": "Thanks for visiting Bright Smile — how did we do?",
+        "body": "Hi {{firstName}},\n\nThanks so much for coming in to see us at Bright Smile Dental. We know the dentist isn't always the easiest appointment to look forward to, and we really appreciate you trusting us with your care.\n\nIf you have 30 seconds, we'd be grateful if you shared a quick review. Honest feedback helps other folks in the area feel a little less nervous about finding a dentist — which is kind of the whole reason we do this:\n\nhttps://g.page/r/Ca-example-business/review\n\nAnd if something wasn't quite right during your visit, just hit reply — we'd much rather hear from you directly so we can make it right.\n\nTake care,\nThe Bright Smile Dental team",
+        "contactId": "{{contactId}}"
+      },
+      "next": "wait_before_sms"
+    },
+    {
+      "id": "wait_before_sms",
+      "type": "wait",
+      "seconds": 432000,
+      "next": "send_review_sms"
+    },
+    {
+      "id": "send_review_sms",
+      "type": "mcp_tool_call",
+      "tool": "send_sms",
+      "args": {
+        "to": "{{phone}}",
+        "body": "Hi {{firstName}}, it's Bright Smile Dental — quick follow-up: if you have 30 seconds, a short review would mean a lot to us: https://g.page/r/Ca-example-business/review. Thanks!",
+        "contact_id": "{{contactId}}"
+      },
+      "next": "log_review_request_complete"
+    },
+    {
+      "id": "log_review_request_complete",
+      "type": "mcp_tool_call",
+      "tool": "create_activity",
+      "args": {
+        "contact_id": "{{contactId}}",
+        "type": "review_request",
+        "subject": "Review Requester agent sequence complete",
+        "body": "Sent review request email + SMS reminder. Review destination: https://g.page/r/Ca-example-business/review. NOTE: reminder fired unconditionally — v1 has no review.submitted event; check the configured review URL manually to see if this customer responded.",
+        "metadata": {
+          "source": "review-requester",
+          "stage": "complete"
+        }
+      },
+      "next": null
+    }
+  ]
+}

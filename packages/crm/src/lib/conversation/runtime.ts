@@ -283,7 +283,7 @@ export async function handleIncomingTurn(input: RuntimeInput): Promise<RuntimeRe
     turnId: inboundTurn.id,
     contactId: input.contactId,
     channel: input.channel,
-  });
+  }, { orgId: input.orgId });
 
   const priorTurns = await loadRecentTurns(input.orgId, conversation.id);
   const soul = await loadSoul(input.orgId);
@@ -336,7 +336,7 @@ export async function handleIncomingTurn(input: RuntimeInput): Promise<RuntimeRe
     turnId: outboundTurn.id,
     contactId: input.contactId,
     channel: input.channel,
-  });
+  }, { orgId: input.orgId });
 
   // Usage tracking for runtime-triggered turns is skipped — seldon_usage
   // requires a user_id FK and runtime-triggered conversations have no

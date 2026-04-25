@@ -3,6 +3,13 @@ id: client-intake-onboarding-portal
 scope: framework
 frameworks: agency,coaching,consulting
 ---
+
+<!--
+  No composition contract. Intentionally invisible to agent
+  synthesis. Adding a contract here requires real semantic
+  work — see tasks/step-2b-1-contract-v2-audit.md §7.5.
+-->
+
 # BLOCK: Client Intake & Onboarding Portal
 
 **Description**  

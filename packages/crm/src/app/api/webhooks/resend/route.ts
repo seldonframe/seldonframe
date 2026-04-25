@@ -123,7 +123,7 @@ export async function POST(request: Request) {
       await emitSeldonEvent("email.delivered", {
         emailId: emailRow.id,
         contactId: emailRow.contactId,
-      });
+      }, { orgId: emailRow.orgId });
       break;
 
     case "email.opened":
@@ -139,7 +139,7 @@ export async function POST(request: Request) {
         await emitSeldonEvent("email.opened", {
           emailId: emailRow.id,
           contactId: emailRow.contactId,
-        });
+        }, { orgId: emailRow.orgId });
       }
       break;
 
@@ -157,7 +157,7 @@ export async function POST(request: Request) {
           emailId: emailRow.id,
           contactId: emailRow.contactId,
           url: payload.data.click?.link ?? "",
-        });
+        }, { orgId: emailRow.orgId });
       }
       break;
 
@@ -177,7 +177,7 @@ export async function POST(request: Request) {
         emailId: emailRow.id,
         contactId: emailRow.contactId,
         reason: reasonText,
-      });
+      }, { orgId: emailRow.orgId });
 
       // Hard bounces and complaints are auto-suppressed so future sends
       // from this workspace skip the address until a human un-suppresses.

@@ -1671,7 +1671,7 @@ export async function createCustomObjectRecord(params: {
     objectSlug: params.objectSlug,
     recordId: nextRecord.id,
     contactId: resolveRelatedContactId(config.entity, nextRecord.values, params.clientId),
-  });
+  }, { orgId: params.orgId });
   return nextRecord;
 }
 
@@ -1744,7 +1744,7 @@ export async function updateCustomObjectRecordField(params: {
       ...(existingRecord?.values ?? {}),
       [params.field]: params.value,
     }, params.clientId),
-  });
+  }, { orgId: params.orgId });
 }
 
 export async function moveCustomObjectRecordLane(params: {

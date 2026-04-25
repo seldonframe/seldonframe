@@ -1,0 +1,135 @@
+{
+  "slug": "hvac-service-calls",
+  "title": "HVAC Service Calls",
+  "description": "Tracks service calls (emergency, scheduled maintenance, install jobs) at customer sites. Each call has a customer, optional equipment reference, technician assignment, status, priority, and disposition. Powers emergency-triage routing, technician dispatch, and post-service-followup archetypes.",
+  "frameworks": ["hvac-arizona"],
+  "triggerPhrases": [
+    "track every service call we run",
+    "I need to assign techs to jobs and track status",
+    "log emergency vs scheduled vs install jobs separately"
+  ],
+  "produces": [
+    {
+      "name": "service_call.created",
+      "fields": [
+        { "name": "serviceCallId", "type": "string" },
+        { "name": "customerId", "type": "string" },
+        { "name": "priority", "type": "string" },
+        { "name": "callType", "type": "string" }
+      ]
+    },
+    {
+      "name": "service_call.assigned",
+      "fields": [
+        { "name": "serviceCallId", "type": "string" },
+        { "name": "technicianId", "type": "string" },
+        { "name": "etaMinutes", "type": "integer" }
+      ]
+    },
+    {
+      "name": "service_call.completed",
+      "fields": [
+        { "name": "serviceCallId", "type": "string" },
+        { "name": "customerId", "type": "string" },
+        { "name": "technicianId", "type": "string" },
+        { "name": "outcome", "type": "string" }
+      ]
+    }
+  ],
+  "consumes": [
+    {
+      "kind": "soul_field",
+      "soul_field": "workspace.soul.technicians",
+      "type": "array"
+    },
+    {
+      "kind": "event",
+      "event": "equipment.serviced"
+    }
+  ],
+  "tools": [
+    {
+      "name": "create_service_call",
+      "description": "Create a new service call for a customer. Used when a call comes in (emergency, scheduled tune-up, install request, warranty claim).",
+      "args": [
+        { "name": "customerId", "type": "string", "required": true },
+        { "name": "callType", "type": "string", "required": true },
+        { "name": "priority", "type": "string", "required": true },
+        { "name": "equipmentId", "type": "string", "required": false },
+        { "name": "scheduledAt", "type": "string", "required": false },
+        { "name": "notes", "type": "string", "required": false }
+      ],
+      "returns": [
+        { "name": "serviceCallId", "type": "string" }
+      ],
+      "emits": ["service_call.created"]
+    },
+    {
+      "name": "assign_technician",
+      "description": "Assign an on-call technician to a service call. Used by the emergency-triage archetype after priority-routing branches.",
+      "args": [
+        { "name": "serviceCallId", "type": "string", "required": true },
+        { "name": "technicianId", "type": "string", "required": true },
+        { "name": "etaMinutes", "type": "integer", "required": true }
+      ],
+      "returns": [
+        { "name": "ok", "type": "boolean" }
+      ],
+      "emits": ["service_call.assigned"]
+    },
+    {
+      "name": "complete_service_call",
+      "description": "Mark a service call complete with outcome (resolved, parts-needed, escalation). Triggers the post-service-followup subscription via service_call.completed event.",
+      "args": [
+        { "name": "serviceCallId", "type": "string", "required": true },
+        { "name": "outcome", "type": "string", "required": true },
+        { "name": "partsUsed", "type": "string", "required": false },
+        { "name": "totalCost", "type": "number", "required": false },
+        { "name": "notes", "type": "string", "required": false }
+      ],
+      "returns": [
+        { "name": "ok", "type": "boolean" }
+      ],
+      "emits": ["service_call.completed"]
+    },
+    {
+      "name": "list_emergency_queue",
+      "description": "Return all service calls currently in priority=emergency or vip status, sorted by created_at. Powers the dispatcher dashboard.",
+      "args": [],
+      "returns": [
+        { "name": "queueJson", "type": "string" }
+      ],
+      "emits": []
+    }
+  ],
+  "subscriptions": [],
+  "entities": [
+    {
+      "name": "serviceCall",
+      "pluralSlug": "service-calls",
+      "fields": [
+        { "name": "customerId", "type": "string", "required": true },
+        { "name": "equipmentId", "type": "string", "required": false, "nullable": true },
+        { "name": "technicianId", "type": "string", "required": false, "nullable": true },
+        { "name": "callType", "type": "string", "required": true },
+        { "name": "priority", "type": "string", "required": true },
+        { "name": "status", "type": "string", "required": true },
+        { "name": "scheduledAt", "type": "string", "required": false, "nullable": true },
+        { "name": "completedAt", "type": "string", "required": false, "nullable": true },
+        { "name": "outcome", "type": "string", "required": false, "nullable": true },
+        { "name": "totalCost", "type": "number", "required": false, "nullable": true },
+        { "name": "notes", "type": "string", "required": false, "nullable": true }
+      ]
+    }
+  ],
+  "customer_surfaces": {
+    "display": [
+      {
+        "entity": "serviceCall",
+        "filter": "{{customer_id}}",
+        "fields": ["callType", "scheduledAt", "completedAt", "outcome", "totalCost"]
+      }
+    ],
+    "actions": []
+  }
+}

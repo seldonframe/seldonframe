@@ -6,6 +6,7 @@ export type SeldonEvent =
   | { type: "booking.created"; data: { appointmentId: string; contactId: string } }
   | { type: "booking.completed"; data: { appointmentId: string; contactId: string } }
   | { type: "booking.cancelled"; data: { appointmentId: string; contactId: string } }
+  | { type: "booking.rescheduled"; data: { appointmentId: string; contactId: string | null; previousStartsAt: string; newStartsAt: string } }
   | { type: "booking.no_show"; data: { appointmentId: string; contactId: string } }
   | { type: "email.sent"; data: { emailId: string; contactId: string } }
   | { type: "email.delivered"; data: { emailId: string; contactId: string | null } }
@@ -42,7 +43,9 @@ export type SeldonEvent =
   | { type: "invoice.voided"; data: { contactId: string | null; invoiceId: string } }
   | { type: "portal.login"; data: { contactId: string } }
   | { type: "portal.message_sent"; data: { contactId: string; messageId: string } }
-  | { type: "portal.resource_viewed"; data: { contactId: string; resourceId: string } };
+  | { type: "portal.resource_viewed"; data: { contactId: string; resourceId: string } }
+  | { type: "vehicle.added"; data: { vehicleId: string; contactId: string; vin: string | null } }
+  | { type: "service.logged"; data: { serviceEventId: string; vehicleId: string; contactId: string; serviceType: string } };
 
 export type BuiltInEventType = SeldonEvent["type"];
 export type EventType = BuiltInEventType | `${string}.${string}`;

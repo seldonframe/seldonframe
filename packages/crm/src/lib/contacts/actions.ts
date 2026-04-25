@@ -108,7 +108,7 @@ export async function createContactAction(formData: FormData) {
     .returning({ id: contacts.id });
 
   if (createdContact?.id) {
-    await emitSeldonEvent("contact.created", { contactId: createdContact.id });
+    await emitSeldonEvent("contact.created", { contactId: createdContact.id }, { orgId: orgId });
   }
 
   await inferClientLifecycleFromStatus({
@@ -239,7 +239,7 @@ export async function bulkImportContactsAction(input: { rows: ImportedContactRow
   }
 
   for (const contactId of createdIds) {
-    await emitSeldonEvent("contact.created", { contactId });
+    await emitSeldonEvent("contact.created", { contactId }, { orgId: orgId });
   }
 
   for (const [status, count] of insertedStatuses) {

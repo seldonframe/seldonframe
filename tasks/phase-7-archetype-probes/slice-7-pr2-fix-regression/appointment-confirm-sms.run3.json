@@ -1,0 +1,73 @@
+{
+  "id": "appointment-confirm-sms",
+  "name": "Appointment Confirm via SMS",
+  "description": "Inbound CONFIRM → look up upcoming appointment → mark confirmed + reply.",
+  "trigger": {
+    "type": "message",
+    "channel": "sms",
+    "channelBinding": {
+      "kind": "any"
+    },
+    "pattern": {
+      "kind": "exact",
+      "value": "CONFIRM",
+      "caseSensitive": false
+    }
+  },
+  "variables": {
+    "contactId": "trigger.contactId",
+    "from": "trigger.from"
+  },
+  "steps": [
+    {
+      "id": "load_appointment",
+      "type": "read_state",
+      "source": "soul",
+      "path": "workspace.soul.appointments.upcoming.{{contactId}}",
+      "capture": "appointment",
+      "next": "check_appointment_exists"
+    },
+    {
+      "id": "check_appointment_exists",
+      "type": "branch",
+      "condition": {
+        "type": "predicate",
+        "predicate": {
+          "kind": "field_exists",
+          "field": "appointment.startsAt"
+        }
+      },
+      "on_match_next": "mark_confirmed",
+      "on_no_match_next": "reply_no_appointment"
+    },
+    {
+      "id": "mark_confirmed",
+      "type": "write_state",
+      "path": "workspace.soul.appointments.upcoming.{{contactId}}.status",
+      "value": "confirmed",
+      "next": "reply_confirmed"
+    },
+    {
+      "id": "reply_confirmed",
+      "type": "mcp_tool_call",
+      "tool": "send_sms",
+      "args": {
+        "contact_id": "{{contactId}}",
+        "to": "{{from}}",
+        "body": "Confirmed for {{appointment.startsAt}}. See you then!"
+      },
+      "next": null
+    },
+    {
+      "id": "reply_no_appointment",
+      "type": "mcp_tool_call",
+      "tool": "send_sms",
+      "args": {
+        "contact_id": "{{contactId}}",
+        "to": "{{from}}",
+        "body": "No upcoming appointment found. Reply HELP for assistance."
+      },
+      "next": null
+    }
+  ]
+}

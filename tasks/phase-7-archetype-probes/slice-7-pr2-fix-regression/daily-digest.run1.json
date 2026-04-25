@@ -1,0 +1,29 @@
+{
+  "id": "daily-digest",
+  "name": "Daily Digest",
+  "description": "Daily morning email summary of yesterday's workspace activity, sent to the owner at a scheduled time.",
+  "trigger": {
+    "type": "schedule",
+    "cron": "0 8 * * *",
+    "timezone": "America/New_York",
+    "catchup": "skip",
+    "concurrency": "skip"
+  },
+  "variables": {
+    "orgName": "trigger.orgName",
+    "firstName": "trigger.ownerFirstName"
+  },
+  "steps": [
+    {
+      "id": "send_digest",
+      "type": "mcp_tool_call",
+      "tool": "send_email",
+      "args": {
+        "to": "owner@example.com",
+        "subject": "Your morning update from {{orgName}}",
+        "body": "Morning {{firstName}},\n\nJust a quick note before the chairs fill up. Yesterday brought a few new faces to {{orgName}} — some fresh contacts, a handful of bookings on the calendar, nothing that needs putting out fires.\n\nEverything's in good shape. Wanted you to have the lay of the land before the day gets going.\n\nWarmly,\nBright Smile Dental"
+      },
+      "next": null
+    }
+  ]
+}

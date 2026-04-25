@@ -101,7 +101,8 @@ export function Sidebar(props: {
         <div className="px-4 pb-0 pt-4 sm:px-5 sm:pt-5 lg:px-6 lg:pt-6">
           <div className="flex min-h-8 items-center gap-3">
             <div className="flex size-8 items-center justify-center overflow-hidden rounded-xl border border-border/80 bg-card/80 shadow-(--shadow-xs)">
-              <Image src="/logo.svg" alt="SeldonFrame logo" width={20} height={20} />
+              {/* SLICE 9 PR 2 C1: SeldonFrame icon (brand-isolated; never themed) */}
+              <Image src="/brand/seldonframe-icon.svg" alt="SeldonFrame" width={20} height={20} />
             </div>
             <div className="min-w-0">
               <p className="text-sm font-semibold tracking-tight text-foreground">SeldonFrame</p>
@@ -118,7 +119,8 @@ export function Sidebar(props: {
               className="flex w-full items-center gap-3 rounded-2xl border border-border/80 bg-card/80 p-3 text-left shadow-(--shadow-xs) transition-all hover:border-border hover:bg-card"
             >
               <div className="flex size-10 items-center justify-center overflow-hidden rounded-xl border border-border/70 bg-muted/30 shrink-0">
-                <Image src="/logo.svg" alt="SeldonFrame logo" width={34} height={34} className="h-full w-full" />
+                {/* SLICE 9 PR 2 C1: workspace tile uses SeldonFrame icon as default avatar; per-workspace logo override is post-launch */}
+                <Image src="/brand/seldonframe-icon.svg" alt="Workspace" width={34} height={34} className="h-full w-full" />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold text-foreground">{workspaceName}</p>

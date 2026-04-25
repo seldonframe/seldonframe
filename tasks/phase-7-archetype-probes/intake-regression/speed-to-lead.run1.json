@@ -1,0 +1,79 @@
+{
+  "name": "Speed-to-Lead",
+  "description": "Qualify inbound intake-form submissions via SMS within minutes and book the next available consultation.",
+  "trigger": {
+    "type": "event",
+    "event": "form.submitted",
+    "filter": {
+      "formId": "form_new_patient_intake"
+    }
+  },
+  "variables": {
+    "contactId": "trigger.contactId",
+    "firstName": "trigger.contact.firstName",
+    "email": "trigger.contact.email",
+    "phone": "trigger.contact.phone"
+  },
+  "steps": [
+    {
+      "id": "wait_before_outreach",
+      "type": "wait",
+      "seconds": 120,
+      "next": "qualify_conversation"
+    },
+    {
+      "id": "qualify_conversation",
+      "type": "conversation",
+      "channel": "sms",
+      "initial_message": "Hi {{contact.firstName}}, it's Bright Smile Dental — thanks for reaching out about a new-patient visit! Your consultation is on us. Any preferred day/time that works for you? And do you have dental insurance we should check, or not sure yet?",
+      "exit_when": "The prospect has shared a preferred appointment day/time AND indicated their insurance status (yes / no / unsure). No pressure — if they seem hesitant, reassure them the consult is free and painless before pushing for details.",
+      "on_exit": {
+        "extract": {
+          "preferred_start": "ISO-8601 datetime for the preferred appointment start, snapped to the next available slot in the clinic's business hours (Mon–Fri 9am–5pm local time).",
+          "insurance_status": "one of: yes | no | unsure | not_asked"
+        },
+        "next": "book_consultation"
+      }
+    },
+    {
+      "id": "book_consultation",
+      "type": "mcp_tool_call",
+      "tool": "create_booking",
+      "args": {
+        "contact_id": "{{contactId}}",
+        "appointment_type_id": "appt_new_patient_consult",
+        "starts_at": "{{preferred_start}}",
+        "notes": "Booked by Speed-to-Lead agent. Insurance status: {{insurance_status}}."
+      },
+      "next": "log_booking_activity"
+    },
+    {
+      "id": "log_booking_activity",
+      "type": "mcp_tool_call",
+      "tool": "create_activity",
+      "args": {
+        "contact_id": "{{contactId}}",
+        "type": "agent_action",
+        "subject": "Speed-to-Lead agent booked consultation",
+        "body": "Scheduled for {{preferred_start}}. Insurance: {{insurance_status}}.",
+        "metadata": {
+          "agentId": "{{agent.id}}",
+          "source": "speed-to-lead"
+        }
+      },
+      "next": "send_confirmation_email"
+    },
+    {
+      "id": "send_confirmation_email",
+      "type": "mcp_tool_call",
+      "tool": "send_email",
+      "args": {
+        "to": "{{email}}",
+        "subject": "You're booked with Bright Smile Dental 🪥",
+        "body": "Hi {{contact.firstName}},\n\nYou're all set for {{preferred_start}} — we're so glad you reached out. Here's what to expect: a relaxed 45-minute new-patient consultation, a gentle look around, and plenty of time for your questions. No pressure, no surprises — just a friendly visit on us.\n\nA few things that help first-timers feel at home:\n• Arrive 5 minutes early so we can get you settled\n• Bring your insurance card if you have one (totally fine if you don't)\n• Let us know anything that's been on your mind about your smile\n\nNeed to reschedule? Just reply to this email or text us back — we'll take care of it, no fuss.\n\nCan't wait to meet you,\nThe Bright Smile Dental team",
+        "contactId": "{{contactId}}"
+      },
+      "next": null
+    }
+  ]
+}

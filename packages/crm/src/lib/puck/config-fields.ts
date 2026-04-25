@@ -18,12 +18,10 @@
 // This file breaks that chain by giving server code a fields registry
 // that doesn't transitively touch React.
 //
-// *** KEEP THIS FILE IN SYNC WITH packages/crm/src/lib/puck/config.impl.tsx. ***
-// When adding/removing/renaming a field on a component in config.impl.tsx,
-// mirror the change here. A follow-up slice will make this the single
-// source of truth by having config.impl.tsx import from here; for the
-// fix landing here, fields are carefully duplicated and the risk is
-// bounded by the Puck validator (validator.ts) running on every save.
+// Single source of truth for Puck component `fields`. Consolidation
+// landed 2026-04-22: config.impl.tsx imports `componentFieldRegistry`
+// here and layers React rendering (`defaultProps` + `render`) on top.
+// Adding/renaming a field happens ONLY in this file.
 
 // Mirror of the `icons` map in config.impl.tsx. Kept here so
 // IconText's `icon` field options match the registry without importing

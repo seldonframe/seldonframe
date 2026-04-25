@@ -7,12 +7,14 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx src/db/seed.ts",
     "db:seed-demo": "tsx src/db/seed-demo.ts",
+    "db:seed-hvac": "tsx src/db/seed-hvac-arizona.ts",
     "test:cross-block": "tsx src/testing/cross-block-smoke.ts"
   },
   "dependencies": {
