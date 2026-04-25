@@ -40,6 +40,18 @@ const BASE_ALLOWLIST: ReadonlySet<string> = new Set<string>([
   //     the same upcoming-appointment record + branch on its
   //     existence — won't fabricate appointments out of thin air.
   "workspace.soul.appointments.upcoming.{{contactId}}.status",
+  // hvac-heat-advisory-outreach (SLICE 9 PR 2 C2): log per-day
+  // outreach summary so future advisory days can dedup against
+  // recently-contacted customers.
+  //
+  // Guarantees:
+  //   - Idempotency: keyed by date (today). Same day re-run rewrites
+  //     same key with same shape (customers_contacted, dispatched_at).
+  //   - Monotonicity: only writes happen forward in time; no past-
+  //     date deletion or rewrite.
+  //   - Scope: write only happens after a successful outreach
+  //     dispatch — log entry confirms a fired send, never spurious.
+  "workspace.soul.outreach_log.heat_advisory.{{today}}",
 ]);
 
 // Tests override via _overrideAllowlistForTests — underscore-

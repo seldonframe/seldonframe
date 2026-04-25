@@ -26,8 +26,9 @@ describe("emergency-triage archetype — registry isolation (G-9-7)", () => {
     assert.equal(Object.keys(archetypes).length, 6);
   });
 
-  test("hvac-archetypes registry now has 2 (pre-season + emergency-triage)", () => {
-    assert.equal(Object.keys(hvacArchetypes).length, 2);
+  test("hvac-archetypes registry includes emergency-triage (count grows as PR 2 ships more)", () => {
+    assert.ok(Object.keys(hvacArchetypes).length >= 2);
+    assert.ok(hvacArchetypes["hvac-emergency-triage"]);
   });
 });
 

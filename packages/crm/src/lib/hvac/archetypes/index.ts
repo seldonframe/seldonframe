@@ -15,11 +15,13 @@
 
 import type { Archetype } from "../../agents/archetypes/types";
 import { emergencyTriageArchetype } from "./emergency-triage";
+import { heatAdvisoryArchetype } from "./heat-advisory";
 import { preSeasonMaintenanceArchetype } from "./pre-season-maintenance";
 
 export const hvacArchetypes: Record<string, Archetype> = {
   "hvac-pre-season-maintenance": preSeasonMaintenanceArchetype,
   "hvac-emergency-triage": emergencyTriageArchetype,
+  "hvac-heat-advisory-outreach": heatAdvisoryArchetype,
 };
 
 export function listHvacArchetypes(): Archetype[] {
