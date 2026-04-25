@@ -14,13 +14,33 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// SLICE 9 PR 2 C1: brand asset application. References go through
+// /brand/ (extracted from the canonical asset bundle in the brand
+// README). The legacy /logo.svg path is kept on disk for now (not
+// removed in this commit) but no longer referenced from layout meta.
 export const metadata: Metadata = {
-  title: "Seldon Frame",
-  description: "Open source CRM framework scaffold",
+  title: "SeldonFrame",
+  description: "AI-native business OS — CRM, booking, intake, brain.",
+  manifest: "/brand/manifest.webmanifest",
   icons: {
-    icon: [{ url: "/logo.svg", type: "image/svg+xml" }],
-    shortcut: "/logo.svg",
-    apple: "/logo.svg",
+    icon: [
+      { url: "/brand/seldonframe-favicon.svg", type: "image/svg+xml" },
+      { url: "/brand/favicon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/brand/favicon-16.png", sizes: "16x16", type: "image/png" },
+    ],
+    shortcut: "/brand/favicon.ico",
+    apple: [{ url: "/brand/favicon-180.png", sizes: "180x180" }],
+  },
+  openGraph: {
+    title: "SeldonFrame",
+    description: "AI-native business OS — CRM, booking, intake, brain.",
+    images: [{ url: "/brand/og-image.png", width: 1200, height: 630 }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "SeldonFrame",
+    description: "AI-native business OS — CRM, booking, intake, brain.",
+    images: ["/brand/twitter-card.png"],
   },
 };
 
