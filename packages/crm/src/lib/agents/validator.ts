@@ -52,7 +52,13 @@ export type ValidationIssueCode =
   | "bad_capture_name"
   | "unknown_step_next"
   | "unsupported_step_type"
-  | "graph_cycle";
+  | "graph_cycle"
+  // SLICE 10 PR 1 C1 — request_approval primitive. Schema accepts
+  // user_id approver type per G-10-1 (forward-compat for v1.1) but
+  // surfaces this code at validate time so v1 deployments are
+  // explicitly told user_id is unsupported until v1.1 ships runtime
+  // resolution. operator + client_owner are the v1 supported types.
+  | "approver_unsupported_in_v1";
 
 export type ValidationIssue = {
   code: ValidationIssueCode;
@@ -475,6 +481,75 @@ const BranchStepSchema = z.object({
   on_no_match_next: z.string().nullable(),
 });
 
+// request_approval — SLICE 10 PR 1 C1 per audit §3 + Max's gate
+// resolution. Pauses the workflow until a designated human approves
+// or rejects the pending action. The 9th step type (8 prior:
+// wait / mcp_tool_call / conversation / await_event / read_state /
+// write_state / emit_event / branch).
+//
+// Design choices encoded structurally (L-22):
+//   - Discriminated `approver` union (G-10-1): three variants
+//     (operator | client_owner | user_id). Schema accepts all three;
+//     the validator surfaces approver_unsupported_in_v1 for user_id
+//     since runtime resolution lands in v1.1.
+//   - Discriminated `timeout` union (G-10-2): three actions
+//     (abort | auto_approve | wait_indefinitely). The
+//     wait_indefinitely variant uses .strict() to reject `seconds`
+//     — the contradiction "wait forever for N seconds" is
+//     impossible to author. abort/auto_approve REQUIRE seconds.
+//     No silent default — author MUST specify the timeout posture.
+//   - `context.title` 1-120, `context.summary` 1-600, `context.preview`
+//     0-4000 — caps prevent runaway specs while leaving room for
+//     long SMS-draft / email-body previews.
+//   - `next_on_approve` + `next_on_reject` BOTH required (parallel
+//     to branch.on_match_next / on_no_match_next). null = terminate.
+//   - Top-level .strict() rejects unknown keys at parse time.
+const ApproverSchema = z.discriminatedUnion("type", [
+  z.strictObject({ type: z.literal("operator") }),
+  z.strictObject({ type: z.literal("client_owner") }),
+  z.strictObject({ type: z.literal("user_id"), userId: z.string().uuid() }),
+]);
+
+const ApprovalContextSchema = z.strictObject({
+  title: z.string().min(1).max(120),
+  summary: z.string().min(1).max(600),
+  preview: z.string().max(4000).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+});
+
+// 30-day cap per the await_event timeout convention (parallel
+// constant — keeps both pause primitives within the same operator
+// mental model for "longest time a workflow can sit").
+const APPROVAL_TIMEOUT_MAX_SECONDS = 2_592_000;
+
+const ApprovalTimeoutSchema = z.discriminatedUnion("action", [
+  z.strictObject({
+    action: z.literal("abort"),
+    seconds: z.number().int().positive().max(APPROVAL_TIMEOUT_MAX_SECONDS),
+  }),
+  z.strictObject({
+    action: z.literal("auto_approve"),
+    seconds: z.number().int().positive().max(APPROVAL_TIMEOUT_MAX_SECONDS),
+  }),
+  // wait_indefinitely uses .strict() to forbid `seconds`. The
+  // discriminated union + .strict() together encode the L-22
+  // structural enforcement: "wait forever for N seconds" is rejected
+  // at parse time, not at runtime.
+  z.strictObject({
+    action: z.literal("wait_indefinitely"),
+  }),
+]);
+
+const RequestApprovalStepSchema = z.strictObject({
+  id: z.string().min(1),
+  type: z.literal("request_approval"),
+  approver: ApproverSchema,
+  context: ApprovalContextSchema,
+  timeout: ApprovalTimeoutSchema,
+  next_on_approve: z.string().nullable(),
+  next_on_reject: z.string().nullable(),
+});
+
 const UnknownStepSchema = z
   .object({
     id: z.string().min(1),
@@ -491,6 +566,7 @@ const KnownStepSchema = z.discriminatedUnion("type", [
   WriteStateStepSchema,
   EmitEventStepSchema,
   BranchStepSchema,
+  RequestApprovalStepSchema,
 ]);
 
 const StepSchema = z.union([KnownStepSchema, UnknownStepSchema]);
@@ -519,10 +595,14 @@ export type WriteStateStep = z.infer<typeof WriteStateStepSchema>;
 export type EmitEventStep = z.infer<typeof EmitEventStepSchema>;
 export type BranchStep = z.infer<typeof BranchStepSchema>;
 export type Condition = z.infer<typeof ConditionSchema>;
+export type RequestApprovalStep = z.infer<typeof RequestApprovalStepSchema>;
+export type ApprovalApprover = z.infer<typeof ApproverSchema>;
+export type ApprovalContext = z.infer<typeof ApprovalContextSchema>;
+export type ApprovalTimeout = z.infer<typeof ApprovalTimeoutSchema>;
 export type UnknownStep = z.infer<typeof UnknownStepSchema>;
 // Discriminated-union narrowing on `.type`. UnknownStep is the runtime
 // fallthrough for unsupported types (none currently unshipped — all
-// SLICE-6-era step types are Known).
+// SLICE-10-era step types are Known).
 export type Step =
   | WaitStep
   | McpToolCallStep
@@ -532,6 +612,7 @@ export type Step =
   | WriteStateStep
   | EmitEventStep
   | BranchStep
+  | RequestApprovalStep
   | UnknownStep;
 
 // Type guards — TypeScript can't narrow Step by `step.type === "..."`
@@ -578,6 +659,22 @@ function isBranchStep(step: Step): step is BranchStep {
     s.condition !== null &&
     "on_match_next" in step &&
     "on_no_match_next" in step
+  );
+}
+
+function isRequestApprovalStep(step: Step): step is RequestApprovalStep {
+  // Distinguish from UnknownStep by literal type + presence of the
+  // approver discriminator + the two next-pointers. Mirrors the
+  // isBranchStep / isAwaitEventStep guard discipline.
+  const s = step as Partial<RequestApprovalStep>;
+  return (
+    step.type === "request_approval" &&
+    typeof s.approver === "object" &&
+    s.approver !== null &&
+    typeof s.context === "object" &&
+    s.context !== null &&
+    "next_on_approve" in step &&
+    "next_on_reject" in step
   );
 }
 
@@ -732,6 +829,11 @@ function successorsOf(step: Step): string[] {
       (n): n is string => n !== null && n !== undefined,
     );
   }
+  if (isRequestApprovalStep(step)) {
+    return [step.next_on_approve, step.next_on_reject].filter(
+      (n): n is string => n !== null && n !== undefined,
+    );
+  }
   if (isAwaitEventStep(step)) {
     const out: string[] = [];
     // Defensive: await_event fields may be missing on malformed input
@@ -764,11 +866,27 @@ function validateStep(
   // `next` reference check. wait / mcp_tool_call / conversation each
   // have a single `next`; await_event has TWO (on_resume.next and
   // on_timeout.next), handled inside validateAwaitEventStep; branch
-  // has TWO (on_match_next and on_no_match_next), handled inline below.
+  // has TWO (on_match_next and on_no_match_next), handled inline below;
+  // request_approval has TWO (next_on_approve and next_on_reject),
+  // handled inline below alongside branch since the shape parallels.
   if (isBranchStep(step)) {
     for (const [field, value] of [
       ["on_match_next", step.on_match_next],
       ["on_no_match_next", step.on_no_match_next],
+    ] as const) {
+      if (value !== null && !stepIds.has(value)) {
+        issues.push({
+          code: "unknown_step_next",
+          stepId: step.id,
+          path: field,
+          message: `step "${step.id}" references ${field}="${value}" which is not a declared step id`,
+        });
+      }
+    }
+  } else if (isRequestApprovalStep(step)) {
+    for (const [field, value] of [
+      ["next_on_approve", step.next_on_approve],
+      ["next_on_reject", step.next_on_reject],
     ] as const) {
       if (value !== null && !stepIds.has(value)) {
         issues.push({
@@ -846,11 +964,39 @@ function validateStep(
     }
     return;
   }
+  // SLICE 10 PR 1 C1 — request_approval validation. Malformed shapes
+  // fall through the discriminated union to UnknownStepSchema (existing
+  // validator pattern); re-parse here so they surface as proper
+  // spec_malformed issues. Then emit approver_unsupported_in_v1 if
+  // the approver type is user_id (G-10-1 v1 carve-out).
+  if (step.type === "request_approval") {
+    const parsed = RequestApprovalStepSchema.safeParse(step);
+    if (!parsed.success) {
+      for (const err of parsed.error.issues) {
+        issues.push({
+          code: "spec_malformed",
+          stepId: step.id,
+          path: err.path.join(".") || "$",
+          message: err.message,
+        });
+      }
+      return;
+    }
+    if (parsed.data.approver.type === "user_id") {
+      issues.push({
+        code: "approver_unsupported_in_v1",
+        stepId: step.id,
+        path: "approver.type",
+        message: `step "${step.id}" uses approver type "user_id" which is schema-supported but the runtime resolver lands in v1.1; v1 supports operator + client_owner only`,
+      });
+    }
+    return;
+  }
   issues.push({
     code: "unsupported_step_type",
     stepId: step.id,
     path: "type",
-    message: `step type "${step.type}" is not supported by this validator (wait / mcp_tool_call / conversation / await_event / read_state / write_state / emit_event / branch are the eight known types)`,
+    message: `step type "${step.type}" is not supported by this validator (wait / mcp_tool_call / conversation / await_event / read_state / write_state / emit_event / branch / request_approval are the nine known types)`,
   });
 }
 
