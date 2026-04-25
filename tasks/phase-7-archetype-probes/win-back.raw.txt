@@ -58,7 +58,7 @@
       "args": {
         "to": "{{email}}",
         "subject": "A small thank-you from Bright Smile — 20% off whenever you're ready",
-        "body": "Hi {{firstName}},\n\nWe noticed you stepped away from your subscription with Bright Smile Dental — totally okay, no pressure at all. We just want dental care to feel less stressful, and that includes leaving when it's the right call.\n\nIf you ever want to come back for a cleaning or a check-in, here's 20% off on us:\n\n{{coupon.code}}\n\nIt's good for the next 14 days — just use it when you book your next visit.\n\nAnd if something about your experience didn't sit right, I'd genuinely like to hear about it. Hit reply — a real person reads every one.\n\nTake care of those teeth,\nThe Bright Smile Dental team",
+        "body": "Hi {{firstName}},\n\nWe noticed you cancelled recently, and that's completely okay — no guilt, no pressure. We just wanted you to know the door is always open here at Bright Smile Dental.\n\nIf it ever feels like the right time to come back for a cleaning or a check-in, here's 20% off on us:\n\n{{coupon.code}}\n\nIt's good for the next 14 days. Use it when you book your next visit — whether that's a painless cleaning, a free new-patient consult, or just a quick chat about what's on your mind.\n\nAnd if there was something about your last experience that didn't sit right, I'd genuinely like to hear it. Just hit reply — a real person reads every one.\n\nTake care of yourself,\nThe Bright Smile Dental team",
         "contactId": "{{contactId}}"
       },
       "next": "wait_before_reminder"
@@ -75,7 +75,7 @@
       "tool": "send_sms",
       "args": {
         "to": "{{phone}}",
-        "body": "Hi {{firstName}}, it's Bright Smile Dental — quick heads up that your 20% off code {{coupon.code}} expires in about a week if you'd like to book a cleaning. No pressure either way!",
+        "body": "Hi {{firstName}}, it's Bright Smile Dental — just a gentle heads up that your 20% off code {{coupon.code}} expires in about a week. Here whenever you're ready, no pressure. 🦷",
         "contact_id": "{{contactId}}"
       },
       "next": "log_winback_complete"

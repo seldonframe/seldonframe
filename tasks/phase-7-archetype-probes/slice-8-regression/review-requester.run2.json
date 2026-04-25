@@ -25,7 +25,7 @@
       "args": {
         "to": "{{email}}",
         "subject": "Thanks for visiting Bright Smile — how did we do?",
-        "body": "Hi {{firstName}},\n\nThanks so much for coming in to see us at Bright Smile Dental. We hope your visit felt easy and pain-free — that's the whole goal around here.\n\nIf you have 30 seconds, we'd be really grateful if you shared a quick review. Honest feedback helps other folks who are nervous about the dentist find a practice they can trust:\n\nhttps://g.page/r/Ca-example-business/review\n\nAnd if something didn't sit right, please just hit reply — we'd much rather hear it from you directly so we can make it right.\n\nThanks again for trusting us with your smile.\n\n— The Bright Smile team",
+        "body": "Hi {{firstName}},\n\nThanks so much for coming in to see us at Bright Smile Dental. We hope the visit felt easy and painless — that's always the goal.\n\nIf you have 30 seconds, we'd really appreciate a quick review. Honest feedback from patients like you is how other folks in the area find a dental team they can actually feel comfortable with:\n\nhttps://g.page/r/Ca-example-business/review\n\nAnd if something didn't feel right, please just hit reply — we'd much rather hear it from you directly so we can make it better.\n\nThanks again,\nThe Bright Smile team",
         "contactId": "{{contactId}}"
       },
       "next": "wait_before_sms"
@@ -42,7 +42,7 @@
       "tool": "send_sms",
       "args": {
         "to": "{{phone}}",
-        "body": "Hi {{firstName}}, it's Bright Smile Dental — quick follow-up: if you have 30 seconds, a short review would mean a lot to us: https://g.page/r/Ca-example-business/review. Thanks!",
+        "body": "Hi {{firstName}}, it's Bright Smile Dental — quick follow-up: if you have 30 seconds, we'd love a short review. It really helps us out: https://g.page/r/Ca-example-business/review",
         "contact_id": "{{contactId}}"
       },
       "next": "log_review_request_complete"

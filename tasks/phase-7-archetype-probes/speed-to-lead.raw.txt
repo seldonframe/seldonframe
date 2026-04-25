@@ -25,8 +25,8 @@
       "id": "qualify_conversation",
       "type": "conversation",
       "channel": "sms",
-      "initial_message": "Hi {{contact.firstName}}, it's Bright Smile Dental — thanks for reaching out about a new-patient visit! We'd love to get you booked. Any preferred day/time that works for you? And do you have dental insurance you'd like us to check, or are you paying out of pocket?",
-      "exit_when": "The prospect has shared a preferred appointment day/time for their new-patient consultation AND confirmed their insurance status (yes / no / unsure).",
+      "initial_message": "Hi {{contact.firstName}}, it's Bright Smile Dental — thanks for reaching out about a new-patient visit! We'd love to get you on the calendar (it's on us). Any preferred day/time that works? And do you have dental insurance you'd like us to check?",
+      "exit_when": "The prospect has shared a preferred appointment day/time for a new-patient consultation AND confirmed their insurance status (yes / no / unsure).",
       "on_exit": {
         "extract": {
           "preferred_start": "ISO-8601 datetime for the preferred appointment start, snapped to the next available slot in the clinic's business hours (Mon–Fri 9am–5pm local time).",
@@ -70,7 +70,7 @@
       "args": {
         "to": "{{email}}",
         "subject": "You're booked with Bright Smile Dental — see you soon",
-        "body": "Hi {{contact.firstName}},\n\nYou're all set for {{preferred_start}} — we're so glad you're coming in. Here's what to expect: a relaxed 45-minute new-patient visit with zero pressure, plenty of time for your questions, and a friendly team using modern, painless tech to make it easy.\n\nA few quick notes:\n• Your consultation is on us — completely free.\n• If you shared insurance details, we'll verify your coverage before your visit.\n• Please arrive about 5 minutes early so we can get you settled.\n\nNeed to reschedule or have a question? Just reply to this email or text us back — we'll take care of it, no problem.\n\nSee you soon,\nThe Bright Smile Dental team",
+        "body": "Hi {{contact.firstName}},\n\nYou're all set for your free new-patient consultation on {{preferred_start}}. We're so glad you're coming in.\n\nWhat to expect: a relaxed 45-minute visit with our team — no pressure, no surprises, plenty of time for your questions. We'll walk you through everything and answer whatever's on your mind about your smile.\n\nNeed to reschedule or have a question before then? Just reply to this email or text us back — we're happy to help.\n\nSee you soon,\nThe Bright Smile Dental team",
         "contactId": "{{contactId}}"
       },
       "next": null

@@ -47,7 +47,7 @@
       "args": {
         "contact_id": "{{contactId}}",
         "to": "{{phone}}",
-        "body": "Hi {{firstName}}, it's Bright Smile Dental. Quick heads-up — the forecast looks rough around your visit on {{bookingStartsAt}}. No pressure at all, but if you'd rather reschedule to a clearer day, just reply RESCHEDULE and we'll find a time that works."
+        "body": "Hi {{firstName}}, it's Bright Smile Dental. The forecast looks rough on your visit day — would you like to move your appointment to a sunnier slot? Just reply with a day that works and we'll take care of the rest. No pressure either way!"
       },
       "next": null
     },
@@ -68,8 +68,8 @@
       "tool": "send_email",
       "args": {
         "to": "{{email}}",
-        "subject": "You're all set — see you at Bright Smile Dental",
-        "body": "Hi {{firstName}},\n\nYour visit at Bright Smile Dental is confirmed for {{bookingStartsAt}}. The weather's looking clear, so we're good to go.\n\nA few friendly reminders: there's nothing you need to prep, and if anything comes up — nerves, scheduling, questions — just reply to this email. We're here to make this easy.\n\nSee you soon,\nThe Bright Smile Dental team"
+        "subject": "You're all set at Bright Smile Dental",
+        "body": "Hi {{firstName}},\n\nYour visit at Bright Smile Dental is confirmed for {{bookingStartsAt}}. The weather looks good, so you're set to head our way — no need to reschedule.\n\nA few friendly reminders:\n• Arrive a few minutes early so we can welcome you in.\n• If anything comes up, just reply to this email and we'll sort it out — zero pressure.\n• Your visit is painless and unhurried; we'll walk you through every step.\n\nLooking forward to seeing you,\nThe Bright Smile Dental team"
       },
       "next": null
     }
