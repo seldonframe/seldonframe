@@ -49,14 +49,14 @@ describe("MessageTriggerStore — insert + list", () => {
       archetypeId: "agent_x",
       channel: "sms",
       channelBinding: { kind: "any" },
-      pattern: { kind: "exact", value: "X" },
+      pattern: { kind: "exact", value: "X", caseSensitive: false },
     }));
     await store.insert(buildMessageTrigger({
       orgId: "org_b",
       archetypeId: "agent_y",
       channel: "sms",
       channelBinding: { kind: "any" },
-      pattern: { kind: "exact", value: "Y" },
+      pattern: { kind: "exact", value: "Y", caseSensitive: false },
     }));
     const a = await store.listEnabledForWorkspaceChannel("org_a", "sms");
     assert.equal(a.length, 1);
@@ -70,7 +70,7 @@ describe("MessageTriggerStore — insert + list", () => {
       archetypeId: "agent_x",
       channel: "sms",
       channelBinding: { kind: "any" },
-      pattern: { kind: "exact", value: "X" },
+      pattern: { kind: "exact", value: "X", caseSensitive: false },
     });
     await store.insert(t);
     await store.setEnabled(t.id, false);
@@ -85,7 +85,7 @@ describe("MessageTriggerStore — insert + list", () => {
       archetypeId: "sms_agent",
       channel: "sms",
       channelBinding: { kind: "any" },
-      pattern: { kind: "exact", value: "X" },
+      pattern: { kind: "exact", value: "X", caseSensitive: false },
     }));
     // Future-proof: even though "email" channel is invalid v1,
     // the storage layer must filter so 7b additions don't leak.
@@ -102,7 +102,7 @@ describe("MessageTriggerStore — find / setEnabled", () => {
       archetypeId: "agent_x",
       channel: "sms",
       channelBinding: { kind: "any" },
-      pattern: { kind: "exact", value: "X" },
+      pattern: { kind: "exact", value: "X", caseSensitive: false },
     });
     await store.insert(t);
     const found = await store.findById(t.id);
@@ -123,7 +123,7 @@ describe("MessageTriggerStore — find / setEnabled", () => {
       archetypeId: "agent_x",
       channel: "sms",
       channelBinding: { kind: "any" },
-      pattern: { kind: "exact", value: "X" },
+      pattern: { kind: "exact", value: "X", caseSensitive: false },
     });
     await store.insert(t);
     await store.setEnabled(t.id, false);
@@ -239,7 +239,7 @@ describe("buildMessageTrigger helper", () => {
       archetypeId: "agent_x",
       channel: "sms",
       channelBinding: { kind: "any" },
-      pattern: { kind: "exact", value: "X" },
+      pattern: { kind: "exact", value: "X", caseSensitive: false },
     });
     assert.ok(t.id.length > 0);
   });

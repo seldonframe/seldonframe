@@ -12,7 +12,8 @@
 // We re-validate defensively here only for the few whitespace edge
 // cases the webhook receiver hasn't normalized yet.
 
-import type { ChannelBinding, MessagePattern, MessageChannel } from "./validator";
+import type { ChannelBinding, MessagePattern } from "./validator";
+import type { MessageChannel } from "./message-trigger-storage";
 
 export type InboundMessageForMatching = {
   channel: MessageChannel;

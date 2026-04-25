@@ -162,7 +162,7 @@ describe("dispatchMessageTriggers — no matching triggers", () => {
 
   test("trigger exists but pattern doesn't match → no_match skip recorded", async () => {
     const { ctx, startedRuns } = makeContext();
-    await seedTrigger(ctx, { pattern: { kind: "exact", value: "OTHER" } });
+    await seedTrigger(ctx, { pattern: { kind: "exact", value: "OTHER", caseSensitive: false } });
     const summary = await dispatchMessageTriggers(ctx, inbound({ body: "CONFIRM" }));
     assert.equal(summary.matched, 0);
     assert.equal(startedRuns.length, 0);
@@ -196,7 +196,7 @@ describe("dispatchMessageTriggers — multiple matching triggers", () => {
     });
     await seedTrigger(ctx, {
       archetypeId: "agent_b",
-      pattern: { kind: "contains", value: "ON" },
+      pattern: { kind: "contains", value: "ON", caseSensitive: false },
     });
     const summary = await dispatchMessageTriggers(ctx, inbound({ body: "CONFIRM" }));
     assert.equal(summary.matched, 2);
@@ -209,11 +209,11 @@ describe("dispatchMessageTriggers — multiple matching triggers", () => {
     const { ctx, startedRuns } = makeContext();
     await seedTrigger(ctx, {
       archetypeId: "matches",
-      pattern: { kind: "exact", value: "CONFIRM" },
+      pattern: { kind: "exact", value: "CONFIRM", caseSensitive: false },
     });
     await seedTrigger(ctx, {
       archetypeId: "skips",
-      pattern: { kind: "exact", value: "OTHER" },
+      pattern: { kind: "exact", value: "OTHER", caseSensitive: false },
     });
     const summary = await dispatchMessageTriggers(ctx, inbound({ body: "CONFIRM" }));
     assert.equal(summary.matched, 1);
