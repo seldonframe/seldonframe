@@ -25,8 +25,8 @@
       "id": "qualify_conversation",
       "type": "conversation",
       "channel": "sms",
-      "initial_message": "Hi {{contact.firstName}}, it's Bright Smile Dental — thanks for reaching out about a new-patient consult! Happy to get you on the books. Any preferred day/time that works for you? And do you have dental insurance you'd like us to check?",
-      "exit_when": "The prospect has shared a preferred appointment day/time AND confirmed their insurance status (yes / no / unsure). No pressure — if they're unsure about insurance, that's fine, we still book.",
+      "initial_message": "Hi {{contact.firstName}}, it's Bright Smile Dental — thanks so much for reaching out about a new-patient consultation! It's on the house and totally pressure-free. Any preference on day/time that works for you? And do you have dental insurance you'd like us to check?",
+      "exit_when": "The prospect has shared a preferred appointment day/time for their new-patient consultation AND confirmed their insurance status (yes / no / unsure).",
       "on_exit": {
         "extract": {
           "preferred_start": "ISO-8601 datetime for the preferred appointment start, snapped to the next available slot in the clinic's business hours (Mon–Fri 9am–5pm local time).",
@@ -69,8 +69,8 @@
       "tool": "send_email",
       "args": {
         "to": "{{email}}",
-        "subject": "You're booked with Bright Smile Dental 🦷",
-        "body": "Hi {{contact.firstName}},\n\nYou're confirmed for {{preferred_start}} — we're so glad you're coming in. Here's what to expect: a relaxed 45-minute new-patient consultation, zero pressure, plenty of time to talk through anything that's been on your mind. The visit is on us.\n\nA few notes to make it easy:\n• Arrive a few minutes early so we can get you settled\n• If you have insurance, bring your card and we'll handle the rest\n• Need to move your time? Just reply to this email or text us back — no problem at all\n\nWe can't wait to meet you.\n\n— The Bright Smile Dental team",
+        "subject": "You're booked with Bright Smile Dental ✨",
+        "body": "Hi {{contact.firstName}},\n\nYou're all set for {{preferred_start}} — we're really looking forward to meeting you.\n\nHere's what to expect: a relaxed 45-minute new-patient visit, a friendly chat about what's been on your mind, and a gentle look at your smile with our modern (read: not scary) tech. No pressure, no surprises — just honest care.\n\nNeed to move things around? Just reply to this email or text us back and we'll sort it out.\n\nSee you soon,\nThe Bright Smile Dental team",
         "contactId": "{{contactId}}"
       },
       "next": null

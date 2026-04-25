@@ -1,8 +1,8 @@
 # Archetype probe: Weather-Aware Booking (weather-aware-booking)
 
-**Generated:** 2026-04-25T12:14:02.633Z
+**Generated:** 2026-04-25T16:04:44.634Z
 **Model:** claude-opus-4-7
-**Input tokens:** 8666 · **Output tokens:** 1106 · **Cost:** $0.0710 · **Latency:** 15577ms
+**Input tokens:** 8666 · **Output tokens:** 1158 · **Cost:** $0.0723 · **Latency:** 15881ms
 **Customization prompt:** (none)
 
 ## Verdict: PASS

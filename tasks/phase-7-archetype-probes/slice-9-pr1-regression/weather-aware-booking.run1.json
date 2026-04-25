@@ -24,7 +24,7 @@
       "condition": {
         "type": "external_state",
         "http": {
-          "url": "https://api.weatherapi.com/v1/forecast.json?q={{contactCity}}&days=1",
+          "url": "https://api.weatherapi.com/v1/forecast.json",
           "method": "GET",
           "timeout_ms": 5000,
           "auth": {
@@ -47,7 +47,7 @@
       "args": {
         "contact_id": "{{contactId}}",
         "to": "{{phone}}",
-        "body": "Hi {{firstName}}, it's Bright Smile Dental. We noticed the weather may be rough around your visit on {{bookingStartsAt}} — totally fine to move it. Want us to find you a calmer day this week? Just reply with a day that works and we'll take care of the rest."
+        "body": "Hi {{firstName}}, it's Bright Smile Dental. We noticed the forecast looks rough for your visit on {{bookingStartsAt}} — totally understand if you'd rather not brave the weather. Want us to move it to a calmer day? Just reply with a time that works and we'll take care of it. No pressure either way!"
       },
       "next": null
     },
@@ -69,7 +69,7 @@
       "args": {
         "to": "{{email}}",
         "subject": "You're all set — your Bright Smile visit is confirmed",
-        "body": "Hi {{firstName}},\n\nGreat news — your visit at Bright Smile Dental is confirmed for {{bookingStartsAt}}. The forecast looks clear, so no need to reshuffle anything.\n\nA few gentle reminders:\n• No prep needed — just show up as you are.\n• Running late or need to move it? Reply to this email anytime, no awkwardness.\n• If this is your new-patient consultation, it's on us.\n\nWe're looking forward to meeting you and making this the easiest dental visit you've ever had.\n\nWarmly,\nThe Bright Smile Dental team"
+        "body": "Hi {{firstName}},\n\nGreat news — your visit at Bright Smile Dental is locked in for {{bookingStartsAt}}, and the forecast is looking friendly. No need to worry about the weather (or the visit — we promise it's painless).\n\nIf anything changes on your end, just reply to this email and we'll sort it out. Otherwise, we'll see you soon!\n\nWarmly,\nThe Bright Smile Dental team"
       },
       "next": null
     }

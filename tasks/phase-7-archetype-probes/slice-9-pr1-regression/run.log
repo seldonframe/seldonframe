@@ -1,0 +1,45 @@
+
+[speed-to-lead] running 3 probes...
+  run 1/3... hash=735f9299ff111080
+  run 2/3... hash=735f9299ff111080
+  run 3/3... hash=735f9299ff111080
+
+[win-back] running 3 probes...
+  run 1/3... hash=72ea1438d6c4a691
+  run 2/3... hash=72ea1438d6c4a691
+  run 3/3... hash=72ea1438d6c4a691
+
+[review-requester] running 3 probes...
+  run 1/3... hash=4464ec782dfd7bad
+  run 2/3... hash=4464ec782dfd7bad
+  run 3/3... hash=4464ec782dfd7bad
+
+[daily-digest] running 3 probes...
+  run 1/3... hash=6e2e04637b8e0e49
+  run 2/3... hash=6e2e04637b8e0e49
+  run 3/3... hash=6e2e04637b8e0e49
+
+[weather-aware-booking] running 3 probes...
+  run 1/3... hash=f330b46ca684ac2b
+  run 2/3... hash=f330b46ca684ac2b
+  run 3/3... hash=f330b46ca684ac2b
+
+[appointment-confirm-sms] running 3 probes...
+  run 1/3... hash=ef6060d76c617b04
+  run 2/3... hash=ef6060d76c617b04
+  run 3/3... hash=ef6060d76c617b04
+
+=== RESULTS ===
+
+Archetype                | Baseline           | run1               | run2               | run3               | Verdict
+------------------------|--------------------|--------------------|--------------------|--------------------|-------
+speed-to-lead           | 735f9299ff111080   | 735f9299ff111080   | 735f9299ff111080   | 735f9299ff111080   | ✅ 3/3 PASS
+win-back                | 72ea1438d6c4a691   | 72ea1438d6c4a691   | 72ea1438d6c4a691   | 72ea1438d6c4a691   | ✅ 3/3 PASS
+review-requester        | 4464ec782dfd7bad   | 4464ec782dfd7bad   | 4464ec782dfd7bad   | 4464ec782dfd7bad   | ✅ 3/3 PASS
+daily-digest            | 6e2e04637b8e0e49   | 6e2e04637b8e0e49   | 6e2e04637b8e0e49   | 6e2e04637b8e0e49   | ✅ 3/3 PASS
+weather-aware-booking   | f330b46ca684ac2b   | f330b46ca684ac2b   | f330b46ca684ac2b   | f330b46ca684ac2b   | ✅ 3/3 PASS
+appointment-confirm-sms | ef6060d76c617b04   | ef6060d76c617b04   | ef6060d76c617b04   | ef6060d76c617b04   | ✅ 3/3 PASS
+
+Total: 18/18 baseline matches
+
+Summary written to tasks\phase-7-archetype-probes\slice-9-pr1-regression\_summary.json
