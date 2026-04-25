@@ -51,12 +51,16 @@ function makeRun(overrides: Partial<StoredRun> = {}): StoredRun {
   };
 }
 
-describe("AGENT_WRITABLE_SOUL_PATHS — v1 empty allowlist", () => {
-  test("v1 ships with an EMPTY allowlist", () => {
-    assert.equal(AGENT_WRITABLE_SOUL_PATHS.size, 0);
+describe("AGENT_WRITABLE_SOUL_PATHS — narrow per-archetype allowlist", () => {
+  test("allowlist is small + every entry is justified by an archetype", () => {
+    // SLICE 7 PR 2 C5 added the appointment-confirm-sms entry.
+    // Each addition must document which archetype + what guarantees
+    // (idempotency, monotonicity, scope) per the allowlist.ts header.
+    assert.ok(AGENT_WRITABLE_SOUL_PATHS.size >= 1);
+    assert.ok(AGENT_WRITABLE_SOUL_PATHS.size <= 10, "allowlist creep guard");
   });
 
-  test("isAgentWritablePath refuses every path when allowlist empty", () => {
+  test("isAgentWritablePath refuses arbitrary paths not in allowlist", () => {
     assert.equal(isAgentWritablePath("workspace.soul.anything"), false);
     assert.equal(isAgentWritablePath("workspace.theme.color"), false);
   });

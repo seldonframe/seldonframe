@@ -26,10 +26,20 @@
 //     point.
 
 const BASE_ALLOWLIST: ReadonlySet<string> = new Set<string>([
-  // v1 INTENTIONALLY EMPTY. Every addition requires a PR that
-  // documents which archetype or scaffolded workflow needs the
-  // write access + what guarantees the write has (idempotency,
-  // monotonicity, etc.).
+  // appointment-confirm-sms (SLICE 7 PR 2 C5): mark the patient's
+  // upcoming appointment as "confirmed" after they reply CONFIRM via
+  // SMS. Path is dynamic on contactId (resolved from trigger payload).
+  //
+  // Guarantees:
+  //   - Idempotency: write is monotonic — value is always the literal
+  //     "confirmed". Re-running the same archetype run for the same
+  //     contact rewrites the same value (no semantic change).
+  //   - Monotonicity: status only transitions toward "confirmed";
+  //     archetype never writes any other value at this path.
+  //   - Scope: write only happens after a successful read_state of
+  //     the same upcoming-appointment record + branch on its
+  //     existence — won't fabricate appointments out of thin air.
+  "workspace.soul.appointments.upcoming.{{contactId}}.status",
 ]);
 
 // Tests override via _overrideAllowlistForTests — underscore-
