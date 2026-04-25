@@ -1,8 +1,10 @@
 # SLICE 8 — workspace test mode close-out
 
 **Date:** 2026-04-25
-**Scope:** SLICE 8 single PR (C0-C7) — workspace test mode for SMS + email dispatch.
-**Commits:** C0 `4a5e6be2` → C1 `21ea1f1a` → C2 `fa6bb8da` → C3 `eb97a0a5` → C4 `0c2246bc` → C5 `56850ea9` → C6 `6e68e3c8` → C7 `[this commit]`.
+**Scope:** SLICE 8 single PR (C0-C7 + L-28 fix) — workspace test mode for SMS + email dispatch.
+**Commits (post L-28 history rewrite):** C0 `4a5e6be2` → C1 `1c7cd28e` → C2 `3c8cd11c` → C3 `0d94d74e` → C4 `3f26fe0d` → C5 `29233d2a` → C6 `c0b8587d` → C7 `b85e27a6` → L-28 fix `80cd28b1`.
+
+**History rewrite note:** original C1-C7 commits (`21ea1f1a..30e03c14`) were rejected by GitHub Push Protection — fake Twilio SIDs in test fixtures matched the real-SID format scanner pattern. Filter-branch rewrote 17 fixture sites across 4 test files to use format-breaking variants (`ACFAKEnotARealTestSID` etc.). L-28 captured the rule. Force-push with `--force-with-lease` was safe — commits had never landed on origin.
 **Probe model:** `claude-opus-4-7`
 
 ---
@@ -176,7 +178,7 @@ Test/prod aggregate: 1004 / 762 = **1.32x** — below the 2-3x typical band. Dri
 | 18-probe regression | `node scripts/phase-7-spike/run-regression-3x.mjs slice-8-regression` | 18/18 PASS, 27-streak holds ✅ |
 | L-17 cross-ref Zod 5-datapoint | (calculated above) | 3.55x at 5 edges + 1 gate (small-denominator inflation; trend confirmed) ✅ |
 | L-17 dispatcher 3rd datapoint | (calculated above) | 2.32x orthogonal (band refined to 1.5-2.5x) ✅ |
-| **Vercel preview build** | **observe at HEAD post-push** | **🟡 PENDING USER CONFIRMATION (per L-27)** |
+| **Vercel preview build** | **observe at HEAD `80cd28b1` post force-push** | **🟡 PENDING USER CONFIRMATION (per L-27)** |
 
 **Vercel row may NOT be marked ✅ via inference.** Per L-27, awaiting Max's direct observation of preview build status at the push HEAD before promoting to verified ✅.
 
