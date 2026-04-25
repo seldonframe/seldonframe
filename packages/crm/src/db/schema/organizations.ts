@@ -1,8 +1,9 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, timestamp, uuid, jsonb, integer } from "drizzle-orm/pg-core";
+import { boolean, pgTable, text, timestamp, uuid, jsonb, integer } from "drizzle-orm/pg-core";
 import type { SoulLearning } from "@seldonframe/core/soul";
 import type { OrgSoul } from "@/lib/soul/types";
 import { DEFAULT_ORG_THEME, type OrgTheme } from "@/lib/theme/types";
+import type { TwilioTestConfig, ResendTestConfig } from "@/lib/test-mode/schema";
 
 export type OrganizationIntegrations = {
   twilio?: {
@@ -10,12 +11,16 @@ export type OrganizationIntegrations = {
     authToken: string;
     fromNumber: string;
     connected: boolean;
+    /** SLICE 8 G-8-3: per-provider test credentials for sandbox routing. */
+    test?: TwilioTestConfig;
   };
   resend?: {
     apiKey: string;
     fromEmail: string;
     fromName: string;
     connected: boolean;
+    /** SLICE 8 G-8-3: per-provider test credentials for sandbox routing. */
+    test?: ResendTestConfig;
   };
   kit?: {
     apiKey: string;
@@ -83,6 +88,13 @@ export const organizations = pgTable("organizations", {
   // Default "UTC" so all existing workspaces have valid state; operators
   // edit in a later admin-UI slice.
   timezone: text("timezone").notNull().default("UTC"),
+  // SLICE 8 G-8-1 — workspace test mode flag. When true, dispatchers
+  // (sendSmsFromApi, sendEmailFromApi) consult per-provider
+  // integrations.{provider}.test sub-objects and route external API
+  // calls to provider sandbox endpoints. Mirrors the column-not-JSONB
+  // convention of `plan`, `timezone`, `soulCompletedAt`. Default false
+  // so existing workspaces never accidentally route to sandbox.
+  testMode: boolean("test_mode").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
