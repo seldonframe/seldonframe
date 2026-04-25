@@ -34,8 +34,9 @@ describe("pre-season-maintenance archetype — registry isolation (G-9-7)", () =
     );
   });
 
-  test("hvac-archetypes registry has exactly 1 archetype in PR 1 (3 more in PR 2)", () => {
-    assert.equal(Object.keys(hvacArchetypes).length, 1);
+  test("hvac-archetypes registry grows as archetypes ship (>= 1 in PR 1; PR 2 adds 2 more)", () => {
+    assert.ok(Object.keys(hvacArchetypes).length >= 1);
+    assert.ok(hvacArchetypes["hvac-pre-season-maintenance"]);
   });
 });
 
