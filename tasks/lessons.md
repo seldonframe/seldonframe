@@ -1461,6 +1461,70 @@ boundaries) and lands higher, refines.
   to verifications by direct observation OR honestly mark them as
   inferred-only.
 
+---
+
+## L-28 — Test fixtures must not match real-secret format patterns
+
+- **Trigger:** SLICE 8 PR push was rejected by GitHub Push Protection.
+  Test fixtures in `test-mode-config.spec.ts` + 3 sibling specs used
+  Twilio Account SID strings like `ACtest1234567890abcdef1234567890ab`
+  — clearly fake (hand-typed, no real account behind them) but the
+  structural format matches GitHub's secret-scanner pattern for real
+  Twilio SIDs (`AC` + ~32 alphanumeric chars).
+
+  GitHub blocked the push with `GH013 Repository rule violations
+  found ... — Twilio Account String Identifier`. False positive but
+  blocking nonetheless.
+
+- **Rule:** When authoring test fixtures for credentialed external
+  services, deliberately use **format-breaking values** that pass your
+  own validator but cannot match real-secret format patterns.
+
+  **Examples by service:**
+  - **Twilio SID:** `AC` + non-hex chars + short or self-documenting
+    string (e.g., `ACFAKEnotARealTestSID`). Real format is `AC` + 32
+    hex chars; format-breaking variants use uppercase/non-hex letters
+    or are clearly too short to be real.
+  - **Stripe keys:** `sk_test_*` is acceptable (Stripe's documented
+    test prefix); `sk_live_*` NEVER appears in test fixtures.
+  - **AWS access keys:** real format is `AKIA[0-9A-Z]{16}`.
+    Test fixtures use `AKIA_FAKE_TEST_NOT_REAL` or simply omit the
+    AKIA prefix entirely if the validator allows.
+  - **API keys generally:** `TEST_` or `FAKE_` prefix in the value
+    body, deliberately uppercase, self-documenting.
+
+  **Reasoning:** format-matching test fixtures train scanner-noise
+  tolerance. Real leaks should fire alerts on a clean baseline;
+  whitelisting test patterns erodes that signal over time.
+
+  **Documentation obligation:** every test file containing
+  format-breaking fixtures includes a comment near the fixtures
+  explaining the format choice, so future engineers don't "fix"
+  them back to real format:
+
+  ```typescript
+  // Test fixtures use non-hex chars + self-documenting names
+  // to avoid GitHub Secret Scanner false positives. Real Twilio
+  // Account SIDs match /AC[0-9a-f]{32}/i; these intentionally don't.
+  ```
+
+  **SLICE 8 example:** C1 `test-mode-config.spec.ts` and 3 sibling
+  files used `ACtest1234567890abcdef1234567890ab` (matches AC + 32
+  hex pattern). GitHub scanner flagged at push time. Mitigation:
+  rewrote 17 fixture sites across 4 files to use `ACFAKEnotARealTestSID`
+  / `ACFAKEnotARealLiveSID` / `ACFAKEnotARealValidSID` variants;
+  force-pushed with `--force-with-lease` since the offending commits
+  were local-only (not yet on origin). Comments added to each test
+  file at fixture sites.
+
+  **How to apply at audit time:** when scoping a slice that introduces
+  test fixtures for credentialed external services, the §3 schema
+  section MUST include "test fixtures use format-breaking values per
+  L-28" as an explicit design choice, not implicit. Pre-empts the
+  push-time discovery of the same false positive.
+
+---
+
 ### L-17 addendum — SLICE 8 hypothesis-validation expectations (single-PR)
 
 SLICE 8 ships TWO L-17 hypothesis-validation candidates simultaneously,

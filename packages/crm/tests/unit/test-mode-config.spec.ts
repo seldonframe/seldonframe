@@ -26,6 +26,12 @@ import {
   TestModeConfigSchema,
 } from "../../src/lib/test-mode/schema";
 
+// Test fixtures use non-hex chars + self-documenting names per L-28
+// to avoid GitHub Secret Scanner false positives. Real Twilio Account
+// SIDs match /AC[0-9a-f]{32}/i; these intentionally don't (contain
+// uppercase K, T, R, S, I, N, V — none of which are hex characters).
+// Do NOT "fix" these to look like real Twilio SIDs.
+
 // ---------------------------------------------------------------------
 // 1. TwilioTestConfigSchema — happy path
 // ---------------------------------------------------------------------

@@ -34,6 +34,9 @@ import {
 
 const ORG = "org_acme";
 
+// Fixtures use format-breaking SIDs per L-28 to avoid GitHub Secret
+// Scanner false positives on the Twilio AC + hex pattern.
+
 const LIVE_TWILIO: TwilioRuntimeConfig = {
   accountSid: "ACFAKEnotARealLiveSID",
   authToken: "live_token",

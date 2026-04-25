@@ -19,6 +19,9 @@ import {
   type WorkspaceTestModeStore,
 } from "../../src/lib/test-mode/store";
 
+// Test fixtures use format-breaking SIDs per L-28 (avoid GitHub
+// Secret Scanner false positives on AC + hex patterns).
+
 const ORG = "org_acme";
 const VALID_TWILIO = {
   accountSid: "ACFAKEnotARealTestSID",

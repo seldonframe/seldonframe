@@ -24,6 +24,9 @@ import { makeInMemoryWorkspaceTestModeStore } from "../../src/lib/test-mode/stor
 
 const ORG = "org_clinic";
 
+// Fixtures use format-breaking SIDs per L-28 to avoid GitHub Secret
+// Scanner false positives on the Twilio AC + hex pattern.
+
 const LIVE_TWILIO = {
   accountSid: "ACFAKEnotARealLiveSID",
   authToken: "live_token",
