@@ -1238,6 +1238,162 @@ reaching for "we'll be more careful next time."
 
 ---
 
+### L-17 addendum — Cross-ref Zod multiplier: edge count is necessary but not sufficient (4-datapoint hypothesis, SLICE 7 PR 1)
+
+Refines the prior 3-datapoint edge-count scaling rule (4-6 → 2.5-3.0x;
+7-9 interpolated; 10+ → 3.0-3.5x). SLICE 7 PR 1's MessageTriggerSchema
+landed at 6 cross-ref edges with a 4.87x test multiplier — well above
+the projected 2.8-3.0x band.
+
+**Empirical data (4 datapoints):**
+
+| Slice | Validator | Edges | Gates | Multiplier |
+|---|---|---|---|---|
+| SLICE 4b | `customer_surfaces` | 4 | 1 | **2.94x** |
+| SLICE 5 PR 1 | `ScheduleTriggerSchema` | 5 | 1 | **2.63x** |
+| SLICE 6 PR 1 | `BranchStepSchema + ExternalStateConditionSchema` | 10 | 2-3 | **3.30x** |
+| SLICE 7 PR 1 | `MessageTriggerSchema` | 6 | 4 | **4.87x** |
+
+**Hypothesis:** the test multiplier scales with both **edge count
+AND gate-decision breadth** encoded in the schema. SLICE 7's 4
+distinct gate decisions (G-7-1 modes × G-7-1b foot-gun × G-7-2 channel
+× G-7-3 binding) drove per-decision exhaustive happy/sad coverage
+that wouldn't appear in a single-gate cross-ref schema.
+
+**Tentative rule (pending validation):**
+
+- **Edge count gives base multiplier per existing band:**
+  - 4-6 edges: 2.5-3.0x base
+  - 7-9 edges: 2.8-3.2x base (interpolated)
+  - 10+ edges: 3.0-3.5x base
+- **Gate-decision breadth multiplier:**
+  - 1 gate: 1.0x (no inflation)
+  - 2-3 gates: 1.3-1.5x
+  - 4+ gates: 1.7-2.0x
+- **Combined:** `expected_ratio = base × gate_breadth`
+
+**Worked check on SLICE 7 PR 1:**
+```
+6 edges → base = 2.85x (4-6 band midpoint)
+4 gates → gate_breadth = 1.7-2.0x
+Combined = 4.85-5.70x
+Actual: 4.87x ← inside predicted band
+```
+
+**Validation needed:** a 7-9 edge schema with **single-gate breadth**
+as a control. SLICE 7 PR 2's loop-guard config schema is a candidate
+(small edge count, focused on one gate decision — loop semantics).
+
+**Audit-time application:**
+
+1. Count cross-ref edges per the 3-datapoint rule of thumb
+2. Count distinct gate decisions encoded in the schema (each Max-
+   approved G-N decision = 1 gate; each independent foot-gun
+   guardrail = 1 gate)
+3. Apply the combined multiplier
+4. Document the actual at PR close to refine the hypothesis
+
+**Status:** **HYPOTHESIS, 4-datapoint observation.** Awaiting a 7-9
+edge single-gate datapoint before formalizing as settled rule.
+
+### L-17 addendum — Dispatcher policy multiplier scales with interleaving, not raw axis count (2-datapoint observation, SLICE 7 PR 1)
+
+Refines the prior dispatcher multiplicative-scaling rule (3.5-4.0x
+based on SLICE 5 PR 1 alone). SLICE 7 PR 1's message dispatcher had
+4 conceptual axes (channel × pattern × loop × dedup) but landed at
+1.75x — far below the projected band.
+
+**Empirical data (2 datapoints):**
+
+| Slice | Dispatcher | Axes | Interleaving | Multiplier |
+|---|---|---|---|---|
+| SLICE 5 PR 1 | schedule dispatcher | 4 (catchup × concurrency × cron-edge × idempotency) | **Heavy** (catchup decision affects concurrency decision) | **3.5x** |
+| SLICE 7 PR 1 | message dispatcher | 4 (channel × pattern × loop × dedup) | **None** (each policy is an independent gate) | **1.75x** |
+
+**Hypothesis:** dispatcher multiplier scales with **policy
+interleaving** (do decisions in axis A affect decisions in axis B?),
+NOT raw axis count.
+
+**Tentative rule:**
+
+- **Interleaved policies** (decision in axis A affects axis B):
+  multiplicative scaling, **3.0-4.0x**
+- **Orthogonal policies** (each policy is an independent gate, evaluated
+  independently): additive scaling, **1.5-2.0x**
+
+**Audit-time identification:**
+
+When scoping dispatcher work in audit §5, identify whether policy
+axes interact:
+- **Interleaved indicators:** "if catchup=skip AND in-flight, skip the
+  fire" (concurrency depends on catchup); "if window crosses cron edge,
+  consider both windows" (cron-edge affects idempotency)
+- **Orthogonal indicators:** policy gates evaluated in sequence with
+  early returns ("does pattern match? if no, skip; does loop guard
+  block? if yes, skip; ..."); each axis short-circuits the next without
+  feeding into it
+
+Apply the appropriate multiplier in §7 LOC projection.
+
+**Status:** **2-datapoint observation.** SLICE 7 PR 2's loop-guard
+extension is a 3rd-datapoint candidate — if loop-guard is orthogonal
+to existing dispatcher policies and lands at 1.5-2.0x, hypothesis
+confirms. If interleaved (e.g., loop-guard window crosses pattern-mode
+boundaries) and lands higher, refines.
+
+---
+
+## L-26 — Structural-hash regression must use canonical `structural-hash.mjs`, not full-spec `stableHash`
+
+- **Trigger:** SLICE 7 PR 1 C7's first regression-runner invocation
+  used the `stableHash` function (sha256 of canonicalized full filled
+  spec, including all prose). All 15 probe runs produced different
+  hashes — surface "drift" failures across all 5 archetypes.
+
+  Investigation: the canonical streak hash function is
+  `scripts/phase-7-spike/structural-hash.mjs`, not `stableHash`.
+  The structural-hash function strips prose fields (`initial_message`,
+  `body`, `subject`, `exit_when`, free-form `args` values) and keeps
+  only the structural skeleton (trigger event + step ids/types/tool/
+  captures/extract_keys/next pointers).
+
+  Re-verifying the saved 15 run files via the canonical function
+  produced 15/15 PASS. The "drift" was honest run-to-run prose
+  variance — Claude's NL synthesis isn't temperature-zero — not
+  architectural drift.
+
+- **Rule:** All structural-hash regression tooling MUST use the
+  canonical `structural-hash.mjs` convention.
+
+  **Specifically:**
+  1. All regression runners use the structural canonicalizer (strip
+     prose, keep skeleton). The reference implementation lives in
+     `scripts/phase-7-spike/structural-hash.mjs`.
+  2. New baselines locked via L-23 3-run check use the same canonical
+     function. Lock the structural hash, not the full-spec hash.
+  3. Any new regression tooling must include an independent
+     re-verification step via
+     `scripts/phase-7-spike/verify-regression-from-saved.mjs <dir>`.
+     This re-hashes saved artifacts and compares to documented
+     baselines without re-probing — confirms the runner's hash
+     function is consistent with the canonical convention.
+
+  **Process for diagnosing apparent drift:** if a regression run
+  reports hashes that "don't match baseline," the FIRST diagnostic
+  is to verify the runner is using `structural-hash.mjs` semantics,
+  not `stableHash`. Only after that confirmation should the failure
+  be treated as architectural drift requiring investigation.
+
+  **SLICE 7 PR 1 example:** runner v1 used `stableHash`; surface
+  "0/15 baseline matches" was a false positive. Mitigation:
+  - Runner updated to canonical structural-hash convention
+  - `verify-regression-from-saved.mjs` added for cheap independent
+    re-verification of saved artifacts
+  - This addendum captures the rule so future regression runs
+    don't repeat the diagnostic detour
+
+---
+
 ## Template for new entries
 
 ```
