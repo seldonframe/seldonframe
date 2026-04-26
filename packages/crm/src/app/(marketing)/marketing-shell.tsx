@@ -20,9 +20,9 @@ const LogoSVG = () => (
 );
 
 const FOOTER_LINKS: Array<{ label: string; href: string; external?: boolean }> = [
-  { label: "GitHub", href: "https://github.com/seldonframe/crm", external: true },
+  { label: "GitHub", href: "https://github.com/seldonframe/seldonframe", external: true },
   { label: "Docs", href: "/docs" },
-  { label: "Discord", href: "https://discord.gg/seldonframe", external: true },
+  { label: "Discord", href: "https://discord.gg/sbVUu976NW", external: true },
   { label: "𝕏", href: "https://x.com/seldonframe", external: true },
   { label: "Blog", href: "/blog" },
   { label: "Privacy", href: "/privacy" },
@@ -41,7 +41,7 @@ export function MarketingShell({ children }: { children: ReactNode }) {
           <a href="/" className="text-[14px] text-[#a1a1aa] hover:text-[#fafafa] transition-colors">Home</a>
           <a href="/docs" className="text-[14px] text-[#a1a1aa] hover:text-[#fafafa] transition-colors">Docs</a>
           <a
-            href="https://github.com/seldonframe/crm"
+            href="https://github.com/seldonframe/seldonframe"
             target="_blank"
             rel="noopener noreferrer"
             className="text-[14px] text-[#a1a1aa] hover:text-[#fafafa] transition-colors"

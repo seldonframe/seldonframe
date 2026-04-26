@@ -114,7 +114,7 @@ export default function QuickstartPage() {
             </li>
             <li>
               <a
-                href="https://github.com/seldonframe/crm"
+                href="https://github.com/seldonframe/seldonframe"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-[#1FAE85] hover:underline"

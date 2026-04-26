@@ -56,7 +56,7 @@ const Nav = () => (
     </a>
     <div className="flex items-center gap-4 md:gap-7">
       <a href="/docs" className="hidden md:block text-[14px] text-[#a1a1aa] hover:text-[#fafafa] transition-colors">Docs</a>
-      <a href="https://github.com/seldonframe/crm" target="_blank" rel="noopener noreferrer" className="hidden md:block text-[14px] text-[#a1a1aa] hover:text-[#fafafa] transition-colors">GitHub</a>
+      <a href="https://github.com/seldonframe/seldonframe" target="_blank" rel="noopener noreferrer" className="hidden md:block text-[14px] text-[#a1a1aa] hover:text-[#fafafa] transition-colors">GitHub</a>
       {/* Fix (d): /pricing → #pricing anchor on same page */}
       <a href="#pricing" className="hidden md:block text-[14px] text-[#a1a1aa] hover:text-[#fafafa] transition-colors">Pricing</a>
       <a href="/blog" className="hidden md:block text-[14px] text-[#a1a1aa] hover:text-[#fafafa] transition-colors">Blog</a>
@@ -413,9 +413,9 @@ const FinalCTA = () => (
 // Fix (a): Footer hrefs replaced with real paths.
 const Footer = () => {
   const links: Array<{ label: string; href: string; external?: boolean }> = [
-    { label: "GitHub", href: "https://github.com/seldonframe/crm", external: true },
+    { label: "GitHub", href: "https://github.com/seldonframe/seldonframe", external: true },
     { label: "Docs", href: "/docs" },
-    { label: "Discord", href: "https://discord.gg/seldonframe", external: true },
+    { label: "Discord", href: "https://discord.gg/sbVUu976NW", external: true },
     { label: "𝕏", href: "https://x.com/seldonframe", external: true },
     { label: "Blog", href: "/blog" },
     { label: "Privacy", href: "/privacy" },
@@ -446,7 +446,7 @@ const Footer = () => {
 
 const DiscordFloat = () => (
   <motion.a
-    href="https://discord.gg/seldonframe"
+    href="https://discord.gg/sbVUu976NW"
     target="_blank"
     rel="noopener noreferrer"
     initial={{ opacity: 0, x: 50 }}

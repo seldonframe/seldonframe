@@ -35,7 +35,7 @@ export default function BlogPage() {
           </a>{" "}
           for updates, or join the{" "}
           <a
-            href="https://discord.gg/seldonframe"
+            href="https://discord.gg/sbVUu976NW"
             target="_blank"
             rel="noopener noreferrer"
             className="text-[#1FAE85] hover:underline font-semibold"

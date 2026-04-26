@@ -45,7 +45,7 @@ export default function DemoPage() {
               </a>{" "}
               or{" "}
               <a
-                href="https://discord.gg/seldonframe"
+                href="https://discord.gg/sbVUu976NW"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-[#1FAE85] hover:underline"
@@ -74,7 +74,7 @@ export default function DemoPage() {
             </li>
             <li>
               <a
-                href="https://github.com/seldonframe/crm/tree/main/tasks/launch-content"
+                href="https://github.com/seldonframe/seldonframe/tree/main/tasks/launch-content"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-[#1FAE85] hover:underline"
