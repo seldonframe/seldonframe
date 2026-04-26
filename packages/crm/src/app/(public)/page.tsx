@@ -1,26 +1,33 @@
+// Marketing landing page (server wrapper).
+// Workstream 2 — replaces the prior LandingHero/LandingNav composition
+// with the Gemini-authored landing client (`./landing-client.tsx`).
+// Preserves the existing auth redirect: signed-in users go straight to
+// the dashboard, unauthenticated visitors see the marketing surface.
+
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { LandingAgenciesSection } from "@/components/landing/agencies-section";
-import { LandingBentoSection } from "@/components/landing/bento-section";
-import { LandingFinalCta } from "@/components/landing/final-cta";
-import { LandingFooter } from "@/components/landing/footer";
-import { LandingHero } from "@/components/landing/hero";
-import { LandingMarketplaceSection } from "@/components/landing/marketplace-section";
-import { LandingNav } from "@/components/landing/nav";
-import { LandingSeldonItSection } from "@/components/landing/seldon-it-section";
-import { LandingSoulSection } from "@/components/landing/soul-section";
-import { LandingWhyNowSection } from "@/components/landing/why-now-section";
+
+import SeldonFrameLandingPage from "./landing-client";
 
 export const metadata: Metadata = {
-  title: "SeldonFrame — The Operating System for Your Business",
+  title: "SeldonFrame — AI-native Business OS you build with natural language",
   description:
-    "SeldonFrame is a business identity operating system. One brain. Every block. If it doesn't exist — Seldon it into existence. Free and open source.",
+    "Composable primitives to create customized business operating systems — branded portals, smart agents, automated workflows — for yourself or your clients.",
   openGraph: {
-    title: "SeldonFrame",
-    description: "The operating system for your business. One brain. Every block.",
+    title: "SeldonFrame — AI-native Business OS",
+    description:
+      "Build a complete AI-native Business OS with natural language. Open source. MCP-native. $9/mo per workspace.",
     type: "website",
     url: "https://app.seldonframe.com",
+    images: [{ url: "/brand/og-image.png", width: 1200, height: 630 }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "SeldonFrame — AI-native Business OS",
+    description:
+      "Build a complete AI-native Business OS with natural language.",
+    images: ["/brand/twitter-card.png"],
   },
 };
 
@@ -30,22 +37,5 @@ export default async function PublicHomePage() {
     redirect("/dashboard");
   }
 
-  return (
-    <div className="min-h-screen bg-[#09090b] font-sans selection:bg-[#14b8a6]/30 selection:text-[#14b8a6]">
-      <LandingNav />
-
-      <main>
-        <LandingHero />
-        <LandingSoulSection />
-        <LandingSeldonItSection />
-        <LandingBentoSection />
-        <LandingAgenciesSection />
-        <LandingMarketplaceSection />
-        <LandingWhyNowSection />
-        <LandingFinalCta />
-      </main>
-
-      <LandingFooter />
-    </div>
-  );
+  return <SeldonFrameLandingPage />;
 }
