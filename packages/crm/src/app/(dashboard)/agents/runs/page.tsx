@@ -18,8 +18,10 @@ import {
   workflowRuns,
   workflowWaits,
   workflowStepResults,
+  workflowApprovals,
+  organizations,
 } from "@/db/schema";
-import { getOrgId } from "@/lib/auth/helpers";
+import { getCurrentUser, getOrgId } from "@/lib/auth/helpers";
 import { RunsClient } from "./runs-client";
 import { SubscriptionsSection } from "./subscriptions-section";
 import { SchedulesSection } from "./schedules-section";
@@ -73,6 +75,24 @@ export default async function WorkflowRunsPage() {
       ).flat()
     : [];
 
+  // SLICE 10 PR 2 C3 — pending approvals for the workspace + caller
+  // identity (for the approve/reject button rendering decision per
+  // L-22 structural enforcement).
+  const allApprovals = await db
+    .select()
+    .from(workflowApprovals)
+    .where(eq(workflowApprovals.orgId, orgId))
+    .orderBy(desc(workflowApprovals.createdAt));
+
+  const currentUser = await getCurrentUser();
+  const [orgRow] = await db
+    .select({ ownerId: organizations.ownerId })
+    .from(organizations)
+    .where(eq(organizations.id, orgId))
+    .limit(1);
+  const currentUserId = currentUser?.id ?? null;
+  const currentUserIsOrgOwner = !!(currentUserId && orgRow?.ownerId === currentUserId);
+
   return (
     <div className="p-6 space-y-4">
       <header>
@@ -85,6 +105,9 @@ export default async function WorkflowRunsPage() {
         initialRuns={runs.map(serializeRun)}
         initialWaits={allWaits.map(serializeWait)}
         initialStepResults={allResults.map(serializeStepResult)}
+        initialApprovals={allApprovals.map(serializeApproval)}
+        currentUserId={currentUserId}
+        currentUserIsOrgOwner={currentUserIsOrgOwner}
       />
       <SchedulesSection orgId={orgId} />
       <SubscriptionsSection orgId={orgId} />
@@ -148,6 +171,35 @@ function serializeStepResult(row: StepRow) {
   };
 }
 
+// SLICE 10 PR 2 C3 — approval row serialization for the drawer block.
+// Strips DB-internal columns (magic_link_token_hash, raw timestamps as
+// Date objects) for client-component hydration safety.
+type ApprovalRow = typeof workflowApprovals.$inferSelect;
+function serializeApproval(row: ApprovalRow) {
+  return {
+    id: row.id,
+    runId: row.runId,
+    stepId: row.stepId,
+    orgId: row.orgId,
+    approverType: row.approverType as "operator" | "client_owner" | "user_id",
+    approverUserId: row.approverUserId,
+    status: row.status as "pending" | "approved" | "rejected" | "timed_out" | "cancelled",
+    contextTitle: row.contextTitle,
+    contextSummary: row.contextSummary,
+    contextPreview: row.contextPreview,
+    contextMetadata: row.contextMetadata,
+    timeoutAction: row.timeoutAction as "abort" | "auto_approve" | "wait_indefinitely",
+    timeoutAt: row.timeoutAt ? row.timeoutAt.toISOString() : null,
+    resolvedAt: row.resolvedAt ? row.resolvedAt.toISOString() : null,
+    resolvedByUserId: row.resolvedByUserId,
+    resolutionComment: row.resolutionComment,
+    resolutionReason: row.resolutionReason,
+    overrideFlag: row.overrideFlag,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
 export type SerializedRun = ReturnType<typeof serializeRun>;
 export type SerializedWait = ReturnType<typeof serializeWait>;
 export type SerializedStepResult = ReturnType<typeof serializeStepResult>;
+export type SerializedApproval = ReturnType<typeof serializeApproval>;
