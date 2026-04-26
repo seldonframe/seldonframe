@@ -7,5 +7,6 @@ export * from "./api";
 export * from "./workspace-secret";
 export * from "./notifier";
 export * from "./contact-resolver";
+export * from "./cron-sweep";
 export { DrizzleApprovalStorage } from "./storage-drizzle";
 export { makeInMemoryApprovalStorage } from "./storage-memory";
