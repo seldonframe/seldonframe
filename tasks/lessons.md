@@ -1800,6 +1800,75 @@ C4 close-out with empirical SLICE 11 data.
 
 ---
 
+## L-29 — Distribution path must be tested end-to-end on a clean environment before any marketing claims reference it
+
+- **Trigger:** Pre-launch test protocol surfaced that the SeldonFrame
+  MCP install command shown on every marketing surface
+  (`claude mcp add seldonframe`) didn't work on a clean GitHub Codespaces
+  environment. The short form errored with "missing required argument
+  'commandOrUrl'", the corrected long form referenced an npm package
+  (`@seldonframe/mcp`) that was never published, and the MCP server
+  failed to spawn — Claude Code reported zero SeldonFrame tools available.
+
+  Root cause: the development environment uses a path-linked local MCP
+  server registration in `~/.claude.json` pointing at a worktree's
+  `skills/mcp-server/src/index.js`. Every dev-machine "test" of the
+  install command silently resolved through this local path instead of
+  exercising the published-package code path. SLICE 9 / 10 / 11 / repo-polish
+  / marketing-website all applied L-27 (Vercel preview verification) and
+  test-suite green bars correctly, but no slice ever validated the
+  `claude mcp add seldonframe` install path against a published artifact.
+
+  The gap was caught on day-1 of cleanroom protocol execution. Marketing
+  copy on landing page, `/docs/quickstart`, README hero, and the
+  How-it-works step-1 card all advertised an unfulfillable command.
+
+- **Rule:** Before any marketing surface (landing page, docs, README,
+  hero terminal, blog) shows an install command, that exact command
+  must succeed on a fresh environment with no local code, no cached
+  dependencies, and no pre-configured environment variables. The test
+  must be run by someone following only the published documentation.
+
+  **"Works on my machine" is not "works."** Distribution-path verification
+  is as important as architectural verification (L-27 Vercel-preview,
+  L-28 credential format-breaking).
+
+  **Cleanroom definition:** any of the following qualifies as a clean
+  environment for distribution verification:
+  - GitHub Codespaces created from `main`
+  - A fresh OS user account on a workstation
+  - A Docker container with only the published prereqs installed
+  - A throwaway VM (UTM, VirtualBox, cloud)
+
+  **The dev machine does not qualify**, even with `~/.claude` renamed
+  away — global npm packages, shell PATH entries, and existing process
+  env vars contaminate the test.
+
+  **Application:** any slice that introduces or modifies a
+  distribution-facing artifact (`npx`, `npm install`, `pip install`,
+  `docker run`, `claude mcp add`, `gh extension install`, etc.) MUST
+  include a cleanroom-test step in its green-bar checklist. The slice
+  is not done until the published artifact has been exercised by an
+  agent or human following only the public documentation.
+
+  **Audit-time application:** when scoping a slice that ships or
+  modifies a distribution artifact, the §3 schema section MUST include
+  "L-29 cleanroom verification" as an explicit completion gate, not
+  implicit. Pre-empts the launch-week discovery of the same gap.
+
+  **Sign-off requirement:** the cleanroom verification result (which
+  environment, what command, what outcome) is recorded in the slice's
+  close-out document. A green dev-machine test is not a sign-off
+  artifact for a distribution-facing change.
+
+  **Background:** the v1 launch-prep MCP install gap shipped through
+  five marketing surfaces because no slice ever ran the cleanroom
+  test. The pre-launch test protocol added in PR #8 codified this
+  step formally; L-29 elevates it from a launch-only protocol step
+  to a permanent green-bar discipline rule.
+
+---
+
 ## Template for new entries
 
 ```

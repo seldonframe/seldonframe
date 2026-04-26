@@ -1,7 +1,7 @@
 {
-  "name": "@seldonframe/mcp-server",
-  "version": "2.1.0",
-  "description": "Official SeldonFrame MCP server. One command creates a real hosted workspace on *.app.seldonframe.com with CRM, Cal.diy booking, Formbricks intake, and Brain v2 — no key, no signup, no setup.",
+  "name": "@seldonframe/mcp",
+  "version": "1.0.0",
+  "description": "MCP server for SeldonFrame — AI-native Business OS platform. One command creates a real hosted workspace with CRM, booking, intake, and Brain v2.",
   "type": "module",
   "bin": {
     "seldonframe-mcp": "src/index.js"
@@ -23,14 +23,20 @@
     "mcp",
     "model-context-protocol",
     "seldonframe",
-    "claude",
-    "crm",
-    "business-os"
+    "ai",
+    "agents",
+    "business-os",
+    "claude-code",
+    "crm"
   ],
   "license": "MIT",
+  "homepage": "https://seldonframe.com",
   "repository": {
     "type": "git",
-    "url": "https://github.com/seldonframe/crm",
+    "url": "https://github.com/seldonframe/seldonframe",
     "directory": "skills/mcp-server"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

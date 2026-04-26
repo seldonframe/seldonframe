@@ -4,7 +4,7 @@
   "version": "2.0.0",
   "description": "SeldonFrame Business OS — one command creates a real hosted workspace on *.app.seldonframe.com with CRM, Cal.diy booking, Formbricks intake, and Brain v2. No key, no signup, no setup. Set SELDONFRAME_API_KEY only to unlock Pro capabilities (second workspace, custom domains, full Brain v2).",
   "homepage": "https://seldonframe.com",
-  "repository": "https://github.com/seldonframe/crm",
+  "repository": "https://github.com/seldonframe/seldonframe",
   "author": "SeldonFrame",
   "license": "MIT",
   "keywords": ["crm", "business-os", "booking", "intake", "brain"],
