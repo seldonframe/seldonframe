@@ -34,6 +34,7 @@ import type {
   BranchStep,
   ConversationStep,
   EmitEventStep,
+  LlmCallStep,
   McpToolCallStep,
   ReadStateStep,
   RequestApprovalStep,
@@ -50,6 +51,8 @@ import { dispatchWriteState } from "./step-dispatchers/write-state";
 import { dispatchEmitEvent } from "./step-dispatchers/emit-event";
 import { dispatchBranch } from "./step-dispatchers/branch";
 import { dispatchRequestApproval } from "./step-dispatchers/request-approval";
+import { dispatchLlmCall } from "./step-dispatchers/llm-call";
+import { recordLlmUsage } from "../ai/workflow-cost-recorder";
 import type { NextAction, RuntimeContext, StoredRun, StoredWait } from "./types";
 import { findStep, RuntimeError, TIMER_EVENT_TYPE } from "./types";
 
@@ -113,6 +116,14 @@ function isRequestApprovalStep(step: Step): step is RequestApprovalStep {
     typeof s.context === "object" && s.context !== null &&
     "next_on_approve" in step &&
     "next_on_reject" in step
+  );
+}
+function isLlmCallStep(step: Step): step is LlmCallStep {
+  const s = step as Partial<LlmCallStep>;
+  return (
+    step.type === "llm_call" &&
+    typeof s.model === "string" &&
+    typeof s.user_prompt === "string"
   );
 }
 
@@ -451,6 +462,23 @@ async function dispatchStep(
       resolveApprover: context.resolveApprover,
       getWorkspaceMagicLinkSecret: context.getWorkspaceMagicLinkSecret,
       now: context.now,
+    });
+  }
+  if (isLlmCallStep(step)) {
+    // SLICE 11 C2 — llm_call dispatcher. THE LAUNCH-BLOCKER FIX.
+    // Until this branch executes, the SLICE 9 PR 2 cost recorder
+    // has zero call sites. Requires invokeClaude on the context;
+    // when unset (pre-SLICE-11 contexts), fail-closed so the gap
+    // is visible at runtime.
+    if (!context.invokeClaude) {
+      return { kind: "fail", reason: "llm_call: RuntimeContext.invokeClaude not configured" };
+    }
+    return dispatchLlmCall(run, step, {
+      invokeClaude: context.invokeClaude,
+      // The recorder helper is module-scoped (writes via the singleton
+      // db). Tests inject their own via context.recordLlmUsage when
+      // present; production binds the module helper.
+      recordLlmUsage: context.recordLlmUsage ?? recordLlmUsage,
     });
   }
   return { kind: "fail", reason: `Unsupported step type "${step.type}" at runtime` };

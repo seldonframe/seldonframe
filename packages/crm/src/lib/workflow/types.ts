@@ -287,6 +287,21 @@ export type RuntimeContext = {
   ) => Promise<import("./approvals/notifier").NotifyApproverResult>;
   /** Base URL used to build the admin/portal links in notification emails. Falls back to NEXT_PUBLIC_APP_URL. */
   appBaseUrl?: string;
+  /**
+   * SLICE 11 C2 — llm_call dispatcher dependencies. Production
+   * binds invokeClaude to an Anthropic SDK wrapper (creates a
+   * client + extracts text/usage from the response). Tests inject
+   * a stub. The recordLlmUsage override is rare (tests that want
+   * to capture the recorder calls); production omits it so the
+   * dispatcher uses the module-level recorder helper.
+   */
+  invokeClaude?: import("./step-dispatchers/llm-call").ClaudeInvoker;
+  recordLlmUsage?: (input: {
+    runId: string;
+    model: string;
+    inputTokens: number | undefined;
+    outputTokens: number | undefined;
+  }) => Promise<void>;
 };
 
 // ---------------------------------------------------------------------
