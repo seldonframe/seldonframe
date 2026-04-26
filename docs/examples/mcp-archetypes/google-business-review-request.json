@@ -1,0 +1,139 @@
+{
+  "$schema": "../../schemas/archetype-spec.json",
+  "id": "google-business-review-request-illustrative",
+  "name": "Post-service review request via Google Business Profile",
+  "description": "After a service call completes, wait 24 hours, send a satisfaction SMS, and only ask for a Google Business review when the customer rates 4 or higher.",
+  "illustrative": true,
+  "requiresExternalMcp": ["google-business-profile"],
+  "trigger": {
+    "type": "event",
+    "event": "service_call.completed"
+  },
+  "variables": {
+    "contactId": "trigger.contactId",
+    "firstName": "trigger.contact.firstName",
+    "phone": "trigger.contact.phone",
+    "techName": "trigger.serviceCall.assignedTechName"
+  },
+  "steps": [
+    {
+      "id": "wait_one_day",
+      "type": "wait",
+      "seconds": 86400,
+      "next": "send_satisfaction_sms"
+    },
+    {
+      "id": "send_satisfaction_sms",
+      "type": "mcp_tool_call",
+      "tool": "send_sms",
+      "args": {
+        "to": "{{phone}}",
+        "body": "Hi {{firstName}}, this is {{soul.businessName}} following up on yesterday's visit with {{techName}}. On a scale of 1–5, how did we do? Just reply with a number.",
+        "contact_id": "{{contactId}}"
+      },
+      "next": "wait_for_rating"
+    },
+    {
+      "id": "wait_for_rating",
+      "type": "await_event",
+      "event": "sms.inbound",
+      "match": {
+        "from": "{{phone}}"
+      },
+      "captureAs": "ratingReply",
+      "timeoutSeconds": 259200,
+      "onTimeout": "log_no_response",
+      "next": "branch_on_rating"
+    },
+    {
+      "id": "branch_on_rating",
+      "type": "branch",
+      "condition": "parseInt(captureScope.ratingReply.body) >= 4",
+      "ifTrue": "send_review_link",
+      "ifFalse": "alert_owner_for_followup"
+    },
+    {
+      "id": "send_review_link",
+      "type": "mcp_tool_call",
+      "tool": "google-business-profile.request_review",
+      "args": {
+        "locationId": "{{soul.googleBusinessLocationId}}",
+        "customerPhone": "{{phone}}",
+        "channel": "sms"
+      },
+      "captureAs": "reviewPrompt",
+      "next": "log_review_requested"
+    },
+    {
+      "id": "alert_owner_for_followup",
+      "type": "mcp_tool_call",
+      "tool": "send_sms",
+      "args": {
+        "to": "{{soul.ownerPhone}}",
+        "body": "Heads up: {{firstName}} ({{phone}}) rated yesterday's service {{ratingReply.body}}/5 — worth a personal call before they post anywhere public.",
+        "contact_id": "{{contactId}}"
+      },
+      "next": "log_low_rating_followup"
+    },
+    {
+      "id": "log_review_requested",
+      "type": "mcp_tool_call",
+      "tool": "create_activity",
+      "args": {
+        "contact_id": "{{contactId}}",
+        "type": "review_request",
+        "subject": "Google Business review prompt sent (rating {{ratingReply.body}}/5)",
+        "metadata": {
+          "source": "google-business-review-request",
+          "rating": "{{ratingReply.body}}",
+          "googleReviewPromptId": "{{reviewPrompt.id}}"
+        }
+      },
+      "next": null
+    },
+    {
+      "id": "log_low_rating_followup",
+      "type": "mcp_tool_call",
+      "tool": "create_activity",
+      "args": {
+        "contact_id": "{{contactId}}",
+        "type": "service_recovery",
+        "subject": "Owner alerted — low rating ({{ratingReply.body}}/5)",
+        "metadata": {
+          "source": "google-business-review-request",
+          "rating": "{{ratingReply.body}}"
+        }
+      },
+      "next": null
+    },
+    {
+      "id": "log_no_response",
+      "type": "mcp_tool_call",
+      "tool": "create_activity",
+      "args": {
+        "contact_id": "{{contactId}}",
+        "type": "review_request",
+        "subject": "Satisfaction SMS sent — no rating reply within 3 days",
+        "metadata": {
+          "source": "google-business-review-request",
+          "outcome": "no_response"
+        }
+      },
+      "next": null
+    }
+  ],
+  "knownLimitations": [
+    {
+      "summary": "Review-gating compliance varies by jurisdiction.",
+      "detail": "This archetype intentionally only solicits public Google reviews from customers who rated 4+. Some jurisdictions and Google's own policies regulate this 'review gating' pattern. Confirm legal status in your market before deploying."
+    },
+    {
+      "summary": "External MCP routing not yet implemented in v1.",
+      "detail": "The 'google-business-profile.request_review' tool would resolve to a community Google Business Profile MCP server. v1's mcp_tool_call dispatcher targets first-party block tools only — external-MCP routing is v1.1+ work."
+    },
+    {
+      "summary": "Rating parser is naive.",
+      "detail": "parseInt(ratingReply.body) only catches numeric replies. 'great!' or 'five stars' would fall to ifFalse. Production version should pass the reply through llm_call with a structured-output schema to extract intent."
+    }
+  ]
+}

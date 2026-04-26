@@ -85,6 +85,8 @@ SeldonFrame integrates with the providers you already use:
 - **Stripe** — payments and subscriptions
 - **Anthropic / OpenAI** — LLM calls (BYO key)
 
+→ [Browse 25+ MCP servers for SMB operators](https://seldonframe.com/docs/mcp-servers) — connect Slack, HubSpot, Google Workspace, Linear, Cal.com, and more via Model Context Protocol.
+
 ## Pricing
 
 - **First workspace** — free forever, self-hosted or on our cloud.
