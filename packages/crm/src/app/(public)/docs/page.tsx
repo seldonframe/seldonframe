@@ -325,7 +325,14 @@ export default function DocsPage() {
         </section>
 
         <div className="grid gap-6 lg:grid-cols-[220px,minmax(0,1fr)] xl:grid-cols-[220px,minmax(0,1fr),360px]">
-          <aside className="h-fit rounded-3xl border border-zinc-800/90 bg-zinc-950/75 p-4 shadow-(--shadow-xs) lg:sticky lg:top-6">
+          {/*
+            Repo-polish C2: sidebar background was bg-zinc-950/75 (75%
+            opaque) which let scrolled content bleed through visually
+            on /docs. Switched to fully-opaque bg-[#0a0a0a] (matches
+            the <main> page background) + z-10 so the sticky sidebar
+            renders cleanly above content at every scroll position.
+          */}
+          <aside className="h-fit rounded-3xl border border-zinc-800/90 bg-[#0a0a0a] p-4 shadow-(--shadow-xs) lg:sticky lg:top-6 lg:z-10">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">On this page</p>
             <nav className="mt-4 space-y-1.5">
               {navSections.map((section) => (

@@ -237,6 +237,7 @@ const Features = () => {
 
 const HowItWorks = () => {
   const steps = [
+    { title: "Install via MCP", desc: "One command in Claude Code. SeldonFrame connects to your IDE via Model Context Protocol.", code: "claude mcp add seldonframe" },
     { title: "Initialize a workspace", desc: "Create a branded workspace. Theme, copy, and portal configured via natural language.", code: "\"Init workspace for Desert Cool HVAC. Phoenix, AZ. Family-business voice. Desert tans, AC-blue accents.\"" },
     { title: "Scaffold what you need", desc: "Describe a block and SeldonFrame generates production-ready code with admin UI, portal surfaces, and tests.", code: "\"Scaffold hvac-equipment block. Track units per customer: install date, brand, model, warranty, last service.\"" },
     { title: "Compose agent flows", desc: "Wire multi-step workflows from primitives. Triggers, branches, SMS, email, approval gates — all composable.", code: "\"Add emergency-triage archetype. Trigger on SMS 'AC NOT WORKING'. Check weather. Priority-route if heat >100°F. Dispatch nearest tech.\"" },
@@ -246,10 +247,10 @@ const HowItWorks = () => {
     <section className="text-center py-[64px] md:py-[100px] px-5 md:px-12 max-w-[1140px] mx-auto">
       <h2 className="text-[clamp(26px,3.5vw,38px)] font-bold tracking-[-0.03em] mb-4 text-[#fafafa]">How it works</h2>
       <p className="text-[16px] text-[#a1a1aa] max-w-[560px] mx-auto mb-12">
-        Three prompts. About six minutes. A complete Business OS, ready to deploy.
+        Four steps. About six minutes. A complete Business OS, ready to deploy.
       </p>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
         {steps.map((step, i) => (
           <motion.div
             key={step.title}
