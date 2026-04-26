@@ -1,0 +1,87 @@
+{
+  "runDate": "2026-04-26T11:14:18.599Z",
+  "baselines": {
+    "speed-to-lead": "735f9299ff111080",
+    "win-back": "72ea1438d6c4a691",
+    "review-requester": "4464ec782dfd7bad",
+    "daily-digest": "6e2e04637b8e0e49",
+    "weather-aware-booking": "f330b46ca684ac2b",
+    "appointment-confirm-sms": "ef6060d76c617b04"
+  },
+  "results": {
+    "speed-to-lead": {
+      "runs": [
+        "C:\\Users\\maxim\\CascadeProjects\\Seldon Frame\\.claude\\worktrees\\slice-11-cost-observability\\tasks\\phase-7-archetype-probes\\slice-11-regression\\speed-to-lead.run1.json",
+        "C:\\Users\\maxim\\CascadeProjects\\Seldon Frame\\.claude\\worktrees\\slice-11-cost-observability\\tasks\\phase-7-archetype-probes\\slice-11-regression\\speed-to-lead.run2.json",
+        "C:\\Users\\maxim\\CascadeProjects\\Seldon Frame\\.claude\\worktrees\\slice-11-cost-observability\\tasks\\phase-7-archetype-probes\\slice-11-regression\\speed-to-lead.run3.json"
+      ],
+      "hashes": [
+        "735f9299ff111080",
+        "735f9299ff111080",
+        "735f9299ff111080"
+      ]
+    },
+    "win-back": {
+      "runs": [
+        "C:\\Users\\maxim\\CascadeProjects\\Seldon Frame\\.claude\\worktrees\\slice-11-cost-observability\\tasks\\phase-7-archetype-probes\\slice-11-regression\\win-back.run1.json",
+        "C:\\Users\\maxim\\CascadeProjects\\Seldon Frame\\.claude\\worktrees\\slice-11-cost-observability\\tasks\\phase-7-archetype-probes\\slice-11-regression\\win-back.run2.json",
+        "C:\\Users\\maxim\\CascadeProjects\\Seldon Frame\\.claude\\worktrees\\slice-11-cost-observability\\tasks\\phase-7-archetype-probes\\slice-11-regression\\win-back.run3.json"
+      ],
+      "hashes": [
+        "72ea1438d6c4a691",
+        "72ea1438d6c4a691",
+        "72ea1438d6c4a691"
+      ]
+    },
+    "review-requester": {
+      "runs": [
+        "C:\\Users\\maxim\\CascadeProjects\\Seldon Frame\\.claude\\worktrees\\slice-11-cost-observability\\tasks\\phase-7-archetype-probes\\slice-11-regression\\review-requester.run1.json",
+        "C:\\Users\\maxim\\CascadeProjects\\Seldon Frame\\.claude\\worktrees\\slice-11-cost-observability\\tasks\\phase-7-archetype-probes\\slice-11-regression\\review-requester.run2.json",
+        "C:\\Users\\maxim\\CascadeProjects\\Seldon Frame\\.claude\\worktrees\\slice-11-cost-observability\\tasks\\phase-7-archetype-probes\\slice-11-regression\\review-requester.run3.json"
+      ],
+      "hashes": [
+        "4464ec782dfd7bad",
+        "4464ec782dfd7bad",
+        "4464ec782dfd7bad"
+      ]
+    },
+    "daily-digest": {
+      "runs": [
+        "C:\\Users\\maxim\\CascadeProjects\\Seldon Frame\\.claude\\worktrees\\slice-11-cost-observability\\tasks\\phase-7-archetype-probes\\slice-11-regression\\daily-digest.run1.json",
+        "C:\\Users\\maxim\\CascadeProjects\\Seldon Frame\\.claude\\worktrees\\slice-11-cost-observability\\tasks\\phase-7-archetype-probes\\slice-11-regression\\daily-digest.run2.json",
+        "C:\\Users\\maxim\\CascadeProjects\\Seldon Frame\\.claude\\worktrees\\slice-11-cost-observability\\tasks\\phase-7-archetype-probes\\slice-11-regression\\daily-digest.run3.json"
+      ],
+      "hashes": [
+        "6e2e04637b8e0e49",
+        "6e2e04637b8e0e49",
+        "6e2e04637b8e0e49"
+      ]
+    },
+    "weather-aware-booking": {
+      "runs": [
+        "C:\\Users\\maxim\\CascadeProjects\\Seldon Frame\\.claude\\worktrees\\slice-11-cost-observability\\tasks\\phase-7-archetype-probes\\slice-11-regression\\weather-aware-booking.run1.json",
+        "C:\\Users\\maxim\\CascadeProjects\\Seldon Frame\\.claude\\worktrees\\slice-11-cost-observability\\tasks\\phase-7-archetype-probes\\slice-11-regression\\weather-aware-booking.run2.json",
+        "C:\\Users\\maxim\\CascadeProjects\\Seldon Frame\\.claude\\worktrees\\slice-11-cost-observability\\tasks\\phase-7-archetype-probes\\slice-11-regression\\weather-aware-booking.run3.json"
+      ],
+      "hashes": [
+        "f330b46ca684ac2b",
+        "f330b46ca684ac2b",
+        "f330b46ca684ac2b"
+      ]
+    },
+    "appointment-confirm-sms": {
+      "runs": [
+        "C:\\Users\\maxim\\CascadeProjects\\Seldon Frame\\.claude\\worktrees\\slice-11-cost-observability\\tasks\\phase-7-archetype-probes\\slice-11-regression\\appointment-confirm-sms.run1.json",
+        "C:\\Users\\maxim\\CascadeProjects\\Seldon Frame\\.claude\\worktrees\\slice-11-cost-observability\\tasks\\phase-7-archetype-probes\\slice-11-regression\\appointment-confirm-sms.run2.json",
+        "C:\\Users\\maxim\\CascadeProjects\\Seldon Frame\\.claude\\worktrees\\slice-11-cost-observability\\tasks\\phase-7-archetype-probes\\slice-11-regression\\appointment-confirm-sms.run3.json"
+      ],
+      "hashes": [
+        "ef6060d76c617b04",
+        "ef6060d76c617b04",
+        "ef6060d76c617b04"
+      ]
+    }
+  },
+  "totalMatches": 18,
+  "totalRuns": 18
+}

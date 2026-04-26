@@ -1,0 +1,77 @@
+{
+  "id": "weather-aware-booking",
+  "name": "Weather-Aware Booking",
+  "description": "Branches on weather-API forecast to offer reschedule vs. confirm.",
+  "trigger": {
+    "type": "event",
+    "event": "booking.requested",
+    "filter": {
+      "bookingSlug": "appt_new_patient_consult"
+    }
+  },
+  "variables": {
+    "contactId": "trigger.contactId",
+    "firstName": "trigger.contact.firstName",
+    "email": "trigger.contact.email",
+    "phone": "trigger.contact.phone",
+    "contactCity": "trigger.contact.city",
+    "bookingStartsAt": "trigger.startsAt"
+  },
+  "steps": [
+    {
+      "id": "check_weather",
+      "type": "branch",
+      "condition": {
+        "type": "external_state",
+        "http": {
+          "url": "https://api.weatherapi.com/v1/forecast.json?q={{contactCity}}&days=1",
+          "method": "GET",
+          "timeout_ms": 5000,
+          "auth": {
+            "type": "bearer",
+            "secret_name": "weather_api_key"
+          }
+        },
+        "response_path": "forecast.forecastday[0].day.daily_chance_of_rain",
+        "operator": "gte",
+        "expected": 60,
+        "timeout_behavior": "fail"
+      },
+      "on_match_next": "offer_reschedule",
+      "on_no_match_next": "confirm_booking"
+    },
+    {
+      "id": "offer_reschedule",
+      "type": "mcp_tool_call",
+      "tool": "send_sms",
+      "args": {
+        "contact_id": "{{contactId}}",
+        "to": "{{phone}}",
+        "body": "Hi {{firstName}}, it's Bright Smile Dental. The forecast looks rough on your visit day — no pressure, but if you'd rather come in when the weather's calmer, just reply RESCHEDULE and we'll find a time that works better for you."
+      },
+      "next": null
+    },
+    {
+      "id": "confirm_booking",
+      "type": "mcp_tool_call",
+      "tool": "create_booking",
+      "args": {
+        "contact_id": "{{contactId}}",
+        "appointment_type_id": "appt_new_patient_consult",
+        "starts_at": "{{bookingStartsAt}}"
+      },
+      "next": "send_confirmation_email"
+    },
+    {
+      "id": "send_confirmation_email",
+      "type": "mcp_tool_call",
+      "tool": "send_email",
+      "args": {
+        "to": "{{email}}",
+        "subject": "You're all set — see you at Bright Smile Dental",
+        "body": "Hi {{firstName}},\n\nYou're booked in for {{bookingStartsAt}}. The weather's looking clear, so we'll see you then — no rush, no pressure, and definitely no painful surprises.\n\nIf anything changes on your end, just reply to this email and we'll sort it out.\n\nWarmly,\nThe Bright Smile Dental team"
+      },
+      "next": null
+    }
+  ]
+}
