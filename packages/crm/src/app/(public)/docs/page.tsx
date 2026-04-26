@@ -8,16 +8,6 @@ export const metadata: Metadata = {
   description: "Public API reference for workspaces, secrets, blocks, Seldon It, Brain, and OpenClaw self-service.",
 };
 
-const navSections = [
-  { id: "authentication", title: "Authentication" },
-  { id: "workspaces", title: "Workspaces" },
-  { id: "secrets", title: "Secrets" },
-  { id: "blocks", title: "Blocks & Skills" },
-  { id: "seldon-it", title: "Seldon It" },
-  { id: "brain", title: "Brain" },
-  { id: "openclaw", title: "OpenClaw Self-Service" },
-] as const;
-
 const liveExamples = [
   {
     title: "Create a workspace from one prompt",
@@ -324,31 +314,14 @@ export default function DocsPage() {
           </div>
         </section>
 
-        <div className="grid gap-6 lg:grid-cols-[220px,minmax(0,1fr)] xl:grid-cols-[220px,minmax(0,1fr),360px]">
-          {/*
-            Repo-polish C2: sidebar background was bg-zinc-950/75 (75%
-            opaque) which let scrolled content bleed through visually
-            on /docs. Switched to fully-opaque bg-[#0a0a0a] (matches
-            the <main> page background) + z-10 so the sticky sidebar
-            renders cleanly above content at every scroll position.
-          */}
-          <aside className="h-fit rounded-3xl border border-zinc-800/90 bg-[#0a0a0a] p-4 shadow-(--shadow-xs) lg:sticky lg:top-6 lg:z-10">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">On this page</p>
-            <nav className="mt-4 space-y-1.5">
-              {navSections.map((section) => (
-                <a key={section.id} href={`#${section.id}`} className="flex items-center rounded-xl px-3 py-2 text-sm text-zinc-400 transition hover:bg-zinc-900 hover:text-zinc-100">
-                  {section.title}
-                </a>
-              ))}
-            </nav>
-            <div className="mt-6 rounded-2xl border border-zinc-800/90 bg-[#0a0a0a] p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-300/80">Heads up</p>
-              <p className="mt-2 text-sm leading-6 text-zinc-400">
-                Builder routes use `x-seldon-api-key`. Workspace CRUD routes typically use `x-org-id` and `x-api-key`.
-              </p>
-            </div>
-          </aside>
+        <div className="rounded-2xl border border-zinc-800/90 bg-[#0a0a0a] p-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-300/80">Heads up</p>
+          <p className="mt-2 text-sm leading-6 text-zinc-400">
+            Builder routes use `x-seldon-api-key`. Workspace CRUD routes typically use `x-org-id` and `x-api-key`.
+          </p>
+        </div>
 
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr),360px]">
           <section className="min-w-0 space-y-5">
             <div className="grid gap-3 md:hidden">
               {liveExamples.map((example) => (
