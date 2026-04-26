@@ -13,6 +13,7 @@ import {
   workflowRuns,
   workflowWaits,
   workflowStepResults,
+  workflowApprovals,
 } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
 
@@ -57,6 +58,14 @@ export async function GET() {
       ).flat()
     : [];
 
+  // SLICE 10 PR 2 C3 — workspace-scoped approvals for the drawer's
+  // pending-approval block + future /agents/approvals page.
+  const approvals = await db
+    .select()
+    .from(workflowApprovals)
+    .where(eq(workflowApprovals.orgId, orgId))
+    .orderBy(desc(workflowApprovals.createdAt));
+
   return NextResponse.json({
     runs: runs.map((row) => ({
       id: row.id,
@@ -94,6 +103,27 @@ export async function GET() {
       captureValue: row.captureValue,
       errorMessage: row.errorMessage,
       durationMs: row.durationMs,
+      createdAt: row.createdAt.toISOString(),
+    })),
+    approvals: approvals.map((row) => ({
+      id: row.id,
+      runId: row.runId,
+      stepId: row.stepId,
+      orgId: row.orgId,
+      approverType: row.approverType,
+      approverUserId: row.approverUserId,
+      status: row.status,
+      contextTitle: row.contextTitle,
+      contextSummary: row.contextSummary,
+      contextPreview: row.contextPreview,
+      contextMetadata: row.contextMetadata,
+      timeoutAction: row.timeoutAction,
+      timeoutAt: row.timeoutAt ? row.timeoutAt.toISOString() : null,
+      resolvedAt: row.resolvedAt ? row.resolvedAt.toISOString() : null,
+      resolvedByUserId: row.resolvedByUserId,
+      resolutionComment: row.resolutionComment,
+      resolutionReason: row.resolutionReason,
+      overrideFlag: row.overrideFlag,
       createdAt: row.createdAt.toISOString(),
     })),
   });

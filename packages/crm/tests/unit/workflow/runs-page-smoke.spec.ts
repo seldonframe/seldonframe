@@ -23,6 +23,7 @@ import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
 import type {
+  SerializedApproval,
   SerializedRun,
   SerializedStepResult,
   SerializedWait,
@@ -105,21 +106,52 @@ describe("runs-page — serializer smoke (2c PR 3 M4)", () => {
 
 describe("runs-page — polling contract smoke", () => {
   test("JSON endpoint response shape matches the client state shape", () => {
-    // The client's refreshSnapshot expects { runs, waits, stepResults }
-    // arrays matching the serializer output. This test documents that
-    // contract explicitly so a drift between page.tsx's serializers
-    // and the JSON endpoint's output surfaces at test time.
+    // The client's refreshSnapshot expects { runs, waits, stepResults,
+    // approvals } arrays matching the serializer output. This test
+    // documents that contract explicitly so a drift between page.tsx's
+    // serializers and the JSON endpoint's output surfaces at test time.
     const snapshot: {
       runs: SerializedRun[];
       waits: SerializedWait[];
       stepResults: SerializedStepResult[];
+      approvals: SerializedApproval[];
     } = {
       runs: [],
       waits: [],
       stepResults: [],
+      approvals: [],
     };
     assert.equal(Array.isArray(snapshot.runs), true);
     assert.equal(Array.isArray(snapshot.waits), true);
     assert.equal(Array.isArray(snapshot.stepResults), true);
+    assert.equal(Array.isArray(snapshot.approvals), true);
+  });
+});
+
+describe("runs-page — SerializedApproval shape (SLICE 10 PR 2 C3)", () => {
+  test("SerializedApproval covers approver + context + timeout + audit fields", () => {
+    const approval: SerializedApproval = {
+      id: "00000000-0000-4000-8000-000000000aaa",
+      runId: "00000000-0000-4000-8000-000000000bbb",
+      stepId: "needs_review",
+      orgId: "00000000-0000-4000-8000-000000000ccc",
+      approverType: "operator",
+      approverUserId: null,
+      status: "pending",
+      contextTitle: "Approve send",
+      contextSummary: "Outbound message ready",
+      contextPreview: null,
+      contextMetadata: null,
+      timeoutAction: "abort",
+      timeoutAt: "2026-04-26T00:00:00.000Z",
+      resolvedAt: null,
+      resolvedByUserId: null,
+      resolutionComment: null,
+      resolutionReason: null,
+      overrideFlag: false,
+      createdAt: "2026-04-25T00:00:00.000Z",
+    };
+    assert.equal(approval.status, "pending");
+    assert.equal(approval.overrideFlag, false);
   });
 });

@@ -36,6 +36,7 @@ import type {
   EmitEventStep,
   McpToolCallStep,
   ReadStateStep,
+  RequestApprovalStep,
   Step,
   WaitStep,
   WriteStateStep,
@@ -48,6 +49,7 @@ import { dispatchReadState } from "./step-dispatchers/read-state";
 import { dispatchWriteState } from "./step-dispatchers/write-state";
 import { dispatchEmitEvent } from "./step-dispatchers/emit-event";
 import { dispatchBranch } from "./step-dispatchers/branch";
+import { dispatchRequestApproval } from "./step-dispatchers/request-approval";
 import type { NextAction, RuntimeContext, StoredRun, StoredWait } from "./types";
 import { findStep, RuntimeError, TIMER_EVENT_TYPE } from "./types";
 
@@ -101,6 +103,16 @@ function isAwaitEventStep(step: Step): step is AwaitEventStep {
     typeof s.event === "string" &&
     typeof s.on_resume === "object" && s.on_resume !== null &&
     typeof s.on_timeout === "object" && s.on_timeout !== null
+  );
+}
+function isRequestApprovalStep(step: Step): step is RequestApprovalStep {
+  const s = step as Partial<RequestApprovalStep>;
+  return (
+    step.type === "request_approval" &&
+    typeof s.approver === "object" && s.approver !== null &&
+    typeof s.context === "object" && s.context !== null &&
+    "next_on_approve" in step &&
+    "next_on_reject" in step
   );
 }
 
@@ -328,6 +340,51 @@ export async function resumeWait(
 }
 
 // ---------------------------------------------------------------------
+// SLICE 10 PR 1 C5 — request_approval resume wrapper for the API layer.
+//
+// Parallel to resumeWait: claims the approval row via CAS, advances
+// the run to next_on_approve / next_on_reject, then drives the
+// dispatch loop. The pure `resumeApproval` helper in
+// step-dispatchers/request-approval.ts handles the CAS + the next-step
+// decision (no dispatch loop dependency, so it stays unit-testable
+// in isolation). This wrapper layers `advanceRun` on top so the API
+// endpoint can call ONE thing and have the run progress to its next
+// pause / completion.
+// ---------------------------------------------------------------------
+
+import { resumeApproval as resumeApprovalPure } from "./step-dispatchers/request-approval";
+import type { ResumeApprovalInput } from "./step-dispatchers/request-approval";
+
+export async function runtimeResumeApproval(
+  context: RuntimeContext,
+  input: ResumeApprovalInput,
+): Promise<{ resumed: boolean; runId: string | null }> {
+  if (!context.approvalStorage) {
+    throw new RuntimeError("runtimeResumeApproval requires context.approvalStorage", "");
+  }
+  const result = await resumeApprovalPure(
+    {
+      storage: context.approvalStorage,
+      loadRun: (runId) => context.storage.getRun(runId),
+      advanceTo: (runId, nextStepId) => advanceTo(context, runId, nextStepId),
+      now: context.now,
+    },
+    input,
+  );
+  // If the resume claimed the row AND the run was advanced (not
+  // terminal), drive the dispatch loop. The pure resumeApproval
+  // returned resumed=true for both "advanced" and "terminal-no-op"
+  // cases; we re-load the run to distinguish.
+  if (result.resumed && result.runId) {
+    const run = await context.storage.getRun(result.runId);
+    if (run && (run.status === "running" || run.status === "waiting")) {
+      await advanceRun(context, result.runId);
+    }
+  }
+  return result;
+}
+
+// ---------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------
 
@@ -337,6 +394,7 @@ function stepResultOutcome(action: NextAction): "advanced" | "paused" | "failed"
       return "advanced";
     case "pause_event":
     case "pause_timer":
+    case "pause_approval":
       return "paused";
     case "fail":
       return "failed";
@@ -371,6 +429,28 @@ async function dispatchStep(
           );
         }),
       onEvaluated: context.onBranchEvaluated,
+    });
+  }
+  if (isRequestApprovalStep(step)) {
+    // SLICE 10 PR 1 C4 — request_approval dispatcher. Requires the
+    // RuntimeContext to carry approvalStorage + resolveApprover +
+    // getWorkspaceMagicLinkSecret. When unset (pre-SLICE-10 callers),
+    // fail-closed with a clear error so the gap is visible at runtime
+    // instead of silently dropping the approval request.
+    if (!context.approvalStorage) {
+      return { kind: "fail", reason: "request_approval: RuntimeContext.approvalStorage not configured" };
+    }
+    if (!context.resolveApprover) {
+      return { kind: "fail", reason: "request_approval: RuntimeContext.resolveApprover not configured" };
+    }
+    if (!context.getWorkspaceMagicLinkSecret) {
+      return { kind: "fail", reason: "request_approval: RuntimeContext.getWorkspaceMagicLinkSecret not configured" };
+    }
+    return dispatchRequestApproval(run, step, {
+      storage: context.approvalStorage,
+      resolveApprover: context.resolveApprover,
+      getWorkspaceMagicLinkSecret: context.getWorkspaceMagicLinkSecret,
+      now: context.now,
     });
   }
   return { kind: "fail", reason: `Unsupported step type "${step.type}" at runtime` };
@@ -416,6 +496,74 @@ async function applyAction(
         timeoutAt: action.timeoutAt,
       });
       await context.storage.updateRun(run.id, { status: "waiting" });
+      return true;
+    }
+    case "pause_approval": {
+      // SLICE 10 PR 1 C4 — persist the approval row + flip run to
+      // "waiting". approvalStorage is guaranteed present by the
+      // dispatcher's pre-flight check (otherwise dispatchStep would
+      // have returned a fail action).
+      if (!context.approvalStorage) {
+        await markRunFailed(context, run.id, "pause_approval: approvalStorage missing at applyAction (should be unreachable)");
+        return true;
+      }
+      const approvalId = await context.approvalStorage.createApproval({
+        runId: run.id,
+        stepId: run.currentStepId ?? "unknown",
+        orgId: run.orgId,
+        approverType: action.approverType,
+        approverUserId: action.approverUserId,
+        contextTitle: action.contextTitle,
+        contextSummary: action.contextSummary,
+        contextPreview: action.contextPreview,
+        contextMetadata: action.contextMetadata,
+        timeoutAction: action.timeoutAction,
+        timeoutAt: action.timeoutAt,
+        magicLinkTokenHash: action.magicLinkTokenHash,
+        magicLinkExpiresAt: action.magicLinkExpiresAt,
+      });
+      await context.storage.updateRun(run.id, { status: "waiting" });
+
+      // SLICE 10 PR 2 C1 — best-effort notification. Failure logs +
+      // swallows (L-22). The approval row exists; admin can find it
+      // via dashboard polling regardless.
+      if (context.notifyApprover && context.loadApproverContact) {
+        const baseUrl = context.appBaseUrl ?? process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+        try {
+          const contact = await context.loadApproverContact(run.orgId, action.approverUserId);
+          if (contact) {
+            await context.notifyApprover({
+              approval: {
+                id: approvalId,
+                orgId: run.orgId,
+                contextTitle: action.contextTitle,
+                contextSummary: action.contextSummary,
+                contextPreview: action.contextPreview,
+                timeoutAt: action.timeoutAt,
+              },
+              approver: contact,
+              appBaseUrl: baseUrl,
+              magicLinkToken: action.magicLinkToken,
+            });
+          } else {
+            // eslint-disable-next-line no-console
+            console.warn("[pause_approval] approver contact not resolvable; notification skipped", {
+              runId: run.id,
+              approvalId,
+              approverUserId: action.approverUserId,
+            });
+          }
+        } catch (err) {
+          // notifyApprover is supposed to swallow internally; this catches
+          // anything escaping (e.g., loadApproverContact throws).
+          // eslint-disable-next-line no-console
+          console.warn("[pause_approval] notification path threw; swallowing", {
+            runId: run.id,
+            approvalId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
       return true;
     }
     case "fail": {

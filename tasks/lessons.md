@@ -1618,6 +1618,124 @@ sufficiently to promote from hypothesis to settled.
 
 ---
 
+### L-17 addendum — LOC budget framing: combined-code (codified during SLICE 10 audit gate resolution)
+
+**Rule:** "code LOC" means production + test code combined.
+Documentation, audit artifacts, and close-out reports are counted
+separately.
+
+**Reasoning:** test code is real code that requires authoring,
+review, and maintenance. Excluding it from projections systematically
+underestimates work for test-heavy slices, which is most slices.
+Cross-ref Zod multipliers in L-17 already implicitly include test
+inflation (they're test/prod ratios); explicit budget framing removes
+ambiguity.
+
+**Retroactive note:** prior slices had inconsistent framing.
+- SLICE 5 PR 1 projected prod-only (~1,100) and overshot combined
+  (~2,305).
+- SLICE 8 projected combined (~1,905) and landed close.
+- SLICE 9 PR 1 projected combined and underspent.
+- SLICE 9 PR 2 budget framing was prod-only (1,690 actual against
+  2,150-3,200 budget); test count not separately enumerated; this
+  inconsistency is methodology debt.
+
+**SLICE 10 forward:** all budget projections + stop-and-reassess
+triggers measure combined code. Documentation budget tracks
+separately and does not count against code budget.
+
+**Application:**
+- Stop-and-reassess triggers measure combined code.
+- Budget upper bounds measure combined code.
+- Documentation/audit/close-out artifacts tracked in a separate
+  "doc budget" line in the projection tables.
+- L-17 multipliers continue to express test/prod ratios; combined
+  code = prod × (1 + multiplier).
+
+**SLICE 10 PR 1 budget per Max's resolution:**
+- Expected: ~1,800-2,200 combined code
+- Stop-and-reassess trigger: ~2,860 combined code (30% over upper)
+
+This addendum is committed in SLICE 10 PR 1 C0 alongside the
+PR 1 baseline doc.
+
+---
+
+### L-17 addendum 2 — Per-file test estimation (codified during SLICE 10 PR 2 C0 from PR 1 actuals)
+
+**Rule:** future audits enumerate per-file test estimates rather
+than aggregate bucket projections. Aggregate buckets (e.g., "schema
+layer: ~250-400 tests") systematically underestimate when multiple
+coordinated subsystems each contribute test surface that
+**accumulates multiplicatively rather than additively**.
+
+**SLICE 10 PR 1 evidence:** aggregate projection ~1,200-1,800
+combined code (per-bucket buckets in baseline doc); actual 3,721
+combined (30% over stop trigger). Production landed in-band at
+~1,720; test surface overran. Diagnosis: each subsystem (schema,
+persistence, dispatcher, API) had cross-cutting test concerns
+(idempotency, race conditions, permission checks, edge cases) that
+compounded across files rather than summed cleanly. The aggregate
+bucket lost the per-file fan-out.
+
+**Reasoning:** test concerns interact across files. Adding magic-
+link generation to the storage module means the dispatcher tests
+exercise magic-link integration AND the storage tests exercise
+magic-link cases AND the API tests exercise magic-link verification.
+Three files × ~10-15 tests each = ~30-45 magic-link-related test
+LOC across the diff, not "magic-link: 15 tests" in a single
+bucket. Aggregate bucketing assumes additive concerns; reality is
+multiplicative.
+
+**Application:** at audit time, list expected test files with
+per-file test count estimates. Sum to projection. Aggregate buckets
+are a planning antipattern.
+
+**Template per audit file:**
+```
+| Test file | Estimated tests | Estimated LOC (10/test) |
+|---|---|---|
+| approval-storage.test.ts | 30-40 | 300-400 |
+| magic-link-token.test.ts | 20-25 | 200-250 |
+| approval-dispatcher.test.ts | 25-35 | 250-350 |
+| ... | ... | ... |
+| **Sum** | **~205-275** | **~2,050-2,750** |
+```
+
+**SLICE 10 PR 1 retrospective per-file estimate (had it been
+authored at audit time):**
+
+| Test file | Estimated | Actual |
+|---|---|---|
+| request-approval-step-schema.spec.ts | 25-35 | 31 |
+| workflow-approvals-schema.spec.ts | 12-18 | 15 |
+| approvals-magic-link.spec.ts | 18-25 | 15 |
+| approvals-storage.spec.ts | 30-40 | 34 |
+| dispatch-request-approval.spec.ts | 20-30 | 15 |
+| approvals-api-authz.spec.ts | 15-20 | 15 |
+| **Sum** | **120-168** | **125** |
+| **Combined LOC at ~17 LOC/test** | **2,040-2,856** | **~2,000** |
+
+The per-file estimate would have predicted 2,040-2,856 combined
+test LOC (much closer to the actual ~2,000) versus the aggregate
+bucket which projected ~1,200-1,800 total combined code (off by
+>2x). **L-17 addendum 2 calibrates better.**
+
+**Refinement note for future:** the actual per-test LOC ratio
+landed ~16-17 LOC/test (not 10). Per-test LOC scales with assertion
+density + setup complexity; for SLICE 10's testing style (rich
+fixtures, multiple assertions per test, structured setup helpers),
+~15-20 LOC/test is a better default. The 10-LOC/test default is
+appropriate for thin-test styles (e.g., snapshot tests, single-
+assertion behavioral tests).
+
+**Application at SLICE 10 PR 2:** the C0 baseline doc enumerates
+per-file estimates AND uses ~15 LOC/test. PR 2 close-out validates
+the prediction accuracy and refines the addendum if <80% per-file
+accuracy is observed.
+
+---
+
 ## Template for new entries
 
 ```

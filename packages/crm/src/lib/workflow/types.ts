@@ -35,6 +35,29 @@ export type NextAction =
   | { kind: "pause_event"; eventType: string; matchPredicate: unknown | null; timeoutAt: Date; onResumeNext: string | null; onResumeCapture: string | null; onTimeoutNext: string | null }
   /** Pause for a duration (no event matching). */
   | { kind: "pause_timer"; timeoutAt: Date; nextAfter: string | null }
+  /**
+   * SLICE 10 PR 1 — Pause until an approver resolves the request OR
+   * the cron sweeps the timeout (PR 2). The runtime persists the
+   * approval row via ApprovalStorage.createApproval and sets the run
+   * status to "waiting"; the resume flows through resumeApproval()
+   * (called from the API handler when the approver clicks).
+   */
+  | {
+      kind: "pause_approval";
+      approverType: "operator" | "client_owner" | "user_id";
+      approverUserId: string | null;
+      contextTitle: string;
+      contextSummary: string;
+      contextPreview: string | null;
+      contextMetadata: Record<string, unknown> | null;
+      timeoutAction: "abort" | "auto_approve" | "wait_indefinitely";
+      timeoutAt: Date | null;
+      onApproveNext: string | null;
+      onRejectNext: string | null;
+      magicLinkToken: string | null;
+      magicLinkTokenHash: string | null;
+      magicLinkExpiresAt: Date | null;
+    }
   /** Terminal failure — mark run failed with this reason. */
   | { kind: "fail"; reason: string };
 
@@ -236,6 +259,34 @@ export type RuntimeContext = {
     elapsedMs: number;
     error?: string;
   }) => void;
+  /**
+   * SLICE 10 PR 1 — approval persistence + approver resolution +
+   * magic-link signing secret. All three optional for backward-compat
+   * with pre-SLICE-10 contexts. When unset, request_approval steps
+   * fail at dispatch time with a clear error (the runtime never
+   * reaches createApproval without these wired).
+   */
+  approvalStorage?: import("./approvals/types").ApprovalStorage;
+  resolveApprover?: (
+    orgId: string,
+    approver:
+      | { type: "operator" }
+      | { type: "client_owner" }
+      | { type: "user_id"; userId: string },
+  ) => Promise<{ userId: string | null } | null>;
+  getWorkspaceMagicLinkSecret?: (orgId: string) => Promise<string>;
+  /**
+   * SLICE 10 PR 2 C1 — approver contact resolver + notifier. The
+   * runtime invokes notifyApprover after persisting the approval
+   * row in pause_approval. Best-effort — failure logs + swallows
+   * (L-22 / SLICE 9 PR 2 C4 cost-recorder pattern).
+   */
+  loadApproverContact?: import("./approvals/contact-resolver").LoadApproverContactFn;
+  notifyApprover?: (
+    input: import("./approvals/notifier").ComposeApprovalEmailInput,
+  ) => Promise<import("./approvals/notifier").NotifyApproverResult>;
+  /** Base URL used to build the admin/portal links in notification emails. Falls back to NEXT_PUBLIC_APP_URL. */
+  appBaseUrl?: string;
 };
 
 // ---------------------------------------------------------------------

@@ -15,14 +15,24 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
 import { formatLlmCost, formatTokenCount } from "@/lib/utils/format-llm-cost";
 
-import type { SerializedRun, SerializedStepResult, SerializedWait } from "./page";
+import type {
+  SerializedApproval,
+  SerializedRun,
+  SerializedStepResult,
+  SerializedWait,
+} from "./page";
 
 type Props = {
   initialRuns: SerializedRun[];
   initialWaits: SerializedWait[];
   initialStepResults: SerializedStepResult[];
+  // SLICE 10 PR 2 C3 — approval drawer block.
+  initialApprovals: SerializedApproval[];
+  currentUserId: string | null;
+  currentUserIsOrgOwner: boolean;
 };
 
 const POLL_INTERVAL_MS = 2000; // §6.5: 2s polling refresh in v1.
@@ -54,12 +64,21 @@ function statusBadgeVariant(status: string): "default" | "secondary" | "destruct
   return "secondary";
 }
 
-export function RunsClient({ initialRuns, initialWaits, initialStepResults }: Props) {
+export function RunsClient({
+  initialRuns,
+  initialWaits,
+  initialStepResults,
+  initialApprovals,
+  currentUserId,
+  currentUserIsOrgOwner,
+}: Props) {
   const [runs, setRuns] = useState(initialRuns);
   const [waits, setWaits] = useState(initialWaits);
   const [stepResults, setStepResults] = useState(initialStepResults);
+  const [approvals, setApprovals] = useState(initialApprovals);
   const [openRunId, setOpenRunId] = useState<string | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
+  const [approvalComment, setApprovalComment] = useState("");
 
   // Polling refresh. Re-hits the same page (as an HTML fetch +
   // regex-extracted JSON would be brittle); instead, call a lightweight
@@ -77,6 +96,7 @@ export function RunsClient({ initialRuns, initialWaits, initialStepResults }: Pr
             setRuns(snapshot.runs);
             setWaits(snapshot.waits);
             setStepResults(snapshot.stepResults);
+            if (snapshot.approvals) setApprovals(snapshot.approvals);
           }
         });
       }
@@ -95,6 +115,17 @@ export function RunsClient({ initialRuns, initialWaits, initialStepResults }: Pr
     ? stepResults.filter((r) => r.runId === openRunId)
     : [];
   const selectedPendingWait = selectedWaits.find((w) => w.resumedAt === null) ?? null;
+  // SLICE 10 PR 2 C3 — pending approval for the open run (max one
+  // pending at a time per run by spec; multiple-pending only happens
+  // mid-spec-update which is a different concern).
+  const selectedPendingApproval = openRunId
+    ? approvals.find((a) => a.runId === openRunId && a.status === "pending") ?? null
+    : null;
+  const callerCanResolve = !!(
+    selectedPendingApproval &&
+    currentUserId &&
+    (selectedPendingApproval.approverUserId === currentUserId || currentUserIsOrgOwner)
+  );
 
   async function handleResume(runId: string) {
     setActionBusy(true);
@@ -103,6 +134,39 @@ export function RunsClient({ initialRuns, initialWaits, initialStepResults }: Pr
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         alert(`Resume failed: ${body.reason ?? body.error ?? res.status}`);
+      }
+    } finally {
+      setActionBusy(false);
+    }
+  }
+
+  // SLICE 10 PR 2 C3 — approval resolution. Calls the regular resolve
+  // endpoint when the caller is the bound approver; the override
+  // endpoint when the caller is the org-owner exercising emergency
+  // unblock (currentUserIsOrgOwner=true AND approverUserId !== current).
+  async function handleApprovalDecision(decision: "approve" | "reject") {
+    if (!selectedPendingApproval) return;
+    const useOverride =
+      currentUserIsOrgOwner &&
+      selectedPendingApproval.approverUserId !== currentUserId;
+    const path = useOverride
+      ? `/api/v1/approvals/${selectedPendingApproval.id}/override`
+      : `/api/v1/approvals/${selectedPendingApproval.id}/resolve`;
+    setActionBusy(true);
+    try {
+      const res = await fetch(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          decision,
+          comment: approvalComment.trim() || undefined,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        alert(`Resolution failed: ${body.error ?? res.status}`);
+      } else {
+        setApprovalComment("");
       }
     } finally {
       setActionBusy(false);
@@ -215,6 +279,79 @@ export function RunsClient({ initialRuns, initialWaits, initialStepResults }: Pr
                   {formatTokenCount(selectedRun.totalTokensOutput)} out
                 </dd>
               </dl>
+
+              {/* SLICE 10 PR 2 C3 — pending approval block (parallel
+                  to "Waiting for event" below). Permissions enforced
+                  twice per L-22: API authz + UI gate (callerCanResolve
+                  controls button visibility). */}
+              {selectedPendingApproval ? (
+                <section className="rounded-md border border-border bg-muted/30 p-3 space-y-2">
+                  <h3 className="font-medium">Waiting for approval</h3>
+                  <dl className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 text-xs">
+                    <dt className="text-muted-foreground">Approver</dt>
+                    <dd>{selectedPendingApproval.approverType}</dd>
+                    <dt className="text-muted-foreground">Asked</dt>
+                    <dd className="font-medium">{selectedPendingApproval.contextTitle}</dd>
+                    <dt className="text-muted-foreground">Summary</dt>
+                    <dd>{selectedPendingApproval.contextSummary}</dd>
+                    {selectedPendingApproval.contextPreview ? (
+                      <>
+                        <dt className="text-muted-foreground">Preview</dt>
+                        <dd>
+                          <pre className="font-mono text-[11px] bg-background border border-border rounded p-2 overflow-x-auto whitespace-pre-wrap">
+                            {selectedPendingApproval.contextPreview}
+                          </pre>
+                        </dd>
+                      </>
+                    ) : null}
+                    <dt className="text-muted-foreground">Timeout</dt>
+                    <dd>
+                      {selectedPendingApproval.timeoutAt
+                        ? `${new Date(selectedPendingApproval.timeoutAt).toLocaleString()} (${relativeTimeTo(selectedPendingApproval.timeoutAt)}, ${selectedPendingApproval.timeoutAction})`
+                        : "no timeout (wait_indefinitely)"}
+                    </dd>
+                  </dl>
+                  {callerCanResolve ? (
+                    <div className="space-y-2 pt-1">
+                      <Textarea
+                        placeholder="Optional comment (visible in audit trail)"
+                        value={approvalComment}
+                        onChange={(e) => setApprovalComment(e.target.value)}
+                        rows={2}
+                        className="text-xs"
+                      />
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="default"
+                          disabled={actionBusy}
+                          onClick={() => handleApprovalDecision("approve")}
+                        >
+                          Approve
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={actionBusy}
+                          onClick={() => handleApprovalDecision("reject")}
+                        >
+                          Reject
+                        </Button>
+                        {currentUserIsOrgOwner &&
+                        selectedPendingApproval.approverUserId !== currentUserId ? (
+                          <span className="text-[11px] text-muted-foreground self-center">
+                            (will be marked as override)
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground pt-1">
+                      Pending the assigned approver&apos;s decision.
+                    </p>
+                  )}
+                </section>
+              ) : null}
 
               {selectedPendingWait ? (
                 <section className="rounded-md border border-border bg-muted/30 p-3 space-y-2">
@@ -334,6 +471,7 @@ async function refreshSnapshot(): Promise<{
   runs: SerializedRun[];
   waits: SerializedWait[];
   stepResults: SerializedStepResult[];
+  approvals?: SerializedApproval[];
 } | null> {
   try {
     const res = await fetch("/api/v1/workflow-runs", { cache: "no-store" });
@@ -342,6 +480,7 @@ async function refreshSnapshot(): Promise<{
       runs: SerializedRun[];
       waits: SerializedWait[];
       stepResults: SerializedStepResult[];
+      approvals?: SerializedApproval[];
     };
     return data;
   } catch {

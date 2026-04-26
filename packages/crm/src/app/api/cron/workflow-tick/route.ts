@@ -30,7 +30,7 @@ import { and, eq } from "drizzle-orm";
 
 import { db } from "@/db";
 import { workflowRuns } from "@/db/schema/workflow-runs";
-import { resumeWait } from "@/lib/workflow/runtime";
+import { resumeWait, runtimeResumeApproval } from "@/lib/workflow/runtime";
 import { DrizzleRuntimeStorage } from "@/lib/workflow/storage-drizzle";
 import { notImplementedToolInvoker, type RuntimeContext } from "@/lib/workflow/types";
 import { runSubscriptionTick } from "@/lib/subscriptions/dispatcher";
@@ -42,6 +42,12 @@ import { DrizzleScheduledTriggerStore } from "@/lib/agents/schedule-dispatcher-d
 // into the module-level registry. Route imports run at boot so the
 // registry is populated before the first tick.
 import "@/lib/subscriptions/register-all-handlers";
+// SLICE 10 PR 2 C2 — approval timeout sweep alongside the wait sweep.
+import {
+  DrizzleApprovalStorage,
+  runApprovalTimeoutSweep,
+  getMagicLinkSecretForWorkspace,
+} from "@/lib/workflow/approvals";
 
 export const runtime = "nodejs";
 
@@ -185,6 +191,35 @@ export async function GET(request: Request) {
     });
   }
 
+  // SLICE 10 PR 2 C2 — approval timeout sweep. Runs after schedule
+  // tick so any newly-fired schedule (e.g., a heat-advisory archetype
+  // that lands a request_approval) doesn't have its approval rows
+  // get swept the same tick they're created. Approval timeouts
+  // are 1h+ in practice so the inter-tick ordering doesn't matter
+  // for correctness, but ordering is documented for clarity.
+  const approvalStorage = new DrizzleApprovalStorage(db);
+  let approvalSweepResult = { scanned: 0, resolved: 0, raced: 0, failed: 0 };
+  try {
+    const approvalContext: RuntimeContext = {
+      storage,
+      invokeTool: notImplementedToolInvoker,
+      now: () => new Date(),
+      approvalStorage,
+      getWorkspaceMagicLinkSecret: getMagicLinkSecretForWorkspace,
+    };
+    approvalSweepResult = await runApprovalTimeoutSweep({
+      storage: approvalStorage,
+      now: new Date(),
+      batchLimit: BATCH_LIMIT,
+      resumeApproval: (input) => runtimeResumeApproval(approvalContext, input),
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("[workflow-tick] approval sweep failed", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
   return NextResponse.json({
     ok: true,
     tickMs: Date.now() - startedAt,
@@ -193,5 +228,6 @@ export async function GET(request: Request) {
     failed,
     subscriptions: subscriptionResult,
     schedules: scheduleOutcome,
+    approvalTimeouts: approvalSweepResult,
   });
 }
