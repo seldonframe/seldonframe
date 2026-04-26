@@ -1,4 +1,4 @@
-# @seldonframe/mcp-server
+# @seldonframe/mcp
 
 Official SeldonFrame MCP server for Claude Code and Claude Desktop.
 
@@ -67,11 +67,16 @@ The repo ships a `.claude-plugin/plugin.json` at the root. From inside Claude Co
 /plugin install <path-to-repo>
 ```
 
-## Install via npm (once published)
+## Install via npm
 
 ```bash
-claude mcp add seldonframe -s user -- npx -y @seldonframe/mcp-server@latest
+claude mcp add seldonframe -- npx -y @seldonframe/mcp
 ```
+
+This is the canonical install command surfaced on the marketing site,
+the `/docs/quickstart` page, and the repo README. It uses `npx -y`
+so users never have to globally install anything; the latest version
+is fetched and run on demand.
 
 ## Environment
 
