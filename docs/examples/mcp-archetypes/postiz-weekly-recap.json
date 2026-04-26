@@ -1,0 +1,73 @@
+{
+  "$schema": "../../schemas/archetype-spec.json",
+  "id": "postiz-weekly-recap-illustrative",
+  "name": "Weekly social recap via Postiz",
+  "description": "Every Monday at 9am, summarize last week's workspace activity and publish a recap post across X, LinkedIn, and Instagram via Postiz.",
+  "illustrative": true,
+  "requiresExternalMcp": ["postiz"],
+  "trigger": {
+    "type": "schedule",
+    "cron": "0 9 * * 1",
+    "timezone": "America/Phoenix"
+  },
+  "variables": {
+    "weekStart": "trigger.lastFireAt",
+    "weekEnd": "trigger.firedAt"
+  },
+  "steps": [
+    {
+      "id": "read_recent_activity",
+      "type": "read_state",
+      "path": "workspace.activity.recent",
+      "args": {
+        "since": "{{weekStart}}",
+        "until": "{{weekEnd}}",
+        "limit": 50
+      },
+      "captureAs": "activity",
+      "next": "draft_recap_post"
+    },
+    {
+      "id": "draft_recap_post",
+      "type": "llm_call",
+      "model": "claude-sonnet-4-7",
+      "system": "You are the social-media voice of {{soul.businessName}}. Write a single recap post (max 220 chars for X compatibility) summarizing the highlights from last week. Tone: {{soul.tone}}. No hashtag spam — at most 2 hashtags. Include 1 specific number or named highlight.",
+      "user": "Last week's activity:\n\n{{activity}}\n\nWrite the recap post now.",
+      "captureAs": "recapText",
+      "next": "publish_to_postiz"
+    },
+    {
+      "id": "publish_to_postiz",
+      "type": "mcp_tool_call",
+      "tool": "postiz.create_post",
+      "args": {
+        "content": "{{recapText}}",
+        "platforms": ["x", "linkedin", "instagram"],
+        "scheduleAt": "now"
+      },
+      "captureAs": "postizResponse",
+      "next": "log_recap_complete"
+    },
+    {
+      "id": "log_recap_complete",
+      "type": "emit_event",
+      "event": "social.recap.published",
+      "payload": {
+        "postizPostId": "{{postizResponse.id}}",
+        "channels": "{{postizResponse.platforms}}",
+        "preview": "{{recapText}}"
+      },
+      "next": null
+    }
+  ],
+  "knownLimitations": [
+    {
+      "summary": "Postiz tool routing not yet implemented in v1.",
+      "detail": "The mcp_tool_call dispatcher today resolves to first-party block tools. External MCP server routing (where 'postiz.create_post' would dispatch to your locally-installed Postiz MCP server) is v1.1+ work."
+    },
+    {
+      "summary": "No conditional skip on quiet weeks.",
+      "detail": "If activity is empty, this still drafts and publishes a post. Production version should add a branch step that ends the workflow when activity.length === 0."
+    }
+  ]
+}
