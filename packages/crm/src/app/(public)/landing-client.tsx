@@ -390,6 +390,11 @@ const Infrastructure = () => {
           </motion.span>
         ))}
       </div>
+      <div className="mt-8">
+        <a href="/docs/mcp-servers" className="text-[14px] text-[#1FAE85] hover:underline">
+          → Browse 25+ MCP servers for SMB operators
+        </a>
+      </div>
     </section>
   );
 };

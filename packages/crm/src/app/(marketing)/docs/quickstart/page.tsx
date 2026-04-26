@@ -101,6 +101,12 @@ export default function QuickstartPage() {
           <h2 className="text-[16px] font-semibold mb-3 text-[#fafafa]">What&apos;s next</h2>
           <ul className="space-y-2 text-[14px]">
             <li>
+              <a href="/docs/mcp-servers" className="text-[#1FAE85] hover:underline">
+                Browse MCP servers &rarr;
+              </a>
+              <span className="text-[#71717a]"> — extend your Business OS with 25+ verified external integrations</span>
+            </li>
+            <li>
               <a href="/demo" className="text-[#1FAE85] hover:underline">
                 Watch the HVAC walkthrough &rarr;
               </a>

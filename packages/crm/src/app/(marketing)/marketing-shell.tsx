@@ -40,6 +40,7 @@ export function MarketingShell({ children }: { children: ReactNode }) {
         <div className="flex items-center gap-4 md:gap-7">
           <a href="/" className="text-[14px] text-[#a1a1aa] hover:text-[#fafafa] transition-colors">Home</a>
           <a href="/docs" className="text-[14px] text-[#a1a1aa] hover:text-[#fafafa] transition-colors">Docs</a>
+          <a href="/docs/mcp-servers" className="text-[14px] text-[#a1a1aa] hover:text-[#fafafa] transition-colors">MCP Servers</a>
           <a
             href="https://github.com/seldonframe/seldonframe"
             target="_blank"
