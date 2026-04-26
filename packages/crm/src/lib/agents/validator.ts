@@ -550,6 +550,50 @@ const RequestApprovalStepSchema = z.strictObject({
   next_on_reject: z.string().nullable(),
 });
 
+// llm_call — SLICE 11 C1 per audit §5.1 + Max's gate resolution
+// (G-11-6 minimum viable instrumentation). The 10th step type
+// (9 prior: wait / mcp_tool_call / conversation / await_event /
+// read_state / write_state / emit_event / branch / request_approval).
+//
+// Purpose: invoke an LLM with a templated prompt + persist usage
+// data to workflow_runs cost columns via recordLlmUsage. Until this
+// step type ships, the SLICE 9 PR 2 cost recorder has no callers
+// (per SLICE 11 audit §2.1 headline finding).
+//
+// Design choices:
+//   - `model` is a free-form string. Pricing falls back to Opus
+//     rates for unknown models per pricing.ts FALLBACK_PRICING
+//     (multi-provider support deferred to v1.1 per G-11-3).
+//   - `user_prompt` REQUIRED, supports {{interpolation}} resolved at
+//     dispatch time (parallel to mcp_tool_call.args strings).
+//   - `system_prompt` OPTIONAL; non-empty when present.
+//   - `max_tokens` OPTIONAL; defaults to 4096 at parse; bounded
+//     1-8192.
+//   - `capture` OPTIONAL; if present, the LLM response text is bound
+//     to that name in run.captureScope, available to downstream steps
+//     as `{{capture_name}}` interpolation.
+//   - `next` REQUIRED (string or null).
+//   - Top-level .strict() rejects unknown keys.
+const LLM_CALL_DEFAULT_MAX_TOKENS = 4096;
+const LLM_CALL_MAX_TOKENS_LIMIT = 8192;
+
+const LlmCallStepSchema = z.strictObject({
+  id: z.string().min(1),
+  type: z.literal("llm_call"),
+  model: z.string().min(1),
+  user_prompt: z.string().min(1),
+  system_prompt: z.string().min(1).optional(),
+  max_tokens: z
+    .number()
+    .int()
+    .positive()
+    .max(LLM_CALL_MAX_TOKENS_LIMIT)
+    .optional()
+    .default(LLM_CALL_DEFAULT_MAX_TOKENS),
+  capture: z.string().min(1).optional(),
+  next: z.string().nullable(),
+});
+
 const UnknownStepSchema = z
   .object({
     id: z.string().min(1),
@@ -567,6 +611,7 @@ const KnownStepSchema = z.discriminatedUnion("type", [
   EmitEventStepSchema,
   BranchStepSchema,
   RequestApprovalStepSchema,
+  LlmCallStepSchema,
 ]);
 
 const StepSchema = z.union([KnownStepSchema, UnknownStepSchema]);
@@ -599,10 +644,11 @@ export type RequestApprovalStep = z.infer<typeof RequestApprovalStepSchema>;
 export type ApprovalApprover = z.infer<typeof ApproverSchema>;
 export type ApprovalContext = z.infer<typeof ApprovalContextSchema>;
 export type ApprovalTimeout = z.infer<typeof ApprovalTimeoutSchema>;
+export type LlmCallStep = z.infer<typeof LlmCallStepSchema>;
 export type UnknownStep = z.infer<typeof UnknownStepSchema>;
 // Discriminated-union narrowing on `.type`. UnknownStep is the runtime
 // fallthrough for unsupported types (none currently unshipped — all
-// SLICE-10-era step types are Known).
+// SLICE-11-era step types are Known).
 export type Step =
   | WaitStep
   | McpToolCallStep
@@ -613,6 +659,7 @@ export type Step =
   | EmitEventStep
   | BranchStep
   | RequestApprovalStep
+  | LlmCallStep
   | UnknownStep;
 
 // Type guards — TypeScript can't narrow Step by `step.type === "..."`
@@ -675,6 +722,20 @@ function isRequestApprovalStep(step: Step): step is RequestApprovalStep {
     s.context !== null &&
     "next_on_approve" in step &&
     "next_on_reject" in step
+  );
+}
+
+function isLlmCallStep(step: Step): step is LlmCallStep {
+  // SLICE 11 C1 — distinguish from UnknownStep by literal type +
+  // presence of model + user_prompt strings. The .strict() schema
+  // guarantees these when the discriminated union accepts the row;
+  // the guard is for runtime narrowing of stored steps loaded from
+  // the spec snapshot.
+  const s = step as Partial<LlmCallStep>;
+  return (
+    step.type === "llm_call" &&
+    typeof s.model === "string" &&
+    typeof s.user_prompt === "string"
   );
 }
 
@@ -992,11 +1053,50 @@ function validateStep(
     }
     return;
   }
+  // SLICE 11 C1 — llm_call validation. Malformed shapes fall through
+  // the discriminated union to UnknownStepSchema (existing pattern);
+  // re-parse here to surface spec_malformed. Capture name validation
+  // mirrors mcp_tool_call's discipline (identifier pattern + uniqueness
+  // across all capture-binding step types).
+  if (step.type === "llm_call") {
+    const parsed = LlmCallStepSchema.safeParse(step);
+    if (!parsed.success) {
+      for (const err of parsed.error.issues) {
+        issues.push({
+          code: "spec_malformed",
+          stepId: step.id,
+          path: err.path.join(".") || "$",
+          message: err.message,
+        });
+      }
+      return;
+    }
+    if (parsed.data.capture !== undefined) {
+      if (!CAPTURE_NAME_PATTERN.test(parsed.data.capture)) {
+        issues.push({
+          code: "bad_capture_name",
+          stepId: step.id,
+          path: "capture",
+          message: `capture="${parsed.data.capture}" must be a lowercase identifier matching /^[a-z][a-zA-Z0-9_]*$/ so downstream {{${parsed.data.capture}}} references are unambiguous`,
+        });
+      } else if (capturedBindings.has(parsed.data.capture)) {
+        issues.push({
+          code: "bad_capture_name",
+          stepId: step.id,
+          path: "capture",
+          message: `capture="${parsed.data.capture}" is already bound by an earlier step; capture names must be unique within a spec`,
+        });
+      } else {
+        capturedBindings.add(parsed.data.capture);
+      }
+    }
+    return;
+  }
   issues.push({
     code: "unsupported_step_type",
     stepId: step.id,
     path: "type",
-    message: `step type "${step.type}" is not supported by this validator (wait / mcp_tool_call / conversation / await_event / read_state / write_state / emit_event / branch / request_approval are the nine known types)`,
+    message: `step type "${step.type}" is not supported by this validator (wait / mcp_tool_call / conversation / await_event / read_state / write_state / emit_event / branch / request_approval / llm_call are the ten known types)`,
   });
 }
 
