@@ -1736,6 +1736,70 @@ accuracy is observed.
 
 ---
 
+### L-17 addendum 3 — Per-test LOC tier sub-categorization (codified during SLICE 11 C0 from SLICE 10 PR 2 finding)
+
+**Rule:** future audits use a 4-tier per-test LOC default rather
+than a single 16 LOC/test default:
+
+| Test class | LOC/test | When to use |
+|---|---|---|
+| Unit-thin | 10-12 | Snapshot tests, single-assertion behavioral tests, table-driven cases |
+| Unit-rich | 15-18 | Rich fixtures, multi-assertion per test, structured setup helpers (SLICE 10 default) |
+| **Integration** | **22-28** | Multi-module orchestration (storage + dispatcher + advance), heavier setup |
+| **Edge-case** | **25-30** | Explicit error-path setup, mock state injection, console-spy patterns |
+
+**Reasoning:** SLICE 10 PR 2 close-out (regression report
+"L-17 addendum 2 verdict" table) showed per-test count accuracy
+80-94% (in-band of L-17 ±20%) but per-test LOC accuracy 60-75%
+(out-of-band). The drift was concentrated in two test classes:
+- `slice-10-integration.spec.ts`: 6 tests / 384 LOC = **64
+  LOC/test** (multi-module orchestration; 4× the 16 default)
+- `slice-10-edge-cases.spec.ts`: 8 tests / 406 LOC = **51
+  LOC/test** (explicit error-path setup; 3× the 16 default)
+
+The per-test count was on target; the LOC ran heavy because each
+integration/edge test exercises broader scope than a unit test.
+
+**Application:** at audit time, classify each expected test file
+into one of the four tiers BEFORE projecting LOC. Sum per-tier
+LOC × per-tier-count. Aggregate doesn't drift.
+
+**Template per audit file:**
+
+```
+| Test file | Tier | Est. tests | Est. LOC |
+|---|---|---|---|
+| schema-shape.spec.ts | unit-rich | 12-16 | 180-290 |
+| dispatcher.spec.ts | unit-rich | 8-12 | 120-220 |
+| slice-N-integration.spec.ts | integration | 4-6 | 90-170 |
+| slice-N-edge-cases.spec.ts | edge-case | 6-8 | 150-240 |
+| **Sum** | | **30-42** | **~540-920** |
+```
+
+**SLICE 10 PR 2 retrospective per-tier estimate (had it been
+authored at audit time using addendum 3):**
+
+| File | Predicted (addendum 3 tiers) | Actual |
+|---|---|---|
+| approvals-notifier.spec.ts (unit-rich) | 9 × 16 = 144 | 186 |
+| approvals-cron-sweep.spec.ts (unit-rich) | 7 × 16 = 112 | 182 |
+| approvals-customer-portal.spec.ts (unit-rich) | 14 × 16 = 224 | 229 |
+| slice-10-integration.spec.ts (integration) | 5 × 25 = 125 | 384 |
+| slice-10-edge-cases.spec.ts (edge-case) | 8 × 27 = 216 | 406 |
+| **Sum** | **821** | **1,387** |
+
+Even with addendum 3, per-test LOC for integration + edge tests
+ran ~50% over the 25-27 LOC/test mid-band. The integration test
+drove the largest delta. **Recommendation:** for slices with
+large fixture surfaces (e.g., constructing full agent specs +
+HVAC archetype examples + multiple resume contexts), upgrade
+integration to 35-50 LOC/test.
+
+**SLICE 11 forward:** apply the 4-tier defaults; revisit after
+C4 close-out with empirical SLICE 11 data.
+
+---
+
 ## Template for new entries
 
 ```
