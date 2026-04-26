@@ -275,6 +275,18 @@ export type RuntimeContext = {
       | { type: "user_id"; userId: string },
   ) => Promise<{ userId: string | null } | null>;
   getWorkspaceMagicLinkSecret?: (orgId: string) => Promise<string>;
+  /**
+   * SLICE 10 PR 2 C1 — approver contact resolver + notifier. The
+   * runtime invokes notifyApprover after persisting the approval
+   * row in pause_approval. Best-effort — failure logs + swallows
+   * (L-22 / SLICE 9 PR 2 C4 cost-recorder pattern).
+   */
+  loadApproverContact?: import("./approvals/contact-resolver").LoadApproverContactFn;
+  notifyApprover?: (
+    input: import("./approvals/notifier").ComposeApprovalEmailInput,
+  ) => Promise<import("./approvals/notifier").NotifyApproverResult>;
+  /** Base URL used to build the admin/portal links in notification emails. Falls back to NEXT_PUBLIC_APP_URL. */
+  appBaseUrl?: string;
 };
 
 // ---------------------------------------------------------------------

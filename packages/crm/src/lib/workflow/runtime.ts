@@ -507,7 +507,7 @@ async function applyAction(
         await markRunFailed(context, run.id, "pause_approval: approvalStorage missing at applyAction (should be unreachable)");
         return true;
       }
-      await context.approvalStorage.createApproval({
+      const approvalId = await context.approvalStorage.createApproval({
         runId: run.id,
         stepId: run.currentStepId ?? "unknown",
         orgId: run.orgId,
@@ -523,6 +523,47 @@ async function applyAction(
         magicLinkExpiresAt: action.magicLinkExpiresAt,
       });
       await context.storage.updateRun(run.id, { status: "waiting" });
+
+      // SLICE 10 PR 2 C1 — best-effort notification. Failure logs +
+      // swallows (L-22). The approval row exists; admin can find it
+      // via dashboard polling regardless.
+      if (context.notifyApprover && context.loadApproverContact) {
+        const baseUrl = context.appBaseUrl ?? process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+        try {
+          const contact = await context.loadApproverContact(run.orgId, action.approverUserId);
+          if (contact) {
+            await context.notifyApprover({
+              approval: {
+                id: approvalId,
+                orgId: run.orgId,
+                contextTitle: action.contextTitle,
+                contextSummary: action.contextSummary,
+                contextPreview: action.contextPreview,
+                timeoutAt: action.timeoutAt,
+              },
+              approver: contact,
+              appBaseUrl: baseUrl,
+              magicLinkToken: action.magicLinkToken,
+            });
+          } else {
+            // eslint-disable-next-line no-console
+            console.warn("[pause_approval] approver contact not resolvable; notification skipped", {
+              runId: run.id,
+              approvalId,
+              approverUserId: action.approverUserId,
+            });
+          }
+        } catch (err) {
+          // notifyApprover is supposed to swallow internally; this catches
+          // anything escaping (e.g., loadApproverContact throws).
+          // eslint-disable-next-line no-console
+          console.warn("[pause_approval] notification path threw; swallowing", {
+            runId: run.id,
+            approvalId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
       return true;
     }
     case "fail": {
