@@ -134,7 +134,7 @@ const Hero = () => {
         </div>
         <div className="p-5 font-mono text-[13px] leading-loose text-[#a1a1aa]">
           <span className="text-[#444]"># Add SeldonFrame to your IDE via MCP</span><br />
-          <span className="text-[#1FAE85]">$ claude mcp add seldonframe</span><br /><br />
+          <span className="text-[#1FAE85]">$ claude mcp add seldonframe -- npx -y @seldonframe/mcp</span><br /><br />
           <span className="text-[#444]"># Create a workspace</span><br />
           <span className="text-[#1FAE85]">$ seldon init &quot;Desert Cool HVAC&quot;</span><br /><br />
           <span className="text-[#444]"># Describe what you need — SeldonFrame builds it</span><br />
@@ -237,7 +237,7 @@ const Features = () => {
 
 const HowItWorks = () => {
   const steps = [
-    { title: "Install via MCP", desc: "One command in Claude Code. SeldonFrame connects to your IDE via Model Context Protocol.", code: "claude mcp add seldonframe" },
+    { title: "Install via MCP", desc: "One command in Claude Code. SeldonFrame connects to your IDE via Model Context Protocol.", code: "claude mcp add seldonframe -- npx -y @seldonframe/mcp" },
     { title: "Initialize a workspace", desc: "Create a branded workspace. Theme, copy, and portal configured via natural language.", code: "\"Init workspace for Desert Cool HVAC. Phoenix, AZ. Family-business voice. Desert tans, AC-blue accents.\"" },
     { title: "Scaffold what you need", desc: "Describe a block and SeldonFrame generates production-ready code with admin UI, portal surfaces, and tests.", code: "\"Scaffold hvac-equipment block. Track units per customer: install date, brand, model, warranty, last service.\"" },
     { title: "Compose agent flows", desc: "Wire multi-step workflows from primitives. Triggers, branches, SMS, email, approval gates — all composable.", code: "\"Add emergency-triage archetype. Trigger on SMS 'AC NOT WORKING'. Check weather. Priority-route if heat >100°F. Dispatch nearest tech.\"" },
