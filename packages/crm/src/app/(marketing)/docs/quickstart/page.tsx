@@ -67,11 +67,65 @@ export default function QuickstartPage() {
             </li>
             <li className="flex items-start gap-2">
               <span className="text-[#1FAE85] text-[12px] font-bold mt-[3px] shrink-0">✓</span>
-              <span>Node.js 20 or newer</span>
+              <span>Node.js 18 or newer (Node 20 recommended)</span>
             </li>
             <li className="flex items-start gap-2">
               <span className="text-[#1FAE85] text-[12px] font-bold mt-[3px] shrink-0">✓</span>
               <span>An Anthropic API key (BYO — SeldonFrame doesn&apos;t margin on tokens)</span>
+            </li>
+          </ul>
+        </section>
+
+        {/*
+          Codespaces / WSL / SSH-remote callout. Surfaces friction
+          surfaced by the L-29 cleanroom test (Findings #1, #2, #3, #8
+          in the pre-launch test protocol). Better to warn users
+          upfront than have them discover the gotchas mid-install.
+        */}
+        <section className="mb-10 bg-[#111113] border border-[#fbbf24]/20 rounded-[12px] p-5 md:p-6">
+          <p className="text-[12px] uppercase tracking-[0.12em] text-[#fbbf24] font-mono mb-3">
+            Running in Codespaces, WSL, or SSH remote?
+          </p>
+          <ul className="space-y-2 text-[13px] text-[#a1a1aa] leading-[1.65]">
+            <li className="flex items-start gap-2">
+              <span className="text-[#a1a1aa] mt-[2px] shrink-0">·</span>
+              <span>
+                <strong className="text-[#d4d4d8]">Node version:</strong> Codespaces default
+                images sometimes ship Node 16. SeldonFrame requires Node 18+. Run{" "}
+                <code className="font-mono text-[#1FAE85]">nvm install 20 &amp;&amp; nvm use 20</code>{" "}
+                if{" "}
+                <code className="font-mono text-[#1FAE85]">node --version</code> shows v16 or v17.
+              </span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-[#a1a1aa] mt-[2px] shrink-0">·</span>
+              <span>
+                <strong className="text-[#d4d4d8]">Claude Code OAuth:</strong> the OAuth callback
+                points at <code className="font-mono text-[#1FAE85]">localhost</code>, which
+                your local browser can&apos;t reach when Claude Code runs in a remote VM. Use
+                the API key path instead:{" "}
+                <code className="font-mono text-[#1FAE85]">export ANTHROPIC_API_KEY=sk-ant-...</code>
+              </span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-[#a1a1aa] mt-[2px] shrink-0">·</span>
+              <span>
+                <strong className="text-[#d4d4d8]">Web-terminal paste:</strong> some
+                browser-based terminals block <code className="font-mono text-[#1FAE85]">Ctrl+V</code>.
+                Use{" "}
+                <code className="font-mono text-[#1FAE85]">Ctrl+Shift+V</code> or right-click → Paste.
+              </span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-[#a1a1aa] mt-[2px] shrink-0">·</span>
+              <span>
+                <strong className="text-[#d4d4d8]">npm cache 404 after publish:</strong> if
+                you ever query a package before it&apos;s published, npm caches the 404.
+                After publishing, run{" "}
+                <code className="font-mono text-[#1FAE85]">npm cache clean --force</code>{" "}
+                if{" "}
+                <code className="font-mono text-[#1FAE85]">npm view</code> still 404s.
+              </span>
             </li>
           </ul>
         </section>
