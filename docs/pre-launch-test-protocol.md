@@ -211,7 +211,7 @@ Test the exact install flow from the quickstart page on the clean machine.
 ### 3.1 MCP installation
 
 ```bash
-claude mcp add seldonframe
+claude mcp add seldonframe -- npx -y @seldonframe/mcp
 ```
 
 - [ ] Command succeeds with exit code 0
@@ -556,7 +556,7 @@ Deliberately test things that might break. Good error messages are the differenc
 
 ### 7.1 Missing prerequisites
 
-- [ ] Run `claude mcp add seldonframe` **before installing Claude Code** (use a different fresh shell)
+- [ ] Run `claude mcp add seldonframe -- npx -y @seldonframe/mcp` **before installing Claude Code** (use a different fresh shell)
   - Error message observed:
   - Helpful? Y / N — if N, P1
 - [ ] Use Node.js 18 (downgrade temporarily) and try `seldon init`
@@ -610,7 +610,7 @@ Stopwatch the actual experience. Compare against marketing claims at the end.
 
 | Operation | Actual time | Notes |
 |---|---|---|
-| `claude mcp add seldonframe` → command finishes | | |
+| `claude mcp add seldonframe -- npx -y @seldonframe/mcp` → command finishes | | |
 | First workspace running (init succeeds + dashboard loads) | | |
 | First block scaffolded + UI rendering | | |
 | First agent flow composed + visible in `/agents` | | |

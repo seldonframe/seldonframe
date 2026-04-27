@@ -29,15 +29,17 @@ SeldonFrame is a Business OS framework. You describe what you want in natural la
 - 📊 **Closed-loop attribution** — every LLM call tracked and attributed to the workflow run that triggered it.
 - 💬 **Natural language scaffolding** — describe a block, an archetype, or a workspace; SeldonFrame generates code, admin UI, and tests.
 - 🛂 **Approval gates** — pause workflows for human review before sending or charging.
-- 🔌 **MCP-native** — install once with `claude mcp add seldonframe`, then drive everything from your IDE.
+- 🔌 **MCP-native** — install once with `claude mcp add seldonframe -- npx -y @seldonframe/mcp`, then drive everything from your IDE.
 - 🔑 **BYO LLM keys** — bring your own Anthropic / OpenAI key. We don't margin on tokens.
 - 🆓 **Open source, no lock-in** — MIT licensed. Self-host or run on our cloud.
 - 🧪 **Test mode** — exercise archetypes against simulated triggers before going live.
 
 ## Quick start
 
+Requires Node.js 18+ and Claude Code installed.
+
 ```bash
-claude mcp add seldonframe
+claude mcp add seldonframe -- npx -y @seldonframe/mcp
 ```
 
 ```bash

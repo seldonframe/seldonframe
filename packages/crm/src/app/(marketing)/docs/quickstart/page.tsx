@@ -135,7 +135,7 @@ export default function QuickstartPage() {
             number={1}
             title="Add SeldonFrame to your IDE"
             body="The MCP server exposes SeldonFrame's primitive surface inside Claude Code. After this command, you can describe what you want and Claude will use SeldonFrame to build it."
-            code="claude mcp add seldonframe"
+            code="claude mcp add seldonframe -- npx -y @seldonframe/mcp"
           />
           <Section
             number={2}
