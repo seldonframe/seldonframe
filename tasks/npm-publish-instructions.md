@@ -1,9 +1,12 @@
-# npm publish — manual instructions for `@seldonframe/mcp` v1.0.0
+# npm publish — manual instructions for `@seldonframe/mcp`
 
+**Current target version:** `1.0.1` (Node-compat fix — see `claude/mcp-fix-node-compat`).
 **For:** Max
-**When to run:** after `claude/publish-mcp-package` is merged to `main`
-**Estimated time:** 10 minutes (5 min publish, 5 min verify)
+**When to run:** after the relevant publish-prep branch is merged to `main`.
+**Estimated time:** 10 minutes (5 min publish, 5 min verify).
 **Per:** L-29 — distribution path must be tested end-to-end on a clean environment before any marketing claims reference it.
+
+> **History:** `1.0.0` was published 2026-04-27 from `claude/publish-mcp-package` and surfaced a Node-16 fetch crash within hours via cleanroom test. `1.0.1` adds a runtime Node version gate so users on Node < 18 get a clear actionable error instead of `fetch is not defined`.
 
 ---
 
@@ -98,15 +101,42 @@ npm publish --access public
 
 If 2FA is on, you'll be prompted for an OTP. Copy from your authenticator.
 
-Successful output ends with:
+Successful output ends with (version will be whatever is in `package.json`):
 ```
-+ @seldonframe/mcp@1.0.0
++ @seldonframe/mcp@1.0.1
 ```
 
 If you see `403 Forbidden`, common causes:
 - Not logged in (`npm login` again)
 - Not a member of `@seldonframe` org with publish rights
 - Wrong scope or `publishConfig.access` not set to `public`
+
+### Step 4.5 — Confirm the package is reachable (NOT just published)
+
+```bash
+npm view @seldonframe/mcp
+```
+
+⚠ **npm caches negative (404) responses.** If you queried the package BEFORE publishing (e.g. ran `npm view` to confirm it was unpublished), npm may serve that cached 404 for several minutes after a successful publish. This is a known footgun, **not a publish failure.**
+
+**Fix:**
+
+```bash
+npm cache clean --force
+npm view @seldonframe/mcp
+```
+
+**Definitive registry check (bypasses local npm cache entirely):**
+
+```bash
+curl -s https://registry.npmjs.org/@seldonframe/mcp | head -c 200
+```
+
+If `curl` shows real metadata but `npm view` still 404s → it's a local cache issue. Clean and retry as above.
+
+If `curl` ALSO returns 404 after several minutes → the publish didn't actually take. Re-run `npm publish --access public` and watch for any error.
+
+---
 
 ---
 
@@ -118,12 +148,17 @@ This is the L-29 cleanroom verification step. It must be performed in an environ
 
 1. Open <https://github.com/codespaces/new?repo=seldonframe/seldonframe&ref=main>
 2. Create a new Codespace (DO NOT reuse an existing one — caches contaminate the test)
-3. In the Codespace terminal:
+3. In the Codespace terminal — **first ensure Node 18+** (Codespaces default image may ship Node 16):
 
 ```bash
+node --version
+# If < 18:
+nvm install 20 && nvm use 20
+node --version    # should now show v20.x
+
 # Verify package is live on npm
 npm view @seldonframe/mcp
-# Should show: name, version 1.0.0, dist-tags, etc.
+# Should show: name, version 1.0.1, dist-tags, etc.
 
 # Install Claude Code (if not already there)
 npm install -g @anthropic-ai/claude-code
@@ -183,9 +218,10 @@ This unblocks Branch 2 (`claude/fix-marketing-install`) — the marketing-copy u
 | Symptom | Likely cause | Action |
 |---|---|---|
 | `403 Forbidden` on publish | Not logged in, or not a member of the org | `npm login` and verify `npm org ls seldonframe` |
-| `EPUBLISHCONFLICT` / "version already exists" | Someone (or a previous attempt) already published 1.0.0 | Bump to `1.0.1` in `package.json` and republish |
-| `npm view @seldonframe/mcp` returns 404 after publish | Registry propagation delay (rare) | Wait 60 seconds, retry. If still 404 after 5 min, escalate. |
-| `claude mcp add` succeeds but `/mcp` shows `Failed to reconnect` | npx download or server boot failed | In Codespace: `npx -y @seldonframe/mcp < /dev/null` to see the actual error |
+| `EPUBLISHCONFLICT` / "version already exists" | A prior `npm publish` already shipped this version | Bump to the next patch (e.g. `1.0.2`) in `package.json` and republish |
+| `npm view @seldonframe/mcp` returns 404 after publish | Local npm cache holds a stale 404 from before publish | `npm cache clean --force` then retry. Or use `curl https://registry.npmjs.org/@seldonframe/mcp` to bypass the cache. |
+| `claude mcp add` succeeds but `/mcp` shows `Failed to reconnect` on Node < 18 | Server intentionally exits with the version-gate error | Upgrade Node: `nvm install 20 && nvm use 20`. Then re-add the MCP and restart Claude Code. |
+| `claude mcp add` succeeds but `/mcp` shows `Failed to reconnect` on Node 18+ | npx download or server boot failed for a different reason | In Codespace: `npx -y @seldonframe/mcp < /dev/null` to see the actual error |
 | Server boots but tool calls return network errors | `app.seldonframe.com/api/v1` unreachable from the Codespace | Verify `https://app.seldonframe.com` is up; check firewall / VPN |
 
 ## Rollback
