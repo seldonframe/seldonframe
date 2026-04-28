@@ -1,0 +1,487 @@
+{
+  "$schema": "./schema.json",
+  "version": 1,
+  "workspace": {
+    "name": "[Your HVAC Business]",
+    "industry": "hvac",
+    "tagline": "Cool homes, warm welcomes.",
+    "theme": {
+      "mode": "light",
+      "accent": "#1E40AF",
+      "displayFont": "cal-sans",
+      "bodyFont": "inter",
+      "radiusScale": "default",
+      "logoUrl": null,
+      "heroImageUrl": null
+    },
+    "contact": {
+      "phone": "+15555550100",
+      "emergencyPhone": "+15555550100",
+      "email": null,
+      "address": {
+        "street": "[Street address]",
+        "city": "[City]",
+        "region": "[State]",
+        "postalCode": "[Postal code]",
+        "country": "US"
+      },
+      "hours": {
+        "mon": [7, 19],
+        "tue": [7, 19],
+        "wed": [7, 19],
+        "thu": [7, 19],
+        "fri": [7, 19],
+        "sat": [7, 19],
+        "sun": null
+      },
+      "timezone": "America/Chicago",
+      "serviceArea": "[County] and surrounding counties — within roughly 40 miles"
+    }
+  },
+  "landing": {
+    "renderer": "general-service-v1",
+    "sections": [
+      {
+        "type": "emergency-strip",
+        "label": "24/7 Emergency Service"
+      },
+      {
+        "type": "hero",
+        "eyebrow": "[City] · HVAC repair, install, maintenance",
+        "headline": "A cool home in 24 hours",
+        "subhead": "Family-owned HVAC for [City] homeowners. Same-day repairs, honest quotes, no pressure to upsell.",
+        "ctaPrimary":   { "label": "Book a free estimate", "href": "/book", "kind": "primary" },
+        "ctaSecondary": { "label": "Call us now",          "href": "tel:+15555550100", "kind": "tel" },
+        "imageUrl": null,
+        "variant": "split-image-right"
+      },
+      {
+        "type": "trust-strip",
+        "items": [
+          { "icon": "Star",        "label": "4.9 stars · 1,200+ Google reviews" },
+          { "icon": "ShieldCheck", "label": "Licensed and insured in [State]" },
+          { "icon": "Award",       "label": "20+ years in [City]" },
+          { "icon": "BadgeCheck",  "label": "BBB A+ rated" }
+        ]
+      },
+      {
+        "type": "services-grid",
+        "headline": "What we fix and install",
+        "subhead": "Residential and light-commercial. Honest scope, no upsell.",
+        "layout": "grid-3",
+        "items": [
+          {
+            "icon": "Wind",
+            "title": "AC repair",
+            "description": "Same-day diagnosis and repair for any AC system. We carry common parts on the truck so most fixes are one-visit.",
+            "category": "Cooling"
+          },
+          {
+            "icon": "Flame",
+            "title": "Heating & furnace",
+            "description": "Furnace repair, heat pump tune-ups, and full replacements. Pre-season check to catch issues before winter.",
+            "category": "Heating"
+          },
+          {
+            "icon": "Settings2",
+            "title": "Full system install",
+            "description": "New HVAC system sized correctly for your home. We install Trane, Lennox, Goodman, and Mitsubishi mini-splits.",
+            "category": "Install"
+          },
+          {
+            "icon": "CalendarCheck",
+            "title": "Seasonal maintenance",
+            "description": "Twice-a-year tune-ups that keep your system running efficiently and catch small issues before they become emergencies.",
+            "category": "Maintenance"
+          },
+          {
+            "icon": "Wind",
+            "title": "Indoor air quality",
+            "description": "Whole-home filtration, humidity control, UV purifiers, and duct cleaning. Especially important if anyone in the house has allergies.",
+            "category": "IAQ"
+          },
+          {
+            "icon": "PhoneCall",
+            "title": "24/7 emergency dispatch",
+            "description": "Furnace dies on the coldest night of the year? AC dies in August? Call any time — we have an on-call tech every night.",
+            "category": "Emergency"
+          }
+        ]
+      },
+      {
+        "type": "about",
+        "headline": "Why neighbors call us first",
+        "body": "We're a family-owned HVAC company that's been serving [City] for over 20 years. We hire local techs, train them properly, and pay them well — which is why our team stays. When you call us, you get someone who's been doing this for years, not someone reading a script. We won't sell you a system you don't need, and we'll always quote a repair before recommending a replacement.",
+        "photoUrl": null,
+        "ownerName": "[Owner Name]",
+        "ownerTitle": "Owner & Lead Technician"
+      },
+      {
+        "type": "mid-cta",
+        "headline": "Get a free estimate today",
+        "subhead": "We'll come out, take a look, and give you an honest quote. No pressure, no obligation.",
+        "ctaPrimary":   { "label": "Book online",  "href": "/book", "kind": "primary" },
+        "ctaSecondary": { "label": "Call us now",  "href": "tel:+15555550100", "kind": "tel" },
+        "embedQuoteForm": true
+      },
+      {
+        "type": "testimonials",
+        "headline": "What [City] homeowners say",
+        "featured": {
+          "quote": "Our AC died on the hottest day of the summer with two kids and a dog at home. They had a tech at the door in under three hours and had the system running again before dinner. Fair price, no upsell. We've been customers ever since.",
+          "authorName": "[Customer Name]",
+          "authorRole": "Homeowner in [Neighborhood]",
+          "rating": 5,
+          "source": "google"
+        },
+        "items": [
+          {
+            "quote": "Replaced our 22-year-old furnace last fall. They quoted three options at three price points and explained the tradeoffs honestly. Install took one day. Bills are noticeably lower.",
+            "authorName": "[Customer Name]",
+            "authorRole": "Homeowner",
+            "rating": 5,
+            "source": "google"
+          },
+          {
+            "quote": "I've used them for both repairs and yearly tune-ups for five years. Every tech who's come out has been on time, polite, and quick. They tell me when something doesn't need fixing yet — which is rare.",
+            "authorName": "[Customer Name]",
+            "authorRole": "Homeowner",
+            "rating": 5,
+            "source": "google"
+          },
+          {
+            "quote": "Called at 11pm during a January cold snap. Tech was at the house by 12:30am, had heat back on by 1:15am. Charged the standard service rate, not a 'middle of the night' premium.",
+            "authorName": "[Customer Name]",
+            "authorRole": "Homeowner",
+            "rating": 5,
+            "source": "google"
+          }
+        ]
+      },
+      {
+        "type": "service-area",
+        "headline": "Service area",
+        "description": "We serve [County] and surrounding counties — typically within 40 miles of [City]. Outside that radius? Call us anyway; we'll often go the extra mile for an existing customer."
+      },
+      {
+        "type": "faq",
+        "headline": "Frequently asked questions",
+        "items": [
+          {
+            "question": "How soon can a technician come out?",
+            "answer": "For non-emergencies, usually within 24-48 hours. For emergencies (no heat in winter, no AC during a heat advisory), we aim for same-day and we'll let you know an honest ETA when you call."
+          },
+          {
+            "question": "Do you charge for estimates?",
+            "answer": "Quotes for new system installs are always free. Diagnostic visits for repair start at a flat rate — if you book the repair, we waive the diagnostic fee."
+          },
+          {
+            "question": "What brands do you install?",
+            "answer": "We're licensed dealers for Trane, Lennox, Goodman, and Mitsubishi (mini-splits). We'll match the brand to your home and budget — we don't get bigger commissions for one over the other."
+          },
+          {
+            "question": "How often should I get my system serviced?",
+            "answer": "Twice a year — once before summer, once before winter. Catching small issues during a 30-minute tune-up is dramatically cheaper than emergency repairs in July."
+          },
+          {
+            "question": "Is financing available for a new system?",
+            "answer": "Yes. We offer 0% financing for 12-18 months on qualifying installs, plus longer-term plans through a third-party lender. We'll walk you through the options before you decide."
+          },
+          {
+            "question": "Are you licensed and insured?",
+            "answer": "Yes — fully licensed in [State] (license #[Number]) and we carry $2M general liability + workers' comp on every tech."
+          }
+        ]
+      },
+      {
+        "type": "footer",
+        "showHours": true,
+        "showAddress": true,
+        "showServiceArea": true,
+        "social": [],
+        "legal": [
+          { "label": "Privacy", "href": "/privacy" },
+          { "label": "Terms",   "href": "/terms" }
+        ]
+      }
+    ]
+  },
+  "booking": {
+    "renderer": "calcom-month-v1",
+    "eventType": {
+      "title": "Free in-home estimate",
+      "description": "45-minute on-site visit. We'll diagnose the issue (or assess your home for a new system) and give you a written quote. No obligation.",
+      "durationMinutes": 45,
+      "location": { "kind": "on-site-customer" },
+      "bufferMinutes": 30
+    },
+    "availability": {
+      "weekly": {
+        "mon": [7, 19],
+        "tue": [7, 19],
+        "wed": [7, 19],
+        "thu": [7, 19],
+        "fri": [7, 19],
+        "sat": [8, 16],
+        "sun": null
+      },
+      "blackoutDates": [],
+      "leadTimeHours": 4,
+      "advanceWindowDays": 30
+    },
+    "formFields": [
+      { "id": "name",    "label": "Full name",       "type": "text",  "required": true,  "placeholder": "Jane Smith" },
+      { "id": "email",   "label": "Email",           "type": "email", "required": true,  "placeholder": "you@example.com" },
+      { "id": "phone",   "label": "Best phone",      "type": "phone", "required": true,  "placeholder": "(555) 555-0100" },
+      { "id": "address", "label": "Service address", "type": "text",  "required": true,  "placeholder": "123 Main St, [City]" },
+      {
+        "id": "service",
+        "label": "What can we help with?",
+        "type": "select",
+        "required": true,
+        "options": ["AC not cooling", "Heating not working", "New system install", "Seasonal tune-up", "Indoor air quality", "Other"]
+      },
+      {
+        "id": "notes",
+        "label": "Anything else we should know?",
+        "type": "textarea",
+        "required": false,
+        "placeholder": "System age, recent issues, accessibility, pets at home, etc."
+      }
+    ],
+    "confirmation": {
+      "headline": "Your estimate is booked",
+      "message": "We'll send a confirmation email and call about an hour before the visit. If anything changes, just call us at (555) 555-0100.",
+      "successRedirectUrl": null
+    }
+  },
+  "intake": {
+    "renderer": "formbricks-stack-v1",
+    "title": "Tell us about the job",
+    "description": "Quick form. Takes about a minute. We'll call back within an hour during business hours.",
+    "questions": [
+      { "id": "fullName", "type": "text",  "label": "What's your name?",         "required": true },
+      { "id": "phone",    "type": "phone", "label": "Best phone to reach you?",  "required": true,
+        "helper": "We'll call back within an hour during business hours." },
+      { "id": "email",    "type": "email", "label": "Email",                     "required": false },
+      { "id": "address",  "type": "text",  "label": "Service address",           "required": true,
+        "helper": "Just the street and city is fine." },
+      {
+        "id": "issueType",
+        "type": "multi-select",
+        "label": "What's going on?",
+        "helper": "Pick all that apply.",
+        "required": true,
+        "options": [
+          "AC not cooling",
+          "Heating not working",
+          "Strange noise or smell",
+          "Thermostat issue",
+          "New system installation",
+          "Seasonal tune-up",
+          "Indoor air quality concern",
+          "Other"
+        ]
+      },
+      {
+        "id": "urgency",
+        "type": "select",
+        "label": "How urgent is this?",
+        "required": true,
+        "options": [
+          "Emergency — today if possible",
+          "Urgent — this week",
+          "Routine — within the next few weeks"
+        ]
+      },
+      {
+        "id": "details",
+        "type": "textarea",
+        "label": "Anything else we should know before we arrive?",
+        "helper": "System age, recent repairs, pets at home, accessibility — anything that helps us prepare.",
+        "required": false,
+        "validation": { "maxLength": 1000 }
+      }
+    ],
+    "completion": {
+      "headline": "Thanks — we'll be in touch shortly",
+      "message": "If your issue is an emergency, call us right now at (555) 555-0100. Otherwise we'll reach out within one business hour."
+    }
+  },
+  "admin": {
+    "renderer": "twenty-shell-v1",
+    "sidebarOrder": ["contacts", "deals", "service_calls", "equipment", "technicians", "activities"],
+    "objects": [
+      {
+        "id": "contacts",
+        "label": "Contacts",
+        "icon": "User",
+        "fields": [
+          { "id": "name",    "label": "Name",    "type": "text",  "required": true,  "showInSidebar": true },
+          { "id": "email",   "label": "Email",   "type": "email" },
+          { "id": "phone",   "label": "Phone",   "type": "phone", "showInSidebar": true },
+          { "id": "address", "label": "Service address", "type": "text",     "showInSidebar": true },
+          { "id": "source",  "label": "Source",  "type": "select", "options": ["Website", "Referral", "Google", "Repeat customer", "Other"] },
+          { "id": "notes",   "label": "Notes",   "type": "longtext" }
+        ],
+        "views": [
+          {
+            "id": "all-contacts",
+            "label": "All contacts",
+            "kind": "table",
+            "isDefault": true,
+            "table": {
+              "columns": ["name", "phone", "address", "source"],
+              "sortBy": { "field": "name", "direction": "asc" }
+            }
+          }
+        ]
+      },
+      {
+        "id": "deals",
+        "label": "Deals",
+        "icon": "Briefcase",
+        "fields": [
+          { "id": "name",      "label": "Deal name", "type": "text",     "required": true,  "showInSidebar": true },
+          { "id": "contact",   "label": "Contact",   "type": "relation", "relationTo": "contacts", "showInSidebar": true },
+          { "id": "amount",    "label": "Amount",    "type": "currency" },
+          { "id": "stage",     "label": "Stage",     "type": "select",   "required": true,
+            "options": ["Lead", "Estimate scheduled", "Quoted", "Approved", "Installed", "Lost"], "showInSidebar": true },
+          { "id": "service",   "label": "Service type", "type": "select",
+            "options": ["AC repair", "Heating repair", "New install", "Maintenance", "IAQ", "Emergency"] },
+          { "id": "close_date", "label": "Expected close", "type": "date" }
+        ],
+        "views": [
+          {
+            "id": "pipeline",
+            "label": "Pipeline",
+            "kind": "kanban",
+            "isDefault": true,
+            "kanban": {
+              "stageField": "stage",
+              "stages": ["Lead", "Estimate scheduled", "Quoted", "Approved", "Installed", "Lost"],
+              "cardFields": ["contact", "amount", "service"],
+              "aggregate": { "field": "amount", "kind": "sum" }
+            }
+          }
+        ]
+      },
+      {
+        "id": "service_calls",
+        "label": "Service calls",
+        "icon": "Wrench",
+        "fields": [
+          { "id": "scheduled_for", "label": "When",     "type": "datetime", "required": true,  "showInSidebar": true },
+          { "id": "contact",      "label": "Customer", "type": "relation", "relationTo": "contacts", "required": true, "showInSidebar": true },
+          { "id": "technician",   "label": "Tech",     "type": "relation", "relationTo": "technicians", "showInSidebar": true },
+          { "id": "service",      "label": "Service",  "type": "select",
+            "options": ["AC repair", "Heating repair", "New install", "Maintenance", "IAQ", "Emergency"], "required": true },
+          { "id": "status",       "label": "Status",   "type": "select",
+            "options": ["Scheduled", "On the way", "On site", "Complete", "Rescheduled", "Cancelled"], "required": true, "showInSidebar": true },
+          { "id": "urgency",      "label": "Urgency",  "type": "select", "options": ["Routine", "Urgent", "Emergency"] },
+          { "id": "notes",        "label": "Notes",    "type": "longtext" }
+        ],
+        "views": [
+          {
+            "id": "today",
+            "label": "Today",
+            "kind": "table",
+            "isDefault": true,
+            "table": {
+              "columns": ["scheduled_for", "contact", "technician", "service", "status", "urgency"],
+              "sortBy": { "field": "scheduled_for", "direction": "asc" }
+            }
+          },
+          {
+            "id": "by-status",
+            "label": "By status",
+            "kind": "kanban",
+            "kanban": {
+              "stageField": "status",
+              "stages": ["Scheduled", "On the way", "On site", "Complete"],
+              "cardFields": ["contact", "service", "technician"]
+            }
+          }
+        ]
+      },
+      {
+        "id": "equipment",
+        "label": "Equipment",
+        "icon": "Settings2",
+        "fields": [
+          { "id": "contact",       "label": "Customer", "type": "relation", "relationTo": "contacts", "required": true, "showInSidebar": true },
+          { "id": "kind",          "label": "Type",     "type": "select",
+            "options": ["Central AC", "Furnace", "Heat pump", "Mini-split", "Boiler", "Air handler", "Thermostat", "Other"], "required": true, "showInSidebar": true },
+          { "id": "brand",         "label": "Brand",    "type": "text",     "showInSidebar": true },
+          { "id": "model",         "label": "Model",    "type": "text" },
+          { "id": "serial",        "label": "Serial",   "type": "text" },
+          { "id": "installed_at",   "label": "Installed", "type": "date" },
+          { "id": "warranty_until", "label": "Warranty until", "type": "date" },
+          { "id": "last_serviced",  "label": "Last serviced", "type": "date" },
+          { "id": "notes",         "label": "Notes",    "type": "longtext" }
+        ],
+        "views": [
+          {
+            "id": "all-equipment",
+            "label": "All equipment",
+            "kind": "table",
+            "isDefault": true,
+            "table": {
+              "columns": ["contact", "kind", "brand", "installed_at", "warranty_until", "last_serviced"],
+              "sortBy": { "field": "last_serviced", "direction": "desc" }
+            }
+          }
+        ]
+      },
+      {
+        "id": "technicians",
+        "label": "Technicians",
+        "icon": "HardHat",
+        "fields": [
+          { "id": "name",       "label": "Name",  "type": "text",  "required": true,  "showInSidebar": true },
+          { "id": "phone",      "label": "Phone", "type": "phone", "showInSidebar": true },
+          { "id": "role",       "label": "Role",  "type": "select",
+            "options": ["Service tech", "Install tech", "Lead tech", "Dispatcher", "Apprentice"], "showInSidebar": true },
+          { "id": "active",     "label": "Active", "type": "boolean" }
+        ],
+        "views": [
+          {
+            "id": "roster",
+            "label": "Roster",
+            "kind": "table",
+            "isDefault": true,
+            "table": {
+              "columns": ["name", "phone", "role", "active"],
+              "sortBy": { "field": "name", "direction": "asc" }
+            }
+          }
+        ]
+      },
+      {
+        "id": "activities",
+        "label": "Activities",
+        "icon": "Activity",
+        "fields": [
+          { "id": "subject",   "label": "Subject", "type": "text",     "required": true,  "showInSidebar": true },
+          { "id": "kind",      "label": "Kind",    "type": "select",
+            "options": ["Call", "Email", "SMS", "Visit", "Note"], "showInSidebar": true },
+          { "id": "contact",   "label": "Contact", "type": "relation", "relationTo": "contacts" },
+          { "id": "occurred_at","label": "When",    "type": "datetime", "showInSidebar": true },
+          { "id": "body",      "label": "Notes",   "type": "longtext" }
+        ],
+        "views": [
+          {
+            "id": "timeline",
+            "label": "Timeline",
+            "kind": "table",
+            "isDefault": true,
+            "table": {
+              "columns": ["subject", "kind", "contact", "occurred_at"],
+              "sortBy": { "field": "occurred_at", "direction": "desc" }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
