@@ -42,13 +42,26 @@ export function adminTokenUserId(orgId: string): string {
 export interface AdminTokenContext {
   orgId: string;
   tokenId: string;
-  /** Synthetic user matching the NextAuth Session["user"] shape. */
+  /**
+   * Synthetic user matching the NextAuth Session["user"] shape declared
+   * in src/types/next-auth.d.ts. All optional fields are explicitly set
+   * to undefined so dashboard code that reads e.g. `user.trialEndsAt`
+   * gets `undefined` (the same outcome as for a brand-new real user)
+   * rather than a TypeScript narrowing error.
+   */
   user: {
     id: string;
     name: string;
     email: null;
     role: "admin";
     orgId: string;
+    image: null;
+    soulCompleted: undefined;
+    welcomeShown: undefined;
+    planId: null;
+    subscriptionStatus: undefined;
+    billingPeriod: undefined;
+    trialEndsAt: null;
   };
 }
 
@@ -80,6 +93,13 @@ export async function resolveAdminTokenContext(): Promise<AdminTokenContext | nu
       email: null,
       role: "admin",
       orgId: validated.orgId,
+      image: null,
+      soulCompleted: undefined,
+      welcomeShown: undefined,
+      planId: null,
+      subscriptionStatus: undefined,
+      billingPeriod: undefined,
+      trialEndsAt: null,
     },
   };
 }
