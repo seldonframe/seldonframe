@@ -15,7 +15,8 @@
     "db:seed": "tsx src/db/seed.ts",
     "db:seed-demo": "tsx src/db/seed-demo.ts",
     "db:seed-hvac": "tsx src/db/seed-hvac-arizona.ts",
-    "test:cross-block": "tsx src/testing/cross-block-smoke.ts"
+    "test:cross-block": "tsx src/testing/cross-block-smoke.ts",
+    "template:validate": "tsx scripts/template-validate.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",
@@ -66,6 +67,8 @@
     "@types/papaparse": "^5.5.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
     "babel-plugin-react-compiler": "1.0.0",
     "dotenv": "^17.3.1",
     "drizzle-kit": "^0.31.10",

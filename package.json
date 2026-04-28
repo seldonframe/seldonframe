@@ -26,6 +26,7 @@
     "db:studio": "pnpm --filter @seldonframe/crm db:studio",
     "db:seed": "pnpm --filter @seldonframe/crm db:seed",
     "db:seed-demo": "pnpm --filter @seldonframe/crm db:seed-demo",
+    "template:validate": "pnpm --filter @seldonframe/crm template:validate",
     "tsx": "node scripts/run-tsx.js"
   },
   "devDependencies": {
