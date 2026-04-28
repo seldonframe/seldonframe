@@ -669,7 +669,11 @@ const BASE_CSS = `@import url('https://fonts.googleapis.com/css2?family=Inter:wg
   font-weight: 600;
 }
 .sf-landing p { margin: 0; }
-.sf-landing a { color: inherit; }
+/* :where() zeros out the .sf-landing portion of specificity so per-class
+   button/link rules below (color, etc.) reliably win the cascade. Without
+   this, .sf-landing a (0,0,1,1) outranked .sf-btn--primary (0,0,1,0) and
+   the white CTA text inherited the body color instead. */
+.sf-landing :where(a) { color: inherit; text-decoration: none; }
 .sf-landing .sf-italic {
   font-family: var(--sf-font-serif);
   font-style: italic;
