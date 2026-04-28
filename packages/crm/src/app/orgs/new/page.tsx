@@ -33,6 +33,9 @@ function isUpgradeRequiredMessage(message?: string) {
     lowered.includes("pro plan required") ||
     lowered.includes("plan required") ||
     lowered.includes("used your free workspace") ||
+    // claude/pre-launch-polish: durable substring + legacy $9 fallback,
+    // mirroring the matcher in api/v1/workspace/create/route.ts.
+    lowered.includes("additional workspace requires a paid tier") ||
     lowered.includes("additional workspace is $9/month") ||
     lowered.includes("organization limit reached") ||
     lowered.includes("workspace limit")

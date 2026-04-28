@@ -231,7 +231,7 @@ const sections = [
     eyebrow: "Agent-native customer ops",
     title: "OpenClaw Self-Service",
     description:
-      "The $29/mo Self-Service + Layer 2 tier unlocks end-client onboarding via OpenClaw using signed portal magic links and fully scoped `end_client_mode: true` execution.",
+      "The Operator and Agency tiers unlock end-client onboarding via OpenClaw using signed portal magic links and fully scoped `end_client_mode: true` execution.",
     bullets: [
       "Enable the self-service tier for a workspace, then call `POST /api/v1/portal/invite` with a managed workspace and contact.",
       "Share the returned `invite_url` with the client. The route issues a signed magic link and a scoped `portal_token`.",

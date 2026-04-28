@@ -71,8 +71,15 @@ function hasActiveWorkspaceSubscription(status: string | null | undefined) {
   return status === "active" || status === "trialing";
 }
 
+// NOTE: this string is also pattern-matched in two callers:
+//   - packages/crm/src/app/api/v1/workspace/create/route.ts (quota error detection)
+//   - packages/crm/src/app/orgs/new/page.tsx (UI quota detection)
+// Both match on the durable substring "additional workspace requires a paid tier"
+// (introduced in claude/pre-launch-polish — was previously coupled to a $9
+// dollar amount that no longer matches the live pricing). Keep in sync if you
+// change this message.
 const WORKSPACE_UPGRADE_REQUIRED_MESSAGE =
-  "You've used your free workspace. Each additional workspace is $9/month and unlocks more Brain intelligence for your OS.";
+  "You've used your free workspace. Each additional workspace requires a paid tier (Starter $49/mo, Operator $99/mo, or Agency $149/mo) and unlocks more Brain intelligence for your OS.";
 
 async function getOwnedWorkspaceCount(userId: string) {
   const [result] = await db

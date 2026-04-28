@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "SeldonFrame — AI-native Business OS",
     description:
-      "Build a complete AI-native Business OS with natural language. Open source. MCP-native. $9/mo per workspace.",
+      "Build a complete AI-native Business OS with natural language. Open source. MCP-native. First workspace free; paid tiers from $49/mo.",
     type: "website",
     url: "https://app.seldonframe.com",
     images: [{ url: "/brand/og-image.png", width: 1200, height: 630 }],

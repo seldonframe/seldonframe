@@ -92,7 +92,7 @@ SeldonFrame integrates with the providers you already use:
 ## Pricing
 
 - **First workspace** — free forever, self-hosted or on our cloud.
-- **Additional workspaces** — $9/month each, hosted.
+- **Paid tiers** — Starter $49/mo, Operator $99/mo, Agency $149/mo. See [seldonframe.com/#pricing](https://seldonframe.com/#pricing).
 
 Self-hosters pay nothing to SeldonFrame.
 
