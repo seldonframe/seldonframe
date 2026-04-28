@@ -1,5 +1,6 @@
 import { requireAuth } from "@/lib/auth/helpers";
 import { getOrgId } from "@/lib/auth/helpers";
+import { isAdminTokenUserId } from "@/lib/auth/admin-token";
 import { SoulProvider } from "@/components/soul/soul-provider";
 import { getSoul } from "@/lib/soul/server";
 import { Sidebar } from "@/components/layout/sidebar";
@@ -42,12 +43,19 @@ export default async function DashboardLayout({
     orgId ? getAllBlocksForOrg(orgId) : [],
     getHiddenBlocks(),
   ]);
-  const [dbUserForPlan] = user?.id
+  // C6: admin-token sessions bind to a workspace, not a real user. The
+  // user.id is the nil-UUID sentinel which doesn't exist in the users
+  // table, so plan / billing / managed-org lookups all throw or return
+  // empty. Skip them and synthesize sensible defaults — the admin-token
+  // operator sees their workspace's data, not a personal billing view.
+  const isAdminTokenSession = isAdminTokenUserId(user?.id);
+  const [dbUserForPlan] = user?.id && !isAdminTokenSession
     ? await db.select({ planId: sql<string | null>`plan_id` }).from(users).where(eq(users.id, user.id)).limit(1)
     : [null];
   const plan = resolvePlanFromPlanId(dbUserForPlan?.planId ?? null);
   const canAccessSeldon = canSeldonIt(plan);
-  const workspaceOptions = user?.id ? await listManagedOrganizations(user.id) : [];
+  const workspaceOptions =
+    user?.id && !isAdminTokenSession ? await listManagedOrganizations(user.id) : [];
 
   const [activeOrg, orgMemberCount] = orgId
     ? await Promise.all([
