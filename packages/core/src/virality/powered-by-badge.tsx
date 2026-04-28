@@ -41,12 +41,14 @@ export function PoweredByBadge({
       target="_blank"
       rel="noopener noreferrer"
       aria-label={label}
-      className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-[10px] font-medium opacity-80 transition-opacity hover:opacity-100"
+      className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium opacity-80 transition-opacity hover:opacity-100"
     >
       <span className="text-[hsl(var(--color-text-secondary))]">Powered by</span>
-      {/* Plain <img> not next/image — package is framework-agnostic */}
+      {/* Plain <img> not next/image — package is framework-agnostic. */}
+      {/* Pre-launch polish: bumped from h-3.5 (14px) to h-5 (20px) — */}
+      {/* the original size was barely legible at footer scale. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={wordmark} alt="SeldonFrame" height={14} className="h-3.5 w-auto" />
+      <img src={wordmark} alt="SeldonFrame" height={20} className="h-5 w-auto" />
     </a>
   );
 }

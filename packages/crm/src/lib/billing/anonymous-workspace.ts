@@ -149,14 +149,51 @@ export function buildWorkspaceUrls(
   const sw = (next: string) =>
     `${adminOrigin}/switch-workspace?to=${encodeURIComponent(orgId)}&next=${encodeURIComponent(next)}`;
   return {
-    // Public-facing — shareable, no login required.
+    // ───── Flat shape (kept for backward compat with MCP v1.0.1 clients). ─────
     home: publicOrigin,
     book: `${publicOrigin}/book`,
     intake: `${publicOrigin}/intake`,
-    // Admin — require a session. These route through /switch-workspace,
-    // which sets the active-org cookie before the admin page loads.
     admin_dashboard: sw("/dashboard"),
     admin_contacts: sw("/contacts"),
     admin_deals: sw("/deals"),
+  };
+}
+
+/**
+ * Structured public/admin split — used in the create_workspace API response
+ * alongside the flat `urls` object. The split makes it easier for Claude Code
+ * to present the result clearly (public URLs are shareable; admin URLs need
+ * login + workspace ownership).
+ */
+export function buildStructuredWorkspaceUrls(
+  slug: string,
+  baseDomain: string,
+  orgId: string
+) {
+  const publicOrigin = `https://${slug}.${baseDomain}`;
+  const adminOrigin = `https://${APP_HOST}`;
+  const sw = (next: string) =>
+    `${adminOrigin}/switch-workspace?to=${encodeURIComponent(orgId)}&next=${encodeURIComponent(next)}`;
+
+  return {
+    public_urls: {
+      home: publicOrigin,
+      book: `${publicOrigin}/book`,
+      intake: `${publicOrigin}/intake`,
+    },
+    admin_urls: {
+      dashboard: sw("/dashboard"),
+      contacts: sw("/contacts"),
+      deals: sw("/deals"),
+      agents: sw("/agents"),
+      settings: sw("/settings"),
+    },
+    admin_setup_note:
+      "Admin URLs require login at app.seldonframe.com AND for the workspace to be linked to your user account. To enable browser admin access: " +
+      "(1) Sign up at https://app.seldonframe.com/signup. " +
+      "(2) In Settings → API, generate a SELDONFRAME_API_KEY. " +
+      "(3) `export SELDONFRAME_API_KEY=sk-…` in your shell and restart Claude Code. " +
+      "(4) Run `link_workspace_owner({})` to attach this workspace to your account. " +
+      "After that, clicking an admin URL routes through /switch-workspace, sets the active-org cookie, and lands you on the requested page.",
   };
 }

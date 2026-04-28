@@ -48,6 +48,37 @@ function resolveWorkspaceSlugFromHost(host: string) {
   return subdomain;
 }
 
+// Admin paths that should NEVER be served from a workspace subdomain.
+// When a user visits e.g. `<slug>.app.seldonframe.com/dashboard`, the proxy
+// 302-redirects to `app.seldonframe.com/switch-workspace?to=<orgId>&next=/dashboard`
+// — which authenticates them, sets the active-org cookie, and lands on the
+// admin page. Without this, the request would fall through to the catch-all
+// rewrite and return 404 (no `/s/<slug>/dashboard` landing page exists).
+const WORKSPACE_SUBDOMAIN_ADMIN_PREFIXES = [
+  "/dashboard",
+  "/contacts",
+  "/deals",
+  "/agents",
+  "/settings",
+  "/activities",
+];
+
+function resolveWorkspaceAdminRedirect(
+  pathname: string,
+  orgId: string,
+  search: string,
+): URL | null {
+  if (!orgId) return null;
+  const isAdminPath = WORKSPACE_SUBDOMAIN_ADMIN_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+  if (!isAdminPath) return null;
+  const target = new URL("https://app.seldonframe.com/switch-workspace");
+  target.searchParams.set("to", orgId);
+  target.searchParams.set("next", `${pathname}${search ?? ""}`);
+  return target;
+}
+
 function resolveWorkspaceRewritePath(
   pathname: string,
   slug: string,
@@ -288,6 +319,21 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
         : null);
 
       if (domainOrg?.slug) {
+        // Admin path on workspace subdomain → redirect to main app's
+        // switch-workspace flow. Requires orgId (only available when the
+        // domain lookup succeeded; the slug-only fallback below can't do
+        // this since it lacks the org id).
+        if (domainOrg.id) {
+          const adminRedirect = resolveWorkspaceAdminRedirect(
+            pathname,
+            domainOrg.id,
+            request.nextUrl.search,
+          );
+          if (adminRedirect) {
+            return NextResponse.redirect(adminRedirect);
+          }
+        }
+
         const rewritePath = resolveWorkspaceRewritePath(pathname, domainOrg.slug, domainOrg.defaults);
 
         if (rewritePath !== pathname) {

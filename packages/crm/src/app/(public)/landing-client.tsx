@@ -307,15 +307,15 @@ const SeeItBuilt = () => (
 const Pricing = () => {
   const tiers = [
     {
-      name: "Starter", badgeColor: "bg-[#222226] text-[#a1a1aa]", price: "$9",
-      features: ["Full primitive surface", "Up to 100 workflow runs/mo", "500 MB database", "Branded customer portal", "Community support", "BYO LLM keys"],
+      name: "Starter", badgeColor: "bg-[#222226] text-[#a1a1aa]", price: "$49",
+      features: ["Full primitive surface", "Up to 100 workflow runs/mo", "500 MB database", "Custom domain", "Branded customer portal", "Community support", "BYO LLM keys"],
     },
     {
-      name: "Operator", badgeColor: "bg-[#1FAE85]/12 text-[#1FAE85]", price: "$29", isFeatured: true,
-      features: ["Everything in Starter", "Up to 5,000 workflow runs/mo", "2 GB database", "Custom domain", "Brain Layer 1 (workspace insights)", "Approval gates", "Email support"],
+      name: "Operator", badgeColor: "bg-[#1FAE85]/12 text-[#1FAE85]", price: "$99", isFeatured: true,
+      features: ["Everything in Starter", "Up to 5,000 workflow runs/mo", "2 GB database", "Brain Layer 1 (workspace insights)", "Approval gates", "Email support"],
     },
     {
-      name: "Agency", badgeColor: "bg-[#e84393]/10 text-[#e84393]", price: "$99",
+      name: "Agency", badgeColor: "bg-[#e84393]/10 text-[#e84393]", price: "$149",
       features: ["Everything in Operator", "Unlimited workflow runs", "10 GB database", "Brain Layer 2 (cross-workspace niche insights)", "White-label option", "Priority support"],
     },
   ];
