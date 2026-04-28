@@ -29,14 +29,31 @@ export const ACTIVE_ORG_COOKIE = "sf_active_org_id";
 export const ADMIN_TOKEN_COOKIE_MAX_AGE = 7 * 24 * 60 * 60;
 
 /**
- * The fake user ID we use when an admin token is the auth source. The
- * `__sf_admin_token__:` prefix is unmistakable in DB queries — anyone
- * grepping for it sees this is not a real users.id and won't pollute
- * users / sessions tables. The orgId suffix lets logs distinguish
- * different workspace contexts at a glance.
+ * Sentinel user.id for admin-token sessions.
+ *
+ * The dashboard does `WHERE organizations.ownerId = user.id` (and other
+ * uuid comparisons) directly against the session user.id. We need a
+ * VALID-shaped uuid here or Postgres throws "invalid input syntax for
+ * type uuid" and the dashboard 500s.
+ *
+ * The nil UUID (`00000000-…`) per RFC 4122 § 4.1.7 is reserved and will
+ * never collide with a real users.id. Queries return empty rows — exactly
+ * what we want for "no real user backing this session".
+ *
+ * Detection of admin-token sessions happens via `isAdminTokenUserId()`
+ * which compares against this sentinel.
  */
-export function adminTokenUserId(orgId: string): string {
-  return `__sf_admin_token__:${orgId}`;
+export const ADMIN_TOKEN_SENTINEL_USER_ID =
+  "00000000-0000-0000-0000-000000000000";
+
+/**
+ * Returns the sentinel user id used by admin-token sessions. The orgId
+ * argument is kept in the signature so the call-site reads "admin token
+ * for this org" — but the return value is the nil UUID regardless,
+ * because the orgId travels separately via `session.user.orgId`.
+ */
+export function adminTokenUserId(_orgId: string): string {
+  return ADMIN_TOKEN_SENTINEL_USER_ID;
 }
 
 export interface AdminTokenContext {
@@ -110,5 +127,5 @@ export async function resolveAdminTokenContext(): Promise<AdminTokenContext | nu
  * a session and want to skip user-table lookups for admin-token sessions.
  */
 export function isAdminTokenUserId(userId: string | null | undefined): boolean {
-  return !!userId && userId.startsWith("__sf_admin_token__:");
+  return userId === ADMIN_TOKEN_SENTINEL_USER_ID;
 }

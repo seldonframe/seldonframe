@@ -30,18 +30,24 @@ test("admin-token cookie names are stable strings (server + middleware coordinat
   assert.equal(ACTIVE_ORG_COOKIE, "sf_active_org_id");
 });
 
-test("adminTokenUserId encodes the orgId into a recognizable synthetic id", () => {
-  const id = adminTokenUserId("00000000-0000-0000-0000-000000000abc");
-  assert.equal(id, "__sf_admin_token__:00000000-0000-0000-0000-000000000abc");
+test("adminTokenUserId returns the nil UUID sentinel (RFC 4122 § 4.1.7)", () => {
+  // Earlier iterations used "__sf_admin_token__:<orgId>" but Postgres uuid
+  // columns reject that shape — the dashboard does
+  // `WHERE organizations.ownerId = user.id` directly and 500'd on
+  // "invalid input syntax for type uuid". The nil UUID is reserved so
+  // it returns empty rows, which is exactly what we want.
+  assert.equal(adminTokenUserId("any-org-id"), "00000000-0000-0000-0000-000000000000");
+  assert.equal(adminTokenUserId("00000000-0000-0000-0000-000000000abc"), "00000000-0000-0000-0000-000000000000");
 });
 
-test("isAdminTokenUserId detects synthetic ids", () => {
+test("isAdminTokenUserId detects sentinel ids", () => {
   assert.equal(isAdminTokenUserId(adminTokenUserId("xyz")), true);
+  assert.equal(isAdminTokenUserId("00000000-0000-0000-0000-000000000000"), true);
   assert.equal(isAdminTokenUserId(null), false);
   assert.equal(isAdminTokenUserId(undefined), false);
   assert.equal(isAdminTokenUserId(""), false);
   // Real UUIDs must not be misclassified
-  assert.equal(isAdminTokenUserId("abc-real-user-uuid"), false);
+  assert.equal(isAdminTokenUserId("11111111-2222-3333-4444-555555555555"), false);
 });
 
 // ─── structured-URL builder (admin URL composition) ───────────────────
