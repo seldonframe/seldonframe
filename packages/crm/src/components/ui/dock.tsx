@@ -79,7 +79,9 @@ const Dock = React.forwardRef<HTMLDivElement, DockProps>(
           "items-end": direction === "bottom",
         })}
       >
-        {renderChildren()}
+        {/* `as never` silences the framer-motion @types/react v18-vs-v19
+            mismatch — same pattern as animated-list.tsx + theme-provider.tsx. */}
+        {renderChildren() as never}
       </motion.div>
     )
   }

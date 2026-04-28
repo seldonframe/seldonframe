@@ -18,9 +18,14 @@ export function AnimatedListItem({ children }: { children: React.ReactNode }) {
     transition: { type: "spring", stiffness: 350, damping: 40 },
   }
 
+  // framer-motion's `motion.div` resolves its children prop type from
+  // a copy of @types/react that's pinned to v18, while the workspace is
+  // on v19. Same nominal-distinction bug as theme-provider.tsx — silenced
+  // with the same `as never` cast. Removing when next-themes/framer-motion
+  // both ship v19-peer-compatible releases (or apps/web upgrades from R18).
   return (
     <motion.div {...animations} layout className="mx-auto w-full">
-      {children}
+      {children as never}
     </motion.div>
   )
 }

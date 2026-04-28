@@ -19,6 +19,7 @@ type WorkspaceCreateBody = {
   // MCP anonymous-create shape:
   name?: unknown;
   source?: unknown;
+  industry?: unknown;
 };
 
 const WORKSPACE_BASE_DOMAIN =
@@ -70,6 +71,12 @@ async function handleAnonymousCreate(request: Request, body: WorkspaceCreateBody
     typeof body.source === "string" && body.source.trim().length > 0
       ? body.source.trim()
       : null;
+  // Phase 3 C3: industry drives starter blueprint selection
+  // (skills/templates/<industry>.json). Optional; falls back to "general".
+  const industry =
+    typeof body.industry === "string" && body.industry.trim().length > 0
+      ? body.industry.trim().toLowerCase()
+      : null;
 
   if (!name) {
     return NextResponse.json(
@@ -100,7 +107,7 @@ async function handleAnonymousCreate(request: Request, body: WorkspaceCreateBody
   }
 
   try {
-    const result = await createAnonymousWorkspace({ name, source });
+    const result = await createAnonymousWorkspace({ name, source, industry });
     const urls = buildWorkspaceUrls(result.slug, WORKSPACE_BASE_DOMAIN, result.orgId);
     const structuredUrls = buildStructuredWorkspaceUrls(
       result.slug,

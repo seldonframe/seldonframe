@@ -20,6 +20,13 @@ const DEFAULT_ENABLED_BLOCKS = [
 export type AnonymousCreateInput = {
   name: string;
   source?: string | null;
+  /**
+   * Optional industry slug used to pick a starter blueprint
+   * (skills/templates/<industry>.json). Falls back to "general" when
+   * absent or unmatched. Phase 3 C3 — drives the blueprint renderer
+   * for the workspace's landing page.
+   */
+  industry?: string | null;
 };
 
 export type AnonymousCreateResult = {
@@ -108,6 +115,7 @@ export async function createAnonymousWorkspace(
     createDefaultLandingPage(org.id, {
       workspaceName: org.name,
       theme: "dark",
+      industry: input.industry ?? null,
     }).catch((error) => {
       console.warn(
         `[anonymous-workspace] landing-page seed failed for ${org.id}:`,

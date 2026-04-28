@@ -1,6 +1,9 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { bookings, intakeForms, landingPages } from "@/db/schema";
+import { pickTemplate } from "@/lib/blueprint/templates";
+import { renderGeneralServiceV1 } from "@/lib/blueprint/renderers/general-service-v1";
+import type { Blueprint } from "@/lib/blueprint/types";
 
 export type TemplateOpts = {
   theme?: "dark" | "light";
@@ -105,7 +108,7 @@ export async function createDefaultIntakeForm(
 
 export async function createDefaultLandingPage(
   orgId: string,
-  opts: TemplateOpts & { workspaceName?: string } = {}
+  opts: TemplateOpts & { workspaceName?: string; industry?: string | null } = {}
 ): Promise<TemplateOutcome & { title: string }> {
   const [existing] = await db
     .select({
@@ -128,11 +131,12 @@ export async function createDefaultLandingPage(
     // Puck), top up the missing contentCss. User-customized rows are left
     // alone regardless.
     if (existing.source === "template" && !existing.contentCss) {
+      const repaired = renderForWorkspace(existing.title, opts.industry ?? null);
       await db
         .update(landingPages)
         .set({
-          contentHtml: buildSeededHomeHtml(existing.title, opts.theme ?? "dark"),
-          contentCss: SEEDED_HOME_CSS,
+          contentHtml: repaired.html,
+          contentCss: repaired.css,
           updatedAt: new Date(),
         })
         .where(eq(landingPages.id, existing.id));
@@ -141,10 +145,8 @@ export async function createDefaultLandingPage(
   }
 
   const title = opts.workspaceName ?? "Welcome";
-  const theme = opts.theme ?? "dark";
   const subhead = SEEDED_HOME_SUBHEAD;
-  const contentHtml = buildSeededHomeHtml(title, theme);
-  const contentCss = SEEDED_HOME_CSS;
+  const rendered = renderForWorkspace(title, opts.industry ?? null);
 
   await db.insert(landingPages).values({
     orgId,
@@ -154,56 +156,43 @@ export async function createDefaultLandingPage(
     pageType: "page",
     source: "template",
     sections: [],
-    contentHtml,
-    contentCss,
+    contentHtml: rendered.html,
+    contentCss: rendered.css,
     seo: { title, description: subhead },
-    settings: { theme },
+    settings: { theme: "light", blueprintRenderer: "general-service-v1" },
   });
 
   return { slug: DEFAULT_LANDING_SLUG, title, alreadyExisted: false };
 }
 
-function escapeHtml(s: string) {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+/**
+ * Phase 3 C3: pick a starter blueprint by industry, customize the
+ * workspace.name slot, and run it through the general-service-v1
+ * renderer. Returns html + css for storage on landing_pages.
+ *
+ * Light mode only in v1. Industry null/unknown → general fallback.
+ */
+function renderForWorkspace(
+  workspaceName: string,
+  industry: string | null
+): { html: string; css: string } {
+  const blueprint = pickTemplate(industry);
+  // Only the workspace-name slot needs a real value at create-time; other
+  // placeholders ([City], [Owner Name], etc.) stay until the operator
+  // edits them via natural-language tools (update_landing_content,
+  // update_theme, etc.). The renderer escapes HTML, so this is safe.
+  const customized: Blueprint = {
+    ...blueprint,
+    workspace: { ...blueprint.workspace, name: workspaceName },
+  };
+  const { html, css } = renderGeneralServiceV1(customized);
+  return { html, css };
 }
 
-// Shared seed content for createDefaultLandingPage — used on initial insert
-// AND by the repair branch that tops up contentCss on pre-fix workspaces
-// that stored contentHtml with contentCss=null (which rendered blank).
+// Subhead used for the landing page's seo.description metadata. The actual
+// page body comes from the blueprint renderer (general-service-v1) which
+// sources its own copy from the resolved blueprint's hero/about sections.
 const SEEDED_HOME_SUBHEAD = "Book a call or send us a note — we'll get back to you.";
-
-function buildSeededHomeHtml(title: string, theme: "dark" | "light") {
-  return `<main class="sf-home" data-theme="${theme}">
-  <section class="sf-home__hero">
-    <h1 class="sf-home__title">${escapeHtml(title)}</h1>
-    <p class="sf-home__subhead">${escapeHtml(SEEDED_HOME_SUBHEAD)}</p>
-    <div class="sf-home__actions">
-      <a class="sf-btn sf-btn--primary" href="/book">Book a call</a>
-      <a class="sf-btn sf-btn--secondary" href="/intake">Send us a note</a>
-    </div>
-  </section>
-</main>`;
-}
-
-// --sf-* tokens come from the workspace theme via PublicThemeProvider; hard
-// fallbacks here match the dark-theme defaults so a theme-provider outage or
-// a workspace with missing theme config still renders legibly.
-const SEEDED_HOME_CSS = `.sf-home { min-height: 60vh; display: flex; align-items: center; justify-content: center; padding: 4rem 1.5rem; font-family: var(--sf-font, system-ui, -apple-system, "Segoe UI", sans-serif); }
-.sf-home__hero { width: 100%; max-width: 640px; text-align: center; }
-.sf-home__title { font-size: clamp(2.25rem, 5vw, 3.5rem); line-height: 1.05; letter-spacing: -0.02em; font-weight: 600; margin: 0 0 1rem; color: var(--sf-text, #f5f5f5); }
-.sf-home__subhead { font-size: 1.125rem; line-height: 1.5; margin: 0 0 2.5rem; color: color-mix(in srgb, var(--sf-text, #f5f5f5) 70%, transparent); }
-.sf-home__actions { display: inline-flex; flex-wrap: wrap; gap: 0.75rem; justify-content: center; }
-.sf-btn { display: inline-flex; align-items: center; justify-content: center; min-width: 9rem; height: 3rem; padding: 0 1.5rem; border-radius: var(--sf-radius, 0.75rem); font-weight: 500; text-decoration: none; transition: transform 120ms ease, box-shadow 120ms ease, background-color 120ms ease; }
-.sf-btn--primary { background: var(--sf-primary, #21a38b); color: #fff; border: 1px solid transparent; }
-.sf-btn--primary:hover { transform: translateY(-1px); box-shadow: 0 10px 30px color-mix(in srgb, var(--sf-primary, #21a38b) 40%, transparent); }
-.sf-btn--secondary { background: transparent; color: var(--sf-text, #f5f5f5); border: 1px solid var(--sf-border, rgba(255,255,255,0.15)); }
-.sf-btn--secondary:hover { background: color-mix(in srgb, var(--sf-text, #f5f5f5) 8%, transparent); }
-@media (max-width: 480px) { .sf-btn { min-width: 100%; } }`;
 
 export const DEFAULT_SLUGS = {
   booking: DEFAULT_BOOKING_SLUG,
