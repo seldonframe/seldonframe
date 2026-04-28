@@ -1,7 +1,7 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { organizations } from "@/db/schema";
+import { landingPages, organizations } from "@/db/schema";
 import {
   resolveOrgIdForWrite,
   resolveV1Identity,
@@ -9,6 +9,11 @@ import {
 import { assertWritable, demoApiBlockedResponse, isDemoReadonly } from "@/lib/demo/server";
 import { logEvent } from "@/lib/observability/log";
 import { DEFAULT_ORG_THEME, type OrgTheme } from "@/lib/theme/types";
+import {
+  loadBlueprintOrFallback,
+  renderBlueprint,
+} from "@/lib/blueprint/persist";
+import { mutateWorkspaceTheme } from "@/lib/blueprint/mutate";
 
 type UpdateBody = {
   workspace_id?: unknown;
@@ -99,9 +104,58 @@ export async function POST(request: Request) {
     .set({ theme: base, updatedAt: new Date() })
     .where(eq(organizations.id, orgId));
 
+  // C3.4: also propagate the accent into every blueprint-rendered
+  // landing page for this org so the rendered HTML/CSS picks up the
+  // new accent on the next request. Without this the org theme moves
+  // but the public-facing landing keeps its old --sf-accent token.
+  //
+  // Only `accent_color` flows through to the blueprint right now —
+  // the OrgTheme `fontFamily` enum (Inter, DM Sans, etc.) doesn't map
+  // 1:1 to the blueprint's displayFont enum (cal-sans, geist), and we
+  // don't want to silently drop a font choice. Mode + primary_color
+  // stay org-only until the blueprint surface acquires those slots.
+  let landingsRePersisted = 0;
+  if (typeof body.accent_color === "string" && /^#[0-9a-f]{6}$/i.test(body.accent_color)) {
+    const accentHex = body.accent_color;
+    const orgLandings = await db
+      .select({
+        id: landingPages.id,
+        title: landingPages.title,
+        settings: landingPages.settings,
+        blueprintJson: landingPages.blueprintJson,
+        source: landingPages.source,
+      })
+      .from(landingPages)
+      .where(and(eq(landingPages.orgId, orgId), eq(landingPages.source, "template")));
+
+    for (const row of orgLandings) {
+      const fallbackIndustry =
+        typeof (row.settings as Record<string, unknown> | undefined)?.industry === "string"
+          ? ((row.settings as Record<string, unknown>).industry as string)
+          : null;
+      const bp = loadBlueprintOrFallback(
+        { blueprintJson: row.blueprintJson },
+        row.title,
+        fallbackIndustry
+      );
+      const updated = mutateWorkspaceTheme(bp, { accent: accentHex });
+      const rendered = renderBlueprint(updated);
+      await db
+        .update(landingPages)
+        .set({
+          blueprintJson: updated as unknown as Record<string, unknown>,
+          contentHtml: rendered.contentHtml,
+          contentCss: rendered.contentCss,
+          updatedAt: new Date(),
+        })
+        .where(eq(landingPages.id, row.id));
+      landingsRePersisted += 1;
+    }
+  }
+
   logEvent(
     "theme_update",
-    { applied_keys: Object.keys(applied) },
+    { applied_keys: Object.keys(applied), landings_re_rendered: landingsRePersisted },
     { request, identity, orgId, status: 200 }
   );
 
@@ -109,6 +163,7 @@ export async function POST(request: Request) {
     ok: true,
     workspace_id: orgId,
     applied,
+    landings_re_rendered: landingsRePersisted,
     next: ["Refresh the subdomain or admin dashboard to see the theme change."],
   });
 }

@@ -1,9 +1,10 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { bookings, intakeForms, landingPages } from "@/db/schema";
-import { pickTemplate } from "@/lib/blueprint/templates";
-import { renderGeneralServiceV1 } from "@/lib/blueprint/renderers/general-service-v1";
-import type { Blueprint } from "@/lib/blueprint/types";
+import {
+  buildBlueprintForWorkspace,
+  renderBlueprint,
+} from "@/lib/blueprint/persist";
 
 export type TemplateOpts = {
   theme?: "dark" | "light";
@@ -130,13 +131,19 @@ export async function createDefaultLandingPage(
     // (source='template', not user-customized via /api/v1/landing/update or
     // Puck), top up the missing contentCss. User-customized rows are left
     // alone regardless.
+    //
+    // C3.3: also backfills `blueprintJson` on the same repair so the
+    // customization loop (load → mutate → render → save) has a source to
+    // round-trip through. Existing pre-C3.3 rows with contentHtml but no
+    // blueprintJson get one written here on next access.
     if (existing.source === "template" && !existing.contentCss) {
-      const repaired = renderForWorkspace(existing.title, opts.industry ?? null);
+      const repaired = buildAndRender(existing.title, opts.industry ?? null);
       await db
         .update(landingPages)
         .set({
-          contentHtml: repaired.html,
-          contentCss: repaired.css,
+          contentHtml: repaired.contentHtml,
+          contentCss: repaired.contentCss,
+          blueprintJson: repaired.blueprint as unknown as Record<string, unknown>,
           updatedAt: new Date(),
         })
         .where(eq(landingPages.id, existing.id));
@@ -146,7 +153,7 @@ export async function createDefaultLandingPage(
 
   const title = opts.workspaceName ?? "Welcome";
   const subhead = SEEDED_HOME_SUBHEAD;
-  const rendered = renderForWorkspace(title, opts.industry ?? null);
+  const rendered = buildAndRender(title, opts.industry ?? null);
 
   await db.insert(landingPages).values({
     orgId,
@@ -156,37 +163,37 @@ export async function createDefaultLandingPage(
     pageType: "page",
     source: "template",
     sections: [],
-    contentHtml: rendered.html,
-    contentCss: rendered.css,
+    contentHtml: rendered.contentHtml,
+    contentCss: rendered.contentCss,
+    // C3.3: source-of-truth Blueprint JSON. Read by update_landing_*
+    // tools when they need to mutate + re-render without losing C3.x
+    // visual polish.
+    blueprintJson: rendered.blueprint as unknown as Record<string, unknown>,
     seo: { title, description: subhead },
-    settings: { theme: "light", blueprintRenderer: "general-service-v1" },
+    // C3.3: stash `industry` in settings so the customization-loop
+    // fallback path can re-derive a starter blueprint for legacy rows
+    // (rows whose blueprint_json is NULL because they predate C3.3).
+    settings: {
+      theme: "light",
+      blueprintRenderer: "general-service-v1",
+      industry: opts.industry ?? null,
+    },
   });
 
   return { slug: DEFAULT_LANDING_SLUG, title, alreadyExisted: false };
 }
 
 /**
- * Phase 3 C3: pick a starter blueprint by industry, customize the
- * workspace.name slot, and run it through the general-service-v1
- * renderer. Returns html + css for storage on landing_pages.
+ * Phase 3 C3.3: pick a starter blueprint by industry, customize the
+ * workspace.name slot, run it through the renderer. Returns the
+ * blueprint plus its rendered html/css — all three need to be persisted
+ * together so the customization loop can round-trip.
  *
  * Light mode only in v1. Industry null/unknown → general fallback.
  */
-function renderForWorkspace(
-  workspaceName: string,
-  industry: string | null
-): { html: string; css: string } {
-  const blueprint = pickTemplate(industry);
-  // Only the workspace-name slot needs a real value at create-time; other
-  // placeholders ([City], [Owner Name], etc.) stay until the operator
-  // edits them via natural-language tools (update_landing_content,
-  // update_theme, etc.). The renderer escapes HTML, so this is safe.
-  const customized: Blueprint = {
-    ...blueprint,
-    workspace: { ...blueprint.workspace, name: workspaceName },
-  };
-  const { html, css } = renderGeneralServiceV1(customized);
-  return { html, css };
+function buildAndRender(workspaceName: string, industry: string | null) {
+  const blueprint = buildBlueprintForWorkspace(workspaceName, industry);
+  return renderBlueprint(blueprint);
 }
 
 // Subhead used for the landing page's seo.description metadata. The actual

@@ -250,7 +250,7 @@ export const TOOLS = [
   {
     name: "update_landing_content",
     description:
-      "Rewrite the workspace's public landing page at / — headline, subhead, and primary CTA label. YOU decide the copy based on the user's request + the workspace Soul; this tool persists it.",
+      "Rewrite the workspace's public landing page hero — headline, subhead, and primary CTA label. C3.4 made this blueprint-aware: the operator's edit lands without losing any of the renderer's visual polish (typography, layered-shadow buttons, animations, etc.). Use this for the most common copy edits; for granular per-section / per-item edits use update_landing_section.",
     inputSchema: obj(
       {
         headline: str("Main hero heading. Keep short; 1 line."),
@@ -258,7 +258,6 @@ export const TOOLS = [
         cta_label: str("Primary call-to-action button text, e.g. 'Book a call'."),
         workspace_id: str("Optional workspace override."),
       },
-      ["headline", "subhead", "cta_label"],
     ),
     handler: async (a) => {
       const ws = wsOrDefault(a.workspace_id);
@@ -267,6 +266,51 @@ export const TOOLS = [
           headline: a.headline,
           subhead: a.subhead,
           cta_label: a.cta_label,
+          workspace_id: ws,
+        },
+        workspace_id: ws,
+      });
+    },
+  },
+  {
+    name: "update_landing_section",
+    description:
+      "Granular per-field landing edit — change any single slot in any section of the blueprint-rendered landing page. Use when update_landing_content's three fields aren't enough. Section types: emergency-strip, hero, trust-strip, services-grid, about, mid-cta, testimonials, service-area, faq, footer. Field is a dot-segmented path on that section (e.g. 'headline', 'subhead', 'items.0.title', 'items.2.answer', 'showHours'). Value is the new value (string for copy, boolean for flags, etc.).",
+    inputSchema: obj(
+      {
+        section: {
+          type: "string",
+          enum: [
+            "emergency-strip",
+            "hero",
+            "trust-strip",
+            "services-grid",
+            "about",
+            "mid-cta",
+            "testimonials",
+            "service-area",
+            "faq",
+            "footer",
+          ],
+        },
+        field: str(
+          "Dot-segmented field path on the section. Examples: 'headline', 'subhead', 'items.0.title', 'items.2.answer', 'showHours'."
+        ),
+        value: {
+          description:
+            "New value for the field. String for copy, number for ratings, boolean for flags, object/array for richer slots.",
+        },
+        workspace_id: str("Optional workspace override."),
+      },
+      ["section", "field", "value"],
+    ),
+    handler: async (a) => {
+      const ws = wsOrDefault(a.workspace_id);
+      return api("POST", "/landing/section/update", {
+        body: {
+          section: a.section,
+          field: a.field,
+          value: a.value,
           workspace_id: ws,
         },
         workspace_id: ws,

@@ -20,6 +20,12 @@ export const landingPages = pgTable(
     sections: jsonb("sections").$type<Record<string, unknown>[]>().notNull().default(sql`'[]'::jsonb`),
     contentHtml: text("content_html"),
     contentCss: text("content_css"),
+    // C3.3: source Blueprint JSON for blueprint-rendered pages. Read by
+    // update_landing_content / update_theme / update_landing_section
+    // helpers, mutated, then re-rendered through renderGeneralServiceV1
+    // back into contentHtml + contentCss. NULL for legacy / Puck-edited
+    // rows (those use puckData / contentHtml directly).
+    blueprintJson: jsonb("blueprint_json").$type<Record<string, unknown> | null>().default(null),
     editorData: jsonb("editor_data").$type<Record<string, unknown> | null>().default(null),
     seo: jsonb("seo").$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
     settings: jsonb("settings").$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
