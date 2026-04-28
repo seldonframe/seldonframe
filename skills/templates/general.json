@@ -1,0 +1,330 @@
+{
+  "$schema": "./schema.json",
+  "version": 1,
+  "workspace": {
+    "name": "[Your Business Name]",
+    "industry": "general",
+    "tagline": "Local. Trusted. Fast.",
+    "theme": {
+      "mode": "light",
+      "accent": "#1A1A1A",
+      "displayFont": "cal-sans",
+      "bodyFont": "inter",
+      "radiusScale": "default",
+      "logoUrl": null,
+      "heroImageUrl": null
+    },
+    "contact": {
+      "phone": "+15555550100",
+      "emergencyPhone": null,
+      "email": null,
+      "address": {
+        "street": "[Street address]",
+        "city": "[City]",
+        "region": "[State or province]",
+        "postalCode": "[Postal code]",
+        "country": "US"
+      },
+      "hours": {
+        "mon": [9, 17],
+        "tue": [9, 17],
+        "wed": [9, 17],
+        "thu": [9, 17],
+        "fri": [9, 17],
+        "sat": null,
+        "sun": null
+      },
+      "timezone": "America/New_York",
+      "serviceArea": "[City] and surrounding area"
+    }
+  },
+  "landing": {
+    "renderer": "general-service-v1",
+    "sections": [
+      {
+        "type": "hero",
+        "eyebrow": "[City] · [Service Category]",
+        "headline": "Reliable [service] you can count on",
+        "subhead": "We help homeowners and businesses get [outcome] without the hassle. Free quote in under a day.",
+        "ctaPrimary": { "label": "Get a free quote", "href": "/intake", "kind": "primary" },
+        "ctaSecondary": { "label": "Call us", "href": "tel:+15555550100", "kind": "tel" },
+        "imageUrl": null,
+        "variant": "split-image-right"
+      },
+      {
+        "type": "trust-strip",
+        "items": [
+          { "icon": "Star", "label": "5-star rated by local customers" },
+          { "icon": "ShieldCheck", "label": "Licensed and insured" },
+          { "icon": "Clock", "label": "Same-day service available" }
+        ]
+      },
+      {
+        "type": "services-grid",
+        "headline": "Services",
+        "subhead": "What we do best.",
+        "layout": "grid-3",
+        "items": [
+          {
+            "icon": "Wrench",
+            "title": "Service one",
+            "description": "Brief description of your first core service. Two short sentences max."
+          },
+          {
+            "icon": "Settings",
+            "title": "Service two",
+            "description": "Brief description of your second core service."
+          },
+          {
+            "icon": "Sparkles",
+            "title": "Service three",
+            "description": "Brief description of your third core service."
+          }
+        ]
+      },
+      {
+        "type": "about",
+        "headline": "Why customers pick us",
+        "body": "Tell your story in 2-3 sentences. What's your background, why did you start the business, and what makes your work different from the competition? Speak to one person, not to everyone.",
+        "photoUrl": null,
+        "ownerName": "[Owner Name]",
+        "ownerTitle": "Owner"
+      },
+      {
+        "type": "mid-cta",
+        "headline": "Ready to get started?",
+        "subhead": "Tell us what you need and we'll send a free quote within 24 hours.",
+        "ctaPrimary": { "label": "Get a free quote", "href": "/intake", "kind": "primary" },
+        "ctaSecondary": { "label": "Call us", "href": "tel:+15555550100", "kind": "tel" },
+        "embedQuoteForm": true
+      },
+      {
+        "type": "testimonials",
+        "headline": "What our customers say",
+        "featured": {
+          "quote": "Replace this with a real customer quote that mentions a specific outcome (e.g. 'They fixed our problem in under an hour and the price matched the quote exactly').",
+          "authorName": "[Customer Name]",
+          "authorRole": "Customer in [City]",
+          "rating": 5,
+          "source": "google"
+        },
+        "items": [
+          {
+            "quote": "Short quote about the experience. Specific is better than glowing.",
+            "authorName": "[Customer Name]",
+            "authorRole": "Homeowner",
+            "rating": 5,
+            "source": "google"
+          },
+          {
+            "quote": "Another short, specific quote.",
+            "authorName": "[Customer Name]",
+            "authorRole": "Local business owner",
+            "rating": 5,
+            "source": "google"
+          },
+          {
+            "quote": "A third short, specific quote.",
+            "authorName": "[Customer Name]",
+            "authorRole": "Customer since [Year]",
+            "rating": 5,
+            "source": "google"
+          }
+        ]
+      },
+      {
+        "type": "service-area",
+        "headline": "Service area",
+        "description": "We serve [City] and surrounding areas within roughly [N] miles."
+      },
+      {
+        "type": "faq",
+        "headline": "Frequently asked questions",
+        "items": [
+          {
+            "question": "How quickly can you come out?",
+            "answer": "Most jobs are scheduled within 24-48 hours. Same-day service is available for urgent issues — call us directly."
+          },
+          {
+            "question": "Do you charge for estimates?",
+            "answer": "No. Estimates are always free and there's no obligation to book."
+          },
+          {
+            "question": "Are you licensed and insured?",
+            "answer": "Yes. We're fully licensed in [State] and carry liability insurance for every job."
+          },
+          {
+            "question": "What payment methods do you accept?",
+            "answer": "We accept cash, check, all major credit cards, and offer financing on larger jobs."
+          }
+        ]
+      },
+      {
+        "type": "footer",
+        "showHours": true,
+        "showAddress": true,
+        "showServiceArea": true,
+        "social": [],
+        "legal": [
+          { "label": "Privacy", "href": "/privacy" },
+          { "label": "Terms", "href": "/terms" }
+        ]
+      }
+    ]
+  },
+  "booking": {
+    "renderer": "calcom-month-v1",
+    "eventType": {
+      "title": "Free consultation",
+      "description": "30-minute conversation to understand your needs and provide a quote.",
+      "durationMinutes": 30,
+      "location": { "kind": "phone" },
+      "bufferMinutes": 0
+    },
+    "availability": {
+      "weekly": {
+        "mon": [9, 17],
+        "tue": [9, 17],
+        "wed": [9, 17],
+        "thu": [9, 17],
+        "fri": [9, 17],
+        "sat": null,
+        "sun": null
+      },
+      "blackoutDates": [],
+      "leadTimeHours": 4,
+      "advanceWindowDays": 60
+    },
+    "formFields": [
+      { "id": "name",  "label": "Full name", "type": "text",  "required": true,  "placeholder": "Jane Smith" },
+      { "id": "email", "label": "Email",     "type": "email", "required": true,  "placeholder": "you@example.com" },
+      { "id": "phone", "label": "Phone",     "type": "phone", "required": false, "placeholder": "(555) 555-0100" },
+      { "id": "notes", "label": "What can we help with?", "type": "textarea", "required": false }
+    ],
+    "confirmation": {
+      "headline": "Your booking is confirmed",
+      "message": "We'll send a calendar invite shortly. If anything changes, just reply to that email.",
+      "successRedirectUrl": null
+    }
+  },
+  "intake": {
+    "renderer": "formbricks-stack-v1",
+    "title": "Tell us about your project",
+    "description": "Quick 5-question form. Takes about a minute.",
+    "questions": [
+      { "id": "fullName",   "type": "text",     "label": "What's your name?",     "required": true },
+      { "id": "phone",      "type": "phone",    "label": "Best phone to reach you?", "required": true },
+      { "id": "email",      "type": "email",    "label": "Email",                 "required": true },
+      {
+        "id": "service",
+        "type": "select",
+        "label": "What service do you need?",
+        "required": true,
+        "options": ["Service one", "Service two", "Service three", "Other / not sure"]
+      },
+      {
+        "id": "details",
+        "type": "textarea",
+        "label": "Tell us a bit about what you're looking for",
+        "helper": "A few sentences is plenty.",
+        "required": false,
+        "validation": { "maxLength": 1000 }
+      }
+    ],
+    "completion": {
+      "headline": "Got it — thanks!",
+      "message": "We'll be in touch within one business day. For urgent issues, give us a call at (555) 555-0100."
+    }
+  },
+  "admin": {
+    "renderer": "twenty-shell-v1",
+    "sidebarOrder": ["contacts", "deals", "activities"],
+    "objects": [
+      {
+        "id": "contacts",
+        "label": "Contacts",
+        "icon": "User",
+        "fields": [
+          { "id": "name",    "label": "Name",    "type": "text",  "required": true,  "showInSidebar": true },
+          { "id": "email",   "label": "Email",   "type": "email" },
+          { "id": "phone",   "label": "Phone",   "type": "phone" },
+          { "id": "company", "label": "Company", "type": "text" },
+          { "id": "source",  "label": "Source",  "type": "select", "options": ["Website", "Referral", "Walk-in", "Repeat customer", "Other"] },
+          { "id": "notes",   "label": "Notes",   "type": "longtext" }
+        ],
+        "views": [
+          {
+            "id": "all-contacts",
+            "label": "All contacts",
+            "kind": "table",
+            "isDefault": true,
+            "table": {
+              "columns": ["name", "email", "phone", "company", "source"],
+              "sortBy": { "field": "name", "direction": "asc" }
+            }
+          }
+        ]
+      },
+      {
+        "id": "deals",
+        "label": "Deals",
+        "icon": "Briefcase",
+        "fields": [
+          { "id": "name",     "label": "Deal name", "type": "text",     "required": true,  "showInSidebar": true },
+          { "id": "contact",  "label": "Contact",   "type": "relation", "relationTo": "contacts", "showInSidebar": true },
+          { "id": "amount",   "label": "Amount",    "type": "currency" },
+          { "id": "stage",    "label": "Stage",     "type": "select",   "required": true,  "options": ["Lead", "Qualified", "Quote sent", "Won", "Lost"], "showInSidebar": true },
+          { "id": "close_date","label": "Close date","type": "date" }
+        ],
+        "views": [
+          {
+            "id": "pipeline",
+            "label": "Pipeline",
+            "kind": "kanban",
+            "isDefault": true,
+            "kanban": {
+              "stageField": "stage",
+              "stages": ["Lead", "Qualified", "Quote sent", "Won", "Lost"],
+              "cardFields": ["contact", "amount", "close_date"],
+              "aggregate": { "field": "amount", "kind": "sum" }
+            }
+          },
+          {
+            "id": "all-deals",
+            "label": "All deals",
+            "kind": "table",
+            "isDefault": false,
+            "table": {
+              "columns": ["name", "contact", "amount", "stage", "close_date"],
+              "sortBy": { "field": "close_date", "direction": "desc" }
+            }
+          }
+        ]
+      },
+      {
+        "id": "activities",
+        "label": "Activities",
+        "icon": "Activity",
+        "fields": [
+          { "id": "subject",  "label": "Subject",   "type": "text",     "required": true,  "showInSidebar": true },
+          { "id": "kind",     "label": "Kind",      "type": "select",   "options": ["Call", "Email", "SMS", "Meeting", "Note"], "showInSidebar": true },
+          { "id": "contact",  "label": "Contact",   "type": "relation", "relationTo": "contacts" },
+          { "id": "occurred_at","label":"When",      "type": "datetime", "showInSidebar": true },
+          { "id": "body",     "label": "Notes",     "type": "longtext" }
+        ],
+        "views": [
+          {
+            "id": "timeline",
+            "label": "Timeline",
+            "kind": "table",
+            "isDefault": true,
+            "table": {
+              "columns": ["subject", "kind", "contact", "occurred_at"],
+              "sortBy": { "field": "occurred_at", "direction": "desc" }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

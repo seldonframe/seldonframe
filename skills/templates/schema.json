@@ -1,0 +1,784 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://seldonframe.com/schemas/blueprint/v1.json",
+  "title": "SeldonFrame Workspace Blueprint",
+  "description": "Deterministic blueprint that every customer-facing workspace surface (landing, booking, intake, admin) renders from. One blueprint = one workspace. Content packs (e.g. hvac.json) are full self-contained blueprints, not deltas. Claude Code generates a blueprint from a natural-language business description by starting from a content pack and replacing the business-data slots.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "workspace", "landing", "booking", "intake", "admin"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Optional JSON Schema reference (e.g. ./schema.json or https://seldonframe.com/schemas/blueprint/v1.json). Ignored by validators; useful for editor IntelliSense."
+    },
+    "version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Schema version. Bumped when the blueprint shape changes incompatibly. Renderer versions (e.g. general-service-v1) are independent."
+    },
+    "workspace": { "$ref": "#/$defs/Workspace" },
+    "landing":   { "$ref": "#/$defs/Landing" },
+    "booking":   { "$ref": "#/$defs/Booking" },
+    "intake":    { "$ref": "#/$defs/Intake" },
+    "admin":     { "$ref": "#/$defs/Admin" }
+  },
+
+  "$defs": {
+
+    "HexColor": {
+      "type": "string",
+      "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$",
+      "description": "CSS hex color. 3 or 6 digits."
+    },
+
+    "URL": {
+      "type": "string",
+      "format": "uri",
+      "description": "Absolute URL with scheme (https:// preferred)."
+    },
+
+    "OptionalURL": {
+      "anyOf": [
+        { "$ref": "#/$defs/URL" },
+        { "type": "null" }
+      ]
+    },
+
+    "PhoneE164": {
+      "type": "string",
+      "pattern": "^\\+[1-9]\\d{1,14}$",
+      "description": "E.164 phone number, e.g. +18175551234."
+    },
+
+    "Slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "minLength": 1,
+      "maxLength": 63,
+      "description": "URL-safe lowercase slug (a-z, 0-9, hyphens). No leading/trailing hyphen, no consecutive hyphens."
+    },
+
+    "IANATimezone": {
+      "type": "string",
+      "pattern": "^[A-Za-z]+(?:/[A-Za-z_]+)+$|^UTC$",
+      "examples": ["America/Chicago", "America/New_York", "Europe/Paris", "UTC"],
+      "description": "IANA timezone identifier."
+    },
+
+    "DayHourRange": {
+      "description": "A single day's open hours as a tuple of [openHour, closeHour] in 24h local time. null = closed.",
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": { "type": "integer", "minimum": 0, "maximum": 24 }
+        }
+      ]
+    },
+
+    "WeeklyHours": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"],
+      "properties": {
+        "mon": { "$ref": "#/$defs/DayHourRange" },
+        "tue": { "$ref": "#/$defs/DayHourRange" },
+        "wed": { "$ref": "#/$defs/DayHourRange" },
+        "thu": { "$ref": "#/$defs/DayHourRange" },
+        "fri": { "$ref": "#/$defs/DayHourRange" },
+        "sat": { "$ref": "#/$defs/DayHourRange" },
+        "sun": { "$ref": "#/$defs/DayHourRange" }
+      }
+    },
+
+    "Address": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["street", "city", "region", "postalCode", "country"],
+      "properties": {
+        "street":      { "type": "string", "minLength": 1 },
+        "city":        { "type": "string", "minLength": 1 },
+        "region":      { "type": "string", "minLength": 1, "description": "State, province, or region." },
+        "postalCode":  { "type": "string", "minLength": 1 },
+        "country":     { "type": "string", "minLength": 2, "description": "ISO 3166-1 alpha-2 (e.g. US, CA) or full name." }
+      }
+    },
+
+    "Workspace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "industry", "theme", "contact"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "Human-readable business name. Drives all heading slots."
+        },
+        "slug": {
+          "$ref": "#/$defs/Slug",
+          "description": "Optional URL-safe slug. Derived from name if absent."
+        },
+        "tagline": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Optional short tagline shown under workspace name."
+        },
+        "industry": {
+          "type": "string",
+          "minLength": 1,
+          "examples": ["general", "hvac", "dental", "legal", "salon", "coaching", "real-estate", "auto-repair", "fitness", "consulting"],
+          "description": "Free-form industry label. Drives content-pack matching when Claude Code picks a starter blueprint. New verticals do NOT require a schema update."
+        },
+        "theme":   { "$ref": "#/$defs/Theme" },
+        "contact": { "$ref": "#/$defs/Contact" }
+      }
+    },
+
+    "Theme": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "accent"],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["light", "dark"],
+          "description": "Default rendering mode. v1 ships light only; dark is reserved for v2."
+        },
+        "accent": {
+          "$ref": "#/$defs/HexColor",
+          "description": "Single brand accent color. Operator picks ONE; the renderer derives accent-soft, accent-hover, ring, and accent-foreground via APCA contrast."
+        },
+        "displayFont": {
+          "type": "string",
+          "enum": ["cal-sans", "geist"],
+          "default": "cal-sans",
+          "description": "Display font (titles, hero, big numbers). Cal Sans is the v1 default per design research."
+        },
+        "bodyFont": {
+          "type": "string",
+          "enum": ["inter"],
+          "default": "inter",
+          "description": "Body font. Inter only in v1."
+        },
+        "radiusScale": {
+          "type": "string",
+          "enum": ["default", "minimal", "rounded"],
+          "default": "default",
+          "description": "default = xs:2 sm:4 md:8 lg:12 xl:20 pill:999. minimal = halve all values. rounded = 1.5x."
+        },
+        "logoUrl":      { "$ref": "#/$defs/OptionalURL", "description": "Workspace logo. Empty state demands an upload." },
+        "heroImageUrl": { "$ref": "#/$defs/OptionalURL", "description": "Landing hero image. Real photo of team or office strongly preferred over stock." }
+      }
+    },
+
+    "Contact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["phone", "address", "hours", "timezone"],
+      "properties": {
+        "phone":        { "$ref": "#/$defs/PhoneE164" },
+        "emergencyPhone": {
+          "anyOf": [{ "$ref": "#/$defs/PhoneE164" }, { "type": "null" }],
+          "description": "Optional after-hours emergency line. Triggers the emergency strip on the landing page when set."
+        },
+        "email": {
+          "anyOf": [
+            { "type": "string", "format": "email" },
+            { "type": "null" }
+          ]
+        },
+        "address":      { "$ref": "#/$defs/Address" },
+        "hours":        { "$ref": "#/$defs/WeeklyHours" },
+        "timezone":     { "$ref": "#/$defs/IANATimezone" },
+        "serviceArea": {
+          "type": "string",
+          "description": "Free-form description of service area shown on landing footer + booking confirmation. e.g. 'Tarrant + Dallas counties' or 'Within 25 miles of downtown Atlanta'."
+        }
+      }
+    },
+
+    "CTA": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label"],
+      "properties": {
+        "label": { "type": "string", "minLength": 1 },
+        "href":  { "type": "string", "minLength": 1, "description": "Internal route (/book) or absolute URL or tel: link." },
+        "kind":  {
+          "type": "string",
+          "enum": ["primary", "secondary", "ghost", "tel"],
+          "default": "primary"
+        }
+      }
+    },
+
+    "Landing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["renderer", "sections"],
+      "properties": {
+        "renderer": {
+          "type": "string",
+          "const": "general-service-v1",
+          "description": "Frozen renderer ID. v1 ships exactly one renderer; future renderers (v2, vertical-specific) get new IDs and never break v1 blueprints."
+        },
+        "sections": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Ordered array of sections. The renderer renders sections in the given order. Operators can omit sections they don't want; required sections per the canonical service-business order are recommended but not enforced.",
+          "items": {
+            "oneOf": [
+              { "$ref": "#/$defs/SectionEmergencyStrip" },
+              { "$ref": "#/$defs/SectionHero" },
+              { "$ref": "#/$defs/SectionTrustStrip" },
+              { "$ref": "#/$defs/SectionServicesGrid" },
+              { "$ref": "#/$defs/SectionAbout" },
+              { "$ref": "#/$defs/SectionMidCta" },
+              { "$ref": "#/$defs/SectionTestimonials" },
+              { "$ref": "#/$defs/SectionServiceArea" },
+              { "$ref": "#/$defs/SectionFaq" },
+              { "$ref": "#/$defs/SectionFooter" }
+            ]
+          }
+        }
+      }
+    },
+
+    "SectionEmergencyStrip": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "label"],
+      "properties": {
+        "type":        { "const": "emergency-strip" },
+        "label":       { "type": "string", "minLength": 1, "description": "e.g. '24/7 Emergency Service'" },
+        "phoneLabel":  { "type": "string", "description": "Optional override for the phone display. Defaults to workspace.contact.emergencyPhone." }
+      },
+      "description": "Red/orange-accented strip ABOVE the hero for emergency-driven trades (HVAC, plumbing, locksmith). Only rendered if workspace.contact.emergencyPhone is set."
+    },
+
+    "SectionHero": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "headline", "ctaPrimary"],
+      "properties": {
+        "type":        { "const": "hero" },
+        "eyebrow":     { "type": "string", "description": "Small uppercase preheading (e.g. 'Dallas-Fort Worth · HVAC')." },
+        "headline":    { "type": "string", "minLength": 1, "maxLength": 80, "description": "≤8 words, outcome-oriented. Includes location explicitly." },
+        "subhead":     { "type": "string", "maxLength": 240, "description": "1-2 lines proof or scope." },
+        "ctaPrimary":  { "$ref": "#/$defs/CTA" },
+        "ctaSecondary":{ "$ref": "#/$defs/CTA" },
+        "imageUrl":    { "$ref": "#/$defs/OptionalURL", "description": "Real photo of team or office. Stock photo is a measurable conversion killer." },
+        "variant":     {
+          "type": "string",
+          "enum": ["split-image-right", "full-bleed", "founder-portrait"],
+          "default": "split-image-right",
+          "description": "split-image-right = HVAC/dental/legal default. full-bleed = salon/bridal. founder-portrait = coaching."
+        }
+      }
+    },
+
+    "SectionTrustStrip": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "items"],
+      "properties": {
+        "type": { "const": "trust-strip" },
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["label"],
+            "properties": {
+              "icon":  { "type": "string", "description": "Lucide icon name." },
+              "label": { "type": "string", "minLength": 1, "description": "e.g. '4.9 stars · 1,200+ reviews', 'BBB A+', '20 years in DFW'." }
+            }
+          }
+        }
+      }
+    },
+
+    "SectionServicesGrid": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "items"],
+      "properties": {
+        "type": { "const": "services-grid" },
+        "headline": { "type": "string", "default": "Services" },
+        "subhead":  { "type": "string" },
+        "layout": {
+          "type": "string",
+          "enum": ["grid-3", "grid-4", "tabs"],
+          "default": "grid-3",
+          "description": "grid-3 is dominant. grid-4 only if exactly 4. tabs for generalists with 6+ services grouped by category."
+        },
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 12,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["title", "description"],
+            "properties": {
+              "icon":         { "type": "string", "description": "Lucide icon name (line style, single weight)." },
+              "title":        { "type": "string", "minLength": 1, "maxLength": 40 },
+              "description":  { "type": "string", "minLength": 1, "maxLength": 200 },
+              "priceFrom":    { "type": "string", "description": "Optional 'From $89' or 'Free estimate'. Skip for variable-scope verticals." },
+              "category":     { "type": "string", "description": "Used when layout = tabs." },
+              "learnMoreUrl": { "$ref": "#/$defs/OptionalURL" }
+            }
+          }
+        }
+      }
+    },
+
+    "SectionAbout": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "headline", "body"],
+      "properties": {
+        "type":       { "const": "about" },
+        "headline":   { "type": "string", "minLength": 1 },
+        "body":       { "type": "string", "minLength": 1, "description": "1-2 paragraphs. Humanize the brand." },
+        "photoUrl":   { "$ref": "#/$defs/OptionalURL", "description": "Real photo of team or owner. Empty state demands upload." },
+        "ownerName":  { "type": "string" },
+        "ownerTitle": { "type": "string", "examples": ["Owner", "Founder", "Lead Dentist", "Head Stylist"] }
+      }
+    },
+
+    "SectionMidCta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "headline"],
+      "properties": {
+        "type":     { "const": "mid-cta" },
+        "headline": { "type": "string", "minLength": 1 },
+        "subhead":  { "type": "string" },
+        "ctaPrimary":   { "$ref": "#/$defs/CTA" },
+        "ctaSecondary": { "$ref": "#/$defs/CTA" },
+        "embedQuoteForm": {
+          "type": "boolean",
+          "default": true,
+          "description": "When true, renders the quote/booking form INLINE rather than behind a button. Inline > modal-button > separate page for conversion."
+        }
+      }
+    },
+
+    "SectionTestimonials": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "items"],
+      "properties": {
+        "type":     { "const": "testimonials" },
+        "headline": { "type": "string", "default": "What our customers say" },
+        "featured": {
+          "$ref": "#/$defs/Testimonial",
+          "description": "Single highlighted quote at the top of the section."
+        },
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 9,
+          "description": "3-up grid below the featured quote. NEVER carousel — users skip carousels.",
+          "items": { "$ref": "#/$defs/Testimonial" }
+        }
+      }
+    },
+
+    "Testimonial": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["quote", "authorName"],
+      "properties": {
+        "quote":       { "type": "string", "minLength": 1, "maxLength": 400 },
+        "authorName":  { "type": "string", "minLength": 1 },
+        "authorRole":  { "type": "string", "description": "e.g. 'Customer in Arlington', 'Homeowner since 2019'." },
+        "avatarUrl":   { "$ref": "#/$defs/OptionalURL" },
+        "rating":      { "type": "integer", "minimum": 1, "maximum": 5 },
+        "source": {
+          "type": "string",
+          "enum": ["google", "yelp", "facebook", "direct", "verified"],
+          "description": "Drives the trust badge under the quote."
+        }
+      }
+    },
+
+    "SectionServiceArea": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "description"],
+      "properties": {
+        "type":        { "const": "service-area" },
+        "headline":    { "type": "string", "default": "Service area" },
+        "description": { "type": "string", "minLength": 1 },
+        "mapEmbedUrl": { "$ref": "#/$defs/OptionalURL", "description": "Google Maps embed URL." },
+        "cities":      {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Optional explicit list of cities served, rendered as a tag cloud."
+        }
+      }
+    },
+
+    "SectionFaq": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "items"],
+      "properties": {
+        "type":     { "const": "faq" },
+        "headline": { "type": "string", "default": "Frequently asked questions" },
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 12,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["question", "answer"],
+            "properties": {
+              "question": { "type": "string", "minLength": 1 },
+              "answer":   { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      },
+      "description": "Always rendered as accordion. Two-column Q&A reads as legal copy and depresses scroll depth."
+    },
+
+    "SectionFooter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type":         { "const": "footer" },
+        "showHours":    { "type": "boolean", "default": true },
+        "showAddress":  { "type": "boolean", "default": true },
+        "showServiceArea": { "type": "boolean", "default": true },
+        "social": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["network", "url"],
+            "properties": {
+              "network": { "type": "string", "enum": ["facebook", "instagram", "x", "linkedin", "youtube", "tiktok", "google"] },
+              "url":     { "$ref": "#/$defs/URL" }
+            }
+          }
+        },
+        "legal": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["label", "href"],
+            "properties": {
+              "label": { "type": "string" },
+              "href":  { "type": "string" }
+            }
+          },
+          "description": "Privacy, Terms, Accessibility, etc."
+        }
+      }
+    },
+
+    "Booking": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["renderer", "eventType", "availability", "formFields", "confirmation"],
+      "properties": {
+        "renderer": {
+          "type": "string",
+          "const": "calcom-month-v1"
+        },
+        "eventType": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["title", "durationMinutes"],
+          "properties": {
+            "title": { "type": "string", "minLength": 1, "examples": ["Free in-home estimate", "Consultation", "Cleaning + Exam"] },
+            "description": { "type": "string", "maxLength": 500 },
+            "durationMinutes": { "type": "integer", "minimum": 5, "maximum": 480 },
+            "location": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind"],
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": ["on-site-customer", "on-site-business", "phone", "video", "hybrid"],
+                  "description": "on-site-customer = tech goes to customer (HVAC, lawn). on-site-business = customer comes to business (salon, dental). phone/video for consults."
+                },
+                "videoProvider": {
+                  "type": "string",
+                  "enum": ["zoom", "google-meet", "microsoft-teams", "manual"],
+                  "description": "Required if kind=video or kind=hybrid."
+                }
+              }
+            },
+            "bufferMinutes": { "type": "integer", "minimum": 0, "default": 0, "description": "Buffer between bookings (drive time, cleanup)." }
+          }
+        },
+        "availability": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["weekly"],
+          "properties": {
+            "weekly": { "$ref": "#/$defs/WeeklyHours" },
+            "blackoutDates": {
+              "type": "array",
+              "items": { "type": "string", "format": "date" },
+              "description": "ISO YYYY-MM-DD dates when no bookings can be made."
+            },
+            "leadTimeHours":   { "type": "integer", "minimum": 0, "default": 4, "description": "Minimum hours of notice before a booking." },
+            "advanceWindowDays": { "type": "integer", "minimum": 1, "default": 60, "description": "How far into the future bookings are allowed." }
+          }
+        },
+        "formFields": {
+          "type": "array",
+          "minItems": 2,
+          "description": "Booking form. name + email always required as first two; others appended.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "label", "type"],
+            "properties": {
+              "id":       { "type": "string", "minLength": 1 },
+              "label":    { "type": "string", "minLength": 1 },
+              "type":     { "type": "string", "enum": ["text", "email", "phone", "textarea", "select"] },
+              "required": { "type": "boolean", "default": false },
+              "placeholder": { "type": "string" },
+              "options":  { "type": "array", "items": { "type": "string" }, "description": "Required if type=select." }
+            }
+          }
+        },
+        "confirmation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["headline"],
+          "properties": {
+            "headline": { "type": "string", "default": "Your booking is confirmed" },
+            "message":  { "type": "string", "description": "Optional follow-up note shown on the in-page success step." },
+            "successRedirectUrl": {
+              "$ref": "#/$defs/OptionalURL",
+              "description": "Optional redirect after a brief delay. Empty = stay on the in-page success step."
+            }
+          }
+        }
+      }
+    },
+
+    "Intake": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["renderer", "title", "questions", "completion"],
+      "properties": {
+        "renderer": {
+          "type": "string",
+          "const": "formbricks-stack-v1"
+        },
+        "title":       { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "questions": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/IntakeQuestion" }
+        },
+        "completion": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["headline"],
+          "properties": {
+            "headline": { "type": "string", "default": "Thank you" },
+            "message":  { "type": "string" },
+            "cta":      { "$ref": "#/$defs/CTA" }
+          }
+        }
+      }
+    },
+
+    "IntakeQuestion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "label"],
+      "properties": {
+        "id":       { "type": "string", "minLength": 1, "pattern": "^[a-zA-Z][a-zA-Z0-9_]*$" },
+        "type":     { "type": "string", "enum": ["text", "textarea", "email", "phone", "number", "select", "multi-select", "rating", "date"] },
+        "label":    { "type": "string", "minLength": 1 },
+        "helper":   { "type": "string" },
+        "required": { "type": "boolean", "default": true, "description": "Per the inverted required-signaling pattern: required is the default. Optional fields opt out." },
+        "options": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Required if type=select or type=multi-select."
+        },
+        "ratingScale": {
+          "type": "string",
+          "enum": ["number-1-5", "number-1-10", "stars-1-5"],
+          "description": "Required if type=rating. v1 ships number scales by default."
+        },
+        "validation": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "minLength": { "type": "integer", "minimum": 0 },
+            "maxLength": { "type": "integer", "minimum": 1 },
+            "min":       { "type": "number", "description": "For type=number." },
+            "max":       { "type": "number" },
+            "pattern":   { "type": "string", "description": "Regex pattern." }
+          }
+        },
+        "showIf": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["questionId", "operator", "value"],
+          "properties": {
+            "questionId": { "type": "string" },
+            "operator":   { "type": "string", "enum": ["equals", "not-equals", "contains", "greater-than", "less-than"] },
+            "value":      {}
+          },
+          "description": "Simple show-if condition only. v1 doesn't support compound logic; add later if user research demands."
+        }
+      }
+    },
+
+    "Admin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["renderer", "objects", "sidebarOrder"],
+      "properties": {
+        "renderer": {
+          "type": "string",
+          "const": "twenty-shell-v1"
+        },
+        "objects": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/AdminObject" }
+        },
+        "sidebarOrder": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Object IDs in their sidebar display order."
+        }
+      }
+    },
+
+    "AdminObject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label", "icon", "fields", "views"],
+      "properties": {
+        "id":    { "type": "string", "pattern": "^[a-z][a-z0-9_]*$", "description": "Snake-case object id, e.g. 'contacts', 'service_calls'." },
+        "label": { "type": "string", "minLength": 1, "description": "Plural display label, e.g. 'Contacts', 'Service Calls'." },
+        "icon":  { "type": "string", "description": "Lucide icon name." },
+        "fields": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/AdminField" }
+        },
+        "views": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/AdminView" }
+        }
+      }
+    },
+
+    "AdminField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label", "type"],
+      "properties": {
+        "id":     { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+        "label":  { "type": "string", "minLength": 1 },
+        "type":   {
+          "type": "string",
+          "enum": ["text", "longtext", "email", "phone", "url", "number", "currency", "date", "datetime", "boolean", "select", "multi-select", "relation"]
+        },
+        "required": { "type": "boolean", "default": false },
+        "options": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "For type=select or multi-select."
+        },
+        "relationTo": {
+          "type": "string",
+          "description": "For type=relation: the target object id."
+        },
+        "showInSidebar": {
+          "type": "boolean",
+          "default": false,
+          "description": "When true, this field shows as a chip in the record-page header (Twenty 'show page chips' pattern)."
+        }
+      }
+    },
+
+    "AdminView": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label", "kind"],
+      "properties": {
+        "id":    { "type": "string", "pattern": "^[a-z][a-z0-9_-]*$" },
+        "label": { "type": "string", "minLength": 1 },
+        "kind":  { "type": "string", "enum": ["table", "kanban", "calendar"] },
+        "isDefault": { "type": "boolean", "default": false, "description": "First view shown when the object is opened." },
+        "table": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "columns": {
+              "type": "array",
+              "items": { "type": "string", "description": "Field id." }
+            },
+            "sortBy": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "field":     { "type": "string" },
+                "direction": { "type": "string", "enum": ["asc", "desc"] }
+              }
+            },
+            "groupBy": { "type": "string", "description": "Field id to group rows by (must be type=select)." }
+          },
+          "description": "Required when kind=table."
+        },
+        "kanban": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["stageField", "stages"],
+          "properties": {
+            "stageField": { "type": "string", "description": "The select field that defines columns. Must be type=select." },
+            "stages": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 9,
+              "description": "Recommended 5-7 per Twenty research. Hard cap 9.",
+              "items": { "type": "string" }
+            },
+            "cardFields": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Field ids shown on each kanban card (2-4 fields recommended)."
+            },
+            "aggregate": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["field", "kind"],
+              "properties": {
+                "field": { "type": "string", "description": "Numeric field id, e.g. 'amount'." },
+                "kind":  { "type": "string", "enum": ["count", "sum", "avg", "min", "max"] }
+              }
+            }
+          },
+          "description": "Required when kind=kanban."
+        }
+      }
+    }
+  }
+}
