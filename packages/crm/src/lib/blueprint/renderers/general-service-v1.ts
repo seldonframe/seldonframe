@@ -15,13 +15,11 @@
  * Exported entry points:
  *   - renderGeneralServiceV1(blueprint) → { html, css }
  *
- * The output `html` is a `<main>` block (no surrounding <html><head>);
- * the output `css` is a stylesheet that compiles cleanly when injected
- * into the existing landing-page renderer's <style> tag. The caller
- * (createDefaultLandingPage) stores these in landing_pages.contentHtml
- * and landing_pages.contentCss.
+ * The output `html` is a `<div class="sf-frame">` block (no surrounding
+ * <html><head>); the output `css` is a stylesheet that compiles cleanly
+ * when injected into the existing landing-page renderer's <style> tag.
  *
- * C3.1 visual elevation:
+ * ─── C3.1 visual elevation ────────────────────────────────────────────
  *   - Cal Sans display + Instrument Serif italic accent + Inter body
  *   - Headline clamp(36px, 8vw, 72px), letter-spacing -0.03em
  *   - Pill (rounded-full) buttons with layered drop shadows
@@ -32,16 +30,26 @@
  *   - Dark #1A1A2E footer with brand-tinted "Powered by"
  *   - Emergency strip deeper red #991B1B with phone-icon pulse
  *   - IntersectionObserver scroll-triggered fade-up animation
- *   - Sticky bottom call bar on mobile
+ *   - Placeholder slot resolution (hide elements with [Brackets])
  *
- * C3.1 placeholder resolution:
- *   - Templates ship with `[City]`, `[Owner Name]`, etc. placeholders so
- *     operators see structure without scaffolding fake data. The renderer
- *     hides any element whose copy still contains an unresolved bracket
- *     pattern — better an empty space than `[County] and surrounding
- *     counties` shown to a real customer. Once the operator runs
- *     update_landing_content the placeholders disappear and the elements
- *     come back.
+ * ─── C3.2 visual elevation ────────────────────────────────────────────
+ *   - Outer #ededed page frame with `rounded-3xl overflow-hidden` inner
+ *     card (Convix pattern — major premium tell)
+ *   - Auto-promoted reviews badge above hero headline (4.9 stars · 1,200+
+ *     Google reviews) lifted from the trust-strip's first matching item,
+ *     with three accent-tinted overlapping avatars
+ *   - Floating glass navbar pill (auto-derived links from visible
+ *     sections + workspace phone CTA on right)
+ *   - Primary-CTA gets chevron-in-circle on the right (Convix / Bloom /
+ *     Stellar pattern) with translateX(2px) on hover
+ *   - Auto-italicize last word of hero headline (3+ words) using
+ *     Instrument Serif when no explicit `*X*` markers given
+ *   - Two decorative blurred radial-gradient glows behind hero in accent
+ *   - Four 6px corner accents on hero card
+ *   - Word-by-word scroll-driven reveal on the featured testimonial
+ *     quote (color: 0.25 → 1.0 opacity scrubbed by scroll position)
+ *   - Inner-stroke `box-shadow inset` borders on service + testimonial
+ *     cards (1.5px white-alpha) for premium depth
  */
 
 import type {
@@ -66,7 +74,7 @@ import { buildThemeTokens } from "../theme";
 // ─── Public entry point ────────────────────────────────────────────────
 
 export interface RenderedLanding {
-  /** The <main> body HTML, without <html>/<head>/<body> wrappers. */
+  /** The <main> body HTML (wrapped in <div class="sf-frame">). */
   html: string;
   /**
    * Stylesheet text. Includes the :root token block + all section styles.
@@ -76,19 +84,45 @@ export interface RenderedLanding {
   css: string;
 }
 
+interface RenderContext {
+  /** Trust-strip item promoted to the hero reviews badge, if any. */
+  promotedReviewItem: { icon?: string; label: string } | null;
+}
+
 export function renderGeneralServiceV1(blueprint: Blueprint): RenderedLanding {
   const themeCss = buildThemeTokens(blueprint.workspace.theme, { surface: "landing" });
 
-  const sectionsHtml = blueprint.landing.sections
-    .map((section) => renderSection(section, blueprint))
-    .filter((s) => s && s.length > 0)
+  const ctx: RenderContext = {
+    promotedReviewItem: findReviewItem(blueprint.landing.sections),
+  };
+
+  // First pass: render every section so we know which survive placeholder
+  // resolution. Navbar links derive from this set so anchors only appear
+  // for sections that actually rendered.
+  const renderedSections = blueprint.landing.sections
+    .map((section) => ({ section, html: renderSection(section, blueprint, ctx) }))
+    .filter((rs) => rs.html.length > 0);
+
+  const navbar = renderNavbar(blueprint, deriveNavItems(renderedSections));
+
+  // Emergency strip stays above the navbar so it's the absolute topmost
+  // element — alert sections should never be visually demoted by chrome.
+  const emergencyHtml = renderedSections.find((rs) => rs.section.type === "emergency-strip")?.html ?? "";
+  const otherSectionsHtml = renderedSections
+    .filter((rs) => rs.section.type !== "emergency-strip")
+    .map((rs) => rs.html)
     .join("\n");
 
-  // ScrollObserver script is appended once after the <main>. Keeping it in
-  // the rendered HTML (not a separate `js` field) lets landing_pages store
-  // a single self-contained string and stays compatible with the existing
-  // contentHtml / contentCss pipeline.
-  const html = `<main class="sf-landing">\n${sectionsHtml}\n</main>\n${SCROLL_OBSERVER_SCRIPT}`;
+  const innerHtml = `<main class="sf-landing">
+${emergencyHtml}
+${navbar}
+${otherSectionsHtml}
+</main>`;
+
+  const html = `<div class="sf-frame">
+${innerHtml}
+</div>
+${SCROLL_OBSERVER_SCRIPT}`;
 
   const css = [themeCss, BASE_CSS].join("\n\n");
 
@@ -97,14 +131,14 @@ export function renderGeneralServiceV1(blueprint: Blueprint): RenderedLanding {
 
 // ─── Section dispatcher ────────────────────────────────────────────────
 
-function renderSection(section: LandingSection, blueprint: Blueprint): string {
+function renderSection(section: LandingSection, blueprint: Blueprint, ctx: RenderContext): string {
   switch (section.type) {
     case "emergency-strip":
       return renderEmergencyStrip(section, blueprint);
     case "hero":
-      return renderHero(section);
+      return renderHero(section, ctx);
     case "trust-strip":
-      return renderTrustStrip(section);
+      return renderTrustStrip(section, ctx);
     case "services-grid":
       return renderServicesGrid(section);
     case "about":
@@ -147,10 +181,6 @@ function hasPlaceholder(s: string): boolean {
   return /\[[^\]]+\]/.test(s);
 }
 
-/**
- * Returns `s` if it has no placeholders (and is non-empty), otherwise null.
- * Use to conditionally render a single piece of copy.
- */
 function resolveOrHide(s: string | null | undefined): string | null {
   if (!s) return null;
   const trimmed = s.trim();
@@ -162,16 +192,40 @@ function resolveOrHide(s: string | null | undefined): string | null {
 /**
  * Renders a headline that supports `*italic accent*` markers — words wrapped
  * in single asterisks become Instrument-Serif italics inline with the
- * Cal-Sans display headline. Example:
- *
- *   "Software *for visionary minds*"  →  Software <em class="sf-italic">for visionary minds</em>
- *
- * Templates aren't required to use the marker; plain headlines render as-is.
- * HTML escaping happens BEFORE the asterisk processing, so user-supplied
- * `<script>` payloads stay escaped.
+ * Cal-Sans display headline. HTML escaping happens BEFORE the asterisk
+ * processing, so user-supplied `<script>` payloads stay escaped.
  */
 function renderEmphasis(s: string): string {
   return escapeHtml(s).replace(/\*([^*]+)\*/g, '<em class="sf-italic">$1</em>');
+}
+
+/**
+ * Auto-italicize the last word of a headline that has no explicit `*X*`
+ * markers AND is at least 3 words long. Hero-only — applying this to every
+ * section headline would feel like over-styled noise.
+ *
+ * Trailing punctuation (`.`, `!`, `?`, etc.) stays outside the italic span
+ * because Instrument Serif terminal punctuation looks sloppy compared to
+ * Cal Sans terminal punctuation.
+ */
+function autoItalicizeLastWord(s: string): string {
+  if (/\*[^*]+\*/.test(s)) return s; // operator already specified accent
+  const parts = s.split(/(\s+)/); // keep separators
+  const wordIdxs = parts
+    .map((p, i) => (/\S/.test(p) ? i : -1))
+    .filter((i) => i >= 0);
+  if (wordIdxs.length < 3) return s;
+  const lastIdx = wordIdxs[wordIdxs.length - 1];
+  const lastWord = parts[lastIdx];
+  const m = lastWord.match(/^(.+?)([.,!?:;]+)?$/);
+  if (!m) return s;
+  const [, core, punct = ""] = m;
+  parts[lastIdx] = `*${core}*${punct}`;
+  return parts.join("");
+}
+
+function renderHeroHeadline(s: string): string {
+  return renderEmphasis(autoItalicizeLastWord(s));
 }
 
 function ctaClass(kind: CTA["kind"]): string {
@@ -188,9 +242,19 @@ function ctaClass(kind: CTA["kind"]): string {
   }
 }
 
+/**
+ * Primary CTAs render with a chevron-in-circle on the right (Convix /
+ * Bloom / Stellar pattern). Other variants stay flat — too many right-side
+ * affordances starts looking gimmicky.
+ */
 function renderCta(cta: CTA): string {
   const href = cta.href ?? "#";
-  return `<a class="${ctaClass(cta.kind)}" href="${escapeAttr(href)}">${escapeHtml(cta.label)}</a>`;
+  const cls = ctaClass(cta.kind);
+  const showChevron = cta.kind === "primary" || cta.kind === undefined;
+  const chevron = showChevron
+    ? `<span class="sf-btn__icon" aria-hidden="true">${CHEVRON_RIGHT_SVG_SMALL}</span>`
+    : "";
+  return `<a class="${cls}" href="${escapeAttr(href)}"><span class="sf-btn__label">${escapeHtml(cta.label)}</span>${chevron}</a>`;
 }
 
 function renderHoursList(hours: WeeklyHours): string {
@@ -214,7 +278,6 @@ function renderHoursList(hours: WeeklyHours): string {
 }
 
 function formatHour(h: number): string {
-  // 24h → 12h with am/pm. 0 = 12am, 12 = 12pm, 24 = 12am next day (treated as 12am)
   const hour = h === 24 ? 0 : h;
   const period = hour < 12 || hour === 24 ? "am" : "pm";
   const display = hour % 12 === 0 ? 12 : hour % 12;
@@ -222,7 +285,6 @@ function formatHour(h: number): string {
 }
 
 function formatPhoneDisplay(e164: string): string {
-  // E.164 like +18175551234 → "(817) 555-1234" for NANP, fallback to original.
   const m = e164.match(/^\+1(\d{3})(\d{3})(\d{4})$/);
   if (m) return `(${m[1]}) ${m[2]}-${m[3]}`;
   return e164;
@@ -233,27 +295,52 @@ function ensureTelHref(href: string): string {
   return `tel:${href.replace(/[^+0-9]/g, "")}`;
 }
 
+/**
+ * Splits a string into `<span class="sf-quote-word">`-wrapped words for
+ * scroll-driven word reveal. Whitespace becomes its own (un-spanned)
+ * segment so the word spacing is preserved when individual word opacity
+ * changes mid-scroll.
+ */
+function splitIntoWords(s: string): string {
+  return escapeHtml(s)
+    .split(/(\s+)/)
+    .map((part) => (/\S/.test(part) ? `<span class="sf-quote-word">${part}</span>` : part))
+    .join("");
+}
+
+// ─── Render context ───────────────────────────────────────────────────
+
+const REVIEW_PATTERN =
+  /(\d+(?:\.\d+)?\s*(?:stars?|\/\s*5)|\d+(?:,\d+)?\+?\s*(?:google\s*)?reviews?)/i;
+
+function findReviewItem(
+  sections: LandingSection[]
+): { icon?: string; label: string } | null {
+  for (const s of sections) {
+    if (s.type !== "trust-strip") continue;
+    for (const item of s.items) {
+      if (hasPlaceholder(item.label)) continue;
+      if (REVIEW_PATTERN.test(item.label)) {
+        return item;
+      }
+    }
+  }
+  return null;
+}
+
 // ─── Inline SVG icons ─────────────────────────────────────────────────
 
-/**
- * Maps blueprint icon names (drawn from the Lucide-style set used in
- * skills/templates/*.json) to inline SVG markup. Inline SVGs avoid an
- * external icon-font dependency, render byte-identically across all
- * runtimes, and inherit the page color via `currentColor`.
- *
- * Stroke width 1.75 reads as premium without being chunky.
- *
- * Unknown names fall back to a generic dot — never throws or returns
- * empty, so the renderer stays deterministic for arbitrary icon strings.
- */
 function iconSvg(name: string | undefined): string {
   const key = (name ?? "").toLowerCase();
   const svg = ICON_MAP[key] ?? ICON_MAP._default;
   return `<span class="sf-icon" aria-hidden="true">${svg}</span>`;
 }
 
-// 24x24 viewBox, stroke 1.75, currentColor — single line definitions kept
-// flat for readability + diffability.
+const CHEVRON_RIGHT_SVG_SMALL = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>`;
+
+const PHONE_SVG_SMALL = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>`;
+
+// 24x24 viewBox, stroke 1.75, currentColor.
 const ICON_MAP: Record<string, string> = {
   wind: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2"/><path d="M9.6 4.6A2 2 0 1 1 11 8H2"/><path d="M12.6 19.4A2 2 0 1 0 14 16H2"/></svg>`,
   flame: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>`,
@@ -264,8 +351,69 @@ const ICON_MAP: Record<string, string> = {
   shieldcheck: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>`,
   award: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/></svg>`,
   badgecheck: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="m9 12 2 2 4-4"/></svg>`,
+  chevronright: CHEVRON_RIGHT_SVG_SMALL,
   _default: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/></svg>`,
 };
+
+// ─── Navbar ────────────────────────────────────────────────────────────
+
+interface NavItem {
+  label: string;
+  href: string;
+}
+
+function deriveNavItems(
+  rendered: Array<{ section: LandingSection; html: string }>
+): NavItem[] {
+  const items: NavItem[] = [];
+  for (const { section } of rendered) {
+    switch (section.type) {
+      case "services-grid":
+        items.push({ label: "Services", href: "#sf-services" });
+        break;
+      case "about":
+        items.push({ label: "About", href: "#sf-about" });
+        break;
+      case "testimonials":
+        items.push({ label: "Reviews", href: "#sf-reviews" });
+        break;
+      case "faq":
+        items.push({ label: "FAQ", href: "#sf-faq" });
+        break;
+    }
+  }
+  // Always anchor "Contact" to the footer if a footer rendered.
+  if (rendered.some((rs) => rs.section.type === "footer")) {
+    items.push({ label: "Contact", href: "#sf-contact" });
+  }
+  return items;
+}
+
+function renderNavbar(blueprint: Blueprint, items: NavItem[]): string {
+  const ws = blueprint.workspace;
+  const phone = ws.contact.phone;
+  const phoneDisplay = formatPhoneDisplay(phone);
+
+  const linksHtml = items.length
+    ? `<ul class="sf-navbar__links">
+        ${items
+          .map(
+            (it) =>
+              `<li><a class="sf-navbar__link" href="${escapeAttr(it.href)}">${escapeHtml(it.label)}</a></li>`
+          )
+          .join("\n")}
+      </ul>`
+    : "";
+
+  return `<nav class="sf-navbar sf-animate" aria-label="Primary">
+  <a class="sf-navbar__brand" href="#sf-hero">${escapeHtml(ws.name)}</a>
+  ${linksHtml}
+  <a class="sf-navbar__cta" href="${escapeAttr(ensureTelHref(phone))}">
+    <span class="sf-navbar__cta-label">${escapeHtml(phoneDisplay)}</span>
+    <span class="sf-navbar__cta-icon" aria-hidden="true">${PHONE_SVG_SMALL}</span>
+  </a>
+</nav>`;
+}
 
 // ─── Section renderers ────────────────────────────────────────────────
 
@@ -280,11 +428,7 @@ function renderEmergencyStrip(section: SectionEmergencyStrip, blueprint: Bluepri
 </aside>`;
 }
 
-function renderHero(section: SectionHero): string {
-  // Hero is the most important above-the-fold real estate. C3.1 ditches the
-  // gray-placeholder image column when no real image is provided — empty
-  // boxes look amateur. Headline is required by the schema, so a hero
-  // always has at least its core copy.
+function renderHero(section: SectionHero, ctx: RenderContext): string {
   if (hasPlaceholder(section.headline)) return "";
 
   const eyebrow = resolveOrHide(section.eyebrow);
@@ -298,14 +442,21 @@ function renderHero(section: SectionHero): string {
     ? renderCta(section.ctaSecondary)
     : "";
 
-  // Variant kept on the wrapper for CSS hooks, but C3.1 uses a single
-  // centered full-bleed layout regardless — image columns are out.
-  const variantClass = `sf-hero--${section.variant ?? "split-image-right"}`;
+  const reviewsBadge = ctx.promotedReviewItem
+    ? renderReviewsBadge(ctx.promotedReviewItem.label)
+    : "";
 
-  return `<section class="sf-hero ${variantClass}">
+  return `<section class="sf-hero" id="sf-hero">
+  <span class="sf-hero__corner sf-hero__corner--tl" aria-hidden="true"></span>
+  <span class="sf-hero__corner sf-hero__corner--tr" aria-hidden="true"></span>
+  <span class="sf-hero__corner sf-hero__corner--bl" aria-hidden="true"></span>
+  <span class="sf-hero__corner sf-hero__corner--br" aria-hidden="true"></span>
+  <span class="sf-hero__glow sf-hero__glow--1" aria-hidden="true"></span>
+  <span class="sf-hero__glow sf-hero__glow--2" aria-hidden="true"></span>
   <div class="sf-hero__content">
+    ${reviewsBadge}
     ${eyebrowHtml}
-    <h1 class="sf-hero__headline sf-animate sf-delay-1">${renderEmphasis(section.headline)}</h1>
+    <h1 class="sf-hero__headline sf-animate sf-delay-1">${renderHeroHeadline(section.headline)}</h1>
     ${subheadHtml}
     <div class="sf-hero__ctas sf-animate sf-delay-3">
       ${renderCta(section.ctaPrimary)}
@@ -315,8 +466,43 @@ function renderHero(section: SectionHero): string {
 </section>`;
 }
 
-function renderTrustStrip(section: SectionTrustStrip): string {
-  const visible = section.items.filter((it) => !hasPlaceholder(it.label));
+/**
+ * Reviews badge: combines an "overlapping avatars" trio with the rating
+ * label pulled from the trust-strip. Placed above the hero headline.
+ *
+ * The avatar gradients are pure CSS — three accent-derived radial fills
+ * stacked with -10px overlap and a 2px ring of the page background. No
+ * external image asset needed.
+ */
+function renderReviewsBadge(label: string): string {
+  // Try to coerce label like "4.9 stars · 1,200+ Google reviews" into a
+  // star count + tail. If we can't pull a number out, just render the
+  // whole label as the badge body (still readable).
+  const ratingMatch = label.match(/(\d+(?:\.\d+)?)\s*(?:stars?|\/\s*5)/i);
+  const ratingValue = ratingMatch ? parseFloat(ratingMatch[1]) : null;
+  const stars = ratingValue
+    ? `<span class="sf-hero__reviews-stars" aria-hidden="true">${"★".repeat(Math.round(ratingValue))}${"☆".repeat(5 - Math.round(ratingValue))}</span>`
+    : "";
+  return `<div class="sf-hero__reviews sf-animate">
+  <span class="sf-hero__reviews-avatars" aria-hidden="true">
+    <span class="sf-hero__reviews-avatar"></span>
+    <span class="sf-hero__reviews-avatar"></span>
+    <span class="sf-hero__reviews-avatar"></span>
+  </span>
+  ${stars}
+  <span class="sf-hero__reviews-label">${escapeHtml(label)}</span>
+</div>`;
+}
+
+function renderTrustStrip(section: SectionTrustStrip, ctx: RenderContext): string {
+  const promoted = ctx.promotedReviewItem;
+  const visible = section.items.filter((it) => {
+    if (hasPlaceholder(it.label)) return false;
+    // Skip the item we promoted to the hero so we don't repeat it.
+    if (promoted && it === promoted) return false;
+    if (promoted && it.label === promoted.label) return false;
+    return true;
+  });
   if (visible.length === 0) return "";
 
   const items = visible
@@ -359,7 +545,6 @@ function renderServicesGrid(section: SectionServicesGrid): string {
       const link = item.learnMoreUrl
         ? `<a class="sf-service__link" href="${escapeAttr(item.learnMoreUrl)}">Learn more →</a>`
         : "";
-      // Stagger visible items for a subtle reveal cascade.
       const delay = `sf-delay-${(idx % 4) + 1}`;
       return `<article class="sf-service sf-animate ${delay}">
       <div class="sf-service__icon">${icon}</div>
@@ -370,7 +555,7 @@ function renderServicesGrid(section: SectionServicesGrid): string {
     </article>`;
     })
     .join("\n");
-  return `<section class="sf-services ${layoutClass}">
+  return `<section class="sf-services ${layoutClass}" id="sf-services">
   <header class="sf-services__header sf-animate">
     <h2 class="sf-services__headline">${renderEmphasis(headline)}</h2>
     ${subheadHtml}
@@ -382,9 +567,6 @@ function renderServicesGrid(section: SectionServicesGrid): string {
 }
 
 function renderAbout(section: SectionAbout): string {
-  // About body is the substance. If it still has placeholders the section
-  // would read as half-finished — better to drop it until the operator
-  // fills it in.
   if (hasPlaceholder(section.body) || hasPlaceholder(section.headline)) return "";
 
   const owner =
@@ -396,7 +578,7 @@ function renderAbout(section: SectionAbout): string {
         }</p>`
       : "";
 
-  return `<section class="sf-about">
+  return `<section class="sf-about" id="sf-about">
   <div class="sf-about__copy sf-animate">
     <h2 class="sf-about__headline">${renderEmphasis(section.headline)}</h2>
     <p class="sf-about__body">${escapeHtml(section.body)}</p>
@@ -431,16 +613,17 @@ function renderMidCta(section: SectionMidCta): string {
 </section>`;
 }
 
-function renderTestimonialCard(t: Testimonial, classes = ""): string {
+function renderTestimonialCard(t: Testimonial, classes = "", featured = false): string {
   const role = t.authorRole && !hasPlaceholder(t.authorRole)
     ? `<span class="sf-quote__role">${escapeHtml(t.authorRole)}</span>`
     : "";
   const stars = t.rating
     ? `<span class="sf-quote__stars" aria-label="${t.rating} out of 5 stars">${"★".repeat(t.rating)}${"☆".repeat(5 - t.rating)}</span>`
     : "";
+  const quoteHtml = featured ? splitIntoWords(t.quote) : escapeHtml(t.quote);
   return `<figure class="sf-quote ${classes}">
     ${stars}
-    <blockquote class="sf-quote__text">${escapeHtml(t.quote)}</blockquote>
+    <blockquote class="sf-quote__text">${quoteHtml}</blockquote>
     <figcaption class="sf-quote__attribution">
       <strong class="sf-quote__name">${escapeHtml(t.authorName)}</strong>
       ${role}
@@ -457,11 +640,10 @@ function renderTestimonials(section: SectionTestimonials): string {
   if (hasPlaceholder(headline)) return "";
   const featured = section.featured && isResolvedTestimonial(section.featured) ? section.featured : null;
   const grid = section.items.filter(isResolvedTestimonial);
-  // If everything is placeholder copy, hide the entire section.
   if (!featured && grid.length === 0) return "";
 
   const featuredHtml = featured
-    ? `<div class="sf-testimonials__featured sf-animate">${renderTestimonialCard(featured, "sf-quote--featured")}</div>`
+    ? `<div class="sf-testimonials__featured sf-animate">${renderTestimonialCard(featured, "sf-quote--featured", true)}</div>`
     : "";
   const gridHtml = grid
     .map((t, idx) => {
@@ -474,7 +656,7 @@ function renderTestimonials(section: SectionTestimonials): string {
     ? `<div class="sf-testimonials__grid">${gridHtml}</div>`
     : "";
 
-  return `<section class="sf-testimonials">
+  return `<section class="sf-testimonials" id="sf-reviews">
   <h2 class="sf-testimonials__headline sf-animate">${renderEmphasis(headline)}</h2>
   ${featuredHtml}
   ${gridWrap}
@@ -526,7 +708,7 @@ function renderFaq(section: SectionFaq): string {
     </details>`
     )
     .join("\n");
-  return `<section class="sf-faq">
+  return `<section class="sf-faq" id="sf-faq">
   <h2 class="sf-faq__headline sf-animate">${renderEmphasis(headline)}</h2>
   <div class="sf-faq__list sf-animate sf-delay-1">
     ${items}
@@ -596,7 +778,7 @@ function renderFooter(section: SectionFooter, blueprint: Blueprint): string {
       ? `<p class="sf-footer__tagline">${escapeHtml(ws.tagline)}</p>`
       : "";
 
-  return `<footer class="sf-footer">
+  return `<footer class="sf-footer" id="sf-contact">
   <div class="sf-footer__top">
     <div class="sf-footer__col sf-footer__col--brand">
       <p class="sf-footer__name">${escapeHtml(ws.name)}</p>
@@ -615,42 +797,35 @@ function renderFooter(section: SectionFooter, blueprint: Blueprint): string {
 </footer>`;
 }
 
-// ─── Scroll observer (animation) ───────────────────────────────────────
+// ─── Scroll observer + word reveal (animation) ────────────────────────
 
 /**
- * Vanilla IntersectionObserver-driven fade-up. Anything tagged
- * `.sf-animate` gets the `--in` class once it crosses 10% into the
- * viewport. No animation library, no React rerender pressure.
+ * Vanilla IntersectionObserver-driven fade-up + word-by-word scroll
+ * reveal on featured testimonial.
  *
- * Includes a `prefers-reduced-motion` short-circuit so accessibility
- * users get content immediately without movement.
- *
- * Defined as a constant so the rendered HTML is byte-stable for the
- * deterministic-render test.
+ * - Anything tagged `.sf-animate` gets `--in` once it crosses 10% into
+ *   the viewport.
+ * - Featured-quote words (`.sf-quote--featured .sf-quote-word`) scrub
+ *   opacity from 0.25 → 1.0 based on viewport position, sequentially
+ *   across the quote.
+ * - `prefers-reduced-motion` short-circuits both — content shows fully
+ *   on load.
  */
-const SCROLL_OBSERVER_SCRIPT = `<script data-sf-scroll-observer="general-service-v1">(function(){if(typeof window==='undefined')return;var d=document;var prefersReduced=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;var els=d.querySelectorAll('.sf-animate');if(prefersReduced||typeof IntersectionObserver==='undefined'){els.forEach(function(el){el.classList.add('sf-animate--in')});return}var obs=new IntersectionObserver(function(entries){entries.forEach(function(e){if(e.isIntersecting){e.target.classList.add('sf-animate--in');obs.unobserve(e.target)}})},{threshold:0.1,rootMargin:'0px 0px -40px 0px'});els.forEach(function(el){obs.observe(el)})})();</script>`;
+const SCROLL_OBSERVER_SCRIPT = `<script data-sf-scroll-observer="general-service-v1">(function(){if(typeof window==='undefined')return;var d=document;var prefersReduced=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;var animateEls=d.querySelectorAll('.sf-animate');if(prefersReduced||typeof IntersectionObserver==='undefined'){animateEls.forEach(function(el){el.classList.add('sf-animate--in')});var allWords=d.querySelectorAll('.sf-quote-word');allWords.forEach(function(w){w.style.opacity='1'});return}var obs=new IntersectionObserver(function(entries){entries.forEach(function(e){if(e.isIntersecting){e.target.classList.add('sf-animate--in');obs.unobserve(e.target)}})},{threshold:0.1,rootMargin:'0px 0px -40px 0px'});animateEls.forEach(function(el){obs.observe(el)});var quoteContainers=d.querySelectorAll('.sf-quote--featured .sf-quote__text');if(quoteContainers.length){var ticking=false;var update=function(){ticking=false;var vh=window.innerHeight||d.documentElement.clientHeight;quoteContainers.forEach(function(el){var rect=el.getBoundingClientRect();var startY=vh;var endY=vh*0.35;var prog=(startY-rect.top)/(startY-endY);if(prog<0)prog=0;if(prog>1)prog=1;var words=el.querySelectorAll('.sf-quote-word');var n=words.length;if(!n)return;words.forEach(function(w,i){var ws=i/n;var we=(i+1)/n;var wp=(prog-ws)/(we-ws);if(wp<0)wp=0;if(wp>1)wp=1;w.style.opacity=(0.25+wp*0.75).toFixed(3)})})};var schedule=function(){if(!ticking){window.requestAnimationFrame(update);ticking=true}};window.addEventListener('scroll',schedule,{passive:true});window.addEventListener('resize',schedule,{passive:true});update()}})();</script>`;
 
 // ─── Stylesheet ────────────────────────────────────────────────────────
 
-/**
- * Base CSS for general-service-v1. Reads from --sf-* tokens emitted by
- * buildThemeTokens; only the layout/spacing/typography rules live here.
- *
- * Mobile-first: default styles target mobile, `@media (min-width: 768px)`
- * adds desktop. No dark mode — light only in v1.
- *
- * Critical decisions per Phase 1 + C3.1:
- *   - Cal Sans (display) + Instrument Serif (italic accent) + Inter (body)
- *   - Headline clamp(36px, 8vw, 72px), letter-spacing -0.03em
- *   - Layered drop-shadow primary buttons, pill rounded-full
- *   - Inline SVG icons with currentColor inherit
- *   - Section bg alternation for rhythm
- *   - Mid-CTA gradient, FAQ +/× rotation, dark #1A1A2E footer
- *   - IntersectionObserver-driven fade-up animations
- */
 const BASE_CSS = `@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap');
 
-/* === sf-landing — general-service-v1 (C3.1) === */
+/* === sf-frame — outer page surface (Convix premium pattern) === */
+.sf-frame {
+  background: #ededed;
+  padding: 12px;
+  min-height: 100vh;
+}
+@media (min-width: 768px) { .sf-frame { padding: 16px; } }
+
+/* === sf-landing — general-service-v1 (C3.2) === */
 .sf-landing {
   background: var(--sf-bg-primary);
   color: #505050;
@@ -659,6 +834,13 @@ const BASE_CSS = `@import url('https://fonts.googleapis.com/css2?family=Inter:wg
   line-height: 1.65;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 12px 32px rgba(0, 0, 0, 0.04);
+  scroll-behavior: smooth;
+}
+@media (min-width: 768px) {
+  .sf-landing { border-radius: 32px; }
 }
 .sf-landing * { box-sizing: border-box; }
 .sf-landing h1, .sf-landing h2, .sf-landing h3 {
@@ -670,9 +852,7 @@ const BASE_CSS = `@import url('https://fonts.googleapis.com/css2?family=Inter:wg
 }
 .sf-landing p { margin: 0; }
 /* :where() zeros out the .sf-landing portion of specificity so per-class
-   button/link rules below (color, etc.) reliably win the cascade. Without
-   this, .sf-landing a (0,0,1,1) outranked .sf-btn--primary (0,0,1,0) and
-   the white CTA text inherited the body color instead. */
+   button/link rules below (color, etc.) reliably win the cascade. */
 .sf-landing :where(a) { color: inherit; text-decoration: none; }
 .sf-landing .sf-italic {
   font-family: var(--sf-font-serif);
@@ -682,10 +862,6 @@ const BASE_CSS = `@import url('https://fonts.googleapis.com/css2?family=Inter:wg
 }
 
 /* Animations — initial state for IntersectionObserver targets */
-@keyframes sfFadeInUp {
-  from { opacity: 0; transform: translate3d(0, 16px, 0); }
-  to   { opacity: 1; transform: translate3d(0, 0, 0); }
-}
 .sf-animate {
   opacity: 0;
   transform: translate3d(0, 16px, 0);
@@ -705,7 +881,79 @@ const BASE_CSS = `@import url('https://fonts.googleapis.com/css2?family=Inter:wg
 .sf-icon { display: inline-flex; align-items: center; justify-content: center; line-height: 0; }
 .sf-icon svg { display: block; }
 
-/* CTA buttons — pill rounded-full, layered shadows for depth */
+/* === Floating glass navbar pill === */
+.sf-navbar {
+  display: flex;
+  align-items: center;
+  gap: clamp(0.75rem, 2vw, 1.5rem);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: saturate(140%) blur(12px);
+  -webkit-backdrop-filter: saturate(140%) blur(12px);
+  border: 1px solid rgba(0, 0, 0, 0.04);
+  border-radius: 9999px;
+  padding: 0.5rem 0.5rem 0.5rem 1.25rem;
+  margin: 1.25rem auto 0;
+  max-width: 760px;
+  width: calc(100% - 2rem);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03), 0 8px 24px rgba(0, 0, 0, 0.04);
+  position: relative;
+  z-index: 20;
+}
+.sf-navbar__brand {
+  font-family: var(--sf-font-display);
+  font-weight: 600;
+  font-size: 1rem;
+  letter-spacing: -0.02em;
+  color: var(--sf-fg-emphasis);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.sf-navbar__links {
+  display: none;
+  flex: 1;
+  justify-content: center;
+  gap: 1.5rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+@media (min-width: 768px) { .sf-navbar__links { display: flex; } }
+.sf-navbar__link {
+  color: var(--sf-fg-muted);
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: color 150ms ease;
+}
+.sf-navbar__link:hover { color: var(--sf-fg-emphasis); }
+.sf-navbar__cta {
+  margin-left: auto;
+  background: var(--sf-fg-emphasis);
+  color: #FFFFFF;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.5rem 0.5rem 1rem;
+  border-radius: 9999px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  letter-spacing: -0.005em;
+  transition: background 180ms ease, transform 180ms ease;
+  flex-shrink: 0;
+}
+.sf-navbar__cta:hover { transform: translateY(-1px); }
+.sf-navbar__cta-label { white-space: nowrap; }
+@media (max-width: 480px) { .sf-navbar__cta-label { display: none; } }
+.sf-navbar__cta-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+/* CTA buttons — pill rounded-full, layered shadows + chevron-in-circle on primary */
 .sf-btn {
   display: inline-flex;
   align-items: center;
@@ -717,7 +965,6 @@ const BASE_CSS = `@import url('https://fonts.googleapis.com/css2?family=Inter:wg
   font-weight: 600;
   font-size: 0.9375rem;
   letter-spacing: -0.005em;
-  text-decoration: none;
   transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
               box-shadow 180ms cubic-bezier(0.22, 1, 0.36, 1),
               background-color 180ms ease,
@@ -725,10 +972,27 @@ const BASE_CSS = `@import url('https://fonts.googleapis.com/css2?family=Inter:wg
   border: 1px solid transparent;
   cursor: pointer;
   white-space: nowrap;
+  gap: 0.5rem;
 }
+.sf-btn__label { display: inline-block; }
+.sf-btn__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9999px;
+  margin-left: 0.375rem;
+  margin-right: -0.625rem;
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  background: rgba(255, 255, 255, 0.18);
+  flex-shrink: 0;
+}
+.sf-btn__icon svg { width: 14px; height: 14px; }
 .sf-btn--primary {
   background: var(--sf-accent);
   color: var(--sf-accent-fg);
+  padding: 0 0.5rem 0 1.5rem;
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.10),
     0 4px 8px rgba(0, 0, 0, 0.08),
@@ -744,17 +1008,18 @@ const BASE_CSS = `@import url('https://fonts.googleapis.com/css2?family=Inter:wg
     0 18px 24px rgba(0, 0, 0, 0.06),
     inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
+.sf-btn--primary:hover .sf-btn__icon { transform: translateX(2px); background: rgba(255, 255, 255, 0.26); }
 .sf-btn--primary:active { transform: translateY(0); }
 .sf-btn--secondary {
   background: #FFFFFF;
   color: var(--sf-fg-emphasis);
   border-color: var(--sf-border-default);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), inset 0 0 0 1px rgba(0, 0, 0, 0.02);
 }
 .sf-btn--secondary:hover {
   border-color: var(--sf-fg-emphasis);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06), inset 0 0 0 1px rgba(0, 0, 0, 0.02);
 }
 .sf-btn--ghost {
   background: transparent;
@@ -765,12 +1030,12 @@ const BASE_CSS = `@import url('https://fonts.googleapis.com/css2?family=Inter:wg
   background: #FFFFFF;
   color: var(--sf-fg-emphasis);
   border-color: var(--sf-border-default);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), inset 0 0 0 1px rgba(0, 0, 0, 0.02);
 }
 .sf-btn--tel:hover {
   border-color: var(--sf-fg-emphasis);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06), inset 0 0 0 1px rgba(0, 0, 0, 0.02);
 }
 
 /* Emergency strip — deeper red, larger phone, pulse on icon */
@@ -787,7 +1052,7 @@ const BASE_CSS = `@import url('https://fonts.googleapis.com/css2?family=Inter:wg
   font-size: 0.9375rem;
   letter-spacing: -0.005em;
   position: relative;
-  z-index: 5;
+  z-index: 10;
 }
 .sf-emergency__icon {
   display: inline-flex;
@@ -812,23 +1077,122 @@ const BASE_CSS = `@import url('https://fonts.googleapis.com/css2?family=Inter:wg
 }
 .sf-emergency__phone:hover { text-decoration-thickness: 2.5px; }
 
-/* Hero — full-width centered, no image column */
+/* === Hero — full-width centered, with corner accents + glow gradients === */
 .sf-hero {
   background: #FFFFFF;
-  padding: clamp(4rem, 10vw, 8rem) 1.5rem clamp(3rem, 8vw, 6rem);
+  padding: clamp(3rem, 8vw, 6rem) 1.5rem clamp(3rem, 8vw, 6rem);
   text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.sf-hero__corner {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  background: var(--sf-fg-emphasis);
+  z-index: 3;
+  pointer-events: none;
+  opacity: 0.85;
+}
+.sf-hero__corner--tl { top: 28px; left: 28px; }
+.sf-hero__corner--tr { top: 28px; right: 28px; }
+.sf-hero__corner--bl { bottom: 28px; left: 28px; }
+.sf-hero__corner--br { bottom: 28px; right: 28px; }
+@media (max-width: 640px) {
+  .sf-hero__corner--tl { top: 16px; left: 16px; }
+  .sf-hero__corner--tr { top: 16px; right: 16px; }
+  .sf-hero__corner--bl { bottom: 16px; left: 16px; }
+  .sf-hero__corner--br { bottom: 16px; right: 16px; }
+}
+.sf-hero__glow {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+  filter: blur(80px);
+  opacity: 0.55;
+}
+.sf-hero__glow--1 {
+  top: -10%;
+  left: 5%;
+  width: 520px;
+  height: 520px;
+  background: radial-gradient(circle, color-mix(in srgb, var(--sf-accent) 30%, transparent), transparent 70%);
+}
+.sf-hero__glow--2 {
+  bottom: -20%;
+  right: 5%;
+  width: 460px;
+  height: 460px;
+  background: radial-gradient(circle, color-mix(in srgb, var(--sf-accent) 18%, transparent), transparent 70%);
 }
 .sf-hero__content {
   max-width: 56rem;
   margin: 0 auto;
+  position: relative;
+  z-index: 2;
+}
+.sf-hero__reviews {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 9999px;
+  padding: 0.4rem 0.875rem 0.4rem 0.4rem;
+  font-size: 0.8125rem;
+  color: var(--sf-fg-muted);
+  font-weight: 500;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  flex-wrap: wrap;
+}
+.sf-hero__reviews-avatars {
+  display: inline-flex;
+  align-items: center;
+}
+.sf-hero__reviews-avatar {
+  display: inline-block;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid #FFFFFF;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+.sf-hero__reviews-avatar:nth-child(1) {
+  background: radial-gradient(circle at 30% 30%,
+    color-mix(in srgb, var(--sf-accent) 60%, white),
+    var(--sf-accent));
+}
+.sf-hero__reviews-avatar:nth-child(2) {
+  margin-left: -10px;
+  background: radial-gradient(circle at 30% 30%,
+    color-mix(in srgb, var(--sf-accent) 25%, white),
+    color-mix(in srgb, var(--sf-accent) 70%, #4B5563));
+}
+.sf-hero__reviews-avatar:nth-child(3) {
+  margin-left: -10px;
+  background: radial-gradient(circle at 30% 30%,
+    color-mix(in srgb, var(--sf-accent) 80%, white),
+    color-mix(in srgb, var(--sf-accent) 50%, #1F2937));
+}
+.sf-hero__reviews-stars {
+  color: #F59E0B;
+  letter-spacing: 0.05em;
+  font-size: 0.8125rem;
+}
+.sf-hero__reviews-label {
+  color: var(--sf-fg-emphasis);
+  font-weight: 600;
 }
 .sf-hero__eyebrow {
   display: inline-block;
   text-transform: uppercase;
   letter-spacing: 0.14em;
   font-size: 0.75rem;
-  color: var(--sf-fg-muted);
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.25rem;
   font-weight: 600;
   padding: 0.375rem 0.875rem;
   background: var(--sf-accent-soft);
@@ -896,6 +1260,7 @@ const BASE_CSS = `@import url('https://fonts.googleapis.com/css2?family=Inter:wg
 .sf-services {
   background: #FFFFFF;
   padding: clamp(4rem, 8vw, 7rem) 1.5rem;
+  scroll-margin-top: 80px;
 }
 .sf-services > * { max-width: 1200px; margin-left: auto; margin-right: auto; }
 .sf-services__header { text-align: center; margin-bottom: clamp(2.5rem, 5vw, 4rem); max-width: 38rem; }
@@ -930,11 +1295,14 @@ const BASE_CSS = `@import url('https://fonts.googleapis.com/css2?family=Inter:wg
   border-radius: 16px;
   padding: 1.75rem;
   transition: border-color 200ms ease, transform 200ms ease, box-shadow 200ms ease;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6);
 }
 .sf-service:hover {
   border-color: var(--sf-accent);
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.05);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.6),
+    0 8px 24px rgba(0, 0, 0, 0.05);
 }
 .sf-service__icon {
   display: inline-flex;
@@ -946,6 +1314,7 @@ const BASE_CSS = `@import url('https://fonts.googleapis.com/css2?family=Inter:wg
   background: var(--sf-accent-soft);
   color: var(--sf-accent);
   margin-bottom: 1.25rem;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sf-accent) 12%, transparent);
 }
 .sf-service__icon svg { width: 22px; height: 22px; }
 .sf-service__title {
@@ -972,7 +1341,6 @@ const BASE_CSS = `@import url('https://fonts.googleapis.com/css2?family=Inter:wg
   color: var(--sf-accent);
   font-weight: 600;
   font-size: 0.875rem;
-  text-decoration: none;
 }
 .sf-service__link:hover { text-decoration: underline; text-underline-offset: 3px; }
 
@@ -980,6 +1348,7 @@ const BASE_CSS = `@import url('https://fonts.googleapis.com/css2?family=Inter:wg
 .sf-about {
   background: #FAFAF7;
   padding: clamp(4rem, 8vw, 7rem) 1.5rem;
+  scroll-margin-top: 80px;
 }
 .sf-about__copy { max-width: 42rem; margin: 0 auto; text-align: center; }
 .sf-about__headline {
@@ -1031,6 +1400,7 @@ const BASE_CSS = `@import url('https://fonts.googleapis.com/css2?family=Inter:wg
 .sf-testimonials {
   background: #FFFFFF;
   padding: clamp(4rem, 8vw, 7rem) 1.5rem;
+  scroll-margin-top: 80px;
 }
 .sf-testimonials > * { max-width: 1200px; margin-left: auto; margin-right: auto; }
 .sf-testimonials__headline {
@@ -1043,7 +1413,10 @@ const BASE_CSS = `@import url('https://fonts.googleapis.com/css2?family=Inter:wg
   text-wrap: balance;
 }
 .sf-testimonials__featured { max-width: 48rem; margin: 0 auto clamp(2rem, 4vw, 3rem); }
-.sf-testimonials__featured .sf-quote__text { font-size: clamp(1.25rem, 2.5vw, 1.625rem); line-height: 1.45; }
+.sf-testimonials__featured .sf-quote__text {
+  font-size: clamp(1.5rem, 3vw, 2.125rem);
+  line-height: 1.35;
+}
 .sf-testimonials__grid {
   display: grid;
   gap: 1.25rem;
@@ -1061,12 +1434,15 @@ const BASE_CSS = `@import url('https://fonts.googleapis.com/css2?family=Inter:wg
   display: flex;
   flex-direction: column;
   gap: 0.875rem;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6);
 }
 .sf-quote--featured {
   background: #FFFFFF;
   border: 1px solid var(--sf-border-default);
-  padding: clamp(2rem, 4vw, 2.75rem);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.04);
+  padding: clamp(2rem, 4vw, 3rem);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.7),
+    0 12px 32px rgba(0, 0, 0, 0.04);
 }
 .sf-quote__text {
   font-family: var(--sf-font-display);
@@ -1076,6 +1452,11 @@ const BASE_CSS = `@import url('https://fonts.googleapis.com/css2?family=Inter:wg
   margin: 0;
   font-style: normal;
   letter-spacing: -0.012em;
+}
+/* Word-by-word scroll reveal for featured quote */
+.sf-quote--featured .sf-quote-word {
+  opacity: 0.25;
+  transition: opacity 200ms ease;
 }
 .sf-quote__attribution { display: flex; flex-direction: column; gap: 0.125rem; font-size: 0.875rem; }
 .sf-quote__name { color: var(--sf-fg-emphasis); font-weight: 600; }
@@ -1127,6 +1508,7 @@ const BASE_CSS = `@import url('https://fonts.googleapis.com/css2?family=Inter:wg
 .sf-faq {
   background: #FFFFFF;
   padding: clamp(4rem, 8vw, 7rem) 1.5rem;
+  scroll-margin-top: 80px;
 }
 .sf-faq > * { max-width: 48rem; margin-left: auto; margin-right: auto; }
 .sf-faq__headline {
@@ -1173,13 +1555,11 @@ const BASE_CSS = `@import url('https://fonts.googleapis.com/css2?family=Inter:wg
   transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .sf-faq__chevron::before {
-  /* horizontal bar */
   top: 50%; left: 0; right: 0;
   height: 1.5px;
   transform: translateY(-50%);
 }
 .sf-faq__chevron::after {
-  /* vertical bar */
   left: 50%; top: 0; bottom: 0;
   width: 1.5px;
   transform: translateX(-50%);
@@ -1201,6 +1581,7 @@ const BASE_CSS = `@import url('https://fonts.googleapis.com/css2?family=Inter:wg
   font-size: 0.9375rem;
   position: relative;
   isolation: isolate;
+  scroll-margin-top: 80px;
 }
 .sf-footer::before {
   content: "";
@@ -1211,7 +1592,7 @@ const BASE_CSS = `@import url('https://fonts.googleapis.com/css2?family=Inter:wg
   z-index: 1;
 }
 .sf-footer h3 { color: #FFFFFF; }
-.sf-footer a { color: #B5B5C2; text-decoration: none; transition: color 150ms ease; }
+.sf-footer a { color: #B5B5C2; transition: color 150ms ease; }
 .sf-footer a:hover { color: #FFFFFF; }
 .sf-footer__top {
   max-width: 1200px;
@@ -1258,16 +1639,11 @@ const BASE_CSS = `@import url('https://fonts.googleapis.com/css2?family=Inter:wg
   color: var(--sf-accent-hover) !important;
 }
 
-/* Sticky mobile call bar — pinned phone CTA on small viewports */
+/* Mobile responsive tweaks */
 @media (max-width: 767px) {
-  .sf-landing { padding-bottom: 4rem; }
-  .sf-hero__ctas .sf-btn--tel,
-  .sf-mid-cta__ctas .sf-btn--tel {
-    /* Inline sticky-bar CTAs stay inline; only the topmost tel-CTA goes sticky. */
-    position: static;
-    width: 100%;
-  }
-  .sf-hero { padding-top: clamp(3rem, 9vw, 5rem); padding-bottom: clamp(2.5rem, 7vw, 4rem); }
+  .sf-navbar { gap: 0.5rem; padding-left: 1rem; }
   .sf-hero__ctas .sf-btn { flex: 1 1 auto; }
+  .sf-hero__reviews { font-size: 0.75rem; padding: 0.35rem 0.75rem 0.35rem 0.35rem; }
+  .sf-hero__reviews-avatar { width: 24px; height: 24px; }
 }
 `;
