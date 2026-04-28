@@ -109,10 +109,15 @@ async function handleAnonymousCreate(request: Request, body: WorkspaceCreateBody
   try {
     const result = await createAnonymousWorkspace({ name, source, industry });
     const urls = buildWorkspaceUrls(result.slug, WORKSPACE_BASE_DOMAIN, result.orgId);
+    // C6: thread the bearer token into structured URL builder so it
+    // produces the single-click `admin_url` for the operator. Without
+    // this they can't reach the dashboard at all (the legacy
+    // /switch-workspace path requires a NextAuth session).
     const structuredUrls = buildStructuredWorkspaceUrls(
       result.slug,
       WORKSPACE_BASE_DOMAIN,
-      result.orgId
+      result.orgId,
+      { bearerToken: result.bearerToken }
     );
 
     logEvent(
@@ -137,12 +142,19 @@ async function handleAnonymousCreate(request: Request, body: WorkspaceCreateBody
           created_at: new Date().toISOString(),
         },
         bearer_token: result.bearerToken,
+        bearer_token_expires_at:
+          result.bearerTokenExpiresAt?.toISOString() ?? null,
         // Flat `urls` retained for backward compat with MCP v1.0.1 clients.
         // Structured fields below (public_urls / admin_urls / admin_setup_note)
         // are the canonical shape for v1.0.2+ clients — they let Claude Code
         // present the result with a clean public-vs-admin distinction.
         urls,
         public_urls: structuredUrls.public_urls,
+        // C6: single-click bearer-token admin URL. Most-prominent field
+        // in the response — Claude Code surfaces it as "⚡ Admin Dashboard
+        // (bookmark this!)" so operators land in the dashboard with one
+        // click, no signup.
+        admin_url: structuredUrls.admin_url,
         admin_urls: structuredUrls.admin_urls,
         admin_setup_note: structuredUrls.admin_setup_note,
         installed: result.installedBlocks,

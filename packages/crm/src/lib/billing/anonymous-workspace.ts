@@ -34,6 +34,13 @@ export type AnonymousCreateResult = {
   slug: string;
   name: string;
   bearerToken: string;
+  /**
+   * C6: when present, the bearer token expires at this instant. The
+   * route handler echoes this into `bearer_token_expires_at` so MCP
+   * clients can warn the operator before the admin URL stops working.
+   * Null for tokens minted without an expiry (legacy paths).
+   */
+  bearerTokenExpiresAt: Date | null;
   installedBlocks: string[];
 };
 
@@ -102,7 +109,14 @@ export async function createAnonymousWorkspace(
     throw new Error("Could not create workspace.");
   }
 
-  const minted = await mintWorkspaceToken(org.id, { name: "mcp:anonymous-create" });
+  // C6: 7-day expiry on the bearer minted at workspace creation. The token
+  // doubles as the admin-URL credential (see /admin/[workspaceId]/route.ts);
+  // capping its lifetime is a small but real harm-reduction step in case a
+  // URL leaks via screenshot / clipboard / browser history.
+  const minted = await mintWorkspaceToken(org.id, {
+    name: "mcp:anonymous-create",
+    expiresInDays: 7,
+  });
 
   // Seed default templates for every block we mark as enabled. Without these
   // rows the public subdomain routes (/, /book, /intake) point at the right
@@ -141,6 +155,7 @@ export async function createAnonymousWorkspace(
     slug: org.slug,
     name: org.name,
     bearerToken: minted.token,
+    bearerTokenExpiresAt: minted.expiresAt,
     installedBlocks: DEFAULT_ENABLED_BLOCKS,
   };
 }
@@ -170,18 +185,33 @@ export function buildWorkspaceUrls(
 /**
  * Structured public/admin split — used in the create_workspace API response
  * alongside the flat `urls` object. The split makes it easier for Claude Code
- * to present the result clearly (public URLs are shareable; admin URLs need
- * login + workspace ownership).
+ * to present the result clearly.
+ *
+ * C6: when a fresh bearer token is provided, we also build an `admin_url`
+ * that lets the operator click directly into the admin dashboard with
+ * zero signup. The token rides as a query-string param; the route at
+ * /admin/[workspaceId] validates it, sets the admin-token cookie, and
+ * redirects to /dashboard. Token expires after 7 days (matched on both
+ * the api_keys row and the cookie).
  */
 export function buildStructuredWorkspaceUrls(
   slug: string,
   baseDomain: string,
-  orgId: string
+  orgId: string,
+  opts?: { bearerToken?: string }
 ) {
   const publicOrigin = `https://${slug}.${baseDomain}`;
   const adminOrigin = `https://${APP_HOST}`;
   const sw = (next: string) =>
     `${adminOrigin}/switch-workspace?to=${encodeURIComponent(orgId)}&next=${encodeURIComponent(next)}`;
+
+  // C6 — single-click admin URL. Only present when a bearer token is
+  // available (e.g. immediately after create_workspace). Pre-existing
+  // workspaces returned via list_workspaces don't get this URL because
+  // we don't re-mint tokens on read paths.
+  const adminUrl = opts?.bearerToken
+    ? `${adminOrigin}/admin/${encodeURIComponent(orgId)}?token=${encodeURIComponent(opts.bearerToken)}`
+    : null;
 
   return {
     public_urls: {
@@ -189,6 +219,7 @@ export function buildStructuredWorkspaceUrls(
       book: `${publicOrigin}/book`,
       intake: `${publicOrigin}/intake`,
     },
+    admin_url: adminUrl,
     admin_urls: {
       dashboard: sw("/dashboard"),
       contacts: sw("/contacts"),
@@ -196,12 +227,13 @@ export function buildStructuredWorkspaceUrls(
       agents: sw("/agents"),
       settings: sw("/settings"),
     },
-    admin_setup_note:
-      "Admin URLs require login at app.seldonframe.com AND for the workspace to be linked to your user account. To enable browser admin access: " +
-      "(1) Sign up at https://app.seldonframe.com/signup. " +
-      "(2) In Settings → API, generate a SELDONFRAME_API_KEY. " +
-      "(3) `export SELDONFRAME_API_KEY=sk-…` in your shell and restart Claude Code. " +
-      "(4) Run `link_workspace_owner({})` to attach this workspace to your account. " +
-      "After that, clicking an admin URL routes through /switch-workspace, sets the active-org cookie, and lands you on the requested page.",
+    admin_setup_note: adminUrl
+      ? "The `admin_url` above is the fastest way in: paste it into your browser to land directly on the dashboard (token-scoped, no signup, expires in 7 days). The `admin_urls` map is the legacy login-required path — use it only after you've signed up at app.seldonframe.com and run link_workspace_owner({})."
+      : "Admin URLs require login at app.seldonframe.com AND for the workspace to be linked to your user account. To enable browser admin access: " +
+        "(1) Sign up at https://app.seldonframe.com/signup. " +
+        "(2) In Settings → API, generate a SELDONFRAME_API_KEY. " +
+        "(3) `export SELDONFRAME_API_KEY=sk-…` in your shell and restart Claude Code. " +
+        "(4) Run `link_workspace_owner({})` to attach this workspace to your account. " +
+        "After that, clicking an admin URL routes through /switch-workspace, sets the active-org cookie, and lands you on the requested page.",
   };
 }

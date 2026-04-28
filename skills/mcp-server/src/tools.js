@@ -63,6 +63,10 @@ export const TOOLS = [
       } else {
         setDefaultWorkspace(id);
       }
+      // C6: surface the bearer-token admin URL as the most prominent line
+      // in the response. Operators paste it into their browser and land
+      // directly on the dashboard — no signup, no login, no OAuth.
+      const adminUrl = result.admin_url ?? null;
       const payload = {
         ok: true,
         workspace: {
@@ -72,13 +76,23 @@ export const TOOLS = [
           tier: ws.tier ?? "free",
           created_at: ws.created_at,
         },
+        // ⚡ Admin Dashboard (bookmark this!): the one URL operators need.
+        admin_url: adminUrl,
+        admin_url_expires_at: result.bearer_token_expires_at ?? null,
+        admin_url_message: adminUrl
+          ? `⚡ Admin Dashboard (bookmark this!): ${adminUrl}\nClick to open the dashboard — no signup needed. Token expires in 7 days; re-mint with list_workspaces({}) when it does.`
+          : null,
         urls: result.urls ?? ws.urls ?? null,
+        public_urls: result.public_urls ?? null,
         installed: result.installed ?? ["crm", "caldiy-booking", "formbricks-intake", "brain-v2"],
         next: [
+          adminUrl
+            ? `Open the admin dashboard: ${adminUrl}  (paste into your browser; no signup needed)`
+            : null,
           "install_vertical_pack({ pack: 'real-estate' })  // or 'dental', 'legal'",
           "fetch_source_for_soul({ url: 'https://yoursite.com' }) → submit_soul({ soul })",
           "get_workspace_snapshot({}) — read workspace state to reason about next steps",
-        ],
+        ].filter(Boolean),
       };
       return firstEver ? withFirstCallBanner(payload) : payload;
     },
