@@ -33,7 +33,14 @@ test("renderGeneralServiceV1 — escapes workspace name (XSS safety)", () => {
   const blueprint = pickTemplate("general");
   blueprint.workspace.name = `<script>alert("xss")</script>`;
   const out = renderGeneralServiceV1(blueprint);
-  assert.ok(!out.html.includes("<script>"), "raw <script> tag must not appear in output");
+  // C3.1 legitimately appends a self-contained IntersectionObserver <script>
+  // for scroll animations, so we assert specifically against the malicious
+  // payload rather than any <script> tag.
+  assert.ok(
+    !out.html.includes(`<script>alert`),
+    "raw <script>alert payload must not appear in output"
+  );
+  assert.ok(!out.html.includes(`alert("xss")`), "alert call must not appear unescaped");
   assert.ok(out.html.includes("&lt;script&gt;"), "escaped form should appear");
 });
 
@@ -78,14 +85,36 @@ test("renderGeneralServiceV1 — output is byte-stable for the same blueprint (d
 
 test("renderGeneralServiceV1 — services-grid renders all items from blueprint", () => {
   const blueprint = pickTemplate("hvac");
-  // hvac.json's services grid has 6 items
+  // hvac.json's services grid has 6 items. C3.1 cards carry multiple classes
+  // (`sf-service sf-animate sf-delay-N`) so we count by the unique title slot
+  // instead of the whole-attribute equality match.
   const out = renderGeneralServiceV1(blueprint);
-  const serviceCardCount = (out.html.match(/class="sf-service"/g) ?? []).length;
+  const serviceCardCount = (out.html.match(/class="sf-service__title"/g) ?? []).length;
   assert.equal(serviceCardCount, 6, "HVAC has 6 services");
 });
 
 test("renderGeneralServiceV1 — testimonials have a featured quote + grid items", () => {
+  // C3.1 hides testimonials that still contain `[Customer Name]` /
+  // `[Neighborhood]` placeholders. Templates ship with placeholders so the
+  // shipped output for raw HVAC is intentionally empty until the operator
+  // fills in real testimonials. To verify the renderer can produce both
+  // featured + grid, we resolve the placeholders inline.
   const blueprint = pickTemplate("hvac");
+  if (blueprint.landing.sections) {
+    for (const section of blueprint.landing.sections) {
+      if (section.type === "testimonials") {
+        section.headline = "What our customers say";
+        if (section.featured) {
+          section.featured.authorName = "Sarah Linton";
+          section.featured.authorRole = "Homeowner in Bedford";
+        }
+        section.items.forEach((item, i) => {
+          item.authorName = `Real Customer ${i + 1}`;
+          item.authorRole = "Homeowner";
+        });
+      }
+    }
+  }
   const out = renderGeneralServiceV1(blueprint);
   assert.ok(out.html.includes("sf-testimonials__featured"), "featured quote present");
   assert.ok(out.html.includes("sf-testimonials__grid"), "grid present");

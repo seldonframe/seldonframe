@@ -281,6 +281,7 @@ export function buildThemeTokens(theme: Theme, options: BuildThemeTokensOptions)
     `  /* Typography */`,
     `  --sf-font-display: ${displayFontFamily(theme.displayFont)};`,
     `  --sf-font-body: ${bodyFontFamily(theme.bodyFont)};`,
+    `  --sf-font-serif: "Instrument Serif", "Iowan Old Style", Georgia, "Times New Roman", serif;`,
     "",
     `  /* Spacing rhythm (matches Tailwind defaults; surfaces shouldn't override) */`,
     `  --sf-space-2: 0.5rem;`,
