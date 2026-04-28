@@ -24,9 +24,16 @@ test("buildThemeTokens — admin surface uses pure white background", () => {
   assert.ok(css.includes("--sf-bg-primary: #FFFFFF;"), "admin should use #FFFFFF");
 });
 
-test("buildThemeTokens — booking surface uses pure white background", () => {
+test("buildThemeTokens — booking surface uses warm off-white background (C4)", () => {
+  // C4: booking moved from #FFFFFF → #FAFAF7 so the Cal.com-style page
+  // reads as the same product as the landing page, not a separate app.
   const css = buildThemeTokens(baseTheme, { surface: "booking" });
-  assert.ok(css.includes("--sf-bg-primary: #FFFFFF;"), "booking should use #FFFFFF");
+  assert.ok(css.includes("--sf-bg-primary: #FAFAF7;"), "booking should use #FAFAF7");
+});
+
+test("buildThemeTokens — intake surface uses warm off-white background (C4)", () => {
+  const css = buildThemeTokens(baseTheme, { surface: "intake" });
+  assert.ok(css.includes("--sf-bg-primary: #FAFAF7;"), "intake should use #FAFAF7");
 });
 
 test("buildThemeTokens — derives accent-hover, accent-soft, accent-fg, ring from accent", () => {

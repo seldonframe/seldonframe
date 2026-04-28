@@ -204,14 +204,20 @@ function radiusFor(scale: Theme["radiusScale"] = "default"): RadiusScale {
 // ─── Surface backgrounds ──────────────────────────────────────────────
 
 /**
- * Per Phase 1 decision 4: warm off-white for the LANDING surface only.
- * Admin and booking stay pure white because their data density requires
- * maximum contrast. Pass the surface to buildThemeTokens to switch.
+ * Per Phase 1 decision 4: warm off-white #FAFAF7 for public-facing
+ * conversion surfaces (landing, booking, intake) — keeps the brand tone
+ * unified across the customer journey. Admin stays pure white because
+ * data density requires maximum contrast and the surface isn't competing
+ * for "premium feel".
+ *
+ * C4 update: booking + intake moved from #FFFFFF → #FAFAF7 so the
+ * Cal.com-style booking page reads as a different *page* of the same
+ * site, not a different app.
  */
 export type Surface = "landing" | "admin" | "booking" | "intake";
 
 function pageBgFor(surface: Surface): string {
-  return surface === "landing" ? "#FAFAF7" : "#FFFFFF";
+  return surface === "admin" ? "#FFFFFF" : "#FAFAF7";
 }
 
 // ─── Public entry point ───────────────────────────────────────────────
