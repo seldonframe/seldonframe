@@ -270,16 +270,24 @@ const authProxy = auth(async (request) => {
     return NextResponse.redirect(new URL(isWelcomeShown ? "/dashboard" : "/welcome", request.url));
   }
 
-  const planGate = enforcePlanGate({
-    request,
-    pathname,
-    user: {
-      planId: user?.planId,
-      subscriptionStatus: user?.subscriptionStatus,
-      trialEndsAt: user?.trialEndsAt,
-    },
-    isAuthenticated,
-  });
+  // C6: skip plan-gate for admin-token sessions. They're attached to
+  // a workspace, not a user, and the workspace's plan is enforced at
+  // API-call time. Running them through the user-plan gate would 307
+  // them to /pricing because the synthetic session has no plan/billing
+  // state.
+  const planGate =
+    hasNextAuth
+      ? enforcePlanGate({
+          request,
+          pathname,
+          user: {
+            planId: user?.planId,
+            subscriptionStatus: user?.subscriptionStatus,
+            trialEndsAt: user?.trialEndsAt,
+          },
+          isAuthenticated,
+        })
+      : { response: null, billingStatus: "active" as const, readOnly: false };
 
   if (planGate.response) {
     return planGate.response;
