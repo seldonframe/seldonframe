@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import {
+  buildStructuredWorkspaceUrls,
   buildWorkspaceUrls,
   createAnonymousWorkspace,
 } from "@/lib/billing/anonymous-workspace";
@@ -101,6 +102,11 @@ async function handleAnonymousCreate(request: Request, body: WorkspaceCreateBody
   try {
     const result = await createAnonymousWorkspace({ name, source });
     const urls = buildWorkspaceUrls(result.slug, WORKSPACE_BASE_DOMAIN, result.orgId);
+    const structuredUrls = buildStructuredWorkspaceUrls(
+      result.slug,
+      WORKSPACE_BASE_DOMAIN,
+      result.orgId
+    );
 
     logEvent(
       "anonymous_workspace_created",
@@ -124,11 +130,19 @@ async function handleAnonymousCreate(request: Request, body: WorkspaceCreateBody
           created_at: new Date().toISOString(),
         },
         bearer_token: result.bearerToken,
+        // Flat `urls` retained for backward compat with MCP v1.0.1 clients.
+        // Structured fields below (public_urls / admin_urls / admin_setup_note)
+        // are the canonical shape for v1.0.2+ clients — they let Claude Code
+        // present the result with a clean public-vs-admin distinction.
         urls,
+        public_urls: structuredUrls.public_urls,
+        admin_urls: structuredUrls.admin_urls,
+        admin_setup_note: structuredUrls.admin_setup_note,
         installed: result.installedBlocks,
         next: [
-          "install_vertical_pack({ pack: 'real-estate' })",
+          "install_vertical_pack({ pack: '<industry-slug>' }) — auto-detects builtin packs (real-estate-agency); falls back to AI synthesis for other industries",
           "fetch_source_for_soul({ url: 'https://yoursite.com' }) → submit_soul({ soul })",
+          "configure_booking({ title, duration_minutes, description }) — tune the booking page if you collected business hours",
           "get_workspace_snapshot({}) — read workspace state to reason about next steps",
         ],
       },
@@ -368,6 +382,11 @@ export async function POST(request: Request) {
     const isPlanRequired =
       loweredMessage.includes("pro plan required") ||
       loweredMessage.includes("used your free workspace") ||
+      // claude/pre-launch-polish: matches the new pricing message in
+      // lib/billing/orgs.ts. Kept the older $9 substring as a fallback
+      // for any in-flight messages from older deploys, plus a durable
+      // dollar-independent substring for future stability.
+      loweredMessage.includes("additional workspace requires a paid tier") ||
       loweredMessage.includes("additional workspace is $9/month");
     const isWorkspaceLimit = loweredMessage.includes("organization limit reached") || loweredMessage.includes("workspace limit");
     const status = isPlanRequired || isWorkspaceLimit ? 403 : 500;
