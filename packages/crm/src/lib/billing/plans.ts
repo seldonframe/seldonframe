@@ -22,7 +22,10 @@ export const PLANS: Plan[] = [
     type: "cloud",
     price: 49,
     yearlyPrice: 468,
-    stripePriceId: "",
+    // Live Stripe price (lookup_key: starter_monthly). Marketing surface
+    // labels this tier "Starter" — see /pricing and the landing
+    // Pricing component.
+    stripePriceId: "price_1TQzh7JOtNZA0x7xLOTicHkW",
     stripeYearlyPriceId: "",
     limits: {
       maxOrgs: 1,
@@ -38,7 +41,9 @@ export const PLANS: Plan[] = [
     type: "cloud",
     price: 99,
     yearlyPrice: 948,
-    stripePriceId: "",
+    // Live Stripe price (lookup_key: cloud_pro_monthly). Marketing surface
+    // labels this tier "Operator".
+    stripePriceId: "price_1TNY81JOtNZA0x7xsulCSP6x",
     stripeYearlyPriceId: "",
     limits: {
       maxOrgs: 1,
@@ -54,7 +59,9 @@ export const PLANS: Plan[] = [
     type: "pro",
     price: 149,
     yearlyPrice: 1428,
-    stripePriceId: "",
+    // Live Stripe price (lookup_key: pro_3_monthly). Marketing surface
+    // labels this tier "Agency".
+    stripePriceId: "price_1TQzjrJOtNZA0x7xV4UFxWrH",
     stripeYearlyPriceId: "",
     limits: {
       maxOrgs: 3,
