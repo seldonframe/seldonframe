@@ -1,4 +1,5 @@
 import { auth } from "@/auth";
+import type { Session } from "next-auth";
 import { and, eq, or } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -79,13 +80,18 @@ export async function requireAuth() {
   // that mutates the users table can no-op for token sessions.
   const adminCtx = await resolveAdminTokenContext();
   if (adminCtx) {
-    return {
+    // Cast to `Session` directly — `Awaited<ReturnType<typeof auth>>`
+    // is a union that includes `NextMiddleware`, which doesn't have a
+    // `user` field, so callers like layout.tsx that read `session.user`
+    // would fail to typecheck against the wider type.
+    const synthetic: Session = {
       user: adminCtx.user,
-      // Match the rough NextAuth Session shape — expires gives the
+      // Match the rough NextAuth Session shape — `expires` gives the
       // dashboard a plausible session-end timestamp for any code that
-      // checks it (most code doesn't).
+      // checks it (most doesn't).
       expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-    } as unknown as Awaited<ReturnType<typeof auth>>;
+    };
+    return synthetic;
   }
 
   redirect("/login");
