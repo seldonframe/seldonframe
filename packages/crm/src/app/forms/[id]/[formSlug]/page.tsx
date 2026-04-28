@@ -38,6 +38,25 @@ export default async function PublicIntakePage({
   const showBadge = await shouldShowPoweredByBadgeForOrg(org.id);
   const theme = await getPublicOrgThemeBySlug(orgSlug);
 
+  // Wiring task: prefer the blueprint-rendered HTML/CSS pair
+  // (formbricks-stack-v1) when present on the row. Falls back to the
+  // legacy PublicForm React component for rows that predate the wiring.
+  const useBlueprintRender = Boolean(form.contentHtml && form.contentCss);
+
+  if (useBlueprintRender) {
+    return (
+      <>
+        <style dangerouslySetInnerHTML={{ __html: form.contentCss! }} />
+        <div dangerouslySetInnerHTML={{ __html: form.contentHtml! }} />
+        {showBadge ? (
+          <div className="flex justify-center py-2">
+            <PoweredByBadge />
+          </div>
+        ) : null}
+      </>
+    );
+  }
+
   return (
     <PublicThemeProvider theme={theme}>
       <main className="crm-page flex items-center justify-center">

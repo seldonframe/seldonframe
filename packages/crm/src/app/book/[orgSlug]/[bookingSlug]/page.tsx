@@ -1,8 +1,8 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { PoweredByBadge } from "@seldonframe/core/virality";
 import { db } from "@/db";
-import { organizations } from "@/db/schema";
+import { bookings, organizations } from "@/db/schema";
 import { PublicBookingForm } from "@/components/bookings/public-booking-form";
 import { TestModePublicBadge } from "@/components/layout/test-mode-public-badge";
 import { PublicThemeProvider } from "@/components/theme/public-theme-provider";
@@ -33,6 +33,49 @@ export default async function PublicBookingPage({
     .limit(1);
   const isTestMode = orgTestMode?.testMode ?? false;
 
+  // Wiring task: prefer the blueprint-rendered HTML/CSS pair (calcom-month-v1)
+  // when present on the booking row. Falls back to the legacy
+  // PublicBookingForm React component for rows that predate the wiring
+  // (those will be backfilled by the seed-repair branch on next access).
+  const [bookingTemplate] = await db
+    .select({
+      contentHtml: bookings.contentHtml,
+      contentCss: bookings.contentCss,
+    })
+    .from(bookings)
+    .where(
+      and(
+        eq(bookings.orgId, bookingContext.orgId),
+        eq(bookings.bookingSlug, bookingSlug),
+        eq(bookings.status, "template")
+      )
+    )
+    .limit(1);
+
+  const useBlueprintRender = Boolean(
+    bookingTemplate?.contentHtml && bookingTemplate?.contentCss
+  );
+
+  if (useBlueprintRender) {
+    // Render the rendered HTML/CSS straight into the page. The C4
+    // renderer's output already carries the navbar / footer / theme
+    // tokens / interactivity script — no wrapper chrome needed beyond
+    // the optional badges below.
+    return (
+      <>
+        <style dangerouslySetInnerHTML={{ __html: bookingTemplate!.contentCss! }} />
+        <div dangerouslySetInnerHTML={{ __html: bookingTemplate!.contentHtml! }} />
+        {(showBadge || isTestMode) ? (
+          <div className="flex flex-col items-center gap-2 py-2">
+            {isTestMode ? <TestModePublicBadge testMode={true} /> : null}
+            {showBadge ? <PoweredByBadge /> : null}
+          </div>
+        ) : null}
+      </>
+    );
+  }
+
+  // Legacy fallback — pre-wiring rows + any place the renderer can't run.
   return (
     <PublicThemeProvider theme={theme}>
       <main className="crm-page flex items-center justify-center">

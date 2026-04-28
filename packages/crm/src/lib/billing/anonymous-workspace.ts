@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { organizations } from "@/db/schema";
 import { mintWorkspaceToken } from "@/lib/auth/workspace-token";
+import { buildBlueprintForWorkspace } from "@/lib/blueprint/persist";
 import {
   createDefaultBookingTemplate,
   createDefaultIntakeForm,
@@ -118,6 +119,17 @@ export async function createAnonymousWorkspace(
     expiresInDays: 7,
   });
 
+  // Wiring task: build the Blueprint ONCE up front and thread it into
+  // all three seed helpers so booking + intake render their respective
+  // sections from the same source of truth that produces the landing.
+  // All three landing surfaces end up with pre-rendered contentHtml/Css,
+  // and the public routes serve them directly — operator clients see one
+  // unified product across /, /book, and /intake.
+  const seedBlueprint = buildBlueprintForWorkspace(
+    org.name,
+    input.industry ?? null
+  );
+
   // Seed default templates for every block we mark as enabled. Without these
   // rows the public subdomain routes (/, /book, /intake) point at the right
   // pages but those pages 404 because the underlying record doesn't exist.
@@ -136,13 +148,19 @@ export async function createAnonymousWorkspace(
         error instanceof Error ? error.message : String(error)
       );
     }),
-    createDefaultBookingTemplate(org.id, { theme: "dark" }).catch((error) => {
+    createDefaultBookingTemplate(org.id, {
+      theme: "dark",
+      blueprint: seedBlueprint,
+    }).catch((error) => {
       console.warn(
         `[anonymous-workspace] booking-template seed failed for ${org.id}:`,
         error instanceof Error ? error.message : String(error)
       );
     }),
-    createDefaultIntakeForm(org.id, { theme: "dark" }).catch((error) => {
+    createDefaultIntakeForm(org.id, {
+      theme: "dark",
+      blueprint: seedBlueprint,
+    }).catch((error) => {
       console.warn(
         `[anonymous-workspace] intake-form seed failed for ${org.id}:`,
         error instanceof Error ? error.message : String(error)

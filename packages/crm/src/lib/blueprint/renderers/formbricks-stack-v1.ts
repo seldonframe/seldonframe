@@ -695,8 +695,19 @@ const INTAKE_INTERACTIVITY_SCRIPT = `<script data-sf-intake="formbricks-stack-v1
   }
 
   function submit(){
-    var payload = { answers: state.answers, workspace: data.workspaceName };
-    fetch('/api/v1/intake/submit', {
+    // Wiring task: pull orgSlug + formSlug from the live URL so the
+    // public-intake endpoint can resolve which form this answers belongs
+    // to. Path shape: /forms/<orgSlug>/<formSlug>
+    var pathParts = window.location.pathname.split('/').filter(Boolean);
+    var orgSlug = pathParts[1] || '';
+    var formSlug = pathParts[2] || 'intake';
+    var payload = {
+      orgSlug: orgSlug,
+      formSlug: formSlug,
+      answers: state.answers,
+      workspace: data.workspaceName,
+    };
+    fetch('/api/v1/public/intake', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),

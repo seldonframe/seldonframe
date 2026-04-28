@@ -24,6 +24,12 @@ export const intakeForms = pgTable(
     slug: text("slug").notNull(),
     fields: jsonb("fields").$type<IntakeFormField[]>().notNull(),
     settings: jsonb("settings").$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
+    // Wiring task: pre-rendered HTML/CSS from formbricks-stack-v1
+    // blueprint renderer. The public intake route serves these directly
+    // when present, falling back to the PublicForm React component for
+    // legacy rows.
+    contentHtml: text("content_html"),
+    contentCss: text("content_css"),
     isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

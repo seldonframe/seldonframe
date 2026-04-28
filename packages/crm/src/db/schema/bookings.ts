@@ -27,6 +27,12 @@ export const bookings = pgTable(
     meetingUrl: text("meeting_url"),
     externalEventId: text("external_event_id"),
     metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
+    // Wiring task: pre-rendered HTML/CSS from calcom-month-v1 blueprint
+    // renderer for template rows (status=template). The public booking
+    // route serves these directly when present, falling back to the
+    // PublicBookingForm React component for legacy rows.
+    contentHtml: text("content_html"),
+    contentCss: text("content_css"),
     cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
     completedAt: timestamp("completed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

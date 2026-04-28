@@ -746,10 +746,20 @@ const BOOKING_INTERACTIVITY_SCRIPT = `<script data-sf-booking="calcom-month-v1">
     if (submit) submit.disabled = true;
 
     var fd = new FormData(form);
-    var payload = { slot: state.selectedSlot ? state.selectedSlot.toISOString() : null };
+    // Wiring task: pull orgSlug + bookingSlug from the live URL so the
+    // public-bookings endpoint can resolve the workspace. Path shape:
+    // /book/<orgSlug>/<bookingSlug>
+    var pathParts = window.location.pathname.split('/').filter(Boolean);
+    var orgSlug = pathParts[1] || '';
+    var bookingSlug = pathParts[2] || 'default';
+    var payload = {
+      orgSlug: orgSlug,
+      bookingSlug: bookingSlug,
+      slot: state.selectedSlot ? state.selectedSlot.toISOString() : null,
+    };
     fd.forEach(function(v, k){ payload[k] = v; });
 
-    fetch('/api/v1/bookings/create', {
+    fetch('/api/v1/public/bookings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),

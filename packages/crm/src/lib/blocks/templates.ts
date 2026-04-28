@@ -5,9 +5,21 @@ import {
   buildBlueprintForWorkspace,
   renderBlueprint,
 } from "@/lib/blueprint/persist";
+import { renderCalcomMonthV1 } from "@/lib/blueprint/renderers/calcom-month-v1";
+import { renderFormbricksStackV1 } from "@/lib/blueprint/renderers/formbricks-stack-v1";
+import type { Blueprint } from "@/lib/blueprint/types";
 
 export type TemplateOpts = {
   theme?: "dark" | "light";
+  /**
+   * Wiring task: when the seed flow has already built a Blueprint (the
+   * normal path through createAnonymousWorkspace), pass it in so the
+   * booking and intake templates render their respective sections from
+   * the SAME blueprint that produced the landing. Skipping this falls
+   * back to the legacy seed (no blueprint-rendered HTML on the row;
+   * route handlers serve the React component instead).
+   */
+  blueprint?: Blueprint;
 };
 
 const DEFAULT_BOOKING_SLUG = "default";
@@ -21,17 +33,43 @@ export type TemplateOutcome = {
 
 // Idempotent — if a row with this slug already exists for this workspace,
 // return it unchanged so re-installs don't clone templates.
+//
+// Wiring task: when `opts.blueprint` is provided, the renderer's
+// HTML/CSS lands on the row's content_html/content_css columns and the
+// public /book route serves them directly (Cal Sans typography, glass
+// navbar, dark footer — same product feel as the landing). Without a
+// blueprint we fall back to seeding only the metadata; the route's
+// React-component path picks up legacy rows.
 export async function createDefaultBookingTemplate(
   orgId: string,
   opts: TemplateOpts = {}
 ): Promise<TemplateOutcome & { title: string }> {
   const [existing] = await db
-    .select({ bookingSlug: bookings.bookingSlug, title: bookings.title })
+    .select({
+      id: bookings.id,
+      bookingSlug: bookings.bookingSlug,
+      title: bookings.title,
+      contentHtml: bookings.contentHtml,
+    })
     .from(bookings)
     .where(and(eq(bookings.orgId, orgId), eq(bookings.bookingSlug, DEFAULT_BOOKING_SLUG)))
     .limit(1);
 
   if (existing) {
+    // Repair branch: row exists but content_html is NULL and we have a
+    // blueprint to render from. Top up so the public route swaps from
+    // the React fallback to the blueprint-rendered HTML on next visit.
+    if (!existing.contentHtml && opts.blueprint) {
+      const rendered = renderCalcomMonthV1(opts.blueprint);
+      await db
+        .update(bookings)
+        .set({
+          contentHtml: rendered.html,
+          contentCss: rendered.css,
+          updatedAt: new Date(),
+        })
+        .where(eq(bookings.id, existing.id));
+    }
     return {
       slug: existing.bookingSlug,
       title: existing.title,
@@ -39,13 +77,24 @@ export async function createDefaultBookingTemplate(
     };
   }
 
+  // Pull title / description / duration from the blueprint when present.
+  // For workspaces created without a blueprint (legacy callers), fall
+  // back to the same defaults the route used pre-blueprint.
+  const eventType = opts.blueprint?.booking.eventType;
+  const title = eventType?.title ?? "Book a call";
+  const description =
+    eventType?.description ?? "Pick a time that works for you. We'll confirm by email.";
+  const durationMinutes = eventType?.durationMinutes ?? 30;
+  const confirmationMessage =
+    opts.blueprint?.booking.confirmation.message ??
+    "Thanks! Check your email for the confirmation.";
+
   const now = new Date();
-  const title = "Book a call";
   const metadata = {
     appointmentName: title,
-    appointmentDescription: "Pick a time that works for you. We'll confirm by email.",
-    durationMinutes: 30,
-    confirmationMessage: "Thanks! Check your email for the confirmation.",
+    appointmentDescription: description,
+    durationMinutes,
+    confirmationMessage,
     theme: opts.theme ?? "dark",
     availability: {
       weekdays: ["mon", "tue", "wed", "thu", "fri"],
@@ -53,6 +102,8 @@ export async function createDefaultBookingTemplate(
       endHour: 17,
     },
   };
+
+  const rendered = opts.blueprint ? renderCalcomMonthV1(opts.blueprint) : null;
 
   await db.insert(bookings).values({
     orgId,
@@ -63,6 +114,8 @@ export async function createDefaultBookingTemplate(
     startsAt: now,
     endsAt: now,
     metadata,
+    contentHtml: rendered?.html ?? null,
+    contentCss: rendered?.css ?? null,
   });
 
   return { slug: DEFAULT_BOOKING_SLUG, title, alreadyExisted: false };
@@ -73,34 +126,70 @@ export async function createDefaultIntakeForm(
   opts: TemplateOpts = {}
 ): Promise<TemplateOutcome & { name: string }> {
   const [existing] = await db
-    .select({ slug: intakeForms.slug, name: intakeForms.name })
+    .select({
+      id: intakeForms.id,
+      slug: intakeForms.slug,
+      name: intakeForms.name,
+      contentHtml: intakeForms.contentHtml,
+    })
     .from(intakeForms)
     .where(and(eq(intakeForms.orgId, orgId), eq(intakeForms.slug, DEFAULT_INTAKE_SLUG)))
     .limit(1);
 
   if (existing) {
+    // Same repair branch as bookings — top up contentHtml/Css if a
+    // blueprint is now available and the row predates the wiring.
+    if (!existing.contentHtml && opts.blueprint) {
+      const rendered = renderFormbricksStackV1(opts.blueprint);
+      await db
+        .update(intakeForms)
+        .set({
+          contentHtml: rendered.html,
+          contentCss: rendered.css,
+          updatedAt: new Date(),
+        })
+        .where(eq(intakeForms.id, existing.id));
+    }
     return { slug: existing.slug, name: existing.name, alreadyExisted: true };
   }
 
-  const name = "Get in touch";
-  const fields = [
-    { key: "fullName", label: "Full name", type: "text", required: true },
-    { key: "email", label: "Email", type: "email", required: true },
-    { key: "phone", label: "Phone (optional)", type: "tel", required: false },
-    {
-      key: "message",
-      label: "What can we help with?",
-      type: "textarea",
-      required: true,
-    },
-  ];
+  // When a blueprint is supplied, derive the form's name + fields from
+  // it. The intakeForms row's `fields` shape is intentionally simpler
+  // than the Blueprint's IntakeQuestion (the public form needs less
+  // metadata server-side because the rendered HTML carries everything).
+  // We map a minimal projection into the existing column.
+  const intake = opts.blueprint?.intake;
+  const name = intake?.title ?? "Get in touch";
+  const mappedFields = intake?.questions
+    ? intake.questions.map((q) => ({
+        key: q.id,
+        label: q.label,
+        type: q.type,
+        required: Boolean(q.required),
+        options: q.options,
+      }))
+    : [
+        { key: "fullName", label: "Full name", type: "text", required: true },
+        { key: "email", label: "Email", type: "email", required: true },
+        { key: "phone", label: "Phone (optional)", type: "tel", required: false },
+        {
+          key: "message",
+          label: "What can we help with?",
+          type: "textarea",
+          required: true,
+        },
+      ];
+
+  const rendered = opts.blueprint ? renderFormbricksStackV1(opts.blueprint) : null;
 
   await db.insert(intakeForms).values({
     orgId,
     name,
     slug: DEFAULT_INTAKE_SLUG,
-    fields,
+    fields: mappedFields,
     settings: { theme: opts.theme ?? "dark", submitLabel: "Send" },
+    contentHtml: rendered?.html ?? null,
+    contentCss: rendered?.css ?? null,
     isActive: true,
   });
 
