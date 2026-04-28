@@ -169,13 +169,31 @@ function isPublicPath(pathname: string) {
   return false;
 }
 
+// C6: presence-only admin-token check. Validation happens at the page layer
+// (requireAuth → resolveAdminTokenContext) where we have full server-runtime
+// access to the DB. The middleware just needs to know whether to LET THE
+// REQUEST THROUGH — a forged cookie reaches the page, fails requireAuth's
+// real validation, and redirects to /login. No security risk because every
+// data access still requires a real session from requireAuth.
+const ADMIN_TOKEN_COOKIE_NAME = "sf_admin_token";
+function hasAdminTokenCookie(request: NextRequest): boolean {
+  const value = request.cookies.get(ADMIN_TOKEN_COOKIE_NAME)?.value;
+  return Boolean(value && value.startsWith("wst_"));
+}
+
 const authProxy = auth(async (request) => {
   const pathname = request.nextUrl.pathname;
   const host = getRequestHost(request);
   const appHost = isAppHost(host);
   const isMarketingHost = marketingHosts.has(host);
 
-  const isAuthenticated = Boolean(request.auth?.user);
+  const hasNextAuth = Boolean(request.auth?.user);
+  const hasAdminToken = hasAdminTokenCookie(request);
+  // C6: admin-token cookie counts as "authenticated" for middleware
+  // routing decisions. Plan-gate / welcome-shown / soul-completed checks
+  // still skip admin-token sessions because the synthetic user has no
+  // billing or onboarding state.
+  const isAuthenticated = hasNextAuth || hasAdminToken;
   const user = request.auth?.user as {
     orgId?: string;
     soulCompleted?: boolean;
@@ -184,8 +202,13 @@ const authProxy = auth(async (request) => {
     subscriptionStatus?: "trialing" | "active" | "past_due" | "canceled" | "unpaid";
     trialEndsAt?: string | null;
   } | undefined;
-  const isSoulCompleted = Boolean(user?.soulCompleted);
-  let isWelcomeShown = Boolean(user?.welcomeShown);
+  // C6: admin-token sessions skip Soul / Welcome onboarding. They're
+  // workspace-scoped guests, not signed-up users — there's nothing to
+  // complete in the user-onboarding flow, and forcing them through
+  // /setup or /welcome would drop them into a dead-end with no auth
+  // chrome. Treat both gates as already passed.
+  const isSoulCompleted = hasNextAuth ? Boolean(user?.soulCompleted) : true;
+  let isWelcomeShown = hasNextAuth ? Boolean(user?.welcomeShown) : true;
 
   if (!appHost && isMarketingHost && (isProtectedPath(pathname) || isAuthPath(pathname))) {
     const redirectUrl = request.nextUrl.clone();
