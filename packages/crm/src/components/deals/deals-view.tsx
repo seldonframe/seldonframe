@@ -511,8 +511,13 @@ function KanbanBoard({
   onDealCreated: (deal: DealRow) => void;
 }) {
   return (
+    // The inner flex row drops `min-w-max` (which previously forced
+    // the row to be 6 × 300px = 1800px regardless of viewport) so
+    // KanbanColumn's `flex-1 min-w-[220px]` can share available
+    // space. Wide screens fill comfortably; narrow viewports
+    // overflow-x-scroll once the 220px floor is reached.
     <div className="overflow-x-auto p-3 sm:p-4">
-      <div className="flex gap-3 sm:gap-4 min-w-max items-start">
+      <div className="flex gap-3 sm:gap-4 items-start">
         {stages.map((stage) => (
           <KanbanColumn
             key={stage.name}
@@ -575,12 +580,13 @@ function KanbanColumn({
   return (
     <div
       ref={setNodeRef}
-      // shrink-0 + fixed width = columns never compress or wrap to a
-      // second row regardless of viewport. Outer KanbanBoard owns
-      // the overflow-x scroll, so on narrow screens the user pans
-      // horizontally rather than seeing Won/Lost stack underneath.
+      // flex-1 + min-w-[220px] = columns share available width on
+      // wide screens (6 columns × ~220px floor = 1320px), and the
+      // outer KanbanBoard's overflow-x kicks in only on tablet /
+      // mobile viewports. min-w guarantees a readable column width
+      // so cards never visually collapse.
       className={
-        "flex w-[300px] shrink-0 flex-col rounded-xl border transition-colors " +
+        "flex min-w-[220px] flex-1 flex-col rounded-xl border transition-colors " +
         (showDropHint
           ? "border-primary/60 bg-primary/5 ring-2 ring-primary/40"
           : isWon
