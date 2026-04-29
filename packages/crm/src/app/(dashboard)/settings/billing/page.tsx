@@ -6,6 +6,7 @@ import { listManagedOrganizations } from "@/lib/billing/orgs";
 import { getOrgSubscription } from "@/lib/billing/subscription";
 import { getOrgId } from "@/lib/auth/helpers";
 import { ClaimAndUpgradeForm } from "@/components/billing/claim-and-upgrade-form";
+import { ClientOnly } from "@/components/shared/client-only";
 
 /*
   Square UI class reference (source of truth):
@@ -177,7 +178,28 @@ export default async function BillingSettingsPage({
       </div>
 
       {isGuestAdminToken ? (
-        <ClaimAndUpgradeForm />
+        // Defer the upgrade form to post-hydration. The form itself is
+        // pure / deterministic, but wrapping it in ClientOnly means
+        // none of its render output participates in the SSR-vs-client
+        // diff — eliminating it as a possible source of React #418.
+        // Cost: a single empty frame before the form appears. Worth
+        // it for an above-the-fold action that's only shown to the
+        // small subset of operators on guest admin sessions.
+        <ClientOnly
+          fallback={
+            <div className="rounded-xl border bg-card p-5">
+              <div className="h-5 w-40 animate-pulse rounded bg-muted/40" />
+              <div className="mt-3 h-3 w-72 animate-pulse rounded bg-muted/30" />
+              <div className="mt-5 grid gap-2 sm:grid-cols-3">
+                <div className="h-20 animate-pulse rounded-lg bg-muted/30" />
+                <div className="h-20 animate-pulse rounded-lg bg-muted/30" />
+                <div className="h-20 animate-pulse rounded-lg bg-muted/30" />
+              </div>
+            </div>
+          }
+        >
+          <ClaimAndUpgradeForm />
+        </ClientOnly>
       ) : null}
 
       {managedOrgs.length > 0 ? (

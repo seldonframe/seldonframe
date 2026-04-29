@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { getStripeClient } from "@seldonframe/payments";
 import { db } from "@/db";
-import { users } from "@/db/schema";
+import { organizations, users } from "@/db/schema";
 import { resolveAdminTokenContext } from "@/lib/auth/admin-token";
 import { claimAnonymousWorkspaceForEmail } from "@/lib/billing/orgs";
 import {
@@ -104,71 +104,112 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Step 2 — claim the workspace.
+  // Step 2 — try to claim the workspace, OR resolve the existing owner
+  // if the workspace is already claimed by someone whose email matches
+  // the supplied one. Two paths from here:
+  //   (a) New claim succeeds → use the freshly inserted user record.
+  //   (b) Workspace already claimed but supplied email matches the
+  //       existing owner → it's the SAME operator coming back to upgrade
+  //       (or change tier). Skip the claim, reuse the existing user.id,
+  //       proceed straight to Stripe Checkout. This is the "owner
+  //       upgrades their own workspace" path that previously 409'd.
+  //   (c) Workspace claimed by a DIFFERENT email → 409, route them to
+  //       sign in instead.
+  let resolvedUser: { id: string; email: string | null } | null = null;
+  let claimFlow: "admin_token_upgrade" | "owner_re_upgrade" =
+    "admin_token_upgrade";
+
   const claim = await claimAnonymousWorkspaceForEmail(adminCtx.orgId, email, name);
-  if (!claim.ok) {
-    if (claim.reason === "email_taken") {
-      return NextResponse.json(
-        {
-          error:
-            "An account already exists with that email. Sign in at /login and manage your subscription from there.",
-          code: "email_taken",
-        },
-        { status: 409 }
-      );
+  if (claim.ok) {
+    const [created] = await db
+      .select({ id: users.id, email: users.email })
+      .from(users)
+      .where(eq(users.id, claim.userId))
+      .limit(1);
+    if (!created) {
+      return NextResponse.json({ error: "Could not load new user." }, { status: 500 });
     }
-    if (claim.reason === "workspace_already_claimed") {
+    resolvedUser = created;
+  } else if (claim.reason === "workspace_already_claimed") {
+    // Look up the actual owner. If their email matches the supplied
+    // one (case-insensitive), this is the owner re-entering the
+    // upgrade flow — perfectly legitimate (e.g., upgrading from
+    // Starter to Pro, or coming back after a checkout abort).
+    const [orgRow] = await db
+      .select({ ownerId: organizations.ownerId })
+      .from(organizations)
+      .where(eq(organizations.id, adminCtx.orgId))
+      .limit(1);
+
+    if (orgRow?.ownerId) {
+      const [existingOwner] = await db
+        .select({ id: users.id, email: users.email })
+        .from(users)
+        .where(eq(users.id, orgRow.ownerId))
+        .limit(1);
+
+      if (
+        existingOwner &&
+        typeof existingOwner.email === "string" &&
+        existingOwner.email.toLowerCase() === email
+      ) {
+        resolvedUser = existingOwner;
+        claimFlow = "owner_re_upgrade";
+      }
+    }
+
+    if (!resolvedUser) {
       return NextResponse.json(
         {
           error:
-            "This workspace is already attached to an account. Sign in to manage its subscription.",
+            "This workspace is already attached to a different account. Sign in to manage its subscription.",
           code: "workspace_already_claimed",
         },
         { status: 409 }
       );
     }
+  } else if (claim.reason === "email_taken") {
+    return NextResponse.json(
+      {
+        error:
+          "An account already exists with that email. Sign in at /login and manage your subscription from there.",
+        code: "email_taken",
+      },
+      { status: 409 }
+    );
+  } else {
     return NextResponse.json({ error: "Workspace not found." }, { status: 404 });
   }
 
-  // Step 3 — create the Stripe Checkout session referencing the new user.
-  const [newUser] = await db
-    .select({ id: users.id, email: users.email })
-    .from(users)
-    .where(eq(users.id, claim.userId))
-    .limit(1);
-
-  if (!newUser) {
-    // Should never happen — we just inserted them. Defensive.
-    return NextResponse.json({ error: "Could not load new user." }, { status: 500 });
-  }
-
+  // Step 3 — create the Stripe Checkout session referencing the user.
+  const checkoutUser = resolvedUser;
   const origin = getRequestOrigin(req);
   const checkoutSession = await stripe.checkout.sessions.create({
-    customer_email: newUser.email,
+    customer_email: checkoutUser.email ?? undefined,
     mode: "subscription",
     payment_method_types: ["card"],
-    client_reference_id: newUser.id,
+    client_reference_id: checkoutUser.id,
     line_items: [{ price: priceId, quantity: 1 }],
     success_url: `${origin}${successPath}`,
     cancel_url: `${origin}${cancelPath}`,
     metadata: {
-      seldonframe_user_id: newUser.id,
-      userId: newUser.id,
+      seldonframe_user_id: checkoutUser.id,
+      userId: checkoutUser.id,
       orgId: adminCtx.orgId,
       workspaceId: adminCtx.orgId,
       priceId,
       type: "self_service_workspace",
-      claim_flow: "admin_token_upgrade",
+      claim_flow: claimFlow,
     },
     subscription_data: {
       metadata: {
-        seldonframe_user_id: newUser.id,
-        userId: newUser.id,
+        seldonframe_user_id: checkoutUser.id,
+        userId: checkoutUser.id,
         orgId: adminCtx.orgId,
         workspaceId: adminCtx.orgId,
         priceId,
         type: "self_service_workspace",
-        claim_flow: "admin_token_upgrade",
+        claim_flow: claimFlow,
       },
     },
   });
@@ -176,6 +217,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     ok: true,
     url: checkoutSession.url,
-    user: { id: newUser.id, email: newUser.email },
+    user: { id: checkoutUser.id, email: checkoutUser.email },
+    claim_flow: claimFlow,
   });
 }
