@@ -6,7 +6,7 @@ import { db } from "@/db";
 import { organizations, users } from "@/db/schema";
 import { isSelfServiceCheckoutPriceId } from "@/lib/billing/price-ids";
 import { getOrgSubscription, updateOrgSubscription } from "@/lib/billing/subscription";
-import { reRenderAllSurfacesForOrg } from "@/lib/blueprint/rerender-org";
+import { applyBrandingForTier, reRenderAllSurfacesForOrg } from "@/lib/blueprint/rerender-org";
 
 function getStripeClient() {
   const secretKey = process.env.STRIPE_SECRET_KEY;
@@ -232,6 +232,16 @@ export async function POST(req: NextRequest) {
         nextMaxWorkspaces: nextSubscription.maxWorkspaces ?? 1,
       });
 
+      // P0 (post-launch fix): auto-flip the page-level white-label
+      // flag (`org.settings.branding.removePoweredBy`) to match the
+      // new tier's entitlement. The renderer already gates on plan,
+      // but the page wrapper reads the per-org settings flag — so
+      // this is the missing auto-toggle. Must run BEFORE the
+      // re-render below so persisted HTML reflects the new state.
+      await applyBrandingForTier(targetOrgId, tier).catch((err) =>
+        console.warn(`[stripe-webhook] applyBrandingForTier failed for ${targetOrgId}:`, err)
+      );
+
       // P0-3: re-render every blueprint surface so the white-label
       // flag (canRemoveBranding) flips in served HTML now that the
       // tier landed. Fire-and-forget — failures log but don't block
@@ -285,6 +295,12 @@ export async function POST(req: NextRequest) {
         });
       }
 
+      // P0 (post-launch fix): auto-flip page-level white-label flag.
+      // See checkout.session.completed branch above for rationale.
+      await applyBrandingForTier(orgId, tier).catch((err) =>
+        console.warn(`[stripe-webhook] applyBrandingForTier failed for ${orgId}:`, err)
+      );
+
       // P0-3: re-render blueprint surfaces with the new white-label flag.
       void reRenderAllSurfacesForOrg(orgId).catch((err) =>
         console.warn(`[stripe-webhook] rerender after subscription update failed for ${orgId}:`, err)
@@ -320,6 +336,13 @@ export async function POST(req: NextRequest) {
         openClawEnabled: false,
         layer2Enabled: false,
       });
+
+      // P0 (post-launch fix): flip page-level white-label flag back
+      // to false so the badge returns. Tier is "free" → canRemoveBranding
+      // is false → branding.removePoweredBy gets written as false.
+      await applyBrandingForTier(orgId, "free").catch((err) =>
+        console.warn(`[stripe-webhook] applyBrandingForTier failed for ${orgId}:`, err)
+      );
 
       // P0-3: tier dropped to free → re-render to restore the
       // "Powered by SeldonFrame" badge on /, /book, /intake.

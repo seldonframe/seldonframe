@@ -26,20 +26,24 @@ interface PlanChoice {
   highlight?: boolean;
 }
 
+// Plan blurbs are entitlement-based, NOT volume-based. SeldonFrame doesn't
+// meter contacts or emails — so "500 contacts, 1k emails/mo" was always
+// a copy bug. The real upgrade levers are: number of workspaces, custom
+// domain, white-label, full Brain v2 / Seldon It, support tier.
 const PLANS: PlanChoice[] = [
   {
     id: "starter",
     priceId: "price_1TQzh7JOtNZA0x7xLOTicHkW",
     label: "Cloud Starter",
     price: "$49/mo",
-    blurb: "1 workspace, 500 contacts, 1k emails/mo",
+    blurb: "1 workspace, all core blocks, community support",
   },
   {
     id: "pro",
     priceId: "price_1TNY81JOtNZA0x7xsulCSP6x",
     label: "Cloud Pro",
     price: "$99/mo",
-    blurb: "Unlimited contacts, custom domain, remove SeldonFrame branding",
+    blurb: "Custom domain, remove SeldonFrame branding, priority support",
     highlight: true,
   },
   {
@@ -47,7 +51,7 @@ const PLANS: PlanChoice[] = [
     priceId: "price_1TQzjrJOtNZA0x7xV4UFxWrH",
     label: "Cloud Agency",
     price: "$149/mo",
-    blurb: "3 workspaces, unlimited emails, full Brain v2",
+    blurb: "3 workspaces, full Brain v2, white-label client portals",
   },
 ];
 

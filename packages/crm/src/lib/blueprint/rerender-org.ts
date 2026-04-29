@@ -30,6 +30,7 @@ import { renderCalcomMonthV1 } from "./renderers/calcom-month-v1";
 import { renderFormbricksStackV1 } from "./renderers/formbricks-stack-v1";
 import { loadBlueprintOrFallback } from "./persist";
 import { canRemoveBranding, resolvePlanFromPlanId } from "@/lib/billing/entitlements";
+import { getPlan } from "@/lib/billing/plans";
 
 /**
  * Compute whether a workspace's rendered surfaces should hide the
@@ -51,6 +52,65 @@ export async function shouldRemovePoweredByForOrg(orgId: string): Promise<boolea
   if (!org) return false;
   const plan = resolvePlanFromPlanId(org.plan ?? null);
   return canRemoveBranding(plan);
+}
+
+/**
+ * P0 — auto-flip `organizations.settings.branding.removePoweredBy` to
+ * match the new tier's entitlement. Called from the Stripe webhook
+ * after `updateOrgSubscription` writes the new tier, and BEFORE
+ * `reRenderAllSurfacesForOrg` re-renders the baked HTML.
+ *
+ * Why this is needed even though the renderer already gates on plan:
+ * the page-level virality wrapper (`shouldShowPoweredByBadgeForOrg`
+ * in `lib/billing/public.ts`) reads `org.settings.branding.removePoweredBy`
+ * as an explicit opt-in. Without this auto-flip, a paying Cloud Pro
+ * customer keeps seeing "Powered by SeldonFrame" on every public page
+ * until they manually toggle `/settings/branding` — defeating the
+ * point of paying for the tier.
+ *
+ * Tier downgrades (e.g. Cloud Pro → free on `customer.subscription.deleted`)
+ * flip the flag back to `false` so the badge returns automatically.
+ *
+ * Idempotent. Operators who manually set the flag get overwritten on
+ * the next subscription event — that's intentional. The plan tier is
+ * the source of truth for white-label entitlement; per-org overrides
+ * exist only because there was no automation before this fix.
+ */
+export async function applyBrandingForTier(
+  orgId: string,
+  tier: string | null | undefined
+): Promise<{ removePoweredBy: boolean }> {
+  const plan = tier ? getPlan(tier) ?? null : null;
+  const removePoweredBy = canRemoveBranding(plan);
+
+  const [org] = await db
+    .select({ settings: organizations.settings })
+    .from(organizations)
+    .where(eq(organizations.id, orgId))
+    .limit(1);
+
+  const currentSettings =
+    (org?.settings as Record<string, unknown> | null) ?? {};
+  const currentBranding =
+    currentSettings.branding && typeof currentSettings.branding === "object"
+      ? (currentSettings.branding as Record<string, unknown>)
+      : {};
+
+  await db
+    .update(organizations)
+    .set({
+      settings: {
+        ...currentSettings,
+        branding: {
+          ...currentBranding,
+          removePoweredBy,
+        },
+      },
+      updatedAt: new Date(),
+    })
+    .where(eq(organizations.id, orgId));
+
+  return { removePoweredBy };
 }
 
 export interface ReRenderResult {
