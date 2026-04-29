@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
-import { auth } from "@/auth";
+import { requireAuth } from "@/lib/auth/helpers";
+import { isAdminTokenUserId } from "@/lib/auth/admin-token";
 import { SetupWizard } from "@/components/soul/setup-wizard";
 import { NewWorkspacePromptForm } from "@/components/orgs/new-workspace-prompt-form";
 import coachingFramework from "@/lib/frameworks/coaching.json";
@@ -43,13 +44,27 @@ function isUpgradeRequiredMessage(message?: string) {
 }
 
 export default async function NewWorkspacePage() {
-  const session = await auth();
+  // requireAuth handles both NextAuth sessions AND admin-token cookies
+  // (the latter via the C6 synthetic-session path). Without this, admin-
+  // token operators clicking "Create new workspace" got silently
+  // redirected to /login — the symptom that surfaced as "the button
+  // does nothing" in the launch audit.
+  const session = await requireAuth();
+  const isGuestAdminToken = isAdminTokenUserId(session.user.id);
 
-  if (!session?.user) {
-    redirect("/login");
+  // Per the launch spec: only operators with zero owned workspaces
+  // (i.e., real NextAuth users hitting this page before they've claimed
+  // their free workspace) get to use the form. Everyone else — including
+  // admin-token operators (who already own one workspace by design) —
+  // gets routed to the billing page so they can upgrade and add more.
+  if (isGuestAdminToken) {
+    redirect("/settings/billing?intent=new-workspace");
   }
 
   const limitStatus = await getWorkspaceLimitStatus();
+  if (!limitStatus.canCreate) {
+    redirect("/settings/billing?intent=new-workspace");
+  }
 
   async function createWorkspaceAction(_prevState: CreateWorkspaceState, formData: FormData): Promise<CreateWorkspaceState> {
     "use server";

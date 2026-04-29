@@ -6,7 +6,6 @@ import { db } from "@/db";
 import { users } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
 import {
-  SELF_SERVICE_WORKSPACE_MONTHLY_PRICE_ID,
   WORKSPACE_ADDON_MONTHLY_PRICE_ID,
   isAllowedCheckoutPriceId,
   isSelfServiceCheckoutPriceId,
@@ -129,8 +128,12 @@ export async function POST(req: NextRequest) {
   const targetWorkspaceId = requestedWorkspaceId || orgId || "";
   const checkoutType = isSelfServiceCheckoutPriceId(resolvedPriceId) ? "self_service_workspace" : "workspace_addon";
 
-  if (resolvedPriceId === SELF_SERVICE_WORKSPACE_MONTHLY_PRICE_ID && !targetWorkspaceId) {
-    return NextResponse.json({ error: "workspaceId is required for the self-service tier." }, { status: 400 });
+  // All self-service tiers (Starter, Pro, Agency) are bound to a
+  // specific workspace. Only the legacy workspace-addon price doesn't
+  // require a workspace id (it's a per-seat add-on, billed at the
+  // user level).
+  if (isSelfServiceCheckoutPriceId(resolvedPriceId) && !targetWorkspaceId) {
+    return NextResponse.json({ error: "workspaceId is required for self-service tiers." }, { status: 400 });
   }
 
   const origin = getRequestOrigin(req);

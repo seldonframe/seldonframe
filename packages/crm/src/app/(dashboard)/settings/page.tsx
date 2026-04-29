@@ -104,8 +104,11 @@ export default async function SettingsPage() {
   const trialEndLabel = subscription.trialEndsAt
     ? new Date(subscription.trialEndsAt).toLocaleDateString([], { month: "short", day: "numeric" })
     : null;
+  // SeldonFrame doesn't advertise a free trial; the "trialing" Stripe
+  // status only appears for legacy or admin-minted subscriptions.
+  // Keep a neutral status badge if it does show up.
   const isTrial = subscription.status === "trialing" && Boolean(trialEndLabel);
-  const billingStatus = isTrial ? `Free Trial · ends ${trialEndLabel}` : `${tierLabel} · ${periodLabel}`;
+  const billingStatus = isTrial ? `Trial · ends ${trialEndLabel}` : `${tierLabel} · ${periodLabel}`;
 
   const domainStatus = domainSettings?.customDomain || "Not configured";
   const pipelineStagesCount = soul?.pipeline?.stages?.length ?? 0;

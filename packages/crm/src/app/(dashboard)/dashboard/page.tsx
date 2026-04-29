@@ -484,7 +484,22 @@ export default async function DashboardPage({
 
   const monthThreshold = new Date(today.getFullYear(), today.getMonth() - 1, 1);
 
-  const firstName = user?.name?.split(" ").filter(Boolean)[0] || "there";
+  // Greeting target — fall back through, in order:
+  //   1. The operator's actual first name (regular NextAuth users)
+  //   2. The active workspace's name (admin-token sessions, or anyone
+  //      whose user.name is the synthetic "Workspace Admin" placeholder)
+  //   3. "there" as a last-resort neutral default
+  // Pre-launch bug: admin-token sessions had user.name = "Workspace Admin",
+  // which split[0] = "Workspace" — so the greeting read "Good afternoon,
+  // Workspace". Now we detect that placeholder and substitute the
+  // workspace's real name.
+  const activeWorkspaceName =
+    workspaceRows.find((row) => row.id === orgId)?.name ?? null;
+  const rawFirstName = user?.name?.split(" ").filter(Boolean)[0] ?? "";
+  const firstName =
+    rawFirstName && rawFirstName !== "Workspace"
+      ? rawFirstName
+      : activeWorkspaceName || "there";
   const trialEndsAt = user?.trialEndsAt ? new Date(user.trialEndsAt) : null;
   const isTrialing = user?.subscriptionStatus === "trialing";
   const trialDaysRemaining =

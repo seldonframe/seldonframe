@@ -223,7 +223,7 @@ export function ClaimAndUpgradeForm() {
             {!submitting ? <ChevronRight className="h-4 w-4" /> : null}
           </button>
           <p className="text-xs text-muted-foreground">
-            14-day free trial · cancel anytime · billed via Stripe
+            Billed monthly via Stripe · cancel anytime
           </p>
         </div>
       </form>

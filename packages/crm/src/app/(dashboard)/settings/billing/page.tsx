@@ -27,7 +27,12 @@ function formatDate(value: string | null | undefined) {
     return "Not set";
   }
 
-  return date.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+  // Pin the locale so server SSR and client hydration produce the
+  // exact same string. Passing `[]` (or undefined) here uses the
+  // runtime's default locale — the server's Node default and the
+  // browser's `navigator.language` can differ ("May 5" vs "5 May")
+  // and that mismatch trips React hydration error #418.
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 // Maps legacy backend subscription tiers to the two-plan model advertised on
@@ -57,7 +62,12 @@ function getTierLabel(tier: string): { label: string; legacy: string | null } {
   return { label: "Free", legacy: null };
 }
 
-export default async function BillingSettingsPage() {
+export default async function BillingSettingsPage({
+  searchParams,
+}: {
+  // Next.js 15+ Promise-based searchParams. We resolve before reading.
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
   // P0-2: requireAuth recognizes both NextAuth sessions AND admin-token
   // cookies (via the C6 synthetic-session path). Admin-token sessions
   // get a different UI: a claim-and-upgrade form instead of the
@@ -65,6 +75,15 @@ export default async function BillingSettingsPage() {
   // user.id isn't in the users table).
   const session = await requireAuth();
   const isGuestAdminToken = isAdminTokenUserId(session.user.id);
+
+  // ?intent=new-workspace lands here from the sidebar's "Create new
+  // workspace" link when the operator already has one (or is on a
+  // guest admin session). Surface a contextual banner so it's clear
+  // why they were redirected here instead of seeing the create form.
+  const resolvedSearchParams = searchParams ? await searchParams : {};
+  const intentRaw = resolvedSearchParams?.intent;
+  const intent = Array.isArray(intentRaw) ? intentRaw[0] : intentRaw;
+  const wantedNewWorkspace = intent === "new-workspace";
 
   const orgId = await getOrgId();
   const activeOrgId = orgId ?? session.user.orgId ?? null;
@@ -89,6 +108,17 @@ export default async function BillingSettingsPage() {
         <h1 className="text-lg sm:text-[22px] font-semibold leading-relaxed text-foreground">Billing</h1>
         <p className="text-sm sm:text-base text-muted-foreground">Manage your plan and subscription details.</p>
       </div>
+
+      {wantedNewWorkspace ? (
+        <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 text-sm">
+          <p className="font-medium text-foreground">You&apos;ve used your free workspace.</p>
+          <p className="mt-1 text-muted-foreground">
+            Upgrade to Cloud Pro or Cloud Agency to add more workspaces. Each tier
+            also unlocks custom domain, removes &quot;Powered by SeldonFrame&quot; branding,
+            and gives you priority support.
+          </p>
+        </div>
+      ) : null}
 
       <div className="rounded-xl border bg-card space-y-4 p-5">
         <div className="grid gap-4 md:grid-cols-3">

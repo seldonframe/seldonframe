@@ -225,7 +225,7 @@ export function LandingPricingSection() {
         </div>
 
         <p className="mt-4 text-sm text-[#8faab0]">
-          All paid plans include 14-day free trial. No credit card required to start.
+          Your first workspace is free, forever. No credit card required to start.
         </p>
       </div>
     </section>
