@@ -575,8 +575,12 @@ function KanbanColumn({
   return (
     <div
       ref={setNodeRef}
+      // shrink-0 + fixed width = columns never compress or wrap to a
+      // second row regardless of viewport. Outer KanbanBoard owns
+      // the overflow-x scroll, so on narrow screens the user pans
+      // horizontally rather than seeing Won/Lost stack underneath.
       className={
-        "flex w-[300px] flex-col rounded-xl border transition-colors " +
+        "flex w-[300px] shrink-0 flex-col rounded-xl border transition-colors " +
         (showDropHint
           ? "border-primary/60 bg-primary/5 ring-2 ring-primary/40"
           : isWon

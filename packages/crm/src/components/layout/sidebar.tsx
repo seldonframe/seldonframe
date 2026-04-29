@@ -19,8 +19,12 @@ import { useLabels } from "@/lib/hooks/use-labels";
 */
 
 const hiddenSlugToHref: Record<string, string> = {
+  // `contacts` deliberately omitted — Clients is a baseline CRM
+  // surface and must always appear in the sidebar even when other
+  // blocks are hidden via the visibility settings. Operators with
+  // `crm` in their hiddenBlocks array still see Clients in nav so
+  // they can re-enable; otherwise the page becomes unreachable.
   bookings: "/bookings",
-  contacts: "/contacts",
   deals: "/deals",
   email: "/emails",
   pages: "/landing",

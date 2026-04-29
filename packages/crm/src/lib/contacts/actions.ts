@@ -255,7 +255,13 @@ export async function bulkImportContactsAction(input: { rows: ImportedContactRow
   };
 }
 
-const editableContactFields = new Set(["firstName", "lastName", "email", "status"]);
+const editableContactFields = new Set([
+  "firstName",
+  "lastName",
+  "email",
+  "phone",
+  "status",
+]);
 
 export async function updateContactFieldAction({
   contactId,
@@ -292,6 +298,7 @@ export async function updateContactFieldAction({
     firstName: string;
     lastName: string | null;
     email: string | null;
+    phone: string | null;
     status: string;
     updatedAt: Date;
   }> = {
@@ -304,6 +311,8 @@ export async function updateContactFieldAction({
     updates.lastName = normalizedValue || null;
   } else if (field === "email") {
     updates.email = normalizedValue || null;
+  } else if (field === "phone") {
+    updates.phone = normalizedValue || null;
   } else if (field === "status") {
     updates.status = normalizedValue || "lead";
   }
