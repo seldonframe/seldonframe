@@ -86,9 +86,6 @@ export async function POST(req: NextRequest) {
   );
   const cancelPath = normalizeReturnPath(body.cancelPath, "/settings/billing");
 
-  if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-    return NextResponse.json({ error: "A valid email is required." }, { status: 400 });
-  }
   if (!priceId || !isAllowedCheckoutPriceId(priceId)) {
     return NextResponse.json({ error: "A supported priceId is required." }, { status: 400 });
   }
@@ -104,81 +101,103 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Step 2 — try to claim the workspace, OR resolve the existing owner
-  // if the workspace is already claimed by someone whose email matches
-  // the supplied one. Two paths from here:
-  //   (a) New claim succeeds → use the freshly inserted user record.
-  //   (b) Workspace already claimed but supplied email matches the
-  //       existing owner → it's the SAME operator coming back to upgrade
-  //       (or change tier). Skip the claim, reuse the existing user.id,
-  //       proceed straight to Stripe Checkout. This is the "owner
-  //       upgrades their own workspace" path that previously 409'd.
-  //   (c) Workspace claimed by a DIFFERENT email → 409, route them to
-  //       sign in instead.
+  // Step 2 — resolve the user we'll attach to the Stripe Checkout
+  // session. Two scenarios:
+  //
+  //   (a) Workspace already has an owner → admin-token bearer IS the
+  //       proof of ownership for this endpoint. The bearer cookie was
+  //       set by the C6 /admin/[workspaceId]?token=... route after
+  //       validating the token against api_keys, so the operator
+  //       holding it has the same authority as the email-bound owner.
+  //       Reuse that owner's user.id regardless of the supplied
+  //       email — this is the "owner re-enters the upgrade flow"
+  //       path (Starter → Pro, aborted+resumed checkout, etc.).
+  //       The supplied email becomes informational only.
+  //
+  //   (b) Workspace has no owner yet → first-time claim. We need a
+  //       valid email to insert a `users` row. If the email is
+  //       already taken by an unrelated account, we refuse (confused-
+  //       deputy defense — same as before).
+  //
+  // Removing the email-must-match check from path (a) was the
+  // post-launch fix the operator-journey audit asked for: requiring
+  // the operator to remember which email they used to claim a
+  // workspace just to upgrade it makes the admin-URL flow useless.
   let resolvedUser: { id: string; email: string | null } | null = null;
   let claimFlow: "admin_token_upgrade" | "owner_re_upgrade" =
     "admin_token_upgrade";
 
-  const claim = await claimAnonymousWorkspaceForEmail(adminCtx.orgId, email, name);
-  if (claim.ok) {
-    const [created] = await db
+  const [orgRow] = await db
+    .select({ ownerId: organizations.ownerId })
+    .from(organizations)
+    .where(eq(organizations.id, adminCtx.orgId))
+    .limit(1);
+
+  if (!orgRow) {
+    return NextResponse.json({ error: "Workspace not found." }, { status: 404 });
+  }
+
+  if (orgRow.ownerId) {
+    // Path (a): existing owner. Admin token = ownership proof.
+    const [existingOwner] = await db
       .select({ id: users.id, email: users.email })
       .from(users)
-      .where(eq(users.id, claim.userId))
-      .limit(1);
-    if (!created) {
-      return NextResponse.json({ error: "Could not load new user." }, { status: 500 });
-    }
-    resolvedUser = created;
-  } else if (claim.reason === "workspace_already_claimed") {
-    // Look up the actual owner. If their email matches the supplied
-    // one (case-insensitive), this is the owner re-entering the
-    // upgrade flow — perfectly legitimate (e.g., upgrading from
-    // Starter to Pro, or coming back after a checkout abort).
-    const [orgRow] = await db
-      .select({ ownerId: organizations.ownerId })
-      .from(organizations)
-      .where(eq(organizations.id, adminCtx.orgId))
+      .where(eq(users.id, orgRow.ownerId))
       .limit(1);
 
-    if (orgRow?.ownerId) {
-      const [existingOwner] = await db
+    if (!existingOwner) {
+      return NextResponse.json(
+        { error: "Workspace owner record missing." },
+        { status: 500 }
+      );
+    }
+
+    resolvedUser = existingOwner;
+    claimFlow = "owner_re_upgrade";
+  } else {
+    // Path (b): first-time claim. Email is required.
+    if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      return NextResponse.json(
+        {
+          error: "A valid email is required to claim this workspace.",
+          code: "email_required",
+        },
+        { status: 400 }
+      );
+    }
+
+    const claim = await claimAnonymousWorkspaceForEmail(adminCtx.orgId, email, name);
+    if (claim.ok) {
+      const [created] = await db
         .select({ id: users.id, email: users.email })
         .from(users)
-        .where(eq(users.id, orgRow.ownerId))
+        .where(eq(users.id, claim.userId))
         .limit(1);
-
-      if (
-        existingOwner &&
-        typeof existingOwner.email === "string" &&
-        existingOwner.email.toLowerCase() === email
-      ) {
-        resolvedUser = existingOwner;
-        claimFlow = "owner_re_upgrade";
+      if (!created) {
+        return NextResponse.json({ error: "Could not load new user." }, { status: 500 });
       }
-    }
-
-    if (!resolvedUser) {
+      resolvedUser = created;
+    } else if (claim.reason === "email_taken") {
       return NextResponse.json(
         {
           error:
-            "This workspace is already attached to a different account. Sign in to manage its subscription.",
-          code: "workspace_already_claimed",
+            "An account already exists with that email. Sign in at /login and manage your subscription from there.",
+          code: "email_taken",
         },
         { status: 409 }
       );
+    } else {
+      return NextResponse.json({ error: "Workspace not found." }, { status: 404 });
     }
-  } else if (claim.reason === "email_taken") {
+  }
+
+  if (!resolvedUser) {
+    // Defensive: every above branch either assigns resolvedUser or
+    // returns. If we somehow reach here with null, surface it loudly.
     return NextResponse.json(
-      {
-        error:
-          "An account already exists with that email. Sign in at /login and manage your subscription from there.",
-        code: "email_taken",
-      },
-      { status: 409 }
+      { error: "Could not resolve workspace owner for checkout." },
+      { status: 500 }
     );
-  } else {
-    return NextResponse.json({ error: "Workspace not found." }, { status: 404 });
   }
 
   // Step 3 — create the Stripe Checkout session referencing the user.
