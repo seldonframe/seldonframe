@@ -343,7 +343,10 @@ export default async function IntegrationsSettingsPage({
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             {!settings.google.calendarConnected ? (
-              <Link href={googleCalendarConnectUrl} className="crm-button-primary h-10 px-4">
+              // prefetch={false} — OAuth start endpoint redirects to
+              // accounts.google.com which fails CORS preflight on RSC
+              // prefetch. Top-level click navigation still works.
+              <Link href={googleCalendarConnectUrl} prefetch={false} className="crm-button-primary h-10 px-4">
                 Connect Google Calendar
               </Link>
             ) : (

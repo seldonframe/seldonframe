@@ -263,7 +263,13 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
                 Connect Google Calendar to sync availability, prevent double-booking, and push meetings onto your actual calendar.
               </p>
             </div>
-            <Link href={googleCalendarConnectUrl} className="crm-button-primary h-10 px-4 inline-flex items-center justify-center whitespace-nowrap">
+            {/* prefetch={false} — googleCalendarConnectUrl 302s to
+                accounts.google.com (OAuth start). Without this, Next.js
+                fires an RSC prefetch on mount which Chrome blocks via
+                CORS preflight, cluttering the console with ERR_FAILED.
+                The user-initiated click still works fine — the browser
+                follows the redirect normally for top-level navigation. */}
+            <Link href={googleCalendarConnectUrl} prefetch={false} className="crm-button-primary h-10 px-4 inline-flex items-center justify-center whitespace-nowrap">
               Connect Google Calendar
             </Link>
           </div>

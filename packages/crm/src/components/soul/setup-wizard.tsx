@@ -772,6 +772,7 @@ export function SetupWizard({
                   <p className="text-xs text-muted-foreground">Sync your availability</p>
                   <Link
                     href="/api/integrations/google-calendar?returnTo=%2Fsetup"
+                    prefetch={false}
                     className={`${integrations.google.connected ? squareOutlineButtonClass : squarePrimaryButtonClass} h-8 px-3 text-xs w-full`}
                   >
                     {integrations.google.connected ? "✓ Connected" : "Connect OAuth"}

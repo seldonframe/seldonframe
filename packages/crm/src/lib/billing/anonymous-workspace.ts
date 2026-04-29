@@ -9,6 +9,7 @@ import {
   createDefaultIntakeForm,
   createDefaultLandingPage,
 } from "@/lib/blocks/templates";
+import { ensureDefaultPipelineForOrg } from "@/lib/deals/pipeline-defaults";
 import { isReservedSlug } from "@/lib/utils/reserved-slugs";
 
 const DEFAULT_ENABLED_BLOCKS = [
@@ -137,7 +138,18 @@ export async function createAnonymousWorkspace(
   // a no-op. Failures are logged but non-fatal: the workspace itself succeeded
   // and the typed customizers (landing/update, configure_booking,
   // customize_intake_form) can still create or repair these rows on demand.
+  //
+  // The pipeline seed is added alongside the public-surface seeds so the
+  // CRM (/contacts, /deals) is usable from the first dashboard load.
+  // Pre-2026-04-29 workspaces don't have this row — `createDealAction`
+  // self-heals via ensureDefaultPipelineForOrg as a backup.
   await Promise.all([
+    ensureDefaultPipelineForOrg(org.id, org.name).catch((error) => {
+      console.warn(
+        `[anonymous-workspace] pipeline seed failed for ${org.id}:`,
+        error instanceof Error ? error.message : String(error)
+      );
+    }),
     createDefaultLandingPage(org.id, {
       workspaceName: org.name,
       theme: "dark",

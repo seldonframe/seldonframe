@@ -7,6 +7,7 @@ import { getOrgId } from "@/lib/auth/helpers";
 import { assertWritable } from "@/lib/demo/server";
 import { emitSeldonEvent } from "@/lib/events/bus";
 import { inferClientLifecycleFromStatus, recordDealStageLearning } from "@/lib/soul/learning";
+import { ensureDefaultPipelineForOrg } from "@/lib/deals/pipeline-defaults";
 
 export async function listDeals() {
   const orgId = await getOrgId();
@@ -43,15 +44,14 @@ export async function createDealAction(formData: FormData) {
     throw new Error("Unauthorized");
   }
 
-  const [pipeline] = await db
-    .select()
-    .from(pipelines)
-    .where(and(eq(pipelines.orgId, orgId), eq(pipelines.isDefault, true)))
-    .limit(1);
-
-  if (!pipeline) {
-    throw new Error("Pipeline not configured");
-  }
+  // Self-heal: workspaces created via the MCP `create_workspace` tool
+  // before pipeline-seeding was wired into `createAnonymousWorkspace`
+  // have no `pipelines` row. Without this, the very first deal-create
+  // form submission lands the page in the global error boundary
+  // ("Pipeline not configured"). ensureDefaultPipelineForOrg returns
+  // the existing pipeline if there is one, otherwise inserts a
+  // standard B2B funnel (Lead → Qualified → ... → Won/Lost).
+  const pipeline = await ensureDefaultPipelineForOrg(orgId);
 
   const contactId = String(formData.get("contactId") ?? "");
 
