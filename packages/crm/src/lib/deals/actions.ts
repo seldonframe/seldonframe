@@ -91,6 +91,86 @@ export async function createDealAction(formData: FormData) {
   });
 }
 
+/**
+ * Quick-add variant of `createDealAction` — accepts a structured
+ * argument instead of FormData and returns a typed result instead of
+ * throwing. Used by the kanban "+ Add deal" inline form so a missing
+ * contact (or other validation failure) renders as an inline error
+ * rather than triggering the global error boundary.
+ *
+ * On success, inserts the deal at the chosen stage (default: first
+ * stage of the org's default pipeline, auto-seeded if missing).
+ */
+export async function quickCreateDealAction(input: {
+  title: string;
+  contactId: string;
+  value: number;
+  stage?: string;
+}): Promise<
+  | { ok: true; dealId: string; stage: string; probability: number }
+  | { ok: false; error: string }
+> {
+  assertWritable();
+
+  const orgId = await getOrgId();
+  if (!orgId) return { ok: false, error: "Unauthorized." };
+
+  const title = input.title.trim();
+  if (!title) return { ok: false, error: "Deal title is required." };
+  if (title.length > 200) return { ok: false, error: "Title must be 200 chars or fewer." };
+
+  if (!input.contactId) return { ok: false, error: "Pick a contact." };
+
+  const value = Number.isFinite(input.value) && input.value >= 0 ? input.value : 0;
+
+  const pipeline = await ensureDefaultPipelineForOrg(orgId);
+
+  const [contact] = await db
+    .select({ id: contacts.id, source: contacts.source })
+    .from(contacts)
+    .where(and(eq(contacts.orgId, orgId), eq(contacts.id, input.contactId)))
+    .limit(1);
+
+  if (!contact) return { ok: false, error: "Contact not found." };
+
+  const stages = Array.isArray(pipeline.stages) ? pipeline.stages : [];
+  const fallbackStage = stages[0] ?? { name: "New", probability: 0 };
+  const targetStage = input.stage
+    ? stages.find((s) => s.name === input.stage) ?? fallbackStage
+    : fallbackStage;
+
+  const [created] = await db
+    .insert(deals)
+    .values({
+      orgId,
+      contactId: contact.id,
+      pipelineId: pipeline.id,
+      title,
+      value: String(value),
+      stage: targetStage.name,
+      probability: targetStage.probability ?? 0,
+    })
+    .returning({ id: deals.id });
+
+  if (!created) return { ok: false, error: "Could not create deal." };
+
+  await recordDealStageLearning({
+    orgId,
+    stage: targetStage.name,
+    probability: targetStage.probability ?? 0,
+    source: contact.source,
+    value,
+    createdAt: new Date(),
+  }).catch(() => undefined);
+
+  return {
+    ok: true,
+    dealId: created.id,
+    stage: targetStage.name,
+    probability: targetStage.probability ?? 0,
+  };
+}
+
 export async function moveDealStageAction(dealId: string, stage: string, probability: number) {
   assertWritable();
 

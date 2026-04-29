@@ -4,21 +4,30 @@ import { contacts } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
 import { getLabels } from "@/lib/soul/labels";
 import { getDefaultPipeline, listDeals } from "@/lib/deals/actions";
-import { DealsView, type DealRow, type StageDef } from "@/components/deals/deals-view";
+import { getDealsView } from "@/lib/deals/view-cookie";
+import {
+  DealsView,
+  type ContactOption,
+  type DealRow,
+  type StageDef,
+} from "@/components/deals/deals-view";
 
 /**
  * /deals — main Engagements page.
  *
- * Server-loads deals + pipeline stages + contacts, then hands off to the
- * `<DealsView>` client component which renders a Table | Kanban toggle
- * with HTML5 drag-and-drop between stages. The kanban view uses the
- * existing `moveDealStageAction` server action so persistence semantics
- * (probability, closedAt for Won/Lost) match the rest of the app.
+ * Server-loads deals + pipeline stages + contacts + the operator's
+ * preferred view (from cookie), then hands off to the `<DealsView>`
+ * client component which owns the Kanban / Table render + drag-drop
+ * via @dnd-kit.
  *
- * Search / stage / value filters stay URL-driven (the `<form method="get">`
- * inside DealsView submits to this same route). The reason: deep links
- * still work, and the SSR-rendered table/kanban respects the filter on
- * first paint without needing a client-side fetch.
+ * Cookie-based view persistence (vs. localStorage) means SSR picks
+ * the right initial render — no flash from kanban → table when the
+ * operator prefers table.
+ *
+ * Pipeline stages drive kanban column ordering. If the org has no
+ * `pipelines` row (legacy workspaces predating eager-seed), the
+ * fallback is a 6-stage B2B funnel; createDealAction self-heals on
+ * first deal create via ensureDefaultPipelineForOrg.
  */
 
 const FALLBACK_STAGES: StageDef[] = [
@@ -40,11 +49,12 @@ export default async function DealsPage({
   const selectedStage = (params.stage ?? "all").trim() || "all";
   const selectedValue = (params.value ?? "all").trim() || "all";
 
-  const [labels, dealRows, defaultPipeline, orgId] = await Promise.all([
+  const [labels, dealRows, defaultPipeline, orgId, initialView] = await Promise.all([
     getLabels(),
     listDeals(),
     getDefaultPipeline(),
     getOrgId(),
+    getDealsView(),
   ]);
 
   const contactRows = orgId
@@ -59,14 +69,14 @@ export default async function DealsPage({
     : [];
 
   const contactById: Record<string, string> = {};
+  const contactOptions: ContactOption[] = [];
   for (const c of contactRows) {
-    contactById[c.id] = `${c.firstName} ${c.lastName ?? ""}`.trim();
+    const name = `${c.firstName} ${c.lastName ?? ""}`.trim() || "(unnamed)";
+    contactById[c.id] = name;
+    contactOptions.push({ id: c.id, name });
   }
+  contactOptions.sort((a, b) => a.name.localeCompare(b.name));
 
-  // Stages from the org's default pipeline drive kanban column order;
-  // fall back to a sensible default for orgs that haven't customized.
-  // The fallback mirrors the standard B2B funnel (Lead → ... → Won/Lost)
-  // and the stage colors below match `pipelines.stages[].color`.
   const stages: StageDef[] =
     Array.isArray(defaultPipeline?.stages) && defaultPipeline.stages.length > 0
       ? defaultPipeline.stages.map((s) => ({
@@ -76,8 +86,6 @@ export default async function DealsPage({
         }))
       : FALLBACK_STAGES;
 
-  // Stages dropdown still derives from data so legacy stages that aren't
-  // in the pipeline schema appear too.
   const availableStages = Array.from(new Set(dealRows.map((d) => d.stage))).sort((a, b) =>
     a.localeCompare(b)
   );
@@ -97,7 +105,7 @@ export default async function DealsPage({
     <main className="animate-page-enter flex-1 overflow-auto p-4 sm:p-6 space-y-6 bg-background w-full">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 sm:gap-6">
         <div className="space-y-2">
-          <h1 className="text-lg sm:text-[22px] font-semibold leading-relaxed text-foreground">
+          <h1 className="text-lg sm:text-[22px] font-semibold tracking-tight leading-relaxed text-foreground">
             Engagements
           </h1>
           <p className="text-sm sm:text-base text-muted-foreground">
@@ -110,10 +118,12 @@ export default async function DealsPage({
         initialDeals={initialDeals}
         stages={stages}
         contactById={contactById}
+        contactOptions={contactOptions}
         contactLabelSingular={labels.contact.singular}
         dealLabelPlural={labels.deal.plural}
         availableStages={availableStages}
         initialFilters={{ search, stage: selectedStage, value: selectedValue }}
+        initialView={initialView}
       />
     </main>
   );
