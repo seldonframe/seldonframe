@@ -29,10 +29,18 @@ export const PLANS: Plan[] = [
     stripeYearlyPriceId: "",
     limits: {
       maxOrgs: 1,
-      maxContacts: 500,
-      maxEmailsPerMonth: 1000,
-      customDomain: false,
-      removeBranding: false,
+      // Vestigial fields — the volume gates (`maxContacts`,
+      // `maxEmailsPerMonth`) are not enforced and don't appear in the
+      // public /pricing page. Real differentiation is workspaces,
+      // workflow runs/mo, DB storage, Brain layer, support tier.
+      maxContacts: -1,
+      maxEmailsPerMonth: -1,
+      // Aligned 2026-04-29 with the live www.seldonframe.com/pricing
+      // page: all 3 paid tiers ship with custom domain + branded
+      // surfaces. Earlier defaults (false/false) were stale and made
+      // the upgrade form lie about Starter's entitlements.
+      customDomain: true,
+      removeBranding: true,
     },
   },
   {

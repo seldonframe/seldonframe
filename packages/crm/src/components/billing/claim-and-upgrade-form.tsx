@@ -26,24 +26,27 @@ interface PlanChoice {
   highlight?: boolean;
 }
 
-// Plan blurbs are entitlement-based, NOT volume-based. SeldonFrame doesn't
-// meter contacts or emails — so "500 contacts, 1k emails/mo" was always
-// a copy bug. The real upgrade levers are: number of workspaces, custom
-// domain, white-label, full Brain v2 / Seldon It, support tier.
+// Plan blurbs mirror the live www.seldonframe.com/pricing page. Levers
+// are workspaces / workflow runs / Brain layer depth / support tier —
+// NOT contact or email volume (we don't meter those). All 3 paid tiers
+// ship with custom domain + branded surfaces; only Agency adds full
+// white-label.
 const PLANS: PlanChoice[] = [
   {
     id: "starter",
     priceId: "price_1TQzh7JOtNZA0x7xLOTicHkW",
     label: "Cloud Starter",
     price: "$49/mo",
-    blurb: "1 workspace, all core blocks, community support",
+    blurb:
+      "1 workspace · custom domain · branded customer portal · community support",
   },
   {
     id: "pro",
     priceId: "price_1TNY81JOtNZA0x7xsulCSP6x",
     label: "Cloud Pro",
     price: "$99/mo",
-    blurb: "Custom domain, remove SeldonFrame branding, priority support",
+    blurb:
+      "Everything in Starter · 5,000 workflow runs/mo · Brain Layer 1 · approval gates · email support",
     highlight: true,
   },
   {
@@ -51,7 +54,8 @@ const PLANS: PlanChoice[] = [
     priceId: "price_1TQzjrJOtNZA0x7xV4UFxWrH",
     label: "Cloud Agency",
     price: "$149/mo",
-    blurb: "3 workspaces, full Brain v2, white-label client portals",
+    blurb:
+      "3 workspaces · unlimited runs · Brain Layer 2 · full white-label · priority support",
   },
 ];
 
