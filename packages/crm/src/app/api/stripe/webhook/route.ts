@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { organizations, users } from "@/db/schema";
 import { isSelfServiceCheckoutPriceId } from "@/lib/billing/price-ids";
 import { getOrgSubscription, updateOrgSubscription } from "@/lib/billing/subscription";
+import { reRenderAllSurfacesForOrg } from "@/lib/blueprint/rerender-org";
 
 function getStripeClient() {
   const secretKey = process.env.STRIPE_SECRET_KEY;
@@ -231,6 +232,14 @@ export async function POST(req: NextRequest) {
         nextMaxWorkspaces: nextSubscription.maxWorkspaces ?? 1,
       });
 
+      // P0-3: re-render every blueprint surface so the white-label
+      // flag (canRemoveBranding) flips in served HTML now that the
+      // tier landed. Fire-and-forget — failures log but don't block
+      // the webhook response (Stripe retries on non-2xx).
+      void reRenderAllSurfacesForOrg(targetOrgId).catch((err) =>
+        console.warn(`[stripe-webhook] rerender after checkout failed for ${targetOrgId}:`, err)
+      );
+
       break;
     }
 
@@ -276,6 +285,11 @@ export async function POST(req: NextRequest) {
         });
       }
 
+      // P0-3: re-render blueprint surfaces with the new white-label flag.
+      void reRenderAllSurfacesForOrg(orgId).catch((err) =>
+        console.warn(`[stripe-webhook] rerender after subscription update failed for ${orgId}:`, err)
+      );
+
       break;
     }
 
@@ -306,6 +320,12 @@ export async function POST(req: NextRequest) {
         openClawEnabled: false,
         layer2Enabled: false,
       });
+
+      // P0-3: tier dropped to free → re-render to restore the
+      // "Powered by SeldonFrame" badge on /, /book, /intake.
+      void reRenderAllSurfacesForOrg(orgId).catch((err) =>
+        console.warn(`[stripe-webhook] rerender after subscription delete failed for ${orgId}:`, err)
+      );
 
       break;
     }

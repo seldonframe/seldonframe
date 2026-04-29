@@ -47,8 +47,21 @@ export interface RenderedIntake {
   css: string;
 }
 
-export function renderFormbricksStackV1(blueprint: Blueprint): RenderedIntake {
+/**
+ * P0-3 white-label: render-time options. Pass `removePoweredBy: true`
+ * for paid tiers (Cloud Pro / Cloud Agency) so the rendered HTML's
+ * footer omits the "Powered by SeldonFrame" link.
+ */
+export interface RenderFormbricksStackV1Options {
+  removePoweredBy?: boolean;
+}
+
+export function renderFormbricksStackV1(
+  blueprint: Blueprint,
+  options: RenderFormbricksStackV1Options = {}
+): RenderedIntake {
   const themeCss = buildThemeTokens(blueprint.workspace.theme, { surface: "intake" });
+  const removePoweredBy = Boolean(options.removePoweredBy);
 
   const navbar = renderNavbar(blueprint);
   const intro = renderIntroPanel(blueprint);
@@ -56,7 +69,7 @@ export function renderFormbricksStackV1(blueprint: Blueprint): RenderedIntake {
     .map((q, idx) => renderQuestionPanel(q, idx, blueprint.intake.questions.length))
     .join("\n");
   const completion = renderCompletionPanel(blueprint);
-  const footer = renderFooter(blueprint);
+  const footer = renderFooter(blueprint, { removePoweredBy });
 
   // Bake the intake blueprint into a JSON island so the client script can
   // drive validation, showIf filtering, and submit without a network
@@ -397,7 +410,10 @@ function renderCompletionPanel(blueprint: Blueprint): string {
 
 // ─── Footer (matches landing + booking) ───────────────────────────────
 
-function renderFooter(blueprint: Blueprint): string {
+function renderFooter(
+  blueprint: Blueprint,
+  opts: { removePoweredBy: boolean }
+): string {
   const ws = blueprint.workspace;
   const phone = ws.contact.phone;
   const phoneDisplay = formatPhoneDisplay(phone);
@@ -417,7 +433,7 @@ function renderFooter(blueprint: Blueprint): string {
     </div>
   </div>
   <div class="sf-footer__bottom">
-    <p class="sf-footer__poweredby">Powered by <a href="https://seldonframe.com" target="_blank" rel="noopener noreferrer">SeldonFrame</a></p>
+    ${opts.removePoweredBy ? "" : `<p class="sf-footer__poweredby">Powered by <a href="https://seldonframe.com" target="_blank" rel="noopener noreferrer">SeldonFrame</a></p>`}
   </div>
 </footer>`;
 }

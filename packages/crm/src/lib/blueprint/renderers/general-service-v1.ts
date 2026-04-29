@@ -84,16 +84,39 @@ export interface RenderedLanding {
   css: string;
 }
 
+/**
+ * Render-time options. Stay separate from the Blueprint type so the
+ * Blueprint can be persisted unchanged (in `landing_pages.blueprint_json`)
+ * while flags like `removePoweredBy` are derived per-render from the
+ * workspace's current plan tier.
+ */
+export interface RenderGeneralServiceV1Options {
+  /**
+   * P0-3 white-label: when true, the footer's "Powered by SeldonFrame"
+   * link is omitted from the rendered HTML. Set by the seed flow / plan
+   * change re-render based on `canRemoveBranding(plan)` from the
+   * entitlements layer. Defaults to false (free + starter tiers see
+   * the badge).
+   */
+  removePoweredBy?: boolean;
+}
+
 interface RenderContext {
   /** Trust-strip item promoted to the hero reviews badge, if any. */
   promotedReviewItem: { icon?: string; label: string } | null;
+  /** P0-3: whether to include the "Powered by SeldonFrame" footer link. */
+  removePoweredBy: boolean;
 }
 
-export function renderGeneralServiceV1(blueprint: Blueprint): RenderedLanding {
+export function renderGeneralServiceV1(
+  blueprint: Blueprint,
+  options: RenderGeneralServiceV1Options = {}
+): RenderedLanding {
   const themeCss = buildThemeTokens(blueprint.workspace.theme, { surface: "landing" });
 
   const ctx: RenderContext = {
     promotedReviewItem: findReviewItem(blueprint.landing.sections),
+    removePoweredBy: Boolean(options.removePoweredBy),
   };
 
   // First pass: render every section so we know which survive placeholder
@@ -152,7 +175,7 @@ function renderSection(section: LandingSection, blueprint: Blueprint, ctx: Rende
     case "faq":
       return renderFaq(section);
     case "footer":
-      return renderFooter(section, blueprint);
+      return renderFooter(section, blueprint, ctx);
   }
 }
 
@@ -716,7 +739,7 @@ function renderFaq(section: SectionFaq): string {
 </section>`;
 }
 
-function renderFooter(section: SectionFooter, blueprint: Blueprint): string {
+function renderFooter(section: SectionFooter, blueprint: Blueprint, ctx: RenderContext): string {
   const ws = blueprint.workspace;
   const phone = ws.contact.phone;
   const phoneDisplay = formatPhoneDisplay(phone);
@@ -792,7 +815,7 @@ function renderFooter(section: SectionFooter, blueprint: Blueprint): string {
   <div class="sf-footer__bottom">
     ${social}
     ${legal}
-    <p class="sf-footer__poweredby">Powered by <a href="https://seldonframe.com" target="_blank" rel="noopener noreferrer">SeldonFrame</a></p>
+    ${ctx.removePoweredBy ? "" : `<p class="sf-footer__poweredby">Powered by <a href="https://seldonframe.com" target="_blank" rel="noopener noreferrer">SeldonFrame</a></p>`}
   </div>
 </footer>`;
 }

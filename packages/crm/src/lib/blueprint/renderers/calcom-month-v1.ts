@@ -50,13 +50,26 @@ export interface RenderedBooking {
   css: string;
 }
 
-export function renderCalcomMonthV1(blueprint: Blueprint): RenderedBooking {
+/**
+ * P0-3 white-label: render-time options. Pass `removePoweredBy: true`
+ * for paid tiers (Cloud Pro / Cloud Agency) so the rendered HTML's
+ * footer omits the "Powered by SeldonFrame" link.
+ */
+export interface RenderCalcomMonthV1Options {
+  removePoweredBy?: boolean;
+}
+
+export function renderCalcomMonthV1(
+  blueprint: Blueprint,
+  options: RenderCalcomMonthV1Options = {}
+): RenderedBooking {
   const themeCss = buildThemeTokens(blueprint.workspace.theme, { surface: "booking" });
+  const removePoweredBy = Boolean(options.removePoweredBy);
 
   const navbar = renderNavbar(blueprint);
   const eventDetails = renderEventDetails(blueprint);
   const scheduler = renderScheduler(blueprint);
-  const footer = renderFooter(blueprint);
+  const footer = renderFooter(blueprint, { removePoweredBy });
 
   // Bake the booking blueprint chunks JS needs (availability, lead time,
   // form fields, confirmation copy) into a single JSON island so the
@@ -449,7 +462,10 @@ function renderConfirmationShell(blueprint: Blueprint): string {
 
 // ─── Footer (matches landing) ─────────────────────────────────────────
 
-function renderFooter(blueprint: Blueprint): string {
+function renderFooter(
+  blueprint: Blueprint,
+  opts: { removePoweredBy: boolean }
+): string {
   const ws = blueprint.workspace;
   const phone = ws.contact.phone;
   const phoneDisplay = formatPhoneDisplay(phone);
@@ -469,7 +485,7 @@ function renderFooter(blueprint: Blueprint): string {
     </div>
   </div>
   <div class="sf-footer__bottom">
-    <p class="sf-footer__poweredby">Powered by <a href="https://seldonframe.com" target="_blank" rel="noopener noreferrer">SeldonFrame</a></p>
+    ${opts.removePoweredBy ? "" : `<p class="sf-footer__poweredby">Powered by <a href="https://seldonframe.com" target="_blank" rel="noopener noreferrer">SeldonFrame</a></p>`}
   </div>
 </footer>`;
 }

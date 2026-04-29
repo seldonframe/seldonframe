@@ -53,9 +53,19 @@ export function buildBlueprintForWorkspace(
  * Run a Blueprint through the renderer and bundle the output for
  * persistence. Single source of truth for the render call so future
  * renderer-version selection (general-service-v2, etc.) lands here.
+ *
+ * P0-3: opts.removePoweredBy threads through to the renderer so paid
+ * tiers (Cloud Pro / Cloud Agency) get HTML without the "Powered by
+ * SeldonFrame" footer link. Defaults to false (free + starter see
+ * the badge).
  */
-export function renderBlueprint(blueprint: Blueprint): RenderedBlueprint {
-  const { html, css } = renderGeneralServiceV1(blueprint);
+export function renderBlueprint(
+  blueprint: Blueprint,
+  opts: { removePoweredBy?: boolean } = {}
+): RenderedBlueprint {
+  const { html, css } = renderGeneralServiceV1(blueprint, {
+    removePoweredBy: opts.removePoweredBy,
+  });
   return { blueprint, contentHtml: html, contentCss: css };
 }
 
