@@ -1,9 +1,11 @@
 import Link from "next/link";
-import { auth } from "@/auth";
+import { requireAuth } from "@/lib/auth/helpers";
+import { isAdminTokenUserId } from "@/lib/auth/admin-token";
 import { createBillingPortalSessionAction } from "@/lib/billing/actions";
 import { listManagedOrganizations } from "@/lib/billing/orgs";
 import { getOrgSubscription } from "@/lib/billing/subscription";
 import { getOrgId } from "@/lib/auth/helpers";
+import { ClaimAndUpgradeForm } from "@/components/billing/claim-and-upgrade-form";
 
 /*
   Square UI class reference (source of truth):
@@ -56,11 +58,13 @@ function getTierLabel(tier: string): { label: string; legacy: string | null } {
 }
 
 export default async function BillingSettingsPage() {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    return null;
-  }
+  // P0-2: requireAuth recognizes both NextAuth sessions AND admin-token
+  // cookies (via the C6 synthetic-session path). Admin-token sessions
+  // get a different UI: a claim-and-upgrade form instead of the
+  // "Manage subscription" button (which would 401 because the synthetic
+  // user.id isn't in the users table).
+  const session = await requireAuth();
+  const isGuestAdminToken = isAdminTokenUserId(session.user.id);
 
   const orgId = await getOrgId();
   const activeOrgId = orgId ?? session.user.orgId ?? null;
@@ -69,7 +73,10 @@ export default async function BillingSettingsPage() {
   const trialEndsAt = subscription.trialEndsAt ?? null;
   const status = subscription.status ?? "trialing";
   const billingPeriod = subscription.stripePriceId?.includes("year") ? "yearly" : "monthly";
-  const managedOrgs = await listManagedOrganizations(session.user.id);
+  // listManagedOrganizations does a `users` table lookup that throws
+  // for admin-token sessions (sentinel UUID isn't there). Skip for
+  // guests — they only have one workspace anyway.
+  const managedOrgs = isGuestAdminToken ? [] : await listManagedOrganizations(session.user.id);
   // Per CLAUDE.md: first workspace is free forever; each additional = $9/mo.
   const ADDITIONAL_WORKSPACE_PRICE = 9;
   const additionalWorkspaces = Math.max(0, managedOrgs.length - 1);
@@ -122,11 +129,13 @@ export default async function BillingSettingsPage() {
         ) : null}
 
         <div className="flex flex-wrap gap-2">
-          <form action={createBillingPortalSessionAction}>
-            <button type="submit" className="crm-button-primary h-10 px-4">
-              Manage subscription
-            </button>
-          </form>
+          {isGuestAdminToken ? null : (
+            <form action={createBillingPortalSessionAction}>
+              <button type="submit" className="crm-button-primary h-10 px-4">
+                Manage subscription
+              </button>
+            </form>
+          )}
           <Link href="/pricing" className="crm-button-secondary inline-flex h-10 items-center px-4">
             See pricing
           </Link>
@@ -136,6 +145,10 @@ export default async function BillingSettingsPage() {
           {trialEndsAt ? ` · Trial ends ${formatDate(trialEndsAt)}` : ""}
         </p>
       </div>
+
+      {isGuestAdminToken ? (
+        <ClaimAndUpgradeForm />
+      ) : null}
 
       {managedOrgs.length > 0 ? (
         <div className="rounded-xl border bg-card space-y-4 p-5">

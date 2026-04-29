@@ -811,3 +811,92 @@ export async function createWorkspaceFromSetupAction(input: CreateWorkspaceFromS
 
   return { orgId: org.id };
 }
+
+// ─── P0-2: claim-and-upgrade for guest (admin-token) workspaces ────
+
+export type ClaimWorkspaceResult =
+  | { ok: true; userId: string; userExisted: boolean }
+  | { ok: false; reason: "email_taken" | "workspace_already_claimed" | "workspace_not_found" };
+
+/**
+ * Convert a guest (admin-token) workspace into a real account-backed
+ * workspace, ahead of a Stripe upgrade.
+ *
+ * Operators created their workspace via MCP (no signup), got an admin
+ * URL with a `wst_…` bearer cookie, and now want to pay. Stripe Checkout
+ * needs a real user record (`users.id` foreign key on subscriptions).
+ *
+ * Flow:
+ *   - Verify the org exists + has `ownerId IS NULL` (true for all
+ *     `createAnonymousWorkspace` rows).
+ *   - If `users.email` is already taken → return `email_taken` so the
+ *     caller can ask the operator to sign in instead. Re-using a
+ *     stranger's user record would silently merge two unrelated
+ *     workspaces into one billing customer.
+ *   - Insert a fresh user with `orgId = workspaceId` + the supplied
+ *     email + name.
+ *   - Set `organizations.ownerId = newUser.id` so dashboard layout +
+ *     billing flows recognize the operator as a real account holder.
+ *
+ * The admin-token cookie keeps working until it expires — operators
+ * see no friction during the upgrade. Once they're paying, the next
+ * sign-up step (set password / verify email) lands them in a normal
+ * NextAuth session and the bearer cookie can be retired.
+ */
+export async function claimAnonymousWorkspaceForEmail(
+  workspaceId: string,
+  email: string,
+  name?: string
+): Promise<ClaimWorkspaceResult> {
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!normalizedEmail || !workspaceId) {
+    return { ok: false, reason: "workspace_not_found" };
+  }
+
+  const [org] = await db
+    .select({ id: organizations.id, ownerId: organizations.ownerId, name: organizations.name })
+    .from(organizations)
+    .where(eq(organizations.id, workspaceId))
+    .limit(1);
+
+  if (!org) return { ok: false, reason: "workspace_not_found" };
+  if (org.ownerId) return { ok: false, reason: "workspace_already_claimed" };
+
+  const [existingUser] = await db
+    .select({ id: users.id, orgId: users.orgId })
+    .from(users)
+    .where(eq(users.email, normalizedEmail))
+    .limit(1);
+
+  if (existingUser) {
+    // Refuse to silently attach the workspace to an existing account —
+    // that's a confused-deputy attack vector if a stranger types a
+    // real customer's email into the upgrade form.
+    return { ok: false, reason: "email_taken" };
+  }
+
+  const displayName = name?.trim() || normalizedEmail.split("@")[0] || "Workspace owner";
+
+  const [createdUser] = await db
+    .insert(users)
+    .values({
+      orgId: workspaceId,
+      email: normalizedEmail,
+      name: displayName,
+      role: "owner",
+      // No password yet — operator can set one later via account-recovery
+      // flow. Email-verification timestamp stays null.
+    })
+    .returning({ id: users.id });
+
+  if (!createdUser) {
+    return { ok: false, reason: "workspace_not_found" };
+  }
+
+  await db
+    .update(organizations)
+    .set({ ownerId: createdUser.id, updatedAt: new Date() })
+    .where(eq(organizations.id, workspaceId));
+
+  return { ok: true, userId: createdUser.id, userExisted: false };
+}
