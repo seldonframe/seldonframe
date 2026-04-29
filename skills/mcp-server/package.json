@@ -1,7 +1,7 @@
 {
   "name": "@seldonframe/mcp",
-  "version": "1.0.3",
-  "description": "MCP server for SeldonFrame — AI-native Business OS platform. One command creates a real hosted workspace with CRM, booking, intake, and Brain v2. v1.0.3: surfaces admin URL prominently in create_workspace response (no signup required to access dashboard).",
+  "version": "1.0.4",
+  "description": "MCP server for SeldonFrame — AI-native Business OS platform. One command creates a real hosted workspace with CRM, booking, intake, and Brain v2. v1.0.4: hardens the admin URL surface so operators always see the bearer-token /admin/<id>?token=... URL, not the legacy /switch-workspace login-required path.",
   "type": "module",
   "bin": {
     "seldonframe-mcp": "src/index.js"

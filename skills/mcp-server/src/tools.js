@@ -67,6 +67,16 @@ export const TOOLS = [
       // in the response. Operators paste it into their browser and land
       // directly on the dashboard — no signup, no login, no OAuth.
       const adminUrl = result.admin_url ?? null;
+      // v1.0.4: strip the misleading `admin_*` keys out of the legacy
+      // flat `urls` object so old clients don't surface the
+      // /switch-workspace login-required URLs as if they were the
+      // intended path. Public-facing keys (home/book/intake) stay.
+      const rawUrls = result.urls ?? ws.urls ?? null;
+      const publicUrls = rawUrls
+        ? Object.fromEntries(
+            Object.entries(rawUrls).filter(([key]) => !key.startsWith("admin_")),
+          )
+        : null;
       const payload = {
         ok: true,
         workspace: {
@@ -82,12 +92,12 @@ export const TOOLS = [
         admin_url_message: adminUrl
           ? `⚡ Admin Dashboard (bookmark this!): ${adminUrl}\nClick to open the dashboard — no signup needed. Token expires in 7 days; re-mint with list_workspaces({}) when it does.`
           : null,
-        urls: result.urls ?? ws.urls ?? null,
-        public_urls: result.public_urls ?? null,
+        urls: publicUrls,
+        public_urls: result.public_urls ?? publicUrls,
         installed: result.installed ?? ["crm", "caldiy-booking", "formbricks-intake", "brain-v2"],
         next: [
           adminUrl
-            ? `Open the admin dashboard: ${adminUrl}  (paste into your browser; no signup needed)`
+            ? `⚡ Admin Dashboard (bookmark this!): ${adminUrl}  (paste into your browser; no signup needed; token expires in 7 days)`
             : null,
           "install_vertical_pack({ pack: 'real-estate' })  // or 'dental', 'legal'",
           "fetch_source_for_soul({ url: 'https://yoursite.com' }) → submit_soul({ soul })",
