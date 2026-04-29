@@ -5,7 +5,8 @@ import { db } from "@/db";
 import { apiKeys, organizations } from "@/db/schema";
 import { getOrgId, requireAuth } from "@/lib/auth/helpers";
 import { isAdminTokenUserId } from "@/lib/auth/admin-token";
-import { COMMON_TIMEZONES, updateWorkspaceSettingsAction } from "@/lib/workspace/actions";
+import { updateWorkspaceSettingsAction } from "@/lib/workspace/actions";
+import { COMMON_TIMEZONES } from "@/lib/workspace/timezones";
 
 /**
  * Server-action wrapper that adapts the typed result to the
