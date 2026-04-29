@@ -42,7 +42,10 @@ export default async function SettingsPage() {
 
   const [orgRow] = orgId
     ? await db
-        .select({ integrations: organizations.integrations })
+        .select({
+          integrations: organizations.integrations,
+          timezone: organizations.timezone,
+        })
         .from(organizations)
         .where(eq(organizations.id, orgId))
         .limit(1)
@@ -118,6 +121,12 @@ export default async function SettingsPage() {
       id: "business",
       title: "Your Business",
       items: [
+        {
+          href: "/settings/workspace",
+          title: "Workspace",
+          description: "Workspace name, timezone, public URLs, and admin token info",
+          status: <span className="text-xs text-zinc-400">{orgRow?.timezone ?? "UTC"}</span>,
+        },
         {
           href: "/settings/profile",
           title: "Business Profile",
