@@ -261,3 +261,50 @@ export async function submitPublicIntakeAction({
 
   return { success: true };
 }
+
+/**
+ * P0-1: list intake submissions for the current operator's workspace,
+ * with the linked contact joined in. Used by /dashboard/forms/[id] to
+ * surface customer-submitted intake responses (previously invisible —
+ * the data landed in `intake_submissions` but no UI ever read it).
+ *
+ * Pass `formId` to scope to a single form, or omit to get every
+ * submission for the workspace (useful for a top-level inbox view).
+ *
+ * Returns rows newest-first; capped to 100 to keep server-component
+ * pages snappy. Operators wanting more should hit the API.
+ */
+export async function listIntakeSubmissions(opts: { formId?: string } = {}) {
+  const orgId = await getOrgId();
+  if (!orgId) return [];
+
+  const conditions = [eq(intakeSubmissions.orgId, orgId)];
+  if (opts.formId) conditions.push(eq(intakeSubmissions.formId, opts.formId));
+
+  const rows = await db
+    .select({
+      id: intakeSubmissions.id,
+      formId: intakeSubmissions.formId,
+      contactId: intakeSubmissions.contactId,
+      data: intakeSubmissions.data,
+      createdAt: intakeSubmissions.createdAt,
+      contactFirstName: contacts.firstName,
+      contactLastName: contacts.lastName,
+      contactEmail: contacts.email,
+      contactPhone: contacts.phone,
+      contactStatus: contacts.status,
+      formName: intakeForms.name,
+      formSlug: intakeForms.slug,
+    })
+    .from(intakeSubmissions)
+    .leftJoin(contacts, eq(intakeSubmissions.contactId, contacts.id))
+    .leftJoin(intakeForms, eq(intakeSubmissions.formId, intakeForms.id))
+    .where(conditions.length === 1 ? conditions[0] : and(...conditions))
+    .orderBy(intakeSubmissions.createdAt)
+    .limit(100);
+
+  // Drizzle `orderBy` without explicit direction defaults to ASC; we
+  // want newest-first. Reverse here rather than importing `desc` for
+  // one call site.
+  return rows.reverse();
+}
