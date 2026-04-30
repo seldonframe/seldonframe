@@ -65,6 +65,71 @@ const MODEL_OPTIONS = [
   { value: "claude-haiku-4", label: "Claude Haiku 4 — fastest, cheapest" },
 ];
 
+/**
+ * Operator-friendly label for a `$placeholder` key. Maps the dev-style
+ * camelCase id to plain English so the form reads like a question
+ * ("Which form should trigger this?") instead of a developer console
+ * ("formId").
+ *
+ * Falls back to a humanized version of the key for placeholders we
+ * haven't explicitly named yet.
+ */
+const PLACEHOLDER_LABELS: Record<string, string> = {
+  $formId: "Trigger form",
+  $appointmentTypeId: "Booking type",
+  $appointmentTypeSlug: "Booking type",
+  $reviewUrl: "Review link",
+  $emailRecipient: "Send digest to",
+  $cron: "When to run",
+  $couponDiscountPercent: "Discount %",
+  $smsKeyword: "SMS keyword to listen for",
+  $bookingSlug: "Booking type",
+  $weatherProvider: "Weather provider",
+};
+
+function placeholderLabel(key: string): string {
+  if (PLACEHOLDER_LABELS[key]) return PLACEHOLDER_LABELS[key];
+  // Fallback: strip leading $, split camelCase, capitalize first.
+  const base = key.replace(/^\$/, "");
+  const spaced = base.replace(/([A-Z])/g, " $1").trim();
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+/**
+ * Plain-English step descriptors for the pipeline preview. The keys
+ * are step IDs (when the archetype assigns them) or step types
+ * (when no id is set). Kept short so the right-rail preview reads as
+ * a flow rather than a developer log.
+ */
+const STEP_LABEL_BY_ID: Record<string, string> = {
+  // speed-to-lead
+  initial_wait: "Wait a couple of minutes",
+  qualify_conversation: "Text the lead",
+  book_consultation: "Book the consultation",
+  send_confirmation: "Send confirmation",
+  log_activity: "Log activity",
+  // win-back
+  send_winback_email: "Send win-back email",
+  wait_for_sms_reminder: "Wait, then nudge by SMS",
+  send_winback_sms: "Send win-back SMS",
+  create_coupon_step: "Create unique coupon",
+  // review-requester
+  send_review_email: "Send review email",
+  wait_for_review_reply: "Wait for response",
+  send_review_sms_nudge: "Send SMS nudge",
+  // daily-digest
+  build_digest: "Compile digest",
+  send_digest_email: "Email the digest",
+  // weather-aware-booking
+  fetch_forecast: "Check weather forecast",
+  branch_on_rain: "Branch on rain risk",
+  offer_reschedule: "Offer reschedule",
+  confirm_booking: "Confirm booking",
+  // appointment-confirm-sms
+  lookup_appointment: "Look up appointment",
+  reply_with_confirmation: "Reply with confirmation",
+};
+
 export function ConfigureAgentForm({
   archetypeId,
   archetypeName,
@@ -98,34 +163,66 @@ export function ConfigureAgentForm({
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [savedFlash, setSavedFlash] = useState(false);
+  const [savedFlash, setSavedFlash] = useState<"saved" | "deployed" | "paused" | null>(null);
   const [, startTransition] = useTransition();
 
   function setPlaceholder(key: string, value: string) {
     setPlaceholderValues((current) => ({ ...current, [key]: value }));
   }
 
+  async function persistConfig(): Promise<{ ok: boolean }> {
+    const result = await saveAgentConfigAction({
+      archetypeId,
+      placeholders: placeholderValues,
+      temperature,
+      model,
+      approvalRequired,
+      maxRunsPerDay,
+      systemPromptOverride: systemPrompt.trim() || null,
+    });
+    if (!result.ok) {
+      setError(result.error);
+      return { ok: false };
+    }
+    return { ok: true };
+  }
+
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    setSavedFlash(false);
+    setSavedFlash(null);
     setSaving(true);
     try {
-      const result = await saveAgentConfigAction({
-        archetypeId,
-        placeholders: placeholderValues,
-        temperature,
-        model,
-        approvalRequired,
-        maxRunsPerDay,
-        systemPromptOverride: systemPrompt.trim() || null,
-      });
-      if (!result.ok) {
-        setError(result.error);
-      } else {
-        setSavedFlash(true);
-        setTimeout(() => setSavedFlash(false), 2500);
+      const { ok } = await persistConfig();
+      if (ok) {
+        setSavedFlash("saved");
+        setTimeout(() => setSavedFlash(null), 2500);
       }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // Save & Deploy: one button that persists config, then flips the
+  // deploy state in the same user action. Operator-friendly path —
+  // config-without-deploy is rare in the wild so we collapse it.
+  async function handleSaveAndDeploy() {
+    setError(null);
+    setSavedFlash(null);
+    setSaving(true);
+    try {
+      const { ok } = await persistConfig();
+      if (!ok) return;
+      const deployResult = await setAgentDeployStateAction({
+        archetypeId,
+        state: "deployed",
+      });
+      if (!deployResult.ok) {
+        setError(deployResult.error);
+        return;
+      }
+      setSavedFlash("deployed");
+      setTimeout(() => setSavedFlash(null), 3000);
     } finally {
       setSaving(false);
     }
@@ -135,6 +232,10 @@ export function ConfigureAgentForm({
     startTransition(async () => {
       const result = await setAgentDeployStateAction({ archetypeId, state });
       if (!result.ok) setError(result.error);
+      else {
+        setSavedFlash(state === "paused" ? "paused" : "deployed");
+        setTimeout(() => setSavedFlash(null), 2500);
+      }
     });
   }
 
@@ -309,59 +410,77 @@ export function ConfigureAgentForm({
         ) : null}
 
         <div className="flex flex-wrap items-center gap-3 pt-1">
+          {/* Primary CTA: Save & deploy in one click. The approval
+              gate (default ON) is the safety net so this is safe to
+              fast-path. */}
+          {!isDeployed ? (
+            <button
+              type="button"
+              disabled={saving}
+              onClick={handleSaveAndDeploy}
+              className="inline-flex h-10 items-center gap-2 rounded-md bg-emerald-600 px-5 text-sm font-semibold text-white shadow-(--shadow-xs) transition-colors hover:bg-emerald-700 disabled:opacity-50"
+            >
+              <Play className="size-3.5" />
+              {saving
+                ? "Deploying…"
+                : isPaused
+                  ? "Resume agent"
+                  : "Save & deploy agent"}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => handleDeployToggle("paused")}
+              className="inline-flex h-10 items-center gap-2 rounded-md border border-border bg-background px-4 text-sm hover:bg-muted/50"
+            >
+              <Pause className="size-3.5" />
+              Pause agent
+            </button>
+          )}
+
+          {/* Secondary: save only (no deploy). Useful for refining
+              copy / temperature without re-arming triggers. */}
           <button
             type="submit"
             disabled={saving}
-            className="crm-button-primary inline-flex h-10 items-center gap-2 px-5 disabled:opacity-50"
+            className="inline-flex h-10 items-center gap-2 rounded-md border border-border bg-background px-4 text-sm text-foreground hover:bg-muted/50 disabled:opacity-50"
           >
-            {saving ? "Saving…" : "Save configuration"}
+            {saving ? "Saving…" : "Save only"}
           </button>
+
           {savedFlash ? (
             <span className="inline-flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
               <CheckCircle2 className="size-3.5" />
-              Saved
+              {savedFlash === "deployed"
+                ? "Saved & deployed"
+                : savedFlash === "paused"
+                  ? "Paused"
+                  : "Saved"}
             </span>
           ) : null}
 
-          {savedConfig ? (
-            isDeployed ? (
-              <button
-                type="button"
-                onClick={() => handleDeployToggle("paused")}
-                className="inline-flex h-10 items-center gap-2 rounded-md border border-border bg-background px-4 text-sm hover:bg-muted/50"
-              >
-                <Pause className="size-3.5" />
-                Pause
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => handleDeployToggle("deployed")}
-                className="inline-flex h-10 items-center gap-2 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-4 text-sm font-medium text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/15"
-              >
-                <Play className="size-3.5" />
-                {isPaused ? "Resume" : "Deploy"}
-              </button>
-            )
-          ) : null}
-
           <Link
-            href={`/automations/${archetypeId}/test`}
+            href={`/automations/${archetypeId}/runs`}
             className="ml-auto text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
           >
-            Test this agent →
+            See runs →
           </Link>
         </div>
 
         {savedConfig ? (
           <p className="text-[11px] text-muted-foreground">
             {isDeployed
-              ? `Deployed — listening for ${archetypeName.toLowerCase()} triggers.`
+              ? `Live — listening for ${archetypeName.toLowerCase()} triggers. Outputs hold for your approval before sending.`
               : isPaused
                 ? "Paused — triggers will be ignored until you resume."
-                : "Saved but not deployed yet."}
+                : "Saved. Click Save & deploy to start listening for triggers."}
           </p>
-        ) : null}
+        ) : (
+          <p className="text-[11px] text-muted-foreground">
+            Approval gate defaults to ON — every outbound action waits for your sign-off
+            before sending. Safe to deploy on the first click.
+          </p>
+        )}
       </form>
 
       {/* ─── RIGHT: live preview ─── */}
@@ -411,7 +530,7 @@ function PlaceholderInput({
   formOptions: PickerOption[];
   appointmentOptions: PickerOption[];
 }) {
-  const label = field.key.replace(/^\$/, "");
+  const label = placeholderLabel(field.key);
   const id = `pf-${field.key.replace(/[^a-z0-9]/gi, "-")}`;
 
   // valuesFromTool drives the picker source. Three known tools today;
@@ -493,32 +612,66 @@ function PipelinePreview({
   }, [specTemplate]);
 
   function describeStep(step: SpecStep): string {
+    // Prefer the archetype-aware plain-English label keyed by step
+    // id. Falls back to step-type heuristics for steps the lookup
+    // table doesn't know about (and for any new archetypes we add
+    // before the table catches up).
+    if (step.id && STEP_LABEL_BY_ID[step.id]) return STEP_LABEL_BY_ID[step.id];
+
     if (step.type === "wait_for_duration") {
       const seconds = step.duration_seconds as number | undefined;
       if (typeof seconds === "number") {
-        if (seconds % 86400 === 0) return `Wait ${seconds / 86400} day(s)`;
-        if (seconds % 3600 === 0) return `Wait ${seconds / 3600} hour(s)`;
-        if (seconds % 60 === 0) return `Wait ${seconds / 60} minute(s)`;
+        if (seconds % 86400 === 0) return `Wait ${seconds / 86400} day${seconds / 86400 === 1 ? "" : "s"}`;
+        if (seconds % 3600 === 0) return `Wait ${seconds / 3600} hour${seconds / 3600 === 1 ? "" : "s"}`;
+        if (seconds % 60 === 0) return `Wait ${seconds / 60} min`;
         return `Wait ${seconds}s`;
       }
       return "Wait";
     }
-    if (step.type === "mcp_tool_call") return `Tool: ${step.tool ?? "unknown"}`;
+    if (step.type === "mcp_tool_call") return `Run ${humanizeToolName(step.tool)}`;
     if (step.type === "send_sms") return "Send SMS";
     if (step.type === "send_email") return "Send email";
-    if (step.type === "conversation") return "Conversation (Claude)";
-    if (step.type === "create_booking") return "Book appointment";
+    if (step.type === "conversation") return "Have a conversation";
+    if (step.type === "create_booking") return "Book the appointment";
     if (step.type === "create_activity") return "Log activity";
-    if (step.type === "await_event") return `Wait for event: ${step.event_type ?? ""}`;
-    if (step.type === "branch") return "Branch on condition";
+    if (step.type === "await_event") return `Wait for ${humanizeEventType(step.event_type as string | undefined)}`;
+    if (step.type === "branch") return "Decide what to do next";
     return step.type ?? "Step";
   }
 
+  function humanizeToolName(tool: unknown): string {
+    if (typeof tool !== "string") return "tool";
+    return tool
+      .replace(/^create_/, "create ")
+      .replace(/^update_/, "update ")
+      .replace(/^send_/, "send ")
+      .replace(/^list_/, "list ")
+      .replace(/^get_/, "look up ")
+      .replace(/_/g, " ");
+  }
+  function humanizeEventType(eventType: string | undefined): string {
+    if (!eventType) return "event";
+    return eventType
+      .replace(/\./g, " ")
+      .replace(/_/g, " ");
+  }
+
+  // Operator-friendly trigger labels mirror the catalog's archetype
+  // descriptions: "When a form is submitted…" reads better than the
+  // dotted event id `form.submitted`.
+  const TRIGGER_LABELS: Record<string, string> = {
+    "form.submitted": "When a form is submitted",
+    "booking.created": "When a booking is created",
+    "booking.completed": "When a booking is completed",
+    "subscription.cancelled": "When a subscription is cancelled",
+    "sms.received": "When an SMS is received",
+    "deal.stage_changed": "When a deal moves stages",
+  };
   const triggerLabel =
     trigger.type === "event" && trigger.event
-      ? trigger.event
+      ? TRIGGER_LABELS[trigger.event] ?? `When ${trigger.event.replace(/\./g, " ").replace(/_/g, " ")}`
       : trigger.type === "cron" && trigger.cron
-        ? `Schedule (${trigger.cron})`
+        ? `Every day on a schedule (${trigger.cron})`
         : trigger.type;
 
   const filledCount = Object.values(placeholderValues).filter(Boolean).length;

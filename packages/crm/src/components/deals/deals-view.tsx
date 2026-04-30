@@ -580,13 +580,13 @@ function KanbanColumn({
   return (
     <div
       ref={setNodeRef}
-      // flex-1 + min-w-[220px] = columns share available width on
-      // wide screens (6 columns × ~220px floor = 1320px), and the
-      // outer KanbanBoard's overflow-x kicks in only on tablet /
-      // mobile viewports. min-w guarantees a readable column width
-      // so cards never visually collapse.
+      // flex-1 + min-w-[180px] = columns share available width on
+      // wide screens (6 × 180px floor = 1080px). 180px is enough
+      // for a 14px deal title + small contact subtitle on one
+      // visible line. Outer KanbanBoard's overflow-x-auto only
+      // kicks in below ~1080px container width (tablet portrait).
       className={
-        "flex min-w-[220px] flex-1 flex-col rounded-xl border transition-colors " +
+        "flex min-w-[180px] flex-1 flex-col rounded-xl border transition-colors " +
         (showDropHint
           ? "border-primary/60 bg-primary/5 ring-2 ring-primary/40"
           : isWon
@@ -716,8 +716,13 @@ function DealCardSurface({
       style={{ borderLeftColor: accent }}
       className={
         "rounded-lg border border-border border-l-[3px] bg-card p-3 transition-shadow " +
+        // Removed `rotate-1` from the floating overlay — that CSS
+        // transform compounded with @dnd-kit's translate3d positioning
+        // and made the dragged card visibly drift away from the
+        // pointer. Plain shadow-only floating state keeps the
+        // overlay aligned to the cursor exactly.
         (isFloating
-          ? "shadow-(--shadow-card-hover) cursor-grabbing rotate-1"
+          ? "shadow-(--shadow-card-hover) cursor-grabbing"
           : "shadow-(--shadow-xs) hover:shadow-(--shadow-card) cursor-grab active:cursor-grabbing")
       }
     >
