@@ -3,17 +3,16 @@
 import { randomUUID } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { and, eq, or, sql } from "drizzle-orm";
-import Stripe from "stripe";
 import { cookies } from "next/headers";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { contacts, orgMembers, organizations, users } from "@/db/schema";
-import { getOrgFeatures } from "@/lib/billing/features";
+import { getOrgFeatures, normalizeTierId } from "@/lib/billing/features";
+import { enforceWorkspaceLimit } from "@/lib/billing/limits";
 import { assertWritable } from "@/lib/demo/server";
 import { getPlan } from "@/lib/billing/plans";
-import { WORKSPACE_ADDON_MONTHLY_PRICE_ID } from "@/lib/billing/price-ids";
 import { getOrgSubscription } from "@/lib/billing/subscription";
 import { installSoul, type FrameworkConfig } from "@/lib/soul/install";
 import { seedInitialBlocks } from "@/lib/soul-compiler/blocks";
@@ -67,19 +66,18 @@ async function getBillingUserById(userId: string) {
   return dbUser;
 }
 
-function hasActiveWorkspaceSubscription(status: string | null | undefined) {
-  return status === "active" || status === "trialing";
-}
 
 // NOTE: this string is also pattern-matched in two callers:
 //   - packages/crm/src/app/api/v1/workspace/create/route.ts (quota error detection)
 //   - packages/crm/src/app/orgs/new/page.tsx (UI quota detection)
 // Both match on the durable substring "additional workspace requires a paid tier"
-// (introduced in claude/pre-launch-polish — was previously coupled to a $9
-// dollar amount that no longer matches the live pricing). Keep in sync if you
-// change this message.
+// — kept stable across pricing migrations so quota detection survives.
+//
+// April 30, 2026 — pricing migration. Old tier names (Starter $49,
+// Operator $99, Agency $149) replaced with the usage-based tiers
+// (Growth $29, Scale $99 unlimited workspaces).
 const WORKSPACE_UPGRADE_REQUIRED_MESSAGE =
-  "You've used your free workspace. Each additional workspace requires a paid tier (Starter $49/mo, Operator $99/mo, or Agency $149/mo) and unlocks more Brain intelligence for your OS.";
+  "You've used your free workspace. Each additional workspace requires a paid tier (Growth $29/mo for up to 3 workspaces, or Scale $99/mo for unlimited).";
 
 async function getOwnedWorkspaceCount(userId: string) {
   const [result] = await db
@@ -90,109 +88,48 @@ async function getOwnedWorkspaceCount(userId: string) {
   return Number(result?.count ?? 0);
 }
 
-async function loadWorkspaceAddonSubscription(
-  user: Awaited<ReturnType<typeof getBillingUserById>>,
+/**
+ * April 30, 2026 — pricing migration. The old "per-workspace add-on
+ * quantity" model (legacy WORKSPACE_ADDON_MONTHLY_PRICE_ID) is gone.
+ * Workspace caps now flow from the user's tier:
+ *   Free   → 1 workspace
+ *   Growth → 3 workspaces
+ *   Scale  → unlimited
+ *
+ * `loadWorkspaceTierStatus` keeps the old shape (active / quantity /
+ * itemId) for backward compat with callers that read it for display,
+ * but `quantity` is now the tier's `maxOrgs - FREE_WORKSPACE_ALLOWANCE`
+ * (i.e. paid-only count: Growth=2, Scale=∞ rendered as 999).
+ */
+function loadWorkspaceTierStatus(
   orgSubscription?: Awaited<ReturnType<typeof getOrgSubscription>>
 ) {
-  const stripeSubscriptionId = user.stripeSubscriptionId ?? orgSubscription?.stripeSubscriptionId ?? null;
-  const billingStatus = user.subscriptionStatus ?? orgSubscription?.status ?? null;
+  const tier = normalizeTierId(orgSubscription?.tier ?? null);
+  const stripeSubscriptionId = orgSubscription?.stripeSubscriptionId ?? null;
+  const active = tier === "growth" || tier === "scale";
 
-  if (!stripeSubscriptionId || !hasActiveWorkspaceSubscription(billingStatus)) {
-    return {
-      stripeSubscriptionId,
-      active: false,
-      quantity: 0,
-      itemId: null as string | null,
-    };
-  }
+  // Paid-tier workspace allowance beyond the free one. Scale =
+  // sentinel `999` (effectively unlimited for UI/display purposes;
+  // the actual gate uses `enforceWorkspaceLimit`).
+  const tierAllowance = tier === "scale" ? 999 : tier === "growth" ? 2 : 0;
 
-  const secretKey = process.env.STRIPE_SECRET_KEY?.trim();
-  if (!secretKey) {
-    return {
-      stripeSubscriptionId,
-      active: true,
-      quantity: 1,
-      itemId: null as string | null,
-    };
-  }
-
-  const stripe = new Stripe(secretKey, {
-    apiVersion: "2025-08-27.basil",
-  });
-
-  try {
-    const subscription = await stripe.subscriptions.retrieve(stripeSubscriptionId);
-    if (!hasActiveWorkspaceSubscription(subscription.status)) {
-      return {
-        stripeSubscriptionId,
-        active: false,
-        quantity: 0,
-        itemId: null as string | null,
-      };
-    }
-
-    const workspaceItem = subscription.items.data.find((item) => item.price?.id === WORKSPACE_ADDON_MONTHLY_PRICE_ID) ?? null;
-
-    return {
-      stripeSubscriptionId,
-      active: Boolean(workspaceItem),
-      quantity: workspaceItem?.quantity ?? 0,
-      itemId: workspaceItem?.id ?? null,
-    };
-  } catch {
-    return {
-      stripeSubscriptionId,
-      active: true,
-      quantity: 1,
-      itemId: null as string | null,
-    };
-  }
+  return {
+    stripeSubscriptionId,
+    active,
+    quantity: tierAllowance,
+    itemId: null as string | null,
+    tier,
+  };
 }
 
 async function ensureWorkspaceCreationBillingForUser(user: Awaited<ReturnType<typeof getBillingUserById>>, existingWorkspaces: number) {
-  if (existingWorkspaces < FREE_WORKSPACE_ALLOWANCE) {
-    return;
-  }
-
-  const orgSubscription = await getOrgSubscription(user.orgId);
-  const addonSubscription = await loadWorkspaceAddonSubscription(user, orgSubscription);
-
-  if (!addonSubscription.active || !addonSubscription.stripeSubscriptionId) {
-    throw new Error(WORKSPACE_UPGRADE_REQUIRED_MESSAGE);
-  }
-
-  const requiredAdditionalWorkspaces = Math.max(1, existingWorkspaces + 1 - FREE_WORKSPACE_ALLOWANCE);
-  if (addonSubscription.quantity >= requiredAdditionalWorkspaces) {
-    return;
-  }
-
-  const secretKey = process.env.STRIPE_SECRET_KEY?.trim();
-  if (!secretKey || !addonSubscription.itemId) {
-    throw new Error(WORKSPACE_UPGRADE_REQUIRED_MESSAGE);
-  }
-
-  const stripe = new Stripe(secretKey, {
-    apiVersion: "2025-08-27.basil",
+  const decision = await enforceWorkspaceLimit({
+    userId: user.id,
+    primaryOrgId: user.orgId ?? null,
+    ownedWorkspaceCount: existingWorkspaces,
   });
-
-  const subscription = await stripe.subscriptions.retrieve(addonSubscription.stripeSubscriptionId);
-  if (!hasActiveWorkspaceSubscription(subscription.status)) {
+  if (!decision.allowed) {
     throw new Error(WORKSPACE_UPGRADE_REQUIRED_MESSAGE);
-  }
-
-  const item = subscription.items.data.find((entry) => entry.id === addonSubscription.itemId && entry.price?.id === WORKSPACE_ADDON_MONTHLY_PRICE_ID);
-  if (!item?.id) {
-    throw new Error(WORKSPACE_UPGRADE_REQUIRED_MESSAGE);
-  }
-
-  const targetQuantity = requiredAdditionalWorkspaces;
-  const currentQuantity = item.quantity ?? 1;
-
-  if (currentQuantity !== targetQuantity) {
-    await stripe.subscriptionItems.update(item.id, {
-      quantity: targetQuantity,
-      proration_behavior: "create_prorations",
-    });
   }
 }
 
@@ -240,8 +177,11 @@ export async function getWorkspaceLimitStatus() {
   const orgSubscription = await getOrgSubscription(user.orgId);
   const orgFeatures = getOrgFeatures(orgSubscription.tier ?? "free");
   const ownedWorkspaceCount = await getOwnedWorkspaceCount(user.id);
-  const addonSubscription = await loadWorkspaceAddonSubscription(user, orgSubscription);
-  const maxOrgs = FREE_WORKSPACE_ALLOWANCE + (addonSubscription.active ? addonSubscription.quantity : 0);
+  const tierStatus = loadWorkspaceTierStatus(orgSubscription);
+  // Tier-based cap: free=1, growth=3, scale=unlimited (rendered as
+  // 999 here so the UI's "X / Y" display still works without a
+  // special-case branch — the actual gate lives in enforceWorkspaceLimit).
+  const maxOrgs = FREE_WORKSPACE_ALLOWANCE + tierStatus.quantity;
   const canCreate = ownedWorkspaceCount < maxOrgs;
 
   return {
@@ -260,8 +200,11 @@ export async function getWorkspaceLimitStatusForUser(userId: string) {
   const orgSubscription = await getOrgSubscription(user.orgId);
   const orgFeatures = getOrgFeatures(orgSubscription.tier ?? "free");
   const ownedWorkspaceCount = await getOwnedWorkspaceCount(user.id);
-  const addonSubscription = await loadWorkspaceAddonSubscription(user, orgSubscription);
-  const maxOrgs = FREE_WORKSPACE_ALLOWANCE + (addonSubscription.active ? addonSubscription.quantity : 0);
+  const tierStatus = loadWorkspaceTierStatus(orgSubscription);
+  // Tier-based cap: free=1, growth=3, scale=unlimited (rendered as
+  // 999 here so the UI's "X / Y" display still works without a
+  // special-case branch — the actual gate lives in enforceWorkspaceLimit).
+  const maxOrgs = FREE_WORKSPACE_ALLOWANCE + tierStatus.quantity;
   const canCreate = ownedWorkspaceCount < maxOrgs;
 
   return {

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { contacts, intakeForms, intakeSubmissions, organizations } from "@/db/schema";
 import type { IntakeFormField } from "@/db/schema/intake-forms";
+import { enforceContactLimit } from "@/lib/billing/limits";
 import { emitSeldonEvent } from "@/lib/events/bus";
 
 /**
@@ -99,6 +100,7 @@ export async function POST(request: Request) {
 
   let contactId: string | null = null;
   let contactCreated = false;
+  let contactLimitBlocked = false;
   if (extracted.email) {
     const [existingContact] = await db
       .select({ id: contacts.id })
@@ -108,20 +110,36 @@ export async function POST(request: Request) {
     if (existingContact) {
       contactId = existingContact.id;
     } else {
-      const [createdContact] = await db
-        .insert(contacts)
-        .values({
+      // April 30, 2026 — free-tier contact cap enforcement. Submissions
+      // are still saved to `intake_submissions` so the operator
+      // doesn't lose the lead, but we DON'T create a new `contacts`
+      // row past the cap. The /contacts page surfaces a banner so the
+      // operator knows new contacts are queued behind the upgrade.
+      const limit = await enforceContactLimit(org.id);
+      if (!limit.allowed) {
+        contactLimitBlocked = true;
+        console.info("[intake-route] contact limit reached", {
           orgId: org.id,
-          firstName: extracted.firstName ?? extracted.email,
-          lastName: extracted.lastName ?? null,
-          email: extracted.email,
-          phone: extracted.phone ?? null,
-          status: "lead",
-          source: "intake",
-        })
-        .returning({ id: contacts.id });
-      contactId = createdContact?.id ?? null;
-      contactCreated = Boolean(contactId);
+          tier: limit.tier,
+          used: limit.used,
+          limit: limit.limit,
+        });
+      } else {
+        const [createdContact] = await db
+          .insert(contacts)
+          .values({
+            orgId: org.id,
+            firstName: extracted.firstName ?? extracted.email,
+            lastName: extracted.lastName ?? null,
+            email: extracted.email,
+            phone: extracted.phone ?? null,
+            status: "lead",
+            source: "intake",
+          })
+          .returning({ id: contacts.id });
+        contactId = createdContact?.id ?? null;
+        contactCreated = Boolean(contactId);
+      }
     }
   }
 
@@ -160,7 +178,10 @@ export async function POST(request: Request) {
     { orgId: org.id }
   ).catch(() => undefined);
 
-  return NextResponse.json({ ok: true });
+  // The form-submitter sees a flat success — they shouldn't know about
+  // the operator's contact cap. The operator surface gets the signal
+  // via the intake_submissions row + a banner on /contacts.
+  return NextResponse.json({ ok: true, contactLimitBlocked });
 }
 
 interface ExtractedContact {

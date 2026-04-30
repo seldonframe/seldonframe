@@ -580,7 +580,7 @@ export function SeldonPageClient({
                 {!allowed ? (
                   <div className="rounded-2xl border border-border bg-secondary dark:bg-card p-1">
                     <div className="rounded-xl border border-border dark:border-transparent bg-card dark:bg-secondary p-4 space-y-4">
-                      <p className="text-sm leading-relaxed">Upgrade to Cloud Pro to Seldon custom blocks.</p>
+                      <p className="text-sm leading-relaxed">Upgrade to Growth or Scale to Seldon custom blocks.</p>
                       <Link href="/settings/billing" className="gap-2 inline-flex items-center justify-center rounded-md text-sm font-medium h-9 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90">
                         Upgrade Plan
                       </Link>

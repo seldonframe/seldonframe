@@ -88,18 +88,27 @@ export default async function SettingsPage() {
   ];
   const connectedIntegrations = integrationSignals.filter(Boolean).length;
 
+  // April 30, 2026 — pricing migration. Display labels for the new
+  // tiers + grandfather mappings for legacy subscription strings.
   const tierLabelMap: Record<string, string> = {
     free: "Free",
-    starter: "Starter",
-    cloud_pro: "Cloud Pro",
-    pro_3: "Pro 3",
-    pro_5: "Pro 5",
-    pro_10: "Pro 10",
-    pro_20: "Pro 20",
+    growth: "Growth",
+    scale: "Scale",
+    // Legacy tier strings still in subscriptions for grandfathered
+    // customers — surface them with the equivalent new tier label so
+    // the UI doesn't show a confused mix of old + new names.
+    starter: "Growth",
+    cloud_starter: "Growth",
+    cloud_pro: "Scale",
+    pro_3: "Scale",
+    pro_5: "Scale",
+    pro_10: "Scale",
+    pro_20: "Scale",
+    self_service: "Scale",
   };
 
   const tier = String(subscription.tier ?? "free");
-  const tierLabel = tierLabelMap[tier] ?? tier;
+  const tierLabel = tierLabelMap[tier] ?? tierLabelMap.free;
   const periodLabel = String(subscription.stripePriceId ?? "").includes("year") ? "Yearly" : "Monthly";
   const trialEndLabel = subscription.trialEndsAt
     ? new Date(subscription.trialEndsAt).toLocaleDateString([], { month: "short", day: "numeric" })

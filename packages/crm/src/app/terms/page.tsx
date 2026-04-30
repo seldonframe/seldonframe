@@ -63,7 +63,7 @@ export default function TermsPage() {
           effect at the end of the current billing period. Refunds are handled on a case-by-case basis.
         </p>
         <p className="mt-4 text-base leading-relaxed text-muted-foreground">
-          Plans: Starter ($49/month), Cloud Pro ($99/month), Pro 3-20 ($149-449/month). Self-hosted is free forever.
+          Plans: Free (forever), Growth ($29/month + usage), Scale ($99/month + usage). Self-hosted is free forever.
         </p>
       </section>
 

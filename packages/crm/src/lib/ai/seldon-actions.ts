@@ -969,7 +969,7 @@ export async function runSeldonItAction(_prev: SeldonRunState, formData: FormDat
   if (!endClientMode && !canSeldonIt(plan)) {
     return {
       ok: false,
-      error: "Upgrade to Cloud Pro to Seldon custom blocks.",
+      error: "Upgrade to Growth or Scale to Seldon custom blocks.",
     };
   }
 

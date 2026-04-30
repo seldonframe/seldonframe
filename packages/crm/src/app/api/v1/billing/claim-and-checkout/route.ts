@@ -8,6 +8,11 @@ import { claimAnonymousWorkspaceForEmail } from "@/lib/billing/orgs";
 import {
   isAllowedCheckoutPriceId,
 } from "@/lib/billing/price-ids";
+import {
+  buildCheckoutLineItemsForTier,
+  tierFromBasePriceId,
+} from "@/lib/billing/checkout-items";
+import type { TierId } from "@/lib/billing/plans";
 
 /**
  * POST /api/v1/billing/claim-and-checkout
@@ -42,7 +47,12 @@ import {
 type Body = {
   email?: unknown;
   name?: unknown;
+  /** Either a base price id (preferred — server derives tier) OR a
+   *  raw `tier` string ("growth" | "scale"). Both are accepted so the
+   *  client can pass whichever it has on hand without serialization
+   *  drift between the marketing /pricing page and /settings/billing. */
   priceId?: unknown;
+  tier?: unknown;
   successPath?: unknown;
   cancelPath?: unknown;
 };
@@ -80,14 +90,40 @@ export async function POST(req: NextRequest) {
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
   const name = typeof body.name === "string" ? body.name.trim() : "";
   const priceId = typeof body.priceId === "string" ? body.priceId.trim() : "";
+  const rawTier = typeof body.tier === "string" ? body.tier.trim().toLowerCase() : "";
   const successPath = normalizeReturnPath(
     body.successPath,
     "/dashboard?upgrade=success&session_id={CHECKOUT_SESSION_ID}"
   );
   const cancelPath = normalizeReturnPath(body.cancelPath, "/settings/billing");
 
-  if (!priceId || !isAllowedCheckoutPriceId(priceId)) {
-    return NextResponse.json({ error: "A supported priceId is required." }, { status: 400 });
+  // Resolve the target tier: prefer an explicit `tier` body field;
+  // fall back to deriving from `priceId`. Both must land on a known
+  // paid tier (growth | scale).
+  let targetTier: TierId | null = null;
+  if (rawTier === "growth" || rawTier === "scale") {
+    targetTier = rawTier;
+  } else if (priceId) {
+    targetTier = tierFromBasePriceId(priceId);
+  }
+  if (priceId && !isAllowedCheckoutPriceId(priceId)) {
+    return NextResponse.json({ error: "Unsupported priceId." }, { status: 400 });
+  }
+  if (!targetTier) {
+    return NextResponse.json(
+      {
+        error:
+          "A supported tier is required. Pass { tier: 'growth' | 'scale' } or { priceId: <growth or scale base> }.",
+      },
+      { status: 400 }
+    );
+  }
+  const lineItems = buildCheckoutLineItemsForTier(targetTier);
+  if (!lineItems || lineItems.length === 0) {
+    return NextResponse.json(
+      { error: `No checkout items configured for tier '${targetTier}'.` },
+      { status: 500 }
+    );
   }
 
   const stripe = getStripeClient();
@@ -203,12 +239,15 @@ export async function POST(req: NextRequest) {
   // Step 3 — create the Stripe Checkout session referencing the user.
   const checkoutUser = resolvedUser;
   const origin = getRequestOrigin(req);
+  const basePriceId = lineItems[0].price; // for metadata + audit
   const checkoutSession = await stripe.checkout.sessions.create({
     customer_email: checkoutUser.email ?? undefined,
     mode: "subscription",
     payment_method_types: ["card"],
     client_reference_id: checkoutUser.id,
-    line_items: [{ price: priceId, quantity: 1 }],
+    // Multi-price subscription: base flat price + (optional) metered
+    // overage prices. See lib/billing/checkout-items.ts.
+    line_items: lineItems,
     success_url: `${origin}${successPath}`,
     cancel_url: `${origin}${cancelPath}`,
     metadata: {
@@ -216,7 +255,8 @@ export async function POST(req: NextRequest) {
       userId: checkoutUser.id,
       orgId: adminCtx.orgId,
       workspaceId: adminCtx.orgId,
-      priceId,
+      tier: targetTier,
+      priceId: basePriceId,
       type: "self_service_workspace",
       claim_flow: claimFlow,
     },
@@ -226,7 +266,8 @@ export async function POST(req: NextRequest) {
         userId: checkoutUser.id,
         orgId: adminCtx.orgId,
         workspaceId: adminCtx.orgId,
-        priceId,
+        tier: targetTier,
+        priceId: basePriceId,
         type: "self_service_workspace",
         claim_flow: claimFlow,
       },
@@ -237,6 +278,7 @@ export async function POST(req: NextRequest) {
     ok: true,
     url: checkoutSession.url,
     user: { id: checkoutUser.id, email: checkoutUser.email },
+    tier: targetTier,
     claim_flow: claimFlow,
   });
 }

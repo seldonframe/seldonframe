@@ -45,18 +45,19 @@ function decryptIfNeeded(value: string | undefined) {
 }
 
 function getIncludedSeldonLimit(planId: string | null) {
-  if (!planId || planId === "free" || planId === "starter") {
-    return 50;
-  }
+  // April 30, 2026 — pricing migration. Map current + legacy tier ids
+  // to monthly Seldon It quotas. Free + grandfathered "starter" are
+  // capped low (50/mo); Growth gets 500/mo; Scale + grandfathered
+  // pro/pro_3/pro_5/pro_10/pro_20 are unlimited.
+  if (!planId) return 50;
+  const id = planId.toLowerCase();
 
-  if (planId === "cloud_pro" || planId === "cloud-pro") {
-    return 500;
-  }
-
-  if (planId.startsWith("pro_") || planId.startsWith("pro-")) {
-    return Number.POSITIVE_INFINITY;
-  }
-
+  if (id === "free") return 50;
+  if (id === "starter" || id === "cloud_starter" || id === "cloud-starter") return 50;
+  if (id === "growth") return 500;
+  if (id === "cloud_pro" || id === "cloud-pro") return 500; // grandfather
+  if (id === "scale") return Number.POSITIVE_INFINITY;
+  if (id.startsWith("pro_") || id.startsWith("pro-")) return Number.POSITIVE_INFINITY;
   return 50;
 }
 

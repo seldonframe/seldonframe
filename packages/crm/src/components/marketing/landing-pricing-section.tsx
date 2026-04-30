@@ -1,22 +1,25 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { motion } from "motion/react";
 import { BorderBeam } from "@/components/ui/border-beam";
 
 type BillingPeriod = "monthly" | "yearly";
 
 type PlanCard = {
-  id: string;
+  id: "self_host" | "free" | "growth" | "scale";
   name: string;
   monthly: number;
   yearly: number;
-  lookupMonthly: string;
-  lookupYearly: string;
-  cta?: "checkout" | "github";
+  /** Tier id passed to /api/stripe/checkout. The server reads this and
+   *  builds the multi-price subscription (base + metered overages)
+   *  from `lib/billing/checkout-items.ts`. */
+  tier: "growth" | "scale" | null;
+  cta?: "checkout" | "github" | "signup";
   features: string[];
   badge?: string;
+  tagline: string;
 };
 
 const PLANS: PlanCard[] = [
@@ -25,61 +28,62 @@ const PLANS: PlanCard[] = [
     name: "Self-Host",
     monthly: 0,
     yearly: 0,
-    lookupMonthly: "",
-    lookupYearly: "",
+    tier: null,
     cta: "github",
+    tagline: "Deploy on your infra",
     features: ["Unlimited workspaces", "BYOK API", "Community support"],
   },
   {
-    id: "starter",
-    name: "Starter",
-    monthly: 49,
-    yearly: 470,
-    lookupMonthly: "starter_monthly",
-    lookupYearly: "starter_yearly",
-    cta: "checkout",
-    features: ["1 workspace", "Seldon It (BYOK)", "All blocks", "Email support"],
+    id: "free",
+    name: "Free",
+    monthly: 0,
+    yearly: 0,
+    tier: null,
+    cta: "signup",
+    tagline: "Free forever — upgrade when you grow",
+    features: [
+      "1 workspace",
+      "50 contacts",
+      "100 agent runs / mo",
+      "All core blocks (landing, booking, intake, CRM, agents)",
+      "SeldonFrame branding on surfaces",
+      "Community support",
+    ],
   },
   {
-    id: "cloud_pro",
-    name: "Cloud Pro",
-    monthly: 99,
-    yearly: 950,
-    lookupMonthly: "cloud_pro_monthly",
-    lookupYearly: "cloud_pro_yearly",
-    cta: "checkout",
-    features: ["1 workspace", "Unlimited Seldon It", "All blocks", "Priority support", "Managed email delivery"],
-  },
-  {
-    id: "pro_3",
-    name: "Pro 3",
-    monthly: 149,
-    yearly: 1430,
-    lookupMonthly: "pro_3_monthly",
-    lookupYearly: "pro_3_yearly",
+    id: "growth",
+    name: "Growth",
+    monthly: 29,
+    yearly: 0,
+    tier: "growth",
     cta: "checkout",
     badge: "Recommended",
-    features: ["3 client workspaces", "Unlimited Seldon It", "AI Framework Generator", "Custom domains", "Managed email"],
+    tagline: "For operators with paying clients",
+    features: [
+      "3 workspaces",
+      "500 contacts included (then $0.02 / contact)",
+      "1,000 agent runs included (then $0.03 / run)",
+      "Custom domain",
+      "No SeldonFrame branding",
+      "Client portal access",
+    ],
   },
   {
-    id: "pro_5",
-    name: "Pro 5",
-    monthly: 249,
-    yearly: 2390,
-    lookupMonthly: "pro_5_monthly",
-    lookupYearly: "pro_5_yearly",
+    id: "scale",
+    name: "Scale",
+    monthly: 99,
+    yearly: 0,
+    tier: "scale",
     cta: "checkout",
-    features: ["5 client workspaces", "Everything in Pro 3 +", "White-label", "Framework library"],
-  },
-  {
-    id: "pro_10",
-    name: "Pro 10",
-    monthly: 349,
-    yearly: 3350,
-    lookupMonthly: "pro_10_monthly",
-    lookupYearly: "pro_10_yearly",
-    cta: "checkout",
-    features: ["10 client workspaces", "Everything in Pro 5 +", "Custom domains", "Full white label", "Marketplace publishing"],
+    tagline: "For agencies building for multiple clients",
+    features: [
+      "Unlimited workspaces",
+      "Unlimited contacts",
+      "Agent runs $0.02 / run (all metered)",
+      "Full white-label",
+      "Client portal with custom branding",
+      "Priority support",
+    ],
   },
 ];
 
@@ -88,31 +92,25 @@ function formatAmount(amount: number, period: BillingPeriod) {
     return "Free forever";
   }
 
-  return period === "monthly" ? `$${amount}/mo` : `$${amount}/yr`;
+  return period === "monthly" ? `$${amount}/mo + usage` : `$${amount}/yr + usage`;
 }
 
 export function LandingPricingSection() {
   const [period, setPeriod] = useState<BillingPeriod>("monthly");
-  const [loadingLookupKey, setLoadingLookupKey] = useState<string | null>(null);
+  const [loadingTier, setLoadingTier] = useState<string | null>(null);
 
-  const cards = useMemo(() => PLANS, []);
-
-  async function handleSubscribe(lookupKey: string) {
-    if (!lookupKey) {
-      return;
-    }
-
-    setLoadingLookupKey(lookupKey);
+  async function handleSubscribe(tier: "growth" | "scale") {
+    setLoadingTier(tier);
 
     try {
       const res = await fetch("/api/stripe/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ billingPeriod: lookupKey }),
+        body: JSON.stringify({ tier }),
       });
 
       if (res.status === 401) {
-        window.location.href = `/signup?plan=${encodeURIComponent(lookupKey)}`;
+        window.location.href = `/signup?plan=${encodeURIComponent(tier)}`;
         return;
       }
 
@@ -127,7 +125,7 @@ export function LandingPricingSection() {
     } catch {
       window.location.href = "/signup";
     } finally {
-      setLoadingLookupKey(null);
+      setLoadingTier(null);
     }
   }
 
@@ -135,6 +133,9 @@ export function LandingPricingSection() {
     <section id="pricing" className="py-20 md:py-28">
       <div className="rounded-3xl border border-white/10 bg-[#071216] p-6 md:p-8">
         <h2 className="text-3xl font-semibold tracking-tight md:text-4xl">Simple pricing. No surprises.</h2>
+        <p className="mt-2 text-[#9fb7bc]">
+          Free forever to start. Pay base + usage as you scale. No per-workspace charge.
+        </p>
 
         <div className="mt-6 inline-flex rounded-full border border-white/10 bg-[#0a191d] p-1">
           {(["monthly", "yearly"] as const).map((value) => {
@@ -155,21 +156,23 @@ export function LandingPricingSection() {
                   />
                 ) : null}
                 <span className={`relative ${active ? "text-[#04302c]" : "text-[#9ab4ba]"}`}>
-                  {value === "monthly" ? "Monthly" : "Yearly — save 20%"}
+                  {value === "monthly" ? "Monthly" : "Yearly"}
                 </span>
               </button>
             );
           })}
         </div>
 
-        <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {cards.map((plan) => {
-            const lookupKey = period === "monthly" ? plan.lookupMonthly : plan.lookupYearly;
-            const loading = loadingLookupKey === lookupKey;
+        <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {PLANS.map((plan) => {
+            const loading = loadingTier === plan.tier;
 
             return (
-              <article key={plan.id} className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0a181d] p-5">
-                {plan.id === "pro_3" ? (
+              <article
+                key={plan.id}
+                className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0a181d] p-5"
+              >
+                {plan.id === "growth" ? (
                   <BorderBeam size={90} duration={7} colorFrom="#16b5ae" colorTo="#89fff8" borderWidth={1.5} />
                 ) : null}
 
@@ -182,7 +185,11 @@ export function LandingPricingSection() {
                   ) : null}
                 </div>
 
-                <p className="mt-4 text-2xl font-semibold text-[#f2fffd]">{formatAmount(period === "monthly" ? plan.monthly : plan.yearly, period)}</p>
+                <p className="mt-1 text-xs text-[#7ea0a6]">{plan.tagline}</p>
+
+                <p className="mt-4 text-2xl font-semibold text-[#f2fffd]">
+                  {formatAmount(period === "monthly" ? plan.monthly : plan.yearly, period)}
+                </p>
 
                 <ul className="mt-4 space-y-1.5 text-sm text-[#9fb7bc]">
                   {plan.features.map((feature) => (
@@ -200,32 +207,31 @@ export function LandingPricingSection() {
                     >
                       GitHub ↗
                     </Link>
-                  ) : (
+                  ) : plan.cta === "signup" ? (
+                    <Link
+                      href="/signup"
+                      className="inline-flex h-10 items-center rounded-full border border-white/15 px-4 text-sm font-medium text-[#d7f1ee] hover:border-[#31d8d0]/60"
+                    >
+                      Start free
+                    </Link>
+                  ) : plan.tier ? (
                     <button
                       type="button"
-                      onClick={() => void handleSubscribe(lookupKey)}
+                      onClick={() => void handleSubscribe(plan.tier!)}
                       disabled={loading}
                       className="inline-flex h-10 items-center rounded-full bg-[#14b8b0] px-4 text-sm font-semibold text-[#07312d] transition-colors hover:bg-[#26c9c1] disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {loading ? "Redirecting..." : "Start Free"}
+                      {loading ? "Redirecting..." : `Start ${plan.name}`}
                     </button>
-                  )}
+                  ) : null}
                 </div>
               </article>
             );
           })}
         </div>
 
-        <div className="mt-5 rounded-xl border border-white/10 bg-[#0a181d] px-4 py-3 text-sm text-[#c0dbdf]">
-          Pro 20: <span className="font-semibold text-[#e7fbf8]">{period === "monthly" ? "$449/mo" : "$4,310/yr"}</span> — 20
-          workspaces, everything in Pro 10 + dedicated support + early access. {" "}
-          <a href="mailto:support@seldonframe.com" className="text-[#80f2ea] hover:text-[#aefaf5]">
-            Contact us
-          </a>
-        </div>
-
-        <p className="mt-4 text-sm text-[#8faab0]">
-          Your first workspace is free, forever. No credit card required to start.
+        <p className="mt-5 text-sm text-[#8faab0]">
+          Billed monthly · cancel anytime. No per-workspace charge — Scale ships with unlimited workspaces.
         </p>
       </div>
     </section>

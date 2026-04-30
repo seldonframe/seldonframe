@@ -4,7 +4,15 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { db } from "@/db";
 import { organizations, users } from "@/db/schema";
-import { isSelfServiceCheckoutPriceId } from "@/lib/billing/price-ids";
+import {
+  GROWTH_BASE_PRICE_ID,
+  SCALE_BASE_PRICE_ID,
+  LEGACY_CLOUD_STARTER_PRICE_ID,
+  LEGACY_CLOUD_PRO_PRICE_ID,
+  LEGACY_CLOUD_AGENCY_PRICE_ID,
+} from "@/lib/billing/price-ids";
+import { resolveTierFromSubscription } from "@/lib/billing/tier-resolve";
+import type { TierId } from "@/lib/billing/plans";
 import { getOrgSubscription, updateOrgSubscription } from "@/lib/billing/subscription";
 import { applyBrandingForTier, reRenderAllSurfacesForOrg } from "@/lib/blueprint/rerender-org";
 
@@ -87,6 +95,34 @@ async function markStripeEventProcessed(orgId: string, eventId: string) {
 
 function isEnabledMetadataFlag(value: string | undefined) {
   return value === "true" || value === "1";
+}
+
+/**
+ * Pick the "base flat" price line from a multi-price subscription.
+ * Returns the price id of the line item that matches the resolved
+ * tier's base (Scale → SCALE_BASE_PRICE_ID, Growth → GROWTH_BASE_PRICE_ID,
+ * legacy → first matching legacy id). Falls back to null if nothing
+ * matches — caller defaults to items[0]?.price?.id for backward compat
+ * with single-line legacy subscriptions.
+ */
+function pickBasePriceId(
+  subscription: Stripe.Subscription,
+  tier: TierId
+): string | null {
+  const ids = subscription.items.data
+    .map((item) => item.price?.id ?? null)
+    .filter((id): id is string => typeof id === "string" && id.length > 0);
+
+  if (tier === "scale") {
+    if (ids.includes(SCALE_BASE_PRICE_ID)) return SCALE_BASE_PRICE_ID;
+    if (ids.includes(LEGACY_CLOUD_PRO_PRICE_ID)) return LEGACY_CLOUD_PRO_PRICE_ID;
+    if (ids.includes(LEGACY_CLOUD_AGENCY_PRICE_ID)) return LEGACY_CLOUD_AGENCY_PRICE_ID;
+  }
+  if (tier === "growth") {
+    if (ids.includes(GROWTH_BASE_PRICE_ID)) return GROWTH_BASE_PRICE_ID;
+    if (ids.includes(LEGACY_CLOUD_STARTER_PRICE_ID)) return LEGACY_CLOUD_STARTER_PRICE_ID;
+  }
+  return null;
 }
 
 async function updateSelfServiceWorkspaceState(params: {
@@ -182,26 +218,43 @@ export async function POST(req: NextRequest) {
       const previousSubscription = await getOrgSubscription(targetOrgId);
 
       const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-      const priceId = subscription.items.data[0]?.price?.id;
-
-      if (!priceId) {
-        break;
-      }
-
-      const price = await stripe.prices.retrieve(priceId);
-      const tier = price.metadata?.tier || "free";
-      const maxWorkspaces = Number.parseInt(price.metadata?.workspaces || "1", 10);
+      // April 30, 2026 — multi-price subscriptions. Resolve tier by
+      // scanning every line item, not just items[0]. The base flat
+      // price (growth_base / scale_base) wins over metered overage
+      // prices (which can sort to items[0] depending on Stripe's
+      // ordering). See lib/billing/tier-resolve.ts.
+      const tier = resolveTierFromSubscription(subscription);
+      // Pick the base price for `stripePriceId` storage — the line
+      // item that matches the resolved tier's base. Falls back to
+      // items[0] for legacy single-line subscriptions.
+      const priceId = pickBasePriceId(subscription, tier) ?? subscription.items.data[0]?.price?.id ?? null;
+      // Workspace cap from the resolved tier (-1 = unlimited stored as
+      // a sentinel; the create-workspace gate uses `getMaxOrgs()` to
+      // turn it into POSITIVE_INFINITY).
+      const maxWorkspaces = tier === "scale" ? -1 : tier === "growth" ? 3 : 1;
       const currentPeriodEnd = (subscription as Stripe.Subscription & { current_period_end?: number }).current_period_end;
-      const selfServiceEnabled = isSelfServiceCheckoutPriceId(priceId);
-      const openClawEnabled = selfServiceEnabled && isEnabledMetadataFlag(price.metadata?.openclaw);
-      const layer2Enabled = selfServiceEnabled && isEnabledMetadataFlag(price.metadata?.layer2);
+      const selfServiceEnabled = tier !== "free";
+      // OpenClaw / layer2 metadata flags ride along on the base price
+      // record. Look them up from the base price's metadata when we
+      // have a base priceId.
+      let openClawEnabled = false;
+      let layer2Enabled = false;
+      if (priceId) {
+        try {
+          const price = await stripe.prices.retrieve(priceId);
+          openClawEnabled = selfServiceEnabled && isEnabledMetadataFlag(price.metadata?.openclaw);
+          layer2Enabled = selfServiceEnabled && isEnabledMetadataFlag(price.metadata?.layer2);
+        } catch (err) {
+          console.warn(`[stripe-webhook] failed to retrieve price ${priceId}:`, err);
+        }
+      }
 
       await updateOrgSubscription(targetOrgId, {
         stripeCustomerId: customerId,
         stripeSubscriptionId: subscriptionId,
         stripePriceId: priceId,
         tier,
-        maxWorkspaces: Number.isNaN(maxWorkspaces) ? 1 : maxWorkspaces,
+        maxWorkspaces,
         selfServiceEnabled,
         openClawEnabled,
         layer2Enabled,
@@ -211,7 +264,7 @@ export async function POST(req: NextRequest) {
         currentPeriodEnd: currentPeriodEnd ? new Date(currentPeriodEnd * 1000).toISOString() : null,
       });
 
-      if (selfServiceEnabled) {
+      if (selfServiceEnabled && priceId) {
         await updateSelfServiceWorkspaceState({
           orgId: targetOrgId,
           enabled: true,
@@ -226,10 +279,11 @@ export async function POST(req: NextRequest) {
       console.info("[stripe-webhook] checkout.session.completed applied", {
         eventId: event.id,
         orgId: targetOrgId,
+        tier,
         previousStatus: previousSubscription.status ?? null,
         nextStatus: nextSubscription.status ?? null,
-        previousMaxWorkspaces: previousSubscription.maxWorkspaces ?? 1,
-        nextMaxWorkspaces: nextSubscription.maxWorkspaces ?? 1,
+        previousTier: previousSubscription.tier ?? null,
+        nextTier: nextSubscription.tier ?? null,
       });
 
       // P0 (post-launch fix): auto-flip the page-level white-label
@@ -256,25 +310,33 @@ export async function POST(req: NextRequest) {
     case "customer.subscription.updated": {
       const subscription = event.data.object as Stripe.Subscription;
       const orgId = subscription.metadata?.type === "self_service_workspace" ? subscription.metadata?.workspaceId : subscription.metadata?.orgId;
-      const priceId = subscription.items.data[0]?.price?.id;
 
-      if (!orgId || !priceId) {
+      if (!orgId) {
         break;
       }
 
-      const price = await stripe.prices.retrieve(priceId);
-      const tier = price.metadata?.tier || "free";
-      const maxWorkspaces = Number.parseInt(price.metadata?.workspaces || "1", 10);
+      const tier = resolveTierFromSubscription(subscription);
+      const priceId = pickBasePriceId(subscription, tier) ?? subscription.items.data[0]?.price?.id ?? null;
+      const maxWorkspaces = tier === "scale" ? -1 : tier === "growth" ? 3 : 1;
       const currentPeriodEnd = (subscription as Stripe.Subscription & { current_period_end?: number }).current_period_end;
-      const selfServiceEnabled = isSelfServiceCheckoutPriceId(priceId);
-      const openClawEnabled = selfServiceEnabled && isEnabledMetadataFlag(price.metadata?.openclaw);
-      const layer2Enabled = selfServiceEnabled && isEnabledMetadataFlag(price.metadata?.layer2);
+      const selfServiceEnabled = tier !== "free";
+      let openClawEnabled = false;
+      let layer2Enabled = false;
+      if (priceId) {
+        try {
+          const price = await stripe.prices.retrieve(priceId);
+          openClawEnabled = selfServiceEnabled && isEnabledMetadataFlag(price.metadata?.openclaw);
+          layer2Enabled = selfServiceEnabled && isEnabledMetadataFlag(price.metadata?.layer2);
+        } catch (err) {
+          console.warn(`[stripe-webhook] failed to retrieve price ${priceId}:`, err);
+        }
+      }
 
       await updateOrgSubscription(orgId, {
         stripeSubscriptionId: subscription.id,
         stripePriceId: priceId,
         tier,
-        maxWorkspaces: Number.isNaN(maxWorkspaces) ? 1 : maxWorkspaces,
+        maxWorkspaces,
         selfServiceEnabled,
         openClawEnabled,
         layer2Enabled,
@@ -284,7 +346,7 @@ export async function POST(req: NextRequest) {
         currentPeriodEnd: currentPeriodEnd ? new Date(currentPeriodEnd * 1000).toISOString() : null,
       });
 
-      if (selfServiceEnabled) {
+      if (selfServiceEnabled && priceId) {
         await updateSelfServiceWorkspaceState({
           orgId,
           enabled: true,
@@ -387,23 +449,26 @@ export async function POST(req: NextRequest) {
 
       let stripePriceId: string | null = null;
       let maxWorkspaces = 1;
-      let tier = "free";
+      let tier: "free" | "growth" | "scale" = "free";
       let selfServiceEnabled = false;
       let openClawEnabled = false;
       let layer2Enabled = false;
 
       if (subscriptionId) {
         const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-        stripePriceId = subscription.items.data[0]?.price?.id ?? null;
+        tier = resolveTierFromSubscription(subscription);
+        stripePriceId = pickBasePriceId(subscription, tier) ?? subscription.items.data[0]?.price?.id ?? null;
+        maxWorkspaces = tier === "scale" ? -1 : tier === "growth" ? 3 : 1;
+        selfServiceEnabled = tier !== "free";
 
         if (stripePriceId) {
-          const price = await stripe.prices.retrieve(stripePriceId);
-          const parsedMaxWorkspaces = Number.parseInt(price.metadata?.workspaces || "1", 10);
-          maxWorkspaces = Number.isNaN(parsedMaxWorkspaces) ? 1 : parsedMaxWorkspaces;
-          tier = price.metadata?.tier || "pro";
-          selfServiceEnabled = isSelfServiceCheckoutPriceId(stripePriceId);
-          openClawEnabled = selfServiceEnabled && isEnabledMetadataFlag(price.metadata?.openclaw);
-          layer2Enabled = selfServiceEnabled && isEnabledMetadataFlag(price.metadata?.layer2);
+          try {
+            const price = await stripe.prices.retrieve(stripePriceId);
+            openClawEnabled = selfServiceEnabled && isEnabledMetadataFlag(price.metadata?.openclaw);
+            layer2Enabled = selfServiceEnabled && isEnabledMetadataFlag(price.metadata?.layer2);
+          } catch (err) {
+            console.warn(`[stripe-webhook] failed to retrieve price ${stripePriceId}:`, err);
+          }
         }
       }
 

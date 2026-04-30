@@ -11,6 +11,8 @@ import {
   synthesizeAgentSpec,
 } from "@/lib/agents/synthesis";
 import { makeAgentToolInvoker } from "@/lib/agents/tool-invoker";
+import { enforceAgentRunLimit } from "@/lib/billing/limits";
+import { reportAgentRunUsage } from "@/lib/billing/meters";
 import { startRun } from "@/lib/workflow/runtime";
 import { DrizzleRuntimeStorage } from "@/lib/workflow/storage-drizzle";
 import type { RuntimeContext } from "@/lib/workflow/types";
@@ -68,12 +70,16 @@ export type AgentDispatchResult = {
   attempted: number;
   started: { archetypeId: string; runId: string }[];
   failed: { archetypeId: string; reason: string }[];
+  /** Agents that matched the trigger but were skipped because the
+   *  org hit the free-tier monthly run cap. The /automations page
+   *  surfaces this so the operator sees that runs are being blocked. */
+  blockedByLimit: { archetypeId: string; reason: string }[];
 };
 
 export async function dispatchEventToDeployedAgents(
   input: AgentDispatchInput
 ): Promise<AgentDispatchResult> {
-  const result: AgentDispatchResult = { attempted: 0, started: [], failed: [] };
+  const result: AgentDispatchResult = { attempted: 0, started: [], failed: [], blockedByLimit: [] };
 
   const [orgRow] = await db
     .select({ settings: organizations.settings })
@@ -107,6 +113,19 @@ export async function dispatchEventToDeployedAgents(
 
     result.attempted += 1;
 
+    // Free-tier hard cap (100 runs/mo). Paid tiers always pass —
+    // overage is metered. The check loads `workflow_runs` count for
+    // the current calendar month, which is fast (indexed scan) and
+    // happens once per matching archetype per event.
+    const limit = await enforceAgentRunLimit(input.orgId);
+    if (!limit.allowed) {
+      result.blockedByLimit.push({
+        archetypeId: archetype.id,
+        reason: `${limit.reason}:${limit.used}/${limit.limit}`,
+      });
+      continue;
+    }
+
     try {
       const synthesis = synthesizeAgentSpec(archetype, config);
       if (!synthesis.ok) {
@@ -129,6 +148,11 @@ export async function dispatchEventToDeployedAgents(
       });
 
       result.started.push({ archetypeId: archetype.id, runId });
+
+      // April 30, 2026 — usage-based billing: emit one Stripe meter
+      // event per workflow_runs row creation. Best-effort; failures
+      // log but never block the run. See lib/billing/meters.ts.
+      void reportAgentRunUsage(input.orgId);
     } catch (err) {
       result.failed.push({
         archetypeId: archetype.id,
@@ -137,14 +161,21 @@ export async function dispatchEventToDeployedAgents(
     }
   }
 
-  if (result.attempted > 0 || result.failed.length > 0) {
+  if (result.attempted > 0 || result.failed.length > 0 || result.blockedByLimit.length > 0) {
     console.info(
-      `[agent-dispatcher] org=${input.orgId} event=${input.triggerEventType} attempted=${result.attempted} started=${result.started.length} failed=${result.failed.length}`
+      `[agent-dispatcher] org=${input.orgId} event=${input.triggerEventType} attempted=${result.attempted} started=${result.started.length} failed=${result.failed.length} blockedByLimit=${result.blockedByLimit.length}`
     );
     if (result.failed.length > 0) {
       for (const f of result.failed) {
         console.warn(
           `[agent-dispatcher] org=${input.orgId} archetype=${f.archetypeId} failed: ${f.reason}`
+        );
+      }
+    }
+    if (result.blockedByLimit.length > 0) {
+      for (const b of result.blockedByLimit) {
+        console.info(
+          `[agent-dispatcher] org=${input.orgId} archetype=${b.archetypeId} blocked-by-limit: ${b.reason}`
         );
       }
     }

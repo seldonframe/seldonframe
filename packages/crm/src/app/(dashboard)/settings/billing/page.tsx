@@ -4,6 +4,8 @@ import { isAdminTokenUserId } from "@/lib/auth/admin-token";
 import { createBillingPortalSessionAction } from "@/lib/billing/actions";
 import { listManagedOrganizations } from "@/lib/billing/orgs";
 import { getOrgSubscription } from "@/lib/billing/subscription";
+import { normalizeTierId } from "@/lib/billing/features";
+import { getUsageSummary, type UsageSummary } from "@/lib/billing/usage";
 import { getOrgId } from "@/lib/auth/helpers";
 import { ClaimAndUpgradeForm } from "@/components/billing/claim-and-upgrade-form";
 
@@ -35,31 +37,155 @@ function formatDate(value: string | null | undefined) {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-// Maps legacy backend subscription tiers to the two-plan model advertised on
-// /pricing. Anything with maxWorkspaces > 1 or a paid stripe tier becomes
-// "Pro"; everything else becomes "Free". Legacy tier strings (cloud_pro,
-// pro_3, pro_5, etc.) still exist in subscriptions for users who signed up
-// before the model simplified — we surface them in a footer note but lead
-// with Free/Pro to keep the UI honest.
-function getTierLabel(tier: string): { label: string; legacy: string | null } {
-  const normalized = tier.toLowerCase();
-  const paidTiers = new Set([
-    "pro",
-    "starter",
-    "cloud_starter",
-    "cloud_pro",
-    "pro_3",
-    "pro_5",
-    "pro_10",
-    "pro_20",
-  ]);
-  if (paidTiers.has(normalized)) {
-    return {
-      label: "Pro",
-      legacy: normalized === "pro" ? null : normalized.replace(/_/g, " "),
-    };
-  }
-  return { label: "Free", legacy: null };
+function formatMoney(amount: number) {
+  return amount.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+/** Map a stored subscription tier to the display label + tagline. The
+ *  normalize layer absorbs legacy values (cloud_pro, pro_3, etc.) so
+ *  paying customers from before the migration see a sensible label. */
+function getTierDisplay(rawTier: string | null | undefined) {
+  const tier = normalizeTierId(rawTier);
+  if (tier === "scale") return { label: "Scale", caption: "$99/mo + $0.02 per agent run" };
+  if (tier === "growth") return { label: "Growth", caption: "$29/mo + usage" };
+  return { label: "Free", caption: "Free forever — upgrade when you grow" };
+}
+
+function ProgressBar({ percent, tone }: { percent: number; tone: "primary" | "warn" | "danger" }) {
+  const safe = Math.max(0, Math.min(100, Math.round(percent)));
+  const fill = tone === "danger" ? "bg-destructive" : tone === "warn" ? "bg-caution" : "bg-primary";
+  return (
+    <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+      <div className={`h-full ${fill}`} style={{ width: `${safe}%` }} />
+    </div>
+  );
+}
+
+function UsageRow({
+  label,
+  used,
+  limit,
+  percent,
+  tone,
+  trailing,
+}: {
+  label: string;
+  used: number;
+  limit: number;
+  percent: number;
+  tone: "primary" | "warn" | "danger";
+  trailing?: string;
+}) {
+  const limitLabel =
+    limit === -1
+      ? "unlimited"
+      : limit === 0
+        ? `${used.toLocaleString()} runs`
+        : `${used.toLocaleString()} / ${limit.toLocaleString()} included`;
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-foreground">{label}</span>
+        <span className="text-muted-foreground tabular-nums">{trailing ?? limitLabel}</span>
+      </div>
+      <ProgressBar percent={percent} tone={tone} />
+    </div>
+  );
+}
+
+function pickTone(percent: number): "primary" | "warn" | "danger" {
+  if (percent >= 100) return "danger";
+  if (percent >= 80) return "warn";
+  return "primary";
+}
+
+function UsageCard({ usage }: { usage: UsageSummary }) {
+  const isFree = usage.tier === "free";
+  const isScale = usage.tier === "scale";
+
+  const contactsTone = pickTone(usage.contacts.percent);
+  const agentRunsTone = pickTone(usage.agentRuns.percent);
+
+  return (
+    <div className="rounded-xl border bg-card space-y-4 p-5">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-section-title">Current usage</h2>
+          <p className="text-sm text-muted-foreground">This billing period</p>
+        </div>
+        <div className="text-right">
+          <p className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Estimated total</p>
+          <p className="text-lg font-semibold text-foreground tabular-nums">
+            {formatMoney(usage.estimatedTotal)}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            base {formatMoney(usage.plan.price)}
+            {usage.contacts.overageCost + usage.agentRuns.overageCost > 0
+              ? ` + ${formatMoney(usage.contacts.overageCost + usage.agentRuns.overageCost)} usage`
+              : ""}
+          </p>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <UsageRow
+          label={isScale ? "Contacts" : "Contacts"}
+          used={usage.contacts.used}
+          limit={usage.contacts.included}
+          percent={usage.contacts.percent}
+          tone={contactsTone}
+          trailing={
+            isScale
+              ? `${usage.contacts.used.toLocaleString()} (unlimited)`
+              : undefined
+          }
+        />
+        <UsageRow
+          label={
+            isScale
+              ? `Agent runs · ${formatMoney(usage.plan.metered.agentRuns?.pricePerUnit ?? 0)} each`
+              : "Agent runs"
+          }
+          used={usage.agentRuns.used}
+          limit={usage.agentRuns.included}
+          percent={usage.agentRuns.percent}
+          tone={agentRunsTone}
+          trailing={
+            isScale
+              ? `${usage.agentRuns.used.toLocaleString()} runs · ${formatMoney(usage.agentRuns.overageCost)}`
+              : undefined
+          }
+        />
+      </div>
+
+      {isFree ? (
+        <div className="space-y-1.5 text-xs text-muted-foreground">
+          {usage.contacts.percent >= 100 || usage.agentRuns.percent >= 100 ? (
+            <p className="text-destructive font-medium">
+              Limit reached. Upgrade to Growth to keep adding contacts and running agents.
+            </p>
+          ) : usage.contacts.percent >= 80 || usage.agentRuns.percent >= 80 ? (
+            <p className="text-caution font-medium">
+              Approaching the Free tier limit. Upgrade to Growth before you hit the cap.
+            </p>
+          ) : (
+            <p>Free tier includes 50 contacts + 100 agent runs per month.</p>
+          )}
+        </div>
+      ) : usage.contacts.overageCost + usage.agentRuns.overageCost > 0 ? (
+        <p className="text-xs text-muted-foreground">
+          Overage charges this period: {formatMoney(usage.contacts.overageCost + usage.agentRuns.overageCost)}
+        </p>
+      ) : (
+        <p className="text-xs text-muted-foreground">No overage charges this period.</p>
+      )}
+    </div>
+  );
 }
 
 export default async function BillingSettingsPage({
@@ -96,11 +222,9 @@ export default async function BillingSettingsPage({
   // for admin-token sessions (sentinel UUID isn't there). Skip for
   // guests — they only have one workspace anyway.
   const managedOrgs = isGuestAdminToken ? [] : await listManagedOrganizations(session.user.id);
-  // Per CLAUDE.md: first workspace is free forever; each additional = $9/mo.
-  const ADDITIONAL_WORKSPACE_PRICE = 9;
-  const additionalWorkspaces = Math.max(0, managedOrgs.length - 1);
-  const estimatedMonthly = additionalWorkspaces * ADDITIONAL_WORKSPACE_PRICE;
-  const tierDisplay = getTierLabel(tier);
+
+  const tierDisplay = getTierDisplay(tier);
+  const usage = await getUsageSummary(activeOrgId, tier);
 
   return (
     // P2 — TODO: track down the underlying React #418 source. The
@@ -122,9 +246,8 @@ export default async function BillingSettingsPage({
         <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 text-sm">
           <p className="font-medium text-foreground">You&apos;ve used your free workspace.</p>
           <p className="mt-1 text-muted-foreground">
-            Upgrade to Cloud Pro or Cloud Agency to add more workspaces. Each tier
-            also unlocks custom domain, removes &quot;Powered by SeldonFrame&quot; branding,
-            and gives you priority support.
+            Upgrade to Growth ($29/mo) for up to 3 workspaces, or Scale ($99/mo) for unlimited.
+            Both tiers also unlock custom domain, remove SeldonFrame branding, and add the client portal.
           </p>
         </div>
       ) : null}
@@ -134,29 +257,26 @@ export default async function BillingSettingsPage({
           <div>
             <p className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Current plan</p>
             <p className="text-lg font-semibold text-foreground">{tierDisplay.label}</p>
-            {tierDisplay.legacy ? (
-              <p className="mt-0.5 text-xs text-muted-foreground">Legacy: {tierDisplay.legacy}</p>
-            ) : null}
+            <p className="mt-0.5 text-xs text-muted-foreground">{tierDisplay.caption}</p>
           </div>
           <div>
             <p className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Workspaces</p>
             <p className="text-lg font-semibold text-foreground">{managedOrgs.length}</p>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              {additionalWorkspaces === 0
-                ? "Just your free workspace"
-                : `1 free + ${additionalWorkspaces} paid`}
+              {usage.tier === "scale"
+                ? "Unlimited on Scale"
+                : usage.tier === "growth"
+                  ? `up to ${usage.plan.limits.maxOrgs}`
+                  : "1 included on Free"}
             </p>
           </div>
           <div>
             <p className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Estimated monthly</p>
-            <p className="text-lg font-semibold text-foreground">
-              ${estimatedMonthly}
-              <span className="ml-1 text-xs font-normal text-muted-foreground">/ mo</span>
+            <p className="text-lg font-semibold text-foreground tabular-nums">
+              {formatMoney(usage.estimatedTotal)}
             </p>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              {additionalWorkspaces === 0
-                ? "First workspace is free forever"
-                : `${additionalWorkspaces} × $${ADDITIONAL_WORKSPACE_PRICE}`}
+              {usage.tier === "free" ? "No charge" : "Base + metered usage"}
             </p>
           </div>
         </div>
@@ -180,10 +300,13 @@ export default async function BillingSettingsPage({
           </Link>
         </div>
         <p className="text-xs text-muted-foreground">
-          Billing via Stripe · {billingPeriod} cycle
+          Billed monthly · cancel anytime
           {trialEndsAt ? ` · Trial ends ${formatDate(trialEndsAt)}` : ""}
+          {billingPeriod === "yearly" ? " · yearly cycle" : ""}
         </p>
       </div>
+
+      <UsageCard usage={usage} />
 
       {isGuestAdminToken ? <ClaimAndUpgradeForm /> : null}
 
@@ -212,7 +335,7 @@ export default async function BillingSettingsPage({
                         : "rounded-full bg-primary/15 px-2 py-0.5 text-[11px] text-primary"
                     }
                   >
-                    {isFree ? "Free" : `$${ADDITIONAL_WORKSPACE_PRICE}/mo`}
+                    {isFree ? "First (free)" : tierDisplay.label}
                   </span>
                 </li>
               );
@@ -220,8 +343,11 @@ export default async function BillingSettingsPage({
           </ul>
 
           <p className="text-xs text-muted-foreground">
-            Your first workspace is always free. Each additional workspace adds ${ADDITIONAL_WORKSPACE_PRICE}/month.
-            Delete a workspace and the charge stops on the next billing cycle.
+            {usage.tier === "scale"
+              ? "Scale includes unlimited workspaces. Each workspace uses your shared agent-run + contact pool."
+              : usage.tier === "growth"
+                ? `Growth includes up to ${usage.plan.limits.maxOrgs} workspaces. Upgrade to Scale for unlimited.`
+                : "Free includes 1 workspace. Upgrade to Growth for up to 3, or Scale for unlimited."}
           </p>
         </div>
       ) : null}

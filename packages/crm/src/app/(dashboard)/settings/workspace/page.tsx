@@ -260,7 +260,7 @@ export default async function WorkspaceSettingsPage() {
           <Link href="/settings/domain" className="underline">
             Domain settings
           </Link>{" "}
-          (Cloud Pro+).
+          (Growth + Scale).
         </p>
       </div>
     </section>
