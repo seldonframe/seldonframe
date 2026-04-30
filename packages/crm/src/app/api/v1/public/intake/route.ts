@@ -143,6 +143,23 @@ export async function POST(request: Request) {
     { orgId: org.id }
   ).catch(() => undefined);
 
+  // Also emit `form.submitted` — the canonical agent-archetype trigger
+  // name (Speed-to-Lead and any future intake-listening archetype use
+  // it). Kept separate from `intake.submitted` for backward compat:
+  // existing subscribers (Brain, telemetry) keep using their event;
+  // the agent dispatcher hooks `form.submitted` exclusively. Payload
+  // includes `orgId` so the dispatcher's listener can route to the
+  // right workspace without re-resolving from the form id.
+  void emitSeldonEvent(
+    "form.submitted",
+    {
+      formId: form.id,
+      contactId: contactId ?? "",
+      data: answers,
+    },
+    { orgId: org.id }
+  ).catch(() => undefined);
+
   return NextResponse.json({ ok: true });
 }
 

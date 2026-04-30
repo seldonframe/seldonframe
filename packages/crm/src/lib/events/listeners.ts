@@ -1,9 +1,41 @@
+import { eq } from "drizzle-orm";
 import { getSeldonEventBus } from "@seldonframe/core/events";
 import { getCoreRuntimeConfig } from "@seldonframe/core/config";
 import { configureTelemetry, trackTelemetryEvent } from "@seldonframe/core/telemetry";
+import { db } from "@/db";
+import { bookings, intakeForms } from "@/db/schema";
 import { dispatchEventToDeployedAgents } from "@/lib/agents/dispatcher";
 import { sendTriggeredEmailsForContactEvent, sendWelcomeEmailForContact } from "@/lib/emails/actions";
 import { syncContactToNewsletter } from "@/lib/integrations/newsletter-sync";
+
+/**
+ * The SeldonEvent typed schema doesn't include orgId on form.submitted /
+ * booking.created payloads — orgId is metadata passed into emitSeldonEvent
+ * for workflow_event_log persistence but doesn't propagate to in-memory
+ * bus listeners. To dispatch to deployed agents we need the orgId; we
+ * resolve it from the form / booking id with a small indexed query.
+ * This is fast (covered indexes) and runs only when there's at least
+ * one matching event subscriber.
+ */
+async function resolveOrgIdForFormId(formId: string): Promise<string | null> {
+  if (!formId) return null;
+  const [row] = await db
+    .select({ orgId: intakeForms.orgId })
+    .from(intakeForms)
+    .where(eq(intakeForms.id, formId))
+    .limit(1);
+  return row?.orgId ?? null;
+}
+
+async function resolveOrgIdForBookingId(bookingId: string): Promise<string | null> {
+  if (!bookingId) return null;
+  const [row] = await db
+    .select({ orgId: bookings.orgId })
+    .from(bookings)
+    .where(eq(bookings.id, bookingId))
+    .limit(1);
+  return row?.orgId ?? null;
+}
 
 let listenersRegistered = false;
 
@@ -65,25 +97,27 @@ export function registerCrmEventListeners() {
 
     // WS3.1.4 — fan out to deployed agents listening for form.submitted
     // events. The dispatcher filters by configured `$formId` so only
-    // agents wired to THIS form fire.
-    const data = event.data as Record<string, unknown> | null;
-    const orgId = typeof data?.orgId === "string" ? data.orgId : null;
-    const formId = typeof data?.formId === "string" ? data.formId : null;
-    if (orgId) {
-      void dispatchEventToDeployedAgents({
-        orgId,
-        triggerEventType: "form.submitted",
-        triggerEventId: null,
-        triggerPayload: data ?? {},
-        matcherPlaceholder: "$formId",
-        matcherValue: formId,
-      }).catch((err) =>
+    // agents wired to THIS form fire. orgId isn't on the typed event
+    // payload (bus design), so we resolve it from the form id.
+    const formId = event.data.formId;
+    void resolveOrgIdForFormId(formId)
+      .then((orgId) => {
+        if (!orgId) return;
+        return dispatchEventToDeployedAgents({
+          orgId,
+          triggerEventType: "form.submitted",
+          triggerEventId: null,
+          triggerPayload: event.data as Record<string, unknown>,
+          matcherPlaceholder: "$formId",
+          matcherValue: formId,
+        });
+      })
+      .catch((err) =>
         console.warn(
           `[listeners] dispatchEventToDeployedAgents form.submitted failed:`,
           err
         )
       );
-    }
   });
 
   bus.on("booking.created", async (event) => {
@@ -97,28 +131,31 @@ export function registerCrmEventListeners() {
     });
 
     // WS3.1.4 — fan out to deployed agents listening for booking.created.
-    // Matcher: appointmentTypeId (or appointmentTypeSlug) — agents are
-    // configured per booking type so a workspace with multiple types
-    // can wire different agents to each.
-    const data = event.data as Record<string, unknown> | null;
-    const orgId = typeof data?.orgId === "string" ? data.orgId : null;
+    // Matcher: appointmentTypeId — agents are configured per booking
+    // type so a workspace with multiple types can wire different
+    // agents to each. orgId resolved from the booking row.
+    const data = event.data as Record<string, unknown>;
+    const bookingId = typeof data.bookingId === "string" ? data.bookingId : "";
     const apptTypeId =
-      typeof data?.appointmentTypeId === "string" ? data.appointmentTypeId : null;
-    if (orgId) {
-      void dispatchEventToDeployedAgents({
-        orgId,
-        triggerEventType: "booking.created",
-        triggerEventId: null,
-        triggerPayload: data ?? {},
-        matcherPlaceholder: "$appointmentTypeId",
-        matcherValue: apptTypeId,
-      }).catch((err) =>
+      typeof data.appointmentTypeId === "string" ? data.appointmentTypeId : null;
+    void resolveOrgIdForBookingId(bookingId)
+      .then((orgId) => {
+        if (!orgId) return;
+        return dispatchEventToDeployedAgents({
+          orgId,
+          triggerEventType: "booking.created",
+          triggerEventId: null,
+          triggerPayload: data,
+          matcherPlaceholder: "$appointmentTypeId",
+          matcherValue: apptTypeId,
+        });
+      })
+      .catch((err) =>
         console.warn(
           `[listeners] dispatchEventToDeployedAgents booking.created failed:`,
           err
         )
       );
-    }
   });
 
   bus.on("booking.completed", async (event) => {
