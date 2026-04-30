@@ -1,196 +1,211 @@
-import { and, eq } from "drizzle-orm";
-import { Clock3 } from "lucide-react";
+import { and, desc, eq, ne } from "drizzle-orm";
+import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ChevronLeft, Mail, Phone } from "lucide-react";
 import { db } from "@/db";
-import { activities, contacts } from "@/db/schema";
+import { activities, bookings, contacts, deals } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
-import { listEmailTemplates, sendEmailTemplateToContactFormAction } from "@/lib/emails/actions";
-import { getContactRevenue } from "@/lib/payments/actions";
 import { getLabels } from "@/lib/soul/labels";
-import { getSoul } from "@/lib/soul/server";
+import { getContactRevenue } from "@/lib/payments/actions";
+import {
+  ContactRecordDetail,
+  type ActivityRow,
+  type BookingRow,
+  type DealRow,
+  type ContactDetail,
+} from "@/components/contacts/contact-record-detail";
 
-function formatCustomFieldValue(type: string, value: unknown) {
-  if (value == null || value === "") {
-    return "—";
-  }
+/**
+ * /contacts/[id] — full Twenty-style record detail page.
+ *
+ * Replaces the previous narrow "contact profile + activity timeline"
+ * card layout with a proper record-page experience: large header
+ * (avatar + name + stage badge + quick actions), tab bar (Overview /
+ * Activity / Deals / Emails / Bookings / Notes), Overview default.
+ *
+ * Data is server-loaded in one parallel batch and passed through to
+ * the client component which owns the tab state, inline-edit
+ * interactions, and the slide-out → full-page handoff parity.
+ *
+ * Tab scope shipped this turn: Overview + Activity (the 80% of
+ * operator time per the WS2.1 spec). Deals / Emails / Bookings /
+ * Notes tabs render their data but the richer editor surfaces
+ * (compose email, +link deal, note editor) ship in the next turn —
+ * the data fetches are wired here so adding the editor surfaces is
+ * pure client-side work.
+ */
 
-  const normalizedType = type.toLowerCase();
+type SearchParams = Promise<{ tab?: string }>;
 
-  if (normalizedType === "number") {
-    const number = Number(value);
-    return Number.isFinite(number) ? number.toLocaleString() : "—";
-  }
-
-  if (normalizedType === "currency") {
-    const number = Number(value);
-    return Number.isFinite(number)
-      ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(number)
-      : "—";
-  }
-
-  if (normalizedType === "date") {
-    const date = new Date(String(value));
-    return Number.isNaN(date.getTime()) ? "—" : date.toLocaleDateString();
-  }
-
-  if (normalizedType === "multi-select" || normalizedType === "multi_select") {
-    if (Array.isArray(value)) {
-      return value.map((item) => String(item)).filter(Boolean).join(", ") || "—";
-    }
-
-    return String(value);
-  }
-
-  return String(value);
-}
-
-export default async function ContactDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ContactRecordPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: SearchParams;
+}) {
   const { id } = await params;
-  const orgId = await getOrgId();
+  const sp = await searchParams;
 
+  const orgId = await getOrgId();
   if (!orgId) {
-    notFound();
+    return (
+      <section className="animate-page-enter space-y-3 p-4 sm:p-6">
+        <h1 className="text-lg font-semibold">Client</h1>
+        <p className="text-sm text-muted-foreground">No active workspace.</p>
+      </section>
+    );
   }
 
-  const [labels, soul, row, timeline] = await Promise.all([
-    getLabels(),
-    getSoul(),
+  const labels = await getLabels();
+
+  const [contact, activityRows, dealRows, bookingRows, revenue] = await Promise.all([
     db
       .select()
       .from(contacts)
       .where(and(eq(contacts.orgId, orgId), eq(contacts.id, id)))
       .limit(1)
-      .then((result) => result[0]),
-    db.select().from(activities).where(and(eq(activities.orgId, orgId), eq(activities.contactId, id))),
+      .then((r) => r[0] ?? null),
+    db
+      .select({
+        id: activities.id,
+        type: activities.type,
+        subject: activities.subject,
+        body: activities.body,
+        metadata: activities.metadata,
+        scheduledAt: activities.scheduledAt,
+        completedAt: activities.completedAt,
+        createdAt: activities.createdAt,
+      })
+      .from(activities)
+      .where(and(eq(activities.orgId, orgId), eq(activities.contactId, id)))
+      .orderBy(desc(activities.createdAt))
+      .limit(200),
+    db
+      .select({
+        id: deals.id,
+        title: deals.title,
+        stage: deals.stage,
+        value: deals.value,
+        probability: deals.probability,
+        createdAt: deals.createdAt,
+        updatedAt: deals.updatedAt,
+      })
+      .from(deals)
+      .where(and(eq(deals.orgId, orgId), eq(deals.contactId, id)))
+      .orderBy(desc(deals.createdAt)),
+    db
+      .select({
+        id: bookings.id,
+        title: bookings.title,
+        bookingSlug: bookings.bookingSlug,
+        status: bookings.status,
+        startsAt: bookings.startsAt,
+        endsAt: bookings.endsAt,
+        meetingUrl: bookings.meetingUrl,
+        createdAt: bookings.createdAt,
+      })
+      .from(bookings)
+      .where(
+        and(
+          eq(bookings.orgId, orgId),
+          eq(bookings.contactId, id),
+          ne(bookings.status, "template")
+        )
+      )
+      .orderBy(desc(bookings.startsAt)),
+    getContactRevenue(id).catch(() => 0),
   ]);
 
-  const templates = await listEmailTemplates();
-  const revenue = await getContactRevenue(id);
+  if (!contact) notFound();
 
-  if (!row) {
-    notFound();
-  }
+  const detail: ContactDetail = {
+    id: contact.id,
+    firstName: contact.firstName,
+    lastName: contact.lastName ?? null,
+    email: contact.email ?? null,
+    phone: contact.phone ?? null,
+    company: (contact as { company?: string | null }).company ?? null,
+    title: (contact as { title?: string | null }).title ?? null,
+    status: contact.status,
+    source: contact.source ?? null,
+    score: contact.score ?? 0,
+    revenue: Number(revenue ?? 0),
+    createdAt:
+      contact.createdAt instanceof Date
+        ? contact.createdAt.toISOString()
+        : String(contact.createdAt),
+    updatedAt:
+      contact.updatedAt instanceof Date
+        ? contact.updatedAt.toISOString()
+        : String(contact.updatedAt),
+  };
 
-  const suggestedFields = soul?.suggestedFields.contact ?? [];
-  const customFields = (row.customFields ?? {}) as Record<string, unknown>;
+  const activityRowsForClient: ActivityRow[] = activityRows.map((a) => ({
+    id: a.id,
+    type: a.type,
+    subject: a.subject,
+    body: a.body,
+    metadata: (a.metadata as Record<string, unknown> | null) ?? null,
+    scheduledAt: a.scheduledAt instanceof Date ? a.scheduledAt.toISOString() : null,
+    completedAt: a.completedAt instanceof Date ? a.completedAt.toISOString() : null,
+    createdAt:
+      a.createdAt instanceof Date ? a.createdAt.toISOString() : String(a.createdAt),
+  }));
+
+  const dealRowsForClient: DealRow[] = dealRows.map((d) => ({
+    id: d.id,
+    title: d.title,
+    stage: d.stage,
+    value: String(d.value),
+    probability: d.probability,
+    createdAt:
+      d.createdAt instanceof Date ? d.createdAt.toISOString() : String(d.createdAt),
+    updatedAt:
+      d.updatedAt instanceof Date ? d.updatedAt.toISOString() : String(d.updatedAt),
+  }));
+
+  const bookingRowsForClient: BookingRow[] = bookingRows.map((b) => ({
+    id: b.id,
+    title: b.title,
+    bookingSlug: b.bookingSlug,
+    status: b.status,
+    startsAt:
+      b.startsAt instanceof Date ? b.startsAt.toISOString() : String(b.startsAt),
+    endsAt: b.endsAt instanceof Date ? b.endsAt.toISOString() : null,
+    meetingUrl: b.meetingUrl ?? null,
+    createdAt:
+      b.createdAt instanceof Date ? b.createdAt.toISOString() : String(b.createdAt),
+  }));
+
+  const validTabs = ["overview", "activity", "deals", "emails", "bookings", "notes"] as const;
+  const initialTab: NonNullable<ContactDetail["tab"]> =
+    sp?.tab && (validTabs as readonly string[]).includes(sp.tab)
+      ? (sp.tab as NonNullable<ContactDetail["tab"]>)
+      : "overview";
 
   return (
-    <section className="animate-page-enter space-y-4">
-      <h1 className="text-page-title">
-        {labels.contact.singular}: {row.firstName} {row.lastName}
-      </h1>
-
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="space-y-4">
-          <div className="rounded-xl border bg-card p-5">
-            <p className="text-[11px] uppercase tracking-[0.08em] text-[hsl(var(--color-text-muted))]">Contact profile</p>
-            <div className="mt-3 grid gap-2 text-sm text-foreground">
-              <p>Email: {row.email ?? "—"}</p>
-              <p>
-                Status: <span className="crm-badge">{row.status}</span>
-              </p>
-              <p>
-                Revenue: <span className="font-medium text-foreground">${Number(revenue).toFixed(2)}</span>
-              </p>
-            </div>
-          </div>
-
-          {suggestedFields.length > 0 ? (
-            <div className="rounded-xl border bg-card p-5">
-              <h2 className="text-card-title">Custom Fields</h2>
-              <div className="mt-3 grid gap-2">
-                {suggestedFields.map((field) => {
-                  const rawValue = customFields[field.key];
-                  const formatted = formatCustomFieldValue(field.type, rawValue);
-
-                  if (field.type === "url" && formatted !== "—") {
-                    return (
-                      <div key={field.key} className="grid grid-cols-[160px_1fr] gap-3 text-sm">
-                        <p className="text-muted-foreground">{field.label}</p>
-                        <a href={String(rawValue)} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-                          {String(rawValue)}
-                        </a>
-                      </div>
-                    );
-                  }
-
-                  if (field.type === "email" && formatted !== "—") {
-                    return (
-                      <div key={field.key} className="grid grid-cols-[160px_1fr] gap-3 text-sm">
-                        <p className="text-muted-foreground">{field.label}</p>
-                        <a href={`mailto:${String(rawValue)}`} className="text-primary hover:underline">
-                          {String(rawValue)}
-                        </a>
-                      </div>
-                    );
-                  }
-
-                  if (field.type === "phone" && formatted !== "—") {
-                    return (
-                      <div key={field.key} className="grid grid-cols-[160px_1fr] gap-3 text-sm">
-                        <p className="text-muted-foreground">{field.label}</p>
-                        <a href={`tel:${String(rawValue)}`} className="text-primary hover:underline">
-                          {String(rawValue)}
-                        </a>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <div key={field.key} className="grid grid-cols-[160px_1fr] gap-3 text-sm">
-                      <p className="text-muted-foreground">{field.label}</p>
-                      <p className="text-foreground">{formatted}</p>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ) : null}
-
-          <form action={sendEmailTemplateToContactFormAction} className="grid gap-3 rounded-xl border bg-card p-5 md:grid-cols-[1fr_auto] md:items-end">
-            <input type="hidden" name="contactId" value={row.id} />
-            <div>
-              <label htmlFor="templateId" className="text-label text-[hsl(var(--color-text-secondary))]">Send Email Template</label>
-              <select id="templateId" name="templateId" className="crm-input mt-1 h-10 w-full px-3" defaultValue="" required>
-                <option value="" disabled>
-                  Select template
-                </option>
-                {templates.map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.name} {template.tag ? `(${template.tag})` : ""}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <button type="submit" className="crm-button-primary h-10 px-4" disabled={!row.email || templates.length === 0}>
-              Send Email
-            </button>
-          </form>
-        </div>
-
-        {timeline.length > 0 ? (
-          <div className="h-fit rounded-xl border bg-card p-5">
-            <h2 className="mb-3 text-card-title">Activity Timeline</h2>
-            <ul className="space-y-2">
-              {timeline.map((item) => (
-                <li key={item.id} className="crm-table-row flex items-center gap-3 rounded-md px-2 py-2 text-label">
-                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-primary/[0.14] text-xs font-semibold text-primary">
-                    {(row.firstName || "C").charAt(0).toUpperCase()}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-foreground">{item.subject ?? "No subject"}</p>
-                    <p className="text-xs text-[hsl(var(--color-text-secondary))]">{item.type}</p>
-                  </div>
-                  <span className="inline-flex items-center gap-1 text-xs text-[hsl(var(--color-text-muted))]">
-                    <Clock3 className="h-3.5 w-3.5" />
-                    {new Date(item.createdAt).toLocaleDateString()}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
+    <main className="animate-page-enter flex-1 overflow-auto bg-background w-full">
+      <div className="border-b bg-background/60 px-4 sm:px-6 lg:px-8 pt-4 pb-1">
+        <Link
+          href="/contacts"
+          className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ChevronLeft className="size-3" />
+          Back to {labels.contact.plural}
+        </Link>
       </div>
-    </section>
+
+      <ContactRecordDetail
+        contact={detail}
+        activity={activityRowsForClient}
+        deals={dealRowsForClient}
+        bookings={bookingRowsForClient}
+        contactLabelSingular={labels.contact.singular}
+        contactLabelPlural={labels.contact.plural}
+        dealLabelPlural={labels.deal.plural}
+        initialTab={initialTab}
+      />
+    </main>
   );
 }

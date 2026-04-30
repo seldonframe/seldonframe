@@ -458,14 +458,19 @@ export function ContactsTableView({
                       {formatDate(row.createdAt)}
                     </td>
                     <td className="px-2 py-2 align-middle">
-                      <button
-                        type="button"
-                        onClick={() => setActiveId(row.id)}
+                      {/* Chevron navigates to the full record page;
+                          row body click still opens the slide-out
+                          panel (see name cell). The two paths differ:
+                          panel = quick glance, full page = focused
+                          editing across all tabs. */}
+                      <Link
+                        href={`/contacts/${row.id}`}
+                        onClick={(e) => e.stopPropagation()}
                         className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                        aria-label={`Open ${fullName(row)} details`}
+                        aria-label={`Open full record for ${fullName(row)}`}
                       >
                         <ChevronRight className="size-4" />
-                      </button>
+                      </Link>
                     </td>
                   </tr>
                 );
@@ -751,6 +756,18 @@ function ContactSidePanel({
         aria-label={`${contactLabelSingular} detail`}
         className="fixed right-0 top-0 z-50 flex h-full w-full max-w-[420px] flex-col border-l bg-card text-card-foreground shadow-(--shadow-modal) animate-in slide-in-from-right duration-200"
       >
+        {/* Open-full-record handoff: explicit affordance at the top
+            of the panel so operators learn the panel is the quick
+            view and the full record page is for sustained editing. */}
+        <div className="flex items-center justify-between gap-2 border-b px-5 py-2 text-[11px]">
+          <span className="text-muted-foreground">Quick view</span>
+          <Link
+            href={`/contacts/${contact.id}`}
+            className="inline-flex items-center gap-1 font-medium text-primary underline-offset-4 hover:underline"
+          >
+            Open full record →
+          </Link>
+        </div>
         <header className="flex items-start justify-between gap-3 border-b px-5 py-4">
           <div className="flex items-center gap-3 min-w-0">
             <Avatar name={fullName(contact)} large />
@@ -875,7 +892,7 @@ function OverviewTab({ contact }: { contact: ContactRow }) {
             href={`/contacts/${contact.id}`}
             className="inline-flex items-center justify-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
           >
-            Open full profile
+            Open full record →
           </Link>
         </div>
       </div>

@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
+  Circle,
   Pause,
   Play,
   ShieldCheck,
@@ -18,6 +19,7 @@ import {
   setAgentDeployStateAction,
   type AgentConfig,
 } from "@/lib/agents/configure-actions";
+import type { Checklist } from "@/lib/agents/setup-checklist";
 
 /**
  * WS3 — agent configure form.
@@ -52,7 +54,7 @@ export type ConfigureAgentFormProps = {
   archetypeId: string;
   archetypeName: string;
   placeholders: PlaceholderField[];
-  requiresInstalled: string[];
+  checklist: Checklist | null;
   savedConfig: AgentConfig | null;
   formOptions: PickerOption[];
   appointmentOptions: PickerOption[];
@@ -134,7 +136,7 @@ export function ConfigureAgentForm({
   archetypeId,
   archetypeName,
   placeholders,
-  requiresInstalled,
+  checklist,
   savedConfig,
   formOptions,
   appointmentOptions,
@@ -246,27 +248,7 @@ export function ConfigureAgentForm({
     <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
       {/* ─── LEFT: form ─── */}
       <form onSubmit={handleSave} className="space-y-5">
-        {requiresInstalled.length > 0 ? (
-          <div className="rounded-xl border bg-card p-4 text-xs">
-            <p className="font-medium text-foreground">Required blocks</p>
-            <p className="mt-1 text-muted-foreground">
-              This agent depends on:{" "}
-              {requiresInstalled.map((slug, i) => (
-                <span key={slug}>
-                  <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px] text-foreground">
-                    {slug}
-                  </code>
-                  {i < requiresInstalled.length - 1 ? " · " : ""}
-                </span>
-              ))}
-              . If any are missing, deploys will fail. Install them via{" "}
-              <Link href="/soul-marketplace" className="underline hover:text-foreground">
-                Soul Marketplace
-              </Link>
-              .
-            </p>
-          </div>
-        ) : null}
+        {checklist ? <SetupChecklist checklist={checklist} /> : null}
 
         {/* Placeholders */}
         {userInputPlaceholders.length > 0 ? (
@@ -410,15 +392,23 @@ export function ConfigureAgentForm({
         ) : null}
 
         <div className="flex flex-wrap items-center gap-3 pt-1">
-          {/* Primary CTA: Save & deploy in one click. The approval
-              gate (default ON) is the safety net so this is safe to
-              fast-path. */}
+          {/* Primary CTA: Save & deploy in one click. Disabled until
+              every checklist item is met — operators shouldn't be
+              able to deploy an agent that's missing its required
+              integrations. The approval gate (default ON) is the
+              safety net for the deploy-fast path; the checklist gate
+              is the safety net for the misconfiguration path. */}
           {!isDeployed ? (
             <button
               type="button"
-              disabled={saving}
+              disabled={saving || (checklist != null && !checklist.allReady)}
               onClick={handleSaveAndDeploy}
-              className="inline-flex h-10 items-center gap-2 rounded-md bg-emerald-600 px-5 text-sm font-semibold text-white shadow-(--shadow-xs) transition-colors hover:bg-emerald-700 disabled:opacity-50"
+              title={
+                checklist && !checklist.allReady
+                  ? `${checklist.totalCount - checklist.metCount} requirement(s) missing — see checklist above.`
+                  : undefined
+              }
+              className="inline-flex h-10 items-center gap-2 rounded-md bg-emerald-600 px-5 text-sm font-semibold text-white shadow-(--shadow-xs) transition-colors hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Play className="size-3.5" />
               {saving
@@ -571,6 +561,77 @@ function PlaceholderInput({
         />
       )}
       <p className="mt-1 text-[11px] text-muted-foreground">{field.description}</p>
+    </div>
+  );
+}
+
+/* ─── setup checklist ─── */
+
+function SetupChecklist({ checklist }: { checklist: Checklist }) {
+  const { items, metCount, totalCount, allReady } = checklist;
+  const pct = totalCount === 0 ? 100 : Math.round((metCount / totalCount) * 100);
+
+  return (
+    <div className="rounded-xl border bg-card p-5 space-y-4">
+      <div>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold text-foreground">Setup</h2>
+          <span
+            className={
+              "text-xs tabular-nums " +
+              (allReady ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground")
+            }
+          >
+            {metCount} of {totalCount} ready
+          </span>
+        </div>
+        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+          <div
+            className={
+              "h-full transition-all " + (allReady ? "bg-emerald-500" : "bg-primary")
+            }
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+      </div>
+
+      <ul className="space-y-2.5">
+        {items.map((item) => (
+          <li key={item.id} className="flex items-start gap-3">
+            {item.status === "met" ? (
+              <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-500" aria-hidden />
+            ) : (
+              <Circle className="mt-0.5 size-4 shrink-0 text-muted-foreground/50" aria-hidden />
+            )}
+            <div className="min-w-0 flex-1">
+              <p
+                className={
+                  "text-sm font-medium " +
+                  (item.status === "met" ? "text-foreground" : "text-foreground")
+                }
+              >
+                {item.label}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">{item.detail}</p>
+            </div>
+            {item.status === "unmet" && item.fixPath ? (
+              <Link
+                href={item.fixPath}
+                className="shrink-0 text-xs font-medium text-primary underline-offset-4 hover:underline"
+              >
+                {item.fixLabel ?? "Fix →"}
+              </Link>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+
+      {!allReady ? (
+        <p className="rounded-md border border-amber-500/30 bg-amber-500/5 p-2 text-[11px] text-amber-700 dark:text-amber-400">
+          Complete the items above before deploying — Save & deploy is disabled until
+          every requirement is met.
+        </p>
+      ) : null}
     </div>
   );
 }

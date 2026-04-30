@@ -15,7 +15,8 @@ import {
 import { db } from "@/db";
 import { workflowRuns } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
-import { listArchetypes } from "@/lib/agents/archetypes";
+import { getArchetype, listArchetypes } from "@/lib/agents/archetypes";
+import type { AgentConfig } from "@/lib/agents/configure-actions";
 import { SoulAutomationsOverview } from "@/components/automations/soul-automations-overview";
 import { getSoul } from "@/lib/soul/server";
 import { organizations, stripeConnections } from "@/db/schema";
@@ -83,7 +84,7 @@ const FALLBACK_VISUAL = {
 export default async function AutomationsPage() {
   const [soul, orgId] = await Promise.all([getSoul(), getOrgId()]);
 
-  // Soul-suggestion data (kept for the secondary panel).
+  // Soul-suggestion data + agent configs (the latter drives card status).
   const [org, stripe] = orgId
     ? await Promise.all([
         db
@@ -100,6 +101,17 @@ export default async function AutomationsPage() {
           .then((rows) => rows[0] ?? null),
       ])
     : [null, null];
+
+  // Per-archetype saved config map. Drives the status badge: not
+  // configured / incomplete / ready / live / paused. The status
+  // resolution is shared with the archetype card so the badge says
+  // what's actually true (per the operator audit — previous version
+  // showed "Not configured" even after saving).
+  const orgSettings = (org?.settings ?? {}) as Record<string, unknown>;
+  const agentConfigs =
+    orgSettings.agentConfigs && typeof orgSettings.agentConfigs === "object"
+      ? (orgSettings.agentConfigs as Record<string, AgentConfig>)
+      : {};
 
   // Per-archetype run stats. One indexed query — workflow_runs has
   // (orgId, archetypeId) covered.
@@ -217,11 +229,8 @@ export default async function AutomationsPage() {
             const visuals = ARCHETYPE_VISUALS[archetype.id] ?? FALLBACK_VISUAL;
             const Icon = visuals.icon;
             const stats = statsByArchetype.get(archetype.id);
-            const status: "live" | "configured" | "idle" = stats?.last30d
-              ? "live"
-              : stats?.everRan
-                ? "configured"
-                : "idle";
+            const config = agentConfigs[archetype.id] ?? null;
+            const status = resolveCatalogStatus(archetype.id, config, stats);
             const lastRunLabel = stats?.lastRun ? relativeFromNow(stats.lastRun) : null;
             return (
               <Link
@@ -321,20 +330,79 @@ export default async function AutomationsPage() {
   );
 }
 
-function StatusBadge({ status, runs }: { status: "live" | "configured" | "idle"; runs: number }) {
+type CatalogStatus = "not_configured" | "incomplete" | "ready" | "live" | "paused";
+
+/**
+ * Status resolution per the operator-audit lifecycle spec:
+ *   - No config row at all → "Not configured" (gray dot)
+ *   - Config exists but required user-input placeholders are empty
+ *     → "Incomplete" (amber dot)
+ *   - Config exists, all required fields filled, deployedAt is null
+ *     OR pausedAt is set → "Ready to deploy" / "Paused"
+ *   - Config exists + deployedAt set + pausedAt null → "Live" (green
+ *     dot, last-run timestamp)
+ *
+ * Required-field check matches the validation in saveAgentConfigAction
+ * — only `kind: "user_input"` placeholders are required; soul_copy
+ * placeholders are filled by Claude during synthesis.
+ */
+function resolveCatalogStatus(
+  archetypeId: string,
+  config: AgentConfig | null,
+  _stats: { last30d: number; lastRun: Date | null; everRan: boolean } | undefined
+): CatalogStatus {
+  if (!config) return "not_configured";
+
+  const archetype = getArchetype(archetypeId);
+  if (archetype) {
+    for (const [key, meta] of Object.entries(archetype.placeholders)) {
+      if (meta.kind !== "user_input") continue;
+      const value = config.placeholders?.[key];
+      if (!value || !value.trim()) return "incomplete";
+    }
+  }
+
+  if (config.deployedAt && !config.pausedAt) return "live";
+  if (config.pausedAt) return "paused";
+  return "ready";
+}
+
+function StatusBadge({
+  status,
+  runs,
+}: {
+  status: CatalogStatus;
+  runs: number;
+}) {
   if (status === "live") {
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-400 ring-1 ring-inset ring-emerald-500/20">
         <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
-        Live · {runs} {runs === 1 ? "run" : "runs"}/30d
+        {runs > 0 ? `Live · ${runs} ${runs === 1 ? "run" : "runs"}/30d` : "Live"}
       </span>
     );
   }
-  if (status === "configured") {
+  if (status === "paused") {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-zinc-500/10 px-2 py-0.5 text-[10px] font-medium text-zinc-600 dark:text-zinc-400 ring-1 ring-inset ring-zinc-500/20">
+        <span className="size-1.5 rounded-full bg-zinc-500" />
+        Paused
+      </span>
+    );
+  }
+  if (status === "ready") {
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400 ring-1 ring-inset ring-amber-500/20">
         <span className="size-1.5 rounded-full bg-amber-500" />
-        Configured
+        Ready to deploy
+      </span>
+    );
+  }
+  if (status === "incomplete") {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400 ring-1 ring-inset ring-amber-500/20">
+        <span className="size-1.5 rounded-full bg-amber-500/60" />
+        Incomplete
       </span>
     );
   }

@@ -3,6 +3,8 @@ import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { getArchetype } from "@/lib/agents/archetypes";
 import { getAgentConfig } from "@/lib/agents/configure-actions";
+import { getArchetypeSetupChecklist } from "@/lib/agents/setup-checklist";
+import { getOrgId } from "@/lib/auth/helpers";
 import { listForms } from "@/lib/forms/actions";
 import { listAppointmentTypes } from "@/lib/bookings/actions";
 import { ConfigureAgentForm } from "@/components/automations/configure-agent-form";
@@ -30,10 +32,14 @@ export default async function ConfigureAutomationPage({
   const archetype = getArchetype(id);
   if (!archetype) notFound();
 
-  const [config, formsResult, appointmentTypesResult] = await Promise.all([
+  const orgId = await getOrgId();
+  const [config, formsResult, appointmentTypesResult, checklist] = await Promise.all([
     getAgentConfig(id),
     listForms().catch(() => []),
     listAppointmentTypes().catch(() => []),
+    orgId
+      ? getArchetypeSetupChecklist(id, orgId).catch(() => null)
+      : Promise.resolve(null),
   ]);
 
   // Surface the typed picker options so the form doesn't have to
@@ -96,7 +102,7 @@ export default async function ConfigureAutomationPage({
           example: meta.example ?? null,
           valuesFromTool: meta.valuesFromTool ?? null,
         }))}
-        requiresInstalled={archetype.requiresInstalled}
+        checklist={checklist}
         savedConfig={config}
         formOptions={formOptions}
         appointmentOptions={appointmentOptions}

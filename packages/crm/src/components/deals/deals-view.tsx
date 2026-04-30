@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import {
   DndContext,
   DragOverlay,
@@ -380,16 +381,15 @@ export function DealsView({
                 router.refresh();
               }}
             />
-            <DragOverlay dropAnimation={null}>
-              {activeDragDeal ? (
-                <DealCardSurface
-                  deal={activeDragDeal}
-                  contactName={contactById[activeDragDeal.contactId] || contactLabelSingular}
-                  accent={activeDragAccent}
-                  isFloating
-                />
-              ) : null}
-            </DragOverlay>
+            <DragOverlayPortal
+              activeDragDeal={activeDragDeal ?? null}
+              accent={activeDragAccent}
+              contactName={
+                activeDragDeal
+                  ? contactById[activeDragDeal.contactId] || contactLabelSingular
+                  : ""
+              }
+            />
           </DndContext>
         ) : (
           <DealsTable
@@ -401,6 +401,54 @@ export function DealsView({
       </div>
     </div>
   );
+}
+
+/* ────────────────────────── drag overlay portal ────────────────────────── */
+
+/**
+ * Renders the DragOverlay through a portal to `document.body` so the
+ * ancestor `animate-page-enter` element's CSS transform doesn't break
+ * the overlay's `position: fixed` positioning. Per CSS spec, any
+ * non-`none` transform creates a containing block for fixed
+ * descendants — which made @dnd-kit's overlay position itself
+ * relative to the dashboard chrome instead of the viewport,
+ * producing a visible cursor offset. Portaling to body restores
+ * viewport-relative positioning so the overlay tracks the pointer
+ * exactly.
+ *
+ * Wrapped in its own component so the createPortal call's React 19
+ * `ReactPortal` return type doesn't pollute the outer JSX.
+ */
+function DragOverlayPortal({
+  activeDragDeal,
+  accent,
+  contactName,
+}: {
+  activeDragDeal: DealRow | null;
+  accent: string;
+  contactName: string;
+}) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) return null;
+
+  const overlay = (
+    <DragOverlay dropAnimation={null}>
+      {activeDragDeal ? (
+        <DealCardSurface
+          deal={activeDragDeal}
+          contactName={contactName}
+          accent={accent}
+          isFloating
+        />
+      ) : null}
+    </DragOverlay>
+  );
+
+  return createPortal(overlay, document.body) as React.ReactElement;
 }
 
 /* ────────────────────────────── stat card ────────────────────────────── */
