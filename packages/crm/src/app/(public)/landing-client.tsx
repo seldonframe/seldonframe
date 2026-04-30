@@ -311,15 +311,18 @@ const Pricing = () => {
   const tiers = [
     {
       name: "Free", badgeColor: "bg-[#222226] text-[#a1a1aa]", price: "$0",
+      workspaceCaption: "1 workspace · free forever",
       features: ["1 workspace", "50 contacts", "100 agent runs / mo", "All core blocks", "BYO LLM keys", "Community support"],
     },
     {
       name: "Growth", badgeColor: "bg-[#1FAE85]/12 text-[#1FAE85]", price: "$29/mo + usage", isFeatured: true,
+      workspaceCaption: "3 workspaces included",
       features: ["3 workspaces", "500 contacts + 1,000 runs included", "$0.02/contact + $0.03/run beyond", "Custom domain", "Remove SeldonFrame branding", "Client portal · email support"],
     },
     {
       name: "Scale", badgeColor: "bg-[#e84393]/10 text-[#e84393]", price: "$99/mo + usage",
-      features: ["Unlimited workspaces", "Unlimited contacts", "Agent runs $0.02 each", "Full white-label", "Brain Layer 2", "Priority support"],
+      workspaceCaption: "Unlimited workspaces",
+      features: ["Unlimited contacts", "Agent runs $0.02 each", "Full white-label", "Client portal with custom branding", "Brain Layer 2", "Priority support"],
     },
   ];
 
@@ -347,7 +350,11 @@ const Pricing = () => {
                 {t.name}
               </span>
               <div className="text-[40px] font-bold tracking-[-0.04em] mb-[2px] text-[#fafafa] leading-none">{t.price}</div>
-              <div className="text-[13px] text-[#71717a] mb-[22px]">per workspace / month</div>
+              {/* April 30, 2026 — usage-based pricing migration. The new
+                  model has NO per-workspace charge: Free=1, Growth=3,
+                  Scale=unlimited. Caption now shows the per-tier
+                  workspace allowance instead of "per workspace / month". */}
+              <div className="text-[13px] text-[#71717a] mb-[22px]">{t.workspaceCaption}</div>
               <ul className="m-0 p-0 list-none">
                 {t.features.map((feat) => (
                   <li key={feat} className="text-[13px] text-[#a1a1aa] py-[7px] border-t border-white/5 flex items-start gap-2 leading-[1.5]">
