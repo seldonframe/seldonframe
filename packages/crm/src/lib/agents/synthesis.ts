@@ -91,13 +91,16 @@ export function synthesizeAgentSpec(
   for (const [k, v] of Object.entries(filled)) allReplacements.set(k, v);
   for (const [k, v] of Object.entries(soulCopyDefaults)) allReplacements.set(k, v);
 
-  // Apply temperature + model overrides if present in the spec
-  // template's variables block. We do this BEFORE the recursive
-  // walk so the substituted values flow through any downstream
-  // references.
-  const specWithOverrides = applyConfigOverrides(archetype.specTemplate, config);
-
-  const spec = substituteInValue(specWithOverrides, allReplacements) as Record<
+  // V1: don't write LLM config (model / temperature / system prompt)
+  // into spec.variables — those are typed as ref strings and the
+  // runtime's `seedVariableScope` calls `ref.split(".")` on every
+  // entry. Inserting a number there breaks the run with
+  // "ref.split is not a function" before any step executes.
+  // The archetype's default model + temperature + system prompt
+  // ride along inside conversation/llm_call steps; per-archetype
+  // override wiring is V1.1 (it'll inject at the step level, not
+  // the variables level).
+  const spec = substituteInValue(archetype.specTemplate, allReplacements) as Record<
     string,
     unknown
   >;
@@ -109,34 +112,6 @@ export function synthesizeAgentSpec(
     soulCopyDefaults,
     unfilledSoulCopy,
   };
-}
-
-/**
- * Apply LLM-related config overrides (model, temperature, optional
- * system-prompt override) to the spec's variables block so
- * downstream conversation / llm_call steps pick them up via
- * `{{model}}` / `{{temperature}}` / `{{system_prompt}}` interpolation.
- */
-function applyConfigOverrides(
-  template: Record<string, unknown>,
-  config: AgentConfig
-): Record<string, unknown> {
-  const variables: Record<string, unknown> =
-    template.variables && typeof template.variables === "object"
-      ? { ...(template.variables as Record<string, unknown>) }
-      : {};
-
-  if (config.model && config.model.trim()) {
-    variables.model = config.model;
-  }
-  if (typeof config.temperature === "number" && Number.isFinite(config.temperature)) {
-    variables.temperature = config.temperature;
-  }
-  if (config.systemPromptOverride && config.systemPromptOverride.trim()) {
-    variables.system_prompt = config.systemPromptOverride;
-  }
-
-  return { ...template, variables };
 }
 
 /**

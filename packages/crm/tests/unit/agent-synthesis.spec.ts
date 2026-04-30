@@ -119,7 +119,15 @@ test("synthesis substitutes longer placeholder names before shorter ones (no $fo
   assert.equal(variables.short_id, "short-id-value");
 });
 
-test("synthesis applies LLM config overrides into spec.variables", () => {
+test("synthesis does NOT inject LLM config into spec.variables (would break seedVariableScope)", () => {
+  // V1 contract: spec.variables stays exactly as the archetype
+  // template wrote it (ref strings only). LLM config (model,
+  // temperature, systemPromptOverride) is NOT threaded into the
+  // variables block because the runtime's seedVariableScope calls
+  // .split('.') on every value — a numeric temperature there
+  // breaks the run with "ref.split is not a function" before
+  // step execution. Per-archetype override wiring at the step
+  // level is V1.1.
   const config = {
     ...COMPLETE_CONFIG(),
     model: "claude-haiku-4",
@@ -130,9 +138,11 @@ test("synthesis applies LLM config overrides into spec.variables", () => {
   assert.equal(result.ok, true);
   if (!result.ok) return;
   const variables = (result.spec.variables as Record<string, unknown>) ?? {};
-  assert.equal(variables.model, "claude-haiku-4");
-  assert.equal(variables.temperature, 0.3);
-  assert.equal(variables.system_prompt, "Be terse.");
+  assert.equal(variables.model, undefined);
+  assert.equal(variables.temperature, undefined);
+  assert.equal(variables.system_prompt, undefined);
+  // Archetype's own variable keys must still be present.
+  assert.equal(typeof variables.contactId, "string");
 });
 
 test("synthesis substitutes soul_copy placeholders with example text when provided", () => {
