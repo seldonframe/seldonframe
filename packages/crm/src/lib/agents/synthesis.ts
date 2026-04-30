@@ -150,6 +150,18 @@ function applyConfigOverrides(
  */
 function substituteInValue(value: unknown, replacements: Map<string, string>): unknown {
   if (typeof value === "string") {
+    // Detect "entire value is a single placeholder token" — used for
+    // numeric coercion below. Without this, archetype templates that
+    // write `seconds: "$waitSeconds"` (string with token) would
+    // produce `seconds: "120"` (string), and the runtime validator
+    // (which requires `seconds: number`) would reject the spec —
+    // startRun then throws and no workflow_run is created.
+    const wholeTokenMatch = /^(\$[A-Za-z][A-Za-z0-9_]*)$/.exec(value.trim());
+    const wholeToken =
+      wholeTokenMatch && replacements.has(wholeTokenMatch[1])
+        ? wholeTokenMatch[1]
+        : null;
+
     let out = value;
     // Sort by descending length so $appointmentTypeId is replaced
     // before $appointment, etc.
@@ -160,6 +172,19 @@ function substituteInValue(value: unknown, replacements: Map<string, string>): u
       const re = new RegExp(`${escapedKey}(?![A-Za-z0-9_])`, "g");
       out = out.replace(re, replacements.get(key)!);
     }
+
+    // Numeric coercion only when the original value WAS the entire
+    // token. A sentence like `"Wait $waitSeconds seconds"` stays a
+    // string after substitution; just `"$waitSeconds"` becomes a
+    // number.
+    if (wholeToken) {
+      const trimmed = out.trim();
+      if (/^-?\d+(?:\.\d+)?$/.test(trimmed)) {
+        const n = Number(trimmed);
+        if (Number.isFinite(n)) return n;
+      }
+    }
+
     return out;
   }
   if (Array.isArray(value)) {

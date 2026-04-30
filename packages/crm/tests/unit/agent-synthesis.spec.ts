@@ -157,6 +157,48 @@ test("getTriggerEventType extracts the trigger.event from a synthesized spec", (
   assert.equal(getTriggerEventType(result.spec), "form.submitted");
 });
 
+test("synthesis coerces whole-token numeric placeholders to numbers", () => {
+  // Speed-to-Lead's wait step: { type: "wait", seconds: "$waitSeconds" }.
+  // After substitution, the runtime validator requires `seconds` to
+  // be a number. Whole-token coercion catches this case.
+  const result = synthesizeAgentSpec(speedToLeadArchetype, COMPLETE_CONFIG());
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  const steps = result.spec.steps as Array<Record<string, unknown>>;
+  const waitStep = steps.find((s) => s.type === "wait");
+  assert.ok(waitStep, "wait step should be present in synthesized spec");
+  assert.equal(typeof waitStep!.seconds, "number");
+  assert.equal(waitStep!.seconds, 120);
+});
+
+test("synthesis does NOT coerce mixed-content tokens (sentences stay strings)", () => {
+  const archetypeWithSentence = {
+    ...speedToLeadArchetype,
+    placeholders: {
+      ...speedToLeadArchetype.placeholders,
+      $count: { kind: "user_input" as const, description: "n" },
+    },
+    specTemplate: {
+      trigger: { type: "event", event: "form.submitted" },
+      steps: [{ id: "x", type: "wait", seconds: 60, next: null }],
+      // Mixed content — should stay a string after substitution.
+      variables: {
+        sentence: "We waited $count minutes",
+        bare: "$count",
+      },
+    },
+  };
+  const config = makeConfig({
+    placeholders: { $count: "5", $formId: "f", $appointmentTypeId: "a", $waitSeconds: "1" },
+  });
+  const result = synthesizeAgentSpec(archetypeWithSentence, config);
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  const variables = result.spec.variables as Record<string, unknown>;
+  assert.equal(variables.sentence, "We waited 5 minutes");
+  assert.equal(variables.bare, 5); // coerced to number
+});
+
 test("getConfigPlaceholderValue returns the trimmed value or null", () => {
   const config = makeConfig({ placeholders: { $formId: "  abc  " } });
   assert.equal(getConfigPlaceholderValue(config, "$formId"), "abc");
