@@ -141,6 +141,24 @@ export default async function AutomationsPage() {
         .orderBy(workflowRuns.archetypeId, desc(workflowRuns.createdAt))
     : [];
 
+  // Coerce SQL aggregate timestamps to Date instances before they
+  // hit the rendering path. Drizzle's `sql<Date | null>` type
+  // annotation is a TypeScript-only hint — Neon's HTTP driver
+  // returns the aggregate (`max(created_at)`) as a raw ISO string
+  // because there's no column-type lookup for ad-hoc SQL exprs.
+  // Without this coercion, `relativeFromNow(value)` calls
+  // `value.getTime()` on a string at render time and the catalog
+  // page returns 500. The pre-dispatcher catalog never hit this
+  // path because lastRun was always null (no workflow_runs rows
+  // for any org); the dispatcher creating its first run is what
+  // unmasked the bug.
+  const toDate = (value: Date | string | null | undefined): Date | null => {
+    if (!value) return null;
+    if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d;
+  };
+
   const statsByArchetype = new Map<
     string,
     { last30d: number; lastRun: Date | null; everRan: boolean }
@@ -148,7 +166,7 @@ export default async function AutomationsPage() {
   for (const row of everRanRows) {
     statsByArchetype.set(row.archetypeId, {
       last30d: 0,
-      lastRun: row.lastRun ?? null,
+      lastRun: toDate(row.lastRun as Date | string | null),
       everRan: true,
     });
   }
@@ -161,7 +179,7 @@ export default async function AutomationsPage() {
     statsByArchetype.set(row.archetypeId, {
       ...existing,
       last30d: row.last30d,
-      lastRun: row.lastRun ?? existing.lastRun,
+      lastRun: toDate(row.lastRun as Date | string | null) ?? existing.lastRun,
     });
   }
 
@@ -414,8 +432,14 @@ function StatusBadge({
   );
 }
 
-function relativeFromNow(value: Date) {
-  const diff = Date.now() - value.getTime();
+function relativeFromNow(value: Date | string) {
+  // Defense in depth — accept either a real Date or an ISO string.
+  // The catalog query's `toDate` helper already coerces, but
+  // hardening here prevents a future caller from hitting the
+  // same `.getTime is not a function` SSR 500.
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const diff = Date.now() - date.getTime();
   if (diff < 0) return "just now";
   const minutes = Math.floor(diff / (1000 * 60));
   if (minutes < 1) return "just now";
@@ -424,5 +448,5 @@ function relativeFromNow(value: Date) {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
   if (days < 30) return `${days}d ago`;
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(value);
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(date);
 }
