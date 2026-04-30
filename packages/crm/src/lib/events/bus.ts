@@ -38,6 +38,7 @@ import { evaluatePredicate } from "@/lib/workflow/predicate-eval";
 import { notImplementedToolInvoker, type RuntimeContext } from "@/lib/workflow/types";
 import { enqueueSubscriptionDeliveriesForEventInContext } from "@/lib/subscriptions/bus-extension";
 import { DrizzleSubscriptionStorage } from "@/lib/subscriptions/storage-drizzle";
+import { registerCrmEventListeners } from "@/lib/events/listeners";
 
 export type EmitOptions = {
   /**
@@ -56,6 +57,17 @@ export async function emitSeldonEvent<T extends EventType>(
   options: EmitOptions,
 ): Promise<void> {
   const startedAt = Date.now();
+
+  // Lazy listener registration. The dashboard layout calls
+  // `registerCrmEventListeners()` for interactive page renders, but
+  // serverless API routes (public intake POST, public booking POST,
+  // Stripe webhook, etc.) execute in their own Lambdas where the
+  // dashboard layout never runs. Without this call, the bus has zero
+  // listeners on first invocation in those contexts and any emit
+  // silently no-ops the agent dispatcher / Brain subscribers.
+  // The function is idempotent (gated by a module-level flag), so
+  // calling it from every emit is cheap.
+  registerCrmEventListeners();
 
   // 1. In-memory dispatch (unchanged). Existing listeners fire here.
   const bus = getSeldonEventBus();
