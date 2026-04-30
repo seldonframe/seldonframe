@@ -209,12 +209,12 @@ Identity usage:
 5. Run migration
 6. Run build and deploy
 
-### Cloud Pro users
+### Growth users
 1. Purchase a marketplace block
 2. Click install
 3. Block is enabled for the org (code already generated and approved)
 
-### Pro Agency users
+### Scale users
 1. Purchase once
 2. Install across client orgs
 3. Each org reads its own soul for personalization

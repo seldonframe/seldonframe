@@ -1,17 +1,16 @@
 import Link from "next/link";
 import { auth } from "@/auth";
 
-// Public pricing page. Mirrors the marketing landing's #pricing section
-// (3 tiers — Starter $49, Operator $99, Agency $149). The first workspace
-// remains free forever. Self-hosting is also free.
+// Public pricing page. Mirrors the marketing landing's #pricing section.
 //
-// This page lives in the CRM app shell so it's reachable from both
-// `seldonframe.com/pricing` (marketing host) and
-// `app.seldonframe.com/pricing` (in-app shell). Logged-in users get a CTA
-// to /settings/billing; logged-out users get /signup.
+// April 30, 2026 — usage-based pricing migration. Tiers are Free /
+// Growth / Scale + Self-host (with no per-workspace charge — Growth
+// caps at 3, Scale is unlimited). Hosted on this CRM app shell so
+// it's reachable from both `seldonframe.com/pricing` (marketing host)
+// and `app.seldonframe.com/pricing` (in-app shell).
 
 type Tier = {
-  id: string;
+  id: "self_host" | "free" | "growth" | "scale";
   name: string;
   price: string;
   badgeNote: string;
@@ -21,60 +20,59 @@ type Tier = {
 
 const TIERS: Tier[] = [
   {
+    id: "self_host",
+    name: "Self-host",
+    price: "Free",
+    badgeNote: "MIT licensed · run on your infra",
+    features: [
+      "Unlimited workspaces",
+      "BYO Stripe / Resend / Twilio keys",
+      "BYO LLM keys",
+      "All blocks, all archetypes",
+      "Community support",
+    ],
+  },
+  {
     id: "free",
     name: "Free",
     price: "$0",
-    badgeNote: "Start here",
+    badgeNote: "Free forever — upgrade when you grow",
     features: [
-      "One fully-featured workspace on <slug>.app.seldonframe.com",
-      "CRM, Cal.diy booking, Formbricks intake, Brain v2",
-      "MCP + Claude Code integration",
-      "Community support",
+      "1 workspace",
+      "50 contacts",
+      "100 agent runs / mo",
+      "All core blocks (landing, booking, intake, CRM, pipeline, agents)",
       "BYO LLM keys",
+      "Community support",
     ],
   },
   {
-    id: "starter",
-    name: "Starter",
-    price: "$49",
-    badgeNote: "Per workspace / month",
-    features: [
-      "Full primitive surface",
-      "Up to 100 workflow runs/mo",
-      "500 MB database",
-      "Custom domain",
-      "Branded customer portal",
-      "Community support",
-      "BYO LLM keys",
-    ],
-  },
-  {
-    id: "operator",
-    name: "Operator",
-    price: "$99",
-    badgeNote: "Per workspace / month",
+    id: "growth",
+    name: "Growth",
+    price: "$29/mo",
+    badgeNote: "+ usage · for operators with paying clients",
     featured: true,
     features: [
-      "Everything in Starter",
-      "Up to 5,000 workflow runs/mo",
-      "2 GB database",
-      "Brain Layer 1 (workspace insights)",
-      "Approval gates",
-      "Email support",
+      "3 workspaces",
+      "500 contacts included, then $0.02 / contact",
+      "1,000 agent runs included, then $0.03 / run",
+      "Custom domain",
+      "Remove SeldonFrame branding",
+      "Client portal · email support",
     ],
   },
   {
-    id: "agency",
-    name: "Agency",
-    price: "$149",
-    badgeNote: "Per workspace / month",
+    id: "scale",
+    name: "Scale",
+    price: "$99/mo",
+    badgeNote: "+ usage · for agencies serving multiple clients",
     features: [
-      "Everything in Operator",
-      "Unlimited workflow runs",
-      "10 GB database",
-      "Brain Layer 2 (cross-workspace niche insights)",
-      "White-label option",
-      "Priority support",
+      "Unlimited workspaces",
+      "Unlimited contacts",
+      "Agent runs $0.02 each (all metered)",
+      "Full white-label",
+      "Client portal with custom branding",
+      "Brain Layer 2 · priority support",
     ],
   },
 ];
@@ -98,8 +96,8 @@ export default async function PricingPage({ searchParams }: PricingPageProps) {
           </p>
           <h1 className="text-page-title">Simple pricing. You own the rest.</h1>
           <p className="mx-auto max-w-2xl text-base text-muted-foreground">
-            Your first workspace is free, forever. Paid tiers unlock more workflow runs, Brain
-            intelligence, and (on Agency) white-label branding. Self-host for free.
+            Open source. Self-host for free. Hosted tiers scale with your usage —
+            pay only for what you use. Your first workspace is always free.
           </p>
         </header>
 
@@ -118,7 +116,7 @@ export default async function PricingPage({ searchParams }: PricingPageProps) {
                 <h2 className="text-card-title">{tier.name}</h2>
                 {tier.featured ? (
                   <span className="rounded-full bg-primary/15 px-2.5 py-1 text-xs font-medium text-primary">
-                    Most popular
+                    Recommended
                   </span>
                 ) : null}
               </div>
@@ -133,18 +131,30 @@ export default async function PricingPage({ searchParams }: PricingPageProps) {
               </ul>
               <div className="mt-auto">
                 <Link
-                  href={tier.id === "free" ? (session?.user ? "/dashboard" : "/signup") : ctaHref}
+                  href={
+                    tier.id === "self_host"
+                      ? "https://github.com/seldonframe/seldonframe"
+                      : tier.id === "free"
+                        ? session?.user
+                          ? "/dashboard"
+                          : "/signup"
+                        : session?.user
+                          ? `${ctaHref}?plan=${tier.id}`
+                          : `/signup?plan=${tier.id}`
+                  }
                   className={`${
                     tier.featured ? "crm-button-primary" : "crm-button-secondary"
                   } inline-flex h-11 w-full items-center justify-center px-4 text-sm font-medium`}
                 >
-                  {tier.id === "free"
-                    ? session?.user
-                      ? "Go to dashboard"
-                      : "Start free"
-                    : session?.user
-                      ? "Manage billing"
-                      : "Start free"}
+                  {tier.id === "self_host"
+                    ? "View on GitHub"
+                    : tier.id === "free"
+                      ? session?.user
+                        ? "Go to dashboard"
+                        : "Start for $0"
+                      : session?.user
+                        ? `Upgrade to ${tier.name}`
+                        : `Start ${tier.name}`}
                 </Link>
               </div>
             </article>
@@ -155,8 +165,8 @@ export default async function PricingPage({ searchParams }: PricingPageProps) {
           <p className="mb-2 font-medium text-foreground">How billing works</p>
           <ul className="space-y-1.5">
             <li>· The first workspace on your account is always free. No trial clock.</li>
-            <li>· Paid tiers are billed per workspace per month.</li>
-            <li>· Delete a workspace and the charge stops on your next billing cycle.</li>
+            <li>· Hosted tiers charge a flat monthly base + metered usage. No per-workspace charge.</li>
+            <li>· Free is hard-capped (50 contacts, 100 agent runs/mo). Paid tiers overflow into metered usage.</li>
             <li>· You bring your own Claude / OpenAI key — we don&apos;t mark up inference.</li>
             <li>· Every LLM call is tracked, attributed to the workflow run, and visible in your admin dashboard.</li>
           </ul>

@@ -305,18 +305,21 @@ const SeeItBuilt = () => (
 );
 
 const Pricing = () => {
+  // April 30, 2026 — usage-based pricing migration. Tiers are
+  // Free / Growth / Scale (no per-workspace charge — Growth caps at 3,
+  // Scale unlimited).
   const tiers = [
     {
-      name: "Starter", badgeColor: "bg-[#222226] text-[#a1a1aa]", price: "$49",
-      features: ["Full primitive surface", "Up to 100 workflow runs/mo", "500 MB database", "Custom domain", "Branded customer portal", "Community support", "BYO LLM keys"],
+      name: "Free", badgeColor: "bg-[#222226] text-[#a1a1aa]", price: "$0",
+      features: ["1 workspace", "50 contacts", "100 agent runs / mo", "All core blocks", "BYO LLM keys", "Community support"],
     },
     {
-      name: "Operator", badgeColor: "bg-[#1FAE85]/12 text-[#1FAE85]", price: "$99", isFeatured: true,
-      features: ["Everything in Starter", "Up to 5,000 workflow runs/mo", "2 GB database", "Brain Layer 1 (workspace insights)", "Approval gates", "Email support"],
+      name: "Growth", badgeColor: "bg-[#1FAE85]/12 text-[#1FAE85]", price: "$29/mo + usage", isFeatured: true,
+      features: ["3 workspaces", "500 contacts + 1,000 runs included", "$0.02/contact + $0.03/run beyond", "Custom domain", "Remove SeldonFrame branding", "Client portal · email support"],
     },
     {
-      name: "Agency", badgeColor: "bg-[#e84393]/10 text-[#e84393]", price: "$149",
-      features: ["Everything in Operator", "Unlimited workflow runs", "10 GB database", "Brain Layer 2 (cross-workspace niche insights)", "White-label option", "Priority support"],
+      name: "Scale", badgeColor: "bg-[#e84393]/10 text-[#e84393]", price: "$99/mo + usage",
+      features: ["Unlimited workspaces", "Unlimited contacts", "Agent runs $0.02 each", "Full white-label", "Brain Layer 2", "Priority support"],
     },
   ];
 
@@ -324,7 +327,7 @@ const Pricing = () => {
     <section id="pricing" className="text-center py-[64px] md:py-[100px] px-5 md:px-12 max-w-[1140px] mx-auto">
       <h2 className="text-[clamp(26px,3.5vw,38px)] font-bold tracking-[-0.03em] mb-[10px] text-[#fafafa]">Simple pricing. You own the rest.</h2>
       <p className="text-[16px] text-[#a1a1aa] max-w-[560px] mx-auto mb-3">
-        Open source. Self-host for free. Paid tiers for hosted infrastructure, Brain Layer, and custom domains.
+        Open source. Self-host for free. Hosted tiers scale with your usage — pay only for what you use.
       </p>
       <div className="text-[14px] text-[#1FAE85] font-semibold mb-11">Your first workspace is always free.</div>
 

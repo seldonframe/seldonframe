@@ -104,9 +104,9 @@ Soul compilation runs HERE, not on the backend:
 
 ## When you'll need \`SELDONFRAME_API_KEY\`
 
-The first workspace is free forever. Paid tiers (Starter $49/mo, Operator
-$99/mo, Agency $149/mo) unlock additional workspaces, custom domains,
-white-label, and advanced Brain capabilities. A key is required for:
+The first workspace is free forever. Paid tiers (Growth $29/mo, Scale
+$99/mo, both with metered usage) unlock additional workspaces, custom
+domains, white-label, and advanced Brain capabilities. A key is required for:
 
 - Adding a **second workspace**
 - Connecting a **custom domain**

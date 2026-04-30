@@ -91,10 +91,12 @@ SeldonFrame integrates with the providers you already use:
 
 ## Pricing
 
-- **First workspace** — free forever, self-hosted or on our cloud.
-- **Paid tiers** — Starter $49/mo, Operator $99/mo, Agency $149/mo. See [seldonframe.com/#pricing](https://seldonframe.com/#pricing).
+- **Self-host** — free forever, MIT licensed. You bring the keys.
+- **Free** — hosted, $0/mo. 1 workspace · 50 contacts · 100 agent runs/mo.
+- **Growth** — $29/mo + usage. 3 workspaces · 500 contacts + 1,000 runs included · $0.02/contact + $0.03/run beyond. Custom domain. Remove SeldonFrame branding. Client portal.
+- **Scale** — $99/mo + usage. Unlimited workspaces + contacts. Agent runs $0.02 each (all metered). Full white-label. Priority support.
 
-Self-hosters pay nothing to SeldonFrame.
+No per-workspace charge. See [seldonframe.com/#pricing](https://seldonframe.com/#pricing).
 
 ## Contributing
 

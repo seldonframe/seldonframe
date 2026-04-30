@@ -112,7 +112,7 @@ export function NewWorkspacePromptForm({ action, initialUpgradeRequired = false 
           <div className="space-y-3">
             <h2 className="text-section-title">You&apos;re at the workspace limit</h2>
             <p className="text-sm text-muted-foreground sm:text-base">
-              You&apos;ve used your free workspace. Paid tiers start at $49/mo (Starter), $99/mo (Operator), or $149/mo (Agency) per workspace. Pick one to keep building.
+              You&apos;ve used your free workspace. Upgrade to Growth ($29/mo) for up to 3 workspaces, or Scale ($99/mo) for unlimited. No per-workspace charge.
             </p>
           </div>
 
@@ -124,7 +124,7 @@ export function NewWorkspacePromptForm({ action, initialUpgradeRequired = false 
                   <span>Opening secure checkout...</span>
                 </span>
               ) : (
-                "Choose a plan ($49+/mo)"
+                "Choose a plan ($29+/mo)"
               )}
             </Button>
             <Link href="/orgs" className="crm-button-secondary h-11 px-5 inline-flex items-center justify-center">

@@ -38,7 +38,7 @@ export function Problem() {
           ))}
         </div>
         <p className="mt-8 text-center text-[hsl(var(--color-text-secondary))]">
-          SeldonFrame replaces them all. One system. Everything connected. From $49/month — less than Calendly alone.
+          SeldonFrame replaces them all. One system. Everything connected. Free to start, $29/mo when you scale.
         </p>
       </div>
     </section>
