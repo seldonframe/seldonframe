@@ -1,6 +1,6 @@
-import { PortalMessageComposer } from "@/components/portal/portal-message-composer";
-import { PortalMessagesFeed } from "@/components/portal/portal-messages-feed";
+import { PortalMessagesClient } from "@/components/portal/portal-messages-client";
 import { listPortalMessages } from "@/lib/portal/actions";
+import { requirePortalSessionForOrg } from "@/lib/portal/auth";
 
 export default async function PortalMessagesPage({
   params,
@@ -11,13 +11,18 @@ export default async function PortalMessagesPage({
 }) {
   const { orgSlug } = await params;
   const { q } = await searchParams;
+  const session = await requirePortalSessionForOrg(orgSlug);
   const rows = await listPortalMessages(orgSlug, q);
+  const clientName =
+    `${session.contact.firstName} ${session.contact.lastName ?? ""}`.trim() || null;
 
   return (
     <section className="space-y-4">
       <div>
         <h2 className="text-section-title">Messages</h2>
-        <p className="text-label text-[hsl(var(--color-text-secondary))]">Send a message to your account team.</p>
+        <p className="text-label text-[hsl(var(--color-text-secondary))]">
+          Send a message to your account team.
+        </p>
       </div>
 
       <form className="crm-card flex flex-wrap items-center gap-2 p-3" action={`/portal/${orgSlug}/messages`}>
@@ -32,11 +37,7 @@ export default async function PortalMessagesPage({
         </button>
       </form>
 
-      <PortalMessageComposer orgSlug={orgSlug} />
-
-      <div className="crm-card space-y-2">
-        <PortalMessagesFeed orgSlug={orgSlug} rows={rows} />
-      </div>
+      <PortalMessagesClient orgSlug={orgSlug} rows={rows} clientName={clientName} />
     </section>
   );
 }

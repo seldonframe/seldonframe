@@ -1,6 +1,6 @@
 "use server";
 
-import { and, desc, eq, ilike, isNull, ne, or, gt, lte, asc } from "drizzle-orm";
+import { and, count, desc, eq, ilike, isNull, ne, or, gt, lte, asc } from "drizzle-orm";
 import { db } from "@/db";
 import {
   bookings,
@@ -14,6 +14,26 @@ import {
 import { emitSeldonEvent } from "@/lib/events/bus";
 import { assertPortalEnabled } from "@/lib/tier/limits";
 import { requirePortalSessionForOrg } from "./auth";
+
+type PortalSession = Awaited<ReturnType<typeof requirePortalSessionForOrg>>;
+
+export async function getUnreadPortalMessageCount(session: PortalSession) {
+  await assertPortalEnabled(session.orgId);
+
+  const [row] = await db
+    .select({ value: count() })
+    .from(portalMessages)
+    .where(
+      and(
+        eq(portalMessages.orgId, session.orgId),
+        eq(portalMessages.contactId, session.contact.id),
+        ne(portalMessages.senderType, "client"),
+        isNull(portalMessages.readAt)
+      )
+    );
+
+  return row?.value ?? 0;
+}
 
 export async function listPortalMessages(orgSlug: string, search?: string) {
   const session = await requirePortalSessionForOrg(orgSlug);
