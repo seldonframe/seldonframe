@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { ChevronRight } from "lucide-react";
 import { db } from "@/db";
-import { orgMembers, organizations, soulSources, soulWiki, type OrganizationSubscription } from "@/db/schema";
+import { contacts, orgMembers, organizations, soulSources, soulWiki, type OrganizationSubscription } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
 import { getOrgSubscription } from "@/lib/billing/subscription";
 import { getStripeConnectionStatus } from "@/lib/payments/actions";
@@ -12,6 +12,7 @@ import { getCustomDomainSettings } from "@/lib/domains/actions";
 import { listSavedFrameworkLibrary } from "@/lib/frameworks/actions";
 import { getBrandingSettings } from "@/lib/branding/actions";
 import { getThemeSettings } from "@/lib/theme/actions";
+import { checkPortalPlanGate } from "@/lib/portal/plan-gate";
 
 /*
   Square UI class reference (source of truth):
@@ -29,7 +30,7 @@ export default async function SettingsPage() {
     : Promise.resolve<OrganizationSubscription>({});
   const themeSettingsPromise = getThemeSettings().catch(() => null);
 
-  const [labels, stripeStatus, domainSettings, savedFrameworks, brandingSettings, themeSettings, subscription, soul] = await Promise.all([
+  const [labels, stripeStatus, domainSettings, savedFrameworks, brandingSettings, themeSettings, subscription, soul, portalGate] = await Promise.all([
     getLabels(),
     getStripeConnectionStatus(),
     getCustomDomainSettings(),
@@ -38,7 +39,20 @@ export default async function SettingsPage() {
     themeSettingsPromise,
     subscriptionPromise,
     getSoul(),
+    orgId
+      ? checkPortalPlanGate(orgId).catch(() => ({ allowed: false, tier: "free" as string, reason: undefined as string | undefined }))
+      : Promise.resolve({ allowed: false, tier: "free" as string, reason: undefined as string | undefined }),
   ]);
+
+  // May 1, 2026 — Client Portal V1: count portal-enabled contacts so
+  // the /settings tile can show "3 enabled" at a glance, the same way
+  // /settings/integrations shows "2 connected".
+  const [portalEnabledRow] = orgId
+    ? await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(contacts)
+        .where(and(eq(contacts.orgId, orgId), eq(contacts.portalAccessEnabled, true)))
+    : [{ count: 0 }];
 
   const [orgRow] = orgId
     ? await db
@@ -127,6 +141,12 @@ export default async function SettingsPage() {
 
   const frameworksStatus = savedFrameworks.length > 0 ? `${savedFrameworks.length} saved` : "No saved frameworks";
   const brandingStatus = brandingSettings?.removePoweredBy ? "White-label enabled" : null;
+  const portalEnabledCount = Math.max(0, portalEnabledRow?.count ?? 0);
+  const portalStatus = portalGate.allowed
+    ? portalEnabledCount > 0
+      ? `${portalEnabledCount} client${portalEnabledCount === 1 ? "" : "s"} enabled`
+      : "No clients enabled yet"
+    : "Growth or Scale required";
 
   const primaryGroups = [
     {
@@ -173,6 +193,12 @@ export default async function SettingsPage() {
           title: "Integrations",
           description: "Resend, Kit, Twilio, and Google Calendar connections",
           status: <span className="text-xs text-zinc-400">{connectedIntegrations} connected</span>,
+        },
+        {
+          href: "/settings/client-portal",
+          title: "Client Portal",
+          description: "Give clients a private dashboard for pipeline, bookings, documents, and messages",
+          status: <span className="text-xs text-zinc-400">{portalStatus}</span>,
         },
       ],
     },
