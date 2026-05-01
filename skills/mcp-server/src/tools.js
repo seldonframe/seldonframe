@@ -1,5 +1,6 @@
 import {
   api,
+  API_INFO,
   fetchText,
   forgetWorkspace,
   htmlToText,
@@ -41,18 +42,61 @@ export const TOOLS = [
   {
     name: "create_workspace",
     description:
-      "Create a real, hosted workspace on <slug>.app.seldonframe.com with CRM, Cal.diy booking, Formbricks intake, and Brain v2 pre-installed. The first workspace requires no API key. Example: create_workspace({ name: 'Dental Clinic Laval', source: 'https://mysite.com' })",
+      "Create a real, hosted workspace on <slug>.app.seldonframe.com with CRM, Cal.diy booking, Formbricks intake, and Brain v2 pre-installed. The first workspace requires no API key. When the user mentions a phone, email, address, list of services, or testimonials, pass them as structured fields so the landing page renders with their real content immediately (no follow-up submit_soul required). Example: create_workspace({ name: 'Desert Cool HVAC', phone: '(602) 555-0188', services: [{ name: 'AC Repair' }, { name: 'Heating' }] })",
     inputSchema: obj(
       {
         name: str("Human-readable workspace name."),
         source: str("Optional URL or description to seed the workspace's Soul from."),
+        phone: str("Operator's business phone (any format — we render as-is). Renders in nav, hero, and footer when set."),
+        email: str("Optional contact email surfaced in the landing footer."),
+        address: str("Optional business address. Comma-separated street, city, region, postal, country renders as-is."),
+        tagline: str("Short hero tagline (one line)."),
+        business_description: str("One paragraph about the business (used for hero subhead + about section)."),
+        services: {
+          type: "array",
+          description:
+            "List of services / products / offerings the business provides. Renders as the services grid on the landing page. Each item: { name, description? }.",
+          items: {
+            type: "object",
+            properties: {
+              name: { type: "string" },
+              description: { type: "string" },
+            },
+            required: ["name"],
+          },
+        },
+        testimonials: {
+          type: "array",
+          description:
+            "Optional customer testimonials to seed the landing page's testimonials section. Each item: { quote, name?, role?, company? }.",
+          items: {
+            type: "object",
+            properties: {
+              quote: { type: "string" },
+              name: { type: "string" },
+              role: { type: "string" },
+              company: { type: "string" },
+            },
+            required: ["quote"],
+          },
+        },
       },
       ["name"],
     ),
     handler: async (args) => {
       const firstEver = isFirstEverCall();
       const result = await api("POST", "/workspace/create", {
-        body: { name: args.name, source: args.source ?? null },
+        body: {
+          name: args.name,
+          source: args.source ?? null,
+          phone: args.phone ?? null,
+          email: args.email ?? null,
+          address: args.address ?? null,
+          tagline: args.tagline ?? null,
+          business_description: args.business_description ?? null,
+          services: args.services ?? null,
+          testimonials: args.testimonials ?? null,
+        },
         allow_anonymous: true,
       });
       const ws = result.workspace ?? result;
@@ -95,10 +139,22 @@ export const TOOLS = [
         urls: publicUrls,
         public_urls: result.public_urls ?? publicUrls,
         installed: result.installed ?? ["crm", "caldiy-booking", "formbricks-intake", "brain-v2"],
+        // May 1, 2026 — email collection promoted to the first
+        // suggested next step. Per the onboarding-loop spec, the
+        // operator gets a permanent inbox record (admin URLs,
+        // landing/booking/intake links) AND we earn a CRM lead in
+        // SeldonFrame's own workspace, so every workspace creation
+        // becomes a tracked relationship.
+        prompt_for_email: {
+          message:
+            "What's your email? I'll send you a summary with all the links above (so you don't lose them) and use it for your admin login when you upgrade. — calls collect_operator_email({ email, name? })",
+          tool: "collect_operator_email",
+        },
         next: [
           adminUrl
             ? `⚡ Admin Dashboard (bookmark this!): ${adminUrl}  (paste into your browser; no signup needed; token expires in 7 days)`
             : null,
+          "Ask the user for their email, then call collect_operator_email({ email, name? }) — sends the welcome email + creates a permanent record. Do this BEFORE any further customization.",
           "install_vertical_pack({ pack: 'real-estate' })  // or 'dental', 'legal'",
           "fetch_source_for_soul({ url: 'https://yoursite.com' }) → submit_soul({ soul })",
           "get_workspace_snapshot({}) — read workspace state to reason about next steps",
@@ -204,6 +260,178 @@ export const TOOLS = [
         ok: true,
         ...result,
         note: `${baseNote}${magicNote} Your MCP bearer token continues to work — no rotation needed.`,
+      };
+    },
+  },
+  {
+    name: "send_welcome_email",
+    description:
+      "Email the active workspace's four key URLs (landing, booking, intake, admin dashboard) to a user. Use this AFTER create_workspace, only when the user has explicitly given their email — never auto-send. The admin URL is bearer-token-scoped and expires in 7 days. Example: send_welcome_email({ email: 'alice@example.com', name: 'Alice' }).",
+    inputSchema: obj(
+      {
+        email: str("Recipient email address."),
+        name: str("Optional recipient name (used in the greeting)."),
+        workspace_id: str("Optional workspace override. Defaults to active workspace."),
+      },
+      ["email"],
+    ),
+    handler: async (a) => {
+      const workspaceId = a.workspace_id ?? getDefaultWorkspace();
+      if (!workspaceId) {
+        throw new Error(
+          "No workspace selected. Run create_workspace({ name: '…' }) first, or pass workspace_id.",
+        );
+      }
+      const bearer = getWorkspaceBearer(workspaceId);
+      if (!bearer) {
+        throw new Error(
+          `No local bearer token for workspace ${workspaceId}. This device did not create it. Re-run create_workspace or switch to the device that did.`,
+        );
+      }
+
+      const snapshot = await api(
+        "GET",
+        `/workspace/${encodeURIComponent(workspaceId)}/snapshot`,
+        { workspace_id: workspaceId },
+      );
+      const publicUrls = snapshot?.public_urls ?? {};
+      if (!publicUrls.home || !publicUrls.book || !publicUrls.intake) {
+        throw new Error(
+          "Snapshot did not return public_urls (home/book/intake). Re-check the workspace.",
+        );
+      }
+
+      // Construct the bearer-scoped admin URL from the API base.
+      // API_INFO.base is `<host>/api/v1` — strip that suffix to get the app host.
+      const appHost = API_INFO.base.replace(/\/api\/v1\/?$/, "");
+      const adminUrl = `${appHost}/admin/${encodeURIComponent(workspaceId)}?token=${encodeURIComponent(bearer)}`;
+
+      await api("POST", "/email/send-welcome", {
+        body: {
+          email: a.email,
+          name: a.name ?? null,
+          workspace: {
+            landing_url: publicUrls.home,
+            booking_url: publicUrls.book,
+            intake_url: publicUrls.intake,
+            admin_url: adminUrl,
+          },
+        },
+        workspace_id: workspaceId,
+      });
+
+      return {
+        ok: true,
+        message: `Welcome email sent to ${a.email}`,
+      };
+    },
+  },
+  {
+    name: "collect_operator_email",
+    description:
+      "Onboarding-loop helper: ask the operator for their email post-create_workspace, then send the welcome email + record them as a lead in SeldonFrame's own CRM. Combines send_welcome_email + a lead-capture call so a single tool call closes the loop. Call this BEFORE further customization (configure_booking / customize_intake_form / install_vertical_pack) so the operator gets a permanent inbox record of their links. Example: collect_operator_email({ email: 'max@desertcool.com', name: 'Max' })",
+    inputSchema: obj(
+      {
+        email: str("Operator email — used as the welcome email recipient AND as the unique key for the SeldonFrame CRM lead."),
+        name: str("Optional operator name (used in the email greeting and on the CRM lead)."),
+        workspace_id: str("Optional workspace override. Defaults to the workspace just created."),
+      },
+      ["email"],
+    ),
+    handler: async (a) => {
+      const workspaceId = a.workspace_id ?? getDefaultWorkspace();
+      if (!workspaceId) {
+        throw new Error(
+          "No workspace selected. Run create_workspace({ name: '…' }) first, or pass workspace_id.",
+        );
+      }
+      const bearer = getWorkspaceBearer(workspaceId);
+      if (!bearer) {
+        throw new Error(
+          `No local bearer token for workspace ${workspaceId}. This device did not create it. Re-run create_workspace or switch to the device that did.`,
+        );
+      }
+
+      // Step 1: pull the workspace snapshot so we have the public URLs
+      // for the welcome email.
+      const snapshot = await api(
+        "GET",
+        `/workspace/${encodeURIComponent(workspaceId)}/snapshot`,
+        { workspace_id: workspaceId },
+      );
+      const publicUrls = snapshot?.public_urls ?? {};
+      const slug = snapshot?.workspace?.slug ?? null;
+      if (!publicUrls.home || !publicUrls.book || !publicUrls.intake) {
+        throw new Error(
+          "Snapshot did not return public_urls (home/book/intake). Re-check the workspace.",
+        );
+      }
+      const appHost = API_INFO.base.replace(/\/api\/v1\/?$/, "");
+      const adminUrl = `${appHost}/admin/${encodeURIComponent(workspaceId)}?token=${encodeURIComponent(bearer)}`;
+
+      // Step 2: send the welcome email. Failures here are surfaced
+      // (operator told us their email, we owe them the email) but
+      // don't block the lead-capture step below.
+      let emailSent = false;
+      let emailError = null;
+      try {
+        await api("POST", "/email/send-welcome", {
+          body: {
+            email: a.email,
+            name: a.name ?? null,
+            workspace: {
+              landing_url: publicUrls.home,
+              booking_url: publicUrls.book,
+              intake_url: publicUrls.intake,
+              admin_url: adminUrl,
+            },
+          },
+          workspace_id: workspaceId,
+        });
+        emailSent = true;
+      } catch (err) {
+        emailError = err?.message ?? String(err);
+      }
+
+      // Step 3: record the operator as a lead in SeldonFrame's own
+      // CRM workspace. Anonymous endpoint — no bearer required, ops
+      // workspace ID is server-side env only. Soft-failure: if the
+      // ops workspace isn't configured we still return ok.
+      let leadRecorded = false;
+      let leadId = null;
+      let leadError = null;
+      try {
+        const leadResp = await api("POST", "/leads/operator-signup", {
+          body: {
+            email: a.email,
+            name: a.name ?? null,
+            source_workspace_id: workspaceId,
+            source_workspace_slug: slug,
+            source: "mcp-onboarding",
+          },
+          allow_anonymous: true,
+        });
+        leadRecorded = Boolean(leadResp?.recorded);
+        leadId = leadResp?.lead_id ?? null;
+      } catch (err) {
+        leadError = err?.message ?? String(err);
+      }
+
+      return {
+        ok: emailSent || leadRecorded,
+        email_sent: emailSent,
+        email_error: emailError,
+        lead_recorded: leadRecorded,
+        lead_id: leadId,
+        lead_error: leadError,
+        message: emailSent
+          ? `Welcome email sent to ${a.email}. Check your inbox — the admin URL is in there too.`
+          : `Could not send welcome email${emailError ? `: ${emailError}` : ""}. Lead ${leadRecorded ? "recorded" : "not recorded"}.`,
+        next: [
+          "configure_booking({ title, duration_minutes, description }) — tune the booking page if you collected business hours",
+          "customize_intake_form({ ... }) — match your intake to the workspace's lead-qualification questions",
+          "install_vertical_pack({ pack: '<industry>' }) — add domain-specific objects, fields, and views",
+        ],
       };
     },
   },

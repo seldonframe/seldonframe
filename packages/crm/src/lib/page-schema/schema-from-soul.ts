@@ -151,9 +151,63 @@ function enrichSectionFromSoul(
       return enrichHowItWorks(section, soul);
     case "cta":
       return enrichCta(section, soul, business);
+    case "testimonials":
+      return enrichTestimonials(section, soul);
     default:
       return section;
   }
+}
+
+/**
+ * May 1, 2026 — overlay soul.testimonials onto the testimonials section
+ * so the section renders with real customer quotes instead of an empty
+ * shell. The blueprint-from-schema converter reads testimonials from
+ * `section.content.items` (not from PageProof.testimonials), so we shape
+ * each testimonial as { title: name, description: quote, image: avatar }
+ * which matches `convertTestimonials` expectations.
+ */
+function enrichTestimonials(
+  section: PageSection,
+  soul: Record<string, unknown> | null | undefined
+): PageSection {
+  // Skip if the pack already pre-populated testimonial items (no pack
+  // does that today, but keep the same defense-in-depth pattern as
+  // enrichOfferings).
+  const packHasItems = (section.content.items?.length ?? 0) > 0;
+  if (packHasItems) return section;
+
+  const raw = readArray(soul?.testimonials);
+  if (!raw || raw.length === 0) return section;
+
+  const items: SectionItem[] = raw
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return null;
+      const obj = entry as Record<string, unknown>;
+      const quote = readString(obj.quote) || readString(obj.body);
+      if (!quote) return null;
+      const name = readString(obj.name) || "";
+      const role = readString(obj.role) || readString(obj.title);
+      const company = readString(obj.company) || readString(obj.org);
+      // Combine name + role/company into the "title" the converter reads
+      // as the author label. Renderer displays this verbatim.
+      const authorLabel =
+        [name, role, company].filter(Boolean).join(", ") || "Anonymous";
+      const item: SectionItem = {
+        title: authorLabel,
+        description: quote,
+      };
+      const avatar = readString(obj.avatar);
+      if (avatar) item.image = avatar;
+      return item;
+    })
+    .filter((item): item is SectionItem => item !== null);
+
+  if (items.length === 0) return section;
+
+  return {
+    ...section,
+    content: { ...section.content, items },
+  };
 }
 
 function enrichHero(

@@ -10,6 +10,7 @@ import {
   createDefaultLandingPage,
 } from "@/lib/blocks/templates";
 import { ensureDefaultPipelineForOrg } from "@/lib/deals/pipeline-defaults";
+import { seedLandingFromSoul } from "@/lib/page-schema/seed-landing-from-soul";
 import { isReservedSlug } from "@/lib/utils/reserved-slugs";
 
 const DEFAULT_ENABLED_BLOCKS = [
@@ -29,6 +30,29 @@ export type AnonymousCreateInput = {
    * for the workspace's landing page.
    */
   industry?: string | null;
+  /**
+   * May 1, 2026 — structured Soul seed fields. When provided, these
+   * are written into `organizations.soul` immediately on create so the
+   * landing page renders with real data (real phone, real services,
+   * real testimonials) on the very first GET — instead of the legacy
+   * placeholder template.
+   *
+   * Optional in every shape: workspaces created without these still
+   * fall back to the legacy template, and a follow-up `submit_soul`
+   * can fill them in later.
+   */
+  phone?: string | null;
+  email?: string | null;
+  address?: string | null;
+  tagline?: string | null;
+  description?: string | null;
+  services?: Array<{ name: string; description?: string | null }> | null;
+  testimonials?: Array<{
+    quote: string;
+    name?: string | null;
+    role?: string | null;
+    company?: string | null;
+  }> | null;
 };
 
 export type AnonymousCreateResult = {
@@ -94,6 +118,12 @@ export async function createAnonymousWorkspace(
   const baseSlug = slugify(name);
   const slug = await resolveUniqueSlug(baseSlug);
 
+  // May 1, 2026 — if any structured Soul fields were provided, build
+  // the seed Soul object up front. Written to organizations.soul on
+  // insert so the post-create seedLandingFromSoul picks it up and
+  // renders real data instead of the legacy placeholder template.
+  const seedSoul = buildSeedSoul(name, input);
+
   const [org] = await db
     .insert(organizations)
     .values({
@@ -104,6 +134,17 @@ export async function createAnonymousWorkspace(
       plan: "free",
       enabledBlocks: DEFAULT_ENABLED_BLOCKS,
       settings: input.source ? { source: input.source } : {},
+      // The Soul column is typed as the strict OrgSoul shape, but in
+      // practice schemaFromSoul reads a loose soul (business_name /
+      // offerings / phone / testimonials — different field names from
+      // OrgSoul.businessName / .services / etc.). The submit_soul
+      // route casts the same way (see /api/v1/soul/submit). Long term
+      // we should widen OrgSoul to a union; short term we cast.
+      soul: seedSoul as unknown as typeof organizations.$inferInsert.soul,
+      // Stamp soulCompletedAt only when the seed Soul carries
+      // operator-provided content. Otherwise leave null so the
+      // /onboarding flow still nudges the operator to complete it.
+      soulCompletedAt: seedSoul ? new Date() : null,
     })
     .returning({ id: organizations.id, slug: organizations.slug, name: organizations.name });
 
@@ -180,6 +221,29 @@ export async function createAnonymousWorkspace(
     }),
   ]);
 
+  // May 1, 2026 — when a seed Soul was provided, re-render the landing
+  // page through the Soul → PageSchema → adapter pipeline so the
+  // freshly-created landing immediately shows the operator's real
+  // phone / services / testimonials instead of the legacy placeholder
+  // template. Idempotent: skipped when seedSoul is null. Best-effort:
+  // failures here log but don't fail workspace creation (the legacy
+  // landing is still in place as a fallback).
+  if (seedSoul) {
+    try {
+      const result = await seedLandingFromSoul(org.id);
+      if (!result.ok) {
+        console.warn(
+          `[anonymous-workspace] soul-driven landing render skipped for ${org.id}: ${result.reason}`
+        );
+      }
+    } catch (error) {
+      console.warn(
+        `[anonymous-workspace] soul-driven landing render failed for ${org.id}:`,
+        error instanceof Error ? error.message : String(error)
+      );
+    }
+  }
+
   return {
     orgId: org.id,
     slug: org.slug,
@@ -188,6 +252,66 @@ export async function createAnonymousWorkspace(
     bearerTokenExpiresAt: minted.expiresAt,
     installedBlocks: DEFAULT_ENABLED_BLOCKS,
   };
+}
+
+/**
+ * May 1, 2026 — assemble a partial Soul object from the structured
+ * create_workspace input fields. Returns null when no structured
+ * fields were provided so the legacy zero-Soul path still applies.
+ *
+ * Field naming matches what schemaFromSoul reads:
+ *   - business_name, tagline, soul_description (about copy)
+ *   - phone, email, address
+ *   - offerings (canonical) — services arg maps onto this
+ *   - testimonials
+ */
+function buildSeedSoul(
+  workspaceName: string,
+  input: AnonymousCreateInput
+): Record<string, unknown> | null {
+  const phone = input.phone?.trim() || null;
+  const email = input.email?.trim() || null;
+  const address = input.address?.trim() || null;
+  const tagline = input.tagline?.trim() || null;
+  const description = input.description?.trim() || null;
+  const services = (input.services ?? [])
+    .filter((s) => s && typeof s.name === "string" && s.name.trim().length > 0)
+    .map((s) => ({
+      name: s.name.trim(),
+      description: typeof s.description === "string" ? s.description.trim() : "",
+    }));
+  const testimonials = (input.testimonials ?? [])
+    .filter((t) => t && typeof t.quote === "string" && t.quote.trim().length > 0)
+    .map((t) => ({
+      quote: t.quote.trim(),
+      name: t.name?.trim() || null,
+      role: t.role?.trim() || null,
+      company: t.company?.trim() || null,
+    }));
+
+  // Bail early if every field is empty — caller didn't pass any
+  // structured Soul fields, so we keep the legacy create flow.
+  const hasContent =
+    phone ||
+    email ||
+    address ||
+    tagline ||
+    description ||
+    services.length > 0 ||
+    testimonials.length > 0;
+  if (!hasContent) return null;
+
+  const soul: Record<string, unknown> = {
+    business_name: workspaceName,
+  };
+  if (tagline) soul.tagline = tagline;
+  if (description) soul.soul_description = description;
+  if (phone) soul.phone = phone;
+  if (email) soul.email = email;
+  if (address) soul.address = address;
+  if (services.length > 0) soul.offerings = services;
+  if (testimonials.length > 0) soul.testimonials = testimonials;
+  return soul;
 }
 
 const APP_HOST = "app.seldonframe.com";

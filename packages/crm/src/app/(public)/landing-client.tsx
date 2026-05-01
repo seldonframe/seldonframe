@@ -125,20 +125,31 @@ const Hero = () => {
         initial={{ opacity: 0, scale: 0.97, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ delay: 1.0, duration: 0.5 }}
-        className="mt-12 max-w-[560px] mx-auto bg-[#111113] border border-white/5 rounded-[12px] overflow-hidden text-left"
+        className="mt-12 max-w-[640px] mx-auto bg-[#111113] border border-white/5 rounded-[12px] overflow-hidden text-left"
       >
         <div className="flex items-center gap-[6px] px-[14px] py-[10px] bg-[#1a1a1e] border-b border-white/5">
           <span className="w-[10px] h-[10px] rounded-full bg-[#ff5f57]" />
           <span className="w-[10px] h-[10px] rounded-full bg-[#ffbd2e]" />
           <span className="w-[10px] h-[10px] rounded-full bg-[#28c840]" />
+          <span className="ml-3 font-mono text-[11px] text-[#666]">claude code</span>
         </div>
+        {/* May 1, 2026 — terminal mockup rewritten to show the REAL
+            MCP-native flow. SeldonFrame is not a CLI tool: there is
+            no `seldon init` or `seldon scaffold`. The only shell
+            command is the one-time `claude mcp add`. From there it
+            is all natural language inside Claude Code. */}
         <div className="p-5 font-mono text-[13px] leading-loose text-[#a1a1aa]">
-          <span className="text-[#444]"># Add SeldonFrame to your IDE via MCP</span><br />
+          <span className="text-[#666]"># Add SeldonFrame to Claude Code (one-time setup)</span><br />
           <span className="text-[#1FAE85]">$ claude mcp add seldonframe -- npx -y @seldonframe/mcp</span><br /><br />
-          <span className="text-[#444]"># Create a workspace</span><br />
-          <span className="text-[#1FAE85]">$ seldon init &quot;Desert Cool HVAC&quot;</span><br /><br />
-          <span className="text-[#444]"># Describe what you need — SeldonFrame builds it</span><br />
-          <span className="text-[#1FAE85]">$ seldon scaffold block customer-intake</span>
+          <span className="text-[#666]"># Then in Claude Code, just describe your business:</span><br />
+          <span className="text-[#fafafa]">&gt; Create a Business OS for Desert Cool HVAC, a</span><br />
+          <span className="text-[#fafafa]">&nbsp;&nbsp;residential HVAC company in Phoenix, AZ.</span><br />
+          <span className="text-[#fafafa]">&nbsp;&nbsp;Phone: (602) 555-0188.</span><br /><br />
+          <span className="text-[#1FAE85]">✅ Workspace created!</span><br />
+          <span className="text-[#a1a1aa]">🌐 Landing page: <span className="text-[#1FAE85]">desert-cool-hvac.app.seldonframe.com</span></span><br />
+          <span className="text-[#a1a1aa]">📅 Booking: <span className="text-[#1FAE85]">desert-cool-hvac.app.seldonframe.com/book</span></span><br />
+          <span className="text-[#a1a1aa]">📝 Intake: <span className="text-[#1FAE85]">desert-cool-hvac.app.seldonframe.com/intake</span></span><br />
+          <span className="text-[#a1a1aa]">⚡ Admin: <span className="text-[#1FAE85]">app.seldonframe.com/admin/abc123?token=wst_...</span></span>
         </div>
       </motion.div>
     </section>
@@ -236,25 +247,41 @@ const Features = () => {
 };
 
 const HowItWorks = () => {
+  // May 1, 2026 — collapsed to 3 steps. SeldonFrame is MCP-native, not
+  // a CLI tool, so the old four-step "init / scaffold / compose"
+  // sequence misrepresented the actual flow. The real flow is:
+  //   1. Install — one shell command, one time.
+  //   2. Describe — talk to Claude Code in plain English.
+  //   3. Launch — landing/booking/intake/CRM/agents go live automatically.
   const steps = [
-    { title: "Install via MCP", desc: "One command in Claude Code. SeldonFrame connects to your IDE via Model Context Protocol.", code: "claude mcp add seldonframe -- npx -y @seldonframe/mcp" },
-    { title: "Initialize a workspace", desc: "Create a branded workspace. Theme, copy, and portal configured via natural language.", code: "\"Init workspace for Desert Cool HVAC. Phoenix, AZ. Family-business voice. Desert tans, AC-blue accents.\"" },
-    { title: "Scaffold what you need", desc: "Describe a block and SeldonFrame generates production-ready code with admin UI, portal surfaces, and tests.", code: "\"Scaffold hvac-equipment block. Track units per customer: install date, brand, model, warranty, last service.\"" },
-    { title: "Compose agent flows", desc: "Wire multi-step workflows from primitives. Triggers, branches, SMS, email, approval gates — all composable.", code: "\"Add emergency-triage archetype. Trigger on SMS 'AC NOT WORKING'. Check weather. Priority-route if heat >100°F. Dispatch nearest tech.\"" },
+    {
+      title: "Install",
+      desc: "One terminal command. SeldonFrame connects to Claude Code via Model Context Protocol — no separate CLI, no config files.",
+      code: "claude mcp add seldonframe -- npx -y @seldonframe/mcp",
+    },
+    {
+      title: "Describe",
+      desc: "Tell Claude Code about your business in plain English. SeldonFrame extracts the right structure — name, phone, services, testimonials — and seeds your workspace from it.",
+      code: "\"Create a Business OS for Desert Cool HVAC, a residential HVAC company in Phoenix, AZ. Phone: (602) 555-0188.\"",
+    },
+    {
+      title: "Launch",
+      desc: "Landing page, booking, intake form, CRM, deal pipeline, and AI agents all deploy automatically. Live at <slug>.app.seldonframe.com in under a minute.",
+      code: "✅ Workspace live: desert-cool-hvac.app.seldonframe.com",
+    },
   ];
 
   return (
     <section className="text-center py-[64px] md:py-[100px] px-5 md:px-12 max-w-[1140px] mx-auto">
       <h2 className="text-[clamp(26px,3.5vw,38px)] font-bold tracking-[-0.03em] mb-4 text-[#fafafa]">How it works</h2>
       <p className="text-[16px] text-[#a1a1aa] max-w-[560px] mx-auto mb-12">
-        Four steps. About six minutes. A complete Business OS, ready to deploy.
+        Three steps. About a minute. A complete Business OS, live in production.
       </p>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         {steps.map((step, i) => (
           <motion.div
             key={step.title}
-            // Fix (b): x: -30 → y: 20 for vertical-reveal parity with other sections
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: "-100px" }}

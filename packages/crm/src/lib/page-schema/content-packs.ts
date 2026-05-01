@@ -241,6 +241,14 @@ const LOCAL_SERVICE_PACK: ContentPack = {
       { value: "4.8★", label: "Google Rating" },
       { value: "24hr", label: "Response Time" },
     ]),
+    // May 1, 2026 — local-service pack now ships with a testimonials
+    // section so customer quotes (collected via update_landing_section
+    // or seeded via create_workspace's testimonials arg) actually
+    // render. Without this section in the pack, soul.testimonials
+    // entries were extracted into proof.testimonials but never made
+    // it onto the page because no testimonials section existed in
+    // the schema's section list.
+    testimonialsSection(),
     faqSection([]), // filled from default_faqs at apply-time
     ctaSection("Ready to get started?", "Get a free quote in minutes."),
     footerSection(),

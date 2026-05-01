@@ -20,6 +20,18 @@ type WorkspaceCreateBody = {
   name?: unknown;
   source?: unknown;
   industry?: unknown;
+  // May 1, 2026 — structured Soul-seed fields. When provided these go
+  // straight into organizations.soul on insert so the landing page
+  // renders with real data on its very first GET.
+  phone?: unknown;
+  email?: unknown;
+  address?: unknown;
+  tagline?: unknown;
+  // `business_description` rather than `description` to avoid colliding
+  // with the legacy Soul-compile path's `description` field above.
+  business_description?: unknown;
+  services?: unknown;
+  testimonials?: unknown;
 };
 
 const WORKSPACE_BASE_DOMAIN =
@@ -85,6 +97,52 @@ async function handleAnonymousCreate(request: Request, body: WorkspaceCreateBody
     );
   }
 
+  // May 1, 2026 — structured Soul-seed extraction. All optional, all
+  // defensive: malformed shapes fall through as null rather than 400ing
+  // the request (so a buggy MCP client doesn't lock operators out of
+  // workspace creation).
+  const phoneInput = typeof body.phone === "string" ? body.phone.trim() : "";
+  const emailInput = typeof body.email === "string" ? body.email.trim() : "";
+  const addressInput = typeof body.address === "string" ? body.address.trim() : "";
+  const taglineInput = typeof body.tagline === "string" ? body.tagline.trim() : "";
+  const descriptionInput =
+    typeof body.business_description === "string"
+      ? body.business_description.trim()
+      : "";
+  const servicesInput = Array.isArray(body.services)
+    ? body.services
+        .map((entry) => {
+          if (!entry || typeof entry !== "object") return null;
+          const obj = entry as Record<string, unknown>;
+          const svcName = typeof obj.name === "string" ? obj.name.trim() : "";
+          if (!svcName) return null;
+          const svcDescription =
+            typeof obj.description === "string" ? obj.description.trim() : null;
+          return { name: svcName, description: svcDescription };
+        })
+        .filter((s): s is { name: string; description: string | null } => s !== null)
+    : null;
+  const testimonialsInput = Array.isArray(body.testimonials)
+    ? body.testimonials
+        .map((entry) => {
+          if (!entry || typeof entry !== "object") return null;
+          const obj = entry as Record<string, unknown>;
+          const quote = typeof obj.quote === "string" ? obj.quote.trim() : "";
+          if (!quote) return null;
+          return {
+            quote,
+            name: typeof obj.name === "string" ? obj.name.trim() : null,
+            role: typeof obj.role === "string" ? obj.role.trim() : null,
+            company:
+              typeof obj.company === "string" ? obj.company.trim() : null,
+          };
+        })
+        .filter(
+          (t): t is { quote: string; name: string | null; role: string | null; company: string | null } =>
+            t !== null
+        )
+    : null;
+
   const ip = resolveRequestIp(request.headers);
   const hourOk = await checkRateLimit(`anon-workspace-create:hour:${ip}`, 3, 60 * 60 * 1000);
   const dayOk = await checkRateLimit(`anon-workspace-create:day:${ip}`, 10, 24 * 60 * 60 * 1000);
@@ -107,7 +165,18 @@ async function handleAnonymousCreate(request: Request, body: WorkspaceCreateBody
   }
 
   try {
-    const result = await createAnonymousWorkspace({ name, source, industry });
+    const result = await createAnonymousWorkspace({
+      name,
+      source,
+      industry,
+      phone: phoneInput || null,
+      email: emailInput || null,
+      address: addressInput || null,
+      tagline: taglineInput || null,
+      description: descriptionInput || null,
+      services: servicesInput,
+      testimonials: testimonialsInput,
+    });
     const urls = buildWorkspaceUrls(result.slug, WORKSPACE_BASE_DOMAIN, result.orgId);
     // C6: thread the bearer token into structured URL builder so it
     // produces the single-click `admin_url` for the operator. Without
