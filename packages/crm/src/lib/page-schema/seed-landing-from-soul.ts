@@ -26,6 +26,7 @@ import { tokensForPersonality } from "./design-tokens";
 import { renderWithGeneralServiceV1 } from "./renderers/general-service-v1-adapter";
 import { blueprintFromSchema } from "./renderers/blueprint-from-schema";
 import { classifyBusinessTypeFromSoul } from "./classify-business";
+import { validateFullPipeline } from "./pipeline-validator";
 import type { BusinessType } from "./types";
 import type { PagePersonality } from "./design-tokens";
 
@@ -154,6 +155,46 @@ export async function seedLandingFromSoul(orgId: string): Promise<SeedLandingRes
     .limit(1);
 
   if (!row) return { ok: false, reason: "no_landing_row" };
+
+  // May 1, 2026 — Soul → Render pipeline contract assertions. Run
+  // BEFORE persisting so failures show up in function logs paired
+  // with the actual render output. Non-blocking: a partial render
+  // is better than no render. Validation errors drive alerts and
+  // catch regressions in renderer / content-pack changes before
+  // they reach production.
+  const soulRecord = org.soul as unknown as Record<string, unknown>;
+  const inputForValidator = {
+    phone:
+      typeof soulRecord.phone === "string" ? (soulRecord.phone as string) : null,
+    services: Array.isArray(soulRecord.offerings)
+      ? (soulRecord.offerings as Array<{ name: string; description?: string | null }>)
+      : null,
+    businessName:
+      (typeof soulRecord.business_name === "string"
+        ? (soulRecord.business_name as string)
+        : null) || org.name,
+    businessDescription:
+      typeof soulRecord.soul_description === "string"
+        ? (soulRecord.soul_description as string)
+        : typeof soulRecord.description === "string"
+          ? (soulRecord.description as string)
+          : null,
+    businessType,
+    tagline:
+      typeof soulRecord.tagline === "string" ? (soulRecord.tagline as string) : null,
+    testimonials: Array.isArray(soulRecord.testimonials)
+      ? (soulRecord.testimonials as Array<{
+          quote: string;
+          name?: string | null;
+          role?: string | null;
+          company?: string | null;
+        }>)
+      : null,
+    faqs: Array.isArray(soulRecord.faqs)
+      ? (soulRecord.faqs as Array<{ question: string; answer: string }>)
+      : null,
+  };
+  validateFullPipeline(inputForValidator, soulRecord, schema, html, { orgId });
 
   await db
     .update(landingPages)

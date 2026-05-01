@@ -15,7 +15,7 @@
       "heroImageUrl": null
     },
     "contact": {
-      "phone": "+15555550100",
+      "phone": "",
       "emergencyPhone": null,
       "email": null,
       "address": {
@@ -47,7 +47,7 @@
         "headline": "Reliable [service] you can count on",
         "subhead": "We help homeowners and businesses get [outcome] without the hassle. Free quote in under a day.",
         "ctaPrimary": { "label": "Get a free quote", "href": "/intake", "kind": "primary" },
-        "ctaSecondary": { "label": "Call us", "href": "tel:+15555550100", "kind": "tel" },
+        "ctaSecondary": { "label": "[Call us]", "href": "tel:[Phone]", "kind": "tel" },
         "imageUrl": null,
         "variant": "split-image-right"
       },
@@ -67,25 +67,25 @@
         "items": [
           {
             "icon": "Wrench",
-            "title": "Service one",
-            "description": "Brief description of your first core service. Two short sentences max."
+            "title": "[Service]",
+            "description": "[Service description]"
           },
           {
             "icon": "Settings",
-            "title": "Service two",
-            "description": "Brief description of your second core service."
+            "title": "[Service]",
+            "description": "[Service description]"
           },
           {
             "icon": "Sparkles",
-            "title": "Service three",
-            "description": "Brief description of your third core service."
+            "title": "[Service]",
+            "description": "[Service description]"
           }
         ]
       },
       {
         "type": "about",
-        "headline": "Why customers pick us",
-        "body": "Tell your story in 2-3 sentences. What's your background, why did you start the business, and what makes your work different from the competition? Speak to one person, not to everyone.",
+        "headline": "[About headline]",
+        "body": "[About copy]",
         "photoUrl": null,
         "ownerName": "[Owner Name]",
         "ownerTitle": "Owner"
@@ -95,38 +95,38 @@
         "headline": "Ready to get started?",
         "subhead": "Tell us what you need and we'll send a free quote within 24 hours.",
         "ctaPrimary": { "label": "Get a free quote", "href": "/intake", "kind": "primary" },
-        "ctaSecondary": { "label": "Call us", "href": "tel:+15555550100", "kind": "tel" },
+        "ctaSecondary": { "label": "[Call us]", "href": "tel:[Phone]", "kind": "tel" },
         "embedQuoteForm": true
       },
       {
         "type": "testimonials",
-        "headline": "What our customers say",
+        "headline": "[Testimonials headline]",
         "featured": {
-          "quote": "Replace this with a real customer quote that mentions a specific outcome (e.g. 'They fixed our problem in under an hour and the price matched the quote exactly').",
+          "quote": "[Featured testimonial quote]",
           "authorName": "[Customer Name]",
-          "authorRole": "Customer in [City]",
+          "authorRole": "[Customer Role]",
           "rating": 5,
           "source": "google"
         },
         "items": [
           {
-            "quote": "Short quote about the experience. Specific is better than glowing.",
+            "quote": "[Testimonial quote]",
             "authorName": "[Customer Name]",
-            "authorRole": "Homeowner",
+            "authorRole": "[Customer Role]",
             "rating": 5,
             "source": "google"
           },
           {
-            "quote": "Another short, specific quote.",
+            "quote": "[Testimonial quote]",
             "authorName": "[Customer Name]",
-            "authorRole": "Local business owner",
+            "authorRole": "[Customer Role]",
             "rating": 5,
             "source": "google"
           },
           {
-            "quote": "A third short, specific quote.",
+            "quote": "[Testimonial quote]",
             "authorName": "[Customer Name]",
-            "authorRole": "Customer since [Year]",
+            "authorRole": "[Customer Role]",
             "rating": 5,
             "source": "google"
           }
@@ -220,7 +220,7 @@
         "type": "select",
         "label": "What service do you need?",
         "required": true,
-        "options": ["Service one", "Service two", "Service three", "Other / not sure"]
+        "options": ["Other / not sure"]
       },
       {
         "id": "details",

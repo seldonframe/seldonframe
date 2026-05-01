@@ -42,11 +42,11 @@ export const TOOLS = [
   {
     name: "create_workspace",
     description:
-      "Create a real, hosted workspace on <slug>.app.seldonframe.com with CRM, Cal.diy booking, Formbricks intake, and Brain v2 pre-installed. The first workspace requires no API key. When the user mentions a phone, email, address, list of services, or testimonials, pass them as structured fields so the landing page renders with their real content immediately (no follow-up submit_soul required). Example: create_workspace({ name: 'Desert Cool HVAC', phone: '(602) 555-0188', services: [{ name: 'AC Repair' }, { name: 'Heating' }] })",
+      "Create a real, hosted workspace on <slug>.app.seldonframe.com with a CRM, booking page, intake form, and AI agents pre-installed. The first workspace requires no API key. When the user mentions a phone, email, address, list of services, or testimonials, pass them as structured fields so the landing page renders with their real content immediately. Example: create_workspace({ name: 'Desert Cool HVAC', phone: '(602) 555-0188', services: [{ name: 'AC Repair' }, { name: 'Heating' }] })",
     inputSchema: obj(
       {
         name: str("Human-readable workspace name."),
-        source: str("Optional URL or description to seed the workspace's Soul from."),
+        source: str("Optional URL or description to seed the business profile from."),
         phone: str("Operator's business phone (any format — we render as-is). Renders in nav, hero, and footer when set."),
         email: str("Optional contact email surfaced in the landing footer."),
         address: str("Optional business address. Comma-separated street, city, region, postal, country renders as-is."),
@@ -138,7 +138,23 @@ export const TOOLS = [
           : null,
         urls: publicUrls,
         public_urls: result.public_urls ?? publicUrls,
-        installed: result.installed ?? ["crm", "caldiy-booking", "formbricks-intake", "brain-v2"],
+        // May 1, 2026 — installed-block labels translated to operator
+        // copy. The MCP-internal slugs ("caldiy-booking",
+        // "formbricks-intake", "brain-v2") are deployment details no
+        // operator should need to learn — surfacing them on every
+        // create_workspace turn was friction without payoff.
+        installed: (result.installed ?? [
+          "crm",
+          "caldiy-booking",
+          "formbricks-intake",
+          "brain-v2",
+        ]).map((slug) => {
+          if (slug === "caldiy-booking") return "Booking page";
+          if (slug === "formbricks-intake") return "Intake form";
+          if (slug === "brain-v2") return "AI learning";
+          if (slug === "crm") return "CRM";
+          return slug;
+        }),
         // May 1, 2026 — email collection promoted to the first
         // suggested next step. Per the onboarding-loop spec, the
         // operator gets a permanent inbox record (admin URLs,
@@ -155,8 +171,8 @@ export const TOOLS = [
             ? `⚡ Admin Dashboard (bookmark this!): ${adminUrl}  (paste into your browser; no signup needed; token expires in 7 days)`
             : null,
           "Ask the user for their email, then call collect_operator_email({ email, name? }) — sends the welcome email + creates a permanent record. Do this BEFORE any further customization.",
-          "install_vertical_pack({ pack: 'real-estate' })  // or 'dental', 'legal'",
-          "fetch_source_for_soul({ url: 'https://yoursite.com' }) → submit_soul({ soul })",
+          "install_vertical_pack({ pack: '<industry>' }) — set up an industry template (real-estate, dental, legal, …)",
+          "fetch_source_for_soul({ url: 'https://yoursite.com' }) → submit_soul({ soul }) — pull the business profile from a website",
           "get_workspace_snapshot({}) — read workspace state to reason about next steps",
         ].filter(Boolean),
       };
@@ -622,10 +638,10 @@ export const TOOLS = [
   {
     name: "install_vertical_pack",
     description:
-      "Install a vertical pack (e.g. 'real-estate', 'dental', 'legal'). Adds domain-specific objects, fields, views.",
+      "Set up an industry template (real-estate, dental, legal, …). Adds industry-specific objects, fields, and views to the CRM and pre-fills the booking page + intake form for that line of work.",
     inputSchema: obj(
       {
-        pack: str("Pack slug, e.g. 'real-estate', 'dental', 'legal'."),
+        pack: str("Industry template name, e.g. 'real-estate', 'dental', 'legal'."),
         workspace_id: str("Optional workspace override."),
       },
       ["pack"],
@@ -641,10 +657,10 @@ export const TOOLS = [
   {
     name: "install_caldiy_booking",
     description:
-      "Install the Cal.diy booking block (event types, availability, bookings). Example: install_caldiy_booking({})",
+      "Install the booking page (event types, availability, scheduled bookings). Example: install_caldiy_booking({})",
     inputSchema: obj({
       workspace_id: str("Optional workspace override."),
-      config: { type: "object", description: "Optional Cal.diy configuration overrides." },
+      config: { type: "object", description: "Optional booking-page configuration overrides." },
     }),
     handler: async (a) => {
       const ws = wsOrDefault(a.workspace_id);
@@ -657,10 +673,10 @@ export const TOOLS = [
   {
     name: "install_formbricks_intake",
     description:
-      "Install a Formbricks intake form (surveys, conditional logic, contact sync). Example: install_formbricks_intake({})",
+      "Install an intake form (questions, conditional logic, automatic CRM sync). Example: install_formbricks_intake({})",
     inputSchema: obj({
       workspace_id: str("Optional workspace override."),
-      form_id: str("Optional existing Formbricks form id to bind."),
+      form_id: str("Optional existing intake-form id to bind."),
     }),
     handler: async (a) => {
       const ws = wsOrDefault(a.workspace_id);
@@ -687,7 +703,7 @@ export const TOOLS = [
   {
     name: "fetch_source_for_soul",
     description:
-      "Fetch a URL and return normalized text (headings + body, up to 256KB). Use this to gather raw content; then you (the caller) extract a structured Soul and submit it with submit_soul. Zero LLM cost to Seldon — extraction runs in this session.",
+      "Fetch a URL and return normalized text (headings + body, up to 256KB). Use this to gather raw content from the operator's existing website; then extract a structured business profile and save it with submit_soul. Zero LLM cost to SeldonFrame — extraction runs in this session.",
     inputSchema: obj(
       {
         url: str("Absolute URL to fetch."),
@@ -706,7 +722,7 @@ export const TOOLS = [
         truncated,
         text,
         next: [
-          "Extract a Soul object: { mission, audience, tone, offerings[], differentiators[], faqs[] }",
+          "Extract a business profile: { mission, audience, tone, offerings[], differentiators[], faqs[] }",
           "submit_soul({ soul: <extracted> })",
         ],
       };
@@ -715,13 +731,13 @@ export const TOOLS = [
   {
     name: "submit_soul",
     description:
-      "Submit a compiled Soul object to the active workspace. The caller is expected to have produced the structured Soul from fetch_source_for_soul output or user conversation.",
+      "Save a business profile to the active workspace. The profile drives the landing page, intake form copy, and AI-agent context. Call this after fetch_source_for_soul or after gathering details from the user. Triggers a re-render of the public landing page so changes are visible immediately.",
     inputSchema: obj(
       {
         soul: {
           type: "object",
           description:
-            "Structured Soul. Expected keys: mission, audience, tone, offerings, differentiators, faqs. Additional keys allowed.",
+            "Business profile. Expected keys: business_name, tagline, soul_description, phone, email, address, offerings, faqs, testimonials. Additional keys allowed — they're preserved for future use.",
         },
         workspace_id: str("Optional workspace override."),
       },

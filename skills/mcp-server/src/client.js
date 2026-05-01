@@ -139,6 +139,18 @@ export async function api(method, path, opts = {}) {
   };
   if (auth) headers.Authorization = auth;
 
+  // May 1, 2026 — inject x-org-id from the resolved workspace for
+  // EVERY tool call. Several CRM endpoints (contacts, deals,
+  // bookings, activities) use guardApiRequest which strictly
+  // requires x-org-id. Without this header, the bearer token alone
+  // returns 400 "Missing x-org-id" even though the bearer is
+  // workspace-scoped. Tools can opt out by passing
+  // `extra_headers: { "x-org-id": null }` if a route needs the
+  // header omitted, but the default is to send it.
+  if (workspace_id && !("x-org-id" in headers) && !("X-Org-ID" in headers)) {
+    headers["x-org-id"] = workspace_id;
+  }
+
   const res = await fetch(`${API_BASE}${path}`, {
     method,
     headers,

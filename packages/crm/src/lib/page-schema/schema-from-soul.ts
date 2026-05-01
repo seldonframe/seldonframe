@@ -174,10 +174,16 @@ function enrichTestimonials(
   // does that today, but keep the same defense-in-depth pattern as
   // enrichOfferings).
   const packHasItems = (section.content.items?.length ?? 0) > 0;
-  if (packHasItems) return section;
+  if (packHasItems) return { ...section, visible: true };
 
   const raw = readArray(soul?.testimonials);
-  if (!raw || raw.length === 0) return section;
+
+  // May 1, 2026 — pipeline contract: hide an empty testimonials section.
+  // Better to show no testimonials block than a "What clients say"
+  // headline followed by nothing.
+  if (!raw || raw.length === 0) {
+    return { ...section, visible: false };
+  }
 
   const items: SectionItem[] = raw
     .map((entry) => {
@@ -202,10 +208,13 @@ function enrichTestimonials(
     })
     .filter((item): item is SectionItem => item !== null);
 
-  if (items.length === 0) return section;
+  if (items.length === 0) {
+    return { ...section, visible: false };
+  }
 
   return {
     ...section,
+    visible: true,
     content: { ...section.content, items },
   };
 }
@@ -267,12 +276,27 @@ function enrichOfferings(
         ? "Our products"
         : "What we do");
 
+  // May 1, 2026 — pipeline contract: never render an empty services grid.
+  // When the pack has no defaults AND soul has no offerings, hide the
+  // section so we don't ship a headline-only "Services" block to end-
+  // users. The legacy general.json placeholder ("Service one/two/three")
+  // is no longer reachable through this path because LOCAL_SERVICE_PACK
+  // ships with empty items.
+  if (items.length === 0) {
+    return {
+      ...section,
+      visible: false,
+      content: { ...section.content, headline, items: [] },
+    };
+  }
+
   return {
     ...section,
+    visible: true,
     content: {
       ...section.content,
       headline,
-      items: items.length > 0 ? items : section.content.items ?? [],
+      items,
     },
   };
 }
@@ -297,15 +321,35 @@ function enrichAbout(
   soul: Record<string, unknown> | null | undefined,
   business: PageBusiness
 ): PageSection {
+  // May 1, 2026 — pipeline contract: never render template instructions.
+  // The legacy general.json had body="Tell your story in 2-3 sentences..."
+  // as the default, which leaked into rendered HTML when no Soul body
+  // was set. We now ONLY use real operator-provided copy:
+  //   1. soul.about_body         (explicit about override)
+  //   2. soul.soul_description   (the description the operator submitted)
+  //   3. soul.mission            (legacy field name)
+  //   4. business.description    (mirror of soul.soul_description)
+  // If none of those are present, hide the section entirely (visible:
+  // false) — a missing about section is strictly better than rendering
+  // template instructions to end-users.
   const body =
     readString(soul?.about_body) ||
+    readString(soul?.soul_description) ||
     readString(soul?.mission) ||
     business.description ||
-    section.content.body ||
     "";
-  const headline = readString(soul?.about_headline) || section.content.headline || `About ${business.name}`;
+
+  if (!body) {
+    return { ...section, visible: false };
+  }
+
+  const headline =
+    readString(soul?.about_headline) ||
+    section.content.headline ||
+    `About ${business.name}`;
   return {
     ...section,
+    visible: true,
     content: { ...section.content, headline, body },
   };
 }
