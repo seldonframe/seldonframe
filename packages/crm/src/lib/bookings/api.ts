@@ -5,6 +5,7 @@ import { emitSeldonEvent } from "@/lib/events/bus";
 import { deleteGoogleCalendarBookingEvent, syncBookingWithGoogleCalendar } from "@/lib/bookings/google-calendar-sync";
 import { createBookingCheckoutSession } from "@/lib/payments/actions";
 import { dispatchWebhook } from "@/lib/utils/webhooks";
+import { trackEvent } from "@/lib/analytics/track";
 
 // Schedule a real booking against an existing appointment-type template.
 // Phase 7.a surfaced this as the MCP gap that blocked Speed-to-Lead
@@ -145,6 +146,29 @@ export async function createBookingFromApi(input: CreateBookingInput): Promise<C
     appointmentId: created.id,
     contactId: contact.id,
   }, { orgId: input.orgId });
+
+  // May 1, 2026 — Measurement Layer 2. Fire-and-forget. Captures
+  // booking-creation context that the Brain layer can later
+  // correlate with show/no-show outcomes (logged in the booking-
+  // status-update path once that ships).
+  trackEvent(
+    "booking_created",
+    {
+      booking_id: created.id,
+      appointment_type_id: template.id,
+      duration_minutes:
+        typeof metadata.durationMinutes === "number"
+          ? metadata.durationMinutes
+          : null,
+      day_of_week: created.startsAt
+        .toLocaleDateString("en-US", { weekday: "long" })
+        .toLowerCase(),
+      hour_of_day: created.startsAt.getHours(),
+      has_email: Boolean(contact.email),
+      source: "api",
+    },
+    { orgId: input.orgId, contactId: contact.id }
+  );
 
   await dispatchWebhook({
     orgId: input.orgId,

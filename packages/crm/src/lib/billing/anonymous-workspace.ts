@@ -12,6 +12,8 @@ import {
 import { ensureDefaultPipelineForOrg } from "@/lib/deals/pipeline-defaults";
 import { seedLandingFromSoul } from "@/lib/page-schema/seed-landing-from-soul";
 import { isReservedSlug } from "@/lib/utils/reserved-slugs";
+import { trackEvent } from "@/lib/analytics/track";
+import { classifyBusinessTypeFromSoul } from "@/lib/page-schema/classify-business";
 
 const DEFAULT_ENABLED_BLOCKS = [
   "crm",
@@ -243,6 +245,30 @@ export async function createAnonymousWorkspace(
       );
     }
   }
+
+  // May 1, 2026 — Measurement Layer 2. Fire-and-forget product analytics
+  // event for the workspace creation moment. Properties capture the
+  // dimensions that matter for funnel analysis: business type
+  // classification (drives content-pack routing), industry hint (from
+  // input or classifier), whether the operator gave us a phone (proxy
+  // for "real business" vs throwaway test workspace), service count,
+  // and source (always 'mcp' on this anonymous path).
+  const businessType = seedSoul
+    ? classifyBusinessTypeFromSoul(seedSoul)
+    : "other";
+  trackEvent(
+    "workspace_created",
+    {
+      business_type: businessType,
+      vertical: input.industry ?? null,
+      has_phone: Boolean(input.phone),
+      has_email: Boolean(input.email),
+      services_count: input.services?.length ?? 0,
+      testimonials_count: input.testimonials?.length ?? 0,
+      source: "mcp",
+    },
+    { orgId: org.id }
+  );
 
   return {
     orgId: org.id,

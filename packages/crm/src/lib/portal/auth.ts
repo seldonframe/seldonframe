@@ -8,6 +8,7 @@ import { db } from "@/db";
 import { contacts, organizations, portalAccessCodes } from "@/db/schema";
 import { emitSeldonEvent } from "@/lib/events/bus";
 import { assertWritable } from "@/lib/demo/server";
+import { trackEvent } from "@/lib/analytics/track";
 import { PORTAL_SESSION_COOKIE, signPortalSession, verifyPortalSession } from "./session";
 import { checkPortalPlanGate } from "./plan-gate";
 
@@ -191,6 +192,13 @@ export async function verifyPortalAccessCodeAction(orgSlug: string, email: strin
 
   await emitSeldonEvent("portal.login", { contactId: contact.id }, { orgId: org.id });
 
+  // May 1, 2026 — Measurement Layer 2. OTC verify path.
+  trackEvent(
+    "portal_login",
+    { login_method: "otc_code" },
+    { orgId: org.id, contactId: contact.id }
+  );
+
   return { success: true };
 }
 
@@ -286,6 +294,13 @@ export async function establishPortalMagicSession(input: {
 
   await setPortalSessionCookie(refreshToken);
   await emitSeldonEvent("portal.login", { contactId: session.contact.id }, { orgId: session.orgId });
+
+  // May 1, 2026 — Measurement Layer 2. Magic-link verify path.
+  trackEvent(
+    "portal_login",
+    { login_method: "magic_link" },
+    { orgId: session.orgId, contactId: session.contact.id }
+  );
 
   return {
     orgSlug: session.orgSlug,

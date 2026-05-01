@@ -1,10 +1,12 @@
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { contacts, formSubmissions } from "@/db/schema";
+import { contacts, formSubmissions, organizations } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
 import { assertWritable, demoApiBlockedResponse, isDemoReadonly } from "@/lib/demo/server";
 import { emitSeldonEvent } from "@/lib/events/bus";
+import { trackEvent } from "@/lib/analytics/track";
+import { logBrainEvent } from "@/lib/analytics/brain";
 
 type SubmitBody = {
   formName?: string;
@@ -144,6 +146,79 @@ export async function POST(request: Request) {
       // Non-blocking for public form submission path.
     }
   }
+
+  // May 1, 2026 — Measurement Layer 2 + 3.
+  //
+  // Layer 2: product event for the funnel (intake submission count).
+  // Layer 3: Brain "landing → intake" outcome with the landing-page
+  // configuration as context, so we can learn which renderer
+  // configurations + Soul shapes drive the highest intake-conversion
+  // rates per vertical.
+  trackEvent(
+    "intake_submitted",
+    {
+      form_name: formName,
+      fields_count: Object.keys(data).length,
+      has_email: Boolean(email),
+      has_phone:
+        typeof (data as Record<string, unknown>).phone === "string" ||
+        typeof (data as Record<string, unknown>).Phone === "string",
+      score,
+    },
+    { orgId, contactId: contactId ?? undefined }
+  );
+
+  // Brain context fetch — best-effort. If the org row read fails the
+  // Brain event still logs with `vertical: null` and `context.*: null`,
+  // because logBrainEvent itself is fire-and-forget.
+  void (async () => {
+    try {
+      const [org] = await db
+        .select({
+          soul: organizations.soul,
+          settings: organizations.settings,
+        })
+        .from(organizations)
+        .where(eq(organizations.id, orgId))
+        .limit(1);
+      const soul = (org?.soul as Record<string, unknown> | null) ?? null;
+      const settings = (org?.settings as Record<string, unknown> | null) ?? null;
+      const pageTokens =
+        (settings?.pageTokens as Record<string, unknown> | null) ?? null;
+      const testimonials = soul && Array.isArray(soul.testimonials)
+        ? soul.testimonials
+        : [];
+      logBrainEvent({
+        orgId,
+        vertical:
+          typeof soul?.industry === "string" ? (soul.industry as string) : null,
+        eventType: "landing_to_intake",
+        context: {
+          business_type:
+            typeof soul?.business_type === "string"
+              ? soul.business_type
+              : null,
+          page_personality:
+            typeof pageTokens?.personality === "string"
+              ? pageTokens.personality
+              : null,
+          page_mode:
+            typeof pageTokens?.mode === "string" ? pageTokens.mode : null,
+          has_phone_on_page:
+            typeof soul?.phone === "string" && (soul.phone as string).length > 0,
+          has_testimonials: testimonials.length > 0,
+          form_fields_count: Object.keys(data).length,
+          form_name: formName,
+        },
+        outcome: "converted",
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(
+        `[brain] landing_to_intake context fetch failed: ${message}`
+      );
+    }
+  })();
 
   const response = NextResponse.json({ success: true, score });
   response.cookies.set("sf_score", String(score), {

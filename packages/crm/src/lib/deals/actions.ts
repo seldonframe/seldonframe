@@ -2,12 +2,14 @@
 
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { contacts, deals, pipelines } from "@/db/schema";
+import { contacts, deals, organizations, pipelines } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
 import { assertWritable } from "@/lib/demo/server";
 import { emitSeldonEvent } from "@/lib/events/bus";
 import { inferClientLifecycleFromStatus, recordDealStageLearning } from "@/lib/soul/learning";
 import { ensureDefaultPipelineForOrg } from "@/lib/deals/pipeline-defaults";
+import { trackEvent } from "@/lib/analytics/track";
+import { logBrainEvent } from "@/lib/analytics/brain";
 
 export async function listDeals() {
   const orgId = await getOrgId();
@@ -228,4 +230,67 @@ export async function moveDealStageAction(dealId: string, stage: string, probabi
     from: existingDeal.stage,
     to: stage,
   }, { orgId: orgId });
+
+  // May 1, 2026 — Measurement Layer 2 + 3.
+  //
+  // Layer 2: stage-change funnel event.
+  // Layer 3: Brain "deal_progression" outcome with the stage
+  // transition + value as context. Outcome bucket: 'won', 'lost', or
+  // 'progressed' (any other transition). Drives per-vertical learning
+  // about which sources / agent touchpoints / configurations move
+  // deals to won at higher rates.
+  const dealValue = Number(updatedDeal?.value ?? 0);
+  const stageLower = stage.toLowerCase();
+  trackEvent(
+    "deal_stage_changed",
+    {
+      deal_id: dealId,
+      from_stage: existingDeal.stage,
+      to_stage: stage,
+      probability,
+      deal_value_cents: Math.round(dealValue * 100),
+      contact_source: updatedDeal?.source ?? null,
+    },
+    { orgId }
+  );
+
+  // Brain context — fetch the org's vertical for cross-workspace
+  // learning. Best-effort; the logBrainEvent call itself is fire-
+  // and-forget so this whole branch can fail without surfacing.
+  void (async () => {
+    try {
+      const [org] = await db
+        .select({ soul: organizations.soul })
+        .from(organizations)
+        .where(eq(organizations.id, orgId))
+        .limit(1);
+      const soul = (org?.soul as Record<string, unknown> | null) ?? null;
+      const outcome = stageLower.includes("won")
+        ? "won"
+        : stageLower.includes("lost")
+          ? "lost"
+          : "progressed";
+      logBrainEvent({
+        orgId,
+        vertical:
+          typeof soul?.industry === "string" ? (soul.industry as string) : null,
+        eventType: "deal_progression",
+        context: {
+          from_stage: existingDeal.stage,
+          to_stage: stage,
+          probability,
+          deal_value_cents: Math.round(dealValue * 100),
+          contact_source: updatedDeal?.source ?? null,
+        },
+        outcome,
+        outcomeValueCents:
+          outcome === "won" ? Math.round(dealValue * 100) : 0,
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(
+        `[brain] deal_progression context fetch failed: ${message}`
+      );
+    }
+  })();
 }

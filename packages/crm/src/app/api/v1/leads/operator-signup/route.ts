@@ -24,6 +24,7 @@ import { contacts } from "@/db/schema";
 import { demoApiBlockedResponse, isDemoReadonly } from "@/lib/demo/server";
 import { logEvent } from "@/lib/observability/log";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
+import { trackEvent } from "@/lib/analytics/track";
 
 type LeadBody = {
   email?: unknown;
@@ -192,6 +193,22 @@ export async function POST(request: Request) {
       duplicate: Boolean(existing),
     },
     { request, status: 200 }
+  );
+
+  // May 1, 2026 — Measurement Layer 2. Captures the moment the
+  // operator hands over their email so we can compute "of all
+  // workspaces created today, what % gave us their email?"
+  // Attached to the source workspace (not the SeldonFrame ops
+  // workspace) so funnel queries align with workspace_created.
+  trackEvent(
+    "operator_email_collected",
+    {
+      has_name: Boolean(name),
+      lead_recorded: true,
+      duplicate: Boolean(existing),
+      lead_id: contactId,
+    },
+    { orgId: sourceWorkspaceId ?? null }
   );
 
   return NextResponse.json(

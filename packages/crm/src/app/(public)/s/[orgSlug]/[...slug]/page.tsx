@@ -6,6 +6,7 @@ import { PublicThemeProvider } from "@/components/theme/public-theme-provider";
 import { shouldShowPoweredByBadgeForOrg } from "@/lib/billing/public";
 import { getPublicLandingPage, trackLandingVisitAction } from "@/lib/landing/actions";
 import { getPublicOrgThemeById } from "@/lib/theme/actions";
+import { trackEvent } from "@/lib/analytics/track";
 import type { LandingSection } from "@/lib/landing/types";
 
 export default async function PublicSPage({
@@ -28,6 +29,29 @@ export default async function PublicSPage({
     pageId: payload.page.id,
     visitorId: `${orgSlug}:${pageSlug}`,
   });
+
+  // May 1, 2026 — Measurement Layer 2. Fire-and-forget. Captures the
+  // landing-view event with renderer-config dimensions so we can ask
+  // "do cinematic-mode SaaS pages convert intake forms at higher
+  // rates than light-mode local-service pages?"
+  trackEvent(
+    "landing_page_viewed",
+    {
+      org_slug: orgSlug,
+      page_slug: pageSlug || "home",
+      page_id: payload.page.id,
+      // The page settings carry the renderer config we want to learn
+      // from. Either field may be missing on legacy rows; fall back
+      // to "unknown" so the dimension is at least bucketable.
+      personality:
+        ((payload.page.settings as Record<string, unknown> | null)?.personality as string) ??
+        "unknown",
+      mode:
+        ((payload.page.settings as Record<string, unknown> | null)?.mode as string) ??
+        "unknown",
+    },
+    { orgId: payload.orgId }
+  );
 
   return (
     <PublicThemeProvider theme={theme}>

@@ -7,6 +7,7 @@ import { assertWritable, demoApiBlockedResponse, isDemoReadonly } from "@/lib/de
 import { logEvent } from "@/lib/observability/log";
 import { applyPipelineStagesFromSoul } from "@/lib/soul/apply-pipeline-stages";
 import { seedLandingFromSoul } from "@/lib/page-schema/seed-landing-from-soul";
+import { trackEvent } from "@/lib/analytics/track";
 
 type SubmitSoulBody = {
   soul?: unknown;
@@ -118,6 +119,41 @@ export async function POST(request: Request) {
       landing_rendered: landingRendered,
     },
     { request, identity, orgId, status: 200 }
+  );
+
+  // May 1, 2026 — Measurement Layer 2. Fire-and-forget product event
+  // capturing what the operator put into their Soul. Counts (offerings,
+  // FAQs, testimonials) drive funnel analysis: do operators who fill
+  // out richer Souls convert intake forms at higher rates?
+  const submittedSoul = body.soul as Record<string, unknown>;
+  const offerings = Array.isArray(submittedSoul.offerings)
+    ? submittedSoul.offerings
+    : Array.isArray(submittedSoul.services)
+      ? submittedSoul.services
+      : [];
+  const faqs = Array.isArray(submittedSoul.faqs) ? submittedSoul.faqs : [];
+  const testimonials = Array.isArray(submittedSoul.testimonials)
+    ? submittedSoul.testimonials
+    : [];
+  trackEvent(
+    "soul_submitted",
+    {
+      business_type:
+        typeof submittedSoul.business_type === "string"
+          ? submittedSoul.business_type
+          : null,
+      vertical:
+        typeof submittedSoul.industry === "string"
+          ? submittedSoul.industry
+          : null,
+      offerings_count: offerings.length,
+      faq_count: faqs.length,
+      has_testimonials: testimonials.length > 0,
+      has_phone: typeof submittedSoul.phone === "string" && submittedSoul.phone.length > 0,
+      pipeline_stages_updated: pipelineUpdate.changed,
+      landing_rendered: landingRendered,
+    },
+    { orgId }
   );
 
   return NextResponse.json({

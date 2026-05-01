@@ -15,6 +15,7 @@ import { resolveTierFromSubscription } from "@/lib/billing/tier-resolve";
 import type { TierId } from "@/lib/billing/plans";
 import { getOrgSubscription, updateOrgSubscription } from "@/lib/billing/subscription";
 import { applyBrandingForTier, reRenderAllSurfacesForOrg } from "@/lib/blueprint/rerender-org";
+import { trackEvent } from "@/lib/analytics/track";
 
 function getStripeClient() {
   const secretKey = process.env.STRIPE_SECRET_KEY;
@@ -285,6 +286,23 @@ export async function POST(req: NextRequest) {
         previousTier: previousSubscription.tier ?? null,
         nextTier: nextSubscription.tier ?? null,
       });
+
+      // May 1, 2026 — Measurement Layer 2. Plan-upgrade product event.
+      // Fired only when the tier actually changed so we don't double-
+      // count the same checkout firing multiple webhook events.
+      if (previousSubscription.tier !== tier) {
+        trackEvent(
+          "plan_upgraded",
+          {
+            from_plan: previousSubscription.tier ?? "free",
+            to_plan: tier,
+            stripe_subscription_id: subscriptionId,
+            stripe_price_id: priceId,
+            self_service_enabled: selfServiceEnabled,
+          },
+          { orgId: targetOrgId }
+        );
+      }
 
       // P0 (post-launch fix): auto-flip the page-level white-label
       // flag (`org.settings.branding.removePoweredBy`) to match the

@@ -50,3 +50,6 @@ export * from "./block-subscription-deliveries";
 export * from "./message-triggers";
 // SLICE 10 PR 1 C2 — request_approval persistence.
 export * from "./workflow-approvals";
+// May 1, 2026 — Measurement Layers 2 + 3.
+export * from "./seldonframe-events";
+export * from "./brain-outcomes";
