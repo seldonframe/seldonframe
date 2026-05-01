@@ -5,6 +5,7 @@ import { organizations } from "@/db/schema";
 import { resolveV1Identity } from "@/lib/auth/v1-identity";
 import { assertWritable, demoApiBlockedResponse, isDemoReadonly } from "@/lib/demo/server";
 import { logEvent } from "@/lib/observability/log";
+import { applyPipelineStagesFromSoul } from "@/lib/soul/apply-pipeline-stages";
 
 type SubmitSoulBody = {
   soul?: unknown;
@@ -70,9 +71,31 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Workspace not found." }, { status: 404 });
   }
 
+  // April 30, 2026 (B6) — re-seed the workspace's pipeline stages from
+  // soul.pipeline_stages if present. Idempotent: no-op when the Soul
+  // doesn't carry stages or the existing pipeline already matches.
+  // Best-effort: failures log but don't fail the Soul submission.
+  let pipelineUpdate: { changed: boolean; stages: unknown } = {
+    changed: false,
+    stages: null,
+  };
+  try {
+    const result = await applyPipelineStagesFromSoul(
+      orgId,
+      body.soul as Record<string, unknown>,
+      null
+    );
+    pipelineUpdate = { changed: result.changed, stages: result.stages };
+  } catch (err) {
+    console.warn("[soul/submit] pipeline re-seed failed:", err);
+  }
+
   logEvent(
     "soul_submit",
-    { bytes: soulJson.length },
+    {
+      bytes: soulJson.length,
+      pipeline_stages_updated: pipelineUpdate.changed,
+    },
     { request, identity, orgId, status: 200 }
   );
 
@@ -84,6 +107,7 @@ export async function POST(request: Request) {
       soul_completed_at: updated.soulCompletedAt?.toISOString() ?? null,
     },
     bytes: soulJson.length,
+    pipeline_stages_updated: pipelineUpdate.changed,
     next: [
       "get_workspace_snapshot({}) — subsequent snapshots now include the submitted Soul under `soul.data`.",
     ],

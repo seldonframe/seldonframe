@@ -17,18 +17,35 @@ function buildPublicFormUrl(orgSlug: string | null, formSlug: string) {
   return `${origin}/forms/${orgSlug}/${formSlug}`;
 }
 
+// UUID v4 shape: 8-4-4-4-12 hex with dashes at fixed positions. Used to
+// gate the by-id lookup so we don't pass a slug ("intake") to a UUID column —
+// Postgres rejects the cast with `invalid input syntax for type uuid` and the
+// route 500s before the slug fallback can run.
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function isUuid(value: string): boolean {
+  return UUID_REGEX.test(value);
+}
+
 // The `id` segment accepts EITHER the uuid primary key OR the slug. Slug
-// lookups are the common MCP case (`update_form({ form_slug: 'intake' })`);
+// lookups are the common MCP case (`update_form({ form: 'intake' })`);
 // uuid lookups are for dashboard links. Both resolved against (orgId, ...).
+//
+// IMPORTANT: only attempt the UUID lookup when the input actually looks
+// like a UUID. Postgres' uuid column type rejects non-UUID strings at the
+// driver layer (not as a missing-row), which crashes the route before the
+// slug fallback runs. Pre-2026-04-30 this caused MCP `update_form({ form:
+// 'intake' })` to 500 in production.
 async function findForm(orgId: string, idOrSlug: string) {
-  // Try by id first — uuid's 36-char shape is easy to recognize but we'll
-  // just try both to keep the guard simple.
-  const byId = await db
-    .select()
-    .from(intakeForms)
-    .where(and(eq(intakeForms.orgId, orgId), eq(intakeForms.id, idOrSlug)))
-    .limit(1);
-  if (byId[0]) return byId[0];
+  if (isUuid(idOrSlug)) {
+    const byId = await db
+      .select()
+      .from(intakeForms)
+      .where(and(eq(intakeForms.orgId, orgId), eq(intakeForms.id, idOrSlug)))
+      .limit(1);
+    if (byId[0]) return byId[0];
+    // Fall through — caller may have passed a slug that happens to be
+    // 36 chars of hex (vanishingly unlikely but cheap to handle).
+  }
 
   const bySlug = await db
     .select()
