@@ -70,13 +70,26 @@ export function renderWithGeneralServiceV1(
   options: GeneralServiceV1RenderOptions = {}
 ): RenderedOutput {
   const blueprint = blueprintFromSchema(schema, tokens);
-  const { html, css } = renderGeneralServiceV1(blueprint, {
+  // May 1, 2026 — pass tokens through so the renderer can apply the
+  // cinematic overlay (dark mode + glass pill nav + blur-in animations
+  // when tokens.mode === "dark" + tokens.effects.glassmorphism).
+  const rendered = renderGeneralServiceV1(blueprint, {
     removePoweredBy: options.removePoweredBy ?? false,
+    tokens,
   });
 
+  // The renderer's `head` carries Google Fonts <link> tags when the
+  // cinematic overlay is active. Concatenate the font preconnects + the
+  // <style> block so the served page's head gets everything in one shot.
+  const headParts: string[] = [];
+  if (rendered.head && rendered.head.length > 0) {
+    headParts.push(rendered.head);
+  }
+  headParts.push(`<style>${rendered.css}</style>`);
+
   return {
-    html,
-    head: `<style>${css}</style>`,
+    html: rendered.html,
+    head: headParts.join("\n"),
     framework: "static",
   };
 }

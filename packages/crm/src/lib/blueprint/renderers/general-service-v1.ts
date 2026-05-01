@@ -70,6 +70,12 @@ import type {
   WeeklyHours,
 } from "../types";
 import { buildThemeTokens } from "../theme";
+import type { DesignTokens } from "@/lib/page-schema/design-tokens";
+import {
+  buildCinematicCss,
+  buildFontLink,
+  isCinematicMode,
+} from "./cinematic-overlay";
 
 // ─── Public entry point ────────────────────────────────────────────────
 
@@ -82,6 +88,12 @@ export interface RenderedLanding {
    * which the existing renderer wraps automatically).
    */
   css: string;
+  /**
+   * Optional <head> fragment — Google Fonts <link> tags + preconnect when
+   * the cinematic overlay is active. The page-rendering layer should inject
+   * this into the served document's <head>. May be an empty string.
+   */
+  head?: string;
 }
 
 /**
@@ -99,6 +111,18 @@ export interface RenderGeneralServiceV1Options {
    * the badge).
    */
   removePoweredBy?: boolean;
+  /**
+   * May 1, 2026 — DesignTokens for the cinematic overlay. When present
+   * and `tokens.mode === "dark"` + `tokens.effects.glassmorphism`, the
+   * renderer:
+   *   - Tags the root frame with `sf-cinematic` class
+   *   - Appends the cinematic CSS overlay to the output stylesheet
+   *   - Returns Google Fonts <link> tags via the new `head` field
+   *
+   * When omitted or in light mode, the renderer's output is byte-identical
+   * to pre-tokens behavior — existing local-service workspaces unaffected.
+   */
+  tokens?: DesignTokens;
 }
 
 interface RenderContext {
@@ -142,14 +166,31 @@ ${navbar}
 ${otherSectionsHtml}
 </main>`;
 
-  const html = `<div class="sf-frame">
+  // May 1, 2026 — cinematic overlay. Tag the root frame with sf-cinematic
+  // when DesignTokens.mode === "dark" + effects.glassmorphism. This scopes
+  // the overlay CSS at .sf-frame.sf-cinematic so existing light-mode
+  // workspaces are unaffected.
+  const cinematic = options.tokens && isCinematicMode(options.tokens);
+  const frameClass = cinematic ? "sf-frame sf-cinematic" : "sf-frame";
+
+  const html = `<div class="${frameClass}">
 ${innerHtml}
 </div>
 ${SCROLL_OBSERVER_SCRIPT}`;
 
-  const css = [themeCss, BASE_CSS].join("\n\n");
+  const cssChunks: string[] = [themeCss, BASE_CSS];
+  if (options.tokens && cinematic) {
+    cssChunks.push(buildCinematicCss(options.tokens));
+  }
+  const css = cssChunks.join("\n\n");
 
-  return { html, css };
+  // Google Fonts <link> tag. Only emitted when cinematic mode is active —
+  // the legacy renderer ships a system font stack that doesn't need
+  // network-loaded fonts. Returning empty string keeps the head undefined-
+  // friendly for callers that don't read it.
+  const head = options.tokens && cinematic ? buildFontLink(options.tokens) : "";
+
+  return { html, css, head };
 }
 
 // ─── Section dispatcher ────────────────────────────────────────────────

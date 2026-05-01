@@ -29,20 +29,25 @@ import { classifyBusinessTypeFromSoul } from "./classify-business";
 import type { BusinessType } from "./types";
 import type { PagePersonality } from "./design-tokens";
 
-/** Map a business type to a default personality. SaaS leans clean (no
- *  glassmorphism — that's reserved for cinematic which would require the
- *  React-based renderer not yet in production). Local services and pro
- *  services use clean. Agencies lean editorial for the spacious feel.
- *  Operators can override per-tier later via update_design_tokens. */
+/** Map a business type to a default personality. May 1, 2026 — these
+ *  defaults drive the cinematic overlay. SaaS gets cinematic (dark mode
+ *  + glassmorphism + Instrument Serif italic headings + blur-in
+ *  animations). Agencies get bold (dark, large type). Pro-services get
+ *  editorial (light, serif, spacious). Local-services + ecommerce stay
+ *  on clean (light, Inter). Operators can override later via
+ *  update_design_tokens / set_page_style. */
 function defaultPersonalityForType(type: BusinessType): PagePersonality {
   switch (type) {
     case "saas":
-    case "local_service":
-    case "professional_service":
-    case "ecommerce":
-    case "other":
-      return "clean";
+      return "cinematic";
     case "agency":
+      return "bold";
+    case "professional_service":
+      return "editorial";
+    case "local_service":
+    case "ecommerce":
+      return "clean";
+    case "other":
       return "editorial";
   }
 }
@@ -100,7 +105,7 @@ export async function seedLandingFromSoul(orgId: string): Promise<SeedLandingRes
   const plan = resolvePlanFromPlanId(org.plan ?? null);
   const removePoweredBy = canRemoveBranding(plan);
 
-  // Render via the adapter (PageSchema → Blueprint → V1 HTML+CSS).
+  // Render via the adapter (PageSchema → Blueprint → V1 HTML+CSS+font-link).
   let html: string;
   let css: string;
   let blueprint: ReturnType<typeof blueprintFromSchema>;
@@ -108,10 +113,24 @@ export async function seedLandingFromSoul(orgId: string): Promise<SeedLandingRes
     const output = renderWithGeneralServiceV1(schema, tokens, schema.media, {
       removePoweredBy,
     });
-    html = output.html;
-    // The adapter returns the CSS wrapped in <style>; strip the wrapper to
-    // store raw CSS in landing_pages.contentCss (the column convention).
-    css = output.head.replace(/^<style>/, "").replace(/<\/style>$/, "");
+
+    // The adapter's `head` contains: optional <link> font preconnects +
+    // `<style>...</style>` wrapping the CSS. Split them: font links get
+    // prepended to contentHtml (so the served page picks them up at the
+    // top of the body — modern browsers handle <link> in body fine);
+    // CSS gets stored raw in contentCss per the column convention.
+    const fontLinkMatch = output.head.match(/^([\s\S]*?)<style>([\s\S]*)<\/style>\s*$/);
+    let fontLinks = "";
+    if (fontLinkMatch) {
+      fontLinks = fontLinkMatch[1].trim();
+      css = fontLinkMatch[2];
+    } else {
+      // Defensive — when the renderer returns no head (light mode legacy
+      // path), the head is just the <style> block. Fall back to existing
+      // behavior.
+      css = output.head.replace(/^<style>/, "").replace(/<\/style>$/, "");
+    }
+    html = fontLinks ? `${fontLinks}\n${output.html}` : output.html;
     blueprint = blueprintFromSchema(schema, tokens);
   } catch (err) {
     console.warn(`[seed-landing-from-soul] render failed for org ${orgId}:`, err);

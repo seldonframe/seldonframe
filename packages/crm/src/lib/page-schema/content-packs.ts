@@ -289,7 +289,12 @@ const SAAS_PACK: ContentPack = {
     ]),
     servicesSection("features", "Features"),
     howItWorksSection(),
-    pricingSection(),
+    // May 1, 2026 — pricing section dropped from default SaaS pack.
+    // It rendered as a second services-grid pulling from soul.offerings,
+    // duplicating the features section above and producing a duplicate
+    // `id="sf-services"` in the HTML. Operators who want a separate
+    // pricing section can re-enable via toggle_section({ section_id:
+    // "pricing", visible: true }) once that MCP tool ships (A6).
     faqSection([]),
     ctaSection("Ready to build?", "Start for $0. Upgrade when you grow."),
     footerSection(),

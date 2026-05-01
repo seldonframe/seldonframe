@@ -246,15 +246,27 @@ function formatHour(h: number): string {
 function renderNavbar(blueprint: Blueprint): string {
   const ws = blueprint.workspace;
   const phone = ws.contact.phone;
-  const phoneDisplay = formatPhoneDisplay(phone);
+
+  // May 1, 2026 — skip phone CTA when phone is empty (SaaS, pro-services,
+  // agencies). Existing local-service blueprints carry valid E.164 phones
+  // and remain unchanged.
+  const phoneCtaHtml = isUsablePhone(phone)
+    ? `<a class="sf-navbar__cta" href="${escapeAttr(ensureTelHref(phone))}">
+    <span class="sf-navbar__cta-label">${escapeHtml(formatPhoneDisplay(phone))}</span>
+    <span class="sf-navbar__cta-icon" aria-hidden="true">${PHONE_SVG_SMALL}</span>
+  </a>`
+    : "";
 
   return `<nav class="sf-navbar sf-animate" aria-label="Primary">
   <a class="sf-navbar__brand" href="/">${escapeHtml(ws.name)}</a>
-  <a class="sf-navbar__cta" href="${escapeAttr(ensureTelHref(phone))}">
-    <span class="sf-navbar__cta-label">${escapeHtml(phoneDisplay)}</span>
-    <span class="sf-navbar__cta-icon" aria-hidden="true">${PHONE_SVG_SMALL}</span>
-  </a>
+  ${phoneCtaHtml}
 </nav>`;
+}
+
+function isUsablePhone(phone: string | null | undefined): boolean {
+  if (!phone) return false;
+  const trimmed = phone.trim();
+  return trimmed.length > 0 && trimmed !== "+";
 }
 
 // ─── Event details (left column) ──────────────────────────────────────
@@ -468,14 +480,16 @@ function renderFooter(
 ): string {
   const ws = blueprint.workspace;
   const phone = ws.contact.phone;
-  const phoneDisplay = formatPhoneDisplay(phone);
   const tagline = resolveOrHide(ws.tagline);
+  const phoneLink = isUsablePhone(phone)
+    ? `<a class="sf-footer__phone" href="${escapeAttr(ensureTelHref(phone))}">${escapeHtml(formatPhoneDisplay(phone))}</a>`
+    : "";
   return `<footer class="sf-footer sf-footer--booking" id="sf-contact">
   <div class="sf-footer__top">
     <div class="sf-footer__col sf-footer__col--brand">
       <p class="sf-footer__name">${escapeHtml(ws.name)}</p>
       ${tagline ? `<p class="sf-footer__tagline">${escapeHtml(tagline)}</p>` : ""}
-      <a class="sf-footer__phone" href="${escapeAttr(ensureTelHref(phone))}">${escapeHtml(phoneDisplay)}</a>
+      ${phoneLink}
     </div>
     <div class="sf-footer__col">
       <h3 class="sf-footer__heading">Need help?</h3>
