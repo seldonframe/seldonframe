@@ -3,10 +3,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft, Mail, Phone } from "lucide-react";
 import { db } from "@/db";
-import { activities, bookings, contacts, deals } from "@/db/schema";
+import { activities, bookings, contacts, deals, organizations } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
 import { getLabels } from "@/lib/soul/labels";
 import { getContactRevenue } from "@/lib/payments/actions";
+import { checkPortalPlanGate } from "@/lib/portal/plan-gate";
 import {
   ContactRecordDetail,
   type ActivityRow,
@@ -59,7 +60,11 @@ export default async function ContactRecordPage({
 
   const labels = await getLabels();
 
-  const [contact, activityRows, dealRows, bookingRows, revenue] = await Promise.all([
+  // May 1, 2026 — Client Portal V1: pull the org slug + plan-gate
+  // result alongside the contact so the OverviewTab aside can render
+  // the Portal Access card without a second client-side fetch.
+  const [contact, activityRows, dealRows, bookingRows, revenue, orgRow, portalGate] =
+    await Promise.all([
     db
       .select()
       .from(contacts)
@@ -115,9 +120,23 @@ export default async function ContactRecordPage({
       )
       .orderBy(desc(bookings.startsAt)),
     getContactRevenue(id).catch(() => 0),
+    db
+      .select({ slug: organizations.slug })
+      .from(organizations)
+      .where(eq(organizations.id, orgId))
+      .limit(1)
+      .then((r) => r[0] ?? null),
+    checkPortalPlanGate(orgId).catch(() => ({
+      allowed: false,
+      tier: "free",
+      reason: "plan_check_failed",
+    })),
   ]);
 
   if (!contact) notFound();
+
+  const portalLastLogin = (contact as { portalLastLoginAt?: Date | string | null })
+    .portalLastLoginAt;
 
   const detail: ContactDetail = {
     id: contact.id,
@@ -139,6 +158,14 @@ export default async function ContactRecordPage({
       contact.updatedAt instanceof Date
         ? contact.updatedAt.toISOString()
         : String(contact.updatedAt),
+    portalAccessEnabled:
+      (contact as { portalAccessEnabled?: boolean }).portalAccessEnabled ?? false,
+    portalLastLoginAt:
+      portalLastLogin instanceof Date
+        ? portalLastLogin.toISOString()
+        : portalLastLogin
+          ? String(portalLastLogin)
+          : null,
   };
 
   const activityRowsForClient: ActivityRow[] = activityRows.map((a) => ({
@@ -205,6 +232,18 @@ export default async function ContactRecordPage({
         contactLabelPlural={labels.contact.plural}
         dealLabelPlural={labels.deal.plural}
         initialTab={initialTab}
+        orgId={orgId}
+        orgSlug={orgRow?.slug ?? null}
+        portalGate={{
+          allowed: portalGate.allowed,
+          reason: portalGate.reason ?? null,
+        }}
+        appOrigin={
+          process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+          process.env.NEXTAUTH_URL?.trim() ||
+          process.env.APP_URL?.trim() ||
+          null
+        }
       />
     </main>
   );

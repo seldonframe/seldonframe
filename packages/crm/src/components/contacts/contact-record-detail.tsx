@@ -18,6 +18,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { updateContactFieldAction } from "@/lib/contacts/actions";
+import { PortalAccessCard } from "./portal-access-card";
 
 /**
  * WS2.1 — full Twenty-style contact record page (client).
@@ -49,8 +50,22 @@ export type ContactDetail = {
   revenue: number;
   createdAt: string;
   updatedAt: string;
+  /** May 1, 2026 — Client Portal V1 fields. */
+  portalAccessEnabled?: boolean;
+  portalLastLoginAt?: string | null;
   /** Tab union — exported here so the page can pass an initial value. */
   tab?: "overview" | "activity" | "deals" | "emails" | "bookings" | "notes";
+};
+
+/**
+ * May 1, 2026 — Client Portal V1: Plan-gate result threaded down from
+ * the page-level server component into the Overview aside so the
+ * Portal Access card can render the right state (toggle vs upgrade
+ * CTA) without an extra client-side fetch.
+ */
+export type PortalGateInfo = {
+  allowed: boolean;
+  reason?: string | null;
 };
 
 export type ActivityRow = {
@@ -208,6 +223,10 @@ export function ContactRecordDetail({
   contactLabelPlural: _contactLabelPlural,
   dealLabelPlural,
   initialTab,
+  orgId,
+  orgSlug,
+  portalGate,
+  appOrigin,
 }: {
   contact: ContactDetail;
   activity: ActivityRow[];
@@ -217,6 +236,11 @@ export function ContactRecordDetail({
   contactLabelPlural: string;
   dealLabelPlural: string;
   initialTab: NonNullable<ContactDetail["tab"]>;
+  /** May 1, 2026 — needed by the Portal Access card in the aside. */
+  orgId?: string;
+  orgSlug?: string | null;
+  portalGate?: PortalGateInfo;
+  appOrigin?: string | null;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -403,6 +427,10 @@ export function ContactRecordDetail({
           dealLabelPlural={dealLabelPlural}
           upcomingBooking={upcomingBookings[0] ?? null}
           lastActivity={lastActivity}
+          orgId={orgId}
+          orgSlug={orgSlug ?? null}
+          portalGate={portalGate}
+          appOrigin={appOrigin ?? null}
         />
       ) : tab === "activity" ? (
         <ActivityTab activity={activity} />
@@ -429,6 +457,10 @@ function OverviewTab({
   dealLabelPlural,
   upcomingBooking,
   lastActivity,
+  orgId,
+  orgSlug,
+  portalGate,
+  appOrigin,
 }: {
   contact: ContactDetail;
   onContactChange: (next: ContactDetail) => void;
@@ -437,6 +469,10 @@ function OverviewTab({
   dealLabelPlural: string;
   upcomingBooking: BookingRow | null;
   lastActivity: ActivityRow | null;
+  orgId?: string;
+  orgSlug: string | null;
+  portalGate?: PortalGateInfo;
+  appOrigin: string | null;
 }) {
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
@@ -615,6 +651,21 @@ function OverviewTab({
             </div>
           </dl>
         </div>
+
+        {/* May 1, 2026 — Client Portal V1: operator-side access toggle. */}
+        {orgId && portalGate ? (
+          <PortalAccessCard
+            contactId={contact.id}
+            contactEmail={contact.email}
+            orgId={orgId}
+            orgSlug={orgSlug}
+            initialEnabled={contact.portalAccessEnabled ?? false}
+            lastLoginAt={contact.portalLastLoginAt ?? null}
+            planAllowed={portalGate.allowed}
+            planReason={portalGate.reason ?? null}
+            appOrigin={appOrigin}
+          />
+        ) : null}
       </aside>
     </div>
   );

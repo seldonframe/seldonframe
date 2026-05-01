@@ -24,10 +24,12 @@ export default async function PortalClientLayout({
             <h1 className="text-section-title">Welcome, {displayName || session.contact.email || "Client"}</h1>
           </div>
 
-          <nav className="flex items-center gap-2 text-sm">
+          <nav className="flex flex-wrap items-center gap-2 text-sm">
             <Link href={`/portal/${orgSlug}`} className="crm-button-secondary h-9 px-3">Overview</Link>
+            <Link href={`/portal/${orgSlug}/pipeline`} className="crm-button-secondary h-9 px-3">My Pipeline</Link>
+            <Link href={`/portal/${orgSlug}/bookings`} className="crm-button-secondary h-9 px-3">Bookings</Link>
             <Link href={`/portal/${orgSlug}/messages`} className="crm-button-secondary h-9 px-3">Messages</Link>
-            <Link href={`/portal/${orgSlug}/resources`} className="crm-button-secondary h-9 px-3">Resources</Link>
+            <Link href={`/portal/${orgSlug}/resources`} className="crm-button-secondary h-9 px-3">Documents</Link>
             <form action={clearPortalSessionAction.bind(null, orgSlug)}>
               <button type="submit" className="crm-button-ghost h-9 px-3">Logout</button>
             </form>

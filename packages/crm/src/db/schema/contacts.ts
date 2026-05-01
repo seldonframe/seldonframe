@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { desc } from "drizzle-orm";
-import { index, integer, pgTable, text, timestamp, uuid, jsonb } from "drizzle-orm/pg-core";
+import { boolean, index, integer, pgTable, text, timestamp, uuid, jsonb } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
 import { users } from "./users";
 
@@ -26,6 +26,14 @@ export const contacts = pgTable(
     customFields: jsonb("custom_fields").$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
     assignedTo: uuid("assigned_to").references(() => users.id, { onDelete: "set null" }),
     lastContactedAt: timestamp("last_contacted_at", { withTimezone: true }),
+    /** May 1, 2026 — Client Portal V1. When true, this contact can sign
+     *  in to the workspace's /portal via magic link (operator-controlled
+     *  via the contact detail page). Default false: existing contacts
+     *  don't get portal access until the operator opts them in. */
+    portalAccessEnabled: boolean("portal_access_enabled").notNull().default(false),
+    /** Touched whenever a portal magic link is verified. Surfaces in the
+     *  admin contact detail page so operators can see "last seen". */
+    portalLastLoginAt: timestamp("portal_last_login_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

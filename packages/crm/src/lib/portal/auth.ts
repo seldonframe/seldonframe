@@ -9,6 +9,7 @@ import { contacts, organizations, portalAccessCodes } from "@/db/schema";
 import { emitSeldonEvent } from "@/lib/events/bus";
 import { assertWritable } from "@/lib/demo/server";
 import { PORTAL_SESSION_COOKIE, signPortalSession, verifyPortalSession } from "./session";
+import { checkPortalPlanGate } from "./plan-gate";
 
 function hashCode(code: string) {
   return crypto.createHash("sha256").update(code).digest("hex");
@@ -80,17 +81,36 @@ export async function requestPortalAccessCodeAction(orgSlug: string, email: stri
   const org = await getOrgBySlug(orgSlug);
 
   if (!org) {
-    throw new Error("Organization not found");
+    // Don't leak which orgs exist via timing or error shape.
+    return { success: true };
+  }
+
+  // May 1, 2026 — workspace plan gate. Free tier doesn't get the
+  // portal. We silently no-op (return success) so guessing emails
+  // doesn't leak which workspaces have the portal enabled.
+  const planGate = await checkPortalPlanGate(org.id);
+  if (!planGate.allowed) {
+    return { success: true };
   }
 
   const [contact] = await db
-    .select({ id: contacts.id, email: contacts.email })
+    .select({
+      id: contacts.id,
+      email: contacts.email,
+      portalAccessEnabled: contacts.portalAccessEnabled,
+    })
     .from(contacts)
     .where(and(eq(contacts.orgId, org.id), eq(contacts.email, email)))
     .limit(1);
 
-  if (!contact?.id) {
-    throw new Error("Contact not found");
+  // May 1, 2026 — silent no-op when:
+  //   (a) the email isn't a known contact (don't leak existence)
+  //   (b) the contact exists but the operator hasn't enabled portal
+  //       access (don't leak that the contact is "on file but locked")
+  // Both cases return success: true so a malicious actor can't
+  // distinguish between them.
+  if (!contact?.id || !contact.portalAccessEnabled) {
+    return { success: true };
   }
 
   const code = generateCode();
@@ -161,6 +181,13 @@ export async function verifyPortalAccessCodeAction(orgSlug: string, email: strin
   });
 
   await setPortalSessionCookie(token);
+
+  // May 1, 2026 — touch portal_last_login_at so the admin contact
+  // detail page can show "Last seen: 3 days ago".
+  await db
+    .update(contacts)
+    .set({ portalLastLoginAt: new Date() })
+    .where(eq(contacts.id, contact.id));
 
   await emitSeldonEvent("portal.login", { contactId: contact.id }, { orgId: org.id });
 

@@ -1,8 +1,16 @@
 "use server";
 
-import { and, desc, eq, ilike, isNull, ne, or } from "drizzle-orm";
+import { and, desc, eq, ilike, isNull, ne, or, gt, lte, asc } from "drizzle-orm";
 import { db } from "@/db";
-import { emails, portalMessages, portalResources, users } from "@/db/schema";
+import {
+  bookings,
+  deals,
+  emails,
+  pipelines,
+  portalMessages,
+  portalResources,
+  users,
+} from "@/db/schema";
 import { emitSeldonEvent } from "@/lib/events/bus";
 import { assertPortalEnabled } from "@/lib/tier/limits";
 import { requirePortalSessionForOrg } from "./auth";
@@ -132,6 +140,83 @@ export async function listPortalResources(orgSlug: string) {
     .select()
     .from(portalResources)
     .where(and(eq(portalResources.orgId, session.orgId), eq(portalResources.contactId, session.contact.id)));
+}
+
+/**
+ * May 1, 2026 — Client Portal V1: Pipeline page.
+ *
+ * List deals scoped to the authenticated contact + their workspace's
+ * default pipeline. Read-only — clients see progress but can't move
+ * cards (admin operators do that on the dashboard side).
+ *
+ * Returns the deals plus the pipeline's stage definitions so the page
+ * can group cards by stage even when no deals exist yet.
+ */
+export async function listPortalDeals(orgSlug: string) {
+  const session = await requirePortalSessionForOrg(orgSlug);
+  await assertPortalEnabled(session.orgId);
+
+  const contactDeals = await db
+    .select()
+    .from(deals)
+    .where(and(eq(deals.orgId, session.orgId), eq(deals.contactId, session.contact.id)))
+    .orderBy(desc(deals.updatedAt));
+
+  // Pull the workspace's default pipeline so stage names render even
+  // when this contact has zero deals yet (the page shows the kanban
+  // shell with empty columns instead of a generic "no deals" wall).
+  const [pipeline] = await db
+    .select({ id: pipelines.id, stages: pipelines.stages })
+    .from(pipelines)
+    .where(and(eq(pipelines.orgId, session.orgId), eq(pipelines.isDefault, true)))
+    .limit(1);
+
+  return {
+    deals: contactDeals,
+    stages: pipeline?.stages ?? [],
+  };
+}
+
+/**
+ * May 1, 2026 — Client Portal V1: Bookings page.
+ *
+ * Returns upcoming + past bookings scoped to the authenticated contact.
+ * The page renders them as two distinct lists (upcoming above, past
+ * below). Cancelled / no-show bookings appear in the past list with
+ * muted status badges.
+ */
+export async function listPortalBookings(orgSlug: string) {
+  const session = await requirePortalSessionForOrg(orgSlug);
+  await assertPortalEnabled(session.orgId);
+
+  const now = new Date();
+
+  const [upcoming, past] = await Promise.all([
+    db
+      .select()
+      .from(bookings)
+      .where(
+        and(
+          eq(bookings.orgId, session.orgId),
+          eq(bookings.contactId, session.contact.id),
+          gt(bookings.startsAt, now)
+        )
+      )
+      .orderBy(asc(bookings.startsAt)),
+    db
+      .select()
+      .from(bookings)
+      .where(
+        and(
+          eq(bookings.orgId, session.orgId),
+          eq(bookings.contactId, session.contact.id),
+          lte(bookings.startsAt, now)
+        )
+      )
+      .orderBy(desc(bookings.startsAt)),
+  ]);
+
+  return { upcoming, past };
 }
 
 export async function markPortalResourceViewedAction(orgSlug: string, resourceId: string) {
