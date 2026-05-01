@@ -167,9 +167,10 @@ function mapBlueprintSection(
       return mapFooter(section, order);
     case "emergency-strip":
     case "service-area":
-      // No direct PageSchema equivalent; renderer-specific. Skip — the
-      // legacy renderer still handles these natively when a Blueprint is
-      // rendered directly.
+    case "partners":
+      // No direct PageSchema equivalent on the reverse path; renderer-
+      // specific or content-pack-only. Skip — the legacy renderer still
+      // handles these natively when a Blueprint is rendered directly.
       return null;
   }
 }
