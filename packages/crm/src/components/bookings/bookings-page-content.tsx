@@ -254,27 +254,9 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
 
   return (
     <>
-      {!calendarConnected ? (
-        <article className="mx-3 rounded-xl border border-primary/20 bg-primary/6 p-4 shadow-(--shadow-xs) md:mx-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="space-y-1">
-              <p className="text-sm font-medium text-foreground">Connect your real calendar</p>
-              <p className="text-sm text-muted-foreground">
-                Connect Google Calendar to sync availability, prevent double-booking, and push meetings onto your actual calendar.
-              </p>
-            </div>
-            {/* prefetch={false} — googleCalendarConnectUrl 302s to
-                accounts.google.com (OAuth start). Without this, Next.js
-                fires an RSC prefetch on mount which Chrome blocks via
-                CORS preflight, cluttering the console with ERR_FAILED.
-                The user-initiated click still works fine — the browser
-                follows the redirect normally for top-level navigation. */}
-            <Link href={googleCalendarConnectUrl} prefetch={false} className="crm-button-primary h-10 px-4 inline-flex items-center justify-center whitespace-nowrap">
-              Connect Google Calendar
-            </Link>
-          </div>
-        </article>
-      ) : null}
+      {/* May 1, 2026 — Connect Google Calendar banner removed. The
+          Cal.diy booking page IS the operator's calendar; external sync
+          was redundant and the OAuth prefetch caused CORS errors. */}
 
       <section className="space-y-4">
         <div className="px-3 md:px-6 py-4 border-b border-border">

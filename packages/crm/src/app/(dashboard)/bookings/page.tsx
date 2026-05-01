@@ -67,8 +67,12 @@ export default async function BookingsPage() {
         }))}
         suggestedServices={soul?.services ?? []}
         orgSlug={orgSlug}
-        calendarConnected={Boolean(integrationSettings?.google.calendarConnected)}
-        googleCalendarConnectUrl="/api/integrations/google-calendar?returnTo=%2Fbookings"
+        // May 1, 2026 — Google Calendar integration removed for V1.
+        // The Cal.diy booking page is the operator's calendar. Both
+        // props passed empty so the UI gracefully hides the
+        // never-rendered Connect Calendar button.
+        calendarConnected={false}
+        googleCalendarConnectUrl=""
         createAppointmentTypeAction={createAppointmentTypeAction}
       />
     </section>

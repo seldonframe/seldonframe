@@ -198,7 +198,9 @@ export default async function AutomationsPage() {
     resend: Boolean(org?.integrations?.resend?.connected),
     twilio: Boolean(org?.integrations?.twilio?.connected),
     kit: Boolean(org?.integrations?.kit?.connected),
-    google: Boolean(org?.integrations?.google?.calendarConnected),
+    // May 1, 2026 — Google Calendar removed; Cal.diy IS the calendar.
+    // Keep field present for downstream type compat; always false.
+    google: false,
   };
   const suggestions: OverviewAutomation[] = (framework?.automationSuggestions ?? []).map(
     (item) => ({

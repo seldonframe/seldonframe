@@ -39,11 +39,10 @@ function renderConnectionBadge(connected: boolean) {
 export default async function IntegrationsSettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ saved?: string; service?: string; twilioTest?: string; resendTest?: string; kitTest?: string; mailchimpTest?: string; beehiivTest?: string; calendarConnected?: string }>;
+  searchParams: Promise<{ saved?: string; service?: string; twilioTest?: string; resendTest?: string; kitTest?: string; mailchimpTest?: string; beehiivTest?: string }>;
 }) {
   const params = await searchParams;
   const settings = await getIntegrationSettings();
-  const googleCalendarConnectUrl = "/api/integrations/google-calendar?returnTo=%2Fsettings%2Fintegrations";
 
   if (!settings) {
     return null;
@@ -57,12 +56,6 @@ export default async function IntegrationsSettingsPage({
     params.mailchimpTest === "1" ? "Mailchimp connection successful" : params.mailchimpTest === "0" ? "Mailchimp connection failed" : null;
   const beehiivTestMessage =
     params.beehiivTest === "1" ? "Beehiiv connection successful" : params.beehiivTest === "0" ? "Beehiiv connection failed" : null;
-  const calendarMessage =
-    params.calendarConnected === "1"
-      ? "Google Calendar connected"
-      : params.calendarConnected === "0"
-        ? "Google Calendar connection failed"
-        : null;
 
   return (
     <section className="animate-page-enter space-y-4 sm:space-y-6">
@@ -79,7 +72,6 @@ export default async function IntegrationsSettingsPage({
       {kitTestMessage ? <p className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary">{kitTestMessage}</p> : null}
       {mailchimpTestMessage ? <p className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary">{mailchimpTestMessage}</p> : null}
       {beehiivTestMessage ? <p className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary">{beehiivTestMessage}</p> : null}
-      {calendarMessage ? <p className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary">{calendarMessage}</p> : null}
 
       <div className="grid gap-4 xl:grid-cols-2">
         <article className="rounded-xl border bg-card p-5 xl:col-span-2 space-y-4">
@@ -333,27 +325,12 @@ export default async function IntegrationsSettingsPage({
           </form>
         </article>
 
-        <article className="rounded-xl border bg-card p-5">
-          <div className="flex items-center justify-between">
-            <h2 className="text-card-title">Google Calendar</h2>
-            {renderConnectionBadge(settings.google.calendarConnected)}
-          </div>
-          <p className="mt-4 text-sm text-muted-foreground">
-            Connect Google to sync booking availability and calendar events.
-          </p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {!settings.google.calendarConnected ? (
-              // prefetch={false} — OAuth start endpoint redirects to
-              // accounts.google.com which fails CORS preflight on RSC
-              // prefetch. Top-level click navigation still works.
-              <Link href={googleCalendarConnectUrl} prefetch={false} className="crm-button-primary h-10 px-4">
-                Connect Google Calendar
-              </Link>
-            ) : (
-              <span className="crm-button-secondary inline-flex h-10 items-center px-4">Calendar connected</span>
-            )}
-          </div>
-        </article>
+        {/* May 1, 2026 — Google Calendar integration removed for V1.
+            The Cal.diy booking page IS the operator's calendar. External
+            calendar sync was redundant and the OAuth prefetch caused
+            CORS errors on the dashboard. The schema field
+            `integrations.google` stays in place (no migration risk for
+            grandfathered orgs); the API routes were deleted. */}
       </div>
     </section>
   );

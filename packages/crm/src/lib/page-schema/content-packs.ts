@@ -370,6 +370,18 @@ const SAAS_PACK: ContentPack = {
           "Pre-built agent archetypes that follow up with leads, send reminders, and qualify prospects — with approval gates.",
         icon: "bot",
       },
+      {
+        title: "75 MCP Tools",
+        description:
+          "Every surface is programmable. Customize landing pages, forms, CRM fields, agents, and pipelines from Claude Code via natural language.",
+        icon: "code",
+      },
+      {
+        title: "Brain Layer",
+        description:
+          "Cross-workspace intelligence that learns what works. Better defaults, smarter agents, higher conversion — automatically.",
+        icon: "sparkles",
+      },
     ]),
     howItWorksSection(),
     // May 1, 2026 — pricing section dropped from default SaaS pack.

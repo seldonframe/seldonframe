@@ -67,9 +67,15 @@ const CINEMATIC_TEMPLATE = `
    Activated when .sf-frame has .sf-cinematic class (scoped overrides only).
    ======================================================================== */
 
+/* The legacy .sf-frame ships background:#ededed + padding:12-16px + a
+   border-radius:24-32px on .sf-landing inside, which produces a visible
+   light-gray border around the whole page in cinematic mode. Kill the
+   outer frame padding + the rounded-corner trick so the dark body
+   reaches every edge. */
 .sf-frame.sf-cinematic {
   background: #060608;
   color: #f5f5f7;
+  padding: 0 !important;
   font-family: '{{body}}', system-ui, -apple-system, sans-serif;
   --sf-cinematic-accent: {{accent}};
   --sf-cinematic-text: #f5f5f7;
@@ -78,6 +84,50 @@ const CINEMATIC_TEMPLATE = `
   --sf-cinematic-bg: #060608;
   --sf-cinematic-bg-elevated: rgba(255, 255, 255, 0.02);
   --sf-cinematic-border: rgba(255, 255, 255, 0.08);
+}
+
+/* Inner landing: inherit dark from .sf-cinematic. Drop legacy rounded
+   corners + box-shadow that expose the outer frame's light gray. */
+.sf-frame.sf-cinematic .sf-landing {
+  background: transparent !important;
+  color: var(--sf-cinematic-text);
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  overflow: visible;
+}
+
+/* Legacy section backgrounds (white #FFFFFF) ride directly on the section
+   wrappers — override every one to inherit from the cinematic body so
+   nothing punches through as a "light stripe" between sections. */
+.sf-frame.sf-cinematic .sf-hero,
+.sf-frame.sf-cinematic .sf-services,
+.sf-frame.sf-cinematic .sf-about,
+.sf-frame.sf-cinematic .sf-testimonials,
+.sf-frame.sf-cinematic .sf-faq,
+.sf-frame.sf-cinematic .sf-mid-cta,
+.sf-frame.sf-cinematic .sf-trust,
+.sf-frame.sf-cinematic .sf-partners,
+.sf-frame.sf-cinematic .sf-footer,
+.sf-frame.sf-cinematic .sf-quote--featured,
+.sf-frame.sf-cinematic .sf-service-area {
+  background: var(--sf-cinematic-bg);
+}
+.sf-frame.sf-cinematic .sf-trust { background: transparent; }
+
+/* Service / quote / button cards each carry their own #FFFFFF in the
+   legacy CSS — re-skin them as glass cards in cinematic mode. */
+.sf-frame.sf-cinematic .sf-quote--featured,
+.sf-frame.sf-cinematic .sf-quote {
+  background: rgba(255, 255, 255, 0.025) !important;
+  border: 1px solid var(--sf-cinematic-border);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.06);
+  color: var(--sf-cinematic-text);
+}
+.sf-frame.sf-cinematic .sf-btn--secondary,
+.sf-frame.sf-cinematic .sf-btn--tel {
+  background: transparent !important;
+  border: 1px solid var(--sf-cinematic-border);
+  color: var(--sf-cinematic-text-muted);
 }
 
 /* Display-font typography for headings + italic accent on hero ----------- */

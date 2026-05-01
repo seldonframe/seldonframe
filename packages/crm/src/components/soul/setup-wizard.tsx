@@ -114,7 +114,7 @@ const integrationMeta: Record<string, { label: string; icon: React.ComponentType
   resend: { label: "SeldonFrame Email", icon: Mail, description: "Built-in transactional emails" },
   twilio: { label: "Twilio", icon: MessageSquare, description: "SMS messages" },
   stripe: { label: "Stripe", icon: CreditCard, description: "Payments" },
-  google: { label: "Google Calendar", icon: Calendar, description: "Booking sync" },
+  // May 1, 2026 — Google Calendar removed; Cal.diy is the calendar.
 };
 
 function resolveBusinessName(template: string, ownerName: string) {
@@ -242,11 +242,8 @@ export function SetupWizard({
     return true;
   }, [businessName, installed, selectedFramework, step]);
 
-  useEffect(() => {
-    if (searchParams.get("calendarConnected") === "1") {
-      setIntegrations((prev) => ({ ...prev, google: { connected: true } }));
-    }
-  }, [searchParams]);
+  // May 1, 2026 — Google Calendar OAuth callback handler removed.
+  // The integration was deleted and the OAuth route no longer exists.
 
   function onSelectFramework(id: string) {
     setSelectedFrameworkId(id);
@@ -764,20 +761,8 @@ export function SetupWizard({
                   </button>
                 </div>
 
-                <div className="rounded-xl border bg-card p-4 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="size-4 text-muted-foreground" />
-                    <span className="text-sm font-medium">Google Calendar</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">Sync your availability</p>
-                  <Link
-                    href="/api/integrations/google-calendar?returnTo=%2Fsetup"
-                    prefetch={false}
-                    className={`${integrations.google.connected ? squareOutlineButtonClass : squarePrimaryButtonClass} h-8 px-3 text-xs w-full`}
-                  >
-                    {integrations.google.connected ? "✓ Connected" : "Connect OAuth"}
-                  </Link>
-                </div>
+                {/* May 1, 2026 — Google Calendar tile removed. Cal.diy
+                    booking IS the calendar; external sync was redundant. */}
 
                 <div className="rounded-xl border bg-card p-4 space-y-3">
                   <div className="flex items-center gap-2">

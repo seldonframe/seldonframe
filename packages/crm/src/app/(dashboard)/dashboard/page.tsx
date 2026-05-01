@@ -369,10 +369,10 @@ export default async function DashboardPage({
   const settings = ((orgRow?.settings ?? {}) as Record<string, unknown>) || {};
   const enabledAutomations = Array.isArray(settings.enabledAutomations) ? settings.enabledAutomations.filter((item): item is string => typeof item === "string") : [];
   const newsletterConnected = Boolean(integrations.newsletter?.connected || integrations.kit?.connected);
-  const googleConnected = Boolean(integrations.google?.calendarConnected);
+  // May 1, 2026 — Google Calendar integration removed; Cal.diy is the calendar.
   const twilioConnected = Boolean(integrations.twilio?.connected);
   const stripeConnected = Boolean(stripeRow);
-  const hasConnectedIntegrations = newsletterConnected || googleConnected || twilioConnected || stripeConnected;
+  const hasConnectedIntegrations = newsletterConnected || twilioConnected || stripeConnected;
   const bookingLinkSlug = appointmentTypeRows[0]?.bookingSlug || "default";
   const bookingPublicPath = orgRow?.slug ? `/book/${orgRow.slug}/${bookingLinkSlug}` : "/book";
   const bookingShared = appointmentTypeRows.length > 0 && bookingRows.length > 0;
@@ -1047,8 +1047,7 @@ export default async function DashboardPage({
             <p className="text-sm text-muted-foreground">Connect the tools you already use so your blocks stay in sync.</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Link href="/settings/integrations" className="crm-button-primary h-9 px-4 text-xs sm:text-sm">Connect Google Calendar</Link>
-            <Link href="/settings/integrations" className="crm-button-secondary h-9 px-4 text-xs sm:text-sm">Connect Newsletter Provider</Link>
+            <Link href="/settings/integrations" className="crm-button-primary h-9 px-4 text-xs sm:text-sm">Connect Newsletter Provider</Link>
             <Link href="/settings/integrations" className="crm-button-secondary h-9 px-4 text-xs sm:text-sm">Connect Stripe</Link>
             <Link href="/dashboard" className="crm-button-ghost h-9 px-3 text-xs sm:text-sm">I&apos;ll set these up later</Link>
           </div>

@@ -104,10 +104,9 @@ describe("blueprintFromSchema — section conversion + actions", () => {
   });
 
   test("services section becomes services-grid with pack-provided product features", () => {
-    // May 1, 2026 — SaaS pack now ships 4 hardcoded product features
-    // (Landing Pages / Booking / CRM / AI Agents) instead of pulling
-    // pricing tiers from soul.offerings. blueprintFromSchema converts
-    // the features section to services-grid with those items.
+    // May 1, 2026 — SaaS pack ships 6 hardcoded product features
+    // (Landing Pages / Booking / CRM / AI Agents / 75 MCP Tools / Brain
+    // Layer) instead of pulling pricing tiers from soul.offerings.
     const schema = schemaFromSoul(seldonFrameSoul);
     const blueprint = blueprintFromSchema(schema, tokensForPersonality("clean"));
 
@@ -116,9 +115,9 @@ describe("blueprintFromSchema — section conversion + actions", () => {
     );
     assert.ok(services, "no services-grid produced");
     if (services?.type !== "services-grid") throw new Error("wrong type");
-    assert.equal(services.items.length, 4);
+    assert.equal(services.items.length, 6);
     assert.equal(services.items[0].title, "Landing Pages");
-    assert.equal(services.items[3].title, "AI Agents");
+    assert.equal(services.items[5].title, "Brain Layer");
   });
 
   test("FAQ section carries soul.faqs as items", () => {
