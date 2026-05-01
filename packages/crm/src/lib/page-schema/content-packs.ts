@@ -246,9 +246,15 @@ const LOCAL_SERVICE_PACK: ContentPack = {
     footerSection(),
   ],
   actions: [
+    // May 1, 2026 — local services get dual hero CTAs (low-intent
+    // /intake "free quote" + mid-intent /book "schedule service"), and
+    // the phone CTA lives in the nav via the renderer's auto phone
+    // surfacing (when business.phone is set). Removed the bare tel:
+    // secondary action that produced a broken link when phone empty.
     action("hero_primary", "Get a free quote →", "/intake", "primary", ["hero", "cta"]),
-    action("hero_secondary", "Call us", "tel:", "secondary", ["hero", "nav"]),
+    action("hero_secondary", "Schedule service →", "/book", "secondary", ["hero"]),
     action("nav_book", "Book", "/book", "ghost", ["nav"]),
+    action("nav_intake", "Contact", "/intake", "ghost", ["nav"]),
     action("footer_intake", "Contact", "/intake", "ghost", ["footer"]),
   ],
   trust_badges: ["Licensed & insured", "Free quotes", "Same-day service"],

@@ -98,6 +98,15 @@ function buildBusiness(
   const tagline = readString(soul?.tagline) || "";
   const description = readString(soul?.soul_description) || readString(soul?.mission) || "";
 
+  // May 1, 2026 — read contact channels off the Soul. Local-service
+  // workspaces (HVAC, plumbing, dental, etc.) need the phone to surface
+  // as a nav CTA + footer link. SaaS workspaces typically don't carry
+  // a phone — the helper just returns undefined and the renderer's
+  // isUsablePhone() guard filters the empty case.
+  const phone = readString(soul?.phone);
+  const email = readString(soul?.email);
+  const address = readString(soul?.address);
+
   // SaaS-specific links — picked off the Soul if present, otherwise omitted.
   const github_url = readString(soul?.github_url);
   const docs_url = readString(soul?.docs_url);
@@ -108,9 +117,9 @@ function buildBusiness(
     type,
     tagline: overrides.tagline ?? tagline,
     description: overrides.description ?? description,
-    phone: overrides.phone,
-    email: overrides.email,
-    address: overrides.address,
+    phone: overrides.phone ?? (phone || undefined),
+    email: overrides.email ?? (email || undefined),
+    address: overrides.address ?? (address || undefined),
     github_url: overrides.github_url ?? (github_url || undefined),
     docs_url: overrides.docs_url ?? (docs_url || undefined),
     discord_url: overrides.discord_url ?? (discord_url || undefined),
@@ -364,6 +373,15 @@ function extractPartners(soul: Record<string, unknown> | null | undefined): stri
 // drop the action so we don't render a button to an empty href.
 
 function resolveActionTemplate(action: PageAction, business: PageBusiness): PageAction | null {
+  // May 1, 2026 — handle the bare `tel:` href used by local-service
+  // packs ("Call us" secondary CTA). When the workspace has a phone,
+  // expand to a full tel: URI; when it doesn't, drop the action so we
+  // don't render a broken link.
+  if (action.href === "tel:" || action.href === "tel:{phone}") {
+    if (!business.phone) return null;
+    return { ...action, href: `tel:${business.phone.replace(/[^+0-9]/g, "")}` };
+  }
+
   if (!action.href.includes("{")) return action;
 
   let resolved = action.href;
