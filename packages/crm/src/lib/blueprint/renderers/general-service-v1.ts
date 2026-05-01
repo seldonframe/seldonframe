@@ -415,7 +415,6 @@ function deriveNavItems(
 function renderNavbar(blueprint: Blueprint, items: NavItem[]): string {
   const ws = blueprint.workspace;
   const phone = ws.contact.phone;
-  const phoneDisplay = formatPhoneDisplay(phone);
 
   const linksHtml = items.length
     ? `<ul class="sf-navbar__links">
@@ -428,14 +427,34 @@ function renderNavbar(blueprint: Blueprint, items: NavItem[]): string {
       </ul>`
     : "";
 
+  // April 30, 2026 — primitives architecture A5/B2. Workspaces with no
+  // phone (SaaS, pro-services, agencies that don't take inbound calls)
+  // skip the phone CTA entirely. Existing local-service workspaces always
+  // ship with a phone in their Blueprint, so this branch is a no-op for
+  // them.
+  const phoneCtaHtml = isUsablePhone(phone)
+    ? `<a class="sf-navbar__cta" href="${escapeAttr(ensureTelHref(phone))}">
+    <span class="sf-navbar__cta-label">${escapeHtml(formatPhoneDisplay(phone))}</span>
+    <span class="sf-navbar__cta-icon" aria-hidden="true">${PHONE_SVG_SMALL}</span>
+  </a>`
+    : "";
+
   return `<nav class="sf-navbar sf-animate" aria-label="Primary">
   <a class="sf-navbar__brand" href="#sf-hero">${escapeHtml(ws.name)}</a>
   ${linksHtml}
-  <a class="sf-navbar__cta" href="${escapeAttr(ensureTelHref(phone))}">
-    <span class="sf-navbar__cta-label">${escapeHtml(phoneDisplay)}</span>
-    <span class="sf-navbar__cta-icon" aria-hidden="true">${PHONE_SVG_SMALL}</span>
-  </a>
+  ${phoneCtaHtml}
 </nav>`;
+}
+
+// True if the phone string looks usable for a tel: link. Defends the
+// renderer against new pipelines (PageSchema → blueprintFromSchema)
+// that produce blueprints with empty phones for SaaS / pro-services
+// workspaces. Existing local-service blueprints all carry valid E.164
+// phones so this is a no-op for them.
+function isUsablePhone(phone: string | null | undefined): boolean {
+  if (!phone) return false;
+  const trimmed = phone.trim();
+  return trimmed.length > 0 && trimmed !== "+";
 }
 
 // ─── Section renderers ────────────────────────────────────────────────

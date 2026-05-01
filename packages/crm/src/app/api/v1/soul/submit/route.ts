@@ -6,6 +6,7 @@ import { resolveV1Identity } from "@/lib/auth/v1-identity";
 import { assertWritable, demoApiBlockedResponse, isDemoReadonly } from "@/lib/demo/server";
 import { logEvent } from "@/lib/observability/log";
 import { applyPipelineStagesFromSoul } from "@/lib/soul/apply-pipeline-stages";
+import { seedLandingFromSoul } from "@/lib/page-schema/seed-landing-from-soul";
 
 type SubmitSoulBody = {
   soul?: unknown;
@@ -90,11 +91,31 @@ export async function POST(request: Request) {
     console.warn("[soul/submit] pipeline re-seed failed:", err);
   }
 
+  // May 1, 2026 (A5/B7) — re-render the landing page using the new
+  // Soul → PageSchema → adapter pipeline. The classifier picks the
+  // matching content pack (saas / agency / professional_service / etc.),
+  // the adapter routes through general-service-v1 with content-pack-aware
+  // data (no more "Licensed and insured" baked into SaaS pages).
+  // Best-effort: failures log but don't fail the Soul submission.
+  let landingRendered = false;
+  try {
+    const seedResult = await seedLandingFromSoul(orgId);
+    landingRendered = seedResult.ok;
+    if (!seedResult.ok) {
+      console.info(
+        `[soul/submit] landing re-render skipped for ${orgId}: ${seedResult.reason}`
+      );
+    }
+  } catch (err) {
+    console.warn("[soul/submit] landing re-render failed:", err);
+  }
+
   logEvent(
     "soul_submit",
     {
       bytes: soulJson.length,
       pipeline_stages_updated: pipelineUpdate.changed,
+      landing_rendered: landingRendered,
     },
     { request, identity, orgId, status: 200 }
   );
@@ -108,6 +129,7 @@ export async function POST(request: Request) {
     },
     bytes: soulJson.length,
     pipeline_stages_updated: pipelineUpdate.changed,
+    landing_rendered: landingRendered,
     next: [
       "get_workspace_snapshot({}) — subsequent snapshots now include the submitted Soul under `soul.data`.",
     ],
