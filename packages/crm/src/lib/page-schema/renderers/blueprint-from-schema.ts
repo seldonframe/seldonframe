@@ -78,6 +78,9 @@ interface ConvertContext {
   business: PageBusiness;
   actionsByPlacement: Map<string, PageAction[]>;
   tokens: DesignTokens;
+  /** Partner names lifted from PageProof.partners — used as a fallback
+   *  when a partners section's items array is empty. */
+  partnersFromProof: string[];
 }
 
 /**
@@ -100,6 +103,7 @@ export function blueprintFromSchema(
     business: schema.business,
     actionsByPlacement: groupActionsByPlacement(schema.actions),
     tokens,
+    partnersFromProof: schema.proof?.partners ?? [],
   };
 
   const workspace = buildWorkspace(schema.business, tokens);
@@ -264,6 +268,8 @@ function convertSection(
       // with layout="stats". The renderer detects this and emits
       // sf-stat__value / sf-stat__label markup instead of icon cards.
       return convertStats(section);
+    case "partners":
+      return convertPartners(section, ctx);
     case "how_it_works":
     case "pricing":
     case "portfolio":
@@ -273,6 +279,29 @@ function convertSection(
       // layouts; the V1 renderer is content-shape-tolerant.
       return convertServicesGrid(section);
   }
+}
+
+function convertPartners(
+  section: PageSection,
+  ctx: ConvertContext
+): import("../../blueprint/types").SectionPartners {
+  // Partners can come from the section content (operator-edited) or from
+  // PageProof.partners (set by content packs). Walk both: section content
+  // wins so operator overrides take precedence.
+  const fromSection = section.content.items?.map((item) => ({
+    name: item.title,
+    href: item.href,
+  })) ?? [];
+  const fromProof = ctx.partnersFromProof;
+  const items = fromSection.length > 0
+    ? fromSection
+    : fromProof.map((name) => ({ name }));
+
+  return {
+    type: "partners",
+    eyebrow: section.content.headline ?? "Built on",
+    items,
+  };
 }
 
 function convertStats(section: PageSection): SectionServicesGrid {

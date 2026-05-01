@@ -153,12 +153,18 @@ describe("schemaFromSoul — merges Soul data onto pack defaults", () => {
     assert.equal(hero?.content.headline, "The open-source Business OS platform");
   });
 
-  test("services section gets items from soul.offerings", () => {
+  test("features section has product capabilities (NOT offerings) — SaaS pack ships hardcoded items", () => {
+    // May 1, 2026 — SaaS pack ships 4 product features (Landing Pages,
+    // Booking System, CRM + Pipeline, AI Agents). enrichOfferings sees
+    // pre-populated items and skips overwriting with soul.offerings
+    // (which on SaaS workspaces is the pricing tier list — wrong for a
+    // features grid).
     const schema = schemaFromSoul(seldonFrameSoul);
     const features = schema.sections.find((s) => s.intent === "features");
     assert.ok(features, "saas pack should produce a features section");
-    assert.equal(features!.content.items?.length, 3);
-    assert.equal(features!.content.items?.[1].title, "Growth");
+    assert.equal(features!.content.items?.length, 4);
+    const titles = features!.content.items?.map((i) => i.title);
+    assert.deepEqual(titles, ["Landing Pages", "Booking System", "CRM + Pipeline", "AI Agents"]);
   });
 
   test("FAQ section uses soul.faqs (overrides defaults)", () => {

@@ -83,11 +83,15 @@ function trustBarSection(bullets: string[]): PageSection {
   };
 }
 
-function servicesSection(intent: "services" | "features" | "products", headline: string): PageSection {
+function servicesSection(
+  intent: "services" | "features" | "products",
+  headline: string,
+  items: Array<{ title: string; description: string; icon?: string }> = []
+): PageSection {
   return {
     id: intent,
     intent,
-    content: { headline, items: [] }, // items filled from soul.offerings
+    content: { headline, items },
     visible: true,
     order: 30,
   };
@@ -126,6 +130,25 @@ function statsSection(stats: Array<{ value: string; label: string }>): PageSecti
     content: { headline: "By the numbers", stats },
     visible: true,
     order: 45,
+  };
+}
+
+/** Partners / tech-stack ribbon. Renders a horizontal "Built on …" row
+ *  of company names. Order 25 sits right after the trust bar. The
+ *  renderer reads either section.content.items or PageProof.partners. */
+function partnersSection(
+  eyebrow: string,
+  partnerNames: string[]
+): PageSection {
+  return {
+    id: "partners",
+    intent: "partners",
+    content: {
+      headline: eyebrow,
+      items: partnerNames.map((name) => ({ title: name, description: "" })),
+    },
+    visible: true,
+    order: 25,
   };
 }
 
@@ -310,7 +333,44 @@ const SAAS_PACK: ContentPack = {
       "Free to start",
       "Deploy in 2 minutes",
     ]),
-    servicesSection("features", "Features"),
+    partnersSection("Built on", [
+      "Anthropic",
+      "Vercel",
+      "Neon",
+      "Stripe",
+      "Resend",
+    ]),
+    // May 1, 2026 — features section gets real product capabilities,
+    // not pricing tiers. Pricing tiers live on /settings/billing and
+    // shouldn't crowd the landing page's feature grid. enrichOfferings
+    // sees these pre-populated items and skips overwriting from
+    // soul.offerings.
+    servicesSection("features", "Features", [
+      {
+        title: "Landing Pages",
+        description:
+          "Professional, conversion-optimized pages generated from your business description. Dark or light mode, editorial typography.",
+        icon: "globe",
+      },
+      {
+        title: "Booking System",
+        description:
+          "Cal.com-quality booking with timezone detection, interactive calendar, and automatic CRM integration.",
+        icon: "calendar",
+      },
+      {
+        title: "CRM + Pipeline",
+        description:
+          "Contact management with kanban pipeline, deal tracking, record detail pages, and activity timeline.",
+        icon: "users",
+      },
+      {
+        title: "AI Agents",
+        description:
+          "Pre-built agent archetypes that follow up with leads, send reminders, and qualify prospects — with approval gates.",
+        icon: "bot",
+      },
+    ]),
     howItWorksSection(),
     // May 1, 2026 — pricing section dropped from default SaaS pack.
     // It rendered as a second services-grid pulling from soul.offerings,

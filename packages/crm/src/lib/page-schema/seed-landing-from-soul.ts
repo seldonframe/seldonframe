@@ -29,26 +29,34 @@ import { classifyBusinessTypeFromSoul } from "./classify-business";
 import type { BusinessType } from "./types";
 import type { PagePersonality } from "./design-tokens";
 
-/** Map a business type to a default personality. May 1, 2026 — these
- *  defaults drive the cinematic overlay. SaaS gets cinematic (dark mode
- *  + glassmorphism + Instrument Serif italic headings + blur-in
- *  animations). Agencies get bold (dark, large type). Pro-services get
- *  editorial (light, serif, spacious). Local-services + ecommerce stay
- *  on clean (light, Inter). Operators can override later via
- *  update_design_tokens / set_page_style. */
+/** Map a business type to a default personality. May 1, 2026 — drives
+ *  both the cinematic overlay (dark, glassmorphism, Instrument Serif
+ *  italic headings, blur-in animations) AND the light/professional
+ *  overlay (white bg with dark hero band, Inter throughout, white
+ *  service cards with hover-lift). Operators override later via
+ *  update_design_tokens / set_page_style.
+ *
+ *  Mapping per user spec:
+ *    saas / agency           → cinematic (dark + glass)
+ *    professional_service    → light mode, Inter (clean personality has
+ *                              the right tokens — light + Inter — even
+ *                              though the name suggests minimalism; the
+ *                              `editorial` personality uses serif which
+ *                              feels wrong for service businesses)
+ *    local_service           → clean (light + Inter)
+ *    ecommerce               → clean (light + Inter)
+ *    other                   → clean (safe default)
+ */
 function defaultPersonalityForType(type: BusinessType): PagePersonality {
   switch (type) {
     case "saas":
-      return "cinematic";
     case "agency":
-      return "bold";
+      return "cinematic";
     case "professional_service":
-      return "editorial";
     case "local_service":
     case "ecommerce":
-      return "clean";
     case "other":
-      return "editorial";
+      return "clean";
   }
 }
 

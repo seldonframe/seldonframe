@@ -83,26 +83,29 @@ describe("iconForItem — explicit icon wins over title inference", () => {
 
 describe("Renderer — services-grid uses Lucide icons", () => {
   test("SaaS features grid renders Lucide SVG paths in service cards", () => {
+    // May 1, 2026 — SaaS pack ships product features (Landing Pages /
+    // Booking / CRM / AI Agents) with explicit icons (globe / calendar
+    // / users / bot). The Lucide globe icon path starts with the
+    // canonical circle + path combo.
     const schema = schemaFromSoul({
       business_name: "TestSaaS",
       industry: "saas-developer-tools",
-      offerings: [
-        { name: "Free", description: "$0 forever." },
-        { name: "Growth", description: "$29/mo." },
-      ],
     });
     const out = renderWithGeneralServiceV1(
       schema,
       tokensForPersonality("cinematic"),
       schema.media
     );
-    // The Lucide "zap" icon (Free tier) has a specific path d= start
-    // ("M4 14a1 1 0 0 1-.78-1.63"). The legacy generic placeholder used
-    // a circle (cx="12" cy="12" r="3"). Verify Lucide rendered, not the
-    // generic.
+    // Globe icon (Landing Pages) — Lucide's globe has a circle + path.
+    // Bot icon (AI Agents) — distinctive M12 8V4 path start.
     assert.ok(
-      out.html.includes("M4 14a1 1 0 0 1-.78-1.63"),
-      "Free tier should render the Lucide 'zap' icon path"
+      out.html.includes("M12 8V4"),
+      "AI Agents card should render the Lucide 'bot' icon path"
+    );
+    // The legacy generic placeholder circle should be ABSENT.
+    assert.ok(
+      !out.html.includes('<circle cx="12" cy="12" r="3"/>'),
+      "generic placeholder circle should be replaced by Lucide icons"
     );
   });
 });

@@ -177,6 +177,16 @@ function enrichOfferings(
   soul: Record<string, unknown> | null | undefined,
   type: BusinessType
 ): PageSection {
+  // May 1, 2026 — if the content pack pre-populated items (e.g. SaaS pack
+  // hardcodes Landing Pages / Booking / CRM / AI Agents), don't overwrite
+  // them with soul.offerings (which on SaaS workspaces is the pricing-tier
+  // list — wrong for a features grid). Operators can still customize the
+  // pre-populated items via update_page_content (A6 MCP tool).
+  const packHasItems = (section.content.items?.length ?? 0) > 0;
+  if (packHasItems) {
+    return section;
+  }
+
   // soul.offerings is the canonical field; older soul shapes used "services".
   const rawOfferings = readArray(soul?.offerings) ?? readArray(soul?.services) ?? [];
 

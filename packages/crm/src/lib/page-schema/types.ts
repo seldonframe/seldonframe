@@ -42,6 +42,7 @@ export type SectionIntent =
   | "trust_bar"
   | "services"               // synonym for "features" on local-service pages
   | "products"               // ecommerce product grid
+  | "partners"               // "Built on" / "As seen on" horizontal logo/name strip
   | "footer";                // structured footer content
 
 export interface SectionItem {

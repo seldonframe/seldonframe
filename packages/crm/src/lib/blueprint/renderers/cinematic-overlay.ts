@@ -233,6 +233,10 @@ const CINEMATIC_TEMPLATE = `
 
 /* Trust strip — rendered as glass pills ---------------------------------- */
 .sf-frame.sf-cinematic .sf-trust {
+  /* Kill the legacy #FAFAF7 light stripe — cinematic mode wants dark. */
+  background: transparent !important;
+  border-top: none !important;
+  border-bottom: none !important;
   margin-top: 4rem;
   padding: 0 2rem;
 }
@@ -510,6 +514,52 @@ const CINEMATIC_TEMPLATE = `
 /* Body padding so fixed-pill nav doesn't overlap content ------------------ */
 .sf-frame.sf-cinematic .sf-landing {
   padding-top: 0;
+}
+
+/* Partners ribbon — "Built on …" horizontal text strip ------------------- */
+.sf-frame.sf-cinematic .sf-partners {
+  background: var(--sf-cinematic-bg);
+  padding: 4rem 2rem 2rem;
+  text-align: center;
+}
+.sf-frame.sf-cinematic .sf-partners__eyebrow {
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.4);
+  margin: 0 0 1.5rem;
+}
+.sf-frame.sf-cinematic .sf-partners__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 2.5rem;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+.sf-frame.sf-cinematic .sf-partner {
+  font-family: '{{display}}', serif;
+  font-style: italic;
+  font-size: clamp(1.25rem, 2.4vw, 1.625rem);
+  font-weight: 400;
+  color: var(--sf-cinematic-text);
+  opacity: 0.55;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  transition: opacity 0.2s ease;
+}
+.sf-frame.sf-cinematic .sf-partner:hover {
+  opacity: 0.9;
+}
+.sf-frame.sf-cinematic .sf-partner__sep {
+  color: rgba(255, 255, 255, 0.2);
+  font-style: normal;
+}
+@media (max-width: 640px) {
+  .sf-frame.sf-cinematic .sf-partners__row { gap: 1.5rem; }
+  .sf-frame.sf-cinematic .sf-partner__sep { display: none; }
 }
 
 /* Stats section — large-number cards inside a glass row ------------------ */

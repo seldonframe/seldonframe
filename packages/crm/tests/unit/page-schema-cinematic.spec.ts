@@ -144,31 +144,50 @@ describe("renderWithGeneralServiceV1 — cinematic vs light", () => {
     assert.match(out.head, /\.sf-frame\.sf-cinematic/);
   });
 
-  test("Local-service + clean → output has plain sf-frame class (no cinematic)", () => {
+  test("Local-service + clean → output has sf-light class (NOT cinematic)", () => {
+    // May 1, 2026 — `clean` personality (mode:"light") now triggers the
+    // light/professional overlay. Different visual universe from cinematic.
     const schema = schemaFromSoul(LOCAL_SOUL);
     const tokens = tokensForPersonality("clean");
     const out = renderWithGeneralServiceV1(schema, tokens, schema.media);
-    assert.ok(out.html.includes('class="sf-frame"'));
-    assert.ok(!out.html.includes("sf-cinematic"));
+    assert.ok(out.html.includes("sf-light"), "light mode should tag sf-light");
+    assert.ok(!out.html.includes("sf-cinematic"), "must not be cinematic");
   });
 
-  test("Local-service + clean → head has NO cinematic <link rel=preconnect> tags", () => {
+  test("Local-service + clean → head emits Inter preconnect <link> (light mode loads Inter)", () => {
+    // Light mode loads Inter via explicit <link rel="preconnect"> +
+    // <link rel="stylesheet"> tags. The legacy BASE_CSS still has its
+    // own @import for Inter + Instrument Serif (loaded inside the
+    // <style> block, not via <link>); that's the V1-existing path
+    // shared with non-tokens callers. Pin the cinematic-vs-light
+    // distinction by checking the explicit <link> ONLY for the family
+    // we expect light mode to preconnect (Inter).
     const schema = schemaFromSoul(LOCAL_SOUL);
     const tokens = tokensForPersonality("clean");
     const out = renderWithGeneralServiceV1(schema, tokens, schema.media);
-    // The legacy renderer's BASE_CSS uses @import for Inter + Instrument
-    // Serif (sufficient for light mode). Cinematic mode adds explicit
-    // <link rel="preconnect"> + <link rel="stylesheet"> tags that are NOT
-    // present in light mode. Pin that distinction.
-    assert.ok(
-      !out.head.includes('<link rel="preconnect"'),
-      "light mode should not emit explicit preconnect <link> tags"
+    assert.ok(out.head.includes('<link rel="preconnect"'), "light mode preconnects for Inter");
+    // The cinematic font stack (Instrument Serif + Barlow) is NOT loaded
+    // via the explicit <link> tags in light mode. Check the <link href=>
+    // lines, not the inner CSS @import.
+    const linkLines = out.head.split("\n").filter((line) => line.startsWith("<link"));
+    const inLinks = linkLines.join(" ");
+    assert.ok(!inLinks.includes("Instrument+Serif"), "light mode <link> tags must not load Instrument Serif");
+    assert.ok(!inLinks.includes("Barlow"), "light mode <link> tags must not load Barlow");
+  });
+
+  test("Local-service + clean → CSS includes light overlay (sf-frame.sf-light rules)", () => {
+    const schema = schemaFromSoul(LOCAL_SOUL);
+    const out = renderWithGeneralServiceV1(
+      schema,
+      tokensForPersonality("clean"),
+      schema.media
     );
+    assert.match(out.head, /\.sf-frame\.sf-light/);
   });
 
-  test("Local-service + clean → CSS stays at the legacy size (no overlay appended)", () => {
+  test("Cinematic CSS payload is meaningfully larger than light", () => {
     const schema = schemaFromSoul(LOCAL_SOUL);
-    const cleanOut = renderWithGeneralServiceV1(
+    const lightOut = renderWithGeneralServiceV1(
       schema,
       tokensForPersonality("clean"),
       schema.media
@@ -178,11 +197,11 @@ describe("renderWithGeneralServiceV1 — cinematic vs light", () => {
       tokensForPersonality("cinematic"),
       schema.media
     );
-    // Cinematic CSS appends ~10kb of overlay rules. Verify the cinematic
-    // output is meaningfully larger than the clean output's head.
+    // Both modes ship overlays (light is ~7kb, cinematic ~12kb); cinematic
+    // is bigger because of the dashboard-mockup styling + glass effects.
     assert.ok(
-      cinematicOut.head.length > cleanOut.head.length + 5000,
-      `cinematic head should be substantially larger (got cinematic=${cinematicOut.head.length}, clean=${cleanOut.head.length})`
+      cinematicOut.head.length > lightOut.head.length,
+      `cinematic head should be larger (got cinematic=${cinematicOut.head.length}, light=${lightOut.head.length})`
     );
   });
 });

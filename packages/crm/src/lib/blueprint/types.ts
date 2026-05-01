@@ -89,7 +89,22 @@ export type LandingSection =
   | SectionTestimonials
   | SectionServiceArea
   | SectionFaq
-  | SectionFooter;
+  | SectionFooter
+  | SectionPartners;
+
+/** "Built on" / partners-and-press strip. Horizontal row of company /
+ *  vendor names, rendered as italic display-font text by default. Used
+ *  for showing tech stack (Anthropic / Vercel / Neon / Stripe / Resend)
+ *  or "as seen on" rows. May 1, 2026. */
+export interface SectionPartners {
+  type: "partners";
+  /** Optional small label above the row, e.g. "Built on" or "Trusted by". */
+  eyebrow?: string;
+  items: Array<{
+    name: string;
+    href?: string;
+  }>;
+}
 
 export interface SectionEmergencyStrip {
   type: "emergency-strip";

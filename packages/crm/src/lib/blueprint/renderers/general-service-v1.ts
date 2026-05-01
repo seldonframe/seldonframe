@@ -77,6 +77,11 @@ import {
   isCinematicMode,
 } from "./cinematic-overlay";
 import {
+  buildLightCss,
+  buildLightFontLink,
+  isLightMode,
+} from "./light-overlay";
+import {
   hasIcon as hasLucideIcon,
   iconForTitle as lucideIconForTitle,
   renderIcon as renderLucideIcon,
@@ -181,12 +186,25 @@ ${navbar}
 ${otherSectionsHtml}
 </main>`;
 
-  // May 1, 2026 — cinematic overlay. Tag the root frame with sf-cinematic
-  // when DesignTokens.mode === "dark" + effects.glassmorphism. This scopes
-  // the overlay CSS at .sf-frame.sf-cinematic so existing light-mode
-  // workspaces are unaffected.
+  // May 1, 2026 — overlay branching. The renderer supports three visual
+  // modes:
+  //   1. Legacy (no tokens) — existing local-service workspaces, byte-
+  //      identical pre-tokens output.
+  //   2. Cinematic — tokens.mode === "dark" + glassmorphism. Dark
+  //      backgrounds, glass nav, blur-in animations, Instrument Serif.
+  //   3. Light/Professional — tokens.mode === "light". White bg with
+  //      dark hero band, Inter throughout, white service cards with
+  //      hover-lift. Used for local_service / professional_service /
+  //      ecommerce defaults.
+  // Each mode tags the root frame with a distinct class so the overlay
+  // CSS scopes to that mode only.
   const cinematic = options.tokens && isCinematicMode(options.tokens);
-  const frameClass = cinematic ? "sf-frame sf-cinematic" : "sf-frame";
+  const lightMode = options.tokens && !cinematic && isLightMode(options.tokens);
+  const frameClass = cinematic
+    ? "sf-frame sf-cinematic"
+    : lightMode
+      ? "sf-frame sf-light"
+      : "sf-frame";
 
   const html = `<div class="${frameClass}">
 ${innerHtml}
@@ -196,14 +214,19 @@ ${SCROLL_OBSERVER_SCRIPT}`;
   const cssChunks: string[] = [themeCss, BASE_CSS];
   if (options.tokens && cinematic) {
     cssChunks.push(buildCinematicCss(options.tokens));
+  } else if (options.tokens && lightMode) {
+    cssChunks.push(buildLightCss(options.tokens));
   }
   const css = cssChunks.join("\n\n");
 
-  // Google Fonts <link> tag. Only emitted when cinematic mode is active —
-  // the legacy renderer ships a system font stack that doesn't need
-  // network-loaded fonts. Returning empty string keeps the head undefined-
-  // friendly for callers that don't read it.
-  const head = options.tokens && cinematic ? buildFontLink(options.tokens) : "";
+  // Google Fonts <link> tag. Cinematic loads Instrument Serif + Barlow;
+  // light mode loads Inter. Legacy path emits no link (system fonts).
+  let head = "";
+  if (options.tokens && cinematic) {
+    head = buildFontLink(options.tokens);
+  } else if (options.tokens && lightMode) {
+    head = buildLightFontLink(options.tokens);
+  }
 
   return { html, css, head };
 }
@@ -230,9 +253,33 @@ function renderSection(section: LandingSection, blueprint: Blueprint, ctx: Rende
       return renderServiceArea(section);
     case "faq":
       return renderFaq(section);
+    case "partners":
+      return renderPartnersStrip(section);
     case "footer":
       return renderFooter(section, blueprint, ctx);
   }
+}
+
+/**
+ * Partners strip — horizontal "Built on" / "Trusted by" row of company
+ * names rendered as italic display-font text. Pure HTML/CSS, no images.
+ * Cinematic mode styles it via .sf-partners CSS in the cinematic overlay.
+ */
+function renderPartnersStrip(section: import("../types").SectionPartners): string {
+  if (!section.items || section.items.length === 0) return "";
+  const eyebrow = section.eyebrow ? section.eyebrow : "Built on";
+  const itemsHtml = section.items
+    .map((item) => {
+      if (item.href) {
+        return `<a class="sf-partner" href="${escapeAttr(item.href)}" target="_blank" rel="noopener">${escapeHtml(item.name)}</a>`;
+      }
+      return `<span class="sf-partner">${escapeHtml(item.name)}</span>`;
+    })
+    .join('<span class="sf-partner__sep" aria-hidden="true">·</span>');
+  return `<section class="sf-partners sf-animate" id="sf-partners">
+  <p class="sf-partners__eyebrow">${escapeHtml(eyebrow)}</p>
+  <div class="sf-partners__row">${itemsHtml}</div>
+</section>`;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────
@@ -466,26 +513,50 @@ interface NavItem {
 function deriveNavItems(
   rendered: Array<{ section: LandingSection; html: string }>
 ): NavItem[] {
+  // May 1, 2026 — dedupe by href so multiple services-grid sections
+  // (features + stats both render as services-grid) don't emit
+  // duplicate "Services" links. Stats sections get a distinct href
+  // (#sf-stats) so they appear as a separate "Stats" entry.
   const items: NavItem[] = [];
+  const seenHrefs = new Set<string>();
+  const push = (item: NavItem) => {
+    if (seenHrefs.has(item.href)) return;
+    seenHrefs.add(item.href);
+    items.push(item);
+  };
+
   for (const { section } of rendered) {
     switch (section.type) {
-      case "services-grid":
-        items.push({ label: "Services", href: "#sf-services" });
+      case "services-grid": {
+        // Stats grids vs feature/services grids: stats get id="sf-stats"
+        // and don't belong in nav (they're scroll context, not a
+        // destination). Use the layout flag we extended in Blueprint.
+        if (section.layout === "stats") {
+          // Skip — stats anchors aren't useful as nav targets.
+          break;
+        }
+        // The renderer's own headline drives the nav label so SaaS
+        // workspaces with intent="features" show "Features" and local-
+        // service ones with intent="services" show "Services". Default
+        // to "Services" when headline is missing.
+        const label = section.headline?.trim() || "Services";
+        push({ label, href: "#sf-services" });
         break;
+      }
       case "about":
-        items.push({ label: "About", href: "#sf-about" });
+        push({ label: "About", href: "#sf-about" });
         break;
       case "testimonials":
-        items.push({ label: "Reviews", href: "#sf-reviews" });
+        push({ label: "Reviews", href: "#sf-reviews" });
         break;
       case "faq":
-        items.push({ label: "FAQ", href: "#sf-faq" });
+        push({ label: "FAQ", href: "#sf-faq" });
         break;
     }
   }
   // Always anchor "Contact" to the footer if a footer rendered.
   if (rendered.some((rs) => rs.section.type === "footer")) {
-    items.push({ label: "Contact", href: "#sf-contact" });
+    push({ label: "Contact", href: "#sf-contact" });
   }
   return items;
 }

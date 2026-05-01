@@ -103,18 +103,22 @@ describe("blueprintFromSchema — section conversion + actions", () => {
     assert.equal(hero.ctaSecondary?.href, "/book");
   });
 
-  test("services section becomes services-grid with offerings as items", () => {
+  test("services section becomes services-grid with pack-provided product features", () => {
+    // May 1, 2026 — SaaS pack now ships 4 hardcoded product features
+    // (Landing Pages / Booking / CRM / AI Agents) instead of pulling
+    // pricing tiers from soul.offerings. blueprintFromSchema converts
+    // the features section to services-grid with those items.
     const schema = schemaFromSoul(seldonFrameSoul);
     const blueprint = blueprintFromSchema(schema, tokensForPersonality("clean"));
 
     const services = blueprint.landing.sections.find(
-      (s) => s.type === "services-grid"
+      (s) => s.type === "services-grid" && s.layout !== "stats"
     );
     assert.ok(services, "no services-grid produced");
     if (services?.type !== "services-grid") throw new Error("wrong type");
-    // 3 offerings (Free, Growth, Scale)
-    assert.equal(services.items.length, 3);
-    assert.equal(services.items[1].title, "Growth");
+    assert.equal(services.items.length, 4);
+    assert.equal(services.items[0].title, "Landing Pages");
+    assert.equal(services.items[3].title, "AI Agents");
   });
 
   test("FAQ section carries soul.faqs as items", () => {
@@ -165,7 +169,11 @@ describe("renderWithGeneralServiceV1 — end-to-end render", () => {
     const out = renderWithGeneralServiceV1(schema, tokens, schema.media);
 
     assert.ok(out.html.length > 1000, "html too short");
-    assert.ok(out.head.startsWith("<style>"), "head missing CSS wrap");
+    // May 1, 2026 — head may start with font <link rel="preconnect">
+    // tags (light mode loads Inter; cinematic loads Instrument Serif +
+    // Barlow). The <style> block always follows. Assert presence rather
+    // than position.
+    assert.ok(out.head.includes("<style>"), "head missing <style> block");
     assert.equal(out.framework, "static");
   });
 
