@@ -820,12 +820,20 @@ function renderFooter(section: SectionFooter, blueprint: Blueprint, ctx: RenderC
       ? `<p class="sf-footer__tagline">${escapeHtml(ws.tagline)}</p>`
       : "";
 
+  // April 30, 2026 — primitives architecture A5/B2. Skip the phone link
+  // entirely on workspaces with no phone (SaaS, pro-services, agencies).
+  // Same isUsablePhone() guard as renderNavbar — keeps existing local-
+  // service blueprints visually unchanged.
+  const phoneLink = isUsablePhone(phone)
+    ? `<a class="sf-footer__phone" href="${escapeAttr(ensureTelHref(phone))}">${escapeHtml(phoneDisplay)}</a>`
+    : "";
+
   return `<footer class="sf-footer" id="sf-contact">
   <div class="sf-footer__top">
     <div class="sf-footer__col sf-footer__col--brand">
       <p class="sf-footer__name">${escapeHtml(ws.name)}</p>
       ${tagline}
-      <a class="sf-footer__phone" href="${escapeAttr(ensureTelHref(phone))}">${escapeHtml(phoneDisplay)}</a>
+      ${phoneLink}
     </div>
     ${addressBlock}
     ${hoursBlock}
