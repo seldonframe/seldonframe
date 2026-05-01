@@ -1,12 +1,13 @@
 "use server";
 
-import { and, count, desc, eq, ilike, isNull, ne, or, gt, lte, asc } from "drizzle-orm";
+import { and, count, desc, eq, ilike, isNull, ne, or, gt, lte, asc, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   bookings,
   deals,
   emails,
   pipelines,
+  portalDocuments,
   portalMessages,
   portalResources,
   users,
@@ -262,5 +263,68 @@ export async function markPortalResourceViewedAction(orgSlug: string, resourceId
       contactId: session.contact.id,
       resourceId: resource.id,
     }, { orgId: session.orgId });
+  }
+}
+
+/**
+ * May 1, 2026 — Client Portal V1: Documents (file uploads).
+ *
+ * Lists portal_documents for the authenticated contact. The /resources
+ * page merges these with portal_resources (link-only references) into
+ * one combined "Documents" list. Newest uploads first.
+ */
+export async function listPortalDocuments(orgSlug: string) {
+  const session = await requirePortalSessionForOrg(orgSlug);
+  await assertPortalEnabled(session.orgId);
+
+  return db
+    .select()
+    .from(portalDocuments)
+    .where(
+      and(
+        eq(portalDocuments.orgId, session.orgId),
+        eq(portalDocuments.contactId, session.contact.id)
+      )
+    )
+    .orderBy(desc(portalDocuments.createdAt));
+}
+
+/**
+ * May 1, 2026 — Bumps download_count and stamps viewed_at on first
+ * download. COALESCE keeps the first-viewed timestamp stable across
+ * subsequent downloads — operators get a single "first opened" signal
+ * plus a running counter. Emits portal.document_downloaded for Brain.
+ */
+export async function markPortalDocumentDownloadedAction(
+  orgSlug: string,
+  documentId: string
+) {
+  const session = await requirePortalSessionForOrg(orgSlug);
+  await assertPortalEnabled(session.orgId);
+
+  const now = new Date();
+
+  const [row] = await db
+    .update(portalDocuments)
+    .set({
+      downloadCount: sql`${portalDocuments.downloadCount} + 1`,
+      viewedAt: sql`COALESCE(${portalDocuments.viewedAt}, ${now})`,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(portalDocuments.orgId, session.orgId),
+        eq(portalDocuments.contactId, session.contact.id),
+        eq(portalDocuments.id, documentId)
+      )
+    )
+    .returning({ id: portalDocuments.id });
+
+  if (row?.id) {
+    await emitSeldonEvent(
+      "portal.document_downloaded",
+      { contactId: session.contact.id, documentId: row.id },
+      { orgId: session.orgId }
+    );
   }
 }

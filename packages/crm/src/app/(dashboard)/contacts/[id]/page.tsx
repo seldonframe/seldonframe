@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft, Mail, Phone } from "lucide-react";
 import { db } from "@/db";
-import { activities, bookings, contacts, deals, organizations } from "@/db/schema";
+import { activities, bookings, contacts, deals, organizations, portalDocuments } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
 import { getLabels } from "@/lib/soul/labels";
 import { getContactRevenue } from "@/lib/payments/actions";
@@ -15,6 +15,7 @@ import {
   type DealRow,
   type ContactDetail,
 } from "@/components/contacts/contact-record-detail";
+import type { DocumentRow } from "@/components/contacts/contact-documents-tab";
 
 /**
  * /contacts/[id] — full Twenty-style record detail page.
@@ -63,7 +64,7 @@ export default async function ContactRecordPage({
   // May 1, 2026 — Client Portal V1: pull the org slug + plan-gate
   // result alongside the contact so the OverviewTab aside can render
   // the Portal Access card without a second client-side fetch.
-  const [contact, activityRows, dealRows, bookingRows, revenue, orgRow, portalGate] =
+  const [contact, activityRows, dealRows, bookingRows, documentRows, revenue, orgRow, portalGate] =
     await Promise.all([
     db
       .select()
@@ -119,6 +120,20 @@ export default async function ContactRecordPage({
         )
       )
       .orderBy(desc(bookings.startsAt)),
+    db
+      .select({
+        id: portalDocuments.id,
+        fileName: portalDocuments.fileName,
+        fileSize: portalDocuments.fileSize,
+        mimeType: portalDocuments.mimeType,
+        blobUrl: portalDocuments.blobUrl,
+        downloadCount: portalDocuments.downloadCount,
+        viewedAt: portalDocuments.viewedAt,
+        createdAt: portalDocuments.createdAt,
+      })
+      .from(portalDocuments)
+      .where(and(eq(portalDocuments.orgId, orgId), eq(portalDocuments.contactId, id)))
+      .orderBy(desc(portalDocuments.createdAt)),
     getContactRevenue(id).catch(() => 0),
     db
       .select({ slug: organizations.slug })
@@ -192,6 +207,19 @@ export default async function ContactRecordPage({
       d.updatedAt instanceof Date ? d.updatedAt.toISOString() : String(d.updatedAt),
   }));
 
+  const documentRowsForClient: DocumentRow[] = documentRows.map((d) => ({
+    id: d.id,
+    fileName: d.fileName,
+    fileSize: Number(d.fileSize),
+    mimeType: d.mimeType,
+    blobUrl: d.blobUrl,
+    downloadCount: d.downloadCount,
+    viewedAt:
+      d.viewedAt instanceof Date ? d.viewedAt.toISOString() : null,
+    createdAt:
+      d.createdAt instanceof Date ? d.createdAt.toISOString() : String(d.createdAt),
+  }));
+
   const bookingRowsForClient: BookingRow[] = bookingRows.map((b) => ({
     id: b.id,
     title: b.title,
@@ -205,7 +233,7 @@ export default async function ContactRecordPage({
       b.createdAt instanceof Date ? b.createdAt.toISOString() : String(b.createdAt),
   }));
 
-  const validTabs = ["overview", "activity", "deals", "emails", "bookings", "notes"] as const;
+  const validTabs = ["overview", "activity", "deals", "emails", "bookings", "documents", "notes"] as const;
   const initialTab: NonNullable<ContactDetail["tab"]> =
     sp?.tab && (validTabs as readonly string[]).includes(sp.tab)
       ? (sp.tab as NonNullable<ContactDetail["tab"]>)
@@ -228,6 +256,7 @@ export default async function ContactRecordPage({
         activity={activityRowsForClient}
         deals={dealRowsForClient}
         bookings={bookingRowsForClient}
+        documents={documentRowsForClient}
         contactLabelSingular={labels.contact.singular}
         contactLabelPlural={labels.contact.plural}
         dealLabelPlural={labels.deal.plural}

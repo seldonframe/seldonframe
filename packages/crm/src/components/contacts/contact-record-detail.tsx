@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   ChevronRight,
   ClipboardList,
+  FileText,
   Mail,
   MessageSquare,
   Pencil,
@@ -19,6 +20,7 @@ import {
 } from "lucide-react";
 import { updateContactFieldAction } from "@/lib/contacts/actions";
 import { PortalAccessCard } from "./portal-access-card";
+import { ContactDocumentsTab, type DocumentRow } from "./contact-documents-tab";
 
 /**
  * WS2.1 — full Twenty-style contact record page (client).
@@ -54,7 +56,7 @@ export type ContactDetail = {
   portalAccessEnabled?: boolean;
   portalLastLoginAt?: string | null;
   /** Tab union — exported here so the page can pass an initial value. */
-  tab?: "overview" | "activity" | "deals" | "emails" | "bookings" | "notes";
+  tab?: "overview" | "activity" | "deals" | "emails" | "bookings" | "notes" | "documents";
 };
 
 /**
@@ -209,6 +211,7 @@ const TABS: Array<{
   { key: "deals", label: "Deals", icon: Building2 },
   { key: "emails", label: "Emails", icon: Mail },
   { key: "bookings", label: "Bookings", icon: Calendar },
+  { key: "documents", label: "Documents", icon: FileText },
   { key: "notes", label: "Notes", icon: StickyNote },
 ];
 
@@ -219,6 +222,7 @@ export function ContactRecordDetail({
   activity,
   deals,
   bookings,
+  documents,
   contactLabelSingular,
   contactLabelPlural: _contactLabelPlural,
   dealLabelPlural,
@@ -232,6 +236,8 @@ export function ContactRecordDetail({
   activity: ActivityRow[];
   deals: DealRow[];
   bookings: BookingRow[];
+  /** May 1, 2026 — Client Portal V1: file uploads on the Documents tab. */
+  documents?: DocumentRow[];
   contactLabelSingular: string;
   contactLabelPlural: string;
   dealLabelPlural: string;
@@ -387,7 +393,9 @@ export function ContactRecordDetail({
                     ? activity.filter((a) => a.type === "note").length
                     : t.key === "emails"
                       ? activity.filter((a) => a.type === "email").length
-                      : 0;
+                      : t.key === "documents"
+                        ? documents?.length ?? 0
+                        : 0;
           return (
             <button
               key={t.key}
@@ -440,6 +448,18 @@ export function ContactRecordDetail({
         <EmailsTab activity={activity.filter((a) => a.type === "email")} />
       ) : tab === "bookings" ? (
         <BookingsTab upcoming={upcomingBookings} past={pastBookings} />
+      ) : tab === "documents" ? (
+        orgId ? (
+          <ContactDocumentsTab
+            orgId={orgId}
+            contactId={contact.id}
+            documents={documents ?? []}
+          />
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Workspace context unavailable — refresh the page.
+          </p>
+        )
       ) : (
         <NotesTab activity={activity.filter((a) => a.type === "note")} />
       )}

@@ -7,9 +7,11 @@ with a checkable plan, gets ticked off as it ships, and ends with a review block
 
 ## In flight
 
-_(none — PRODUCTION smoke passed 17/17 on 2026-04-19 evening. Zero-friction
-first-run is live at app.seldonframe.com. Remaining items are post-launch
-polish; see queue below.)_
+- [ ] **Portal Documents (file upload)** — first-class file uploads on the
+      Client Portal. New `portal_documents` table + Vercel Blob, server actions
+      `uploadPortalDocumentAction` / `markPortalDocumentDownloadedAction`,
+      operator drag-drop tab on the contact record, merged client-portal list.
+      Plan: [tasks/portal-documents-plan.md](./portal-documents-plan.md).
 
 ---
 

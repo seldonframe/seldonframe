@@ -18,6 +18,7 @@ export * from "./landing-pages";
 export * from "./portal-access-codes";
 export * from "./portal-messages";
 export * from "./portal-resources";
+export * from "./portal-documents";
 export * from "./intake-forms";
 export * from "./metrics-snapshots";
 export * from "./webhooks";
