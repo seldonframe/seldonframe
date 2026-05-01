@@ -117,7 +117,11 @@ export interface SectionServicesGrid {
   type: "services-grid";
   headline?: string;
   subhead?: string;
-  layout?: "grid-3" | "grid-4" | "tabs";
+  /** May 1, 2026 — `stats` layout produces large-number / label cards
+   *  instead of icon-led service cards. Used for "by the numbers"
+   *  sections. The renderer reads layout to switch markup + assigns
+   *  id="sf-stats" instead of id="sf-services". */
+  layout?: "grid-3" | "grid-4" | "tabs" | "stats";
   items: Array<{
     icon?: string;
     title: string;

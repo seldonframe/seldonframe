@@ -259,9 +259,13 @@ function convertSection(
       return convertMidCta(section, ctx);
     case "footer":
       return convertFooter(section, ctx);
+    case "stats":
+      // May 1, 2026 — stats sections render via the services-grid renderer
+      // with layout="stats". The renderer detects this and emits
+      // sf-stat__value / sf-stat__label markup instead of icon cards.
+      return convertStats(section);
     case "how_it_works":
     case "pricing":
-    case "stats":
     case "portfolio":
     case "team":
       // No bespoke renderer — fall through as a services-grid so the
@@ -269,6 +273,32 @@ function convertSection(
       // layouts; the V1 renderer is content-shape-tolerant.
       return convertServicesGrid(section);
   }
+}
+
+function convertStats(section: PageSection): SectionServicesGrid {
+  // Stats: title is the number ("75+"), description is the label
+  // ("MCP Tools"). PageSection.content can carry either `items` (already
+  // shaped as title/description) or `stats` (the canonical shape). Walk
+  // both so content packs and operator-edited schemas both work.
+  const fromStats = section.content.stats?.map((stat) => ({
+    title: stat.value,
+    description: stat.label,
+  })) ?? [];
+  const fromItems = (section.content.items ?? []).map((item) => ({
+    title: item.title,
+    description: item.description,
+  }));
+  const items = fromStats.length > 0 ? fromStats : fromItems;
+  return {
+    type: "services-grid",
+    headline: section.content.headline,
+    subhead: section.content.subheadline,
+    layout: "stats",
+    items: items.map((item) => ({
+      title: item.title,
+      description: item.description,
+    })),
+  };
 }
 
 function convertHero(section: PageSection, ctx: ConvertContext): SectionHero {

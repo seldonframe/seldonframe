@@ -116,6 +116,19 @@ function aboutSection(): PageSection {
   };
 }
 
+/** Stats section — large-number / label cards. Each pack provides default
+ *  numbers; operators override via update_page_content once that MCP tool
+ *  ships (A6). Render order 45 sits between services (30) and FAQ (60). */
+function statsSection(stats: Array<{ value: string; label: string }>): PageSection {
+  return {
+    id: "stats",
+    intent: "stats",
+    content: { headline: "By the numbers", stats },
+    visible: true,
+    order: 45,
+  };
+}
+
 function testimonialsSection(): PageSection {
   return {
     id: "testimonials",
@@ -200,6 +213,11 @@ const LOCAL_SERVICE_PACK: ContentPack = {
     ]),
     servicesSection("services", "Services we offer"),
     aboutSection(),
+    statsSection([
+      { value: "500+", label: "Jobs Completed" },
+      { value: "4.8★", label: "Google Rating" },
+      { value: "24hr", label: "Response Time" },
+    ]),
     faqSection([]), // filled from default_faqs at apply-time
     ctaSection("Ready to get started?", "Get a free quote in minutes."),
     footerSection(),
@@ -245,6 +263,11 @@ const PROFESSIONAL_SERVICE_PACK: ContentPack = {
     ]),
     servicesSection("services", "How I work with clients"),
     aboutSection(),
+    statsSection([
+      { value: "100+", label: "Clients Served" },
+      { value: "5+", label: "Years Experience" },
+      { value: "4.9", label: "Average Rating" },
+    ]),
     testimonialsSection(),
     faqSection([]),
     ctaSection("Ready to talk?", "Book a free consultation."),
@@ -291,10 +314,14 @@ const SAAS_PACK: ContentPack = {
     howItWorksSection(),
     // May 1, 2026 — pricing section dropped from default SaaS pack.
     // It rendered as a second services-grid pulling from soul.offerings,
-    // duplicating the features section above and producing a duplicate
-    // `id="sf-services"` in the HTML. Operators who want a separate
-    // pricing section can re-enable via toggle_section({ section_id:
-    // "pricing", visible: true }) once that MCP tool ships (A6).
+    // duplicating the features section above. Re-enable via toggle_section
+    // once A6 MCP tools land.
+    statsSection([
+      { value: "75+", label: "MCP Tools" },
+      { value: "2,100+", label: "Tests Passing" },
+      { value: "6", label: "Agent Archetypes" },
+      { value: "2 min", label: "Deploy Time" },
+    ]),
     faqSection([]),
     ctaSection("Ready to build?", "Start for $0. Upgrade when you grow."),
     footerSection(),

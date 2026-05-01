@@ -76,6 +76,11 @@ import {
   buildFontLink,
   isCinematicMode,
 } from "./cinematic-overlay";
+import {
+  hasIcon as hasLucideIcon,
+  iconForTitle as lucideIconForTitle,
+  renderIcon as renderLucideIcon,
+} from "./lucide-icons";
 
 // ─── Public entry point ────────────────────────────────────────────────
 
@@ -130,6 +135,14 @@ interface RenderContext {
   promotedReviewItem: { icon?: string; label: string } | null;
   /** P0-3: whether to include the "Powered by SeldonFrame" footer link. */
   removePoweredBy: boolean;
+  /** May 1, 2026 — true when the cinematic CSS overlay is active (dark
+   *  mode + glassmorphism). Used by section renderers to gate effects
+   *  like the SaaS hero dashboard mockup. */
+  cinematic: boolean;
+  /** Workspace business type, derived from blueprint.workspace.industry.
+   *  Section renderers branch on this to render type-specific decoration
+   *  (e.g., the dashboard mockup for SaaS). */
+  businessType: "local_service" | "professional_service" | "saas" | "agency" | "ecommerce" | "other";
 }
 
 export function renderGeneralServiceV1(
@@ -141,6 +154,8 @@ export function renderGeneralServiceV1(
   const ctx: RenderContext = {
     promotedReviewItem: findReviewItem(blueprint.landing.sections),
     removePoweredBy: Boolean(options.removePoweredBy),
+    cinematic: Boolean(options.tokens && isCinematicMode(options.tokens)),
+    businessType: classifyIndustryToBusinessType(blueprint.workspace.industry),
   };
 
   // First pass: render every section so we know which survive placeholder
@@ -396,8 +411,30 @@ function findReviewItem(
 
 function iconSvg(name: string | undefined): string {
   const key = (name ?? "").toLowerCase();
+  // May 1, 2026 — Lucide-first icon resolution. The legacy ICON_MAP
+  // (chrome icons: phonecall, star, shieldcheck, etc.) stays as a
+  // fallback for the trust-strip + emergency-strip + reviews-badge that
+  // reference it directly. New content cards (services, features, stats)
+  // resolve through Lucide first so item.icon = "calendar" → the proper
+  // calendar SVG, not the generic placeholder.
+  if (hasLucideIcon(name)) {
+    return `<span class="sf-icon" aria-hidden="true">${renderLucideIcon(name as string)}</span>`;
+  }
   const svg = ICON_MAP[key] ?? ICON_MAP._default;
   return `<span class="sf-icon" aria-hidden="true">${svg}</span>`;
+}
+
+/**
+ * Icon for a content card. Honors `item.icon` if known (Lucide or chrome
+ * map); otherwise infers from the item title via `iconForTitle`. Always
+ * returns a non-empty SVG — better than a blank slot when the operator's
+ * Soul didn't carry icon hints.
+ */
+function iconForContentItem(item: { icon?: string; title?: string }): string {
+  if (item.icon && (hasLucideIcon(item.icon) || ICON_MAP[item.icon.toLowerCase()])) {
+    return iconSvg(item.icon);
+  }
+  return `<span class="sf-icon" aria-hidden="true">${renderLucideIcon(lucideIconForTitle(item.title))}</span>`;
 }
 
 const CHEVRON_RIGHT_SVG_SMALL = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>`;
@@ -487,6 +524,40 @@ function renderNavbar(blueprint: Blueprint, items: NavItem[]): string {
 </nav>`;
 }
 
+// May 1, 2026 — Map a workspace industry string to a business type, so
+// section renderers can branch on type (e.g., emit the dashboard mockup
+// for SaaS hero, skip phone footer for SaaS). Mirrors the keyword map
+// in lib/page-schema/classify-business.ts but reads from the legacy
+// Blueprint.workspace.industry field.
+function classifyIndustryToBusinessType(
+  industry: string | null | undefined
+): RenderContext["businessType"] {
+  if (!industry) return "other";
+  const v = industry.toLowerCase();
+  if (v.includes("saas") || v.includes("developer") || v.includes("software")) return "saas";
+  if (v.includes("agency") || v.includes("studio")) return "agency";
+  if (v.includes("ecommerce") || v.includes("shop") || v.includes("retail")) return "ecommerce";
+  if (
+    v.includes("hvac") ||
+    v.includes("plumb") ||
+    v.includes("roof") ||
+    v.includes("clean") ||
+    v.includes("repair") ||
+    v.includes("general-service")
+  ) {
+    return "local_service";
+  }
+  if (
+    v.includes("professional") ||
+    v.includes("coach") ||
+    v.includes("legal") ||
+    v.includes("therapy")
+  ) {
+    return "professional_service";
+  }
+  return "other";
+}
+
 // True if the phone string looks usable for a tel: link. Defends the
 // renderer against new pipelines (PageSchema → blueprintFromSchema)
 // that produce blueprints with empty phones for SaaS / pro-services
@@ -529,6 +600,16 @@ function renderHero(section: SectionHero, ctx: RenderContext): string {
     ? renderReviewsBadge(ctx.promotedReviewItem.label)
     : "";
 
+  // May 1, 2026 — SaaS hero dashboard mockup. Decorative inline HTML/CSS
+  // showing a fake admin dashboard so the hero doesn't end at the CTAs.
+  // Only renders when business type === "saas" AND cinematic overlay is
+  // active (the styling needs the dark background to look right). Pure
+  // CSS, pointer-events:none — purely a visual element.
+  const dashboardMockup =
+    ctx.cinematic && ctx.businessType === "saas"
+      ? renderHeroDashboardMockup()
+      : "";
+
   return `<section class="sf-hero" id="sf-hero">
   <span class="sf-hero__corner sf-hero__corner--tl" aria-hidden="true"></span>
   <span class="sf-hero__corner sf-hero__corner--tr" aria-hidden="true"></span>
@@ -545,8 +626,55 @@ function renderHero(section: SectionHero, ctx: RenderContext): string {
       ${renderCta(section.ctaPrimary)}
       ${ctaSecondary}
     </div>
+    ${dashboardMockup}
   </div>
 </section>`;
+}
+
+/**
+ * Render a fake admin dashboard preview as inline HTML. Used in SaaS hero
+ * sections to give visual weight below the CTAs without requiring an
+ * actual screenshot asset. Pure CSS — no pointer events, no real data.
+ */
+function renderHeroDashboardMockup(): string {
+  return `<div class="sf-hero__mockup sf-animate sf-delay-4" aria-hidden="true">
+    <div class="sf-mockup__chrome">
+      <span class="sf-mockup__dot"></span>
+      <span class="sf-mockup__dot"></span>
+      <span class="sf-mockup__dot"></span>
+      <span class="sf-mockup__url">app.seldonframe.com/dashboard</span>
+    </div>
+    <div class="sf-mockup__body">
+      <aside class="sf-mockup__sidebar">
+        <p class="sf-mockup__brand">SeldonFrame</p>
+        <ul class="sf-mockup__nav">
+          <li class="sf-mockup__nav-item is-active">Dashboard</li>
+          <li class="sf-mockup__nav-item">Contacts</li>
+          <li class="sf-mockup__nav-item">Deals</li>
+          <li class="sf-mockup__nav-item">Automations</li>
+          <li class="sf-mockup__nav-item">Settings</li>
+        </ul>
+      </aside>
+      <main class="sf-mockup__main">
+        <p class="sf-mockup__greeting">Welcome back</p>
+        <div class="sf-mockup__stats">
+          <div class="sf-mockup__stat"><span class="sf-mockup__stat-num">128</span><span class="sf-mockup__stat-label">Contacts</span></div>
+          <div class="sf-mockup__stat"><span class="sf-mockup__stat-num">42</span><span class="sf-mockup__stat-label">Active deals</span></div>
+          <div class="sf-mockup__stat"><span class="sf-mockup__stat-num">$24k</span><span class="sf-mockup__stat-label">MRR</span></div>
+        </div>
+        <table class="sf-mockup__table">
+          <thead>
+            <tr><th>Contact</th><th>Stage</th><th>Value</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Maxime H.</td><td><span class="sf-mockup__pill">Demo</span></td><td>$2,400</td></tr>
+            <tr><td>Sarah K.</td><td><span class="sf-mockup__pill">Trial</span></td><td>$1,800</td></tr>
+            <tr><td>James P.</td><td><span class="sf-mockup__pill">Won</span></td><td>$3,600</td></tr>
+          </tbody>
+        </table>
+      </main>
+    </div>
+  </div>`;
 }
 
 /**
@@ -619,9 +747,23 @@ function renderServicesGrid(section: SectionServicesGrid): string {
 
   const layout = section.layout ?? "grid-3";
   const layoutClass = `sf-services--${layout}`;
+  // May 1, 2026 — stats layout: when section.layout === "stats", render
+  // each item as a large-number / label pair instead of an icon card.
+  // Used for "by the numbers" sections — e.g., SaaS pages showing
+  // 75+ MCP tools / 2,100+ tests / 6 archetypes / 2 min deploy.
+  const isStats = layout === "stats";
   const items = visible
     .map((item, idx) => {
-      const icon = iconSvg(item.icon);
+      if (isStats) {
+        // Stats card: title becomes the large number ("75+"), description
+        // becomes the label below ("MCP Tools"). No icon, no link, no price.
+        const delay = `sf-delay-${(idx % 4) + 1}`;
+        return `<article class="sf-stat sf-animate ${delay}">
+      <p class="sf-stat__value">${escapeHtml(item.title)}</p>
+      <p class="sf-stat__label">${escapeHtml(item.description)}</p>
+    </article>`;
+      }
+      const icon = iconForContentItem(item);
       const price = item.priceFrom && !hasPlaceholder(item.priceFrom)
         ? `<p class="sf-service__price">${escapeHtml(item.priceFrom)}</p>`
         : "";
@@ -638,12 +780,17 @@ function renderServicesGrid(section: SectionServicesGrid): string {
     </article>`;
     })
     .join("\n");
-  return `<section class="sf-services ${layoutClass}" id="sf-services">
+  // Stats sections get a distinct id so the duplicate-id concern doesn't
+  // bite (legacy services grid hardcodes id="sf-services"). Stats lives
+  // at id="sf-stats" so nav anchors and CSS scoping stay clean.
+  const sectionId = isStats ? "sf-stats" : "sf-services";
+  const gridClass = isStats ? "sf-stats__grid" : "sf-services__grid";
+  return `<section class="sf-services ${layoutClass}" id="${sectionId}">
   <header class="sf-services__header sf-animate">
     <h2 class="sf-services__headline">${renderEmphasis(headline)}</h2>
     ${subheadHtml}
   </header>
-  <div class="sf-services__grid">
+  <div class="${gridClass}">
     ${items}
   </div>
 </section>`;
