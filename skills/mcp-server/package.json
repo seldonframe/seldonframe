@@ -1,6 +1,6 @@
 {
   "name": "@seldonframe/mcp",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "description": "MCP server for SeldonFrame — AI-native Business OS platform. One command creates a real, hosted workspace with a website, booking page, intake form, CRM, and AI agents. v1.1.5: Visual + auth completeness pass on top of v1.1.4's Personality-Driven Content Layer. (1) Service-card icons now resolve via per-vertical Lucide rules (dental→smile/tooth/baby for pediatric, hvac→wrench/snowflake/flame, legal→scale/gavel/briefcase) instead of every card collapsing to the generic 'sparkles' fallback. 23 new icons added; vertical-aware fallback when no keyword matches. (2) Hero sections now render with personality-curated Unsplash background photography (1600x900 with a dark scrim for legibility) and per-service-card images (800x600 round-robin from a 6-image bundle per vertical). Hand-curated URLs only — no auto-fetch. (3) Booking page now defaults the slot picker to the workspace's IANA timezone (organizations.timezone, inferred from city/state) instead of the visitor's browser TZ — a customer in NYC booking with a Texas dental practice now sees Central time. Visitor can still switch via the dropdown OR via a ?tz= URL override for shareable links. (4) Admin dashboard now works for admin-token sessions: getSoul + requireBillingUser branch on resolveAdminTokenContext so operators clicking the welcome-email admin URL don't hit Unauthorized when the dashboard tries to read soul/billing data via the synthetic nil-UUID user.",
   "type": "module",
   "bin": {
