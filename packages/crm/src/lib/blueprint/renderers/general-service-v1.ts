@@ -723,7 +723,20 @@ function renderHero(section: SectionHero, ctx: RenderContext): string {
   // SVG artifacts (multiple operators flagged this in demo tests).
   // The .sf-hero__glow spans stay — they're the radial-gradient
   // background washes that give the hero its depth.
-  return `<section class="sf-hero" id="sf-hero">
+  //
+  // v1.1.5 / Issue #3 — when section.imageUrl is set (personality-
+  // curated Unsplash photo), emit a full-bleed background image with
+  // a dark scrim so the headline copy stays legible. The CSS for
+  // .sf-hero__bg + .sf-hero__scrim is appended to the renderer's
+  // stylesheet (see further down). The img URL is escaped to prevent
+  // CSS injection via crafted Soul submissions.
+  const heroBgHtml = section.imageUrl
+    ? `<div class="sf-hero__bg" style="background-image: url('${escapeAttr(section.imageUrl)}');" aria-hidden="true"></div>
+  <div class="sf-hero__scrim" aria-hidden="true"></div>`
+    : "";
+  const heroClass = section.imageUrl ? "sf-hero sf-hero--has-image" : "sf-hero";
+  return `<section class="${heroClass}" id="sf-hero">
+  ${heroBgHtml}
   <span class="sf-hero__glow sf-hero__glow--1" aria-hidden="true"></span>
   <span class="sf-hero__glow sf-hero__glow--2" aria-hidden="true"></span>
   <div class="sf-hero__content">
@@ -1431,6 +1444,43 @@ const BASE_CSS = `@import url('https://fonts.googleapis.com/css2?family=Inter:wg
   text-align: center;
   position: relative;
   overflow: hidden;
+}
+/* v1.1.5 / Issue #3 — full-bleed hero background image (Unsplash). */
+.sf-hero--has-image {
+  background: #0b0b10;
+  color: #ffffff;
+  padding-top: clamp(5rem, 12vw, 9rem);
+  padding-bottom: clamp(5rem, 12vw, 9rem);
+}
+.sf-hero__bg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  z-index: 0;
+  pointer-events: none;
+}
+.sf-hero__scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.55) 0%,
+    rgba(0, 0, 0, 0.65) 50%,
+    rgba(0, 0, 0, 0.75) 100%
+  );
+  z-index: 1;
+  pointer-events: none;
+}
+.sf-hero--has-image .sf-hero__headline,
+.sf-hero--has-image .sf-hero__subhead,
+.sf-hero--has-image .sf-hero__eyebrow {
+  color: #ffffff;
+  text-shadow: 0 1px 16px rgba(0, 0, 0, 0.35);
+}
+.sf-hero--has-image .sf-hero__reviews {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 .sf-hero__corner {
   position: absolute;

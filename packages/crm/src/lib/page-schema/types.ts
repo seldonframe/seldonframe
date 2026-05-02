@@ -77,6 +77,11 @@ export interface SectionContent {
   stats?: SectionStat[];
   /** Optional bullet list of strings for trust_bar / quick proof rows. */
   bullets?: string[];
+  /** v1.1.5 / Issue #3 — optional background image URL for hero
+   *  sections (full-bleed). Personality-driven; operators override via
+   *  update_landing_section. The renderer overlays a dark gradient so
+   *  text contrast is preserved regardless of the image's tonality. */
+  imageUrl?: string;
 }
 
 export interface PageSection {

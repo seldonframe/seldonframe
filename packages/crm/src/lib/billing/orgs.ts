@@ -17,6 +17,10 @@ import { getOrgSubscription } from "@/lib/billing/subscription";
 import { installSoul, type FrameworkConfig } from "@/lib/soul/install";
 import { seedInitialBlocks } from "@/lib/soul-compiler/blocks";
 import type { SoulV4 } from "@/lib/soul-compiler/schema";
+import {
+  ADMIN_TOKEN_SENTINEL_USER_ID,
+  resolveAdminTokenContext,
+} from "@/lib/auth/admin-token";
 
 const FREE_WORKSPACE_ALLOWANCE = 1;
 
@@ -33,15 +37,39 @@ function slugify(value: string) {
 async function requireBillingUser() {
   const session = await auth();
 
-  if (!session?.user?.id) {
-    throw new Error("Unauthorized");
+  if (session?.user?.id) {
+    return getBillingUserById(session.user.id);
   }
 
-  return getBillingUserById(session.user.id);
+  // v1.1.5 / Issue #9 — admin-token sessions don't have a backing
+  // users row. Synthesize a billing-user from the workspace's
+  // organizations row (plan + subscriptionStatus live there for
+  // workspace-scoped billing) so the dashboard layout, /settings, and
+  // anything else that calls requireBillingUser() doesn't 401 the
+  // operator out of their own workspace just because they entered via
+  // the admin-token URL instead of NextAuth.
+  const adminCtx = await resolveAdminTokenContext();
+  if (adminCtx?.orgId) {
+    return getBillingUserForAdminTokenOrg(adminCtx.orgId);
+  }
+
+  throw new Error("Unauthorized");
 }
 
 async function getBillingUserById(userId: string) {
   if (!userId) {
+    throw new Error("Unauthorized");
+  }
+
+  // v1.1.5 / Issue #9 — when callers pass the admin-token sentinel
+  // user.id (e.g. from `getCurrentUser()` returning the synthetic
+  // session), short-circuit to the workspace-backed billing user so
+  // we don't 401 on a UUID that intentionally doesn't exist in users.
+  if (userId === ADMIN_TOKEN_SENTINEL_USER_ID) {
+    const adminCtx = await resolveAdminTokenContext();
+    if (adminCtx?.orgId) {
+      return getBillingUserForAdminTokenOrg(adminCtx.orgId);
+    }
     throw new Error("Unauthorized");
   }
 
@@ -64,6 +92,49 @@ async function getBillingUserById(userId: string) {
   }
 
   return dbUser;
+}
+
+/**
+ * v1.1.5 / Issue #9 — synthesize a billing-user from an org row for
+ * admin-token sessions. Plan lives on the organizations table directly;
+ * stripe IDs + subscription status live in the `subscription` jsonb
+ * column. We project both into the same shape getBillingUserById
+ * returns so downstream callers (loadWorkspaceTierStatus, billing
+ * portal helpers, workspace-limit checks) don't need to branch.
+ *
+ * The synthesized .id matches the admin-token sentinel so downstream
+ * comparisons that gate on "is this a real user?" still work.
+ */
+async function getBillingUserForAdminTokenOrg(orgId: string) {
+  const [orgRow] = await db
+    .select({
+      id: organizations.id,
+      plan: organizations.plan,
+      subscription: organizations.subscription,
+      name: organizations.name,
+    })
+    .from(organizations)
+    .where(eq(organizations.id, orgId))
+    .limit(1);
+
+  if (!orgRow) {
+    throw new Error("Unauthorized");
+  }
+
+  const sub = (orgRow.subscription ?? {}) as {
+    stripeSubscriptionId?: string | null;
+    status?: string | null;
+  };
+
+  return {
+    id: ADMIN_TOKEN_SENTINEL_USER_ID,
+    orgId: orgRow.id,
+    planId: orgRow.plan ?? null,
+    stripeSubscriptionId: sub.stripeSubscriptionId ?? null,
+    subscriptionStatus: sub.status ?? null,
+    name: orgRow.name,
+    email: null,
+  };
 }
 
 

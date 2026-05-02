@@ -230,9 +230,15 @@ export async function createAnonymousWorkspace(
   // All three landing surfaces end up with pre-rendered contentHtml/Css,
   // and the public routes serve them directly — operator clients see one
   // unified product across /, /book, and /intake.
+  // v1.1.5 / Issue #7 — pass the inferred timezone so the booking
+  // template's renderer reads workspace.contact.timezone and defaults
+  // the slot picker to the workspace's local time (not the visitor's
+  // browser TZ). The Texas dental practice's slots show in Central
+  // even when a visitor in Eastern opens the page.
   const seedBlueprint = buildBlueprintForWorkspace(
     org.name,
-    input.industry ?? null
+    input.industry ?? null,
+    { timezone: inferredTimezone }
   );
 
   // May 2, 2026 — booking duration + title default from CRM personality.

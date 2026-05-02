@@ -349,6 +349,11 @@ function convertHero(section: PageSection, ctx: ConvertContext): SectionHero {
     subhead: section.content.subheadline,
     ctaPrimary: actionToCta(primary, "primary"),
     ctaSecondary: secondary ? actionToCta(secondary, "secondary") : undefined,
+    // v1.1.5 / Issue #3 — pass the personality-curated hero image
+    // (Unsplash URL) through to the Blueprint so renderHero can emit
+    // a full-bleed background-image. Optional; null/undefined falls
+    // back to the existing text-only hero with .sf-hero__glow gradients.
+    imageUrl: section.content.imageUrl ?? null,
   };
 }
 

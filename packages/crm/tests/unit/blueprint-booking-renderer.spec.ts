@@ -59,6 +59,45 @@ test("renderCalcomMonthV1 — emits C3.x polish markers (frame, navbar, layered-
   for (const m of POLISH_CSS) assert.ok(out.css.includes(m), `css must contain ${m}`);
 });
 
+// ─── v1.1.5 / Issue #7 — workspace timezone defaults ─────────────────────
+
+test("renderCalcomMonthV1 — defaults state.timezone to data.workspaceTimezone (not browser TZ)", () => {
+  const blueprint = pickTemplate("hvac");
+  blueprint.workspace.contact.timezone = "America/Chicago";
+  const out = renderCalcomMonthV1(blueprint);
+  // Initial-state init from line 605: `state = { timezone: data.workspaceTimezone || 'UTC' }`
+  assert.ok(
+    out.html.includes(`"workspaceTimezone":"America/Chicago"`),
+    "embedded data should expose the workspace's IANA TZ"
+  );
+  // setupTimezone now prefers workspaceTimezone over browser detection.
+  assert.ok(
+    out.html.includes("urlTz || data.workspaceTimezone || detected || 'UTC'"),
+    "setupTimezone should fall back through urlTz → workspaceTimezone → detected"
+  );
+});
+
+test("renderCalcomMonthV1 — supports ?tz= URL override", () => {
+  const out = renderCalcomMonthV1(pickTemplate("hvac"));
+  // The readTzFromUrl helper parses ?tz= for shareable links.
+  assert.ok(
+    out.html.includes("URLSearchParams"),
+    "client script should read URL params for tz override"
+  );
+  assert.ok(
+    out.html.includes("function readTzFromUrl"),
+    "client script should expose readTzFromUrl helper"
+  );
+});
+
+test("renderCalcomMonthV1 — emits tzContextSuffix for visitor-vs-workspace clarity", () => {
+  const out = renderCalcomMonthV1(pickTemplate("hvac"));
+  assert.ok(
+    out.html.includes("tzContextSuffix"),
+    "renderer should append a workspace-TZ suffix when visitor switches zones"
+  );
+});
+
 // ─── Event details ────────────────────────────────────────────────────
 
 test("renderCalcomMonthV1 — renders event title from blueprint.booking.eventType", () => {

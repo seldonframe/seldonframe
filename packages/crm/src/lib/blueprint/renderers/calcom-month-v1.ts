@@ -698,7 +698,7 @@ const BOOKING_INTERACTIVITY_SCRIPT = `<script data-sf-booking="calcom-month-v1">
     if (!grid || !state.selectedDate) return;
 
     if (heading) heading.textContent = formatLongDate(state.selectedDate);
-    if (subhead) subhead.textContent = data.eventType.durationMinutes + ' minute slots, shown in ' + niceTzLabel(state.timezone);
+    if (subhead) subhead.textContent = data.eventType.durationMinutes + ' minute slots, shown in ' + niceTzLabel(state.timezone) + tzContextSuffix();
 
     var slots = generateSlots(state.selectedDate);
     if (slots.length === 0) {
@@ -843,11 +843,31 @@ const BOOKING_INTERACTIVITY_SCRIPT = `<script data-sf-booking="calcom-month-v1">
     return tz.replace(/_/g, ' ');
   }
 
+  // v1.1.5 / Issue #7 — read ?tz= override from the page URL so the
+  // operator can paste a shareable link in their preferred zone.
+  function readTzFromUrl(){
+    try {
+      var params = new URLSearchParams(window.location.search);
+      var v = params.get('tz');
+      return v && v.trim().length > 0 ? v.trim() : '';
+    } catch (e) { return ''; }
+  }
+
   function setupTimezone(){
     var sel = document.getElementById('sf-tz-select');
     if (!sel) return;
-    var detected = (Intl && Intl.DateTimeFormat) ? Intl.DateTimeFormat().resolvedOptions().timeZone : data.workspaceTimezone;
-    state.timezone = detected || data.workspaceTimezone;
+
+    // v1.1.5 / Issue #7 — default to the WORKSPACE's timezone (not the
+    // visitor's browser TZ). Booking pages should show times in the
+    // business's local time so a customer in NYC booking with a Texas
+    // dental practice sees "9 AM Central" — the practice's hours, not
+    // the visitor's morning. Visitor-driven TZ is wrong for trades /
+    // services / dental: the appointment happens at the practice's
+    // location, not the visitor's. URL ?tz= override wins so shareable
+    // links in a different zone still work.
+    var urlTz = readTzFromUrl();
+    var detected = (Intl && Intl.DateTimeFormat) ? Intl.DateTimeFormat().resolvedOptions().timeZone : '';
+    state.timezone = urlTz || data.workspaceTimezone || detected || 'UTC';
 
     var zones = [];
     try {
@@ -867,6 +887,16 @@ const BOOKING_INTERACTIVITY_SCRIPT = `<script data-sf-booking="calcom-month-v1">
       state.timezone = sel.value;
       if (state.selectedDate) renderSlots();
     });
+  }
+
+  // v1.1.5 / Issue #7 — append a friendly suffix when the visitor's
+  // current TZ matches the workspace TZ ("local time") or differs
+  // ("workspace local time"). Helps the visitor understand why slots
+  // look different from their wall clock.
+  function tzContextSuffix(){
+    var ws = data.workspaceTimezone;
+    if (!ws || state.timezone === ws) return '';
+    return ' (workspace: ' + niceTzLabel(ws) + ')';
   }
 
   // ─── Wiring ─────────────────────────────────────────────────────

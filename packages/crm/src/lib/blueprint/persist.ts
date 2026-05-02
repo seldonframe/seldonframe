@@ -40,12 +40,25 @@ export interface RenderedBlueprint {
  */
 export function buildBlueprintForWorkspace(
   workspaceName: string,
-  industry: string | null | undefined
+  industry: string | null | undefined,
+  opts: { timezone?: string | null } = {}
 ): Blueprint {
   const template = pickTemplate(industry);
+  // v1.1.5 / Issue #7 — when the workspace's IANA timezone is known
+  // (createAnonymousWorkspace infers it from city/state and stores it
+  // on organizations.timezone), thread it onto workspace.contact.timezone
+  // so the booking renderer's `data.workspaceTimezone` reflects the
+  // operator's actual local time. Without this, the template's default
+  // ("UTC" or "America/Los_Angeles" depending on industry pack) ships
+  // to every workspace and the booking page shows slots in the wrong
+  // zone.
+  const tz = opts.timezone?.trim();
+  const contact = tz
+    ? { ...template.workspace.contact, timezone: tz }
+    : template.workspace.contact;
   return {
     ...template,
-    workspace: { ...template.workspace, name: workspaceName },
+    workspace: { ...template.workspace, name: workspaceName, contact },
   };
 }
 

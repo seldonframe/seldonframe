@@ -34,6 +34,8 @@ import {
   type PersonalityTemplateVars,
   type ResolvedPersonalityContent,
 } from "@/lib/crm/personality";
+import { iconForTitle } from "@/lib/blueprint/renderers/lucide-icons";
+import { getPersonalityImages } from "@/lib/crm/personality-images";
 import type { BusinessType, PageSchema } from "./types";
 import type { PagePersonality } from "./design-tokens";
 
@@ -154,6 +156,22 @@ export async function seedLandingFromSoul(orgId: string): Promise<SeedLandingRes
   // .review_rating, never fabricated).
   applyResolvedContentToSchema(schema, resolvedContent, crmPersonality);
   applyStatsFromSoul(schema, soulRecordRaw, crmPersonality);
+
+  // v1.1.5 / Issue #2 — assign per-service Lucide icons based on the
+  // service title + personality vertical. Without this, every service
+  // card falls through to the generic "sparkles" fallback because the
+  // operator's input.services strings are bare names ("AC Repair",
+  // "Cleanings") with no icon hint. iconForTitle keyword-matches first,
+  // then falls back to the vertical default (dental → smile, hvac →
+  // wrench, legal → scale).
+  applyServiceIconsFromPersonality(schema, crmPersonality);
+
+  // v1.1.5 / Issue #3 — assign personality-curated Unsplash hero
+  // image (and per-service images) so a fresh dental workspace renders
+  // with a dental-office hero photo, not a text-only band. Operators
+  // can override per-section via update_landing_section once they see
+  // the rendered preview.
+  applyPersonalityImagesToSchema(schema, crmPersonality);
 
   // Plan-tier branding flag.
   const plan = resolvePlanFromPlanId(org.plan ?? null);
@@ -376,6 +394,82 @@ function applyResolvedContentToSchema(
   // future per-vertical branching (e.g. a different services_heading rule
   // for SaaS vs local-service personalities). No behavioral effect today.
   void personality;
+}
+
+/**
+ * v1.1.5 / Issue #3 — assign personality-curated Unsplash images.
+ * Hero gets the bundle's hero_url; service cards get round-robin
+ * assignment from service_grid_image_urls. Items already carrying an
+ * `image` value (e.g. operator-uploaded) are left alone.
+ */
+function applyPersonalityImagesToSchema(
+  schema: PageSchema,
+  personality: CRMPersonality
+): void {
+  const bundle = getPersonalityImages(personality.vertical);
+  if (!bundle) return;
+
+  for (const section of schema.sections) {
+    if (section.intent === "hero" && !section.content.imageUrl) {
+      section.content = { ...section.content, imageUrl: bundle.hero_url };
+      continue;
+    }
+    if (
+      (section.intent === "services" ||
+        section.intent === "features" ||
+        section.intent === "products") &&
+      bundle.service_grid_image_urls.length > 0
+    ) {
+      const items = section.content.items;
+      if (!items || items.length === 0) continue;
+      section.content = {
+        ...section.content,
+        items: items.map((item, idx) => {
+          if (item.image) return item;
+          const url =
+            bundle.service_grid_image_urls[
+              idx % bundle.service_grid_image_urls.length
+            ];
+          return { ...item, image: url };
+        }),
+      };
+    }
+  }
+}
+
+/**
+ * v1.1.5 / Issue #2 — assign Lucide icons to service cards by walking
+ * the schema's services-intent items and calling iconForTitle with the
+ * personality's vertical hint. Items that already carry an `icon`
+ * attribute (e.g. operator-edited via update_landing_section, or a
+ * SaaS pack with hardcoded icons) are left alone. Mutates the schema
+ * in place.
+ */
+function applyServiceIconsFromPersonality(
+  schema: PageSchema,
+  personality: CRMPersonality
+): void {
+  for (const section of schema.sections) {
+    if (
+      section.intent !== "services" &&
+      section.intent !== "features" &&
+      section.intent !== "products"
+    ) {
+      continue;
+    }
+    const items = section.content.items;
+    if (!items || items.length === 0) continue;
+    section.content = {
+      ...section.content,
+      items: items.map((item) => {
+        if (item.icon && item.icon.trim().length > 0) return item;
+        return {
+          ...item,
+          icon: iconForTitle(item.title, personality.vertical),
+        };
+      }),
+    };
+  }
 }
 
 /**
