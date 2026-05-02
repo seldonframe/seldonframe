@@ -1,7 +1,7 @@
 {
   "name": "@seldonframe/mcp",
-  "version": "1.1.3",
-  "description": "MCP server for SeldonFrame — AI-native Business OS platform. One command creates a real, hosted workspace with a website, booking page, intake form, CRM, and AI agents. v1.1.3: fixes the personality-mismatch bug in create_full_workspace where dental / legal / agency workspaces seeded the wrong CRM personality (and wrong pipeline stages, intake fields, booking duration). Root cause: the orchestrator passed `industry: null` to the inner createAnonymousWorkspace, losing the industry hint, so the inner classifier fell back to the BUSINESS_TYPE_FALLBACK chain → coaching for any vertical whose keywords only live in the personality bank (dental, legal, agency). Fix: pass the industry hint through to the inner classifier so the inner personality decision matches the outer one. Plus a defensive override that re-writes settings.crmPersonality + reseeds the default pipeline stages to the orchestrator's classified personality if any future regression reintroduces the mismatch.",
+  "version": "1.1.5",
+  "description": "MCP server for SeldonFrame — AI-native Business OS platform. One command creates a real, hosted workspace with a website, booking page, intake form, CRM, and AI agents. v1.1.5: services-grid icon classifier — soul.offerings entries from create_full_workspace now get topic-appropriate Lucide icons (wrench for AC repair, flame for heating, smile for invisalign, siren for emergency, sparkles for cleanings/teeth whitening, dollar-sign for quotes, clipboard-check for inspections, message-circle for consultations) instead of the generic _default circle. Pure substring classifier wired into enrichOfferings in schema-from-soul. Adds 6 new inline Lucide SVGs to the renderer (wrench, smile, siren, message-circle, dollar-sign, clipboard-check). Builds on v1.1.3's personality-mismatch fix.",
   "type": "module",
   "bin": {
     "seldonframe-mcp": "src/index.js"

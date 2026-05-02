@@ -24,6 +24,7 @@ import {
   getContentPack,
 } from "./content-packs";
 import { classifyBusinessTypeFromSoul } from "./classify-business";
+import { classifyServiceIcon } from "./service-icon-classifier";
 import type {
   BusinessType,
   PageAction,
@@ -264,7 +265,13 @@ function enrichOfferings(
 
   const items: SectionItem[] = rawOfferings
     .map((entry) => normalizeOffering(entry))
-    .filter((item): item is SectionItem => item !== null);
+    .filter((item): item is SectionItem => item !== null)
+    // May 2, 2026 — issue #2 of the Personality-Driven Content Layer spec.
+    // soul.offerings entries from createFullWorkspace come in as `{ name }`
+    // only (no icon hint), so without this every services-grid card
+    // rendered the generic _default circle. Classify a topic-appropriate
+    // icon from the title; preserve any explicit icon already set.
+    .map((item) => (item.icon ? item : { ...item, icon: classifyServiceIcon(item.title) }));
 
   // Pick a per-type intent label. SaaS calls them Features, ecommerce
   // calls them Products, everyone else calls them Services.
