@@ -425,8 +425,6 @@ const INDUSTRY_KEYWORDS: Array<{ vertical: PersonalityVertical; keywords: string
       "pest control", "junk removal", "moving company", "pool service",
       "garage door", "auto repair", "appliance repair", "tree service",
       "snow removal", "handyman", "locksmith",
-      // Real estate (uses similar workflow)
-      "real-estate", "real estate",
     ],
   },
   {

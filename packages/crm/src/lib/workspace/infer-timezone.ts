@@ -247,18 +247,36 @@ function normalize(s: string): string {
  * Resolve a state code from any of: 2-letter state code (CA / NY),
  * full state name ("California"), or a well-known city name
  * ("San Diego"). Returns null when nothing matches.
+ *
+ * Two-letter code matching is intentionally strict — only when the
+ * input itself is a short state-code string ("CA" / "ca" / "Ca")
+ * OR the original input contains the code in UPPERCASE
+ * surrounded by word boundaries (e.g. "San Diego, CA"). This stops
+ * the English preposition "in" inside free text like "...HVAC in
+ * San Diego." from being misread as the state code IN (Indiana).
  */
 export function resolveStateCode(input: string | null | undefined): string | null {
   if (!input) return null;
+  const trimmed = input.trim();
+  if (!trimmed) return null;
   const haystack = normalize(input);
   if (!haystack) return null;
 
-  // Direct 2-letter code (e.g. "CA", "NY", "ON"). Look at every
-  // whitespace-separated token so phrases like "based in CA" match.
-  for (const token of haystack.split(/\s+/)) {
-    const upper = token.toUpperCase();
-    if (upper.length === 2 && upper in STATE_TIMEZONES) {
-      return upper;
+  // Strict short-input case: the WHOLE string is just a 2-letter
+  // code (any casing). "ca", "Ca", "CA" all work.
+  if (trimmed.length === 2) {
+    const upper = trimmed.toUpperCase();
+    if (upper in STATE_TIMEZONES) return upper;
+  }
+
+  // Embedded 2-letter codes — require the ORIGINAL input to contain
+  // the code in UPPERCASE bounded by word boundaries. That matches
+  // "San Diego, CA" / "based in NY" but rejects "in" inside free
+  // text like "HVAC in San Diego."
+  const upperMatches = trimmed.match(/\b[A-Z]{2}\b/g);
+  if (upperMatches) {
+    for (const match of upperMatches) {
+      if (match in STATE_TIMEZONES) return match;
     }
   }
 

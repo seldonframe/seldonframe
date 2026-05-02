@@ -195,13 +195,149 @@ export const TOOLS = [
         },
         // URLs are in the payload (downstream consumers may rely on
         // them) but in a bucket whose name signals "do not display."
+        // May 2, 2026: admin_url REMOVED from this bucket. The admin
+        // browser URL is constructed only by finalize_workspace, so
+        // there is structurally nothing for Claude Code to leak before
+        // the email step. Public URLs stay (they're idempotent and
+        // useful to consumers other than the operator chat).
         _pending_after_email: {
           website_url: websiteUrl,
           booking_url: bookingUrl,
           intake_url: intakeUrl,
-          admin_url: adminUrl,
-          admin_url_expires_at: result.bearer_token_expires_at ?? null,
           public_urls: result.public_urls ?? publicUrls,
+        },
+      };
+      return firstEver ? withFirstCallBanner(payload) : payload;
+    },
+  },
+  {
+    name: "create_full_workspace",
+    description:
+      "PREFERRED for new workspaces. Atomic, server-side workspace creation: takes structured business info and creates everything in ONE call — workspace, business profile, CRM with industry-specific pipeline stages, booking page with availability, intake form, themed landing page, all deployed with live URLs. " +
+      "Use this instead of create_workspace + a long sequence of customization tools. The pipeline runs server-side with a fixed order — same input always produces same output, no retries, no 404s. " +
+      "MANDATORY FOLLOW-UP: After this returns `status: 'ready'`, ask the operator verbatim 'What email should I use for your account? This is where you'll get your login link and notifications.' Then call `finalize_workspace({ workspace_id, email })`. The admin dashboard URL is ONLY created by finalize_workspace — it does not exist in this response (so there's nothing for you to display prematurely). " +
+      "Example: create_full_workspace({ business_name: 'Summit Air Comfort', city: 'Phoenix', state: 'AZ', phone: '(480) 555-2100', services: ['AC repair', 'heating installation', 'duct cleaning'], business_description: 'Residential and commercial HVAC in Phoenix', review_count: 950, review_rating: 4.7, trust_signals: ['licensed', 'bonded', 'insured'], emergency_service: true, same_day: true, service_area: ['Scottsdale', 'Tempe', 'Mesa'] })",
+    inputSchema: obj(
+      {
+        business_name: str("Business display name (e.g. 'Summit Air Comfort')."),
+        city: str("Operator's city. Drives timezone inference."),
+        state: str("US state code or full name (or Canadian province). Drives timezone inference."),
+        phone: str("Business phone, any format. Renders in nav, hero, footer."),
+        services: {
+          type: "array",
+          description:
+            "Services / offerings the business provides — each as a plain string. The classifier reads these to pick the right CRM personality (HVAC, legal, dental, coaching, agency, default).",
+          items: { type: "string" },
+        },
+        business_description: str(
+          "One paragraph describing the business — drives the hero subhead, about section, and (critically) the personality classifier. Include industry words verbatim ('residential HVAC', 'family-owned plumbing', 'dental practice')."
+        ),
+        review_count: { type: "number", description: "Optional — number of reviews. Surfaces in trust strip + hero proof metric." },
+        review_rating: { type: "number", description: "Optional — average star rating (e.g. 4.7). Surfaces in trust strip." },
+        certifications: {
+          type: "array",
+          description: "Optional — credentials like ['EPA-certified', 'NATE-certified']. Surfaces in trust strip.",
+          items: { type: "string" },
+        },
+        trust_signals: {
+          type: "array",
+          description: "Optional — short claims like ['licensed', 'bonded', 'insured']. Surfaces in trust strip.",
+          items: { type: "string" },
+        },
+        emergency_service: { type: "boolean", description: "Optional — operator offers 24/7 emergency service. Surfaces in nav + hero." },
+        same_day: { type: "boolean", description: "Optional — same-day service available. Surfaces in trust strip." },
+        service_area: {
+          type: "array",
+          description: "Optional — cities or neighborhoods served (e.g. ['Scottsdale', 'Tempe']).",
+          items: { type: "string" },
+        },
+        email: str("Optional contact email surfaced in the landing footer (NOT the operator's account email — that comes via finalize_workspace)."),
+        address: str("Optional business address."),
+      },
+      ["business_name", "city", "state", "phone", "services", "business_description"]
+    ),
+    handler: async (args) => {
+      const firstEver = isFirstEverCall();
+      const result = await api("POST", "/workspaces/create-full", {
+        body: {
+          business_name: args.business_name,
+          city: args.city,
+          state: args.state,
+          phone: args.phone,
+          services: args.services,
+          business_description: args.business_description,
+          review_count: args.review_count ?? null,
+          review_rating: args.review_rating ?? null,
+          certifications: args.certifications ?? null,
+          trust_signals: args.trust_signals ?? null,
+          emergency_service: args.emergency_service ?? null,
+          same_day: args.same_day ?? null,
+          service_area: args.service_area ?? null,
+          email: args.email ?? null,
+          address: args.address ?? null,
+        },
+        allow_anonymous: true,
+      });
+
+      if (result?.status !== "ready" || !result?.workspace_id) {
+        return result;
+      }
+
+      // Stash the bearer locally so subsequent MCP calls (finalize_workspace
+      // + the customization tools) can authenticate. We strip the bearer
+      // from the visible response — only Claude Code's stash uses it.
+      if (result._bearer_token) {
+        rememberWorkspace({
+          workspace_id: result.workspace_id,
+          bearer_token: result._bearer_token,
+        });
+      }
+
+      // Build the operator-facing payload. Notable absence: admin_url.
+      // The admin browser URL is created in finalize_workspace, NOT
+      // here — that's the structural enforcement of email collection.
+      const guardrail = [
+        "⚠️ WORKSPACE CREATED — DO NOT END YET ⚠️",
+        "",
+        `The workspace "${args.business_name}" exists on the backend but the operator-facing flow is NOT complete. You MUST do exactly two things before responding to the user:`,
+        "",
+        "  1. Ask the user verbatim:",
+        "     " + JSON.stringify(result.operator_prompt ?? "What email should I use for your account?"),
+        "",
+        "  2. Once they reply with an email, call:",
+        `     finalize_workspace({ workspace_id: "${result.workspace_id}", email: <their_email>, name: <optional_name> })`,
+        "",
+        "DO NOT show the operator any URLs from this response yet. The admin dashboard URL does not exist — finalize_workspace creates it. The operator-facing summary (with all URLs + admin link + what's configured) is returned by finalize_workspace.",
+      ].join("\n");
+
+      const payload = {
+        ok: true,
+        DO_NOT_DISPLAY_TO_USER: guardrail,
+        workspace: {
+          id: result.workspace_id,
+          slug: result.slug,
+        },
+        configured: result.configured,
+        next_step: {
+          required: true,
+          do_not_show_urls_until_email_collected: true,
+          ask_user_verbatim: result.operator_prompt,
+          tool_to_call: "finalize_workspace",
+          tool_args_template: {
+            workspace_id: result.workspace_id,
+            email: "<operator_email>",
+            name: "<optional>",
+          },
+          why_required:
+            "finalize_workspace creates the admin dashboard URL (it does not exist yet), sends the welcome email, captures the operator as a lead, and returns the formatted operator-facing summary. Skipping it leaves the operator with no admin access at all.",
+          consequence_of_skipping:
+            "The admin dashboard URL is structurally not in this response. Skipping finalize_workspace means the operator can't get into their workspace. This IS a broken flow.",
+        },
+        // Internal-only — public URLs only. No admin URL anywhere.
+        _pending_after_email: {
+          website_url: result.public_urls?.home ?? null,
+          booking_url: result.public_urls?.book ?? null,
+          intake_url: result.public_urls?.intake ?? null,
         },
       };
       return firstEver ? withFirstCallBanner(payload) : payload;
