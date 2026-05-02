@@ -228,13 +228,22 @@ function action(
 
 const LOCAL_SERVICE_PACK: ContentPack = {
   sections: [
-    heroSection("Local. Trusted. Fast.", "Quality service from your neighborhood pros."),
+    // May 1, 2026 — Hormozi-style hero. Quantified outcome (Same-Day),
+    // proof metric (4.8★ + customer count), risk-reversal language.
+    // Replaces the previous generic "Local. Trusted. Fast." headline.
+    heroSection(
+      "Same-Day Service. 4.8★ from 500+ Local Customers.",
+      "Licensed & insured · Free estimates · We show up when we say we will"
+    ),
     trustBarSection([
-      "5-star rated by local customers",
-      "Licensed and insured",
+      "4.8★ Google rated",
+      "Licensed & insured",
       "Same-day service available",
+      "Free estimates",
     ]),
-    servicesSection("services", "Services we offer"),
+    // First section after hero is a benefit-headlined services grid,
+    // populated from soul.offerings or hidden when empty.
+    servicesSection("services", "Everything we fix — fast"),
     aboutSection(),
     statsSection([
       { value: "500+", label: "Jobs Completed" },
@@ -250,7 +259,10 @@ const LOCAL_SERVICE_PACK: ContentPack = {
     // the schema's section list.
     testimonialsSection(),
     faqSection([]), // filled from default_faqs at apply-time
-    ctaSection("Ready to get started?", "Get a free quote in minutes."),
+    ctaSection(
+      "Get a free quote in 60 seconds",
+      "No obligation · Same-day callbacks · Licensed & insured"
+    ),
     footerSection(),
   ],
   actions: [
@@ -289,16 +301,20 @@ const LOCAL_SERVICE_PACK: ContentPack = {
 
 const PROFESSIONAL_SERVICE_PACK: ContentPack = {
   sections: [
+    // May 1, 2026 — Hormozi rewrite: lead with the dream outcome
+    // (results) + proof metric (clients served) + lower the perceived
+    // effort barrier (free, no commitment).
     heroSection(
-      "Practical advice. Real results.",
-      "Personalized engagements built around your goals."
+      "Real Results in 90 Days. 100+ Clients. Free Consultation.",
+      "Personalized engagements · Certified · No commitment until you're ready"
     ),
     trustBarSection([
       "Trusted by 100+ clients",
+      "Free consultation",
       "Personalized approach",
       "Certified professional",
     ]),
-    servicesSection("services", "How I work with clients"),
+    servicesSection("services", "How I help clients move forward"),
     aboutSection(),
     statsSection([
       { value: "100+", label: "Clients Served" },
@@ -307,7 +323,10 @@ const PROFESSIONAL_SERVICE_PACK: ContentPack = {
     ]),
     testimonialsSection(),
     faqSection([]),
-    ctaSection("Ready to talk?", "Book a free consultation."),
+    ctaSection(
+      "Book your free consultation",
+      "30 minutes · Confidential · No commitment"
+    ),
     footerSection(),
   ],
   actions: [
@@ -341,11 +360,18 @@ const PROFESSIONAL_SERVICE_PACK: ContentPack = {
 
 const SAAS_PACK: ContentPack = {
   sections: [
-    heroSection("Build faster.", "Open-source platform for builders who ship."),
+    // May 1, 2026 — Hormozi rewrite: explicitly state what we replace
+    // (the operator's pain), quantify time-to-value (2 minutes),
+    // include a risk-reversal ($0 forever).
+    heroSection(
+      "Replace 5 Tools. Deploy in 2 Minutes. Start Free Forever.",
+      "Landing page, CRM, booking, intake, and AI agents — one install · MIT licensed · No credit card"
+    ),
     trustBarSection([
-      "Open source",
-      "Free to start",
+      "Free forever to self-host",
       "Deploy in 2 minutes",
+      "MIT licensed",
+      "No credit card",
     ]),
     partnersSection("Built on", [
       "Anthropic",
@@ -409,7 +435,10 @@ const SAAS_PACK: ContentPack = {
       { value: "2 min", label: "Deploy Time" },
     ]),
     faqSection([]),
-    ctaSection("Ready to build?", "Start for $0. Upgrade when you grow."),
+    ctaSection(
+      "Spin up your Business OS in 2 minutes",
+      "Free forever · No credit card · MIT licensed"
+    ),
     footerSection(),
   ],
   actions: [
@@ -451,18 +480,27 @@ const SAAS_PACK: ContentPack = {
 
 const AGENCY_PACK: ContentPack = {
   sections: [
-    heroSection("Strategy meets execution.", "Branded growth systems for ambitious teams."),
+    // May 1, 2026 — Hormozi rewrite: client outcome (3x conversion),
+    // speed metric (5 days), differentiator (free strategy call).
+    heroSection(
+      "Sites That Convert 3x Higher. Live in 5 Days. Free Strategy Call.",
+      "50+ projects delivered · No retainer required · Custom scope per project"
+    ),
     trustBarSection([
       "50+ projects delivered",
-      "Global clients",
-      "Full-service team",
+      "Free strategy call",
+      "No retainer required",
+      "Custom scope per project",
     ]),
-    servicesSection("services", "What we do"),
+    servicesSection("services", "How we make sites that convert"),
     portfolioSection(),
     aboutSection(),
     testimonialsSection(),
     faqSection([]),
-    ctaSection("Ready to start a project?", "Tell us about your goals."),
+    ctaSection(
+      "Book your free strategy call",
+      "30 minutes · No commitment · Custom scope"
+    ),
     footerSection(),
   ],
   actions: [
@@ -497,17 +535,26 @@ const AGENCY_PACK: ContentPack = {
 
 const ECOMMERCE_PACK: ContentPack = {
   sections: [
-    heroSection("Made to last.", "Goods that look great and ship fast."),
+    // May 1, 2026 — Hormozi rewrite: product benefit + risk reversal
+    // + free-shipping threshold quantified.
+    heroSection(
+      "Built to Last. Free Shipping Over $50. 30-Day Returns.",
+      "Made for daily use · Backed by our no-questions return policy"
+    ),
     trustBarSection([
-      "Free shipping on orders over $50",
-      "Easy 30-day returns",
+      "Free shipping on $50+",
+      "30-day returns",
       "Secure checkout",
+      "Made to last",
     ]),
-    servicesSection("products", "Our products"),
+    servicesSection("products", "Shop the lineup"),
     aboutSection(),
     testimonialsSection(),
     faqSection([]),
-    ctaSection("Ready to shop?", "Free shipping on orders over $50."),
+    ctaSection(
+      "Shop now — free shipping over $50",
+      "Secure checkout · 30-day returns · Real customer reviews"
+    ),
     footerSection(),
   ],
   actions: [

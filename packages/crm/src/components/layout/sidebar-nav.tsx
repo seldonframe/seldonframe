@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, Briefcase, Building2, Calendar, ChevronRight, FileText, Layout, LayoutDashboard, Mail, Puzzle, Settings, Sparkles, Users, Zap } from "lucide-react";
+import { BookOpen, Briefcase, Building2, Calendar, ChevronRight, ExternalLink, FileText, Layout, LayoutDashboard, Mail, MessageCircle, Puzzle, Settings, Sparkles, Users, Zap } from "lucide-react";
 
 type NavItem = {
   href: string;
@@ -11,6 +11,10 @@ type NavItem = {
   disabled?: boolean;
   tooltip?: string;
   upgrade?: boolean;
+  /** May 1, 2026 — when true, render as <a target="_blank"> instead
+   *  of a Next.js Link. Used for off-platform destinations like the
+   *  SeldonFrame Discord. */
+  external?: boolean;
 };
 
 export type NavGroup = {
@@ -40,6 +44,8 @@ const iconMap = {
   settings: Settings,
   sparkles: Sparkles,
   puzzle: Puzzle,
+  messagecircle: MessageCircle,
+  discord: MessageCircle,
 } as const;
 
 function resolveIcon(iconName: string) {
@@ -52,10 +58,43 @@ function isActivePath(pathname: string, href: string) {
 }
 
 function NavItemLink({ item, pathname, onNavigate, icon: Icon }: { item: NavItem; pathname: string; onNavigate?: () => void; icon: React.ComponentType<{ className?: string }> }) {
-  const active = isActivePath(pathname, item.href);
+  const active = !item.external && isActivePath(pathname, item.href);
   const className = item.disabled
     ? "crm-sidebar-link cursor-not-allowed border border-transparent px-3.5 text-sm font-medium opacity-55"
     : "crm-sidebar-link border px-3.5 text-sm font-medium";
+
+  // May 1, 2026 — external links (Discord, etc.) render as plain
+  // <a target="_blank"> so they don't trip Next.js client-side
+  // routing and so the operator stays in the dashboard tab when
+  // they pop the link open.
+  const trailing = item.upgrade ? (
+    <span className="rounded-md border border-border bg-card/70 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+      Upgrade
+    </span>
+  ) : item.external ? (
+    <ExternalLink className="size-3 text-muted-foreground/60" />
+  ) : active && !item.disabled ? (
+    <ChevronRight className="h-4 w-4 text-muted-foreground/70" />
+  ) : null;
+
+  if (item.external) {
+    return (
+      <a
+        href={item.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={className}
+        title={item.tooltip}
+        onClick={() => {
+          if (!item.disabled) onNavigate?.();
+        }}
+      >
+        <Icon className="crm-sidebar-icon size-4 shrink-0" />
+        <span className="crm-sidebar-text flex-1 text-[13px] sm:text-sm">{item.label}</span>
+        {trailing}
+      </a>
+    );
+  }
 
   return (
     <Link
@@ -71,12 +110,7 @@ function NavItemLink({ item, pathname, onNavigate, icon: Icon }: { item: NavItem
     >
       <Icon className={`crm-sidebar-icon size-4 shrink-0 ${active && !item.disabled ? "text-primary" : ""}`} />
       <span className="crm-sidebar-text flex-1 text-[13px] sm:text-sm">{item.label}</span>
-      {active && !item.disabled ? <ChevronRight className="h-4 w-4 text-muted-foreground/70" /> : null}
-      {item.upgrade ? (
-        <span className="rounded-md border border-border bg-card/70 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
-          Upgrade
-        </span>
-      ) : null}
+      {trailing}
     </Link>
   );
 }

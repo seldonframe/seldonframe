@@ -80,6 +80,16 @@ export function Sidebar(props: {
       title: "SYSTEM",
       items: filterHidden([
         { href: "/docs", label: "Docs", icon: "BookOpen" },
+        // May 1, 2026 — Discord link in the SYSTEM group so operators
+        // always have a one-click path to community help. external:
+        // true so it opens in a new tab (operator keeps their place
+        // in the dashboard).
+        {
+          href: "https://discord.gg/sbVUu976NW",
+          label: "Discord",
+          icon: "MessageCircle",
+          external: true,
+        },
         { href: "/settings", label: "Settings", icon: "Settings" },
       ]),
     },

@@ -1,7 +1,7 @@
 {
   "name": "@seldonframe/mcp",
-  "version": "1.0.4",
-  "description": "MCP server for SeldonFrame — AI-native Business OS platform. One command creates a real hosted workspace with CRM, booking, intake, and Brain v2. v1.0.4: hardens the admin URL surface so operators always see the bearer-token /admin/<id>?token=... URL, not the legacy /switch-workspace login-required path.",
+  "version": "1.0.5",
+  "description": "MCP server for SeldonFrame — AI-native Business OS platform. One command creates a real hosted workspace with CRM, booking page, intake form, and AI agents. v1.0.5: collect_operator_email tool closes the onboarding loop (welcome email + lead capture); auto-injects x-org-id from workspace bearer for ALL tool calls (fixes list_contacts / list_deals / list_bookings / send_welcome_email); structured Soul-seed fields on create_workspace (phone, services, testimonials) so the landing page renders real data on the first GET; operator-facing labels replace internal slugs in responses.",
   "type": "module",
   "bin": {
     "seldonframe-mcp": "src/index.js"

@@ -14,6 +14,10 @@ import {
   validatePageSchema,
   validateRenderedHTML,
   validateFullPipeline,
+  validateHeadlineQuality,
+  validateAboveTheFold,
+  validateSectionHeadlines,
+  validateLayoutCoherence,
 } from "@/lib/page-schema/pipeline-validator";
 import type { PageSchema } from "@/lib/page-schema/types";
 
@@ -412,7 +416,9 @@ describe("validateFullPipeline", () => {
       "<div>Apex</div>"
     );
     assert.equal(result.allPassed, false);
-    assert.equal(result.results.length, 3);
+    // 7 checks now: soul_storage, page_schema, headline_quality,
+    // above_the_fold, section_headlines, layout_coherence, rendered_html.
+    assert.equal(result.results.length, 7);
     assert.ok(result.results.some((r) => !r.passed));
   });
 
@@ -425,6 +431,41 @@ describe("validateFullPipeline", () => {
         description: "",
         phone: "(972) 485-0813",
       },
+      sections: [
+        {
+          id: "hero",
+          intent: "hero",
+          content: {
+            headline: "Same-Day AC Repair. 4.8★ from 500+ Customers.",
+            subheadline: "Licensed · Insured · Free estimates",
+          },
+          visible: true,
+          order: 10,
+        },
+        {
+          id: "trust_bar",
+          intent: "trust_bar",
+          content: { bullets: ["Licensed", "Insured", "4.8★ Google"] },
+          visible: true,
+          order: 20,
+        },
+      ],
+      actions: [
+        {
+          id: "hero_primary",
+          text: "Get a free quote",
+          href: "/intake",
+          style: "primary",
+          placement: ["hero", "cta"],
+        },
+        {
+          id: "hero_secondary",
+          text: "Schedule service",
+          href: "/book",
+          style: "secondary",
+          placement: ["hero"],
+        },
+      ],
     });
     const result = validateFullPipeline(
       { businessName: "Apex Air", phone: "(972) 485-0813" },
@@ -433,5 +474,412 @@ describe("validateFullPipeline", () => {
       '<div>Apex Air</div><a href="tel:9724850813">(972) 485-0813</a>'
     );
     assert.equal(result.allPassed, true);
+  });
+});
+
+// ─── validateHeadlineQuality (Hormozi check #3) ──────────────────────────────
+
+describe("validateHeadlineQuality", () => {
+  test("ERROR when headline equals company name", () => {
+    const schema = makeSchema({
+      business: {
+        name: "Apex Air Solutions",
+        type: "local_service",
+        tagline: "",
+        description: "",
+      },
+      sections: [
+        {
+          id: "hero",
+          intent: "hero",
+          content: { headline: "Apex Air Solutions", subheadline: "" },
+          visible: true,
+          order: 10,
+        },
+      ],
+    });
+    const result = validateHeadlineQuality(schema, {
+      business_name: "Apex Air Solutions",
+    });
+    assert.equal(result.passed, false);
+    assert.ok(result.errors.some((e) => e.includes("HEADLINE IS COMPANY NAME")));
+  });
+
+  test("WARN on generic descriptive headlines", () => {
+    const schema = makeSchema({
+      sections: [
+        {
+          id: "hero",
+          intent: "hero",
+          content: {
+            headline: "Professional coaching services",
+            subheadline: "",
+          },
+          visible: true,
+          order: 10,
+        },
+      ],
+    });
+    const result = validateHeadlineQuality(schema, {});
+    assert.equal(result.passed, true); // warn-only, doesn't fail
+    assert.ok(result.warnings.some((w) => w.includes("HEADLINE IS GENERIC")));
+  });
+
+  test("WARN when headline has no quantification", () => {
+    const schema = makeSchema({
+      sections: [
+        {
+          id: "hero",
+          intent: "hero",
+          content: { headline: "Quality Service You Can Trust", subheadline: "" },
+          visible: true,
+          order: 10,
+        },
+      ],
+    });
+    const result = validateHeadlineQuality(schema, {});
+    assert.ok(result.warnings.some((w) => w.includes("HEADLINE NOT QUANTIFIED")));
+  });
+
+  test("PASS on Hormozi-style headline (numbers + risk reversal)", () => {
+    const schema = makeSchema({
+      sections: [
+        {
+          id: "hero",
+          intent: "hero",
+          content: {
+            headline: "Same-Day AC Repair. 4.8★ from 2,300+ Dallas Homeowners.",
+            subheadline: "NATE certified · Licensed · We show up or you don't pay",
+          },
+          visible: true,
+          order: 10,
+        },
+      ],
+    });
+    const result = validateHeadlineQuality(schema, {});
+    assert.equal(result.passed, true);
+    // Should not fire NOT_QUANTIFIED warning
+    assert.equal(
+      result.warnings.filter((w) => w.includes("NOT QUANTIFIED")).length,
+      0
+    );
+  });
+
+  test("WARN when subhead repeats headline", () => {
+    const schema = makeSchema({
+      sections: [
+        {
+          id: "hero",
+          intent: "hero",
+          content: {
+            headline: "Free 30-day trial",
+            subheadline: "Free 30-day trial",
+          },
+          visible: true,
+          order: 10,
+        },
+      ],
+    });
+    const result = validateHeadlineQuality(schema, {});
+    assert.ok(result.warnings.some((w) => w.includes("SUBHEAD REPEATS HEADLINE")));
+  });
+});
+
+// ─── validateAboveTheFold (Hormozi check #4) ─────────────────────────────────
+
+describe("validateAboveTheFold", () => {
+  test("ERROR when no hero", () => {
+    const schema = makeSchema({ sections: [] });
+    const result = validateAboveTheFold(schema);
+    assert.equal(result.passed, false);
+    assert.ok(result.errors.some((e) => e.includes("MISSING HERO")));
+  });
+
+  test("ERROR when no hero CTA", () => {
+    const schema = makeSchema({
+      sections: [
+        {
+          id: "hero",
+          intent: "hero",
+          content: { headline: "Quality service in 24h", subheadline: "" },
+          visible: true,
+          order: 10,
+        },
+      ],
+      actions: [],
+    });
+    const result = validateAboveTheFold(schema);
+    assert.equal(result.passed, false);
+    assert.ok(result.errors.some((e) => e.includes("MISSING CTA")));
+  });
+
+  test("WARN when only 1 hero CTA", () => {
+    const schema = makeSchema({
+      sections: [
+        {
+          id: "hero",
+          intent: "hero",
+          content: { headline: "Same-day AC repair", subheadline: "" },
+          visible: true,
+          order: 10,
+        },
+        {
+          id: "trust_bar",
+          intent: "trust_bar",
+          content: { bullets: ["Licensed"] },
+          visible: true,
+          order: 20,
+        },
+      ],
+      actions: [
+        {
+          id: "hero_primary",
+          text: "Get a quote",
+          href: "/intake",
+          style: "primary",
+          placement: ["hero"],
+        },
+      ],
+    });
+    const result = validateAboveTheFold(schema);
+    assert.equal(result.passed, true);
+    assert.ok(result.warnings.some((w) => w.includes("ONLY 1 CTA")));
+  });
+
+  test("ERROR when local_service has no trust bar", () => {
+    const schema = makeSchema({
+      business: { name: "Apex", type: "local_service", tagline: "", description: "" },
+      sections: [
+        {
+          id: "hero",
+          intent: "hero",
+          content: { headline: "Same-day repairs", subheadline: "" },
+          visible: true,
+          order: 10,
+        },
+      ],
+      actions: [
+        {
+          id: "p",
+          text: "Quote",
+          href: "/intake",
+          style: "primary",
+          placement: ["hero"],
+        },
+        {
+          id: "s",
+          text: "Book",
+          href: "/book",
+          style: "secondary",
+          placement: ["hero"],
+        },
+      ],
+    });
+    const result = validateAboveTheFold(schema);
+    assert.equal(result.passed, false);
+    assert.ok(result.errors.some((e) => e.includes("MISSING TRUST BAR")));
+  });
+});
+
+// ─── validateSectionHeadlines (Hormozi check #5) ─────────────────────────────
+
+describe("validateSectionHeadlines", () => {
+  test("WARN on generic 'Services' label", () => {
+    const schema = makeSchema({
+      sections: [
+        {
+          id: "services",
+          intent: "services",
+          content: { headline: "Services", items: [] },
+          visible: true,
+          order: 30,
+        },
+      ],
+    });
+    const result = validateSectionHeadlines(schema);
+    assert.equal(result.passed, true);
+    assert.ok(result.warnings.some((w) => w.includes("GENERIC SECTION HEADLINE")));
+  });
+
+  test("PASS on benefit-driven section headline", () => {
+    const schema = makeSchema({
+      sections: [
+        {
+          id: "services",
+          intent: "services",
+          content: {
+            headline: "8 Ways We Keep Dallas Cool — All Year Round",
+            items: [],
+          },
+          visible: true,
+          order: 30,
+        },
+      ],
+    });
+    const result = validateSectionHeadlines(schema);
+    assert.equal(result.passed, true);
+    assert.equal(result.warnings.length, 0);
+  });
+
+  test("ERROR on template instructions in section body", () => {
+    const schema = makeSchema({
+      sections: [
+        {
+          id: "about",
+          intent: "about",
+          content: {
+            headline: "Why customers pick us",
+            body: "Tell your story in 2-3 sentences.",
+          },
+          visible: true,
+          order: 40,
+        },
+      ],
+    });
+    const result = validateSectionHeadlines(schema);
+    assert.equal(result.passed, false);
+    assert.ok(result.errors.some((e) => e.includes("TEMPLATE INSTRUCTIONS")));
+  });
+
+  test("hidden sections are skipped", () => {
+    const schema = makeSchema({
+      sections: [
+        {
+          id: "services",
+          intent: "services",
+          content: { headline: "Services", items: [] },
+          visible: false,
+          order: 30,
+        },
+      ],
+    });
+    const result = validateSectionHeadlines(schema);
+    assert.equal(result.warnings.length, 0);
+  });
+});
+
+// ─── validateLayoutCoherence (Hormozi check #6) ──────────────────────────────
+
+describe("validateLayoutCoherence", () => {
+  test("WARN on orphan service card (4 items)", () => {
+    const schema = makeSchema({
+      sections: [
+        {
+          id: "services",
+          intent: "services",
+          content: {
+            headline: "Services",
+            items: [
+              { title: "A", description: "" },
+              { title: "B", description: "" },
+              { title: "C", description: "" },
+              { title: "D", description: "" },
+            ],
+          },
+          visible: true,
+          order: 30,
+        },
+      ],
+    });
+    const result = validateLayoutCoherence(schema, {}, "");
+    assert.ok(result.warnings.some((w) => w.includes("ORPHAN SERVICE CARD")));
+  });
+
+  test("PASS when service grid is multiple of 3", () => {
+    const schema = makeSchema({
+      sections: [
+        {
+          id: "services",
+          intent: "services",
+          content: {
+            headline: "Services",
+            items: [
+              { title: "A", description: "" },
+              { title: "B", description: "" },
+              { title: "C", description: "" },
+            ],
+          },
+          visible: true,
+          order: 30,
+        },
+      ],
+    });
+    const result = validateLayoutCoherence(schema, {}, "");
+    assert.equal(
+      result.warnings.filter((w) => w.includes("ORPHAN")).length,
+      0
+    );
+  });
+
+  test("ERROR when local_service has no phone but soul does", () => {
+    const schema = makeSchema({
+      business: {
+        name: "Apex",
+        type: "local_service",
+        tagline: "",
+        description: "",
+        phone: undefined,
+      },
+    });
+    const result = validateLayoutCoherence(
+      schema,
+      { phone: "(972) 485-0813" },
+      ""
+    );
+    assert.equal(result.passed, false);
+    assert.ok(result.errors.some((e) => e.includes("LOCAL_SERVICE MISSING PHONE")));
+  });
+
+  test("ERROR on empty action href", () => {
+    const schema = makeSchema({
+      actions: [
+        {
+          id: "broken",
+          text: "Click",
+          href: "",
+          style: "primary",
+          placement: ["hero"],
+        },
+      ],
+    });
+    const result = validateLayoutCoherence(schema, {}, "");
+    assert.equal(result.passed, false);
+    assert.ok(result.errors.some((e) => e.includes("EMPTY HREF")));
+  });
+
+  test("ERROR on duplicate nav link text", () => {
+    const schema = makeSchema({
+      actions: [
+        {
+          id: "a",
+          text: "Book",
+          href: "/book",
+          style: "ghost",
+          placement: ["nav"],
+        },
+        {
+          id: "b",
+          text: "Book",
+          href: "/schedule",
+          style: "ghost",
+          placement: ["nav"],
+        },
+      ],
+    });
+    const result = validateLayoutCoherence(schema, {}, "");
+    assert.equal(result.passed, false);
+    assert.ok(result.errors.some((e) => e.includes("DUPLICATE LINK TEXT")));
+  });
+
+  test("WARN when SaaS HTML mentions business hours", () => {
+    const schema = makeSchema({
+      business: { name: "Acme", type: "saas", tagline: "", description: "" },
+    });
+    const result = validateLayoutCoherence(
+      schema,
+      {},
+      "<div>Mon-Fri 9-5</div>"
+    );
+    assert.ok(result.warnings.some((w) => w.includes("HAS BUSINESS HOURS")));
   });
 });

@@ -8,6 +8,7 @@ import { CommandPalette } from "@/components/layout/command-palette";
 import { DemoBanner } from "@/components/layout/demo-banner";
 import { TestModeBanner } from "@/components/layout/test-mode-banner";
 import { DashboardTopbar } from "@/components/layout/dashboard-topbar";
+import { HelpButton } from "@/components/layout/help-button";
 import { SeldonChat } from "@/components/seldon-chat";
 import { registerCrmEventListeners } from "@/lib/events/listeners";
 import { getAllBlocksForOrg } from "@/lib/blocks/registry";
@@ -189,6 +190,10 @@ export default async function DashboardLayout({
           </div>
           <SeldonChat enabled={canAccessSeldon} />
           <CommandPalette items={paletteItems} />
+          {/* May 1, 2026 — persistent help escape hatch on every
+              admin page. Floating bottom-right button opens a popover
+              with Discord / Docs / Report-a-bug links. */}
+          <HelpButton />
         </div>
       </div>
     </SoulProvider>

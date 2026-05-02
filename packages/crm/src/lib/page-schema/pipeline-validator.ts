@@ -50,7 +50,14 @@ export interface PipelineInput {
 
 export interface ValidationResult {
   /** Stage label so a downstream consumer can route alerts. */
-  stage: "soul_storage" | "page_schema" | "rendered_html";
+  stage:
+    | "soul_storage"
+    | "page_schema"
+    | "rendered_html"
+    | "headline_quality"
+    | "above_the_fold"
+    | "section_headlines"
+    | "layout_coherence";
   /** True iff the stage's critical assertions all passed. */
   passed: boolean;
   /** Non-fatal: data was missing from input, so we can't assert it. */
@@ -415,6 +422,336 @@ export function validateRenderedHTML(
   };
 }
 
+// ─── Hormozi-style content quality checks ────────────────────────────────────
+//
+// Per the Hormozi Value Equation (Dream Outcome × Perceived Likelihood ÷
+// Time × Effort), every headline must lead with a quantified benefit.
+// "Phoenix's Most Trusted HVAC Team" is a description, not a value claim.
+// "Same-Day AC Repair. 4.8★ from 2,300+ Dallas Homeowners." is.
+//
+// These checks are conservative (warn, not error) for most rules so a
+// pack default that lacks quantification doesn't block the render —
+// the goal is to surface the quality regression to operators in the
+// log box so we can iterate the packs over time.
+
+const GENERIC_HEADLINE_PATTERNS = [
+  /^professional .* services?$/i,
+  /^welcome to /i,
+  /^your trusted /i,
+  /^your reliable /i,
+  /^your premier /i,
+  /^the .* (platform|solution|system)$/i,
+  /^reliable .* you can count on$/i,
+];
+
+const QUANTIFICATION_KEYWORDS = [
+  // Numbers / percentages / time / star ratings
+  "%",
+  "★",
+  "free",
+  "guarantee",
+  "guaranteed",
+  "minute",
+  "hour",
+  "day",
+  "week",
+  "month",
+  "same-day",
+  "today",
+  "instantly",
+  "no credit card",
+  "no obligation",
+  "risk-free",
+  "money-back",
+  "lifetime",
+];
+
+const GENERIC_SECTION_HEADLINES = new Set([
+  "services",
+  "our services",
+  "features",
+  "how it works",
+  "about",
+  "about us",
+  "testimonials",
+  "what our customers say",
+  "what clients say",
+  "why us",
+  "why choose us",
+  "faq",
+  "frequently asked questions",
+  "pricing",
+  "contact us",
+]);
+
+function hasQuantification(text: string): boolean {
+  const lower = text.toLowerCase();
+  // Any digit run of 1+ counts (5, 24, 2300, $99, 4.8) — quick proxy
+  // for "this headline carries a number."
+  if (/\d/.test(lower)) return true;
+  return QUANTIFICATION_KEYWORDS.some((kw) => lower.includes(kw));
+}
+
+/**
+ * Check 3 — Hormozi headline quality. Catches generic, descriptive
+ * headlines that don't convert.
+ */
+export function validateHeadlineQuality(
+  schema: PageSchema,
+  soul: Record<string, unknown> | null | undefined
+): ValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  const hero = schema.sections.find((s) => s.intent === "hero" && s.visible);
+  if (!hero) {
+    return {
+      stage: "headline_quality",
+      passed: true,
+      warnings: ["No visible hero — skipped"],
+      errors: [],
+    };
+  }
+
+  const headline = (hero.content.headline ?? "").trim();
+  const subhead = (hero.content.subheadline ?? "").trim();
+  const businessName = schema.business.name?.trim() ?? "";
+  const soulName = readSoulField(soul, "business_name", "businessName", "company_name");
+
+  // ── Hard error: headline equals company name ──
+  if (
+    headline.length > 0 &&
+    (headline === businessName || (soulName && headline === soulName))
+  ) {
+    errors.push(
+      `HEADLINE IS COMPANY NAME: "${headline}" — replace with a benefit-driven value claim ("Same-Day AC Repair. 4.8★ from 2,300+ Dallas Homeowners.")`
+    );
+  }
+
+  // ── Warn: matches generic descriptive patterns ──
+  for (const pattern of GENERIC_HEADLINE_PATTERNS) {
+    if (pattern.test(headline)) {
+      warnings.push(
+        `HEADLINE IS GENERIC: "${headline}" matches pattern ${pattern} — lead with a quantified outcome instead`
+      );
+      break;
+    }
+  }
+
+  // ── Warn: no quantified element (number, timeframe, proof metric, risk reversal) ──
+  if (headline.length > 0 && !hasQuantification(headline)) {
+    warnings.push(
+      `HEADLINE NOT QUANTIFIED: "${headline}" — add a number, timeframe, star rating, or risk-reversal word ("free", "guaranteed", "same-day")`
+    );
+  }
+
+  // ── Warn: subhead repeats headline ──
+  if (subhead.length > 0 && headline.length > 0 && subhead === headline) {
+    warnings.push(`SUBHEAD REPEATS HEADLINE: "${subhead}"`);
+  }
+
+  // ── Warn: subhead too long ──
+  if (subhead.length > 200) {
+    warnings.push(
+      `SUBHEAD TOO LONG: ${subhead.length} chars — keep under 200; use " · " separators for proof points`
+    );
+  }
+
+  return {
+    stage: "headline_quality",
+    passed: errors.length === 0,
+    warnings,
+    errors,
+  };
+}
+
+/**
+ * Check 4 — above-the-fold completeness. The first paint must have
+ * everything that converts: hero, headline, at least one CTA with a
+ * working href, and (for local services) a trust bar.
+ */
+export function validateAboveTheFold(schema: PageSchema): ValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  const hero = schema.sections.find((s) => s.intent === "hero" && s.visible);
+  if (!hero) {
+    errors.push("ABOVE-THE-FOLD MISSING HERO: no visible hero section");
+  } else if (!hero.content.headline?.trim()) {
+    errors.push("ABOVE-THE-FOLD HERO HAS NO HEADLINE");
+  }
+
+  // Hero placement actions = primary + (ideally) secondary CTA
+  const heroActions = schema.actions.filter((a) =>
+    a.placement.includes("hero")
+  );
+  const heroActionsWithHref = heroActions.filter(
+    (a) => a.href && a.href.trim() !== "" && a.href.trim() !== "#"
+  );
+  if (heroActionsWithHref.length === 0) {
+    errors.push(
+      "ABOVE-THE-FOLD MISSING CTA: no hero-placement actions with a working href"
+    );
+  } else if (heroActionsWithHref.length === 1) {
+    warnings.push(
+      "ABOVE-THE-FOLD HAS ONLY 1 CTA: best practice is two — high-intent primary + lower-commitment secondary"
+    );
+  }
+
+  // Local-service pages need a trust bar above the fold.
+  if (schema.business.type === "local_service") {
+    const trustBar = schema.sections.find(
+      (s) => s.intent === "trust_bar" && s.visible
+    );
+    const bullets = trustBar?.content.bullets ?? [];
+    if (!trustBar || bullets.length === 0) {
+      errors.push(
+        "LOCAL_SERVICE MISSING TRUST BAR: page needs a trust strip with at least one bullet (Licensed, Insured, Free Estimates, …)"
+      );
+    }
+  }
+
+  return {
+    stage: "above_the_fold",
+    passed: errors.length === 0,
+    warnings,
+    errors,
+  };
+}
+
+/**
+ * Check 5 — section headlines must state benefits, never generic
+ * labels. Also ensures no template-instruction text leaked into
+ * any section body.
+ */
+export function validateSectionHeadlines(schema: PageSchema): ValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  for (const section of schema.sections) {
+    if (!section.visible) continue;
+
+    const headline = (section.content.headline ?? "").trim().toLowerCase();
+    if (headline && GENERIC_SECTION_HEADLINES.has(headline)) {
+      warnings.push(
+        `GENERIC SECTION HEADLINE: section "${section.intent}" uses "${section.content.headline}" — restate as a benefit ("8 Ways We Keep Dallas Cool — All Year Round")`
+      );
+    }
+
+    const body = section.content.body ?? "";
+    for (const phrase of TEMPLATE_INSTRUCTION_PHRASES) {
+      if (body.includes(phrase)) {
+        errors.push(
+          `TEMPLATE INSTRUCTIONS in section "${section.intent}" body: "${phrase}"`
+        );
+      }
+    }
+  }
+
+  return {
+    stage: "section_headlines",
+    passed: errors.length === 0,
+    warnings,
+    errors,
+  };
+}
+
+/**
+ * Check 6 — layout coherence. Catches visual / structural problems
+ * the other checks don't: orphan service cards (count % 3 === 1
+ * looks bad on a 3-column grid), missing phone for local_service,
+ * SaaS pages showing business hours, broken hrefs, duplicate nav
+ * link text.
+ */
+export function validateLayoutCoherence(
+  schema: PageSchema,
+  soul: Record<string, unknown> | null | undefined,
+  html: string
+): ValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  // ── Orphan service card warning ──
+  const servicesSection = schema.sections.find(
+    (s) =>
+      (s.intent === "services" ||
+        s.intent === "features" ||
+        s.intent === "products") &&
+      s.visible
+  );
+  const itemCount = servicesSection?.content.items?.length ?? 0;
+  if (itemCount > 1 && itemCount % 3 === 1) {
+    warnings.push(
+      `ORPHAN SERVICE CARD: services grid has ${itemCount} items — that's a 3-row layout with one orphan; aim for multiples of 3 (or 4 for a 2x2 / 4-col grid)`
+    );
+  }
+
+  // ── Local service must have a phone ──
+  if (schema.business.type === "local_service") {
+    const phone = (schema.business.phone ?? "").trim();
+    const soulPhone = readSoulField(soul, "phone");
+    if (!phone && soulPhone) {
+      errors.push(
+        `LOCAL_SERVICE MISSING PHONE in schema: soul has "${soulPhone}" but schema.business.phone is empty`
+      );
+    } else if (!phone && !soulPhone) {
+      warnings.push(
+        "LOCAL_SERVICE MISSING PHONE: no phone in schema or soul — local-service pages convert better with a visible phone CTA"
+      );
+    }
+  }
+
+  // ── SaaS pages should not show business hours ──
+  if (schema.business.type === "saas" || schema.business.type === "agency") {
+    if (
+      html.includes("Mon-Fri") ||
+      html.includes("Monday – Friday") ||
+      html.includes("business hours")
+    ) {
+      warnings.push(
+        `${schema.business.type.toUpperCase()} HAS BUSINESS HOURS in HTML — SaaS / agency pages typically shouldn't show hours; check footer`
+      );
+    }
+  }
+
+  // ── Action hrefs must be real ──
+  let hashCount = 0;
+  for (const action of schema.actions) {
+    if (action.href === "" || action.href.trim() === "") {
+      errors.push(`ACTION "${action.id}" HAS EMPTY HREF`);
+    } else if (action.href.trim() === "#") {
+      hashCount += 1;
+    }
+  }
+  if (hashCount > 2) {
+    warnings.push(
+      `${hashCount} actions point to bare "#" — anchor without a target. Replace with real routes.`
+    );
+  }
+
+  // ── Nav must not have duplicate link text ──
+  const navActions = schema.actions.filter((a) => a.placement.includes("nav"));
+  const seen = new Set<string>();
+  const duplicates = new Set<string>();
+  for (const action of navActions) {
+    const key = action.text.trim().toLowerCase();
+    if (seen.has(key)) duplicates.add(key);
+    seen.add(key);
+  }
+  if (duplicates.size > 0) {
+    errors.push(
+      `NAV HAS DUPLICATE LINK TEXT: ${Array.from(duplicates).join(", ")}`
+    );
+  }
+
+  return {
+    stage: "layout_coherence",
+    passed: errors.length === 0,
+    warnings,
+    errors,
+  };
+}
+
 // ─── Full pipeline ────────────────────────────────────────────────────────────
 
 export interface FullPipelineValidationResult {
@@ -442,6 +779,10 @@ export function validateFullPipeline(
   const results: ValidationResult[] = [
     validateSoulStorage(input, soul),
     validatePageSchema(soul, schema),
+    validateHeadlineQuality(schema, soul),
+    validateAboveTheFold(schema),
+    validateSectionHeadlines(schema),
+    validateLayoutCoherence(schema, soul, html),
     validateRenderedHTML(soul, html),
   ];
 

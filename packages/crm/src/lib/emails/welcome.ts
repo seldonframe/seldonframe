@@ -157,9 +157,19 @@ export function renderWelcomeEmailHtml(req: WelcomeEmailRequest): string {
           </ol>
         </td></tr>
 
-        <tr><td style="padding:16px 32px 28px 32px;border-top:1px solid #eef0f3;font-size:13px;color:#6b7280;line-height:1.5;">
-          Stuck or want to share what you're building?
-          Join the <a href="${DISCORD_INVITE}" style="color:#1a73e8;text-decoration:none;">SeldonFrame Discord</a> — we read every message.
+        <tr><td style="padding:8px 32px 24px 32px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#5865f2;border-radius:10px;">
+            <tr><td align="center" style="padding:18px 24px;">
+              <div style="font-size:13px;color:#dbe1ff;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:6px;">Need help?</div>
+              <div style="font-size:18px;font-weight:600;color:#ffffff;margin-bottom:14px;">Join the SeldonFrame builder community</div>
+              <a href="${DISCORD_INVITE}" style="display:inline-block;background:#ffffff;color:#5865f2;text-decoration:none;font-size:14px;font-weight:600;padding:11px 22px;border-radius:8px;">Join Discord →</a>
+              <div style="font-size:12px;color:#dbe1ff;margin-top:10px;">Live builder Q&amp;A · share what you&apos;re shipping · we read every message</div>
+            </td></tr>
+          </table>
+        </td></tr>
+
+        <tr><td style="padding:0 32px 24px 32px;border-top:1px solid #eef0f3;font-size:12px;color:#9aa0a6;line-height:1.5;text-align:center;padding-top:16px;">
+          Sent by SeldonFrame · <a href="${DISCORD_INVITE}" style="color:#9aa0a6;text-decoration:underline;">Discord</a>
         </td></tr>
 
       </table>
@@ -186,8 +196,13 @@ Next steps:
   2. Customize your landing, booking page, and intake form by talking to Claude — every change is one MCP call away.
   3. Connect a custom domain when you're ready to ship publicly.
 
-Stuck or want to share what you're building? Join the SeldonFrame Discord:
-${DISCORD_INVITE}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Join the SeldonFrame builder community on Discord:
+
+  ${DISCORD_INVITE}
+
+Live builder Q&A. Share what you're shipping. We read every message.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 `;
 }
 
