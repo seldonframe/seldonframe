@@ -21,6 +21,7 @@ import {
 import { updateContactFieldAction } from "@/lib/contacts/actions";
 import { PortalAccessCard } from "./portal-access-card";
 import { ContactDocumentsTab, type DocumentRow } from "./contact-documents-tab";
+import type { PersonalityField } from "@/lib/crm/personality";
 
 /**
  * WS2.1 — full Twenty-style contact record page (client).
@@ -55,6 +56,9 @@ export type ContactDetail = {
   /** May 1, 2026 — Client Portal V1 fields. */
   portalAccessEnabled?: boolean;
   portalLastLoginAt?: string | null;
+  /** CRMPersonality industry-specific values (HVAC system_age, LEGAL
+   *  practice_area, etc.). Sourced from contacts.custom_fields. */
+  customFields?: Record<string, unknown> | null;
   /** Tab union — exported here so the page can pass an initial value. */
   tab?: "overview" | "activity" | "deals" | "emails" | "bookings" | "notes" | "documents";
 };
@@ -186,6 +190,26 @@ function formatDateTime(value: string | null) {
   }).format(d);
 }
 
+function formatIndustryFieldValue(
+  raw: unknown,
+  field: PersonalityField
+): string {
+  if (raw === null || raw === undefined || raw === "") return "—";
+  if (field.type === "date") {
+    return formatDate(typeof raw === "string" ? raw : String(raw));
+  }
+  if (field.type === "checkbox") {
+    return raw ? "Yes" : "No";
+  }
+  if (field.type === "number") {
+    const n = typeof raw === "number" ? raw : Number(raw);
+    return Number.isFinite(n) ? n.toLocaleString() : String(raw);
+  }
+  if (typeof raw === "string") return raw;
+  if (typeof raw === "number" || typeof raw === "boolean") return String(raw);
+  return JSON.stringify(raw);
+}
+
 function relativeFromNow(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
@@ -226,6 +250,7 @@ export function ContactRecordDetail({
   contactLabelSingular,
   contactLabelPlural: _contactLabelPlural,
   dealLabelPlural,
+  industryFields = [],
   initialTab,
   orgId,
   orgSlug,
@@ -241,6 +266,8 @@ export function ContactRecordDetail({
   contactLabelSingular: string;
   contactLabelPlural: string;
   dealLabelPlural: string;
+  /** CRMPersonality industry-specific field schema for the aside. */
+  industryFields?: PersonalityField[];
   initialTab: NonNullable<ContactDetail["tab"]>;
   /** May 1, 2026 — needed by the Portal Access card in the aside. */
   orgId?: string;
@@ -435,6 +462,7 @@ export function ContactRecordDetail({
           dealLabelPlural={dealLabelPlural}
           upcomingBooking={upcomingBookings[0] ?? null}
           lastActivity={lastActivity}
+          industryFields={industryFields}
           orgId={orgId}
           orgSlug={orgSlug ?? null}
           portalGate={portalGate}
@@ -477,6 +505,7 @@ function OverviewTab({
   dealLabelPlural,
   upcomingBooking,
   lastActivity,
+  industryFields,
   orgId,
   orgSlug,
   portalGate,
@@ -489,6 +518,7 @@ function OverviewTab({
   dealLabelPlural: string;
   upcomingBooking: BookingRow | null;
   lastActivity: ActivityRow | null;
+  industryFields: PersonalityField[];
   orgId?: string;
   orgSlug: string | null;
   portalGate?: PortalGateInfo;
@@ -671,6 +701,32 @@ function OverviewTab({
             </div>
           </dl>
         </div>
+
+        {industryFields.length > 0 ? (
+          <div className="rounded-xl border bg-card p-5">
+            <h3 className="text-sm font-semibold text-foreground pb-3 border-b">
+              Industry details
+            </h3>
+            <dl className="mt-3 space-y-2 text-sm">
+              {industryFields.map((field) => {
+                const raw = contact.customFields?.[field.key];
+                const value = formatIndustryFieldValue(raw, field);
+                return (
+                  <div key={field.key} className="flex items-start justify-between gap-3">
+                    <dt className="text-xs text-muted-foreground">{field.label}</dt>
+                    <dd
+                      className={`text-right text-xs ${
+                        value === "—" ? "text-muted-foreground" : "text-foreground"
+                      }`}
+                    >
+                      {value}
+                    </dd>
+                  </div>
+                );
+              })}
+            </dl>
+          </div>
+        ) : null}
 
         {/* May 1, 2026 — Client Portal V1: operator-side access toggle. */}
         {orgId && portalGate ? (

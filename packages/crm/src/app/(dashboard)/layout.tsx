@@ -3,6 +3,7 @@ import { getOrgId } from "@/lib/auth/helpers";
 import { isAdminTokenUserId } from "@/lib/auth/admin-token";
 import { SoulProvider } from "@/components/soul/soul-provider";
 import { getSoul } from "@/lib/soul/server";
+import { getPersonality } from "@/lib/crm/personality-server";
 import { Sidebar } from "@/components/layout/sidebar";
 import { CommandPalette } from "@/components/layout/command-palette";
 import { DemoBanner } from "@/components/layout/demo-banner";
@@ -35,7 +36,7 @@ export default async function DashboardLayout({
   registerCrmEventListeners();
 
   const session = await requireAuth();
-  const soul = await getSoul();
+  const [soul, personality] = await Promise.all([getSoul(), getPersonality()]);
   const user = session.user;
   const avatarFallback = user?.name?.trim()?.charAt(0)?.toUpperCase() || user?.email?.charAt(0)?.toUpperCase() || "U";
 
@@ -135,7 +136,7 @@ export default async function DashboardLayout({
   ];
 
   return (
-    <SoulProvider soul={soul}>
+    <SoulProvider soul={soul} personality={personality}>
       <div className="min-h-screen w-full lg:p-3">
         <div className="flex min-h-screen w-full flex-col items-center justify-start bg-background/95 lg:rounded-2xl lg:border lg:border-border/80 lg:shadow-(--shadow-card)">
           <div className="animate-page-enter flex min-h-screen w-full flex-col md:flex-row">

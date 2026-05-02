@@ -22,6 +22,7 @@
 // better than no page).
 
 import type { PageSchema } from "./types";
+import type { CRMPersonality } from "@/lib/crm/personality";
 
 /**
  * What the operator put into create_workspace (or submit_soul) — the
@@ -57,7 +58,8 @@ export interface ValidationResult {
     | "headline_quality"
     | "above_the_fold"
     | "section_headlines"
-    | "layout_coherence";
+    | "layout_coherence"
+    | "crm_personality";
   /** True iff the stage's critical assertions all passed. */
   passed: boolean;
   /** Non-fatal: data was missing from input, so we can't assert it. */
@@ -811,4 +813,75 @@ export function validateFullPipeline(
   }
 
   return { allPassed, results };
+}
+
+// ─── CRM Personality validation ──────────────────────────────────────────────
+//
+// Catches personalities that would render an unusable admin UI: too few
+// pipeline stages to express a real funnel, missing terminology (sidebar
+// labels would fall back to "Contact"/"Deal"), or an intake form that
+// can't capture a contact (no fields, or no required email channel).
+
+export function validateCRMPersonality(
+  personality: CRMPersonality | null | undefined,
+  businessType?: string | null
+): ValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  if (!personality) {
+    errors.push("PERSONALITY MISSING: no CRMPersonality available");
+    return { stage: "crm_personality", passed: false, warnings, errors };
+  }
+
+  const businessTag = businessType ? ` (business_type=${businessType})` : "";
+
+  if (!personality.pipeline?.stages || personality.pipeline.stages.length < 4) {
+    errors.push(
+      `PIPELINE TOO SHORT${businessTag}: vertical "${personality.vertical}" has ${personality.pipeline?.stages?.length ?? 0} stages — need at least 4 to express a real funnel`
+    );
+  }
+
+  const term = personality.terminology;
+  if (
+    !term ||
+    !term.contact?.singular ||
+    !term.contact?.plural ||
+    !term.deal?.singular ||
+    !term.deal?.plural ||
+    !term.activity?.singular ||
+    !term.activity?.plural
+  ) {
+    errors.push(
+      `TERMINOLOGY INCOMPLETE${businessTag}: vertical "${personality.vertical}" missing singular/plural for one of contact/deal/activity`
+    );
+  }
+
+  if (!Array.isArray(personality.intakeFields) || personality.intakeFields.length === 0) {
+    errors.push(
+      `INTAKE FIELDS EMPTY${businessTag}: vertical "${personality.vertical}" has no intake fields — public form would render no inputs`
+    );
+  } else {
+    const hasRequiredEmail = personality.intakeFields.some(
+      (f) => f.type === "email" && f.required
+    );
+    if (!hasRequiredEmail) {
+      errors.push(
+        `INTAKE MISSING REQUIRED EMAIL${businessTag}: vertical "${personality.vertical}" intake form has no required email field — submissions can't be tied back to a contact`
+      );
+    }
+  }
+
+  if (!Array.isArray(personality.contactFields?.industrySpecific)) {
+    warnings.push(
+      `CONTACT FIELDS UNDEFINED${businessTag}: vertical "${personality.vertical}" has no industry-specific contact fields — aside will fall back to standard fields only`
+    );
+  }
+
+  return {
+    stage: "crm_personality",
+    passed: errors.length === 0,
+    warnings,
+    errors,
+  };
 }

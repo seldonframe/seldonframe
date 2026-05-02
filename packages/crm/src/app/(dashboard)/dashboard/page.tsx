@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, or, sql } from "drizzle-orm";
 import Link from "next/link";
-import { DollarSign, Users, CalendarDays, Activity, Plus, ChartLine, MoreHorizontal, BarChart2, ClipboardList, Search, Filter, FileInput, Sparkles } from "lucide-react";
+import { DollarSign, Users, CalendarDays, Activity, Plus, ChartLine, MoreHorizontal, BarChart2, ClipboardList, Search, Filter, FileInput, Sparkles, AlertTriangle, AlertCircle, Info } from "lucide-react";
 import { db } from "@/db";
 import { activities, bookings as bookingsTable, contacts as contactsTable, metricsSnapshots, organizations, orgMembers, paymentRecords, pipelines as pipelinesTable, stripeConnections, type OrganizationIntegrations, type PipelineStage } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth/helpers";
@@ -12,6 +12,8 @@ import { listEmailTemplates } from "@/lib/emails/actions";
 import { listForms } from "@/lib/forms/actions";
 import { listLandingPages } from "@/lib/landing/actions";
 import { getSoul } from "@/lib/soul/server";
+import { getPersonality } from "@/lib/crm/personality-server";
+import type { PersonalityUrgencyIndicator } from "@/lib/crm/personality";
 import { getHiddenBlocks } from "@/lib/blocks/visibility-actions";
 import { BlockVisibilityToggle } from "@/components/dashboard/block-visibility-toggle";
 import { setActiveOrgAction } from "@/lib/billing/orgs";
@@ -135,6 +137,40 @@ function stageBadgeClass(stage: string) {
   return "border-border bg-muted/50 text-muted-foreground";
 }
 
+function UrgencyStrip({ items }: { items: PersonalityUrgencyIndicator[] }) {
+  if (items.length === 0) return null;
+  const tone = (severity: PersonalityUrgencyIndicator["severity"]) => {
+    if (severity === "danger") {
+      return { chip: "border-negative/30 bg-negative/10 text-negative", icon: AlertCircle };
+    }
+    if (severity === "warning") {
+      return { chip: "border-caution/30 bg-caution/10 text-caution", icon: AlertTriangle };
+    }
+    return { chip: "border-border bg-muted/40 text-muted-foreground", icon: Info };
+  };
+  return (
+    <div className="crm-card flex flex-wrap items-center gap-2 px-3 py-2.5 sm:px-4 sm:py-3">
+      <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        Watch list
+      </span>
+      <div className="flex flex-wrap gap-1.5">
+        {items.map((item) => {
+          const { chip, icon: Icon } = tone(item.severity);
+          return (
+            <span
+              key={item.key}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${chip}`}
+            >
+              <Icon className="size-3" />
+              {item.label}
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function StatCard({
   label,
   value,
@@ -196,7 +232,7 @@ export default async function DashboardPage({
       `/switch-workspace?to=${encodeURIComponent(params.workspace)}&next=/dashboard`
     );
   }
-  const [user, contactRows, dealRows, bookingRows, appointmentTypeRows, emailTemplateRows, landingPageRows, intakeFormRows, soul, hiddenBlocks] = await Promise.all([
+  const [user, contactRows, dealRows, bookingRows, appointmentTypeRows, emailTemplateRows, landingPageRows, intakeFormRows, soul, hiddenBlocks, personality] = await Promise.all([
     getCurrentUser(),
     listContacts(),
     listDeals(),
@@ -207,6 +243,7 @@ export default async function DashboardPage({
     listForms(),
     getSoul(),
     getHiddenBlocks(),
+    getPersonality(),
   ]);
   const orgId = user?.orgId;
 
@@ -572,9 +609,19 @@ export default async function DashboardPage({
           .join(", ")
       : "var(--muted) 0% 100%";
 
+  // Personality drives the labels of the four primary metric cards. Values
+  // come from the same data sources regardless of vertical (count, status,
+  // calendar bucket, revenue); the personality just renames them so an
+  // HVAC operator sees "Open Jobs" / "Maintenance Plans" instead of the
+  // generic "Total Contacts" / "Active Engagements". When the personality
+  // declares fewer than 4 metrics we keep the generic label as fallback.
+  const personalityMetrics = personality.dashboard.primaryMetrics;
+  const metricLabel = (index: number, fallback: string) =>
+    personalityMetrics[index]?.label ?? fallback;
+
   const stats = [
     {
-      label: `Total ${contactLabelPlural}`,
+      label: metricLabel(0, `Total ${contactLabelPlural}`),
       value: contactRows.length.toLocaleString(),
       icon: <Users className="size-3.5 sm:size-[18px] text-primary" />,
       trend: percentChange(contactsThisMonth, contactsPreviousMonth),
@@ -583,7 +630,7 @@ export default async function DashboardPage({
       iconBadgeClass: "bg-primary/10",
     },
     {
-      label: "Active Engagements",
+      label: metricLabel(1, "Active Engagements"),
       value: activeEngagements.toLocaleString(),
       icon: <Activity className="size-3.5 sm:size-[18px] text-caution" />,
       trend: percentChange(activeEngagements, activeEngagementsPrev),
@@ -592,7 +639,7 @@ export default async function DashboardPage({
       iconBadgeClass: "bg-caution/10",
     },
     {
-      label: "Bookings This Month",
+      label: metricLabel(2, "Bookings This Month"),
       value: bookingsThisMonth.toLocaleString(),
       icon: <CalendarDays className="size-3.5 sm:size-[18px] text-[hsl(220_70%_55%)]" />,
       trend: percentChange(bookingsThisMonth, bookingsPreviousMonth),
@@ -601,7 +648,7 @@ export default async function DashboardPage({
       iconBadgeClass: "bg-[hsl(220_70%_55%_/_0.1)]",
     },
     {
-      label: "Revenue",
+      label: metricLabel(3, "Revenue"),
       value: formatCurrency(monthlyRevenue),
       icon: <DollarSign className="size-3.5 sm:size-[18px] text-positive" />,
       trend: percentChange(monthlyRevenue, previousMonthRevenue),
@@ -610,6 +657,8 @@ export default async function DashboardPage({
       iconBadgeClass: "bg-positive/10",
     },
   ];
+
+  const urgencyIndicators = personality.dashboard.urgencyIndicators;
 
   const opportunityRows = [...dealRows]
     .sort((a, b) => Number(b.value) - Number(a.value))
@@ -1064,6 +1113,8 @@ export default async function DashboardPage({
           </div>
         </section>
       ) : null}
+
+      <UrgencyStrip items={urgencyIndicators} />
 
       <div className="crm-card grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 sm:gap-5 sm:p-5 xl:grid-cols-4 xl:gap-6 xl:p-6">
         {stats.map((stat, index) => (

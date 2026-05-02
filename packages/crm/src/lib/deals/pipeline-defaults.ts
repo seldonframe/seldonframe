@@ -43,7 +43,8 @@ export const DEFAULT_PIPELINE_STAGES: PipelineStage[] = [
  */
 export async function ensureDefaultPipelineForOrg(
   orgId: string,
-  workspaceName?: string | null
+  workspaceName?: string | null,
+  overrides?: { stages?: PipelineStage[]; pipelineName?: string }
 ): Promise<{ id: string; stages: PipelineStage[] }> {
   const [existing] = await db
     .select({ id: pipelines.id, stages: pipelines.stages })
@@ -55,13 +56,20 @@ export async function ensureDefaultPipelineForOrg(
     return { id: existing.id, stages: existing.stages };
   }
 
-  const name = workspaceName ? `${workspaceName} pipeline` : "Default pipeline";
+  // Personality-driven seed when caller supplies stages (e.g. HVAC's
+  // "New Lead → Estimate Scheduled → …" funnel). Falls back to the
+  // generic B2B funnel for legacy callers and lazy-seed paths that
+  // don't carry personality context.
+  const stages = overrides?.stages?.length ? overrides.stages : DEFAULT_PIPELINE_STAGES;
+  const name =
+    overrides?.pipelineName ??
+    (workspaceName ? `${workspaceName} pipeline` : "Default pipeline");
   const [created] = await db
     .insert(pipelines)
     .values({
       orgId,
       name,
-      stages: DEFAULT_PIPELINE_STAGES,
+      stages,
       isDefault: true,
     })
     .returning({ id: pipelines.id, stages: pipelines.stages });

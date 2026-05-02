@@ -14,6 +14,7 @@ import { seedLandingFromSoul } from "@/lib/page-schema/seed-landing-from-soul";
 import { isReservedSlug } from "@/lib/utils/reserved-slugs";
 import { trackEvent } from "@/lib/analytics/track";
 import { classifyBusinessTypeFromSoul } from "@/lib/page-schema/classify-business";
+import { selectCRMPersonality } from "@/lib/crm/personality";
 
 const DEFAULT_ENABLED_BLOCKS = [
   "crm",
@@ -126,6 +127,20 @@ export async function createAnonymousWorkspace(
   // renders real data instead of the legacy placeholder template.
   const seedSoul = buildSeedSoul(name, input);
 
+  // Pick the CRMPersonality up front so it can land on settings in the
+  // initial INSERT — every admin surface (sidebar labels, pipeline
+  // seed, contact aside, dashboard, intake form) reads from this. The
+  // industry hint wins when present; otherwise we classify the seed
+  // soul into a high-level businessType bucket for the fallback.
+  const seedBusinessType = seedSoul
+    ? classifyBusinessTypeFromSoul(seedSoul)
+    : "other";
+  const personality = selectCRMPersonality(seedBusinessType, input.industry ?? null);
+  const baseSettings: Record<string, unknown> = {
+    crmPersonality: personality,
+  };
+  if (input.source) baseSettings.source = input.source;
+
   const [org] = await db
     .insert(organizations)
     .values({
@@ -135,7 +150,7 @@ export async function createAnonymousWorkspace(
       parentUserId: null,
       plan: "free",
       enabledBlocks: DEFAULT_ENABLED_BLOCKS,
-      settings: input.source ? { source: input.source } : {},
+      settings: baseSettings,
       // The Soul column is typed as the strict OrgSoul shape, but in
       // practice schemaFromSoul reads a loose soul (business_name /
       // offerings / phone / testimonials — different field names from
@@ -187,7 +202,10 @@ export async function createAnonymousWorkspace(
   // Pre-2026-04-29 workspaces don't have this row — `createDealAction`
   // self-heals via ensureDefaultPipelineForOrg as a backup.
   await Promise.all([
-    ensureDefaultPipelineForOrg(org.id, org.name).catch((error) => {
+    ensureDefaultPipelineForOrg(org.id, org.name, {
+      stages: personality.pipeline.stages,
+      pipelineName: personality.pipeline.name,
+    }).catch((error) => {
       console.warn(
         `[anonymous-workspace] pipeline seed failed for ${org.id}:`,
         error instanceof Error ? error.message : String(error)
@@ -215,6 +233,7 @@ export async function createAnonymousWorkspace(
     createDefaultIntakeForm(org.id, {
       theme: "dark",
       blueprint: seedBlueprint,
+      personalityIntakeFields: personality.intakeFields,
     }).catch((error) => {
       console.warn(
         `[anonymous-workspace] intake-form seed failed for ${org.id}:`,
@@ -253,14 +272,12 @@ export async function createAnonymousWorkspace(
   // input or classifier), whether the operator gave us a phone (proxy
   // for "real business" vs throwaway test workspace), service count,
   // and source (always 'mcp' on this anonymous path).
-  const businessType = seedSoul
-    ? classifyBusinessTypeFromSoul(seedSoul)
-    : "other";
   trackEvent(
     "workspace_created",
     {
-      business_type: businessType,
+      business_type: seedBusinessType,
       vertical: input.industry ?? null,
+      crm_personality: personality.vertical,
       has_phone: Boolean(input.phone),
       has_email: Boolean(input.email),
       services_count: input.services?.length ?? 0,

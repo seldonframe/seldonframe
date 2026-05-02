@@ -8,6 +8,7 @@ import {
 import { renderCalcomMonthV1 } from "@/lib/blueprint/renderers/calcom-month-v1";
 import { renderFormbricksStackV1 } from "@/lib/blueprint/renderers/formbricks-stack-v1";
 import type { Blueprint } from "@/lib/blueprint/types";
+import type { PersonalityIntakeField } from "@/lib/crm/personality";
 
 export type TemplateOpts = {
   theme?: "dark" | "light";
@@ -20,6 +21,13 @@ export type TemplateOpts = {
    * route handlers serve the React component instead).
    */
   blueprint?: Blueprint;
+  /**
+   * Personality intake schema. When provided AND the blueprint doesn't
+   * carry questions of its own, the default intake form's fields come
+   * from the personality (e.g. HVAC asks for property_type / system_type
+   * up front instead of the generic "What can we help with?").
+   */
+  personalityIntakeFields?: PersonalityIntakeField[];
 };
 
 const DEFAULT_BOOKING_SLUG = "default";
@@ -160,6 +168,7 @@ export async function createDefaultIntakeForm(
   // We map a minimal projection into the existing column.
   const intake = opts.blueprint?.intake;
   const name = intake?.title ?? "Get in touch";
+  const personalityFields = opts.personalityIntakeFields ?? null;
   const mappedFields = intake?.questions
     ? intake.questions.map((q) => ({
         key: q.id,
@@ -168,17 +177,25 @@ export async function createDefaultIntakeForm(
         required: Boolean(q.required),
         options: q.options,
       }))
-    : [
-        { key: "fullName", label: "Full name", type: "text", required: true },
-        { key: "email", label: "Email", type: "email", required: true },
-        { key: "phone", label: "Phone (optional)", type: "tel", required: false },
-        {
-          key: "message",
-          label: "What can we help with?",
-          type: "textarea",
-          required: true,
-        },
-      ];
+    : personalityFields && personalityFields.length > 0
+      ? personalityFields.map((f) => ({
+          key: f.key,
+          label: f.label,
+          type: f.type,
+          required: f.required,
+          options: f.options,
+        }))
+      : [
+          { key: "fullName", label: "Full name", type: "text", required: true },
+          { key: "email", label: "Email", type: "email", required: true },
+          { key: "phone", label: "Phone (optional)", type: "tel", required: false },
+          {
+            key: "message",
+            label: "What can we help with?",
+            type: "textarea",
+            required: true,
+          },
+        ];
 
   const rendered = opts.blueprint ? renderFormbricksStackV1(opts.blueprint) : null;
 

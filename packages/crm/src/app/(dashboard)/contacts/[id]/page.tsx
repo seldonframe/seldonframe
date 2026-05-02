@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { activities, bookings, contacts, deals, organizations, portalDocuments } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
 import { getLabels } from "@/lib/soul/labels";
+import { getPersonality } from "@/lib/crm/personality-server";
 import { getContactRevenue } from "@/lib/payments/actions";
 import { checkPortalPlanGate } from "@/lib/portal/plan-gate";
 import {
@@ -59,7 +60,7 @@ export default async function ContactRecordPage({
     );
   }
 
-  const labels = await getLabels();
+  const [labels, personality] = await Promise.all([getLabels(), getPersonality()]);
 
   // May 1, 2026 — Client Portal V1: pull the org slug + plan-gate
   // result alongside the contact so the OverviewTab aside can render
@@ -181,6 +182,8 @@ export default async function ContactRecordPage({
         : portalLastLogin
           ? String(portalLastLogin)
           : null,
+    customFields:
+      (contact as { customFields?: Record<string, unknown> | null }).customFields ?? {},
   };
 
   const activityRowsForClient: ActivityRow[] = activityRows.map((a) => ({
@@ -260,6 +263,7 @@ export default async function ContactRecordPage({
         contactLabelSingular={labels.contact.singular}
         contactLabelPlural={labels.contact.plural}
         dealLabelPlural={labels.deal.plural}
+        industryFields={personality.contactFields.industrySpecific}
         initialTab={initialTab}
         orgId={orgId}
         orgSlug={orgRow?.slug ?? null}
