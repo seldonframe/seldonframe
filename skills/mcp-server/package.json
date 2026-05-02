@@ -1,7 +1,7 @@
 {
   "name": "@seldonframe/mcp",
-  "version": "1.1.1",
-  "description": "MCP server for SeldonFrame — AI-native Business OS platform. One command creates a real, hosted workspace with a website, booking page, intake form, CRM, and AI agents. v1.1.1: DEPRECATED `create_workspace` tool. Renamed to `_legacy_create_workspace` (sorts last in tool listings) and the handler returns a deprecation error pointing at `create_full_workspace` without doing anything. Closes the old door so Claude Code is forced onto the atomic pipeline introduced in v1.1.0 — every fix shipped since (timezone, pipeline stages, email collection, admin URL withholding) only activates inside the new pipeline. WELCOME_MARKDOWN updated so create_full_workspace is the only workspace-creation path mentioned anywhere.",
+  "version": "1.1.2",
+  "description": "MCP server for SeldonFrame — AI-native Business OS platform. One command creates a real, hosted workspace with a website, booking page, intake form, CRM, and AI agents. v1.1.2: surgically removes three tools that let Claude Code work around the atomic pipeline — `create_workspace` (deprecation in 1.1.1 wasn't enough; deleted entirely), `install_vertical_pack` (the /packs/install endpoint doesn't exist; was 404'ing every test run), and `create_landing_page` (was triggering Free-tier upgrade_required errors by trying to create a SECOND landing page when the workspace already had one from the create_full_workspace pipeline). Industry config now flows entirely through the CRMPersonality the server picks during create_full_workspace; landing-page customization goes through `update_landing_page` on the auto-created default page.",
   "type": "module",
   "bin": {
     "seldonframe-mcp": "src/index.js"

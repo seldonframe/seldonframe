@@ -39,36 +39,11 @@ function wsOrDefault(workspace_id) {
 }
 
 export const TOOLS = [
-  {
-    // May 2, 2026 (v1.1.1) — Renamed from `create_workspace` to
-    // `_legacy_create_workspace` to force Claude Code onto the new
-    // atomic `create_full_workspace` path. The leading underscore
-    // sorts this tool toward the bottom of MCP tool listings, and
-    // the "DEPRECATED" prefix in the description makes it obvious
-    // when the model is browsing tools. The handler does NOT call
-    // the API — it returns a redirect error immediately so even if
-    // Claude Code does invoke this, no workspace is created and the
-    // model is told exactly which tool to use instead.
-    name: "_legacy_create_workspace",
-    description:
-      "DEPRECATED — do not use. Use `create_full_workspace` instead for ALL workspace creation. This tool no longer creates anything; calling it returns an error pointing at the replacement. The atomic `create_full_workspace` runs the entire 13-step pipeline server-side in one call (workspace + business profile + CRM + booking + intake + landing page) and the admin URL is structurally created only by `finalize_workspace` — both fixes that the legacy multi-call sequence couldn't reliably deliver.",
-    inputSchema: obj({}),
-    handler: async () => {
-      return {
-        ok: false,
-        error:
-          "This tool is deprecated. Use create_full_workspace for all new workspaces.",
-        redirect_tool: "create_full_workspace",
-        why:
-          "create_full_workspace runs the entire workspace creation pipeline atomically server-side — same input always produces the same output, no retries, no Claude-Code orchestration. The admin dashboard URL is then created only by finalize_workspace, which structurally enforces the email-collection step. The legacy create_workspace path required Claude Code to chain 15-25 tool calls in some order and skipped finalize_workspace in practice.",
-        next_step: {
-          tool_to_call: "create_full_workspace",
-          docs:
-            "Pass: business_name, city, state, phone, services[], business_description (required), and any of: review_count, review_rating, certifications[], trust_signals[], emergency_service, same_day, service_area[].",
-        },
-      };
-    },
-  },
+  // May 2, 2026 (v1.1.2) — `create_workspace` (formerly
+  // `_legacy_create_workspace`) DELETED entirely from the tool registry.
+  // Deprecation in 1.1.1 didn't stop Claude Code from finding alternative
+  // multi-tool paths to compose a workspace. Removing the tool outright
+  // is the only structural way to force `create_full_workspace`.
   {
     name: "create_full_workspace",
     description:
@@ -821,25 +796,14 @@ export const TOOLS = [
       return api("GET", `/automations?workspace_id=${encodeURIComponent(ws)}`, { workspace_id: ws });
     },
   },
-  {
-    name: "install_vertical_pack",
-    description:
-      "Set up an industry template (real-estate, dental, legal, …). Adds industry-specific objects, fields, and views to the CRM and pre-fills the booking page + intake form for that line of work.",
-    inputSchema: obj(
-      {
-        pack: str("Industry template name, e.g. 'real-estate', 'dental', 'legal'."),
-        workspace_id: str("Optional workspace override."),
-      },
-      ["pack"],
-    ),
-    handler: async (a) => {
-      const ws = wsOrDefault(a.workspace_id);
-      return api("POST", "/packs/install", {
-        body: { pack: a.pack, workspace_id: ws },
-        workspace_id: ws,
-      });
-    },
-  },
+  // May 2, 2026 (v1.1.2) — `install_vertical_pack` DELETED entirely.
+  // The /packs/install endpoint doesn't exist, so this tool 404'd
+  // every time Claude Code reached for it. Industry-specific
+  // configuration (terminology, pipeline stages, intake fields,
+  // booking duration) is now driven by the CRMPersonality the
+  // server picks during create_full_workspace from the operator's
+  // services + business_description — no separate install step
+  // needed.
   {
     name: "install_caldiy_booking",
     description:
@@ -2321,39 +2285,14 @@ export const TOOLS = [
       return api("GET", `/landing/${encodeURIComponent(args.page_id)}`, { workspace_id: ws });
     },
   },
-  {
-    name: "create_landing_page",
-    description:
-      "Create a landing page from an optional Puck payload. Without puck_data, creates a blank draft. With puck_data, validates the payload against the Puck schema and rejects on mismatch. Set published=true to publish immediately.",
-    inputSchema: obj(
-      {
-        title: str("Page title (used for the dashboard; not the public URL)."),
-        slug: str("Optional URL slug. Derived from title if omitted."),
-        puck_data: {
-          type: "object",
-          description: "Optional Puck payload { content: [], root: {props}, zones: {} }.",
-        },
-        published: {
-          type: "boolean",
-          description: "If true, publish the page immediately. Default: draft.",
-        },
-        workspace_id: str("Optional. Falls back to the active workspace."),
-      },
-      ["title"],
-    ),
-    handler: async (args) => {
-      const ws = wsOrDefault(args.workspace_id);
-      return api("POST", "/landing", {
-        body: {
-          title: args.title,
-          slug: args.slug,
-          puckData: args.puck_data,
-          published: Boolean(args.published),
-        },
-        workspace_id: ws,
-      });
-    },
-  },
+  // May 2, 2026 (v1.1.2) — `create_landing_page` DELETED entirely.
+  // Every workspace already has a default landing page seeded by
+  // create_full_workspace (via createDefaultLandingPage +
+  // seedLandingFromSoul). Calling create_landing_page tried to
+  // create a SECOND page, which the Free-tier landingPages limit (=1)
+  // rejected with `upgrade_required` — surfacing as a 500 on every
+  // demo run. Customization goes through update_landing_page on
+  // the existing page; no second page is ever needed.
   {
     name: "update_landing_page",
     description:

@@ -173,6 +173,15 @@ export async function createFullWorkspace(
   // landing/booking/intake template seed → soul-driven landing
   // re-render with personality + tokens + style overrides). The new
   // contract here is just stricter input + post-validation.
+  //
+  // CRITICAL CONTRACT (v1.1.2): step 12 (landing page) is
+  // exactly ONE INSERT for the default page (idempotent — see
+  // createDefaultLandingPage's existing-row check at the top), then
+  // an UPDATE via seedLandingFromSoul. NEVER two INSERTs. The Free-
+  // tier landingPages limit is 1; trying to insert a second page
+  // returns `upgrade_required` and surfaces as a 500 to the caller.
+  // The standalone create_landing_page MCP tool was deleted in 1.1.2
+  // for the same reason — it bypassed this contract.
   let createResult: Awaited<ReturnType<typeof createAnonymousWorkspace>>;
   try {
     createResult = await createAnonymousWorkspace({
