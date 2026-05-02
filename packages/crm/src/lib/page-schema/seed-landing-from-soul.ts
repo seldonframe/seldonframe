@@ -108,6 +108,15 @@ export async function seedLandingFromSoul(orgId: string): Promise<SeedLandingRes
 
   const schema = schemaFromSoul(org.soul as unknown as Record<string, unknown>, {
     business_type: businessType,
+    // May 2, 2026 — pass the workspace name as an override so we
+    // never render the literal "Your Business" placeholder when
+    // soul.business_name is missing. The workspace.name is always
+    // populated (it's a NOT NULL column) so this guarantees the
+    // rendered nav / hero / footer show the real company name even
+    // when the operator hasn't filled out a Soul yet.
+    business_overrides: {
+      name: org.name,
+    },
   });
 
   // Plan-tier branding flag.

@@ -413,13 +413,20 @@ const INDUSTRY_KEYWORDS: Array<{ vertical: PersonalityVertical; keywords: string
   {
     vertical: "hvac",
     keywords: [
-      "hvac", "heating", "cooling", "air conditioning", "furnace",
+      // HVAC / heating / cooling — broadened May 2, 2026
+      "hvac", "heating", "cooling", "air conditioning", "air conditioner",
+      "ac repair", "ac install", "furnace", "boiler", "heat pump",
+      "mini-split", "mini split", "duct cleaning", "indoor air quality",
+      // Plumbing / electrical
       "plumb", "plumber", "plumbing", "electrician", "electrical",
+      // Construction / contracting
       "contractor", "roofing", "roofer", "landscaping", "lawn care",
       "cleaning service", "house cleaning", "carpet cleaning",
       "pest control", "junk removal", "moving company", "pool service",
       "garage door", "auto repair", "appliance repair", "tree service",
-      "snow removal", "real-estate", "real estate",
+      "snow removal", "handyman", "locksmith",
+      // Real estate (uses similar workflow)
+      "real-estate", "real estate",
     ],
   },
   {

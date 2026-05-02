@@ -681,11 +681,13 @@ function renderHero(section: SectionHero, ctx: RenderContext): string {
       ? renderHeroDashboardMockup()
       : "";
 
+  // May 2, 2026 — black-square corner spans removed. They rendered as
+  // 7×7 var(--sf-fg-emphasis) blocks 28px from each corner — meant
+  // as a subtle frame accent, but in practice they read as broken
+  // SVG artifacts (multiple operators flagged this in demo tests).
+  // The .sf-hero__glow spans stay — they're the radial-gradient
+  // background washes that give the hero its depth.
   return `<section class="sf-hero" id="sf-hero">
-  <span class="sf-hero__corner sf-hero__corner--tl" aria-hidden="true"></span>
-  <span class="sf-hero__corner sf-hero__corner--tr" aria-hidden="true"></span>
-  <span class="sf-hero__corner sf-hero__corner--bl" aria-hidden="true"></span>
-  <span class="sf-hero__corner sf-hero__corner--br" aria-hidden="true"></span>
   <span class="sf-hero__glow sf-hero__glow--1" aria-hidden="true"></span>
   <span class="sf-hero__glow sf-hero__glow--2" aria-hidden="true"></span>
   <div class="sf-hero__content">

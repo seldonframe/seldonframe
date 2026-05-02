@@ -30,6 +30,9 @@ type WorkspaceCreateBody = {
   // `business_description` rather than `description` to avoid colliding
   // with the legacy Soul-compile path's `description` field above.
   business_description?: unknown;
+  // May 2, 2026 — explicit city/state for timezone inference.
+  city?: unknown;
+  state?: unknown;
   services?: unknown;
   testimonials?: unknown;
 };
@@ -109,6 +112,8 @@ async function handleAnonymousCreate(request: Request, body: WorkspaceCreateBody
     typeof body.business_description === "string"
       ? body.business_description.trim()
       : "";
+  const cityInput = typeof body.city === "string" ? body.city.trim() : "";
+  const stateInput = typeof body.state === "string" ? body.state.trim() : "";
   const servicesInput = Array.isArray(body.services)
     ? body.services
         .map((entry) => {
@@ -174,6 +179,8 @@ async function handleAnonymousCreate(request: Request, body: WorkspaceCreateBody
       address: addressInput || null,
       tagline: taglineInput || null,
       description: descriptionInput || null,
+      city: cityInput || null,
+      state: stateInput || null,
       services: servicesInput,
       testimonials: testimonialsInput,
     });

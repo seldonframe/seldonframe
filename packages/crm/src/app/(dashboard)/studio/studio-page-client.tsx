@@ -36,10 +36,10 @@ const studioSteps: Array<{ id: StudioStep; label: string }> = [
 const initialInstallState: SeldonRunState = { ok: false };
 const installLoadingMessages = [
   "Analyzing...",
-  "Compiling Soul...",
+  "Building your business profile...",
   "Building core blocks...",
   "Wiring payments...",
-  "Activating Brain v2...",
+  "Setting up AI learning...",
   "Deploying...",
 ];
 

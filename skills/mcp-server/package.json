@@ -1,7 +1,7 @@
 {
   "name": "@seldonframe/mcp",
-  "version": "1.0.7",
-  "description": "MCP server for SeldonFrame — AI-native Business OS platform. One command creates a real, hosted workspace with a website, booking page, intake form, CRM, and AI agents. v1.0.7: makes email collection MANDATORY at the end of every workspace creation flow. New `finalize_workspace({ email })` wrapper bundles welcome email + lead capture + a formatted final summary that Claude Code paraphrases verbatim to the operator (includes live URLs, configured CRM personality, pipeline stages, admin link). create_workspace tool description and response payload both explicitly tell Claude Code the email step is non-negotiable; welcome instructions mark step 4 as MANDATORY with the exact verbatim question to ask.",
+  "version": "1.0.8",
+  "description": "MCP server for SeldonFrame — AI-native Business OS platform. One command creates a real, hosted workspace with a website, booking page, intake form, CRM, and AI agents. v1.0.8: bulletproof finalize_workspace guardrail (create_workspace response now leads with a DO_NOT_DISPLAY warning string and hides URLs under _pending_after_email so models physically can't paste them to the operator without first calling finalize_workspace). New city/state args on create_workspace drive timezone inference (San Diego, CA → America/Los_Angeles instead of UTC). Backend fixes shipped alongside: classifier broadened so 'Heating', 'Cooling', 'AC', 'Furnace' etc. resolve to local_service / HVAC personality (was leaking to coaching → wrong pipeline stages); 'Your Business' nav placeholder eliminated (workspace.name now flows through); booking duration now defaults to 60 min for HVAC/coaching, 30 min for legal/dental, 45 for agency; black-square hero corner artifacts removed; 'Brain v2' / 'Compiling Soul' loading messages reworded for operators.",
   "type": "module",
   "bin": {
     "seldonframe-mcp": "src/index.js"

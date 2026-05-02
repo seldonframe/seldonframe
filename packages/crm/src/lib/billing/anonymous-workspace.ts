@@ -15,6 +15,7 @@ import { isReservedSlug } from "@/lib/utils/reserved-slugs";
 import { trackEvent } from "@/lib/analytics/track";
 import { classifyBusinessTypeFromSoul } from "@/lib/page-schema/classify-business";
 import { selectCRMPersonality } from "@/lib/crm/personality";
+import { inferTimezone } from "@/lib/workspace/infer-timezone";
 
 const DEFAULT_ENABLED_BLOCKS = [
   "crm",
@@ -49,6 +50,16 @@ export type AnonymousCreateInput = {
   address?: string | null;
   tagline?: string | null;
   description?: string | null;
+  /**
+   * May 2, 2026 — city + state hints for timezone inference. The
+   * combined string ("San Diego, CA") is also tried as a fallback
+   * if neither is parseable on its own. We accept either / both /
+   * neither — when neither resolves to a state we know, organizations.
+   * timezone falls back to UTC and the operator can fix it via
+   * /settings/workspace.
+   */
+  city?: string | null;
+  state?: string | null;
   services?: Array<{ name: string; description?: string | null }> | null;
   testimonials?: Array<{
     quote: string;
@@ -141,6 +152,22 @@ export async function createAnonymousWorkspace(
   };
   if (input.source) baseSettings.source = input.source;
 
+  // May 2, 2026 — infer organizations.timezone from the city/state/
+  // address/business_description so the booking page renders the
+  // operator's actual hours (Pacific Coast Heating in San Diego ⇒
+  // America/Los_Angeles, not the visitor's browser TZ). Falls back
+  // to UTC when nothing resolves — the operator can override via
+  // /settings/workspace.
+  const inferredTimezone =
+    inferTimezone(
+      input.state ?? null,
+      input.city ?? null,
+      input.city && input.state ? `${input.city}, ${input.state}` : null,
+      input.address ?? null,
+      input.description ?? null,
+      input.source ?? null,
+    ) ?? "UTC";
+
   const [org] = await db
     .insert(organizations)
     .values({
@@ -151,6 +178,7 @@ export async function createAnonymousWorkspace(
       plan: "free",
       enabledBlocks: DEFAULT_ENABLED_BLOCKS,
       settings: baseSettings,
+      timezone: inferredTimezone,
       // The Soul column is typed as the strict OrgSoul shape, but in
       // practice schemaFromSoul reads a loose soul (business_name /
       // offerings / phone / testimonials — different field names from
@@ -188,6 +216,49 @@ export async function createAnonymousWorkspace(
     org.name,
     input.industry ?? null
   );
+
+  // May 2, 2026 — booking duration + title default from CRM personality.
+  // Service businesses (HVAC, plumbing, electrical) need 60-min slots
+  // for "Service Call / Estimate"; coaching/consulting want 45-60;
+  // legal want 30 ("Free Consultation"); dental wants 30 ("Appointment").
+  // Mutates seedBlueprint.booking.eventType in place — createDefaultBookingTemplate
+  // reads from there. Default 30 stays for unknown verticals.
+  const personalityBookingDefaults: Record<
+    string,
+    { durationMinutes: number; title: string; description: string }
+  > = {
+    hvac: {
+      durationMinutes: 60,
+      title: "Service Call / Free Estimate",
+      description: "Pick a time that works for you. We'll confirm by email.",
+    },
+    legal: {
+      durationMinutes: 30,
+      title: "Free Consultation",
+      description: "30-minute initial consultation. Confidential, no commitment.",
+    },
+    dental: {
+      durationMinutes: 30,
+      title: "Appointment",
+      description: "Book your visit at a time that works for you.",
+    },
+    coaching: {
+      durationMinutes: 60,
+      title: "Discovery Call",
+      description: "60-minute call to talk about your goals and how we can help.",
+    },
+    agency: {
+      durationMinutes: 45,
+      title: "Strategy Call",
+      description: "45-minute call to discuss your project and scope.",
+    },
+  };
+  const bookingDefault = personalityBookingDefaults[personality.vertical];
+  if (bookingDefault && seedBlueprint.booking?.eventType) {
+    seedBlueprint.booking.eventType.durationMinutes = bookingDefault.durationMinutes;
+    seedBlueprint.booking.eventType.title = bookingDefault.title;
+    seedBlueprint.booking.eventType.description = bookingDefault.description;
+  }
 
   // Seed default templates for every block we mark as enabled. Without these
   // rows the public subdomain routes (/, /book, /intake) point at the right

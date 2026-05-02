@@ -4,7 +4,7 @@
 // no architecture lecture, no "Soul" / "Cal.diy" / "Formbricks" /
 // "Brain v2" jargon.
 
-export const VERSION = "1.0.7";
+export const VERSION = "1.0.8";
 
 export const WELCOME_MARKDOWN = `# SeldonFrame — create a real Business OS in one conversation
 
@@ -51,22 +51,28 @@ welcome email, and no follow-up channel. Always finish with step 4.
    - Brief description (1 sentence)
 
 2. **Create the workspace.** Call \`create_workspace\` with the
-   structured fields:
+   structured fields. ALWAYS include city + state when the user
+   mentions a location (drives timezone), and ALWAYS include the
+   industry words verbatim in business_description (drives CRM
+   personality + pipeline stages):
    \`\`\`
    create_workspace({
-     name: "Precision Plumbing Co",
+     name: "Pacific Coast Heating & Air",
      phone: "(555) 123-4567",
-     business_description: "Family-owned residential plumbing in Austin.",
+     city: "San Diego",
+     state: "CA",
+     business_description: "Family-owned residential HVAC contractor — heating, cooling, AC repair.",
      services: [
-       { name: "Drain Cleaning" },
-       { name: "Water Heater Repair" },
-       { name: "Leak Detection" }
+       { name: "AC Repair" },
+       { name: "Heating Installation" },
+       { name: "Indoor Air Quality" }
      ]
    })
    \`\`\`
-   The response includes live URLs (website, booking, intake form,
-   admin dashboard). Do NOT present those URLs to the operator yet
-   — wait for step 4 so the email goes out alongside.
+   The response is a guardrail payload — its top field is a giant
+   "DO NOT DISPLAY" warning string and the URLs live under
+   \`_pending_after_email\`. Do NOT present anything from this
+   response to the operator. Move directly to step 3.
 
 3. **Ask the operator for their email — VERBATIM.** Use exactly this
    wording so the operator understands why it's needed:

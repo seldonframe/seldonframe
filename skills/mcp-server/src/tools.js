@@ -57,8 +57,10 @@ export const TOOLS = [
         phone: str("Operator's business phone (any format — we render as-is). Renders in nav, hero, and footer when set."),
         email: str("Optional contact email surfaced in the landing footer."),
         address: str("Optional business address. Comma-separated street, city, region, postal, country renders as-is."),
+        city: str("Operator's city (e.g. 'San Diego'). Used to set the workspace timezone so the booking page renders the right hours. ALWAYS include when the user mentions a location."),
+        state: str("Operator's US state code or full name (e.g. 'CA' or 'California'), or Canadian province. Used for timezone inference. ALWAYS include when the user mentions a location."),
         tagline: str("Short hero tagline (one line)."),
-        business_description: str("One paragraph about the business (used for hero subhead + about section)."),
+        business_description: str("One paragraph about the business (used for hero subhead + about section). ALWAYS include the industry words verbatim ('residential HVAC', 'family-owned plumbing', 'dental practice') so the right CRM personality + pipeline stages get seeded."),
         services: {
           type: "array",
           description:
@@ -99,6 +101,8 @@ export const TOOLS = [
           phone: args.phone ?? null,
           email: args.email ?? null,
           address: args.address ?? null,
+          city: args.city ?? null,
+          state: args.state ?? null,
           tagline: args.tagline ?? null,
           business_description: args.business_description ?? null,
           services: args.services ?? null,
@@ -128,34 +132,46 @@ export const TOOLS = [
             Object.entries(rawUrls).filter(([key]) => !key.startsWith("admin_")),
           )
         : null;
-      // May 2, 2026 — operator-facing response payload.
+      // May 2, 2026 — bulletproof guardrail. Earlier next_step+summary
+      // shape was still being skipped: Claude Code would paste the
+      // URLs to the operator and end the turn without ever calling
+      // finalize_workspace. This shape makes that physically harder:
       //
-      // Goals: lead with the live URLs (operators care about those
-      // first), prompt for the email next (the keystone of the
-      // onboarding loop), and never surface internal jargon
-      // (no "Soul" / "Cal.diy" / "Formbricks" / "Brain v2" /
-      // "loadSoulPackage" / etc).
-      //
-      // The `summary` string is what Claude Code should paraphrase to
-      // the operator verbatim — it's pre-formatted with bullets so
-      // copy-paste lands cleanly.
+      //   1. The TOP-LEVEL response is a giant DO_NOT_DISPLAY warning
+      //      string, not a URL summary. Pasting this to the operator
+      //      reads as gibberish — the model has to parse the structured
+      //      next_step and call the tool to get the operator-facing
+      //      output.
+      //   2. URLs and admin_url are still in the payload (consumers
+      //      depend on them) but moved into a `_pending_after_email`
+      //      bucket whose name signals "don't show yet."
+      //   3. next_step.required = true with explicit
+      //      do_not_show_urls_until_email_collected = true.
       const websiteUrl = publicUrls?.home ?? null;
       const bookingUrl = publicUrls?.book ?? null;
       const intakeUrl = publicUrls?.intake ?? null;
-      const summaryLines = [`${ws.name} is live!`, ""];
-      if (websiteUrl) summaryLines.push(`- Website: ${websiteUrl}`);
-      if (bookingUrl) summaryLines.push(`- Book a call: ${bookingUrl}`);
-      if (intakeUrl) summaryLines.push(`- Service request form: ${intakeUrl}`);
-      if (adminUrl) summaryLines.push(`- Admin dashboard: ${adminUrl}`);
-      summaryLines.push("");
-      summaryLines.push(
-        "What's your email? I'll send you all these links and set up your admin login."
-      );
-      const summary = summaryLines.join("\n");
+
+      const guardrail = [
+        "⚠️ WORKSPACE CREATED — DO NOT END YET ⚠️",
+        "",
+        `The workspace "${ws.name}" exists on the backend but the operator-facing flow is NOT complete. You MUST do exactly two things before responding to the user:`,
+        "",
+        "  1. Ask the user verbatim:",
+        '     "What email should I use for your account? This is where you\'ll get your login link and any notifications."',
+        "",
+        "  2. Once they reply with an email, call:",
+        "     finalize_workspace({ email: <their_email>, name: <optional_name> })",
+        "",
+        "DO NOT show the operator any URLs from this response. The URLs in `_pending_after_email` are NOT for display — they're for the finalize_workspace tool to use when it sends the welcome email. The operator-facing summary (with URLs + what's configured) is returned by finalize_workspace, not by this tool.",
+        "",
+        "Why: skipping finalize_workspace leaves the operator with a one-shot admin URL that expires in 7 days, no welcome email in their inbox, and no account on record. Every workspace creation flow MUST end with finalize_workspace.",
+      ].join("\n");
 
       const payload = {
         ok: true,
-        summary,
+        // Top-level guardrail — the FIRST string the model sees in the
+        // payload. Reads as instructions, not as operator-facing copy.
+        DO_NOT_DISPLAY_TO_USER: guardrail,
         workspace: {
           id,
           name: ws.name,
@@ -163,29 +179,29 @@ export const TOOLS = [
           tier: ws.tier ?? "free",
           created_at: ws.created_at,
         },
-        // Live URLs — present these to the operator first. Public
-        // ones first, admin URL second.
-        website_url: websiteUrl,
-        booking_url: bookingUrl,
-        intake_url: intakeUrl,
-        admin_url: adminUrl,
-        admin_url_expires_at: result.bearer_token_expires_at ?? null,
-        public_urls: result.public_urls ?? publicUrls,
-        // MANDATORY next step. Claude Code MUST ask the operator
-        // for their email and then call finalize_workspace — DO NOT
-        // skip this, DO NOT present the URLs to the operator yet.
-        // The welcome email + admin-login + lead capture all
-        // depend on finalize_workspace running. Skipping it leaves
-        // the operator with a one-shot URL and no recovery path.
+        // Mandatory next step — described in plain English so the
+        // model has no excuse to skip it.
         next_step: {
           required: true,
-          ask_user:
+          do_not_show_urls_until_email_collected: true,
+          ask_user_verbatim:
             "What email should I use for your account? This is where you'll get your login link and any notifications.",
           tool_to_call: "finalize_workspace",
           tool_args_template: { email: "<operator_email>", name: "<optional>" },
           why_required:
-            "finalize_workspace sends the welcome email (with all the URLs the operator needs to bookmark), creates their account so the admin login keeps working past the 7-day token, and captures them as a lead. The summary it returns is the formatted final output to paraphrase to the operator.",
-          do_not_skip: true,
+            "finalize_workspace is what sends the welcome email (Resend), creates the operator's account so the admin login keeps working past the 7-day token, captures them as a lead in our CRM, and returns the formatted operator-facing summary (URLs + what's configured) for you to paraphrase.",
+          consequence_of_skipping:
+            "Operator gets a one-shot admin URL with no recovery path, no welcome email, no account on record, no follow-up channel. This IS a broken flow.",
+        },
+        // URLs are in the payload (downstream consumers may rely on
+        // them) but in a bucket whose name signals "do not display."
+        _pending_after_email: {
+          website_url: websiteUrl,
+          booking_url: bookingUrl,
+          intake_url: intakeUrl,
+          admin_url: adminUrl,
+          admin_url_expires_at: result.bearer_token_expires_at ?? null,
+          public_urls: result.public_urls ?? publicUrls,
         },
       };
       return firstEver ? withFirstCallBanner(payload) : payload;

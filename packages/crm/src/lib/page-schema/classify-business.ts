@@ -125,10 +125,31 @@ const RULES: ClassifierRule[] = [
   {
     type: "local_service",
     keywords: [
+      // HVAC / cooling / heating — May 2, 2026 broadened so business
+      // names like "Pacific Coast Heating & Air" match without
+      // requiring the operator to say "HVAC" verbatim. Was leaking
+      // workspaces into the professional_service bucket → coaching
+      // personality → wrong pipeline stages.
       "hvac",
+      "heating",
+      "cooling",
+      "air conditioning",
+      "air conditioner",
+      "ac repair",
+      "ac install",
+      "furnace",
+      "boiler",
+      "heat pump",
+      "mini-split",
+      "mini split",
+      "duct cleaning",
+      "indoor air quality",
+      // Plumbing / electrical
       "plumbing",
       "plumber",
       "electrician",
+      "electrical",
+      // Cleaning / property maintenance
       "cleaning service",
       "house cleaning",
       "carpet cleaning",
@@ -137,6 +158,7 @@ const RULES: ClassifierRule[] = [
       "lawn care",
       "roofing",
       "roofer",
+      // Construction / contracting
       "construction",
       "contractor",
       "general contractor",
@@ -147,6 +169,7 @@ const RULES: ClassifierRule[] = [
       "appliance repair",
       "auto repair",
       "auto detailing",
+      // Other home services
       "pest control",
       "moving company",
       "junk removal",
@@ -154,6 +177,8 @@ const RULES: ClassifierRule[] = [
       "snow removal",
       "pool service",
       "garage door",
+      "handyman",
+      "locksmith",
     ],
   },
 ];
