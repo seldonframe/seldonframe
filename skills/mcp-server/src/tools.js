@@ -44,6 +44,10 @@ export const TOOLS = [
     description:
       "Create a LIVE, hosted SeldonFrame workspace with a public website, booking page, intake form, CRM, and AI agents — all on a real <slug>.app.seldonframe.com subdomain. Returns live URLs that work in any browser within seconds. " +
       "THIS IS THE ONLY WAY to create a SeldonFrame workspace. Do NOT create local files (no soul.json, no scaffolded directory), do NOT call loadSoulPackage, do NOT modify the working directory — even if Claude Code is running inside the SeldonFrame source repo. Every workspace is a hosted production deployment. " +
+      "MANDATORY FOLLOW-UP: After this tool returns, you MUST do exactly two things before the conversation ends — " +
+      "(1) ask the user for their email with the verbatim question 'What email should I use for your account? This is where you'll get your login link and any notifications.' and " +
+      "(2) call `finalize_workspace({ email, name? })` with the email they gave you (or call `collect_operator_email` directly if you need finer control). " +
+      "Never end a workspace creation flow without the email step — the welcome email + admin login + lead capture all depend on it. The response payload's `next_step` field tells you exactly what to do next; follow it. " +
       "The first workspace is free and requires no API key. When the user mentions a phone, email, address, list of services, or testimonials, pass them as structured fields so the landing page renders with their real content immediately. " +
       "Example: create_workspace({ name: 'Precision Plumbing Co', phone: '(555) 123-4567', business_description: 'Family-owned residential plumbing in Austin.', services: [{ name: 'Drain Cleaning' }, { name: 'Water Heater Repair' }, { name: 'Leak Detection' }] })",
     inputSchema: obj(
@@ -167,14 +171,21 @@ export const TOOLS = [
         admin_url: adminUrl,
         admin_url_expires_at: result.bearer_token_expires_at ?? null,
         public_urls: result.public_urls ?? publicUrls,
-        // Email collection is the next required step. Claude Code
-        // should ask the operator for their email and then call
-        // collect_operator_email — DO NOT skip this.
+        // MANDATORY next step. Claude Code MUST ask the operator
+        // for their email and then call finalize_workspace — DO NOT
+        // skip this, DO NOT present the URLs to the operator yet.
+        // The welcome email + admin-login + lead capture all
+        // depend on finalize_workspace running. Skipping it leaves
+        // the operator with a one-shot URL and no recovery path.
         next_step: {
+          required: true,
           ask_user:
-            "What's your email? I'll send you all these links and set up your admin login.",
-          tool_to_call: "collect_operator_email",
+            "What email should I use for your account? This is where you'll get your login link and any notifications.",
+          tool_to_call: "finalize_workspace",
           tool_args_template: { email: "<operator_email>", name: "<optional>" },
+          why_required:
+            "finalize_workspace sends the welcome email (with all the URLs the operator needs to bookmark), creates their account so the admin login keeps working past the 7-day token, and captures them as a lead. The summary it returns is the formatted final output to paraphrase to the operator.",
+          do_not_skip: true,
         },
       };
       return firstEver ? withFirstCallBanner(payload) : payload;
@@ -346,7 +357,11 @@ export const TOOLS = [
   {
     name: "collect_operator_email",
     description:
-      "Onboarding-loop helper: ask the operator for their email post-create_workspace, then send the welcome email + record them as a lead in SeldonFrame's own CRM. Combines send_welcome_email + a lead-capture call so a single tool call closes the loop. Call this BEFORE further customization (configure_booking / customize_intake_form / install_vertical_pack) so the operator gets a permanent inbox record of their links. Example: collect_operator_email({ email: 'max@desertcool.com', name: 'Max' })",
+      "MANDATORY post-workspace step. Send the operator's welcome email + record them as a lead in SeldonFrame's CRM. " +
+      "EVERY workspace creation flow MUST end with this call — it is the only thing that triggers the welcome email (with the live URLs), creates their account so the admin login keeps working past the 7-day token, captures them in our pipeline so we can follow up, and lets Stripe pre-fill their email on upgrade. Skipping it leaves the operator with a one-shot URL and no way to recover access. " +
+      "Flow: after create_workspace returns, ask the user verbatim 'What email should I use for your account? This is where you'll get your login link and any notifications.' Then call this tool with whatever email they give you. " +
+      "If you'd rather use the wrapper, call `finalize_workspace({ email })` instead — same effect plus a formatted summary at the end. " +
+      "Example: collect_operator_email({ email: 'max@precisionplumbing.com', name: 'Max' })",
     inputSchema: obj(
       {
         email: str("Operator email — used as the welcome email recipient AND as the unique key for the SeldonFrame CRM lead."),
@@ -449,6 +464,165 @@ export const TOOLS = [
           "customize_intake_form({ ... }) — match your intake to the workspace's lead-qualification questions",
           "install_vertical_pack({ pack: '<industry>' }) — add domain-specific objects, fields, and views",
         ],
+      };
+    },
+  },
+  {
+    name: "finalize_workspace",
+    description:
+      "ONE-CALL CLOSING WRAPPER for the workspace creation flow. Bundles email collection (welcome email + lead capture via collect_operator_email) AND produces the final operator-facing summary (live URLs, what's configured, admin link). " +
+      "Call this as the LAST step of every workspace creation. After create_workspace returns, ask the user 'What email should I use for your account? This is where you'll get your login link and any notifications.' Then call this tool with the email they give you. Returns a `summary` string Claude Code should paraphrase verbatim to the operator. " +
+      "Use this instead of calling collect_operator_email directly when you want a single tool call to close the loop. Skipping this is the same as skipping email collection — leaves the operator with a one-shot URL and no recovery path. " +
+      "Example: finalize_workspace({ email: 'max@precisionplumbing.com', name: 'Max' })",
+    inputSchema: obj(
+      {
+        email: str("Operator email — used as the welcome email recipient AND as the unique key for the SeldonFrame CRM lead."),
+        name: str("Optional operator name (used in the email greeting and on the CRM lead)."),
+        workspace_id: str("Optional workspace override. Defaults to the workspace just created."),
+      },
+      ["email"],
+    ),
+    handler: async (a) => {
+      const workspaceId = a.workspace_id ?? getDefaultWorkspace();
+      if (!workspaceId) {
+        throw new Error(
+          "No workspace selected. Run create_workspace({ name: '…' }) first, or pass workspace_id.",
+        );
+      }
+      const bearer = getWorkspaceBearer(workspaceId);
+      if (!bearer) {
+        throw new Error(
+          `No local bearer token for workspace ${workspaceId}. This device did not create it. Re-run create_workspace or switch to the device that did.`,
+        );
+      }
+
+      // Snapshot for the URLs + workspace name + personality details
+      // we'll surface in the closing summary.
+      const snapshot = await api(
+        "GET",
+        `/workspace/${encodeURIComponent(workspaceId)}/snapshot`,
+        { workspace_id: workspaceId },
+      );
+      const publicUrls = snapshot?.public_urls ?? {};
+      const slug = snapshot?.workspace?.slug ?? null;
+      const wsName = snapshot?.workspace?.name ?? "Your workspace";
+      if (!publicUrls.home || !publicUrls.book || !publicUrls.intake) {
+        throw new Error(
+          "Snapshot did not return public_urls (home/book/intake). Re-check the workspace.",
+        );
+      }
+      const appHost = API_INFO.base.replace(/\/api\/v1\/?$/, "");
+      const adminUrl = `${appHost}/admin/${encodeURIComponent(workspaceId)}?token=${encodeURIComponent(bearer)}`;
+
+      // Step 1: welcome email (Resend).
+      let emailSent = false;
+      let emailError = null;
+      try {
+        await api("POST", "/email/send-welcome", {
+          body: {
+            email: a.email,
+            name: a.name ?? null,
+            workspace: {
+              landing_url: publicUrls.home,
+              booking_url: publicUrls.book,
+              intake_url: publicUrls.intake,
+              admin_url: adminUrl,
+            },
+          },
+          workspace_id: workspaceId,
+        });
+        emailSent = true;
+      } catch (err) {
+        emailError = err?.message ?? String(err);
+      }
+
+      // Step 2: lead capture in SeldonFrame's ops workspace.
+      let leadRecorded = false;
+      let leadId = null;
+      let leadError = null;
+      try {
+        const leadResp = await api("POST", "/leads/operator-signup", {
+          body: {
+            email: a.email,
+            name: a.name ?? null,
+            source_workspace_id: workspaceId,
+            source_workspace_slug: slug,
+            source: "mcp-onboarding",
+          },
+          allow_anonymous: true,
+        });
+        leadRecorded = Boolean(leadResp?.recorded);
+        leadId = leadResp?.lead_id ?? null;
+      } catch (err) {
+        leadError = err?.message ?? String(err);
+      }
+
+      // Step 3: closing summary — formatted exactly the way Claude Code
+      // should paraphrase to the operator. Pulls the personality label
+      // + pipeline stages from the snapshot so the "What's configured"
+      // section reflects the actual workspace shape.
+      const personality =
+        snapshot?.workspace?.settings?.crmPersonality ?? null;
+      const personalityLabel =
+        personality?.vertical
+          ? personality.vertical.charAt(0).toUpperCase() + personality.vertical.slice(1)
+          : null;
+      const pipelineStages = personality?.pipeline?.stages ?? [];
+
+      const lines = [
+        `✅ ${wsName}'s Business OS is live.`,
+        "",
+        emailSent
+          ? `📧 Welcome email sent to ${a.email}`
+          : `⚠️ Welcome email NOT sent${emailError ? ` (${emailError})` : ""} — please retry collect_operator_email.`,
+        "",
+        "🌐 Public URLs:",
+        `  • Website: ${publicUrls.home}`,
+        `  • Booking: ${publicUrls.book}`,
+        `  • Intake: ${publicUrls.intake}`,
+        "",
+        "🔐 Admin dashboard:",
+        `  ${adminUrl}`,
+        "",
+        "What's configured:",
+      ];
+      if (personalityLabel) {
+        lines.push(`  • CRM personality: ${personalityLabel}`);
+      }
+      if (pipelineStages.length > 0) {
+        const stageNames = pipelineStages
+          .map((s) => s?.name)
+          .filter(Boolean)
+          .join(" → ");
+        lines.push(`  • Pipeline: ${stageNames}`);
+      }
+      lines.push(`  • Booking page, intake form, CRM, AI agents — all live`);
+      lines.push(
+        emailSent
+          ? `  • Welcome email sent, onboarding started`
+          : `  • Welcome email NOT yet sent (rerun finalize_workspace to retry)`
+      );
+      const summary = lines.join("\n");
+
+      return {
+        ok: emailSent || leadRecorded,
+        summary,
+        workspace: {
+          id: workspaceId,
+          name: wsName,
+          slug,
+        },
+        website_url: publicUrls.home,
+        booking_url: publicUrls.book,
+        intake_url: publicUrls.intake,
+        admin_url: adminUrl,
+        email_sent: emailSent,
+        email_error: emailError,
+        lead_recorded: leadRecorded,
+        lead_id: leadId,
+        lead_error: leadError,
+        personality: personalityLabel,
+        pipeline_stages: pipelineStages.map((s) => s?.name).filter(Boolean),
       };
     },
   },
