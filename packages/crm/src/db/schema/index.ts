@@ -53,3 +53,13 @@ export * from "./workflow-approvals";
 // May 1, 2026 — Measurement Layers 2 + 3.
 export * from "./seldonframe-events";
 export * from "./brain-outcomes";
+// May 2, 2026 — Composable Primitives foundation. Five tables that
+// turn SeldonFrame into a platform: dynamic data collections,
+// records, pages (admin/public/portal), sidebar items, and custom
+// automation agents. API routes + MCP tools + dynamic page renderer
+// land in the spawned composable-primitives task.
+export * from "./workspace-collections";
+export * from "./workspace-records";
+export * from "./workspace-pages";
+export * from "./workspace-sidebar-items";
+export * from "./workspace-agents";
