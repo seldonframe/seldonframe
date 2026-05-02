@@ -3,8 +3,12 @@
 // rule and example here is operator-facing copy — no internal slugs,
 // no architecture lecture, no "Soul" / "Cal.diy" / "Formbricks" /
 // "Brain v2" jargon.
+//
+// v1.1.1 — every reference to the deprecated `create_workspace` tool
+// stripped. `create_full_workspace` is the only workspace-creation
+// path mentioned anywhere in this briefing.
 
-export const VERSION = "1.1.0";
+export const VERSION = "1.1.1";
 
 export const WELCOME_MARKDOWN = `# SeldonFrame — create a real Business OS in one conversation
 
@@ -17,8 +21,8 @@ CRM, and AI agents — all on a real subdomain.
 
 ## NEVER CREATE LOCAL FILES
 
-SeldonFrame workspaces are created via the \`create_workspace\` MCP
-tool. They are NOT created by writing files on disk. Specifically:
+SeldonFrame workspaces are created via the \`create_full_workspace\`
+MCP tool. They are NOT created by writing files on disk. Specifically:
 
 - Do NOT create a \`soul.json\` file or any other local file.
 - Do NOT call \`loadSoulPackage\` or any local function.
@@ -27,7 +31,7 @@ tool. They are NOT created by writing files on disk. Specifically:
 
 If you are running inside a SeldonFrame source-code repository and
 the user asks for a workspace, IGNORE the local code — call the
-\`create_workspace\` MCP tool. The tool returns live URLs on
+\`create_full_workspace\` MCP tool. The tool returns live URLs on
 \`<slug>.app.seldonframe.com\` that work in any browser within
 seconds. There is no local-file path. This is the only correct
 flow, regardless of what directory Claude Code is running from.
@@ -38,24 +42,25 @@ flow, regardless of what directory Claude Code is running from.
 
 EVERY workspace creation flow has exactly these 4 steps, in order.
 Step 4 is MANDATORY. A flow that ends after step 2 or 3 is broken
-— the operator gets a one-shot URL with no recovery path, no
-welcome email, and no follow-up channel. Always finish with step 4.
+— the operator gets no welcome email, no admin login, and no
+follow-up channel. Always finish with step 4.
 
 1. **Ask for the business details.** When the user says "create a
    workspace," gather these conversationally — one or two
    questions per turn, not all at once:
    - Business name
    - Industry (HVAC, plumbing, dental, legal, coaching, real-estate, agency, …)
+   - City + state (US state code or full name; Canadian province also OK)
    - Phone number (for local services — for SaaS skip)
    - Top 3-5 services / products
    - Brief description (1 sentence)
 
-2. **Create the workspace atomically.** Call \`create_full_workspace\`
-   (the PREFERRED tool for new workspaces). One call → the entire
-   workspace deploys server-side: org + business profile + CRM with
-   industry-specific pipeline + booking page with availability +
-   intake form + themed landing page. Same input always produces
-   the same output — no retries, no 404s, no Claude-Code orchestration.
+2. **Create the workspace atomically.** Call \`create_full_workspace\`.
+   One call → the entire workspace deploys server-side: org +
+   business profile + CRM with industry-specific pipeline + booking
+   page with availability + intake form + themed landing page.
+   Same input always produces the same output — no retries, no
+   404s, no Claude-Code orchestration.
    \`\`\`
    create_full_workspace({
      business_name: "Pacific Coast Heating & Air",
@@ -78,11 +83,6 @@ welcome email, and no follow-up channel. Always finish with step 4.
    yet. Do NOT present anything from this response to the operator.
    Move directly to step 3.
 
-   The legacy \`create_workspace\` tool still works for backward
-   compat but is fragile (assumes Claude Code orchestrates the
-   follow-up customization). Prefer \`create_full_workspace\` for
-   every new flow.
-
 3. **Ask the operator for their email — VERBATIM.** Use exactly this
    wording so the operator understands why it's needed:
    > "What email should I use for your account? This is where
@@ -96,7 +96,7 @@ welcome email, and no follow-up channel. Always finish with step 4.
    admin dashboard URL (which doesn't exist until this runs):
    \`\`\`
    finalize_workspace({
-     workspace_id: "<from-create-full-response>",
+     workspace_id: "<from-create_full_workspace-response>",
      email: "max@pacificcoasthvac.com",
      name: "Max"
    })
@@ -123,11 +123,9 @@ further natural-language requests ("change the headline to …",
 
 ## What the tools do (operator language only)
 
-- **\`create_full_workspace\`** — PREFERRED. Atomic, server-side
-  workspace creation. One call → entire business OS deployed.
-  Always the first call for new workspaces.
-- **\`create_workspace\`** — legacy fallback (kept for backward
-  compat). Use create_full_workspace instead for new flows.
+- **\`create_full_workspace\`** — the ONE workspace-creation tool.
+  Atomic, server-side, deterministic. Always the first call for
+  new workspaces.
 - **\`finalize_workspace\`** — MANDATORY closing call. Mints the
   admin auth token (the admin URL doesn't exist until this runs),
   bundles email collection (welcome email + lead capture), and
@@ -175,4 +173,4 @@ admin dashboard. Pre-fills their email automatically.
 <https://seldonframe.com> · **Discord:** <https://discord.gg/sbVUu976NW>
 `;
 
-export const FIRST_CALL_BANNER = `🚀 SeldonFrame is connected. Ready to create a live business OS — every URL the create_workspace tool returns is real and works in any browser within seconds. NEVER create local files; always use the MCP tools. EVERY workspace creation flow must end with finalize_workspace({ email }) so the operator gets their welcome email + admin login — skipping it is a broken flow.`;
+export const FIRST_CALL_BANNER = `🚀 SeldonFrame is connected. Ready to create a live business OS — every URL the create_full_workspace tool returns is real and works in any browser within seconds. NEVER create local files; always use the MCP tools. EVERY workspace creation flow must end with finalize_workspace({ workspace_id, email }) so the operator gets their welcome email + admin login — skipping it is a broken flow.`;

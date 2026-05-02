@@ -1,7 +1,7 @@
 {
   "name": "@seldonframe/mcp",
-  "version": "1.1.0",
-  "description": "MCP server for SeldonFrame — AI-native Business OS platform. One command creates a real, hosted workspace with a website, booking page, intake form, CRM, and AI agents. v1.1.0: ATOMIC WORKSPACE CREATION. New `create_full_workspace` tool runs the entire 13-step pipeline server-side in one call — workspace, business profile, CRM with industry-specific pipeline stages, booking page with availability, intake form, themed landing page, all deployed with live URLs. Same input always produces the same output, no Claude-Code orchestration, no retries, no 404s. Admin dashboard URL is now created ONLY by finalize_workspace (not by create_full_workspace or create_workspace) — structural enforcement of the email-collection step instead of prompt-wording enforcement. The legacy create_workspace tool stays for backward compatibility but is no longer the recommended path.",
+  "version": "1.1.1",
+  "description": "MCP server for SeldonFrame — AI-native Business OS platform. One command creates a real, hosted workspace with a website, booking page, intake form, CRM, and AI agents. v1.1.1: DEPRECATED `create_workspace` tool. Renamed to `_legacy_create_workspace` (sorts last in tool listings) and the handler returns a deprecation error pointing at `create_full_workspace` without doing anything. Closes the old door so Claude Code is forced onto the atomic pipeline introduced in v1.1.0 — every fix shipped since (timezone, pipeline stages, email collection, admin URL withholding) only activates inside the new pipeline. WELCOME_MARKDOWN updated so create_full_workspace is the only workspace-creation path mentioned anywhere.",
   "type": "module",
   "bin": {
     "seldonframe-mcp": "src/index.js"
