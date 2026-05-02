@@ -182,12 +182,24 @@ export async function createFullWorkspace(
   // returns `upgrade_required` and surfaces as a 500 to the caller.
   // The standalone create_landing_page MCP tool was deleted in 1.1.2
   // for the same reason — it bypassed this contract.
+  //
+  // CRITICAL CONTRACT (v1.1.3): pass `industryHint` as the `industry`
+  // arg so createAnonymousWorkspace's internal personality classifier
+  // (selectCRMPersonality) sees the same hint as our outer Step 2-3
+  // classifier. Without this, the inner call only gets businessType
+  // and falls through BUSINESS_TYPE_FALLBACK["professional_service"]
+  // → "coaching" for dental / legal / agency workspaces — seeding the
+  // wrong pipeline stages, booking duration, and intake fields. The
+  // assertion below would catch the personality mismatch in
+  // settings.crmPersonality, but the pipeline rows would already be
+  // wrong. Sourcing the same hint at both layers keeps everything
+  // consistent from the start.
   let createResult: Awaited<ReturnType<typeof createAnonymousWorkspace>>;
   try {
     createResult = await createAnonymousWorkspace({
       name: input.business_name,
       source: input.business_description,
-      industry: null,
+      industry: industryHint,
       phone,
       email: input.email ?? null,
       address: input.address ?? null,
@@ -204,6 +216,66 @@ export async function createFullWorkspace(
       status: "error",
       error: { step: "create_organization", message },
     };
+  }
+
+  // Defensive override (v1.1.3). Even with industryHint passed in,
+  // re-confirm settings.crmPersonality matches the orchestrator's
+  // pick — and re-seed the pipeline stages if they don't. This makes
+  // the orchestrator the source of truth for personality, regardless
+  // of what classifier path createAnonymousWorkspace took internally
+  // (or what a future refactor of that function might change).
+  //
+  // We update + reseed in two steps so:
+  //   1. settings.crmPersonality reflects the right vertical for the
+  //      sidebar / dashboard / contact fields (driven via useLabels).
+  //   2. The default pipeline row carries the right stages so the
+  //      operator sees "New Patient → Appointment Scheduled → ..."
+  //      instead of "Applied → Discovery Booked → Enrolled" for a
+  //      dental workspace.
+  try {
+    const [orgRow] = await db
+      .select({ settings: organizations.settings })
+      .from(organizations)
+      .where(eq(organizations.id, createResult.orgId))
+      .limit(1);
+    const currentSettings = (orgRow?.settings ?? {}) as Record<string, unknown>;
+    const currentPersonality = currentSettings.crmPersonality as
+      | { vertical?: string }
+      | undefined;
+
+    if (currentPersonality?.vertical !== personality.vertical) {
+      // Mismatch: override settings + re-seed the default pipeline to
+      // match the orchestrator's classified personality.
+      await db
+        .update(organizations)
+        .set({
+          settings: { ...currentSettings, crmPersonality: personality },
+          updatedAt: new Date(),
+        })
+        .where(eq(organizations.id, createResult.orgId));
+
+      await db
+        .update(pipelines)
+        .set({
+          name: personality.pipeline.name,
+          stages: personality.pipeline.stages,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(pipelines.orgId, createResult.orgId),
+            eq(pipelines.isDefault, true)
+          )
+        );
+    }
+  } catch (err) {
+    // Non-blocking — the assertion below will catch a mismatch and
+    // surface it as a structured error. Logging here helps diagnose
+    // the underlying DB issue without breaking workspace creation.
+    console.warn(
+      `[create-full] personality override failed for ${createResult.orgId}:`,
+      err instanceof Error ? err.message : String(err)
+    );
   }
 
   // Step 13: VALIDATE OUTPUT
