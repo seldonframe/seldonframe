@@ -5,7 +5,13 @@
 // network or DB.
 
 const DISCORD_INVITE = "https://discord.gg/sbVUu976NW";
-const DEFAULT_FROM = "SeldonFrame <onboarding@resend.dev>";
+// v1.1.4 / Issue #4 — default to the verified seldonframe.com domain
+// (set up in Resend → Domains) so welcome emails actually reach the
+// operator's inbox. The legacy onboarding@resend.dev sandbox was rate-
+// limited to 3/day and could only send to the account owner's verified
+// email — every operator-facing send silently 403'd. RESEND_FROM_ADDRESS
+// can still override per-environment (e.g. for staging tests).
+const DEFAULT_FROM = "SeldonFrame <welcome@seldonframe.com>";
 
 export type WelcomeWorkspace = {
   landing_url: string;

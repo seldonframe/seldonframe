@@ -130,14 +130,17 @@ describe("pickFromAddress", () => {
     assert.equal(result, "Foo <foo@x.com>");
   });
 
-  test("falls back to onboarding@resend.dev when not set", () => {
+  test("falls back to welcome@seldonframe.com (verified domain) when not set", () => {
+    // v1.1.4 / Issue #4 — the legacy onboarding@resend.dev sandbox
+    // address is rate-limited to 3/day and only delivers to the account
+    // owner. The verified seldonframe.com domain delivers to any operator.
     const result = pickFromAddress({});
-    assert.match(result, /onboarding@resend\.dev/);
+    assert.match(result, /welcome@seldonframe\.com/);
   });
 
   test("falls back when RESEND_FROM_ADDRESS is empty", () => {
     const result = pickFromAddress({ RESEND_FROM_ADDRESS: "   " });
-    assert.match(result, /onboarding@resend\.dev/);
+    assert.match(result, /welcome@seldonframe\.com/);
   });
 });
 

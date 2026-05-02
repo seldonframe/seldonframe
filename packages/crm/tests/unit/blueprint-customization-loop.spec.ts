@@ -39,10 +39,13 @@ import {
 } from "@/lib/blueprint/persist";
 
 // Markers that prove the C3.x visual polish survived a re-render.
+// May 2026 — sf-hero__corner spans were intentionally removed from the
+// renderer (they read as black squares against the dark hero band). The
+// CSS for them remains in the stylesheet; the polish-survival assertion
+// no longer requires the markup itself.
 const POLISH_HTML_MARKERS = [
   "sf-frame",            // C3.2 outer page frame
   "sf-navbar",           // C3.2 floating glass nav
-  "sf-hero__corner",     // C3.2 corner accents
   "sf-hero__glow",       // C3.2 blurred gradients
   "sf-btn__icon",        // C3.2 chevron-in-circle on primary CTA
   "sf-faq__chevron",     // C3.1 +/× rotation

@@ -28,6 +28,15 @@ export type TemplateOpts = {
    * up front instead of the generic "What can we help with?").
    */
   personalityIntakeFields?: PersonalityIntakeField[];
+  /**
+   * v1.1.4 / Issue #5 — operator-supplied service list. When present,
+   * the intake form gets a "Service interested in" select dropdown
+   * populated from these strings (plus an "Other / not sure" option
+   * tacked on the end). Without this, the form just asks free-text
+   * "What's going on?" — leaving the operator with leads they have
+   * to triage before they can route.
+   */
+  servicesForIntake?: string[];
 };
 
 const DEFAULT_BOOKING_SLUG = "default";
@@ -169,7 +178,13 @@ export async function createDefaultIntakeForm(
   const intake = opts.blueprint?.intake;
   const name = intake?.title ?? "Get in touch";
   const personalityFields = opts.personalityIntakeFields ?? null;
-  const mappedFields = intake?.questions
+  let mappedFields: Array<{
+    key: string;
+    label: string;
+    type: string;
+    required: boolean;
+    options?: string[];
+  }> = intake?.questions
     ? intake.questions.map((q) => ({
         key: q.id,
         label: q.label,
@@ -196,6 +211,49 @@ export async function createDefaultIntakeForm(
             required: true,
           },
         ];
+
+  // v1.1.4 / Issue #5 — inject a "Service interested in" select with the
+  // operator's actual services as options. Idempotent: if a `service`
+  // field already exists (e.g. seeded by the personality), we just back-
+  // fill its options instead of duplicating it. The "Other / not sure"
+  // tail lets visitors who don't fit the service list still convert.
+  const services = (opts.servicesForIntake ?? [])
+    .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
+    .map((s) => s.trim());
+  if (services.length > 0) {
+    const options = [...services, "Other / not sure"];
+    const existingIdx = mappedFields.findIndex(
+      (f) => f.key === "service" || f.key === "service_type" || f.key === "service_interest"
+    );
+    if (existingIdx >= 0) {
+      mappedFields[existingIdx] = {
+        ...mappedFields[existingIdx],
+        type: "select",
+        options,
+      };
+    } else {
+      // Insert just after the contact fields (name/email/phone) but
+      // before the free-text "what's going on" field, so the operator
+      // gets routed-by-service leads without losing the open prompt.
+      const insertAfter = Math.max(
+        mappedFields.findIndex((f) => f.key === "phone"),
+        mappedFields.findIndex((f) => f.key === "email"),
+        mappedFields.findIndex((f) => f.key === "fullName")
+      );
+      const insertAt = insertAfter >= 0 ? insertAfter + 1 : mappedFields.length;
+      mappedFields = [
+        ...mappedFields.slice(0, insertAt),
+        {
+          key: "service",
+          label: "Which service are you interested in?",
+          type: "select",
+          required: true,
+          options,
+        },
+        ...mappedFields.slice(insertAt),
+      ];
+    }
+  }
 
   const rendered = opts.blueprint ? renderFormbricksStackV1(opts.blueprint) : null;
 

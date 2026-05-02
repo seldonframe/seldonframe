@@ -510,6 +510,39 @@ interface NavItem {
   href: string;
 }
 
+/**
+ * v1.1.4 / Issue #6 — map a long services-section headline to a short,
+ * single-word nav label. Without this, personalities with descriptive
+ * headlines (e.g. dental's "Our Services", legal's "Practice Areas",
+ * coaching's "How I help clients move forward") leaked the entire
+ * section heading into the nav bar.
+ *
+ * Matching is keyword-based on the lowercased headline so it works
+ * regardless of personality. Falls back to "Services".
+ */
+function shortNavLabelForServicesHeadline(headline: string | undefined): string {
+  const trimmed = (headline ?? "").trim();
+  if (!trimmed) return "Services";
+  const lower = trimmed.toLowerCase();
+
+  // Personality-specific short labels (substring match).
+  if (lower.includes("practice area")) return "Practice Areas";
+  if (lower.includes("treatment")) return "Treatments";
+  if (lower.includes("feature")) return "Features";
+  if (lower.includes("product")) return "Products";
+  if (lower.includes("solution")) return "Solutions";
+  if (lower.includes("portfolio") || lower.includes("work")) return "Work";
+  if (lower.includes("pricing") || lower.includes("plan")) return "Pricing";
+
+  // Headline already short and starts with "Services" / "Our Services" — keep it.
+  if (/^(our )?services\b/i.test(trimmed) && trimmed.length <= 24) {
+    return trimmed.length <= 16 ? trimmed : "Services";
+  }
+
+  // Anything else: refuse to leak a long heading into the nav.
+  return "Services";
+}
+
 function deriveNavItems(
   rendered: Array<{ section: LandingSection; html: string }>
 ): NavItem[] {
@@ -535,11 +568,14 @@ function deriveNavItems(
           // Skip — stats anchors aren't useful as nav targets.
           break;
         }
-        // The renderer's own headline drives the nav label so SaaS
-        // workspaces with intent="features" show "Features" and local-
-        // service ones with intent="services" show "Services". Default
-        // to "Services" when headline is missing.
-        const label = section.headline?.trim() || "Services";
+        // v1.1.4 / Issue #6 — derive a SHORT, single-word nav label
+        // from the headline. Previously we passed `section.headline`
+        // through verbatim, which leaked content like
+        // "How I help clients move forward" or "Healthy Smiles for
+        // the Whole Family" into the nav bar. Map to a known short
+        // label by keyword, fall back to "Services" when nothing
+        // matches.
+        const label = shortNavLabelForServicesHeadline(section.headline);
         push({ label, href: "#sf-services" });
         break;
       }

@@ -209,6 +209,17 @@ export async function createFullWorkspace(
       description: input.business_description,
       services: input.services.map((name) => ({ name })),
       testimonials: null,
+      // v1.1.4 — proof + service-area enrichment fields. seedSoul
+      // writes these onto organizations.soul where seedLandingFromSoul
+      // picks them up via resolvePersonalityContent and feeds them
+      // into the rendered hero, trust strip, FAQ, and stats.
+      review_count: input.review_count ?? null,
+      review_rating: input.review_rating ?? null,
+      service_area: input.service_area ?? null,
+      certifications: input.certifications ?? null,
+      trust_signals: input.trust_signals ?? null,
+      emergency_service: input.emergency_service ?? null,
+      same_day: input.same_day ?? null,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

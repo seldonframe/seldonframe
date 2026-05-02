@@ -93,6 +93,41 @@ export interface PersonalityDashboard {
   urgencyIndicators: PersonalityUrgencyIndicator[];
 }
 
+// ─── Landing-page content templates ──────────────────────────────────────────
+// May 2, 2026 — every personality drives industry-appropriate landing-page
+// copy via these templates. Strings can include {placeholders} that are
+// substituted at render time from the workspace input (city, rating,
+// review_count, phone, services_list, service_area, certifications).
+//
+// Without this layer, dental/legal/etc workspaces fell back to the
+// professional_service content pack — which was coaching-flavored
+// ("Book a free consultation", "How long is a typical engagement?").
+
+export interface PersonalityContentFaq {
+  question: string;
+  answer_template: string;
+}
+
+export interface PersonalityContentTemplates {
+  /** Pick the first one; future A/B testing uses the others. */
+  hero_headlines: string[];
+  hero_subheadline: string;
+  /** Exactly 4 — render as the trust strip under the hero. */
+  trust_badges: string[];
+  /** Section heading above the services grid (e.g. "Practice Areas"
+   *  for legal, "Our Services" for dental, "What We Do" generic). */
+  services_heading: string;
+  /** 5 questions/answers, both with substitution. */
+  faqs: PersonalityContentFaq[];
+  /** Hero CTA buttons. Primary points at /book, secondary at /intake. */
+  cta_button_primary: string;
+  cta_button_secondary: string;
+  /** Bottom-of-page CTA section. */
+  bottom_cta_heading: string;
+  /** Three short trust points shown under the bottom CTA button. */
+  bottom_cta_trust_points: string[];
+}
+
 export interface CRMPersonality {
   vertical: PersonalityVertical;
   terminology: PersonalityTerminology;
@@ -100,6 +135,10 @@ export interface CRMPersonality {
   contactFields: PersonalityContactFields;
   intakeFields: PersonalityIntakeField[];
   dashboard: PersonalityDashboard;
+  /** May 2, 2026 — landing-page content templates. Optional for
+   *  backward compat; personalities without templates fall back to
+   *  the BusinessType-keyed content pack defaults. */
+  content_templates?: PersonalityContentTemplates;
 }
 
 // ─── Pipeline color palette ────────────────────────────────────────────────
@@ -171,6 +210,57 @@ const HVAC_PERSONALITY: CRMPersonality = {
       { key: "completed_no_review", label: "Completed jobs without review", severity: "info" },
     ],
   },
+  content_templates: {
+    hero_headlines: [
+      "Same-Day Service[ in {city}].[ {rating}★ from {review_count}+ Local Customers.]",
+      "[{city}'s ]Trusted HVAC Pros — Same-Day Service, Honest Pricing.",
+      "[{rating}★ on Google.][ {review_count}+ Jobs.] Licensed & Insured.",
+    ],
+    hero_subheadline:
+      "Licensed & insured · Free estimates · We show up when we say we will.[ Serving {service_area}.]",
+    trust_badges: [
+      "[{rating}★ on Google]",
+      "Licensed & insured",
+      "Same-day service",
+      "Free estimates",
+    ],
+    services_heading: "Everything we fix — fast",
+    faqs: [
+      {
+        question: "How quickly can you come out?",
+        answer_template:
+          "We offer same-day service for most jobs[ in {city} and surrounding areas], and can usually be on-site within 24 hours.",
+      },
+      {
+        question: "Do you charge for estimates?",
+        answer_template:
+          "Free estimates on most jobs. We'll give you a clear, upfront price before any work starts — no hidden fees.",
+      },
+      {
+        question: "Are you licensed and insured?",
+        answer_template:
+          "Yes. We're fully licensed, bonded, and insured.[ {certifications_sentence}]",
+      },
+      {
+        question: "What areas do you serve?",
+        answer_template:
+          "[We serve {service_area}. ]Call[ {phone}] if you're not sure whether you're in our service area.",
+      },
+      {
+        question: "What payment methods do you accept?",
+        answer_template:
+          "Cash, credit card, debit card, and digital wallets. Financing available on larger jobs.",
+      },
+    ],
+    cta_button_primary: "Get a free quote →",
+    cta_button_secondary: "Schedule service →",
+    bottom_cta_heading: "Get a free quote in 60 seconds",
+    bottom_cta_trust_points: [
+      "No obligation",
+      "Same-day callbacks",
+      "Licensed & insured",
+    ],
+  },
 };
 
 // ─── LEGAL ─────────────────────────────────────────────────────────────────
@@ -224,6 +314,57 @@ const LEGAL_PERSONALITY: CRMPersonality = {
       { key: "conflict_check_pending", label: "Conflict checks pending", severity: "danger" },
       { key: "statute_within_30d", label: "Statute within 30 days", severity: "danger" },
       { key: "engagement_not_signed_7d", label: "Engagement letters > 7d unsigned", severity: "warning" },
+    ],
+  },
+  content_templates: {
+    hero_headlines: [
+      "Trusted Counsel[ in {city}].[ {rating}★ from {review_count}+ Clients.]",
+      "[{city} ]Attorneys — Free Consultation, Confidential Advice.",
+      "Real Outcomes.[ {review_count}+ Cases.][ {rating}★ Reviewed.]",
+    ],
+    hero_subheadline:
+      "Free initial consultation · Confidential · No commitment until you're ready to retain.",
+    trust_badges: [
+      "[{rating}★ from {review_count}+ clients]",
+      "Free initial consultation",
+      "Confidential",
+      "No retainer until you decide",
+    ],
+    services_heading: "Practice Areas",
+    faqs: [
+      {
+        question: "Is the initial consultation really free?",
+        answer_template:
+          "Yes. The first consultation is free and confidential. We'll listen, give you our honest take, and only recommend retaining us if we genuinely think we can help.",
+      },
+      {
+        question: "How do you charge?",
+        answer_template:
+          "Most matters are billed hourly with a retainer; some are flat-fee or contingency. We'll quote you clearly during the consultation — no surprises.",
+      },
+      {
+        question: "Will my conversation stay confidential?",
+        answer_template:
+          "Absolutely. Everything you share — even before you officially retain us — is protected by attorney-client privilege.",
+      },
+      {
+        question: "How long will my case take?",
+        answer_template:
+          "It depends on the matter. We'll give you an honest timeline at your consultation and keep you updated as things progress.",
+      },
+      {
+        question: "Where are you located?",
+        answer_template:
+          "[We're based in {city}. ]Reach us[ at {phone}] or book a consultation online.",
+      },
+    ],
+    cta_button_primary: "Book a free consultation →",
+    cta_button_secondary: "Tell us about your situation →",
+    bottom_cta_heading: "Get clarity on your situation — for free",
+    bottom_cta_trust_points: [
+      "30-minute consult",
+      "Confidential",
+      "No commitment",
     ],
   },
 };
@@ -280,6 +421,57 @@ const DENTAL_PERSONALITY: CRMPersonality = {
       { key: "overdue_recalls", label: "Overdue recalls", severity: "warning" },
       { key: "unconfirmed_tomorrow", label: "Unconfirmed for tomorrow", severity: "danger" },
       { key: "treatment_pending_acceptance_14d", label: "Plans pending > 14d", severity: "info" },
+    ],
+  },
+  content_templates: {
+    hero_headlines: [
+      "Healthy Smiles for the Whole Family[ — {rating}★ from {review_count}+ Patients]",
+      "[{city}'s ]Family Dentist — Now Accepting New Patients",
+      "Your Smile Deserves the Best.[ {review_count}+ Happy Patients][ in {city}].",
+    ],
+    hero_subheadline:
+      "Now accepting new patients · In-network with most PPO plans · Same-day emergency appointments available.",
+    trust_badges: [
+      "[{rating}★ on Google ({review_count}+ reviews)]",
+      "Accepting new patients",
+      "In-network PPO",
+      "Same-day emergency",
+    ],
+    services_heading: "Our Services",
+    faqs: [
+      {
+        question: "Are you accepting new patients?",
+        answer_template:
+          "Yes! We're currently accepting new patients[ in {city}] and surrounding areas. Book a first visit online[ or call {phone}].",
+      },
+      {
+        question: "Do you take my insurance?",
+        answer_template:
+          "We're in-network with most major PPO plans. We'll verify your coverage before your first visit so there are no surprises.",
+      },
+      {
+        question: "What if I have a dental emergency?",
+        answer_template:
+          "[Call us at {phone} — we ]hold same-day emergency slots open for current and new patients.",
+      },
+      {
+        question: "What should I expect at my first visit?",
+        answer_template:
+          "A comprehensive exam, X-rays if needed, and a chance to talk through any concerns. No pressure — just an honest plan for your smile.",
+      },
+      {
+        question: "Where are you located?",
+        answer_template:
+          "[We're in {city}. ]Free parking on-site.[ Reach us at {phone} for directions.]",
+      },
+    ],
+    cta_button_primary: "Book your first visit →",
+    cta_button_secondary: "Ask us a question →",
+    bottom_cta_heading: "Book your first visit today",
+    bottom_cta_trust_points: [
+      "Accepting new patients",
+      "Most insurance accepted",
+      "Friendly, modern office",
     ],
   },
 };
@@ -526,5 +718,205 @@ export function readPersonalityFromSettings(
   ) {
     return DEFAULT_PERSONALITY;
   }
-  return value as CRMPersonality;
+  // May 2, 2026 — settings.crmPersonality predates content_templates.
+  // Stale rows missing the field still validate as a valid personality;
+  // we backfill from the fresh registry entry so renders pick up the
+  // industry-appropriate copy without a one-off migration.
+  const stored = value as CRMPersonality;
+  if (!stored.content_templates) {
+    const fresh = PERSONALITIES[stored.vertical];
+    if (fresh?.content_templates) {
+      return { ...stored, content_templates: fresh.content_templates };
+    }
+  }
+  return stored;
+}
+
+// ─── Template substitution ─────────────────────────────────────────────────
+// May 2, 2026 — substitute {city}/{rating}/{review_count}/{phone}/...
+// placeholders in personality.content_templates against workspace input.
+//
+// Substitution philosophy:
+//   - Missing values → strip the placeholder (and any surrounding " · "
+//     fragment so we don't ship "{review_count}+ patients" or " ·  · ")
+//     rather than substituting "[unknown]" garbage.
+//   - {certifications_sentence} expands to "We hold X, Y, and Z." or ""
+//     when no certifications were provided.
+//   - Pure-string-replace, no template engine, deterministic.
+
+export interface PersonalityTemplateVars {
+  city?: string | null;
+  state?: string | null;
+  phone?: string | null;
+  rating?: number | null;
+  review_count?: number | null;
+  services_list?: string | null;
+  service_area?: string | null;
+  certifications?: string[] | null;
+  business_name?: string | null;
+}
+
+function joinList(items: string[]): string {
+  if (items.length === 0) return "";
+  if (items.length === 1) return items[0];
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`;
+}
+
+/**
+ * Substitute `{placeholder}` tokens in a single template string.
+ *
+ * Design:
+ *   1. **Bracketed optional segments** — `[ ... {placeholder} ... ]`
+ *      means "render this whole fragment iff every placeholder inside
+ *      resolves to a non-empty value." If any inner placeholder is
+ *      missing, the entire bracketed segment (and any adjacent
+ *      separator like " · " or " — ") is dropped. This is the
+ *      canonical way to mark proof-dependent copy ("[{rating}★ from
+ *      {review_count}+ Patients]") so it disappears cleanly when the
+ *      operator didn't supply review data — instead of shipping
+ *      mangled "★ from + Patients" output.
+ *   2. **Bare placeholders** — `{placeholder}` outside any brackets
+ *      gets substituted to its value, or "" when missing. Surrounding
+ *      whitespace and double-separator runs are then collapsed.
+ *
+ * Templates with a missing placeholder OUTSIDE brackets fail loud:
+ * they ship empty/garbled copy. Always bracket proof-dependent
+ * fragments.
+ */
+export function substitutePersonalityTemplate(
+  template: string,
+  vars: PersonalityTemplateVars
+): string {
+  const certifications = (vars.certifications ?? []).filter(
+    (c): c is string => typeof c === "string" && c.trim().length > 0
+  );
+  const certificationsSentence =
+    certifications.length > 0
+      ? `We hold ${joinList(certifications)}.`
+      : "";
+
+  const replacements: Record<string, string | null> = {
+    "{city}": vars.city?.trim() || null,
+    "{state}": vars.state?.trim() || null,
+    "{phone}": vars.phone?.trim() || null,
+    "{rating}":
+      typeof vars.rating === "number" && vars.rating > 0
+        ? String(vars.rating)
+        : null,
+    "{review_count}":
+      typeof vars.review_count === "number" && vars.review_count > 0
+        ? String(vars.review_count)
+        : null,
+    "{services_list}": vars.services_list?.trim() || null,
+    "{service_area}": vars.service_area?.trim() || null,
+    "{certifications}":
+      certifications.length > 0 ? joinList(certifications) : null,
+    "{certifications_sentence}": certificationsSentence || null,
+    "{business_name}": vars.business_name?.trim() || null,
+  };
+
+  function substituteSegment(segment: string): string | null {
+    // Returns null if any placeholder inside has no value (drop the
+    // whole segment); otherwise returns the substituted string.
+    const placeholderRegex = /\{[a-z_]+\}/g;
+    let resolved: string | null = segment;
+    let match: RegExpExecArray | null;
+    placeholderRegex.lastIndex = 0;
+    while ((match = placeholderRegex.exec(segment)) !== null) {
+      const token = match[0];
+      const value = replacements[token];
+      if (value === null || value === undefined || value.length === 0) {
+        return null; // drop entire segment
+      }
+      resolved = (resolved as string).split(token).join(value);
+    }
+    return resolved;
+  }
+
+  // Pass 1: handle [ ... {placeholder} ... ] bracketed optional segments.
+  // Walk left-to-right with a regex that captures the bracket contents
+  // plus any *immediately adjacent* separator on the LEFT (so dropping
+  // the bracket also drops the leading " · ", " — ", " in ", " from ").
+  let out = template.replace(
+    /([\s,—·-]+(?:in|from)\s+)?(\s*[·,—-]\s*)?\[([^\]]*)\](\s*[·,—-]\s*)?/g,
+    (_full, leftConn: string | undefined, leftSep: string | undefined, inner: string, rightSep: string | undefined) => {
+      const substituted = substituteSegment(inner);
+      if (substituted === null || substituted.trim().length === 0) {
+        return ""; // drop segment + adjacent separators
+      }
+      const left = leftConn ?? leftSep ?? "";
+      const right = rightSep ?? "";
+      return `${left}${substituted}${right}`;
+    }
+  );
+
+  // Pass 2: substitute bare (non-bracketed) placeholders. Missing ones
+  // become empty — design templates to bracket proof-dependent copy.
+  for (const [token, value] of Object.entries(replacements)) {
+    if (value && value.length > 0) {
+      out = out.split(token).join(value);
+    } else {
+      out = out.split(token).join("");
+    }
+  }
+
+  // Final tidy-up: collapse adjacent separators and double whitespace
+  // introduced by the strip pass.
+  return out
+    .replace(/\s*·\s*·\s*/g, " · ")
+    .replace(/\s*—\s*—\s*/g, " — ")
+    .replace(/,\s*,/g, ",")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+\./g, ".")
+    .replace(/\s+,/g, ",")
+    .replace(/^[\s.,·—-]+|[\s,·—-]+$/g, "")
+    .trim();
+}
+
+/**
+ * Apply substitution to every string field in a personality's
+ * content_templates. Returns null when the personality has no templates
+ * (older rows OR personalities we haven't authored copy for yet — those
+ * still fall back to the BusinessType content pack defaults).
+ */
+export interface ResolvedPersonalityContent {
+  hero_headline: string;
+  hero_subheadline: string;
+  trust_badges: string[];
+  services_heading: string;
+  faqs: Array<{ question: string; answer: string }>;
+  cta_button_primary: string;
+  cta_button_secondary: string;
+  bottom_cta_heading: string;
+  bottom_cta_trust_points: string[];
+}
+
+export function resolvePersonalityContent(
+  personality: CRMPersonality,
+  vars: PersonalityTemplateVars
+): ResolvedPersonalityContent | null {
+  const t = personality.content_templates;
+  if (!t) return null;
+  const sub = (s: string) => substitutePersonalityTemplate(s, vars);
+  return {
+    hero_headline: sub(t.hero_headlines[0] ?? ""),
+    hero_subheadline: sub(t.hero_subheadline),
+    trust_badges: t.trust_badges
+      .map(sub)
+      .filter((s) => s.length > 0),
+    services_heading: sub(t.services_heading),
+    faqs: t.faqs
+      .map((faq) => ({
+        question: sub(faq.question),
+        answer: sub(faq.answer_template),
+      }))
+      .filter((faq) => faq.question.length > 0 && faq.answer.length > 0),
+    cta_button_primary: sub(t.cta_button_primary),
+    cta_button_secondary: sub(t.cta_button_secondary),
+    bottom_cta_heading: sub(t.bottom_cta_heading),
+    bottom_cta_trust_points: t.bottom_cta_trust_points
+      .map(sub)
+      .filter((s) => s.length > 0),
+  };
 }

@@ -67,6 +67,24 @@ export type AnonymousCreateInput = {
     role?: string | null;
     company?: string | null;
   }> | null;
+  /**
+   * May 2, 2026 — review-proof + service-area enrichment fields.
+   * When present these flow into:
+   *   - soul.review_count / soul.review_rating  → stats section + hero
+   *     headline ("4.8★ from 400+ Patients")
+   *   - soul.service_area                       → hero subhead, FAQ
+   *   - soul.certifications                     → trust strip, FAQ
+   * When absent the personality template substitution drops the
+   * placeholders cleanly (see substitutePersonalityTemplate). Never
+   * fabricated.
+   */
+  review_count?: number | null;
+  review_rating?: number | null;
+  service_area?: string[] | null;
+  certifications?: string[] | null;
+  trust_signals?: string[] | null;
+  emergency_service?: boolean | null;
+  same_day?: boolean | null;
 };
 
 export type AnonymousCreateResult = {
@@ -260,6 +278,39 @@ export async function createAnonymousWorkspace(
     seedBlueprint.booking.eventType.description = bookingDefault.description;
   }
 
+  // v1.1.4 / Issue #5 — inject a "Service interested in" select into
+  // the intake blueprint so the RENDERED form picks it up alongside
+  // the mappedFields stored on the row. Without this, the rendered
+  // HTML keeps the generic "What's going on?" question and the
+  // dropdown only shows up via the React component fallback path.
+  const intakeServices = (input.services ?? [])
+    .map((s) => s?.name?.trim())
+    .filter((s): s is string => Boolean(s));
+  if (intakeServices.length > 0 && seedBlueprint.intake?.questions) {
+    const questions = seedBlueprint.intake.questions;
+    const hasServiceQ = questions.some(
+      (q) =>
+        q.id === "service" ||
+        q.id === "service_type" ||
+        q.id === "service_interest"
+    );
+    if (!hasServiceQ) {
+      const insertAfter = Math.max(
+        questions.findIndex((q) => q.id === "phone"),
+        questions.findIndex((q) => q.id === "email"),
+        questions.findIndex((q) => q.id === "fullName" || q.id === "name")
+      );
+      const insertAt = insertAfter >= 0 ? insertAfter + 1 : questions.length;
+      questions.splice(insertAt, 0, {
+        id: "service",
+        type: "select",
+        label: "Which service are you interested in?",
+        required: true,
+        options: [...intakeServices, "Other / not sure"],
+      });
+    }
+  }
+
   // Seed default templates for every block we mark as enabled. Without these
   // rows the public subdomain routes (/, /book, /intake) point at the right
   // pages but those pages 404 because the underlying record doesn't exist.
@@ -305,6 +356,12 @@ export async function createAnonymousWorkspace(
       theme: "dark",
       blueprint: seedBlueprint,
       personalityIntakeFields: personality.intakeFields,
+      // v1.1.4 / Issue #5 — surface the operator's actual services as
+      // a select dropdown on the intake form so leads come in pre-
+      // routed (e.g. "Invisalign" vs "Cleaning" vs "Emergency").
+      servicesForIntake: (input.services ?? [])
+        .map((s) => s?.name?.trim())
+        .filter((s): s is string => Boolean(s)),
     }).catch((error) => {
       console.warn(
         `[anonymous-workspace] intake-form seed failed for ${org.id}:`,
@@ -403,6 +460,26 @@ function buildSeedSoul(
       company: t.company?.trim() || null,
     }));
 
+  // May 2, 2026 — proof + service-area enrichment fields. Filtered to
+  // valid values; we never fabricate when missing.
+  const reviewCount =
+    typeof input.review_count === "number" && input.review_count > 0
+      ? input.review_count
+      : null;
+  const reviewRating =
+    typeof input.review_rating === "number" && input.review_rating > 0
+      ? input.review_rating
+      : null;
+  const serviceArea = (input.service_area ?? [])
+    .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
+    .map((s) => s.trim());
+  const certifications = (input.certifications ?? [])
+    .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
+    .map((s) => s.trim());
+  const trustSignals = (input.trust_signals ?? [])
+    .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
+    .map((s) => s.trim());
+
   // Bail early if every field is empty — caller didn't pass any
   // structured Soul fields, so we keep the legacy create flow.
   const hasContent =
@@ -412,7 +489,14 @@ function buildSeedSoul(
     tagline ||
     description ||
     services.length > 0 ||
-    testimonials.length > 0;
+    testimonials.length > 0 ||
+    reviewCount ||
+    reviewRating ||
+    serviceArea.length > 0 ||
+    certifications.length > 0 ||
+    trustSignals.length > 0 ||
+    input.city ||
+    input.state;
   if (!hasContent) return null;
 
   const soul: Record<string, unknown> = {
@@ -423,8 +507,17 @@ function buildSeedSoul(
   if (phone) soul.phone = phone;
   if (email) soul.email = email;
   if (address) soul.address = address;
+  if (input.city) soul.city = input.city.trim();
+  if (input.state) soul.state = input.state.trim();
   if (services.length > 0) soul.offerings = services;
   if (testimonials.length > 0) soul.testimonials = testimonials;
+  if (reviewCount) soul.review_count = reviewCount;
+  if (reviewRating) soul.review_rating = reviewRating;
+  if (serviceArea.length > 0) soul.service_area = serviceArea;
+  if (certifications.length > 0) soul.certifications = certifications;
+  if (trustSignals.length > 0) soul.trust_signals = trustSignals;
+  if (input.emergency_service) soul.emergency_service = true;
+  if (input.same_day) soul.same_day = true;
   return soul;
 }
 

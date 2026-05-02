@@ -27,7 +27,14 @@ import { renderWithGeneralServiceV1 } from "./renderers/general-service-v1-adapt
 import { blueprintFromSchema } from "./renderers/blueprint-from-schema";
 import { classifyBusinessTypeFromSoul } from "./classify-business";
 import { validateFullPipeline } from "./pipeline-validator";
-import type { BusinessType } from "./types";
+import {
+  readPersonalityFromSettings,
+  resolvePersonalityContent,
+  type CRMPersonality,
+  type PersonalityTemplateVars,
+  type ResolvedPersonalityContent,
+} from "@/lib/crm/personality";
+import type { BusinessType, PageSchema } from "./types";
 import type { PagePersonality } from "./design-tokens";
 
 /** Map a business type to a default personality. May 1, 2026 — drives
@@ -87,6 +94,7 @@ export async function seedLandingFromSoul(orgId: string): Promise<SeedLandingRes
       soul: organizations.soul,
       plan: organizations.plan,
       theme: organizations.theme,
+      settings: organizations.settings,
     })
     .from(organizations)
     .where(eq(organizations.id, orgId))
@@ -106,7 +114,28 @@ export async function seedLandingFromSoul(orgId: string): Promise<SeedLandingRes
     palette: { accent },
   });
 
-  const schema = schemaFromSoul(org.soul as unknown as Record<string, unknown>, {
+  // v1.1.4 — Personality-Driven Content Layer.
+  // Read the CRMPersonality from org.settings (set at workspace creation
+  // by selectCRMPersonality / defensive override in createFullWorkspace),
+  // build template vars from the soul, and resolve the personality's
+  // content_templates into final substituted strings. The result is then
+  // overlaid onto a soul COPY so schemaFromSoul's existing enrichHero /
+  // enrichFaq / enrichCta paths pick it up — and applied as direct
+  // section overrides for trust_bar / services-headline / stats / cta
+  // (which schemaFromSoul currently sources from the BusinessType pack
+  // defaults, not the personality).
+  const crmPersonality = readPersonalityFromSettings(
+    (org.settings as Record<string, unknown> | null)?.crmPersonality
+  );
+  const soulRecordRaw = org.soul as unknown as Record<string, unknown>;
+  const templateVars = buildPersonalityVars(soulRecordRaw, org.name);
+  const resolvedContent = resolvePersonalityContent(
+    crmPersonality,
+    templateVars
+  );
+  const enrichedSoul = applyResolvedContentToSoul(soulRecordRaw, resolvedContent);
+
+  const schema = schemaFromSoul(enrichedSoul, {
     business_type: businessType,
     // May 2, 2026 — pass the workspace name as an override so we
     // never render the literal "Your Business" placeholder when
@@ -118,6 +147,13 @@ export async function seedLandingFromSoul(orgId: string): Promise<SeedLandingRes
       name: org.name,
     },
   });
+
+  // v1.1.4 — direct section overrides for slots schemaFromSoul does
+  // not enrich from the soul (trust_bar, services_heading) and the
+  // stats grid (which #8 says must come from input.review_count /
+  // .review_rating, never fabricated).
+  applyResolvedContentToSchema(schema, resolvedContent, crmPersonality);
+  applyStatsFromSoul(schema, soulRecordRaw, crmPersonality);
 
   // Plan-tier branding flag.
   const plan = resolvePlanFromPlanId(org.plan ?? null);
@@ -171,7 +207,8 @@ export async function seedLandingFromSoul(orgId: string): Promise<SeedLandingRes
   // is better than no render. Validation errors drive alerts and
   // catch regressions in renderer / content-pack changes before
   // they reach production.
-  const soulRecord = org.soul as unknown as Record<string, unknown>;
+  // v1.1.4 — reuse soulRecordRaw from above to avoid a redundant cast.
+  const soulRecord = soulRecordRaw;
   const inputForValidator = {
     phone:
       typeof soulRecord.phone === "string" ? (soulRecord.phone as string) : null,
@@ -217,3 +254,182 @@ export async function seedLandingFromSoul(orgId: string): Promise<SeedLandingRes
 
   return { ok: true, landingId: row.id };
 }
+
+// ─── v1.1.4 — Personality-Driven Content helpers ─────────────────────────────
+
+function readSoulString(soul: Record<string, unknown>, key: string): string | null {
+  const v = soul[key];
+  return typeof v === "string" && v.trim().length > 0 ? v.trim() : null;
+}
+
+function readSoulNumber(soul: Record<string, unknown>, key: string): number | null {
+  const v = soul[key];
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+
+function readSoulStringArray(soul: Record<string, unknown>, key: string): string[] {
+  const v = soul[key];
+  if (!Array.isArray(v)) return [];
+  return v.filter((s): s is string => typeof s === "string" && s.trim().length > 0);
+}
+
+function buildPersonalityVars(
+  soul: Record<string, unknown>,
+  workspaceName: string
+): PersonalityTemplateVars {
+  const offerings = Array.isArray(soul.offerings)
+    ? (soul.offerings as Array<{ name?: string }>)
+    : [];
+  const servicesList = offerings
+    .map((o) => (typeof o.name === "string" ? o.name.trim() : ""))
+    .filter((s) => s.length > 0)
+    .slice(0, 6) // keep substituted copy short
+    .join(", ");
+
+  const serviceAreaList = readSoulStringArray(soul, "service_area").slice(0, 4);
+  const certifications = readSoulStringArray(soul, "certifications");
+
+  return {
+    city: readSoulString(soul, "city"),
+    state: readSoulString(soul, "state"),
+    phone: readSoulString(soul, "phone"),
+    rating: readSoulNumber(soul, "review_rating"),
+    review_count: readSoulNumber(soul, "review_count"),
+    services_list: servicesList || null,
+    service_area: serviceAreaList.length > 0 ? serviceAreaList.join(", ") : null,
+    certifications: certifications.length > 0 ? certifications : null,
+    business_name: readSoulString(soul, "business_name") || workspaceName,
+  };
+}
+
+/**
+ * Overlay resolved content onto a soul COPY so schemaFromSoul's existing
+ * enrichHero / enrichFaq / enrichCta paths pick up the personality copy
+ * without operator-provided overrides being lost. Operator-provided
+ * fields always win — when soul.hero_headline is already set, we leave it.
+ */
+function applyResolvedContentToSoul(
+  soul: Record<string, unknown>,
+  resolved: ResolvedPersonalityContent | null
+): Record<string, unknown> {
+  if (!resolved) return soul;
+  const next: Record<string, unknown> = { ...soul };
+
+  if (!readSoulString(next, "hero_headline") && resolved.hero_headline) {
+    next.hero_headline = resolved.hero_headline;
+  }
+  if (!readSoulString(next, "hero_subheadline") && resolved.hero_subheadline) {
+    next.hero_subheadline = resolved.hero_subheadline;
+  }
+  if (!readSoulString(next, "cta_headline") && resolved.bottom_cta_heading) {
+    next.cta_headline = resolved.bottom_cta_heading;
+  }
+  // Only inject FAQs when the operator hasn't supplied any — operator
+  // FAQs always win.
+  const existingFaqs = Array.isArray(next.faqs) ? (next.faqs as unknown[]) : [];
+  if (existingFaqs.length === 0 && resolved.faqs.length > 0) {
+    next.faqs = resolved.faqs;
+  }
+
+  return next;
+}
+
+/**
+ * Direct section overrides for slots schemaFromSoul sources from the
+ * BusinessType content pack (not the personality):
+ *   - trust_bar bullets
+ *   - services-grid headline (only the "services" intent — features /
+ *     products / how_it_works keep their pack defaults)
+ *
+ * Mutates the schema in place. No-op when no resolved content (older
+ * personalities without templates fall back to the pack defaults).
+ */
+function applyResolvedContentToSchema(
+  schema: PageSchema,
+  resolved: ResolvedPersonalityContent | null,
+  personality: CRMPersonality
+): void {
+  if (!resolved) return;
+
+  for (const section of schema.sections) {
+    if (section.intent === "trust_bar" && resolved.trust_badges.length > 0) {
+      section.content = {
+        ...section.content,
+        bullets: resolved.trust_badges,
+      };
+      section.visible = true;
+      continue;
+    }
+    if (
+      section.intent === "services" &&
+      resolved.services_heading.trim().length > 0
+    ) {
+      section.content = {
+        ...section.content,
+        headline: resolved.services_heading,
+      };
+      continue;
+    }
+  }
+
+  // Touch personality so the lint/type checker keeps the import live for
+  // future per-vertical branching (e.g. a different services_heading rule
+  // for SaaS vs local-service personalities). No behavioral effect today.
+  void personality;
+}
+
+/**
+ * v1.1.4 / Issue #8 — stats section is fed exclusively from operator
+ * input. When soul carries review_count + review_rating, render those
+ * (plus a third stat from soul.years_in_business or jobs_completed when
+ * present). When neither is set, hide the stats section entirely so we
+ * never ship fabricated "500+ Jobs" / "4.8★" / "24hr" defaults from
+ * the content pack.
+ */
+function applyStatsFromSoul(
+  schema: PageSchema,
+  soul: Record<string, unknown>,
+  personality: CRMPersonality
+): void {
+  const reviewCount = readSoulNumber(soul, "review_count");
+  const reviewRating = readSoulNumber(soul, "review_rating");
+  const yearsInBusiness = readSoulNumber(soul, "years_in_business");
+  const jobsCompleted = readSoulNumber(soul, "jobs_completed");
+
+  // Pick a customer-noun appropriate for the personality so dental
+  // workspaces show "Patients" instead of "Customers".
+  const customerLabel =
+    personality.terminology.contact.plural || "Customers";
+
+  const stats: Array<{ value: string; label: string }> = [];
+  if (reviewRating) {
+    stats.push({ value: `${reviewRating}★`, label: "Google Rating" });
+  }
+  if (reviewCount) {
+    stats.push({
+      value: `${reviewCount.toLocaleString("en-US")}+`,
+      label: customerLabel,
+    });
+  }
+  if (yearsInBusiness) {
+    stats.push({ value: `${yearsInBusiness}+`, label: "Years in Business" });
+  } else if (jobsCompleted) {
+    stats.push({ value: `${jobsCompleted.toLocaleString("en-US")}+`, label: "Jobs Completed" });
+  }
+
+  for (const section of schema.sections) {
+    if (section.intent !== "stats") continue;
+    if (stats.length === 0) {
+      // Hide rather than ship fabricated defaults.
+      section.visible = false;
+      section.content = { ...section.content, stats: [] };
+      continue;
+    }
+    section.visible = true;
+    section.content = {
+      ...section.content,
+      stats,
+    };
+  }
+}
+

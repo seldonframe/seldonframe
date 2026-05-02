@@ -10,7 +10,9 @@ import {
   DEFAULT_PERSONALITY,
   PERSONALITIES,
   readPersonalityFromSettings,
+  resolvePersonalityContent,
   selectCRMPersonality,
+  substitutePersonalityTemplate,
   type CRMPersonality,
 } from "@/lib/crm/personality";
 import { validateCRMPersonality } from "@/lib/page-schema/pipeline-validator";
@@ -257,5 +259,151 @@ describe("readPersonalityFromSettings", () => {
     assert.equal(read.vertical, "hvac");
     assert.equal(read.terminology.contact.singular, "Customer");
     assert.equal(read.pipeline.stages.length, PERSONALITIES.hvac.pipeline.stages.length);
+  });
+
+  test("backfills content_templates for stored rows that predate the field", () => {
+    const stored = JSON.parse(JSON.stringify(PERSONALITIES.dental));
+    delete stored.content_templates;
+    const read = readPersonalityFromSettings(stored);
+    assert.equal(read.vertical, "dental");
+    assert.ok(read.content_templates, "content_templates should be backfilled from registry");
+    assert.ok(read.content_templates!.hero_headlines.length > 0);
+  });
+});
+
+// ─── substitutePersonalityTemplate (v1.1.4) ───────────────────────────────────
+
+describe("substitutePersonalityTemplate", () => {
+  test("substitutes all known placeholders when present", () => {
+    const out = substitutePersonalityTemplate(
+      "{rating}★ from {review_count}+ patients in {city}",
+      { rating: 4.8, review_count: 400, city: "Austin" }
+    );
+    assert.equal(out, "4.8★ from 400+ patients in Austin");
+  });
+
+  test("bracketed segment: keeps when all inner placeholders resolve", () => {
+    const out = substitutePersonalityTemplate(
+      "Same-Day Service[ in {city}].[ {rating}★ from {review_count}+ Local Customers.]",
+      { city: "Austin", rating: 4.8, review_count: 400 }
+    );
+    assert.equal(
+      out,
+      "Same-Day Service in Austin. 4.8★ from 400+ Local Customers."
+    );
+  });
+
+  test("bracketed segment: drops when ANY inner placeholder is missing", () => {
+    const out = substitutePersonalityTemplate(
+      "Same-Day Service[ in {city}].[ {rating}★ from {review_count}+ Local Customers.]",
+      { city: "Austin" }
+    );
+    assert.equal(out, "Same-Day Service in Austin.");
+  });
+
+  test("bracketed segment: drops both when neither placeholder resolves", () => {
+    const out = substitutePersonalityTemplate(
+      "Same-Day Service[ in {city}].[ {rating}★ from {review_count}+ Local Customers.]",
+      {}
+    );
+    assert.equal(out, "Same-Day Service.");
+  });
+
+  test("bracketed segment: drops adjacent separator runs when dropped", () => {
+    const out = substitutePersonalityTemplate(
+      "[{rating}★ on Google] · Licensed & insured · Same-day service",
+      {}
+    );
+    assert.equal(out, "Licensed & insured · Same-day service");
+  });
+
+  test("does not fabricate values when both rating and review_count are missing", () => {
+    const out = substitutePersonalityTemplate(
+      "[{rating}★ from {review_count}+ Patients]",
+      {}
+    );
+    assert.equal(out, "");
+  });
+
+  test("expands {certifications_sentence} to a friendly sentence", () => {
+    const out = substitutePersonalityTemplate(
+      "We're licensed. {certifications_sentence}",
+      { certifications: ["EPA 608", "NATE certified", "BBB A+"] }
+    );
+    assert.match(out, /EPA 608, NATE certified, and BBB A\+/);
+  });
+
+  test("drops bracketed {certifications_sentence} when there are no certifications", () => {
+    const out = substitutePersonalityTemplate(
+      "We're licensed.[ {certifications_sentence}]",
+      {}
+    );
+    assert.equal(out, "We're licensed.");
+  });
+});
+
+// ─── resolvePersonalityContent (v1.1.4) ───────────────────────────────────────
+
+describe("resolvePersonalityContent", () => {
+  test("returns null for personalities without content_templates", () => {
+    const stripped = JSON.parse(JSON.stringify(PERSONALITIES.coaching));
+    delete stripped.content_templates;
+    assert.equal(resolvePersonalityContent(stripped, {}), null);
+  });
+
+  test("dental: returns substituted hero, FAQs, CTAs from real input", () => {
+    const resolved = resolvePersonalityContent(PERSONALITIES.dental, {
+      city: "Austin",
+      phone: "(512) 555-3200",
+      rating: 4.8,
+      review_count: 400,
+    });
+    assert.ok(resolved);
+    assert.match(resolved!.hero_headline, /4\.8/);
+    assert.match(resolved!.hero_headline, /400/);
+    assert.equal(resolved!.services_heading, "Our Services");
+    assert.ok(resolved!.faqs.length > 0);
+    assert.match(resolved!.faqs[0].answer, /Austin/);
+    assert.match(resolved!.faqs[0].answer, /\(512\) 555-3200/);
+    assert.equal(resolved!.cta_button_primary, "Book your first visit →");
+  });
+
+  test("hvac: substitutes service_area into hero subheadline", () => {
+    const resolved = resolvePersonalityContent(PERSONALITIES.hvac, {
+      city: "San Diego",
+      service_area: "San Diego, Chula Vista, Oceanside",
+      rating: 4.7,
+      review_count: 950,
+    });
+    assert.ok(resolved);
+    assert.match(resolved!.hero_subheadline, /Serving San Diego/);
+    assert.match(resolved!.trust_badges[0], /4\.7/);
+  });
+
+  test("hvac: drops the trust_badge with rating when rating absent (no fabrication)", () => {
+    const resolved = resolvePersonalityContent(PERSONALITIES.hvac, {
+      city: "San Diego",
+    });
+    assert.ok(resolved);
+    // The first trust_badge "[{rating}★ on Google]" should be dropped
+    // entirely, leaving the static badges only.
+    assert.equal(resolved!.trust_badges.length, 3);
+    assert.deepEqual(resolved!.trust_badges, [
+      "Licensed & insured",
+      "Same-day service",
+      "Free estimates",
+    ]);
+  });
+
+  test("legal: keeps generic copy when proof metrics are absent", () => {
+    const resolved = resolvePersonalityContent(PERSONALITIES.legal, {
+      city: "Austin",
+      phone: "(512) 555-1000",
+    });
+    assert.ok(resolved);
+    // Hero headline drops the {rating} / {review_count} fragment cleanly
+    assert.doesNotMatch(resolved!.hero_headline, /\{/);
+    assert.match(resolved!.hero_headline, /Trusted Counsel in Austin/);
+    assert.equal(resolved!.services_heading, "Practice Areas");
   });
 });
