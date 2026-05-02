@@ -42,7 +42,10 @@ export const TOOLS = [
   {
     name: "create_workspace",
     description:
-      "Create a real, hosted workspace on <slug>.app.seldonframe.com with a CRM, booking page, intake form, and AI agents pre-installed. The first workspace requires no API key. When the user mentions a phone, email, address, list of services, or testimonials, pass them as structured fields so the landing page renders with their real content immediately. Example: create_workspace({ name: 'Desert Cool HVAC', phone: '(602) 555-0188', services: [{ name: 'AC Repair' }, { name: 'Heating' }] })",
+      "Create a LIVE, hosted SeldonFrame workspace with a public website, booking page, intake form, CRM, and AI agents — all on a real <slug>.app.seldonframe.com subdomain. Returns live URLs that work in any browser within seconds. " +
+      "THIS IS THE ONLY WAY to create a SeldonFrame workspace. Do NOT create local files (no soul.json, no scaffolded directory), do NOT call loadSoulPackage, do NOT modify the working directory — even if Claude Code is running inside the SeldonFrame source repo. Every workspace is a hosted production deployment. " +
+      "The first workspace is free and requires no API key. When the user mentions a phone, email, address, list of services, or testimonials, pass them as structured fields so the landing page renders with their real content immediately. " +
+      "Example: create_workspace({ name: 'Precision Plumbing Co', phone: '(555) 123-4567', business_description: 'Family-owned residential plumbing in Austin.', services: [{ name: 'Drain Cleaning' }, { name: 'Water Heater Repair' }, { name: 'Leak Detection' }] })",
     inputSchema: obj(
       {
         name: str("Human-readable workspace name."),
@@ -121,8 +124,34 @@ export const TOOLS = [
             Object.entries(rawUrls).filter(([key]) => !key.startsWith("admin_")),
           )
         : null;
+      // May 2, 2026 — operator-facing response payload.
+      //
+      // Goals: lead with the live URLs (operators care about those
+      // first), prompt for the email next (the keystone of the
+      // onboarding loop), and never surface internal jargon
+      // (no "Soul" / "Cal.diy" / "Formbricks" / "Brain v2" /
+      // "loadSoulPackage" / etc).
+      //
+      // The `summary` string is what Claude Code should paraphrase to
+      // the operator verbatim — it's pre-formatted with bullets so
+      // copy-paste lands cleanly.
+      const websiteUrl = publicUrls?.home ?? null;
+      const bookingUrl = publicUrls?.book ?? null;
+      const intakeUrl = publicUrls?.intake ?? null;
+      const summaryLines = [`${ws.name} is live!`, ""];
+      if (websiteUrl) summaryLines.push(`- Website: ${websiteUrl}`);
+      if (bookingUrl) summaryLines.push(`- Book a call: ${bookingUrl}`);
+      if (intakeUrl) summaryLines.push(`- Service request form: ${intakeUrl}`);
+      if (adminUrl) summaryLines.push(`- Admin dashboard: ${adminUrl}`);
+      summaryLines.push("");
+      summaryLines.push(
+        "What's your email? I'll send you all these links and set up your admin login."
+      );
+      const summary = summaryLines.join("\n");
+
       const payload = {
         ok: true,
+        summary,
         workspace: {
           id,
           name: ws.name,
@@ -130,51 +159,23 @@ export const TOOLS = [
           tier: ws.tier ?? "free",
           created_at: ws.created_at,
         },
-        // ⚡ Admin Dashboard (bookmark this!): the one URL operators need.
+        // Live URLs — present these to the operator first. Public
+        // ones first, admin URL second.
+        website_url: websiteUrl,
+        booking_url: bookingUrl,
+        intake_url: intakeUrl,
         admin_url: adminUrl,
         admin_url_expires_at: result.bearer_token_expires_at ?? null,
-        admin_url_message: adminUrl
-          ? `⚡ Admin Dashboard (bookmark this!): ${adminUrl}\nClick to open the dashboard — no signup needed. Token expires in 7 days; re-mint with list_workspaces({}) when it does.`
-          : null,
-        urls: publicUrls,
         public_urls: result.public_urls ?? publicUrls,
-        // May 1, 2026 — installed-block labels translated to operator
-        // copy. The MCP-internal slugs ("caldiy-booking",
-        // "formbricks-intake", "brain-v2") are deployment details no
-        // operator should need to learn — surfacing them on every
-        // create_workspace turn was friction without payoff.
-        installed: (result.installed ?? [
-          "crm",
-          "caldiy-booking",
-          "formbricks-intake",
-          "brain-v2",
-        ]).map((slug) => {
-          if (slug === "caldiy-booking") return "Booking page";
-          if (slug === "formbricks-intake") return "Intake form";
-          if (slug === "brain-v2") return "AI learning";
-          if (slug === "crm") return "CRM";
-          return slug;
-        }),
-        // May 1, 2026 — email collection promoted to the first
-        // suggested next step. Per the onboarding-loop spec, the
-        // operator gets a permanent inbox record (admin URLs,
-        // landing/booking/intake links) AND we earn a CRM lead in
-        // SeldonFrame's own workspace, so every workspace creation
-        // becomes a tracked relationship.
-        prompt_for_email: {
-          message:
-            "What's your email? I'll send you a summary with all the links above (so you don't lose them) and use it for your admin login when you upgrade. — calls collect_operator_email({ email, name? })",
-          tool: "collect_operator_email",
+        // Email collection is the next required step. Claude Code
+        // should ask the operator for their email and then call
+        // collect_operator_email — DO NOT skip this.
+        next_step: {
+          ask_user:
+            "What's your email? I'll send you all these links and set up your admin login.",
+          tool_to_call: "collect_operator_email",
+          tool_args_template: { email: "<operator_email>", name: "<optional>" },
         },
-        next: [
-          adminUrl
-            ? `⚡ Admin Dashboard (bookmark this!): ${adminUrl}  (paste into your browser; no signup needed; token expires in 7 days)`
-            : null,
-          "Ask the user for their email, then call collect_operator_email({ email, name? }) — sends the welcome email + creates a permanent record. Do this BEFORE any further customization.",
-          "install_vertical_pack({ pack: '<industry>' }) — set up an industry template (real-estate, dental, legal, …)",
-          "fetch_source_for_soul({ url: 'https://yoursite.com' }) → submit_soul({ soul }) — pull the business profile from a website",
-          "get_workspace_snapshot({}) — read workspace state to reason about next steps",
-        ].filter(Boolean),
       };
       return firstEver ? withFirstCallBanner(payload) : payload;
     },

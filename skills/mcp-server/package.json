@@ -1,7 +1,7 @@
 {
   "name": "@seldonframe/mcp",
-  "version": "1.0.5",
-  "description": "MCP server for SeldonFrame — AI-native Business OS platform. One command creates a real hosted workspace with CRM, booking page, intake form, and AI agents. v1.0.5: collect_operator_email tool closes the onboarding loop (welcome email + lead capture); auto-injects x-org-id from workspace bearer for ALL tool calls (fixes list_contacts / list_deals / list_bookings / send_welcome_email); structured Soul-seed fields on create_workspace (phone, services, testimonials) so the landing page renders real data on the first GET; operator-facing labels replace internal slugs in responses.",
+  "version": "1.0.6",
+  "description": "MCP server for SeldonFrame — AI-native Business OS platform. One command creates a real, hosted workspace with a website, booking page, intake form, CRM, and AI agents. v1.0.6: NEVER-CREATE-LOCAL-FILES rule baked into the server's system instructions and into the create_workspace tool description so Claude Code reliably uses the MCP tool even when running inside a SeldonFrame source repo; rewritten create_workspace response payload with a copy-paste-ready operator summary (live URLs + email prompt) and zero internal jargon (no Soul / Cal.diy / Formbricks / Brain v2 references in operator-facing copy); welcome.md fully rewritten in operator language.",
   "type": "module",
   "bin": {
     "seldonframe-mcp": "src/index.js"

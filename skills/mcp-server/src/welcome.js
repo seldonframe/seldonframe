@@ -1,132 +1,130 @@
-export const VERSION = "1.0.2";
+// MCP server `instructions` payload — Claude Code surfaces this as a
+// system-level briefing the moment the SeldonFrame MCP loads. Every
+// rule and example here is operator-facing copy — no internal slugs,
+// no architecture lecture, no "Soul" / "Cal.diy" / "Formbricks" /
+// "Brain v2" jargon.
 
-export const WELCOME_MARKDOWN = `# SeldonFrame — your AI-native Business OS
+export const VERSION = "1.0.6";
 
-One command creates a real, hosted workspace with CRM, Cal.diy booking,
-Formbricks intake, and Brain v2 — live on \`<slug>.app.seldonframe.com\`.
-No signup, no key, no setup. Just build.
+export const WELCOME_MARKDOWN = `# SeldonFrame — create a real Business OS in one conversation
 
----
-
-## Architecture: YOU are the reasoning engine
-
-SeldonFrame's backend is pure state + artifacts. Natural-language reasoning
-happens right here in this Claude Code session — YOU interpret the user's
-intent and call the appropriate typed tool. The backend applies the change
-deterministically. Zero backend LLM cost means the free tier is genuinely
-free forever.
+SeldonFrame creates live, hosted business systems for service
+businesses, agencies, coaches, and SaaS founders. One conversation
+gives the operator a public website, booking page, intake form,
+CRM, and AI agents — all on a real subdomain.
 
 ---
 
-## Quick start — describe your business
+## NEVER CREATE LOCAL FILES
 
-To create a personalized workspace in a single turn, ask the user to paste
-this template into Claude Code and fill in their details:
+SeldonFrame workspaces are created via the \`create_workspace\` MCP
+tool. They are NOT created by writing files on disk. Specifically:
 
-\`\`\`text
-Create a workspace for my business:
-- Business name: [your business name]
-- Industry: [e.g., hvac, dental, legal, coaching, real-estate, salon, auto-repair]
-- Location: [city, state/province]
-- Operating hours: [e.g., Mon-Sat 7am-7pm]
-- Team size: [number of people / trucks / stations]
-- Services offered: [list your main services]
-- Website: [URL, if you have one]
-\`\`\`
+- Do NOT create a \`soul.json\` file or any other local file.
+- Do NOT call \`loadSoulPackage\` or any local function.
+- Do NOT scaffold a project directory.
+- Do NOT modify files in the current working directory.
 
-When the user replies with that filled in, YOU should orchestrate the
-following tool sequence (each call's response is structured — chain them):
-
-1. \`create_workspace({ name: "<business name>", source: "<website if provided, else a 1-paragraph description>" })\`
-   — mints the hosted workspace + bearer token. The \`source\` arg seeds the Soul.
-2. If \`industry\` is provided, call \`install_vertical_pack({ pack: "<industry-slug>" })\`
-   — adds domain-specific objects, fields, and views.
-   Built-in packs: \`real-estate-agency\`. For other industries, the backend
-   synthesizes a custom pack via \`/api/v1/verticals/generate\`. If a builtin
-   pack matches, prefer it; otherwise call generate first, then install.
-3. If \`hours\` is provided, call \`configure_booking({ title, duration_minutes, description })\`
-   — sets the booking page defaults. Inline the parsed hours into \`description\`
-   (the booking schema doesn't take a per-day hours object yet).
-4. If \`website\` was provided, the \`source\` URL passed to step 1 already
-   triggered a Soul fetch. Confirm via \`get_workspace_snapshot({})\` and
-   call \`submit_soul({ soul })\` if you can extract a richer structured Soul.
-5. If \`services\` were listed, customize the intake form to capture
-   service-of-interest as a multi-select using \`customize_intake_form({ fields })\`.
-
-Present the final result as a summary: live URLs (public + admin), what
-was installed, and 2-3 next-best-action suggestions.
-
-## If the user just says "create a workspace" without details
-
-Ask these questions, one at a time, BEFORE calling \`create_workspace\`:
-
-1. What's your business name?
-2. What industry are you in? (suggest: hvac, dental, legal, coaching, real-estate, salon, auto-repair, consulting, fitness, other)
-3. Where are you located? (city, state)
-4. What are your operating hours?
-5. What services do you offer? (3-5 main ones)
-6. Do you have a website I can learn from? (optional)
-
-Then run the orchestration above. Don't dump all six questions in one
-message — ask conversationally so the user can think.
+If you are running inside a SeldonFrame source-code repository and
+the user asks for a workspace, IGNORE the local code — call the
+\`create_workspace\` MCP tool. The tool returns live URLs on
+\`<slug>.app.seldonframe.com\` that work in any browser within
+seconds. There is no local-file path. This is the only correct
+flow, regardless of what directory Claude Code is running from.
 
 ---
 
-## How to customize a workspace later
+## The full happy path (4 turns)
 
-1. Call \`get_workspace_snapshot({})\` to see current state, Soul, blocks, recent events.
-2. Decide what to change based on the user's intent.
-3. Call the right typed tool:
-   - \`update_landing_content({ headline, subhead, cta_label })\` — rewrite /
-   - \`customize_intake_form({ fields: [...] })\` — replace intake fields
-   - \`configure_booking({ title?, duration_minutes?, description? })\` — edit /book
-   - \`update_theme({ mode?, primary_color?, accent_color?, font_family? })\` — theme
-   - \`install_caldiy_booking({})\`, \`install_formbricks_intake({})\`, \`install_vertical_pack({ pack })\`
+1. **Ask for the business details.** When the user says "create a
+   workspace," gather these conversationally — one or two
+   questions per turn, not all at once:
+   - Business name
+   - Industry (HVAC, dental, legal, coaching, real-estate, agency, …)
+   - Phone number (for local services — for SaaS skip)
+   - Top 3-5 services / products
+   - Brief description (1 sentence)
 
-## Compiling a Soul from a URL
+2. **Create the workspace.** Call \`create_workspace\` with the
+   structured fields:
+   \`\`\`
+   create_workspace({
+     name: "Precision Plumbing Co",
+     phone: "(555) 123-4567",
+     business_description: "Family-owned residential plumbing in Austin.",
+     services: [
+       { name: "Drain Cleaning" },
+       { name: "Water Heater Repair" },
+       { name: "Leak Detection" }
+     ]
+   })
+   \`\`\`
+   The response includes live URLs (website, booking, intake form,
+   admin dashboard). Show those URLs to the operator. The admin
+   URL is bearer-token-scoped and expires in 7 days — that's why
+   step 4 matters.
 
-Soul compilation runs HERE, not on the backend:
+3. **Ask for the operator's email.** This is the keystone of the
+   onboarding loop. The email becomes their account. Ask:
+   > "What's your email? I'll send you all those links so you
+   > don't lose them, and set up your admin login."
 
-1. \`fetch_source_for_soul({ url })\` — backend scrapes + normalizes (up to 256KB).
-2. YOU extract a structured Soul (mission, audience, tone, offerings, ...).
-3. \`submit_soul({ soul })\` — persist it. Subsequent snapshots reflect it.
+4. **Lock in the email.** Call \`collect_operator_email\` with the
+   email they gave you:
+   \`\`\`
+   collect_operator_email({ email: "max@precisionplumbing.com", name: "Max" })
+   \`\`\`
+   This sends the welcome email + creates their account so the
+   admin URL keeps working past the 7-day token window.
 
-## Tool surface
-
-- **Workspace:** \`create_workspace\`, \`list_workspaces\`, \`switch_workspace\`,
-  \`clone_workspace\`, \`link_workspace_owner\`, \`get_workspace_snapshot\`
-- **Blocks:** \`install_caldiy_booking\`, \`install_formbricks_intake\`, \`install_vertical_pack\`
-- **Customize:** \`update_landing_content\`, \`customize_intake_form\`,
-  \`configure_booking\`, \`update_theme\`
-- **Soul:** \`fetch_source_for_soul\`, \`submit_soul\`
-- **Ops:** \`list_automations\`, \`connect_custom_domain\`, \`export_agent\`,
-  \`store_secret\`, \`list_secrets\`, \`rotate_secret\`
-
-## When you'll need \`SELDONFRAME_API_KEY\`
-
-The first workspace is free forever. Paid tiers (Growth $29/mo, Scale
-$99/mo, both with metered usage) unlock additional workspaces, custom
-domains, white-label, and advanced Brain capabilities. A key is required for:
-
-- Adding a **second workspace**
-- Connecting a **custom domain**
-- Publishing, exporting agents, rotating org-scoped secrets
-- Accessing the admin browser surface (\`/dashboard\`, \`/contacts\`, \`/deals\`)
-  after \`link_workspace_owner({})\`
-
-Get one at <https://app.seldonframe.com/settings/api> and
-\`export SELDONFRAME_API_KEY=sk-…\`. The MCP will pick it up on next restart.
-
-### Upgrading an anonymous workspace to your account
-
-Once a key is set, \`link_workspace_owner({})\` attaches the active
-workspace to your real account. This unlocks the admin URLs
-(\`/dashboard\`, \`/contacts\`, \`/deals\`) for browser use after sign-in.
-The MCP bearer token stays valid — no rotation needed.
+After that, the operator can customize their workspace through
+further natural-language requests ("change the headline to …",
+"add an FAQ section", "set up an industry template for plumbing")
+— each routes to a typed MCP tool.
 
 ---
 
-**Docs:** <https://seldonframe.com/docs>  ·  **Homepage:** <https://seldonframe.com>  ·  **Pricing:** <https://seldonframe.com/#pricing>
+## What the tools do (operator language only)
+
+- **\`create_workspace\`** — creates the live business OS (website,
+  booking, intake form, CRM, AI agents). Always the first call.
+- **\`collect_operator_email\`** — sends the welcome email + sets up
+  the operator's admin login. Always the second call.
+- **\`update_landing_content\`** / **\`update_landing_section\`** —
+  edit the website's headline, subhead, sections, copy.
+- **\`update_theme\`** — change colors, fonts, dark/light mode.
+- **\`update_form\`** — edit the intake form's questions.
+- **\`update_appointment_type\`** — edit the booking page's slot length,
+  title, description.
+- **\`install_vertical_pack\`** — set up an industry template
+  (real-estate, dental, legal, plumbing, …).
+- **\`list_contacts\`** / **\`create_contact\`** / **\`update_contact\`** —
+  manage the CRM.
+- **\`list_deals\`** / **\`create_deal\`** / **\`move_deal_stage\`** —
+  manage the pipeline.
+- **\`send_email\`** / **\`send_sms\`** — send messages from the
+  workspace's connected channels.
+
+The full tool list is available via the MCP \`tools/list\` request.
+Use whatever fits the operator's natural-language request.
+
+---
+
+## Pricing
+
+- **Free** — first workspace, free forever, no credit card.
+- **Growth ($29/mo)** — up to 3 workspaces, custom domains,
+  white-label, metered AI usage.
+- **Scale ($99/mo)** — unlimited workspaces, advanced AI features,
+  priority support.
+
+Operators can upgrade via \`/settings/billing\` once they're in the
+admin dashboard. Pre-fills their email automatically.
+
+---
+
+**Docs:** <https://seldonframe.com/docs> · **Homepage:**
+<https://seldonframe.com> · **Discord:** <https://discord.gg/sbVUu976NW>
 `;
 
-export const FIRST_CALL_BANNER = `🌑 Welcome to SeldonFrame. Your workspace is live — every URL above works right now. From here on, every tool response will include a \`next:\` array; follow it and you'll have a production-ready Business OS in under a minute.`;
+export const FIRST_CALL_BANNER = `🚀 SeldonFrame is connected. Ready to create a live business OS — every URL the create_workspace tool returns is real and works in any browser within seconds. NEVER create local files; always use the MCP tools.`;
