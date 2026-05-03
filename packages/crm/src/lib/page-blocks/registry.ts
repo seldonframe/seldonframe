@@ -31,20 +31,51 @@
 import { z } from "zod";
 import type { LandingSection } from "@/lib/blueprint/types";
 
+/**
+ * v1.4.1 — surface kind. Discriminates how persist.ts routes a block:
+ *
+ *   - "landing-section": the block is one section in the landing page.
+ *     persist.ts mutates Blueprint.landing.sections, re-renders the full
+ *     landing via renderGeneralServiceV1, persists to landing_pages.
+ *     hero / services / about / faq / cta all live here.
+ *
+ *   - "booking": the block updates Blueprint.booking + the bookings table
+ *     row's metadata + re-renders the booking template via calcom-month-v1.
+ *
+ *   - "intake": the block updates Blueprint.intake + the intakeForms table
+ *     row's name + fields + re-renders the form via formbricks-stack-v1.
+ *
+ * Blocks declare which surface they target so persist.ts can dispatch
+ * without a per-block conditional pyramid.
+ */
+export type BlockSurface = "landing-section" | "booking" | "intake";
+
 export interface BlockDefinition<TProps = unknown> {
   name: string;
   version: string;
-  /** Discriminator from blueprint/types.ts. Tells the renderer which
-   *  Section variant to construct. */
-  sectionType: "hero" | "services-grid" | "faq";
+  /** Which workspace surface this block writes to. Determines the
+   *  persist path used (see BlockSurface). */
+  surface: BlockSurface;
+  /** For landing-section blocks: which section type the block renders to.
+   *  For booking/intake blocks: arbitrary discriminator (unused by the
+   *  renderer, kept for symmetry / debugging). */
+  sectionType:
+    | "hero"
+    | "services-grid"
+    | "about"
+    | "faq"
+    | "mid-cta"
+    | "booking"
+    | "intake";
   /** One-line summary surfaced in list_blocks() and (later) marketplace. */
   description: string;
   /** Zod schema validating the LLM-generated props. Mirrors the SKILL.md
    *  frontmatter `props` field. */
   propsSchema: z.ZodType<TProps>;
-  /** Maps validated v2 props onto the existing LandingSection shape so the
-   *  v1 renderer (renderGeneralServiceV1) can produce HTML unchanged. */
-  toSection: (props: TProps) => LandingSection;
+  /** For landing-section blocks: maps validated props onto the existing
+   *  LandingSection shape. For booking/intake blocks: undefined — those
+   *  use surface-specific persist paths that read the props directly. */
+  toSection?: (props: TProps) => LandingSection;
   /** Deterministic post-generation checks the registry runs before
    *  persisting. Mirror the `validators` block in the SKILL.md
    *  frontmatter. Each returns null if the props pass, or an error
@@ -99,6 +130,7 @@ const HERO_SELDONFRAME_LEAKS = [
 const heroBlock: BlockDefinition<HeroProps> = {
   name: "hero",
   version: "1.0.0",
+  surface: "landing-section",
   sectionType: "hero",
   description:
     "Above-the-fold hero with quantified value claim, primary CTA, and supporting visual.",
@@ -185,6 +217,7 @@ const CORPORATE_PHRASES = [
 const servicesBlock: BlockDefinition<ServicesProps> = {
   name: "services",
   version: "1.0.0",
+  surface: "landing-section",
   sectionType: "services-grid",
   description:
     "Services grid with one card per service, distinct icon per card, customer-language descriptions.",
@@ -263,6 +296,7 @@ const GENERIC_FAQ_HEADLINES = [
 const faqBlock: BlockDefinition<FaqProps> = {
   name: "faq",
   version: "1.0.0",
+  surface: "landing-section",
   sectionType: "faq",
   description:
     "FAQ addressing real friction points (pricing, scheduling, scope, refunds) — not sales-pitch Q&A.",
@@ -290,15 +324,336 @@ const faqBlock: BlockDefinition<FaqProps> = {
   ],
 };
 
+// ─── ABOUT ───────────────────────────────────────────────────────────────────
+
+const AboutPropsSchema = z.object({
+  headline: z.string().min(2),
+  body: z.string().min(30),
+  owner_name: z.string().optional(),
+  owner_title: z.string().optional(),
+  photo_query: z.string().optional(),
+});
+type AboutProps = z.infer<typeof AboutPropsSchema>;
+
+const GENERIC_ABOUT_HEADLINES = [
+  /^about us$/i,
+  /^about$/i,
+  /^our story$/i,
+  /^who we are$/i,
+  /^meet the team$/i,
+];
+
+const ABOUT_CORPORATE_PHRASES = [
+  /we pride ourselves/i,
+  /industry-leading/i,
+  /best-in-class/i,
+  /state-of-the-art/i,
+  /world-class/i,
+  /cutting-edge/i,
+  /\bsynergy\b/i,
+  /\becosystem\b/i,
+];
+
+const ABOUT_SPECIFICITY_SIGNALS = [
+  /\d/, // any digit (year, count)
+  /\bsince\b/i,
+  /\bcertified\b/i,
+  /\blicensed\b/i,
+  /\bdon'?t\b/i, // "we don't do X" promise
+  /\bonly\b/i, // "the only one in town"
+];
+
+const aboutBlock: BlockDefinition<AboutProps> = {
+  name: "about",
+  version: "1.0.0",
+  surface: "landing-section",
+  sectionType: "about",
+  description:
+    "About-the-business section — who they are, why they started, what makes them specific. Trust-building, not corporate.",
+  propsSchema: AboutPropsSchema,
+  toSection: (props) => ({
+    type: "about",
+    headline: props.headline,
+    body: props.body,
+    photoUrl: null,
+    ownerName: props.owner_name,
+    ownerTitle: props.owner_title,
+  }),
+  validators: [
+    (p) =>
+      GENERIC_ABOUT_HEADLINES.some((re) => re.test(p.headline))
+        ? `headline_not_generic: about headline "${p.headline}" is too generic — restate as something specific to the business`
+        : null,
+    (p) =>
+      ABOUT_SPECIFICITY_SIGNALS.some((re) => re.test(p.body))
+        ? null
+        : `body_specificity: about body lacks concrete signals (years, numbers, city, credentials, "what we don't do"). Generic bodies erode trust.`,
+    (p) => {
+      for (const re of ABOUT_CORPORATE_PHRASES) {
+        if (re.test(p.body)) {
+          return `no_corporate_phrases: about body contains corporate-stock phrasing (matched ${re.source})`;
+        }
+      }
+      return null;
+    },
+  ],
+};
+
+// ─── CTA ─────────────────────────────────────────────────────────────────────
+
+const CtaPropsSchema = z.object({
+  headline: z.string().min(4),
+  subhead: z.string().optional(),
+  cta_primary: z.object({
+    label: z.string().min(2).max(40),
+    href: z.enum(["/book", "/intake"]),
+  }),
+  cta_secondary: z
+    .object({
+      label: z.string().min(2).max(40),
+      href: z.string().refine(
+        (v) => v === "/book" || v === "/intake" || v.startsWith("tel:"),
+        { message: "secondary cta_href must be /book, /intake, or tel:..." }
+      ),
+    })
+    .optional(),
+});
+type CtaProps = z.infer<typeof CtaPropsSchema>;
+
+const CTA_URGENCY_RE =
+  /\d|%|★|\btoday\b|\bsame-day\b|\bfree\b|\bguaranteed\b|\brisk-free\b|\bthis week\b|\bnow\b|\bavailable\b|\bbefore\b/i;
+
+const CTA_THROAT_CLEARING = [
+  /^welcome\b/i,
+  /^your trusted /i,
+  /^premier /i,
+  /^the leading /i,
+  /^we are committed/i,
+];
+
+const ctaBlock: BlockDefinition<CtaProps> = {
+  name: "cta",
+  version: "1.0.0",
+  surface: "landing-section",
+  sectionType: "mid-cta",
+  description:
+    "Mid-page call-to-action — focused conversion moment. Singular outcome, low friction, urgency without pressure.",
+  propsSchema: CtaPropsSchema,
+  toSection: (props) => ({
+    type: "mid-cta",
+    headline: props.headline,
+    subhead: props.subhead,
+    ctaPrimary: { label: props.cta_primary.label, href: props.cta_primary.href },
+    ctaSecondary: props.cta_secondary
+      ? { label: props.cta_secondary.label, href: props.cta_secondary.href }
+      : undefined,
+    embedQuoteForm: false,
+  }),
+  validators: [
+    (p) =>
+      p.cta_primary.href === "/book" || p.cta_primary.href === "/intake"
+        ? null
+        : `cta_routes_internal: cta_primary.href must be /book or /intake (got ${p.cta_primary.href})`,
+    (p) =>
+      CTA_URGENCY_RE.test(p.headline)
+        ? null
+        : `headline_quantified_or_urgent: cta headline "${p.headline}" lacks quantification or urgency words. Add a number, "today", "free", "guaranteed", or similar.`,
+    (p) =>
+      CTA_THROAT_CLEARING.some((re) => re.test(p.headline))
+        ? `no_throat_clearing: cta headline "${p.headline}" starts with a generic throat-clearing phrase`
+        : null,
+  ],
+};
+
+// ─── BOOKING ─────────────────────────────────────────────────────────────────
+
+const dayHourTuple = z
+  .tuple([z.number().min(0).max(24), z.number().min(0).max(24)])
+  .nullable();
+
+const BookingPropsSchema = z.object({
+  title: z.string().min(2),
+  description: z.string().min(12),
+  duration_minutes: z.number().int().min(15).max(240),
+  location_kind: z.enum([
+    "on-site-business",
+    "on-site-customer",
+    "phone",
+    "video",
+    "hybrid",
+  ]),
+  weekly_availability: z.object({
+    mon: dayHourTuple,
+    tue: dayHourTuple,
+    wed: dayHourTuple,
+    thu: dayHourTuple,
+    fri: dayHourTuple,
+    sat: dayHourTuple,
+    sun: dayHourTuple,
+  }),
+  form_fields: z
+    .array(
+      z.object({
+        id: z.string().regex(/^[a-z][a-z0-9_]*$/, "snake_case ids only"),
+        label: z.string().min(2),
+        type: z.enum(["text", "email", "phone", "textarea", "select"]),
+        required: z.boolean().optional(),
+        placeholder: z.string().optional(),
+        options: z.array(z.string()).optional(),
+      }),
+    )
+    .optional(),
+});
+export type BookingProps = z.infer<typeof BookingPropsSchema>;
+
+const GENERIC_BOOKING_TITLES = [
+  /^free consultation$/i,
+  /^30-minute conversation$/i,
+  /^discovery call$/i,
+  /^schedule a meeting$/i,
+  /^book a meeting$/i,
+];
+
+const bookingBlock: BlockDefinition<BookingProps> = {
+  name: "booking",
+  version: "1.0.0",
+  surface: "booking",
+  sectionType: "booking",
+  description:
+    "The booking calendar — title, description, slot duration, location kind, weekly hours, and any extra form fields collected at booking time.",
+  propsSchema: BookingPropsSchema,
+  // No toSection — booking uses a surface-specific persist path that
+  // updates Blueprint.booking + the bookings table directly.
+  validators: [
+    (p) =>
+      GENERIC_BOOKING_TITLES.some((re) => re.test(p.title))
+        ? `title_not_generic: booking title "${p.title}" matches a v1 template default. Restate as the vertical's actual primary appointment.`
+        : null,
+    (p) => {
+      const days = Object.values(p.weekly_availability);
+      const open = days.filter((d) => d !== null);
+      return open.length > 0
+        ? null
+        : `at_least_one_open_day: weekly_availability has zero open days; booking page would have no slots`;
+    },
+    (p) => {
+      const offenders: string[] = [];
+      for (const [day, hours] of Object.entries(p.weekly_availability)) {
+        if (hours === null) continue;
+        const [open, close] = hours;
+        if (open >= close) offenders.push(`${day} ${open}-${close} (open >= close)`);
+        if (close - open < 1) offenders.push(`${day} ${open}-${close} (window < 1h)`);
+      }
+      return offenders.length > 0
+        ? `hours_sane: invalid availability windows: ${offenders.join(", ")}`
+        : null;
+    },
+    (p) => {
+      if (!p.form_fields) return null;
+      const ids = p.form_fields.map((f) => f.id);
+      return new Set(ids).size === ids.length
+        ? null
+        : `form_field_ids_unique: form_fields have duplicate ids (${ids.join(", ")})`;
+    },
+  ],
+};
+
+// ─── INTAKE ──────────────────────────────────────────────────────────────────
+
+const IntakePropsSchema = z.object({
+  title: z.string().min(2),
+  description: z.string().optional(),
+  questions: z
+    .array(
+      z.object({
+        id: z.string().regex(/^[a-z][a-z0-9_]*$/, "snake_case ids only"),
+        label: z.string().min(2),
+        type: z.enum([
+          "text",
+          "textarea",
+          "email",
+          "phone",
+          "number",
+          "select",
+          "multi-select",
+          "rating",
+          "date",
+        ]),
+        required: z.boolean().optional(),
+        helper: z.string().optional(),
+        options: z.array(z.string()).optional(),
+      }),
+    )
+    .min(3)
+    .max(8),
+  completion_headline: z.string().min(2),
+  completion_message: z.string().optional(),
+});
+export type IntakeProps = z.infer<typeof IntakePropsSchema>;
+
+const GENERIC_INTAKE_TITLES = [
+  /^tell us about your project$/i,
+  /^get in touch$/i,
+  /^contact us$/i,
+  /^inquiry form$/i,
+  /^submit your details$/i,
+];
+
+const intakeBlock: BlockDefinition<IntakeProps> = {
+  name: "intake",
+  version: "1.0.0",
+  surface: "intake",
+  sectionType: "intake",
+  description:
+    "The intake / lead-capture form — title, description, questions, and the completion message after submit.",
+  propsSchema: IntakePropsSchema,
+  // No toSection — intake uses a surface-specific persist path.
+  validators: [
+    (p) =>
+      GENERIC_INTAKE_TITLES.some((re) => re.test(p.title))
+        ? `title_not_generic: intake title "${p.title}" matches a v1 template default. Restate as something specific to this business.`
+        : null,
+    (p) =>
+      p.questions.some((q) => q.type === "email")
+        ? null
+        : `has_email_field: at least one intake question must have type="email" — operators need email to follow up`,
+    (p) => {
+      const ids = p.questions.map((q) => q.id);
+      return new Set(ids).size === ids.length
+        ? null
+        : `question_ids_unique: intake questions have duplicate ids (${ids.join(", ")})`;
+    },
+    (p) => {
+      const broken = p.questions
+        .filter((q) => q.type === "select" || q.type === "multi-select")
+        .filter((q) => !q.options || q.options.length < 2)
+        .map((q) => q.id);
+      return broken.length > 0
+        ? `select_options_present: select / multi-select questions need ≥2 options (broken: ${broken.join(", ")})`
+        : null;
+    },
+  ],
+};
+
 // ─── REGISTRY ────────────────────────────────────────────────────────────────
 
 // `unknown` here lets us hold heterogeneously-typed blocks in one map; each
 // dispatch site narrows via the registered schema.parse before calling the
 // block's other functions.
+//
+// Order matters: this is the order create_workspace_v2's recommended_blocks
+// returns to the IDE agent. Hero first (most operator-visible), services
+// second, about third (trust), faq fourth (objections), cta fifth
+// (re-conversion), booking sixth (the actual conversion surface), intake
+// seventh (the lower-intent capture path).
 export const BLOCK_REGISTRY: Record<string, BlockDefinition<unknown>> = {
   hero: heroBlock as unknown as BlockDefinition<unknown>,
   services: servicesBlock as unknown as BlockDefinition<unknown>,
+  about: aboutBlock as unknown as BlockDefinition<unknown>,
   faq: faqBlock as unknown as BlockDefinition<unknown>,
+  cta: ctaBlock as unknown as BlockDefinition<unknown>,
+  booking: bookingBlock as unknown as BlockDefinition<unknown>,
+  intake: intakeBlock as unknown as BlockDefinition<unknown>,
 };
 
 export function listBlockNames(): string[] {

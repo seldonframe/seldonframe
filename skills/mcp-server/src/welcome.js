@@ -8,7 +8,7 @@
 // stripped. `create_full_workspace` is the only workspace-creation
 // path mentioned anywhere in this briefing.
 
-export const VERSION = "1.4.0";
+export const VERSION = "1.4.1";
 
 export const WELCOME_MARKDOWN = `# SeldonFrame — create a real Business OS in one conversation
 
@@ -82,32 +82,46 @@ but the output quality is worse on niches outside SF's curated set.
    rendering with v1 default copy.
 
 3. **For each block in \`v2.recommended_blocks\` — generate + persist.**
-   Iterate over them sequentially or in parallel; both work.
-   For each one:
+   v1.4.1 ships SEVEN blocks: hero, services, about, faq, cta, booking,
+   intake. Doing them sequentially blows the latency budget; do them in
+   PARALLEL. Fire all 7 \`get_block_skill\` calls at once, then all 7
+   generate-and-persist passes concurrently. The MCP supports it; the
+   server is happy with parallel writes (each block touches a disjoint
+   surface or a different table row).
    \`\`\`
-   // a. Read the SKILL.md
-   const skill = await get_block_skill({ block_name: "hero" });
+   // a. Read the SKILL.md (parallel)
+   const skills = await Promise.all(
+     recommended_blocks.map(b => get_block_skill({ block_name: b.name }))
+   );
    // skill.skill_md is markdown text. Read it carefully — the YAML
    // frontmatter is the prop schema (enforced server-side); the
    // body is YOUR generation prompt.
 
-   // b. Generate props with your own LLM. Use v2.context as input.
-   //    Example prompt to yourself: "Following the SKILL.md below,
-   //    produce a JSON object that satisfies its schema for the
-   //    business described in <v2.context>. ..."
-   //    Output: a JSON object matching the schema.
+   // b. Generate props with your own LLM (parallel). Use v2.context as input.
+   //    Each block's SKILL.md is the source of truth for its prop schema +
+   //    voice rules. The generation prompt you craft for yourself should
+   //    inline the entire SKILL.md body + the v2.context payload.
 
-   // c. Persist
-   await persist_block({
-     workspace_id,
-     block_name: "hero",
-     generation_prompt: "<the prompt you used, full text>",
-     props: { headline: "...", subhead: "...", cta_primary: {...}, ... }
-   });
+   // c. Persist (parallel)
+   await Promise.all(
+     blocksWithProps.map(({ name, props, prompt }) =>
+       persist_block({
+         workspace_id,
+         block_name: name,
+         generation_prompt: prompt,
+         props,
+       })
+     )
+   );
    \`\`\`
-   If \`persist_block\` returns \`validation_errors\`, regenerate with
-   the SKILL.md rules applied more carefully. Do NOT show validation
-   errors to the operator — they're for you to self-correct.
+   If any \`persist_block\` returns \`validation_errors\`, regenerate
+   THAT block with the SKILL.md rules applied more carefully and retry —
+   the other blocks already landed. Do NOT show validation errors to the
+   operator; they're for you to self-correct.
+
+   The 7 blocks span 3 surfaces: landing-page sections (hero, services,
+   about, faq, cta), booking calendar (booking), and intake form (intake).
+   Each touches a different DB row, so parallel writes don't conflict.
 
 4. **Mark v2 complete.** Call \`complete_workspace_v2({ workspace_id })\`.
    Returns which blocks landed and any that were skipped. Skipped
@@ -209,4 +223,4 @@ admin dashboard. Pre-fills their email automatically.
 <https://seldonframe.com> · **Discord:** <https://discord.gg/sbVUu976NW>
 `;
 
-export const FIRST_CALL_BANNER = `🚀 SeldonFrame v1.4 is connected. PREFERRED workspace creation: create_workspace_v2 → for each recommended_block: get_block_skill + persist_block → complete_workspace_v2 → finalize_workspace({ workspace_id, email }). The v2 flow puts YOUR LLM in charge of high-stakes copy (hero, services, faq) using one SKILL.md per block. Every URL is real and works in any browser within seconds. NEVER create local files. Skipping finalize_workspace leaves the operator with no admin login — always close the loop.`;
+export const FIRST_CALL_BANNER = `🚀 SeldonFrame v1.4.1 is connected. PREFERRED workspace creation: create_workspace_v2 → IN PARALLEL for all 7 recommended_blocks (hero, services, about, faq, cta, booking, intake): get_block_skill + persist_block → complete_workspace_v2 → finalize_workspace({ workspace_id, email }). The v2 flow puts YOUR LLM in charge of every operator-facing surface using one SKILL.md per block. Each block's prop schema is server-validated. Run blocks in PARALLEL (Promise.all) — sequential takes 60+ seconds. Every URL is real. NEVER create local files. Skipping finalize_workspace leaves the operator with no admin login.`;

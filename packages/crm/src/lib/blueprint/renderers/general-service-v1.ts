@@ -1670,6 +1670,12 @@ const BASE_CSS = `@import url('https://fonts.googleapis.com/css2?family=Inter:wg
   margin-bottom: 1rem;
   font-weight: 600;
   text-wrap: balance;
+  /* v1.4.1 — match FAQ headline centering for consistency. */
+  display: block;
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+  text-align: center;
 }
 .sf-services__subhead {
   color: #6B6B6B;
@@ -1757,6 +1763,12 @@ const BASE_CSS = `@import url('https://fonts.googleapis.com/css2?family=Inter:wg
   margin-bottom: 1.5rem;
   font-weight: 600;
   text-wrap: balance;
+  /* v1.4.1 — match FAQ headline centering for consistency. */
+  display: block;
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+  text-align: center;
 }
 .sf-about__body {
   font-size: 1.0625rem;
@@ -1914,6 +1926,15 @@ const BASE_CSS = `@import url('https://fonts.googleapis.com/css2?family=Inter:wg
   font-size: clamp(1.75rem, 5vw, 3rem);
   line-height: 1.1;
   letter-spacing: -0.025em;
+  /* v1.4.1 — explicit centering. Pre-1.4.1 the H2 used text-align: center
+     alone but operators reported it rendering left-aligned in some viewports.
+     Belt-and-suspenders: width:100% + display:block + margin auto so the
+     element itself is centered, text-align: center centers the text within,
+     and text-wrap: balance keeps two-line headlines visually balanced. */
+  display: block;
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
   text-align: center;
   margin-bottom: clamp(2.5rem, 5vw, 4rem);
   font-weight: 600;
