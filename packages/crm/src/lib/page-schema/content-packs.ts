@@ -358,120 +358,73 @@ const PROFESSIONAL_SERVICE_PACK: ContentPack = {
   nav: { show_phone: false, extra_links: [] },
 };
 
+// v1.1.7 — SAAS_PACK rewritten to be GENERIC SaaS-shape content. The
+// previous pack hardcoded SeldonFrame's own marketing copy ("Replace 5
+// Tools", "75 MCP Tools", "Brain Layer", "Anthropic/Vercel/Neon
+// partners", "Free forever to self-host"). That meant a freshly created
+// workspace whose business_description happened to contain "platform"
+// or "api" got the SeldonFrame marketing site instead of their own
+// business — a launch-blocking bug surfaced in the Elevated Med Spa
+// demo (description mentioned "aesthetics platform" → SaaS pack →
+// rendered as a SeldonFrame product page).
+//
+// Now: hero copy uses {business.name}-flavored text via enrichHero
+// fallback; features grid ships EMPTY so enrichOfferings populates from
+// the operator's soul.offerings; partners + stats sections dropped
+// because they were SeldonFrame-specific and we have no operator data
+// to fill them generically. SeldonFrame's actual marketing site lives
+// in apps/web; it is NOT loaded from this pack on operator workspaces.
 const SAAS_PACK: ContentPack = {
   sections: [
-    // May 1, 2026 — Hormozi rewrite: explicitly state what we replace
-    // (the operator's pain), quantify time-to-value (2 minutes),
-    // include a risk-reversal ($0 forever).
     heroSection(
-      "Replace 5 Tools. Deploy in 2 Minutes. Start Free Forever.",
-      "Landing page, CRM, booking, intake, and AI agents — one install · MIT licensed · No credit card"
+      "Modern software, built for the way you work",
+      "Powerful features, clean defaults, predictable pricing"
     ),
     trustBarSection([
-      "Free forever to self-host",
-      "Deploy in 2 minutes",
-      "MIT licensed",
-      "No credit card",
+      "Built for teams",
+      "No credit card required",
+      "Cancel anytime",
+      "Modern stack",
     ]),
-    partnersSection("Built on", [
-      "Anthropic",
-      "Vercel",
-      "Neon",
-      "Stripe",
-      "Resend",
-    ]),
-    // May 1, 2026 — features section gets real product capabilities,
-    // not pricing tiers. Pricing tiers live on /settings/billing and
-    // shouldn't crowd the landing page's feature grid. enrichOfferings
-    // sees these pre-populated items and skips overwriting from
-    // soul.offerings.
-    servicesSection("features", "Features", [
-      {
-        title: "Landing Pages",
-        description:
-          "Professional, conversion-optimized pages generated from your business description. Dark or light mode, editorial typography.",
-        icon: "globe",
-      },
-      {
-        title: "Booking System",
-        description:
-          "Cal.com-quality booking with timezone detection, interactive calendar, and automatic CRM integration.",
-        icon: "calendar",
-      },
-      {
-        title: "CRM + Pipeline",
-        description:
-          "Contact management with kanban pipeline, deal tracking, record detail pages, and activity timeline.",
-        icon: "users",
-      },
-      {
-        title: "AI Agents",
-        description:
-          "Pre-built agent archetypes that follow up with leads, send reminders, and qualify prospects — with approval gates.",
-        icon: "bot",
-      },
-      {
-        title: "75 MCP Tools",
-        description:
-          "Every surface is programmable. Customize landing pages, forms, CRM fields, agents, and pipelines from Claude Code via natural language.",
-        icon: "code",
-      },
-      {
-        title: "Brain Layer",
-        description:
-          "Cross-workspace intelligence that learns what works. Better defaults, smarter agents, higher conversion — automatically.",
-        icon: "sparkles",
-      },
-    ]),
+    // v1.1.7 — empty items array so enrichOfferings reads soul.offerings.
+    // Operators who genuinely run a SaaS business get their actual
+    // product features rendered, not SeldonFrame's.
+    servicesSection("features", "Features"),
+    aboutSection(),
     howItWorksSection(),
-    // May 1, 2026 — pricing section dropped from default SaaS pack.
-    // It rendered as a second services-grid pulling from soul.offerings,
-    // duplicating the features section above. Re-enable via toggle_section
-    // once A6 MCP tools land.
-    statsSection([
-      { value: "75+", label: "MCP Tools" },
-      { value: "2,100+", label: "Tests Passing" },
-      { value: "6", label: "Agent Archetypes" },
-      { value: "2 min", label: "Deploy Time" },
-    ]),
+    testimonialsSection(),
     faqSection([]),
     ctaSection(
-      "Spin up your Business OS in 2 minutes",
-      "Free forever · No credit card · MIT licensed"
+      "Get started today",
+      "Free to try · No credit card required"
     ),
     footerSection(),
   ],
   actions: [
-    action("hero_primary", "Start for $0 →", "/intake", "primary", ["hero", "cta"]),
-    action("hero_secondary", "See a demo →", "/book", "secondary", ["hero"]),
-    action("nav_pricing", "Pricing", "#pricing", "ghost", ["nav"]),
-    action("nav_docs", "Docs", "{docs_url}", "ghost", ["nav"]),
-    action("nav_github", "GitHub", "{github_url}", "ghost", ["nav"]),
-    action("footer_github", "GitHub", "{github_url}", "ghost", ["footer"]),
-    action("footer_discord", "Discord", "{discord_url}", "ghost", ["footer"]),
-    action("footer_docs", "Docs", "{docs_url}", "ghost", ["footer"]),
+    // v1.1.7 — generic CTAs. Operators editing their landing page can
+    // rename via update_landing_section once they want their own copy.
+    action("hero_primary", "Get started →", "/intake", "primary", ["hero", "cta"]),
+    action("hero_secondary", "Book a demo →", "/book", "secondary", ["hero"]),
+    action("nav_book", "Book a demo", "/book", "ghost", ["nav"]),
+    action("nav_intake", "Contact", "/intake", "ghost", ["nav"]),
+    action("footer_intake", "Contact us", "/intake", "ghost", ["footer"]),
   ],
-  trust_badges: ["Open source", "Free to start", "MIT licensed"],
+  trust_badges: ["Built for teams", "Free to try", "Modern stack"],
   default_faqs: [
     {
-      question: "Is it really free?",
+      question: "Is there a free trial?",
       answer:
-        "Yes. The Free tier is free forever — no trial, no credit card. Upgrade only when you outgrow it.",
+        "Yes — get started for free, no credit card required. Upgrade only when you're ready.",
     },
     {
-      question: "Can I self-host?",
+      question: "Who is this for?",
       answer:
-        "Yes. Self-hosting is MIT-licensed and free forever. Bring your own keys for Stripe, Resend, Twilio, and your LLM provider.",
+        "Built for modern teams who want professional tools without the bloat. We'll tailor the experience to your workflow.",
     },
     {
-      question: "How does pricing work?",
+      question: "How do I get started?",
       answer:
-        "Flat monthly base + metered usage. No per-workspace charge — Growth includes 3 workspaces, Scale is unlimited.",
-    },
-    {
-      question: "What integrations do you support?",
-      answer:
-        "MCP-native, so any MCP server works out of the box. First-class integrations for Stripe, Resend, Twilio, Google Calendar, and more via the marketplace.",
+        "Hit the get-started button above and tell us a little about what you need — we'll take it from there.",
     },
   ],
   footer: { show_hours: false, show_phone: false, extra_links: [] },

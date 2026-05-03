@@ -97,16 +97,19 @@ describe("blueprintFromSchema — section conversion + actions", () => {
     assert.ok(hero, "no hero section produced");
     if (hero?.type !== "hero") throw new Error("not a hero");
     assert.equal(hero.headline, "The open-source Business OS platform");
-    assert.match(hero.ctaPrimary.label, /Start for \$0/);
-    // Secondary CTA = "See a demo →" → /book per SaaS pack
+    // v1.1.7 — generic CTA. The SaaS pack used to ship "Start for $0 →"
+    // (SeldonFrame's own marketing CTA). Now neutral.
+    assert.match(hero.ctaPrimary.label, /Get started/i);
+    // Secondary CTA = "Book a demo →" → /book per neutralized SaaS pack
     assert.ok(hero.ctaSecondary);
     assert.equal(hero.ctaSecondary?.href, "/book");
   });
 
-  test("services section becomes services-grid with pack-provided product features", () => {
-    // May 1, 2026 — SaaS pack ships 6 hardcoded product features
-    // (Landing Pages / Booking / CRM / AI Agents / 75 MCP Tools / Brain
-    // Layer) instead of pulling pricing tiers from soul.offerings.
+  test("services section becomes services-grid populated from soul.offerings", () => {
+    // v1.1.7 — SAAS_PACK no longer ships SeldonFrame-specific feature
+    // items. enrichOfferings populates from the operator's
+    // soul.offerings instead. For this fixture (Free/Growth/Scale
+    // pricing tiers), those become the grid items.
     const schema = schemaFromSoul(seldonFrameSoul);
     const blueprint = blueprintFromSchema(schema, tokensForPersonality("clean"));
 
@@ -115,9 +118,11 @@ describe("blueprintFromSchema — section conversion + actions", () => {
     );
     assert.ok(services, "no services-grid produced");
     if (services?.type !== "services-grid") throw new Error("wrong type");
-    assert.equal(services.items.length, 6);
-    assert.equal(services.items[0].title, "Landing Pages");
-    assert.equal(services.items[5].title, "Brain Layer");
+    assert.equal(services.items.length, 3);
+    assert.deepEqual(
+      services.items.map((i) => i.title),
+      ["Free", "Growth", "Scale"]
+    );
   });
 
   test("FAQ section carries soul.faqs as items", () => {
@@ -187,14 +192,25 @@ describe("renderWithGeneralServiceV1 — end-to-end render", () => {
     assert.match(out.html, /SeldonFrame/);
   });
 
-  test("rendered HTML contains the SaaS hero CTA", () => {
+  test("rendered HTML contains the (neutral) SaaS hero CTA", () => {
+    // v1.1.7 — neutral CTA. The SaaS pack used to ship "Start for $0 →"
+    // (SeldonFrame's own marketing copy). The neutralized pack ships
+    // generic "Get started →". Operator-supplied FAQ copy is unaffected
+    // (the seldonFrameSoul fixture's "MIT licensed" FAQ answer renders
+    // because the operator typed it).
     const schema = schemaFromSoul(seldonFrameSoul);
     const out = renderWithGeneralServiceV1(
       schema,
       tokensForPersonality("clean"),
       schema.media
     );
-    assert.match(out.html, /Start for \$0/);
+    assert.match(out.html, /Get started/i);
+    // SeldonFrame-specific SaaS pack copy must not be back-leaked into
+    // operator workspaces via the pack defaults.
+    assert.doesNotMatch(
+      out.html,
+      /Start for \$0|75 MCP Tools|Brain Layer|2,100\+ Tests/
+    );
   });
 
   test("SaaS workspace HTML has NO phone CTA in nav (B2 verification)", () => {

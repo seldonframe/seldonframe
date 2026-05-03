@@ -12,7 +12,8 @@ export type PersonalityVertical =
   | "legal"
   | "dental"
   | "coaching"
-  | "agency";
+  | "agency"
+  | "medspa";
 
 export interface PersonalityLabel {
   singular: string;
@@ -586,6 +587,121 @@ const AGENCY_PERSONALITY: CRMPersonality = {
   },
 };
 
+// ─── MEDSPA ────────────────────────────────────────────────────────────────
+// v1.1.7 — added after the Elevated Med Spa demo classified as "saas"
+// (because "platform" was in the saas keyword bank) and fell back to
+// coaching personality (Applied → Discovery Booked → Enrolled). Med
+// spa is a distinct vertical with its own pipeline (Inquiry →
+// Consultation → Treatment Plan → Accepted → Scheduled → Completed →
+// Follow-up), terminology (Client / Treatment), and branding (luxury
+// dark + gold).
+
+const MEDSPA_PERSONALITY: CRMPersonality = {
+  vertical: "medspa",
+  terminology: {
+    contact: { singular: "Client", plural: "Clients" },
+    deal: { singular: "Treatment", plural: "Treatments" },
+    activity: { singular: "Appointment", plural: "Appointments" },
+  },
+  pipeline: {
+    name: "Treatment Pipeline",
+    stages: [
+      { name: "Inquiry", color: STAGE_COLORS.start, probability: 10 },
+      { name: "Consultation Booked", color: STAGE_COLORS.qualifying, probability: 25 },
+      { name: "Consultation Done", color: "#7c3aed", probability: 40 },
+      { name: "Treatment Plan Sent", color: STAGE_COLORS.proposal, probability: 55 },
+      { name: "Accepted", color: "#22c55e", probability: 75 },
+      { name: "Treatment Scheduled", color: "#0ea5e9", probability: 85 },
+      { name: "Completed", color: STAGE_COLORS.delivered, probability: 100 },
+      { name: "Follow-up", color: STAGE_COLORS.recall, probability: 60 },
+    ],
+  },
+  contactFields: {
+    industrySpecific: [
+      { key: "date_of_birth", label: "Date of Birth", type: "date" },
+      { key: "skin_type", label: "Skin Type", type: "select", options: ["I — Always burns", "II — Usually burns", "III — Sometimes burns", "IV — Rarely burns", "V — Very rarely burns", "VI — Never burns"] },
+      { key: "medical_alerts", label: "Medical Alerts / Allergies", type: "textarea" },
+      { key: "current_medications", label: "Current Medications", type: "textarea" },
+      { key: "areas_of_interest", label: "Areas of Interest", type: "text" },
+      { key: "last_treatment_date", label: "Last Treatment", type: "date" },
+      { key: "next_followup", label: "Next Follow-up", type: "date" },
+      { key: "membership_status", label: "Membership", type: "select", options: ["None", "Glow", "Elevate", "VIP"] },
+    ],
+  },
+  intakeFields: [
+    { key: "fullName", label: "Full name", type: "text", required: true },
+    { key: "email", label: "Email", type: "email", required: true },
+    { key: "phone", label: "Phone", type: "tel", required: true },
+    { key: "date_of_birth", label: "Date of birth", type: "date", required: true },
+    { key: "areas_of_interest", label: "What treatments are you interested in?", type: "textarea", required: true },
+    { key: "medical_alerts", label: "Any allergies or medical conditions we should know about?", type: "textarea", required: false },
+  ],
+  dashboard: {
+    primaryMetrics: [
+      { key: "active_clients", label: "Active Clients", icon: "Users", tone: "primary" },
+      { key: "revenue_this_month", label: "Revenue This Month", icon: "DollarSign", tone: "positive" },
+      { key: "treatment_acceptance", label: "Treatment Acceptance", icon: "CheckCircle2", tone: "neutral" },
+      { key: "memberships", label: "Active Memberships", icon: "Star", tone: "caution" },
+    ],
+    urgencyIndicators: [
+      { key: "consults_no_followup_3d", label: "Consults without follow-up > 3d", severity: "warning" },
+      { key: "plans_pending_acceptance_14d", label: "Treatment plans pending > 14d", severity: "info" },
+      { key: "missed_followups", label: "Missed follow-ups", severity: "danger" },
+    ],
+  },
+  content_templates: {
+    hero_headlines: [
+      "Look and Feel Your Best[ — {rating}★ from {review_count}+ Clients]",
+      "[{city}'s ]Aesthetics & Wellness Studio — Complimentary Consultation",
+      "Elevate Your Beauty Routine.[ {review_count}+ Happy Clients][ in {city}].",
+    ],
+    hero_subheadline:
+      "Medical-grade aesthetics · Board-certified providers · Personalized treatment plans.[ Now booking complimentary consultations.]",
+    trust_badges: [
+      "[{rating}★ on Google ({review_count}+ reviews)]",
+      "Medical director on-site",
+      "FDA-approved treatments",
+      "Complimentary consultations",
+    ],
+    services_heading: "Our Treatments",
+    faqs: [
+      {
+        question: "How does the consultation work?",
+        answer_template:
+          "Your complimentary consultation is a 30-minute in-person visit. We'll discuss your goals, assess your skin, and walk you through a personalized treatment plan — no pressure to book anything that day.",
+      },
+      {
+        question: "Are your providers licensed?",
+        answer_template:
+          "Yes. All treatments are performed or supervised by our board-certified medical director and licensed practitioners.",
+      },
+      {
+        question: "How long do results last?",
+        answer_template:
+          "It depends on the treatment. We'll set realistic expectations during your consultation and recommend a maintenance cadence so your results stay consistent.",
+      },
+      {
+        question: "Do you offer membership pricing?",
+        answer_template:
+          "Yes — our members get monthly treatment credits, exclusive pricing, and priority booking.[ Visit us in {city}] or ask about our Glow / Elevate / VIP tiers at your consultation.",
+      },
+      {
+        question: "Where are you located?",
+        answer_template:
+          "[We're in {city}. ]On-site parking and easy access from the main avenues.[ Reach us at {phone}.]",
+      },
+    ],
+    cta_button_primary: "Book your consultation →",
+    cta_button_secondary: "Ask us a question →",
+    bottom_cta_heading: "Ready to elevate your beauty routine?",
+    bottom_cta_trust_points: [
+      "Complimentary consultation",
+      "Board-certified providers",
+      "Personalized treatment plan",
+    ],
+  },
+};
+
 // ─── Registry + selection ──────────────────────────────────────────────────
 
 export const PERSONALITIES = {
@@ -594,6 +710,7 @@ export const PERSONALITIES = {
   dental: DENTAL_PERSONALITY,
   coaching: COACHING_PERSONALITY,
   agency: AGENCY_PERSONALITY,
+  medspa: MEDSPA_PERSONALITY,
 } as const satisfies Record<PersonalityVertical, CRMPersonality>;
 
 export const DEFAULT_PERSONALITY: CRMPersonality = COACHING_PERSONALITY;
@@ -626,6 +743,27 @@ const INDUSTRY_KEYWORDS: Array<{ vertical: PersonalityVertical; keywords: string
   {
     vertical: "dental",
     keywords: ["dental", "dentist", "dentistry", "orthodont", "oral health", "hygienist", "endodont", "periodont"],
+  },
+  {
+    // v1.1.7 — added so med spa / aesthetics workspaces don't fall
+    // through to the BUSINESS_TYPE_FALLBACK ("professional_service" →
+    // "coaching") chain. Specific industry markers first; broader
+    // wellness / aesthetics terms last so a chiropractor or massage
+    // therapist doesn't accidentally pick up med-spa pipeline stages.
+    vertical: "medspa",
+    keywords: [
+      "med spa", "medspa", "med-spa", "medical spa", "medical aesthetics",
+      "aesthetic clinic", "aesthetic medicine", "aesthetics studio",
+      "botox", "dysport", "filler", "dermal filler", "lip filler",
+      "microneedling", "chemical peel", "hydrafacial", "facial treatment",
+      "laser hair", "laser hair removal", "laser treatment",
+      "body contouring", "coolsculpting", "emsculpt", "sculpting",
+      "iv therapy", "iv drip", "iv hydration",
+      "wellness clinic", "wellness studio", "wellness lounge",
+      "cosmetic injector", "cosmetic injection", "cosmetic dermatology",
+      "skin clinic", "skin studio", "skincare clinic",
+      "rejuvenation", "anti-aging", "anti aging",
+    ],
   },
   {
     vertical: "agency",

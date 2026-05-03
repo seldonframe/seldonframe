@@ -56,24 +56,39 @@ const RULES: ClassifierRule[] = [
   {
     type: "saas",
     keywords: [
-      "software",
+      // v1.1.7 — tightened. "platform" alone matched "wellness platform",
+      // "aesthetics platform", "marketing platform", etc. — pulling
+      // every kind of business into the SaaS bucket and onto the
+      // SeldonFrame-marketing landing template. "api" matched "rapid"
+      // and "therapist". "library" matched "library of services". Use
+      // multi-word, distinctive markers only.
       "saas",
-      "platform",
+      "saas platform",
+      "software platform",
+      "software product",
       "developer tools",
       "developer tool",
+      "developer platform",
       "open source",
       "open-source",
-      "api",
+      "rest api",
+      "graphql",
       "framework",
-      "library",
+      "javascript library",
+      "typescript library",
+      "python library",
       "sdk",
       "cli",
+      "command line",
+      "command-line",
       "ide",
       "mcp",
-      "infrastructure",
+      "model context protocol",
+      "infrastructure-as-code",
       "developer-first",
       "indie hackers",
-      "yc",
+      "y combinator",
+      "yc batch",
     ],
   },
   {

@@ -26,6 +26,30 @@ describe("selectCRMPersonality", () => {
     assert.equal(p.terminology.contact.singular, "Customer");
   });
 
+  test("industry hint 'medspa' picks the MEDSPA personality (v1.1.7)", () => {
+    const p = selectCRMPersonality(null, "med spa");
+    assert.equal(p.vertical, "medspa");
+    assert.equal(p.terminology.contact.singular, "Client");
+    assert.equal(p.terminology.deal.singular, "Treatment");
+  });
+
+  test("description with 'botox' picks the MEDSPA personality (v1.1.7)", () => {
+    const p = selectCRMPersonality(null, "Luxury botox and filler studio in Austin");
+    assert.equal(p.vertical, "medspa");
+  });
+
+  test("description with 'aesthetics platform' classifies to MEDSPA (v1.1.7), not SaaS", () => {
+    // v1.1.7 regression — pre-1.1.7, "platform" alone matched the SaaS
+    // classifier, dragging "Elevated Med Spa, a luxury aesthetics
+    // platform" onto the SeldonFrame marketing template. The fix:
+    // tightened SaaS keywords to multi-word distinct markers.
+    const p = selectCRMPersonality(
+      "professional_service",
+      "aesthetics platform medical spa botox filler"
+    );
+    assert.equal(p.vertical, "medspa");
+  });
+
   test("industry hint 'legal' picks the LEGAL personality", () => {
     const p = selectCRMPersonality(null, "legal");
     assert.equal(p.vertical, "legal");
@@ -393,6 +417,26 @@ describe("resolvePersonalityContent", () => {
       "Same-day service",
       "Free estimates",
     ]);
+  });
+
+  test("medspa: substitutes hero copy with luxury aesthetics tone", () => {
+    const resolved = resolvePersonalityContent(PERSONALITIES.medspa, {
+      city: "Austin",
+      phone: "(512) 555-9000",
+      rating: 4.9,
+      review_count: 220,
+    });
+    assert.ok(resolved);
+    assert.equal(resolved!.services_heading, "Our Treatments");
+    assert.match(resolved!.hero_headline, /Look and Feel Your Best/);
+    assert.match(resolved!.hero_headline, /4\.9/);
+    assert.match(resolved!.hero_headline, /220/);
+    assert.equal(resolved!.cta_button_primary, "Book your consultation →");
+    // FAQ #5 mentions city + phone via bracketed segments
+    assert.ok(resolved!.faqs.length >= 4);
+    const allFaqText = resolved!.faqs.map((f) => f.answer).join("\n");
+    assert.match(allFaqText, /Austin/);
+    assert.match(allFaqText, /\(512\) 555-9000/);
   });
 
   test("legal: keeps generic copy when proof metrics are absent", () => {

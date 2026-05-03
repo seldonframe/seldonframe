@@ -82,29 +82,38 @@ describe("content packs honor business-type personality", () => {
     );
   });
 
-  test("saas trust badges include 'Open source' (no 'Licensed & insured')", () => {
+  test("saas trust badges are NEUTRAL (no SeldonFrame-specific 'Open source / MIT licensed' copy)", () => {
+    // v1.1.7 — SAAS_PACK rewritten neutral. The previous pack hardcoded
+    // SeldonFrame's own marketing badges ("Open source", "MIT licensed",
+    // "Free forever to self-host") — when ANY workspace got
+    // misclassified as SaaS, the visitor saw SeldonFrame branding on a
+    // stranger's landing page. Now the SaaS pack ships generic copy.
     const pack = getContentPack("saas");
     assert.ok(
-      pack.trust_badges.some((b) => /Open source/i.test(b)),
-      "missing 'Open source'"
+      !pack.trust_badges.some((b) => /MIT licensed|Open source/i.test(b)),
+      `saas pack must not carry SeldonFrame-specific badges, got ${JSON.stringify(pack.trust_badges)}`
     );
-    // "Licensed & insured" is the local-service-flavored badge we want to
-    // keep out of SaaS. "MIT licensed" (a software-license badge) is fine
-    // and shows up in the SaaS pack — match the full local-service phrase
-    // rather than just "Licensed".
     assert.ok(
       !pack.trust_badges.some((b) => /licensed (?:and|&) insured/i.test(b)),
       "saas pack must not carry the 'Licensed & insured' local-service badge"
     );
   });
 
-  test("saas hero CTA = 'Start for $0 →'", () => {
+  test("saas hero CTA is generic (no SeldonFrame-specific 'Start for $0')", () => {
+    // v1.1.7 — generic "Get started" CTA. SeldonFrame's own marketing
+    // CTAs live in apps/web, not in the operator-workspace content pack.
     const pack = getContentPack("saas");
     const heroPrimary = pack.actions.find(
       (a) => a.id === "hero_primary" && a.placement.includes("hero")
     );
     assert.ok(heroPrimary, "missing saas hero_primary");
-    assert.match(heroPrimary!.text, /Start for \$0/);
+    assert.doesNotMatch(
+      heroPrimary!.text,
+      /Start for \$0|MCP|MIT licensed/,
+      "must not carry SeldonFrame-specific copy"
+    );
+    // Generic CTA — actionable + neutral
+    assert.match(heroPrimary!.text, /get started|book|try|sign/i);
   });
 });
 
@@ -153,25 +162,21 @@ describe("schemaFromSoul — merges Soul data onto pack defaults", () => {
     assert.equal(hero?.content.headline, "The open-source Business OS platform");
   });
 
-  test("features section has product capabilities (NOT offerings) — SaaS pack ships 6 hardcoded items", () => {
-    // May 1, 2026 — SaaS pack ships 6 product features for a 3x2 grid:
-    // Landing Pages / Booking System / CRM + Pipeline / AI Agents /
-    // 75 MCP Tools / Brain Layer. enrichOfferings sees pre-populated
-    // items and skips overwriting with soul.offerings (which on SaaS
-    // workspaces is the pricing tier list — wrong for a features grid).
+  test("features section is empty by default — populated from soul.offerings", () => {
+    // v1.1.7 — SAAS_PACK ships an empty features list so enrichOfferings
+    // populates from the operator's soul.offerings instead of the
+    // previous SeldonFrame-specific defaults ("Landing Pages / Booking
+    // System / 75 MCP Tools / Brain Layer"). When a misclassified
+    // workspace had no offerings, the operator was advertising
+    // SeldonFrame's products on their own landing page.
     const schema = schemaFromSoul(seldonFrameSoul);
     const features = schema.sections.find((s) => s.intent === "features");
     assert.ok(features, "saas pack should produce a features section");
-    assert.equal(features!.content.items?.length, 6);
+    // soul.offerings is the pricing-tier list (Free/Growth/Scale) for
+    // this fixture; enrichOfferings populates them as items.
+    assert.equal(features!.content.items?.length, 3);
     const titles = features!.content.items?.map((i) => i.title);
-    assert.deepEqual(titles, [
-      "Landing Pages",
-      "Booking System",
-      "CRM + Pipeline",
-      "AI Agents",
-      "75 MCP Tools",
-      "Brain Layer",
-    ]);
+    assert.deepEqual(titles, ["Free", "Growth", "Scale"]);
   });
 
   test("FAQ section uses soul.faqs (overrides defaults)", () => {
@@ -190,28 +195,37 @@ describe("schemaFromSoul — merges Soul data onto pack defaults", () => {
   });
 
   test("template-style action hrefs (`{github_url}`) are dropped when missing", () => {
-    // No github_url in the Soul → SaaS pack's GitHub button gets filtered out
-    // rather than rendering as `https://...{github_url}`.
+    // v1.1.7 — SAAS_PACK no longer hardcodes GitHub/Docs/Discord nav
+    // links pointing at SeldonFrame's repo. The classifier output
+    // doesn't carry GitHub URLs by default, so the action would be
+    // filtered. Keep the test as a regression guard: if any action
+    // ever does template a github_url, it must resolve or disappear.
     const schema = schemaFromSoul({
       business_name: "TestCo",
       industry: "saas",
     });
     const githubAction = schema.actions.find((a) => a.text === "GitHub");
-    // Should be undefined (filtered) or have a real URL — never the literal template.
+    // v1.1.7: SAAS_PACK no longer ships a GitHub action — undefined OK.
     if (githubAction) {
       assert.doesNotMatch(githubAction.href, /\{github_url\}/);
     }
   });
 
-  test("template-style action hrefs resolve when github_url is present", () => {
+  test("schemaFromSoul never emits a literal {github_url} or {docs_url} template", () => {
+    // v1.1.7 — explicit invariant. Even if a future content-pack
+    // change reintroduces github_url action templates, schemaFromSoul
+    // must never leak the literal placeholder into the rendered page.
     const schema = schemaFromSoul({
       business_name: "TestCo",
       industry: "saas",
-      github_url: "https://github.com/example/repo",
     });
-    const githubAction = schema.actions.find((a) => a.text === "GitHub");
-    assert.ok(githubAction, "should render a GitHub action when url present");
-    assert.equal(githubAction!.href, "https://github.com/example/repo");
+    for (const action of schema.actions) {
+      assert.doesNotMatch(
+        action.href,
+        /\{[a-z_]+\}/,
+        `action ${action.id} leaked an unresolved placeholder: ${action.href}`
+      );
+    }
   });
 
   test("local-service Soul never gets SaaS pack content", () => {

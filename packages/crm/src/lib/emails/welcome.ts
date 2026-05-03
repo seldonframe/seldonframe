@@ -9,9 +9,19 @@ const DISCORD_INVITE = "https://discord.gg/sbVUu976NW";
 // (set up in Resend → Domains) so welcome emails actually reach the
 // operator's inbox. The legacy onboarding@resend.dev sandbox was rate-
 // limited to 3/day and could only send to the account owner's verified
-// email — every operator-facing send silently 403'd. RESEND_FROM_ADDRESS
-// can still override per-environment (e.g. for staging tests).
+// email — every operator-facing send silently 403'd.
+//
+// v1.1.7 / Bug #2 (med-spa demo) — `RESEND_FROM_ADDRESS` env var on the
+// production deployment was still pointing to `onboarding@resend.dev`
+// from a pre-v1.1.4 run, which Resend treats as sandbox. Sandbox-mode
+// sends to non-account-owner recipients return an error that gets
+// surfaced to the operator as "the email service is in test mode".
+// Fix: when the env override points at the sandbox domain, IGNORE it
+// and use the verified production domain. Real per-environment
+// overrides (e.g. `staging@seldonframe.com`) still work because they
+// don't match the sandbox prefix.
 const DEFAULT_FROM = "SeldonFrame <welcome@seldonframe.com>";
+const SANDBOX_FROM_PATTERN = /@resend\.dev>?$/i;
 
 export type WelcomeWorkspace = {
   landing_url: string;
@@ -87,6 +97,14 @@ export function validateWelcomeRequest(body: unknown): ValidateResult {
 
 export function pickFromAddress(env: NodeJS.ProcessEnv | Record<string, string | undefined>): string {
   const configured = typeof env.RESEND_FROM_ADDRESS === "string" ? env.RESEND_FROM_ADDRESS.trim() : "";
+  // v1.1.7 — if the env var points at Resend's sandbox onboarding
+  // address, ignore it. The sandbox can only deliver to the verified
+  // account owner; any operator-facing send fails. The verified
+  // welcome@seldonframe.com domain is set up in Resend (DNS verified
+  // May 01) and works for all recipients.
+  if (configured && SANDBOX_FROM_PATTERN.test(configured)) {
+    return DEFAULT_FROM;
+  }
   return configured || DEFAULT_FROM;
 }
 
@@ -263,6 +281,14 @@ export async function sendWelcomeEmail(
         detail = "";
       }
     }
+    // v1.1.7 — surface the actual Resend error in stdout so it shows
+    // up in Vercel function logs paired with the request. Without
+    // this, a sandbox-mode rejection or unverified-domain failure
+    // gets swallowed into "the email service is in test mode" with
+    // no way to debug from the deployment side.
+    console.error(
+      `[welcome-email] Resend ${response.status}: ${detail || "(no detail)"} from=${deps.fromAddress}`,
+    );
     return {
       ok: false,
       status: response.status,

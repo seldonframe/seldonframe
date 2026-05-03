@@ -111,6 +111,23 @@ const AGENCY_IMAGES: PersonalityImageBundle = {
   ],
 };
 
+// ─── MEDSPA ──────────────────────────────────────────────────────────────────
+// v1.1.7 — luxury aesthetics, modern spa interiors, treatment rooms,
+// botanical/skincare products. Lean toward warm, premium, calming —
+// not clinical or harsh.
+
+const MEDSPA_IMAGES: PersonalityImageBundle = {
+  hero_url: hero("1570172619644-dfd03ed5d881"), // serene treatment-room ambience
+  service_grid_image_urls: [
+    card("1596704017254-9b121068fb31"), // facial treatment
+    card("1571019613454-1cb2f99b2d8b"), // skincare products / botanical
+    card("1503951914875-452162b0f3f1"), // laser/wellness device
+    card("1591343395082-e120087004b4"), // dropper / serum
+    card("1583416750470-965b2707b355"), // spa interior detail
+    card("1612817288484-6f916006741a"), // massage / body treatment
+  ],
+};
+
 // ─── COACHING ────────────────────────────────────────────────────────────────
 // 1:1 coaching sessions, video calls, journaling, professional growth.
 // Warm, conversational, person-focused.
@@ -135,6 +152,7 @@ const IMAGES: Partial<Record<PersonalityVertical, PersonalityImageBundle>> = {
   legal: LEGAL_IMAGES,
   agency: AGENCY_IMAGES,
   coaching: COACHING_IMAGES,
+  medspa: MEDSPA_IMAGES,
 };
 
 /**

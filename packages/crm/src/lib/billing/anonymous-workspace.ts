@@ -276,6 +276,14 @@ export async function createAnonymousWorkspace(
       title: "Strategy Call",
       description: "45-minute call to discuss your project and scope.",
     },
+    // v1.1.7 — med spa default. Complimentary in-person consultation
+    // is the standard funnel (free first visit, paid treatments after).
+    medspa: {
+      durationMinutes: 30,
+      title: "Complimentary Consultation",
+      description:
+        "30-minute in-person consultation. We'll assess your goals and walk you through a personalized plan — no obligation.",
+    },
   };
   const bookingDefault = personalityBookingDefaults[personality.vertical];
   if (bookingDefault && seedBlueprint.booking?.eventType) {

@@ -709,13 +709,15 @@ function renderHero(section: SectionHero, ctx: RenderContext): string {
 
   // May 1, 2026 — SaaS hero dashboard mockup. Decorative inline HTML/CSS
   // showing a fake admin dashboard so the hero doesn't end at the CTAs.
-  // Only renders when business type === "saas" AND cinematic overlay is
-  // active (the styling needs the dark background to look right). Pure
-  // CSS, pointer-events:none — purely a visual element.
-  const dashboardMockup =
-    ctx.cinematic && ctx.businessType === "saas"
-      ? renderHeroDashboardMockup()
-      : "";
+  // v1.1.7 — REMOVED. The mockup hardcoded specific stats ("128
+  // Contacts, 42 Active Deals, $24k MRR") that are SeldonFrame's own
+  // dashboard preview. When a workspace was misclassified as SaaS
+  // (anything mentioning "platform" — see classify-business pre-1.1.7),
+  // the visitor saw a stranger's MRR numbers in the hero. The mockup
+  // belongs only on SeldonFrame's own marketing site (apps/web), not
+  // on every operator workspace. To re-introduce, accept stats data
+  // from the operator's soul rather than hardcoding it.
+  const dashboardMockup = "";
 
   // May 2, 2026 — black-square corner spans removed. They rendered as
   // 7×7 var(--sf-fg-emphasis) blocks 28px from each corner — meant

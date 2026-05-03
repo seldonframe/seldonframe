@@ -82,21 +82,26 @@ describe("iconForItem — explicit icon wins over title inference", () => {
 });
 
 describe("Renderer — services-grid uses Lucide icons", () => {
-  test("SaaS features grid renders Lucide SVG paths in service cards", () => {
-    // May 1, 2026 — SaaS pack ships product features (Landing Pages /
-    // Booking / CRM / AI Agents) with explicit icons (globe / calendar
-    // / users / bot). The Lucide globe icon path starts with the
-    // canonical circle + path combo.
+  test("Operator-supplied service items render Lucide SVG paths", () => {
+    // v1.1.7 — SaaS pack no longer ships SeldonFrame-specific feature
+    // items ("Landing Pages / Booking / CRM / AI Agents / 75 MCP Tools").
+    // Operator workspaces get items from soul.offerings instead. This
+    // test validates the renderer still produces real Lucide SVGs for
+    // operator-supplied items (the icon classifier picks up the title).
     const schema = schemaFromSoul({
-      business_name: "TestSaaS",
+      business_name: "Acme Bot Co",
       industry: "saas-developer-tools",
+      offerings: [
+        { name: "AI Agents", description: "Automate your workflow" },
+        { name: "Booking", description: "Calendar slots" },
+        { name: "CRM", description: "Contact management" },
+      ],
     });
     const out = renderWithGeneralServiceV1(
       schema,
       tokensForPersonality("cinematic"),
       schema.media
     );
-    // Globe icon (Landing Pages) — Lucide's globe has a circle + path.
     // Bot icon (AI Agents) — distinctive M12 8V4 path start.
     assert.ok(
       out.html.includes("M12 8V4"),
@@ -111,20 +116,30 @@ describe("Renderer — services-grid uses Lucide icons", () => {
 });
 
 describe("Stats section", () => {
-  test("SaaS pack includes stats section with 4 default values", () => {
+  // v1.1.7 — SAAS_PACK rewritten to be neutral. The previous pack
+  // hardcoded "75+ MCP Tools / 2,100+ Tests / 6 Agent Archetypes"
+  // — SeldonFrame's own product stats. Now the SaaS pack ships
+  // without a stats section so operators don't accidentally
+  // advertise SeldonFrame's metrics on their own landing page.
+  // (Workspaces that genuinely want stats can add them via
+  // update_landing_section once they have real numbers.)
+  test("SaaS pack ships WITHOUT a stats section (no fabricated metrics)", () => {
     const schema = schemaFromSoul({
       business_name: "TestSaaS",
       industry: "saas-developer-tools",
     });
     const stats = schema.sections.find((s) => s.intent === "stats");
-    assert.ok(stats, "SaaS pack should include a stats section");
-    assert.equal(stats!.content.stats?.length, 4);
-    // First stat: "75+" / "MCP Tools"
-    assert.equal(stats!.content.stats?.[0].value, "75+");
-    assert.equal(stats!.content.stats?.[0].label, "MCP Tools");
+    assert.equal(
+      stats,
+      undefined,
+      "v1.1.7: SaaS pack should NOT include a default stats section"
+    );
   });
 
-  test("Local-service pack includes 3 stats", () => {
+  test("Local-service pack still includes 3 default stats", () => {
+    // Local-service stats are operator-overridden by applyStatsFromSoul
+    // (#8 from v1.1.4) when input.review_count / .review_rating are
+    // present. The pack default exists as a fallback.
     const schema = schemaFromSoul({
       business_name: "Phoenix HVAC",
       soul_description: "HVAC repair and installation.",
@@ -135,27 +150,32 @@ describe("Stats section", () => {
     assert.equal(stats!.content.stats?.[0].value, "500+");
   });
 
-  test("Stats section renders with sf-stat__value + sf-stat__label markup", () => {
+  test("Local-service stats render with sf-stat__value + sf-stat__label markup", () => {
     const schema = schemaFromSoul({
-      business_name: "TestSaaS",
-      industry: "saas-developer-tools",
+      business_name: "Phoenix HVAC",
+      soul_description: "HVAC repair and installation.",
     });
     const out = renderWithGeneralServiceV1(
       schema,
-      tokensForPersonality("cinematic"),
+      tokensForPersonality("clean"),
       schema.media
     );
     assert.match(out.html, /sf-stat__value/);
     assert.match(out.html, /sf-stat__label/);
     assert.match(out.html, /id="sf-stats"/);
-    // The "75+" value appears literally in the rendered HTML.
-    assert.match(out.html, /75\+/);
-    assert.match(out.html, /MCP Tools/);
+    // The "500+" value appears literally in the rendered HTML.
+    assert.match(out.html, /500\+/);
   });
 });
 
-describe("Hero dashboard mockup — SaaS only", () => {
-  test("SaaS + cinematic → hero contains the dashboard mockup", () => {
+describe("Hero dashboard mockup — disabled in v1.1.7", () => {
+  // v1.1.7 — the SaaS hero dashboard mockup hardcoded SeldonFrame's
+  // own dashboard preview ("128 Contacts, 42 Active Deals, $24k MRR").
+  // When a workspace was misclassified as SaaS (anything mentioning
+  // "platform"), the visitor saw a stranger's MRR numbers in the hero.
+  // The mockup belongs only on SeldonFrame's own marketing site
+  // (apps/web), not on every operator workspace.
+  test("SaaS + cinematic → no mockup (was on; now removed)", () => {
     const schema = schemaFromSoul({
       business_name: "TestSaaS",
       industry: "saas-developer-tools",
@@ -165,10 +185,14 @@ describe("Hero dashboard mockup — SaaS only", () => {
       tokensForPersonality("cinematic"),
       schema.media
     );
-    assert.match(out.html, /sf-hero__mockup/);
-    assert.match(out.html, /sf-mockup__chrome/);
-    assert.match(out.html, /sf-mockup__sidebar/);
-    assert.match(out.html, /Welcome back/);
+    assert.ok(
+      !out.html.includes("sf-hero__mockup"),
+      "v1.1.7: dashboard mockup HTML must not appear on operator workspaces"
+    );
+    assert.ok(
+      !out.html.includes("sf-mockup__sidebar"),
+      "no fake-sidebar markup either"
+    );
   });
 
   test("SaaS + clean (non-cinematic) → no mockup", () => {

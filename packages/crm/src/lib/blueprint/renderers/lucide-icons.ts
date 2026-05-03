@@ -203,6 +203,10 @@ const RULES: IconRule[] = [
   // Dental
   { icon: "baby", keywords: ["pediatric", "children", "kids dent"] },
   { icon: "smile", keywords: ["dental", "dentist", "tooth", "teeth", "whitening", "implant", "invisalign", "orthodont", "braces", "crown", "veneer", "filling", "smile"] },
+  // v1.1.7 — Med spa / aesthetics treatments
+  { icon: "sparkles", keywords: ["botox", "dysport", "filler", "microneedling", "hydrafacial", "facial", "chemical peel", "anti-aging", "anti aging", "rejuvenation", "skincare"] },
+  { icon: "zap", keywords: ["laser", "ipl", "coolsculpting", "emsculpt", "body contouring", "sculpting"] },
+  { icon: "droplets", keywords: ["iv therapy", "iv drip", "iv hydration", "hydration"] },
   // Medical / health (general — must come AFTER dental so "dental" doesn't
   // fall through to the broader stethoscope match)
   { icon: "stethoscope", keywords: ["medical", "doctor", "physician", "clinic", "exam", "checkup", "diagnos", "consult"] },
@@ -275,6 +279,9 @@ const VERTICAL_DEFAULTS: Record<string, IconName> = {
   legal: "scale",
   agency: "palette",
   coaching: "message_circle",
+  // v1.1.7 — med-spa fallback. Sparkles fits the aesthetics/luxury feel
+  // when an individual treatment name doesn't keyword-match.
+  medspa: "sparkles",
 };
 
 /**

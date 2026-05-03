@@ -110,25 +110,31 @@ export async function seedLandingFromSoul(orgId: string): Promise<SeedLandingRes
     org.soul as unknown as Record<string, unknown>
   );
   const personality = defaultPersonalityForType(businessType);
-  const accent =
-    typeof org.theme?.accentColor === "string" ? org.theme.accentColor : "#14b8a6";
-  const tokens = tokensForPersonality(personality, {
-    palette: { accent },
-  });
 
   // v1.1.4 — Personality-Driven Content Layer.
   // Read the CRMPersonality from org.settings (set at workspace creation
   // by selectCRMPersonality / defensive override in createFullWorkspace),
   // build template vars from the soul, and resolve the personality's
-  // content_templates into final substituted strings. The result is then
-  // overlaid onto a soul COPY so schemaFromSoul's existing enrichHero /
-  // enrichFaq / enrichCta paths pick it up — and applied as direct
-  // section overrides for trust_bar / services-headline / stats / cta
-  // (which schemaFromSoul currently sources from the BusinessType pack
-  // defaults, not the personality).
+  // content_templates into final substituted strings.
   const crmPersonality = readPersonalityFromSettings(
     (org.settings as Record<string, unknown> | null)?.crmPersonality
   );
+
+  // v1.1.7 — per-CRMPersonality default accent. Operators can still
+  // override via update_theme; we only fall through to the personality
+  // default when org.theme.accentColor is unset (the workspace just
+  // got created and no operator customization happened yet). Without
+  // this, every workspace ships with the generic teal #14b8a6 accent
+  // even when the personality has a clear brand archetype (medspa →
+  // gold, dental → fresh blue, hvac → vivid orange).
+  const personalityAccent = personalityDefaultAccent(crmPersonality.vertical);
+  const accent =
+    typeof org.theme?.accentColor === "string"
+      ? org.theme.accentColor
+      : personalityAccent ?? "#14b8a6";
+  const tokens = tokensForPersonality(personality, {
+    palette: { accent },
+  });
   const soulRecordRaw = org.soul as unknown as Record<string, unknown>;
   const templateVars = buildPersonalityVars(soulRecordRaw, org.name);
   const resolvedContent = resolvePersonalityContent(
@@ -271,6 +277,29 @@ export async function seedLandingFromSoul(orgId: string): Promise<SeedLandingRes
     .where(eq(landingPages.id, row.id));
 
   return { ok: true, landingId: row.id };
+}
+
+// ─── v1.1.7 — Per-CRMPersonality default accent color ────────────────────────
+// Mapped to brand archetypes that read as appropriate for each vertical.
+// Operators override via update_theme — we only apply these when no
+// operator customization is on file yet.
+function personalityDefaultAccent(vertical: string | undefined): string | null {
+  switch (vertical) {
+    case "medspa":
+      return "#c9a96e"; // luxury gold
+    case "dental":
+      return "#2e90fa"; // fresh, friendly blue
+    case "hvac":
+      return "#f97316"; // vivid orange (warm + service-trade energetic)
+    case "legal":
+      return "#1e3a8a"; // deep navy (trust, gravitas)
+    case "agency":
+      return "#a855f7"; // creative violet
+    case "coaching":
+      return "#14b8a6"; // existing teal default
+    default:
+      return null;
+  }
 }
 
 // ─── v1.1.4 — Personality-Driven Content helpers ─────────────────────────────
