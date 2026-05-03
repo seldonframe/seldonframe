@@ -437,35 +437,43 @@ function applyResolvedContentToSchema(
 }
 
 /**
- * v1.1.8 — Override hero + footer CTA button labels with the
+ * v1.1.8 / v1.1.9 — Override hero + footer CTA button labels with the
  * personality's content_templates.cta_button_primary /
- * cta_button_secondary. Pack-defined PageActions (e.g. SAAS_PACK's
- * "Get started →") get rewritten to the personality voice
- * ("Book your consultation →" for medspa, "Get a free quote →"
- * for hvac, etc.) so a med spa workspace doesn't ship a generic
- * SaaS button on its hero.
+ * cta_button_secondary, AND structurally enforce the CTA href
+ * contract: primary ALWAYS points at /book, secondary ALWAYS points
+ * at /intake. The href is hardcoded here, never read from the pack
+ * or personality config — making the historical "CTA swap" bug
+ * (LOCAL_SERVICE_PACK had primary→/intake, SAAS_PACK same, etc.)
+ * structurally impossible.
  *
- * Hrefs are preserved (CTAs still point at /book / /intake); only
- * the visible label changes. Operators who edit a CTA via
- * update_landing_section retain their override (we only touch the
- * pack-default labels that match the SAAS_PACK / LOCAL_SERVICE_PACK
- * generic copy).
+ * Operators who manually edit a CTA via update_landing_section after
+ * workspace creation retain their override; this runs at seed time only.
  */
 function applyResolvedContentToActions(
   schema: PageSchema,
   resolved: ResolvedPersonalityContent | null
 ): void {
-  if (!resolved) return;
-  const primary = resolved.cta_button_primary?.trim();
-  const secondary = resolved.cta_button_secondary?.trim();
-  if (!primary && !secondary) return;
+  const primaryLabel = resolved?.cta_button_primary?.trim();
+  const secondaryLabel = resolved?.cta_button_secondary?.trim();
 
   schema.actions = schema.actions.map((action) => {
-    if (action.id === "hero_primary" && primary) {
-      return { ...action, text: primary };
+    if (action.id === "hero_primary") {
+      // v1.1.9 — primary CTA is ALWAYS /book. Label from personality
+      // when available, otherwise leave the pack-default label
+      // (already operator-friendly).
+      return {
+        ...action,
+        href: "/book",
+        text: primaryLabel || action.text,
+      };
     }
-    if (action.id === "hero_secondary" && secondary) {
-      return { ...action, text: secondary };
+    if (action.id === "hero_secondary") {
+      // v1.1.9 — secondary CTA is ALWAYS /intake.
+      return {
+        ...action,
+        href: "/intake",
+        text: secondaryLabel || action.text,
+      };
     }
     return action;
   });

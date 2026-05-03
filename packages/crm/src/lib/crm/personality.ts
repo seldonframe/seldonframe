@@ -129,12 +129,31 @@ export interface PersonalityContentTemplates {
   bottom_cta_trust_points: string[];
 }
 
+/**
+ * v1.1.9 — explicit intake-form metadata. The `intakeFields` array
+ * (kept for backward compat) only declares the field schema; intake
+ * forms also need a personality-specific title + lead-in description
+ * so the public form doesn't ship with the generic "Get in touch"
+ * heading. Optional — personalities without `intake` fall back to
+ * the workspace name + a neutral default.
+ */
+export interface PersonalityIntakeMeta {
+  /** Form heading shown at the top of the public intake page.
+   *  e.g. "Request a Treatment Consultation" (medspa),
+   *       "Tell us about your project" (agency). */
+  title: string;
+  /** One-sentence lead-in below the title. */
+  description?: string;
+}
+
 export interface CRMPersonality {
   vertical: PersonalityVertical;
   terminology: PersonalityTerminology;
   pipeline: PersonalityPipeline;
   contactFields: PersonalityContactFields;
   intakeFields: PersonalityIntakeField[];
+  /** v1.1.9 — optional intake-form metadata. */
+  intake?: PersonalityIntakeMeta;
   dashboard: PersonalityDashboard;
   /** May 2, 2026 — landing-page content templates. Optional for
    *  backward compat; personalities without templates fall back to
@@ -198,6 +217,10 @@ const HVAC_PERSONALITY: CRMPersonality = {
     { key: "system_type", label: "System type", type: "select", required: false, options: ["Central AC", "Heat Pump", "Furnace", "Mini-split", "Boiler", "Not sure"] },
     { key: "issue", label: "What's going on?", type: "textarea", required: true },
   ],
+  intake: {
+    title: "Request Service",
+    description: "Tell us what's going on and we'll get back to you with a quote.",
+  },
   dashboard: {
     primaryMetrics: [
       { key: "open_jobs", label: "Open Jobs", icon: "Wrench", tone: "primary" },
@@ -304,6 +327,10 @@ const LEGAL_PERSONALITY: CRMPersonality = {
     { key: "opposing_party", label: "Opposing party (for conflict check)", type: "text", required: false },
     { key: "summary", label: "Brief summary of your situation", type: "textarea", required: true },
   ],
+  intake: {
+    title: "Request a Free Consultation",
+    description: "Confidential, no commitment. We'll listen first and only recommend retaining us if we genuinely think we can help.",
+  },
   dashboard: {
     primaryMetrics: [
       { key: "active_cases", label: "Active Cases", icon: "Briefcase", tone: "primary" },
@@ -411,6 +438,10 @@ const DENTAL_PERSONALITY: CRMPersonality = {
     { key: "insurance_provider", label: "Insurance provider", type: "text", required: false },
     { key: "primary_concern", label: "What brings you in?", type: "textarea", required: true },
   ],
+  intake: {
+    title: "Request an Appointment",
+    description: "New patients welcome. We'll confirm your appointment and verify your insurance ahead of your visit.",
+  },
   dashboard: {
     primaryMetrics: [
       { key: "active_patients", label: "Active Patients", icon: "Users", tone: "primary" },
@@ -516,6 +547,10 @@ const COACHING_PERSONALITY: CRMPersonality = {
     { key: "company", label: "Company / role", type: "text", required: false },
     { key: "goals", label: "What do you want to work on?", type: "textarea", required: true },
   ],
+  intake: {
+    title: "Apply to Work With Us",
+    description: "Tell us about your goals. We'll be in touch within 2 business days to set up a discovery call.",
+  },
   dashboard: {
     primaryMetrics: [
       { key: "active_clients", label: "Active Clients", icon: "Users", tone: "primary" },
@@ -527,6 +562,57 @@ const COACHING_PERSONALITY: CRMPersonality = {
       { key: "discovery_no_followup_3d", label: "Discovery calls without follow-up > 3d", severity: "warning" },
       { key: "proposals_open_14d", label: "Proposals open > 14d", severity: "warning" },
       { key: "ending_engagements_30d", label: "Engagements ending in 30d (renewal)", severity: "info" },
+    ],
+  },
+  content_templates: {
+    hero_headlines: [
+      "Real Results in 90 Days[ — {rating}★ from {review_count}+ Clients]",
+      "[{city}'s ]Coaching for High-Performers — Free Discovery Call",
+      "Get Unstuck. Book a free discovery call.[ {review_count}+ clients ][served].",
+    ],
+    hero_subheadline:
+      "Personalized 1:1 coaching · Certified · No commitment until you're ready to enroll.",
+    trust_badges: [
+      "[{rating}★ from {review_count}+ clients]",
+      "Free discovery call",
+      "Certified coach",
+      "No long-term lock-in",
+    ],
+    services_heading: "How I help clients move forward",
+    faqs: [
+      {
+        question: "What's your approach?",
+        answer_template:
+          "Every engagement starts with a free discovery call so we can understand your goals before recommending anything. Sessions are personalized — no rigid frameworks.",
+      },
+      {
+        question: "How long is a typical engagement?",
+        answer_template:
+          "Engagements range from a single intensive to multi-month programs. We'll tailor the timeline at your discovery call based on what you actually need.",
+      },
+      {
+        question: "What are your qualifications?",
+        answer_template:
+          "Certified, with experience working with executives, founders, and operators across multiple industries. Happy to share references on request.",
+      },
+      {
+        question: "How does pricing work?",
+        answer_template:
+          "Quoted per engagement, not per session. We'll talk numbers on the discovery call once we understand your scope.",
+      },
+      {
+        question: "How do I book?",
+        answer_template:
+          "Hit the discovery-call button above[ or reach me at {phone}].",
+      },
+    ],
+    cta_button_primary: "Book a free discovery call →",
+    cta_button_secondary: "Tell us about your goals →",
+    bottom_cta_heading: "Book your free discovery call",
+    bottom_cta_trust_points: [
+      "30-minute call",
+      "No commitment",
+      "Honest assessment",
     ],
   },
 };
@@ -572,6 +658,10 @@ const AGENCY_PERSONALITY: CRMPersonality = {
     { key: "budget_range", label: "Budget range", type: "select", required: true, options: ["< $10k", "$10k–$25k", "$25k–$50k", "$50k–$100k", "$100k+"] },
     { key: "brief", label: "Project brief", type: "textarea", required: true },
   ],
+  intake: {
+    title: "Tell Us About Your Project",
+    description: "Share the brief, budget, and timeline. We'll come back with a proposal tailored to your goals.",
+  },
   dashboard: {
     primaryMetrics: [
       { key: "active_projects", label: "Active Projects", icon: "Briefcase", tone: "primary" },
@@ -583,6 +673,57 @@ const AGENCY_PERSONALITY: CRMPersonality = {
       { key: "proposals_open_10d", label: "Proposals open > 10d", severity: "warning" },
       { key: "projects_overdue", label: "Projects overdue", severity: "danger" },
       { key: "retainers_renewal_30d", label: "Retainers up for renewal in 30d", severity: "info" },
+    ],
+  },
+  content_templates: {
+    hero_headlines: [
+      "Brands That Convert[ — {rating}★ from {review_count}+ Clients]",
+      "[{city}'s ]Creative Studio — Brand, Web, Campaigns",
+      "Strategy Meets Craft.[ {review_count}+ Projects Shipped.]",
+    ],
+    hero_subheadline:
+      "Brand-led, performance-minded · Senior team, no juniors · Project + retainer engagements.",
+    trust_badges: [
+      "[{rating}★ from {review_count}+ clients]",
+      "Senior team",
+      "Strategy + craft",
+      "Performance-minded",
+    ],
+    services_heading: "Selected work",
+    faqs: [
+      {
+        question: "How do you scope a project?",
+        answer_template:
+          "Every engagement starts with a free strategy call. We share rough effort + budget bands at the call, then send a tailored proposal within 48 hours.",
+      },
+      {
+        question: "What's your typical engagement size?",
+        answer_template:
+          "Sprints from $10k–$25k, full brand or website builds from $25k–$75k, retainers from $5k/mo. We'll quote you specifically based on scope.",
+      },
+      {
+        question: "Who works on my project?",
+        answer_template:
+          "Senior team only — no juniors. The strategist + designer who pitched stay on through delivery.",
+      },
+      {
+        question: "How long does a project take?",
+        answer_template:
+          "Brand sprints: 2–4 weeks. Websites: 4–8 weeks. Campaigns: depends on scope. We'll set timeline at scoping.",
+      },
+      {
+        question: "Do you take on retainers?",
+        answer_template:
+          "Yes, after a successful project together. Retainers cover ongoing creative + strategy at a discounted rate vs project work.",
+      },
+    ],
+    cta_button_primary: "Book a strategy call →",
+    cta_button_secondary: "Tell us about your project →",
+    bottom_cta_heading: "Let's build something worth talking about",
+    bottom_cta_trust_points: [
+      "Senior team",
+      "Strategy + craft",
+      "Free first call",
     ],
   },
 };
@@ -636,6 +777,10 @@ const MEDSPA_PERSONALITY: CRMPersonality = {
     { key: "areas_of_interest", label: "What treatments are you interested in?", type: "textarea", required: true },
     { key: "medical_alerts", label: "Any allergies or medical conditions we should know about?", type: "textarea", required: false },
   ],
+  intake: {
+    title: "Request a Treatment Consultation",
+    description: "Complimentary, no commitment. We'll assess your goals and walk you through a personalized treatment plan.",
+  },
   dashboard: {
     primaryMetrics: [
       { key: "active_clients", label: "Active Clients", icon: "Users", tone: "primary" },

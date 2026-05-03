@@ -32,6 +32,10 @@ import { selectCRMPersonality } from "@/lib/crm/personality";
 import { classifyBusinessTypeFromSoul } from "@/lib/page-schema/classify-business";
 import { inferTimezone } from "@/lib/workspace/infer-timezone";
 import { trackEvent } from "@/lib/analytics/track";
+import {
+  logOutputContractResult,
+  validateWorkspaceOutputContract,
+} from "./output-contract-validator";
 
 // ─── Input + Output contracts ────────────────────────────────────────────────
 
@@ -314,6 +318,45 @@ export async function createFullWorkspace(
       status: "error",
       error: { step: validationResult.step, message: validationResult.message },
     };
+  }
+
+  // v1.1.9 — Step 13b: OUTPUT CONTRACT VALIDATOR.
+  // Inspects the actual rendered HTML + DB rows against the personality
+  // + operator input. Logs every check (pass/fail/warn) for observability;
+  // does NOT block workspace creation. Failures surface in Vercel
+  // function logs paired with workspace_id + personality so a recurring
+  // bug across operators can be diagnosed by querying the structured logs.
+  //
+  // The user spec (May 3, 2026): "These aren't 'fixes.' They're
+  // assertions the validator would catch. Implement the validator,
+  // then make these assertions pass. Every future niche inherits the
+  // same assertions automatically."
+  try {
+    const contractResult = await validateWorkspaceOutputContract(
+      createResult.orgId,
+      {
+        business_name: input.business_name,
+        city: input.city,
+        state: stateCode,
+        services: input.services,
+        review_count: input.review_count,
+        review_rating: input.review_rating,
+      },
+      personality,
+      timezone,
+    );
+    logOutputContractResult(createResult.orgId, personality, contractResult);
+  } catch (err) {
+    // Validator failures are observational only — must NEVER block
+    // workspace creation. Log the error and proceed.
+    console.error(
+      JSON.stringify({
+        event: "workspace_output_contract_threw",
+        workspace_id: createResult.orgId,
+        personality: personality.vertical,
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    );
   }
 
   // Public URL set — same shape as buildWorkspaceUrls but assembled

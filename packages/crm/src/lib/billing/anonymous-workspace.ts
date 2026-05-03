@@ -370,6 +370,11 @@ export async function createAnonymousWorkspace(
       theme: "dark",
       blueprint: seedBlueprint,
       personalityIntakeFields: personality.intakeFields,
+      // v1.1.9 — pass the personality's intake title so the public
+      // intake form ships with personality-specific copy
+      // ("Request a Treatment Consultation" for medspa instead of
+      // a generic "Tell us about your project").
+      intakeTitle: personality.intake?.title,
       // v1.1.4 / Issue #5 — surface the operator's actual services as
       // a select dropdown on the intake form so leads come in pre-
       // routed (e.g. "Invisalign" vs "Cleaning" vs "Emergency").

@@ -37,6 +37,13 @@ export type TemplateOpts = {
    * to triage before they can route.
    */
   servicesForIntake?: string[];
+  /**
+   * v1.1.9 — personality-specific intake form title. When set, replaces
+   * the default "Get in touch" / blueprint-derived title so a med spa
+   * workspace ships "Request a Treatment Consultation" instead of
+   * generic copy. Comes from CRMPersonality.intake.title.
+   */
+  intakeTitle?: string;
 };
 
 const DEFAULT_BOOKING_SLUG = "default";
@@ -175,8 +182,13 @@ export async function createDefaultIntakeForm(
   // than the Blueprint's IntakeQuestion (the public form needs less
   // metadata server-side because the rendered HTML carries everything).
   // We map a minimal projection into the existing column.
+  //
+  // v1.1.9 — opts.intakeTitle (sourced from CRMPersonality.intake.title)
+  // wins over the blueprint's title and the generic "Get in touch"
+  // fallback. This is what makes the intake form ship with personality-
+  // specific copy out of the box.
   const intake = opts.blueprint?.intake;
-  const name = intake?.title ?? "Get in touch";
+  const name = opts.intakeTitle?.trim() || intake?.title || "Get in touch";
   const personalityFields = opts.personalityIntakeFields ?? null;
   let mappedFields: Array<{
     key: string;
