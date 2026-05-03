@@ -177,13 +177,24 @@ const IMAGES: Partial<Record<PersonalityVertical, PersonalityImageBundle>> = {
 };
 
 /**
- * Look up a personality's curated image bundle. Returns null when the
- * personality has no curated images (rare — every built-in vertical has
- * one). Callers should fall back to text-only rendering when null.
+ * Look up a personality's curated image bundle. Returns the GENERAL
+ * bundle as a last-resort fallback so workspaces with LLM-generated
+ * personalities (whose `vertical` value is whatever the model picked
+ * — "roofing", "pet-grooming", "tax-prep", etc.) still render with
+ * SOMETHING in the hero rather than text-only. v1.3.1 — added the
+ * fallback after the Ironclad Roofing demo showed a text-only hero
+ * (default personality wasn't in the IMAGES map).
  */
 export function getPersonalityImages(
   vertical: PersonalityVertical | string | null | undefined
 ): PersonalityImageBundle | null {
-  if (!vertical) return null;
-  return IMAGES[vertical as PersonalityVertical] ?? null;
+  if (vertical) {
+    const exact = IMAGES[vertical as PersonalityVertical];
+    if (exact) return exact;
+  }
+  // Fallback: GENERAL bundle (workshop / contractor / blueprints —
+  // generic enough to fit any service business). Callers that
+  // specifically need to detect "no curated bundle" can compare the
+  // returned object identity against IMAGES.general.
+  return IMAGES.general ?? null;
 }

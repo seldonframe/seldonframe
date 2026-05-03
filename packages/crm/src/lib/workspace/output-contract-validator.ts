@@ -369,6 +369,29 @@ export async function validateWorkspaceOutputContract(
     });
   }
 
+  // 7b. v1.3.1 — hero background image present.
+  // applyPersonalityImagesToSchema sets section.content.imageUrl;
+  // renderHero emits .sf-hero__bg with the image URL. If the rendered
+  // HTML doesn't have .sf-hero__bg, the personality's image bundle
+  // didn't fire (vertical not in IMAGES map, or applyPersonalityImages
+  // ToSchema skipped because imageUrl was already set, or seed soul
+  // path didn't run).
+  const hasHeroBg = html.includes("sf-hero__bg");
+  const hasHeroImageUrl = /background-image:\s*url\([^)]*unsplash\.com/.test(
+    html,
+  );
+  checks.push({
+    surface: "hero_background_image",
+    status: hasHeroBg && hasHeroImageUrl ? "pass" : "warn",
+    expected: "sf-hero__bg div with Unsplash background-image URL",
+    actual: hasHeroBg
+      ? hasHeroImageUrl
+        ? "present"
+        : "div present but no Unsplash URL"
+      : "missing (text-only hero)",
+    severity: "cosmetic",
+  });
+
   // ─── CRM checks ──────────────────────────────────────────────────────────
 
   // 8. Pipeline stages match personality.
@@ -422,21 +445,71 @@ export async function validateWorkspaceOutputContract(
   });
 
   // 12. Booking has actual availability hours (not just a row stub).
-  // Detected by inspecting metadata.availability or startsAt/endsAt.
+  // v1.3.1 — the canonical metadata.availability shape is per-day
+  // { enabled, start, end } (full day names: "monday"/"tuesday"/...)
+  // — which is what resolvePublicBookingContext +
+  // listPublicBookingSlotsAction read. Pre-v1.3.1 the seed wrote
+  // { weekdays: ["mon",...], startHour, endHour } which was a
+  // different shape entirely; the validator now asserts the
+  // canonical shape so any future regression is caught.
   if (bookingTemplate) {
     const meta = (bookingTemplate.metadata ?? {}) as {
-      availability?: { weekly?: Record<string, unknown> } | null;
+      availability?: Record<string, { enabled?: boolean }> | null;
     };
-    const weekly = meta.availability?.weekly ?? {};
-    const dayCount = Object.values(weekly).filter(
-      (v) => v !== null && v !== undefined,
-    ).length;
+    const availability = meta.availability ?? {};
+    const enabledDays = ([
+      "monday",
+      "tuesday",
+      "wednesday",
+      "thursday",
+      "friday",
+      "saturday",
+      "sunday",
+    ] as const).filter((d) => availability[d]?.enabled === true);
     checks.push({
-      surface: "booking_availability",
-      status: dayCount > 0 ? "pass" : "fail",
-      expected: "≥1 day with hours configured",
-      actual: `${dayCount} days configured`,
+      surface: "booking_availability_enabled_days",
+      status: enabledDays.length > 0 ? "pass" : "fail",
+      expected: "≥1 day enabled in metadata.availability (canonical shape)",
+      actual:
+        enabledDays.length > 0
+          ? enabledDays.join(", ")
+          : `0 enabled (metadata.availability=${JSON.stringify(availability).slice(0, 80)})`,
       severity: "blocking",
+    });
+  }
+
+  // 12b. Booking page rendered HTML embeds a working slot generator.
+  // The calcom-month-v1 renderer embeds availability.weekly in a JSON
+  // data-island the client-side script reads. If the booking template
+  // row's contentHtml is missing this island, the React fallback path
+  // is used and we should at least log it so we know which workspaces
+  // shipped without the rich renderer.
+  if (bookingTemplate) {
+    const [bookingRendered] = await db
+      .select({ contentHtml: bookings.contentHtml })
+      .from(bookings)
+      .where(
+        and(
+          eq(bookings.orgId, workspaceId),
+          eq(bookings.status, "template"),
+        ),
+      )
+      .limit(1);
+    const bookingHtml = bookingRendered?.contentHtml ?? "";
+    const hasIsland = bookingHtml.includes("sf-booking-data");
+    const hasWeekly =
+      bookingHtml.includes('"weekly"') &&
+      /"mon"\s*:\s*\[/.test(bookingHtml);
+    checks.push({
+      surface: "booking_renderer_data_island",
+      status: hasIsland && hasWeekly ? "pass" : "warn",
+      expected: "JSON data-island with weekly schedule",
+      actual: hasIsland
+        ? hasWeekly
+          ? "present + weekly populated"
+          : "island present but weekly empty"
+        : "no island (React fallback path)",
+      severity: "cosmetic",
     });
   }
 
@@ -453,14 +526,35 @@ export async function validateWorkspaceOutputContract(
 
   if (intake) {
     // 14. Intake title matches personality (when personality declares one).
+    // v1.3.1 — also assert the title appears in the RENDERED HTML
+    // (not just the DB row's `name` column). The Formbricks renderer
+    // reads blueprint.intake.title for the form heading; v1.1.9 only
+    // updated the DB column, missing the rendered heading. This check
+    // catches the gap.
     const expectedTitle = personality.intake?.title;
     if (expectedTitle) {
       checks.push({
-        surface: "intake_title",
+        surface: "intake_title_db_row",
         status: intake.name === expectedTitle ? "pass" : "warn",
         expected: expectedTitle,
         actual: intake.name ?? "(empty)",
         severity: "cosmetic",
+      });
+
+      // Pull the rendered intake HTML to check the form heading.
+      const [intakeRendered] = await db
+        .select({ contentHtml: intakeForms.contentHtml })
+        .from(intakeForms)
+        .where(eq(intakeForms.orgId, workspaceId))
+        .limit(1);
+      const intakeHtml = intakeRendered?.contentHtml ?? "";
+      const rendered = intakeHtml.includes(expectedTitle);
+      checks.push({
+        surface: "intake_title_rendered_html",
+        status: rendered ? "pass" : "fail",
+        expected: `"${expectedTitle}" in rendered intake HTML`,
+        actual: rendered ? "present" : "missing (still showing template default)",
+        severity: "blocking",
       });
     }
 

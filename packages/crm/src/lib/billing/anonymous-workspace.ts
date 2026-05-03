@@ -300,6 +300,51 @@ export async function createAnonymousWorkspace(
     seedBlueprint.booking.eventType.description = bookingDefault.description;
   }
 
+  // v1.3.1 / BUG 2 — propagate personality.intake.title onto
+  // seedBlueprint.intake.title. The Formbricks renderer reads
+  // blueprint.intake.title as the rendered form heading; without
+  // this mutation, every workspace ships with the JSON template's
+  // "Tell us about your project" regardless of personality. Fixing
+  // the DB row's `name` column (v1.1.9) was necessary but not
+  // sufficient — the rendered HTML's heading needs the same source.
+  if (personality.intake?.title && seedBlueprint.intake) {
+    seedBlueprint.intake.title = personality.intake.title;
+  }
+  if (personality.intake?.description && seedBlueprint.intake) {
+    seedBlueprint.intake.description = personality.intake.description;
+  }
+
+  // v1.3.1 / BUG 2 — also propagate personality.intakeFields onto
+  // seedBlueprint.intake.questions. The Formbricks renderer iterates
+  // questions to produce one panel per question; without this, every
+  // workspace ships with the JSON template's generic 4-question
+  // form regardless of the personality's domain-specific fields
+  // (e.g. dental's date_of_birth + insurance_provider).
+  if (personality.intakeFields?.length && seedBlueprint.intake) {
+    // Map PersonalityIntakeField → IntakeQuestion. Type vocabularies
+    // overlap mostly; map the few exceptions: tel→phone (Formbricks
+    // uses "phone"), checkbox→select with Yes/No options (Formbricks
+    // doesn't have a dedicated boolean type).
+    seedBlueprint.intake.questions = personality.intakeFields.map((f) => {
+      if (f.type === "checkbox") {
+        return {
+          id: f.key,
+          type: "select" as const,
+          label: f.label,
+          required: f.required,
+          options: f.options ?? ["Yes", "No"],
+        };
+      }
+      return {
+        id: f.key,
+        type: f.type === "tel" ? ("phone" as const) : f.type,
+        label: f.label,
+        required: f.required,
+        options: f.options,
+      };
+    });
+  }
+
   // v1.1.4 / Issue #5 — inject a "Service interested in" select into
   // the intake blueprint so the RENDERED form picks it up alongside
   // the mappedFields stored on the row. Without this, the rendered

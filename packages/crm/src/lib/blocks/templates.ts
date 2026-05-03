@@ -113,6 +113,26 @@ export async function createDefaultBookingTemplate(
     opts.blueprint?.booking.confirmation.message ??
     "Thanks! Check your email for the confirmation.";
 
+  // v1.3.1 / BUG 1 — metadata.availability MUST be in the shape
+  // resolvePublicBookingContext / listPublicBookingSlotsAction expect:
+  //   { monday: { enabled: bool, start: "HH:MM", end: "HH:MM" }, ... }
+  // (full day names, not abbreviations).
+  //
+  // Prior code wrote { weekdays: ["mon",...], startHour, endHour } — a
+  // completely different shape. The reader's normalizeAvailability fell
+  // back to defaults silently (Mon-Fri 9-17 enabled) which MASKED the
+  // bug for the happy path but broke:
+  //   - the React fallback PublicBookingForm (slots came from defaults
+  //     not from the blueprint's actual hours)
+  //   - the per-personality booking hours (HVAC's Mon-Sat 7-19 was
+  //     never honored because the template wrote the wrong shape)
+  //   - the validator's booking_availability check
+  //
+  // Source the schedule from blueprint.booking.availability.weekly when
+  // present (rich per-day data); fall back to a safe Mon-Fri 9-17.
+  const blueprintWeekly = opts.blueprint?.booking.availability.weekly;
+  const availability = buildAppointmentAvailabilityFromBlueprint(blueprintWeekly);
+
   const now = new Date();
   const metadata = {
     appointmentName: title,
@@ -120,11 +140,7 @@ export async function createDefaultBookingTemplate(
     durationMinutes,
     confirmationMessage,
     theme: opts.theme ?? "dark",
-    availability: {
-      weekdays: ["mon", "tue", "wed", "thu", "fri"],
-      startHour: 9,
-      endHour: 17,
-    },
+    availability,
   };
 
   const rendered = opts.blueprint ? renderCalcomMonthV1(opts.blueprint) : null;
@@ -376,6 +392,56 @@ function buildAndRender(workspaceName: string, industry: string | null) {
 // page body comes from the blueprint renderer (general-service-v1) which
 // sources its own copy from the resolved blueprint's hero/about sections.
 const SEEDED_HOME_SUBHEAD = "Book a call or send us a note — we'll get back to you.";
+
+// v1.3.1 — convert blueprint's weekly schedule (e.g. { mon: [9, 17],
+// tue: [9, 17], sat: null, ... }) into the per-day { enabled, start,
+// end } shape the booking actions read. Keeps a single source of
+// truth (blueprint.booking.availability.weekly) and writes it in the
+// shape the rest of the system expects.
+type BlueprintWeekly = NonNullable<
+  NonNullable<Blueprint["booking"]>["availability"]
+>["weekly"];
+
+function pad2Hour(n: number): string {
+  return n < 10 ? `0${n}:00` : `${n}:00`;
+}
+
+function buildAppointmentAvailabilityFromBlueprint(
+  weekly: BlueprintWeekly | undefined | null,
+): Record<string, { enabled: boolean; start: string; end: string }> {
+  // Blueprint uses 3-letter keys (mon/tue); booking actions use full
+  // names (monday/tuesday). Map between them.
+  const dayMap: Array<[keyof NonNullable<BlueprintWeekly>, string]> = [
+    ["sun", "sunday"],
+    ["mon", "monday"],
+    ["tue", "tuesday"],
+    ["wed", "wednesday"],
+    ["thu", "thursday"],
+    ["fri", "friday"],
+    ["sat", "saturday"],
+  ];
+  const out: Record<string, { enabled: boolean; start: string; end: string }> = {};
+  for (const [shortKey, fullKey] of dayMap) {
+    const range = weekly?.[shortKey];
+    if (range && Array.isArray(range) && range.length === 2) {
+      const [start, end] = range;
+      if (typeof start === "number" && typeof end === "number" && start < end) {
+        out[fullKey] = { enabled: true, start: pad2Hour(start), end: pad2Hour(end) };
+        continue;
+      }
+    }
+    // Default Mon-Fri 9-17 enabled, weekend disabled — matches the
+    // server-side defaultAvailabilitySchedule() so behavior is the
+    // same regardless of which path constructs the schedule.
+    const isWeekend = fullKey === "saturday" || fullKey === "sunday";
+    out[fullKey] = {
+      enabled: !isWeekend,
+      start: "09:00",
+      end: "17:00",
+    };
+  }
+  return out;
+}
 
 export const DEFAULT_SLUGS = {
   booking: DEFAULT_BOOKING_SLUG,

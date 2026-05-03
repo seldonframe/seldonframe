@@ -31,10 +31,23 @@ describe("getPersonalityImages", () => {
     });
   }
 
-  test("returns null for unknown vertical", () => {
-    assert.equal(getPersonalityImages("nonexistent"), null);
-    assert.equal(getPersonalityImages(null), null);
-    assert.equal(getPersonalityImages(undefined), null);
+  test("v1.3.1 — falls back to GENERAL bundle for unknown verticals", () => {
+    // Pre-v1.3.1: returned null for unknown verticals → workspaces with
+    // LLM-generated personalities (vertical = "roofing", "pet-grooming",
+    // etc.) shipped text-only heroes. Now falls back to GENERAL_IMAGES
+    // so every workspace renders with industry-neutral photography.
+    const general = getPersonalityImages("general");
+    assert.ok(general, "GENERAL_IMAGES must be defined");
+
+    const unknown = getPersonalityImages("nonexistent");
+    assert.equal(unknown, general, "unknown vertical → GENERAL fallback");
+
+    const llmGenerated = getPersonalityImages("pet-grooming");
+    assert.equal(llmGenerated, general, "LLM-generated vertical → GENERAL fallback");
+
+    // null/undefined still resolve to GENERAL (graceful degradation).
+    assert.equal(getPersonalityImages(null), general);
+    assert.equal(getPersonalityImages(undefined), general);
   });
 
   test("hero URL carries the canonical Unsplash sizing params (w=1600&h=900)", () => {
