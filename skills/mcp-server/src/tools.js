@@ -2433,6 +2433,233 @@ export const TOOLS = [
       return result;
     },
   },
+
+  // ─── v1.4.0 — v2 (MCP-native) workspace creation ────────────────────────
+  //
+  // The v2 flow shifts block GENERATION out of the SF backend and into the
+  // IDE agent's LLM context. Operator's IDE agent (Claude Code, Cursor,
+  // Windsurf, etc.) reads each block's SKILL.md, generates props with its
+  // own LLM, and posts the props back to SF. SF persists + renders.
+  //
+  // PREFERRED for new workspace creation as of v1.4. The v1
+  // create_full_workspace tool above still works (and v1 still owns
+  // booking, intake, about, theme, pipeline) — v2 only owns hero, services,
+  // and faq for now (the highest-stakes copy surfaces, where the v1 layer-
+  // mismatch bug class hurt most).
+
+  {
+    name: "create_workspace_v2",
+    description:
+      "PREFERRED for new workspaces (v1.4+). MCP-native workspace creation: bootstraps the workspace via the v1 orchestrator (CRM, booking, intake, theme, pipeline) AND returns a list of v2 page blocks the IDE agent will now generate using its own LLM. " +
+      "Flow: 1) call this tool with the operator's business info; 2) for each block in `v2.recommended_blocks`, call get_block_skill(name) and use your LLM to generate props matching the SKILL.md prompt + schema; 3) call persist_block({ workspace_id, block_name, generation_prompt, props }) for each; 4) call complete_workspace_v2({ workspace_id }). " +
+      "MANDATORY FOLLOW-UP: After this returns `status: 'ready'` AND after all blocks land via persist_block + complete_workspace_v2, ask the operator verbatim 'What email should I use for your account?' Then call finalize_workspace({ workspace_id, email }). The admin dashboard URL is created by finalize_workspace, not here. " +
+      "Why v2: v1 generated all copy server-side from a hardcoded personality system, which produced layer-mismatch bugs every time a new niche was tested. v2 puts the LLM in your context (the IDE agent), reads from one SKILL.md per block, and the generated copy is naturally niche-aware. The operator can later say 'change the hero' and you customize it via persist_block with a customization payload.",
+    inputSchema: obj(
+      {
+        business_name: str("Business display name."),
+        city: str("Operator's city. Drives timezone inference."),
+        state: str("US state code or full name (or Canadian province)."),
+        phone: str("Business phone, any format."),
+        services: {
+          type: "array",
+          description: "Services / offerings the business provides — each as a plain string.",
+          items: { type: "string" },
+        },
+        business_description: str(
+          "One paragraph describing the business — drives the personality classifier and feeds into block prompts."
+        ),
+        review_count: { type: "number", description: "Optional — number of reviews." },
+        review_rating: { type: "number", description: "Optional — average star rating." },
+        certifications: { type: "array", items: { type: "string" } },
+        trust_signals: { type: "array", items: { type: "string" } },
+        emergency_service: { type: "boolean" },
+        same_day: { type: "boolean" },
+        service_area: { type: "array", items: { type: "string" } },
+        email: str("Optional contact email surfaced in the landing footer (NOT the operator's account email)."),
+        address: str("Optional business address."),
+      },
+      ["business_name", "city", "state", "phone", "services", "business_description"],
+    ),
+    handler: async (args) => {
+      const firstEver = isFirstEverCall();
+      const result = await api("POST", "/workspace/v2/create", {
+        body: {
+          business_name: args.business_name,
+          city: args.city,
+          state: args.state,
+          phone: args.phone,
+          services: args.services,
+          business_description: args.business_description,
+          review_count: args.review_count ?? null,
+          review_rating: args.review_rating ?? null,
+          certifications: args.certifications ?? null,
+          trust_signals: args.trust_signals ?? null,
+          emergency_service: args.emergency_service ?? null,
+          same_day: args.same_day ?? null,
+          service_area: args.service_area ?? null,
+          email: args.email ?? null,
+          address: args.address ?? null,
+        },
+        allow_anonymous: true,
+      });
+
+      if (result?.status !== "ready" || !result?.workspace_id) {
+        return result;
+      }
+
+      // Stash the bearer locally so subsequent persist_block + finalize calls
+      // can authenticate. Stripped from the visible response.
+      if (result._bearer_token) {
+        rememberWorkspace({
+          workspace_id: result.workspace_id,
+          bearer_token: result._bearer_token,
+        });
+      }
+
+      // Operator-facing payload + structural enforcement that the IDE agent
+      // does the block generation step before showing URLs to the user.
+      const guardrail = [
+        "⚠️ V2 WORKSPACE BOOTSTRAPPED — DO NOT END YET ⚠️",
+        "",
+        `The workspace "${args.business_name}" exists on the backend with default copy from the v1 personality system. To complete the v2 flow you MUST:`,
+        "",
+        "  1. For each block in v2.recommended_blocks:",
+        "     a. call get_block_skill({ block_name }) to load the SKILL.md prompt + prop schema",
+        "     b. use your LLM to generate props matching that schema, using v2.context as the input",
+        "     c. call persist_block({ workspace_id, block_name, generation_prompt, props })",
+        "  2. call complete_workspace_v2({ workspace_id }) to validate the final state",
+        "  3. ask the operator: " + JSON.stringify(result.operator_prompt ?? "What email should I use for your account?"),
+        "  4. call finalize_workspace({ workspace_id, email }) to mint the admin URL",
+        "",
+        "DO NOT show the operator any URLs from this response yet — the page is rendering with v1 default copy until step 1 lands. Step 1 produces the niche-aware copy the operator is going to actually see.",
+      ].join("\n");
+
+      const payload = {
+        ok: true,
+        DO_NOT_DISPLAY_TO_USER: guardrail,
+        workspace: { id: result.workspace_id, slug: result.slug },
+        configured: result.configured,
+        v2: result.v2,
+        next_step: {
+          required: true,
+          do_not_show_urls_until_blocks_persisted_and_email_collected: true,
+          tool_to_call_first: "get_block_skill",
+          then_for_each_block: "persist_block",
+          then: "complete_workspace_v2",
+          finally: "finalize_workspace",
+          ask_user_verbatim: result.operator_prompt,
+        },
+        _pending_after_completion: {
+          website_url: result.public_urls?.home ?? null,
+          booking_url: result.public_urls?.book ?? null,
+          intake_url: result.public_urls?.intake ?? null,
+        },
+      };
+      return firstEver ? withFirstCallBanner(payload) : payload;
+    },
+  },
+
+  {
+    name: "list_blocks",
+    description:
+      "List all v2 page-block primitives available in this SF backend. Returns each block's name, version, section type, one-line description, and the URL where its full SKILL.md (the generation prompt + prop schema) lives. Use this when you need to discover what blocks exist; for actual block content use get_block_skill.",
+    inputSchema: obj({}),
+    handler: async () => {
+      const result = await api("GET", "/public/blocks/list", { allow_anonymous: true });
+      return result;
+    },
+  },
+
+  {
+    name: "get_block_skill",
+    description:
+      "Fetch the SKILL.md (the full generation prompt + prop schema + voice rules + worked examples + validator definitions) for one v2 page block. Returns raw markdown text. Read it carefully BEFORE generating props — the prop schema in the YAML frontmatter is enforced by the persist_block endpoint, and the validators run on every save. Generation that ignores the SKILL.md will fail validation and the operator will see worse output.",
+    inputSchema: obj(
+      { block_name: str("Block name. Use list_blocks to discover. As of v1.4: hero, services, faq.") },
+      ["block_name"],
+    ),
+    handler: async (args) => {
+      const path = `/public/blocks/${encodeURIComponent(args.block_name)}/skill`;
+      // Custom fetch — the SKILL.md endpoint returns text/markdown, not JSON.
+      const res = await fetch(`${API_INFO.base}${path}`);
+      if (!res.ok) {
+        const errBody = await res.text();
+        throw new Error(`get_block_skill ${res.status}: ${errBody}`);
+      }
+      const skill_md = await res.text();
+      return {
+        block_name: args.block_name,
+        skill_md,
+        usage:
+          "The frontmatter (between the --- markers) defines the prop schema and validators. The body is the generation prompt — read it as if it were addressed to you. Generate JSON matching the prop schema, then call persist_block.",
+      };
+    },
+  },
+
+  {
+    name: "persist_block",
+    description:
+      "Persist a v2 block instance. Call this after you've read the block's SKILL.md and generated props matching its schema. The server validates props (Zod schema + deterministic copy-quality validators), renders the block via the existing renderer, replaces the matching section in the workspace's landing page, and returns the public URL where the change is now visible. " +
+      "For initial generation, omit `customization`. For operator-driven edits ('make the hero warmer', 'add a card about kids cuts'), pass `customization: { prompt }` — the operator's prompt is appended to the row's customization history (forever-frozen rule), and the new props replace the previous render. " +
+      "Returns `validation_errors` on failure — if you see them, regenerate the props with the rules from SKILL.md applied more carefully and retry. Don't show validation errors to the operator; they're for you.",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id from create_workspace_v2."),
+        block_name: str("Block name (must match a get_block_skill name): hero, services, or faq."),
+        generation_prompt: str(
+          "The full prompt your LLM consumed to produce these props. Stored as the source of truth for re-renders. Include the workspace context (business name, services, etc.) — not just the SKILL.md body."
+        ),
+        props: {
+          type: "object",
+          description:
+            "Block props matching the prop schema in the block's SKILL.md frontmatter. Validated server-side; mismatches return 422 with structured validation_errors.",
+          additionalProperties: true,
+        },
+        customization: {
+          type: "object",
+          description:
+            "Optional operator-customization layer. When set, append-only override of the initial generation. Use this when the operator says 'change X about my hero' rather than 'rewrite my hero'.",
+          properties: {
+            prompt: str("The operator's natural-language customization request."),
+            source: str("Optional source identifier (e.g. 'claude-code/desktop-7af3') for audit logs."),
+          },
+        },
+      },
+      ["workspace_id", "block_name", "generation_prompt", "props"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/workspace/v2/blocks", {
+        body: {
+          workspace_id: ws,
+          block_name: args.block_name,
+          generation_prompt: args.generation_prompt,
+          props: args.props,
+          customization: args.customization ?? null,
+        },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
+  {
+    name: "complete_workspace_v2",
+    description:
+      "Mark the v2 flow finished for a workspace. Returns which blocks landed vs. were skipped (skipped ones still render via the v1 default pipeline), plus the next steps. Call after every recommended_block has been persisted via persist_block. The operator-facing summary (admin URL, etc.) still requires finalize_workspace afterward.",
+    inputSchema: obj(
+      { workspace_id: str("Workspace id from create_workspace_v2.") },
+      ["workspace_id"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/workspace/v2/complete", {
+        body: { workspace_id: ws },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
 ];
 
 export const TOOL_MAP = Object.fromEntries(TOOLS.map((t) => [t.name, t]));

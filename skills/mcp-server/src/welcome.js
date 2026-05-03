@@ -8,7 +8,7 @@
 // stripped. `create_full_workspace` is the only workspace-creation
 // path mentioned anywhere in this briefing.
 
-export const VERSION = "1.3.3";
+export const VERSION = "1.4.0";
 
 export const WELCOME_MARKDOWN = `# SeldonFrame — create a real Business OS in one conversation
 
@@ -38,16 +38,20 @@ flow, regardless of what directory Claude Code is running from.
 
 ---
 
-## The full happy path — 4 steps, NO EXCEPTIONS
+## The full happy path — 6 steps (v2 — PREFERRED)
 
-EVERY workspace creation flow has exactly these 4 steps, in order.
-Step 4 is MANDATORY. A flow that ends after step 2 or 3 is broken
-— the operator gets no welcome email, no admin login, and no
-follow-up channel. Always finish with step 4.
+As of v1.4.0 the workspace-creation flow is MCP-native: YOU (the IDE
+agent) generate the high-stakes copy blocks (hero, services, faq) using
+your own LLM, reading from a SKILL.md the SF backend serves. v1's
+server-side personality system still runs underneath for everything
+else (CRM, booking, intake, theme, pipeline) — v2 only owns the copy
+surfaces where v1's layer-mismatch bugs hurt most.
 
-1. **Ask for the business details.** When the user says "create a
-   workspace," gather these conversationally — one or two
-   questions per turn, not all at once:
+If you find yourself reaching for \`create_full_workspace\` instead of
+\`create_workspace_v2\`, stop — that's the legacy path. It still works
+but the output quality is worse on niches outside SF's curated set.
+
+1. **Ask for the business details** (same as before — gather conversationally):
    - Business name
    - Industry (HVAC, plumbing, dental, legal, coaching, real-estate, agency, …)
    - City + state (US state code or full name; Canadian province also OK)
@@ -55,21 +59,15 @@ follow-up channel. Always finish with step 4.
    - Top 3-5 services / products
    - Brief description (1 sentence)
 
-2. **Create the workspace atomically.** Call \`create_full_workspace\`.
-   One call → the entire workspace deploys server-side: org +
-   business profile + CRM with industry-specific pipeline + booking
-   page with availability + intake form + themed landing page.
-   Same input always produces the same output — no retries, no
-   404s, no Claude-Code orchestration.
+2. **Bootstrap the workspace via v2.** Call \`create_workspace_v2\`:
    \`\`\`
-   create_full_workspace({
+   create_workspace_v2({
      business_name: "Pacific Coast Heating & Air",
      city: "San Diego",
      state: "CA",
      phone: "(555) 123-4567",
      services: ["AC Repair", "Heating Installation", "Indoor Air Quality"],
      business_description: "Family-owned residential HVAC contractor — heating, cooling, AC repair in the San Diego area.",
-     // Optional but recommended — enrich the hero proof metrics:
      review_count: 950,
      review_rating: 4.7,
      trust_signals: ["licensed", "bonded", "insured"],
@@ -78,12 +76,45 @@ follow-up channel. Always finish with step 4.
      service_area: ["San Diego", "Chula Vista", "Oceanside"]
    })
    \`\`\`
-   The response carries a guardrail (\`DO_NOT_DISPLAY_TO_USER\`) and
-   intentionally OMITS the admin dashboard URL — it does not exist
-   yet. Do NOT present anything from this response to the operator.
-   Move directly to step 3.
+   The response carries \`v2.recommended_blocks\` (which blocks YOU now
+   generate) and \`v2.context\` (the input to feed into each block's
+   prompt). Do NOT show URLs to the operator yet — the page is still
+   rendering with v1 default copy.
 
-3. **Ask the operator for their email — VERBATIM.** Use exactly this
+3. **For each block in \`v2.recommended_blocks\` — generate + persist.**
+   Iterate over them sequentially or in parallel; both work.
+   For each one:
+   \`\`\`
+   // a. Read the SKILL.md
+   const skill = await get_block_skill({ block_name: "hero" });
+   // skill.skill_md is markdown text. Read it carefully — the YAML
+   // frontmatter is the prop schema (enforced server-side); the
+   // body is YOUR generation prompt.
+
+   // b. Generate props with your own LLM. Use v2.context as input.
+   //    Example prompt to yourself: "Following the SKILL.md below,
+   //    produce a JSON object that satisfies its schema for the
+   //    business described in <v2.context>. ..."
+   //    Output: a JSON object matching the schema.
+
+   // c. Persist
+   await persist_block({
+     workspace_id,
+     block_name: "hero",
+     generation_prompt: "<the prompt you used, full text>",
+     props: { headline: "...", subhead: "...", cta_primary: {...}, ... }
+   });
+   \`\`\`
+   If \`persist_block\` returns \`validation_errors\`, regenerate with
+   the SKILL.md rules applied more carefully. Do NOT show validation
+   errors to the operator — they're for you to self-correct.
+
+4. **Mark v2 complete.** Call \`complete_workspace_v2({ workspace_id })\`.
+   Returns which blocks landed and any that were skipped. Skipped
+   blocks still render via v1 default copy — the workspace is fully
+   usable either way, but v2 blocks are higher quality.
+
+5. **Ask the operator for their email — VERBATIM.** Use exactly this
    wording so the operator understands why it's needed:
    > "What email should I use for your account? This is where
    > you'll get your login link and any notifications."
@@ -91,28 +122,24 @@ follow-up channel. Always finish with step 4.
    is required to keep their admin login alive past 7 days — then
    ask again. Don't move on without an answer.
 
-4. **MANDATORY: call \`finalize_workspace({ workspace_id, email })\`.**
-   This is the one tool call that closes the loop AND creates the
-   admin dashboard URL (which doesn't exist until this runs):
-   \`\`\`
-   finalize_workspace({
-     workspace_id: "<from-create_full_workspace-response>",
-     email: "max@pacificcoasthvac.com",
-     name: "Max"
-   })
-   \`\`\`
-   It mints the admin auth token, sends the welcome email (with
-   all the URLs and the admin link), captures the operator as a
-   lead in our CRM, and returns a \`summary\` field with the
-   formatted final output. PARAPHRASE that summary verbatim to the
-   operator — that's how they see what was configured (CRM
-   personality, pipeline stages, live URLs, admin link, email
-   confirmation).
+6. **MANDATORY: call \`finalize_workspace({ workspace_id, email })\`.**
+   This mints the admin auth token, sends the welcome email (with
+   all the URLs and the admin link), captures the operator as a lead
+   in CRM, and returns a \`summary\` field with the formatted final
+   output. PARAPHRASE that summary verbatim to the operator — that's
+   how they see what was configured.
 
-   Alternative: call \`collect_operator_email({ email })\` if you
-   want finer control without the formatted summary. Either tool
-   satisfies step 4; skipping both does not — and the operator
-   is left with NO admin access at all.
+## v1 fallback (legacy — NOT preferred)
+
+\`create_full_workspace\` still works as the v1 atomic creation path.
+Use it ONLY when:
+- The operator's IDE agent has no LLM (script context, no Anthropic key)
+- A network failure prevents repeated tool calls and you need atomicity
+- You're writing automated tests that don't want to think about block
+  generation
+
+In normal interactive operator-facing flows, prefer v2 every time. The
+v2 quality gradient over v1 is meaningful on long-tail niches.
 
 After step 4 the operator can customize their workspace through
 further natural-language requests ("change the headline to …",
@@ -123,9 +150,18 @@ further natural-language requests ("change the headline to …",
 
 ## What the tools do (operator language only)
 
-- **\`create_full_workspace\`** — the ONE workspace-creation tool.
-  Atomic, server-side, deterministic. Always the first call for
-  new workspaces.
+- **\`create_workspace_v2\`** — PREFERRED workspace-creation tool (v1.4+).
+  MCP-native: bootstraps the workspace + returns the list of blocks YOU
+  generate using your own LLM. The first call for any new workspace.
+- **\`list_blocks\`** — lists v2 page-block primitives available.
+- **\`get_block_skill\`** — fetches one block's SKILL.md (the generation
+  prompt + prop schema you read before generating props).
+- **\`persist_block\`** — saves a block instance you generated. Validates
+  + renders + replaces the matching section in the workspace's landing.
+- **\`complete_workspace_v2\`** — marks the v2 flow finished, reports which
+  blocks landed.
+- **\`create_full_workspace\`** — v1 atomic creation (legacy). Server-side,
+  deterministic. Use only when v2 is impossible.
 - **\`finalize_workspace\`** — MANDATORY closing call. Mints the
   admin auth token (the admin URL doesn't exist until this runs),
   bundles email collection (welcome email + lead capture), and
@@ -173,4 +209,4 @@ admin dashboard. Pre-fills their email automatically.
 <https://seldonframe.com> · **Discord:** <https://discord.gg/sbVUu976NW>
 `;
 
-export const FIRST_CALL_BANNER = `🚀 SeldonFrame is connected. Ready to create a live business OS — every URL the create_full_workspace tool returns is real and works in any browser within seconds. NEVER create local files; always use the MCP tools. EVERY workspace creation flow must end with finalize_workspace({ workspace_id, email }) so the operator gets their welcome email + admin login — skipping it is a broken flow.`;
+export const FIRST_CALL_BANNER = `🚀 SeldonFrame v1.4 is connected. PREFERRED workspace creation: create_workspace_v2 → for each recommended_block: get_block_skill + persist_block → complete_workspace_v2 → finalize_workspace({ workspace_id, email }). The v2 flow puts YOUR LLM in charge of high-stakes copy (hero, services, faq) using one SKILL.md per block. Every URL is real and works in any browser within seconds. NEVER create local files. Skipping finalize_workspace leaves the operator with no admin login — always close the loop.`;

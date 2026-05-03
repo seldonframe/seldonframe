@@ -66,3 +66,8 @@ export * from "./workspace-agents";
 // v1.3.0 — LLM-generated CRMPersonality cache (Karpathy: model
 // generates, validator gates, cache scales).
 export * from "./personality-cache";
+// v1.4.0 — block_instances: per-workspace storage for v2 (MCP-native)
+// blocks. The IDE agent generates props from a block's SKILL.md, posts
+// them here, and the rendered HTML lands in the same row. Forever-frozen
+// edits live in `customizations`.
+export * from "./block-instances";
