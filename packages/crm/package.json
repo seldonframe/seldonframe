@@ -16,7 +16,9 @@
     "db:seed-demo": "tsx src/db/seed-demo.ts",
     "db:seed-hvac": "tsx src/db/seed-hvac-arizona.ts",
     "test:cross-block": "tsx src/testing/cross-block-smoke.ts",
-    "template:validate": "tsx scripts/template-validate.ts"
+    "template:validate": "tsx scripts/template-validate.ts",
+    "blocks:emit": "tsx scripts/emit-blocks.ts",
+    "blocks:emit:check": "tsx scripts/emit-blocks.ts --check"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",
@@ -77,6 +79,7 @@
     "eslint-config-next": "16.2.1",
     "tailwindcss": "^4",
     "tsx": "^4.21.0",
-    "typescript": "^5"
+    "typescript": "^5",
+    "yaml": "^2.8.4"
   }
 }

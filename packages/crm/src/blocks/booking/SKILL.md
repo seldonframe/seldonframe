@@ -2,27 +2,24 @@
 name: booking
 version: 1.0.0
 description: The booking page (calendar) — what visitors see when they hit /book. Title, description, slot duration, location kind, weekly availability hours, and the form fields collected at booking time.
+surface: booking
 section_type: booking
 props:
   title:
     type: string
-    required: true
-    min_words: 2
-    max_words: 8
-    description: Event-type title in the calendar header. Vertical-specific. e.g. "Book Your Haircut", "Schedule HVAC Service", "Book a Consultation". NEVER "Free consultation" or "30-minute conversation" — those are the v1 template defaults that leaked.
+    min: 2
+    description: Event-type title in the calendar header. Vertical-specific. e.g. "Book Your Haircut", "Schedule HVAC Service", "Book a Consultation". NEVER "Free consultation" or "30-minute conversation" — those are the v1 template defaults that leaked. Prompt-guidance length 2-8 words.
   description:
     type: string
-    required: true
-    min_words: 12
-    max_words: 50
-    description: 1-2 sentences shown under the title. Tells the visitor what happens at the appointment + any prep needed. Customer-facing, not internal jargon.
+    min: 12
+    description: 1-2 sentences shown under the title. Tells the visitor what happens at the appointment + any prep needed. Customer-facing, not internal jargon. Prompt-guidance length 12-50 words.
   duration_minutes:
     type: number
-    required: true
+    min: 15
+    max: 240
     description: Default slot length in minutes. Pick based on the actual service - 30 for quick consults / nail trims, 45 for haircuts / coaching sessions, 60 for treatments / strategy calls / HVAC service calls, 90 for premium grooming / legal consults.
   location_kind:
-    type: string
-    required: true
+    type: enum
     enum: ["on-site-business", "on-site-customer", "phone", "video", "hybrid"]
     description: |
       Where the appointment happens.
@@ -33,29 +30,82 @@ props:
       - "hybrid": mix of in-person and remote.
   weekly_availability:
     type: object
-    required: true
     description: |
-      Per-weekday availability. Each weekday key (mon, tue, wed, thu, fri, sat, sun) is either an [openHour, closeHour] tuple or null (closed that day). Hours are 0-24 in workspace timezone. Pick hours that match the vertical - HVAC 7-19, dental 8-17, restaurant 11-22, mobile services 9-18, legal 9-17.
+      Per-weekday availability. Each weekday key is either a [openHour, closeHour] tuple of 24-hour numbers, or null (closed that day). Hours in workspace timezone. Pick hours that match the vertical - HVAC 7-19, dental 8-17, restaurant 11-22, mobile services 9-18, legal 9-17.
     properties:
-      mon: { type: array, items: { type: number }, description: "[openHour, closeHour] or null" }
-      tue: { type: array, items: { type: number } }
-      wed: { type: array, items: { type: number } }
-      thu: { type: array, items: { type: number } }
-      fri: { type: array, items: { type: number } }
-      sat: { type: array, items: { type: number } }
-      sun: { type: array, items: { type: number } }
+      mon:
+        type: tuple
+        nullable: true
+        tuple:
+          - { type: number, min: 0, max: 24 }
+          - { type: number, min: 0, max: 24 }
+      tue:
+        type: tuple
+        nullable: true
+        tuple:
+          - { type: number, min: 0, max: 24 }
+          - { type: number, min: 0, max: 24 }
+      wed:
+        type: tuple
+        nullable: true
+        tuple:
+          - { type: number, min: 0, max: 24 }
+          - { type: number, min: 0, max: 24 }
+      thu:
+        type: tuple
+        nullable: true
+        tuple:
+          - { type: number, min: 0, max: 24 }
+          - { type: number, min: 0, max: 24 }
+      fri:
+        type: tuple
+        nullable: true
+        tuple:
+          - { type: number, min: 0, max: 24 }
+          - { type: number, min: 0, max: 24 }
+      sat:
+        type: tuple
+        nullable: true
+        tuple:
+          - { type: number, min: 0, max: 24 }
+          - { type: number, min: 0, max: 24 }
+      sun:
+        type: tuple
+        nullable: true
+        tuple:
+          - { type: number, min: 0, max: 24 }
+          - { type: number, min: 0, max: 24 }
   form_fields:
     type: array
     required: false
     description: |
       Optional EXTRA fields specific to this vertical. The server ALWAYS adds standard name + email automatically (do NOT include them here — they'll be deduplicated). Only add genuine operator-specific fields ("Dog's name" for grooming, "Service address" for HVAC, "Party size" for a restaurant). Omit entirely for simple bookings.
-    item_schema:
-      id: { type: string, description: "snake_case id, e.g. 'dog_name', 'service_address'" }
-      label: { type: string, description: "Customer-facing label" }
-      type: { type: string, enum: ["text", "email", "phone", "textarea", "select"] }
-      required: { type: boolean }
-      placeholder: { type: string, required: false }
-      options: { type: array, items: { type: string }, required: false, description: "for type=select only" }
+    items:
+      type: object
+      properties:
+        id:
+          type: string
+          min: 1
+          description: snake_case id, e.g. "dog_name", "service_address"
+        label:
+          type: string
+          min: 2
+          description: Customer-facing label
+        type:
+          type: enum
+          enum: ["text", "email", "phone", "textarea", "select"]
+        required:
+          type: boolean
+          required: false
+        placeholder:
+          type: string
+          required: false
+        options:
+          type: array
+          required: false
+          description: For type=select only.
+          items:
+            type: string
 validators:
   - rule: title_not_generic
     severity: error

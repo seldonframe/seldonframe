@@ -2,6 +2,7 @@
 name: hero
 version: 1.0.0
 description: Above-the-fold hero with quantified value claim, primary CTA, and supporting visual.
+surface: landing-section
 section_type: hero
 props:
   eyebrow:
@@ -10,25 +11,22 @@ props:
     description: 2-5 word kicker above the headline. Often a category or proof. Optional.
   headline:
     type: string
-    required: true
-    min_words: 4
-    max_words: 12
-    description: The single most important sentence on the page. Must contain quantification (number, %, ★, "free", "guaranteed", "same-day", "today", "instantly", proximity word).
+    min: 4
+    description: The single most important sentence on the page. Must contain quantification (number, %, ★, "free", "guaranteed", "same-day", "today", "instantly", proximity word). Prompt-guidance length 4-12 words.
   subhead:
     type: string
-    required: true
-    min_words: 8
-    max_words: 30
-    description: One sentence. Specifies who the business is + what it does + supporting proof. Must mention the business name OR the city/neighborhood.
+    min: 8
+    description: One sentence. Specifies who the business is + what it does + supporting proof. Must mention the business name OR the city/neighborhood. Prompt-guidance length 8-30 words.
   cta_primary:
     type: object
-    required: true
     properties:
       label:
         type: string
+        min: 2
+        max: 40
         description: 2-4 words, action-oriented. e.g. "Book a Cut", "Get a Quote", "Schedule Service".
       href:
-        type: string
+        type: enum
         enum: ["/book", "/intake"]
         description: MUST be exactly "/book" or "/intake". No external URLs.
   cta_secondary:
@@ -37,26 +35,24 @@ props:
     properties:
       label:
         type: string
+        min: 2
+        max: 40
       href:
         type: string
-        enum: ["/book", "/intake", "tel:"]
-        description: "/book", "/intake", or a tel: link.
+        description: Must be "/book", "/intake", or a tel:... link. (Refinement enforced by validator at runtime since the union is irregular.)
   background_image_query:
     type: string
-    required: true
-    min_words: 2
-    max_words: 5
-    description: Free-text Unsplash search query that matches the business's vertical. e.g. "barbershop interior warm light", "hvac technician outdoor unit", "law office consultation". 2-5 words, visually evocative.
+    min: 2
+    description: Free-text Unsplash search query that matches the business's vertical. e.g. "barbershop interior warm light", "hvac technician outdoor unit", "law office consultation". Prompt-guidance length 2-5 words.
   variant:
-    type: string
+    type: enum
     required: false
     enum: ["split-image-right", "full-bleed", "founder-portrait"]
-    default: full-bleed
     description: Layout variant. "full-bleed" works for ~95% of cases.
 validators:
   - rule: headline_quantified
     severity: error
-    description: Headline must contain at least one of: a digit, %, ★, "free", "guaranteed", "same-day", "today", "instantly", "no-obligation", or a proximity phrase ("just off", "in [neighborhood]").
+    description: 'Headline must contain at least one of: a digit, %, ★, "free", "guaranteed", "same-day", "today", "instantly", "no-obligation", or a proximity phrase ("just off", "in [neighborhood]").'
   - rule: business_name_or_locality_in_subhead
     severity: error
     description: Subhead must contain the business name or the city/neighborhood. The hero must feel personal, not generic.

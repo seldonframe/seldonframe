@@ -2,20 +2,17 @@
 name: about
 version: 1.0.0
 description: About-the-business section — who they are, why they started, what makes them specific. Trust-building, not corporate.
+surface: landing-section
 section_type: about
 props:
   headline:
     type: string
-    required: true
-    min_words: 2
-    max_words: 8
-    description: Section heading. Conversational. NOT "About us" / "Our story" / "Who we are" — those are placeholders.
+    min: 2
+    description: Section heading. Conversational. NOT "About us" / "Our story" / "Who we are" — those are placeholders. Prompt-guidance length 2-8 words.
   body:
     type: string
-    required: true
-    min_words: 30
-    max_words: 90
-    description: 2-4 sentences. First-person OR third-person — match the operator's voice. Should mention the founder/team, the city, and at least one specific detail (years, certification, what they DON'T do, why they started).
+    min: 30
+    description: 2-4 sentences. First-person OR third-person — match the operator's voice. Should mention the founder/team, the city, and at least one specific detail (years, certification, what they DON'T do, why they started). Prompt-guidance length 30-90 words.
   owner_name:
     type: string
     required: false
@@ -27,9 +24,7 @@ props:
   photo_query:
     type: string
     required: false
-    min_words: 2
-    max_words: 5
-    description: Optional Unsplash query for the about-section photo. e.g. "barber portrait apron", "small business owner shop". Skip if no good photo fits.
+    description: Optional Unsplash query for the about-section photo. e.g. "barber portrait apron", "small business owner shop". Skip if no good photo fits. Prompt-guidance length 2-5 words.
 validators:
   - rule: headline_not_generic
     severity: error

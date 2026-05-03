@@ -2,31 +2,29 @@
 name: faq
 version: 1.0.0
 description: Frequently-asked-questions section addressing the actual concerns that block visitors from booking — pricing, scheduling, what to expect, scope, refunds.
+surface: landing-section
 section_type: faq
 props:
   headline:
     type: string
-    required: true
-    min_words: 2
-    max_words: 8
-    description: Section heading. Specific to the business when possible ("Common Questions Before Your First Cut", "What Homeowners Ask Most"). Avoid generic "Frequently asked questions".
+    min: 2
+    description: Section heading. Specific to the business when possible ("Common Questions Before Your First Cut", "What Homeowners Ask Most"). Avoid generic "Frequently asked questions". Prompt-guidance length 2-8 words.
   items:
     type: array
-    required: true
     min_items: 4
     max_items: 8
     description: 4-8 question/answer pairs. Each must address a real friction point a visitor has BEFORE booking — not a sales pitch.
-    item_schema:
-      question:
-        type: string
-        min_words: 3
-        max_words: 15
-        description: Phrased as the visitor would actually ask it ("What does a haircut cost?" not "What is your pricing structure?"). First-person ("Do I need..." or "Can I...") is good.
-      answer:
-        type: string
-        min_words: 15
-        max_words: 80
-        description: 1-3 sentences. Direct answer first, then context. End with a soft next-step when natural ("Just call ahead.", "Mention this when you book.").
+    items:
+      type: object
+      properties:
+        question:
+          type: string
+          min: 3
+          description: Phrased as the visitor would actually ask it ("What does a haircut cost?" not "What is your pricing structure?"). First-person ("Do I need..." or "Can I...") is good. Prompt-guidance length 3-15 words.
+        answer:
+          type: string
+          min: 15
+          description: 1-3 sentences. Direct answer first, then context. End with a soft next-step when natural ("Just call ahead.", "Mention this when you book."). Prompt-guidance length 15-80 words.
 validators:
   - rule: questions_are_visitor_phrasings
     severity: warn

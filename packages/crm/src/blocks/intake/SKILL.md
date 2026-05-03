@@ -2,44 +2,58 @@
 name: intake
 version: 1.0.0
 description: The intake form (the lead-capture page at /intake). Title, description, and the questions visitors answer. Per-vertical — a barbershop intake is short, a legal intake is structured, a coaching intake is exploratory.
+surface: intake
 section_type: intake
 props:
   title:
     type: string
-    required: true
-    min_words: 2
-    max_words: 8
-    description: Form title shown at the top of the page. Vertical-specific. NOT "Tell us about your project" or "Get in touch" — those are template defaults.
+    min: 2
+    description: Form title shown at the top of the page. Vertical-specific. NOT "Tell us about your project" or "Get in touch" — those are template defaults. Prompt-guidance length 2-8 words.
   description:
     type: string
     required: false
-    max_words: 30
-    description: Optional 1-sentence framing under the title. What the visitor is signing up for, how long it takes, what happens next.
+    description: Optional 1-sentence framing under the title. What the visitor is signing up for, how long it takes, what happens next. Prompt-guidance max 30 words.
   questions:
     type: array
-    required: true
     min_items: 3
     max_items: 8
     description: |
       The actual questions. Order matters - ask easy/identifying questions first (name, email), THEN scope-defining questions, THEN open-ended at the end. Don't ask for budget or sensitive info before establishing context.
-    item_schema:
-      id: { type: string, description: "snake_case id, unique within the form" }
-      label: { type: string, description: "Customer-facing question phrasing" }
-      type: { type: string, enum: ["text", "textarea", "email", "phone", "number", "select", "multi-select", "rating", "date"] }
-      required: { type: boolean }
-      helper: { type: string, required: false, description: "Optional one-line clarifier under the label" }
-      options: { type: array, items: { type: string }, required: false, description: "for type=select / multi-select" }
+    items:
+      type: object
+      properties:
+        id:
+          type: string
+          min: 1
+          description: snake_case id, unique within the form.
+        label:
+          type: string
+          min: 2
+          description: Customer-facing question phrasing.
+        type:
+          type: enum
+          enum: ["text", "textarea", "email", "phone", "number", "select", "multi-select", "rating", "date"]
+        required:
+          type: boolean
+          required: false
+        helper:
+          type: string
+          required: false
+          description: Optional one-line clarifier under the label.
+        options:
+          type: array
+          required: false
+          description: For type=select / multi-select.
+          items:
+            type: string
   completion_headline:
     type: string
-    required: true
-    min_words: 2
-    max_words: 8
-    description: What the user sees AFTER they submit. e.g. "Thanks - we'll be in touch", "We got it!". Personal, not corporate.
+    min: 2
+    description: What the user sees AFTER they submit. e.g. "Thanks - we'll be in touch", "We got it!". Personal, not corporate. Prompt-guidance length 2-8 words.
   completion_message:
     type: string
     required: false
-    max_words: 30
-    description: Optional 1-sentence message after submission. What happens next, when to expect a reply.
+    description: Optional 1-sentence message after submission. What happens next, when to expect a reply. Prompt-guidance max 30 words.
 validators:
   - rule: title_not_generic
     severity: error

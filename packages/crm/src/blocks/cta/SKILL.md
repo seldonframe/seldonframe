@@ -2,28 +2,27 @@
 name: cta
 version: 1.0.0
 description: Mid-page call-to-action — a focused conversion moment between sections. Singular outcome, low friction, urgency without pressure.
+surface: landing-section
 section_type: mid-cta
 props:
   headline:
     type: string
-    required: true
-    min_words: 4
-    max_words: 12
-    description: One-line value claim that re-states why to act now. Quantification + urgency. Not a generic "Get started today".
+    min: 4
+    description: One-line value claim that re-states why to act now. Quantification + urgency. Not a generic "Get started today". Prompt-guidance length 4-12 words.
   subhead:
     type: string
     required: false
-    max_words: 25
-    description: Optional one sentence reinforcing the headline with proof or risk-reversal.
+    description: Optional one sentence reinforcing the headline with proof or risk-reversal. Prompt-guidance max 25 words.
   cta_primary:
     type: object
-    required: true
     properties:
       label:
         type: string
+        min: 2
+        max: 40
         description: 2-4 words, action-oriented. Match the operator's primary action ("Book a Cut", "Get a Free Estimate", "Start Coaching").
       href:
-        type: string
+        type: enum
         enum: ["/book", "/intake"]
         description: MUST be exactly "/book" or "/intake".
   cta_secondary:
@@ -32,9 +31,11 @@ props:
     properties:
       label:
         type: string
+        min: 2
+        max: 40
       href:
         type: string
-        enum: ["/book", "/intake", "tel:"]
+        description: Must be "/book", "/intake", or a tel:... link. (Refinement enforced by validator at runtime.)
 validators:
   - rule: headline_quantified_or_urgent
     severity: warn

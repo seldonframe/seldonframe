@@ -2,51 +2,50 @@
 name: services
 version: 1.0.0
 description: Services / offerings grid with one card per service, each with a distinct icon and a short customer-language description.
+surface: landing-section
 section_type: services-grid
 props:
   headline:
     type: string
-    required: true
-    min_words: 2
-    max_words: 8
-    description: Section heading. Vertical-specific verbiage ("How We Cut", "What We Fix", "Practice Areas") not generic ("Our Services", "What We Do").
+    min: 2
+    description: Section heading. Vertical-specific verbiage ("How We Cut", "What We Fix", "Practice Areas") not generic ("Our Services", "What We Do"). Prompt-guidance length 2-8 words.
   subhead:
     type: string
     required: false
-    max_words: 25
-    description: Optional 1-sentence framing under the headline. Skip if the headline + cards already say it.
+    description: Optional 1-sentence framing under the headline. Skip if the headline + cards already say it. Prompt-guidance max 25 words.
   layout:
-    type: string
+    type: enum
     required: false
     enum: ["grid-3", "grid-4", "tabs", "stats"]
-    default: grid-3
-    description: "grid-3" or "grid-4" for typical service grids. "tabs" for ≤4 dense services. "stats" only when items are numbers, not services.
+    description: '"grid-3" or "grid-4" for typical service grids. "tabs" for ≤4 dense services. "stats" only when items are numbers, not services. Default at runtime is "grid-3" if omitted.'
   items:
     type: array
-    required: true
     min_items: 3
     max_items: 8
     description: One entry per service. Each must have a distinct icon — repeat-icon services-grid is a layer-mismatch tell.
-    item_schema:
-      icon:
-        type: string
-        description: Lucide icon name in snake_case from the allowlist (see body). Each item MUST pick a different icon.
-      title:
-        type: string
-        description: Service name. Use the operator's exact phrasing — match input.services strings verbatim.
-      description:
-        type: string
-        min_words: 8
-        max_words: 30
-        description: 1-2 sentences. Customer-facing, not industry jargon. Lead with outcome ("Fades, scissor cuts, beard sculpting — out the door in 30 minutes") not feature ("Professional men's grooming services").
-      price_from:
-        type: string
-        required: false
-        description: Optional starting price like "$45+" or "From $200". Use only if the operator provided pricing.
-      category:
-        type: string
-        required: false
-        description: Optional grouping label (e.g. "Repair", "Install", "Maintenance"). Used by tabs layout.
+    items:
+      type: object
+      properties:
+        icon:
+          type: string
+          min: 2
+          description: Lucide icon name in snake_case from the allowlist (see body). Each item MUST pick a different icon.
+        title:
+          type: string
+          min: 2
+          description: Service name. Use the operator's exact phrasing — match input.services strings verbatim.
+        description:
+          type: string
+          min: 8
+          description: 1-2 sentences. Customer-facing, not industry jargon. Lead with outcome ("Fades, scissor cuts, beard sculpting — out the door in 30 minutes") not feature ("Professional men's grooming services"). Prompt-guidance length 8-30 words.
+        price_from:
+          type: string
+          required: false
+          description: Optional starting price like "$45+" or "From $200". Use only if the operator provided pricing.
+        category:
+          type: string
+          required: false
+          description: Optional grouping label (e.g. "Repair", "Install", "Maintenance"). Used by tabs layout.
 validators:
   - rule: distinct_icons
     severity: error
