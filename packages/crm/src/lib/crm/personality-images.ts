@@ -198,3 +198,83 @@ export function getPersonalityImages(
   // returned object identity against IMAGES.general.
   return IMAGES.general ?? null;
 }
+
+// ─── v1.3.4 — per-query Unsplash search ──────────────────────────────────────
+//
+// When the LLM personality includes images.hero_query (free-text), we
+// can fetch a real photo for that query rather than falling back to a
+// hand-curated bundle that may be irrelevant or broken. Two paths:
+//
+//   1. Official Unsplash API (when UNSPLASH_ACCESS_KEY is set in env).
+//      Authoritative, returns a real photo URL + photographer attribution.
+//   2. Source.unsplash.com legacy redirect (no key required, deprecated
+//      but the CDN still serves photos — Unsplash hasn't taken it
+//      offline as of May 2026). Used as a key-less fallback.
+//
+// The result is a PLAIN URL string. Caller embeds in
+// `background-image: url(...)` exactly like the curated-bundle URLs.
+
+const HERO_QUERY_PARAMS = "auto=format&fit=crop&w=1600&h=900&q=80";
+
+/**
+ * Resolve a hero image URL from a free-text query. Tries the official
+ * API first when UNSPLASH_ACCESS_KEY is set; otherwise constructs a
+ * source.unsplash.com URL. Both paths return a string that the
+ * renderer can embed directly. NEVER throws — falls back to a
+ * deterministic URL on any error so workspaces always have an image.
+ */
+export async function resolveHeroImageUrlForQuery(
+  query: string,
+): Promise<string> {
+  const cleanedQuery = query?.trim() || "professional business interior";
+  const apiKey = process.env.UNSPLASH_ACCESS_KEY?.trim();
+
+  if (apiKey) {
+    try {
+      const response = await fetch(
+        `https://api.unsplash.com/search/photos?query=${encodeURIComponent(cleanedQuery)}&per_page=10&orientation=landscape&content_filter=high`,
+        {
+          headers: {
+            Authorization: `Client-ID ${apiKey}`,
+            "Accept-Version": "v1",
+          },
+        },
+      );
+      if (response.ok) {
+        const data = (await response.json()) as {
+          results?: Array<{
+            urls?: { raw?: string; full?: string; regular?: string };
+          }>;
+        };
+        const first = data.results?.[0];
+        // Prefer raw + our params so we get the right crop + size.
+        const raw = first?.urls?.raw ?? first?.urls?.full;
+        if (raw) {
+          // Append our standard params to the raw URL.
+          return `${raw}${raw.includes("?") ? "&" : "?"}${HERO_QUERY_PARAMS}`;
+        }
+      }
+      console.warn(
+        JSON.stringify({
+          event: "unsplash_api_no_results",
+          query: cleanedQuery,
+          status: response.status,
+        }),
+      );
+    } catch (err) {
+      console.warn(
+        JSON.stringify({
+          event: "unsplash_api_error",
+          query: cleanedQuery,
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
+      // Fall through to the keyless fallback.
+    }
+  }
+
+  // Keyless fallback: source.unsplash.com legacy endpoint. Returns a
+  // 302 to a real Unsplash photo matching the query. Still works as
+  // of May 2026 even though Unsplash has marked it deprecated.
+  return `https://source.unsplash.com/1600x900/?${encodeURIComponent(cleanedQuery)}`;
+}

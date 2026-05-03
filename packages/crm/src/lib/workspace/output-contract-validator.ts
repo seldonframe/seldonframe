@@ -392,6 +392,47 @@ export async function validateWorkspaceOutputContract(
     severity: "cosmetic",
   });
 
+  // 7c. v1.3.4 — hero image is LOADABLE.
+  // Extract the actual URL from the rendered HTML and verify it (a)
+  // belongs to a known-good Unsplash host pattern and (b) has the
+  // sizing params we need so the renderer doesn't fall back to a tiny
+  // thumbnail. We don't HEAD-request the URL here — adding a network
+  // round-trip to workspace creation is expensive — but we DO assert
+  // the URL shape is one the CDN actually serves. If a future
+  // regression starts emitting URLs like "https://example.com/photo"
+  // or "undefined", this check catches it.
+  const heroUrlMatch = html.match(
+    /background-image:\s*url\(\s*['"]?(https:\/\/[^'")\s]+)['"]?\s*\)/i,
+  );
+  const heroUrl = heroUrlMatch?.[1] ?? null;
+  if (heroUrl) {
+    const hostOk =
+      heroUrl.includes("images.unsplash.com") ||
+      heroUrl.includes("source.unsplash.com");
+    const hasSizing =
+      /[?&](w=\d+|fit=crop|auto=format)/i.test(heroUrl) ||
+      // source.unsplash.com encodes size in the path, e.g.
+      // /1600x900/?coffee — check for that shape too.
+      /source\.unsplash\.com\/\d+x\d+/.test(heroUrl);
+    checks.push({
+      surface: "hero_image_loadable",
+      status: hostOk && hasSizing ? "pass" : "warn",
+      expected: "Unsplash host + sizing params present",
+      actual: heroUrl.length > 120 ? `${heroUrl.slice(0, 120)}…` : heroUrl,
+      severity: "cosmetic",
+    });
+  } else if (hasHeroBg) {
+    // We saw the bg div but couldn't extract a URL — emit a warn so
+    // the Vercel logs carry a sample of the markup for debugging.
+    checks.push({
+      surface: "hero_image_loadable",
+      status: "warn",
+      expected: "extractable URL inside background-image",
+      actual: "bg div present but URL regex did not match",
+      severity: "cosmetic",
+    });
+  }
+
   // ─── CRM checks ──────────────────────────────────────────────────────────
 
   // 8. Pipeline stages match personality.
@@ -477,6 +518,70 @@ export async function validateWorkspaceOutputContract(
       severity: "blocking",
     });
   }
+
+  // 12c. v1.3.4 — booking title is PERSONALIZED, not the generic
+  // "Free consultation" / "30-minute conversation" leaked from the
+  // general.json template. The user observed this on the Iron & Oak
+  // Barbershop test: a barber-shop visitor saw "Free consultation"
+  // on the booking calendar — clearly wrong. Root cause was that
+  // verticals not present in `personalityBookingDefaults` fell
+  // through to the JSON template defaults instead of getting
+  // LLM-generated copy. This check asserts the leak is gone.
+  if (bookingTemplate) {
+    const bookingMeta = (bookingTemplate.metadata ?? {}) as {
+      appointmentName?: string;
+      description?: string;
+    };
+    const titleStr = bookingTemplate.title ?? "";
+    const apptName = bookingMeta.appointmentName ?? "";
+    const descStr = bookingMeta.description ?? "";
+    const personalityBookingTitle = personality.booking?.title?.trim();
+
+    const looksGeneric =
+      /free consultation/i.test(titleStr) ||
+      /free consultation/i.test(apptName) ||
+      /30-minute conversation/i.test(descStr);
+
+    // Pass when (a) we don't look generic AND (b) the personality
+    // declared a booking title, the rendered title actually uses it.
+    const personalityTitleApplied = personalityBookingTitle
+      ? titleStr.includes(personalityBookingTitle) ||
+        apptName.includes(personalityBookingTitle)
+      : true; // No expectation if personality didn't declare one.
+
+    checks.push({
+      surface: "booking_title_personalized",
+      status:
+        !looksGeneric && personalityTitleApplied
+          ? "pass"
+          : "fail",
+      expected: personalityBookingTitle
+        ? `title/appointmentName contains "${personalityBookingTitle}" and not "Free consultation"`
+        : 'title/appointmentName not "Free consultation" / "30-minute conversation"',
+      actual: `title="${titleStr.slice(0, 60)}" appointmentName="${apptName.slice(0, 60)}"`,
+      severity: "blocking",
+    });
+  }
+
+  // 12d. v1.3.4 — pipeline is READY to receive deals when bookings
+  // confirm. submitPublicBookingAction inserts a deal at the first
+  // pipeline stage on every successful free booking; for that to
+  // work, the pipeline must exist with at least one stage with a
+  // non-empty name. ensureDefaultPipelineForOrg lazy-seeds when
+  // missing, but if the FIRST stage's name is empty we'd silently
+  // insert a deal with stage="" and the kanban wouldn't render it
+  // in any column. This catches that edge.
+  const firstStageName = pipeline?.stages?.[0]?.name ?? "";
+  checks.push({
+    surface: "booking_to_deal_pipeline_ready",
+    status: firstStageName.length > 0 ? "pass" : "fail",
+    expected: "first pipeline stage with non-empty name",
+    actual:
+      firstStageName.length > 0
+        ? `first stage = "${firstStageName}"`
+        : "(no pipeline OR first stage name is empty)",
+    severity: "blocking",
+  });
 
   // 12b. Booking page rendered HTML embeds a working slot generator.
   // The calcom-month-v1 renderer embeds availability.weekly in a JSON

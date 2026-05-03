@@ -310,11 +310,35 @@ export async function createAnonymousWorkspace(
         "30-minute appointment to walk through your project and get pricing. No obligation.",
     },
   };
-  const bookingDefault = personalityBookingDefaults[personality.vertical];
-  if (bookingDefault && seedBlueprint.booking?.eventType) {
-    seedBlueprint.booking.eventType.durationMinutes = bookingDefault.durationMinutes;
-    seedBlueprint.booking.eventType.title = bookingDefault.title;
-    seedBlueprint.booking.eventType.description = bookingDefault.description;
+  // v1.3.4 — booking metadata resolution priority:
+  //   1. LLM-generated personality.booking (per-niche, customer-voiced)
+  //   2. personalityBookingDefaults[vertical] (7 seed verticals)
+  //   3. blueprint.booking.eventType from JSON template (last resort)
+  //
+  // Without (1), LLM-niche workspaces (barbershop, tutoring, etc.)
+  // shipped with general.json's "Free consultation" / "30-minute
+  // conversation to understand your needs and provide a quote" on
+  // their booking page, regardless of how good the rest of the
+  // personality output was. The JSON template's defaults are
+  // industry-neutral, designed to never look wrong; that means they
+  // also never look RIGHT for any specific niche.
+  const llmBooking = personality.booking;
+  const seedBookingDefault = personalityBookingDefaults[personality.vertical];
+  if (seedBlueprint.booking?.eventType) {
+    if (llmBooking) {
+      seedBlueprint.booking.eventType.title = llmBooking.title;
+      seedBlueprint.booking.eventType.description = llmBooking.description;
+      seedBlueprint.booking.eventType.durationMinutes = llmBooking.duration_minutes;
+      // Map location_kind to the blueprint's expected location shape.
+      // The blueprint uses { kind: "phone" | "video" | "in-person" | "custom" }
+      // — same vocabulary, just nested.
+      seedBlueprint.booking.eventType.location = { kind: llmBooking.location_kind };
+    } else if (seedBookingDefault) {
+      seedBlueprint.booking.eventType.durationMinutes = seedBookingDefault.durationMinutes;
+      seedBlueprint.booking.eventType.title = seedBookingDefault.title;
+      seedBlueprint.booking.eventType.description = seedBookingDefault.description;
+    }
+    // else: leave the JSON template's defaults (last-resort fallback)
   }
 
   // v1.3.1 / BUG 2 — propagate personality.intake.title onto

@@ -280,6 +280,25 @@ The output must:
   bar_chart, globe, mail, phone, star, check_circle, clock,
   trending_up, zap, shield, users, bot) }\`. Pick a DIFFERENT icon per
   service so each card has distinct visual treatment.
+- Provide \`booking\`: \`{ title (event name in the calendar header,
+  e.g. "Book Your Haircut" not "Free consultation"; should match the
+  business's actual primary offering), description (1-2 sentences),
+  duration_minutes (number — typical visit length: 30 for quick
+  consults, 45 for haircuts/coaching, 60 for treatments / strategy
+  calls, 90 for premium services), location_kind (one of:
+  "on-site-business" — customer comes to the business (barbershop,
+  dental office, salon, restaurant, retail, gym);
+  "on-site-customer" — provider goes to the customer (HVAC, plumber,
+  landscaping, in-home tutor, mobile detailing);
+  "phone" — voice consultation (legal intake, basic coaching);
+  "video" — Zoom/Meet/Teams (agency, remote coaching, telehealth);
+  "hybrid" — mix of in-person and remote) }\`.
+- Provide \`images\`: \`{ hero_query (free-text Unsplash search query,
+  e.g. "barbershop interior", "math tutoring student",
+  "nail salon manicure", "law office consultation" — 2-4 words,
+  visually evocative, matches the actual business), about_query
+  (optional secondary query for the about-section image, often
+  "team photo professional" or the business name's vibe) }\`.
 
 Return ONLY the JSON object, no markdown fences, no explanation. The
 output will be parsed with JSON.parse() directly.`;

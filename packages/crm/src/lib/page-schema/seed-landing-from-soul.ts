@@ -35,7 +35,10 @@ import {
   type ResolvedPersonalityContent,
 } from "@/lib/crm/personality";
 import { iconForTitle } from "@/lib/blueprint/renderers/lucide-icons";
-import { getPersonalityImages } from "@/lib/crm/personality-images";
+import {
+  getPersonalityImages,
+  resolveHeroImageUrlForQuery,
+} from "@/lib/crm/personality-images";
 import type { BusinessType, PageSchema } from "./types";
 import type { PagePersonality } from "./design-tokens";
 
@@ -201,7 +204,9 @@ export async function seedLandingFromSoul(orgId: string): Promise<SeedLandingRes
   // with a dental-office hero photo, not a text-only band. Operators
   // can override per-section via update_landing_section once they see
   // the rendered preview.
-  applyPersonalityImagesToSchema(schema, crmPersonality);
+  // v1.3.4 — now async (Unsplash API fetch path). Awaited so the
+  // hero image URL lands in the rendered HTML before persistence.
+  await applyPersonalityImagesToSchema(schema, crmPersonality);
 
   // Plan-tier branding flag.
   const plan = resolvePlanFromPlanId(org.plan ?? null);
@@ -504,22 +509,58 @@ function applyResolvedContentToActions(
  * assignment from service_grid_image_urls. Items already carrying an
  * `image` value (e.g. operator-uploaded) are left alone.
  */
-function applyPersonalityImagesToSchema(
+async function applyPersonalityImagesToSchema(
   schema: PageSchema,
   personality: CRMPersonality
-): void {
+): Promise<void> {
+  // v1.3.4 — image source priority:
+  //   1. LLM personality.images.hero_query → resolveHeroImageUrlForQuery
+  //      (real per-niche photo via Unsplash API or source.unsplash.com)
+  //   2. Curated bundle from getPersonalityImages (7 seed verticals
+  //      get hand-picked photos; everything else falls to GENERAL)
+  //   3. Skip (operator-set imageUrl wins; null = no image)
+  //
+  // Tier 1 produces an actually-relevant image for ANY niche — the
+  // LLM picked the search query that fits the business's voice.
+  // Tier 2 is the v1.1.5 system that's been in place; kept as a
+  // hot path for the seed verticals to avoid a network hop.
+  const llmHeroQuery = personality.images?.hero_query?.trim();
   const bundle = getPersonalityImages(personality.vertical);
-  if (!bundle) return;
+  let resolvedHeroUrl: string | null = null;
+
+  if (llmHeroQuery) {
+    try {
+      resolvedHeroUrl = await resolveHeroImageUrlForQuery(llmHeroQuery);
+    } catch (err) {
+      // resolveHeroImageUrlForQuery never throws today, but be defensive.
+      console.warn(
+        JSON.stringify({
+          event: "hero_query_resolve_failed",
+          query: llmHeroQuery,
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
+    }
+  }
+  // Fallback to curated bundle when LLM didn't provide a query.
+  if (!resolvedHeroUrl && bundle?.hero_url) {
+    resolvedHeroUrl = bundle.hero_url;
+  }
 
   for (const section of schema.sections) {
-    if (section.intent === "hero" && !section.content.imageUrl) {
-      section.content = { ...section.content, imageUrl: bundle.hero_url };
+    if (
+      section.intent === "hero" &&
+      !section.content.imageUrl &&
+      resolvedHeroUrl
+    ) {
+      section.content = { ...section.content, imageUrl: resolvedHeroUrl };
       continue;
     }
     if (
       (section.intent === "services" ||
         section.intent === "features" ||
         section.intent === "products") &&
+      bundle &&
       bundle.service_grid_image_urls.length > 0
     ) {
       const items = section.content.items;

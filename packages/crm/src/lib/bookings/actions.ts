@@ -2,8 +2,9 @@
 
 import { and, asc, eq, gte, inArray, lt, ne } from "drizzle-orm";
 import { db } from "@/db";
-import { activities, bookings, contacts, organizations, users } from "@/db/schema";
+import { activities, bookings, contacts, deals, organizations, users } from "@/db/schema";
 import { getCurrentUser, getOrgId } from "@/lib/auth/helpers";
+import { ensureDefaultPipelineForOrg } from "@/lib/deals/pipeline-defaults";
 import { assertWritable } from "@/lib/demo/server";
 import { emitSeldonEvent } from "@/lib/events/bus";
 import { createBookingCheckoutSession } from "@/lib/payments/actions";
@@ -1180,6 +1181,82 @@ export async function submitPublicBookingAction({
           },
           scheduledAt: bookingStart,
         });
+      }
+
+      // v1.3.4 — surface the booking in the CRM pipeline kanban.
+      //
+      // Root-cause fix for "bookings don't appear in /deals after a
+      // visitor books on the public page": until now,
+      // `submitPublicBookingAction` only inserted into `bookings` +
+      // `activities` + `contacts`. The kanban reads `deals`, so the
+      // visitor's expressed intent never showed up where operators
+      // actually triage their pipeline.
+      //
+      // Design choices:
+      //   - Use the org's default pipeline. `ensureDefaultPipelineForOrg`
+      //     lazy-seeds one if missing, so legacy workspaces created
+      //     before pipeline-seeding was wired into createAnonymousWorkspace
+      //     still get a kanban entry.
+      //   - Land the deal at the FIRST stage (Lead / "New Lead" /
+      //     equivalent) — operators move it through their funnel as
+      //     the booking becomes a paying customer.
+      //   - Use the booking price as the deal value. For free
+      //     consultations this lands at $0; operators can edit later.
+      //   - Stamp `customFields.bookingId` so future booking events
+      //     (no-show, completed, canceled) can reconcile back to this
+      //     deal instead of creating duplicates.
+      //   - Wrap in try/catch + structured log: a deal-insert failure
+      //     must NOT roll back the booking itself. The visitor's
+      //     booking is the contract; the kanban entry is operator UX.
+      try {
+        const pipeline = await ensureDefaultPipelineForOrg(bookingContext.orgId);
+        const firstStage = pipeline.stages?.[0];
+        const stageName = firstStage?.name ?? "Lead";
+        const stageProbability = firstStage?.probability ?? 0;
+
+        const [createdDeal] = await db
+          .insert(deals)
+          .values({
+            orgId: bookingContext.orgId,
+            contactId,
+            pipelineId: pipeline.id,
+            title: `${bookingContext.appointmentName} — ${fullName}`,
+            stage: stageName,
+            probability: stageProbability,
+            value: String(bookingContext.price ?? 0),
+            customFields: {
+              source: "public-booking",
+              bookingId: createdBooking.id,
+              bookingSlug,
+              appointmentName: bookingContext.appointmentName,
+              durationMinutes: bookingContext.durationMinutes,
+              startsAt: bookingStart.toISOString(),
+            },
+          })
+          .returning({ id: deals.id });
+
+        console.log(
+          JSON.stringify({
+            event: "public_booking_deal_created",
+            ...baseLogContext,
+            booking_id: createdBooking.id,
+            deal_id: createdDeal?.id ?? null,
+            pipeline_id: pipeline.id,
+            stage: stageName,
+          }),
+        );
+      } catch (err) {
+        // Deal insertion failed — log but don't roll back. The
+        // booking is already saved; an operator can manually create
+        // a deal from the booking row in the admin UI if needed.
+        console.error(
+          JSON.stringify({
+            event: "public_booking_deal_failed",
+            ...baseLogContext,
+            booking_id: createdBooking.id,
+            error: err instanceof Error ? err.message : String(err),
+          }),
+        );
       }
     }
   }
