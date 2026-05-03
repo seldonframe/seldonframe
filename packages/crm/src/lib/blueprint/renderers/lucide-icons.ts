@@ -203,6 +203,21 @@ const ICON_PATHS: Record<IconName, string> = {
 };
 
 /**
+ * v1.5.1 — runtime allowlist of every icon the renderer can actually emit.
+ * Derived from ICON_PATHS so adding an icon means adding ONE entry to
+ * ICON_PATHS — never editing this array directly.
+ *
+ * Used by the v2 services block validator to reject icons the LLM picked
+ * that the renderer can't render. Pre-1.5.1 the LLM picked icon names
+ * like "piano", "microphone", "wood_oven" (none in this list); the
+ * renderer fell back silently and ALL services-grid cards rendered with
+ * the same default icon.
+ */
+export const ICON_NAMES: readonly IconName[] = Object.keys(
+  ICON_PATHS,
+) as readonly IconName[];
+
+/**
  * Render a Lucide icon as inline SVG. Returns empty string for unknown
  * names — caller should fall back to a default icon (sparkles is a good
  * neutral choice).

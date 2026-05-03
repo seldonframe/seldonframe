@@ -1210,9 +1210,25 @@ export async function submitPublicBookingAction({
       //     booking is the contract; the kanban entry is operator UX.
       try {
         const pipeline = await ensureDefaultPipelineForOrg(bookingContext.orgId);
-        const firstStage = pipeline.stages?.[0];
-        const stageName = firstStage?.name ?? "Lead";
-        const stageProbability = firstStage?.probability ?? 0;
+        // v1.5.1 — smart stage selection. A booking that just landed in
+        // the system represents a confirmed appointment, NOT a cold
+        // inquiry. Pre-1.5.1 we landed every deal at index 0 ("Lead" /
+        // "Inquiry"), which made the kanban inaccurate the moment a
+        // visitor booked — operators had to manually move every deal up
+        // a stage. Now we look for a stage whose name suggests
+        // "appointment confirmed" (booked / scheduled / trial /
+        // appointment / consultation) and use it; fall back to first
+        // stage when no such stage exists. Personalities that DO declare
+        // a "Trial Lesson Booked" / "Estimate Scheduled" / "Consult
+        // Booked" stage automatically get the right behavior; everything
+        // else lands at first stage as before.
+        const stages = pipeline.stages ?? [];
+        const bookedStageRe =
+          /\b(booked|scheduled|trial|appointment|consult(ation)?|reservation|reserved)\b/i;
+        const matchedStage = stages.find((s) => bookedStageRe.test(s.name));
+        const targetStage = matchedStage ?? stages[0];
+        const stageName = targetStage?.name ?? "Lead";
+        const stageProbability = targetStage?.probability ?? 0;
 
         const [createdDeal] = await db
           .insert(deals)
@@ -1243,6 +1259,8 @@ export async function submitPublicBookingAction({
             deal_id: createdDeal?.id ?? null,
             pipeline_id: pipeline.id,
             stage: stageName,
+            stage_match: matchedStage ? "smart" : "first_stage_fallback",
+            available_stages: stages.map((s) => s.name),
           }),
         );
       } catch (err) {

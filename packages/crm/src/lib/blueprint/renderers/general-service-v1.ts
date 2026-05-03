@@ -1484,6 +1484,20 @@ const BASE_CSS = `@import url('https://fonts.googleapis.com/css2?family=Inter:wg
   background: rgba(255, 255, 255, 0.92);
   border-color: rgba(255, 255, 255, 0.2);
 }
+/* v1.5.1 — eyebrow contrast on hero-with-image. Pre-1.5.1 the eyebrow
+   pill used the personality's accent-soft background (a light tint),
+   which washed out against busy hero photos — the eyebrow text became
+   nearly invisible. Operators reported this on the Coastline Music
+   test ("HALIFAX'S MUSIC SCHOOL" pill background was too whitish on
+   the piano photo). Override to a dark translucent pill with full-
+   white text whenever there's a background image — works against any
+   photo regardless of its dominant tones. */
+.sf-hero--has-image .sf-hero__eyebrow {
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
 .sf-hero__corner {
   position: absolute;
   width: 7px;
@@ -1613,6 +1627,13 @@ const BASE_CSS = `@import url('https://fonts.googleapis.com/css2?family=Inter:wg
   line-height: 1.55;
   margin: 0 auto 2.5rem;
   max-width: 38rem;
+  /* v1.5.1 — explicit text-align. Pre-1.5.1 the subhead inherited
+     parent text-align (which varied by overlay). Operators reported the
+     hero subhead rendering left-aligned within its centered container —
+     the "left-anchored within a centered max-width box" anti-pattern.
+     Pinning text-align: center keeps multi-line subheads visually
+     centered relative to the page. */
+  text-align: center;
   text-wrap: pretty;
 }
 .sf-hero__ctas {
@@ -1926,19 +1947,32 @@ const BASE_CSS = `@import url('https://fonts.googleapis.com/css2?family=Inter:wg
   font-size: clamp(1.75rem, 5vw, 3rem);
   line-height: 1.1;
   letter-spacing: -0.025em;
-  /* v1.4.1 — explicit centering. Pre-1.4.1 the H2 used text-align: center
-     alone but operators reported it rendering left-aligned in some viewports.
-     Belt-and-suspenders: width:100% + display:block + margin auto so the
-     element itself is centered, text-align: center centers the text within,
-     and text-wrap: balance keeps two-line headlines visually balanced. */
+  /* v1.5.1 — last-resort bulletproofing. v1.4.1 added the explicit
+     centering properties; operators STILL reported the headline
+     rendering left-aligned (Coastline Music v1.5.0 test). The .sf-faq > *
+     rule constrains the H2 to max-width 48rem with margin auto, but the
+     text inside the H2 was being left-aligned by some lower-specificity
+     CSS leaking through. !important on text-align ends the chase. */
   display: block;
   width: 100%;
-  margin-left: auto;
-  margin-right: auto;
-  text-align: center;
+  max-width: none;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  text-align: center !important;
   margin-bottom: clamp(2.5rem, 5vw, 4rem);
   font-weight: 600;
   text-wrap: balance;
+}
+/* v1.5.1 — defeat the .sf-faq > * { max-width: 48rem; margin: auto; }
+   constraint specifically for the headline. The 48rem cap was making the
+   H2 element narrower than the page; combined with text-align: center
+   inside, the centered text appeared "left-anchored" because the H2
+   itself was off-center relative to the wider FAQ section. Letting the
+   headline span the full FAQ section width + text-align: center inside
+   produces the centered-on-page result operators expect. */
+.sf-faq > .sf-faq__headline {
+  max-width: none !important;
+  width: 100% !important;
 }
 .sf-faq__list { display: flex; flex-direction: column; gap: 0; }
 .sf-faq__item {
