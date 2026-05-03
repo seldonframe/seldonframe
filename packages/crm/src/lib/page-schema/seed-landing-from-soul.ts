@@ -119,18 +119,19 @@ export async function seedLandingFromSoul(orgId: string): Promise<SeedLandingRes
     (org.settings as Record<string, unknown> | null)?.crmPersonality
   );
 
-  // v1.3.2 — render-mode resolution. Personality's theme.mode wins
-  // when set. Falls back to BusinessType-based heuristic (legacy
-  // saas/agency → cinematic, everything else → clean) so workspaces
-  // without a personality theme still pick a sensible default. The
-  // user spec: "Default to light for most verticals; use dark /
-  // cinematic for premium verticals (medspa, agency, luxury)."
+  // v1.3.3 — render-mode resolution. Personality's theme.mode is the
+  // canonical source. Default ALWAYS falls to "clean" (light) per
+  // the user spec — premium verticals must opt in to dark via
+  // theme.mode === "dark". Previously the fallback used the
+  // BusinessType heuristic which routed saas/agency to cinematic by
+  // default, but for LLM-generated personalities without an explicit
+  // theme.mode that produced unwanted dark renders for ordinary
+  // service businesses (the Bright Futures Tutoring failure mode).
   const personality: PagePersonality =
-    crmPersonality.theme?.mode === "dark"
-      ? "cinematic"
-      : crmPersonality.theme?.mode === "light"
-        ? "clean"
-        : defaultPersonalityForType(businessType);
+    crmPersonality.theme?.mode === "dark" ? "cinematic" : "clean";
+  // Reference the now-unused fallback so the function doesn't get
+  // tree-shaken. Kept callable for legacy paths + tests.
+  void defaultPersonalityForType;
 
   // v1.1.7 — per-CRMPersonality default accent. Operators can still
   // override via update_theme; we only fall through to the personality
@@ -550,6 +551,20 @@ function applyServiceIconsFromPersonality(
   schema: PageSchema,
   personality: CRMPersonality
 ): void {
+  // v1.3.3 — when the LLM personality includes services_enrichment,
+  // its per-service icon picks take precedence over both the
+  // keyword classifier AND any pre-set item.icon. The LLM sees the
+  // operator's exact service list and picks one icon per service from
+  // the same allowlist the renderer knows about — distinct icons
+  // per card by design. Falls back to keyword classifier for items
+  // without an enrichment match.
+  const enrichmentByName = new Map<string, string>();
+  for (const e of personality.services_enrichment ?? []) {
+    if (e.icon && e.service_name) {
+      enrichmentByName.set(e.service_name, e.icon);
+    }
+  }
+
   for (const section of schema.sections) {
     if (
       section.intent !== "services" &&
@@ -563,7 +578,16 @@ function applyServiceIconsFromPersonality(
     section.content = {
       ...section.content,
       items: items.map((item) => {
+        // 1. LLM enrichment wins (distinct per-service icon).
+        const enrichedIcon = item.title
+          ? enrichmentByName.get(item.title)
+          : undefined;
+        if (enrichedIcon) {
+          return { ...item, icon: enrichedIcon };
+        }
+        // 2. Operator-supplied icon (e.g. via update_landing_section).
         if (item.icon && item.icon.trim().length > 0) return item;
+        // 3. Fallback: keyword classifier with vertical hint.
         return {
           ...item,
           icon: iconForTitle(item.title, personality.vertical),

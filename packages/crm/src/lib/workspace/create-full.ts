@@ -263,7 +263,20 @@ export async function createFullWorkspace(
       state: stateCode,
       tagline: null,
       description: input.business_description,
-      services: input.services.map((name) => ({ name })),
+      // v1.3.3 — when the LLM personality includes services_enrichment,
+      // pair each operator service name with the LLM's description so
+      // soul.offerings carries description + (later) icon. Falls back to
+      // bare {name} when the LLM didn't enrich (or for legacy keyword-
+      // resolved personalities). Match by case-sensitive equality on
+      // service_name; LLM is instructed to copy verbatim.
+      services: input.services.map((name) => {
+        const enrichment = personality.services_enrichment?.find(
+          (e) => e.service_name === name,
+        );
+        return enrichment
+          ? { name, description: enrichment.description }
+          : { name };
+      }),
       testimonials: null,
       // v1.1.4 — proof + service-area enrichment fields. seedSoul
       // writes these onto organizations.soul where seedLandingFromSoul
@@ -276,6 +289,14 @@ export async function createFullWorkspace(
       trust_signals: input.trust_signals ?? null,
       emergency_service: input.emergency_service ?? null,
       same_day: input.same_day ?? null,
+      // v1.3.3 — thread the LLM-resolved personality so booking
+      // template + intake form + landing seed all use it instead of
+      // the keyword-classifier fallback. Without this, the LLM
+      // personality was thrown away by createAnonymousWorkspace's
+      // internal selectCRMPersonality call → Sakura Nail Studio got
+      // "Get in Touch" intake title (general personality default)
+      // instead of "Book Your Nail Appointment" (LLM output).
+      personality,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

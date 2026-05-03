@@ -85,6 +85,18 @@ export type AnonymousCreateInput = {
   trust_signals?: string[] | null;
   emergency_service?: boolean | null;
   same_day?: boolean | null;
+  /**
+   * v1.3.3 — pre-resolved CRMPersonality from create-full.ts (which
+   * runs the LLM personality generator BEFORE this function). When
+   * set, it overrides the keyword-based selectCRMPersonality call
+   * below. Without this, the LLM-resolved personality was thrown
+   * away and the booking template + intake form + landing page got
+   * the WRONG (keyword-fallback) personality's copy. The defensive
+   * settings.crmPersonality override in create-full.ts only ran AFTER
+   * the seeding so booking/intake stayed wrong even though the
+   * landing eventually got fixed.
+   */
+  personality?: import("@/lib/crm/personality").CRMPersonality | null;
 };
 
 export type AnonymousCreateResult = {
@@ -164,7 +176,12 @@ export async function createAnonymousWorkspace(
   const seedBusinessType = seedSoul
     ? classifyBusinessTypeFromSoul(seedSoul)
     : "other";
-  const personality = selectCRMPersonality(seedBusinessType, input.industry ?? null);
+  // v1.3.3 — prefer the LLM-resolved personality when create-full.ts
+  // has already generated one. Falls back to keyword classifier so
+  // legacy callers without an LLM personality keep working.
+  const personality =
+    input.personality ??
+    selectCRMPersonality(seedBusinessType, input.industry ?? null);
   const baseSettings: Record<string, unknown> = {
     crmPersonality: personality,
   };

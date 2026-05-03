@@ -910,10 +910,35 @@ export async function submitPublicBookingAction({
 }) {
   assertWritable();
 
+  // v1.3.3 — structured logging at every throw. The route handler
+  // catches and returns 500; without these logs we couldn't tell
+  // which validation step rejected the booking.
+  const baseLogContext = {
+    org_slug: orgSlug,
+    booking_slug: bookingSlug,
+    starts_at: startsAt,
+  };
+  const rejectAndThrow = (
+    reason: string,
+    details: Record<string, unknown>,
+  ): never => {
+    console.error(
+      JSON.stringify({
+        event: "submit_public_booking_rejected",
+        reason,
+        ...baseLogContext,
+        ...details,
+      }),
+    );
+    throw new Error(`${reason}: ${JSON.stringify(details).slice(0, 200)}`);
+  };
+
   const bookingContext = await resolvePublicBookingContext(orgSlug, bookingSlug);
 
   if (!bookingContext) {
-    throw new Error("Booking page not found");
+    return rejectAndThrow("booking_context_not_found", {
+      hint: "no organizations row for orgSlug, or no bookings row with status='template' for that bookingSlug",
+    });
   }
 
   const [existing] = await db
@@ -946,7 +971,10 @@ export async function submitPublicBookingAction({
   const bookingStart = new Date(startsAt);
 
   if (Number.isNaN(bookingStart.getTime())) {
-    throw new Error("Invalid start time");
+    return rejectAndThrow("invalid_start_time", {
+      received: startsAt,
+      hint: "starts_at must be a parseable ISO 8601 datetime",
+    });
   }
 
   // v1.3.2 — TIMEZONE-AWARE slot validation.
@@ -975,26 +1003,39 @@ export async function submitPublicBookingAction({
   const localParts = partsInTimezone(bookingStart, workspaceTz);
   const dayAvailability = bookingContext.availability[localParts.weekday];
   if (!dayAvailability?.enabled) {
-    throw new Error(
-      `Selected slot is on ${localParts.weekday}, which is not available for booking.`,
-    );
+    return rejectAndThrow("day_not_available", {
+      weekday_in_workspace_tz: localParts.weekday,
+      workspace_timezone: workspaceTz,
+      day_availability: dayAvailability ?? null,
+      all_availability_keys: Object.keys(bookingContext.availability),
+    });
   }
   const slotMinuteOfDay = localParts.hour * 60 + localParts.minute;
   const dayStartMinutes = toMinutes(dayAvailability.start);
   const dayEndMinutes = toMinutes(dayAvailability.end);
   if (slotMinuteOfDay < dayStartMinutes || slotMinuteOfDay >= dayEndMinutes) {
-    throw new Error(
-      `Selected slot (${localParts.hour}:${String(localParts.minute).padStart(2, "0")} ${workspaceTz}) is outside ${localParts.weekday} business hours (${dayAvailability.start}–${dayAvailability.end}).`,
-    );
+    return rejectAndThrow("slot_outside_business_hours", {
+      slot_local_hhmm: `${localParts.hour}:${String(localParts.minute).padStart(2, "0")}`,
+      slot_minute_of_day: slotMinuteOfDay,
+      workspace_timezone: workspaceTz,
+      weekday: localParts.weekday,
+      day_start: dayAvailability.start,
+      day_end: dayAvailability.end,
+      day_start_minutes: dayStartMinutes,
+      day_end_minutes: dayEndMinutes,
+    });
   }
   // Snap-to-grid check: slot must align to a 15-minute boundary so
   // we don't accept arbitrarily-offset bookings. 15 (not 30) so a
   // 60-min duration can still anchor at :15 / :45 if the personality
   // wants finer granularity later.
   if (slotMinuteOfDay % 15 !== 0) {
-    throw new Error(
-      `Selected slot is off-grid (${localParts.hour}:${String(localParts.minute).padStart(2, "0")} not on a 15-minute boundary).`,
-    );
+    return rejectAndThrow("slot_off_grid", {
+      slot_local_hhmm: `${localParts.hour}:${String(localParts.minute).padStart(2, "0")}`,
+      slot_minute_of_day: slotMinuteOfDay,
+      modulo_15: slotMinuteOfDay % 15,
+      hint: "client must pick slots aligned to :00, :15, :30, :45 boundaries in the workspace TZ",
+    });
   }
   // Check for overlap with existing real bookings on the same day.
   const dayStartUtc = new Date(bookingStart);
@@ -1021,7 +1062,11 @@ export async function submitPublicBookingAction({
     return bookingStart.getTime() < e && slotEnd.getTime() > s;
   });
   if (overlap) {
-    throw new Error("That time was just booked. Please pick another slot.");
+    return rejectAndThrow("slot_already_booked", {
+      conflict_count: conflicts.length,
+      requested_start: bookingStart.toISOString(),
+      requested_end: slotEnd.toISOString(),
+    });
   }
 
   const provider = await resolveBookingProvider(null);

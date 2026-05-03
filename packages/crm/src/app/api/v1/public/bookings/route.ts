@@ -40,11 +40,36 @@ type SubmitBody = {
   startsAt?: unknown; // older clients post as `startsAt`
 };
 
+// v1.3.3 — every reject path emits a single-line structured JSON log
+// to stderr so Vercel function logs become queryable. Pattern from the
+// output-contract-validator: one event-typed line per outcome.
+//
+// Why this matters: pre-1.3.3 the route returned 400 with NO LOG (the
+// "No logs found for this request" message in the Vercel UI). Booking
+// confirmation was rejected silently for every workspace; we couldn't
+// tell whether the timezone fix landed because the error path was
+// invisible. Karpathy: observability before fix.
+function rejectionLog(
+  reason: string,
+  details: Record<string, unknown>,
+): void {
+  console.error(
+    JSON.stringify({
+      event: "public_booking_rejected",
+      reason,
+      ...details,
+    }),
+  );
+}
+
 export async function POST(request: Request) {
   let body: SubmitBody;
   try {
     body = (await request.json()) as SubmitBody;
-  } catch {
+  } catch (err) {
+    rejectionLog("invalid_json_body", {
+      error: err instanceof Error ? err.message : String(err),
+    });
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
@@ -70,6 +95,15 @@ export async function POST(request: Request) {
         : "";
 
   if (!orgSlug || !fullName || !email || !startsAt) {
+    rejectionLog("missing_required_field", {
+      orgSlug_present: Boolean(orgSlug),
+      fullName_present: Boolean(fullName),
+      email_present: Boolean(email),
+      startsAt_present: Boolean(startsAt),
+      booking_slug: bookingSlug,
+      // Hash email for diagnostics without leaking PII
+      email_domain: email.split("@")[1] ?? null,
+    });
     return NextResponse.json(
       {
         error:
@@ -88,6 +122,18 @@ export async function POST(request: Request) {
       notes: notes.length > 0 ? notes : undefined,
       startsAt,
     });
+    // Success log — useful for funnel analytics + confirming the
+    // booking actually persisted.
+    console.log(
+      JSON.stringify({
+        event: "public_booking_succeeded",
+        org_slug: orgSlug,
+        booking_slug: bookingSlug,
+        starts_at: startsAt,
+        email_domain: email.split("@")[1] ?? null,
+        had_checkout: Boolean(result.checkoutUrl),
+      }),
+    );
     return NextResponse.json({
       ok: true,
       checkoutUrl: result.checkoutUrl ?? null,
@@ -95,6 +141,13 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Booking failed.";
+    rejectionLog("submit_action_threw", {
+      org_slug: orgSlug,
+      booking_slug: bookingSlug,
+      starts_at: startsAt,
+      error: message,
+      stack: error instanceof Error ? error.stack?.slice(0, 800) : null,
+    });
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
 }

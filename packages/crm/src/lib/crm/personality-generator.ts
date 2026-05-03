@@ -267,6 +267,19 @@ The output must:
   studio, jewelry, high-end salon, club, fashion boutique). When in
   doubt, choose "light" — it's safer for legibility + accessibility
   and works for 80%+ of business types.
+- Provide \`services_enrichment\`: an array with EXACTLY ONE entry per
+  service the operator listed (in the same order). Each entry has:
+  \`{ service_name (verbatim), description (1-2 sentences a customer
+  would actually want to read, not internal jargon), icon (snake_case
+  Lucide name from: smile, baby, heart, stethoscope, wrench, flame,
+  snowflake, droplets, home, scale, briefcase, gavel, siren,
+  message_circle, dollar_sign, car, truck, scissors, camera, palette,
+  megaphone, leaf, dumbbell, cloud_lightning, columns, search,
+  app_window, square_stack, hammer, paintbrush, layers, fence,
+  blocks, thermometer, square, ruler, sparkles, calendar, file_text,
+  bar_chart, globe, mail, phone, star, check_circle, clock,
+  trending_up, zap, shield, users, bot) }\`. Pick a DIFFERENT icon per
+  service so each card has distinct visual treatment.
 
 Return ONLY the JSON object, no markdown fences, no explanation. The
 output will be parsed with JSON.parse() directly.`;
