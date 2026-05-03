@@ -29,6 +29,7 @@ import {
 } from "@/db/schema";
 import { createAnonymousWorkspace } from "@/lib/billing/anonymous-workspace";
 import { selectCRMPersonality } from "@/lib/crm/personality";
+import { resolvePersonalityForBusiness } from "@/lib/crm/personality-generator";
 import { classifyBusinessTypeFromSoul } from "@/lib/page-schema/classify-business";
 import { inferTimezone } from "@/lib/workspace/infer-timezone";
 import { trackEvent } from "@/lib/analytics/track";
@@ -142,13 +143,18 @@ export async function createFullWorkspace(
   const phone = input.phone.trim();
 
   // Step 2 + 3: CLASSIFY + RESOLVE PERSONALITY
-  // We compose the same Soul shape the legacy classifier expects so the
-  // existing keyword bank (broadened May 2 to cover heating/cooling/AC)
-  // does the work. Then pass services + description as the industry
-  // hint to selectCRMPersonality so the personality bank's MORE
-  // specific keywords (e.g. "law firm" → legal, even when the
-  // business-type classifier returns the generic "professional_service"
-  // bucket) get a shot before the businessType fallback chain.
+  //
+  // v1.3.0 — three-layer personality resolution:
+  //   1. cache hit: SELECT from personality_cache by business_type_key
+  //   2. LLM generation: Claude generates a custom CRMPersonality for
+  //      THIS specific business, validator-gated, cached on success
+  //   3. fallback: keyword-based selectCRMPersonality (existing
+  //      hardcoded 7-personality registry)
+  //
+  // Cache + LLM cover the long tail of niches (pet grooming,
+  // photography, accounting, …); the fallback guarantees a valid
+  // personality even when the LLM is unavailable or returns invalid
+  // JSON twice in a row.
   const classifierSoul: Record<string, unknown> = {
     business_name: input.business_name,
     soul_description: input.business_description,
@@ -161,7 +167,50 @@ export async function createFullWorkspace(
   ]
     .filter(Boolean)
     .join(" ");
-  const personality = selectCRMPersonality(businessType, industryHint);
+
+  let personality;
+  let personalitySource: "cache" | "llm" | "fallback" | "keyword" = "keyword";
+  let personalityCacheKey: string | null = null;
+  try {
+    const resolved = await resolvePersonalityForBusiness({
+      business_name: input.business_name,
+      city: input.city,
+      state: stateCode,
+      services: input.services,
+      business_description: input.business_description,
+    });
+    personality = resolved.personality;
+    personalitySource = resolved.source;
+    personalityCacheKey = resolved.business_type_key;
+    // One structured log line per workspace creation so we can query
+    // Vercel function logs for cache-hit ratio + LLM cost over time.
+    console.log(
+      JSON.stringify({
+        event: "personality_resolved",
+        workspace_business_name: input.business_name,
+        source: resolved.source,
+        business_type_key: resolved.business_type_key,
+        personality_vertical: resolved.personality.vertical,
+        notes: resolved.notes ?? null,
+      }),
+    );
+  } catch (err) {
+    // Generator threw despite its internal try/catch — guarantee a
+    // valid personality via the legacy keyword fallback.
+    personality = selectCRMPersonality(businessType, industryHint);
+    personalitySource = "keyword";
+    console.error(
+      JSON.stringify({
+        event: "personality_generator_threw",
+        error: err instanceof Error ? err.message : String(err),
+        workspace_business_name: input.business_name,
+      }),
+    );
+  }
+  // Reference businessType + cache key so they're not flagged as unused;
+  // both flow into trackEvent below for funnel analysis.
+  void businessType;
+  void personalityCacheKey;
 
   // Step 4: INFER TIMEZONE
   const timezone =
@@ -374,6 +423,14 @@ export async function createFullWorkspace(
     "workspace_created_full",
     {
       personality: personality.vertical,
+      // v1.3.0 — track which personality-resolution layer was used:
+      //   cache (instant lookup), llm (Claude generated + validated +
+      //   cached), or fallback (LLM unavailable / failed twice →
+      //   keyword-based selectCRMPersonality). Cache hit ratio over
+      //   time is the leading indicator that the architecture is
+      //   working (long tail of niches getting cached).
+      personality_source: personalitySource,
+      personality_cache_key: personalityCacheKey,
       timezone,
       services_count: input.services.length,
       has_review_metrics: Boolean(input.review_count || input.review_rating),

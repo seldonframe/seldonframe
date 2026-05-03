@@ -63,3 +63,6 @@ export * from "./workspace-records";
 export * from "./workspace-pages";
 export * from "./workspace-sidebar-items";
 export * from "./workspace-agents";
+// v1.3.0 — LLM-generated CRMPersonality cache (Karpathy: model
+// generates, validator gates, cache scales).
+export * from "./personality-cache";
