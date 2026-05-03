@@ -214,6 +214,54 @@ function toDateTimeLocalValue(date: Date) {
   return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
+// v1.3.2 — extract date components in a specific IANA timezone using
+// Intl.DateTimeFormat. JS Date methods (.getHours/.getDay) are
+// SERVER-LOCAL — useless for cross-TZ booking validation. The booking
+// flow needs to compare a UTC moment against the workspace's local
+// hours (e.g. "is 4pm Vancouver between Mon-Sat 3pm-8pm Vancouver?")
+// regardless of where the server runs (Vercel runs in UTC).
+//
+// Returns { year, month, day, weekday, hour, minute } in the target TZ.
+// Weekday is "monday" / "tuesday" / ... matching the AvailabilitySchedule
+// keys.
+function partsInTimezone(
+  date: Date,
+  timeZone: string,
+): {
+  year: number;
+  month: number;
+  day: number;
+  weekday: AvailabilityDayKey;
+  hour: number;
+  minute: number;
+} {
+  // formatToParts gives us each component independently — robust
+  // across TZs + DST transitions without manual offset math.
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    weekday: "long",
+    hour12: false,
+  });
+  const parts = Object.fromEntries(
+    fmt.formatToParts(date).map((p) => [p.type, p.value]),
+  );
+  // hour can be "24" in some locales when actually 00; normalize.
+  const rawHour = parseInt(parts.hour ?? "0", 10);
+  return {
+    year: parseInt(parts.year ?? "0", 10),
+    month: parseInt(parts.month ?? "0", 10),
+    day: parseInt(parts.day ?? "0", 10),
+    weekday: ((parts.weekday ?? "monday").toLowerCase()) as AvailabilityDayKey,
+    hour: rawHour === 24 ? 0 : rawHour,
+    minute: parseInt(parts.minute ?? "0", 10),
+  };
+}
+
 function normalizeVoiceConfirmation(rawSoul: unknown) {
   const soul = (rawSoul as { voice?: { samplePhrases?: string[] } } | null) ?? null;
   return soul?.voice?.samplePhrases?.[0] || "Booking confirmed. We will contact you shortly.";
@@ -901,15 +949,79 @@ export async function submitPublicBookingAction({
     throw new Error("Invalid start time");
   }
 
-  const bookingDate = toDateTimeLocalValue(bookingStart).slice(0, 10);
-  const availableSlots = await listPublicBookingSlotsAction({
-    orgSlug,
-    bookingSlug,
-    date: bookingDate,
-  });
+  // v1.3.2 — TIMEZONE-AWARE slot validation.
+  //
+  // The previous strict check `availableSlots.slots.includes(toDateTimeLocalValue(bookingStart))`
+  // compared format strings produced from server-local time
+  // (Vercel = UTC). The client picked a slot in the WORKSPACE'S
+  // timezone (e.g. "Wed 4pm Vancouver"), which `toISOString()` ships
+  // as a UTC moment ("Wed 23:00 UTC"). On the server, getHours()
+  // returns 23, slot generation produces ["09:00", "09:30", ...,
+  // "16:30"] in UTC — no match → "Selected slot is no longer
+  // available" rejected every valid booking attempt.
+  //
+  // New design: derive workspace-local components from the UTC
+  // moment via Intl, then validate against the personality/template
+  // availability in the SAME workspace TZ frame. This is the
+  // correct semantic model — bookings happen in the BUSINESS'S
+  // local time, not the server's, and not the visitor's.
+  const [orgRow] = await db
+    .select({ timezone: organizations.timezone })
+    .from(organizations)
+    .where(eq(organizations.id, bookingContext.orgId))
+    .limit(1);
+  const workspaceTz = orgRow?.timezone || "UTC";
 
-  if (!availableSlots.slots.includes(toDateTimeLocalValue(bookingStart))) {
-    throw new Error("Selected slot is no longer available");
+  const localParts = partsInTimezone(bookingStart, workspaceTz);
+  const dayAvailability = bookingContext.availability[localParts.weekday];
+  if (!dayAvailability?.enabled) {
+    throw new Error(
+      `Selected slot is on ${localParts.weekday}, which is not available for booking.`,
+    );
+  }
+  const slotMinuteOfDay = localParts.hour * 60 + localParts.minute;
+  const dayStartMinutes = toMinutes(dayAvailability.start);
+  const dayEndMinutes = toMinutes(dayAvailability.end);
+  if (slotMinuteOfDay < dayStartMinutes || slotMinuteOfDay >= dayEndMinutes) {
+    throw new Error(
+      `Selected slot (${localParts.hour}:${String(localParts.minute).padStart(2, "0")} ${workspaceTz}) is outside ${localParts.weekday} business hours (${dayAvailability.start}–${dayAvailability.end}).`,
+    );
+  }
+  // Snap-to-grid check: slot must align to a 15-minute boundary so
+  // we don't accept arbitrarily-offset bookings. 15 (not 30) so a
+  // 60-min duration can still anchor at :15 / :45 if the personality
+  // wants finer granularity later.
+  if (slotMinuteOfDay % 15 !== 0) {
+    throw new Error(
+      `Selected slot is off-grid (${localParts.hour}:${String(localParts.minute).padStart(2, "0")} not on a 15-minute boundary).`,
+    );
+  }
+  // Check for overlap with existing real bookings on the same day.
+  const dayStartUtc = new Date(bookingStart);
+  dayStartUtc.setUTCHours(0, 0, 0, 0);
+  const dayEndUtc = new Date(dayStartUtc);
+  dayEndUtc.setUTCDate(dayEndUtc.getUTCDate() + 1);
+  const conflicts = await db
+    .select({ startsAt: bookings.startsAt, endsAt: bookings.endsAt })
+    .from(bookings)
+    .where(
+      and(
+        eq(bookings.orgId, bookingContext.orgId),
+        eq(bookings.bookingSlug, bookingSlug),
+        ne(bookings.status, "template"),
+        inArray(bookings.status, ["scheduled", "completed"]),
+        gte(bookings.startsAt, dayStartUtc),
+        lt(bookings.startsAt, dayEndUtc),
+      ),
+    );
+  const slotEnd = deriveEndsAt(bookingStart, bookingContext.durationMinutes);
+  const overlap = conflicts.some((row) => {
+    const s = new Date(row.startsAt).getTime();
+    const e = new Date(row.endsAt).getTime();
+    return bookingStart.getTime() < e && slotEnd.getTime() > s;
+  });
+  if (overlap) {
+    throw new Error("That time was just booked. Please pick another slot.");
   }
 
   const provider = await resolveBookingProvider(null);

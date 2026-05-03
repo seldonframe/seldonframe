@@ -147,6 +147,23 @@ export interface PersonalityIntakeMeta {
   description?: string;
 }
 
+/**
+ * v1.3.2 — per-personality renderer mode hint. Drives whether the
+ * landing page renders with the cinematic (dark + glass +
+ * Instrument-Serif italic headers) or clean (light + Inter +
+ * neutral) PagePersonality. Light is the right default for trades,
+ * tutoring, dental, retailers, and most niches; dark/cinematic
+ * fits luxury / premium verticals (medspa, design agency, fashion).
+ *
+ * Optional — if absent, defaults to light unless the BusinessType
+ * classifier says otherwise (saas/agency historically → cinematic).
+ */
+export type PersonalityThemeMode = "light" | "dark";
+
+export interface PersonalityTheme {
+  mode: PersonalityThemeMode;
+}
+
 export interface CRMPersonality {
   vertical: PersonalityVertical;
   terminology: PersonalityTerminology;
@@ -155,6 +172,9 @@ export interface CRMPersonality {
   intakeFields: PersonalityIntakeField[];
   /** v1.1.9 — optional intake-form metadata. */
   intake?: PersonalityIntakeMeta;
+  /** v1.3.2 — optional renderer theme hint. Defaults to light for
+   *  most verticals; medspa + agency override to dark. */
+  theme?: PersonalityTheme;
   dashboard: PersonalityDashboard;
   /** May 2, 2026 — landing-page content templates. Optional for
    *  backward compat; personalities without templates fall back to
@@ -225,6 +245,7 @@ const GENERAL_PERSONALITY: CRMPersonality = {
     title: "Get in Touch",
     description: "Tell us a little about what you need and we'll get back to you with a quote.",
   },
+  theme: { mode: "light" },
   dashboard: {
     primaryMetrics: [
       { key: "open_jobs", label: "Open Jobs", icon: "Briefcase", tone: "primary" },
@@ -336,6 +357,7 @@ const HVAC_PERSONALITY: CRMPersonality = {
     title: "Request Service",
     description: "Tell us what's going on and we'll get back to you with a quote.",
   },
+  theme: { mode: "light" },
   dashboard: {
     primaryMetrics: [
       { key: "open_jobs", label: "Open Jobs", icon: "Wrench", tone: "primary" },
@@ -446,6 +468,7 @@ const LEGAL_PERSONALITY: CRMPersonality = {
     title: "Request a Free Consultation",
     description: "Confidential, no commitment. We'll listen first and only recommend retaining us if we genuinely think we can help.",
   },
+  theme: { mode: "light" },
   dashboard: {
     primaryMetrics: [
       { key: "active_cases", label: "Active Cases", icon: "Briefcase", tone: "primary" },
@@ -557,6 +580,7 @@ const DENTAL_PERSONALITY: CRMPersonality = {
     title: "Request an Appointment",
     description: "New patients welcome. We'll confirm your appointment and verify your insurance ahead of your visit.",
   },
+  theme: { mode: "light" },
   dashboard: {
     primaryMetrics: [
       { key: "active_patients", label: "Active Patients", icon: "Users", tone: "primary" },
@@ -666,6 +690,7 @@ const COACHING_PERSONALITY: CRMPersonality = {
     title: "Apply to Work With Us",
     description: "Tell us about your goals. We'll be in touch within 2 business days to set up a discovery call.",
   },
+  theme: { mode: "light" },
   dashboard: {
     primaryMetrics: [
       { key: "active_clients", label: "Active Clients", icon: "Users", tone: "primary" },
@@ -777,6 +802,7 @@ const AGENCY_PERSONALITY: CRMPersonality = {
     title: "Tell Us About Your Project",
     description: "Share the brief, budget, and timeline. We'll come back with a proposal tailored to your goals.",
   },
+  theme: { mode: "dark" },
   dashboard: {
     primaryMetrics: [
       { key: "active_projects", label: "Active Projects", icon: "Briefcase", tone: "primary" },
@@ -896,6 +922,7 @@ const MEDSPA_PERSONALITY: CRMPersonality = {
     title: "Request a Treatment Consultation",
     description: "Complimentary, no commitment. We'll assess your goals and walk you through a personalized treatment plan.",
   },
+  theme: { mode: "dark" },
   dashboard: {
     primaryMetrics: [
       { key: "active_clients", label: "Active Clients", icon: "Users", tone: "primary" },

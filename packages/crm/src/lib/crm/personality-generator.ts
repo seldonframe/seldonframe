@@ -73,6 +73,10 @@ export interface GeneratorResult {
   business_type_key: string;
   /** When source='llm' or 'fallback', diagnostic string for logs. */
   notes?: string;
+  /** When source='llm', the model id that produced the schema (after
+   *  any haiku-fallback retry). Surfaced in observability so we can
+   *  see which model is actually serving production. */
+  model?: string;
 }
 
 // ─── Cache key derivation ────────────────────────────────────────────────────
@@ -256,6 +260,13 @@ The output must:
   (e.g., "Book your treatment", "Get a free roofing quote").
 - Provide a dashboard with at least 3 primaryMetrics and 2
   urgencyIndicators relevant to this business.
+- Set \`theme.mode\` to "light" for most verticals (trades, tutoring,
+  professional services, retailers, healthcare, fitness, education,
+  hospitality). Use "dark" ONLY for premium / luxury / nightlife /
+  fashion / aesthetic verticals (med spa, design agency, photography
+  studio, jewelry, high-end salon, club, fashion boutique). When in
+  doubt, choose "light" — it's safer for legibility + accessibility
+  and works for 80%+ of business types.
 
 Return ONLY the JSON object, no markdown fences, no explanation. The
 output will be parsed with JSON.parse() directly.`;
@@ -272,21 +283,63 @@ output will be parsed with JSON.parse() directly.`;
 interface CallResult {
   ok: true;
   personality: CRMPersonality;
+  /** Which model actually produced the JSON. Surfaced in logs so we can
+   *  attribute output quality + cost to the right tier. */
+  model: string;
 }
 interface CallError {
   ok: false;
   error: string;
+  /** Set when the failure was a 404 (model-not-found) so the caller can
+   *  trigger the haiku-fallback retry. */
+  modelNotFound?: boolean;
 }
 type CallOutcome = CallResult | CallError;
+
+// v1.3.2 — model selection is an EXTERNAL DEPENDENCY that WILL change
+// again. Centralize in env var so rotation is zero-deploy:
+//
+//   ANTHROPIC_MODEL — primary model id. Default tracks the latest
+//                     stable Sonnet at time of writing.
+//   ANTHROPIC_MODEL_FALLBACK — degraded fallback when primary returns
+//                              404. Default = haiku for cost + lower
+//                              latency.
+//
+// Setting either env var on Vercel takes effect on the next request —
+// no npm publish, no source change. The constants below are the
+// shipped defaults and only matter when the env var is unset.
+const DEFAULT_PRIMARY_MODEL = "claude-sonnet-4-20250514";
+const DEFAULT_FALLBACK_MODEL = "claude-3-5-haiku-20241022";
+
+function primaryModel(): string {
+  return process.env.ANTHROPIC_MODEL?.trim() || DEFAULT_PRIMARY_MODEL;
+}
+
+function fallbackModel(): string {
+  return process.env.ANTHROPIC_MODEL_FALLBACK?.trim() || DEFAULT_FALLBACK_MODEL;
+}
+
+function detect404(err: unknown): boolean {
+  // Anthropic SDK throws an APIError with status 404 when the model
+  // id doesn't resolve (e.g. claude-3-5-sonnet-latest got retired).
+  // Match defensively across SDK versions.
+  if (!err) return false;
+  const e = err as { status?: number; statusCode?: number; message?: string };
+  if (e.status === 404 || e.statusCode === 404) return true;
+  if (typeof e.message === "string" && /\b404\b|model.*not.*found/i.test(e.message))
+    return true;
+  return false;
+}
 
 async function callAnthropic(
   apiKey: string,
   prompt: string,
+  model: string,
 ): Promise<CallOutcome> {
   try {
     const anthropic = new Anthropic({ apiKey });
     const response = await anthropic.messages.create({
-      model: "claude-3-5-sonnet-latest",
+      model,
       max_tokens: 4096,
       messages: [{ role: "user", content: prompt }],
     });
@@ -309,13 +362,44 @@ async function callAnthropic(
         error: `JSON.parse failed: ${err instanceof Error ? err.message : String(err)}`,
       };
     }
-    return { ok: true, personality: parsed as CRMPersonality };
+    return { ok: true, personality: parsed as CRMPersonality, model };
   } catch (err) {
+    const isModelNotFound = detect404(err);
     return {
       ok: false,
       error: err instanceof Error ? err.message : String(err),
+      modelNotFound: isModelNotFound,
     };
   }
+}
+
+/**
+ * Call Anthropic with primary model; on 404 (model-not-found) retry
+ * once with the fallback model. Returns the OK outcome with the
+ * actually-used model id, or the FINAL error if both attempts failed.
+ */
+async function callAnthropicWithModelFallback(
+  apiKey: string,
+  prompt: string,
+): Promise<CallOutcome> {
+  const primary = primaryModel();
+  const first = await callAnthropic(apiKey, prompt, primary);
+  if (first.ok) return first;
+  if (!first.modelNotFound) return first;
+  // Primary model 404'd. Retry with the haiku fallback so the operator
+  // still gets an LLM-generated personality (lower quality + cost) rather
+  // than falling all the way through to the keyword fallback layer.
+  const fallback = fallbackModel();
+  if (fallback === primary) return first; // misconfig; nothing to retry
+  console.warn(
+    JSON.stringify({
+      event: "personality_generator_model_fallback",
+      from_model: primary,
+      to_model: fallback,
+      reason: first.error,
+    }),
+  );
+  return callAnthropic(apiKey, prompt, fallback);
 }
 
 // ─── Cache helpers ───────────────────────────────────────────────────────────
@@ -404,15 +488,19 @@ export async function resolvePersonalityForBusiness(
   // Layer 2: LLM generation. Skip if no API key.
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
   if (apiKey) {
-    let attempt: CallOutcome = await callAnthropic(apiKey, buildPrompt(input));
+    let attempt: CallOutcome = await callAnthropicWithModelFallback(
+      apiKey,
+      buildPrompt(input),
+    );
     let validationErrors: string | null = null;
 
     if (attempt.ok) {
       const errors = checkPersonalityCompleteness(attempt.personality);
       if (errors.length > 0) {
+        const usedModel = attempt.model;
         validationErrors = formatCompletenessErrors(errors);
         // Retry once with feedback.
-        attempt = await callAnthropic(
+        attempt = await callAnthropicWithModelFallback(
           apiKey,
           buildPrompt(input, validationErrors),
         );
@@ -423,13 +511,14 @@ export async function resolvePersonalityForBusiness(
               businessTypeKey,
               attempt.personality,
               "llm",
-              "claude-3-5-sonnet-latest",
+              attempt.model,
             );
             return {
               personality: attempt.personality,
               source: "llm",
               business_type_key: businessTypeKey,
-              notes: "validated on retry",
+              notes: `validated on retry (initial model=${usedModel})`,
+              model: attempt.model,
             };
           }
           validationErrors = formatCompletenessErrors(errors2);
@@ -442,16 +531,17 @@ export async function resolvePersonalityForBusiness(
           businessTypeKey,
           attempt.personality,
           "llm",
-          "claude-3-5-sonnet-latest",
+          attempt.model,
         );
         return {
           personality: attempt.personality,
           source: "llm",
           business_type_key: businessTypeKey,
+          model: attempt.model,
         };
       }
     } else {
-      validationErrors = `first_call_failed: ${attempt.error}`;
+      validationErrors = `first_call_failed: ${attempt.error}${attempt.modelNotFound ? " [model_not_found]" : ""}`;
     }
 
     // Falling through to layer 3 — log the LLM failure for observability.
@@ -460,6 +550,8 @@ export async function resolvePersonalityForBusiness(
         event: "personality_generator_fallback",
         business_type_key: businessTypeKey,
         reason: validationErrors,
+        primary_model: primaryModel(),
+        fallback_model: fallbackModel(),
       }),
     );
   }

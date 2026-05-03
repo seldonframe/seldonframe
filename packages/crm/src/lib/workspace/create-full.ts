@@ -184,6 +184,8 @@ export async function createFullWorkspace(
     personalityCacheKey = resolved.business_type_key;
     // One structured log line per workspace creation so we can query
     // Vercel function logs for cache-hit ratio + LLM cost over time.
+    // v1.3.2 — added `model` so we can confirm which Anthropic model
+    // is actually serving production after env-var rotation.
     console.log(
       JSON.stringify({
         event: "personality_resolved",
@@ -191,6 +193,7 @@ export async function createFullWorkspace(
         source: resolved.source,
         business_type_key: resolved.business_type_key,
         personality_vertical: resolved.personality.vertical,
+        model: resolved.model ?? null,
         notes: resolved.notes ?? null,
       }),
     );

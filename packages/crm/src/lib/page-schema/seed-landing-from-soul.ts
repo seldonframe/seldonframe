@@ -109,7 +109,6 @@ export async function seedLandingFromSoul(orgId: string): Promise<SeedLandingRes
   const businessType = classifyBusinessTypeFromSoul(
     org.soul as unknown as Record<string, unknown>
   );
-  const personality = defaultPersonalityForType(businessType);
 
   // v1.1.4 — Personality-Driven Content Layer.
   // Read the CRMPersonality from org.settings (set at workspace creation
@@ -119,6 +118,19 @@ export async function seedLandingFromSoul(orgId: string): Promise<SeedLandingRes
   const crmPersonality = readPersonalityFromSettings(
     (org.settings as Record<string, unknown> | null)?.crmPersonality
   );
+
+  // v1.3.2 — render-mode resolution. Personality's theme.mode wins
+  // when set. Falls back to BusinessType-based heuristic (legacy
+  // saas/agency → cinematic, everything else → clean) so workspaces
+  // without a personality theme still pick a sensible default. The
+  // user spec: "Default to light for most verticals; use dark /
+  // cinematic for premium verticals (medspa, agency, luxury)."
+  const personality: PagePersonality =
+    crmPersonality.theme?.mode === "dark"
+      ? "cinematic"
+      : crmPersonality.theme?.mode === "light"
+        ? "clean"
+        : defaultPersonalityForType(businessType);
 
   // v1.1.7 — per-CRMPersonality default accent. Operators can still
   // override via update_theme; we only fall through to the personality
