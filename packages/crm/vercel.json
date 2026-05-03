@@ -22,6 +22,10 @@
     {
       "path": "/api/cron/report-contact-usage",
       "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/brain-promote",
+      "schedule": "0 5 * * 0"
     }
   ]
 }

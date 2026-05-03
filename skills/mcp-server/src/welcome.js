@@ -8,7 +8,7 @@
 // stripped. `create_full_workspace` is the only workspace-creation
 // path mentioned anywhere in this briefing.
 
-export const VERSION = "1.5.1";
+export const VERSION = "1.6.0";
 
 export const WELCOME_MARKDOWN = `# SeldonFrame — create a real Business OS in one conversation
 
@@ -167,6 +167,8 @@ further natural-language requests ("change the headline to …",
 - **\`create_workspace_v2\`** — PREFERRED workspace-creation tool (v1.4+).
   MCP-native: bootstraps the workspace + returns the list of blocks YOU
   generate using your own LLM. The first call for any new workspace.
+  v1.6+ also returns \`brain_patterns\` — anonymized cross-workspace
+  insights for this vertical that you should fold into your generation.
 - **\`list_blocks\`** — lists v2 page-block primitives available.
 - **\`get_block_skill\`** — fetches one block's SKILL.md (the generation
   prompt + prop schema you read before generating props).
@@ -174,6 +176,16 @@ further natural-language requests ("change the headline to …",
   + renders + replaces the matching section in the workspace's landing.
 - **\`complete_workspace_v2\`** — marks the v2 flow finished, reports which
   blocks landed.
+- **\`read_brain_path\`** / **\`list_brain_dir\`** — read the workspace's
+  layer-1 brain (notes about THIS workspace's customers, voice, pipeline
+  patterns). Use BEFORE generating blocks; reads tick the note's \`uses\`
+  counter so the system knows what's actually being consumed.
+- **\`write_brain_note\`** — capture insights the operator volunteers
+  ("walk-ins on Saturday convert 3× better"). Notes live in the
+  workspace's brain forever, contribute to layer-2 cross-workspace
+  patterns when 3+ workspaces independently observe them.
+- **\`list_brain_patterns\`** — read layer-2 cross-workspace patterns,
+  filtered by vertical or block_type.
 - **\`create_full_workspace\`** — v1 atomic creation (legacy). Server-side,
   deterministic. Use only when v2 is impossible.
 - **\`finalize_workspace\`** — MANDATORY closing call. Mints the

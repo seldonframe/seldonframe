@@ -71,3 +71,7 @@ export * from "./personality-cache";
 // them here, and the rendered HTML lands in the same row. Forever-frozen
 // edits live in `customizations`.
 export * from "./block-instances";
+// v1.6.0 — brain_notes: file-tree storage for the Karpathy LLM-Wiki
+// brain. Two layers (workspace + global), self-pruning + self-promoting
+// via confidence/uses/wins. The compounding moat.
+export * from "./brain-notes";

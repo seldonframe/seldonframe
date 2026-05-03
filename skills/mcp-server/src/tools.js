@@ -2660,6 +2660,149 @@ export const TOOLS = [
       return result;
     },
   },
+
+  // ─── v1.6.0 — brain layer (Karpathy LLM-Wiki) ───────────────────────────
+  //
+  // Two-layer brain stored as a file-tree of markdown notes:
+  //   - Layer 1 (workspace): notes about THIS workspace's customers, voice,
+  //     pipeline patterns, learnings. Reads cost 0 LLM tokens server-side
+  //     (the IDE agent's LLM consumes them as context).
+  //   - Layer 2 (global): cross-workspace patterns, anonymized. The weekly
+  //     cron promotes high-confidence workspace notes that appear in 3+
+  //     workspaces.
+  //
+  // Use these tools BEFORE generating a block to give the IDE agent's
+  // LLM workspace-specific + vertical-specific context. Use them AFTER
+  // a successful interaction to write back what worked.
+
+  {
+    name: "read_brain_path",
+    description:
+      "Read a single brain note from the workspace's layer-1 brain. Returns the body (markdown), confidence (0-1), uses (times read), wins (times the consuming interaction was successful), and metadata. Reading a note increments its `uses` counter — that's how the feedback loop knows the note has been consumed. Use BEFORE generating blocks: check for relevant entries (voice/copy-that-works.md, customers/recurring.md, learnings.md) so your generation reflects what's been observed about this workspace.",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id."),
+        path: str(
+          "Note path. Examples: voice/copy-that-works.md, customers/recurring.md, pipeline/closed-won-patterns.md, learnings.md.",
+        ),
+      },
+      ["workspace_id", "path"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/brain", {
+        body: { op: "read", path: args.path },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
+  {
+    name: "list_brain_dir",
+    description:
+      "List brain notes in the workspace's layer-1 brain. Returns metadata + a 120-char body preview per note (full body requires read_brain_path). Use to discover what the brain knows about this workspace before generating blocks. Pass `prefix` to filter by directory (e.g. 'voice/' returns voice-related notes only). Notes are returned sorted by confidence descending.",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id."),
+        prefix: str(
+          "Optional path prefix to filter (e.g. 'voice/', 'customers/'). Omit for all notes.",
+        ),
+      },
+      ["workspace_id"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/brain", {
+        body: { op: "list", prefix: args.prefix ?? undefined },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
+  {
+    name: "write_brain_note",
+    description:
+      "Write a brain note to the workspace's layer-1 brain. Use to capture insights the operator volunteers ('walk-ins on Saturday convert 3× better', 'don't ever say synergy in the copy', 'most leads come in via Instagram'). The note is REPLACED on subsequent writes to the same path; for append-style writes use `append: true`. Source field is recorded so the cron can attribute promotions correctly.",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id."),
+        path: str(
+          "Note path. Convention: <category>/<topic>.md. Examples: customers/recurring.md, voice/copy-that-works.md, learnings.md, ops/saturday-rush.md.",
+        ),
+        body: str(
+          "Markdown body of the note. Concrete, specific, observation-based. Avoid generalities.",
+        ),
+        append: {
+          type: "boolean",
+          description:
+            "When true, prepend the body as a new dated paragraph to the existing note (preserves history). When false (default), replaces the existing body.",
+        },
+        type: str(
+          "Optional note type for filtering: 'pattern' | 'fact' | 'preference' | 'warning' | 'playbook' | 'anti-pattern'.",
+        ),
+        tags: {
+          type: "array",
+          description: "Optional tags for filtering.",
+          items: { type: "string" },
+        },
+      },
+      ["workspace_id", "path", "body"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const op = args.append ? "append" : "write";
+      const payload = {
+        op,
+        path: args.path,
+        metadata: {
+          source: "operator:claude-code",
+          type: args.type ?? undefined,
+          tags: args.tags ?? undefined,
+        },
+      };
+      if (op === "append") payload.paragraph = args.body;
+      else payload.body = args.body;
+      const result = await api("POST", "/brain", {
+        body: payload,
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
+  {
+    name: "list_brain_patterns",
+    description:
+      "List layer-2 cross-workspace patterns. These are anonymized insights the cron has promoted from workspaces that all observed the same thing (3+ workspaces, confidence >= 0.7). Use BEFORE generating blocks for a vertical-specific business — patterns/by-vertical/<vertical>.md gives you observations across every other workspace in that vertical. Compounding moat: each new workspace's interactions feed back into these patterns over time.",
+    inputSchema: obj(
+      {
+        workspace_id: str(
+          "Workspace id (used for auth; the patterns themselves are global).",
+        ),
+        vertical: str(
+          "Optional vertical filter: 'barbershop' | 'hvac' | 'legal' | 'restaurant' | etc. Returns patterns/by-vertical/<vertical>/* notes only.",
+        ),
+        block_type: str(
+          "Optional block-type filter: 'hero' | 'services' | 'faq' | etc. Returns patterns/by-block-type/<type>/* notes only.",
+        ),
+      },
+      ["workspace_id"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/brain", {
+        body: {
+          op: "list_patterns",
+          vertical: args.vertical ?? undefined,
+          block_type: args.block_type ?? undefined,
+        },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
 ];
 
 export const TOOL_MAP = Object.fromEntries(TOOLS.map((t) => [t.name, t]));

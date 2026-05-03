@@ -1276,6 +1276,45 @@ export async function submitPublicBookingAction({
           }),
         );
       }
+
+      // v1.6.0 — brain trigger: append a dated observation to the
+      // workspace's pipeline/booked-appointments.md note. Over time this
+      // becomes a record of "what kinds of customers actually book us"
+      // that the IDE agent reads when generating future blocks (e.g.
+      // hero copy that highlights the demographic that's actually
+      // converting). Best-effort — failures don't roll back the booking.
+      try {
+        const { appendToBrainNote } = await import("@/lib/brain/store");
+        const localTime = (() => {
+          try {
+            const parts = partsInTimezone(bookingStart, workspaceTz);
+            return `${parts.weekday} ${parts.hour}:${String(parts.minute).padStart(2, "0")}`;
+          } catch {
+            return bookingStart.toISOString();
+          }
+        })();
+        await appendToBrainNote({
+          orgId: bookingContext.orgId,
+          scope: "workspace",
+          path: "pipeline/booked-appointments.md",
+          paragraph: `**${bookingContext.appointmentName}** booked for ${localTime} (${workspaceTz}). Lead source: public-booking. Email domain: ${email.split("@")[1] ?? "unknown"}.`,
+          metadata: {
+            type: "fact",
+            tags: ["booking", "conversion"],
+            source: `trigger:booking.created:${createdBooking.id}`,
+            related_block_types: ["hero", "cta", "booking"],
+          },
+        });
+      } catch (err) {
+        console.warn(
+          JSON.stringify({
+            event: "brain_trigger_booking_failed",
+            ...baseLogContext,
+            booking_id: createdBooking.id,
+            error: err instanceof Error ? err.message : String(err),
+          }),
+        );
+      }
     }
   }
 

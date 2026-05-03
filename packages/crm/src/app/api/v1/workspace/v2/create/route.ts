@@ -142,6 +142,39 @@ export async function POST(request: Request) {
     persist_endpoint: "/api/v1/workspace/v2/blocks",
   }));
 
+  // v1.6.0 — brain layer: pre-fetch any cross-workspace patterns the
+  // IDE agent should know about for THIS vertical. Layer-2 patterns
+  // are anonymized aggregations (the cron promotes them once 3+
+  // workspaces independently observe the same thing). Returning them
+  // inline saves the IDE agent a second MCP round-trip; for finer
+  // control they can still call list_brain_patterns directly.
+  let brainPatterns: Array<{
+    path: string;
+    body_preview: string;
+    confidence: number;
+  }> = [];
+  try {
+    const { listBrainDir } = await import("@/lib/brain/store");
+    const vertical = result.configured?.personality;
+    const prefix = vertical
+      ? `patterns/by-vertical/${vertical}`
+      : "patterns/";
+    const notes = await listBrainDir({
+      orgId: null,
+      scope: "global",
+      prefix,
+      limit: 10,
+    });
+    brainPatterns = notes.map((n) => ({
+      path: n.path,
+      body_preview: n.body_preview,
+      confidence: n.confidence,
+    }));
+  } catch {
+    // Brain not yet populated for this vertical — empty patterns is
+    // expected at v1.6.0 launch (brain compounds over time).
+  }
+
   // Workspace context the agent feeds into each block's prompt.
   const context = {
     business_name: input.business_name,
@@ -187,11 +220,19 @@ export async function POST(request: Request) {
       v2: {
         recommended_blocks: recommendedBlocks,
         context,
+        // v1.6.0 — brain patterns for this vertical. Layer-2 cross-
+        // workspace patterns the IDE agent should fold into its block
+        // generation prompts. May be empty at first; compounds over
+        // time as more workspaces in this vertical are created and
+        // their successful patterns get promoted by the weekly cron.
+        brain_patterns: brainPatterns,
         next_steps: [
           "1. For each block in recommended_blocks: GET skill_url to load SKILL.md (markdown text).",
-          "2. Use your LLM to generate props matching the prop schema in the SKILL.md frontmatter, using the context object as input.",
-          "3. POST { workspace_id, block_name, generation_prompt, props } to persist_endpoint with Authorization: Bearer <_bearer_token>.",
-          "4. After all blocks are persisted, POST { workspace_id } to /api/v1/workspace/v2/complete with the same bearer.",
+          "2. Optionally: call read_brain_path / list_brain_dir to pull workspace-specific notes (voice/copy-that-works.md, customers/recurring.md, learnings.md). For NEW workspaces these will be empty; for re-rolls they accumulate insights.",
+          "3. Fold brain_patterns (above) AND any workspace-scoped brain notes into your block-generation prompt alongside the SKILL.md.",
+          "4. Use your LLM to generate props matching the prop schema in the SKILL.md frontmatter, using the context object + brain context as input.",
+          "5. POST { workspace_id, block_name, generation_prompt, props } to persist_endpoint with Authorization: Bearer <_bearer_token>.",
+          "6. After all blocks are persisted, POST { workspace_id } to /api/v1/workspace/v2/complete with the same bearer.",
         ],
       },
     },

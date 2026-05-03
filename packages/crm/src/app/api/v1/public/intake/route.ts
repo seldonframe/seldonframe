@@ -201,6 +201,62 @@ export async function POST(request: Request) {
     { orgId: org.id }
   ).catch(() => undefined);
 
+  // v1.6.0 — brain trigger: append a dated observation to the
+  // workspace's intake/recent-leads.md note. Captures the SHAPE of
+  // what's being asked (which questions are answered, which are
+  // skipped, which categories visitors pick) without storing PII. Over
+  // time this becomes a "what kinds of leads come through this form"
+  // record the IDE agent reads when generating future intake / hero /
+  // FAQ blocks. Best-effort — never blocks the submission response.
+  void (async () => {
+    try {
+      const { appendToBrainNote } = await import("@/lib/brain/store");
+      // Summarize the answer keys (not values — protects PII). A note
+      // like "5 fields filled, 1 skipped — service: AC repair" tells the
+      // agent which question categories drive completion vs. drop-off.
+      const answerKeys = Object.keys(answers).filter((k) => {
+        const v = answers[k];
+        return v != null && v !== "" && !(Array.isArray(v) && v.length === 0);
+      });
+      const skippedKeys = formFields
+        .map((f) => f.key)
+        .filter((k) => !answerKeys.includes(k));
+      // Pull a few low-risk values that suggest "what kind of lead":
+      // service / interest / how-did-you-hear style fields. Skip anything
+      // that looks like email/phone/address/name.
+      const PII_KEY_RE = /email|phone|address|name|street|zip|postal/i;
+      const safeValues = answerKeys
+        .filter((k) => !PII_KEY_RE.test(k))
+        .slice(0, 4)
+        .map((k) => {
+          const v = answers[k];
+          const str = typeof v === "string" ? v : Array.isArray(v) ? v.join(", ") : String(v);
+          return `${k}: ${str.slice(0, 60)}`;
+        })
+        .join(" | ");
+      await appendToBrainNote({
+        orgId: org.id,
+        scope: "workspace",
+        path: "intake/recent-leads.md",
+        paragraph: `Submission via /${formSlug}: ${answerKeys.length} answered, ${skippedKeys.length} skipped. ${safeValues || "(no non-PII fields to summarize)"}`,
+        metadata: {
+          type: "fact",
+          tags: ["intake", "lead-shape"],
+          source: `trigger:form.submitted:${form.id}`,
+          related_block_types: ["intake", "hero", "faq"],
+        },
+      });
+    } catch (err) {
+      console.warn(
+        JSON.stringify({
+          event: "brain_trigger_intake_failed",
+          form_slug: formSlug,
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
+    }
+  })();
+
   // v1.3.5 — funnel observability. Pairs with public_intake_rejected so
   // every public submission has a single-line outcome record.
   console.log(
