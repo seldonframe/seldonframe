@@ -298,7 +298,7 @@ async function persistBookingBlock(
       leadTimeHours: prevBooking?.availability?.leadTimeHours,
       advanceWindowDays: prevBooking?.availability?.advanceWindowDays,
     },
-    formFields: (props.form_fields ?? []) as BookingFormField[],
+    formFields: mergeBookingFormFields(props.form_fields ?? []),
     confirmation: prevBooking?.confirmation ?? {
       headline: "Your booking is confirmed",
       message: "We'll send a calendar invite shortly. If anything changes, just reply to that email.",
@@ -676,4 +676,55 @@ function hourToTimeString(h: number): string {
 
 function sha1(s: string): string {
   return createHash("sha1").update(s).digest("hex");
+}
+
+/**
+ * v1.4.2 — always include standard name + email fields in the booking
+ * form, even when the LLM only provides operator-specific extras.
+ *
+ * Why: the calcom-month-v1 renderer reads Blueprint.booking.formFields
+ * directly — it does NOT auto-prepend name/email. Pre-1.4.2 the v2
+ * persist path replaced formFields with whatever the LLM generated,
+ * wiping the standard fields v1's bootstrap had put there. Result:
+ * every v2 workspace shipped a booking form with no name + email
+ * inputs, and submitPublicBookingAction rejected every attempt with
+ * "missing_required_field fullName_present:false email_present:false".
+ *
+ * The right behavior is for the SF backend to OWN the standard fields
+ * (the renderer always needs them; the booking POST handler always
+ * requires them). The LLM's job is to add operator-specific extras —
+ * "Dog's name" for grooming, "Service address" for HVAC, "Party size"
+ * for a restaurant. We dedupe on `id` so an LLM that DOES include name
+ * or email doesn't produce two of each.
+ */
+function mergeBookingFormFields(
+  llmFields: Array<{
+    id: string;
+    label: string;
+    type: "text" | "email" | "phone" | "textarea" | "select";
+    required?: boolean;
+    placeholder?: string;
+    options?: string[];
+  }>,
+): BookingFormField[] {
+  const STANDARD_FIELDS: BookingFormField[] = [
+    {
+      id: "fullName",
+      label: "Your name",
+      type: "text",
+      required: true,
+    },
+    {
+      id: "email",
+      label: "Email",
+      type: "email",
+      required: true,
+    },
+  ];
+  const standardIds = new Set(STANDARD_FIELDS.map((f) => f.id));
+  // Drop any LLM-provided field that conflicts with a standard id; the
+  // server's standard takes precedence (the booking POST handler
+  // expects exactly these ids).
+  const extras = llmFields.filter((f) => !standardIds.has(f.id));
+  return [...STANDARD_FIELDS, ...extras] as BookingFormField[];
 }

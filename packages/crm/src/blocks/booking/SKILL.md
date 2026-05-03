@@ -48,7 +48,7 @@ props:
     type: array
     required: false
     description: |
-      Optional extra fields collected on the booking form (ABOVE the standard name + email). Only include if the vertical genuinely needs them ("Dog's name" for grooming, "Service address" for HVAC, "What you'd like to discuss" for legal). Omit entirely for simple bookings.
+      Optional EXTRA fields specific to this vertical. The server ALWAYS adds standard name + email automatically (do NOT include them here — they'll be deduplicated). Only add genuine operator-specific fields ("Dog's name" for grooming, "Service address" for HVAC, "Party size" for a restaurant). Omit entirely for simple bookings.
     item_schema:
       id: { type: string, description: "snake_case id, e.g. 'dog_name', 'service_address'" }
       label: { type: string, description: "Customer-facing label" }
@@ -104,9 +104,11 @@ date, has to feel right.
 4. **Availability matches the trade.** A bar opens at 4pm. A mobile
    groomer works 9-6. An HVAC tech is on-call 7am-7pm. Pick believable
    hours; skipping days is fine ("Closed Sunday").
-5. **Form fields are minimal.** Standard name + email are added by the
-   renderer automatically. Add extra fields only when the appointment
-   genuinely needs them.
+5. **Form fields are EXTRAS only.** The server always adds standard
+   name + email — DO NOT include them in form_fields (they'll be
+   deduped). Only add genuine operator-specific extras: "Dog's name"
+   for a groomer, "Service address" for HVAC, "Party size" for a
+   restaurant. Skip the array entirely for simple bookings.
 
 ## Worked examples
 
