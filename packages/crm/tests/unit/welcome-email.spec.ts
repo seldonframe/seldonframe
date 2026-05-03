@@ -116,18 +116,18 @@ describe("validateWelcomeRequest", () => {
 });
 
 describe("pickFromAddress", () => {
-  test("uses RESEND_FROM_ADDRESS when set", () => {
+  test("uses RESEND_FROM_ADDRESS when it points at the verified seldonframe.com domain", () => {
     const result = pickFromAddress({
       RESEND_FROM_ADDRESS: "SeldonFrame <onboarding@seldonframe.com>",
     });
     assert.equal(result, "SeldonFrame <onboarding@seldonframe.com>");
   });
 
-  test("trims whitespace from RESEND_FROM_ADDRESS", () => {
+  test("trims whitespace from RESEND_FROM_ADDRESS (when domain is verified)", () => {
     const result = pickFromAddress({
-      RESEND_FROM_ADDRESS: "  Foo <foo@x.com>  ",
+      RESEND_FROM_ADDRESS: "  Foo <foo@seldonframe.com>  ",
     });
-    assert.equal(result, "Foo <foo@x.com>");
+    assert.equal(result, "Foo <foo@seldonframe.com>");
   });
 
   test("falls back to welcome@seldonframe.com (verified domain) when not set", () => {
@@ -141,6 +141,29 @@ describe("pickFromAddress", () => {
   test("falls back when RESEND_FROM_ADDRESS is empty", () => {
     const result = pickFromAddress({ RESEND_FROM_ADDRESS: "   " });
     assert.match(result, /welcome@seldonframe\.com/);
+  });
+
+  test("v1.1.7 — IGNORES the resend.dev sandbox address (forces verified domain)", () => {
+    // Production deployments stuck with the legacy
+    // onboarding@resend.dev fallback (sandbox-only, can't deliver
+    // to non-account-owner emails). pickFromAddress must override.
+    const result = pickFromAddress({
+      RESEND_FROM_ADDRESS: "SeldonFrame <onboarding@resend.dev>",
+    });
+    assert.match(result, /welcome@seldonframe\.com/);
+    assert.doesNotMatch(result, /resend\.dev/);
+  });
+
+  test("v1.1.8 — IGNORES non-seldonframe.com env overrides (env drift guard)", () => {
+    // A staging/preview deployment with a misconfigured
+    // RESEND_FROM_ADDRESS like noreply@example.com would be rejected
+    // by Resend (unverified domain). Forcing the verified default
+    // makes the welcome email path resilient to env drift.
+    const result = pickFromAddress({
+      RESEND_FROM_ADDRESS: "Generic <noreply@example.com>",
+    });
+    assert.match(result, /welcome@seldonframe\.com/);
+    assert.doesNotMatch(result, /example\.com/);
   });
 });
 

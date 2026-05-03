@@ -103,6 +103,20 @@ export function pickFromAddress(env: NodeJS.ProcessEnv | Record<string, string |
   // welcome@seldonframe.com domain is set up in Resend (DNS verified
   // May 01) and works for all recipients.
   if (configured && SANDBOX_FROM_PATTERN.test(configured)) {
+    console.warn(
+      `[welcome-email] Ignoring RESEND_FROM_ADDRESS="${configured}" — sandbox addresses can only deliver to the account owner. Falling back to ${DEFAULT_FROM}.`,
+    );
+    return DEFAULT_FROM;
+  }
+  // v1.1.8 — aggressive default. When the env var is not set OR
+  // doesn't carry a seldonframe.com address, force the verified
+  // production domain. This guards against env drift where a
+  // staging/preview deployment carries an unverified `noreply@example
+  // .com`-style override that Resend would reject.
+  if (configured && !/seldonframe\.com>?$/i.test(configured)) {
+    console.warn(
+      `[welcome-email] RESEND_FROM_ADDRESS="${configured}" doesn't use a verified seldonframe.com domain — falling back to ${DEFAULT_FROM} for safety.`,
+    );
     return DEFAULT_FROM;
   }
   return configured || DEFAULT_FROM;

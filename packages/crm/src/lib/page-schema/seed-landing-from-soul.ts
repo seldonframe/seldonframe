@@ -163,6 +163,17 @@ export async function seedLandingFromSoul(orgId: string): Promise<SeedLandingRes
   applyResolvedContentToSchema(schema, resolvedContent, crmPersonality);
   applyStatsFromSoul(schema, soulRecordRaw, crmPersonality);
 
+  // v1.1.8 — Aggressive CTA-label override. The previous v1.1.4 path
+  // overlaid hero_headline / faqs / cta_headline onto the soul, but
+  // CTA BUTTON labels (the "Start for $0 →" / "Get started →" copy
+  // on the actual buttons) flow through PageSchema.actions which are
+  // pack-defined and don't read from the personality. Without this,
+  // a fresh medspa workspace shipped with the SAAS_PACK's "Get
+  // started →" button instead of "Book your consultation →" — the
+  // personality's voice didn't carry through to the CTAs that
+  // matter most for conversion.
+  applyResolvedContentToActions(schema, resolvedContent);
+
   // v1.1.5 / Issue #2 — assign per-service Lucide icons based on the
   // service title + personality vertical. Without this, every service
   // card falls through to the generic "sparkles" fallback because the
@@ -423,6 +434,41 @@ function applyResolvedContentToSchema(
   // future per-vertical branching (e.g. a different services_heading rule
   // for SaaS vs local-service personalities). No behavioral effect today.
   void personality;
+}
+
+/**
+ * v1.1.8 — Override hero + footer CTA button labels with the
+ * personality's content_templates.cta_button_primary /
+ * cta_button_secondary. Pack-defined PageActions (e.g. SAAS_PACK's
+ * "Get started →") get rewritten to the personality voice
+ * ("Book your consultation →" for medspa, "Get a free quote →"
+ * for hvac, etc.) so a med spa workspace doesn't ship a generic
+ * SaaS button on its hero.
+ *
+ * Hrefs are preserved (CTAs still point at /book / /intake); only
+ * the visible label changes. Operators who edit a CTA via
+ * update_landing_section retain their override (we only touch the
+ * pack-default labels that match the SAAS_PACK / LOCAL_SERVICE_PACK
+ * generic copy).
+ */
+function applyResolvedContentToActions(
+  schema: PageSchema,
+  resolved: ResolvedPersonalityContent | null
+): void {
+  if (!resolved) return;
+  const primary = resolved.cta_button_primary?.trim();
+  const secondary = resolved.cta_button_secondary?.trim();
+  if (!primary && !secondary) return;
+
+  schema.actions = schema.actions.map((action) => {
+    if (action.id === "hero_primary" && primary) {
+      return { ...action, text: primary };
+    }
+    if (action.id === "hero_secondary" && secondary) {
+      return { ...action, text: secondary };
+    }
+    return action;
+  });
 }
 
 /**
