@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { submitPublicBookingAction } from "@/lib/bookings/actions";
+import { resolveWorkspaceSlugFromRequest } from "@/lib/workspace/host-to-slug";
 
 /**
  * POST /api/v1/public/bookings
@@ -73,7 +74,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  const orgSlug = typeof body.orgSlug === "string" ? body.orgSlug.trim() : "";
+  // v1.3.5 — orgSlug resolution is body-FIRST, host-FALLBACK.
+  // The C4 vanilla-JS client extracts orgSlug from window.location.pathname,
+  // expecting /book/<slug>/<bookingSlug>. On a workspace subdomain
+  // (<slug>.app.seldonframe.com) the proxy.ts middleware REWRITES /book to
+  // /book/<slug>/default server-side — the browser URL stays /book, so the
+  // client sees no slug in the path and posts orgSlug="". Result: every
+  // visitor on every subdomain hit "missing_required_field" 400. The body
+  // value still wins when present (lets the path-based /book/<slug>/<x>
+  // flow keep working unchanged); the host derivation is the safety net.
+  const bodyOrgSlug = typeof body.orgSlug === "string" ? body.orgSlug.trim() : "";
+  const hostOrgSlug = bodyOrgSlug ? null : resolveWorkspaceSlugFromRequest(request);
+  const orgSlug = bodyOrgSlug || hostOrgSlug || "";
   const bookingSlug =
     typeof body.bookingSlug === "string" && body.bookingSlug.trim().length > 0
       ? body.bookingSlug.trim()
@@ -103,6 +115,8 @@ export async function POST(request: Request) {
       booking_slug: bookingSlug,
       // Hash email for diagnostics without leaking PII
       email_domain: email.split("@")[1] ?? null,
+      host_header: request.headers.get("host"),
+      x_forwarded_host: request.headers.get("x-forwarded-host"),
     });
     return NextResponse.json(
       {
@@ -132,6 +146,11 @@ export async function POST(request: Request) {
         starts_at: startsAt,
         email_domain: email.split("@")[1] ?? null,
         had_checkout: Boolean(result.checkoutUrl),
+        // v1.3.5 — track how often the host-fallback rescues a request
+        // the body would have missed. If this stays at 100% we can
+        // simplify by dropping body.orgSlug entirely; if it stays at 0%
+        // we know the C4 client patch is doing its job.
+        slug_source: bodyOrgSlug ? "body" : "host",
       }),
     );
     return NextResponse.json({

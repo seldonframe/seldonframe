@@ -5,6 +5,7 @@ import { contacts, intakeForms, intakeSubmissions, organizations } from "@/db/sc
 import type { IntakeFormField } from "@/db/schema/intake-forms";
 import { enforceContactLimit } from "@/lib/billing/limits";
 import { emitSeldonEvent } from "@/lib/events/bus";
+import { resolveWorkspaceSlugFromRequest } from "@/lib/workspace/host-to-slug";
 
 /**
  * POST /api/v1/public/intake
@@ -50,7 +51,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  const orgSlug = typeof body.orgSlug === "string" ? body.orgSlug.trim() : "";
+  // v1.3.5 — orgSlug resolution is body-FIRST, host-FALLBACK. Same
+  // failure mode as the booking route: the C5 intake client extracts
+  // orgSlug from window.location.pathname, but on a workspace
+  // subdomain the proxy rewrites /intake → /forms/<slug>/intake
+  // server-side and the browser URL stays /intake — slug invisible to
+  // the client. The body value still wins when present so any client
+  // that DOES include it keeps working unchanged.
+  const bodyOrgSlug = typeof body.orgSlug === "string" ? body.orgSlug.trim() : "";
+  const hostOrgSlug = bodyOrgSlug ? null : resolveWorkspaceSlugFromRequest(request);
+  const orgSlug = bodyOrgSlug || hostOrgSlug || "";
   const formSlug =
     typeof body.formSlug === "string" && body.formSlug.trim().length > 0
       ? body.formSlug.trim()
@@ -61,6 +71,19 @@ export async function POST(request: Request) {
       : null;
 
   if (!orgSlug || !answers) {
+    // Structured logging mirrors the booking route so we can tell
+    // body-vs-host derivation failure apart from genuine bad requests.
+    console.error(
+      JSON.stringify({
+        event: "public_intake_rejected",
+        reason: "missing_required_field",
+        orgSlug_present: Boolean(orgSlug),
+        answers_present: Boolean(answers),
+        host_header: request.headers.get("host"),
+        x_forwarded_host: request.headers.get("x-forwarded-host"),
+        form_slug: formSlug,
+      }),
+    );
     return NextResponse.json(
       { error: "orgSlug and answers are required." },
       { status: 400 }
@@ -177,6 +200,19 @@ export async function POST(request: Request) {
     },
     { orgId: org.id }
   ).catch(() => undefined);
+
+  // v1.3.5 — funnel observability. Pairs with public_intake_rejected so
+  // every public submission has a single-line outcome record.
+  console.log(
+    JSON.stringify({
+      event: "public_intake_succeeded",
+      org_slug: orgSlug,
+      form_slug: formSlug,
+      contact_created: contactCreated,
+      contact_limit_blocked: contactLimitBlocked,
+      slug_source: bodyOrgSlug ? "body" : "host",
+    }),
+  );
 
   // The form-submitter sees a flat success — they shouldn't know about
   // the operator's contact cap. The operator surface gets the signal

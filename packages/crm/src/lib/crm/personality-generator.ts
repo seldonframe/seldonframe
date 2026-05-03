@@ -328,20 +328,35 @@ interface CallError {
 }
 type CallOutcome = CallResult | CallError;
 
-// v1.3.2 — model selection is an EXTERNAL DEPENDENCY that WILL change
-// again. Centralize in env var so rotation is zero-deploy:
+// v1.3.2 / v1.3.5 — model selection is an EXTERNAL DEPENDENCY that
+// WILL change again. Centralize in env vars so rotation is zero-deploy:
 //
-//   ANTHROPIC_MODEL — primary model id. Default tracks the latest
-//                     stable Sonnet at time of writing.
-//   ANTHROPIC_MODEL_FALLBACK — degraded fallback when primary returns
-//                              404. Default = haiku for cost + lower
-//                              latency.
+//   ANTHROPIC_MODEL — primary model id. Default tracks the strongest
+//                     general-purpose Claude at time of writing.
+//   ANTHROPIC_MODEL_FALLBACK — secondary, used when primary 404s.
+//                              Default = strongest Sonnet so quality
+//                              degradation is minimal.
+//   ANTHROPIC_MODEL_TERTIARY — last-resort fallback before keyword-only.
+//                              Default = haiku for cost + lower latency.
 //
-// Setting either env var on Vercel takes effect on the next request —
-// no npm publish, no source change. The constants below are the
-// shipped defaults and only matter when the env var is unset.
-const DEFAULT_PRIMARY_MODEL = "claude-sonnet-4-20250514";
-const DEFAULT_FALLBACK_MODEL = "claude-3-5-haiku-20241022";
+// Setting any env var on Vercel takes effect on the next request — no
+// npm publish, no source change. The constants below are the shipped
+// defaults and only matter when the env var is unset.
+// v1.3.5 — primary defaults to Opus 4.7. Personality generation is a
+// once-per-niche cost (cache hits skip the LLM entirely; cold cache for
+// each new vertical pays a single Opus call). The cold-call quality
+// gradient between Sonnet and Opus is meaningful for the long-tail
+// niches where SF has zero hand-curated personality (pet grooming,
+// equipment rental, accounting, voiceover...) — Opus produces noticeably
+// better intake titles, FAQ phrasings, hero copy, service icon picks,
+// and Unsplash query suggestions. Cache amortizes the cost across every
+// future workspace in that niche so the per-workspace blended cost is
+// near-zero. Sonnet 4.5 is the secondary fallback (still excellent;
+// kicks in only when Opus 404s); Haiku is the tertiary safety net so
+// we never fall through to keyword-only.
+const DEFAULT_PRIMARY_MODEL = "claude-opus-4-7";
+const DEFAULT_FALLBACK_MODEL = "claude-sonnet-4-5-20250929";
+const DEFAULT_TERTIARY_MODEL = "claude-3-5-haiku-20241022";
 
 function primaryModel(): string {
   return process.env.ANTHROPIC_MODEL?.trim() || DEFAULT_PRIMARY_MODEL;
@@ -349,6 +364,10 @@ function primaryModel(): string {
 
 function fallbackModel(): string {
   return process.env.ANTHROPIC_MODEL_FALLBACK?.trim() || DEFAULT_FALLBACK_MODEL;
+}
+
+function tertiaryModel(): string {
+  return process.env.ANTHROPIC_MODEL_TERTIARY?.trim() || DEFAULT_TERTIARY_MODEL;
 }
 
 function detect404(err: unknown): boolean {
@@ -418,20 +437,57 @@ async function callAnthropicWithModelFallback(
   const first = await callAnthropic(apiKey, prompt, primary);
   if (first.ok) return first;
   if (!first.modelNotFound) return first;
-  // Primary model 404'd. Retry with the haiku fallback so the operator
-  // still gets an LLM-generated personality (lower quality + cost) rather
-  // than falling all the way through to the keyword fallback layer.
+  // Primary model 404'd. Retry with the secondary fallback so the
+  // operator still gets an LLM-generated personality (slightly lower
+  // quality, similar cost) rather than falling all the way through to
+  // the keyword fallback layer.
   const fallback = fallbackModel();
-  if (fallback === primary) return first; // misconfig; nothing to retry
-  console.warn(
-    JSON.stringify({
-      event: "personality_generator_model_fallback",
-      from_model: primary,
-      to_model: fallback,
-      reason: first.error,
-    }),
-  );
-  return callAnthropic(apiKey, prompt, fallback);
+  if (fallback !== primary) {
+    console.warn(
+      JSON.stringify({
+        event: "personality_generator_model_fallback",
+        from_model: primary,
+        to_model: fallback,
+        reason: first.error,
+      }),
+    );
+    const second = await callAnthropic(apiKey, prompt, fallback);
+    if (second.ok) return second;
+    if (!second.modelNotFound) return second;
+    // v1.3.5 — secondary 404'd too. Try tertiary (haiku) before giving
+    // up. This three-step chain (Opus → Sonnet → Haiku by default)
+    // means the system stays alive through any single model retirement
+    // — Anthropic deprecates one model id and the next request just
+    // walks down the chain.
+    const tertiary = tertiaryModel();
+    if (tertiary !== fallback && tertiary !== primary) {
+      console.warn(
+        JSON.stringify({
+          event: "personality_generator_model_fallback",
+          from_model: fallback,
+          to_model: tertiary,
+          reason: second.error,
+        }),
+      );
+      return callAnthropic(apiKey, prompt, tertiary);
+    }
+    return second;
+  }
+  // Fallback equals primary (misconfig or single-model setup). Try
+  // tertiary directly so we still retry once before giving up.
+  const tertiary = tertiaryModel();
+  if (tertiary !== primary) {
+    console.warn(
+      JSON.stringify({
+        event: "personality_generator_model_fallback",
+        from_model: primary,
+        to_model: tertiary,
+        reason: first.error,
+      }),
+    );
+    return callAnthropic(apiKey, prompt, tertiary);
+  }
+  return first;
 }
 
 // ─── Cache helpers ───────────────────────────────────────────────────────────

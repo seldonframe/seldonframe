@@ -724,12 +724,24 @@ const INTAKE_INTERACTIVITY_SCRIPT = `<script data-sf-intake="formbricks-stack-v1
   }
 
   function submit(){
-    // Wiring task: pull orgSlug + formSlug from the live URL so the
-    // public-intake endpoint can resolve which form this answers belongs
-    // to. Path shape: /forms/<orgSlug>/<formSlug>
+    // v1.3.5 — orgSlug resolution is path-FIRST, subdomain-FALLBACK.
+    // Path shape: /forms/<orgSlug>/<formSlug> on canonical URLs. On a
+    // workspace subdomain (<slug>.app.seldonframe.com/intake) the proxy
+    // rewrites /intake to /forms/<slug>/intake server-side; the browser
+    // URL stays /intake so window.location.pathname yields ["intake"]
+    // with no slug at index 1. Subdomain fallback covers it on the
+    // client; server-side host derivation in route.ts is the canonical
+    // safety net.
     var pathParts = window.location.pathname.split('/').filter(Boolean);
     var orgSlug = pathParts[1] || '';
     var formSlug = pathParts[2] || 'intake';
+    if (!orgSlug) {
+      var host = window.location.hostname || '';
+      var labels = host.split('.');
+      if (labels.length >= 3 && labels[0] && labels[0] !== 'app' && labels[0] !== 'www') {
+        orgSlug = labels[0];
+      }
+    }
     var payload = {
       orgSlug: orgSlug,
       formSlug: formSlug,

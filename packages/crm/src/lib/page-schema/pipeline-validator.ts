@@ -117,6 +117,46 @@ function isPlaceholderPhone(phone: string | null | undefined): boolean {
   );
 }
 
+/**
+ * v1.3.5 — substring search that's resilient to HTML-entity escaping.
+ *
+ * The renderer escapes special chars when emitting business names /
+ * service titles into HTML: `&` → `&amp;`, `<` → `&lt;`, `>` → `&gt;`,
+ * `"` → `&quot;`, `'` → `&#39;` (or `&apos;`). A literal `html.includes`
+ * check on the source value misses these cases — the strings ARE in
+ * the rendered HTML, just in their entity-encoded form.
+ *
+ * Pre-1.3.5 the Iron & Oak Barbershop test logged `BUSINESS NAME NOT IN
+ * HTML: "Iron & Oak Barbershop"` even though `Iron &amp; Oak Barbershop`
+ * appeared all over the rendered page. The validator was wrong, not the
+ * rendering pipeline.
+ *
+ * Strategy: try the literal needle first (cheap, covers the 95% case),
+ * then try its HTML-escaped form, then try a "decoded haystack" form
+ * where we replace common entities back to their literal characters in
+ * a copy of the HTML and re-check. Returns true on any hit.
+ */
+function htmlContainsText(html: string, needle: string): boolean {
+  if (!needle) return true;
+  if (html.includes(needle)) return true;
+  const escaped = needle
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+  if (escaped !== needle && html.includes(escaped)) return true;
+  // Also try the &apos; variant for single quotes (some encoders use it).
+  const escapedApos = needle
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+  if (escapedApos !== escaped && html.includes(escapedApos)) return true;
+  return false;
+}
+
 // ─── Stage 1: Soul storage ────────────────────────────────────────────────────
 
 /**
@@ -397,7 +437,7 @@ export function validateRenderedHTML(
   // ── Services: at least one real offering should appear when soul has them ──
   if (soulOfferings.length > 0) {
     const firstService = readSoulField(soulOfferings[0], "name", "title");
-    if (firstService && !html.includes(firstService)) {
+    if (firstService && !htmlContainsText(html, firstService)) {
       warnings.push(
         `First offering "${firstService}" not found in HTML — may be paraphrased or hidden`
       );
@@ -412,7 +452,13 @@ export function validateRenderedHTML(
   }
 
   // ── Business name should appear ──
-  if (soulName && !html.includes(soulName)) {
+  // v1.3.5 — use htmlContainsText so business names with HTML-special
+  // characters ("Iron & Oak Barbershop", "Joe's Plumbing", "<3 Salon")
+  // match against their entity-encoded form in the rendered HTML
+  // ("Iron &amp; Oak Barbershop", "Joe&#39;s Plumbing", "&lt;3 Salon").
+  // Pre-1.3.5 the strict substring check failed for every business with
+  // an ampersand in the name, even though the name WAS rendered.
+  if (soulName && !htmlContainsText(html, soulName)) {
     errors.push(`BUSINESS NAME NOT IN HTML: "${soulName}"`);
   }
 

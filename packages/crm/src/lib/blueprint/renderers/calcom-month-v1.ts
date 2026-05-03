@@ -776,12 +776,32 @@ const BOOKING_INTERACTIVITY_SCRIPT = `<script data-sf-booking="calcom-month-v1">
     if (submit) submit.disabled = true;
 
     var fd = new FormData(form);
-    // Wiring task: pull orgSlug + bookingSlug from the live URL so the
-    // public-bookings endpoint can resolve the workspace. Path shape:
-    // /book/<orgSlug>/<bookingSlug>
+    // v1.3.5 — orgSlug resolution is path-FIRST, subdomain-FALLBACK.
+    // Path shape: /book/<orgSlug>/<bookingSlug> — works when the visitor
+    // is on the canonical app.seldonframe.com/book/<slug>/<bookingSlug>
+    // URL. But on a workspace subdomain (<slug>.app.seldonframe.com/book)
+    // the proxy.ts middleware rewrites /book to /book/<slug>/default
+    // server-side; the BROWSER URL stays /book, so window.location.pathname
+    // gives ["book"] with no slug at index 1. Subdomain fallback: extract
+    // the first label of window.location.hostname when it ends with the
+    // workspace base domain. Server-side host derivation in the route
+    // handler (resolveWorkspaceSlugFromRequest) is the canonical safety
+    // net, but doing it client-side too keeps the payload self-describing
+    // for any agent / CLI that intercepts and replays it.
     var pathParts = window.location.pathname.split('/').filter(Boolean);
     var orgSlug = pathParts[1] || '';
     var bookingSlug = pathParts[2] || 'default';
+    if (!orgSlug) {
+      var host = window.location.hostname || '';
+      // Match the workspace-subdomain shape (slug.app.seldonframe.com or
+      // slug.<configured-base>); we do not ship the base domain into the
+      // client bundle, so the heuristic is "first label when the host
+      // has 3+ labels and the first label is not app/www".
+      var labels = host.split('.');
+      if (labels.length >= 3 && labels[0] && labels[0] !== 'app' && labels[0] !== 'www') {
+        orgSlug = labels[0];
+      }
+    }
     var payload = {
       orgSlug: orgSlug,
       bookingSlug: bookingSlug,
