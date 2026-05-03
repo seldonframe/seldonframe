@@ -47,6 +47,26 @@ function card(photoId: string): string {
   return `https://images.unsplash.com/photo-${photoId}?${CARD_PARAMS}`;
 }
 
+// ─── GENERAL ─────────────────────────────────────────────────────────────────
+// v1.2.0 — fallback for any business that doesn't match a named
+// vertical. Hand-picked images that read as "professional contractor /
+// trade / local service" — work boots, blueprints, contractor on a
+// site, residential exterior work — generic enough to fit roofing /
+// landscaping / handyman / painting / fencing / general remodelers
+// without looking like a specific vertical.
+
+const GENERAL_IMAGES: PersonalityImageBundle = {
+  hero_url: hero("1503387762-cf8d8a39c049"), // contractor consulting on residential job site
+  service_grid_image_urls: [
+    card("1503387762-cf8d8a39c049"), // contractor on site
+    card("1581094288338-2314dddb7ece"), // tools laid out
+    card("1503387837-b154d5074bd2"), // blueprints / planning
+    card("1581092334651-ddf26d9a09d0"), // residential workspace
+    card("1556761175-5973dc0f32e7"), // craftsperson at work
+    card("1505236858219-8359eb29e329"), // home exterior project
+  ],
+};
+
 // ─── HVAC ────────────────────────────────────────────────────────────────────
 // Technicians, HVAC equipment, residential service. Photos lean toward
 // "professional + trustworthy" rather than corporate stock.
@@ -147,6 +167,7 @@ const COACHING_IMAGES: PersonalityImageBundle = {
 // ─── Registry ────────────────────────────────────────────────────────────────
 
 const IMAGES: Partial<Record<PersonalityVertical, PersonalityImageBundle>> = {
+  general: GENERAL_IMAGES,
   hvac: HVAC_IMAGES,
   dental: DENTAL_IMAGES,
   legal: LEGAL_IMAGES,

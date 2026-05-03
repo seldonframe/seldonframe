@@ -18,7 +18,12 @@
 
 import { pickTemplate } from "./templates";
 import { renderGeneralServiceV1 } from "./renderers/general-service-v1";
-import type { Blueprint } from "./types";
+import type {
+  Blueprint,
+  LandingSection,
+  SectionHero,
+  SectionMidCta,
+} from "./types";
 
 export interface RenderedBlueprint {
   /** The blueprint that produced the output. Persisted to landing_pages.blueprintJson. */
@@ -56,9 +61,60 @@ export function buildBlueprintForWorkspace(
   const contact = tz
     ? { ...template.workspace.contact, timezone: tz }
     : template.workspace.contact;
+  // v1.2.0 — defense-in-depth CTA href contract. Even if a template
+  // JSON file has the wrong hrefs (e.g. legacy general.json had
+  // ctaPrimary→/intake), normalize at blueprint build time so:
+  //   - hero.ctaPrimary    → /book   (kind=primary)
+  //   - hero.ctaSecondary  → /intake (kind=secondary)
+  //   - mid-cta.ctaPrimary → /book
+  //   - mid-cta.ctaSecondary → /intake
+  // This is the SECOND defense layer (the first is
+  // applyResolvedContentToActions in seedLandingFromSoul) so workspaces
+  // built via the template path (createDefaultLandingPage) without a
+  // soul-driven re-render also satisfy the contract. Operators who
+  // later customize via update_landing_section override this — their
+  // edits go through a different path that doesn't re-call this.
+  const normalizeHero = (s: SectionHero): SectionHero => {
+    const next: SectionHero = {
+      ...s,
+      ctaPrimary: { label: s.ctaPrimary.label, href: "/book", kind: "primary" },
+    };
+    if (s.ctaSecondary) {
+      next.ctaSecondary = {
+        label: s.ctaSecondary.label,
+        href: "/intake",
+        kind: "secondary",
+      };
+    }
+    return next;
+  };
+  const normalizeMidCta = (s: SectionMidCta): SectionMidCta => {
+    const next: SectionMidCta = { ...s };
+    if (s.ctaPrimary) {
+      next.ctaPrimary = {
+        label: s.ctaPrimary.label,
+        href: "/book",
+        kind: "primary",
+      };
+    }
+    if (s.ctaSecondary) {
+      next.ctaSecondary = {
+        label: s.ctaSecondary.label,
+        href: "/intake",
+        kind: "secondary",
+      };
+    }
+    return next;
+  };
+  const sections: LandingSection[] = (template.landing?.sections ?? []).map((section) => {
+    if (section.type === "hero") return normalizeHero(section);
+    if (section.type === "mid-cta") return normalizeMidCta(section);
+    return section;
+  });
   return {
     ...template,
     workspace: { ...template.workspace, name: workspaceName, contact },
+    landing: { ...template.landing, sections },
   };
 }
 

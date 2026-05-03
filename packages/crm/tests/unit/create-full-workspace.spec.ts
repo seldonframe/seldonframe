@@ -105,16 +105,18 @@ describe("createFullWorkspace classification", () => {
     assert.equal(vertical, "agency");
   });
 
-  test("Unknown business → coaching default (safest fallback)", () => {
+  test("v1.2.0: Unknown business → general default (was coaching)", () => {
     const vertical = classifyFromInput(
       ["custom-poured candles", "scent classes"],
       "Small-batch candle maker — every batch poured by hand."
     );
-    // No keyword in services or description matches a vertical bucket.
-    // Falls through to the BUSINESS_TYPE_FALLBACK chain → coaching.
-    // (Note: avoid the word "studio" — that triggers the agency
-    // bucket via "design studio" / "production studio" patterns.)
-    assert.equal(vertical, "coaching");
+    // v1.2.0: BUSINESS_TYPE_FALLBACK rerouted from coaching → general.
+    // A candle maker that doesn't match any specific vertical now ships
+    // GENERAL personality (Customer/Job/Quote terminology, "Book a free
+    // quote" CTAs) instead of coaching ("Discovery call / Engagement").
+    // (Note: avoid the word "studio" — that triggers the agency bucket
+    // via "design studio" / "production studio" patterns.)
+    assert.equal(vertical, "general");
   });
 });
 
@@ -194,7 +196,7 @@ describe("createFullWorkspace — spec parity", () => {
     assert.equal(tz, "America/New_York");
   });
 
-  test("Default fixture (spec): unknown vertical → coaching default + Pacific timezone", () => {
+  test("v1.2.0: Default fixture: unknown vertical → general default + Pacific timezone", () => {
     // Spec fixture inspired: Artisan Candle Shop, Portland OR (with
     // wording adjusted to avoid the agency-bucket "studio" keyword).
     const vertical = classifyFromInput(
@@ -202,10 +204,8 @@ describe("createFullWorkspace — spec parity", () => {
       "Small-batch candle maker in Portland."
     );
     const tz = inferTimezone("OR", "Portland", "Portland, OR");
-    // Spec says "default" personality but the actual fallback is the
-    // BUSINESS_TYPE_FALLBACK chain → coaching personality. Still a
-    // valid, useful personality for an unknown craft business.
-    assert.equal(vertical, "coaching");
+    // v1.2.0: fallback rerouted from coaching → general.
+    assert.equal(vertical, "general");
     assert.equal(tz, "America/Los_Angeles");
   });
 });

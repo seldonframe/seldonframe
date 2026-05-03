@@ -64,7 +64,26 @@ export type IconName =
   | "palette"
   | "megaphone"
   | "leaf"
-  | "dumbbell";
+  | "dumbbell"
+  // v1.2.0 — trade / contractor icons. Roofing, storm restoration,
+  // gutters, siding, decks, renovation, painting, flooring, fencing,
+  // concrete, demolition, insulation, drywall — every common service
+  // a general contractor or trade specialist might list, so the
+  // workspace's services grid renders distinct icons instead of
+  // 6×wrench.
+  | "cloud_lightning"
+  | "columns"
+  | "search"
+  | "app_window"
+  | "square_stack"
+  | "hammer"
+  | "paintbrush"
+  | "layers"
+  | "fence"
+  | "blocks"
+  | "thermometer"
+  | "square"
+  | "ruler";
 
 const ICON_PATHS: Record<IconName, string> = {
   zap:
@@ -154,6 +173,33 @@ const ICON_PATHS: Record<IconName, string> = {
     '<path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6"/>',
   dumbbell:
     '<path d="M14.4 14.4 9.6 9.6"/><path d="M18.657 21.485a2 2 0 1 1-2.829-2.828l-1.767 1.768a2 2 0 1 1-2.829-2.829l6.364-6.364a2 2 0 1 1 2.829 2.829l-1.768 1.767a2 2 0 1 1 2.828 2.829z"/><path d="m21.5 21.5-1.4-1.4"/><path d="M3.9 3.9 2.5 2.5"/><path d="M6.404 12.768a2 2 0 1 1-2.829-2.829l1.768-1.767a2 2 0 1 1-2.828-2.829l2.828-2.828a2 2 0 1 1 2.829 2.828l1.767-1.768a2 2 0 1 1 2.829 2.829z"/>',
+  // v1.2.0 trade icons. Path data from lucide-react v0.460+ (MIT).
+  cloud_lightning:
+    '<path d="M6 16.326A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 .5 8.973"/><path d="m13 12-3 5h4l-3 5"/>',
+  columns:
+    '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 3v18"/>',
+  search:
+    '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  app_window:
+    '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M10 4v4"/><path d="M2 8h20"/><path d="M6 4v4"/>',
+  square_stack:
+    '<path d="M4 10c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h4c1.1 0 2 .9 2 2"/><path d="M10 16c-1.1 0-2-.9-2-2v-4c0-1.1.9-2 2-2h4c1.1 0 2 .9 2 2"/><rect x="14" y="14" width="8" height="8" rx="2"/>',
+  hammer:
+    '<path d="m15 12-8.373 8.373a1 1 0 1 1-3-3L12 9"/><path d="m18 15 4-4"/><path d="m21.5 11.5-1.914-1.914A2 2 0 0 1 19 8.172V7l-2.26-2.26a6 6 0 0 0-4.202-1.756L9 2.96l.92.82A6.18 6.18 0 0 1 12 8.4V10l2 2h1.172a2 2 0 0 1 1.414.586L18.5 14.5"/>',
+  paintbrush:
+    '<path d="m14.622 17.897-10.68-2.913"/><path d="M18.376 2.622a1 1 0 1 1 3.002 3.002L17.36 9.643a.5.5 0 0 0 0 .707l.944.944a2.41 2.41 0 0 1 0 3.408l-.944.944a.5.5 0 0 1-.707 0L8.354 7.348a.5.5 0 0 1 0-.707l.944-.944a2.41 2.41 0 0 1 3.408 0l.944.944a.5.5 0 0 0 .707 0z"/><path d="M9 8c-1.804 2.71-3.97 3.46-6.583 3.948a.507.507 0 0 0-.302.819l7.32 8.883a1 1 0 0 0 1.185.204C12.735 20.405 16 16.792 16 15"/>',
+  layers:
+    '<path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.91a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/>',
+  fence:
+    '<path d="M4 3 2 5v15c0 .6.4 1 1 1h2c.6 0 1-.4 1-1V5l-2-2"/><path d="M14 3 12 5v15c0 .6.4 1 1 1h2c.6 0 1-.4 1-1V5l-2-2"/><path d="m9 8 1 0"/><path d="m9 13 1 0"/><path d="m9 18 1 0"/><path d="m19 8 1 0"/><path d="m19 13 1 0"/><path d="m19 18 1 0"/>',
+  blocks:
+    '<rect x="14" y="3" width="7" height="7" rx="1"/><path d="M10 21V8a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5a1 1 0 0 0-1-1H3"/>',
+  thermometer:
+    '<path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/>',
+  square:
+    '<rect width="18" height="18" x="3" y="3" rx="2"/>',
+  ruler:
+    '<path d="M21.3 8.7 8.7 21.3a1 1 0 0 1-1.4 0l-5.6-5.6a1 1 0 0 1 0-1.4L14.3 1.7a1 1 0 0 1 1.4 0l5.6 5.6a1 1 0 0 1 0 1.4Z"/><path d="m7.5 10.5 2 2"/><path d="m10.5 7.5 2 2"/><path d="m13.5 4.5 2 2"/><path d="m4.5 13.5 2 2"/>',
 };
 
 /**
@@ -214,10 +260,29 @@ const RULES: IconRule[] = [
   // HVAC / heating / cooling / plumbing / electrical
   { icon: "snowflake", keywords: ["ac ", "a/c", "air condition", "cooling", "freon", "chiller"] },
   { icon: "flame", keywords: ["heat", "furnace", "boiler", "burner", "ignit", "gas line"] },
-  { icon: "wrench", keywords: ["repair", "install", "fix", "maintenance", "tune-up", "tune up", "service call"] },
   // "pipe" alone matches "pipeline" — keep specific terms only.
-  { icon: "droplets", keywords: ["plumb", "leak", "drain", "faucet", "sewer", "water heater", "water line", "indoor air"] },
-  { icon: "home", keywords: ["residential", "home service", "house ", "property", "homeown"] },
+  { icon: "droplets", keywords: ["plumb", "leak", "drain", "faucet", "sewer", "water heater", "water line", "indoor air", "gutter", "downspout"] },
+  // v1.2.0 — Trade / contractor specifics. Ordered specific-first so
+  // "storm damage" matches before generic terms.
+  { icon: "cloud_lightning", keywords: ["storm damage", "storm restor", "hail damage", "hailstorm", "wind damage"] },
+  { icon: "shield", keywords: ["tarping", "tarp", "emergency cover", "board-up", "board up"] },
+  { icon: "home", keywords: ["roof", "rooftop", "shingle", "shingles", "asphalt roof", "metal roof", "residential", "home service", "house ", "homeown"] },
+  { icon: "columns", keywords: ["siding", "exterior cladding", "vinyl siding", "fiber cement"] },
+  { icon: "app_window", keywords: ["window install", "windows ", "replacement window", "glass install", "glazing"] },
+  { icon: "square_stack", keywords: ["deck", "patio", "porch", "outdoor living", "pergola"] },
+  { icon: "hammer", keywords: ["renovation", "remodel", "remodeling", "demo ", "demolition", "tear-out", "tear out", "carpentry", "framing"] },
+  { icon: "paintbrush", keywords: ["paint", "painting", "stain ", "exterior paint", "interior paint"] },
+  { icon: "layers", keywords: ["floor", "flooring", "hardwood", "tile install", "carpet install", "lvp ", "vinyl plank"] },
+  { icon: "fence", keywords: ["fence", "fencing", "gate ", "wood fence", "vinyl fence"] },
+  { icon: "blocks", keywords: ["concrete", "masonry", "foundation", "driveway", "stonework"] },
+  { icon: "thermometer", keywords: ["insulation", "spray foam", "r-value", "weatheriz"] },
+  { icon: "square", keywords: ["drywall", "sheetrock", "plaster"] },
+  { icon: "search", keywords: ["inspection", "inspect", "audit", "assessment", "estimate visit"] },
+  { icon: "ruler", keywords: ["measure", "design build", "project plan"] },
+  // Generic install/repair AFTER specific trade rules so a "Roof
+  // repair" service hits the roof→home rule first instead of the
+  // generic wrench fallback.
+  { icon: "wrench", keywords: ["repair", "install", "fix", "maintenance", "tune-up", "tune up", "service call"] },
   // Legal
   { icon: "scale", keywords: ["family law", "estate", "personal injury", "litigation", "criminal", "immigration", "contract law"] },
   { icon: "gavel", keywords: ["litigation", "lawsuit", "trial", "court", "judg", "verdict"] },
@@ -274,6 +339,7 @@ const RULES: IconRule[] = [
 // vertical fallback shouldn't dominate cross-vertical patterns
 // ("emergency" → siren must beat "dental" → smile).
 const VERTICAL_DEFAULTS: Record<string, IconName> = {
+  general: "wrench", // generic trade/service fallback
   hvac: "wrench",
   dental: "smile",
   legal: "scale",

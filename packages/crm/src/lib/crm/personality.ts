@@ -8,6 +8,7 @@
 // then on unless the operator updates settings.
 
 export type PersonalityVertical =
+  | "general"
   | "hvac"
   | "legal"
   | "dental"
@@ -175,6 +176,120 @@ const STAGE_COLORS = {
   lost: "#71717a",       // gray   — lost / did not retain
   recall: "#0ea5e9",     // cyan   — recall / renewal
 } as const;
+
+// ─── GENERAL ───────────────────────────────────────────────────────────────
+// v1.2.0 — true generic personality. The DEFAULT_PERSONALITY for any
+// workspace whose business doesn't keyword-match a specialized
+// vertical. Previously this was COACHING, which gave roofing /
+// landscaping / random trade workspaces a coaching pipeline ("Applied
+// → Discovery Booked → Enrolled") and coaching-flavored CTAs ("Book
+// a free discovery call"). GENERAL is voiced for any small-business
+// service operator: trade contractors, retailers, neighborhood
+// professionals, niche service providers.
+
+const GENERAL_PERSONALITY: CRMPersonality = {
+  vertical: "general",
+  terminology: {
+    contact: { singular: "Customer", plural: "Customers" },
+    deal: { singular: "Job", plural: "Jobs" },
+    activity: { singular: "Activity", plural: "Activities" },
+  },
+  pipeline: {
+    name: "Sales pipeline",
+    stages: [
+      { name: "New Lead", color: STAGE_COLORS.start, probability: 10 },
+      { name: "Quoted", color: STAGE_COLORS.qualifying, probability: 25 },
+      { name: "Approved", color: STAGE_COLORS.proposal, probability: 60 },
+      { name: "Scheduled", color: "#0ea5e9", probability: 80 },
+      { name: "In Progress", color: STAGE_COLORS.active, probability: 90 },
+      { name: "Completed", color: STAGE_COLORS.delivered, probability: 100 },
+      { name: "Lost", color: STAGE_COLORS.lost, probability: 0 },
+    ],
+  },
+  contactFields: {
+    industrySpecific: [
+      { key: "address", label: "Address", type: "text" },
+      { key: "referral_source", label: "Referral Source", type: "text" },
+      { key: "preferred_contact", label: "Preferred Contact", type: "select", options: ["Email", "Phone", "Text"] },
+      { key: "notes", label: "Notes", type: "textarea" },
+    ],
+  },
+  intakeFields: [
+    { key: "fullName", label: "Full name", type: "text", required: true },
+    { key: "email", label: "Email", type: "email", required: true },
+    { key: "phone", label: "Phone", type: "tel", required: true },
+    { key: "address", label: "Address", type: "text", required: false },
+    { key: "details", label: "Tell us what you need", type: "textarea", required: true },
+  ],
+  intake: {
+    title: "Get in Touch",
+    description: "Tell us a little about what you need and we'll get back to you with a quote.",
+  },
+  dashboard: {
+    primaryMetrics: [
+      { key: "open_jobs", label: "Open Jobs", icon: "Briefcase", tone: "primary" },
+      { key: "revenue_this_month", label: "Revenue This Month", icon: "DollarSign", tone: "positive" },
+      { key: "avg_job_value", label: "Avg Job Value", icon: "TrendingUp", tone: "neutral" },
+      { key: "win_rate", label: "Quote → Won", icon: "Target", tone: "caution" },
+    ],
+    urgencyIndicators: [
+      { key: "unanswered_24h", label: "Unanswered > 24h", severity: "danger" },
+      { key: "quote_stale_7d", label: "Stale quotes > 7d", severity: "warning" },
+      { key: "completed_no_review", label: "Completed jobs without review", severity: "info" },
+    ],
+  },
+  content_templates: {
+    hero_headlines: [
+      "Trusted Local Service[ — {rating}★ from {review_count}+ Customers]",
+      "[{city}'s ]Trusted {business_name} — Free Quotes",
+      "Quality Work, Honest Pricing.[ {review_count}+ Happy Customers.]",
+    ],
+    hero_subheadline:
+      "Free estimates · Licensed and insured · Local team that shows up on time.[ Serving {service_area}.]",
+    trust_badges: [
+      "[{rating}★ from {review_count}+ customers]",
+      "Licensed & insured",
+      "Free quotes",
+      "Local team",
+    ],
+    services_heading: "Our Services",
+    faqs: [
+      {
+        question: "How does the free quote work?",
+        answer_template:
+          "Tell us about your project and we'll come out (or send pricing remotely if it's simple) within 24-48 hours. No commitment, no pressure.",
+      },
+      {
+        question: "Are you licensed and insured?",
+        answer_template:
+          "Yes. We're fully licensed and carry liability insurance for every job we take on.[ {certifications_sentence}]",
+      },
+      {
+        question: "What areas do you serve?",
+        answer_template:
+          "[We serve {service_area}. ]Call[ {phone}] if you're not sure whether you're in our service area.",
+      },
+      {
+        question: "How do you handle pricing?",
+        answer_template:
+          "Upfront, written quotes before any work starts. No surprise charges. We'll walk you through every line before you sign.",
+      },
+      {
+        question: "How do I get started?",
+        answer_template:
+          "Book a free quote above[ or call us at {phone}]. We'll take it from there.",
+      },
+    ],
+    cta_button_primary: "Book a free quote →",
+    cta_button_secondary: "Get in touch →",
+    bottom_cta_heading: "Ready to get started?",
+    bottom_cta_trust_points: [
+      "Free quote",
+      "No obligation",
+      "Local team",
+    ],
+  },
+};
 
 // ─── HVAC ──────────────────────────────────────────────────────────────────
 
@@ -850,6 +965,7 @@ const MEDSPA_PERSONALITY: CRMPersonality = {
 // ─── Registry + selection ──────────────────────────────────────────────────
 
 export const PERSONALITIES = {
+  general: GENERAL_PERSONALITY,
   hvac: HVAC_PERSONALITY,
   legal: LEGAL_PERSONALITY,
   dental: DENTAL_PERSONALITY,
@@ -858,7 +974,14 @@ export const PERSONALITIES = {
   medspa: MEDSPA_PERSONALITY,
 } as const satisfies Record<PersonalityVertical, CRMPersonality>;
 
-export const DEFAULT_PERSONALITY: CRMPersonality = COACHING_PERSONALITY;
+// v1.2.0 — DEFAULT_PERSONALITY changed from COACHING → GENERAL.
+// Before: any business that didn't keyword-match got coaching's
+// "Applied → Discovery Booked → Enrolled" pipeline + "Book a free
+// discovery call" CTAs (wrong for trades / retailers / random
+// services). Now: GENERAL is industry-neutral — Customer/Job/Activity
+// terminology, "New Lead → Quoted → Approved → Scheduled → In
+// Progress → Completed" pipeline, "Book a free quote" CTAs.
+export const DEFAULT_PERSONALITY: CRMPersonality = GENERAL_PERSONALITY;
 
 // Industry-keyword → vertical. Keywords are normalized (lowercased, hyphens
 // preserved) and matched as substring containment against the input. Order
@@ -923,9 +1046,19 @@ const INDUSTRY_KEYWORDS: Array<{ vertical: PersonalityVertical; keywords: string
 // Business-type fallback (the high-level classification in lib/page-schema/
 // classify-business.ts). Less precise than industry — we only fall back
 // here when the operator didn't supply an industry hint.
+//
+// v1.2.0 — professional_service no longer falls through to coaching
+// (which was wrong for any non-coaching service business — accountants,
+// consultants, real estate agents, financial planners, etc. all got
+// "Discovery call" CTAs). Falls through to GENERAL instead — neutral
+// "Customer / Job / Quote" terminology that works for any service.
+// Same with local_service that doesn't match a specific HVAC keyword
+// (e.g. roofing, landscaping, painting) — they used to inherit HVAC
+// pipeline stages; now they get GENERAL's neutral "New Lead → Quoted
+// → Approved → Scheduled → Completed".
 const BUSINESS_TYPE_FALLBACK: Record<string, PersonalityVertical> = {
-  local_service: "hvac",
-  professional_service: "coaching",
+  local_service: "general",
+  professional_service: "general",
   agency: "agency",
 };
 

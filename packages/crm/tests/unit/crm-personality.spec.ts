@@ -75,9 +75,14 @@ describe("selectCRMPersonality", () => {
     assert.equal(p.vertical, "legal");
   });
 
-  test("business_type fallback: local_service → HVAC", () => {
+  // v1.2.0 — fallbacks rerouted from coaching → general so workspaces
+  // that don't match a specific keyword bank ship industry-neutral
+  // copy (Customer/Job/Quote, "Book a free quote") instead of
+  // coaching-flavored copy ("Discovery call / Engagement / Enrolled")
+  // that's wrong for trades / retailers / generic services.
+  test("v1.2.0: business_type fallback: local_service → GENERAL", () => {
     const p = selectCRMPersonality("local_service", null);
-    assert.equal(p.vertical, "hvac");
+    assert.equal(p.vertical, "general");
   });
 
   test("business_type fallback: agency → AGENCY", () => {
@@ -85,27 +90,46 @@ describe("selectCRMPersonality", () => {
     assert.equal(p.vertical, "agency");
   });
 
-  test("business_type fallback: professional_service → COACHING", () => {
+  test("v1.2.0: business_type fallback: professional_service → GENERAL", () => {
     const p = selectCRMPersonality("professional_service", null);
-    assert.equal(p.vertical, "coaching");
+    assert.equal(p.vertical, "general");
   });
 
-  test("unknown business_type + no industry → DEFAULT (coaching)", () => {
+  test("v1.2.0: unknown business_type + no industry → DEFAULT (general)", () => {
     const p = selectCRMPersonality("other", null);
     assert.equal(p.vertical, DEFAULT_PERSONALITY.vertical);
-    assert.equal(p.vertical, "coaching");
+    assert.equal(p.vertical, "general");
   });
 
-  test("null/undefined inputs → DEFAULT (coaching)", () => {
+  test("v1.2.0: null/undefined inputs → DEFAULT (general)", () => {
     const p = selectCRMPersonality(null, null);
-    assert.equal(p.vertical, "coaching");
+    assert.equal(p.vertical, "general");
     const q = selectCRMPersonality(undefined, undefined);
-    assert.equal(q.vertical, "coaching");
+    assert.equal(q.vertical, "general");
   });
 
-  test("empty strings → DEFAULT (coaching)", () => {
+  test("v1.2.0: empty strings → DEFAULT (general)", () => {
     const p = selectCRMPersonality("", "");
-    assert.equal(p.vertical, "coaching");
+    assert.equal(p.vertical, "general");
+  });
+
+  test("v1.2.0: roofing keyword matches local_service classifier (was falling through to coaching)", () => {
+    // Specific regression for the Ironclad Roofing demo failure.
+    // selectCRMPersonality only walks INDUSTRY_KEYWORDS for industry
+    // hints — but we want operator-input "Roof repair" / "Storm damage"
+    // / "Gutter installation" to land in the general personality so the
+    // workspace ships with neutral trade terminology + the trade-icon
+    // RULES my v1.2.0 added. classify-business handles the
+    // BusinessType bucket; selectCRMPersonality handles the personality
+    // pick once businessType is known.
+    const p = selectCRMPersonality(
+      "local_service",
+      "Roof repair, storm damage restoration, gutter installation",
+    );
+    // Roofing-specific industry words don't yet have a "roofing"
+    // personality, so this falls to the general personality via the
+    // local_service businessType fallback.
+    assert.equal(p.vertical, "general");
   });
 
   test("industry keyword matches inside a longer phrase", () => {

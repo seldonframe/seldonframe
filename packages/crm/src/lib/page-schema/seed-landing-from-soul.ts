@@ -307,7 +307,13 @@ function personalityDefaultAccent(vertical: string | undefined): string | null {
     case "agency":
       return "#a855f7"; // creative violet
     case "coaching":
-      return "#14b8a6"; // existing teal default
+      return "#14b8a6"; // teal
+    case "general":
+      // v1.2.0 — generic trade / contractor accent. Saturated steel
+      // blue reads professional + trustworthy without being any
+      // specific industry's color (gold = medspa, navy = legal, orange
+      // = hvac, etc.).
+      return "#0e7490";
     default:
       return null;
   }

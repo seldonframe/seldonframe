@@ -51,7 +51,7 @@
         "headline": "A cool home in 24 hours",
         "subhead": "Family-owned HVAC for [City] homeowners. Same-day repairs, honest quotes, no pressure to upsell.",
         "ctaPrimary":   { "label": "Book a free estimate", "href": "/book", "kind": "primary" },
-        "ctaSecondary": { "label": "[Call us now]",        "href": "tel:[Phone]", "kind": "tel" },
+        "ctaSecondary": { "label": "Get a free quote",     "href": "/intake",     "kind": "secondary" },
         "imageUrl": null,
         "variant": "split-image-right"
       },
@@ -121,7 +121,7 @@
         "headline": "Get a free estimate today",
         "subhead": "We'll come out, take a look, and give you an honest quote. No pressure, no obligation.",
         "ctaPrimary":   { "label": "Book online",  "href": "/book", "kind": "primary" },
-        "ctaSecondary": { "label": "[Call us now]","href": "tel:[Phone]", "kind": "tel" },
+        "ctaSecondary": { "label": "Get a free quote", "href": "/intake",     "kind": "secondary" },
         "embedQuoteForm": true
       },
       {

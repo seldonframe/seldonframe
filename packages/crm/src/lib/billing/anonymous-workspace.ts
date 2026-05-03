@@ -284,6 +284,14 @@ export async function createAnonymousWorkspace(
       description:
         "30-minute in-person consultation. We'll assess your goals and walk you through a personalized plan — no obligation.",
     },
+    // v1.2.0 — general (industry-neutral) default. Free quote /
+    // estimate appointment for any trade or service business.
+    general: {
+      durationMinutes: 30,
+      title: "Free Quote",
+      description:
+        "30-minute appointment to walk through your project and get pricing. No obligation.",
+    },
   };
   const bookingDefault = personalityBookingDefaults[personality.vertical];
   if (bookingDefault && seedBlueprint.booking?.eventType) {

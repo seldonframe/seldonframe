@@ -46,8 +46,8 @@
         "eyebrow": "[City] · [Service Category]",
         "headline": "Reliable [service] you can count on",
         "subhead": "We help homeowners and businesses get [outcome] without the hassle. Free quote in under a day.",
-        "ctaPrimary": { "label": "Get a free quote", "href": "/intake", "kind": "primary" },
-        "ctaSecondary": { "label": "[Call us]", "href": "tel:[Phone]", "kind": "tel" },
+        "ctaPrimary": { "label": "Book a free consultation", "href": "/book", "kind": "primary" },
+        "ctaSecondary": { "label": "Get in touch", "href": "/intake", "kind": "secondary" },
         "imageUrl": null,
         "variant": "split-image-right"
       },
@@ -94,8 +94,8 @@
         "type": "mid-cta",
         "headline": "Ready to get started?",
         "subhead": "Tell us what you need and we'll send a free quote within 24 hours.",
-        "ctaPrimary": { "label": "Get a free quote", "href": "/intake", "kind": "primary" },
-        "ctaSecondary": { "label": "[Call us]", "href": "tel:[Phone]", "kind": "tel" },
+        "ctaPrimary": { "label": "Book a free consultation", "href": "/book", "kind": "primary" },
+        "ctaSecondary": { "label": "Get in touch", "href": "/intake", "kind": "secondary" },
         "embedQuoteForm": true
       },
       {
