@@ -88,7 +88,32 @@ async function getBillingUserById(userId: string) {
     .limit(1);
 
   if (!dbUser) {
-    throw new Error("Unauthorized");
+    // v1.7.3 — session has a user.id but the users row doesn't exist
+    // (NextAuth Drizzle-adapter race? failed insert? imported user
+    // from a different deployment?). Pre-1.7.3 this threw
+    // "Unauthorized" and crashed every server-component that touched
+    // billing — including /dashboard, which then showed the
+    // unhelpful "This page couldn't load" frontend error.
+    //
+    // The right behavior is to treat this as "user exists in session,
+    // but has no workspace state yet" — return a synthesized record
+    // with no orgId/plan so downstream code (dashboard layout, page,
+    // settings) renders an empty state instead of crashing.
+    // listManagedOrganizations + getOwnedWorkspaceCount return []/0
+    // for these synthesized users, so the empty state ("no workspaces
+    // yet — create one or claim an existing one") triggers naturally.
+    console.warn(
+      `[billing/orgs] Session user.id=${userId} not found in users table — returning synthesized empty record. If this persists, the Drizzle NextAuth adapter may have failed to insert the user; check sign-in logs.`,
+    );
+    return {
+      id: userId,
+      orgId: null,
+      planId: null,
+      stripeSubscriptionId: null,
+      subscriptionStatus: null,
+      name: null,
+      email: null,
+    };
   }
 
   return dbUser;
@@ -303,6 +328,18 @@ export async function listManagedOrganizations(userId?: string) {
     userOrgId: user.orgId,
   });
 
+  // v1.7.3 — user.orgId is now nullable (synthesized empty record path
+  // in getBillingUserById when session.user.id has no users row). Build
+  // OR conditions defensively: include the eq(orgId) clause only when
+  // user.orgId is set; otherwise fall back to the other paths.
+  const orgListOrConditions = [
+    eq(organizations.parentUserId, user.id),
+    eq(organizations.ownerId, user.id),
+    buildMembershipOrgCondition(membershipOrgIds),
+  ];
+  if (user.orgId) {
+    orgListOrConditions.push(eq(organizations.id, user.orgId));
+  }
   const rows = await db
     .select({
       id: organizations.id,
@@ -314,14 +351,7 @@ export async function listManagedOrganizations(userId?: string) {
       createdAt: organizations.createdAt,
     })
     .from(organizations)
-    .where(
-      or(
-        eq(organizations.parentUserId, user.id),
-        eq(organizations.ownerId, user.id),
-        eq(organizations.id, user.orgId),
-        buildMembershipOrgCondition(membershipOrgIds)
-      )
-    );
+    .where(or(...orgListOrConditions));
 
   if (rows.length === 0) {
     return [];
@@ -367,6 +397,18 @@ export async function listManagedOrganizationsForUser(userId: string) {
     inputUserId: userId,
   });
 
+  // v1.7.3 — user.orgId is now nullable (synthesized empty record path
+  // in getBillingUserById when session.user.id has no users row). Build
+  // OR conditions defensively: include the eq(orgId) clause only when
+  // user.orgId is set; otherwise fall back to the other paths.
+  const orgListOrConditions = [
+    eq(organizations.parentUserId, user.id),
+    eq(organizations.ownerId, user.id),
+    buildMembershipOrgCondition(membershipOrgIds),
+  ];
+  if (user.orgId) {
+    orgListOrConditions.push(eq(organizations.id, user.orgId));
+  }
   const rows = await db
     .select({
       id: organizations.id,
@@ -378,14 +420,7 @@ export async function listManagedOrganizationsForUser(userId: string) {
       createdAt: organizations.createdAt,
     })
     .from(organizations)
-    .where(
-      or(
-        eq(organizations.parentUserId, user.id),
-        eq(organizations.ownerId, user.id),
-        eq(organizations.id, user.orgId),
-        buildMembershipOrgCondition(membershipOrgIds)
-      )
-    );
+    .where(or(...orgListOrConditions));
 
   if (rows.length === 0) {
     return [];
@@ -444,7 +479,11 @@ export async function setActiveOrgAction(formData: FormData) {
     .where(
       and(
         eq(organizations.id, orgId),
-        or(eq(organizations.parentUserId, user.id), eq(organizations.ownerId, user.id), eq(organizations.id, user.orgId))
+        // v1.7.3 — user.orgId nullable; include the eq clause only
+        // when set, fall back to ownerId/parentUserId paths otherwise.
+        user.orgId
+          ? or(eq(organizations.parentUserId, user.id), eq(organizations.ownerId, user.id), eq(organizations.id, user.orgId))
+          : or(eq(organizations.parentUserId, user.id), eq(organizations.ownerId, user.id)),
       )
     )
     .limit(1);
