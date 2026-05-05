@@ -14,7 +14,12 @@ import {
   hasApiKey,
   isFirstEverCall,
 } from "./client.js";
-import { FIRST_CALL_BANNER } from "./welcome.js";
+// v1.7.1 — direct import of VERSION. The connect_workspace handler
+// references it for the User-Agent header on the anonymous /auth/*
+// fetch calls (those bypass api() because they're pre-bearer). Earlier
+// drafts assumed VERSION leaked in via client.js's transitive import;
+// it doesn't. Direct import = no runtime "VERSION is not defined".
+import { FIRST_CALL_BANNER, VERSION } from "./welcome.js";
 
 const str = (description, extra = {}) => ({ type: "string", description, ...extra });
 const obj = (properties, required = []) => ({
