@@ -2724,6 +2724,92 @@ export const TOOLS = [
   },
 
   {
+    name: "get_landing_structure",
+    description:
+      "Read the workspace's landing-page section list with INDEX as the addressing primitive. Returns each section's index (0..N-1, top-to-bottom on the rendered page), type ('hero', 'services-grid', 'about', 'faq', 'mid-cta', 'trust-strip', 'footer', etc.), and a 1-line preview ('Vancouver's Trusted HVAC Family — Same-Day Service' for hero, '3 services (grid-3)' vs 'stats — 4 numbers' for services-grid duplicates). " +
+      "Use this BEFORE move_section / delete_section so you know which index to target. The preview disambiguates duplicate types (e.g. when a workspace has TWO services-grid sections — one with services, one with stats). " +
+      "v1.11+ replaces the v1.10 workflow where the agent had to fetch landing_pages.blueprintJson manually and parse it client-side. Cheap server-side (one DB read).",
+    inputSchema: obj(
+      { workspace_id: str("Workspace id.") },
+      ["workspace_id"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("GET", "/workspace/v2/landing/structure", {
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
+  {
+    name: "move_section",
+    description:
+      "Move ONE landing-page section atomically. Identifies sections by INDEX (run get_landing_structure first to find which index to move). Splice semantics: the section at from_index is removed, then inserted at to_index in the resulting array — so to_index is the section's NEW position in the result. " +
+      "Examples: 'put hero below FAQ' → from_index=<hero index>, to_index=<faq's current index>. 'Move services to the top' → from_index=<services index>, to_index=0. " +
+      "Handles duplicate types correctly (the case reorder_landing_sections refused) — index identity is unambiguous even when two services-grid or two mid-cta sections exist. " +
+      "Use reorder_landing_sections instead when you want to express the entire new order at once AND types are unique. Use move_section for single-step moves OR when types repeat.",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id."),
+        from_index: {
+          type: "integer",
+          description:
+            "0-based index of the section to move (from the get_landing_structure response).",
+          minimum: 0,
+        },
+        to_index: {
+          type: "integer",
+          description:
+            "0-based index where the section should END UP in the result. Splice semantics — equivalent to: remove from from_index, then insert at to_index.",
+          minimum: 0,
+        },
+      },
+      ["workspace_id", "from_index", "to_index"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/workspace/v2/landing/move-section", {
+        body: {
+          workspace_id: ws,
+          from_index: args.from_index,
+          to_index: args.to_index,
+        },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
+  {
+    name: "delete_section",
+    description:
+      "Remove ONE landing-page section atomically. Identifies the section by INDEX (run get_landing_structure first). Refuses to leave 0 sections — minimum is 1 — so you can't accidentally wipe the page. " +
+      "Use when the workspace has a duplicate section type (e.g. two services-grid sections, one of which was an unintended generation artifact) and the operator wants the duplicate gone. Disambiguate WHICH duplicate via the preview text from get_landing_structure (e.g. 'stats — 4 numbers' vs '3 services (grid-3)'). " +
+      "For content edits, use update_landing_section. For replacing a section's content, use persist_block. delete_section is structural — it removes the section from the page entirely.",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id."),
+        index: {
+          type: "integer",
+          description:
+            "0-based index of the section to delete (from get_landing_structure response).",
+          minimum: 0,
+        },
+      },
+      ["workspace_id", "index"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/workspace/v2/landing/delete-section", {
+        body: { workspace_id: ws, index: args.index },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
+  {
     name: "reorder_landing_sections",
     description:
       "Reorder the sections of a workspace's landing page WITHOUT changing their content. Use when the operator says 'move FAQ to the bottom', 'put services after the about section', 'rearrange so the CTA is below testimonials'. " +

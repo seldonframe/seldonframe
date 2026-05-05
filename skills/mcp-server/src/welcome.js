@@ -8,7 +8,7 @@
 // stripped. `create_full_workspace` is the only workspace-creation
 // path mentioned anywhere in this briefing.
 
-export const VERSION = "1.10.1";
+export const VERSION = "1.11.0";
 
 export const WELCOME_MARKDOWN = `# SeldonFrame — create a real Business OS in one conversation
 
@@ -190,10 +190,20 @@ further natural-language requests ("change the headline to …",
   block re-generation ("make the hero punchier", "rewrite the FAQ to
   be less salesy"). Server only assembles context; YOUR LLM does the
   generation, then call persist_block with \`customization\`.
-- **\`reorder_landing_sections\`** (v1.10+) — reorder landing-page
-  sections without changing content. Pass the full ordered array of
-  section types; multiset must equal current. For content edits use
-  update_landing_section; for regeneration use regenerate_block.
+- **\`get_landing_structure\`** (v1.11+) — read the workspace's landing
+  section list with INDEX as the addressing primitive + 1-line preview
+  per section. Use BEFORE move/delete to find the right index;
+  preview text disambiguates duplicate types ('3 services' vs
+  'stats — 4 numbers').
+- **\`move_section\`** (v1.11+) — atomic single-section move by index.
+  Splice semantics: from_index → to_index in result. Works even when
+  section types repeat (the case reorder_landing_sections refuses).
+- **\`delete_section\`** (v1.11+) — atomic single-section remove by
+  index. Refuses to leave 0 sections. Use to clean up unintended
+  duplicates.
+- **\`reorder_landing_sections\`** (v1.10+) — bulk reorder by section
+  type when types are unique. Pass the full ordered type array. For
+  duplicate-type cases use move_section instead.
 - **\`upload_workspace_image\`** (v1.10+, fast path in v1.10.1+) — set
   the workspace logo (slot=logo → organizations.theme.logoUrl) or hero
   background (slot=hero_background → Blueprint.landing hero imageUrl
@@ -262,4 +272,4 @@ admin dashboard. Pre-fills their email automatically.
 <https://seldonframe.com> · **Discord:** <https://discord.gg/sbVUu976NW>
 `;
 
-export const FIRST_CALL_BANNER = `🚀 SeldonFrame v1.10.1 is connected. PREFERRED workspace creation: create_workspace_v2 → IN PARALLEL for all 7 recommended_blocks (hero, services, about, faq, cta, booking, intake): get_block_skill + persist_block → complete_workspace_v2 → finalize_workspace({ workspace_id, email }). The v2 flow puts YOUR LLM in charge of every operator-facing surface using one SKILL.md per block. Each block's prop schema is server-validated. Run blocks in PARALLEL (Promise.all) — sequential takes 60+ seconds. v1.10+ TIER 2 CUSTOMIZE TOOLS: regenerate_block (re-do one block with operator instructions; thin-harness — server bundles context, your LLM generates), reorder_landing_sections (purely mechanical reorder by section type), upload_workspace_image (set logo/hero_background; v1.10.1+ accepts image_url or local_file_path — DON'T base64 unless you have to, the encoded string eats your tool-call token budget). Every URL is real. NEVER create local files. Skipping finalize_workspace leaves the operator with no admin login.`;
+export const FIRST_CALL_BANNER = `🚀 SeldonFrame v1.11.0 is connected. PREFERRED workspace creation: create_workspace_v2 → IN PARALLEL for all 7 recommended_blocks (hero, services, about, faq, cta, booking, intake): get_block_skill + persist_block → complete_workspace_v2 → finalize_workspace({ workspace_id, email }). The v2 flow puts YOUR LLM in charge of every operator-facing surface using one SKILL.md per block. Each block's prop schema is server-validated. Run blocks in PARALLEL (Promise.all) — sequential takes 60+ seconds. v1.10+ TIER 2 CUSTOMIZE TOOLS: regenerate_block (re-do one block with operator instructions; thin-harness — server bundles context, your LLM generates), upload_workspace_image (set logo/hero_background; v1.10.1+ accepts image_url or local_file_path — DON'T base64 unless you have to, the encoded string eats your tool-call token budget). v1.11+ STRUCTURAL PRIMITIVES: get_landing_structure → move_section → delete_section. INDEX-based, handle duplicate section types, atomic. Use these for "put X below Y" and "delete the duplicate Z" — much simpler than reorder_landing_sections's full-array form (which still works for clean cases). Every URL is real. NEVER create local files. Skipping finalize_workspace leaves the operator with no admin login.`;
