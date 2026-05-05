@@ -1,6 +1,7 @@
 import {
   api,
   API_INFO,
+  defaultDeviceLabel,
   fetchText,
   forgetWorkspace,
   htmlToText,
@@ -2769,6 +2770,135 @@ export const TOOLS = [
         workspace_id: ws,
       });
       return result;
+    },
+  },
+
+  // ─── v1.7.0 — magic-link device-flow auth ──────────────────────────────
+  //
+  // Use connect_workspace when the operator wants to ADMIN AN EXISTING
+  // workspace from a NEW device/IDE. The flow:
+  //   1. operator: "connect me to my iron-oak-barbershop workspace,
+  //      my email is marc@ironoak.ca"
+  //   2. tool calls /api/v1/auth/initiate, gets atok + emails operator
+  //   3. operator opens email, clicks the magic link
+  //   4. browser approval page renders (workspace + device label),
+  //      operator clicks "Yes, authorize"
+  //   5. tool's internal poll resolves, gets a fresh workspace bearer,
+  //      stores it locally + sets as default workspace
+  //
+  // For NEW workspaces (no existing slug), use create_workspace_v2
+  // which mints a bearer at creation time and doesn't need a magic link.
+
+  {
+    name: "connect_workspace",
+    description:
+      "Connect this device/IDE to an EXISTING SeldonFrame workspace via magic-link email. Use when the operator already has a workspace (e.g. created from another device) and wants to admin it from this Claude Code / Cursor / Windsurf session. Sends a confirmation email with a one-click approval link; the tool polls until approval (5-min timeout) then stores the workspace bearer locally. For brand-new workspaces, use create_workspace_v2 instead.",
+    inputSchema: obj(
+      {
+        workspace_slug: str(
+          "Workspace slug (the subdomain prefix). Example: 'iron-oak-barbershop' for iron-oak-barbershop.app.seldonframe.com.",
+        ),
+        email: str(
+          "Operator's email — must match an email associated with the workspace owner. Magic link is sent here.",
+        ),
+        device_label: str(
+          "Optional human-readable label shown to the operator on the approval page so they can verify they're authorizing the right device. Defaults to a hostname-based label.",
+        ),
+      },
+      ["workspace_slug", "email"],
+    ),
+    handler: async (args) => {
+      const deviceLabel = args.device_label?.trim() || defaultDeviceLabel();
+
+      // Step 1: initiate. Anonymous endpoint; no bearer required.
+      const initiateRes = await fetch(`${API_INFO.base}/auth/initiate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "User-Agent": `seldonframe-mcp/${VERSION}`,
+        },
+        body: JSON.stringify({
+          workspace_slug: args.workspace_slug,
+          email: args.email,
+          device_label: deviceLabel,
+        }),
+      });
+      const initiateBody = await initiateRes.json().catch(() => ({}));
+      if (!initiateRes.ok || !initiateBody.ok) {
+        throw new Error(
+          `connect_workspace: initiate failed (${initiateRes.status}): ${initiateBody.error ?? initiateRes.statusText}`,
+        );
+      }
+
+      const { atok, approval_url, expires_at, workspace } = initiateBody;
+
+      // Step 2: poll until approved or expired. 2-second cadence,
+      // 5-minute total budget (the atok TTL on the server).
+      const POLL_INTERVAL_MS = 2000;
+      const POLL_BUDGET_MS = 5 * 60 * 1000;
+      const start = Date.now();
+      let token = null;
+      let workspaceId = null;
+      let lastStatus = "pending";
+      while (Date.now() - start < POLL_BUDGET_MS) {
+        await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+        const checkRes = await fetch(
+          `${API_INFO.base}/auth/check?atok=${encodeURIComponent(atok)}`,
+          {
+            headers: { "User-Agent": `seldonframe-mcp/${VERSION}` },
+          },
+        );
+        const checkBody = await checkRes.json().catch(() => ({}));
+        lastStatus = checkBody.status ?? "pending";
+        if (lastStatus === "pending") continue;
+        if (lastStatus === "approved" && checkBody.token) {
+          token = checkBody.token;
+          workspaceId = checkBody.workspace_id;
+          break;
+        }
+        // Terminal failure.
+        return {
+          ok: false,
+          status: lastStatus,
+          error:
+            lastStatus === "rejected"
+              ? `You (or someone with access to ${args.email}) clicked "No, this wasn't me" on the approval page. The connection was not authorized.`
+              : lastStatus === "expired"
+                ? `The approval link expired before being clicked. Run connect_workspace again to get a fresh link.`
+                : lastStatus === "already_claimed"
+                  ? `This authorization was already claimed by another session — the bearer can only be issued once.`
+                  : `Authorization failed with status: ${lastStatus}`,
+          approval_url,
+        };
+      }
+
+      if (!token) {
+        return {
+          ok: false,
+          status: lastStatus,
+          error: `Authorization timed out after 5 minutes. The link is still valid — open the email and click "Authorize", or run connect_workspace again to get a fresh one.`,
+          approval_url,
+          expires_at,
+        };
+      }
+
+      // Step 3: store the bearer locally + set as default workspace.
+      rememberWorkspace({
+        workspace_id: workspaceId,
+        bearer_token: token,
+      });
+
+      return {
+        ok: true,
+        connected: {
+          workspace_id: workspaceId,
+          slug: workspace.slug,
+          name: workspace.name,
+          device_label: deviceLabel,
+          public_url: `https://${workspace.slug}.app.seldonframe.com/`,
+        },
+        message: `Connected ${deviceLabel} to ${workspace.name}. You can now run any workspace tool (list_contacts, persist_block, customize_block, etc.) and it will act on this workspace by default.`,
+      };
     },
   },
 

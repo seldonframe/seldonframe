@@ -75,3 +75,7 @@ export * from "./block-instances";
 // brain. Two layers (workspace + global), self-pruning + self-promoting
 // via confidence/uses/wins. The compounding moat.
 export * from "./brain-notes";
+// v1.7.0 — device_auth_requests: magic-link device-flow auth so
+// operators can administer existing workspaces from new IDEs/devices
+// without copy-pasting bearer tokens.
+export * from "./device-auth-requests";

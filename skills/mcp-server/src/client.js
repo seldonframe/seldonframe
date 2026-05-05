@@ -1,5 +1,5 @@
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
-import { homedir } from "node:os";
+import { homedir, hostname } from "node:os";
 import { join } from "node:path";
 import { VERSION } from "./welcome.js";
 
@@ -204,3 +204,17 @@ export function htmlToText(html) {
 }
 
 export const API_INFO = { base: API_BASE };
+
+/**
+ * v1.7.0 — best-effort device label for magic-link device-flow auth.
+ * Falls back to "Claude Code (unknown device)" if hostname lookup
+ * fails (some sandboxed runtimes block it).
+ */
+export function defaultDeviceLabel() {
+  try {
+    const host = hostname();
+    return `Claude Code on ${host}`;
+  } catch {
+    return "Claude Code (unknown device)";
+  }
+}

@@ -8,7 +8,7 @@
 // stripped. `create_full_workspace` is the only workspace-creation
 // path mentioned anywhere in this briefing.
 
-export const VERSION = "1.6.0";
+export const VERSION = "1.7.0";
 
 export const WELCOME_MARKDOWN = `# SeldonFrame — create a real Business OS in one conversation
 
@@ -169,6 +169,10 @@ further natural-language requests ("change the headline to …",
   generate using your own LLM. The first call for any new workspace.
   v1.6+ also returns \`brain_patterns\` — anonymized cross-workspace
   insights for this vertical that you should fold into your generation.
+- **\`connect_workspace\`** (v1.7+) — connect this device to an EXISTING
+  workspace via magic-link email. Use when the operator already has a
+  workspace (created from another device) and wants to admin it from
+  this IDE. Sends a confirmation email; tool polls until approved.
 - **\`list_blocks\`** — lists v2 page-block primitives available.
 - **\`get_block_skill\`** — fetches one block's SKILL.md (the generation
   prompt + prop schema you read before generating props).
