@@ -213,7 +213,17 @@ export async function createBillingPortalSessionAction() {
   const customerId = orgSubscription.stripeCustomerId ?? user?.stripeCustomerId ?? null;
 
   if (!customerId) {
-    throw new Error("No Stripe customer is associated with this account");
+    // v1.8.1 — graceful redirect instead of throwing. Users on free
+    // tier (or any tier where they've never completed a Stripe
+    // checkout) have no customer yet — clicking "Manage subscription"
+    // shouldn't crash the page; it should send them to the pricing /
+    // upgrade flow. The settings page itself ALSO conditionally hides
+    // the button for free-tier users (defense in depth), but a stale
+    // page state, a direct form POST, or a guest-admin-token edge
+    // case can still hit this action with no customer. Redirect →
+    // /settings/billing?upgrade=needed surfaces a banner explaining
+    // why they were sent back.
+    redirect("/settings/billing?upgrade=needed");
   }
 
   const portalUrl = await createStripeBillingPortalUrl({

@@ -252,6 +252,22 @@ export default async function BillingSettingsPage({
         </div>
       ) : null}
 
+      {/* v1.8.1 — landed-from-portal-action banner. The
+          createBillingPortalSessionAction redirects here with
+          ?upgrade=needed when the user has no Stripe customer yet
+          (free tier, never checked out). Surfaces the redirect
+          reason instead of leaving the operator confused about why
+          their click on "Manage subscription" did nothing. */}
+      {resolvedSearchParams?.upgrade === "needed" ? (
+        <div className="rounded-xl border border-caution/30 bg-caution/10 p-4 text-sm">
+          <p className="font-medium text-foreground">No active subscription to manage yet.</p>
+          <p className="mt-1 text-muted-foreground">
+            You&apos;re on the free tier. Upgrade below to manage your subscription, unlock custom
+            domains, remove SeldonFrame branding, and access the client portal.
+          </p>
+        </div>
+      ) : null}
+
       <div className="rounded-xl border bg-card space-y-4 p-5">
         <div className="grid gap-4 md:grid-cols-3">
           <div>
@@ -288,13 +304,25 @@ export default async function BillingSettingsPage({
         ) : null}
 
         <div className="flex flex-wrap gap-2">
-          {isGuestAdminToken ? null : (
+          {/* v1.8.1 — only show "Manage subscription" for paying tiers
+              that actually have a Stripe customer. Free tier sees
+              "Upgrade" as the primary CTA instead. This prevents the
+              click-action-crash class entirely; the action's graceful
+              redirect on missing customerId is defense in depth. */}
+          {!isGuestAdminToken && tier !== "free" ? (
             <form action={createBillingPortalSessionAction}>
               <button type="submit" className="crm-button-primary h-10 px-4">
                 Manage subscription
               </button>
             </form>
-          )}
+          ) : !isGuestAdminToken ? (
+            <Link
+              href="/pricing"
+              className="crm-button-primary inline-flex h-10 items-center px-4"
+            >
+              Upgrade
+            </Link>
+          ) : null}
           <Link href="/pricing" className="crm-button-secondary inline-flex h-10 items-center px-4">
             See pricing
           </Link>
