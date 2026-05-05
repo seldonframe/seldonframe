@@ -2907,6 +2907,102 @@ export const TOOLS = [
     },
   },
 
+  // ─── v1.8.0 — custom domains (paying tiers) ─────────────────────────────
+  //
+  // Operators on Growth ($29) or Scale ($99) can route their own
+  // hostnames (joescuts.com, ironandoak.ca, etc.) to their workspace.
+  // Free-tier workspaces stay on <slug>.app.seldonframe.com.
+  //
+  // Flow:
+  //   1. add_custom_domain → registers with Vercel, returns DNS record
+  //      to add at the operator's registrar.
+  //   2. operator adds the CNAME / A record at Cloudflare / Namecheap /
+  //      etc.
+  //   3. verify_domain → polls Vercel, returns verified once DNS resolves.
+  //      Vercel auto-provisions SSL via Let's Encrypt.
+  //   4. Subsequent traffic routes to the workspace automatically (proxy
+  //      checks workspace_domains FIRST before subdomain extraction).
+
+  {
+    name: "add_custom_domain",
+    description:
+      "Add a custom hostname (e.g. 'joescuts.com', 'www.joescuts.com', 'bookings.joescuts.com') to the workspace. PAID FEATURE — requires Growth ($29/mo) or Scale ($99/mo); returns 402 upgrade_required on free tier. Returns DNS instructions the operator needs to add at their registrar (Cloudflare, Namecheap, GoDaddy, etc.). Once DNS propagates (typically 5min - 24h), call verify_domain to mark verified + enable routing. Vercel auto-provisions SSL once DNS resolves.",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id."),
+        hostname: str(
+          "Hostname to register, lowercased and without scheme. Examples: 'joescuts.com', 'www.joescuts.com', 'shop.joescuts.com'.",
+        ),
+      },
+      ["workspace_id", "hostname"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/domains", {
+        body: { op: "add", hostname: args.hostname },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
+  {
+    name: "verify_domain",
+    description:
+      "Re-check DNS for a previously-added custom domain. Returns { verified: true } once Vercel sees the correct DNS record AND issues SSL — usually 5 minutes after the operator adds the CNAME / A record at their registrar, sometimes up to 24 hours depending on TTL. Returns { verified: false, recommended_records } when DNS still hasn't propagated; surface those recommendations to the operator so they can fix their registrar config.",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id."),
+        hostname: str("The hostname to re-verify (must already be added)."),
+      },
+      ["workspace_id", "hostname"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/domains", {
+        body: { op: "verify", hostname: args.hostname },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
+  {
+    name: "list_workspace_domains",
+    description:
+      "List all custom domains registered to the workspace. Returns hostname, status (pending / verified / failed), DNS verification record, and primary flag for each. Allowed on all tiers — free workspaces will see an empty list since custom domains require a paid tier.",
+    inputSchema: obj({ workspace_id: str("Workspace id.") }, ["workspace_id"]),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/domains", {
+        body: { op: "list" },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
+  {
+    name: "remove_workspace_domain",
+    description:
+      "Remove a custom domain from the workspace. Routes immediately stop responding for the removed hostname; SSL cert is preserved on Vercel for 30 days in case the operator wants to re-add it. Idempotent — no error if the domain was already removed.",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id."),
+        hostname: str("Hostname to remove."),
+      },
+      ["workspace_id", "hostname"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/domains", {
+        body: { op: "remove", hostname: args.hostname },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
   {
     name: "list_brain_patterns",
     description:

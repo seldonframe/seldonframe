@@ -8,7 +8,7 @@
 // stripped. `create_full_workspace` is the only workspace-creation
 // path mentioned anywhere in this briefing.
 
-export const VERSION = "1.7.3";
+export const VERSION = "1.8.0";
 
 export const WELCOME_MARKDOWN = `# SeldonFrame — create a real Business OS in one conversation
 
@@ -173,6 +173,11 @@ further natural-language requests ("change the headline to …",
   workspace via magic-link email. Use when the operator already has a
   workspace (created from another device) and wants to admin it from
   this IDE. Sends a confirmation email; tool polls until approved.
+- **\`add_custom_domain\`** / **\`verify_domain\`** /
+  **\`list_workspace_domains\`** / **\`remove_workspace_domain\`** (v1.8+)
+  — register the operator's own hostname against the workspace.
+  PAID FEATURE on Growth ($29/mo) or Scale ($99/mo); free tier returns
+  402 with upgrade CTA. Vercel auto-provisions SSL once DNS resolves.
 - **\`list_blocks\`** — lists v2 page-block primitives available.
 - **\`get_block_skill\`** — fetches one block's SKILL.md (the generation
   prompt + prop schema you read before generating props).

@@ -79,3 +79,6 @@ export * from "./brain-notes";
 // operators can administer existing workspaces from new IDEs/devices
 // without copy-pasting bearer tokens.
 export * from "./device-auth-requests";
+// v1.8.0 — workspace_domains: custom hostnames for paying tiers,
+// registered through Vercel Domains API.
+export * from "./workspace-domains";

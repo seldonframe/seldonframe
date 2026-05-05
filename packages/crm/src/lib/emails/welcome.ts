@@ -34,6 +34,10 @@ export type WelcomeEmailRequest = {
   email: string;
   name: string | null;
   workspace: WelcomeWorkspace;
+  /** v1.8.0 — workspace tier. When undefined or "free", the welcome
+   *  email includes an upgrade pitch for custom domains. Paid tiers
+   *  see a "your custom domain is ready to add" message instead. */
+  tier?: "free" | "growth" | "scale";
 };
 
 export type ValidateResult =
@@ -80,6 +84,16 @@ export function validateWelcomeRequest(body: unknown): ValidateResult {
 
   const name = isNonEmptyString(b.name) ? b.name.trim() : null;
 
+  // v1.8.0 — optional tier passthrough. Drives the upgrade-pitch
+  // block. Falls back to "free" silently when omitted so existing
+  // callers keep working.
+  const rawTier =
+    typeof b.tier === "string" ? b.tier.trim().toLowerCase() : "";
+  const tier: "free" | "growth" | "scale" | undefined =
+    rawTier === "free" || rawTier === "growth" || rawTier === "scale"
+      ? (rawTier as "free" | "growth" | "scale")
+      : undefined;
+
   return {
     ok: true,
     data: {
@@ -91,6 +105,7 @@ export function validateWelcomeRequest(body: unknown): ValidateResult {
         intake_url: (w.intake_url as string).trim(),
         admin_url: (w.admin_url as string).trim(),
       },
+      tier,
     },
   };
 }
@@ -129,6 +144,51 @@ function escapeHtml(value: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+/**
+ * v1.8.0 — render the tier-conditional block between Next-Steps and
+ * the Discord CTA.
+ *
+ *   Free tier  → upgrade pitch (custom domains require Growth/Scale).
+ *   Paid tier  → "your custom domain is ready to add" + MCP command.
+ *
+ * Always returns a <tr><td>...</td></tr> shape so the surrounding
+ * email-table layout stays valid even when no tier is provided
+ * (defensive: empty string for that case).
+ */
+function renderUpgradeBlock(req: WelcomeEmailRequest): string {
+  const tier = req.tier ?? "free";
+  const adminUrl = escapeHtml(req.workspace.admin_url);
+  const billingUrl = adminUrl.replace(/\/admin\b.*$/, "/settings/billing");
+
+  if (tier === "free") {
+    return `<tr><td style="padding:8px 32px 8px 32px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fffbea;border:1px solid #fde68a;border-radius:10px;">
+        <tr><td style="padding:16px 18px;">
+          <div style="font-size:13px;color:#92400e;letter-spacing:0.04em;text-transform:uppercase;font-weight:600;margin-bottom:6px;">Want your own domain?</div>
+          <div style="font-size:14px;color:#78350f;line-height:1.55;margin-bottom:10px;">
+            Your workspace is on a SeldonFrame subdomain right now. Upgrade to <strong>Growth ($29/mo)</strong> or <strong>Scale ($99/mo)</strong> to route your own hostname (joescuts.com → your workspace) with auto-SSL.
+          </div>
+          <a href="${billingUrl}" style="display:inline-block;background:#92400e;color:#fffbea;text-decoration:none;font-size:13px;font-weight:600;padding:9px 18px;border-radius:7px;">View pricing →</a>
+        </td></tr>
+      </table>
+    </td></tr>`;
+  }
+
+  // Paid tier: usable hint about adding a custom domain.
+  return `<tr><td style="padding:8px 32px 8px 32px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;">
+      <tr><td style="padding:16px 18px;">
+        <div style="font-size:13px;color:#065f46;letter-spacing:0.04em;text-transform:uppercase;font-weight:600;margin-bottom:6px;">Custom domain ready</div>
+        <div style="font-size:14px;color:#064e3b;line-height:1.55;margin-bottom:6px;">
+          Your plan includes custom domains with auto-SSL. From your IDE, ask Claude:
+          <code style="background:#d1fae5;padding:2px 6px;border-radius:4px;font-size:13px;">add_custom_domain hostname:&quot;yoursite.com&quot;</code>
+        </div>
+        <div style="font-size:13px;color:#047857;">You'll get a CNAME record to paste into your DNS, then run <code>verify_domain</code> once it propagates.</div>
+      </td></tr>
+    </table>
+  </td></tr>`;
 }
 
 export function renderWelcomeEmailHtml(req: WelcomeEmailRequest): string {
@@ -191,9 +251,11 @@ export function renderWelcomeEmailHtml(req: WelcomeEmailRequest): string {
           <ol style="padding-left:20px;margin:0 0 16px 0;">
             <li style="margin-bottom:6px;">Open the admin dashboard to see the CRM, deals pipeline, and automations already running.</li>
             <li style="margin-bottom:6px;">Customize your landing, booking page, and intake form by talking to Claude — every change is one MCP call away.</li>
-            <li style="margin-bottom:6px;">Connect a custom domain when you're ready to ship publicly.</li>
+            <li style="margin-bottom:6px;">Take your first booking or intake submission. Each one feeds the workspace's brain so the next change Claude makes is sharper.</li>
           </ol>
         </td></tr>
+
+        ${renderUpgradeBlock(req)}
 
         <tr><td style="padding:8px 32px 24px 32px;">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#5865f2;border-radius:10px;">
