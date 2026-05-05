@@ -8,7 +8,7 @@
 // stripped. `create_full_workspace` is the only workspace-creation
 // path mentioned anywhere in this briefing.
 
-export const VERSION = "1.9.0";
+export const VERSION = "1.10.0";
 
 export const WELCOME_MARKDOWN = `# SeldonFrame — create a real Business OS in one conversation
 
@@ -185,6 +185,19 @@ further natural-language requests ("change the headline to …",
   + renders + replaces the matching section in the workspace's landing.
 - **\`complete_workspace_v2\`** — marks the v2 flow finished, reports which
   blocks landed.
+- **\`regenerate_block\`** (v1.10+) — bundles current props + workspace
+  summary + brain patterns + the operator's new instructions for
+  block re-generation ("make the hero punchier", "rewrite the FAQ to
+  be less salesy"). Server only assembles context; YOUR LLM does the
+  generation, then call persist_block with \`customization\`.
+- **\`reorder_landing_sections\`** (v1.10+) — reorder landing-page
+  sections without changing content. Pass the full ordered array of
+  section types; multiset must equal current. For content edits use
+  update_landing_section; for regeneration use regenerate_block.
+- **\`upload_workspace_image\`** (v1.10+) — upload a base64-encoded
+  image to slot=logo (organizations.theme.logoUrl) or
+  slot=hero_background (Blueprint.landing hero imageUrl + landing
+  re-render). 5 MB max, image/* MIME types. Vercel Blob auto-CDN.
 - **\`read_brain_path\`** / **\`list_brain_dir\`** — read the workspace's
   layer-1 brain (notes about THIS workspace's customers, voice, pipeline
   patterns). Use BEFORE generating blocks; reads tick the note's \`uses\`
@@ -244,4 +257,4 @@ admin dashboard. Pre-fills their email automatically.
 <https://seldonframe.com> · **Discord:** <https://discord.gg/sbVUu976NW>
 `;
 
-export const FIRST_CALL_BANNER = `🚀 SeldonFrame v1.4.1 is connected. PREFERRED workspace creation: create_workspace_v2 → IN PARALLEL for all 7 recommended_blocks (hero, services, about, faq, cta, booking, intake): get_block_skill + persist_block → complete_workspace_v2 → finalize_workspace({ workspace_id, email }). The v2 flow puts YOUR LLM in charge of every operator-facing surface using one SKILL.md per block. Each block's prop schema is server-validated. Run blocks in PARALLEL (Promise.all) — sequential takes 60+ seconds. Every URL is real. NEVER create local files. Skipping finalize_workspace leaves the operator with no admin login.`;
+export const FIRST_CALL_BANNER = `🚀 SeldonFrame v1.10.0 is connected. PREFERRED workspace creation: create_workspace_v2 → IN PARALLEL for all 7 recommended_blocks (hero, services, about, faq, cta, booking, intake): get_block_skill + persist_block → complete_workspace_v2 → finalize_workspace({ workspace_id, email }). The v2 flow puts YOUR LLM in charge of every operator-facing surface using one SKILL.md per block. Each block's prop schema is server-validated. Run blocks in PARALLEL (Promise.all) — sequential takes 60+ seconds. v1.10+ TIER 2 CUSTOMIZE TOOLS: regenerate_block (re-do one block with operator instructions; thin-harness — server bundles context, your LLM generates), reorder_landing_sections (purely mechanical reorder by section type), upload_workspace_image (base64 image → Vercel Blob → applied to slot=logo or slot=hero_background). Every URL is real. NEVER create local files. Skipping finalize_workspace leaves the operator with no admin login.`;

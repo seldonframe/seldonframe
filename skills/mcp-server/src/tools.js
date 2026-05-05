@@ -2667,6 +2667,126 @@ export const TOOLS = [
     },
   },
 
+  // ─── v1.10.0 — block customization (regenerate / reorder / image) ──────
+  //
+  // These tools let the operator iterate on a workspace AFTER the v2
+  // creation flow has shipped: regenerate one block with new
+  // instructions ("make the hero punchier"), reorder landing sections
+  // ("move FAQ to the bottom"), or upload an image (logo, hero
+  // background).
+  //
+  // Thin harness, fat skill: server-side these tools do NO creative
+  // work. regenerate_block just bundles the IDE agent everything it
+  // needs (current props, workspace summary, brain patterns); the
+  // agent's own LLM does the actual regeneration and calls
+  // persist_block to save the result.
+
+  {
+    name: "regenerate_block",
+    description:
+      "Get the bundle needed to regenerate ONE v2 page block with new operator instructions. Use this when the operator asks for a targeted change to an existing block ('make the hero punchier', 'add a card about kids cuts', 'rewrite the FAQ to be less salesy'). " +
+      "Returns: current_props (so your LLM can iterate rather than start fresh), workspace_summary (business name, industry, services, voice from the workspace's soul), brain_patterns (anonymized cross-workspace patterns for this vertical), customization_history (previous edits — useful for understanding what NOT to revert), and the operator's new_instructions (echoed back so they're visible in your context). " +
+      "The next move is YOURS: fetch the block's SKILL.md via get_block_skill, generate new props that satisfy the prop schema while applying new_instructions, then call persist_block with `customization: { prompt: <new_instructions> }` to record the change. " +
+      "If the block has never been persisted (status=first_generation), this is a normal first-time generation path — same downstream flow, just no current_props to iterate from. " +
+      "Antifragile design note: this tool only ASSEMBLES context. Your LLM does the creative work. As models improve, regeneration quality improves with zero MCP changes.",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id from create_workspace_v2."),
+        block_name: str(
+          "Block name to regenerate. Must match a v2 block: hero, services, about, faq, cta, booking, intake.",
+        ),
+        new_instructions: str(
+          "Optional: the operator's natural-language regeneration request ('make it more urgent', 'shorter copy', 'less salesy'). When provided, surfaced in the response and used in the customization field of the subsequent persist_block call. Omit when the operator just wants a fresh roll without specific guidance.",
+        ),
+      },
+      ["workspace_id", "block_name"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const blockName = encodeURIComponent(args.block_name);
+      const qs = args.new_instructions
+        ? `?new_instructions=${encodeURIComponent(args.new_instructions)}`
+        : "";
+      const result = await api(
+        "GET",
+        `/workspace/v2/blocks/${blockName}/regenerate${qs}`,
+        { workspace_id: ws },
+      );
+      return result;
+    },
+  },
+
+  {
+    name: "reorder_landing_sections",
+    description:
+      "Reorder the sections of a workspace's landing page WITHOUT changing their content. Use when the operator says 'move FAQ to the bottom', 'put services after the about section', 'rearrange so the CTA is below testimonials'. " +
+      "Pass `new_order` as the full ordered array of section types as they should appear top-to-bottom. The multiset of types in new_order MUST equal the current landing's section types — no add/remove. Section types include: hero, services-grid, about, mid-cta, faq, testimonials, trust-strip, emergency-strip, service-area, partners, footer (the actual set depends on what's currently on the page). " +
+      "Returns the new sections_order on success or validation_errors on failure (missing/extra types, duplicates). For content edits use update_landing_section. To regenerate a block's content use regenerate_block. To get the current order, fetch the workspace's landing or call regenerate_block (which exposes block names) — most landing pages start as: hero → services → about → faq → mid-cta.",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id."),
+        new_order: {
+          type: "array",
+          description:
+            "Ordered array of section type strings. Must contain EVERY section type currently on the landing page, exactly once each. Example: [\"hero\", \"services-grid\", \"about\", \"mid-cta\", \"faq\"].",
+          items: { type: "string" },
+        },
+      },
+      ["workspace_id", "new_order"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/workspace/v2/landing/reorder", {
+        body: { workspace_id: ws, new_order: args.new_order },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
+  {
+    name: "upload_workspace_image",
+    description:
+      "Upload an image to a workspace and apply it to one of two slots: 'logo' (replaces organizations.theme.logoUrl, surfaces in header / footer / og-image / favicon) or 'hero_background' (replaces the hero section's background image and re-renders the landing page). " +
+      "Use when the operator says 'use this as my logo', 'replace the hero image with this photo', 'change the header logo'. " +
+      "Pass the image bytes as base64 in `image_data_b64`. The MCP server forwards them to Vercel Blob; SSL + CDN are auto-provisioned. Max 5 MB; allowed types: image/png, image/jpeg, image/webp, image/svg+xml, image/gif. " +
+      "Returns the public Blob URL on success; that URL is now live on the workspace's public surface within seconds. " +
+      "If the operator gave you a local file path, read it as bytes and base64-encode it before calling this tool. If they gave you a URL, fetch it first then re-upload (we re-host so the asset is on our CDN, not theirs). " +
+      "Antifragile design: server only validates file shape + applies URL to the right column. Your LLM picks which slot ('they said logo, that maps to slot=logo'). As you get better at intent-mapping, the harness doesn't change.",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id."),
+        slot: str(
+          "Image slot: 'logo' (workspace logo, used in header/footer/og-image) or 'hero_background' (hero section background image). Other slots may be added in future versions.",
+        ),
+        file_name: str(
+          "Original filename (for the blob path). Sanitized server-side — special chars stripped, path traversal blocked.",
+        ),
+        content_type: str(
+          "MIME type. Must be one of: image/png, image/jpeg, image/webp, image/svg+xml, image/gif.",
+        ),
+        image_data_b64: str(
+          "Image bytes, base64-encoded. Max 5 MB after decoding.",
+        ),
+      },
+      ["workspace_id", "slot", "file_name", "content_type", "image_data_b64"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/workspace/v2/images", {
+        body: {
+          workspace_id: ws,
+          slot: args.slot,
+          file_name: args.file_name,
+          content_type: args.content_type,
+          image_data_b64: args.image_data_b64,
+        },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
   // ─── v1.6.0 — brain layer (Karpathy LLM-Wiki) ───────────────────────────
   //
   // Two-layer brain stored as a file-tree of markdown notes:
