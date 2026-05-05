@@ -28,12 +28,18 @@ async function createStripeCustomer(params: { secretKey: string; email: string; 
   });
 
   if (!response.ok) {
+    // contract:throw-ok: Stripe API error; bubbles up to selectPlanAction
+    // which doesn't catch — but that path is only reachable from a
+    // form submit, and Next.js server-action error handling shows the
+    // operator a generic error toast rather than crashing the page.
     throw new Error("Failed to create Stripe customer");
   }
 
   const payload = (await response.json()) as { id?: string };
 
   if (!payload.id) {
+    // contract:throw-ok: Stripe responded 200 but malformed body —
+    // unrecoverable, programmer/external error.
     throw new Error("Stripe customer id missing");
   }
 
@@ -74,12 +80,16 @@ async function createStripeCheckoutSession(params: {
   });
 
   if (!response.ok) {
+    // contract:throw-ok: Stripe API error; same pattern as the
+    // customer-creation throw — bubbles to the form-submit handler
+    // which shows a generic error toast.
     throw new Error("Failed to create Stripe checkout session");
   }
 
   const payload = (await response.json()) as { url?: string | null };
 
   if (!payload.url) {
+    // contract:throw-ok: Stripe 200 with malformed body, unrecoverable.
     throw new Error("Stripe checkout URL missing");
   }
 
@@ -100,12 +110,16 @@ async function createStripeBillingPortalUrl(params: { secretKey: string; custome
   });
 
   if (!response.ok) {
+    // contract:throw-ok: Stripe API error; same pattern as the other
+    // Stripe helpers — caller is createBillingPortalSessionAction
+    // which is form-submit-driven, not SSR-render-driven.
     throw new Error("Failed to create Stripe billing portal session");
   }
 
   const payload = (await response.json()) as { url?: string | null };
 
   if (!payload.url) {
+    // contract:throw-ok: Stripe 200 with malformed body, unrecoverable.
     throw new Error("Stripe portal URL missing");
   }
 
@@ -126,6 +140,10 @@ export async function selectPlanAction(formData: FormData) {
 
   const plan = getPlan(planId);
   if (!plan) {
+    // contract:throw-ok: planId comes from the form submit; the plan
+    // selection UI only renders valid plan IDs. If we reach this
+    // branch, the user manually crafted a bad form POST — programmer-
+    // error / abuse, not a normal operator path.
     throw new Error("Invalid plan selected");
   }
 
@@ -145,6 +163,11 @@ export async function selectPlanAction(formData: FormData) {
     .limit(1);
 
   if (!user) {
+    // contract:throw-ok: userId came from session.user.id which
+    // requires a NextAuth session; this branch is only reachable
+    // if the users row was deleted between sign-in and form submit
+    // (extreme race). Same form-submit error-toast UX as Stripe
+    // failures above; not a server-component render path.
     throw new Error("User not found");
   }
 
@@ -164,6 +187,9 @@ export async function selectPlanAction(formData: FormData) {
   }
 
   if (!selectedPriceId) {
+    // contract:throw-ok: deployment-config error (env var missing for
+    // a known plan); operator-facing form-submit error-toast UX, not
+    // SSR boundary.
     throw new Error(`Stripe price id is missing for plan ${planId} (${normalizedPeriod})`);
   }
 

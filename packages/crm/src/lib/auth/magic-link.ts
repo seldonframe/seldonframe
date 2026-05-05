@@ -52,6 +52,10 @@ export async function mintClaimMagicLink(
     process.env.AUTH_SECRET?.trim() || process.env.NEXTAUTH_SECRET?.trim() || ""
   );
   if (!secret) {
+    // contract:throw-ok: deployment-config error (env var missing).
+    // Caller (server action) catches and returns a structured error
+    // to the operator. The throw signal is what surfaces this misconfig
+    // in observability before it silently breaks magic-link auth.
     throw new Error(
       "Cannot mint magic link: AUTH_SECRET (or NEXTAUTH_SECRET) is not set."
     );

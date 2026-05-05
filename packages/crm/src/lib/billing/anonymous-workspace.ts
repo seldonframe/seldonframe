@@ -145,6 +145,11 @@ async function resolveUniqueSlug(desired: string): Promise<string> {
     candidate = `${base}-${randomUUID().slice(0, 4)}`;
   }
 
+  // contract:throw-ok: 8 random suffix collisions in a row is
+  // statistically impossible at any realistic workspace count;
+  // reaching here implies a cosmic-ray-level failure mode. Caller
+  // (createFullWorkspace) wraps in try/catch and surfaces as a
+  // structured error response.
   throw new Error("Could not allocate a unique slug after 8 attempts.");
 }
 
@@ -153,9 +158,12 @@ export async function createAnonymousWorkspace(
 ): Promise<AnonymousCreateResult> {
   const name = input.name.trim();
   if (!name) {
+    // contract:throw-ok: input validation; caller (createFullWorkspace
+    // route) wraps in try/catch and returns 422 to the API client.
     throw new Error("Workspace name is required.");
   }
   if (name.length > 64) {
+    // contract:throw-ok: input validation; same try/catch path.
     throw new Error("Workspace name must be 64 characters or fewer.");
   }
 
@@ -229,6 +237,8 @@ export async function createAnonymousWorkspace(
     .returning({ id: organizations.id, slug: organizations.slug, name: organizations.name });
 
   if (!org) {
+    // contract:throw-ok: db.insert.returning returned no rows —
+    // unrecoverable DB error. Caller wraps in try/catch + 422.
     throw new Error("Could not create workspace.");
   }
 

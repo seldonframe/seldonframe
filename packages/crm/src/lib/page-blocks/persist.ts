@@ -219,6 +219,11 @@ async function persistLandingSectionBlock(
   blockName: string,
 ): Promise<string> {
   if (!toSection) {
+    // contract:throw-ok: registry misconfiguration — every
+    // surface=landing-section block MUST have toSection. This branch
+    // is unreachable in valid registry state and is caught by the
+    // top-level try/catch in persistBlockForWorkspace which returns
+    // a structured error response.
     throw new Error(
       `block "${blockName}" surface=landing-section but no toSection function — registry misconfigured`,
     );
@@ -463,6 +468,11 @@ async function loadLandingForWorkspace(workspaceId: string): Promise<{
     )
     .limit(1);
   if (!landing) {
+    // contract:throw-ok: workspace doesn't have a landing page row —
+    // create_workspace_v2 always creates one, so this means the
+    // workspace was created via a path that didn't bootstrap the
+    // landing. Caught by top-level try/catch in
+    // persistBlockForWorkspace; surfaced as 422 to the IDE agent.
     throw new Error(
       "workspace_landing_missing: no landing_pages row with slug='home'. Run create_workspace_v2 before persisting blocks.",
     );
@@ -697,7 +707,7 @@ function sha1(s: string): string {
  * for a restaurant. We dedupe on `id` so an LLM that DOES include name
  * or email doesn't produce two of each.
  */
-function mergeBookingFormFields(
+export function mergeBookingFormFields(
   llmFields: Array<{
     id: string;
     label: string;

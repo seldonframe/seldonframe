@@ -53,11 +53,20 @@ async function requireBillingUser() {
     return getBillingUserForAdminTokenOrg(adminCtx.orgId);
   }
 
+  // contract:throw-ok: requireBillingUser is only reached AFTER
+  // requireAuth has confirmed an authenticated session; no-session +
+  // no-admin-token here is a programmer error (caller forgot to
+  // requireAuth first). The throw is the right signal to fix the
+  // caller. End-user-reachable callers all redirect to /login first.
   throw new Error("Unauthorized");
 }
 
 async function getBillingUserById(userId: string) {
   if (!userId) {
+    // contract:throw-ok: empty userId is a programmer-error guard.
+    // All call sites pass a session.user.id which is non-empty when
+    // the session exists. Reaching this branch with empty string
+    // means the caller didn't check auth — a bug at the call site.
     throw new Error("Unauthorized");
   }
 
@@ -70,6 +79,9 @@ async function getBillingUserById(userId: string) {
     if (adminCtx?.orgId) {
       return getBillingUserForAdminTokenOrg(adminCtx.orgId);
     }
+    // contract:throw-ok: admin-token sentinel id should ALWAYS come
+    // with an admin-token cookie — this branch is unreachable in
+    // normal flow. Stale cookie or programmer-error bypass.
     throw new Error("Unauthorized");
   }
 
@@ -143,6 +155,9 @@ async function getBillingUserForAdminTokenOrg(orgId: string) {
     .limit(1);
 
   if (!orgRow) {
+    // contract:throw-ok: admin-token cookie referenced a non-existent
+    // org. Stale cookie after workspace deletion. Caller's try/catch
+    // surfaces "session expired, please re-auth."
     throw new Error("Unauthorized");
   }
 
@@ -225,6 +240,10 @@ async function ensureWorkspaceCreationBillingForUser(user: Awaited<ReturnType<ty
     ownedWorkspaceCount: existingWorkspaces,
   });
   if (!decision.allowed) {
+    // contract:throw-ok: workspace-creation-limit gate. All callers
+    // are server actions or API routes that catch this specific
+    // message and surface a tier-upgrade UI. The throw is caught
+    // by the caller's try/catch — never reaches SSR boundary.
     throw new Error(WORKSPACE_UPGRADE_REQUIRED_MESSAGE);
   }
 }
@@ -489,6 +508,11 @@ export async function setActiveOrgAction(formData: FormData) {
     .limit(1);
 
   if (!org) {
+    // contract:throw-ok: setActiveOrgAction is a form-submit server
+    // action; the form posts an org id from a list the user just
+    // saw. Reaching this means the org was deleted between page
+    // render and form submit OR the user crafted a bad post —
+    // either way, form-submit error UI surfaces it cleanly.
     throw new Error("Organization not found");
   }
 
@@ -513,15 +537,20 @@ export async function createManagedOrganizationAction(formData: FormData) {
   const ownerEmail = String(formData.get("ownerEmail") ?? "").trim();
 
   if (!businessName) {
+    // contract:throw-ok: form-submit input validation; caller's UI
+    // shows the error inline. Same pattern as Stripe selectPlanAction.
     throw new Error("Business name is required");
   }
 
   const limitStatus = await getWorkspaceLimitStatusForUser(user.id);
   if (limitStatus.tier === "free") {
+    // contract:throw-ok: tier gate; caller's form-submit error UI
+    // surfaces the upgrade pitch.
     throw new Error("Pro plan required to create managed organizations");
   }
 
   if (!limitStatus.canCreate) {
+    // contract:throw-ok: workspace-limit gate; same form-submit UX.
     throw new Error("Organization limit reached for current plan");
   }
 
@@ -549,6 +578,8 @@ export async function createManagedOrganizationAction(formData: FormData) {
     .returning({ id: organizations.id });
 
   if (!org) {
+    // contract:throw-ok: db.insert.returning empty — DB error during
+    // workspace creation. Form-submit error UI handles this.
     throw new Error("Could not create organization");
   }
 
@@ -702,6 +733,7 @@ export async function createWorkspaceFromSoulAction(input: CreateWorkspaceFromSo
   const businessName = String(soul.business_name ?? "").trim();
 
   if (!businessName) {
+    // contract:throw-ok: form-submit input validation; inline error UI.
     throw new Error("Business name is required");
   }
 
@@ -739,6 +771,8 @@ export async function createWorkspaceFromSoulAction(input: CreateWorkspaceFromSo
     .returning({ id: organizations.id, slug: organizations.slug, name: organizations.name });
 
   if (!org) {
+    // contract:throw-ok: db.insert.returning empty — DB error during
+    // workspace creation. Form-submit error UI handles this.
     throw new Error("Could not create workspace");
   }
 
@@ -793,10 +827,12 @@ export async function createWorkspaceFromSetupAction(input: CreateWorkspaceFromS
   const generatedFramework = input.generatedFramework ?? null;
 
   if (!businessName) {
+    // contract:throw-ok: form-submit input validation; inline error UI.
     throw new Error("Business name is required");
   }
 
   if (!frameworkId) {
+    // contract:throw-ok: form-submit input validation; inline error UI.
     throw new Error("Framework is required");
   }
 
@@ -827,6 +863,8 @@ export async function createWorkspaceFromSetupAction(input: CreateWorkspaceFromS
     .returning({ id: organizations.id });
 
   if (!org) {
+    // contract:throw-ok: db.insert.returning empty — DB error during
+    // workspace creation. Form-submit error UI handles this.
     throw new Error("Could not create workspace");
   }
 

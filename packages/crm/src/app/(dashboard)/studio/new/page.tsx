@@ -166,6 +166,9 @@ export default function NewSoulStudioPage() {
 
     if (!response.ok) {
       const payload = (await response.json().catch(() => ({}))) as { error?: string };
+      // contract:throw-ok: client-side fetch handler inside an
+      // async function called from a form submit; caller surfaces
+      // the error in inline UI state, not via SSR boundary.
       throw new Error(payload.error || "Failed to create listing");
     }
 

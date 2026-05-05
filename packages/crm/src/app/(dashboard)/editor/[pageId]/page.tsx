@@ -27,6 +27,8 @@ export default function PageEditor() {
     fetch(`/api/v1/pages/${params.pageId}`)
       .then(async (res) => {
         if (!res.ok) {
+          // contract:throw-ok: client-side fetch handler; caught by the
+          // .catch() below which falls back to emptyPuckData.
           throw new Error("Failed to load page");
         }
         return res.json();

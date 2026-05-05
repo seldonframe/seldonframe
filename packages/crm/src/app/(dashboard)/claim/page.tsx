@@ -42,6 +42,8 @@ export default function ClaimPage() {
       .then(async (res) => {
         const body = (await res.json().catch(() => ({}))) as { success?: boolean; error?: string };
         if (!res.ok || !body.success) {
+          // contract:throw-ok: client-side fetch handler; caught by the
+          // .catch() below which sets the error state + redirects.
           throw new Error(body.error || "Claim failed");
         }
 
