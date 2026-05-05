@@ -11,25 +11,31 @@ import { logEvent } from "@/lib/observability/log";
 type Body = { atok?: unknown };
 
 export async function POST(request: Request) {
-  const body = (await request.json().catch(() => ({}))) as Body;
-  const atok = typeof body.atok === "string" ? body.atok.trim() : "";
-  if (!atok) {
+  // v1.7.2 — wrap to guarantee JSON response shape even on crashes.
+  try {
+    const body = (await request.json().catch(() => ({}))) as Body;
+    const atok = typeof body.atok === "string" ? body.atok.trim() : "";
+    if (!atok) {
+      return NextResponse.json(
+        { ok: false, error: "missing_atok" },
+        { status: 400 },
+      );
+    }
+    const result = await rejectDeviceAuth({ atok });
+    if (!result.ok) {
+      return NextResponse.json(
+        { ok: false, error: result.error },
+        { status: 400 },
+      );
+    }
+    logEvent("device_auth_rejected", {}, { request, status: 200 });
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[auth/reject] unexpected error: ${message}`);
     return NextResponse.json(
-      { ok: false, error: "missing_atok" },
-      { status: 400 },
+      { ok: false, error: "internal_error", message },
+      { status: 500 },
     );
   }
-  const result = await rejectDeviceAuth({ atok });
-  if (!result.ok) {
-    return NextResponse.json(
-      { ok: false, error: result.error },
-      { status: 400 },
-    );
-  }
-  logEvent(
-    "device_auth_rejected",
-    {},
-    { request, status: 200 },
-  );
-  return NextResponse.json({ ok: true });
 }

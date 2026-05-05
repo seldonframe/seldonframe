@@ -17,14 +17,27 @@ import { NextResponse } from "next/server";
 import { checkDeviceAuth } from "@/lib/auth/device-auth";
 
 export async function GET(request: Request) {
-  const url = new URL(request.url);
-  const atok = url.searchParams.get("atok")?.trim() ?? "";
-  if (!atok) {
+  // v1.7.2 — wrap to guarantee JSON response shape even on crashes.
+  // The MCP polling loop chokes on non-JSON; consistent shape lets it
+  // surface a clean error to the agent instead of looking like a
+  // network failure.
+  try {
+    const url = new URL(request.url);
+    const atok = url.searchParams.get("atok")?.trim() ?? "";
+    if (!atok) {
+      return NextResponse.json(
+        { ok: false, error: "missing_atok" },
+        { status: 400 },
+      );
+    }
+    const result = await checkDeviceAuth({ atok });
+    return NextResponse.json({ ok: true, ...result });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[auth/check] unexpected error: ${message}`);
     return NextResponse.json(
-      { ok: false, error: "missing_atok" },
-      { status: 400 },
+      { ok: false, error: "internal_error", message },
+      { status: 500 },
     );
   }
-  const result = await checkDeviceAuth({ atok });
-  return NextResponse.json({ ok: true, ...result });
 }

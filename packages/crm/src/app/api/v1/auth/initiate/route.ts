@@ -42,6 +42,22 @@ type Body = {
 };
 
 export async function POST(request: Request) {
+  // v1.7.2 — wrap to guarantee JSON shape even on crashes (matches the
+  // pattern applied to /approve, /reject, /check). The MCP polling
+  // loop chokes on non-JSON; the browser approval page does too.
+  try {
+    return await handlePost(request);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[auth/initiate] unexpected error: ${message}`);
+    return NextResponse.json(
+      { ok: false, error: "internal_error", message },
+      { status: 500 },
+    );
+  }
+}
+
+async function handlePost(request: Request) {
   const ip = resolveIp(request.headers);
   // 10 attempts per hour per IP — generous enough for legit retries
   // (operator's email goes to spam, they re-initiate) but tight enough

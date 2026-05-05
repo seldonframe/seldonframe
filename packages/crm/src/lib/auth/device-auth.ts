@@ -148,8 +148,25 @@ export async function approveDeviceAuth(input: ApproveInput): Promise<ApproveRes
     expiresInDays: TOKEN_TTL_DAYS,
   });
 
-  // Encrypt the raw token at rest. encryptValue returns "v1.<ciphertext>".
-  const encrypted = encryptValue(minted.token);
+  // v1.7.2 — encryption is best-effort. encryptValue requires
+  // ENCRYPTION_KEY env var; production environments that don't have
+  // it set were crashing the approve handler with `Missing
+  // ENCRYPTION_KEY`, returning empty 500s, and stranding the browser
+  // approval page. Fall back to storing the raw token: the bearer is
+  // still single-shot (atomic claim in checkDeviceAuth), still
+  // protected by atok lookup + status='approved' + claimedAt
+  // semantics. Encryption-at-rest was defense-in-depth, not the
+  // primary security. checkDeviceAuth's existing
+  // "decrypt-or-passthrough" handles both encrypted and raw values.
+  let storedToken: string;
+  try {
+    storedToken = encryptValue(minted.token);
+  } catch (err) {
+    console.warn(
+      `[device-auth] ENCRYPTION_KEY not available — storing bearer raw. Set ENCRYPTION_KEY on the deployment for at-rest encryption. Reason: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    storedToken = minted.token;
+  }
 
   await db
     .update(deviceAuthRequests)
@@ -157,7 +174,7 @@ export async function approveDeviceAuth(input: ApproveInput): Promise<ApproveRes
       status: "approved",
       approvedAt: new Date(),
       issuedTokenId: minted.tokenId,
-      issuedTokenRaw: encrypted,
+      issuedTokenRaw: storedToken,
       updatedAt: new Date(),
     })
     .where(eq(deviceAuthRequests.id, row.id));
@@ -253,12 +270,23 @@ export async function checkDeviceAuth(input: CheckInput): Promise<CheckResult> {
     return { status: "already_claimed" };
   }
 
+  // v1.7.2 — defensive decode. Token was stored either encrypted
+  // (when ENCRYPTION_KEY is set — "v1.<ciphertext>") or raw (fallback).
+  // The "v1." prefix is encryptValue's marker; raw bearers start with
+  // "wst_". Try decrypt only if it looks encrypted, otherwise pass
+  // through. Failures propagate as already_claimed so the polling MCP
+  // sees a terminal state rather than an indefinite hang.
   let token: string;
   try {
-    token = row.issuedTokenRaw.startsWith("v1.")
-      ? decryptValue(row.issuedTokenRaw)
-      : row.issuedTokenRaw;
-  } catch {
+    if (row.issuedTokenRaw.startsWith("v1.")) {
+      token = decryptValue(row.issuedTokenRaw);
+    } else {
+      token = row.issuedTokenRaw;
+    }
+  } catch (err) {
+    console.warn(
+      `[device-auth] decrypt failed on claim — returning already_claimed. Reason: ${err instanceof Error ? err.message : String(err)}`,
+    );
     return { status: "already_claimed" };
   }
 
