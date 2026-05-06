@@ -486,4 +486,92 @@ export const COMPOSITE_CSS = `/* v1.12 composite blocks — shared stylesheet */
   font-size: 13px;
   border-radius: 8px;
 }
+
+/* v1.14 — cinematic-mode overrides. The base CSS uses var(--sf-text)
+ * which can resolve dark in workspaces whose theme tokens were tuned
+ * for light backgrounds; on the cinematic dark backdrop those would
+ * render dark-on-dark and become unreadable. Mirrors the override
+ * pattern in cinematic-overlay.ts for typed sections. */
+.sf-frame.sf-cinematic .sf-cmp-section {
+  color: rgba(255, 255, 255, 0.92);
+  background: transparent;
+}
+.sf-frame.sf-cinematic .sf-cmp-headline,
+.sf-frame.sf-cinematic .sf-cmp-heading {
+  color: rgba(255, 255, 255, 0.96);
+}
+.sf-frame.sf-cinematic .sf-cmp-subhead {
+  color: rgba(255, 255, 255, 0.72);
+}
+.sf-frame.sf-cinematic .sf-cmp-text {
+  color: rgba(255, 255, 255, 0.82);
+}
+.sf-frame.sf-cinematic .sf-cmp-text-muted {
+  color: rgba(255, 255, 255, 0.55);
+}
+.sf-frame.sf-cinematic .sf-cmp-card {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(8px);
+}
+.sf-frame.sf-cinematic .sf-cmp-card-muted {
+  background: rgba(255, 255, 255, 0.02);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+.sf-frame.sf-cinematic .sf-cmp-card-primary {
+  background: color-mix(in oklab, transparent 90%, var(--sf-primary) 10%);
+  border-color: var(--sf-primary);
+}
+.sf-frame.sf-cinematic .sf-cmp-divider {
+  border-top-color: rgba(255, 255, 255, 0.12);
+}
+.sf-frame.sf-cinematic .sf-cmp-list-x .sf-cmp-list-item::before {
+  color: rgba(255, 255, 255, 0.45);
+}
+.sf-frame.sf-cinematic .sf-cmp-stat-label {
+  color: rgba(255, 255, 255, 0.7);
+}
+.sf-frame.sf-cinematic .sf-cmp-embed-empty {
+  border-color: rgba(255, 255, 255, 0.18);
+  color: rgba(255, 255, 255, 0.55);
+}
+.sf-frame.sf-cinematic .sf-cmp-embed-faq-item {
+  border-bottom-color: rgba(255, 255, 255, 0.12);
+}
+.sf-frame.sf-cinematic .sf-cmp-embed-faq-item summary {
+  color: rgba(255, 255, 255, 0.92);
+}
+.sf-frame.sf-cinematic .sf-cmp-embed-faq-answer {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+/* Light-mode overrides parallel cinematic for symmetry. Light pages
+ * use buildLightCss; the base var(--sf-text) usually works there but
+ * we pin explicit values for predictability. */
+.sf-frame.sf-light .sf-cmp-section {
+  color: #1a1a2e;
+}
+.sf-frame.sf-light .sf-cmp-headline,
+.sf-frame.sf-light .sf-cmp-heading {
+  color: #0a0a1f;
+}
+.sf-frame.sf-light .sf-cmp-subhead,
+.sf-frame.sf-light .sf-cmp-text {
+  color: rgba(26, 26, 46, 0.82);
+}
+.sf-frame.sf-light .sf-cmp-text-muted {
+  color: rgba(26, 26, 46, 0.55);
+}
+.sf-frame.sf-light .sf-cmp-card {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.sf-frame.sf-light .sf-cmp-card-muted {
+  background: #f7f7fa;
+  border-color: rgba(0, 0, 0, 0.06);
+}
+.sf-frame.sf-light .sf-cmp-stat-label {
+  color: rgba(26, 26, 46, 0.7);
+}
 `;

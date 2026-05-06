@@ -3036,6 +3036,149 @@ export const TOOLS = [
     },
   },
 
+  // ─── v1.14.0 — booking-form structural primitives ───────────────────────
+  //
+  // Mirrors v1.13's intake-structure pattern but for the booking form,
+  // PLUS a standard-field contract: fullName + email at indices 0/1
+  // are server-owned (the renderer + public POST handler require
+  // them). Destructive ops on indices 0/1 are rejected.
+
+  {
+    name: "get_booking_structure",
+    description:
+      "Read the workspace's booking event-type + fields (indexed list with type + label + required + 1-line preview). Standard fields (fullName at index 0, email at index 1) are flagged is_standard:true — they're server-owned and cannot be moved/deleted/renamed. Use BEFORE add_booking_field / move_booking_field / delete_booking_field / update_booking_field to find the right index.",
+    inputSchema: obj(
+      { workspace_id: str("Workspace id.") },
+      ["workspace_id"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("GET", "/workspace/v2/booking/structure", {
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
+  {
+    name: "add_booking_field",
+    description:
+      "Add ONE field to the booking form (after the standard fullName + email). Field shape: { id, type, label, required?, placeholder?, options? }. Types: text, textarea, email, phone, select. " +
+      "Use when the operator wants to capture extra info from bookers — service address, equipment type, preferred technician, party size, etc. ID must be unique within the form (cannot be 'fullName' or 'email' — those are reserved). " +
+      "Position defaults to appending at the end. Insert positions must be >= 2 (slots 0/1 are reserved for the standards).",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id."),
+        field: {
+          type: "object",
+          description:
+            "BookingFormField object: { id (kebab-case, unique, NOT 'fullName'/'email'), type, label, required?, placeholder?, options? for select fields }.",
+          additionalProperties: true,
+        },
+        position: {
+          type: "integer",
+          description:
+            "Optional 0-based insert position. Default: append. Must be >= 2 (0/1 are reserved for standards).",
+          minimum: 2,
+        },
+      },
+      ["workspace_id", "field"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/workspace/v2/booking/fields", {
+        body: {
+          workspace_id: ws,
+          op: "add",
+          field: args.field,
+          position: args.position,
+        },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
+  {
+    name: "move_booking_field",
+    description:
+      "Move ONE booking field (extra) to a new position. Splice semantics. Standards (fullName, email at indices 0/1) cannot be moved AND cannot be displaced — both from_index and to_index must be >= 2.",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id."),
+        from_index: { type: "integer", description: "0-based source index. Must be >= 2 (standards locked).", minimum: 2 },
+        to_index: { type: "integer", description: "0-based target index in the result. Must be >= 2.", minimum: 2 },
+      },
+      ["workspace_id", "from_index", "to_index"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/workspace/v2/booking/fields", {
+        body: {
+          workspace_id: ws,
+          op: "move",
+          from_index: args.from_index,
+          to_index: args.to_index,
+        },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
+  {
+    name: "delete_booking_field",
+    description:
+      "Remove ONE booking field (extra). Standards (fullName, email at indices 0/1) cannot be deleted — index must be >= 2. Floor is 'just the 2 standards' (different from intake's 'minimum 1' rule because booking forms always have 2 standards).",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id."),
+        index: { type: "integer", description: "0-based index. Must be >= 2 (standards locked).", minimum: 2 },
+      },
+      ["workspace_id", "index"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/workspace/v2/booking/fields", {
+        body: { workspace_id: ws, op: "delete", index: args.index },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
+  {
+    name: "update_booking_field",
+    description:
+      "Patch ONE booking field (extra) by index. Patch can include any subset of: id, type, label, required, placeholder, options. Standards (fullName, email) cannot be patched — index must be >= 2. ID changes blocked from colliding with another field OR with reserved standard ids.",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id."),
+        index: { type: "integer", description: "0-based index of the field to patch. Must be >= 2.", minimum: 2 },
+        patch: {
+          type: "object",
+          description:
+            "Subset of BookingFormField fields to overwrite. Empty patch is rejected. ID changes blocked from colliding (with another field or with reserved 'fullName'/'email').",
+          additionalProperties: true,
+        },
+      },
+      ["workspace_id", "index", "patch"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/workspace/v2/booking/fields", {
+        body: {
+          workspace_id: ws,
+          op: "update",
+          index: args.index,
+          patch: args.patch,
+        },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
   {
     name: "reorder_landing_sections",
     description:
