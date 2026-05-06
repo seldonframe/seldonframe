@@ -93,7 +93,7 @@ export default async function ClientPortalSettingsPage() {
 
   const appOrigin = getAppOrigin();
   const portalUrl =
-    orgSlug && appOrigin ? `${appOrigin}/portal/${orgSlug}/login` : null;
+    orgSlug && appOrigin ? `${appOrigin}/customer/${orgSlug}/login` : null;
 
   return (
     <section className="animate-page-enter space-y-6 sm:space-y-8">

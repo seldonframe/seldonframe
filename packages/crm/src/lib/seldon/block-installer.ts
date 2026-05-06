@@ -147,7 +147,7 @@ export async function installBlock(
       name: String(params.name ?? params.title ?? `${blockType} override`),
       description: `Client-scoped override saved for ${blockType}`,
       publicUrl: null,
-      adminUrl: `/portal/${orgSlug}/messages`,
+      adminUrl: `/customer/${orgSlug}/messages`,
       status: "live",
     };
   }
@@ -318,7 +318,7 @@ export async function updateBlock(
       name: String(updates.name ?? `${blockType} override`),
       description: `Client-scoped override saved: ${changes}`,
       publicUrl: null,
-      adminUrl: `/portal/${orgSlug}/messages`,
+      adminUrl: `/customer/${orgSlug}/messages`,
       status: "live",
       changes,
     };

@@ -1,44 +1,51 @@
 // ============================================================================
-// v1.16.1 — portal access-code email
+// v1.20.0 — operator-portal magic-link email
 // ============================================================================
 //
-// Sent when a customer hits /customer/<orgSlug>/login and enters their
-// email. The action requestPortalAccessCodeAction generates a 6-digit
-// code, hashes + persists it, and (post-v1.16.1) calls this sender.
+// Sent when an agency operator (Acme AI) invites their sub-tenant
+// operator (Cypress & Pine HVAC owner) to access the workspace's
+// branded admin portal at /portal/<orgSlug>.
 //
-// Pre-v1.16.1 the code sat in the DB unread — no email infrastructure
-// was wired up to deliver it. Customers got "no email arrived" with
-// no error.
-//
-// Mirrors the device-auth email pattern (Resend HTTPS POST with
-// verified welcome@seldonframe.com sender). Same DEFAULT_FROM,
-// same fallback handling for sandbox addresses.
+// Distinct from the customer-portal access-code email (v1.16.1):
+//   - audience: business operator, NOT homeowner
+//   - delivery: clickable magic link, NOT 6-digit code (operators
+//     are technical enough for one-click; customers benefit from
+//     the lower-friction "type 6 digits on the page you're already on")
+//   - copy: business-grade ("you've been invited to manage Cypress &
+//     Pine HVAC's CRM"), not consumer-grade ("here's your sign-in code")
+//   - branding: same partner-agency overrides as portal-access-code so
+//     the email goes FROM agency_domain when verified, footer says
+//     "on Acme AI" instead of "on SeldonFrame"
 
 const DEFAULT_FROM = "SeldonFrame <welcome@seldonframe.com>";
 const SANDBOX_FROM_PATTERN = /@resend\.dev>?$/i;
 
-export interface PortalAccessCodeEmailRequest {
+export interface OperatorMagicLinkEmailRequest {
   email: string;
   workspaceName: string;
-  /** The 6-digit plaintext code. The DB only stores its hash. */
-  code: string;
-  /** Minutes until the code expires (display only). */
+  /** Full clickable URL — already includes the magic-link token in
+   *  the query string. Example: https://app.seldonframe.com/portal/
+   *  cypress-pine-hvac/magic?token=... */
+  inviteUrl: string;
+  /** Minutes until the magic link expires (display only). */
   expiresInMinutes: number;
-  /** v1.18 — partner-agency branding overrides. NULL = SeldonFrame
-   *  defaults (existing behavior). When set, the agency's brand
-   *  replaces SF in subject + footer. */
+  /** v1.20 — partner-agency branding overrides. Same shape as
+   *  portal-access-code email; null = SeldonFrame defaults. */
   brandName?: string | null;
   logoUrl?: string | null;
   supportUrl?: string | null;
+  /** Optional — name of the person who issued the invite. Surfaced
+   *  in the email as "Maxime invited you to ..." for trust + context. */
+  invitedByName?: string | null;
 }
 
-export interface PortalAccessCodeEmailDeps {
+export interface OperatorMagicLinkEmailDeps {
   fetcher?: typeof fetch;
   apiKey: string;
   fromAddress: string;
 }
 
-export type PortalAccessCodeSendResult =
+export type OperatorMagicLinkSendResult =
   | { ok: true; messageId: string }
   | { ok: false; status: number; error: string };
 
@@ -67,21 +74,20 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
-export function portalAccessCodeEmailSubject(req: PortalAccessCodeEmailRequest): string {
-  // v1.18 — when an agency brand is provided, address the customer
-  // with the agency's name + the workspace name. Otherwise plain
-  // workspace-name subject (existing behavior).
-  if (req.brandName) {
-    return `Your ${req.workspaceName} sign-in code: ${req.code}`;
-  }
-  return `Your ${req.workspaceName} sign-in code: ${req.code}`;
+export function operatorMagicLinkEmailSubject(
+  req: OperatorMagicLinkEmailRequest,
+): string {
+  return `Sign in to ${req.workspaceName}`;
 }
 
-export function renderPortalAccessCodeEmailHtml(
-  req: PortalAccessCodeEmailRequest,
+export function renderOperatorMagicLinkEmailHtml(
+  req: OperatorMagicLinkEmailRequest,
 ): string {
   const safeWorkspace = escapeHtml(req.workspaceName);
-  const safeCode = escapeHtml(req.code);
+  const safeUrl = escapeHtml(req.inviteUrl);
+  const invitedByLine = req.invitedByName
+    ? `<p style="margin:0 0 12px;color:#444;">${escapeHtml(req.invitedByName)} invited you to manage ${safeWorkspace}.</p>`
+    : "";
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -95,11 +101,14 @@ export function renderPortalAccessCodeEmailHtml(
 <table role="presentation" cellpadding="0" cellspacing="0" width="560" style="max-width:560px;background:#ffffff;border:1px solid #e5e5e1;border-radius:12px;padding:32px;">
 <tr><td>
 <h1 style="margin:0 0 16px;font-size:22px;font-weight:600;letter-spacing:-0.01em;">Sign in to ${safeWorkspace}</h1>
-<p style="margin:0 0 16px;color:#444;">Enter this 6-digit code on the sign-in page to access your account:</p>
+${invitedByLine}
+<p style="margin:0 0 24px;color:#444;">Click the button below to access your CRM dashboard. The link is single-use and expires in ${req.expiresInMinutes} minutes.</p>
 <p style="margin:0 0 24px;text-align:center;">
-  <span style="display:inline-block;background:#f5f5f3;border:1px solid #e5e5e1;border-radius:8px;padding:16px 32px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:28px;font-weight:600;letter-spacing:6px;color:#111;">${safeCode}</span>
+  <a href="${safeUrl}" style="display:inline-block;background:#111;border:1px solid #111;border-radius:8px;padding:14px 32px;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;letter-spacing:0.01em;">Sign in to ${safeWorkspace}</a>
 </p>
-<p style="margin:0 0 8px;color:#666;font-size:13px;">This code expires in ${req.expiresInMinutes} minutes. If you didn't request it, you can safely ignore this email.</p>
+<p style="margin:0 0 8px;color:#666;font-size:12px;">If the button doesn't work, copy and paste this URL into your browser:</p>
+<p style="margin:0 0 16px;color:#666;font-size:12px;word-break:break-all;"><a href="${safeUrl}" style="color:#666;">${safeUrl}</a></p>
+<p style="margin:0;color:#666;font-size:13px;">If you didn't request this, you can safely ignore this email — your account stays secure.</p>
 </td></tr>
 </table>
 ${renderFooter(req)}
@@ -109,10 +118,8 @@ ${renderFooter(req)}
 </html>`;
 }
 
-function renderFooter(req: PortalAccessCodeEmailRequest): string {
+function renderFooter(req: OperatorMagicLinkEmailRequest): string {
   const safeWorkspace = escapeHtml(req.workspaceName);
-  // v1.18 — if branded by a partner agency, replace "SeldonFrame"
-  // with the agency name + link. Falls back to SF defaults.
   if (req.brandName) {
     const safeBrand = escapeHtml(req.brandName);
     const supportUrl = req.supportUrl
@@ -123,35 +130,38 @@ function renderFooter(req: PortalAccessCodeEmailRequest): string {
   return `<p style="margin:16px 0 0;color:#999;font-size:12px;">${safeWorkspace} on SeldonFrame · <a href="https://seldonframe.com" style="color:#666;">seldonframe.com</a></p>`;
 }
 
-export function renderPortalAccessCodeEmailText(
-  req: PortalAccessCodeEmailRequest,
+export function renderOperatorMagicLinkEmailText(
+  req: OperatorMagicLinkEmailRequest,
 ): string {
   const platformLine = req.brandName
     ? `— ${req.workspaceName} on ${req.brandName}`
     : `— ${req.workspaceName} on SeldonFrame`;
+  const invitedByLine = req.invitedByName
+    ? `${req.invitedByName} invited you to manage ${req.workspaceName}.\n\n`
+    : "";
   return [
     `Sign in to ${req.workspaceName}`,
     "",
-    `Enter this 6-digit code on the sign-in page:`,
+    invitedByLine + `Click the link below to access your CRM dashboard:`,
     "",
-    `    ${req.code}`,
+    `    ${req.inviteUrl}`,
     "",
-    `This code expires in ${req.expiresInMinutes} minutes.`,
+    `The link is single-use and expires in ${req.expiresInMinutes} minutes.`,
     "",
-    `If you didn't request it, you can safely ignore this email.`,
+    `If you didn't request this, you can safely ignore this email.`,
     "",
     platformLine,
   ].join("\n");
 }
 
-export async function sendPortalAccessCodeEmail(
-  req: PortalAccessCodeEmailRequest,
-  deps: PortalAccessCodeEmailDeps,
-): Promise<PortalAccessCodeSendResult> {
+export async function sendOperatorMagicLinkEmail(
+  req: OperatorMagicLinkEmailRequest,
+  deps: OperatorMagicLinkEmailDeps,
+): Promise<OperatorMagicLinkSendResult> {
   const fetcher = deps.fetcher ?? globalThis.fetch;
-  const subject = portalAccessCodeEmailSubject(req);
-  const html = renderPortalAccessCodeEmailHtml(req);
-  const text = renderPortalAccessCodeEmailText(req);
+  const subject = operatorMagicLinkEmailSubject(req);
+  const html = renderOperatorMagicLinkEmailHtml(req);
+  const text = renderOperatorMagicLinkEmailText(req);
 
   let response: Response;
   try {
@@ -167,7 +177,7 @@ export async function sendPortalAccessCodeEmail(
         subject,
         html,
         text,
-        tags: [{ name: "category", value: "portal-access-code" }],
+        tags: [{ name: "category", value: "operator-magic-link" }],
       }),
     });
   } catch (err) {
@@ -191,7 +201,7 @@ export async function sendPortalAccessCodeEmail(
       }
     }
     console.error(
-      `[portal-access-code-email] Resend ${response.status}: ${detail || "(no detail)"} from=${deps.fromAddress}`,
+      `[operator-magic-link-email] Resend ${response.status}: ${detail || "(no detail)"} from=${deps.fromAddress}`,
     );
     return {
       ok: false,

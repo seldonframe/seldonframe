@@ -328,7 +328,7 @@ export async function clearPortalSessionAction(orgSlug: string) {
     maxAge: 0,
   });
 
-  redirect(`/portal/${orgSlug}/login`);
+  redirect(`/customer/${orgSlug}/login`);
 }
 
 export async function getPortalSessionForOrg(orgSlug: string) {
@@ -371,7 +371,7 @@ export async function createPortalMagicLink(input: {
     exp: expiresAt.getTime(),
   });
 
-  const url = new URL(`/portal/${input.orgSlug}/magic`, getAppOrigin());
+  const url = new URL(`/customer/${input.orgSlug}/magic`, getAppOrigin());
   url.searchParams.set("token", token);
   if (input.redirectTo?.trim()) {
     url.searchParams.set("redirect", input.redirectTo.trim());
@@ -420,7 +420,7 @@ export async function establishPortalMagicSession(input: {
 
   return {
     orgSlug: session.orgSlug,
-    redirectTo: input.redirectTo?.trim() || `/portal/${session.orgSlug}?onboarding=1`,
+    redirectTo: input.redirectTo?.trim() || `/customer/${session.orgSlug}?onboarding=1`,
     contact: session.contact,
   };
 }
@@ -429,7 +429,7 @@ export async function requirePortalSessionForOrg(orgSlug: string) {
   const session = await getPortalSessionForOrg(orgSlug);
 
   if (!session) {
-    redirect(`/portal/${orgSlug}/login`);
+    redirect(`/customer/${orgSlug}/login`);
   }
 
   return session;

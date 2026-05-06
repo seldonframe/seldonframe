@@ -37,7 +37,7 @@ export type CustomerLoginProps = {
   title?: string;
   /** Default "Use your contact email to receive a one-time code." */
   subtitle?: string;
-  /** Default `/portal/${orgSlug}`. */
+  /** Default `/customer/${orgSlug}`. */
   postLoginHref?: string;
   /** Test hook + deep-link: jump to verify stage with a pre-filled email. */
   initialStage?: "request" | "verify";
@@ -66,7 +66,7 @@ export function CustomerLogin({
   const [error, setError] = useState<string | null>(initialError ?? null);
   const [devCode, setDevCode] = useState<string | null>(initialDevCode ?? null);
 
-  const redirectHref = postLoginHref ?? `/portal/${orgSlug}`;
+  const redirectHref = postLoginHref ?? `/customer/${orgSlug}`;
 
   function requestCode() {
     startTransition(async () => {

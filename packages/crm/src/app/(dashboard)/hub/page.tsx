@@ -17,7 +17,8 @@ export default async function HubPage() {
     { href: "/bookings", title: "Booking", subtitle: "Scheduling and calendar-linked sessions" },
     { href: "/landing", title: "Pages", subtitle: "Section-based marketing pages" },
     { href: "/emails", title: "Email", subtitle: "Resend-first outbound communications" },
-    { href: `/portal/${org?.slug ?? "demo"}/login`, title: "Portal", subtitle: "Client-facing authentication and delivery" },
+    { href: `/customer/${org?.slug ?? "demo"}/login`, title: "Customer Portal", subtitle: "Where your customers sign in to view their account with you" },
+    { href: `/portal/${org?.slug ?? "demo"}`, title: "Operator Portal", subtitle: "Branded mini-CRM for sub-tenant operators (white-label)" },
   ] as const;
 
   return (

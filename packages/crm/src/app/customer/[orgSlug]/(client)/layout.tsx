@@ -86,15 +86,15 @@ export default async function PortalClientLayout({
               data-portal-nav=""
               className="flex flex-wrap items-center gap-2 text-sm"
             >
-              <PortalNavLink href={`/portal/${orgSlug}`}>Overview</PortalNavLink>
-              <PortalNavLink href={`/portal/${orgSlug}/pipeline`}>
+              <PortalNavLink href={`/customer/${orgSlug}`}>Overview</PortalNavLink>
+              <PortalNavLink href={`/customer/${orgSlug}/pipeline`}>
                 My Pipeline
               </PortalNavLink>
-              <PortalNavLink href={`/portal/${orgSlug}/bookings`}>
+              <PortalNavLink href={`/customer/${orgSlug}/bookings`}>
                 Bookings
               </PortalNavLink>
               <Link
-                href={`/portal/${orgSlug}/messages`}
+                href={`/customer/${orgSlug}/messages`}
                 className="inline-flex h-9 items-center gap-2 px-3 text-sm font-medium"
                 style={{
                   backgroundColor: "transparent",
@@ -118,7 +118,7 @@ export default async function PortalClientLayout({
                   </span>
                 ) : null}
               </Link>
-              <PortalNavLink href={`/portal/${orgSlug}/resources`}>
+              <PortalNavLink href={`/customer/${orgSlug}/resources`}>
                 Documents
               </PortalNavLink>
               <form action={clearPortalSessionAction.bind(null, orgSlug)}>

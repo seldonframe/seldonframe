@@ -49,7 +49,7 @@ export async function POST(request: Request) {
     const invite = await createPortalMagicLink({
       orgSlug: workspace.slug,
       contactId: contact.id,
-      redirectTo: `/portal/${workspace.slug}?onboarding=1&self_service=1`,
+      redirectTo: `/customer/${workspace.slug}?onboarding=1&self_service=1`,
     });
 
     return NextResponse.json({

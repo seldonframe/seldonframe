@@ -25,7 +25,7 @@ export default async function PortalMessagesPage({
         </p>
       </div>
 
-      <form className="crm-card flex flex-wrap items-center gap-2 p-3" action={`/portal/${orgSlug}/messages`}>
+      <form className="crm-card flex flex-wrap items-center gap-2 p-3" action={`/customer/${orgSlug}/messages`}>
         <input
           name="q"
           defaultValue={q ?? ""}

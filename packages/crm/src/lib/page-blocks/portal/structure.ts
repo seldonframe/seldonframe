@@ -265,7 +265,7 @@ function customerPortalUrlFor(slug: string | null): string | null {
   if (!slug) return null;
   const baseDomain =
     process.env.WORKSPACE_BASE_DOMAIN?.trim() || "app.seldonframe.com";
-  return `https://${slug}.${baseDomain}/portal/${slug}`;
+  return `https://${slug}.${baseDomain}/customer/${slug}`;
 }
 
 // ─── DB-loading mutators ───────────────────────────────────────────────────

@@ -95,7 +95,7 @@ export function PortalAccessCard({
       (appOrigin && appOrigin.trim()) ||
       (typeof window !== "undefined" ? window.location.origin : "");
     if (!origin) return null;
-    return `${origin}/portal/${orgSlug}/login`;
+    return `${origin}/customer/${orgSlug}/login`;
   }
 
   function handleToggle(next: boolean) {
@@ -200,7 +200,7 @@ export function PortalAccessCard({
             This client can sign in to{" "}
             {orgSlug ? (
               <span className="font-mono text-[11px] text-foreground">
-                /portal/{orgSlug}
+                /customer/{orgSlug}
               </span>
             ) : (
               "their portal"
