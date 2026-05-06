@@ -8,7 +8,7 @@
 // stripped. `create_full_workspace` is the only workspace-creation
 // path mentioned anywhere in this briefing.
 
-export const VERSION = "1.15.0";
+export const VERSION = "1.16.0";
 
 export const WELCOME_MARKDOWN = `# SeldonFrame — create a real Business OS in one conversation
 
@@ -269,8 +269,10 @@ further natural-language requests ("change the headline to …",
   as add_composite_section PLUS 5 new customer.* embed refs that
   pull per-customer data (next appointment, documents, deals,
   recent appointments, contact info). Template stored once on the
-  workspace; every customer sees their own data. preview_portal
-  renders against a real contact for visual verification.
+  workspace; every customer sees their own data via magic-link
+  login at the customer_portal_url returned in the response (live
+  in v1.16+). preview_portal renders the template against a
+  specific contact for visual verification.
 - **\`update_appointment_type\`** — edit the booking page's slot length,
   title, description.
 - **\`install_vertical_pack\`** — set up an industry template
@@ -304,4 +306,4 @@ admin dashboard. Pre-fills their email automatically.
 <https://seldonframe.com> · **Discord:** <https://discord.gg/sbVUu976NW>
 `;
 
-export const FIRST_CALL_BANNER = `🚀 SeldonFrame v1.15.0 is connected. PREFERRED workspace creation: create_workspace_v2 → IN PARALLEL for all 7 recommended_blocks (hero, services, about, faq, cta, booking, intake): get_block_skill + persist_block → complete_workspace_v2 → finalize_workspace({ workspace_id, email }). The v2 flow puts YOUR LLM in charge of every operator-facing surface using one SKILL.md per block. Each block's prop schema is server-validated. Run blocks in PARALLEL (Promise.all) — sequential takes 60+ seconds. v1.10+ TIER 2 CUSTOMIZE TOOLS: regenerate_block (re-do one block with operator instructions; thin-harness — server bundles context, your LLM generates), upload_workspace_image (set logo/hero_background; v1.10.1+ accepts image_url or local_file_path — DON'T base64 unless you have to, the encoded string eats your tool-call token budget). v1.11+ STRUCTURAL PRIMITIVES: get_landing_structure → move_section → delete_section. INDEX-based, handle duplicate section types, atomic. v1.12+ COMPOSITE TREES: add_composite_section / update_composite_section — manifest ANY block (comparison, pricing, "how it works," stats, custom CTAs) from 12 low-level primitives. Server validates + renders; YOUR LLM composes. Read the SKILL.md via get_block_skill('composite') before composing. Every URL is real. NEVER create local files. Skipping finalize_workspace leaves the operator with no admin login.`;
+export const FIRST_CALL_BANNER = `🚀 SeldonFrame v1.16.0 is connected. PREFERRED workspace creation: create_workspace_v2 → IN PARALLEL for all 7 recommended_blocks (hero, services, about, faq, cta, booking, intake): get_block_skill + persist_block → complete_workspace_v2 → finalize_workspace({ workspace_id, email }). The v2 flow puts YOUR LLM in charge of every operator-facing surface using one SKILL.md per block. Each block's prop schema is server-validated. Run blocks in PARALLEL (Promise.all) — sequential takes 60+ seconds. v1.10+ TIER 2 CUSTOMIZE TOOLS: regenerate_block (re-do one block with operator instructions; thin-harness — server bundles context, your LLM generates), upload_workspace_image (set logo/hero_background; v1.10.1+ accepts image_url or local_file_path — DON'T base64 unless you have to, the encoded string eats your tool-call token budget). v1.11+ STRUCTURAL PRIMITIVES: get_landing_structure → move_section → delete_section. INDEX-based, handle duplicate section types, atomic. v1.12+ COMPOSITE TREES: add_composite_section / update_composite_section — manifest ANY block (comparison, pricing, "how it works," stats, custom CTAs) from 12 low-level primitives. Server validates + renders; YOUR LLM composes. Read the SKILL.md via get_block_skill('composite') before composing. Every URL is real. NEVER create local files. Skipping finalize_workspace leaves the operator with no admin login.`;

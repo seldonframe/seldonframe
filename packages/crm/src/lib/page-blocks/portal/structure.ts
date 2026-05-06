@@ -181,7 +181,9 @@ export interface PortalStructureResult {
   ok: true;
   workspace_id: string;
   slug: string | null;
-  preview_url: string | null;
+  /** Live customer-facing portal URL (v1.16+). Customers log in here
+   *  via magic-link to see the template rendered with their own data. */
+  customer_portal_url: string | null;
   sections: PortalSectionSummary[];
 }
 
@@ -241,25 +243,29 @@ export async function getPortalStructureForWorkspace(
   const loaded = await loadPortalTemplate(workspaceId);
   if (!loaded.ok) return loaded;
 
-  const baseDomain =
-    process.env.WORKSPACE_BASE_DOMAIN?.trim() || "app.seldonframe.com";
-  // Preview URL — operators use this to render the template against
-  // an arbitrary contact for visual inspection. ?contact_id=... is
-  // appended by the caller.
-  const previewUrl = loaded.slug
-    ? `https://${loaded.slug}.${baseDomain}/api/v1/workspace/v2/portal/preview`
-    : null;
+  // v1.16 — return the LIVE customer-facing portal URL, not the
+  // MCP-only preview endpoint. Customers reach this URL via a
+  // magic-link sent from the operator. The portal page renders the
+  // template against THEIR data on login.
+  const customerPortalUrl = customerPortalUrlFor(loaded.slug);
 
   return {
     ok: true,
     workspace_id: workspaceId,
     slug: loaded.slug,
-    preview_url: previewUrl,
+    customer_portal_url: customerPortalUrl,
     sections: loaded.sections.map((section, index) => ({
       index,
       preview: derivePortalSectionPreview(section),
     })),
   };
+}
+
+function customerPortalUrlFor(slug: string | null): string | null {
+  if (!slug) return null;
+  const baseDomain =
+    process.env.WORKSPACE_BASE_DOMAIN?.trim() || "app.seldonframe.com";
+  return `https://${slug}.${baseDomain}/portal/${slug}`;
 }
 
 // ─── DB-loading mutators ───────────────────────────────────────────────────
@@ -269,7 +275,7 @@ export type PortalApplyResult =
       ok: true;
       sections: PortalSectionSummary[];
       validation_warnings: VoiceViolation[];
-      preview_url: string | null;
+      customer_portal_url: string | null;
       index?: number;
     }
   | {
@@ -317,7 +323,7 @@ export async function addPortalSectionForWorkspace(
       preview: derivePortalSectionPreview(section),
     })),
     validation_warnings: warnings,
-    preview_url: previewUrlFor(loaded.slug),
+    customer_portal_url: customerPortalUrlFor(loaded.slug),
     index: insertedAt,
   };
 }
@@ -354,7 +360,7 @@ export async function updatePortalSectionForWorkspace(
       preview: derivePortalSectionPreview(section),
     })),
     validation_warnings: warnings,
-    preview_url: previewUrlFor(loaded.slug),
+    customer_portal_url: customerPortalUrlFor(loaded.slug),
     index,
   };
 }
@@ -381,7 +387,7 @@ export async function movePortalSectionForWorkspace(
       preview: derivePortalSectionPreview(section),
     })),
     validation_warnings: [],
-    preview_url: previewUrlFor(loaded.slug),
+    customer_portal_url: customerPortalUrlFor(loaded.slug),
   };
 }
 
@@ -406,16 +412,10 @@ export async function deletePortalSectionForWorkspace(
       preview: derivePortalSectionPreview(section),
     })),
     validation_warnings: [],
-    preview_url: previewUrlFor(loaded.slug),
+    customer_portal_url: customerPortalUrlFor(loaded.slug),
   };
 }
 
-function previewUrlFor(slug: string | null): string | null {
-  if (!slug) return null;
-  const baseDomain =
-    process.env.WORKSPACE_BASE_DOMAIN?.trim() || "app.seldonframe.com";
-  return `https://${slug}.${baseDomain}/api/v1/workspace/v2/portal/preview`;
-}
 
 // ─── render-time loader (for the preview endpoint + future portal route) ──
 
