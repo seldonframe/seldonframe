@@ -2889,6 +2889,153 @@ export const TOOLS = [
     },
   },
 
+  // ─── v1.13.0 — intake-form structural primitives ────────────────────────
+  //
+  // Five atomic primitives for the intake-form surface, mirroring the
+  // landing-structure pattern: read / add / move / delete / update.
+  // Index-based addressing; ID uniqueness enforced on add/update.
+  // Linear (no nesting), so simpler than composite trees.
+
+  {
+    name: "get_intake_structure",
+    description:
+      "Read the workspace's intake form: title, description, and the indexed list of fields with type + label + required + 1-line preview. Use this BEFORE add_intake_field / move_intake_field / delete_intake_field / update_intake_field to find the right index. Cheap one-DB-read.",
+    inputSchema: obj(
+      { workspace_id: str("Workspace id.") },
+      ["workspace_id"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("GET", "/workspace/v2/intake/structure", {
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
+  {
+    name: "add_intake_field",
+    description:
+      "Add ONE field to the intake form. Field shape: { id, type, label, required?, helper?, options?, validation?, ratingScale? }. Types: text, textarea, email, phone, number, select, multi-select, rating, date. " +
+      "ID must be unique within the form (server rejects duplicates — IDs are the bind key for answers). For select/multi-select pass an `options` array. " +
+      "Use when the operator wants a new question on the intake form ('add a phone field', 'ask about budget', 'add a checkbox for newsletter signup'). For content edits to existing fields use update_intake_field. " +
+      "Position is optional — defaults to appending at the end. Use get_intake_structure first if you want to insert between specific fields.",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id."),
+        field: {
+          type: "object",
+          description:
+            "The new IntakeQuestion object: { id (kebab-case, unique), type, label, required?, helper?, options?, ratingScale?, validation? }.",
+          additionalProperties: true,
+        },
+        position: {
+          type: "integer",
+          description:
+            "Optional 0-based insert index. Default: append. Use get_intake_structure to find the right slot.",
+          minimum: 0,
+        },
+      },
+      ["workspace_id", "field"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/workspace/v2/intake/fields", {
+        body: {
+          workspace_id: ws,
+          op: "add",
+          field: args.field,
+          position: args.position,
+        },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
+  {
+    name: "move_intake_field",
+    description:
+      "Move ONE intake field to a new position. Splice semantics — field at from_index is removed, then inserted at to_index in the result. Use when the operator says 'put email at the top' or 'move phone above address'. " +
+      "Run get_intake_structure first to find the indices.",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id."),
+        from_index: { type: "integer", description: "0-based source index.", minimum: 0 },
+        to_index: { type: "integer", description: "0-based target index in the result.", minimum: 0 },
+      },
+      ["workspace_id", "from_index", "to_index"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/workspace/v2/intake/fields", {
+        body: {
+          workspace_id: ws,
+          op: "move",
+          from_index: args.from_index,
+          to_index: args.to_index,
+        },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
+  {
+    name: "delete_intake_field",
+    description:
+      "Remove ONE intake field. Refuses to leave 0 fields (the public submit becomes meaningless without any inputs — minimum is 1). Use when the operator wants to remove a question from the form ('drop the property type field', 'remove the rating question'). For content edits use update_intake_field. Run get_intake_structure first to find the right index.",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id."),
+        index: { type: "integer", description: "0-based index of the field to delete.", minimum: 0 },
+      },
+      ["workspace_id", "index"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/workspace/v2/intake/fields", {
+        body: { workspace_id: ws, op: "delete", index: args.index },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
+  {
+    name: "update_intake_field",
+    description:
+      "Patch ONE intake field by index. Patch can include any subset of: id, type, label, helper, required, options, ratingScale, validation, showIf. Only the fields you pass are changed; everything else stays. " +
+      "Use for content edits ('rename phone to mobile', 'make email optional', 'add a fourth option to property type', 'change the helper text'). " +
+      "ID changes must not collide with another field's id (server rejects). For structural changes (add/remove fields) use the dedicated tools.",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id."),
+        index: { type: "integer", description: "0-based index of the field to patch.", minimum: 0 },
+        patch: {
+          type: "object",
+          description:
+            "Subset of IntakeQuestion fields to overwrite. Empty patch is rejected. ID changes are allowed but must not collide with another field.",
+          additionalProperties: true,
+        },
+      },
+      ["workspace_id", "index", "patch"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/workspace/v2/intake/fields", {
+        body: {
+          workspace_id: ws,
+          op: "update",
+          index: args.index,
+          patch: args.patch,
+        },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
   {
     name: "reorder_landing_sections",
     description:
