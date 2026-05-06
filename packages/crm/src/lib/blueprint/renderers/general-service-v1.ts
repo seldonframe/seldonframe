@@ -217,6 +217,17 @@ ${SCROLL_OBSERVER_SCRIPT}`;
   } else if (options.tokens && lightMode) {
     cssChunks.push(buildLightCss(options.tokens));
   }
+  // v1.12 — composite-block CSS, included once per page when any
+  // composite section is present. Cheap to include unconditionally
+  // (~3 KB), but skip when no composite sections exist for a tiny
+  // payload win on legacy workspaces.
+  const hasComposite = blueprint.landing.sections.some(
+    (s) => s.type === "composite",
+  );
+  if (hasComposite) {
+    const { COMPOSITE_CSS } = require("@/lib/page-blocks/composite/render") as typeof import("@/lib/page-blocks/composite/render");
+    cssChunks.push(COMPOSITE_CSS);
+  }
   const css = cssChunks.join("\n\n");
 
   // Google Fonts <link> tag. Cinematic loads Instrument Serif + Barlow;
@@ -257,7 +268,77 @@ function renderSection(section: LandingSection, blueprint: Blueprint, ctx: Rende
       return renderPartnersStrip(section);
     case "footer":
       return renderFooter(section, blueprint, ctx);
+    case "composite":
+      return renderCompositeSection(section, blueprint);
   }
+}
+
+// v1.12 — composite section dispatch. Lazy-loaded so the renderer
+// doesn't pull in composite/render.ts unless a page actually has a
+// composite section.
+function renderCompositeSection(
+  section: import("../types").SectionComposite,
+  blueprint: Blueprint,
+): string {
+  const { renderCompositeTree } = require("@/lib/page-blocks/composite/render") as typeof import("@/lib/page-blocks/composite/render");
+  const ctx = buildCompositeRenderContext(blueprint);
+  return renderCompositeTree(section.tree, ctx);
+}
+
+function buildCompositeRenderContext(
+  blueprint: Blueprint,
+): import("@/lib/page-blocks/composite/render").CompositeRenderContext {
+  // Phone — workspace.contact.phone is E.164. Display form is best-effort
+  // (we don't have a formatter; just pass the E.164 if no display variant
+  // is computed elsewhere). Future polish: format US/CA numbers.
+  const phone = blueprint.workspace?.contact?.phone ?? "";
+  const phoneDisplay = phone;
+
+  // Services — pull from any services-grid section (the first one with
+  // grid-3 layout, falling back to any).
+  const servicesSection = blueprint.landing.sections.find(
+    (s): s is import("../types").SectionServicesGrid =>
+      s.type === "services-grid" && (s as import("../types").SectionServicesGrid).layout !== "stats",
+  ) ?? blueprint.landing.sections.find(
+    (s): s is import("../types").SectionServicesGrid => s.type === "services-grid",
+  );
+  const services = servicesSection
+    ? (servicesSection.items ?? []).map((item) => ({
+        name: item.title,
+        description: item.description,
+      }))
+    : [];
+
+  // FAQ items.
+  const faqSection = blueprint.landing.sections.find(
+    (s): s is import("../types").SectionFaq => s.type === "faq",
+  );
+  const faq = faqSection?.items ?? [];
+
+  // Testimonials.
+  const testimonialsSection = blueprint.landing.sections.find(
+    (s): s is import("../types").SectionTestimonials => s.type === "testimonials",
+  );
+  const testimonials = (testimonialsSection?.items ?? []).map((t) => ({
+    quote: t.quote,
+    authorName: t.authorName,
+  }));
+
+  // Hours — best-effort summary string from WeeklyHours. We don't have
+  // a formatter here; pass empty if hours isn't structured. Future:
+  // "Mon–Sat 7:00–19:00" derivation.
+  const hours_summary = "";
+
+  return {
+    workspace_phone: phone,
+    workspace_phone_display: phoneDisplay,
+    services,
+    faq,
+    testimonials,
+    hours_summary,
+    book_url: "/book",
+    intake_url: "/intake",
+  };
 }
 
 /**

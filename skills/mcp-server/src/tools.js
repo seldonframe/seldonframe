@@ -2810,6 +2810,86 @@ export const TOOLS = [
   },
 
   {
+    name: "add_composite_section",
+    description:
+      "Add a CUSTOM landing-page section by composing low-level primitives (heading / text / image / list / button / card / row / col / stat / embed / divider / spacer) into a tree. Use this when the operator asks for a section type that doesn't fit hero/services/about/faq/mid-cta — e.g. 'a 2-column comparison of us vs DIY', 'a pricing tier section', 'a how-it-works in 4 steps', 'a stats row with 4 numbers', 'a side-by-side image + bullet-list'. " +
+      "The agent's job: read operator intent + the workspace soul (voice, services, brand) and emit a `tree` JSON object. Server validates (Zod schema, depth ≤ 4, children-per-container caps, heading-level descent), voice-scans against soul.voice.avoidWords (warnings, not errors), then renders + persists. " +
+      "Tree root MUST be kind=section. Leaves can include kind=embed with ref ∈ {services, faq, testimonials, hours, phone} to pull workspace-data into the section without re-typing it. Phone embed renders as a tel: link. " +
+      "Pattern library (typical compositions): COMPARISON = section { row{cols:2, [card{heading,list-check}, card{variant:muted, heading,list-x}]}}. STATS = section { row{cols:4, [stat,stat,stat,stat]}}. HOW-IT-WORKS = section { row{cols:4, [card{heading,text}, card{heading,text}, card{heading,text}, card{heading,text}]}}. SIDE-BY-SIDE = section { row{cols:2, [col{image}, col{heading,text,button}]}}. " +
+      "Returns the new section's index, the full sections list with previews, validation_warnings (voice violations the agent should fix on retry), and the public_url. Use position to insert at a specific index (default: append).",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id."),
+        tree: {
+          type: "object",
+          description:
+            "Composite tree root. MUST be kind=section with optional eyebrow/headline/subhead and a children array. See the COMPOSITE_BLOCK_SKILL.md (fetch via get_block_skill('composite')) for the full primitive vocabulary, validation rules, and worked patterns.",
+          additionalProperties: true,
+        },
+        position: {
+          type: "integer",
+          description:
+            "Optional 0-based insert position. Default: appended at the end. Use get_landing_structure to find the right slot first.",
+          minimum: 0,
+        },
+      },
+      ["workspace_id", "tree"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/workspace/v2/landing/composite", {
+        body: {
+          workspace_id: ws,
+          op: "add",
+          tree: args.tree,
+          position: args.position,
+        },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
+  {
+    name: "update_composite_section",
+    description:
+      "Replace the tree of an EXISTING composite section. Use when the operator asks to refine a custom section you previously created ('shorten the comparison', 'add another stat', 'make the cards muted'). Index must point at a section of type=composite — for typed sections (hero, services, faq, etc.) use update_landing_section, regenerate_block, or persist_block. " +
+      "First call get_landing_structure to find the right index — composite sections show preview text starting with 'composite — <headline>'. Then generate the new tree (typically by reading current_props equivalent — for composite sections this means fetching the existing tree, mutating, and submitting; today the simplest path is to regenerate from scratch using operator instructions + soul). " +
+      "Same validation + voice-scan as add_composite_section. Returns the same payload with index unchanged.",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id."),
+        index: {
+          type: "integer",
+          description:
+            "0-based index of the composite section to update (from get_landing_structure).",
+          minimum: 0,
+        },
+        tree: {
+          type: "object",
+          description:
+            "Replacement tree. Same shape as add_composite_section — kind=section root with children.",
+          additionalProperties: true,
+        },
+      },
+      ["workspace_id", "index", "tree"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/workspace/v2/landing/composite", {
+        body: {
+          workspace_id: ws,
+          op: "update",
+          tree: args.tree,
+          index: args.index,
+        },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
+  {
     name: "reorder_landing_sections",
     description:
       "Reorder the sections of a workspace's landing page WITHOUT changing their content. Use when the operator says 'move FAQ to the bottom', 'put services after the about section', 'rearrange so the CTA is below testimonials'. " +

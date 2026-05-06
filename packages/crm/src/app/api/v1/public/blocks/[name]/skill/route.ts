@@ -17,25 +17,28 @@ export async function GET(
   { params }: { params: Promise<{ name: string }> },
 ) {
   const { name } = await params;
-  const block = getBlock(name);
-  if (!block) {
-    return NextResponse.json(
-      {
-        error: "block_unknown",
-        known_blocks: ["hero", "services", "faq"],
-      },
-      { status: 404 },
-    );
-  }
+
+  // v1.12 — accept SKILL.md for any block whose name is a valid
+  // identifier and whose SKILL.md exists on disk. Previously we required
+  // a registry entry first; that gated out the new "composite" block
+  // (which has no typed prop schema — its "props" ARE a recursive tree).
+  // The skill-loader has its own allowlist regex (^[a-z][a-z0-9-]{1,30}$)
+  // so we're not opening a path-traversal vector by skipping the registry
+  // check here.
   const skill = await loadSkillMd(name);
   if (!skill) {
+    // Distinguish "not in registry AND no skill file" vs "registry hit
+    // but skill file missing" so operators get an actionable message.
+    const block = getBlock(name);
     return NextResponse.json(
       {
-        error: "skill_md_not_found",
+        error: block ? "skill_md_not_found" : "block_unknown",
         block_name: name,
-        hint: `Expected file at packages/crm/src/blocks/${name}/SKILL.md`,
+        hint: block
+          ? `Expected file at packages/crm/src/blocks/${name}/SKILL.md`
+          : `Unknown block name. Known: ${[...new Set(["composite", "hero", "services", "about", "faq", "cta", "booking", "intake"])].join(", ")}.`,
       },
-      { status: 500 },
+      { status: block ? 500 : 404 },
     );
   }
   return new NextResponse(skill, {

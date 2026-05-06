@@ -76,12 +76,31 @@ function parseFrontmatter(skillMd: string): BlockFrontmatter {
   if (!parsed || typeof parsed !== "object") {
     throw new Error("Frontmatter is not a YAML object");
   }
-  for (const required of ["name", "version", "description", "props"]) {
-    if (!(required in parsed)) {
-      throw new Error(`Frontmatter missing required field: ${required}`);
+  // v1.12 — blocks can opt out of codegen with `codegen: false`. Used by
+  // composite (whose "props" are a recursive tree, not a flat YAML
+  // object — Zod schema lives in lib/page-blocks/composite/schema.ts
+  // and is hand-written for the recursive case).
+  const skipsCodegen = (parsed as { codegen?: unknown }).codegen === false;
+  const required = skipsCodegen
+    ? ["name", "version", "description"]
+    : ["name", "version", "description", "props"];
+  for (const field of required) {
+    if (!(field in parsed)) {
+      throw new Error(`Frontmatter missing required field: ${field}`);
     }
   }
   return parsed as unknown as BlockFrontmatter;
+}
+
+function frontmatterSkipsCodegen(skillMd: string): boolean {
+  const match = skillMd.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (!match) return false;
+  try {
+    const parsed = parseYaml(match[1]) as Record<string, unknown>;
+    return parsed && typeof parsed === "object" && (parsed as { codegen?: unknown }).codegen === false;
+  } catch {
+    return false;
+  }
 }
 
 // ─── YAML → Zod codegen ─────────────────────────────────────────────────────
@@ -250,6 +269,15 @@ function main(): void {
   for (const name of blockNames) {
     const skillPath = join(BLOCKS_ROOT, name, "SKILL.md");
     const skillMd = readFileSync(skillPath, "utf8");
+
+    // v1.12 — blocks with `codegen: false` in frontmatter skip codegen
+    // entirely. Used by composite, whose Zod schema is hand-written
+    // (recursive trees can't be expressed in flat-YAML props).
+    if (frontmatterSkipsCodegen(skillMd)) {
+      console.log(`  ⤳ ${name} — codegen:false (hand-written schema)`);
+      continue;
+    }
+
     let fm: BlockFrontmatter;
     try {
       fm = parseFrontmatter(skillMd);

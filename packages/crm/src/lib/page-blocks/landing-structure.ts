@@ -186,6 +186,17 @@ export function derivePreview(section: LandingSection): string {
     case "footer": {
       return "footer";
     }
+    case "composite": {
+      // v1.12 — composite section. Surface the root section's headline
+      // (or eyebrow as fallback) plus a child-count hint so the agent
+      // can disambiguate multiple composite sections.
+      const tree = (s.tree ?? {}) as Record<string, unknown>;
+      const headline = typeof tree.headline === "string" ? tree.headline : "";
+      const eyebrow = typeof tree.eyebrow === "string" ? tree.eyebrow : "";
+      const children = Array.isArray(tree.children) ? tree.children : [];
+      const label = headline || eyebrow || "(composite — no headline)";
+      return truncate(`composite — ${label} (${children.length} child${children.length === 1 ? "" : "ren"})`);
+    }
     default:
       // Defensive — unknown section types still need a usable preview
       // so get_landing_structure never returns an empty string.

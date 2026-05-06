@@ -168,9 +168,12 @@ function mapBlueprintSection(
     case "emergency-strip":
     case "service-area":
     case "partners":
+    case "composite":
       // No direct PageSchema equivalent on the reverse path; renderer-
       // specific or content-pack-only. Skip — the legacy renderer still
       // handles these natively when a Blueprint is rendered directly.
+      // (v1.12 — composite sections are blueprint-only; the page-schema
+      // layer doesn't model arbitrary trees.)
       return null;
   }
 }

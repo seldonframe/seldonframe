@@ -90,7 +90,24 @@ export type LandingSection =
   | SectionServiceArea
   | SectionFaq
   | SectionFooter
-  | SectionPartners;
+  | SectionPartners
+  | SectionComposite;
+
+/** v1.12 — composite-tree section. Holds an arbitrary tree of low-
+ *  level primitives (heading/text/list/button/card/row/section/etc.)
+ *  built by the IDE agent for blocks that don't fit the typed
+ *  vocabulary (comparison columns, "how it works", pricing tiers,
+ *  side-by-side stats, custom CTAs). The renderer walks the tree
+ *  and emits theme-aware HTML against a shared composite stylesheet.
+ *  See packages/crm/src/lib/page-blocks/composite/schema.ts for the
+ *  full primitive catalogue. */
+export interface SectionComposite {
+  type: "composite";
+  /** The root node MUST be kind=section. We don't widen this in the
+   *  type because every composite tree has a section root with
+   *  optional eyebrow/headline/subhead — that's the contract. */
+  tree: import("../page-blocks/composite/schema").CompositeNode;
+}
 
 /** "Built on" / partners-and-press strip. Horizontal row of company /
  *  vendor names, rendered as italic display-font text by default. Used
