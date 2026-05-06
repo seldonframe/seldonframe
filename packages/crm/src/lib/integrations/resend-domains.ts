@@ -216,6 +216,57 @@ export async function triggerResendDomainVerification(
   };
 }
 
+/**
+ * v1.18.1 — list all domains in our Resend account. Used to find an
+ * existing registration for a hostname when create returns 403
+ * "domain has been registered already". Resend's create endpoint
+ * isn't idempotent — calling create with an already-registered name
+ * fails with no recovery hint; the only path to attach the existing
+ * record is to list, match by name, and use that domain's id.
+ */
+export type ListResendDomainsResult =
+  | {
+      ok: true;
+      domains: Array<{ id: string; name: string; status: string }>;
+    }
+  | { ok: false; error: string; status: number };
+
+export async function listResendSenderDomains(): Promise<ListResendDomainsResult> {
+  const apiKey = process.env.RESEND_API_KEY?.trim();
+  if (!apiKey) {
+    return { ok: false, error: "resend_not_configured", status: 503 };
+  }
+  let response: Response;
+  try {
+    response = await fetch(`${RESEND_API_BASE}/domains`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+  } catch (err) {
+    return {
+      ok: false,
+      error: `resend_request_failed: ${err instanceof Error ? err.message : String(err)}`,
+      status: 502,
+    };
+  }
+  if (!response.ok) {
+    const detail = await readErrorDetail(response);
+    return { ok: false, error: detail, status: response.status };
+  }
+  const data = (await response.json().catch(() => ({}))) as {
+    data?: Array<{ id?: string; name?: string; status?: string }>;
+  };
+  const list = Array.isArray(data.data) ? data.data : [];
+  return {
+    ok: true,
+    domains: list.map((d) => ({
+      id: d.id ?? "",
+      name: d.name ?? "",
+      status: d.status ?? "pending",
+    })),
+  };
+}
+
 export async function removeResendSenderDomain(
   domainId: string,
 ): Promise<RemoveResendDomainResult> {

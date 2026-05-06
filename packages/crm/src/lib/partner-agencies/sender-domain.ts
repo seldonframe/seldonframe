@@ -27,6 +27,7 @@ import { partnerAgencies } from "@/db/schema";
 import {
   createResendSenderDomain,
   getResendSenderDomain,
+  listResendSenderDomains,
   triggerResendDomainVerification,
   isResendConfigured,
   type ResendDnsRecord,
@@ -93,45 +94,117 @@ export async function registerAgencySenderDomain(
     };
   }
 
-  // Call Resend.
-  const result = await createResendSenderDomain(input.domain);
-  if (!result.ok) {
-    return {
-      ok: false,
-      error: "resend_create_failed",
-      validation_errors: [`Resend ${result.status}: ${result.error}`],
-    };
+  // Call Resend. v1.18.1 — make this idempotent. Resend's POST /domains
+  // returns 403 "The <name> domain has been registered already" when
+  // the same name is already in our Resend account (could be from a
+  // prior attempt by the same agency, or a stale row from a deleted
+  // agency). We fall back to listing all domains, matching by name,
+  // and using the existing record. Either way the operator gets the
+  // same DNS records they need to add at their registrar.
+  let domainId: string;
+  let dnsRecords: ResendDnsRecord[] = [];
+  let status = "pending";
+
+  const createResult = await createResendSenderDomain(input.domain);
+  if (createResult.ok) {
+    domainId = createResult.domain_id;
+    dnsRecords = createResult.dns_records;
+    status = createResult.status;
+  } else {
+    const isAlreadyRegistered =
+      createResult.status === 403 ||
+      /already/i.test(createResult.error) ||
+      /registered/i.test(createResult.error);
+    if (!isAlreadyRegistered) {
+      return {
+        ok: false,
+        error: "resend_create_failed",
+        validation_errors: [`Resend ${createResult.status}: ${createResult.error}`],
+      };
+    }
+
+    // Find the existing record + re-use it.
+    const list = await listResendSenderDomains();
+    if (!list.ok) {
+      return {
+        ok: false,
+        error: "resend_list_failed",
+        validation_errors: [
+          `Resend reports ${input.domain} is already registered, but listing domains to find it failed: Resend ${list.status}: ${list.error}`,
+        ],
+      };
+    }
+    const existing = list.domains.find(
+      (d) => d.name.toLowerCase() === input.domain.toLowerCase(),
+    );
+    if (!existing) {
+      return {
+        ok: false,
+        error: "resend_already_registered_but_not_listable",
+        validation_errors: [
+          `Resend reports ${input.domain} is already registered but it doesn't appear in our domain list. It's likely registered under a DIFFERENT Resend account; use a different domain or contact support.`,
+        ],
+      };
+    }
+
+    // Pull the full record (with DNS records) for the existing domain.
+    const detail = await getResendSenderDomain(existing.id);
+    if (!detail.ok) {
+      return {
+        ok: false,
+        error: "resend_get_existing_failed",
+        validation_errors: [`Resend ${detail.status}: ${detail.error}`],
+      };
+    }
+    domainId = detail.domain_id;
+    dnsRecords = detail.dns_records;
+    status = detail.status;
   }
 
   const localPart = (input.senderLocalPart ?? "welcome").trim().toLowerCase();
   const senderEmail = `${localPart}@${input.domain.toLowerCase()}`;
 
-  // Persist on the agency row. verified_sender_at stays null — set
-  // only when verification succeeds.
+  // Persist on the agency row. verified_sender_at stays null when the
+  // domain isn't yet verified at Resend's side; if we recovered an
+  // already-verified existing record we mirror that into our row too.
   await db
     .update(partnerAgencies)
     .set({
-      resendDomainId: result.domain_id,
+      resendDomainId: domainId,
       senderEmailAddress: senderEmail,
-      verifiedSenderAt: null,
+      verifiedSenderAt: status === "verified" ? new Date() : null,
       updatedAt: new Date(),
     })
     .where(eq(partnerAgencies.id, input.agencyId));
+
+  const recoveredFromExisting = !createResult.ok;
+  const nextSteps =
+    status === "verified"
+      ? [
+          `Domain ${input.domain} is ALREADY verified in Resend (recovered an existing record). No DNS changes needed.`,
+          `Emails for workspaces attached to this agency will send FROM ${senderEmail} starting immediately.`,
+        ]
+      : [
+          `Add the DNS records above at your registrar for ${input.domain}.`,
+          "DNS typically propagates in 5-60 minutes.",
+          `Once added, call verify_partner_agency_sender_domain({ agency_id: "${input.agencyId}" }) to check status.`,
+          "After verification: emails for workspaces attached to this agency will send FROM " +
+            senderEmail +
+            " instead of welcome@seldonframe.com.",
+        ];
+  if (recoveredFromExisting) {
+    nextSteps.unshift(
+      `(Note) Recovered an existing Resend domain registration for ${input.domain} — DNS records below match what Resend already has. If you've added them at the registrar before, status will already be 'verified'.`,
+    );
+  }
 
   return {
     ok: true,
     domain: input.domain,
     sender_email_address: senderEmail,
-    dns_records: result.dns_records,
-    status: result.status,
-    next_steps: [
-      `Add the DNS records above at your registrar for ${input.domain}.`,
-      "DNS typically propagates in 5-60 minutes.",
-      `Once added, call verify_partner_agency_sender_domain({ agency_id: "${input.agencyId}" }) to check status.`,
-      "After verification: emails for workspaces attached to this agency will send FROM " +
-        senderEmail +
-        " instead of welcome@seldonframe.com.",
-    ],
+    dns_records: dnsRecords,
+    status,
+    next_steps: nextSteps,
   };
 }
 
