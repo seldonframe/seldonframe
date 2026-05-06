@@ -1,7 +1,7 @@
 "use server";
 
 import crypto from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { put } from "@vercel/blob";
 import { db } from "@/db";
 import { contacts, organizations, portalDocuments } from "@/db/schema";
@@ -9,7 +9,12 @@ import { auth } from "@/auth";
 import { assertWritable } from "@/lib/demo/server";
 import { emitSeldonEvent } from "@/lib/events/bus";
 import { checkPortalPlanGate } from "./plan-gate";
-import { requestPortalAccessCodeAction } from "./auth";
+import { createPortalMagicLink } from "./auth";
+import {
+  pickFromAddress,
+  sendPortalInviteMagicLinkEmail,
+} from "@/lib/emails/portal-invite-magic-link";
+import { getEffectiveBrandingForWorkspace } from "@/lib/partner-agencies/branding";
 
 /**
  * Operator-side: toggle portal access for a contact. Used by the
@@ -70,15 +75,22 @@ export async function setContactPortalAccessAction(input: {
 }
 
 /**
- * Operator-side: send a portal invite (magic-code email) to a contact.
- * Wraps the existing requestPortalAccessCodeAction so the per-contact
- * card can trigger the same flow the public login form uses, without
- * requiring the operator to leave the admin dashboard.
+ * Operator-side: send a portal invite to a contact.
  *
- * The code flow is OTC-based: the contact gets a 6-digit code emailed
- * (or in dev, returned in the codePreview field). They paste it into
- * /portal/<orgSlug>/login. Operators who want a one-click "magic link"
- * style flow can extend this in a follow-up — V1 ships the OTC code.
+ * v1.20.1 — switched from 6-digit code to MAGIC LINK. Pre-1.20.1 the
+ * contact got an email containing just "your code is 712420" with NO
+ * clickable URL — they had to know to navigate to /customer/<slug>/login
+ * themselves. v1.20.1 sends a one-click magic link bound to their
+ * contactId; click in inbox → land signed-in at /customer/<slug>.
+ *
+ * The 6-digit code self-service flow is unchanged for customers who
+ * navigate directly to /customer/<slug>/login (no invite email): they
+ * type their email, get a code, type the code. That path covers
+ * customers who lost the invite email.
+ *
+ * Branding: when the workspace is under an active partner agency, the
+ * email's footer + sender substitute the agency's brand (same defense-
+ * in-depth as the access-code email).
  */
 export async function sendPortalInviteAction(input: {
   orgSlug: string;
@@ -90,11 +102,110 @@ export async function sendPortalInviteAction(input: {
   if (!session?.user?.id) {
     return { ok: false, reason: "unauthorized" };
   }
-  if (!input.email) {
+  const email = (input.email ?? "").trim().toLowerCase();
+  if (!email) {
     return { ok: false, reason: "missing_email" };
   }
 
-  await requestPortalAccessCodeAction(input.orgSlug, input.email);
+  // Resolve the org + the contact (case-insensitive email match per
+  // v1.19) so we can mint the magic link bound to the right contactId.
+  const [org] = await db
+    .select({ id: organizations.id, name: organizations.name })
+    .from(organizations)
+    .where(eq(organizations.slug, input.orgSlug))
+    .limit(1);
+  if (!org) {
+    // Silent no-op for security parity with the access-code path —
+    // don't leak which orgs exist via timing or error shape.
+    console.warn(
+      `[portal-invite-magic-link] silent_no_op: org_not_found org_slug=${input.orgSlug} email_domain=${email.split("@")[1] ?? "(no_domain)"}`,
+    );
+    return { ok: true };
+  }
+
+  const planGate = await checkPortalPlanGate(org.id);
+  if (!planGate.allowed) {
+    console.warn(
+      `[portal-invite-magic-link] silent_no_op: plan_gate_denied org_id=${org.id} reason=${planGate.reason ?? "no_reason"}`,
+    );
+    return { ok: true };
+  }
+
+  const [contact] = await db
+    .select({
+      id: contacts.id,
+      firstName: contacts.firstName,
+      email: contacts.email,
+      portalAccessEnabled: contacts.portalAccessEnabled,
+    })
+    .from(contacts)
+    .where(
+      and(
+        eq(contacts.orgId, org.id),
+        sql`lower(${contacts.email}) = ${email}`,
+      ),
+    )
+    .limit(1);
+  if (!contact?.id) {
+    console.warn(
+      `[portal-invite-magic-link] silent_no_op: contact_not_found org_id=${org.id} email_domain=${email.split("@")[1] ?? "(no_domain)"}`,
+    );
+    return { ok: true };
+  }
+  if (!contact.portalAccessEnabled) {
+    console.warn(
+      `[portal-invite-magic-link] silent_no_op: portal_access_disabled org_id=${org.id} contact_id=${contact.id}`,
+    );
+    return { ok: true };
+  }
+
+  // Mint a bound magic link via the existing portal primitive.
+  const link = await createPortalMagicLink({
+    orgSlug: input.orgSlug,
+    contactId: contact.id,
+    expiresInMinutes: 30,
+  });
+
+  const apiKey = process.env.RESEND_API_KEY?.trim();
+  if (!apiKey) {
+    console.warn(
+      `[portal-invite-magic-link] silent_no_op: resend_not_configured org_id=${org.id} contact_id=${contact.id}`,
+    );
+    return { ok: true };
+  }
+
+  const branding = await getEffectiveBrandingForWorkspace(org.id);
+  const fromAddress = pickFromAddress(process.env);
+
+  const send = await sendPortalInviteMagicLinkEmail(
+    {
+      email: contact.email ?? email,
+      workspaceName: org.name ?? input.orgSlug,
+      inviteUrl: link.inviteUrl,
+      expiresInMinutes: 30,
+      firstName: contact.firstName ?? null,
+      brandName: branding?.is_white_label ? branding.brand_name : null,
+      logoUrl: branding?.logo_url ?? null,
+      supportUrl: branding?.is_white_label ? branding.support_url : null,
+    },
+    { apiKey, fromAddress },
+  );
+
+  if (!send.ok) {
+    console.error(
+      `[portal-invite-magic-link] send_failed org_id=${org.id} contact_id=${contact.id} status=${send.status} error=${send.error}`,
+    );
+    // Surface to caller so the UI can show "couldn't send" instead
+    // of a misleading success ✓.
+    return { ok: false, reason: "email_send_failed" };
+  }
+
+  await emitSeldonEvent(
+    "portal.invite_magic_link_sent",
+    { contactId: contact.id, email_domain: email.split("@")[1] ?? "(no_domain)" },
+    { orgId: org.id },
+  );
+
   return { ok: true };
 }
 
