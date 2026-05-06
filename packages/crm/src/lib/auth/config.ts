@@ -70,7 +70,7 @@ export const authConfig = {
         }
 
         if (token.sub) {
-          const [dbUser] = await db
+          let [dbUser] = await db
             .select({
               id: users.id,
               orgId: users.orgId,
@@ -83,6 +83,56 @@ export const authConfig = {
             .from(users)
             .where(eq(users.id, token.sub))
             .limit(1);
+
+          // v1.19 — self-healing JWT recovery. Why this exists:
+          //
+          //   The session strategy is JWT, so token.sub is what the page
+          //   queries with. But token.sub can drift away from the real
+          //   users.id row in three ways:
+          //     1. createUser failed mid-flow (org created, users INSERT
+          //        threw — user has a JWT but no users row)
+          //     2. JWT was minted from a user that was later deleted +
+          //        recreated with a new uuid (re-claim flows, manual
+          //        ops cleanup)
+          //     3. Cross-deployment JWT carry-over (rare in practice)
+          //
+          //   Without recovery: every page hits the v1.7.3 synthesized-
+          //   empty-record path, dashboard renders an empty shell with
+          //   no workspace, no plan, no surface for the user to take
+          //   any meaningful action. They look "signed in" but every
+          //   write 403s.
+          //
+          //   v1.19 fix: when token.sub doesn't resolve, fall back to
+          //   email. If a users row with this email exists, re-anchor
+          //   token.sub to that row's id silently. Log it so we can
+          //   detect and root-cause the original drift in production.
+          if (!dbUser && typeof token.email === "string" && token.email.length > 0) {
+            const normalizedEmail = token.email.trim().toLowerCase();
+            const [recovered] = await db
+              .select({
+                id: users.id,
+                orgId: users.orgId,
+                role: users.role,
+                planId: users.planId,
+                subscriptionStatus: users.subscriptionStatus,
+                billingPeriod: users.billingPeriod,
+                trialEndsAt: users.trialEndsAt,
+              })
+              .from(users)
+              .where(eq(users.email, normalizedEmail))
+              .limit(1);
+            if (recovered) {
+              console.warn(
+                `[auth][jwt] self_healed_token_sub: token.sub=${token.sub} did not resolve, recovered via email=${normalizedEmail.split("@")[1] ?? "(?)"} user_id=${recovered.id}`,
+              );
+              token.sub = recovered.id;
+              dbUser = recovered;
+            } else {
+              console.warn(
+                `[auth][jwt] orphan_token_no_email_match: token.sub=${token.sub} email_domain=${normalizedEmail.split("@")[1] ?? "(?)"} — user has a JWT but no users row by id OR email`,
+              );
+            }
+          }
 
           if (dbUser) {
             token.orgId = dbUser.orgId;

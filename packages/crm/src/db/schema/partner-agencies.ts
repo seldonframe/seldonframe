@@ -29,6 +29,15 @@ export const partnerAgencies = pgTable(
     ownerUserId: uuid("owner_user_id").references(() => users.id, {
       onDelete: "set null",
     }),
+    // v1.19 — polymorphic ownership. Anonymous workspaces (created
+    // via create_workspace_v2 with no claimed owner) can register
+    // agencies natively by anchoring ownership to the workspace_id
+    // instead of a user_id. At least one of owner_user_id /
+    // owner_workspace_id must be set; both can be set when a
+    // workspace is later claimed by a user. Application code
+    // enforces the "at least one" constraint (DB CHECK constraint
+    // queued for v1.19.1 once existing rows are confirmed valid).
+    ownerWorkspaceId: uuid("owner_workspace_id"),
     /** 'pending' | 'active' | 'suspended' | 'archived'.
      *  - pending:   newly registered, not yet activated by plan check
      *  - active:    Scale-tier confirmed; chrome substitution live

@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { desc } from "drizzle-orm";
-import { boolean, index, integer, pgTable, text, timestamp, uuid, jsonb } from "drizzle-orm/pg-core";
+import { boolean, index, integer, pgTable, text, timestamp, uniqueIndex, uuid, jsonb } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
 import { users } from "./users";
 
@@ -41,5 +41,13 @@ export const contacts = pgTable(
     index("contacts_org_status_idx").on(table.orgId, table.status),
     index("contacts_org_assigned_to_idx").on(table.orgId, table.assignedTo),
     index("contacts_org_score_idx").on(table.orgId, desc(table.score)),
+    // v1.19.0 — partial unique index on (org_id, lower(email)). NULL/empty
+    // email rows are exempt (a contact can exist without an email).
+    // Drizzle's uniqueIndex doesn't render expressions or partial WHERE
+    // here, but we declare it so introspection sees it.
+    // The actual DDL lives in drizzle/0042_contacts_lower_email_uniq.sql.
+    uniqueIndex("contacts_org_lower_email_uniq")
+      .on(table.orgId, sql`lower(${table.email})`)
+      .where(sql`${table.email} IS NOT NULL AND ${table.email} <> ''`),
   ]
 );

@@ -39,7 +39,10 @@ export interface RegisterAgencySenderDomainInput {
   /** Optional local part (default "welcome"). The agency's customer-
    *  facing emails will be sent FROM `<local>@<domain>` once verified. */
   senderLocalPart?: string;
-  ownerUserId: string;
+  /** v1.19 — polymorphic ownership. At least one of ownerUserId or
+   *  ownerWorkspaceId must be set. */
+  ownerUserId?: string;
+  ownerWorkspaceId?: string;
 }
 
 export type RegisterAgencySenderDomainResult =
@@ -65,11 +68,20 @@ export async function registerAgencySenderDomain(
       ],
     };
   }
-  if (!input.agencyId || !input.domain || !input.ownerUserId) {
+  if (!input.agencyId || !input.domain) {
     return {
       ok: false,
       error: "validation_failed",
-      validation_errors: ["agencyId, domain, ownerUserId are all required"],
+      validation_errors: ["agencyId, domain are required"],
+    };
+  }
+  if (!input.ownerUserId && !input.ownerWorkspaceId) {
+    return {
+      ok: false,
+      error: "validation_failed",
+      validation_errors: [
+        "at least one of ownerUserId or ownerWorkspaceId must be provided",
+      ],
     };
   }
 
@@ -86,7 +98,15 @@ export async function registerAgencySenderDomain(
       validation_errors: [`agency ${input.agencyId} does not exist`],
     };
   }
-  if (agency.ownerUserId !== input.ownerUserId) {
+  // v1.19 polymorphic ownership: caller is the agency owner if EITHER
+  // their userId matches agency.ownerUserId OR their workspaceId
+  // matches agency.ownerWorkspaceId.
+  const matchesUser =
+    input.ownerUserId != null && agency.ownerUserId === input.ownerUserId;
+  const matchesWorkspace =
+    input.ownerWorkspaceId != null &&
+    agency.ownerWorkspaceId === input.ownerWorkspaceId;
+  if (!matchesUser && !matchesWorkspace) {
     return {
       ok: false,
       error: "not_agency_owner",
@@ -210,7 +230,10 @@ export async function registerAgencySenderDomain(
 
 export interface VerifyAgencySenderDomainInput {
   agencyId: string;
-  ownerUserId: string;
+  /** v1.19 — polymorphic ownership. At least one of ownerUserId or
+   *  ownerWorkspaceId must be set. */
+  ownerUserId?: string;
+  ownerWorkspaceId?: string;
 }
 
 export type VerifyAgencySenderDomainResult =
@@ -233,11 +256,20 @@ export async function verifyAgencySenderDomain(
       validation_errors: ["RESEND_API_KEY env var not set"],
     };
   }
-  if (!input.agencyId || !input.ownerUserId) {
+  if (!input.agencyId) {
     return {
       ok: false,
       error: "validation_failed",
-      validation_errors: ["agencyId, ownerUserId are required"],
+      validation_errors: ["agencyId is required"],
+    };
+  }
+  if (!input.ownerUserId && !input.ownerWorkspaceId) {
+    return {
+      ok: false,
+      error: "validation_failed",
+      validation_errors: [
+        "at least one of ownerUserId or ownerWorkspaceId must be provided",
+      ],
     };
   }
 
@@ -253,7 +285,13 @@ export async function verifyAgencySenderDomain(
       validation_errors: [],
     };
   }
-  if (agency.ownerUserId !== input.ownerUserId) {
+  // v1.19 polymorphic ownership match
+  const matchesUser =
+    input.ownerUserId != null && agency.ownerUserId === input.ownerUserId;
+  const matchesWorkspace =
+    input.ownerWorkspaceId != null &&
+    agency.ownerWorkspaceId === input.ownerWorkspaceId;
+  if (!matchesUser && !matchesWorkspace) {
     return {
       ok: false,
       error: "not_agency_owner",

@@ -56,42 +56,97 @@ export default async function PortalOverviewPage({
   // we keep the parallel await so the dependency is loaded but don't
   // re-thread it (next iteration: pass orgRow.timezone all the way).
 
+  // v1.19.0 — use --sf-* CSS variables (set by PortalLayout's
+  // PublicThemeProvider) so cards, stats, and message rows pick up
+  // the workspace's branded theme. Pre-1.19 used `crm-card`/`text-label`
+  // which rendered the SeldonFrame defaults regardless of workspace.
+  const cardStyle: React.CSSProperties = {
+    backgroundColor: "var(--sf-card-bg)",
+    color: "var(--sf-text)",
+    border: "1px solid var(--sf-border)",
+    borderRadius: "var(--sf-radius)",
+  };
+  const labelStyle: React.CSSProperties = {
+    color: "var(--sf-muted)",
+    fontSize: "0.75rem",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+  };
+
   return (
     <section className="space-y-4">
       {customTemplate ? (
         <>
           <style dangerouslySetInnerHTML={{ __html: customTemplate.css }} />
-          <article className="crm-card">
+          <article className="p-5" style={cardStyle}>
             <div dangerouslySetInnerHTML={{ __html: customTemplate.html }} />
           </article>
         </>
       ) : null}
 
       <div className="grid gap-3 md:grid-cols-3">
-        <article className="crm-card">
-          <p className="text-label text-[hsl(var(--color-text-muted))]">Messages</p>
-          <p className="mt-1 text-2xl font-semibold">{messages.length}</p>
+        <article className="p-5" style={cardStyle}>
+          <p style={labelStyle}>Messages</p>
+          <p
+            className="mt-1 text-2xl font-semibold"
+            style={{ color: "var(--sf-text)" }}
+          >
+            {messages.length}
+          </p>
         </article>
-        <article className="crm-card">
-          <p className="text-label text-[hsl(var(--color-text-muted))]">Resources</p>
-          <p className="mt-1 text-2xl font-semibold">{resources.length}</p>
+        <article className="p-5" style={cardStyle}>
+          <p style={labelStyle}>Resources</p>
+          <p
+            className="mt-1 text-2xl font-semibold"
+            style={{ color: "var(--sf-text)" }}
+          >
+            {resources.length}
+          </p>
         </article>
-        <article className="crm-card">
-          <p className="text-label text-[hsl(var(--color-text-muted))]">Viewed Resources</p>
-          <p className="mt-1 text-2xl font-semibold">{resources.filter((row) => Boolean(row.viewedAt)).length}</p>
+        <article className="p-5" style={cardStyle}>
+          <p style={labelStyle}>Viewed Resources</p>
+          <p
+            className="mt-1 text-2xl font-semibold"
+            style={{ color: "var(--sf-text)" }}
+          >
+            {resources.filter((row) => Boolean(row.viewedAt)).length}
+          </p>
         </article>
       </div>
 
-      <article className="crm-card">
-        <h2 className="text-card-title">Recent Messages</h2>
+      <article className="p-5" style={cardStyle}>
+        <h2
+          className="text-base font-semibold"
+          style={{ color: "var(--sf-text)" }}
+        >
+          Recent Messages
+        </h2>
         {messages.length === 0 ? (
-          <p className="mt-2 text-label text-[hsl(var(--color-text-secondary))]">No messages yet.</p>
+          <p
+            className="mt-2 text-sm"
+            style={{ color: "var(--sf-muted)" }}
+          >
+            No messages yet.
+          </p>
         ) : (
           <ul className="mt-3 space-y-2">
             {messages.slice(0, 5).map((row) => (
-              <li key={row.id} className="crm-table-row rounded-md px-2 py-2 text-sm">
-                <p className="font-medium text-foreground">{row.subject ?? "Message"}</p>
-                <p className="text-[hsl(var(--color-text-secondary))]">{row.body}</p>
+              <li
+                key={row.id}
+                className="px-3 py-2 text-sm"
+                style={{
+                  backgroundColor: "var(--sf-bg)",
+                  borderRadius: "var(--sf-radius)",
+                  border: "1px solid var(--sf-border)",
+                }}
+              >
+                <p
+                  className="font-medium"
+                  style={{ color: "var(--sf-text)" }}
+                >
+                  {row.subject ?? "Message"}
+                </p>
+                <p style={{ color: "var(--sf-muted)" }}>{row.body}</p>
               </li>
             ))}
           </ul>

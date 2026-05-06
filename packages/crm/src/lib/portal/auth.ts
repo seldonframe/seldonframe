@@ -1,7 +1,7 @@
 "use server";
 
 import crypto from "node:crypto";
-import { and, desc, eq, isNull, gt } from "drizzle-orm";
+import { and, desc, eq, isNull, gt, sql } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
@@ -87,13 +87,28 @@ async function resolvePortalSessionByToken(orgSlug: string, token: string | null
   };
 }
 
-export async function requestPortalAccessCodeAction(orgSlug: string, email: string) {
+export async function requestPortalAccessCodeAction(orgSlug: string, rawEmail: string) {
   assertWritable();
+
+  // v1.19 — normalize email at action entry. Customers type with
+  // arbitrary casing ("Gmail.com" vs "gmail.com") and pre-1.19 the
+  // case-sensitive lookup silently no-op'd. Per RFC 5321 the local-
+  // part is technically case-sensitive but virtually no provider
+  // enforces that and our intended UX is "type your email, get the
+  // code." Lowercase + trim once here, use the normalized form
+  // through the rest of the action.
+  const email = (rawEmail ?? "").trim().toLowerCase();
+  const emailDomain = email.split("@")[1] ?? null;
 
   const org = await getOrgBySlug(orgSlug);
 
   if (!org) {
-    // Don't leak which orgs exist via timing or error shape.
+    // Don't leak which orgs exist via timing or error shape, but
+    // DO log structured so ops can diagnose "no email arrived"
+    // reports in one log line. v1.19 — observability addition.
+    console.warn(
+      `[portal-access-code] silent_no_op: org_not_found org_slug=${orgSlug} email_domain=${emailDomain}`,
+    );
     return { success: true };
   }
 
@@ -102,9 +117,15 @@ export async function requestPortalAccessCodeAction(orgSlug: string, email: stri
   // doesn't leak which workspaces have the portal enabled.
   const planGate = await checkPortalPlanGate(org.id);
   if (!planGate.allowed) {
+    console.warn(
+      `[portal-access-code] silent_no_op: plan_gate_denied org_id=${org.id} tier=${planGate.tier} reason=${planGate.reason ?? "no_reason"}`,
+    );
     return { success: true };
   }
 
+  // v1.19 — case-insensitive contact lookup. Email is already
+  // lowercased; we lower() the stored email at compare time so
+  // legacy rows with mixed casing also match.
   const [contact] = await db
     .select({
       id: contacts.id,
@@ -112,7 +133,12 @@ export async function requestPortalAccessCodeAction(orgSlug: string, email: stri
       portalAccessEnabled: contacts.portalAccessEnabled,
     })
     .from(contacts)
-    .where(and(eq(contacts.orgId, org.id), eq(contacts.email, email)))
+    .where(
+      and(
+        eq(contacts.orgId, org.id),
+        sql`lower(${contacts.email}) = ${email}`,
+      ),
+    )
     .limit(1);
 
   // May 1, 2026 — silent no-op when:
@@ -120,8 +146,18 @@ export async function requestPortalAccessCodeAction(orgSlug: string, email: stri
   //   (b) the contact exists but the operator hasn't enabled portal
   //       access (don't leak that the contact is "on file but locked")
   // Both cases return success: true so a malicious actor can't
-  // distinguish between them.
-  if (!contact?.id || !contact.portalAccessEnabled) {
+  // distinguish between them. v1.19 — log distinct paths so ops can
+  // tell them apart in production logs.
+  if (!contact?.id) {
+    console.warn(
+      `[portal-access-code] silent_no_op: contact_not_found org_id=${org.id} email_domain=${emailDomain}`,
+    );
+    return { success: true };
+  }
+  if (!contact.portalAccessEnabled) {
+    console.warn(
+      `[portal-access-code] silent_no_op: portal_access_disabled org_id=${org.id} contact_id=${contact.id}`,
+    );
     return { success: true };
   }
 
@@ -196,8 +232,13 @@ export async function requestPortalAccessCodeAction(orgSlug: string, email: stri
   };
 }
 
-export async function verifyPortalAccessCodeAction(orgSlug: string, email: string, code: string) {
+export async function verifyPortalAccessCodeAction(orgSlug: string, rawEmail: string, code: string) {
   assertWritable();
+
+  // v1.19 — same case-insensitive normalization as
+  // requestPortalAccessCodeAction. Customer types email at /verify
+  // with whatever casing they want; we match by lower(email).
+  const email = (rawEmail ?? "").trim().toLowerCase();
 
   const org = await getOrgBySlug(orgSlug);
 
@@ -208,13 +249,23 @@ export async function verifyPortalAccessCodeAction(orgSlug: string, email: strin
   const [contact] = await db
     .select({ id: contacts.id })
     .from(contacts)
-    .where(and(eq(contacts.orgId, org.id), eq(contacts.email, email)))
+    .where(
+      and(
+        eq(contacts.orgId, org.id),
+        sql`lower(${contacts.email}) = ${email}`,
+      ),
+    )
     .limit(1);
 
   if (!contact?.id) {
     throw new Error("Contact not found");
   }
 
+  // v1.19 — codes were stored with the lowercased email at request
+  // time, so equality match works without a lower() wrapper here.
+  // We DO match by contact_id which is already a strict UUID match,
+  // so the email check is redundant for the same contact — kept as
+  // defense in depth.
   const [record] = await db
     .select()
     .from(portalAccessCodes)
@@ -222,7 +273,7 @@ export async function verifyPortalAccessCodeAction(orgSlug: string, email: strin
       and(
         eq(portalAccessCodes.orgId, org.id),
         eq(portalAccessCodes.contactId, contact.id),
-        eq(portalAccessCodes.email, email),
+        sql`lower(${portalAccessCodes.email}) = ${email}`,
         isNull(portalAccessCodes.usedAt),
         gt(portalAccessCodes.expiresAt, new Date())
       )

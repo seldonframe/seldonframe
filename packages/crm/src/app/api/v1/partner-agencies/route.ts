@@ -72,26 +72,22 @@ export async function POST(request: Request) {
     );
   }
 
-  // Resolve owner_user_id from the bearer's workspace. The bearer is
-  // workspace-scoped; the workspace owner is the human who controls
-  // the agency.
+  // v1.19 — polymorphic ownership. Resolve owner identity in two
+  // tiers:
+  //   1. organizations.owner_id of the bearer's workspace (preferred).
+  //      This is a real human, picked up after the workspace is claimed.
+  //   2. fallback: the bearer's workspace.id itself (anonymous-workspace-
+  //      as-actor). create_workspace_v2 produces workspaces with
+  //      owner_id = NULL by design; v1.18 NextAuth bug also leaves many
+  //      claimed-but-not-linked workspaces in this state. v1.19 lets
+  //      these workspaces register agencies natively.
   const [orgRow] = await db
     .select({ ownerId: organizations.ownerId })
     .from(organizations)
     .where(eq(organizations.id, guard.orgId))
     .limit(1);
   const ownerUserId = orgRow?.ownerId ?? null;
-  if (!ownerUserId) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "no_owner_for_workspace",
-        message:
-          "The workspace bearer doesn't map to an owning user. Agency operations require an owner_id on the workspace.",
-      },
-      { status: 403 },
-    );
-  }
+  const ownerWorkspaceId = guard.orgId;
 
   if (op === "register") {
     if (typeof body.name !== "string") {
@@ -103,7 +99,8 @@ export async function POST(request: Request) {
     const result = await registerPartnerAgency({
       name: body.name,
       slug: typeof body.slug === "string" ? body.slug : undefined,
-      ownerUserId,
+      ownerUserId: ownerUserId ?? undefined,
+      ownerWorkspaceId,
       logoUrl: typeof body.logo_url === "string" ? body.logo_url : undefined,
       primaryColor:
         typeof body.primary_color === "string" ? body.primary_color : undefined,
@@ -169,7 +166,8 @@ export async function POST(request: Request) {
     const result = await attachWorkspaceToAgency({
       workspaceId: body.workspace_id,
       agencyId: body.agency_id,
-      ownerUserId,
+      ownerUserId: ownerUserId ?? undefined,
+      ownerWorkspaceId,
     });
     if (!result.ok) {
       logEvent(
@@ -205,7 +203,8 @@ export async function POST(request: Request) {
         typeof body.sender_local_part === "string"
           ? body.sender_local_part
           : undefined,
-      ownerUserId,
+      ownerUserId: ownerUserId ?? undefined,
+      ownerWorkspaceId,
     });
     if (!result.ok) {
       logEvent(
@@ -232,7 +231,8 @@ export async function POST(request: Request) {
     }
     const result = await verifyAgencySenderDomain({
       agencyId: body.agency_id,
-      ownerUserId,
+      ownerUserId: ownerUserId ?? undefined,
+      ownerWorkspaceId,
     });
     if (!result.ok) {
       logEvent(
@@ -267,7 +267,8 @@ export async function POST(request: Request) {
   }
   const result = await detachWorkspaceFromAgency({
     workspaceId: body.workspace_id,
-    ownerUserId,
+    ownerUserId: ownerUserId ?? undefined,
+    ownerWorkspaceId,
   });
   if (!result.ok) {
     logEvent(

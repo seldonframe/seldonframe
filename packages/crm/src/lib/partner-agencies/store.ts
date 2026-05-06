@@ -35,17 +35,9 @@ const SCALE_TIER_PLANS = new Set(["scale", "Scale", "SCALE"]);
 /** Check whether the user OWNING this workspace is on Scale tier.
  *  We check the workspace's plan column rather than per-user state
  *  because a user can own multiple workspaces and the plan is per-
- *  workspace (each workspace pays its own subscription).
- *
- *  For agency operations, we use the AGENCY-OWNING workspace's plan
- *  — which is whichever workspace the owner_user_id signed up with.
- *  For v1.17 we look up ANY workspace owned by ownerUserId on Scale;
- *  if none, the agency stays in 'pending' status. */
+ *  workspace (each workspace pays its own subscription). */
 async function isOwnerOnScaleTier(ownerUserId: string): Promise<boolean> {
   if (!ownerUserId) return false;
-  // Look for any organization where this user is the owner AND the
-  // plan is scale-or-higher. organizations.ownerId is the original
-  // creator; future: extend to check membership table for non-owners.
   const rows = await db
     .select({ plan: organizations.plan })
     .from(organizations)
@@ -53,12 +45,32 @@ async function isOwnerOnScaleTier(ownerUserId: string): Promise<boolean> {
   return rows.some((r) => SCALE_TIER_PLANS.has(r.plan ?? ""));
 }
 
+/** v1.19 — polymorphic-ownership scale check. When the agency is
+ *  anchored to a workspace (anonymous-workspace ownership), we
+ *  check THAT workspace's plan directly. Simpler than the user
+ *  case (no need to scan multiple workspaces). */
+async function isWorkspaceOnScaleTier(workspaceId: string): Promise<boolean> {
+  if (!workspaceId) return false;
+  const [row] = await db
+    .select({ plan: organizations.plan })
+    .from(organizations)
+    .where(eq(organizations.id, workspaceId))
+    .limit(1);
+  return SCALE_TIER_PLANS.has(row?.plan ?? "");
+}
+
 // ─── registerPartnerAgency ─────────────────────────────────────────────────
 
 export interface RegisterAgencyInput {
   name: string;
   slug?: string;
-  ownerUserId: string;
+  /** v1.19 — polymorphic ownership. At least one of ownerUserId or
+   *  ownerWorkspaceId must be set. ownerUserId is preferred when
+   *  available (real human identity); ownerWorkspaceId is the
+   *  fallback for anonymous workspaces (create_workspace_v2 path)
+   *  that haven't been claimed by a user yet. */
+  ownerUserId?: string;
+  ownerWorkspaceId?: string;
   logoUrl?: string;
   primaryColor?: string;
   accentColor?: string;
@@ -85,8 +97,11 @@ export async function registerPartnerAgency(
   if (!input.name || typeof input.name !== "string" || input.name.trim().length < 2) {
     errors.push("name is required and must be 2+ chars");
   }
-  if (!input.ownerUserId || typeof input.ownerUserId !== "string") {
-    errors.push("ownerUserId is required");
+  // v1.19 — polymorphic ownership. Need at least one identity.
+  if (!input.ownerUserId && !input.ownerWorkspaceId) {
+    errors.push(
+      "at least one of ownerUserId or ownerWorkspaceId must be provided",
+    );
   }
   if (errors.length > 0) {
     return { ok: false, error: "validation_failed", validation_errors: errors };
@@ -115,7 +130,14 @@ export async function registerPartnerAgency(
     };
   }
 
-  const onScale = await isOwnerOnScaleTier(input.ownerUserId);
+  // v1.19 — polymorphic plan gate. User identity is preferred when
+  // present (real human, owns multiple workspaces possibly); workspace
+  // identity is the fallback (anonymous-workspace-as-actor).
+  const onScale = input.ownerUserId
+    ? await isOwnerOnScaleTier(input.ownerUserId)
+    : input.ownerWorkspaceId
+      ? await isWorkspaceOnScaleTier(input.ownerWorkspaceId)
+      : false;
 
   const [created] = await db
     .insert(partnerAgencies)
@@ -127,7 +149,8 @@ export async function registerPartnerAgency(
       accentColor: input.accentColor ?? null,
       supportEmail: input.supportEmail ?? null,
       supportUrl: input.supportUrl ?? null,
-      ownerUserId: input.ownerUserId,
+      ownerUserId: input.ownerUserId ?? null,
+      ownerWorkspaceId: input.ownerWorkspaceId ?? null,
       status: onScale ? "active" : "pending",
       hidePoweredByBadge: input.hidePoweredByBadge ?? false,
     })
@@ -149,7 +172,9 @@ export async function registerPartnerAgency(
 export interface AttachWorkspaceInput {
   workspaceId: string;
   agencyId: string;
-  ownerUserId: string;
+  /** v1.19 — polymorphic ownership. At least one identity must be set. */
+  ownerUserId?: string;
+  ownerWorkspaceId?: string;
 }
 
 export type AttachWorkspaceResult =
@@ -159,11 +184,20 @@ export type AttachWorkspaceResult =
 export async function attachWorkspaceToAgency(
   input: AttachWorkspaceInput,
 ): Promise<AttachWorkspaceResult> {
-  if (!input.workspaceId || !input.agencyId || !input.ownerUserId) {
+  if (!input.workspaceId || !input.agencyId) {
     return {
       ok: false,
       error: "validation_failed",
-      validation_errors: ["workspaceId, agencyId, ownerUserId are all required"],
+      validation_errors: ["workspaceId, agencyId are required"],
+    };
+  }
+  if (!input.ownerUserId && !input.ownerWorkspaceId) {
+    return {
+      ok: false,
+      error: "validation_failed",
+      validation_errors: [
+        "at least one of ownerUserId or ownerWorkspaceId must be provided",
+      ],
     };
   }
 
@@ -182,7 +216,15 @@ export async function attachWorkspaceToAgency(
       validation_errors: [`agency ${input.agencyId} does not exist`],
     };
   }
-  if (agency.ownerUserId !== input.ownerUserId) {
+  // v1.19 polymorphic-ownership match: caller is the agency owner if
+  // either their userId matches agency.ownerUserId OR their
+  // workspaceId matches agency.ownerWorkspaceId.
+  const matchesUser =
+    input.ownerUserId != null && agency.ownerUserId === input.ownerUserId;
+  const matchesWorkspace =
+    input.ownerWorkspaceId != null &&
+    agency.ownerWorkspaceId === input.ownerWorkspaceId;
+  if (!matchesUser && !matchesWorkspace) {
     return {
       ok: false,
       error: "not_agency_owner",
@@ -212,7 +254,20 @@ export async function attachWorkspaceToAgency(
       validation_errors: [`workspace ${input.workspaceId} does not exist`],
     };
   }
-  if (workspace.ownerId && workspace.ownerId !== input.ownerUserId) {
+  // v1.19 — for anonymous workspaces (workspace.ownerId === null), we
+  // accept the bearer-workspace identity match: the caller's
+  // workspaceId equals the target workspace.id (you own a workspace
+  // by holding its bearer key). For claimed workspaces, the human
+  // owner must match.
+  const ownsByUserId =
+    workspace.ownerId != null &&
+    input.ownerUserId != null &&
+    workspace.ownerId === input.ownerUserId;
+  const ownsBySelfWorkspace =
+    workspace.ownerId == null &&
+    input.ownerWorkspaceId != null &&
+    input.ownerWorkspaceId === input.workspaceId;
+  if (!ownsByUserId && !ownsBySelfWorkspace) {
     return {
       ok: false,
       error: "not_workspace_owner",
@@ -236,13 +291,24 @@ export async function attachWorkspaceToAgency(
 
 export async function detachWorkspaceFromAgency(input: {
   workspaceId: string;
-  ownerUserId: string;
+  /** v1.19 — polymorphic ownership. At least one identity must be set. */
+  ownerUserId?: string;
+  ownerWorkspaceId?: string;
 }): Promise<{ ok: true } | { ok: false; error: string; validation_errors: string[] }> {
-  if (!input.workspaceId || !input.ownerUserId) {
+  if (!input.workspaceId) {
     return {
       ok: false,
       error: "validation_failed",
-      validation_errors: ["workspaceId, ownerUserId are required"],
+      validation_errors: ["workspaceId is required"],
+    };
+  }
+  if (!input.ownerUserId && !input.ownerWorkspaceId) {
+    return {
+      ok: false,
+      error: "validation_failed",
+      validation_errors: [
+        "at least one of ownerUserId or ownerWorkspaceId must be provided",
+      ],
     };
   }
 
@@ -263,31 +329,51 @@ export async function detachWorkspaceFromAgency(input: {
     };
   }
 
-  // Allow the workspace owner OR the agency owner to detach. Anyone
-  // else: rejected.
-  if (workspace.ownerId && workspace.ownerId !== input.ownerUserId) {
-    if (workspace.parentAgencyId) {
-      const [agency] = await db
-        .select({ ownerUserId: partnerAgencies.ownerUserId })
-        .from(partnerAgencies)
-        .where(eq(partnerAgencies.id, workspace.parentAgencyId))
-        .limit(1);
-      if (!agency || agency.ownerUserId !== input.ownerUserId) {
-        return {
-          ok: false,
-          error: "not_authorized",
-          validation_errors: [
-            "caller is neither the workspace owner nor the agency owner",
-          ],
-        };
-      }
-    } else {
-      return {
-        ok: false,
-        error: "not_workspace_owner",
-        validation_errors: ["caller does not own the workspace"],
-      };
+  // v1.19 polymorphic ownership: allow detach when ANY of these match:
+  //   - caller's userId matches workspace.ownerId (claimed workspace, human owner)
+  //   - caller's workspaceId equals workspace.id and workspace.ownerId is null
+  //     (anonymous-workspace-as-actor owning itself)
+  //   - caller's userId matches the agency owner's userId
+  //   - caller's workspaceId matches the agency owner's workspaceId
+  const ownsWorkspaceByUserId =
+    workspace.ownerId != null &&
+    input.ownerUserId != null &&
+    workspace.ownerId === input.ownerUserId;
+  const ownsWorkspaceBySelf =
+    workspace.ownerId == null &&
+    input.ownerWorkspaceId != null &&
+    input.ownerWorkspaceId === input.workspaceId;
+
+  let isAuthorized = ownsWorkspaceByUserId || ownsWorkspaceBySelf;
+
+  if (!isAuthorized && workspace.parentAgencyId) {
+    const [agency] = await db
+      .select({
+        ownerUserId: partnerAgencies.ownerUserId,
+        ownerWorkspaceId: partnerAgencies.ownerWorkspaceId,
+      })
+      .from(partnerAgencies)
+      .where(eq(partnerAgencies.id, workspace.parentAgencyId))
+      .limit(1);
+    if (agency) {
+      const matchesAgencyByUser =
+        input.ownerUserId != null &&
+        agency.ownerUserId === input.ownerUserId;
+      const matchesAgencyByWorkspace =
+        input.ownerWorkspaceId != null &&
+        agency.ownerWorkspaceId === input.ownerWorkspaceId;
+      isAuthorized = matchesAgencyByUser || matchesAgencyByWorkspace;
     }
+  }
+
+  if (!isAuthorized) {
+    return {
+      ok: false,
+      error: "not_authorized",
+      validation_errors: [
+        "caller is neither the workspace owner nor the agency owner",
+      ],
+    };
   }
 
   await db
