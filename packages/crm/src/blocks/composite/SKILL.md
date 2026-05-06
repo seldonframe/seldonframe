@@ -276,3 +276,88 @@ Where possible, embed workspace data via `kind: "embed"` rather than copy-pastin
 - ❌ Don't try to recreate a navbar / footer with composite. Those are page-chrome, not sections.
 - ❌ Don't hardcode the workspace's phone, services, or FAQ inside text/list items if you can use `embed` instead. Embeds stay live as the soul evolves.
 - ❌ Don't generate generic copy. Pull from the soul (business name, services, voice). If the soul is sparse, ask the operator before generating filler.
+- ❌ **Don't add a duplicate of an existing composite section.** Before `add_composite_section`, run `get_landing_structure` (or `get_portal_structure` for portal). If you find a section with a similar headline / similar children to what the operator just asked for, ASK FIRST whether they want to ADD ANOTHER (rare) or REPLACE the existing one (common — use `update_composite_section` / `update_portal_section` instead). The smoke-test playbook is "if it looks like the operator already has this, confirm before duplicating."
+
+---
+
+## Portal surface (v1.15+)
+
+Composite trees ALSO render on the customer portal. Same vocabulary, plus 5 per-customer `embed.ref` values:
+
+| ref | renders as |
+|---|---|
+| `customer.contact_info` | name + email + phone (clickable mailto/tel) |
+| `customer.next_appointment` | upcoming booking card (title + datetime + location) — empty placeholder if none |
+| `customer.recent_appointments` | list of past appointments (title + date + status) |
+| `customer.documents` | list of download links to portal_documents shared with this customer |
+| `customer.deals` | list of active deals/jobs (title + stage + value) |
+
+Use the **portal** tools to manage the template — `get_portal_structure / add_portal_section / update_portal_section / move_portal_section / delete_portal_section`. The template is stored ONCE on the workspace; every customer sees their own data through it. Use `preview_portal({ workspace_id, contact_id })` to render the template against a real contact for visual verification.
+
+### Portal patterns
+
+**WELCOME** (top-of-portal greeting + contact summary):
+```json
+{
+  "kind": "section",
+  "headline": "Welcome back",
+  "children": [
+    { "kind": "text", "text": "Here's what's happening with your account." },
+    { "kind": "embed", "ref": "customer.contact_info" }
+  ]
+}
+```
+
+**NEXT VISIT** (upcoming-appointment card with rebook fallback):
+```json
+{
+  "kind": "section",
+  "eyebrow": "Coming up",
+  "headline": "Your next visit",
+  "children": [
+    { "kind": "embed", "ref": "customer.next_appointment" },
+    { "kind": "spacer", "size": "sm" },
+    { "kind": "button", "label": "Book another visit", "action": { "kind": "book" } }
+  ]
+}
+```
+
+**DOCS + DEALS SIDE-BY-SIDE**:
+```json
+{
+  "kind": "section",
+  "headline": "Your activity",
+  "children": [{
+    "kind": "row",
+    "cols": 2,
+    "children": [
+      {
+        "kind": "card",
+        "children": [
+          { "kind": "heading", "level": 3, "text": "Shared documents" },
+          { "kind": "embed", "ref": "customer.documents" }
+        ]
+      },
+      {
+        "kind": "card",
+        "children": [
+          { "kind": "heading", "level": 3, "text": "Active jobs" },
+          { "kind": "embed", "ref": "customer.deals" }
+        ]
+      }
+    ]
+  }]
+}
+```
+
+### Portal voice + scope
+
+- Address the customer directly: "Your next visit," "Your documents." NOT "the customer's appointments."
+- Use the workspace's voice (warm/clinical/etc.) but shift to second person.
+- Don't over-show. A portal with 3 sections (welcome / next visit / documents) is usually right. >5 sections feels cluttered.
+- The workspace `embed.ref` values (`services`, `faq`, `hours`, `phone`) STILL work in portal sections — useful for "Need help? Call us" callouts. But customer.* should dominate.
+
+### Anti-patterns specific to portal
+
+- ❌ Don't reveal data that doesn't belong to THIS customer. The customer.* embeds are auth-scoped server-side; trying to construct a "all customers" embed manually would be a leak. Stick to the embed refs.
+- ❌ Don't put workspace-marketing content on the portal. The portal is for an authenticated customer's account view, not the home page.

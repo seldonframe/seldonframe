@@ -96,7 +96,26 @@ const StatSchema = z.object({
 
 const EmbedSchema = z.object({
   kind: z.literal("embed"),
-  ref: z.enum(["services", "faq", "testimonials", "hours", "phone"]),
+  // Workspace-data refs (rendered against CompositeRenderContext on
+  // any surface) AND customer-data refs (rendered against
+  // CustomerRenderContext on the portal surface). The renderer
+  // gracefully degrades when a ref's data isn't in scope (e.g.
+  // customer.* embeds rendered with workspace-only context show as
+  // "data not available" placeholders rather than crashing).
+  ref: z.enum([
+    // Workspace-data (any surface)
+    "services",
+    "faq",
+    "testimonials",
+    "hours",
+    "phone",
+    // Customer-data (portal surface, v1.15+)
+    "customer.next_appointment",
+    "customer.recent_appointments",
+    "customer.documents",
+    "customer.deals",
+    "customer.contact_info",
+  ]),
 });
 
 const DividerSchema = z.object({

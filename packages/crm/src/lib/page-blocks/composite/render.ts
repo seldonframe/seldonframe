@@ -219,7 +219,81 @@ function renderEmbed(
   node: Extract<CompositeNode, { kind: "embed" }>,
   ctx: CompositeRenderContext,
 ): string {
+  // v1.15 — customer.* refs require a CustomerRenderContext. We
+  // duck-type by checking for the customer field; if absent, emit
+  // a permissive empty placeholder ("data not available in this
+  // context") rather than crashing. This lets composite trees with
+  // customer.* embeds preview-render with workspace-only context
+  // (e.g. operator inspecting a template before binding to a real
+  // customer).
+  const customerCtx = ctx as CompositeRenderContext &
+    Partial<{
+      customer: { id: string; first_name: string; last_name: string; email: string; phone: string | null };
+      next_appointment: { id: string; title: string; starts_at_iso: string; starts_at_display: string; location_summary: string } | null;
+      recent_appointments: Array<{ id: string; title: string; starts_at_display: string; status: string }>;
+      documents: Array<{ id: string; file_name: string; blob_url: string; uploaded_at_display: string }>;
+      deals: Array<{ id: string; title: string; stage: string; value_display: string }>;
+    }>;
+
   switch (node.ref) {
+    case "customer.contact_info": {
+      const c = customerCtx.customer;
+      if (!c) return `<div class="sf-cmp-embed-empty">customer info — not in scope</div>`;
+      const phoneTel = c.phone ? `<a href="tel:${escapeAttr(c.phone)}">${escapeHtml(c.phone)}</a>` : "";
+      return (
+        `<div class="sf-cmp-embed sf-cmp-embed-customer-info">` +
+        `<div class="sf-cmp-embed-customer-name">${escapeHtml(`${c.first_name}${c.last_name ? " " + c.last_name : ""}`.trim() || "Customer")}</div>` +
+        `<div class="sf-cmp-embed-customer-email"><a href="mailto:${escapeAttr(c.email)}">${escapeHtml(c.email)}</a></div>` +
+        (phoneTel ? `<div class="sf-cmp-embed-customer-phone">${phoneTel}</div>` : "") +
+        `</div>`
+      );
+    }
+    case "customer.next_appointment": {
+      const a = customerCtx.next_appointment;
+      if (!a) {
+        return `<div class="sf-cmp-embed-empty">No upcoming appointments</div>`;
+      }
+      return (
+        `<div class="sf-cmp-embed sf-cmp-embed-next-appointment">` +
+        `<div class="sf-cmp-embed-appointment-title">${escapeHtml(a.title)}</div>` +
+        `<div class="sf-cmp-embed-appointment-time">${escapeHtml(a.starts_at_display)}</div>` +
+        (a.location_summary ? `<div class="sf-cmp-embed-appointment-location">${escapeHtml(a.location_summary)}</div>` : "") +
+        `</div>`
+      );
+    }
+    case "customer.recent_appointments": {
+      const list = customerCtx.recent_appointments ?? [];
+      if (!list.length) return `<div class="sf-cmp-embed-empty">No recent appointments yet</div>`;
+      const items = list
+        .map(
+          (a) =>
+            `<li class="sf-cmp-list-item"><strong>${escapeHtml(a.title)}</strong> — ${escapeHtml(a.starts_at_display)} <span class="sf-cmp-embed-appointment-status">(${escapeHtml(a.status)})</span></li>`,
+        )
+        .join("");
+      return `<ul class="sf-cmp-list sf-cmp-embed-recent-appointments">${items}</ul>`;
+    }
+    case "customer.documents": {
+      const list = customerCtx.documents ?? [];
+      if (!list.length) return `<div class="sf-cmp-embed-empty">No documents shared yet</div>`;
+      const items = list
+        .map(
+          (d) =>
+            `<li class="sf-cmp-list-item"><a class="sf-cmp-embed-document-link" href="${escapeAttr(d.blob_url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(d.file_name)}</a> <span class="sf-cmp-embed-document-meta">— ${escapeHtml(d.uploaded_at_display)}</span></li>`,
+        )
+        .join("");
+      return `<ul class="sf-cmp-list sf-cmp-embed-documents">${items}</ul>`;
+    }
+    case "customer.deals": {
+      const list = customerCtx.deals ?? [];
+      if (!list.length) return `<div class="sf-cmp-embed-empty">No active deals</div>`;
+      const items = list
+        .map(
+          (d) =>
+            `<li class="sf-cmp-list-item"><strong>${escapeHtml(d.title)}</strong> — ${escapeHtml(d.stage)} <span class="sf-cmp-embed-deal-value">${escapeHtml(d.value_display)}</span></li>`,
+        )
+        .join("");
+      return `<ul class="sf-cmp-list sf-cmp-embed-deals">${items}</ul>`;
+    }
     case "phone": {
       const display = ctx.workspace_phone_display || ctx.workspace_phone;
       if (!display) return `<span class="sf-cmp-embed-empty">phone — not set</span>`;

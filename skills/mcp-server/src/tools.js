@@ -3179,6 +3179,176 @@ export const TOOLS = [
     },
   },
 
+  // ─── v1.15.0 — portal-template structural primitives ────────────────────
+  //
+  // Composite trees on the customer portal surface, with per-customer
+  // embed refs (customer.next_appointment, customer.documents,
+  // customer.deals, customer.contact_info, customer.recent_appointments).
+  // Same primitive vocabulary as landing — just rendered against a per-
+  // customer CustomerRenderContext at request time. Template is stored
+  // once on the workspace; every customer sees their own data through it.
+  //
+  // Operators define the template once via add/update/move/delete.
+  // The customer-facing portal route renders the template against
+  // each customer's context. preview_portal renders it server-side
+  // for visual inspection against any contact.
+
+  {
+    name: "get_portal_structure",
+    description:
+      "Read the workspace's portal template — indexed list of composite-tree sections with previews. Use BEFORE add_portal_section / update_portal_section / move_portal_section / delete_portal_section to find the right index. Empty templates are valid (the portal just shows built-in tabs without a Custom tab).",
+    inputSchema: obj(
+      { workspace_id: str("Workspace id.") },
+      ["workspace_id"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("GET", "/workspace/v2/portal/structure", {
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
+  {
+    name: "add_portal_section",
+    description:
+      "Add a composite-tree section to the workspace's portal template. The template renders on every customer's portal — same composite primitive vocabulary as landing (12 node kinds), PLUS 5 customer.* embed refs that pull per-customer data: " +
+      "customer.contact_info (name + email + phone), customer.next_appointment (upcoming booking card), customer.recent_appointments (history list), customer.documents (download links), customer.deals (active jobs/deals). " +
+      "Read get_block_skill('composite') for the primitive vocabulary + voice rules. Tree root MUST be kind=section. Validation runs (Zod + structural rules + voice scan) same as add_composite_section. " +
+      "Typical patterns: WELCOME = section { headline: 'Welcome back', children: [text + customer.contact_info] }. NEXT-APPOINTMENT = section { headline: 'Your next visit', children: [embed: customer.next_appointment, button: book] }. DOCS = section { headline: 'Your documents', children: [embed: customer.documents] }. " +
+      "Position is optional — defaults to appending. Use get_portal_structure first if you want to insert between specific sections.",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id."),
+        tree: {
+          type: "object",
+          description:
+            "Composite tree root (kind=section with optional eyebrow/headline/subhead and children). See get_block_skill('composite') for the primitive vocabulary. Customer.* embed refs are valid here.",
+          additionalProperties: true,
+        },
+        position: {
+          type: "integer",
+          description:
+            "Optional 0-based insert position. Default: append at the end.",
+          minimum: 0,
+        },
+      },
+      ["workspace_id", "tree"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/workspace/v2/portal/section", {
+        body: {
+          workspace_id: ws,
+          op: "add",
+          tree: args.tree,
+          position: args.position,
+        },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
+  {
+    name: "update_portal_section",
+    description:
+      "Replace the tree of an existing portal-template section. Use to refine ('shorten the welcome', 'add a CTA to the documents section'). Index must exist. Validation runs same as add_portal_section.",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id."),
+        index: { type: "integer", description: "0-based index of the portal section to replace.", minimum: 0 },
+        tree: {
+          type: "object",
+          description: "Replacement tree. Same shape as add_portal_section.",
+          additionalProperties: true,
+        },
+      },
+      ["workspace_id", "index", "tree"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/workspace/v2/portal/section", {
+        body: {
+          workspace_id: ws,
+          op: "update",
+          tree: args.tree,
+          index: args.index,
+        },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
+  {
+    name: "move_portal_section",
+    description:
+      "Move ONE portal-template section atomically. Splice semantics: section at from_index removed, then inserted at to_index in the result.",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id."),
+        from_index: { type: "integer", description: "0-based source index.", minimum: 0 },
+        to_index: { type: "integer", description: "0-based target index in the result.", minimum: 0 },
+      },
+      ["workspace_id", "from_index", "to_index"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/workspace/v2/portal/section", {
+        body: {
+          workspace_id: ws,
+          op: "move",
+          from_index: args.from_index,
+          to_index: args.to_index,
+        },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
+  {
+    name: "delete_portal_section",
+    description:
+      "Remove ONE portal-template section. UNLIKE landing's delete_section, leaving 0 portal sections is valid — the portal just shows built-in tabs (Documents, Bookings) without a Custom tab.",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id."),
+        index: { type: "integer", description: "0-based index to delete.", minimum: 0 },
+      },
+      ["workspace_id", "index"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/workspace/v2/portal/section", {
+        body: { workspace_id: ws, op: "delete", index: args.index },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
+  {
+    name: "preview_portal",
+    description:
+      "Render the workspace's portal template against a SPECIFIC contact's data. Returns HTML + CSS so you can visually verify the template before customers see it. Pass contact_id of any contact in the workspace; if the id doesn't belong to this workspace, you get a 404. Use after add_portal_section / update_portal_section to confirm the per-customer embeds resolve correctly with real data.",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id."),
+        contact_id: str("Contact id of an existing customer in this workspace. Use list_contacts to discover ids."),
+      },
+      ["workspace_id", "contact_id"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const path = `/workspace/v2/portal/preview?contact_id=${encodeURIComponent(args.contact_id)}`;
+      const result = await api("GET", path, { workspace_id: ws });
+      return result;
+    },
+  },
+
   {
     name: "reorder_landing_sections",
     description:
