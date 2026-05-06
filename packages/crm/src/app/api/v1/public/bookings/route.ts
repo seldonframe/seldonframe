@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { submitPublicBookingAction } from "@/lib/bookings/actions";
-import { resolveWorkspaceSlugFromRequest } from "@/lib/workspace/host-to-slug";
+import {
+  resolveWorkspaceSlugFromRequest,
+  resolveWorkspaceSlugFromRequestWithCustomDomains,
+} from "@/lib/workspace/host-to-slug";
 
 /**
  * POST /api/v1/public/bookings
@@ -74,18 +77,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  // v1.3.5 — orgSlug resolution is body-FIRST, host-FALLBACK.
-  // The C4 vanilla-JS client extracts orgSlug from window.location.pathname,
-  // expecting /book/<slug>/<bookingSlug>. On a workspace subdomain
-  // (<slug>.app.seldonframe.com) the proxy.ts middleware REWRITES /book to
-  // /book/<slug>/default server-side — the browser URL stays /book, so the
-  // client sees no slug in the path and posts orgSlug="". Result: every
-  // visitor on every subdomain hit "missing_required_field" 400. The body
-  // value still wins when present (lets the path-based /book/<slug>/<x>
-  // flow keep working unchanged); the host derivation is the safety net.
+  // v1.3.5 — orgSlug resolution is body-FIRST, host-FALLBACK for the
+  // <slug>.app.seldonframe.com case.
+  //
+  // v1.16.2 — custom-domain override. On a custom domain (e.g.
+  // hvac.tirionforge.com) the C4 client falls back to
+  // hostname.split('.')[0] which yields "hvac" — wrong, the real
+  // workspace slug is `cypress-pine-hvac`. The host-fallback for
+  // <slug>.app.seldonframe.com returns null on custom domains. So
+  // we add a workspace_domains lookup: if the host matches a
+  // verified custom domain, we resolve the canonical slug and PREFER
+  // it over the body's value (the body is whatever the client guessed).
   const bodyOrgSlug = typeof body.orgSlug === "string" ? body.orgSlug.trim() : "";
-  const hostOrgSlug = bodyOrgSlug ? null : resolveWorkspaceSlugFromRequest(request);
-  const orgSlug = bodyOrgSlug || hostOrgSlug || "";
+  const customDomainSlug = await resolveWorkspaceSlugFromRequestWithCustomDomains(request);
+  const subdomainSlug = customDomainSlug ? null : resolveWorkspaceSlugFromRequest(request);
+  // Order of preference:
+  //   1. customDomainSlug (host says "this is workspace X via verified custom domain")
+  //   2. bodyOrgSlug (operator-supplied, trusted on standard domains)
+  //   3. subdomainSlug (fallback when body is missing on subdomains)
+  const orgSlug = customDomainSlug || bodyOrgSlug || subdomainSlug || "";
   const bookingSlug =
     typeof body.bookingSlug === "string" && body.bookingSlug.trim().length > 0
       ? body.bookingSlug.trim()
@@ -150,7 +160,11 @@ export async function POST(request: Request) {
         // the body would have missed. If this stays at 100% we can
         // simplify by dropping body.orgSlug entirely; if it stays at 0%
         // we know the C4 client patch is doing its job.
-        slug_source: bodyOrgSlug ? "body" : "host",
+        slug_source: customDomainSlug
+          ? "custom_domain"
+          : bodyOrgSlug
+            ? "body"
+            : "subdomain_fallback",
       }),
     );
     return NextResponse.json({

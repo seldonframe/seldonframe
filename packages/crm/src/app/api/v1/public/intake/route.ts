@@ -5,7 +5,10 @@ import { contacts, intakeForms, intakeSubmissions, organizations } from "@/db/sc
 import type { IntakeFormField } from "@/db/schema/intake-forms";
 import { enforceContactLimit } from "@/lib/billing/limits";
 import { emitSeldonEvent } from "@/lib/events/bus";
-import { resolveWorkspaceSlugFromRequest } from "@/lib/workspace/host-to-slug";
+import {
+  resolveWorkspaceSlugFromRequest,
+  resolveWorkspaceSlugFromRequestWithCustomDomains,
+} from "@/lib/workspace/host-to-slug";
 
 /**
  * POST /api/v1/public/intake
@@ -51,16 +54,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  // v1.3.5 — orgSlug resolution is body-FIRST, host-FALLBACK. Same
-  // failure mode as the booking route: the C5 intake client extracts
-  // orgSlug from window.location.pathname, but on a workspace
-  // subdomain the proxy rewrites /intake → /forms/<slug>/intake
-  // server-side and the browser URL stays /intake — slug invisible to
-  // the client. The body value still wins when present so any client
-  // that DOES include it keeps working unchanged.
+  // v1.3.5 — orgSlug resolution: body-FIRST, host-FALLBACK on the
+  // <slug>.app.seldonframe.com case.
+  // v1.16.2 — custom-domain override. On a custom domain the C5
+  // client falls back to hostname.split('.')[0] which yields the
+  // wrong segment (e.g. "hvac" instead of "cypress-pine-hvac"). When
+  // the host is a verified custom domain in workspace_domains, we
+  // resolve the canonical slug and PREFER it over body's value.
   const bodyOrgSlug = typeof body.orgSlug === "string" ? body.orgSlug.trim() : "";
-  const hostOrgSlug = bodyOrgSlug ? null : resolveWorkspaceSlugFromRequest(request);
-  const orgSlug = bodyOrgSlug || hostOrgSlug || "";
+  const customDomainSlug = await resolveWorkspaceSlugFromRequestWithCustomDomains(request);
+  const subdomainSlug = customDomainSlug ? null : resolveWorkspaceSlugFromRequest(request);
+  const orgSlug = customDomainSlug || bodyOrgSlug || subdomainSlug || "";
   const formSlug =
     typeof body.formSlug === "string" && body.formSlug.trim().length > 0
       ? body.formSlug.trim()

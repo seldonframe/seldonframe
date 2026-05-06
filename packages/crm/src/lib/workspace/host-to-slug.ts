@@ -89,3 +89,55 @@ export function resolveWorkspaceSlugFromRequest(
   const candidate = forwarded?.split(",")[0]?.trim() || request.headers.get("host");
   return resolveWorkspaceSlugFromHostHeader(candidate);
 }
+
+/**
+ * v1.16.2 — host → slug resolution that also handles CUSTOM DOMAINS.
+ *
+ * The original `resolveWorkspaceSlugFromHostHeader` only knows about
+ * the `<slug>.app.seldonframe.com` shape. When a workspace registers
+ * a custom domain (v1.8 — e.g. hvac.tirionforge.com), the host doesn't
+ * match the base-domain suffix and the helper returns null.
+ *
+ * The C4 booking client also has a host-fallback that splits the
+ * hostname on dots and takes the first segment as the slug. On a
+ * custom domain `hvac.tirionforge.com`, that fallback yields "hvac"
+ * — wrong (the actual workspace slug is `cypress-pine-hvac`).
+ *
+ * This helper closes the gap: if the standard subdomain path returns
+ * null, we look up `workspace_domains` by the full hostname. If found,
+ * we resolve the workspace and return its slug. The result becomes
+ * the canonical "the host says this is workspace X" answer — and the
+ * caller should PREFER it over any body-supplied orgSlug, since the
+ * body's value is whatever the client guessed from the URL.
+ */
+export async function resolveWorkspaceSlugFromRequestWithCustomDomains(
+  request: Request,
+): Promise<string | null> {
+  // Fast path: subdomain resolution (no DB call).
+  const subdomainSlug = resolveWorkspaceSlugFromRequest(request);
+  if (subdomainSlug) return subdomainSlug;
+
+  // Slow path: custom-domain lookup. Pull the host as-is, query
+  // workspace_domains for a verified row, then look up the org's slug.
+  const forwarded = request.headers.get("x-forwarded-host");
+  const candidate = forwarded?.split(",")[0]?.trim() || request.headers.get("host");
+  if (!candidate) return null;
+  const normalized = candidate.trim().toLowerCase().replace(/:\d+$/, "");
+  if (!normalized) return null;
+
+  // Lazy-import so this module stays importable from edge contexts
+  // that don't need the DB path (e.g. proxy.ts uses the sync helper).
+  const { resolveWorkspaceForCustomDomain } = await import("@/lib/domains/store");
+  const match = await resolveWorkspaceForCustomDomain(normalized);
+  if (!match) return null;
+
+  const { db } = await import("@/db");
+  const { organizations } = await import("@/db/schema");
+  const { eq } = await import("drizzle-orm");
+  const [row] = await db
+    .select({ slug: organizations.slug })
+    .from(organizations)
+    .where(eq(organizations.id, match.workspace_id))
+    .limit(1);
+  return row?.slug ?? null;
+}
