@@ -22,13 +22,32 @@ function readRemovePoweredBy(rawSettings: unknown) {
 
 export async function shouldShowPoweredByBadgeForOrg(orgId: string) {
   const [org] = await db
-    .select({ ownerId: organizations.ownerId, plan: organizations.plan, settings: organizations.settings })
+    .select({
+      ownerId: organizations.ownerId,
+      plan: organizations.plan,
+      settings: organizations.settings,
+      // v1.17 — partner-agency override.
+      parentAgencyId: organizations.parentAgencyId,
+    })
     .from(organizations)
     .where(eq(organizations.id, orgId))
     .limit(1);
 
   if (!org) {
     return true;
+  }
+
+  // v1.17 — when the workspace is attached to an active agency that
+  // opted to hide the badge, suppress it regardless of the workspace's
+  // own plan. The agency owns the chrome on this surface.
+  if (org.parentAgencyId) {
+    const { getEffectiveBrandingForWorkspace } = await import(
+      "@/lib/partner-agencies/branding"
+    );
+    const branding = await getEffectiveBrandingForWorkspace(orgId);
+    if (branding.is_white_label && !branding.show_powered_by_badge) {
+      return false;
+    }
   }
 
   const [owner] = org.ownerId

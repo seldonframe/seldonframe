@@ -3349,6 +3349,116 @@ export const TOOLS = [
     },
   },
 
+  // ─── v1.17.0 — partner-agency tools (white-label CRM resellers) ─────────
+  //
+  // Layer-1 in the SF/Agency/Workspace/Customer hierarchy. An agency
+  // is a SeldonFrame-paying entity that resells Business OS to SMBs;
+  // each SMB gets its own workspace, but the chrome (logo, colors,
+  // sender, support pointers) shows the AGENCY's brand instead of
+  // SeldonFrame's. Plan-gated: Scale tier ($99) or higher.
+  //
+  // v1.17 ships the foundational primitives (register agency + attach
+  // / detach workspaces). v1.18 adds verified-sender email branding.
+  // v1.19 adds management tools (list_my_agencies, update_agency).
+  // v1.20 adds the agency's own custom domain.
+
+  {
+    name: "register_partner_agency",
+    description:
+      "Register a partner agency. Used by Scale-tier customers who resell SeldonFrame's Business OS to SMBs (HVAC contractors, dentists, lawyers, realtors) under their OWN brand. Once registered, the agency can attach client workspaces via attach_workspace_to_agency; those workspaces will show the agency's logo / colors / support links instead of SeldonFrame's. " +
+      "Plan gate: at least one workspace owned by the caller must be on Scale tier; otherwise the agency is created in 'pending' status and chrome substitution doesn't activate until the upgrade lands. " +
+      "Provide name (required) + slug (auto-derived from name if omitted). Optional: logo_url (uploaded image URL), primary_color / accent_color (hex like #5b21b6), support_email + support_url (where the agency's clients go for help — these REPLACE SeldonFrame's docs/Discord pointers in client chrome), hide_powered_by_badge (true to suppress the 'Powered by SeldonFrame' footer on clients' public pages — Scale-tier perk).",
+    inputSchema: obj(
+      {
+        workspace_id: str(
+          "Workspace id (any workspace owned by the caller — used to resolve the owning user for the new agency).",
+        ),
+        name: str("Agency display name (e.g. 'Acme AI'). 2+ chars."),
+        slug: str(
+          "Optional URL-safe slug. Default: derived from name. Must be unique among non-archived agencies.",
+        ),
+        logo_url: str("Optional logo URL (https://...). Use upload_workspace_image to host one if needed."),
+        primary_color: str("Optional hex color like #5b21b6."),
+        accent_color: str("Optional hex color like #a78bfa."),
+        support_email: str("Optional. Where the agency's clients email for help."),
+        support_url: str("Optional. Where the agency's clients click for docs/help."),
+        hide_powered_by_badge: {
+          type: "boolean",
+          description:
+            "Hide the 'Powered by SeldonFrame' footer on the agency's clients' public landing pages. Scale-tier feature.",
+        },
+      },
+      ["workspace_id", "name"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/partner-agencies", {
+        body: {
+          op: "register",
+          name: args.name,
+          slug: args.slug,
+          logo_url: args.logo_url,
+          primary_color: args.primary_color,
+          accent_color: args.accent_color,
+          support_email: args.support_email,
+          support_url: args.support_url,
+          hide_powered_by_badge: args.hide_powered_by_badge,
+        },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
+  {
+    name: "attach_workspace_to_agency",
+    description:
+      "Attach a workspace to a partner agency. The workspace's chrome (admin dashboard logo, public landing footer, customer portal branding) flips to the agency's brand. Caller must own BOTH the agency and the workspace. Agency must be in 'active' status (not pending — register first, upgrade if needed).",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id (the bearer's workspace; also the workspace to attach)."),
+        target_workspace_id: str(
+          "Workspace id of the workspace you want to attach to the agency. Often this is the SAME as workspace_id (the workspace running the MCP); for an agency operator with multiple client workspaces, this is the specific client's workspace_id.",
+        ),
+        agency_id: str("Agency id from register_partner_agency."),
+      },
+      ["workspace_id", "target_workspace_id", "agency_id"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/partner-agencies", {
+        body: {
+          op: "attach",
+          workspace_id: args.target_workspace_id,
+          agency_id: args.agency_id,
+        },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
+  {
+    name: "detach_workspace_from_agency",
+    description:
+      "Detach a workspace from its current agency. Chrome falls back to SeldonFrame defaults on next render. Either the workspace owner OR the agency owner can detach.",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id (the bearer's workspace)."),
+        target_workspace_id: str("Workspace id to detach (often the same as workspace_id)."),
+      },
+      ["workspace_id", "target_workspace_id"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/partner-agencies", {
+        body: { op: "detach", workspace_id: args.target_workspace_id },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
   {
     name: "reorder_landing_sections",
     description:

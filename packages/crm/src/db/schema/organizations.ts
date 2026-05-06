@@ -95,6 +95,14 @@ export const organizations = pgTable("organizations", {
   // convention of `plan`, `timezone`, `soulCompletedAt`. Default false
   // so existing workspaces never accidentally route to sandbox.
   testMode: boolean("test_mode").notNull().default(false),
+  // v1.17.0 — white-label hierarchy. When set, the workspace inherits
+  // its chrome (logo, colors, sender, support links) from the parent
+  // agency. NULL = default SeldonFrame branding (existing behavior).
+  // Foreign key to partner_agencies(id) added via the 0040 migration;
+  // not declared here to avoid a circular import (partner_agencies
+  // references users, organizations references partner_agencies via
+  // FK constraint at the SQL layer only).
+  parentAgencyId: uuid("parent_agency_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

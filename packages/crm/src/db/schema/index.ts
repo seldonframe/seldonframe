@@ -82,3 +82,7 @@ export * from "./device-auth-requests";
 // v1.8.0 — workspace_domains: custom hostnames for paying tiers,
 // registered through Vercel Domains API.
 export * from "./workspace-domains";
+// v1.17.0 — partner_agencies: white-label CRM resellers (Layer 1
+// in the SF/Agency/Workspace/Customer hierarchy). organizations
+// gains a parent_agency_id FK (added in the 0040 migration).
+export * from "./partner-agencies";
