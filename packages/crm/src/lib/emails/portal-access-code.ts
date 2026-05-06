@@ -24,6 +24,12 @@ export interface PortalAccessCodeEmailRequest {
   code: string;
   /** Minutes until the code expires (display only). */
   expiresInMinutes: number;
+  /** v1.18 — partner-agency branding overrides. NULL = SeldonFrame
+   *  defaults (existing behavior). When set, the agency's brand
+   *  replaces SF in subject + footer. */
+  brandName?: string | null;
+  logoUrl?: string | null;
+  supportUrl?: string | null;
 }
 
 export interface PortalAccessCodeEmailDeps {
@@ -62,6 +68,12 @@ function escapeHtml(value: string): string {
 }
 
 export function portalAccessCodeEmailSubject(req: PortalAccessCodeEmailRequest): string {
+  // v1.18 — when an agency brand is provided, address the customer
+  // with the agency's name + the workspace name. Otherwise plain
+  // workspace-name subject (existing behavior).
+  if (req.brandName) {
+    return `Your ${req.workspaceName} sign-in code: ${req.code}`;
+  }
   return `Your ${req.workspaceName} sign-in code: ${req.code}`;
 }
 
@@ -90,16 +102,33 @@ export function renderPortalAccessCodeEmailHtml(
 <p style="margin:0 0 8px;color:#666;font-size:13px;">This code expires in ${req.expiresInMinutes} minutes. If you didn't request it, you can safely ignore this email.</p>
 </td></tr>
 </table>
-<p style="margin:16px 0 0;color:#999;font-size:12px;">${safeWorkspace} on SeldonFrame · <a href="https://seldonframe.com" style="color:#666;">seldonframe.com</a></p>
+${renderFooter(req)}
 </td></tr>
 </table>
 </body>
 </html>`;
 }
 
+function renderFooter(req: PortalAccessCodeEmailRequest): string {
+  const safeWorkspace = escapeHtml(req.workspaceName);
+  // v1.18 — if branded by a partner agency, replace "SeldonFrame"
+  // with the agency name + link. Falls back to SF defaults.
+  if (req.brandName) {
+    const safeBrand = escapeHtml(req.brandName);
+    const supportUrl = req.supportUrl
+      ? escapeHtml(req.supportUrl)
+      : "https://seldonframe.com";
+    return `<p style="margin:16px 0 0;color:#999;font-size:12px;">${safeWorkspace} on ${safeBrand} · <a href="${supportUrl}" style="color:#666;">${escapeHtml(req.supportUrl ?? "")}</a></p>`;
+  }
+  return `<p style="margin:16px 0 0;color:#999;font-size:12px;">${safeWorkspace} on SeldonFrame · <a href="https://seldonframe.com" style="color:#666;">seldonframe.com</a></p>`;
+}
+
 export function renderPortalAccessCodeEmailText(
   req: PortalAccessCodeEmailRequest,
 ): string {
+  const platformLine = req.brandName
+    ? `— ${req.workspaceName} on ${req.brandName}`
+    : `— ${req.workspaceName} on SeldonFrame`;
   return [
     `Sign in to ${req.workspaceName}`,
     "",
@@ -111,7 +140,7 @@ export function renderPortalAccessCodeEmailText(
     "",
     `If you didn't request it, you can safely ignore this email.`,
     "",
-    `— ${req.workspaceName} on SeldonFrame`,
+    platformLine,
   ].join("\n");
 }
 

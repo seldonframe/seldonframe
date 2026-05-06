@@ -3459,6 +3459,65 @@ export const TOOLS = [
     },
   },
 
+  // ─── v1.18.0 — partner-agency sender domain (Resend) ────────────────────
+
+  {
+    name: "register_partner_agency_sender_domain",
+    description:
+      "Register a sender domain for a partner agency so the agency can send transactional emails (welcome, magic-link, portal-access-code) FROM their own domain instead of welcome@seldonframe.com. " +
+      "The SeldonFrame backend creates the domain in Resend (under our SF Resend account), and returns the DNS records (SPF, DKIM, MX) the agency must add at THEIR registrar. The agency does NOT need their own Resend account. " +
+      "The default sender_local_part is 'welcome' — final sender becomes welcome@<domain>. Override with sender_local_part='hello' to get hello@<domain>. " +
+      "After this call: the agency adds the DNS records, waits 5-60 min for propagation, then calls verify_partner_agency_sender_domain. Once Resend confirms verification, the agency's clients' transactional emails switch to the agency's sender automatically.",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id (the bearer's workspace; used to resolve owning user)."),
+        agency_id: str("Agency id from register_partner_agency."),
+        domain: str("Domain to send from (e.g. 'acmeai.com'). Without scheme. The agency must control DNS for this domain."),
+        sender_local_part: str(
+          "Optional local-part of the sender address (default: 'welcome'). Final sender becomes <local>@<domain>.",
+        ),
+      },
+      ["workspace_id", "agency_id", "domain"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/partner-agencies", {
+        body: {
+          op: "register_sender_domain",
+          agency_id: args.agency_id,
+          domain: args.domain,
+          sender_local_part: args.sender_local_part,
+        },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
+  {
+    name: "verify_partner_agency_sender_domain",
+    description:
+      "Trigger Resend's DNS verification for a partner agency's sender domain. Call this AFTER the agency has added the SPF/DKIM/MX records at their registrar. Returns the current verification status. When status flips to 'verified', the agency's verified_sender_at timestamp is set and chrome substitution kicks in for outbound emails on attached workspaces. Idempotent — safe to call repeatedly while DNS is propagating.",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id (the bearer's workspace)."),
+        agency_id: str("Agency id from register_partner_agency."),
+      },
+      ["workspace_id", "agency_id"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/partner-agencies", {
+        body: {
+          op: "verify_sender_domain",
+          agency_id: args.agency_id,
+        },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
   {
     name: "reorder_landing_sections",
     description:

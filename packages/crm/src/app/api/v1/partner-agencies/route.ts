@@ -21,6 +21,10 @@ import {
   attachWorkspaceToAgency,
   detachWorkspaceFromAgency,
 } from "@/lib/partner-agencies/store";
+import {
+  registerAgencySenderDomain,
+  verifyAgencySenderDomain,
+} from "@/lib/partner-agencies/sender-domain";
 
 type Body = {
   op?: unknown;
@@ -34,9 +38,18 @@ type Body = {
   hide_powered_by_badge?: unknown;
   workspace_id?: unknown;
   agency_id?: unknown;
+  // v1.18 — sender-domain ops
+  domain?: unknown;
+  sender_local_part?: unknown;
 };
 
-const VALID_OPS = ["register", "attach", "detach"] as const;
+const VALID_OPS = [
+  "register",
+  "attach",
+  "detach",
+  "register_sender_domain",
+  "verify_sender_domain",
+] as const;
 type Op = (typeof VALID_OPS)[number];
 
 export async function POST(request: Request) {
@@ -169,6 +182,73 @@ export async function POST(request: Request) {
     logEvent(
       "v17_attach_workspace_to_agency_succeeded",
       { workspace_id: result.workspace_id, agency_id: result.agency_id },
+      { request, orgId: guard.orgId, status: 200 },
+    );
+    return NextResponse.json(result, { status: 200 });
+  }
+
+  if (op === "register_sender_domain") {
+    if (typeof body.agency_id !== "string" || typeof body.domain !== "string") {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "missing_required_field",
+          required: ["agency_id", "domain"],
+        },
+        { status: 400 },
+      );
+    }
+    const result = await registerAgencySenderDomain({
+      agencyId: body.agency_id,
+      domain: body.domain.trim().toLowerCase(),
+      senderLocalPart:
+        typeof body.sender_local_part === "string"
+          ? body.sender_local_part
+          : undefined,
+      ownerUserId,
+    });
+    if (!result.ok) {
+      logEvent(
+        "v18_register_agency_sender_domain_failed",
+        { error: result.error, validation_errors: result.validation_errors },
+        { request, orgId: guard.orgId, status: 422, severity: "warn" },
+      );
+      return NextResponse.json(result, { status: 422 });
+    }
+    logEvent(
+      "v18_register_agency_sender_domain_succeeded",
+      { agency_id: body.agency_id, domain: result.domain },
+      { request, orgId: guard.orgId, status: 200 },
+    );
+    return NextResponse.json(result, { status: 200 });
+  }
+
+  if (op === "verify_sender_domain") {
+    if (typeof body.agency_id !== "string") {
+      return NextResponse.json(
+        { ok: false, error: "missing_required_field", required: ["agency_id"] },
+        { status: 400 },
+      );
+    }
+    const result = await verifyAgencySenderDomain({
+      agencyId: body.agency_id,
+      ownerUserId,
+    });
+    if (!result.ok) {
+      logEvent(
+        "v18_verify_agency_sender_domain_failed",
+        { error: result.error, validation_errors: result.validation_errors },
+        { request, orgId: guard.orgId, status: 422, severity: "warn" },
+      );
+      return NextResponse.json(result, { status: 422 });
+    }
+    logEvent(
+      "v18_verify_agency_sender_domain_succeeded",
+      {
+        agency_id: body.agency_id,
+        verified: result.verified,
+        status: result.status,
+      },
       { request, orgId: guard.orgId, status: 200 },
     );
     return NextResponse.json(result, { status: 200 });

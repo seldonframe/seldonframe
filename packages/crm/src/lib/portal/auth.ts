@@ -142,6 +142,12 @@ export async function requestPortalAccessCodeAction(orgSlug: string, email: stri
   // returns quickly even if Resend is slow; we log failures for ops.
   // Best-effort: any send failure is logged but doesn't change the
   // success response (still don't leak existence via timing/error).
+  //
+  // v1.18.0 — agency-branded sender + template. When the workspace
+  // is attached to an active agency with a verified sender, the
+  // email goes FROM the agency's domain + carries the agency's logo
+  // / brand name in the template. Falls back to SF defaults when no
+  // active agency is attached or the sender hasn't verified.
   try {
     const apiKey = process.env.RESEND_API_KEY?.trim() ?? "";
     if (!apiKey) {
@@ -149,13 +155,26 @@ export async function requestPortalAccessCodeAction(orgSlug: string, email: stri
         "[portal-access-code] RESEND_API_KEY not set — code persisted but not emailed",
       );
     } else {
-      const fromAddress = pickPortalAccessCodeFromAddress(process.env);
+      const { getEffectiveBrandingForWorkspace } = await import(
+        "@/lib/partner-agencies/branding"
+      );
+      const branding = await getEffectiveBrandingForWorkspace(org.id);
+      const fromAddress =
+        branding.sender_email_address
+          ? `${branding.brand_name} <${branding.sender_email_address}>`
+          : pickPortalAccessCodeFromAddress(process.env);
       const sendResult = await sendPortalAccessCodeEmail(
         {
           email,
           workspaceName: org.name,
           code,
           expiresInMinutes: 15,
+          // v1.18 — pass the agency's brand name so the email subject
+          // + footer say the agency's name when applicable. Defaults
+          // to "<workspaceName> on SeldonFrame" when no agency.
+          brandName: branding.is_white_label ? branding.brand_name : null,
+          logoUrl: branding.is_white_label ? branding.logo_url : null,
+          supportUrl: branding.support_url,
         },
         { apiKey, fromAddress },
       );
