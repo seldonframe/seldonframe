@@ -11,6 +11,10 @@ import { assertWritable } from "@/lib/demo/server";
 import { trackEvent } from "@/lib/analytics/track";
 import { PORTAL_SESSION_COOKIE, signPortalSession, verifyPortalSession } from "./session";
 import { checkPortalPlanGate } from "./plan-gate";
+import {
+  sendPortalAccessCodeEmail,
+  pickFromAddress as pickPortalAccessCodeFromAddress,
+} from "@/lib/emails/portal-access-code";
 
 function hashCode(code: string) {
   return crypto.createHash("sha256").update(code).digest("hex");
@@ -21,7 +25,14 @@ function generateCode() {
 }
 
 async function getOrgBySlug(orgSlug: string) {
-  const [org] = await db.select({ id: organizations.id }).from(organizations).where(eq(organizations.slug, orgSlug)).limit(1);
+  // v1.16.1 — also pull `name` so the portal-access-code email can
+  // address the customer with the workspace's brand name ("Sign in
+  // to Cypress & Pine HVAC") rather than a generic subject.
+  const [org] = await db
+    .select({ id: organizations.id, name: organizations.name })
+    .from(organizations)
+    .where(eq(organizations.slug, orgSlug))
+    .limit(1);
   return org ?? null;
 }
 
@@ -124,6 +135,41 @@ export async function requestPortalAccessCodeAction(orgSlug: string, email: stri
     codeHash: hashCode(code),
     expiresAt,
   });
+
+  // v1.16.1 — actually deliver the code via email. Pre-v1.16.1 the
+  // code was generated + persisted but never sent — customers got
+  // "no email arrived" with no error. Fire-and-forget so the action
+  // returns quickly even if Resend is slow; we log failures for ops.
+  // Best-effort: any send failure is logged but doesn't change the
+  // success response (still don't leak existence via timing/error).
+  try {
+    const apiKey = process.env.RESEND_API_KEY?.trim() ?? "";
+    if (!apiKey) {
+      console.warn(
+        "[portal-access-code] RESEND_API_KEY not set — code persisted but not emailed",
+      );
+    } else {
+      const fromAddress = pickPortalAccessCodeFromAddress(process.env);
+      const sendResult = await sendPortalAccessCodeEmail(
+        {
+          email,
+          workspaceName: org.name,
+          code,
+          expiresInMinutes: 15,
+        },
+        { apiKey, fromAddress },
+      );
+      if (!sendResult.ok) {
+        console.error(
+          `[portal-access-code] send failed: ${sendResult.status} ${sendResult.error}`,
+        );
+      }
+    }
+  } catch (err) {
+    console.error(
+      `[portal-access-code] unexpected send error: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 
   return {
     success: true,
