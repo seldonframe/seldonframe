@@ -121,15 +121,13 @@ export async function executeTurn(input: {
     };
   }
 
-  // 2. Check daily token budget
-  if (await isDailyBudgetExhausted(agent)) {
-    return {
-      ok: false,
-      reason: "daily_budget_exhausted",
-      fallbackMessage:
-        "I'm having trouble right now — let me have someone follow up with you. What's the best email or phone to reach you at?",
-    };
-  }
+  // v1.27.9 — daily token budget removed. Under BYOK the operator pays
+  // Anthropic directly; SF has no cost exposure to cap. Operators manage
+  // spend in their own Anthropic billing dashboard. The artificial budget
+  // halt was breaking valid conversations on busy days for no reason.
+  // The agents.tokensUsedToday + dailyTokenBudget columns stay in the
+  // schema (no breaking migration); they're just no longer checked or
+  // incremented by the runtime.
 
   // 3. Persist user turn
   const [lastTurn] = await db
@@ -455,13 +453,13 @@ export async function executeTurn(input: {
     })
     .where(eq(agentConversations.id, input.conversationId));
 
-  // Update agent's daily token usage
+  // v1.27.9 — agents.tokensUsedToday increment removed (see budget note
+  // above). Per-turn tokens still persist on agent_turns rows for
+  // observability + cost analytics; the aggregate counter on the agents
+  // table is no longer maintained.
   await db
     .update(agents)
-    .set({
-      tokensUsedToday: sql`${agents.tokensUsedToday} + ${totalTokensIn + totalTokensOut}`,
-      updatedAt: new Date(),
-    })
+    .set({ updatedAt: new Date() })
     .where(eq(agents.id, agent.id));
 
   // 10. Activity bridge — first user turn → activity row on contact's
@@ -484,19 +482,7 @@ export async function executeTurn(input: {
 }
 
 // ─── helpers ───────────────────────────────────────────────────────────────
-
-async function isDailyBudgetExhausted(agent: Agent): Promise<boolean> {
-  // Lazy reset: if last reset was >24h ago, zero out the counter.
-  const resetAge = Date.now() - new Date(agent.tokensUsedResetAt).getTime();
-  if (resetAge >= 24 * 60 * 60 * 1000) {
-    await db
-      .update(agents)
-      .set({ tokensUsedToday: 0, tokensUsedResetAt: new Date() })
-      .where(eq(agents.id, agent.id));
-    return false;
-  }
-  return agent.tokensUsedToday >= agent.dailyTokenBudget;
-}
+// v1.27.9 — isDailyBudgetExhausted removed; see note in step 2 above.
 
 function computeCostCents(tokensIn: number, tokensOut: number): number {
   const cents =

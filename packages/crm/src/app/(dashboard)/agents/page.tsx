@@ -31,8 +31,6 @@ export default async function AdminAgentsPage() {
       archetype: agents.archetype,
       status: agents.status,
       currentVersion: agents.currentVersion,
-      tokensUsedToday: agents.tokensUsedToday,
-      dailyTokenBudget: agents.dailyTokenBudget,
       createdAt: agents.createdAt,
     })
     .from(agents)
@@ -58,10 +56,6 @@ export default async function AdminAgentsPage() {
       ) : (
         <div className="space-y-3">
           {rows.map((row) => {
-            const tokenPct = Math.min(
-              100,
-              Math.round((row.tokensUsedToday / row.dailyTokenBudget) * 100),
-            );
             return (
               <article
                 key={row.id}
@@ -76,12 +70,6 @@ export default async function AdminAgentsPage() {
                     </p>
                   </div>
                   <StatusPill status={row.status} />
-                </div>
-                <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-                  <span>
-                    Tokens today: {row.tokensUsedToday.toLocaleString()} /{" "}
-                    {row.dailyTokenBudget.toLocaleString()} ({tokenPct}%)
-                  </span>
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2">
                   <Link

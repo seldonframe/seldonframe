@@ -35,8 +35,6 @@ export default async function AgentOverviewPage({
       archetype: agents.archetype,
       blueprint: agents.blueprint,
       currentVersion: agents.currentVersion,
-      tokensUsedToday: agents.tokensUsedToday,
-      dailyTokenBudget: agents.dailyTokenBudget,
       orgId: agents.orgId,
       orgSlug: organizations.slug,
     })
@@ -118,10 +116,6 @@ export default async function AgentOverviewPage({
     process.env.WORKSPACE_BASE_DOMAIN?.trim() || "app.seldonframe.com";
   const embedUrl = `https://${baseDomain}/api/v1/public/agent/${agent.orgSlug}--${agent.slug}/embed.js`;
   const blueprint = (agent.blueprint ?? {}) as AgentBlueprint;
-  const tokenPct = Math.min(
-    100,
-    Math.round((agent.tokensUsedToday / agent.dailyTokenBudget) * 100),
-  );
 
   return (
     <div className="space-y-4">
@@ -165,25 +159,6 @@ export default async function AgentOverviewPage({
           value={`${agg?.avgLatency ?? 0}ms`}
         />
       </div>
-
-      <article className="rounded-xl border bg-card p-5">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-card-title">Daily token usage</h2>
-          <span className="text-xs text-muted-foreground">
-            {agent.tokensUsedToday.toLocaleString()} /{" "}
-            {agent.dailyTokenBudget.toLocaleString()} ({tokenPct}%)
-          </span>
-        </div>
-        <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
-          <div
-            className={`h-full ${tokenPct >= 90 ? "bg-rose-500" : tokenPct >= 70 ? "bg-amber-500" : "bg-emerald-500"}`}
-            style={{ width: `${tokenPct}%` }}
-          />
-        </div>
-        <p className="mt-2 text-xs text-muted-foreground">
-          Auto-resets every 24h. Adjust in Settings if you need more headroom.
-        </p>
-      </article>
 
       <article className="rounded-xl border bg-card p-5">
         <div className="flex items-center justify-between gap-3">

@@ -5,8 +5,11 @@
 //
 // Pre-flight checks BEFORE the operator types anything:
 //   - Workspace has an Anthropic key configured (else chat will 100% error)
-//   - Daily token budget not exhausted (else every turn returns degraded)
 //   - Agent in 'test' or 'live' status
+//
+// (Daily-token-budget check removed in v1.27.9 — under BYOK there's no
+// SF cost exposure to cap. Operators manage spend in their own Anthropic
+// dashboard.)
 //
 // Each fail surfaces an actionable banner ABOVE the chat UI so operators
 // don't waste a turn discovering the issue from a generic fallback message.
@@ -51,8 +54,6 @@ export default async function AgentTestPage({
       blueprint: agents.blueprint,
       orgId: agents.orgId,
       orgSlug: organizations.slug,
-      tokensUsedToday: agents.tokensUsedToday,
-      dailyTokenBudget: agents.dailyTokenBudget,
       orgIntegrations: organizations.integrations,
     })
     .from(agents)
@@ -101,27 +102,8 @@ export default async function AgentTestPage({
     });
   }
 
-  const tokenPct = Math.min(
-    100,
-    Math.round((row.tokensUsedToday / row.dailyTokenBudget) * 100),
-  );
-  if (tokenPct >= 100) {
-    diagnostics.push({
-      level: "block",
-      title: "Daily token budget exhausted",
-      message:
-        `Used ${row.tokensUsedToday.toLocaleString()} / ${row.dailyTokenBudget.toLocaleString()} tokens. ` +
-        "Auto-resets every 24h or raise the budget on the Settings tab.",
-      actionHref: `/agents/${row.id}/settings`,
-      actionLabel: "Raise budget",
-    });
-  } else if (tokenPct >= 80) {
-    diagnostics.push({
-      level: "warn",
-      title: `Token budget ${tokenPct}% used`,
-      message: `${row.tokensUsedToday.toLocaleString()} / ${row.dailyTokenBudget.toLocaleString()} tokens today. Resets every 24h.`,
-    });
-  }
+  // v1.27.9 — daily-token-budget check removed (BYOK; SF has no cost
+  // exposure to cap; operators manage spend in Anthropic dashboard).
 
   const hasBlocker = diagnostics.some((d) => d.level === "block");
 
