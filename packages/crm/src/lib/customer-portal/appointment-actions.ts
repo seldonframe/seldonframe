@@ -28,11 +28,26 @@
 
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { bookings } from "@/db/schema";
+import { activities, bookings, users } from "@/db/schema";
 import { assertWritable } from "@/lib/demo/server";
 import { emitSeldonEvent } from "@/lib/events/bus";
 import { trackEvent } from "@/lib/analytics/track";
 import { requirePortalSessionForOrg } from "@/lib/portal/auth";
+
+/**
+ * v1.21.1 — Resolve the workspace owner's userId for activities.
+ * activities.userId is NOT NULL; for customer-side actions (where
+ * the actor is a contact, not a user) we anchor the activity row
+ * to the workspace owner so it shows in their timeline.
+ */
+async function resolveOwnerUserId(orgId: string): Promise<string | null> {
+  const [owner] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(and(eq(users.orgId, orgId), eq(users.role, "owner")))
+    .limit(1);
+  return owner?.id ?? null;
+}
 
 export type CancelBookingResult =
   | { ok: true; bookingId: string }
@@ -72,6 +87,24 @@ export async function cancelBookingAction(input: {
 
   if (!updated) {
     return { ok: false, reason: "booking_not_found" };
+  }
+
+  // v1.21.1 — bridge to operator's contact activity feed.
+  const ownerUserId = await resolveOwnerUserId(session.orgId);
+  if (ownerUserId) {
+    await db.insert(activities).values({
+      orgId: session.orgId,
+      userId: ownerUserId,
+      contactId: session.contact.id,
+      type: "booking_cancelled",
+      subject: `Customer cancelled: ${updated.title}`,
+      body: input.reason?.trim() || "(no reason given)",
+      metadata: {
+        source: "customer_portal",
+        bookingId: updated.id,
+      },
+      completedAt: new Date(),
+    });
   }
 
   await emitSeldonEvent(
@@ -126,6 +159,24 @@ export async function requestRescheduleAction(input: {
 
   if (!booking) {
     return { ok: false, reason: "booking_not_found" };
+  }
+
+  // v1.21.1 — bridge to operator's contact activity feed.
+  const ownerUserId = await resolveOwnerUserId(session.orgId);
+  if (ownerUserId) {
+    await db.insert(activities).values({
+      orgId: session.orgId,
+      userId: ownerUserId,
+      contactId: session.contact.id,
+      type: "reschedule_requested",
+      subject: `Reschedule requested: ${booking.title}`,
+      body: input.reason.trim() || "(no reason given)",
+      metadata: {
+        source: "customer_portal",
+        bookingId: booking.id,
+      },
+      completedAt: new Date(),
+    });
   }
 
   await emitSeldonEvent(

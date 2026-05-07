@@ -3,6 +3,7 @@
 import { and, count, desc, eq, ilike, isNull, ne, or, gt, lte, asc, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  activities,
   bookings,
   deals,
   emails,
@@ -116,6 +117,33 @@ export async function sendPortalMessageAction(orgSlug: string, formData: FormDat
     .from(users)
     .where(and(eq(users.orgId, session.orgId), eq(users.role, "owner")))
     .limit(1);
+
+  // v1.21.1 — bridge to operator activity feed. Customer messages
+  // were silently invisible on the contact's /contacts/<id>?tab=activity
+  // page pre-1.21.1 because portal_messages and activities are
+  // separate tables. We also insert an activities row so operators
+  // see customer-side action in the timeline they already check.
+  if (owner?.id) {
+    const previewBody =
+      body.length > 280 ? `${body.slice(0, 277)}...` : body;
+    await db.insert(activities).values({
+      orgId: session.orgId,
+      userId: owner.id,
+      contactId: session.contact.id,
+      type: "portal_message",
+      subject: subject
+        ? `Portal message: ${subject}`
+        : "New portal message from client",
+      body: previewBody,
+      metadata: {
+        source: "customer_portal",
+        portalMessageId: created?.id ?? null,
+        attachmentUrl,
+        attachmentName,
+      },
+      completedAt: new Date(),
+    });
+  }
 
   if (owner?.email) {
     await db.insert(emails).values({
