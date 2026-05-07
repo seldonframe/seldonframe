@@ -1,4 +1,4 @@
-// v1.26.1 — agent embed.js endpoint
+// v1.26.2 — agent embed.js endpoint (SSE-aware)
 //
 // Operators add a single line to their site:
 //   <script src="https://app.seldonframe.com/api/v1/public/agent/<orgSlug>--<agentSlug>/embed.js" async></script>
@@ -207,25 +207,75 @@ function renderEmbedScript(input: {
     appendMessage("user", msg);
     var typing = appendTyping();
     try {
+      // v1.26.2 — request SSE stream for typewriter effect.
       var res = await fetch(CFG.turnUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Accept": "text/event-stream" },
         body: JSON.stringify({
           conversation_id: conversationId,
           anonymous_session_id: sessionId,
           message: msg,
+          stream: true,
           channel_meta: {
             referrer: document.referrer || null,
             page_url: location.href,
           }
         })
       });
-      var data = await res.json();
-      if (data.conversation_id) conversationId = data.conversation_id;
+      var ctype = (res.headers.get("content-type") || "").toLowerCase();
+      if (ctype.indexOf("text/event-stream") === -1) {
+        // Server fell back to JSON (older route, error, etc.)
+        var data = await res.json();
+        if (data.conversation_id) conversationId = data.conversation_id;
+        typing.remove();
+        appendMessage(data.message ? "assistant" : "system",
+          data.message || "Something went wrong. Please try again.");
+        return;
+      }
+      // SSE consumer ─────────────────────────────────────────────────
       typing.remove();
-      if (data.message) {
-        appendMessage("assistant", data.message);
-      } else {
+      var assistantEl = appendMessage("assistant", "");
+      var reader = res.body.getReader();
+      var decoder = new TextDecoder();
+      var buffer = "";
+      var currentEvent = "delta";
+      while (true) {
+        var step = await reader.read();
+        if (step.done) break;
+        buffer += decoder.decode(step.value, { stream: true });
+        var lines = buffer.split("\\n");
+        // keep last partial line in buffer
+        buffer = lines.pop() || "";
+        for (var i = 0; i < lines.length; i++) {
+          var line = lines[i];
+          if (line.indexOf("event:") === 0) {
+            currentEvent = line.slice(6).trim();
+          } else if (line.indexOf("data:") === 0) {
+            var payload = line.slice(5).trim();
+            if (!payload) continue;
+            try {
+              var json = JSON.parse(payload);
+              if (currentEvent === "start" && json.conversation_id) {
+                conversationId = json.conversation_id;
+              } else if (currentEvent === "delta" && json.text) {
+                assistantEl.textContent += json.text;
+                msgsEl.scrollTop = msgsEl.scrollHeight;
+              } else if (currentEvent === "done") {
+                if (json.conversation_id) conversationId = json.conversation_id;
+              } else if (currentEvent === "error") {
+                if (!assistantEl.textContent) {
+                  assistantEl.remove();
+                  appendMessage("system", "Connection issue. Please try again.");
+                }
+              }
+            } catch (parseErr) {
+              // ignore malformed event chunk
+            }
+          }
+        }
+      }
+      if (!assistantEl.textContent) {
+        assistantEl.remove();
         appendMessage("system", "Something went wrong. Please try again.");
       }
     } catch (err) {

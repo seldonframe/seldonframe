@@ -24,6 +24,7 @@ import {
 } from "@/db/schema";
 import { assertWritable } from "@/lib/demo/server";
 import { emitSeldonEvent } from "@/lib/events/bus";
+import { runEvalSuite } from "./eval-runner";
 
 // ─── createAgent ───────────────────────────────────────────────────────────
 
@@ -228,13 +229,22 @@ export async function updateAgentBlueprint(
 
 // ─── publishAgent ──────────────────────────────────────────────────────────
 
+export type PublishAgentResult =
+  | { ok: true; evalSummary?: Awaited<ReturnType<typeof runEvalSuite>> }
+  | {
+      ok: false;
+      error: string;
+      evalSummary?: Awaited<ReturnType<typeof runEvalSuite>>;
+    };
+
 export async function publishAgent(input: {
   agentId: string;
   orgId: string;
-  /** Target status. v1.26.0 allows direct draft→live; v1.26.1 will
-   *  require eval pass before live. */
+  /** Target status. v1.26.2 eval-gates draft|test → live (≥87.5% pass). */
   status: "draft" | "test" | "live" | "paused";
-}): Promise<{ ok: true } | { ok: false; error: string }> {
+  /** Skip eval gate (logged). Use only for SF-controlled emergencies. */
+  force?: boolean;
+}): Promise<PublishAgentResult> {
   assertWritable();
 
   const [agent] = await db
@@ -244,6 +254,29 @@ export async function publishAgent(input: {
     .limit(1);
   if (!agent) {
     return { ok: false, error: "agent_not_found" };
+  }
+
+  // v1.26.2 — eval gate. Require ≥87.5% pass rate before flipping to 'live'.
+  // Other transitions (draft, test, paused) are unrestricted.
+  let evalSummary: Awaited<ReturnType<typeof runEvalSuite>> | undefined;
+  if (input.status === "live" && !input.force) {
+    evalSummary = await runEvalSuite({
+      agentId: input.agentId,
+      orgId: input.orgId,
+    });
+    if (!evalSummary.ok) {
+      return {
+        ok: false,
+        error: `eval_run_failed: ${evalSummary.error}`,
+      };
+    }
+    if (!evalSummary.summary.meetsPublishGate) {
+      return {
+        ok: false,
+        error: "eval_gate_failed",
+        evalSummary,
+      };
+    }
   }
 
   await db
@@ -257,7 +290,7 @@ export async function publishAgent(input: {
     { orgId: input.orgId },
   );
 
-  return { ok: true };
+  return { ok: true, evalSummary };
 }
 
 // ─── small util ────────────────────────────────────────────────────────────

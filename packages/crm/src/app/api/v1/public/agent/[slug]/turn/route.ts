@@ -1,4 +1,4 @@
-// v1.26.0 — public agent turn endpoint
+// v1.26.2 — public agent turn endpoint
 //
 // POST /api/v1/public/agent/<slug>/turn
 //   body: {
@@ -6,18 +6,23 @@
 //     anonymous_session_id?: string,   // browser-stable id from embed
 //     message: string,
 //     channel_meta?: object             // referrer, page url, etc.
+//     stream?: boolean                  // v1.26.2 — opt-in SSE response
 //   }
-//   response: {
-//     conversation_id: string,
-//     message: string,
-//     validators_critical_failed?: boolean
-//   }
+//   non-streaming response: { conversation_id, message, validators_critical_failed? }
+//   streaming response (Content-Type: text/event-stream):
+//     event: start    data: {"conversation_id":"..."}
+//     event: delta    data: {"text":"..."}    (multiple)
+//     event: done     data: {"conversation_id":"...","validators_critical_failed":false}
+//     event: error    data: {"reason":"..."}
 //
 // Auth: anonymous. Agent's `slug` resolves to its workspace via
-// `(orgs.slug, agents.slug)` join. The agent must be in 'live' or
-// 'test' status.
+// `(orgs.slug, agents.slug)` join. Agent must be in 'live' or 'test' status.
 //
-// v1.26.0 ships non-streaming JSON response. v1.26.1 adds SSE.
+// v1.26.2 SSE NOTE: the runtime still buffers the full response (validators
+// run before any byte reaches the client — critical for safety). The SSE
+// branch then chunks the buffered text and emits ~25ms-spaced delta events
+// for typewriter UX. Real Anthropic-streaming-passthrough lands in v1.27
+// alongside the multi-step tool-call streaming story.
 
 import { NextRequest, NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
@@ -30,7 +35,14 @@ type Body = {
   anonymous_session_id?: string;
   message?: string;
   channel_meta?: Record<string, unknown>;
+  stream?: boolean;
 };
+
+const CRITICAL_VALIDATORS = [
+  "quotes_only_from_soul_pricing",
+  "no_prompt_injection_echo",
+  "no_pii_leak",
+];
 
 export async function POST(
   request: NextRequest,
@@ -53,10 +65,12 @@ export async function POST(
     return NextResponse.json({ error: "message_too_long" }, { status: 400 });
   }
 
-  // Resolve agent. The slug path encodes org + agent: format
-  // "<orgSlug>--<agentSlug>". This avoids needing two URL params for
-  // public chat embeds (one slug per workspace+agent pair). Operators
-  // who only have one agent can use just the org slug.
+  const wantsStream =
+    body.stream === true ||
+    request.headers.get("accept")?.includes("text/event-stream") ||
+    request.nextUrl.searchParams.get("stream") === "1";
+
+  // Resolve agent.
   const [orgSlugPart, agentSlugPart] = agentSlugPath.includes("--")
     ? agentSlugPath.split("--", 2)
     : [agentSlugPath, "default"];
@@ -119,6 +133,70 @@ export async function POST(
     conversationId = created.id;
   }
 
+  // SSE branch ───────────────────────────────────────────────────────────
+  if (wantsStream) {
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        const encoder = new TextEncoder();
+        const send = (event: string, data: unknown) => {
+          controller.enqueue(
+            encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`),
+          );
+        };
+        try {
+          send("start", { conversation_id: conversationId });
+          const result = await executeTurn({
+            conversationId: conversationId!,
+            userMessage: message,
+          });
+          if (!result.ok) {
+            send("delta", { text: result.fallbackMessage });
+            send("done", {
+              conversation_id: conversationId,
+              degraded: true,
+              reason: result.reason,
+            });
+            controller.close();
+            return;
+          }
+          // Chunk + emit. Smaller chunks = smoother typewriter; we cap at
+          // ~28 chars and pause ~22ms between chunks. Total response is
+          // typically <600 chars so this lands in <500ms.
+          const text = result.assistantMessage;
+          const chunks = chunkText(text, 28);
+          for (const chunk of chunks) {
+            send("delta", { text: chunk });
+            await sleep(22);
+          }
+          send("done", {
+            conversation_id: conversationId,
+            validators_critical_failed: result.validators.some(
+              (v) => !v.passed && CRITICAL_VALIDATORS.includes(v.name),
+            ),
+          });
+          controller.close();
+        } catch (err) {
+          send("error", {
+            reason: "internal_error",
+            detail: err instanceof Error ? err.message : String(err),
+          });
+          controller.close();
+        }
+      },
+    });
+
+    return new NextResponse(stream, {
+      status: 200,
+      headers: {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+        "X-Accel-Buffering": "no",
+      },
+    });
+  }
+
+  // Non-streaming JSON branch (back-compat) ──────────────────────────────
   const result = await executeTurn({
     conversationId,
     userMessage: message,
@@ -137,11 +215,40 @@ export async function POST(
     conversation_id: conversationId,
     message: result.assistantMessage,
     validators_critical_failed: result.validators.some(
-      (v) =>
-        !v.passed &&
-        // critical validators only — these are the ones that gate
-        // response delivery. quotes_only / no_injection / no_pii.
-        ["quotes_only_from_soul_pricing", "no_prompt_injection_echo", "no_pii_leak"].includes(v.name),
+      (v) => !v.passed && CRITICAL_VALIDATORS.includes(v.name),
     ),
   });
+}
+
+// ─── helpers ────────────────────────────────────────────────────────────
+
+function chunkText(text: string, maxLen: number): string[] {
+  if (!text) return [""];
+  // Split on word boundaries when possible so the typewriter pauses at
+  // natural gaps. Falls back to fixed-width slicing for very long runs.
+  const words = text.split(/(\s+)/);
+  const out: string[] = [];
+  let buf = "";
+  for (const w of words) {
+    if (buf.length + w.length > maxLen) {
+      if (buf) out.push(buf);
+      if (w.length > maxLen) {
+        // very long token (URL, etc.) — slice
+        for (let i = 0; i < w.length; i += maxLen) {
+          out.push(w.slice(i, i + maxLen));
+        }
+        buf = "";
+      } else {
+        buf = w;
+      }
+    } else {
+      buf += w;
+    }
+  }
+  if (buf) out.push(buf);
+  return out;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

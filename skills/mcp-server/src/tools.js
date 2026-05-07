@@ -4247,6 +4247,155 @@ export const TOOLS = [
       return result;
     },
   },
+
+  // ───────────────────────────────────────────────────────────────────────
+  // v1.26.2 — agent debug + observability tools.
+  // run_agent_evals = manual eval suite trigger (publish auto-runs too).
+  // tail_agent_conversations / get_agent_conversation = observability.
+  // replay_conversation = regression-test a blueprint change against a
+  //   known-good past chat. get_agent_metrics = aggregate stats for the
+  //   "is my agent healthy?" check.
+  // ───────────────────────────────────────────────────────────────────────
+
+  {
+    name: "run_agent_evals",
+    description:
+      "Run the platform's safety + behavior eval suite against this agent. The 8-scenario suite covers prompt-injection probes (ignore-instructions, role-swap), PII probes (customer-list leak), pricing discipline (refuses invented prices, refuses competitor match), scope refusal (off-topic), greeting + escalation. Each scenario runs through the live blueprint as an ephemeral test conversation, results persist to agent_evals. " +
+      "publish_agent with status='live' AUTOMATICALLY runs this and gates on ≥87.5% pass. Call this directly to dry-run before publishing or to verify after a blueprint update.",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id (bearer workspace)."),
+        agent_id: str("Agent id from list_agents / create_agent."),
+      },
+      ["workspace_id", "agent_id"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/agents", {
+        body: { op: "run_evals", agent_id: args.agent_id },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
+  {
+    name: "tail_agent_conversations",
+    description:
+      "List recent conversations for an agent — newest first. Excludes eval-runs and replay-runs by default (set include_eval_runs=true to see them). Each row includes status, turn_count, tokens, llm_cost_cents, and the customer's first message preview so you can spot patterns (most common questions, escalations, etc.) without opening each transcript. " +
+      "Use BEFORE get_agent_conversation to pick which conversation to drill into.",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id (bearer workspace)."),
+        agent_id: str("Agent id from list_agents."),
+        limit: {
+          type: "integer",
+          description: "How many conversations to return (default 20, max 100).",
+        },
+        include_eval_runs: {
+          type: "boolean",
+          description: "Include eval/replay synthetic runs in the list (default false).",
+        },
+      },
+      ["workspace_id", "agent_id"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/agents", {
+        body: {
+          op: "tail_conversations",
+          agent_id: args.agent_id,
+          limit: args.limit,
+          include_eval_runs: args.include_eval_runs,
+        },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
+  {
+    name: "get_agent_conversation",
+    description:
+      "Fetch the full transcript of a single conversation: every turn (user + assistant), all tool_calls (look_up_availability, book_appointment, escalate_to_human, etc.) with their inputs, all tool_results with success/error, validator_results per assistant turn (which validators passed/failed), tokens, latency, model. " +
+      "Use this to debug WHY an agent gave a specific answer — was it a tool failure? a validator gating? wrong info in blueprint? Pair with replay_conversation to test a blueprint fix.",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id (bearer workspace)."),
+        conversation_id: str(
+          "Conversation id (from tail_agent_conversations or admin /conversations page).",
+        ),
+      },
+      ["workspace_id", "conversation_id"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/agents", {
+        body: {
+          op: "get_conversation",
+          conversation_id: args.conversation_id,
+        },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
+  {
+    name: "replay_conversation",
+    description:
+      "Replay a past conversation's user messages against the agent's CURRENT blueprint, returning the original responses + the new responses side-by-side. Lets you regression-test a blueprint change ('did adding this FAQ break the booking flow?') without touching production. " +
+      "Creates a new ephemeral test-status conversation tagged with replay_of=<original>; the original is untouched.",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id (bearer workspace)."),
+        conversation_id: str("Original conversation id to replay."),
+      },
+      ["workspace_id", "conversation_id"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/agents", {
+        body: {
+          op: "replay_conversation",
+          conversation_id: args.conversation_id,
+        },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
+  {
+    name: "get_agent_metrics",
+    description:
+      "Aggregate health stats for an agent over a time window: conversations + turns count, tokens (in/out), avg latency, validator pass rate (% of assistant turns where ALL validators passed), latest eval pass rate (last result per scenario). " +
+      "Use as a dashboard ping — 'is my agent healthy?' If validator_pass_rate drops or eval_pass_rate falls below the 87.5% gate, the agent shouldn't be promoted to live.",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id (bearer workspace)."),
+        agent_id: str("Agent id from list_agents."),
+        since_hours: {
+          type: "integer",
+          description:
+            "Time window in hours (default 24). Pass 168 for last 7 days, 720 for last 30 days.",
+        },
+      },
+      ["workspace_id", "agent_id"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/agents", {
+        body: {
+          op: "get_metrics",
+          agent_id: args.agent_id,
+          since_hours: args.since_hours,
+        },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
 ];
 
 export const TOOL_MAP = Object.fromEntries(TOOLS.map((t) => [t.name, t]));
