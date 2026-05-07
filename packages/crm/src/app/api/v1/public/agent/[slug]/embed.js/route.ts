@@ -1,4 +1,19 @@
-// v1.26.2 — agent embed.js endpoint (SSE-aware)
+// v1.28.2 — agent embed.js endpoint (SSE + markdown + mobile-first + a11y)
+//
+// v1.28.2 polish on top of v1.26.2's SSE foundation:
+//   - Markdown rendering for agent responses (bold / italic / code spans /
+//     links with rel=noopener / bullet lists / line breaks). Inline parser
+//     in the IIFE — no external dep on the operator's site.
+//   - Mobile-first: full-screen panel below 640px (Intercom pattern).
+//   - Brand inheritance: operator's logo (workspace.theme.logoUrl) renders
+//     in panel header; falls back to first-letter avatar.
+//   - Accessibility: role=dialog + aria-label on panel, role=log +
+//     aria-live=polite on messages, screen-reader label on textarea, Esc
+//     closes panel + returns focus to bubble, focus-visible outlines.
+//   - Spring animations: bubble + panel reveal use cubic-bezier(.34,1.56,.64,1).
+//     Per-message slide-in. Respects prefers-reduced-motion.
+//   - UX: textarea (auto-grows to 120px), Enter sends, Shift+Enter newline,
+//     animated typing dots (was "Typing..." text).
 //
 // Operators add a single line to their site:
 //   <script src="https://app.seldonframe.com/api/v1/public/agent/<orgSlug>--<agentSlug>/embed.js" async></script>
@@ -67,8 +82,15 @@ export async function GET(
     /[\\`$]/g,
     "\\$&",
   );
-  const themeRaw = (agentRow.theme ?? null) as { primaryColor?: string } | null;
+  const themeRaw = (agentRow.theme ?? null) as {
+    primaryColor?: string;
+    logoUrl?: string;
+  } | null;
   const primaryColor = themeRaw?.primaryColor ?? "#111111";
+  const logoUrl =
+    typeof themeRaw?.logoUrl === "string" && /^https?:\/\//.test(themeRaw.logoUrl)
+      ? themeRaw.logoUrl
+      : null;
   const orgName = agentRow.orgName.replace(/[\\`$"<>]/g, "");
 
   const script = renderEmbedScript({
@@ -76,6 +98,7 @@ export async function GET(
     greeting,
     primaryColor,
     orgName,
+    logoUrl,
   });
 
   return new NextResponse(script, {
@@ -93,12 +116,14 @@ function renderEmbedScript(input: {
   greeting: string;
   primaryColor: string;
   orgName: string;
+  logoUrl: string | null;
 }): string {
   const config = {
     turnUrl: input.turnUrl,
     greeting: input.greeting,
     primaryColor: input.primaryColor,
     orgName: input.orgName,
+    logoUrl: input.logoUrl,
   };
   // The embed runs as an IIFE. Self-contained — no framework deps.
   // Renders shadow-DOM-free for max compatibility (works inside iframes,
@@ -122,49 +147,126 @@ function renderEmbedScript(input: {
 
   var style = document.createElement("style");
   style.textContent = [
-    ".sf-agent-bubble{position:fixed;bottom:20px;right:20px;width:56px;height:56px;border-radius:50%;background:" + CFG.primaryColor + ";color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,0.15);z-index:2147483646;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;border:none;font-size:24px;transition:transform .15s ease}",
-    ".sf-agent-bubble:hover{transform:scale(1.05)}",
-    ".sf-agent-panel{position:fixed;bottom:88px;right:20px;width:380px;max-width:calc(100vw - 40px);height:560px;max-height:calc(100vh - 120px);background:#fff;border-radius:16px;box-shadow:0 16px 48px rgba(0,0,0,0.2);z-index:2147483647;display:none;flex-direction:column;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif}",
-    ".sf-agent-panel.open{display:flex}",
-    ".sf-agent-header{padding:14px 16px;background:" + CFG.primaryColor + ";color:#fff;display:flex;justify-content:space-between;align-items:center}",
-    ".sf-agent-header strong{font-size:14px;font-weight:600}",
-    ".sf-agent-close{background:transparent;border:none;color:#fff;cursor:pointer;font-size:20px;padding:0 4px;opacity:.85}",
-    ".sf-agent-close:hover{opacity:1}",
-    ".sf-agent-messages{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;background:#f7f7f5}",
-    ".sf-agent-msg{max-width:80%;padding:10px 12px;border-radius:14px;font-size:14px;line-height:1.45;white-space:pre-wrap;word-wrap:break-word}",
-    ".sf-agent-msg.user{align-self:flex-end;background:" + CFG.primaryColor + ";color:#fff;border-bottom-right-radius:4px}",
-    ".sf-agent-msg.assistant{align-self:flex-start;background:#fff;color:#111;border-bottom-left-radius:4px;border:1px solid #e5e5e1}",
-    ".sf-agent-msg.system{align-self:center;color:#888;font-size:12px;font-style:italic;background:transparent}",
-    ".sf-agent-typing{align-self:flex-start;color:#888;font-size:13px;padding:8px 12px}",
-    ".sf-agent-form{display:flex;gap:8px;padding:12px;border-top:1px solid #e5e5e1;background:#fff}",
-    ".sf-agent-input{flex:1;padding:10px 12px;border:1px solid #e5e5e1;border-radius:10px;font-size:14px;outline:none;font-family:inherit}",
+    // v1.28.2 — bubble: subtle rest pulse → wakes attention without nagging
+    ".sf-agent-bubble{position:fixed;bottom:20px;right:20px;width:56px;height:56px;border-radius:50%;background:" + CFG.primaryColor + ";color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,0.15),0 1px 4px rgba(0,0,0,0.08);z-index:2147483646;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;border:none;font-size:24px;transition:transform .2s cubic-bezier(.34,1.56,.64,1),box-shadow .2s ease}",
+    ".sf-agent-bubble:hover{transform:scale(1.08)}",
+    ".sf-agent-bubble:active{transform:scale(.95)}",
+    ".sf-agent-bubble:focus-visible{outline:2px solid " + CFG.primaryColor + ";outline-offset:3px}",
+    // Panel: spring slide-up reveal. Hidden = opacity 0 + translateY(8px) + scale(.98)
+    ".sf-agent-panel{position:fixed;bottom:88px;right:20px;width:380px;max-width:calc(100vw - 40px);height:560px;max-height:calc(100vh - 120px);background:#fff;border-radius:16px;box-shadow:0 16px 48px rgba(0,0,0,0.18),0 4px 12px rgba(0,0,0,0.08);z-index:2147483647;display:flex;flex-direction:column;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;opacity:0;transform:translateY(8px) scale(.98);pointer-events:none;transition:opacity .22s ease,transform .28s cubic-bezier(.34,1.56,.64,1)}",
+    ".sf-agent-panel.open{opacity:1;transform:translateY(0) scale(1);pointer-events:auto}",
+    // Mobile: full-screen below sm. Bigger touch targets, no rounded corners.
+    "@media (max-width:640px){.sf-agent-panel{bottom:0;right:0;left:0;top:0;width:100%;max-width:100%;height:100%;max-height:100%;border-radius:0}.sf-agent-bubble{bottom:16px;right:16px}}",
+    "@media (prefers-reduced-motion:reduce){.sf-agent-panel,.sf-agent-bubble{transition:none}}",
+    ".sf-agent-header{padding:14px 16px;background:" + CFG.primaryColor + ";color:#fff;display:flex;justify-content:space-between;align-items:center;gap:8px}",
+    ".sf-agent-header-left{display:flex;align-items:center;gap:10px;min-width:0}",
+    ".sf-agent-logo{width:28px;height:28px;border-radius:8px;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;flex-shrink:0;overflow:hidden}",
+    ".sf-agent-logo img{width:100%;height:100%;object-fit:cover}",
+    ".sf-agent-header strong{font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+    ".sf-agent-close{background:transparent;border:none;color:#fff;cursor:pointer;font-size:24px;padding:4px 8px;opacity:.85;border-radius:6px;line-height:1}",
+    ".sf-agent-close:hover{opacity:1;background:rgba(255,255,255,.12)}",
+    ".sf-agent-close:focus-visible{outline:2px solid #fff;outline-offset:1px}",
+    ".sf-agent-messages{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;background:#f7f7f5;scroll-behavior:smooth}",
+    ".sf-agent-msg{max-width:85%;padding:10px 14px;border-radius:16px;font-size:14px;line-height:1.5;word-wrap:break-word;animation:sf-agent-msg-in .22s cubic-bezier(.34,1.56,.64,1)}",
+    "@keyframes sf-agent-msg-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}",
+    "@media (prefers-reduced-motion:reduce){.sf-agent-msg{animation:none}}",
+    ".sf-agent-msg.user{align-self:flex-end;background:" + CFG.primaryColor + ";color:#fff;border-bottom-right-radius:6px}",
+    ".sf-agent-msg.assistant{align-self:flex-start;background:#fff;color:#111;border-bottom-left-radius:6px;border:1px solid #e5e5e1}",
+    ".sf-agent-msg.system{align-self:center;color:#888;font-size:12px;font-style:italic;background:transparent;border:none;padding:4px 10px}",
+    // Markdown styles inside assistant messages
+    ".sf-agent-msg.assistant strong{font-weight:600;color:inherit}",
+    ".sf-agent-msg.assistant em{font-style:italic}",
+    ".sf-agent-msg.assistant a{color:" + CFG.primaryColor + ";text-decoration:underline}",
+    ".sf-agent-msg.assistant code{background:#f0f0ec;padding:1px 5px;border-radius:4px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92em}",
+    ".sf-agent-msg.assistant ul{margin:6px 0;padding-left:20px}",
+    ".sf-agent-msg.assistant li{margin:2px 0}",
+    ".sf-agent-typing{align-self:flex-start;color:#888;font-size:13px;padding:6px 12px;display:flex;gap:4px}",
+    ".sf-agent-typing span{width:6px;height:6px;background:#bbb;border-radius:50%;animation:sf-agent-typing-bounce 1.2s infinite}",
+    ".sf-agent-typing span:nth-child(2){animation-delay:.15s}",
+    ".sf-agent-typing span:nth-child(3){animation-delay:.3s}",
+    "@keyframes sf-agent-typing-bounce{0%,60%,100%{opacity:.3;transform:translateY(0)}30%{opacity:1;transform:translateY(-4px)}}",
+    ".sf-agent-form{display:flex;gap:8px;padding:12px;border-top:1px solid #e5e5e1;background:#fff;align-items:flex-end}",
+    ".sf-agent-input{flex:1;padding:10px 14px;border:1px solid #e5e5e1;border-radius:12px;font-size:14px;outline:none;font-family:inherit;resize:none;max-height:120px;line-height:1.4;transition:border-color .15s}",
     ".sf-agent-input:focus{border-color:" + CFG.primaryColor + "}",
-    ".sf-agent-send{padding:10px 16px;background:" + CFG.primaryColor + ";color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:14px;font-weight:600}",
+    ".sf-agent-send{padding:10px 16px;background:" + CFG.primaryColor + ";color:#fff;border:none;border-radius:12px;cursor:pointer;font-size:14px;font-weight:600;height:42px;flex-shrink:0;transition:transform .12s ease,opacity .15s ease}",
+    ".sf-agent-send:hover:not(:disabled){transform:translateY(-1px)}",
+    ".sf-agent-send:active:not(:disabled){transform:translateY(0) scale(.97)}",
+    ".sf-agent-send:focus-visible{outline:2px solid " + CFG.primaryColor + ";outline-offset:2px}",
     ".sf-agent-send:disabled{opacity:.5;cursor:not-allowed}",
     ".sf-agent-footer{padding:8px 12px;text-align:center;font-size:11px;color:#999;border-top:1px solid #f0f0ec;background:#fff}",
-    ".sf-agent-footer a{color:#999}"
+    ".sf-agent-footer a{color:#999}",
+    ".sf-agent-sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}"
   ].join("");
   document.head.appendChild(style);
 
   var bubble = document.createElement("button");
   bubble.className = "sf-agent-bubble";
   bubble.setAttribute("aria-label", "Open chat");
+  bubble.setAttribute("aria-expanded", "false");
   bubble.innerHTML = "&#128172;";
 
   var panel = document.createElement("div");
   panel.className = "sf-agent-panel";
+  panel.setAttribute("role", "dialog");
+  panel.setAttribute("aria-label", "Chat with " + CFG.orgName);
+  panel.setAttribute("aria-modal", "false"); // operator's site behind stays interactive
+  // v1.28.2 — header with optional operator logo + brand name
+  var logoMarkup = CFG.logoUrl
+    ? '<span class="sf-agent-logo"><img src="' + escapeAttr(CFG.logoUrl) + '" alt="" /></span>'
+    : '<span class="sf-agent-logo">' + escapeHtml(CFG.orgName.charAt(0).toUpperCase()) + '</span>';
   panel.innerHTML = [
-    '<div class="sf-agent-header"><strong>' + escapeHtml(CFG.orgName) + '</strong>',
-    '<button class="sf-agent-close" aria-label="Close chat">\\u00d7</button></div>',
-    '<div class="sf-agent-messages" id="sf-agent-msgs"></div>',
+    '<div class="sf-agent-header">',
+    '<div class="sf-agent-header-left">',
+    logoMarkup,
+    '<strong>' + escapeHtml(CFG.orgName) + '</strong>',
+    '</div>',
+    '<button class="sf-agent-close" aria-label="Close chat" type="button">\\u00d7</button>',
+    '</div>',
+    '<div class="sf-agent-messages" id="sf-agent-msgs" role="log" aria-live="polite" aria-relevant="additions"></div>',
     '<form class="sf-agent-form" id="sf-agent-form" autocomplete="off">',
-    '<input class="sf-agent-input" id="sf-agent-input" type="text" placeholder="Type a message..." />',
-    '<button class="sf-agent-send" type="submit">Send</button>',
+    '<label for="sf-agent-input" class="sf-agent-sr">Message</label>',
+    '<textarea class="sf-agent-input" id="sf-agent-input" rows="1" placeholder="Type a message..." aria-label="Type a message"></textarea>',
+    '<button class="sf-agent-send" type="submit" aria-label="Send message">Send</button>',
     '</form>',
     '<div class="sf-agent-footer">Powered by <a href="https://seldonframe.com" target="_blank" rel="noopener">SeldonFrame</a></div>'
   ].join("");
 
   function escapeHtml(s){return String(s).replace(/[&<>"']/g, function(c){return ({"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;","'":"&#39;"})[c];});}
+  function escapeAttr(s){return escapeHtml(s);}
+
+  // v1.28.2 — minimal inline-markdown renderer. Handles **bold**, *italic*,
+  // \`code\`, [text](url), - bullet lists, and line breaks. Output is HTML —
+  // we escapeHtml() FIRST then re-inject sanctioned tags. Links are
+  // hardened with rel=noopener target=_blank. No raw HTML survives.
+  function renderMarkdown(text){
+    var safe = escapeHtml(text);
+    // Code spans: \`x\` -> <code>x</code>
+    safe = safe.replace(/\`([^\`\\n]+)\`/g, '<code>$1</code>');
+    // Bold: **x** -> <strong>x</strong>
+    safe = safe.replace(/\\*\\*([^*\\n]+)\\*\\*/g, '<strong>$1</strong>');
+    // Italic: *x* -> <em>x</em> (only when not adjacent to letters)
+    safe = safe.replace(/(^|[^*\\w])\\*([^*\\n]+)\\*(?!\\w)/g, '$1<em>$2</em>');
+    // Links: [text](https://...) — only http/https
+    safe = safe.replace(/\\[([^\\]\\n]+)\\]\\((https?:\\/\\/[^\\s)]+)\\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+    // Bullet lists: lines starting with "- " group into <ul>
+    var lines = safe.split("\\n");
+    var out = [];
+    var inList = false;
+    for (var i = 0; i < lines.length; i++){
+      var line = lines[i];
+      var bullet = line.match(/^- (.+)$/);
+      if (bullet){
+        if (!inList){ out.push("<ul>"); inList = true; }
+        out.push("<li>" + bullet[1] + "</li>");
+      } else {
+        if (inList){ out.push("</ul>"); inList = false; }
+        out.push(line);
+      }
+    }
+    if (inList) out.push("</ul>");
+    // Line breaks: convert remaining \\n to <br>
+    return out.join("\\n").replace(/\\n/g, "<br>");
+  }
 
   var msgsEl = panel.querySelector("#sf-agent-msgs");
   var formEl = panel.querySelector("#sf-agent-form");
@@ -174,7 +276,13 @@ function renderEmbedScript(input: {
   function appendMessage(role, content){
     var el = document.createElement("div");
     el.className = "sf-agent-msg " + role;
-    el.textContent = content;
+    if (role === "assistant" && content){
+      // v1.28.2 — markdown rendering for agent responses (links, bold,
+      // bullets, code spans). User + system messages stay as plain text.
+      el.innerHTML = renderMarkdown(content);
+    } else {
+      el.textContent = content;
+    }
     msgsEl.appendChild(el);
     msgsEl.scrollTop = msgsEl.scrollHeight;
     return el;
@@ -183,26 +291,56 @@ function renderEmbedScript(input: {
   function appendTyping(){
     var el = document.createElement("div");
     el.className = "sf-agent-typing";
-    el.textContent = "Typing...";
+    el.setAttribute("aria-label", "Agent is typing");
+    el.innerHTML = "<span></span><span></span><span></span>";
     msgsEl.appendChild(el);
     msgsEl.scrollTop = msgsEl.scrollHeight;
     return el;
   }
 
-  bubble.addEventListener("click", function(){
+  // v1.28.2 — auto-grow textarea up to max-height
+  function autoGrow(el){
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, 120) + "px";
+  }
+
+  function openPanel(){
     panel.classList.add("open");
+    bubble.setAttribute("aria-expanded", "true");
     if (!msgsEl.children.length){
       appendMessage("assistant", CFG.greeting);
     }
-    setTimeout(function(){ inputEl.focus(); }, 50);
+    setTimeout(function(){ inputEl.focus(); }, 100);
+  }
+  function closePanel(){
+    panel.classList.remove("open");
+    bubble.setAttribute("aria-expanded", "false");
+    bubble.focus();
+  }
+
+  bubble.addEventListener("click", openPanel);
+  closeBtn.addEventListener("click", closePanel);
+
+  // v1.28.2 — Esc closes panel; Enter sends, Shift+Enter newline
+  document.addEventListener("keydown", function(e){
+    if (e.key === "Escape" && panel.classList.contains("open")){
+      closePanel();
+    }
   });
-  closeBtn.addEventListener("click", function(){ panel.classList.remove("open"); });
+  inputEl.addEventListener("input", function(){ autoGrow(inputEl); });
+  inputEl.addEventListener("keydown", function(e){
+    if (e.key === "Enter" && !e.shiftKey){
+      e.preventDefault();
+      formEl.requestSubmit();
+    }
+  });
 
   formEl.addEventListener("submit", async function(e){
     e.preventDefault();
     var msg = inputEl.value.trim();
     if (!msg) return;
     inputEl.value = "";
+    inputEl.style.height = "auto"; // reset textarea height after send
     inputEl.disabled = true;
     appendMessage("user", msg);
     var typing = appendTyping();
@@ -233,8 +371,16 @@ function renderEmbedScript(input: {
         return;
       }
       // SSE consumer ─────────────────────────────────────────────────
+      // v1.28.2 — accumulate raw text + re-render markdown on each delta.
+      // Re-rendering on every chunk keeps responses cheap (responses are
+      // <600 chars typically) AND ensures bold/links/bullets resolve as
+      // soon as the closing token streams in. ARIA-live=polite on the
+      // messages region announces the final assistant response to AT
+      // users without spamming on every token.
       typing.remove();
       var assistantEl = appendMessage("assistant", "");
+      assistantEl.dataset.streaming = "true";
+      var assistantText = "";
       var reader = res.body.getReader();
       var decoder = new TextDecoder();
       var buffer = "";
@@ -258,12 +404,17 @@ function renderEmbedScript(input: {
               if (currentEvent === "start" && json.conversation_id) {
                 conversationId = json.conversation_id;
               } else if (currentEvent === "delta" && json.text) {
-                assistantEl.textContent += json.text;
+                assistantText += json.text;
+                assistantEl.innerHTML = renderMarkdown(assistantText);
                 msgsEl.scrollTop = msgsEl.scrollHeight;
               } else if (currentEvent === "done") {
                 if (json.conversation_id) conversationId = json.conversation_id;
+                // Final markdown re-render to catch any partial-token edges
+                if (assistantText){
+                  assistantEl.innerHTML = renderMarkdown(assistantText);
+                }
               } else if (currentEvent === "error") {
-                if (!assistantEl.textContent) {
+                if (!assistantText) {
                   assistantEl.remove();
                   appendMessage("system", "Connection issue. Please try again.");
                 }
@@ -274,7 +425,8 @@ function renderEmbedScript(input: {
           }
         }
       }
-      if (!assistantEl.textContent) {
+      assistantEl.dataset.streaming = "false";
+      if (!assistantText) {
         assistantEl.remove();
         appendMessage("system", "Something went wrong. Please try again.");
       }
