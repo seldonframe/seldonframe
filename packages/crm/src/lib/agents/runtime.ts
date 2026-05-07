@@ -108,6 +108,7 @@ export async function executeTurn(input: {
       name: organizations.name,
       slug: organizations.slug,
       soul: organizations.soul,
+      timezone: organizations.timezone,
     })
     .from(organizations)
     .where(eq(organizations.id, agent.orgId))
@@ -210,6 +211,11 @@ export async function executeTurn(input: {
     blueprint,
     archetype: agent.archetype,
     testMode: conv.status === "test",
+    // v1.27.7 — temporal grounding so the agent can resolve "this Friday"
+    // / "tomorrow" / "next week" without asking. Workspace timezone
+    // anchors the resolution to the operator's local time.
+    now: new Date(),
+    timezone: orgRow.timezone ?? "UTC",
   });
   const tools = getToolsForCapabilities(blueprint.capabilities);
 
@@ -382,9 +388,28 @@ export async function executeTurn(input: {
   }
 
   // 7. Run validators
+  // v1.27.7 — pass full conversation context (all user turns + tool
+  // results) so no_pii_leak doesn't flag echoes of data the customer
+  // already provided OR that a tool returned (e.g. find_my_existing_
+  // appointment surfacing the linked contact's phone).
+  const conversationContext = history
+    .map((turn) => {
+      const parts: string[] = [];
+      if (turn.role === "user" && turn.content) parts.push(turn.content);
+      if (turn.toolResults) {
+        for (const tr of turn.toolResults) {
+          if (tr.ok) parts.push(JSON.stringify(tr.output ?? null));
+        }
+      }
+      return parts.join("\n");
+    })
+    .filter(Boolean)
+    .join("\n");
+
   const { results: validatorResults, criticalFailed } = runValidators({
     response: finalText,
     userMessage: input.userMessage,
+    conversationContext,
     blueprint,
     soul: (orgRow.soul as { services?: Array<{ name: string }>; voice?: { avoidWords?: string[] } } | null) ?? null,
   });

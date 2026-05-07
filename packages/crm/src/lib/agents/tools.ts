@@ -163,13 +163,32 @@ const findMyExistingAppointmentInput = z.object({
   email: z.string().email(),
 });
 
+type AppointmentLookupResult = {
+  appointments: Array<{
+    id: string;
+    title: string;
+    startsAtIso: string;
+    status: string;
+  }>;
+  /** v1.27.7 — linked contact info so the agent doesn't have to re-ask
+   *  for name/phone after identifying the customer by email. The system
+   *  prompt's "Be smart by default" rule #2 instructs the LLM to USE
+   *  this data instead of asking the visitor to re-type it. */
+  contact: {
+    id: string;
+    fullName: string | null;
+    email: string;
+    phone: string | null;
+  } | null;
+};
+
 export const findMyExistingAppointment: AgentTool<
   z.infer<typeof findMyExistingAppointmentInput>,
-  Array<{ id: string; title: string; startsAtIso: string; status: string }>
+  AppointmentLookupResult
 > = {
   name: "find_my_existing_appointment",
   description:
-    "Look up upcoming appointments for a customer by email. Use when the visitor says they want to reschedule or cancel an existing booking.",
+    "Look up upcoming appointments AND linked contact info for a customer by email. Use when the visitor says they want to reschedule or cancel an existing booking. Returns both `appointments` (upcoming bookings) AND `contact` (their name/phone on file). USE THE CONTACT FIELDS — don't re-ask the visitor for info we already have.",
   inputSchema: findMyExistingAppointmentInput,
   jsonSchema: {
     type: "object",
@@ -194,15 +213,46 @@ export const findMyExistingAppointment: AgentTool<
         ),
       )
       .limit(5);
-    return rows.map((row) => ({
-      id: row.id,
-      title: row.title,
-      startsAtIso:
-        row.startsAt instanceof Date
-          ? row.startsAt.toISOString()
-          : String(row.startsAt),
-      status: row.status,
-    }));
+
+    // Linked contact lookup — the same email may already exist in the
+    // CRM with a fuller record (name, phone). Surface it so the agent
+    // doesn't have to re-ask.
+    const [contactRow] = await db
+      .select({
+        id: contacts.id,
+        firstName: contacts.firstName,
+        lastName: contacts.lastName,
+        email: contacts.email,
+        phone: contacts.phone,
+      })
+      .from(contacts)
+      .where(
+        and(eq(contacts.orgId, ctx.orgId), ilike(contacts.email, input.email)),
+      )
+      .limit(1);
+
+    return {
+      appointments: rows.map((row) => ({
+        id: row.id,
+        title: row.title,
+        startsAtIso:
+          row.startsAt instanceof Date
+            ? row.startsAt.toISOString()
+            : String(row.startsAt),
+        status: row.status,
+      })),
+      contact: contactRow
+        ? {
+            id: contactRow.id,
+            fullName:
+              [contactRow.firstName, contactRow.lastName]
+                .filter(Boolean)
+                .join(" ") || null,
+            email: contactRow.email ?? input.email,
+            phone: contactRow.phone ?? null,
+          }
+        : null,
+    };
   },
 };
 

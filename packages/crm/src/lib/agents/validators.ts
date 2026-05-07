@@ -19,6 +19,13 @@ export type ValidatorContext = {
   /** The user's message that triggered this response (for injection
    *  echo detection). */
   userMessage: string;
+  /** v1.27.7 — full conversation history (user messages + tool-result
+   *  blobs the agent saw). Used by no_pii_leak to allow echoing data
+   *  the customer already provided in earlier turns OR data a tool
+   *  returned (e.g. find_my_existing_appointment surfacing the linked
+   *  contact's phone). Without this context the validator over-fires:
+   *  it would flag the customer's own phone-number echo as a leak. */
+  conversationContext?: string;
   /** Agent blueprint for soul-derived facts. */
   blueprint: AgentBlueprint;
   /** Soul snapshot for voice / hours / services checks. */
@@ -118,14 +125,21 @@ const PHONE_PATTERN = /\+?\d{1,3}?[\s.-]?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/g;
 const noPiiLeak: Validator = {
   name: "no_pii_leak",
   severity: "critical",
-  run: ({ response, userMessage }) => {
+  run: ({ response, userMessage, conversationContext }) => {
+    // v1.27.7 — the "trusted" set (data we KNOW belongs to this customer
+    // or was returned by a tool the agent had access to) comes from:
+    //   - the current user message
+    //   - the full conversation context (earlier turns + tool results)
+    // Anything in the response that's NOT in the trusted set is a leak.
+    const trustedSource = `${userMessage}\n${conversationContext ?? ""}`;
+
     const responseEmails = new Set(
       Array.from(response.matchAll(EMAIL_PATTERN)).map((m) =>
         m[0].toLowerCase(),
       ),
     );
-    const userEmails = new Set(
-      Array.from(userMessage.matchAll(EMAIL_PATTERN)).map((m) =>
+    const trustedEmails = new Set(
+      Array.from(trustedSource.matchAll(EMAIL_PATTERN)).map((m) =>
         m[0].toLowerCase(),
       ),
     );
@@ -134,16 +148,18 @@ const noPiiLeak: Validator = {
         m[0].replace(/\D/g, ""),
       ),
     );
-    const userPhones = new Set(
-      Array.from(userMessage.matchAll(PHONE_PATTERN)).map((m) =>
+    const trustedPhones = new Set(
+      Array.from(trustedSource.matchAll(PHONE_PATTERN)).map((m) =>
         m[0].replace(/\D/g, ""),
       ),
     );
 
     const leakedEmails = [...responseEmails].filter(
-      (e) => !userEmails.has(e) && !e.endsWith("@seldonframe.local"),
+      (e) => !trustedEmails.has(e) && !e.endsWith("@seldonframe.local"),
     );
-    const leakedPhones = [...responsePhones].filter((p) => !userPhones.has(p));
+    const leakedPhones = [...responsePhones].filter(
+      (p) => !trustedPhones.has(p),
+    );
 
     if (leakedEmails.length === 0 && leakedPhones.length === 0) {
       return { name: "no_pii_leak", passed: true };

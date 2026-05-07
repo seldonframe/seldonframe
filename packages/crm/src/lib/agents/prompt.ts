@@ -1,4 +1,4 @@
-// v1.26.0 — agent system prompt composer
+// v1.27.7 — agent system prompt composer (with platform intelligence baseline)
 //
 // Operators DO NOT write system prompts. We derive them from Soul +
 // the agent's blueprint. This is the most important safety property
@@ -7,8 +7,15 @@
 // reasoning. Bad prompts are a class of bugs the operator can't
 // introduce.
 //
-// The composed prompt is reproducible — same Soul + same blueprint
-// always produces the same prompt. That's the eval-suite contract.
+// v1.27.7 adds the PLATFORM INTELLIGENCE BASELINE — defaults every agent
+// gets for free, regardless of blueprint:
+//   - Temporal grounding (today's date, day of week, timezone)
+//   - "Don't ask for info you already have" rule
+//   - "Resolve relative dates optimistically" rule
+//   - "Echoing customer-provided data is fine" rule
+//
+// As Claude gets better, we add more nuance HERE. No code restructure.
+// This is the "fat skill" layer in thin-harness/fat-skill.
 
 import type { OrgSoul } from "@/lib/soul/types";
 import type { AgentBlueprint } from "@/db/schema/agents";
@@ -23,6 +30,14 @@ export type ComposeSystemPromptInput = {
   /** Whether this is a test-mode conversation. Affects tool guidance
    *  ("note: any booking actions in test mode are sandboxed"). */
   testMode?: boolean;
+  /** v1.27.7 — current wall-clock context for the agent's temporal
+   *  grounding. Defaults to "now in workspace's local timezone" if
+   *  the runtime doesn't pass one. */
+  now?: Date;
+  /** v1.27.7 — workspace timezone (e.g. "America/Phoenix"). Used so
+   *  the agent resolves "tomorrow" / "this Friday" in the OPERATOR'S
+   *  local time, not the server's. */
+  timezone?: string;
 };
 
 const ARCHETYPE_PERSONAS: Record<string, string> = {
@@ -35,13 +50,61 @@ const ARCHETYPE_PERSONAS: Record<string, string> = {
 };
 
 export function composeSystemPrompt(input: ComposeSystemPromptInput): string {
-  const { orgName, soul, blueprint, archetype, brainNotes, testMode } = input;
+  const {
+    orgName,
+    soul,
+    blueprint,
+    archetype,
+    brainNotes,
+    testMode,
+    now,
+    timezone,
+  } = input;
 
   const personaTemplate =
     ARCHETYPE_PERSONAS[archetype] ?? ARCHETYPE_PERSONAS["website-chatbot"];
   const persona = personaTemplate.replace("{orgName}", orgName);
 
   const sections: string[] = [persona];
+
+  // ── PLATFORM INTELLIGENCE BASELINE ────────────────────────────────────
+  // Every agent gets this for free. Operators don't author it. As Claude
+  // improves, we expand THIS section. Architecture stays stable.
+
+  // Temporal grounding: tell the agent what day it is, in the workspace's
+  // local timezone. Without this, "this Friday" / "tomorrow" / "next week"
+  // can't be resolved.
+  const tz = timezone ?? "America/New_York";
+  const nowDate = now ?? new Date();
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+  const timeFmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+  sections.push(
+    `## Right now\n` +
+      `Today is ${fmt.format(nowDate)} (${timeFmt.format(nowDate)} ${tz}). ` +
+      `When the visitor says "today", "tomorrow", "this Friday", "next week", etc., resolve them to a CONCRETE date using this anchor. ` +
+      `Default to the most natural interpretation: "this Friday" = the next upcoming Friday; "tomorrow" = the next calendar day; "next week" = the same weekday 7 days out. Don't ask the visitor what date they meant unless their phrasing is genuinely ambiguous.`,
+  );
+
+  sections.push(
+    `## Be smart by default\n` +
+      `1. **Don't ask for info you already have.** If the visitor's email, name, or phone is already in this conversation (they typed it, or a tool returned a contact record), USE IT. Never ask for the same field twice.\n` +
+      `2. **Use linked-contact data when a tool returns it.** If find_my_existing_appointment returns a customer record, you have their name, email, and phone. Don't re-ask. Confirm details by RESTATING them ("I see this is for Maxime at 450-516-1803 — should I update the appointment?") rather than asking the visitor to re-type.\n` +
+      `3. **Echoing data the visitor just provided is NOT a leak.** If the visitor types their phone number, repeating it back to confirm is helpful, not a privacy violation. Only treat OTHER customers' data as PII to protect.\n` +
+      `4. **Default to optimistic interpretation.** "Yes" / "sounds good" / "go ahead" = proceed. "Friday at 1pm" = the next Friday at 1:00 PM in the visitor's local time. "$200 ish" = around $200. Pick the most likely meaning and act.\n` +
+      `5. **Confirm before destructive actions.** Before book_appointment / cancel / reschedule executes, say what you're about to do in one sentence ("I'll move your appointment from May 21 to May 8 at 1pm — confirm?") and wait for explicit yes.\n` +
+      `6. **Stay concise.** If the visitor asks a yes/no question, answer in one sentence. Reserve longer responses for genuinely complex topics.`,
+  );
 
   // Industry + offering
   if (soul?.industry) {
