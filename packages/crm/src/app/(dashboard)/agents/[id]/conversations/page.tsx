@@ -1,9 +1,9 @@
-// v1.26.2 — agent conversations review surface
+// v1.27.0 — agent conversations review surface (now with quality marking).
 //
-// Lists recent conversations for the agent (excluding eval runs) plus
-// each one's first user message + last assistant reply. Click expands
-// in-place to show the full transcript with tool calls + validator
-// results. v1.26.3 will add operator-quality marking (good/bad/notes).
+// Renders inside the /agents/[id] layout (header + tab nav supplied there).
+// Lists recent conversations excluding eval runs; expand-in-place shows the
+// full transcript with tool calls + validator results. Each row exposes a
+// QualityMarker (good/bad/notes) that writes operator_quality + operator_notes.
 
 import { notFound } from "next/navigation";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
@@ -18,6 +18,7 @@ import {
   type AgentValidatorResult,
 } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
+import { QualityMarker } from "./quality-marker";
 
 export const dynamic = "force-dynamic";
 
@@ -57,6 +58,8 @@ export default async function AgentConversationsPage({
       llmCostCents: agentConversations.llmCostCents,
       anonymousSessionId: agentConversations.anonymousSessionId,
       channelMeta: agentConversations.channelMeta,
+      operatorQuality: agentConversations.operatorQuality,
+      operatorNotes: agentConversations.operatorNotes,
     })
     .from(agentConversations)
     .where(
@@ -69,21 +72,12 @@ export default async function AgentConversationsPage({
     .limit(PAGE_SIZE);
 
   return (
-    <section className="animate-page-enter space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h1 className="text-page-title">{agent.name} — conversations</h1>
-          <p className="text-label text-[hsl(var(--color-text-secondary))]">
-            Recent customer chats. Eval-run conversations hidden by default.
-          </p>
-        </div>
-        <Link
-          href={`/admin/agents/${agent.id}/test`}
-          className="crm-button-secondary h-9 px-4 text-sm"
-        >
-          Open sandbox
-        </Link>
-      </div>
+    <div className="space-y-4">
+      <p className="text-xs text-muted-foreground">
+        Recent customer chats. Eval-run conversations hidden by default. Use
+        the good/bad buttons to mark a conversation — these signals fold into
+        future eval scenarios so the agent learns from your judgment.
+      </p>
 
       {convs.length === 0 ? (
         <article className="rounded-xl border bg-card p-6">
@@ -97,7 +91,7 @@ export default async function AgentConversationsPage({
           agentId: agent.id,
           expandedId,
         })}
-    </section>
+    </div>
   );
 }
 
@@ -113,6 +107,8 @@ async function renderConversationList(input: {
     llmCostCents: number;
     anonymousSessionId: string | null;
     channelMeta: Record<string, unknown>;
+    operatorQuality: string | null;
+    operatorNotes: string | null;
   }>;
   agentId: string;
   expandedId: string | undefined;
@@ -200,8 +196,8 @@ async function renderConversationList(input: {
               <Link
                 href={
                   isExpanded
-                    ? `/admin/agents/${input.agentId}/conversations`
-                    : `/admin/agents/${input.agentId}/conversations?expand=${conv.id}`
+                    ? `/agents/${input.agentId}/conversations`
+                    : `/agents/${input.agentId}/conversations?expand=${conv.id}`
                 }
                 className="text-primary underline-offset-2 hover:underline"
               >
@@ -227,13 +223,46 @@ async function renderConversationList(input: {
                     {lastAssistant.content}
                   </p>
                 )}
+                {(conv.operatorQuality === "good" ||
+                  conv.operatorQuality === "bad") && (
+                  <p className="mt-1 text-xs">
+                    <span
+                      className={
+                        conv.operatorQuality === "good"
+                          ? "text-emerald-600"
+                          : "text-rose-600"
+                      }
+                    >
+                      {conv.operatorQuality === "good"
+                        ? "✓ marked good"
+                        : "✗ marked bad"}
+                    </span>
+                    {conv.operatorNotes && (
+                      <span className="ml-2 text-muted-foreground">
+                        — {conv.operatorNotes}
+                      </span>
+                    )}
+                  </p>
+                )}
               </div>
             ) : (
-              <div className="mt-3 space-y-3">
-                {turnsForThis.map((t) => (
-                  <TurnDisplay key={t.turnIndex} turn={t} />
-                ))}
-              </div>
+              <>
+                <div className="mt-3 space-y-3">
+                  {turnsForThis.map((t) => (
+                    <TurnDisplay key={t.turnIndex} turn={t} />
+                  ))}
+                </div>
+                <QualityMarker
+                  conversationId={conv.id}
+                  initialQuality={
+                    conv.operatorQuality === "good" ||
+                    conv.operatorQuality === "bad"
+                      ? conv.operatorQuality
+                      : null
+                  }
+                  initialNotes={conv.operatorNotes}
+                />
+              </>
             )}
           </article>
         );

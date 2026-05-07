@@ -116,6 +116,7 @@ export function Sidebar(props: {
             { href: "/contacts", label: labels.contact.plural, icon: "Users" },
             { href: "/deals", label: labels.deal.plural, icon: "Building2" },
             { href: "/bookings", label: "Booking", icon: "Calendar" },
+            { href: "/agents", label: "Agents", icon: "Bot" },
             { href: "/landing", label: "Pages", icon: "Layout" },
             { href: "/emails", label: "Email", icon: "Mail" },
             { href: "/forms", label: labels.intakeForm.plural, icon: "FileText" },

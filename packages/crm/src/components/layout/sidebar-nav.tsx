@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, Briefcase, Building2, Calendar, ChevronRight, ExternalLink, FileText, Layout, LayoutDashboard, Mail, MessageCircle, Puzzle, Settings, Sparkles, Users, Zap } from "lucide-react";
+import { BookOpen, Bot, Briefcase, Building2, Calendar, ChevronRight, ExternalLink, FileText, Layout, LayoutDashboard, Mail, MessageCircle, Puzzle, Settings, Sparkles, Users, Zap } from "lucide-react";
 
 type NavItem = {
   href: string;
@@ -41,6 +41,8 @@ const iconMap = {
   filetext: FileText,
   automations: Zap,
   zap: Zap,
+  agents: Bot,
+  bot: Bot,
   settings: Settings,
   sparkles: Sparkles,
   puzzle: Puzzle,

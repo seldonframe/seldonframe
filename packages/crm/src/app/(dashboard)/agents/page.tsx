@@ -85,13 +85,13 @@ export default async function AdminAgentsPage() {
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2">
                   <Link
-                    href={`/admin/agents/${row.id}/test`}
+                    href={`/agents/${row.id}/test`}
                     className="crm-button-secondary h-9 px-4 text-sm"
                   >
                     Open sandbox
                   </Link>
                   <Link
-                    href={`/admin/agents/${row.id}/conversations`}
+                    href={`/agents/${row.id}/conversations`}
                     className="crm-button-secondary h-9 px-4 text-sm"
                   >
                     View conversations
