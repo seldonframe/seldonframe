@@ -1,6 +1,7 @@
 import { requireAuth } from "@/lib/auth/helpers";
 import { getOrgId } from "@/lib/auth/helpers";
 import { isAdminTokenUserId } from "@/lib/auth/admin-token";
+import { isOperatorPortalUserId } from "@/lib/auth/operator-portal-context";
 import { SoulProvider } from "@/components/soul/soul-provider";
 import { getSoul } from "@/lib/soul/server";
 import { getPersonality } from "@/lib/crm/personality-server";
@@ -51,13 +52,20 @@ export default async function DashboardLayout({
   // empty. Skip them and synthesize sensible defaults — the admin-token
   // operator sees their workspace's data, not a personal billing view.
   const isAdminTokenSession = isAdminTokenUserId(user?.id);
-  const [dbUserForPlan] = user?.id && !isAdminTokenSession
+  // v1.25.0 — operator-portal sessions follow the same skip-the-lookup
+  // pattern: synthetic user.id won't exist in the users table, so we
+  // synthesize sensible defaults rather than crashing or rendering
+  // empty plan/billing state. The operator sees their workspace's data,
+  // not personal billing.
+  const isOperatorSession = isOperatorPortalUserId(user?.id);
+  const skipUserLookup = isAdminTokenSession || isOperatorSession;
+  const [dbUserForPlan] = user?.id && !skipUserLookup
     ? await db.select({ planId: sql<string | null>`plan_id` }).from(users).where(eq(users.id, user.id)).limit(1)
     : [null];
   const plan = resolvePlanFromPlanId(dbUserForPlan?.planId ?? null);
   const canAccessSeldon = canSeldonIt(plan);
   const workspaceOptions =
-    user?.id && !isAdminTokenSession ? await listManagedOrganizations(user.id) : [];
+    user?.id && !skipUserLookup ? await listManagedOrganizations(user.id) : [];
 
   const [activeOrg, orgMemberCount] = orgId
     ? await Promise.all([

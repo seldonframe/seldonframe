@@ -30,9 +30,12 @@ export async function GET(
     );
   }
 
+  // v1.25.0 — operator session unlocks the admin dashboard. Land at
+  // /dashboard so the operator gets the same UX as the SF agency
+  // operator (one source of truth at the route level). The operator's
+  // workspace is set via the sf_operator_session cookie, which
+  // getOrgId() picks up for all admin-page server components.
   const target =
-    redirectTo && redirectTo.startsWith("/")
-      ? redirectTo
-      : `/portal/${orgSlug}`;
+    redirectTo && redirectTo.startsWith("/") ? redirectTo : `/dashboard`;
   return NextResponse.redirect(new URL(target, request.url));
 }

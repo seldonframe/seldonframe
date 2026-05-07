@@ -220,8 +220,11 @@ export async function consumeAgencySupportSession(input: {
     maxAge: SUPPORT_SESSION_TTL_HOURS * 60 * 60,
   });
 
+  // v1.25.0 — agency support session lands at /dashboard (same admin
+  // shell as a normal operator login), with the supportOriginUserId
+  // surfaced on the synthetic session for banner rendering.
   return {
     ok: true,
-    redirectTo: `/portal/${input.orgSlug}`,
+    redirectTo: `/dashboard`,
   };
 }

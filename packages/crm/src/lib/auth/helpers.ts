@@ -9,18 +9,34 @@ import {
   isAdminTokenUserId,
   resolveAdminTokenContext,
 } from "./admin-token";
+import {
+  isOperatorPortalUserId,
+  resolveOperatorPortalContext,
+} from "./operator-portal-context";
 
 /**
- * C6: server components and route handlers can authenticate via either
- *   - a real NextAuth session (interactive login)
- *   - an admin-token cookie (set by /admin/[workspaceId]?token=wst_…)
- * The admin-token path returns a synthetic Session-shaped object whose
- * `user.id` carries the `__sf_admin_token__:` prefix so callers that
- * need to skip user-table writes can detect it via `isAdminTokenUserId`.
+ * Server components and route handlers can authenticate via THREE sources:
+ *   1. NextAuth session (interactive login)
+ *   2. Admin-token cookie (set by /admin/[workspaceId]?token=wst_…)
+ *   3. v1.25.0 — Operator-portal session (sf_operator_session cookie).
+ *      Set by the magic-link verifier in lib/operator-portal/auth.ts
+ *      OR by createAgencySupportSession. Yields a synthetic Session-
+ *      shaped object whose user.id carries the
+ *      `__sf_operator_portal__:` prefix; downstream code that mutates
+ *      the users table can no-op for these sessions via
+ *      isOperatorPortalUserId, mirroring the admin-token treatment.
+ *
+ * Resolution order: NextAuth → operator portal → admin-token.
+ * Operator portal precedes admin-token because the magic-link flow
+ * is the dominant white-label entry path.
  */
 export async function getCurrentUser() {
   const session = await auth();
   if (session?.user) return session.user;
+
+  // v1.25.0 — operator-portal session
+  const opCtx = await resolveOperatorPortalContext();
+  if (opCtx) return opCtx.user;
 
   const adminCtx = await resolveAdminTokenContext();
   if (adminCtx) return adminCtx.user;
@@ -33,6 +49,10 @@ export async function getOrgId() {
   // skip the user/org-membership round-trip and return the token's orgId.
   const adminCtx = await resolveAdminTokenContext();
   if (adminCtx) return adminCtx.orgId;
+
+  // v1.25.0 — operator-portal sessions are also workspace-scoped.
+  const opCtx = await resolveOperatorPortalContext();
+  if (opCtx) return opCtx.orgId;
 
   const user = await getCurrentUser();
 
@@ -74,21 +94,26 @@ export async function requireAuth() {
   const session = await auth();
   if (session?.user) return session;
 
+  // v1.25.0 — operator-portal session: produces a synthetic session
+  // so the dashboard layout/page renders without redirecting to login.
+  // Surface the supportOriginUserId on the user object so layouts can
+  // render the agency-support audit banner. Downstream code that
+  // mutates the users table can no-op via isOperatorPortalUserId.
+  const opCtx = await resolveOperatorPortalContext();
+  if (opCtx) {
+    const synthetic: Session = {
+      user: opCtx.user,
+      expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    };
+    return synthetic;
+  }
+
   // C6: admin-token cookie produces a synthetic session so the dashboard
-  // layout / page renders without redirecting to /login. The synthetic
-  // user.id is recognizable via isAdminTokenUserId so downstream code
-  // that mutates the users table can no-op for token sessions.
+  // layout / page renders without redirecting to /login.
   const adminCtx = await resolveAdminTokenContext();
   if (adminCtx) {
-    // Cast to `Session` directly — `Awaited<ReturnType<typeof auth>>`
-    // is a union that includes `NextMiddleware`, which doesn't have a
-    // `user` field, so callers like layout.tsx that read `session.user`
-    // would fail to typecheck against the wider type.
     const synthetic: Session = {
       user: adminCtx.user,
-      // Match the rough NextAuth Session shape — `expires` gives the
-      // dashboard a plausible session-end timestamp for any code that
-      // checks it (most doesn't).
       expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
     };
     return synthetic;
@@ -109,6 +134,12 @@ export async function getCurrentWorkspaceRole() {
   // users / org_members lookup since the synthetic user.id doesn't
   // exist in either table.
   if (isAdminTokenUserId(user.id)) {
+    return "admin";
+  }
+
+  // v1.25.0 — operator-portal sessions are workspace-admin equivalent
+  // for the workspace they're scoped to. Same skip-the-lookup pattern.
+  if (isOperatorPortalUserId(user.id)) {
     return "admin";
   }
 
