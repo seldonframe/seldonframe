@@ -11,8 +11,9 @@ import { ensureDefaultPipelineForOrg } from "@/lib/deals/pipeline-defaults";
 import { trackEvent } from "@/lib/analytics/track";
 import { logBrainEvent } from "@/lib/analytics/brain";
 
-export async function listDeals() {
-  const orgId = await getOrgId();
+export async function listDeals(orgIdOverride?: string) {
+  // v1.24.0 — accept orgId override for operator-portal mirror.
+  const orgId = orgIdOverride ?? (await getOrgId());
 
   if (!orgId) {
     return [];
@@ -21,8 +22,9 @@ export async function listDeals() {
   return db.select().from(deals).where(eq(deals.orgId, orgId));
 }
 
-export async function getDefaultPipeline() {
-  const orgId = await getOrgId();
+export async function getDefaultPipeline(orgIdOverride?: string) {
+  // v1.24.0 — accept orgId override for operator-portal mirror.
+  const orgId = orgIdOverride ?? (await getOrgId());
 
   if (!orgId) {
     return null;

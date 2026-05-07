@@ -619,8 +619,9 @@ export async function updateBookingTypeAction(input: {
   };
 }
 
-export async function listAppointmentTypes() {
-  const orgId = await getOrgId();
+export async function listAppointmentTypes(orgIdOverride?: string) {
+  // v1.24.0 — accept orgId override for operator-portal mirror.
+  const orgId = orgIdOverride ?? (await getOrgId());
 
   if (!orgId) {
     return [];
@@ -639,8 +640,9 @@ export async function listAppointmentTypes() {
     .orderBy(asc(bookings.createdAt));
 }
 
-export async function listBookings() {
-  const orgId = await getOrgId();
+export async function listBookings(orgIdOverride?: string) {
+  // v1.24.0 — accept orgId override for operator-portal mirror.
+  const orgId = orgIdOverride ?? (await getOrgId());
 
   if (!orgId) {
     return [];

@@ -33,9 +33,11 @@ async function resolveActiveOrgIdForReadPath(): Promise<string | null> {
   return null;
 }
 
-export async function getSoul(): Promise<OrgSoul | null> {
+export async function getSoul(orgIdOverride?: string): Promise<OrgSoul | null> {
   try {
-    const orgId = await resolveActiveOrgIdForReadPath();
+    // v1.24.0 — accept an explicit orgId override so operator-portal
+    // mirror can reuse this helper without going through NextAuth.
+    const orgId = orgIdOverride ?? (await resolveActiveOrgIdForReadPath());
     if (!orgId) return null;
 
     const [org] = await db

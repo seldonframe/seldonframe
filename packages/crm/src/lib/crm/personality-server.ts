@@ -17,9 +17,10 @@ import {
  * Workspaces created before the personality system landed have no
  * `settings.crmPersonality`; they transparently get DEFAULT_PERSONALITY.
  */
-export async function getPersonality(): Promise<CRMPersonality> {
+export async function getPersonality(orgIdOverride?: string): Promise<CRMPersonality> {
   try {
-    const orgId = await getOrgId();
+    // v1.24.0 — accept orgId override for operator-portal mirror.
+    const orgId = orgIdOverride ?? (await getOrgId());
     if (!orgId) return DEFAULT_PERSONALITY;
 
     const [row] = await db

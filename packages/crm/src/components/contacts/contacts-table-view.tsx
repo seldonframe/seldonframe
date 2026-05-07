@@ -98,6 +98,17 @@ export type ContactsTableViewProps = {
   // side panel.
   csvImportHref: string;
   newContactHref: string;
+  /** v1.24.0 — base href for contact-detail links. "/contacts" for
+   *  the SF admin dashboard; "/portal/<slug>/contacts" for the
+   *  operator portal mirror. Default "/contacts" for backward compat. */
+  contactDetailHrefBase?: string;
+  /** v1.24.0 — base href for deal-detail links surfaced in the side
+   *  panel's Deals tab. "/deals" admin / "/portal/<slug>/deals" operator. */
+  dealDetailHrefBase?: string;
+  /** v1.24.0 — when true, hide write affordances (inline edit, bulk
+   *  select, status change). Operator portal sets this until v1.24.1
+   *  ships dual-auth server actions. */
+  readonly?: boolean;
 };
 
 type SortKey = "name" | "email" | "phone" | "stage" | "created";
@@ -210,6 +221,9 @@ export function ContactsTableView({
   notesByContact,
   csvImportHref,
   newContactHref,
+  contactDetailHrefBase = "/contacts",
+  dealDetailHrefBase = "/deals",
+  readonly = false,
 }: ContactsTableViewProps) {
   const router = useRouter();
   const [sortKey, setSortKey] = useState<SortKey>("created");
@@ -464,7 +478,7 @@ export function ContactsTableView({
                           panel = quick glance, full page = focused
                           editing across all tabs. */}
                       <Link
-                        href={`/contacts/${row.id}`}
+                        href={`${contactDetailHrefBase}/${row.id}`}
                         onClick={(e) => e.stopPropagation()}
                         className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                         aria-label={`Open full record for ${fullName(row)}`}
@@ -488,6 +502,8 @@ export function ContactsTableView({
           notes={notesByContact[activeContact.id] ?? []}
           contactLabelSingular={contactLabelSingular}
           contactLabelPlural={contactLabelPlural}
+          contactDetailHrefBase={contactDetailHrefBase}
+          dealDetailHrefBase={dealDetailHrefBase}
           onClose={() => setActiveId(null)}
         />
       ) : null}
@@ -729,6 +745,8 @@ function ContactSidePanel({
   notes,
   contactLabelSingular,
   contactLabelPlural,
+  contactDetailHrefBase = "/contacts",
+  dealDetailHrefBase = "/deals",
   onClose,
 }: {
   contact: ContactRow;
@@ -737,6 +755,8 @@ function ContactSidePanel({
   notes: NoteItem[];
   contactLabelSingular: string;
   contactLabelPlural: string;
+  contactDetailHrefBase?: string;
+  dealDetailHrefBase?: string;
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<"overview" | "activity" | "deals" | "notes">("overview");
@@ -762,7 +782,7 @@ function ContactSidePanel({
         <div className="flex items-center justify-between gap-2 border-b px-5 py-2 text-[11px]">
           <span className="text-muted-foreground">Quick view</span>
           <Link
-            href={`/contacts/${contact.id}`}
+            href={`${contactDetailHrefBase}/${contact.id}`}
             className="inline-flex items-center gap-1 font-medium text-primary underline-offset-4 hover:underline"
           >
             Open full record →
@@ -821,11 +841,15 @@ function ContactSidePanel({
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
           {tab === "overview" ? (
-            <OverviewTab contact={contact} />
+            <OverviewTab contact={contact} contactDetailHrefBase={contactDetailHrefBase} />
           ) : tab === "activity" ? (
             <ActivityTab activity={activity} />
           ) : tab === "deals" ? (
-            <DealsTab deals={deals} contactLabelPlural={contactLabelPlural} />
+            <DealsTab
+              deals={deals}
+              contactLabelPlural={contactLabelPlural}
+              dealDetailHrefBase={dealDetailHrefBase}
+            />
           ) : (
             <NotesTab notes={notes} />
           )}
@@ -839,7 +863,13 @@ function ContactSidePanel({
   );
 }
 
-function OverviewTab({ contact }: { contact: ContactRow }) {
+function OverviewTab({
+  contact,
+  contactDetailHrefBase = "/contacts",
+}: {
+  contact: ContactRow;
+  contactDetailHrefBase?: string;
+}) {
   const fields: Array<{ label: string; value: string | null; icon?: React.ReactNode }> = [
     { label: "Email", value: contact.email, icon: <Mail className="size-3.5 text-muted-foreground" /> },
     { label: "Phone", value: contact.phone, icon: <Phone className="size-3.5 text-muted-foreground" /> },
@@ -889,7 +919,7 @@ function OverviewTab({ contact }: { contact: ContactRow }) {
             </a>
           ) : null}
           <Link
-            href={`/contacts/${contact.id}`}
+            href={`${contactDetailHrefBase}/${contact.id}`}
             className="inline-flex items-center justify-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
           >
             Open full record →
@@ -946,9 +976,11 @@ function activityTypeLabel(type: string): string {
 function DealsTab({
   deals,
   contactLabelPlural,
+  dealDetailHrefBase = "/deals",
 }: {
   deals: DealLink[];
   contactLabelPlural: string;
+  dealDetailHrefBase?: string;
 }) {
   if (deals.length === 0) {
     return (
@@ -962,7 +994,7 @@ function DealsTab({
       {deals.map((d) => (
         <li key={d.id}>
           <Link
-            href={`/deals/${d.id}`}
+            href={`${dealDetailHrefBase}/${d.id}`}
             className="flex items-start justify-between gap-3 rounded-lg border border-border bg-background/50 p-3 transition-colors hover:bg-muted/50"
           >
             <div className="min-w-0 flex-1">

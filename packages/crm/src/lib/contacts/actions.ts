@@ -15,6 +15,10 @@ type ContactListOptions = {
   status?: string;
   sort?: ContactListSort;
   createdAfter?: Date;
+  /** v1.24.0 — explicit orgId override. When set, skip the session-
+   *  based getOrgId() resolution. Used by the operator portal mirror
+   *  which has a different session source than NextAuth. */
+  orgId?: string;
 };
 
 type ImportedContactRow = {
@@ -28,7 +32,10 @@ type ImportedContactRow = {
 };
 
 export async function listContacts(options?: ContactListOptions) {
-  const orgId = await getOrgId();
+  // v1.24.0 — accept an explicit orgId override so the operator-portal
+  // mirror (which authenticates via the sf_operator_session cookie,
+  // not NextAuth) can reuse this helper.
+  const orgId = options?.orgId ?? (await getOrgId());
 
   if (!orgId) {
     return [];
