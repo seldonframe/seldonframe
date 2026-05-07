@@ -359,10 +359,15 @@ export async function getLatestEvalRun(input: {
   };
 }
 
-/** Re-export for the publish gate. */
-export { PUBLISH_PASS_RATE_THRESHOLD };
+// NOTE: do NOT re-export PUBLISH_PASS_RATE_THRESHOLD from this module —
+// this file is "use server", and Next.js Server Actions only allow async-
+// function exports. Re-exporting a number breaks `next build` at the
+// page-data collection step. Consumers should import the constant
+// directly from "./eval-scenarios". (TypeScript doesn't catch this; only
+// next build does.)
 
-// avoid unused-import warning when AgentEvalScenario isn't directly used
+// avoid unused-import warning when AgentEvalScenario / agentTurns aren't
+// referenced directly in this file's runtime code
 type _Touch = AgentEvalScenario;
 const _touchAgentTurns = agentTurns;
 void _touchAgentTurns;
