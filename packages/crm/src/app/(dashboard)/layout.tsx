@@ -203,6 +203,7 @@ export default async function DashboardLayout({
                     soulId: workspace.soulId,
                   }))}
                   switchWorkspaceAction={setActiveOrgAction}
+                  isOperatorSession={isOperatorSession}
                 />
                 {children}
               </div>
@@ -212,8 +213,10 @@ export default async function DashboardLayout({
           <CommandPalette items={paletteItems} />
           {/* May 1, 2026 — persistent help escape hatch on every
               admin page. Floating bottom-right button opens a popover
-              with Discord / Docs / Report-a-bug links. */}
-          <HelpButton />
+              with Discord / Docs / Report-a-bug links.
+              v1.25.3 — hidden for operator sessions: their support is
+              their agency (Acme AI), not SF community / docs. */}
+          {!isOperatorSession ? <HelpButton /> : null}
         </div>
       </div>
     </SoulProvider>

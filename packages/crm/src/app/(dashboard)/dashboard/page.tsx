@@ -707,9 +707,14 @@ export default async function DashboardPage({
 
   return (
     <main className="animate-page-enter flex-1 overflow-auto w-full space-y-5 p-3 sm:space-y-6 sm:p-4 md:p-6">
-      <div className="rounded-2xl border border-border/80 bg-background/30 px-4 py-3 text-sm text-muted-foreground">
-        For the best experience, use Seldon directly from Claude Code with our MCP + Skill.
-      </div>
+      {/* v1.25.3 — Claude Code/MCP hint is for SF technical users.
+          Hidden for operator sessions (HVAC owner / dentist /etc.) who
+          have no relationship with our developer tooling. */}
+      {!isOperatorSession ? (
+        <div className="rounded-2xl border border-border/80 bg-background/30 px-4 py-3 text-sm text-muted-foreground">
+          For the best experience, use Seldon directly from Claude Code with our MCP + Skill.
+        </div>
+      ) : null}
 
       {showWorkspaceTabs ? (
         <div className="inline-flex items-center rounded-xl border border-border/80 bg-card/75 p-1 shadow-(--shadow-xs)">
@@ -813,19 +818,33 @@ export default async function DashboardPage({
             Good {timeOfDay()}, {firstName}
           </h1>
           <p className="text-sm sm:text-base text-muted-foreground">
-            This is your calm workspace overview.
+            {/* v1.25.3 — operator sessions get a copy that grounds the
+                page in THEIR business, not SF-meta workspace concept. */}
+            {isOperatorSession
+              ? "Here's what's happening at your workspace today."
+              : "This is your calm workspace overview."}
           </p>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-3">
-          <Link href="/orgs/new" className="crm-button-secondary h-8 gap-2 px-3 text-xs sm:h-9 sm:gap-3 sm:text-sm">
-            <Plus className="size-3 sm:size-4" />
-            <span>Create New Client OS</span>
-          </Link>
-        </div>
+        {/* v1.25.3 — "Create New Client OS" is an SF-agency action
+            (creating a new white-label client workspace). Operator
+            sessions never need it; their workspace is fixed. */}
+        {!isOperatorSession ? (
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Link href="/orgs/new" className="crm-button-secondary h-8 gap-2 px-3 text-xs sm:h-9 sm:gap-3 sm:text-sm">
+              <Plus className="size-3 sm:size-4" />
+              <span>Create New Client OS</span>
+            </Link>
+          </div>
+        ) : null}
       </header>
 
-      {(bookingTemplateRow || defaultIntakeForm || pipelineStages.length > 0) && (
+      {/* v1.25.3 — "Newly installed blocks" is the SF agency's
+          build-time view of what they just shipped to a client
+          workspace. The HVAC owner doesn't have a build-time —
+          their workspace was already configured before they got
+          access. Hide for operator sessions. */}
+      {!isOperatorSession && (bookingTemplateRow || defaultIntakeForm || pipelineStages.length > 0) && (
         <section className="crm-card space-y-5">
           <div className="flex items-start justify-between gap-3">
             <div className="space-y-1">
@@ -966,7 +985,12 @@ export default async function DashboardPage({
                 <h2 className="text-base sm:text-lg font-semibold">Pipeline</h2>
               </div>
               <p className="text-sm text-muted-foreground">
-                Live kanban from BLOCK.md view metadata — stage colors, WIP limits, and lane totals all come from the pipeline schema.
+                {/* v1.25.3 — operator sessions get plain English; the
+                    BLOCK.md jargon is for SF builders configuring the
+                    pipeline schema. */}
+                {isOperatorSession
+                  ? "Drag deals between stages to update their status."
+                  : "Live kanban from BLOCK.md view metadata — stage colors, WIP limits, and lane totals all come from the pipeline schema."}
               </p>
             </div>
             <Link

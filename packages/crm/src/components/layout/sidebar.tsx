@@ -82,6 +82,11 @@ export function Sidebar(props: {
   // (Acme AI), not the sub-tenant operator (HVAC owner).
   const navGroups: NavGroup[] = isOperatorSession
     ? [
+        // v1.25.3 — operator sidebar trimmed further: no SF Discord
+        // help link. HVAC owner / dentist / etc. get support from
+        // their AGENCY (Acme AI), not SF community. The agency-side
+        // contact info lives in the user-account dropdown footer
+        // (workspace settings / brand chrome).
         {
           title: "OVERVIEW",
           items: filterHidden([
@@ -94,17 +99,6 @@ export function Sidebar(props: {
             { href: "/contacts", label: labels.contact.plural, icon: "Users" },
             { href: "/deals", label: labels.deal.plural, icon: "Building2" },
             { href: "/bookings", label: "Booking", icon: "Calendar" },
-          ]),
-        },
-        {
-          title: "ACCOUNT",
-          items: filterHidden([
-            {
-              href: "https://discord.gg/sbVUu976NW",
-              label: "Help",
-              icon: "MessageCircle",
-              external: true,
-            },
           ]),
         },
       ].filter((group) => group.items.length > 0)

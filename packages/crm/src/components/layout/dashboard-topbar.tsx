@@ -123,6 +123,7 @@ export function DashboardTopbar({
   activeWorkspaceId,
   workspaceOptions,
   switchWorkspaceAction,
+  isOperatorSession = false,
 }: {
   userName: string;
   userEmail: string;
@@ -132,6 +133,9 @@ export function DashboardTopbar({
   activeWorkspaceId: string | null;
   workspaceOptions: Array<{ id: string; name: string; contactCount: number; soulId: string | null }>;
   switchWorkspaceAction: (formData: FormData) => void | Promise<void>;
+  /** v1.25.3 — operator session: hide Docs link (SF developer docs).
+   *  Their support comes from their agency, not SF documentation. */
+  isOperatorSession?: boolean;
 }) {
   const pathname = usePathname();
   const labels = useLabels();
@@ -256,12 +260,16 @@ export function DashboardTopbar({
       </div>
 
       <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
-        <Link
-          href="/docs"
-          className="hidden h-9 items-center rounded-xl border border-border/80 bg-background/70 px-3 text-sm font-medium text-muted-foreground shadow-(--shadow-xs) transition hover:border-border hover:bg-background hover:text-foreground lg:inline-flex"
-        >
-          Docs
-        </Link>
+        {/* v1.25.3 — Docs link is for SF builders. Hidden for
+            operator sessions. */}
+        {!isOperatorSession ? (
+          <Link
+            href="/docs"
+            className="hidden h-9 items-center rounded-xl border border-border/80 bg-background/70 px-3 text-sm font-medium text-muted-foreground shadow-(--shadow-xs) transition hover:border-border hover:bg-background hover:text-foreground lg:inline-flex"
+          >
+            Docs
+          </Link>
+        ) : null}
 
         <button type="button" className="crm-topbar-icon-btn" aria-label="Toggle theme" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
           {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
