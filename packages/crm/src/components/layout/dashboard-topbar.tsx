@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Bell, Check, Command, ChevronsUpDown, Menu, Moon, Search, Sun } from "lucide-react";
-import { signOut } from "next-auth/react";
 import { useTheme } from "next-themes";
 import { usePathname } from "next/navigation";
 import { useLabels } from "@/lib/hooks/use-labels";
+import { signOutAllSessionsAction } from "@/lib/auth/actions";
 
 /*
   Square UI class reference (source of truth):
@@ -305,13 +305,14 @@ export function DashboardTopbar({
               >
                 Settings
               </Link>
-              <button
-                type="button"
-                className="w-full rounded-xl px-2.5 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground"
-                onClick={() => signOut({ callbackUrl: "/login" })}
-              >
-                Log out
-              </button>
+              <form action={signOutAllSessionsAction}>
+                <button
+                  type="submit"
+                  className="w-full rounded-xl px-2.5 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground"
+                >
+                  Log out
+                </button>
+              </form>
             </div>
           ) : null}
         </div>
