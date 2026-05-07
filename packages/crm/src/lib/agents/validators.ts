@@ -43,6 +43,14 @@ export type ValidatorContext = {
   soul: {
     services?: Array<{ name: string }>;
     voice?: { avoidWords?: string[] };
+    /** v1.28.6 — operator's OWN business contact info. Not PII to
+     *  protect — it's the contact the agent SHOULD share when asked
+     *  "how do I reach you?". Validator allowlists these so the agent
+     *  isn't blocked from surfacing legitimate business contact details. */
+    contact?: {
+      email?: string;
+      phone?: string;
+    };
   } | null;
 };
 
@@ -136,13 +144,20 @@ const PHONE_PATTERN = /\+?\d{1,3}?[\s.-]?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/g;
 const noPiiLeak: Validator = {
   name: "no_pii_leak",
   severity: "critical",
-  run: ({ response, userMessage, conversationContext }) => {
+  run: ({ response, userMessage, conversationContext, soul }) => {
     // v1.27.7 — the "trusted" set (data we KNOW belongs to this customer
     // or was returned by a tool the agent had access to) comes from:
     //   - the current user message
     //   - the full conversation context (earlier turns + tool results)
-    // Anything in the response that's NOT in the trusted set is a leak.
-    const trustedSource = `${userMessage}\n${conversationContext ?? ""}`;
+    // v1.28.6 — ALSO trust the operator's own business contact info
+    // (soul.contact). Sharing the BUSINESS's own email/phone with a
+    // visitor isn't a privacy leak — it's literally the agent's job.
+    // Without this, validator over-fires when the agent legitimately
+    // surfaces "you can reach us at info@cypresspine.com".
+    const operatorContactParts: string[] = [];
+    if (soul?.contact?.email) operatorContactParts.push(soul.contact.email);
+    if (soul?.contact?.phone) operatorContactParts.push(soul.contact.phone);
+    const trustedSource = `${userMessage}\n${conversationContext ?? ""}\n${operatorContactParts.join("\n")}`;
 
     const responseEmails = new Set(
       Array.from(response.matchAll(EMAIL_PATTERN)).map((m) =>

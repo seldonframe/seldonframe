@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { runEvalsAction } from "@/lib/agents/actions";
 import type { EvalRunSummary } from "@/lib/agents/eval-runner";
+import { getFixHint } from "@/lib/agents/fallbacks";
 
 type ScenarioMeta = {
   id: string;
@@ -134,21 +135,30 @@ export function EvalsClient(props: {
                 )}
               </header>
               {result && !result.passed && (
-                <div className="mt-3 space-y-2 text-xs">
-                  <div className="rounded border border-rose-200 bg-rose-50 p-2 text-rose-800 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-300">
+                <div className="mt-3 space-y-3 text-xs">
+                  {/* v1.28.6 — surface failure details inline (no
+                       collapse). Operators (and Claude Code) can't fix
+                       what they can't see. */}
+                  <div className="rounded border border-rose-200 bg-rose-50 p-3 text-rose-800 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-300">
+                    <p className="font-medium uppercase tracking-wide text-[10px] mb-1 opacity-70">
+                      Why it failed
+                    </p>
                     {result.failureReasons.map((reason) => (
                       <p key={reason}>• {reason}</p>
                     ))}
                   </div>
+                  {result.validatorFails.length > 0 && (
+                    <FailureFixHints validatorNames={result.validatorFails} />
+                  )}
                   {result.finalResponse && (
-                    <details className="rounded border border-border p-2">
-                      <summary className="cursor-pointer text-muted-foreground">
-                        Agent response
-                      </summary>
-                      <p className="mt-2 whitespace-pre-wrap">
+                    <div className="rounded border border-border bg-muted/30 p-3">
+                      <p className="font-medium uppercase tracking-wide text-[10px] mb-1 text-muted-foreground">
+                        Agent's actual response
+                      </p>
+                      <p className="whitespace-pre-wrap">
                         {result.finalResponse}
                       </p>
-                    </details>
+                    </div>
                   )}
                 </div>
               )}
@@ -156,6 +166,34 @@ export function EvalsClient(props: {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/**
+ * v1.28.6 — Per-validator fix hints. Maps each failed validator name
+ * to an operator-actionable suggestion ("add the missing service to
+ * your pricing facts" / "soul.contact may need an email" / etc.) so
+ * the operator doesn't have to infer what to fix from indirect signals.
+ */
+function FailureFixHints({ validatorNames }: { validatorNames: string[] }) {
+  const hints = validatorNames
+    .map((name) => ({ name, hint: getFixHint(name) }))
+    .filter((h): h is { name: string; hint: string } => Boolean(h.hint));
+  if (hints.length === 0) return null;
+  return (
+    <div className="rounded border border-amber-200 bg-amber-50/50 p-3 text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
+      <p className="font-medium uppercase tracking-wide text-[10px] mb-1 opacity-80">
+        How to fix
+      </p>
+      <ul className="space-y-1.5">
+        {hints.map((h) => (
+          <li key={h.name}>
+            <span className="font-mono text-[11px] opacity-70">{h.name}:</span>{" "}
+            {h.hint}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

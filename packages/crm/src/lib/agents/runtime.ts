@@ -38,6 +38,7 @@ import {
 import { getAIClient } from "@/lib/ai/client";
 import { composeSystemPrompt } from "./prompt";
 import { runValidators } from "./validators";
+import { composeCorrectionPrompt, selectFinalFallback } from "./fallbacks";
 import {
   findTool,
   getToolsForCapabilities,
@@ -404,7 +405,18 @@ export async function executeTurn(input: {
     .filter(Boolean)
     .join("\n");
 
-  const { results: validatorResults, criticalFailed } = runValidators({
+  // v1.28.6 — pass soul.contact so no_pii_leak doesn't over-fire on the
+  // operator's own business email/phone (sharing those is the agent's
+  // job, not a privacy violation).
+  const soulForValidators = (orgRow.soul as {
+    services?: Array<{ name: string }>;
+    voice?: { avoidWords?: string[] };
+    contact?: { email?: string; phone?: string };
+  } | null) ?? null;
+
+  let validatorResults: AgentValidatorResult[];
+  let criticalFailed: boolean;
+  ({ results: validatorResults, criticalFailed } = runValidators({
     response: finalText,
     userMessage: input.userMessage,
     conversationContext,
@@ -414,18 +426,92 @@ export async function executeTurn(input: {
     turnToolCalls: allToolCalls,
     turnToolResults: allToolResults,
     blueprint,
-    soul: (orgRow.soul as { services?: Array<{ name: string }>; voice?: { avoidWords?: string[] } } | null) ?? null,
-  });
+    soul: soulForValidators,
+  }));
 
+  // v1.28.6 — REGENERATE on critical fail (Karpathy: trust the LLM with
+  // corrective context, don't replace its judgment with a hardcoded
+  // template). On critical fail, append a synthetic user message
+  // describing the violation(s) and ask the LLM to write a clean
+  // response. Re-run validators. If they still fail, use the
+  // per-validator final fallback (better than the v1.27.x one-size-
+  // fits-all "what's your email?"). Limited to ONE retry to bound
+  // token cost on adversarial probes.
   if (criticalFailed) {
-    finalText =
-      "Let me check on that for you and have someone follow up. What's the best email to reach you at?";
+    const failedNames = validatorResults
+      .filter((v) => !v.passed)
+      .map((v) => v.name);
     console.warn(
-      `[agent-runtime] critical_validator_failed agentId=${agent.id} convId=${conv.id} fails=${validatorResults
-        .filter((v) => !v.passed)
-        .map((v) => v.name)
-        .join(",")}`,
+      `[agent-runtime] critical_validator_failed_will_regenerate agentId=${agent.id} convId=${conv.id} fails=${failedNames.join(",")}`,
     );
+
+    try {
+      const correctionPrompt = composeCorrectionPrompt(failedNames);
+      // Append a synthetic user message; reuse the same system + tools
+      // + conversation history. The LLM has one chance to recover.
+      const regenMessages: AnthropicMessage[] = [
+        ...messages,
+        { role: "user", content: correctionPrompt },
+      ];
+      const regenResponse = await anthropic.messages.create({
+        model: MODEL,
+        max_tokens: 512,
+        system: systemPrompt,
+        // No tools on regeneration — we want a clean text response, not
+        // another tool-loop iteration. The original turn already
+        // resolved any tool calls; we're fixing the FINAL TEXT.
+        messages: regenMessages as Anthropic.Messages.MessageParam[],
+      });
+      totalTokensIn += regenResponse.usage?.input_tokens ?? 0;
+      totalTokensOut += regenResponse.usage?.output_tokens ?? 0;
+      const regenText = regenResponse.content
+        .filter(
+          (b): b is Anthropic.Messages.TextBlock => b.type === "text",
+        )
+        .map((b) => b.text)
+        .join("\n");
+
+      if (regenText) {
+        // Re-run validators on the regenerated response.
+        const second = runValidators({
+          response: regenText,
+          userMessage: input.userMessage,
+          conversationContext,
+          turnToolCalls: allToolCalls,
+          turnToolResults: allToolResults,
+          blueprint,
+          soul: soulForValidators,
+        });
+        if (!second.criticalFailed) {
+          // Recovery succeeded — use the regenerated response.
+          finalText = regenText;
+          validatorResults = second.results;
+          criticalFailed = false;
+          console.warn(
+            `[agent-runtime] critical_validator_recovered_via_regen agentId=${agent.id} convId=${conv.id}`,
+          );
+        } else {
+          // Regenerated response ALSO failed — use per-validator
+          // final fallback. Don't loop infinitely.
+          const stillFailed = second.results
+            .filter((v) => !v.passed)
+            .map((v) => v.name);
+          finalText = selectFinalFallback(stillFailed);
+          validatorResults = second.results;
+          console.warn(
+            `[agent-runtime] critical_validator_failed_after_regen_using_fallback agentId=${agent.id} convId=${conv.id} fails=${stillFailed.join(",")}`,
+          );
+        }
+      } else {
+        // Regeneration returned no text — shouldn't happen, but fall back.
+        finalText = selectFinalFallback(failedNames);
+      }
+    } catch (regenErr) {
+      console.error(
+        `[agent-runtime] regen_error agentId=${agent.id} convId=${conv.id} err=${regenErr instanceof Error ? regenErr.message : String(regenErr)}`,
+      );
+      finalText = selectFinalFallback(failedNames);
+    }
   }
 
   // 8. Persist assistant turn
