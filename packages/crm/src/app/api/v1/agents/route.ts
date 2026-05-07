@@ -547,8 +547,6 @@ export async function POST(request: Request) {
         id: agents.id,
         name: agents.name,
         status: agents.status,
-        tokensUsedToday: agents.tokensUsedToday,
-        dailyTokenBudget: agents.dailyTokenBudget,
         currentVersion: agents.currentVersion,
       })
       .from(agents)
@@ -632,8 +630,6 @@ export async function POST(request: Request) {
         name: agent.name,
         status: agent.status,
         current_version: agent.currentVersion,
-        tokens_used_today: agent.tokensUsedToday,
-        daily_token_budget: agent.dailyTokenBudget,
       },
       window_hours: sinceHours,
       conversations: aggRow?.conversations ?? 0,
@@ -662,8 +658,6 @@ export async function POST(request: Request) {
       archetype: agents.archetype,
       status: agents.status,
       currentVersion: agents.currentVersion,
-      tokensUsedToday: agents.tokensUsedToday,
-      dailyTokenBudget: agents.dailyTokenBudget,
       createdAt: agents.createdAt,
     })
     .from(agents)

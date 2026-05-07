@@ -8,7 +8,7 @@
 // stripped. `create_full_workspace` is the only workspace-creation
 // path mentioned anywhere in this briefing.
 
-export const VERSION = "1.28.0";
+export const VERSION = "1.28.1";
 
 export const WELCOME_MARKDOWN = `# SeldonFrame — create a real Business OS in one conversation
 
@@ -18,6 +18,33 @@ gives the operator a public website, booking page, intake form,
 CRM, and AI agents — all on a real subdomain.
 
 ---
+
+## Step zero — before exploring, call \`get_workspace_state\`
+
+For ANY workspace task ("build me a chatbot for X", "what's in this
+workspace", "update the agent's FAQ", "how is my chatbot doing"), the
+FIRST tool call should be \`get_workspace_state({ workspace_id })\`. It
+returns in one round-trip: workspace identity, integrations status
+(LLM keys, Twilio, Resend, etc. — booleans only), agents with inline
+health stats (status, version, eval pass rate, validator pass rate
+24h, conversations 24h), counts (contacts, bookings, deals, agents),
+and a tailored next_steps array.
+
+This replaces ~4-6 progressive discovery calls. Without it, Claude Code
+typically wastes time loading tool schemas one at a time, asking the
+user obvious questions like "is the Anthropic key configured?" (the
+state response answers it), and creating duplicate agents (the state
+response shows what already exists).
+
+## Anti-patterns — DON'T do these
+
+| Wasteful action | Why it's wrong | What to do instead |
+| --------------- | -------------- | ------------------ |
+| \`ls\` / \`cat package.json\` / read \`.env\` | SF is a HOSTED platform. Workspaces aren't local files. There's no node_modules to inspect, no .env to read. | Call \`get_workspace_state\` to know what's in the workspace. |
+| \`node --version\` / \`npm --version\` | Irrelevant — SF runs on Vercel, not the operator's local Node. | Skip entirely. |
+| Asking "how should I configure the Anthropic key?" | The workspace either already has one or it doesn't — \`get_workspace_state\` tells you via \`integrations.anthropic.configured\`. | Check the state response first. If false, call \`configure_llm_provider\` (auto-detects from env) or use \`build_website_chatbot\` (handles it inline). |
+| Creating an agent without checking if one exists | Will create a duplicate — most workspaces already have a website-chatbot. | \`get_workspace_state\` returns existing agents. If one exists, use \`update_website_chatbot\` instead of \`build_website_chatbot\`. |
+| Mentioning "daily token budget" / "tokens used today" | The token-budget concept was REMOVED in v1.27.9 (BYOK = SF has no cost exposure to cap; operators manage spend on Anthropic dashboard). | Don't reference it. If you see stale data showing it, ignore. |
 
 ## Capability map — pick the right primitive BEFORE you explore tools
 
@@ -406,4 +433,4 @@ admin dashboard. Pre-fills their email automatically.
 <https://seldonframe.com> · **Discord:** <https://discord.gg/sbVUu976NW>
 `;
 
-export const FIRST_CALL_BANNER = `🚀 SeldonFrame v1.28.0 is connected. CAPABILITY MAP — pick the right primitive BEFORE exploring tools: (a) "build me a website" → WORKSPACE → create_workspace_v2 + block tools. (b) "add a chatbot to my website / landing page" → AGENT (web chat) → build_website_chatbot (v1.28+ skill bundle: configure_llm + create_agent + publish-test in 1 call; auto-detects ANTHROPIC_API_KEY from env). Drop to primitives (configure_llm_provider + create_agent + publish_agent) only for custom flows. CRITICAL ANTI-PATTERN: chat widgets are NOT blocks. Don't search list_blocks for chat — chat agents are a separate primitive (v1.26+). (c) "auto-reply to inbound SMS/email" → CONVERSATION → send_conversation_turn (one-shot Soul-aware reply, not a website widget). (d) "add hero/services/faq/cta section" → BLOCK → get_block_skill + persist_block. (e) "send campaign email/sms" → MESSAGING. (f) CRM ops → list_contacts/create_deal/etc. CHATBOT CANONICAL FLOW (v1.28+ — 1 call instead of 5): build_website_chatbot({workspace_id, name, faq, pricing_facts, greeting}) → wraps configure_llm + create_agent + publish-test in one call, auto-detects ANTHROPIC_API_KEY from env. Then: operator sandbox-tests at /agents/[id]/test → publish_agent({status:"live"}) auto-runs 8-scenario eval gate (≥87.5% pass required). Observability tools after publish: list_agents, tail_agent_conversations, get_agent_conversation, get_agent_metrics, run_agent_evals, replay_conversation. Dashboard surfaces /agents, /agents/[id]/test, /agents/[id]/settings, /agents/[id]/evals, /agents/[id]/conversations let operators iterate without leaving the browser. WORKSPACE FLOW (legacy reference): create_workspace_v2 → IN PARALLEL for all 7 recommended_blocks (hero, services, about, faq, cta, booking, intake): get_block_skill + persist_block → complete_workspace_v2 → finalize_workspace({workspace_id, email}). Run blocks in PARALLEL (Promise.all) — sequential takes 60+ seconds. v1.10+ CUSTOMIZE: regenerate_block, upload_workspace_image (image_url preferred over base64). v1.11+ STRUCTURAL: get_landing_structure, move_section, delete_section. v1.12+ COMPOSITES: add_composite_section / update_composite_section — manifest ANY block from 12 low-level primitives. Skipping finalize_workspace leaves the operator with no admin login. Every URL is real. NEVER create local files.`;
+export const FIRST_CALL_BANNER = `🚀 SeldonFrame v1.28.1 is connected. STEP ZERO: for any workspace task call get_workspace_state({workspace_id}) FIRST — returns workspace identity + integrations status + agents with inline health stats + counts + tailored next_steps in ONE round-trip. Replaces 4-6 progressive discovery calls. ANTI-PATTERNS: don't ls/cat/read .env (SF is hosted, not local files); don't check node/npm versions (irrelevant); don't ask 'is Anthropic key configured?' (state response tells you); don't create a duplicate agent (state response shows existing ones — use update_website_chatbot instead of build_website_chatbot when one exists). Token-budget concept removed in v1.27.9 — ignore stale references. CAPABILITY MAP — pick the right primitive BEFORE exploring tools: (a) "build me a website" → WORKSPACE → create_workspace_v2 + block tools. (b) "add a chatbot to my website / landing page" → AGENT (web chat) → build_website_chatbot (v1.28+ skill bundle: configure_llm + create_agent + publish-test in 1 call; auto-detects ANTHROPIC_API_KEY from env). Drop to primitives (configure_llm_provider + create_agent + publish_agent) only for custom flows. CRITICAL ANTI-PATTERN: chat widgets are NOT blocks. Don't search list_blocks for chat — chat agents are a separate primitive (v1.26+). (c) "auto-reply to inbound SMS/email" → CONVERSATION → send_conversation_turn (one-shot Soul-aware reply, not a website widget). (d) "add hero/services/faq/cta section" → BLOCK → get_block_skill + persist_block. (e) "send campaign email/sms" → MESSAGING. (f) CRM ops → list_contacts/create_deal/etc. CHATBOT CANONICAL FLOW (v1.28+ — 1 call instead of 5): build_website_chatbot({workspace_id, name, faq, pricing_facts, greeting}) → wraps configure_llm + create_agent + publish-test in one call, auto-detects ANTHROPIC_API_KEY from env. Then: operator sandbox-tests at /agents/[id]/test → publish_agent({status:"live"}) auto-runs 8-scenario eval gate (≥87.5% pass required). Observability tools after publish: list_agents, tail_agent_conversations, get_agent_conversation, get_agent_metrics, run_agent_evals, replay_conversation. Dashboard surfaces /agents, /agents/[id]/test, /agents/[id]/settings, /agents/[id]/evals, /agents/[id]/conversations let operators iterate without leaving the browser. WORKSPACE FLOW (legacy reference): create_workspace_v2 → IN PARALLEL for all 7 recommended_blocks (hero, services, about, faq, cta, booking, intake): get_block_skill + persist_block → complete_workspace_v2 → finalize_workspace({workspace_id, email}). Run blocks in PARALLEL (Promise.all) — sequential takes 60+ seconds. v1.10+ CUSTOMIZE: regenerate_block, upload_workspace_image (image_url preferred over base64). v1.11+ STRUCTURAL: get_landing_structure, move_section, delete_section. v1.12+ COMPOSITES: add_composite_section / update_composite_section — manifest ANY block from 12 low-level primitives. Skipping finalize_workspace leaves the operator with no admin login. Every URL is real. NEVER create local files.`;

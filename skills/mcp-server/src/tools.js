@@ -4287,6 +4287,36 @@ export const TOOLS = [
   },
 
   // ───────────────────────────────────────────────────────────────────────
+  // v1.28.1 — WORKSPACE DISCOVERY (single-call replacement for the
+  // 4-6 progressive "Called seldonframe N times" round-trips that
+  // happen as Claude Code lazy-loads tool schemas to figure out what's
+  // in a workspace). Returns workspace identity + integrations status +
+  // agents with inline health stats + counts. Designed to be the FIRST
+  // call for any "what's in this workspace?" / "build me a chatbot for X"
+  // / "is the agent healthy?" prompt.
+  // ───────────────────────────────────────────────────────────────────────
+
+  {
+    name: "get_workspace_state",
+    description:
+      "USE FIRST for any workspace task — replaces 4-6 separate discovery calls with one. " +
+      "Returns: workspace identity (name, slug, industry, timezone, dashboard URL); integrations status (anthropic / openai / twilio / resend / kit / mailchimp configured? — booleans only, no keys leaked); agents WITH inline health stats (status, version, eval pass rate, validator pass rate 24h, conversations 24h, eval gate met?, last eval run); high-level counts (contacts, bookings, deals, agents); and a next_steps array tailored to the workspace's current state (e.g. 'configure Anthropic key', 'no agents yet — call build_website_chatbot', 'agents need eval run before live'). " +
+      "USE WHEN USER SAYS: 'what's in this workspace', 'how is my chatbot doing', 'build me a chatbot for [biz]' (call FIRST so you know if an agent already exists + if LLM is configured), 'is my agent live yet', 'workspace status'. " +
+      "AVOIDS asking the user obvious questions like 'how should I configure the Anthropic key?' — the response.integrations.anthropic.configured tells you. Avoids creating a duplicate agent — response.agents tells you what already exists. Avoids a separate get_agent_metrics call — stats come inline.",
+    inputSchema: obj(
+      { workspace_id: str("Workspace id (bearer workspace).") },
+      ["workspace_id"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("GET", "/workspace-state", {
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
+  // ───────────────────────────────────────────────────────────────────────
   // v1.28.0 — SKILL BUNDLE. Wraps the canonical 4-call chatbot-build
   // sequence (configure_llm_provider → create_agent → publish_agent test
   // → return embed snippet) into ONE call. Reduces ~30s + 4 round-trips
@@ -4474,6 +4504,153 @@ export const TOOLS = [
           `2. Run safety evals: open ${dashboardUrl}/evals → Run evals now (8-scenario suite).`,
           `3. When ready, publish to live: call publish_agent({ agent_id: '${agentId}', status: 'live' }) — auto-runs eval gate, requires ≥87.5% pass.`,
           `4. Drop on the operator's website: <script src="${createResult.embed_url}" async></script>`,
+        ],
+      };
+    },
+  },
+
+  // ───────────────────────────────────────────────────────────────────────
+  // v1.28.1 — UPDATE skill bundle. Peer to build_website_chatbot for
+  // the case when an agent ALREADY exists. One call to merge new FAQ /
+  // pricing / greeting / capabilities into the existing blueprint
+  // (bumps version), returns refreshed embed snippet + dashboard URL.
+  // Saves operators from rediscovering the agent_id and re-running
+  // update_agent_blueprint with full-array semantics.
+  // ───────────────────────────────────────────────────────────────────────
+
+  {
+    name: "update_website_chatbot",
+    description:
+      "USE WHEN USER SAYS: 'update the chatbot's FAQ', 'add new pricing to the agent', 'change the greeting', 'add a new service to the chatbot', 'the chatbot answer for X needs updating'. " +
+      "ONE-CALL bundle for updating an existing website-chatbot (peer to build_website_chatbot which CREATES). Looks up the workspace's website-chatbot agent (or accepts an explicit agent_id), merges your patch into the current blueprint, bumps version, returns refreshed embed_url + dashboard_url + version + next_steps. " +
+      "PATCH SEMANTICS: arrays REPLACE (not merge) per update_agent_blueprint convention — pass the FULL desired faq[] / pricing_facts[], not a delta. Greeting + capabilities are scalar replaces. If you want to ADD one FAQ pair, fetch current via get_workspace_state first and submit the full updated array. " +
+      "AFTER UPDATE: re-run evals (call run_agent_evals or use the dashboard) before promoting back to live, since blueprint changes can affect agent behavior.",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id (bearer workspace)."),
+        agent_id: str(
+          "Agent id. Optional — if omitted, the bundle finds the workspace's first website-chatbot agent (most workspaces have one).",
+        ),
+        faq: {
+          type: "array",
+          description:
+            "FULL desired FAQ list (REPLACES existing). Each item: { q, a }.",
+          items: obj(
+            { q: str("Question."), a: str("Answer.") },
+            ["q", "a"],
+          ),
+        },
+        pricing_facts: {
+          type: "array",
+          description:
+            "FULL desired pricing list (REPLACES existing). Each item: { label, amount, currency }.",
+          items: obj(
+            {
+              label: str("Service name."),
+              amount: { type: "number" },
+              currency: str("3-letter currency code, e.g. USD."),
+            },
+            ["label", "amount", "currency"],
+          ),
+        },
+        greeting: str("New greeting text. Omit to keep current."),
+        capabilities: {
+          type: "array",
+          description:
+            "FULL desired capability list (REPLACES). Default 7-tool list for website-chatbot: look_up_availability, book_appointment, find_my_existing_appointment, reschedule_appointment, cancel_appointment, escalate_to_human, provide_faq_answer.",
+          items: { type: "string" },
+        },
+        publish_notes: str(
+          "Optional one-line audit note (e.g. 'Added emergency-call FAQ').",
+        ),
+      },
+      ["workspace_id"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+
+      // 1. Resolve agent id — either provided or look up the first
+      // website-chatbot agent in the workspace.
+      let agentId = args.agent_id;
+      if (!agentId) {
+        const stateResult = await api("GET", "/workspace-state", {
+          workspace_id: ws,
+        });
+        const websiteChatbots = (stateResult?.agents ?? []).filter(
+          (a) => a.archetype === "website-chatbot",
+        );
+        if (websiteChatbots.length === 0) {
+          return {
+            ok: false,
+            error: "no_website_chatbot",
+            hint:
+              "No website-chatbot agent in this workspace. Call build_website_chatbot to create one first.",
+          };
+        }
+        if (websiteChatbots.length > 1) {
+          return {
+            ok: false,
+            error: "ambiguous_agent",
+            hint:
+              "Multiple website-chatbot agents found in this workspace. Pass agent_id explicitly.",
+            agents: websiteChatbots.map((a) => ({
+              id: a.id,
+              name: a.name,
+              status: a.status,
+            })),
+          };
+        }
+        agentId = websiteChatbots[0].id;
+      }
+
+      // 2. Build the patch — only include fields explicitly provided.
+      const patch = {};
+      if (Array.isArray(args.faq)) patch.faq = args.faq;
+      if (Array.isArray(args.pricing_facts))
+        patch.pricingFacts = args.pricing_facts;
+      if (typeof args.greeting === "string") patch.greeting = args.greeting;
+      if (Array.isArray(args.capabilities))
+        patch.capabilities = args.capabilities;
+
+      if (Object.keys(patch).length === 0) {
+        return {
+          ok: false,
+          error: "empty_patch",
+          hint:
+            "No update fields provided. Pass at least one of: faq, pricing_facts, greeting, capabilities.",
+        };
+      }
+
+      // 3. Update the blueprint
+      const updateResult = await api("POST", "/agents", {
+        body: {
+          op: "update_blueprint",
+          agent_id: agentId,
+          patch,
+          publish_notes: args.publish_notes ?? undefined,
+        },
+        workspace_id: ws,
+      });
+      if (!updateResult || updateResult.ok === false) {
+        return {
+          ok: false,
+          error: "update_failed",
+          detail: updateResult,
+        };
+      }
+
+      const baseDomain =
+        process.env.WORKSPACE_BASE_DOMAIN?.trim() || "app.seldonframe.com";
+      return {
+        ok: true,
+        agent_id: agentId,
+        version: updateResult.version,
+        dashboard_url: `https://${baseDomain}/agents/${agentId}`,
+        next_steps: [
+          `Blueprint updated to v${updateResult.version}.`,
+          `Re-test in sandbox: https://${baseDomain}/agents/${agentId}/test`,
+          `Re-run evals before promoting to live: open https://${baseDomain}/agents/${agentId}/evals → Run evals now, OR call run_agent_evals from MCP.`,
+          `If pass rate ≥ 87.5%, promote to live: publish_agent({ agent_id: '${agentId}', status: 'live' })`,
         ],
       };
     },
