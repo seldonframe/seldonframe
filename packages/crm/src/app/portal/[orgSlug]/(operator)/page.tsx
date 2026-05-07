@@ -94,8 +94,10 @@ export default async function OperatorPortalDashboard({
           borderRadius: "10px",
         }}
       >
-        <header className="flex items-center justify-between pb-3 mb-3"
-          style={{ borderBottom: "1px solid #F0F0EC" }}>
+        <header
+          className="flex items-center justify-between pb-3 mb-3"
+          style={{ borderBottom: "1px solid #F0F0EC" }}
+        >
           <h2
             className="text-[14px] font-semibold tracking-tight"
             style={{ color: "#111" }}
@@ -103,7 +105,7 @@ export default async function OperatorPortalDashboard({
             Recent activity
           </h2>
           <span className="text-[11px]" style={{ color: "#999" }}>
-            v1.21 — full activity feed
+            last {recentActivities.length}
           </span>
         </header>
         {recentActivities.length === 0 ? (
@@ -129,51 +131,6 @@ export default async function OperatorPortalDashboard({
             ))}
           </ul>
         )}
-      </section>
-
-      <section
-        className="px-5 py-4"
-        style={{
-          backgroundColor: "#FFFFFF",
-          border: "1px solid #E5E5E1",
-          borderRadius: "10px",
-        }}
-      >
-        <header className="pb-2 mb-2">
-          <h2
-            className="text-[14px] font-semibold tracking-tight"
-            style={{ color: "#111" }}
-          >
-            Coming in v1.21
-          </h2>
-        </header>
-        <ul className="grid gap-1.5 sm:grid-cols-2 text-[13px]"
-          style={{ color: "#444" }}>
-          <li>
-            <span className="font-medium" style={{ color: "#111" }}>
-              Contacts
-            </span>{" "}
-            — full table view scoped to your workspace
-          </li>
-          <li>
-            <span className="font-medium" style={{ color: "#111" }}>
-              Deals
-            </span>{" "}
-            — pipeline kanban
-          </li>
-          <li>
-            <span className="font-medium" style={{ color: "#111" }}>
-              Bookings
-            </span>{" "}
-            — calendar + upcoming jobs
-          </li>
-          <li>
-            <span className="font-medium" style={{ color: "#111" }}>
-              Agency support sessions
-            </span>{" "}
-            — your provider can sign in to help (audit-logged)
-          </li>
-        </ul>
       </section>
     </div>
   );
