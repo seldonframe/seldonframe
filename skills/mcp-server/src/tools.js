@@ -4039,6 +4039,214 @@ export const TOOLS = [
       return result;
     },
   },
+
+  // ── v1.26 — agent foundation ────────────────────────────────────────────
+  // Build agents (web chat / voice / SMS / email) on top of Soul + Brain.
+  // BYOK: operators bring their own LLM key (Anthropic / OpenAI) — they
+  // pay LLM bills directly to the provider. SF makes money per agent
+  // turn (separate billing). configure_llm_provider sets the key;
+  // create_agent registers a new agent draft; list_agents shows the
+  // workspace's agents.
+
+  {
+    name: "configure_llm_provider",
+    description:
+      "Set the LLM API key for this workspace's agents (BYOK — Bring Your Own Key). " +
+      "The OPERATOR pays the LLM provider directly (Anthropic / OpenAI / etc.); SF charges separately for agent platform usage. " +
+      "Stored encrypted at rest using the deployment's ENCRYPTION_KEY. " +
+      "Operators get keys from console.anthropic.com (recommended for v1.26.x — best tool-use support) or platform.openai.com. " +
+      "Call this BEFORE create_agent — agents fail-graceful with 'I'm not set up yet' if no key configured.",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id (bearer workspace)."),
+        provider: {
+          type: "string",
+          enum: ["anthropic", "openai"],
+          description:
+            "LLM provider. v1.26 ships full Anthropic support (tool use, streaming-ready). OpenAI support for chat is partial — recommend Anthropic for production agents.",
+        },
+        api_key: str(
+          "API key. Anthropic keys start with 'sk-ant-...'. Stored encrypted; never echoed back in responses.",
+        ),
+      },
+      ["workspace_id", "provider", "api_key"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/agents", {
+        body: {
+          op: "set_llm_key",
+          provider: args.provider,
+          api_key: args.api_key,
+        },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
+  {
+    name: "create_agent",
+    description:
+      "Create a new agent for this workspace. Agents are conversational interfaces (web chat, voice, SMS) that answer FAQs, book appointments, and escalate to humans — composed from typed primitives + the workspace's Soul (industry, voice, services). " +
+      "WHAT GETS COMPOSED AUTOMATICALLY: persona derived from soul.industry + soul.voice; FAQ knowledge from your `faq` array; pricing facts from `pricing_facts` (validators block any $-amount the agent invents that's not in this list); typed tools (look_up_availability, book_appointment, find_my_existing_appointment, escalate_to_human, provide_faq_answer). " +
+      "WHAT YOU PROVIDE: name, archetype (website-chatbot for v1.26.x; voice-receptionist + sms-followup-bot queued), channel (web_chat / voice / sms / email), inline FAQ pairs, allowed pricing facts, optional greeting. " +
+      "STATUS LIFECYCLE: created in 'draft' (not callable). Flip to 'test' to chat with it in sandbox (tool calls return synthetic results — no real bookings). Flip to 'live' once you're confident. v1.26.2 will add eval-gating that blocks 'live' until a test scenario suite passes. " +
+      "SAFETY: response validators run on every turn — quotes_only_from_soul_pricing (critical, blocks hallucinated $X), no_prompt_injection_echo (critical), no_pii_leak (critical), no_avoid_words (warning), response_length_under_cap (warning). Critical fail = agent says 'let me check + escalate' instead of sending the bad response. " +
+      "OUTPUT: the agent's embed URL (one-line <script> for the operator's website) and turn URL (POST endpoint for direct API integration).",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id (bearer workspace)."),
+        name: str(
+          "Agent display name (e.g. 'Cypress HVAC Assistant'). Surfaces in the chat header.",
+        ),
+        archetype: {
+          type: "string",
+          enum: ["website-chatbot", "voice-receptionist", "sms-followup-bot"],
+          description:
+            "Agent shape. v1.26.x ships website-chatbot with full feature support; voice-receptionist + sms-followup-bot are queued for v1.27/v1.28.",
+        },
+        channel: {
+          type: "string",
+          enum: ["web_chat", "voice", "sms", "email"],
+          description:
+            "Delivery channel. v1.26.x ships web_chat only (embed.js bubble). Other channels queued.",
+        },
+        faq: {
+          type: "array",
+          description:
+            "Operator-curated FAQ pairs. Each item is { q: string, a: string }. The agent has these in its system prompt; visitors get answers without an LLM round-trip when the question is a clear match. v1.27 adds vector RAG over uploaded docs.",
+          items: obj(
+            {
+              q: str("Question as a visitor would phrase it."),
+              a: str("Operator's exact answer (1-3 sentences)."),
+            },
+            ["q", "a"],
+          ),
+        },
+        pricing_facts: {
+          type: "array",
+          description:
+            "ONLY prices the agent may quote. Validators block any $-amount in the agent's response that's not in this list (or doesn't match exactly). If you want the agent to refuse all price questions, omit this. Each item: { label: string, amount: number, currency: 'USD' | etc. }",
+          items: obj(
+            {
+              label: str("Service name (e.g. 'Furnace tune-up')."),
+              amount: { type: "number" },
+              currency: str("3-letter currency code, e.g. USD."),
+            },
+            ["label", "amount", "currency"],
+          ),
+        },
+        greeting: str(
+          "Optional first message shown when the chat opens (default: 'Hi! How can I help you today?').",
+        ),
+        capabilities: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Optional explicit subset of typed tools the agent may call. Default: all five (look_up_availability, book_appointment, find_my_existing_appointment, escalate_to_human, provide_faq_answer). Restrict if you want a read-only agent (omit book_appointment) or a no-escalation agent (omit escalate_to_human).",
+        },
+      },
+      ["workspace_id", "name", "archetype", "channel"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/agents", {
+        body: {
+          op: "create",
+          name: args.name,
+          archetype: args.archetype,
+          channel: args.channel,
+          faq: args.faq ?? undefined,
+          pricing_facts: args.pricing_facts ?? undefined,
+          greeting: args.greeting ?? undefined,
+          capabilities: args.capabilities ?? undefined,
+        },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
+  {
+    name: "list_agents",
+    description:
+      "List all agents in this workspace with status (draft/test/live/paused), version, daily token usage vs budget, and metadata. Use to find an agent_id before calling publish_agent or update_agent_blueprint, or to audit which agents are live across a workspace.",
+    inputSchema: obj(
+      { workspace_id: str("Workspace id (bearer workspace).") },
+      ["workspace_id"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/agents", {
+        body: { op: "list" },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
+  {
+    name: "publish_agent",
+    description:
+      "Change an agent's status: draft → test (sandboxed playground; tools return synthetic results), test → live (real bookings, real escalations, customer-facing), live → paused (chat bubble disabled). v1.26.2 will add eval-gating that blocks 'live' until the agent's eval suite passes; for v1.26.x, the operator-side responsibility is to test in 'test' mode before flipping to 'live'.",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id (bearer workspace)."),
+        agent_id: str("Agent id from create_agent."),
+        status: {
+          type: "string",
+          enum: ["draft", "test", "live", "paused"],
+          description: "Target status.",
+        },
+      },
+      ["workspace_id", "agent_id", "status"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/agents", {
+        body: { op: "publish", agent_id: args.agent_id, status: args.status },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
+  {
+    name: "update_agent_blueprint",
+    description:
+      "Update an agent's blueprint (FAQ, pricing facts, greeting, capabilities). Bumps current_version + writes a new agent_versions row for rollback. The agent's status is unchanged — flip to test/live separately when you're ready. " +
+      "PATCH SEMANTICS: arrays REPLACE (not merge). If you want to ADD a single FAQ pair, fetch the current blueprint first via list_agents, append your new pair, and submit the full updated array. " +
+      "Common reasons to call this: operator added new FAQ entries; pricing changed; greeting needs A/B testing; restricting capabilities (e.g. removing book_appointment to make agent answer-only).",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id (bearer workspace)."),
+        agent_id: str("Agent id from create_agent."),
+        patch: {
+          type: "object",
+          description:
+            "Partial blueprint patch. Fields: faq, pricing_facts, greeting, capabilities, archetype. Arrays REPLACE.",
+        },
+        publish_notes: str(
+          "Optional one-line note for the audit log (e.g. 'Added emergency-call FAQ').",
+        ),
+      },
+      ["workspace_id", "agent_id", "patch"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/agents", {
+        body: {
+          op: "update_blueprint",
+          agent_id: args.agent_id,
+          patch: args.patch,
+          publish_notes: args.publish_notes ?? undefined,
+        },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
 ];
 
 export const TOOL_MAP = Object.fromEntries(TOOLS.map((t) => [t.name, t]));

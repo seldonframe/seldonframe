@@ -14,9 +14,10 @@
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { agents } from "@/db/schema";
+import { agents, organizations } from "@/db/schema";
 import { guardApiRequest } from "@/lib/api/guard";
 import { logEvent } from "@/lib/observability/log";
+import { encryptValue } from "@/lib/encryption";
 import {
   createAgent,
   publishAgent,
@@ -39,9 +40,18 @@ type Body = {
   publish_notes?: unknown;
   // publish
   status?: unknown;
+  // set_llm_key
+  provider?: unknown;
+  api_key?: unknown;
 };
 
-const VALID_OPS = ["create", "update_blueprint", "publish", "list"] as const;
+const VALID_OPS = [
+  "create",
+  "update_blueprint",
+  "publish",
+  "list",
+  "set_llm_key",
+] as const;
 type Op = (typeof VALID_OPS)[number];
 
 export async function POST(request: Request) {
@@ -178,6 +188,84 @@ export async function POST(request: Request) {
       return NextResponse.json(result, { status: 422 });
     }
     return NextResponse.json(result);
+  }
+
+  if (op === "set_llm_key") {
+    if (typeof body.provider !== "string" || typeof body.api_key !== "string") {
+      return NextResponse.json(
+        { ok: false, error: "missing_required_field", required: ["provider", "api_key"] },
+        { status: 400 },
+      );
+    }
+    if (!["anthropic", "openai"].includes(body.provider)) {
+      return NextResponse.json(
+        { ok: false, error: "invalid_provider", allowed: ["anthropic", "openai"] },
+        { status: 400 },
+      );
+    }
+    if (body.api_key.length < 10) {
+      return NextResponse.json(
+        { ok: false, error: "invalid_api_key" },
+        { status: 400 },
+      );
+    }
+
+    // Encrypt at rest. encryptValue prefixes "v1." which the
+    // existing decryptIfNeeded path in lib/ai/client.ts recognizes.
+    let encryptedKey: string;
+    try {
+      encryptedKey = encryptValue(body.api_key);
+    } catch (err) {
+      console.error(
+        `[agents/set_llm_key] encryption_failed orgId=${guard.orgId}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "encryption_unavailable",
+          hint: "Set ENCRYPTION_KEY env var on the deployment.",
+        },
+        { status: 503 },
+      );
+    }
+
+    // Merge into organizations.integrations jsonb. Other providers'
+    // entries (kit, mailchimp, etc.) remain untouched.
+    const [orgRow] = await db
+      .select({ integrations: organizations.integrations })
+      .from(organizations)
+      .where(eq(organizations.id, guard.orgId))
+      .limit(1);
+    const existing = (orgRow?.integrations ?? {}) as Record<string, unknown>;
+    const next = {
+      ...existing,
+      [body.provider]: {
+        ...((existing[body.provider] as Record<string, unknown>) ?? {}),
+        apiKey: encryptedKey,
+      },
+    };
+
+    await db
+      .update(organizations)
+      .set({ integrations: next, updatedAt: new Date() })
+      .where(eq(organizations.id, guard.orgId));
+
+    logEvent(
+      "v26_agent_llm_key_configured",
+      { provider: body.provider },
+      { request, orgId: guard.orgId, status: 200 },
+    );
+
+    return NextResponse.json({
+      ok: true,
+      provider: body.provider,
+      configured_at: new Date().toISOString(),
+      next_steps: [
+        "Create your first agent: call create_agent with your workspace's archetype + faq + pricing_facts.",
+        "Test in sandbox before flipping to live: publish_agent with status='test'.",
+        "Once you're happy, publish_agent with status='live' and add the embed snippet to your website.",
+      ],
+    });
   }
 
   // op === "list"

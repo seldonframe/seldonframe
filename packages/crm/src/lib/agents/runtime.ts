@@ -20,7 +20,7 @@
 "use server";
 
 import { and, asc, eq, sql } from "drizzle-orm";
-import Anthropic from "@anthropic-ai/sdk";
+import type Anthropic from "@anthropic-ai/sdk";
 import { db } from "@/db";
 import {
   agentConversations,
@@ -35,6 +35,7 @@ import {
   type AgentToolResult,
   type AgentValidatorResult,
 } from "@/db/schema";
+import { getAIClient } from "@/lib/ai/client";
 import { composeSystemPrompt } from "./prompt";
 import { runValidators } from "./validators";
 import {
@@ -46,7 +47,13 @@ import {
 
 const MODEL = process.env.ANTHROPIC_AGENT_MODEL?.trim() || "claude-sonnet-4-5-20250929";
 const MAX_TURN_ITERATIONS = 6; // tool-call cap per single turn (catches loops)
-const COST_PER_1K_INPUT_CENTS = 0.3; // approx Sonnet 4.5 — keep updated
+// v1.26.1 — these are SF's internal accounting markup for
+// billing-the-operator-for-agent-platform-usage. The OPERATOR pays
+// the LLM bill directly via their BYOK Anthropic key; SF makes money
+// per agent turn (separate billing line). Numbers are deliberately
+// rough — the operator's exact LLM cost lives on their Anthropic
+// dashboard; ours is platform-usage metering.
+const COST_PER_1K_INPUT_CENTS = 0.3;
 const COST_PER_1K_OUTPUT_CENTS = 1.5;
 
 type ExecuteTurnResult =
@@ -205,9 +212,22 @@ export async function executeTurn(input: {
     testMode: conv.status === "test",
   });
   const tools = getToolsForCapabilities(blueprint.capabilities);
-  const anthropic = new Anthropic({
-    apiKey: process.env.ANTHROPIC_API_KEY,
-  });
+
+  // v1.26.1 — BYOK. Resolve the LLM client from the workspace's
+  // configured key (organizations.integrations.anthropic.apiKey,
+  // encrypted at rest). Operator pays Anthropic directly; SF charges
+  // separately per agent turn. If no BYOK key is set AND no platform
+  // key is available (e.g. SF env not configured), gracefully degrade.
+  const aiResolution = await getAIClient({ orgId: agent.orgId });
+  if (!aiResolution.client) {
+    return {
+      ok: false,
+      reason: "llm_not_configured",
+      fallbackMessage:
+        "I'm not set up to chat yet — the team is finishing my configuration. Please reach out directly and we'll be in touch right away.",
+    };
+  }
+  const anthropic: Anthropic = aiResolution.client;
 
   // 6. Loop over LLM ↔ tools until we get a stop_reason of "end_turn"
   let totalTokensIn = 0;
