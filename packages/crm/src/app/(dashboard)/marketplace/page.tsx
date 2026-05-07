@@ -33,11 +33,11 @@ export default async function MarketplacePage({
     <section className="animate-page-enter space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-page-title">Block Marketplace</h1>
-          <p className="text-label text-[hsl(var(--color-text-secondary))]">Extend SeldonFrame with new capabilities.</p>
+          <h1 className="text-page-title">Templates</h1>
+          <p className="text-label text-[hsl(var(--color-text-secondary))]">Add new pages, integrations, and AI capabilities to your workspace.</p>
         </div>
         <Link href="/marketplace/submit" className="crm-button-primary h-10 px-4">
-          Submit a Block
+          Submit a Template
         </Link>
       </div>
 
@@ -45,7 +45,7 @@ export default async function MarketplacePage({
         <input
           className="crm-input h-10 w-full px-3"
           name="q"
-          placeholder="Search blocks"
+          placeholder="Search templates"
           defaultValue={query}
         />
         <select className="crm-input h-10 w-full px-3" name="category" defaultValue={category}>

@@ -145,12 +145,43 @@ export default async function AdminAgentsPage() {
       </div>
 
       {rows.length === 0 ? (
-        <article className="rounded-xl border bg-card p-6">
-          <p className="text-sm text-muted-foreground">
-            No agents yet. Build one from Claude Code with the SeldonFrame
-            MCP — call{" "}
-            <code className="font-mono text-xs">build_website_chatbot</code>.
-          </p>
+        <article className="rounded-xl border bg-card p-8 text-center">
+          <div className="mx-auto max-w-md space-y-4">
+            <h2 className="text-lg font-semibold">Build your first AI assistant</h2>
+            <p className="text-sm text-muted-foreground">
+              Your AI assistant answers customer questions, books appointments,
+              and escalates to your team when it can&apos;t help. Lives on your
+              website as a chat bubble. Set up takes ~30 seconds.
+            </p>
+            <div className="flex flex-wrap justify-center gap-2 pt-2">
+              <a
+                href="https://seldonframe.com/docs/agents"
+                target="_blank"
+                rel="noopener"
+                className="crm-button-secondary h-10 px-5 text-sm"
+              >
+                How it works
+              </a>
+              <details className="inline-block text-left">
+                <summary className="crm-button-primary h-10 px-5 text-sm cursor-pointer inline-flex items-center">
+                  Build with Claude Code →
+                </summary>
+                <pre className="mt-3 rounded-md bg-muted p-3 text-xs whitespace-pre-wrap text-left">
+{`build_website_chatbot({
+  workspace_id: "<your-workspace-id>",
+  name: "My HVAC Assistant",
+  faq: [
+    { q: "What hours?", a: "Mon-Fri 8a-6p" },
+    { q: "Service area?", a: "Phoenix metro" }
+  ],
+  pricing_facts: [
+    { label: "Service call", amount: 89, currency: "USD" }
+  ]
+})`}
+                </pre>
+              </details>
+            </div>
+          </div>
         </article>
       ) : (
         <div className="space-y-3">

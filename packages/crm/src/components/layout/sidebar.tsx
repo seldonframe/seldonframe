@@ -103,24 +103,30 @@ export function Sidebar(props: {
         },
       ].filter((group) => group.items.length > 0)
     : [
+        // v1.29.0 — operator-language sidebar. Two flat groups instead
+        // of three jargon-named ones ("YOUR SOUL" / "YOUR BLOCKS" /
+        // "SYSTEM"). Operators don't say "Soul" or "Block." They say
+        // "my customers", "my schedule", "my settings."
         {
-          title: "YOUR SOUL",
+          title: "OVERVIEW",
           items: filterHidden([
             { href: "/dashboard", label: "Dashboard", icon: "LayoutDashboard" },
-            { href: "/soul-marketplace", label: "Soul Marketplace", icon: "Puzzle" },
           ]),
         },
         {
-          title: "YOUR BLOCKS",
+          title: "RUN THE BUSINESS",
           items: filterHidden([
             { href: "/contacts", label: labels.contact.plural, icon: "Users" },
             { href: "/deals", label: labels.deal.plural, icon: "Building2" },
-            { href: "/bookings", label: "Booking", icon: "Calendar" },
+            { href: "/bookings", label: "Bookings", icon: "Calendar" },
             { href: "/agents", label: "Agents", icon: "Bot" },
             { href: "/landing", label: "Pages", icon: "Layout" },
             { href: "/emails", label: "Email", icon: "Mail" },
             { href: "/forms", label: labels.intakeForm.plural, icon: "FileText" },
             { href: "/automations", label: "Automations", icon: "Zap" },
+            // Renamed: Soul Marketplace → Templates. Route fixed:
+            // /soul-marketplace was a 404 — actual route is /marketplace.
+            { href: "/marketplace", label: "Templates", icon: "Puzzle" },
           ]),
         },
         {

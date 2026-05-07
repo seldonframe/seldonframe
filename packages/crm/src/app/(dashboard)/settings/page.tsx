@@ -148,75 +148,46 @@ export default async function SettingsPage() {
       : "No clients enabled yet"
     : "Growth or Scale required";
 
+  // v1.29.0 — restructured into 5 plain-English buckets. Operators don't
+  // need to learn "Soul" / "Brain" / "framework" jargon to set up their
+  // business. Power-user / SF-internal stuff routes through Developer.
+  //
+  //   1. Workspace         — name, profile, timezone, brand
+  //   2. Billing            — plan, payments, custom domain
+  //   3. Integrations       — LLM keys, email/SMS providers, Google Cal
+  //   4. CRM setup          — pipeline stages, custom fields, suppression,
+  //                           client portal, knowledge base
+  //   5. Developer          — API keys, webhooks, soul export/import,
+  //                           saved framework presets (collapsed; only
+  //                           visible to operators who know they need it)
   const primaryGroups = [
     {
-      id: "business",
-      title: "Your Business",
+      id: "workspace",
+      title: "Workspace",
+      description: "Your business identity — name, brand, profile.",
       items: [
         {
           href: "/settings/workspace",
           title: "Workspace",
-          description: "Workspace name, timezone, public URLs, and admin token info",
+          description: "Workspace name, timezone, public URLs",
           status: <span className="text-xs text-zinc-400">{orgRow?.timezone ?? "UTC"}</span>,
         },
         {
           href: "/settings/profile",
           title: "Business Profile",
-          description: "Name, industry, description, and Seldon custom context",
+          description: "Name, industry, description — used by your AI assistants",
           status: null,
         },
         {
           href: "/settings/theme",
           title: "Brand & Theme",
-          description: "Colors, fonts, logo, and visual style for public pages",
+          description: "Colors, fonts, logo for your public pages and chatbot",
           status: (
             <span className="inline-flex items-center gap-2 text-xs text-zinc-400">
               <span className="h-2.5 w-2.5 rounded-full border border-zinc-600" style={{ backgroundColor: themeSettings?.theme.primaryColor || "#14b8a6" }} />
               {themeSettings?.theme.primaryColor || "Primary color"}
             </span>
           ),
-        },
-        {
-          href: "/settings/soul-wiki",
-          title: "Soul Knowledge",
-          description: "Feed Seldon your website, videos, and testimonials",
-          status: <span className="text-xs text-zinc-400">{soulSourceCount} sources · {soulArticleCount} articles compiled</span>,
-        },
-        {
-          href: "/settings/pipeline",
-          title: "Pipeline",
-          description: `Deal stages and workflow for your ${labels.deal.plural.toLowerCase()}`,
-          status: <span className="text-xs text-zinc-400">{pipelineStagesCount} stages</span>,
-        },
-        {
-          href: "/settings/integrations",
-          title: "Integrations",
-          description: "Resend, Kit, Twilio, and Google Calendar connections",
-          status: <span className="text-xs text-zinc-400">{connectedIntegrations} connected</span>,
-        },
-        {
-          href: "/settings/client-portal",
-          title: "Client Portal",
-          description: "Give clients a private dashboard for pipeline, bookings, documents, and messages",
-          status: <span className="text-xs text-zinc-400">{portalStatus}</span>,
-        },
-      ],
-    },
-    {
-      id: "account",
-      title: "Account & Billing",
-      items: [
-        {
-          href: "/settings/billing",
-          title: "Billing",
-          description: "Plan, trial, and subscription portal",
-          status: <span className="text-xs text-zinc-400">{billingStatus}</span>,
-        },
-        {
-          href: "/settings/domain",
-          title: "Domain",
-          description: "Custom domain for forms, bookings, and landing pages",
-          status: <span className="text-xs text-zinc-400">{domainStatus}</span>,
         },
         {
           href: "/settings/team",
@@ -226,29 +197,130 @@ export default async function SettingsPage() {
         },
       ],
     },
+    {
+      id: "billing",
+      title: "Billing",
+      description: "Your plan, payments, and custom domain.",
+      items: [
+        {
+          href: "/settings/billing",
+          title: "Plan & Subscription",
+          description: "Plan tier, billing cycle, and Stripe customer portal",
+          status: <span className="text-xs text-zinc-400">{billingStatus}</span>,
+        },
+        {
+          href: "/settings/payments",
+          title: "Accept Payments",
+          description: "Connect Stripe to charge for bookings, services, or subscriptions",
+          status: stripeStatus ? (
+            <span className="text-xs text-emerald-400">Connected</span>
+          ) : (
+            <span className="text-xs text-zinc-400">Not connected</span>
+          ),
+        },
+        {
+          href: "/settings/domain",
+          title: "Custom Domain",
+          description: "Use your own domain for booking pages, forms, and the chat widget",
+          status: <span className="text-xs text-zinc-400">{domainStatus}</span>,
+        },
+      ],
+    },
+    {
+      id: "integrations",
+      title: "Integrations",
+      description: "Connect the tools your business already uses.",
+      items: [
+        {
+          href: "/settings/integrations/llm",
+          title: "AI / LLM Provider",
+          description: "Anthropic or OpenAI key — powers your AI assistants",
+          status: (() => {
+            const anthropicCfg = (integrations as Record<string, unknown>).anthropic as
+              | { apiKey?: string }
+              | undefined;
+            const openaiCfg = (integrations as Record<string, unknown>).openai as
+              | { apiKey?: string }
+              | undefined;
+            const has = Boolean(anthropicCfg?.apiKey || openaiCfg?.apiKey);
+            return (
+              <span className={`text-xs ${has ? "text-emerald-400" : "text-amber-400"}`}>
+                {has ? "Configured" : "Not configured"}
+              </span>
+            );
+          })(),
+        },
+        {
+          href: "/settings/integrations",
+          title: "Other Integrations",
+          description: "Email (Resend), SMS (Twilio), newsletters (Kit), Google Calendar",
+          status: <span className="text-xs text-zinc-400">{connectedIntegrations} connected</span>,
+        },
+      ],
+    },
+    {
+      id: "crm",
+      title: "CRM Setup",
+      description: "Tune how customers, deals, and bookings work for your business.",
+      items: [
+        {
+          href: "/settings/pipeline",
+          title: "Pipeline Stages",
+          description: `Stages that ${labels.deal.plural.toLowerCase()} move through (lead → won)`,
+          status: <span className="text-xs text-zinc-400">{pipelineStagesCount} stages</span>,
+        },
+        {
+          href: "/settings/fields",
+          title: "Custom Fields",
+          description: "Add fields specific to your business (warranty type, SQFT, etc.)",
+          status: null,
+        },
+        {
+          href: "/settings/client-portal",
+          title: "Customer Portal",
+          description: "Private dashboard where customers see their bookings + messages",
+          status: <span className="text-xs text-zinc-400">{portalStatus}</span>,
+        },
+        {
+          href: "/settings/soul-wiki",
+          title: "Knowledge Base",
+          description: "Feed your AI assistants your website, FAQs, and policy documents",
+          status: <span className="text-xs text-zinc-400">{soulSourceCount} sources · {soulArticleCount} articles</span>,
+        },
+        {
+          href: "/settings/suppression",
+          title: "Suppression List",
+          description: "Email/phone opt-outs for compliance",
+          status: null,
+        },
+      ],
+    },
   ] as const;
 
+  // v1.29.0 — Developer / power-user surfaces. Default-collapsed.
+  // Operators who don't know they need these never have to see them.
   const advancedItems = [
-    { href: "/settings/fields", title: "Custom Fields", description: "Add fields specific to your business", status: null },
-    { href: "/settings/webhooks", title: "Webhooks", description: "Connect external services and automations", status: null },
-    { href: "/settings/api", title: "API Keys", description: "Generate keys for programmatic access", status: null },
-    { href: "/settings/branding", title: "Branding", description: "White-label and public brand defaults", status: brandingStatus ? <span className="text-xs text-zinc-400">{brandingStatus}</span> : null },
-    { href: "/settings/frameworks", title: "Saved Frameworks", description: "Manage reusable framework presets", status: <span className="text-xs text-zinc-400">{frameworksStatus}</span> },
-    { href: "/settings/soul-transfer", title: "Soul Export / Import", description: "Download or upload your system configuration", status: null },
-    { href: "/settings/payments", title: "Payments", description: "Connect Stripe to accept payments", status: stripeStatus ? <span className="text-xs text-zinc-400">Connected</span> : <span className="text-xs text-zinc-400">Not connected</span> },
+    { href: "/settings/api", title: "API Keys", description: "Programmatic access for custom integrations", status: null },
+    { href: "/settings/webhooks", title: "Webhooks", description: "Push events to external services", status: null },
+    { href: "/settings/branding", title: "White-label Branding", description: "Hide 'Powered by SeldonFrame' (agency tier)", status: brandingStatus ? <span className="text-xs text-emerald-400">{brandingStatus}</span> : null },
+    { href: "/settings/frameworks", title: "Industry Packs", description: "Reusable presets for industry-specific setups", status: <span className="text-xs text-zinc-400">{frameworksStatus}</span> },
+    { href: "/settings/soul-transfer", title: "Export / Import", description: "Download or upload your full workspace configuration as JSON", status: null },
   ] as const;
 
   return (
     <section className="animate-page-enter space-y-6 sm:space-y-8">
       <div className="space-y-2">
         <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground">Settings</h1>
-        <p className="text-sm text-muted-foreground">Manage your business setup, account settings, and billing.</p>
+        <p className="text-sm text-muted-foreground">Configure your workspace, plan, integrations, and CRM. Everything is editable.</p>
       </div>
 
       <div className="space-y-4">
         {primaryGroups.map((group) => (
           <article key={group.id} className="rounded-xl border bg-card p-5 space-y-4">
-            <p className="font-medium text-muted-foreground">{group.title}</p>
+            <div>
+              <p className="font-semibold text-foreground">{group.title}</p>
+              <p className="text-sm text-muted-foreground mt-0.5">{group.description}</p>
+            </div>
 
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {group.items.map((section) => (
@@ -267,12 +339,12 @@ export default async function SettingsPage() {
           </article>
         ))}
 
-        <details className="rounded-xl border bg-card p-5" open={false}>
+        <details className="rounded-xl border bg-card p-5">
           <summary className="cursor-pointer list-none">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="font-medium text-muted-foreground">Advanced Settings</p>
-                <p className="text-sm text-zinc-500 mt-1">Custom fields, webhooks, API keys, frameworks, and export tools.</p>
+                <p className="font-semibold text-foreground">Developer</p>
+                <p className="text-sm text-muted-foreground mt-0.5">For power users — API keys, webhooks, white-label, export/import. Most operators never need this.</p>
               </div>
               <ChevronRight className="h-4 w-4 text-zinc-600 mt-1 shrink-0" />
             </div>
