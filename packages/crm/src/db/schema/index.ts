@@ -86,3 +86,8 @@ export * from "./workspace-domains";
 // in the SF/Agency/Workspace/Customer hierarchy). organizations
 // gains a parent_agency_id FK (added in the 0040 migration).
 export * from "./partner-agencies";
+
+// v1.22.0 — agency_support_sessions: audit log when an agency
+// operator opens their managed workspace's branded operator portal
+// for support purposes. Tracks origin_user_id, started_at, ended_at.
+export * from "./agency-support-sessions";

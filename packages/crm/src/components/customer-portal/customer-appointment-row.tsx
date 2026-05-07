@@ -8,10 +8,7 @@
 
 import { useState, useTransition } from "react";
 
-import {
-  cancelBookingAction,
-  requestRescheduleAction,
-} from "@/lib/customer-portal/appointment-actions";
+import { cancelBookingAction } from "@/lib/customer-portal/appointment-actions";
 
 export type CustomerAppointmentRowProps = {
   orgSlug: string;
@@ -52,16 +49,12 @@ export function CustomerAppointmentRow({
   });
 
   const [pending, startTransition] = useTransition();
-  const [confirmKind, setConfirmKind] = useState<
-    null | "cancel" | "reschedule"
-  >(null);
+  // v1.22 — reschedule moved to a dedicated page (/customer/<slug>/
+  // reschedule/<bookingId>) with a real slot picker. Cancel stays
+  // inline with a simple reason textarea, so confirmKind is now
+  // simpler (cancel-only).
+  const [confirmKind, setConfirmKind] = useState<null | "cancel">(null);
   const [reason, setReason] = useState("");
-  // v1.21.1 — reschedule picker: structured date + time inputs (not
-  // free-text). Customer enters a preferred slot; operator confirms
-  // on their side. v1.22 will plug into the live availability calendar
-  // for true atomic self-service reschedule.
-  const [preferredDate, setPreferredDate] = useState("");
-  const [preferredTime, setPreferredTime] = useState("");
   const [feedback, setFeedback] = useState<
     null | { kind: "ok"; message: string } | { kind: "error"; message: string }
   >(null);
@@ -75,55 +68,20 @@ export function CustomerAppointmentRow({
     if (!confirmKind) return;
     startTransition(async () => {
       try {
-        if (confirmKind === "cancel") {
-          const res = await cancelBookingAction({
-            orgSlug,
-            bookingId,
-            reason: reason.trim() || undefined,
+        const res = await cancelBookingAction({
+          orgSlug,
+          bookingId,
+          reason: reason.trim() || undefined,
+        });
+        if (res.ok) {
+          setLocalStatus("cancelled");
+          setFeedback({
+            kind: "ok",
+            message: "Cancelled. We'll let the team know.",
           });
-          if (res.ok) {
-            setLocalStatus("cancelled");
-            setFeedback({
-              kind: "ok",
-              message: "Cancelled. We'll let the team know.",
-            });
-            setConfirmKind(null);
-          } else {
-            setFeedback({ kind: "error", message: humanizeReason(res.reason) });
-          }
+          setConfirmKind(null);
         } else {
-          if (!preferredDate || !preferredTime) {
-            setFeedback({
-              kind: "error",
-              message: "Please pick a preferred date and time.",
-            });
-            return;
-          }
-          // Compose human-readable + machine-parseable reason. The
-          // operator's activity feed gets both: a clear sentence
-          // they can scan at a glance, and the structured ISO so a
-          // future v1.22 can auto-create the new booking.
-          const isoCandidate = `${preferredDate}T${preferredTime}`;
-          const note = reason.trim();
-          const composedReason =
-            `Preferred: ${preferredDate} at ${preferredTime}` +
-            (note ? `. Note: ${note}` : "") +
-            ` (iso=${isoCandidate})`;
-          const res = await requestRescheduleAction({
-            orgSlug,
-            bookingId,
-            reason: composedReason,
-          });
-          if (res.ok) {
-            setFeedback({
-              kind: "ok",
-              message:
-                "Request sent. We'll confirm the new time within one business day.",
-            });
-            setConfirmKind(null);
-          } else {
-            setFeedback({ kind: "error", message: humanizeReason(res.reason) });
-          }
+          setFeedback({ kind: "error", message: humanizeReason(res.reason) });
         }
       } catch (err) {
         setFeedback({
@@ -219,13 +177,11 @@ export function CustomerAppointmentRow({
 
       {isCancellable && !confirmKind ? (
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              setConfirmKind("reschedule");
-              setReason("");
-              setFeedback(null);
-            }}
+          {/* v1.22 — Reschedule now links to the slot-picker page
+              (real availability, atomic update). Cancel stays inline
+              with the simple reason textarea. */}
+          <a
+            href={`/customer/${orgSlug}/reschedule/${bookingId}`}
             className="inline-flex h-8 items-center px-3 text-[12px] font-medium"
             style={{
               backgroundColor: "#FFFFFF",
@@ -235,7 +191,7 @@ export function CustomerAppointmentRow({
             }}
           >
             {rescheduleLabel}
-          </button>
+          </a>
           <button
             type="button"
             onClick={() => {
@@ -293,99 +249,8 @@ export function CustomerAppointmentRow({
         </div>
       ) : null}
 
-      {confirmKind === "reschedule" ? (
-        <div className="mt-3 space-y-3">
-          <p
-            className="text-[11px] font-medium"
-            style={{ color: "#444" }}
-          >
-            Pick a preferred date and time. We&apos;ll confirm within one
-            business day.
-          </p>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-1">
-              <label
-                className="text-[11px]"
-                style={{ color: "#666" }}
-              >
-                Preferred date
-              </label>
-              <input
-                type="date"
-                value={preferredDate}
-                onChange={(e) => setPreferredDate(e.target.value)}
-                disabled={pending}
-                min={new Date().toISOString().slice(0, 10)}
-                className="w-full px-3 py-2 text-[13px]"
-                style={{
-                  backgroundColor: "#FFFFFF",
-                  color: "#111",
-                  border: "1px solid #E5E5E1",
-                  borderRadius: "8px",
-                }}
-              />
-            </div>
-            <div className="space-y-1">
-              <label
-                className="text-[11px]"
-                style={{ color: "#666" }}
-              >
-                Preferred time
-              </label>
-              <input
-                type="time"
-                value={preferredTime}
-                onChange={(e) => setPreferredTime(e.target.value)}
-                disabled={pending}
-                step={900}
-                className="w-full px-3 py-2 text-[13px]"
-                style={{
-                  backgroundColor: "#FFFFFF",
-                  color: "#111",
-                  border: "1px solid #E5E5E1",
-                  borderRadius: "8px",
-                }}
-              />
-            </div>
-          </div>
-          <div className="space-y-1">
-            <label
-              className="text-[11px]"
-              style={{ color: "#666" }}
-            >
-              Anything we should know? (optional)
-            </label>
-            <textarea
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              disabled={pending}
-              rows={2}
-              className="w-full px-3 py-2 text-[13px]"
-              style={{
-                backgroundColor: "#FFFFFF",
-                color: "#111",
-                border: "1px solid #E5E5E1",
-                borderRadius: "8px",
-                resize: "vertical",
-              }}
-              placeholder="e.g. afternoon works best — running errands in the morning"
-            />
-          </div>
-          <FormFooterButtons
-            primaryLabel={pending ? "Sending…" : "Send request"}
-            primaryColor="#111"
-            onPrimary={submit}
-            onCancel={() => {
-              setConfirmKind(null);
-              setReason("");
-              setPreferredDate("");
-              setPreferredTime("");
-              setFeedback(null);
-            }}
-            pending={pending}
-          />
-        </div>
-      ) : null}
+      {/* v1.22 — Reschedule no longer renders inline; it links out to
+          /customer/<slug>/reschedule/<bookingId> for the slot picker. */}
     </div>
   );
 }

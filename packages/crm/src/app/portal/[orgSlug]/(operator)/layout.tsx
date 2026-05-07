@@ -13,11 +13,11 @@
 // we surface a banner ("You are signed in as <email> on behalf of
 // <agency>"). v1.21 will add audit logging + revoke flow.
 
-import Link from "next/link";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { organizations } from "@/db/schema";
 import { OperatorPortalShell } from "@/components/operator-portal/operator-portal-shell";
+import { OperatorPortalSidebarNav } from "@/components/operator-portal/operator-portal-sidebar-nav";
 import { getEffectiveBrandingForWorkspace } from "@/lib/partner-agencies/branding";
 import {
   clearOperatorSessionAction,
@@ -77,29 +77,10 @@ export default async function OperatorPortalLayout({
             borderRight: "1px solid #E5E5E1",
           }}
         >
-          <nav className="flex flex-col gap-0.5 text-[13px]">
-            <SidebarLink href={`/portal/${orgSlug}`} active>
-              Dashboard
-            </SidebarLink>
-            <SidebarLink
-              href={`/portal/${orgSlug}/contacts`}
-              comingSoon
-            >
-              Contacts
-            </SidebarLink>
-            <SidebarLink
-              href={`/portal/${orgSlug}/deals`}
-              comingSoon
-            >
-              Deals
-            </SidebarLink>
-            <SidebarLink
-              href={`/portal/${orgSlug}/bookings`}
-              comingSoon
-            >
-              Bookings
-            </SidebarLink>
-          </nav>
+          <OperatorPortalSidebarNav orgSlug={orgSlug} />
+          {/* v1.22 — sidebar nav extracted to a client component so the
+              active-link highlight tracks pathname instead of relying
+              on the layout knowing which child page is rendering. */}
 
           <div className="mt-6 pt-4" style={{ borderTop: "1px solid #E5E5E1" }}>
             <p
@@ -137,48 +118,4 @@ function slugToDisplayName(slug: string): string {
     .split("-")
     .map((part) => (part ? part[0].toUpperCase() + part.slice(1) : ""))
     .join(" ");
-}
-
-function SidebarLink({
-  href,
-  active,
-  comingSoon,
-  children,
-}: {
-  href: string;
-  active?: boolean;
-  comingSoon?: boolean;
-  children: React.ReactNode;
-}) {
-  if (comingSoon) {
-    return (
-      <span
-        className="flex items-center justify-between px-2 py-1.5 cursor-not-allowed"
-        style={{
-          color: "#BBB",
-        }}
-      >
-        <span>{children}</span>
-        <span
-          className="text-[10px] font-medium"
-          style={{ color: "#BBB" }}
-        >
-          v1.21
-        </span>
-      </span>
-    );
-  }
-  return (
-    <Link
-      href={href}
-      className="flex items-center px-2 py-1.5 font-medium"
-      style={{
-        backgroundColor: active ? "#F0F0EC" : "transparent",
-        color: active ? "#111" : "#444",
-        borderRadius: "6px",
-      }}
-    >
-      {children}
-    </Link>
-  );
 }
