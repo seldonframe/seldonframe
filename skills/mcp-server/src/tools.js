@@ -4056,6 +4056,7 @@ export const TOOLS = [
       "The OPERATOR pays the LLM provider directly (Anthropic / OpenAI / etc.); SF charges separately for agent platform usage. " +
       "Stored encrypted at rest using the deployment's ENCRYPTION_KEY. " +
       "Operators get keys from console.anthropic.com (recommended for v1.26.x — best tool-use support) or platform.openai.com. " +
+      "v1.28+ AUTO-DETECT: pass api_key='env' (or omit api_key entirely) and the MCP server will read process.env.ANTHROPIC_API_KEY / OPENAI_API_KEY from its own environment. Most Claude Code users already have this set (it's how Claude Code works), so this lets a solo SF client onboard with zero key-paste step. Returns { ok: false, error: 'no_env_key' } if the env var isn't set; in that case the user must paste the key explicitly. " +
       "Skip if the workspace already has a key — agents fail-graceful with 'I'm not set up yet' if no key configured, so a 'not configured' chatbot response means CALL THIS TOOL.",
     inputSchema: obj(
       {
@@ -4067,21 +4068,50 @@ export const TOOLS = [
             "LLM provider. v1.26 ships full Anthropic support (tool use, streaming-ready). OpenAI support for chat is partial — recommend Anthropic for production agents.",
         },
         api_key: str(
-          "API key. Anthropic keys start with 'sk-ant-...'. Stored encrypted; never echoed back in responses.",
+          "API key. Anthropic keys start with 'sk-ant-...'. Stored encrypted; never echoed back. v1.28+ AUTO-DETECT: pass 'env' (literal string) or omit entirely to read process.env.{ANTHROPIC,OPENAI}_API_KEY from the MCP server's local environment.",
         ),
       },
-      ["workspace_id", "provider", "api_key"],
+      ["workspace_id", "provider"],
     ),
     handler: async (args) => {
       const ws = args.workspace_id;
+      let apiKey = args.api_key;
+
+      // v1.28 — auto-detect from MCP server's local environment.
+      // Triggered by: omitted api_key, empty string, or literal 'env'.
+      const wantsEnv = !apiKey || apiKey === "env" || apiKey === "$ENV";
+      if (wantsEnv) {
+        const envName =
+          args.provider === "openai" ? "OPENAI_API_KEY" : "ANTHROPIC_API_KEY";
+        apiKey = process.env[envName];
+        if (!apiKey) {
+          return {
+            ok: false,
+            error: "no_env_key",
+            hint:
+              `${envName} not set in the MCP server's environment. ` +
+              `Either: (a) set ${envName} in your shell before launching Claude Code (most Claude Code users already have this), ` +
+              `or (b) pass api_key='sk-ant-...' explicitly. ` +
+              `For platform-deployment scenarios where keys differ per workspace (e.g. agency managing multiple HVAC clients with separate Anthropic billing), always pass api_key explicitly — env auto-detect is for solo-operator convenience.`,
+            envName,
+          };
+        }
+      }
+
       const result = await api("POST", "/agents", {
         body: {
           op: "set_llm_key",
           provider: args.provider,
-          api_key: args.api_key,
+          api_key: apiKey,
         },
         workspace_id: ws,
       });
+      // v1.28 — annotate the response so the LLM knows whether env was used
+      // (so it can tell the user 'I auto-detected your key from your shell env'
+      // vs 'I saved the key you provided').
+      if (result && typeof result === "object" && result.ok) {
+        return { ...result, source: wantsEnv ? "env_inherited" : "explicit" };
+      }
       return result;
     },
   },
@@ -4253,6 +4283,199 @@ export const TOOLS = [
         workspace_id: ws,
       });
       return result;
+    },
+  },
+
+  // ───────────────────────────────────────────────────────────────────────
+  // v1.28.0 — SKILL BUNDLE. Wraps the canonical 4-call chatbot-build
+  // sequence (configure_llm_provider → create_agent → publish_agent test
+  // → return embed snippet) into ONE call. Reduces ~30s + 4 round-trips
+  // to ~5s + 1 round-trip. Primitives stay fully callable for power users
+  // who need a custom flow; this is sugar.
+  // ───────────────────────────────────────────────────────────────────────
+
+  {
+    name: "build_website_chatbot",
+    description:
+      "USE WHEN USER SAYS: 'build me a chatbot for [business]', 'add a chatbot to my website', 'create a website chatbot', 'put a chat widget on my homepage', 'set up an AI assistant for my landing page'. " +
+      "ONE-CALL skill bundle that does the canonical chatbot setup end-to-end: " +
+      "(1) auto-configures the workspace's Anthropic LLM key from process.env.ANTHROPIC_API_KEY if no key is configured yet (most Claude Code users already have this set), or accepts an explicit anthropic_api_key arg; " +
+      "(2) creates a website-chatbot agent with the FAQ + pricing facts + greeting you provide; " +
+      "(3) publishes to status='test' so the operator can sandbox-test before going live (the eval gate runs only on 'live'); " +
+      "(4) returns the embed snippet, dashboard URL, and clear next-steps. " +
+      "USE THIS as the default for natural-language 'create a chatbot' requests. Fall back to the primitive tools (configure_llm_provider + create_agent + publish_agent) only when you need a custom flow (e.g. agency managing multiple operators with separate Anthropic billing — pass anthropic_api_key explicitly per workspace).",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id (bearer workspace)."),
+        name: str(
+          "Agent display name (e.g. 'Cypress & Pine HVAC Assistant'). Surfaces in chat header.",
+        ),
+        faq: {
+          type: "array",
+          description:
+            "Operator-curated FAQ pairs. Each item is { q, a }. Pass at least 3-5 covering the top customer questions: hours, service area, common issues, what to expect.",
+          items: obj(
+            {
+              q: str("Question as a visitor would phrase it."),
+              a: str("Operator's exact answer (1-3 sentences)."),
+            },
+            ["q", "a"],
+          ),
+        },
+        pricing_facts: {
+          type: "array",
+          description:
+            "ONLY prices the agent may quote. Critical for safety — without this, agent refuses ALL price questions (safer default). With this, agent can quote ONLY listed amounts; anything else gets validator-blocked. Each item: { label, amount, currency }.",
+          items: obj(
+            {
+              label: str("Service name (e.g. 'Service call', 'AC tune-up')."),
+              amount: { type: "number" },
+              currency: str("3-letter code, e.g. USD."),
+            },
+            ["label", "amount", "currency"],
+          ),
+        },
+        greeting: str(
+          "First message shown when chat opens (~120 chars). E.g. 'Hi! Asking about HVAC service in Phoenix? I can book you in or answer common questions.' Default if omitted: 'Hi! How can I help you today?'",
+        ),
+        anthropic_api_key: str(
+          "Optional explicit Anthropic API key (sk-ant-...). If omitted, reads from process.env.ANTHROPIC_API_KEY in the MCP server's environment. Pass explicitly for white-label scenarios (different operator = different Anthropic billing). Skipped entirely if the workspace already has a key configured.",
+        ),
+      },
+      ["workspace_id", "name"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const steps = [];
+
+      // 1. Configure LLM (auto-detect from env if no explicit key)
+      // We try this BEFORE create_agent so failures surface clearly.
+      // If a key is already configured for this workspace, the set_llm_key
+      // op is idempotent (overwrites); harmless to call. If neither
+      // explicit nor env key is available, fail fast with a clear error
+      // so the user can paste a key.
+      const explicitKey = args.anthropic_api_key;
+      const envKey = process.env.ANTHROPIC_API_KEY;
+      const keyToUse = explicitKey || envKey;
+      if (!keyToUse) {
+        return {
+          ok: false,
+          error: "no_anthropic_key",
+          hint:
+            "No Anthropic key available. Either: (a) set ANTHROPIC_API_KEY in your shell before launching Claude Code (most Claude Code users already have this), " +
+            "or (b) pass anthropic_api_key='sk-ant-...' explicitly to this tool, " +
+            "or (c) configure via the dashboard at /settings/integrations/llm before calling create_agent. " +
+            "Without a key, the agent will be created in draft but every customer turn will return 'I'm not set up yet'.",
+          steps,
+        };
+      }
+      const configResult = await api("POST", "/agents", {
+        body: {
+          op: "set_llm_key",
+          provider: "anthropic",
+          api_key: keyToUse,
+        },
+        workspace_id: ws,
+      });
+      if (!configResult || configResult.ok === false) {
+        return {
+          ok: false,
+          error: "llm_config_failed",
+          detail: configResult,
+          steps,
+        };
+      }
+      steps.push({
+        step: "configure_llm_provider",
+        ok: true,
+        source: explicitKey ? "explicit" : "env_inherited",
+      });
+
+      // 2. Create the agent
+      const createResult = await api("POST", "/agents", {
+        body: {
+          op: "create",
+          name: args.name,
+          archetype: "website-chatbot",
+          channel: "web_chat",
+          faq: args.faq ?? [],
+          pricing_facts: args.pricing_facts ?? [],
+          greeting:
+            args.greeting ?? "Hi! How can I help you today?",
+        },
+        workspace_id: ws,
+      });
+      if (!createResult || createResult.ok === false) {
+        return {
+          ok: false,
+          error: "create_agent_failed",
+          detail: createResult,
+          steps,
+        };
+      }
+      steps.push({
+        step: "create_agent",
+        ok: true,
+        agent_id: createResult.agent?.id,
+      });
+
+      const agentId = createResult.agent?.id;
+      if (!agentId) {
+        return {
+          ok: false,
+          error: "create_agent_returned_no_id",
+          detail: createResult,
+          steps,
+        };
+      }
+
+      // 3. Publish to test (sandbox-callable; eval gate doesn't run yet)
+      const publishResult = await api("POST", "/agents", {
+        body: {
+          op: "publish",
+          agent_id: agentId,
+          status: "test",
+        },
+        workspace_id: ws,
+      });
+      if (!publishResult || publishResult.ok === false) {
+        // Created but not published. Return partial success so the user
+        // can publish manually.
+        return {
+          ok: false,
+          error: "publish_failed_but_agent_created",
+          agent: createResult.agent,
+          embed_url: createResult.embed_url,
+          turn_url: createResult.turn_url,
+          publish_detail: publishResult,
+          steps,
+          next_steps: [
+            `Agent ${agentId} was created but couldn't be published to test. Call publish_agent({ agent_id: '${agentId}', status: 'test' }) manually, or check the dashboard at /agents/${agentId}`,
+          ],
+        };
+      }
+      steps.push({ step: "publish_agent_test", ok: true });
+
+      // 4. Compose the operator-friendly final response.
+      const baseDomain =
+        process.env.WORKSPACE_BASE_DOMAIN?.trim() || "app.seldonframe.com";
+      const dashboardUrl = `https://${baseDomain}/agents/${agentId}`;
+
+      return {
+        ok: true,
+        agent: createResult.agent,
+        embed_url: createResult.embed_url,
+        turn_url: createResult.turn_url,
+        dashboard_url: dashboardUrl,
+        sandbox_url: `${dashboardUrl}/test`,
+        steps,
+        next_steps: [
+          `1. Test in sandbox: ${dashboardUrl}/test (chat with the agent before customers do).`,
+          `2. Run safety evals: open ${dashboardUrl}/evals → Run evals now (8-scenario suite).`,
+          `3. When ready, publish to live: call publish_agent({ agent_id: '${agentId}', status: 'live' }) — auto-runs eval gate, requires ≥87.5% pass.`,
+          `4. Drop on the operator's website: <script src="${createResult.embed_url}" async></script>`,
+        ],
+      };
     },
   },
 

@@ -8,7 +8,7 @@
 // stripped. `create_full_workspace` is the only workspace-creation
 // path mentioned anywhere in this briefing.
 
-export const VERSION = "1.27.10";
+export const VERSION = "1.28.0";
 
 export const WELCOME_MARKDOWN = `# SeldonFrame — create a real Business OS in one conversation
 
@@ -30,7 +30,7 @@ tool that doesn't exist in that primitive.
 | Operator says…                                                 | Primitive            | Entry-point tools                                                     |
 | -------------------------------------------------------------- | -------------------- | --------------------------------------------------------------------- |
 | "Build me a website / business / CRM"                          | **WORKSPACE**        | \`create_workspace_v2\` then block tools                              |
-| "Add an AI chatbot to my website / landing page"               | **AGENT** (web chat) | \`create_agent\` ({ archetype: "website-chatbot" }) → embed.js script |
+| "Add an AI chatbot to my website / landing page"               | **AGENT** (web chat) | \`build_website_chatbot\` (one call: configure_llm + create + publish-test) |
 | "Build me a 24/7 AI receptionist for my phone"                 | AGENT (voice)        | (v1.28+ — voice archetype shipping soon)                              |
 | "Reply to inbound customer SMS / email automatically"          | **CONVERSATION**     | \`send_conversation_turn\` (one-shot Soul-aware reply)                |
 | "Add a hero / services / FAQ / CTA section to a page"          | **BLOCK**            | \`get_block_skill\` + \`persist_block\`                               |
@@ -61,19 +61,13 @@ when shipping) and SMS auto-reply (use the CONVERSATION primitive's
 
 ## Build a website chatbot — the canonical short flow
 
-Most operators asking for "AI on my website" want this exact flow.
-~5 tool calls, end-to-end:
+Most operators asking for "AI on my website" want this exact flow. As
+of v1.28.0 this is **ONE tool call**:
 
 \`\`\`
-1. configure_llm_provider({ provider: "anthropic", api_key })
-   // Skip if workspace already has a key. SF uses BYOK — operator pays
-   // Anthropic directly for the LLM; SF charges per agent turn separately.
-
-2. create_agent({
+1. build_website_chatbot({
      workspace_id,
      name: "Cypress Pine HVAC Helper",
-     archetype: "website-chatbot",
-     channel: "web_chat",
      greeting: "Hi! Asking about HVAC service in Phoenix? I can book you in.",
      faq: [
        { q: "What areas do you service?", a: "Phoenix, Scottsdale, Tempe..." },
@@ -83,18 +77,28 @@ Most operators asking for "AI on my website" want this exact flow.
        { label: "Service call", amount: 89, currency: "USD" },
        { label: "AC tune-up", amount: 149, currency: "USD" }
      ]
+     // anthropic_api_key omitted → auto-detected from
+     // process.env.ANTHROPIC_API_KEY in the MCP server's environment
+     // (most Claude Code users already have this set).
    })
-   // → returns { agent, embed_url, turn_url, next_steps }
+   // → returns { agent, embed_url, turn_url, dashboard_url, next_steps }
+   // Internally: configures LLM key, creates agent, publishes to test.
 
-3. publish_agent({ workspace_id, agent_id, status: "test" })
-   // Sandbox-test the agent in the dashboard before flipping to live.
+2. (Operator sandbox-tests at /agents/[id]/test.)
 
-4. (Operator tests in /agents/[id]/test sandbox.)
-
-5. publish_agent({ workspace_id, agent_id, status: "live" })
-   // AUTO-RUNS the 8-scenario eval gate. Fails if pass rate < 87.5%.
+3. publish_agent({ agent_id, status: "live" })
+   // Auto-runs the 8-scenario eval gate. Requires ≥87.5% pass rate.
    // Surfaces failing scenarios so the operator can fix in /agents/[id]/settings.
 \`\`\`
+
+If the operator manages multiple workspaces with separate Anthropic
+billing (e.g. Acme AI agency managing Cypress Pine HVAC + Sunset
+Dental), pass anthropic_api_key explicitly per workspace instead of
+relying on env auto-detect.
+
+For custom flows (different archetype, custom capability allowlist,
+multi-step blueprint construction), drop down to the primitives:
+configure_llm_provider + create_agent + publish_agent + update_agent_blueprint.
 
 Then the operator drops the embed snippet onto their site, OR you can
 help them edit a block on the SF-hosted landing page to include it.
@@ -402,4 +406,4 @@ admin dashboard. Pre-fills their email automatically.
 <https://seldonframe.com> · **Discord:** <https://discord.gg/sbVUu976NW>
 `;
 
-export const FIRST_CALL_BANNER = `🚀 SeldonFrame v1.27.10 is connected. CAPABILITY MAP — pick the right primitive BEFORE exploring tools: (a) "build me a website" → WORKSPACE → create_workspace_v2 + block tools. (b) "add a chatbot to my website / landing page" → AGENT (web chat) → create_agent({archetype:"website-chatbot"}) → embed.js script. CRITICAL ANTI-PATTERN: chat widgets are NOT blocks. Don't search list_blocks for chat — chat agents are a separate primitive (v1.26+). (c) "auto-reply to inbound SMS/email" → CONVERSATION → send_conversation_turn (one-shot Soul-aware reply, not a website widget). (d) "add hero/services/faq/cta section" → BLOCK → get_block_skill + persist_block. (e) "send campaign email/sms" → MESSAGING. (f) CRM ops → list_contacts/create_deal/etc. CHATBOT CANONICAL FLOW (5 calls): configure_llm_provider (BYOK Anthropic, skip if already set) → create_agent (faq + pricing_facts + greeting) → publish_agent({status:"test"}) → operator sandbox-tests at /agents/[id]/test → publish_agent({status:"live"}) auto-runs 8-scenario eval gate (≥87.5% pass required). Observability tools after publish: list_agents, tail_agent_conversations, get_agent_conversation, get_agent_metrics, run_agent_evals, replay_conversation. Dashboard surfaces /agents, /agents/[id]/test, /agents/[id]/settings, /agents/[id]/evals, /agents/[id]/conversations let operators iterate without leaving the browser. WORKSPACE FLOW (legacy reference): create_workspace_v2 → IN PARALLEL for all 7 recommended_blocks (hero, services, about, faq, cta, booking, intake): get_block_skill + persist_block → complete_workspace_v2 → finalize_workspace({workspace_id, email}). Run blocks in PARALLEL (Promise.all) — sequential takes 60+ seconds. v1.10+ CUSTOMIZE: regenerate_block, upload_workspace_image (image_url preferred over base64). v1.11+ STRUCTURAL: get_landing_structure, move_section, delete_section. v1.12+ COMPOSITES: add_composite_section / update_composite_section — manifest ANY block from 12 low-level primitives. Skipping finalize_workspace leaves the operator with no admin login. Every URL is real. NEVER create local files.`;
+export const FIRST_CALL_BANNER = `🚀 SeldonFrame v1.28.0 is connected. CAPABILITY MAP — pick the right primitive BEFORE exploring tools: (a) "build me a website" → WORKSPACE → create_workspace_v2 + block tools. (b) "add a chatbot to my website / landing page" → AGENT (web chat) → build_website_chatbot (v1.28+ skill bundle: configure_llm + create_agent + publish-test in 1 call; auto-detects ANTHROPIC_API_KEY from env). Drop to primitives (configure_llm_provider + create_agent + publish_agent) only for custom flows. CRITICAL ANTI-PATTERN: chat widgets are NOT blocks. Don't search list_blocks for chat — chat agents are a separate primitive (v1.26+). (c) "auto-reply to inbound SMS/email" → CONVERSATION → send_conversation_turn (one-shot Soul-aware reply, not a website widget). (d) "add hero/services/faq/cta section" → BLOCK → get_block_skill + persist_block. (e) "send campaign email/sms" → MESSAGING. (f) CRM ops → list_contacts/create_deal/etc. CHATBOT CANONICAL FLOW (v1.28+ — 1 call instead of 5): build_website_chatbot({workspace_id, name, faq, pricing_facts, greeting}) → wraps configure_llm + create_agent + publish-test in one call, auto-detects ANTHROPIC_API_KEY from env. Then: operator sandbox-tests at /agents/[id]/test → publish_agent({status:"live"}) auto-runs 8-scenario eval gate (≥87.5% pass required). Observability tools after publish: list_agents, tail_agent_conversations, get_agent_conversation, get_agent_metrics, run_agent_evals, replay_conversation. Dashboard surfaces /agents, /agents/[id]/test, /agents/[id]/settings, /agents/[id]/evals, /agents/[id]/conversations let operators iterate without leaving the browser. WORKSPACE FLOW (legacy reference): create_workspace_v2 → IN PARALLEL for all 7 recommended_blocks (hero, services, about, faq, cta, booking, intake): get_block_skill + persist_block → complete_workspace_v2 → finalize_workspace({workspace_id, email}). Run blocks in PARALLEL (Promise.all) — sequential takes 60+ seconds. v1.10+ CUSTOMIZE: regenerate_block, upload_workspace_image (image_url preferred over base64). v1.11+ STRUCTURAL: get_landing_structure, move_section, delete_section. v1.12+ COMPOSITES: add_composite_section / update_composite_section — manifest ANY block from 12 low-level primitives. Skipping finalize_workspace leaves the operator with no admin login. Every URL is real. NEVER create local files.`;
