@@ -4,6 +4,7 @@ import { DollarSign, Users, CalendarDays, Activity, Plus, ChartLine, MoreHorizon
 import { db } from "@/db";
 import { activities, bookings as bookingsTable, contacts as contactsTable, metricsSnapshots, organizations, orgMembers, paymentRecords, pipelines as pipelinesTable, stripeConnections, type OrganizationIntegrations, type PipelineStage } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth/helpers";
+import { isOperatorPortalUserId } from "@/lib/auth/operator-portal-context";
 import { listAppointmentTypes } from "@/lib/bookings/actions";
 import { listBookings } from "@/lib/bookings/actions";
 import { listContacts } from "@/lib/contacts/actions";
@@ -251,12 +252,21 @@ export default async function DashboardPage({
     return null;
   }
 
-  const membershipRows = user?.id
+  // v1.25.2 — gate org_members lookup for operator sessions. The
+  // synthetic operator user.id (`__sf_operator_portal__:<orgId>`)
+  // isn't a valid UUID, so this query crashes with 22P02
+  // "invalid input syntax for type uuid" if we run it. Operator
+  // sessions are scoped to ONE workspace by design — their
+  // membershipOrgIds list is just [their orgId].
+  const isOperatorSession = isOperatorPortalUserId(user?.id);
+  const membershipRows = user?.id && !isOperatorSession
     ? await db
         .select({ orgId: orgMembers.orgId })
         .from(orgMembers)
         .where(eq(orgMembers.userId, user.id))
-    : [];
+    : isOperatorSession && orgId
+      ? [{ orgId }]
+      : [];
 
   const membershipOrgIds = membershipRows.map((row) => row.orgId);
   console.error("[ORG-LIST-DIAG]", {
@@ -271,24 +281,39 @@ export default async function DashboardPage({
     userId: user?.id ?? null,
     userOrgId: user?.orgId ?? null,
   });
+  // v1.25.2 — operator sessions have a synthetic non-UUID id, so the
+  // ownerId/parentUserId equality clauses crash. Operator sessions
+  // are workspace-scoped; just look up the active workspace by orgId.
   const directWorkspaceRows = user?.id
-    ? await db
-        .select({
-          id: organizations.id,
-          name: organizations.name,
-          soulId: organizations.soulId,
-          slug: organizations.slug,
-          ownerId: organizations.ownerId,
-          parentUserId: organizations.parentUserId,
-        })
-        .from(organizations)
-        .where(
-          or(
-            eq(organizations.ownerId, user.id),
-            eq(organizations.parentUserId, user.id),
-            eq(organizations.id, user.orgId)
+    ? isOperatorSession
+      ? await db
+          .select({
+            id: organizations.id,
+            name: organizations.name,
+            soulId: organizations.soulId,
+            slug: organizations.slug,
+            ownerId: organizations.ownerId,
+            parentUserId: organizations.parentUserId,
+          })
+          .from(organizations)
+          .where(eq(organizations.id, orgId))
+      : await db
+          .select({
+            id: organizations.id,
+            name: organizations.name,
+            soulId: organizations.soulId,
+            slug: organizations.slug,
+            ownerId: organizations.ownerId,
+            parentUserId: organizations.parentUserId,
+          })
+          .from(organizations)
+          .where(
+            or(
+              eq(organizations.ownerId, user.id),
+              eq(organizations.parentUserId, user.id),
+              eq(organizations.id, user.orgId)
+            )
           )
-        )
     : [];
 
   const membershipWorkspaceRows = user?.id

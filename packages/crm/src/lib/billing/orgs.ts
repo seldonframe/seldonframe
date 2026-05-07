@@ -24,6 +24,20 @@ import {
 
 const FREE_WORKSPACE_ALLOWANCE = 1;
 
+/**
+ * v1.25.2 — synthetic session ids (admin-token sentinel, operator-
+ * portal session) carry recognizable string prefixes that aren't
+ * valid uuids. Postgres rejects them at the column-type level with
+ * 22P02 "invalid input syntax for type uuid". Use this guard before
+ * passing user ids into queries that compare against uuid columns.
+ *
+ * Pattern from RFC 4122: 8-4-4-4-12 hex with hyphens.
+ */
+const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function isUuidShape(value: string | null | undefined): boolean {
+  return typeof value === "string" && UUID_SHAPE.test(value);
+}
+
 function slugify(value: string) {
   return value
     .toLowerCase()
@@ -335,6 +349,15 @@ export async function getWorkspaceLimitStatusForUser(userId: string) {
 export async function listManagedOrganizations(userId?: string) {
   const user = userId ? await getBillingUserById(userId) : await requireBillingUser();
 
+  // v1.25.2 — synthetic ids (admin-token sentinel, operator-portal
+  // session) aren't valid uuids and would crash the org_members
+  // query with 22P02. Both session types are workspace-scoped, so
+  // return [] (the caller's empty-state path handles this fine —
+  // workspace switcher doesn't render).
+  if (!isUuidShape(user.id)) {
+    return [];
+  }
+
   const membershipRows = await db
     .select({ orgId: orgMembers.orgId })
     .from(orgMembers)
@@ -402,6 +425,11 @@ export async function listManagedOrganizations(userId?: string) {
 
 export async function listManagedOrganizationsForUser(userId: string) {
   const user = await getBillingUserById(userId);
+
+  // v1.25.2 — same defense-in-depth as listManagedOrganizations.
+  if (!isUuidShape(user.id)) {
+    return [];
+  }
 
   const membershipRows = await db
     .select({ orgId: orgMembers.orgId })

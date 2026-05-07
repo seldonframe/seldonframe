@@ -31,12 +31,21 @@ import {
  * is the dominant white-label entry path.
  */
 export async function getCurrentUser() {
-  const session = await auth();
-  if (session?.user) return session.user;
-
-  // v1.25.0 — operator-portal session
+  // v1.25.2 — operator-portal session takes PRECEDENCE over NextAuth
+  // when the cookie is explicitly set. Reason: when a user clicks
+  // an operator magic link, their intent is clearly to use the
+  // operator portal — even if they happen to have a stale NextAuth
+  // session in the same browser (common: tried /signup earlier and
+  // got the verification error but still got a partial NextAuth
+  // cookie set; or this is the SF agency operator opening their
+  // client's portal in the same browser as their own dashboard).
+  // Operator cookie wins if present + valid; falls through to
+  // NextAuth otherwise.
   const opCtx = await resolveOperatorPortalContext();
   if (opCtx) return opCtx.user;
+
+  const session = await auth();
+  if (session?.user) return session.user;
 
   const adminCtx = await resolveAdminTokenContext();
   if (adminCtx) return adminCtx.user;
@@ -45,14 +54,15 @@ export async function getCurrentUser() {
 }
 
 export async function getOrgId() {
+  // v1.25.2 — operator-portal session takes precedence (same reason
+  // as getCurrentUser above). Workspace-scoped, single round-trip.
+  const opCtx = await resolveOperatorPortalContext();
+  if (opCtx) return opCtx.orgId;
+
   // C6: admin-token sessions are scoped to a single workspace by design;
   // skip the user/org-membership round-trip and return the token's orgId.
   const adminCtx = await resolveAdminTokenContext();
   if (adminCtx) return adminCtx.orgId;
-
-  // v1.25.0 — operator-portal sessions are also workspace-scoped.
-  const opCtx = await resolveOperatorPortalContext();
-  if (opCtx) return opCtx.orgId;
 
   const user = await getCurrentUser();
 
@@ -91,14 +101,11 @@ export async function getOrgId() {
 }
 
 export async function requireAuth() {
-  const session = await auth();
-  if (session?.user) return session;
-
-  // v1.25.0 — operator-portal session: produces a synthetic session
-  // so the dashboard layout/page renders without redirecting to login.
-  // Surface the supportOriginUserId on the user object so layouts can
-  // render the agency-support audit banner. Downstream code that
-  // mutates the users table can no-op via isOperatorPortalUserId.
+  // v1.25.2 — operator-portal session takes precedence over NextAuth
+  // when the cookie is set. See getCurrentUser comment for rationale
+  // (intent-based: clicking an operator magic link means the user
+  // wants the operator portal even if they have stale NextAuth in
+  // the same browser).
   const opCtx = await resolveOperatorPortalContext();
   if (opCtx) {
     const synthetic: Session = {
@@ -107,6 +114,9 @@ export async function requireAuth() {
     };
     return synthetic;
   }
+
+  const session = await auth();
+  if (session?.user) return session;
 
   // C6: admin-token cookie produces a synthetic session so the dashboard
   // layout / page renders without redirecting to /login.
