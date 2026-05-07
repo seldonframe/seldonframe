@@ -10,7 +10,11 @@
 //
 // All validators are pure functions — testable in isolation, no DB.
 
-import type { AgentBlueprint } from "@/db/schema/agents";
+import type {
+  AgentBlueprint,
+  AgentToolCall,
+  AgentToolResult,
+} from "@/db/schema/agents";
 import type { AgentValidatorResult } from "@/db/schema/agents";
 
 export type ValidatorContext = {
@@ -26,6 +30,13 @@ export type ValidatorContext = {
    *  contact's phone). Without this context the validator over-fires:
    *  it would flag the customer's own phone-number echo as a leak. */
   conversationContext?: string;
+  /** v1.27.10 — tool calls + results from THIS turn only. Used by
+   *  no_hallucinated_state_change to verify that a "Done, rescheduled!"
+   *  claim is backed by an actual reschedule_appointment tool call with
+   *  ok=true result. Detects the LLM-lies case (and the tool-not-in-
+   *  capability-list case) at runtime. */
+  turnToolCalls?: AgentToolCall[];
+  turnToolResults?: AgentToolResult[];
   /** Agent blueprint for soul-derived facts. */
   blueprint: AgentBlueprint;
   /** Soul snapshot for voice / hours / services checks. */
@@ -219,6 +230,105 @@ const responseLengthUnderCap: Validator = {
   },
 };
 
+// ─── 6. no_hallucinated_state_change ───────────────────────────────────────
+//
+// v1.27.10 — defense-in-depth against the most dangerous agent failure
+// mode: claiming a state change happened (rescheduled / cancelled / booked
+// / escalated) without actually calling the matching tool.
+//
+// Two failure paths this catches:
+//   (a) The agent's blueprint doesn't include the matching capability,
+//       so the tool isn't even in the LLM's tool list. The system prompt
+//       still says "you MUST call X" — contradictory state. LLM picks
+//       "claim success" over "tell user we can't do that." Critical bug
+//       because the customer believes the booking moved when it didn't.
+//   (b) The capability IS in the tool list, but the LLM lied — system
+//       prompts aren't 100% reliable. Same outcome.
+//
+// We catch both by scanning the response for completion phrases mapped
+// to required tool calls. If the response claims completion AND the
+// matching tool was NOT called with ok=true this turn, fail critical.
+// The runtime then replaces with the safe fallback ("let me check") —
+// the customer doesn't get told a non-existent state change happened.
+//
+// As Claude gets better at not hallucinating actions, this validator
+// fires less. Architecture stable.
+
+type ActionPattern = {
+  /** Regex matching completion-claim phrases for this action. */
+  pattern: RegExp;
+  /** Tool that MUST have been called with ok=true to make the claim valid. */
+  requiredToolName: string;
+  /** Human-readable label for the failure detail. */
+  label: string;
+};
+
+const ACTION_PATTERNS: ActionPattern[] = [
+  // Reschedule
+  {
+    pattern:
+      /\b(rescheduled|moved (your|the) (appointment|booking)|appointment (has been |is )?moved|new time is set|see you (then|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday))/i,
+    requiredToolName: "reschedule_appointment",
+    label: "claimed reschedule without calling reschedule_appointment",
+  },
+  // Cancel
+  {
+    pattern:
+      /\b(cancell?ed (your|the) (appointment|booking)|appointment (has been |is )?cancell?ed|cancellation (is )?confirmed)/i,
+    requiredToolName: "cancel_appointment",
+    label: "claimed cancellation without calling cancel_appointment",
+  },
+  // Book
+  {
+    pattern:
+      /\b(you'?re (now |all )?(booked|scheduled)|appointment (has been |is )?(booked|scheduled|confirmed)|i'?ve booked|booking (is )?confirmed)/i,
+    requiredToolName: "book_appointment",
+    label: "claimed booking without calling book_appointment",
+  },
+  // Escalate
+  {
+    pattern:
+      /\b(let the team know|team will (follow up|reach out|be in touch)|i'?ve (passed|forwarded) (this|that)|someone (will|is going to) (call|email|reach out|contact|follow up))/i,
+    requiredToolName: "escalate_to_human",
+    label: "claimed escalation without calling escalate_to_human",
+  },
+];
+
+const noHallucinatedStateChange: Validator = {
+  name: "no_hallucinated_state_change",
+  severity: "critical",
+  run: ({ response, turnToolCalls, turnToolResults }) => {
+    const calls = turnToolCalls ?? [];
+    const results = turnToolResults ?? [];
+
+    // A tool call "counts" if it was made AND its matching result is
+    // ok=true. Hallucinated calls or failed calls don't justify the
+    // completion claim.
+    const successfulToolNames = new Set<string>();
+    for (const call of calls) {
+      const result = results.find((r) => r.toolCallId === call.id);
+      if (result?.ok) successfulToolNames.add(call.name);
+    }
+
+    const failures: string[] = [];
+    for (const action of ACTION_PATTERNS) {
+      if (!action.pattern.test(response)) continue;
+      if (!successfulToolNames.has(action.requiredToolName)) {
+        failures.push(action.label);
+      }
+    }
+
+    if (failures.length === 0) {
+      return { name: "no_hallucinated_state_change", passed: true };
+    }
+    return {
+      name: "no_hallucinated_state_change",
+      passed: false,
+      details: failures.join("; "),
+    };
+  },
+};
+
 // ─── runner ────────────────────────────────────────────────────────────────
 
 export const ALL_VALIDATORS: Validator[] = [
@@ -227,6 +337,7 @@ export const ALL_VALIDATORS: Validator[] = [
   noPiiLeak,
   noAvoidWords,
   responseLengthUnderCap,
+  noHallucinatedStateChange,
 ];
 
 export function runValidators(

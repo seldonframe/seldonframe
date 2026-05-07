@@ -408,6 +408,11 @@ export async function executeTurn(input: {
     response: finalText,
     userMessage: input.userMessage,
     conversationContext,
+    // v1.27.10 — pass this turn's tool calls + results so the
+    // no_hallucinated_state_change validator can verify completion
+    // claims are backed by successful tool calls.
+    turnToolCalls: allToolCalls,
+    turnToolResults: allToolResults,
     blueprint,
     soul: (orgRow.soul as { services?: Array<{ name: string }>; voice?: { avoidWords?: string[] } } | null) ?? null,
   });
