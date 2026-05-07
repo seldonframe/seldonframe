@@ -91,3 +91,10 @@ export * from "./partner-agencies";
 // operator opens their managed workspace's branded operator portal
 // for support purposes. Tracks origin_user_id, started_at, ended_at.
 export * from "./agency-support-sessions";
+
+// v1.26.0 — agent foundation: agents (blueprint), agent_versions
+// (rollback + eval-gated promotion), agent_conversations (chat
+// session), agent_turns (every message + validators + cost),
+// agent_evals (test scenarios per version). Web chat archetype
+// ships first; voice / SMS / email queued.
+export * from "./agents";

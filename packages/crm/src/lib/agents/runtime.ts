@@ -1,0 +1,488 @@
+// v1.26.0 — agent runtime: executeTurn(conversationId, userMessage)
+//
+// Non-streaming for v1.26.0 (returns full response after all tool
+// calls resolve). v1.26.1 adds SSE streaming.
+//
+// Flow per turn:
+//   1. Load conversation + agent + soul (+ brain in v1.26.1)
+//   2. Check daily token budget — gracefully degrade if exhausted
+//   3. Persist user turn
+//   4. Build messages array from conversation history
+//   5. Call Anthropic with system prompt + tools allowlist
+//   6. Loop: handle tool_use blocks (validate input, execute, append result)
+//   7. Run validators on final assistant text
+//      - critical fail → fallback to "let me check" + escalate
+//   8. Persist assistant turn (with validators_passed, tokens, latency)
+//   9. Update conversation aggregate counters
+//   10. Activity-bridge: if first turn, write activity row to operator's CRM
+//   11. Return assistant response
+
+"use server";
+
+import { and, asc, eq, sql } from "drizzle-orm";
+import Anthropic from "@anthropic-ai/sdk";
+import { db } from "@/db";
+import {
+  agentConversations,
+  agentTurns,
+  agents,
+  organizations,
+  activities,
+  users,
+  type Agent,
+  type AgentBlueprint,
+  type AgentToolCall,
+  type AgentToolResult,
+  type AgentValidatorResult,
+} from "@/db/schema";
+import { composeSystemPrompt } from "./prompt";
+import { runValidators } from "./validators";
+import {
+  findTool,
+  getToolsForCapabilities,
+  type AgentTool,
+  type ToolExecuteContext,
+} from "./tools";
+
+const MODEL = process.env.ANTHROPIC_AGENT_MODEL?.trim() || "claude-sonnet-4-5-20250929";
+const MAX_TURN_ITERATIONS = 6; // tool-call cap per single turn (catches loops)
+const COST_PER_1K_INPUT_CENTS = 0.3; // approx Sonnet 4.5 — keep updated
+const COST_PER_1K_OUTPUT_CENTS = 1.5;
+
+type ExecuteTurnResult =
+  | {
+      ok: true;
+      assistantMessage: string;
+      validators: AgentValidatorResult[];
+      toolCalls: AgentToolCall[];
+      toolResults: AgentToolResult[];
+      tokensIn: number;
+      tokensOut: number;
+      latencyMs: number;
+    }
+  | { ok: false; reason: string; fallbackMessage: string };
+
+export async function executeTurn(input: {
+  conversationId: string;
+  userMessage: string;
+}): Promise<ExecuteTurnResult> {
+  const t0 = Date.now();
+
+  // 1. Load conversation + agent + org + soul
+  const [conv] = await db
+    .select()
+    .from(agentConversations)
+    .where(eq(agentConversations.id, input.conversationId))
+    .limit(1);
+  if (!conv) {
+    return {
+      ok: false,
+      reason: "conversation_not_found",
+      fallbackMessage: "I'm sorry, this chat session has expired. Please refresh the page.",
+    };
+  }
+
+  const [agent] = await db
+    .select()
+    .from(agents)
+    .where(eq(agents.id, conv.agentId))
+    .limit(1);
+  if (!agent) {
+    return {
+      ok: false,
+      reason: "agent_not_found",
+      fallbackMessage: "I'm sorry, this assistant is unavailable. Please contact us directly.",
+    };
+  }
+
+  const [orgRow] = await db
+    .select({
+      id: organizations.id,
+      name: organizations.name,
+      slug: organizations.slug,
+      soul: organizations.soul,
+    })
+    .from(organizations)
+    .where(eq(organizations.id, agent.orgId))
+    .limit(1);
+  if (!orgRow) {
+    return {
+      ok: false,
+      reason: "org_not_found",
+      fallbackMessage: "I'm sorry, something went wrong. Please contact us directly.",
+    };
+  }
+
+  // 2. Check daily token budget
+  if (await isDailyBudgetExhausted(agent)) {
+    return {
+      ok: false,
+      reason: "daily_budget_exhausted",
+      fallbackMessage:
+        "I'm having trouble right now — let me have someone follow up with you. What's the best email or phone to reach you at?",
+    };
+  }
+
+  // 3. Persist user turn
+  const [lastTurn] = await db
+    .select({ turnIndex: agentTurns.turnIndex })
+    .from(agentTurns)
+    .where(eq(agentTurns.conversationId, input.conversationId))
+    .orderBy(sql`${agentTurns.turnIndex} DESC`)
+    .limit(1);
+  const nextTurnIndex = (lastTurn?.turnIndex ?? -1) + 1;
+
+  await db.insert(agentTurns).values({
+    conversationId: input.conversationId,
+    turnIndex: nextTurnIndex,
+    role: "user",
+    content: input.userMessage,
+  });
+
+  // 4. Build messages array from conversation history
+  const history = await db
+    .select({
+      role: agentTurns.role,
+      content: agentTurns.content,
+      toolCalls: agentTurns.toolCalls,
+      toolResults: agentTurns.toolResults,
+    })
+    .from(agentTurns)
+    .where(eq(agentTurns.conversationId, input.conversationId))
+    .orderBy(asc(agentTurns.turnIndex));
+
+  // Convert SF turn shape → Anthropic Messages API shape.
+  type AnthropicMessage = {
+    role: "user" | "assistant";
+    content:
+      | string
+      | Array<
+          | { type: "text"; text: string }
+          | { type: "tool_use"; id: string; name: string; input: unknown }
+          | { type: "tool_result"; tool_use_id: string; content: string; is_error?: boolean }
+        >;
+  };
+  const messages: AnthropicMessage[] = [];
+  for (const turn of history) {
+    if (turn.role === "user") {
+      messages.push({ role: "user", content: turn.content ?? "" });
+    } else if (turn.role === "assistant") {
+      const blocks: Array<
+        | { type: "text"; text: string }
+        | { type: "tool_use"; id: string; name: string; input: unknown }
+      > = [];
+      if (turn.content) blocks.push({ type: "text", text: turn.content });
+      if (turn.toolCalls) {
+        for (const tc of turn.toolCalls) {
+          blocks.push({ type: "tool_use", id: tc.id, name: tc.name, input: tc.input });
+        }
+      }
+      messages.push({ role: "assistant", content: blocks });
+      // Tool results from previous turns ride as a user message.
+      if (turn.toolResults && turn.toolResults.length > 0) {
+        messages.push({
+          role: "user",
+          content: turn.toolResults.map((tr) => ({
+            type: "tool_result" as const,
+            tool_use_id: tr.toolCallId,
+            content: tr.ok
+              ? JSON.stringify(tr.output ?? null)
+              : `Error: ${tr.error ?? "unknown"}`,
+            is_error: !tr.ok,
+          })),
+        });
+      }
+    }
+  }
+
+  // 5. System prompt + tools
+  const blueprint = (agent.blueprint ?? {}) as AgentBlueprint;
+  const systemPrompt = composeSystemPrompt({
+    orgName: orgRow.name,
+    soul: (orgRow.soul as Parameters<typeof composeSystemPrompt>[0]["soul"]) ?? null,
+    blueprint,
+    archetype: agent.archetype,
+    testMode: conv.status === "test",
+  });
+  const tools = getToolsForCapabilities(blueprint.capabilities);
+  const anthropic = new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+  });
+
+  // 6. Loop over LLM ↔ tools until we get a stop_reason of "end_turn"
+  let totalTokensIn = 0;
+  let totalTokensOut = 0;
+  const allToolCalls: AgentToolCall[] = [];
+  const allToolResults: AgentToolResult[] = [];
+  let finalText = "";
+
+  for (let iter = 0; iter < MAX_TURN_ITERATIONS; iter++) {
+    let response: Anthropic.Messages.Message;
+    try {
+      response = await anthropic.messages.create({
+        model: MODEL,
+        max_tokens: 1024,
+        system: systemPrompt,
+        tools: tools.map((t) => ({
+          name: t.name,
+          description: t.description,
+          input_schema: t.jsonSchema as Anthropic.Messages.Tool.InputSchema,
+        })),
+        messages: messages as Anthropic.Messages.MessageParam[],
+      });
+    } catch (err) {
+      console.error(
+        `[agent-runtime] anthropic_error agentId=${agent.id} convId=${conv.id} err=${err instanceof Error ? err.message : String(err)}`,
+      );
+      return {
+        ok: false,
+        reason: "llm_error",
+        fallbackMessage:
+          "I'm having a hiccup. Can I have someone follow up with you? What's your email?",
+      };
+    }
+
+    totalTokensIn += response.usage?.input_tokens ?? 0;
+    totalTokensOut += response.usage?.output_tokens ?? 0;
+
+    // Extract text + tool_use blocks
+    const textBlocks: string[] = [];
+    const toolUseBlocks: Array<{ id: string; name: string; input: unknown }> = [];
+    for (const block of response.content) {
+      if (block.type === "text") {
+        textBlocks.push(block.text);
+      } else if (block.type === "tool_use") {
+        toolUseBlocks.push({
+          id: block.id,
+          name: block.name,
+          input: block.input,
+        });
+      }
+    }
+
+    if (textBlocks.length > 0) {
+      finalText = textBlocks.join("\n");
+    }
+
+    if (response.stop_reason === "end_turn" || toolUseBlocks.length === 0) {
+      break;
+    }
+
+    // Append assistant message to messages history (mid-turn)
+    messages.push({
+      role: "assistant",
+      content: response.content as AnthropicMessage["content"],
+    });
+
+    // Execute tools
+    const toolResultsForThisIter: Array<{
+      type: "tool_result";
+      tool_use_id: string;
+      content: string;
+      is_error?: boolean;
+    }> = [];
+    for (const tu of toolUseBlocks) {
+      allToolCalls.push({ id: tu.id, name: tu.name, input: tu.input as Record<string, unknown> });
+      const tool = findTool(tu.name);
+      if (!tool) {
+        const result: AgentToolResult = {
+          toolCallId: tu.id,
+          ok: false,
+          error: `Unknown tool: ${tu.name}`,
+        };
+        allToolResults.push(result);
+        toolResultsForThisIter.push({
+          type: "tool_result",
+          tool_use_id: tu.id,
+          content: `Error: unknown tool ${tu.name}`,
+          is_error: true,
+        });
+        continue;
+      }
+      // Validate input against schema
+      const parsed = tool.inputSchema.safeParse(tu.input);
+      if (!parsed.success) {
+        const result: AgentToolResult = {
+          toolCallId: tu.id,
+          ok: false,
+          error: `Input validation failed: ${parsed.error.message}`,
+        };
+        allToolResults.push(result);
+        toolResultsForThisIter.push({
+          type: "tool_result",
+          tool_use_id: tu.id,
+          content: `Error: ${parsed.error.message}`,
+          is_error: true,
+        });
+        continue;
+      }
+      // Execute
+      const ctx: ToolExecuteContext = {
+        orgId: agent.orgId,
+        orgSlug: orgRow.slug,
+        agentId: agent.id,
+        conversationId: conv.id,
+        testMode: conv.status === "test",
+      };
+      try {
+        const output = await (tool as AgentTool<unknown, unknown>).execute(parsed.data, ctx);
+        const result: AgentToolResult = { toolCallId: tu.id, ok: true, output };
+        allToolResults.push(result);
+        toolResultsForThisIter.push({
+          type: "tool_result",
+          tool_use_id: tu.id,
+          content: JSON.stringify(output ?? null),
+        });
+      } catch (err) {
+        const result: AgentToolResult = {
+          toolCallId: tu.id,
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        };
+        allToolResults.push(result);
+        toolResultsForThisIter.push({
+          type: "tool_result",
+          tool_use_id: tu.id,
+          content: `Error: ${err instanceof Error ? err.message : String(err)}`,
+          is_error: true,
+        });
+      }
+    }
+
+    messages.push({
+      role: "user",
+      content: toolResultsForThisIter,
+    });
+  }
+
+  // 7. Run validators
+  const { results: validatorResults, criticalFailed } = runValidators({
+    response: finalText,
+    userMessage: input.userMessage,
+    blueprint,
+    soul: (orgRow.soul as { services?: Array<{ name: string }>; voice?: { avoidWords?: string[] } } | null) ?? null,
+  });
+
+  if (criticalFailed) {
+    finalText =
+      "Let me check on that for you and have someone follow up. What's the best email to reach you at?";
+    console.warn(
+      `[agent-runtime] critical_validator_failed agentId=${agent.id} convId=${conv.id} fails=${validatorResults
+        .filter((v) => !v.passed)
+        .map((v) => v.name)
+        .join(",")}`,
+    );
+  }
+
+  // 8. Persist assistant turn
+  const latencyMs = Date.now() - t0;
+  const costCents = computeCostCents(totalTokensIn, totalTokensOut);
+
+  await db.insert(agentTurns).values({
+    conversationId: input.conversationId,
+    turnIndex: nextTurnIndex + 1,
+    role: "assistant",
+    content: finalText,
+    toolCalls: allToolCalls.length > 0 ? allToolCalls : null,
+    toolResults: allToolResults.length > 0 ? allToolResults : null,
+    validatorsPassed: validatorResults,
+    latencyMs,
+    tokensIn: totalTokensIn,
+    tokensOut: totalTokensOut,
+    model: MODEL,
+  });
+
+  // 9. Update conversation aggregates
+  await db
+    .update(agentConversations)
+    .set({
+      lastTurnAt: new Date(),
+      tokensIn: sql`${agentConversations.tokensIn} + ${totalTokensIn}`,
+      tokensOut: sql`${agentConversations.tokensOut} + ${totalTokensOut}`,
+      llmCostCents: sql`${agentConversations.llmCostCents} + ${costCents}`,
+      turnCount: sql`${agentConversations.turnCount} + 2`,
+    })
+    .where(eq(agentConversations.id, input.conversationId));
+
+  // Update agent's daily token usage
+  await db
+    .update(agents)
+    .set({
+      tokensUsedToday: sql`${agents.tokensUsedToday} + ${totalTokensIn + totalTokensOut}`,
+      updatedAt: new Date(),
+    })
+    .where(eq(agents.id, agent.id));
+
+  // 10. Activity bridge — first user turn → activity row on contact's
+  // timeline. Subsequent turns are aggregated for the operator review
+  // surface (v1.26.1).
+  if (nextTurnIndex === 0 && conv.status !== "test") {
+    await writeFirstTurnActivity(agent, orgRow.id, conv.id, input.userMessage);
+  }
+
+  return {
+    ok: true,
+    assistantMessage: finalText,
+    validators: validatorResults,
+    toolCalls: allToolCalls,
+    toolResults: allToolResults,
+    tokensIn: totalTokensIn,
+    tokensOut: totalTokensOut,
+    latencyMs,
+  };
+}
+
+// ─── helpers ───────────────────────────────────────────────────────────────
+
+async function isDailyBudgetExhausted(agent: Agent): Promise<boolean> {
+  // Lazy reset: if last reset was >24h ago, zero out the counter.
+  const resetAge = Date.now() - new Date(agent.tokensUsedResetAt).getTime();
+  if (resetAge >= 24 * 60 * 60 * 1000) {
+    await db
+      .update(agents)
+      .set({ tokensUsedToday: 0, tokensUsedResetAt: new Date() })
+      .where(eq(agents.id, agent.id));
+    return false;
+  }
+  return agent.tokensUsedToday >= agent.dailyTokenBudget;
+}
+
+function computeCostCents(tokensIn: number, tokensOut: number): number {
+  const cents =
+    (tokensIn / 1000) * COST_PER_1K_INPUT_CENTS +
+    (tokensOut / 1000) * COST_PER_1K_OUTPUT_CENTS;
+  return Math.ceil(cents);
+}
+
+async function writeFirstTurnActivity(
+  agent: Agent,
+  orgId: string,
+  conversationId: string,
+  firstUserMessage: string,
+): Promise<void> {
+  const [owner] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.orgId, orgId))
+    .limit(1);
+  if (!owner?.id) return;
+  const preview =
+    firstUserMessage.length > 200
+      ? `${firstUserMessage.slice(0, 197)}...`
+      : firstUserMessage;
+  await db.insert(activities).values({
+    orgId,
+    userId: owner.id,
+    type: "agent_conversation_started",
+    subject: `Agent conversation: "${preview.slice(0, 60)}"`,
+    body: preview,
+    metadata: {
+      source: "agent",
+      agentId: agent.id,
+      agentName: agent.name,
+      conversationId,
+    },
+    completedAt: new Date(),
+  });
+  void and; // import keepalive
+}
