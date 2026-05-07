@@ -14,6 +14,8 @@ const ALL_CAPABILITIES = [
   "look_up_availability",
   "book_appointment",
   "find_my_existing_appointment",
+  "reschedule_appointment",
+  "cancel_appointment",
   "escalate_to_human",
   "provide_faq_answer",
 ];

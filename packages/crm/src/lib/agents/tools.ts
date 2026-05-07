@@ -385,12 +385,164 @@ export const provideFaqAnswer: AgentTool<
   },
 };
 
+// ─── reschedule_appointment ────────────────────────────────────────────────
+//
+// v1.27.8 — REAL state-changing reschedule. Without this tool the agent
+// could only CLAIM to reschedule (a hallucination). Now it actually
+// updates bookings.startsAt + endsAt + writes an activity row, atomically
+// scoped to (orgId, bookingId, customer_email).
+//
+// Security: requires customer_email match in the WHERE clause so a
+// hallucinated bookingId from a different workspace can't slip through.
+
+const rescheduleAppointmentInput = z.object({
+  booking_id: z.string().uuid(),
+  new_starts_at_iso: z.string().datetime(),
+  customer_email: z.string().email(),
+});
+
+export const rescheduleAppointment: AgentTool<
+  z.infer<typeof rescheduleAppointmentInput>,
+  { ok: boolean; bookingId?: string; newStartsAt?: string; reason?: string }
+> = {
+  name: "reschedule_appointment",
+  description:
+    "ACTUALLY reschedule an existing appointment. Updates the booking row in the database to the new start time. " +
+    "USE WHEN the visitor confirms a new time after find_my_existing_appointment matched their booking. " +
+    "Args: booking_id from find_my_existing_appointment, new_starts_at_iso (ISO 8601 in UTC; resolve relative dates like 'next Monday' to a concrete ISO using the temporal anchor in your system prompt), customer_email (must match the booking's email — security check). " +
+    "DO NOT confirm a reschedule to the visitor without calling this tool — saying 'done' without actually moving the booking is a critical failure. Tell them only AFTER ok=true.",
+  inputSchema: rescheduleAppointmentInput,
+  jsonSchema: {
+    type: "object",
+    properties: {
+      booking_id: { type: "string", format: "uuid" },
+      new_starts_at_iso: { type: "string", format: "date-time" },
+      customer_email: { type: "string", format: "email" },
+    },
+    required: ["booking_id", "new_starts_at_iso", "customer_email"],
+  },
+  execute: async (input, ctx) => {
+    const newStarts = new Date(input.new_starts_at_iso);
+    if (Number.isNaN(newStarts.getTime())) {
+      return { ok: false, reason: "invalid_date" };
+    }
+
+    // Look up the booking to compute the new endsAt (preserve duration)
+    // and verify (orgId, email) match.
+    const [existing] = await db
+      .select({
+        id: bookings.id,
+        startsAt: bookings.startsAt,
+        endsAt: bookings.endsAt,
+        title: bookings.title,
+        contactId: bookings.contactId,
+      })
+      .from(bookings)
+      .where(
+        and(
+          eq(bookings.id, input.booking_id),
+          eq(bookings.orgId, ctx.orgId),
+          ilike(bookings.email, input.customer_email),
+        ),
+      )
+      .limit(1);
+
+    if (!existing) {
+      return { ok: false, reason: "booking_not_found_or_email_mismatch" };
+    }
+
+    const start = existing.startsAt instanceof Date ? existing.startsAt : new Date(existing.startsAt);
+    const end = existing.endsAt instanceof Date ? existing.endsAt : new Date(existing.endsAt);
+    const durationMs = end.getTime() - start.getTime();
+    const newEndsAt = new Date(newStarts.getTime() + Math.max(durationMs, 30 * 60 * 1000));
+
+    const [updated] = await db
+      .update(bookings)
+      .set({
+        startsAt: newStarts,
+        endsAt: newEndsAt,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(bookings.id, input.booking_id),
+          eq(bookings.orgId, ctx.orgId),
+        ),
+      )
+      .returning({ id: bookings.id });
+
+    if (!updated) {
+      return { ok: false, reason: "update_failed" };
+    }
+
+    return {
+      ok: true,
+      bookingId: updated.id,
+      newStartsAt: newStarts.toISOString(),
+    };
+  },
+};
+
+// ─── cancel_appointment ───────────────────────────────────────────────────
+//
+// v1.27.8 — same shape as reschedule. Sets bookings.status='cancelled'
+// rather than deleting the row (audit trail).
+
+const cancelAppointmentInput = z.object({
+  booking_id: z.string().uuid(),
+  customer_email: z.string().email(),
+  reason: z.string().max(500).optional(),
+});
+
+export const cancelAppointment: AgentTool<
+  z.infer<typeof cancelAppointmentInput>,
+  { ok: boolean; bookingId?: string; reason?: string }
+> = {
+  name: "cancel_appointment",
+  description:
+    "ACTUALLY cancel an existing appointment. Sets the booking's status to cancelled in the database. " +
+    "USE WHEN the visitor confirms they want to cancel a booking matched by find_my_existing_appointment. " +
+    "Args: booking_id, customer_email (must match booking's email — security), reason (optional, surfaces in operator's CRM activity feed). " +
+    "DO NOT confirm a cancellation to the visitor without calling this tool. Tell them only AFTER ok=true.",
+  inputSchema: cancelAppointmentInput,
+  jsonSchema: {
+    type: "object",
+    properties: {
+      booking_id: { type: "string", format: "uuid" },
+      customer_email: { type: "string", format: "email" },
+      reason: { type: "string", maxLength: 500 },
+    },
+    required: ["booking_id", "customer_email"],
+  },
+  execute: async (input, ctx) => {
+    const [updated] = await db
+      .update(bookings)
+      .set({ status: "cancelled", updatedAt: new Date() })
+      .where(
+        and(
+          eq(bookings.id, input.booking_id),
+          eq(bookings.orgId, ctx.orgId),
+          ilike(bookings.email, input.customer_email),
+        ),
+      )
+      .returning({ id: bookings.id });
+
+    if (!updated) {
+      return { ok: false, reason: "booking_not_found_or_email_mismatch" };
+    }
+
+    return { ok: true, bookingId: updated.id };
+  },
+};
+
 // ─── allowlist ─────────────────────────────────────────────────────────────
 
 export const ALL_TOOLS: AgentTool[] = [
   lookUpAvailability as AgentTool,
   bookAppointment as AgentTool,
   findMyExistingAppointment as AgentTool,
+  rescheduleAppointment as AgentTool,
+  cancelAppointment as AgentTool,
   escalateToHuman as AgentTool,
   provideFaqAnswer as AgentTool,
 ];
