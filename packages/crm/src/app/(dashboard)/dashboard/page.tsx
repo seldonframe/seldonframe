@@ -814,16 +814,18 @@ export default async function DashboardPage({
       ) : null}
 
       <header className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end sm:gap-8">
-        <div className="space-y-2 sm:space-y-4">
-          <h1 className="text-lg sm:text-[22px] font-semibold leading-relaxed text-foreground">
+        <div className="space-y-1.5 sm:space-y-2">
+          <h1 className="text-xl sm:text-[28px] font-semibold leading-tight tracking-tight text-foreground">
             Good {timeOfDay()}, {firstName}
           </h1>
           <p className="text-sm sm:text-base text-muted-foreground">
-            {/* v1.25.3 — operator sessions get a copy that grounds the
-                page in THEIR business, not SF-meta workspace concept. */}
+            {/* v1.25.3 + v1.29.1 — both audiences get warmer, more
+                concrete copy. SF builders' "calm workspace overview"
+                was vague; "what's happening today" is what people
+                actually want to know. */}
             {isOperatorSession
-              ? "Here's what's happening at your workspace today."
-              : "This is your calm workspace overview."}
+              ? "Here's what's happening at your business today."
+              : "Here's what's happening across your workspace today."}
           </p>
         </div>
 
@@ -832,9 +834,9 @@ export default async function DashboardPage({
             sessions never need it; their workspace is fixed. */}
         {!isOperatorSession ? (
           <div className="flex items-center gap-2 sm:gap-3">
-            <Link href="/orgs/new" className="crm-button-secondary h-8 gap-2 px-3 text-xs sm:h-9 sm:gap-3 sm:text-sm">
-              <Plus className="size-3 sm:size-4" />
-              <span>Create New Client OS</span>
+            <Link href="/orgs/new" className="crm-button-secondary h-9 gap-2 px-4 text-sm">
+              <Plus className="size-4" />
+              <span>New workspace</span>
             </Link>
           </div>
         ) : null}

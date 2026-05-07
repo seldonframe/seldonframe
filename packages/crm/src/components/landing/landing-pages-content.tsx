@@ -76,12 +76,18 @@ export function LandingPagesContent({
 
   if (pages.length === 0 && !showCreate) {
     return (
-      <div className="space-y-4">
-        <div className="rounded-xl border bg-card p-4">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-medium text-sm">Create your first landing page</h3>
+      <div className="space-y-6">
+        <div className="rounded-2xl border bg-card p-8 text-center">
+          <div className="mx-auto max-w-md space-y-3">
+            <div className="mx-auto size-12 rounded-full bg-primary/10 flex items-center justify-center">
+              <Layout className="h-6 w-6 text-primary" />
+            </div>
+            <h2 className="text-lg font-semibold">Build your first page</h2>
+            <p className="text-sm text-muted-foreground">
+              Pages live on your public website — landing pages, lead forms,
+              booking flows. Start from a template below or build from scratch.
+            </p>
           </div>
-          <p className="text-sm text-muted-foreground">Choose a template to get started.</p>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -89,13 +95,13 @@ export function LandingPagesContent({
             <button
               key={tpl.key}
               type="button"
-              className="p-4 rounded-xl border bg-card hover:bg-accent/50 transition-all cursor-pointer group text-left"
+              className="p-5 rounded-xl border bg-card hover:bg-accent/40 hover:border-primary/30 transition-all cursor-pointer group text-left"
               onClick={() => handleTemplateClick()}
             >
-              <div className="size-10 rounded-lg flex items-center justify-center mb-3 bg-muted">
+              <div className="size-10 rounded-lg flex items-center justify-center mb-3 bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-colors">
                 {tpl.icon}
               </div>
-              <p className="font-medium text-sm truncate mb-0.5">{tpl.title}</p>
+              <p className="font-medium text-sm mb-0.5">{tpl.title}</p>
               <p className="text-xs text-muted-foreground">{tpl.description}</p>
             </button>
           ))}

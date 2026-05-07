@@ -25,7 +25,7 @@ export default async function LandingPagesDashboard() {
       <div>
         <h1 className="text-lg sm:text-[22px] font-semibold leading-relaxed text-foreground">Pages</h1>
         <p className="text-sm sm:text-base text-muted-foreground">
-          Build and publish modular pages with integrated {labels.intakeForm.singular.toLowerCase()} and booking sections.
+          Your business&apos;s public-facing pages — landing pages, lead capture, booking flows.
         </p>
       </div>
 

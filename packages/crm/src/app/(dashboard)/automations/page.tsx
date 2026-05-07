@@ -229,18 +229,19 @@ export default async function AutomationsPage() {
           Automations
         </h1>
         <p className="mt-1 text-sm sm:text-base text-muted-foreground">
-          Build, test, and deploy AI agents for this workspace. Each agent responds to a
-          trigger (form submission, booking, SMS reply, schedule) and runs with your LLM key.
+          Set up rules that run on their own — like sending a follow-up email
+          when a booking comes in, or texting a reminder before a service call.
+          Pick a template below to get started.
         </p>
       </div>
 
       <div>
         <div className="mb-3 flex items-center justify-between gap-2">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Agent catalog
+            Available templates
           </h2>
           <span className="text-xs text-muted-foreground">
-            {archetypes.length} archetypes
+            {archetypes.length} {archetypes.length === 1 ? "template" : "templates"}
           </span>
         </div>
 

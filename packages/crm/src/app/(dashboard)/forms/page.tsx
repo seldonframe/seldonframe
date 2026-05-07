@@ -22,32 +22,19 @@ export default async function FormsPage() {
   const [org] = orgId ? await db.select({ slug: organizations.slug }).from(organizations).where(eq(organizations.id, orgId)).limit(1) : [null];
   const orgSlug = org?.slug ?? "";
 
-  const stats = [
-    {
-      title: "Total Forms",
-      value: String(forms.length),
-      change: "+0",
-      icon: FileText,
-    },
-    {
-      title: "Active Forms",
-      value: String(forms.filter((form) => form.isActive).length),
-      change: "+0",
-      icon: CheckCircle2,
-    },
-    {
-      title: "Draft Forms",
-      value: String(forms.filter((form) => !form.isActive).length),
-      change: "+0",
-      icon: Eye,
-    },
-    {
-      title: "Submissions",
-      value: "0",
-      change: "+0",
-      icon: ListTodo,
-    },
-  ] as const;
+  // v1.29.1 — show stats grid only when there's meaningful data.
+  // Empty stats with "+0 vs last month" labels feel like dashboard
+  // inflation. Hide them when the workspace has no forms yet — the
+  // empty-state hero below carries the moment instead.
+  const showStats = forms.length > 0;
+  const stats = showStats
+    ? ([
+        { title: "Total", value: String(forms.length), icon: FileText },
+        { title: "Published", value: String(forms.filter((f) => f.isActive).length), icon: CheckCircle2 },
+        { title: "Draft", value: String(forms.filter((f) => !f.isActive).length), icon: Eye },
+        { title: "Submissions", value: "0", icon: ListTodo },
+      ] as const)
+    : [];
 
   return (
     <section className="animate-page-enter space-y-6">
@@ -61,22 +48,23 @@ export default async function FormsPage() {
         <FormsPageActions buttonLabel={`+ New ${labels.intakeForm.singular}`} />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map((stat) => (
-          <div key={stat.title} className="rounded-xl border border-border bg-card p-4">
-            <div className="flex items-start justify-between">
-              <div className="space-y-1">
-                <p className="text-sm text-muted-foreground">{stat.title}</p>
-                <p className="text-2xl font-medium text-foreground">{stat.value}</p>
-                <p className="text-xs text-muted-foreground">{stat.change} vs last month</p>
-              </div>
-              <div className="flex size-10 items-center justify-center rounded-lg border border-border bg-muted shrink-0">
-                <stat.icon className="size-5 text-muted-foreground" />
+      {showStats && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {stats.map((stat) => (
+            <div key={stat.title} className="rounded-xl border border-border bg-card p-4">
+              <div className="flex items-start justify-between">
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">{stat.title}</p>
+                  <p className="text-2xl font-semibold text-foreground tabular-nums">{stat.value}</p>
+                </div>
+                <div className="flex size-9 items-center justify-center rounded-lg border border-border bg-muted shrink-0">
+                  <stat.icon className="size-4 text-muted-foreground" />
+                </div>
               </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {forms.length === 0 ? (
         <article className="rounded-xl border border-border bg-card p-4">

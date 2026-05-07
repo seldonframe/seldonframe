@@ -24,19 +24,19 @@ export default async function EmailsPage() {
 
   return (
     <section className="animate-page-enter space-y-4 sm:space-y-6">
-      <div className="flex h-14 items-center justify-between border-b border-border bg-background px-3 md:px-6">
-        <div className="flex flex-1 items-center gap-2 md:gap-4">
-          <div className="flex items-center gap-2 md:gap-2.5">
-            <Mail className="size-4 text-foreground" />
-            <p className="text-sm md:text-base font-normal tracking-tight text-foreground">Emails</p>
-          </div>
-          <div className="hidden sm:flex items-center gap-2.5">
-            <div className="size-1 rounded-full bg-muted-foreground/20" />
-            <p className="text-sm md:text-base font-normal tracking-tight text-foreground">
-              {rows.length} email{rows.length !== 1 ? "s" : ""}
-            </p>
-          </div>
+      <div>
+        <div className="flex items-center gap-2">
+          <Mail className="size-5 text-foreground" />
+          <h1 className="text-lg sm:text-[22px] font-semibold leading-relaxed text-foreground">Email</h1>
         </div>
+        <p className="text-sm sm:text-base text-muted-foreground mt-1">
+          Send a one-off message or save a template to reuse for campaigns.{" "}
+          {rows.length > 0 && (
+            <span className="text-muted-foreground/70">
+              {rows.length} email{rows.length !== 1 ? "s" : ""} sent so far.
+            </span>
+          )}
+        </p>
       </div>
 
       <EmailPageContent
