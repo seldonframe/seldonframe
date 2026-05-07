@@ -114,39 +114,61 @@ export default async function DashboardLayout({
       ])
     : [[], [], [], []];
 
-  const paletteItems = [
-    { label: "Dashboard", href: "/dashboard", group: "Navigate" },
-    { label: "Creator Studio", href: "/studio", group: "Navigate" },
-    { label: "Soul Marketplace", href: "/soul-marketplace", group: "Navigate" },
-    { label: "Seldon It", href: canAccessSeldon ? "/seldon" : "/settings/billing", group: "Navigate" as const },
-    ...(dbUserForPlan?.planId?.startsWith("pro-") ? [{ label: "Organizations", href: "/orgs", group: "Navigate" as const }] : []),
-    { label: "Contacts", href: "/contacts", group: "Navigate" },
-    { label: "Deals", href: "/deals", group: "Navigate" },
-    { label: "Pages", href: "/landing", group: "Navigate" },
-    { label: "Bookings", href: "/bookings", group: "Navigate" },
-    { label: "Email", href: "/emails", group: "Navigate" },
-    { label: "Settings", href: "/settings", group: "Navigate" },
-    ...contactHits.map((row) => ({
-      label: `${row.firstName} ${row.lastName ?? ""}`.trim(),
-      href: `/contacts/${row.id}`,
-      group: "Contacts",
-    })),
-    ...dealHits.map((row) => ({
-      label: row.title,
-      href: `/deals/${row.id}`,
-      group: "Deals",
-    })),
-    ...pageHits.map((row) => ({
-      label: row.title,
-      href: `/landing/${row.id}`,
-      group: "Pages",
-    })),
-    ...activityHits.map((row) => ({
-      label: row.subject || "Untitled activity",
-      href: row.contactId ? `/contacts/${row.contactId}` : row.dealId ? `/deals/${row.dealId}` : "/dashboard",
-      group: "Recent Activity",
-    })),
-  ];
+  // v1.25.4 — palette items split by session type. Operator sessions
+  // (HVAC owner / dentist / etc.) only get their CRM essentials; SF-
+  // internal nav (Soul Marketplace, Studio, Seldon It, Pages, Email,
+  // Settings) is hidden + not searchable. Recent activity entries
+  // also limited to /contacts and /deals destinations (operator nav).
+  const paletteItems = isOperatorSession
+    ? [
+        { label: "Dashboard", href: "/dashboard", group: "Navigate" },
+        { label: "Contacts", href: "/contacts", group: "Navigate" },
+        { label: "Deals", href: "/deals", group: "Navigate" },
+        { label: "Bookings", href: "/bookings", group: "Navigate" },
+        ...contactHits.map((row) => ({
+          label: `${row.firstName} ${row.lastName ?? ""}`.trim(),
+          href: `/contacts/${row.id}`,
+          group: "Contacts",
+        })),
+        ...dealHits.map((row) => ({
+          label: row.title,
+          href: `/deals/${row.id}`,
+          group: "Deals",
+        })),
+      ]
+    : [
+        { label: "Dashboard", href: "/dashboard", group: "Navigate" },
+        { label: "Creator Studio", href: "/studio", group: "Navigate" },
+        { label: "Soul Marketplace", href: "/soul-marketplace", group: "Navigate" },
+        { label: "Seldon It", href: canAccessSeldon ? "/seldon" : "/settings/billing", group: "Navigate" as const },
+        ...(dbUserForPlan?.planId?.startsWith("pro-") ? [{ label: "Organizations", href: "/orgs", group: "Navigate" as const }] : []),
+        { label: "Contacts", href: "/contacts", group: "Navigate" },
+        { label: "Deals", href: "/deals", group: "Navigate" },
+        { label: "Pages", href: "/landing", group: "Navigate" },
+        { label: "Bookings", href: "/bookings", group: "Navigate" },
+        { label: "Email", href: "/emails", group: "Navigate" },
+        { label: "Settings", href: "/settings", group: "Navigate" },
+        ...contactHits.map((row) => ({
+          label: `${row.firstName} ${row.lastName ?? ""}`.trim(),
+          href: `/contacts/${row.id}`,
+          group: "Contacts",
+        })),
+        ...dealHits.map((row) => ({
+          label: row.title,
+          href: `/deals/${row.id}`,
+          group: "Deals",
+        })),
+        ...pageHits.map((row) => ({
+          label: row.title,
+          href: `/landing/${row.id}`,
+          group: "Pages",
+        })),
+        ...activityHits.map((row) => ({
+          label: row.subject || "Untitled activity",
+          href: row.contactId ? `/contacts/${row.contactId}` : row.dealId ? `/deals/${row.dealId}` : "/dashboard",
+          group: "Recent Activity",
+        })),
+      ];
 
   return (
     <SoulProvider soul={soul} personality={personality}>
@@ -209,7 +231,12 @@ export default async function DashboardLayout({
               </div>
             </div>
           </div>
-          <SeldonChat enabled={canAccessSeldon} />
+          {/* v1.25.4 — SeldonChat is the SF assistant for the SF
+              agency operator (configures their workspace, runs Seldon
+              tools). Operators (HVAC owner / dentist) have their own
+              support channel via their agency, and we don't want to
+              expose Seldon-internal tooling to them. */}
+          {!isOperatorSession ? <SeldonChat enabled={canAccessSeldon} /> : null}
           <CommandPalette items={paletteItems} />
           {/* May 1, 2026 — persistent help escape hatch on every
               admin page. Floating bottom-right button opens a popover

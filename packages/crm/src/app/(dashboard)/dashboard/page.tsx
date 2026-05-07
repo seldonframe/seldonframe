@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { activities, bookings as bookingsTable, contacts as contactsTable, metricsSnapshots, organizations, orgMembers, paymentRecords, pipelines as pipelinesTable, stripeConnections, type OrganizationIntegrations, type PipelineStage } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth/helpers";
 import { isOperatorPortalUserId } from "@/lib/auth/operator-portal-context";
+import { OperatorTodaySnapshot } from "@/components/dashboard/operator-today-snapshot";
 import { listAppointmentTypes } from "@/lib/bookings/actions";
 import { listBookings } from "@/lib/bookings/actions";
 import { listContacts } from "@/lib/contacts/actions";
@@ -838,6 +839,14 @@ export default async function DashboardPage({
           </div>
         ) : null}
       </header>
+
+      {/* v1.25.4 — operator "Today" snapshot widget. Replaces the v1.25.3
+          gap (where SF "Newly installed blocks" used to live for agency
+          ops) with operator-actionable counts: today's bookings, unread
+          messages, stuck deals, week trend. */}
+      {isOperatorSession && orgId ? (
+        <OperatorTodaySnapshot orgId={orgId} />
+      ) : null}
 
       {/* v1.25.3 — "Newly installed blocks" is the SF agency's
           build-time view of what they just shipped to a client
