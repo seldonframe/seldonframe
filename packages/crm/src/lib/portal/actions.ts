@@ -112,17 +112,19 @@ export async function sendPortalMessageAction(orgSlug: string, formData: FormDat
     }, { orgId: session.orgId });
   }
 
+  // v1.21.2 — match the existing booking-activity pattern: pick the
+  // FIRST user in the org rather than filtering for role='owner'.
+  // Some workspaces have the owner mapped via a different role
+  // string (admin / member / null) depending on how the user was
+  // created (NextAuth adapter vs manual SQL backfill vs anonymous-
+  // workspace claim). The role-strict filter caused the v1.21.1
+  // activity-bridge insert to silently skip on Cypress & Pine HVAC.
   const [owner] = await db
     .select({ id: users.id, email: users.email })
     .from(users)
-    .where(and(eq(users.orgId, session.orgId), eq(users.role, "owner")))
+    .where(eq(users.orgId, session.orgId))
     .limit(1);
 
-  // v1.21.1 — bridge to operator activity feed. Customer messages
-  // were silently invisible on the contact's /contacts/<id>?tab=activity
-  // page pre-1.21.1 because portal_messages and activities are
-  // separate tables. We also insert an activities row so operators
-  // see customer-side action in the timeline they already check.
   if (owner?.id) {
     const previewBody =
       body.length > 280 ? `${body.slice(0, 277)}...` : body;

@@ -41,10 +41,15 @@ import { requirePortalSessionForOrg } from "@/lib/portal/auth";
  * to the workspace owner so it shows in their timeline.
  */
 async function resolveOwnerUserId(orgId: string): Promise<string | null> {
+  // v1.21.2 — match the existing booking-activity pattern (first
+  // user in org). The role='owner' filter was too strict — some
+  // workspace users have role='admin'/'member'/null depending on
+  // how they were created, causing the activity-bridge insert to
+  // silently skip on certain workspaces.
   const [owner] = await db
     .select({ id: users.id })
     .from(users)
-    .where(and(eq(users.orgId, orgId), eq(users.role, "owner")))
+    .where(eq(users.orgId, orgId))
     .limit(1);
   return owner?.id ?? null;
 }
