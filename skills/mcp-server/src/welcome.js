@@ -8,7 +8,7 @@
 // stripped. `create_full_workspace` is the only workspace-creation
 // path mentioned anywhere in this briefing.
 
-export const VERSION = "1.18.1";
+export const VERSION = "1.27.1";
 
 export const WELCOME_MARKDOWN = `# SeldonFrame — create a real Business OS in one conversation
 
@@ -16,6 +16,102 @@ SeldonFrame creates live, hosted business systems for service
 businesses, agencies, coaches, and SaaS founders. One conversation
 gives the operator a public website, booking page, intake form,
 CRM, and AI agents — all on a real subdomain.
+
+---
+
+## Capability map — pick the right primitive BEFORE you explore tools
+
+SeldonFrame has SEVEN top-level primitives. They are NOT the same as
+each other. Pick correctly from this map FIRST. Don't go fishing in
+\`tools/list\` looking for the right one — most mistakes happen because
+the wrong primitive was chosen and the LLM got stuck searching for a
+tool that doesn't exist in that primitive.
+
+| Operator says…                                                 | Primitive            | Entry-point tools                                                     |
+| -------------------------------------------------------------- | -------------------- | --------------------------------------------------------------------- |
+| "Build me a website / business / CRM"                          | **WORKSPACE**        | \`create_workspace_v2\` then block tools                              |
+| "Add an AI chatbot to my website / landing page"               | **AGENT** (web chat) | \`create_agent\` ({ archetype: "website-chatbot" }) → embed.js script |
+| "Build me a 24/7 AI receptionist for my phone"                 | AGENT (voice)        | (v1.28+ — voice archetype shipping soon)                              |
+| "Reply to inbound customer SMS / email automatically"          | **CONVERSATION**     | \`send_conversation_turn\` (one-shot Soul-aware reply)                |
+| "Add a hero / services / FAQ / CTA section to a page"          | **BLOCK**            | \`get_block_skill\` + \`persist_block\`                               |
+| "Send a campaign email / SMS blast"                            | **MESSAGING**        | \`send_email\` / \`send_sms\`                                         |
+| "Update contacts / deals / bookings in the CRM"                | **CRM**              | \`list_contacts\`, \`create_deal\`, \`move_deal_stage\`, etc.         |
+
+### CRITICAL anti-pattern: chat widgets are NOT blocks
+
+If the operator says "add a chatbot to the website," "add chat to my
+landing page," or "I want an AI assistant on my site," **do NOT look
+in the blocks catalog**. Blocks are static page sections (hero,
+services, faq, cta, booking, intake). The chat-widget primitive is a
+separate concept called an **AGENT**, shipped in v1.26+.
+
+WRONG path (don't do this):
+- \`list_blocks\` → search for "chat" → conclude "no chat block exists" → propose SMS workaround
+
+RIGHT path:
+- \`create_agent({ archetype: "website-chatbot", faq, pricing_facts, greeting })\`
+- → returns \`embed_url\`
+- Drop \`<script src="EMBED_URL" async></script>\` on any page (or use the inline-edit option in v1.28+)
+
+The same applies to voice (use AGENT with archetype="voice-receptionist"
+when shipping) and SMS auto-reply (use the CONVERSATION primitive's
+\`send_conversation_turn\`, not an AGENT).
+
+---
+
+## Build a website chatbot — the canonical short flow
+
+Most operators asking for "AI on my website" want this exact flow.
+~5 tool calls, end-to-end:
+
+\`\`\`
+1. configure_llm_provider({ provider: "anthropic", api_key })
+   // Skip if workspace already has a key. SF uses BYOK — operator pays
+   // Anthropic directly for the LLM; SF charges per agent turn separately.
+
+2. create_agent({
+     workspace_id,
+     name: "Cypress Pine HVAC Helper",
+     archetype: "website-chatbot",
+     channel: "web_chat",
+     greeting: "Hi! Asking about HVAC service in Phoenix? I can book you in.",
+     faq: [
+       { q: "What areas do you service?", a: "Phoenix, Scottsdale, Tempe..." },
+       { q: "Do you offer emergency service?", a: "Yes — 24/7..." }
+     ],
+     pricing_facts: [
+       { label: "Service call", amount: 89, currency: "USD" },
+       { label: "AC tune-up", amount: 149, currency: "USD" }
+     ]
+   })
+   // → returns { agent, embed_url, turn_url, next_steps }
+
+3. publish_agent({ workspace_id, agent_id, status: "test" })
+   // Sandbox-test the agent in the dashboard before flipping to live.
+
+4. (Operator tests in /agents/[id]/test sandbox.)
+
+5. publish_agent({ workspace_id, agent_id, status: "live" })
+   // AUTO-RUNS the 8-scenario eval gate. Fails if pass rate < 87.5%.
+   // Surfaces failing scenarios so the operator can fix in /agents/[id]/settings.
+\`\`\`
+
+Then the operator drops the embed snippet onto their site, OR you can
+help them edit a block on the SF-hosted landing page to include it.
+
+After publish, observability tools the operator can call from Claude
+Code at any time:
+- \`list_agents\` — workspace roster
+- \`tail_agent_conversations\` — recent customer chats with first-message preview
+- \`get_agent_conversation\` — full transcript with tool calls + validator results
+- \`get_agent_metrics\` — health stats over a time window
+- \`run_agent_evals\` — manual eval suite trigger
+- \`replay_conversation\` — re-run a past chat against current blueprint
+
+The dashboard surfaces (\`/agents\`, \`/agents/[id]/test\`, \`/agents/[id]/settings\`,
+\`/agents/[id]/evals\`, \`/agents/[id]/conversations\`) provide the same view
+without leaving the browser — operators iterate FAQ/pricing/greeting inline
+and Save bumps a new blueprint version.
 
 ---
 
@@ -306,4 +402,4 @@ admin dashboard. Pre-fills their email automatically.
 <https://seldonframe.com> · **Discord:** <https://discord.gg/sbVUu976NW>
 `;
 
-export const FIRST_CALL_BANNER = `🚀 SeldonFrame v1.18.1 is connected. PREFERRED workspace creation: create_workspace_v2 → IN PARALLEL for all 7 recommended_blocks (hero, services, about, faq, cta, booking, intake): get_block_skill + persist_block → complete_workspace_v2 → finalize_workspace({ workspace_id, email }). The v2 flow puts YOUR LLM in charge of every operator-facing surface using one SKILL.md per block. Each block's prop schema is server-validated. Run blocks in PARALLEL (Promise.all) — sequential takes 60+ seconds. v1.10+ TIER 2 CUSTOMIZE TOOLS: regenerate_block (re-do one block with operator instructions; thin-harness — server bundles context, your LLM generates), upload_workspace_image (set logo/hero_background; v1.10.1+ accepts image_url or local_file_path — DON'T base64 unless you have to, the encoded string eats your tool-call token budget). v1.11+ STRUCTURAL PRIMITIVES: get_landing_structure → move_section → delete_section. INDEX-based, handle duplicate section types, atomic. v1.12+ COMPOSITE TREES: add_composite_section / update_composite_section — manifest ANY block (comparison, pricing, "how it works," stats, custom CTAs) from 12 low-level primitives. Server validates + renders; YOUR LLM composes. Read the SKILL.md via get_block_skill('composite') before composing. Every URL is real. NEVER create local files. Skipping finalize_workspace leaves the operator with no admin login.`;
+export const FIRST_CALL_BANNER = `🚀 SeldonFrame v1.27.1 is connected. CAPABILITY MAP — pick the right primitive BEFORE exploring tools: (a) "build me a website" → WORKSPACE → create_workspace_v2 + block tools. (b) "add a chatbot to my website / landing page" → AGENT (web chat) → create_agent({archetype:"website-chatbot"}) → embed.js script. CRITICAL ANTI-PATTERN: chat widgets are NOT blocks. Don't search list_blocks for chat — chat agents are a separate primitive (v1.26+). (c) "auto-reply to inbound SMS/email" → CONVERSATION → send_conversation_turn (one-shot Soul-aware reply, not a website widget). (d) "add hero/services/faq/cta section" → BLOCK → get_block_skill + persist_block. (e) "send campaign email/sms" → MESSAGING. (f) CRM ops → list_contacts/create_deal/etc. CHATBOT CANONICAL FLOW (5 calls): configure_llm_provider (BYOK Anthropic, skip if already set) → create_agent (faq + pricing_facts + greeting) → publish_agent({status:"test"}) → operator sandbox-tests at /agents/[id]/test → publish_agent({status:"live"}) auto-runs 8-scenario eval gate (≥87.5% pass required). Observability tools after publish: list_agents, tail_agent_conversations, get_agent_conversation, get_agent_metrics, run_agent_evals, replay_conversation. Dashboard surfaces /agents, /agents/[id]/test, /agents/[id]/settings, /agents/[id]/evals, /agents/[id]/conversations let operators iterate without leaving the browser. WORKSPACE FLOW (legacy reference): create_workspace_v2 → IN PARALLEL for all 7 recommended_blocks: get_block_skill + persist_block → complete_workspace_v2 → finalize_workspace({workspace_id, email}). v1.10+ TIER 2 CUSTOMIZE: regenerate_block, upload_workspace_image (image_url preferred over base64). v1.11+ STRUCTURAL: get_landing_structure, move_section, delete_section. v1.12+ COMPOSITES: add_composite_section / update_composite_section. Run blocks in PARALLEL (Promise.all). Skipping finalize_workspace leaves the operator with no admin login. Every URL is real. NEVER create local files.`; PREFERRED workspace creation: create_workspace_v2 → IN PARALLEL for all 7 recommended_blocks (hero, services, about, faq, cta, booking, intake): get_block_skill + persist_block → complete_workspace_v2 → finalize_workspace({ workspace_id, email }). The v2 flow puts YOUR LLM in charge of every operator-facing surface using one SKILL.md per block. Each block's prop schema is server-validated. Run blocks in PARALLEL (Promise.all) — sequential takes 60+ seconds. v1.10+ TIER 2 CUSTOMIZE TOOLS: regenerate_block (re-do one block with operator instructions; thin-harness — server bundles context, your LLM generates), upload_workspace_image (set logo/hero_background; v1.10.1+ accepts image_url or local_file_path — DON'T base64 unless you have to, the encoded string eats your tool-call token budget). v1.11+ STRUCTURAL PRIMITIVES: get_landing_structure → move_section → delete_section. INDEX-based, handle duplicate section types, atomic. v1.12+ COMPOSITE TREES: add_composite_section / update_composite_section — manifest ANY block (comparison, pricing, "how it works," stats, custom CTAs) from 12 low-level primitives. Server validates + renders; YOUR LLM composes. Read the SKILL.md via get_block_skill('composite') before composing. Every URL is real. NEVER create local files. Skipping finalize_workspace leaves the operator with no admin login.`;

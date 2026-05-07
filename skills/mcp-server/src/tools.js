@@ -4051,11 +4051,12 @@ export const TOOLS = [
   {
     name: "configure_llm_provider",
     description:
-      "Set the LLM API key for this workspace's agents (BYOK — Bring Your Own Key). " +
+      "USE WHEN USER SAYS: 'set up Anthropic key for my agents', 'add my OpenAI key', 'configure BYOK for agents', 'why is my chatbot saying it's not configured?' " +
+      "FIRST-RUN setup BEFORE create_agent. Sets the LLM API key for this workspace's agents (BYOK — Bring Your Own Key). " +
       "The OPERATOR pays the LLM provider directly (Anthropic / OpenAI / etc.); SF charges separately for agent platform usage. " +
       "Stored encrypted at rest using the deployment's ENCRYPTION_KEY. " +
       "Operators get keys from console.anthropic.com (recommended for v1.26.x — best tool-use support) or platform.openai.com. " +
-      "Call this BEFORE create_agent — agents fail-graceful with 'I'm not set up yet' if no key configured.",
+      "Skip if the workspace already has a key — agents fail-graceful with 'I'm not set up yet' if no key configured, so a 'not configured' chatbot response means CALL THIS TOOL.",
     inputSchema: obj(
       {
         workspace_id: str("Workspace id (bearer workspace)."),
@@ -4088,12 +4089,14 @@ export const TOOLS = [
   {
     name: "create_agent",
     description:
-      "Create a new agent for this workspace. Agents are conversational interfaces (web chat, voice, SMS) that answer FAQs, book appointments, and escalate to humans — composed from typed primitives + the workspace's Soul (industry, voice, services). " +
+      "USE WHEN USER SAYS: 'add a chatbot to my website', 'add an AI assistant to my landing page', 'put a chat widget on my site', 'create a website chatbot', 'add an AI agent that answers customer questions', 'I want chat on my homepage', 'build me a chatbot for [business]'. " +
+      "DON'T confuse with: list_blocks (chat widgets are NOT a block type — agents are a separate primitive); send_conversation_turn (that's for inbound SMS/email auto-reply, NOT a website widget). If the operator wants chat on their website, THIS is the tool. " +
+      "Creates a new agent for this workspace. Agents are conversational interfaces (web chat, voice, SMS) that answer FAQs, book appointments, and escalate to humans — composed from typed primitives + the workspace's Soul (industry, voice, services). " +
       "WHAT GETS COMPOSED AUTOMATICALLY: persona derived from soul.industry + soul.voice; FAQ knowledge from your `faq` array; pricing facts from `pricing_facts` (validators block any $-amount the agent invents that's not in this list); typed tools (look_up_availability, book_appointment, find_my_existing_appointment, escalate_to_human, provide_faq_answer). " +
-      "WHAT YOU PROVIDE: name, archetype (website-chatbot for v1.26.x; voice-receptionist + sms-followup-bot queued), channel (web_chat / voice / sms / email), inline FAQ pairs, allowed pricing facts, optional greeting. " +
-      "STATUS LIFECYCLE: created in 'draft' (not callable). Flip to 'test' to chat with it in sandbox (tool calls return synthetic results — no real bookings). Flip to 'live' once you're confident. v1.26.2 will add eval-gating that blocks 'live' until a test scenario suite passes. " +
+      "WHAT YOU PROVIDE: name, archetype (website-chatbot for v1.26.x+; voice-receptionist + sms-followup-bot queued), channel (web_chat / voice / sms / email), inline FAQ pairs, allowed pricing facts, optional greeting. " +
+      "STATUS LIFECYCLE: created in 'draft' (not callable). Flip to 'test' to chat with it in sandbox. Flip to 'live' once you're confident — v1.26.2+ eval-gates 'live' until 8-scenario suite passes ≥87.5%. " +
       "SAFETY: response validators run on every turn — quotes_only_from_soul_pricing (critical, blocks hallucinated $X), no_prompt_injection_echo (critical), no_pii_leak (critical), no_avoid_words (warning), response_length_under_cap (warning). Critical fail = agent says 'let me check + escalate' instead of sending the bad response. " +
-      "OUTPUT: the agent's embed URL (one-line <script> for the operator's website) and turn URL (POST endpoint for direct API integration).",
+      "OUTPUT: the agent's embed URL (one-line <script> for the operator's website) and turn URL (POST endpoint for direct API integration). Tell the operator to drop the script tag on their site OR show them the dashboard sandbox at /agents/[id]/test to chat with it.",
     inputSchema: obj(
       {
         workspace_id: str("Workspace id (bearer workspace)."),
@@ -4171,7 +4174,8 @@ export const TOOLS = [
   {
     name: "list_agents",
     description:
-      "List all agents in this workspace with status (draft/test/live/paused), version, daily token usage vs budget, and metadata. Use to find an agent_id before calling publish_agent or update_agent_blueprint, or to audit which agents are live across a workspace.",
+      "USE WHEN USER SAYS: 'show me my agents', 'which chatbots do I have', 'list agents in this workspace', 'is the HVAC chatbot live yet?'. " +
+      "Lists all agents in the workspace with status (draft/test/live/paused), version, daily token usage vs budget, and metadata. Use to find an agent_id before calling publish_agent / update_agent_blueprint / get_agent_metrics, or to audit which agents are live across a workspace.",
     inputSchema: obj(
       { workspace_id: str("Workspace id (bearer workspace).") },
       ["workspace_id"],
@@ -4189,7 +4193,9 @@ export const TOOLS = [
   {
     name: "publish_agent",
     description:
-      "Change an agent's status: draft → test (sandboxed playground; tools return synthetic results), test → live (real bookings, real escalations, customer-facing), live → paused (chat bubble disabled). v1.26.2 will add eval-gating that blocks 'live' until the agent's eval suite passes; for v1.26.x, the operator-side responsibility is to test in 'test' mode before flipping to 'live'.",
+      "USE WHEN USER SAYS: 'put my chatbot live', 'enable the agent', 'switch agent to test mode', 'pause the chatbot', 'go live with the assistant', 'turn off the chatbot temporarily'. " +
+      "Changes an agent's status: draft → test (sandboxed playground), test → live (real bookings, real escalations, customer-facing), live → paused (chat bubble disabled). " +
+      "EVAL GATE (v1.26.2+): flipping to 'live' AUTO-RUNS the 8-scenario eval suite — rejects with error='eval_gate_failed' if pass rate < 87.5%. The response includes evalSummary so you can show the operator which scenarios failed and route them to /agents/[id]/settings to fix. Use { force: true } to bypass (logged; SF emergencies only).",
     inputSchema: obj(
       {
         workspace_id: str("Workspace id (bearer workspace)."),
@@ -4215,8 +4221,10 @@ export const TOOLS = [
   {
     name: "update_agent_blueprint",
     description:
-      "Update an agent's blueprint (FAQ, pricing facts, greeting, capabilities). Bumps current_version + writes a new agent_versions row for rollback. The agent's status is unchanged — flip to test/live separately when you're ready. " +
+      "USE WHEN USER SAYS: 'add this FAQ to the chatbot', 'update agent pricing', 'change the greeting', 'remove booking from the agent', 'the chatbot answer for X is wrong, fix it', 'add another service to the agent'. " +
+      "Updates an agent's blueprint (FAQ, pricing facts, greeting, capabilities). Bumps current_version + writes a new agent_versions row for rollback. The agent's status is unchanged — flip to test/live separately. " +
       "PATCH SEMANTICS: arrays REPLACE (not merge). If you want to ADD a single FAQ pair, fetch the current blueprint first via list_agents, append your new pair, and submit the full updated array. " +
+      "After a blueprint change, RE-RUN evals before promoting to live (use run_agent_evals or just call publish_agent({status:'live'}) which auto-runs them). " +
       "Common reasons to call this: operator added new FAQ entries; pricing changed; greeting needs A/B testing; restricting capabilities (e.g. removing book_appointment to make agent answer-only).",
     inputSchema: obj(
       {
@@ -4260,8 +4268,9 @@ export const TOOLS = [
   {
     name: "run_agent_evals",
     description:
-      "Run the platform's safety + behavior eval suite against this agent. The 8-scenario suite covers prompt-injection probes (ignore-instructions, role-swap), PII probes (customer-list leak), pricing discipline (refuses invented prices, refuses competitor match), scope refusal (off-topic), greeting + escalation. Each scenario runs through the live blueprint as an ephemeral test conversation, results persist to agent_evals. " +
-      "publish_agent with status='live' AUTOMATICALLY runs this and gates on ≥87.5% pass. Call this directly to dry-run before publishing or to verify after a blueprint update.",
+      "USE WHEN USER SAYS: 'test the chatbot against safety scenarios', 'run evals', 'check if my agent passes the safety suite', 'is the chatbot safe?', 'why did my agent fail the publish gate?'. " +
+      "Runs the platform's 8-scenario safety + behavior eval suite against this agent: prompt-injection probes (ignore-instructions, role-swap), PII probes (customer-list leak), pricing discipline (refuses invented prices, refuses competitor match), scope refusal (off-topic), greeting + escalation. Each scenario runs through the live blueprint as an ephemeral test conversation; results persist to agent_evals. " +
+      "publish_agent({status:'live'}) AUTOMATICALLY runs this and gates on ≥87.5% pass. Call THIS tool directly to dry-run before publishing or to verify after a blueprint update.",
     inputSchema: obj(
       {
         workspace_id: str("Workspace id (bearer workspace)."),
@@ -4282,7 +4291,8 @@ export const TOOLS = [
   {
     name: "tail_agent_conversations",
     description:
-      "List recent conversations for an agent — newest first. Excludes eval-runs and replay-runs by default (set include_eval_runs=true to see them). Each row includes status, turn_count, tokens, llm_cost_cents, and the customer's first message preview so you can spot patterns (most common questions, escalations, etc.) without opening each transcript. " +
+      "USE WHEN USER SAYS: 'show me recent chats with the agent', 'what are customers asking the chatbot', 'tail conversations', 'list the latest 20 chatbot sessions', 'what's been happening on the agent today?'. " +
+      "Lists recent conversations for an agent — newest first. Excludes eval-runs and replay-runs by default (set include_eval_runs=true to see them). Each row includes status, turn_count, tokens, llm_cost_cents, and the customer's first message preview so you can spot patterns (most common questions, escalations, etc.) without opening each transcript. " +
       "Use BEFORE get_agent_conversation to pick which conversation to drill into.",
     inputSchema: obj(
       {
@@ -4317,7 +4327,8 @@ export const TOOLS = [
   {
     name: "get_agent_conversation",
     description:
-      "Fetch the full transcript of a single conversation: every turn (user + assistant), all tool_calls (look_up_availability, book_appointment, escalate_to_human, etc.) with their inputs, all tool_results with success/error, validator_results per assistant turn (which validators passed/failed), tokens, latency, model. " +
+      "USE WHEN USER SAYS: 'show me that conversation in detail', 'why did the chatbot say X?', 'debug this chat', 'what tools did the agent call in conversation Y', 'show the validator results for conversation Z'. " +
+      "Fetches the full transcript of a single conversation: every turn (user + assistant), all tool_calls (look_up_availability, book_appointment, escalate_to_human, etc.) with their inputs, all tool_results with success/error, validator_results per assistant turn (which validators passed/failed), tokens, latency, model. " +
       "Use this to debug WHY an agent gave a specific answer — was it a tool failure? a validator gating? wrong info in blueprint? Pair with replay_conversation to test a blueprint fix.",
     inputSchema: obj(
       {
@@ -4344,7 +4355,8 @@ export const TOOLS = [
   {
     name: "replay_conversation",
     description:
-      "Replay a past conversation's user messages against the agent's CURRENT blueprint, returning the original responses + the new responses side-by-side. Lets you regression-test a blueprint change ('did adding this FAQ break the booking flow?') without touching production. " +
+      "USE WHEN USER SAYS: 'will my new FAQ break the booking flow?', 'replay this chat against the new blueprint', 'regression test the chatbot', 'test if my recent change still answers this conversation correctly'. " +
+      "Replays a past conversation's user messages against the agent's CURRENT blueprint, returning the original responses + the new responses side-by-side. Lets you regression-test a blueprint change without touching production. " +
       "Creates a new ephemeral test-status conversation tagged with replay_of=<original>; the original is untouched.",
     inputSchema: obj(
       {
@@ -4369,8 +4381,9 @@ export const TOOLS = [
   {
     name: "get_agent_metrics",
     description:
+      "USE WHEN USER SAYS: 'is my chatbot healthy?', 'how's the agent performing?', 'show me agent stats', 'what's my chatbot's pass rate this week?', 'agent dashboard ping'. " +
       "Aggregate health stats for an agent over a time window: conversations + turns count, tokens (in/out), avg latency, validator pass rate (% of assistant turns where ALL validators passed), latest eval pass rate (last result per scenario). " +
-      "Use as a dashboard ping — 'is my agent healthy?' If validator_pass_rate drops or eval_pass_rate falls below the 87.5% gate, the agent shouldn't be promoted to live.",
+      "Use as a dashboard ping. If validator_pass_rate drops or eval_pass_rate falls below the 87.5% gate, the agent shouldn't be promoted to live.",
     inputSchema: obj(
       {
         workspace_id: str("Workspace id (bearer workspace)."),
