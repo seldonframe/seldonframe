@@ -74,6 +74,24 @@ export default async function IntegrationsSettingsPage({
       {beehiivTestMessage ? <p className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary">{beehiivTestMessage}</p> : null}
 
       <div className="grid gap-4 xl:grid-cols-2">
+        <article className="rounded-xl border bg-card p-5 xl:col-span-2 space-y-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-card-title">AI / LLM Providers</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Bring your own Anthropic / OpenAI key. Used by your agents at
+                customer chat time. Required before agents can serve traffic.
+              </p>
+            </div>
+            <Link
+              href="/settings/integrations/llm"
+              className="crm-button-secondary h-9 px-4 text-sm whitespace-nowrap"
+            >
+              Manage keys →
+            </Link>
+          </div>
+        </article>
+
         <article className="rounded-xl border bg-card p-5 xl:col-span-2 space-y-4">
           <div>
             <h2 className="text-card-title">Email</h2>

@@ -94,7 +94,10 @@ export default async function AgentTestPage({
       title: "No Anthropic API key configured",
       message:
         "Without a key, every turn fails with an llm_not_configured error. " +
-        "Configure a key from Claude Code: configure_llm_provider({ provider: 'anthropic', api_key: 'sk-ant-...' }).",
+        "Add your key in Settings → Integrations → AI / LLM, or call " +
+        "configure_llm_provider from Claude Code.",
+      actionHref: "/settings/integrations/llm",
+      actionLabel: "Add key",
     });
   }
 
