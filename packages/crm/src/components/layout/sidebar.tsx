@@ -46,8 +46,28 @@ export function Sidebar(props: {
   userName: string;
   userEmail: string;
   avatarFallback: string;
+  /** v1.25.1 — true when the active session is from the operator-portal
+   *  cookie (sub-tenant operator like the HVAC owner). Hides SF-internal
+   *  nav items (Soul Marketplace, Pages, Email, Forms, Automations,
+   *  Settings) so the operator only sees the CRM essentials they care
+   *  about: Dashboard / Contacts / Deals / Bookings. */
+  isOperatorSession?: boolean;
+  /** v1.25.1 — agency name when the workspace is under an active
+   *  partner agency. Surfaced as "<workspace> on <agency>" subtitle. */
+  agencyBrandName?: string | null;
 }) {
-  const { hiddenBlocks = [], workspaceName, activeWorkspaceId, workspaceOptions, switchWorkspaceAction, userName, userEmail, avatarFallback } = props;
+  const {
+    hiddenBlocks = [],
+    workspaceName,
+    activeWorkspaceId,
+    workspaceOptions,
+    switchWorkspaceAction,
+    userName,
+    userEmail,
+    avatarFallback,
+    isOperatorSession = false,
+    agencyBrandName = null,
+  } = props;
   const labels = useLabels();
   const pathname = usePathname();
   const hiddenHrefs = new Set(hiddenBlocks.map((slug) => hiddenSlugToHref[slug]).filter(Boolean));
@@ -56,44 +76,72 @@ export function Sidebar(props: {
     return items.filter((item) => !hiddenHrefs.has(item.href));
   }
 
-  const navGroups: NavGroup[] = [
-    {
-      title: "YOUR SOUL",
-      items: filterHidden([
-        { href: "/dashboard", label: "Dashboard", icon: "LayoutDashboard" },
-        { href: "/soul-marketplace", label: "Soul Marketplace", icon: "Puzzle" },
-      ]),
-    },
-    {
-      title: "YOUR BLOCKS",
-      items: filterHidden([
-        { href: "/contacts", label: labels.contact.plural, icon: "Users" },
-        { href: "/deals", label: labels.deal.plural, icon: "Building2" },
-        { href: "/bookings", label: "Booking", icon: "Calendar" },
-        { href: "/landing", label: "Pages", icon: "Layout" },
-        { href: "/emails", label: "Email", icon: "Mail" },
-        { href: "/forms", label: labels.intakeForm.plural, icon: "FileText" },
-        { href: "/automations", label: "Automations", icon: "Zap" },
-      ]),
-    },
-    {
-      title: "SYSTEM",
-      items: filterHidden([
-        { href: "/docs", label: "Docs", icon: "BookOpen" },
-        // May 1, 2026 — Discord link in the SYSTEM group so operators
-        // always have a one-click path to community help. external:
-        // true so it opens in a new tab (operator keeps their place
-        // in the dashboard).
+  // v1.25.1 — operator portal sessions see a trimmed nav: Dashboard +
+  // CRM essentials only. The full SF nav (Soul Marketplace, Pages, Email,
+  // Forms, Automations, Studio) belongs to the SF agency operator
+  // (Acme AI), not the sub-tenant operator (HVAC owner).
+  const navGroups: NavGroup[] = isOperatorSession
+    ? [
         {
-          href: "https://discord.gg/sbVUu976NW",
-          label: "Discord",
-          icon: "MessageCircle",
-          external: true,
+          title: "OVERVIEW",
+          items: filterHidden([
+            { href: "/dashboard", label: "Dashboard", icon: "LayoutDashboard" },
+          ]),
         },
-        { href: "/settings", label: "Settings", icon: "Settings" },
-      ]),
-    },
-  ].filter((group) => group.items.length > 0);
+        {
+          title: "CRM",
+          items: filterHidden([
+            { href: "/contacts", label: labels.contact.plural, icon: "Users" },
+            { href: "/deals", label: labels.deal.plural, icon: "Building2" },
+            { href: "/bookings", label: "Booking", icon: "Calendar" },
+          ]),
+        },
+        {
+          title: "ACCOUNT",
+          items: filterHidden([
+            {
+              href: "https://discord.gg/sbVUu976NW",
+              label: "Help",
+              icon: "MessageCircle",
+              external: true,
+            },
+          ]),
+        },
+      ].filter((group) => group.items.length > 0)
+    : [
+        {
+          title: "YOUR SOUL",
+          items: filterHidden([
+            { href: "/dashboard", label: "Dashboard", icon: "LayoutDashboard" },
+            { href: "/soul-marketplace", label: "Soul Marketplace", icon: "Puzzle" },
+          ]),
+        },
+        {
+          title: "YOUR BLOCKS",
+          items: filterHidden([
+            { href: "/contacts", label: labels.contact.plural, icon: "Users" },
+            { href: "/deals", label: labels.deal.plural, icon: "Building2" },
+            { href: "/bookings", label: "Booking", icon: "Calendar" },
+            { href: "/landing", label: "Pages", icon: "Layout" },
+            { href: "/emails", label: "Email", icon: "Mail" },
+            { href: "/forms", label: labels.intakeForm.plural, icon: "FileText" },
+            { href: "/automations", label: "Automations", icon: "Zap" },
+          ]),
+        },
+        {
+          title: "SYSTEM",
+          items: filterHidden([
+            { href: "/docs", label: "Docs", icon: "BookOpen" },
+            {
+              href: "https://discord.gg/sbVUu976NW",
+              label: "Discord",
+              icon: "MessageCircle",
+              external: true,
+            },
+            { href: "/settings", label: "Settings", icon: "Settings" },
+          ]),
+        },
+      ].filter((group) => group.items.length > 0);
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
@@ -119,8 +167,21 @@ export function Sidebar(props: {
               <Image src="/brand/seldonframe-icon.svg" alt="SeldonFrame" width={20} height={20} />
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-semibold tracking-tight text-foreground">SeldonFrame</p>
-              <p className="text-[11px] text-muted-foreground">Operating system for modern teams</p>
+              {/* v1.25.1 — operator-session brand override: show the
+                  agency name as the primary brand, with "Powered by
+                  SeldonFrame" subtitle (or hide it when agency has
+                  hide_powered_by_badge=true via the chrome wrapper).
+                  Default SF branding stays for non-operator sessions. */}
+              <p className="text-sm font-semibold tracking-tight text-foreground">
+                {isOperatorSession && agencyBrandName ? agencyBrandName : "SeldonFrame"}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                {isOperatorSession
+                  ? agencyBrandName
+                    ? `${workspaceName}'s CRM`
+                    : `${workspaceName} portal`
+                  : "Operating system for modern teams"}
+              </p>
             </div>
           </div>
         </div>

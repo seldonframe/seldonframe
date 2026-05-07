@@ -2,6 +2,7 @@ import { requireAuth } from "@/lib/auth/helpers";
 import { getOrgId } from "@/lib/auth/helpers";
 import { isAdminTokenUserId } from "@/lib/auth/admin-token";
 import { isOperatorPortalUserId } from "@/lib/auth/operator-portal-context";
+import { getEffectiveBrandingForWorkspace } from "@/lib/partner-agencies/branding";
 import { SoulProvider } from "@/components/soul/soul-provider";
 import { getSoul } from "@/lib/soul/server";
 import { getPersonality } from "@/lib/crm/personality-server";
@@ -67,7 +68,7 @@ export default async function DashboardLayout({
   const workspaceOptions =
     user?.id && !skipUserLookup ? await listManagedOrganizations(user.id) : [];
 
-  const [activeOrg, orgMemberCount] = orgId
+  const [activeOrg, orgMemberCount, effectiveBranding] = orgId
     ? await Promise.all([
         db.select({ id: organizations.id, name: organizations.name, testMode: organizations.testMode }).from(organizations).where(eq(organizations.id, orgId)).limit(1).then((rows) => rows[0] ?? null),
         db
@@ -75,8 +76,12 @@ export default async function DashboardLayout({
           .from(users)
           .where(eq(users.orgId, orgId))
           .then((rows) => Number(rows[0]?.count ?? 0)),
+        // v1.25.1 — pull active partner-agency branding so the
+        // operator's chrome shows "Acme AI" instead of SeldonFrame
+        // when their workspace is under an active white-label agency.
+        getEffectiveBrandingForWorkspace(orgId),
       ])
-    : [null, 0];
+    : [null, 0, null];
 
   const isSwitchedOrg = Boolean(orgId && user?.orgId && orgId !== user.orgId);
 
@@ -165,6 +170,12 @@ export default async function DashboardLayout({
               userName={user?.name || "Account"}
               userEmail={user?.email || ""}
               avatarFallback={avatarFallback}
+              isOperatorSession={isOperatorSession}
+              agencyBrandName={
+                effectiveBranding?.is_white_label
+                  ? effectiveBranding.brand_name
+                  : null
+              }
             />
             <div className="min-h-screen min-w-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
               <DemoBanner />
