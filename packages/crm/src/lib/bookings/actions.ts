@@ -1163,6 +1163,25 @@ export async function submitPublicBookingAction({
         contactId,
       }, { orgId: bookingContext.orgId });
 
+      // v1.28.4 — fire-and-forget the post-booking 24h reminder workflow.
+      // bookingReminderWorkflow durably sleeps until startsAt-24h, then
+      // sends an SMS (if Twilio configured) or email (if Resend); writes
+      // an activity row in either case. Skips internally if the booking
+      // is already <24h away or gets cancelled before fire time.
+      try {
+        const { start } = await import("workflow/api");
+        const { bookingReminderWorkflow } = await import(
+          "@/lib/workflows/booking-reminder"
+        );
+        await start(bookingReminderWorkflow, [createdBooking.id]);
+      } catch (err) {
+        // Don't fail the booking on workflow trigger errors. Log and
+        // continue — the booking row exists; the reminder is best-effort.
+        console.error(
+          `[submitPublicBookingAction] booking_reminder_workflow_start_failed bookingId=${createdBooking.id} err=${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+
       const [owner] = await db
         .select({ id: users.id })
         .from(users)
