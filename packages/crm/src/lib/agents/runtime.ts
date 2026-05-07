@@ -251,14 +251,20 @@ export async function executeTurn(input: {
         messages: messages as Anthropic.Messages.MessageParam[],
       });
     } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      const errClass = classifyAnthropicError(detail);
       console.error(
-        `[agent-runtime] anthropic_error agentId=${agent.id} convId=${conv.id} err=${err instanceof Error ? err.message : String(err)}`,
+        `[agent-runtime] anthropic_error agentId=${agent.id} convId=${conv.id} class=${errClass.reason} err=${detail}`,
       );
       return {
         ok: false,
-        reason: "llm_error",
+        reason: errClass.reason,
+        // Test-mode = SF client testing in sandbox → return real diagnostic.
+        // Live/active = end customer talking to agent → return gentle fallback.
         fallbackMessage:
-          "I'm having a hiccup. Can I have someone follow up with you? What's your email?",
+          conv.status === "test"
+            ? `[runtime error: ${errClass.reason}] ${errClass.operatorHint}`
+            : "I'm having a hiccup. Can I have someone follow up with you? What's your email?",
       };
     }
 
@@ -505,4 +511,94 @@ async function writeFirstTurnActivity(
     completedAt: new Date(),
   });
   void and; // import keepalive
+}
+
+// ─── error classifier ──────────────────────────────────────────────────────
+//
+// v1.27.5 — categorize Anthropic API errors into operator-actionable
+// classes. The runtime catches the raw error and returns:
+//   - reason  (stable identifier for the UI to switch on)
+//   - operatorHint (specific guidance shown in test-mode sandbox)
+//
+// In live/active conversations the gentle fallback fires regardless;
+// only the test-mode sandbox surfaces these hints to the SF client.
+
+type AnthropicErrorClass = {
+  reason:
+    | "llm_credit_exhausted"
+    | "llm_invalid_key"
+    | "llm_rate_limited"
+    | "llm_model_unavailable"
+    | "llm_overloaded"
+    | "llm_timeout"
+    | "llm_error";
+  operatorHint: string;
+};
+
+function classifyAnthropicError(detail: string): AnthropicErrorClass {
+  const lower = detail.toLowerCase();
+
+  if (
+    lower.includes("credit balance is too low") ||
+    lower.includes("insufficient credits")
+  ) {
+    return {
+      reason: "llm_credit_exhausted",
+      operatorHint:
+        "Anthropic account has no credits left. Add credits at " +
+        "console.anthropic.com/settings/billing, then retry.",
+    };
+  }
+  if (
+    lower.includes("invalid x-api-key") ||
+    lower.includes("authentication_error") ||
+    lower.includes("401")
+  ) {
+    return {
+      reason: "llm_invalid_key",
+      operatorHint:
+        "Anthropic API key is invalid or revoked. Update via " +
+        "configure_llm_provider with a fresh sk-ant-... key.",
+    };
+  }
+  if (lower.includes("rate_limit") || lower.includes("429")) {
+    return {
+      reason: "llm_rate_limited",
+      operatorHint:
+        "Anthropic rate limit reached. Wait ~60s and try again, or " +
+        "raise your tier at console.anthropic.com.",
+    };
+  }
+  if (lower.includes("model_not_found") || lower.includes("not_found_error")) {
+    return {
+      reason: "llm_model_unavailable",
+      operatorHint:
+        "The configured Claude model isn't available on your account tier. " +
+        "Contact SF support if this persists (model is platform-controlled).",
+    };
+  }
+  if (lower.includes("overloaded_error") || lower.includes("529")) {
+    return {
+      reason: "llm_overloaded",
+      operatorHint:
+        "Anthropic API is temporarily overloaded. Try again in a moment.",
+    };
+  }
+  if (
+    lower.includes("timeout") ||
+    lower.includes("etimedout") ||
+    lower.includes("econnreset")
+  ) {
+    return {
+      reason: "llm_timeout",
+      operatorHint:
+        "Network timeout reaching Anthropic. Check your deployment's " +
+        "outbound connectivity and try again.",
+    };
+  }
+
+  return {
+    reason: "llm_error",
+    operatorHint: `Unexpected Anthropic API error: ${detail.slice(0, 200)}`,
+  };
 }

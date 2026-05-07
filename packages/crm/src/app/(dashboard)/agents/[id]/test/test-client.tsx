@@ -1,14 +1,26 @@
 "use client";
 
-// v1.26.2 — agent test sandbox client (interactive chat).
+// v1.27.5 — agent test sandbox client (interactive chat with diagnostic
+// surfacing).
 //
-// Talks to the public /turn endpoint (SSE branch) so the operator
-// experiences the same UX their end customers get on the embed widget.
-// State is local — refresh = fresh conversation.
+// Talks to the public /turn endpoint (SSE branch). Differences from the
+// embed widget UX:
+//   - Surfaces the REAL error reason (e.g. llm_credit_exhausted) inline
+//     instead of the customer-facing "hiccup" fallback. Runtime ships the
+//     test-mode diagnostic in fallbackMessage when conversation.status='test'.
+//   - Halts the input on degraded turns so operators don't loop the same
+//     error trying to recover; surfaces a "Retry" button instead.
 
 import { useEffect, useRef, useState } from "react";
 
-type Msg = { role: "user" | "assistant" | "system"; content: string };
+type Msg = {
+  role: "user" | "assistant" | "system";
+  content: string;
+  /** When set, this assistant message represents a runtime degradation
+   *  (Anthropic error, no key, budget exhausted) rather than a real
+   *  agent reply. */
+  degraded?: { reason: string };
+};
 
 export function TestSandboxClient(props: {
   agentName: string;
@@ -21,6 +33,7 @@ export function TestSandboxClient(props: {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [halted, setHalted] = useState<{ reason: string } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -54,18 +67,28 @@ export function TestSandboxClient(props: {
       const ctype = (res.headers.get("content-type") || "").toLowerCase();
       if (!res.ok || ctype.indexOf("text/event-stream") === -1) {
         const data = (await res.json().catch(() => null)) as
-          | { conversation_id?: string; message?: string; reason?: string }
+          | {
+              conversation_id?: string;
+              message?: string;
+              reason?: string;
+              degraded?: boolean;
+            }
           | null;
         if (data?.conversation_id) setConversationId(data.conversation_id);
+        const reason = data?.reason ?? "unknown_error";
         setMessages((m) => {
           const next = [...m];
           next[next.length - 1] = {
             role: data?.message ? "assistant" : "system",
             content:
               data?.message ?? `Error${data?.reason ? `: ${data.reason}` : ""}`,
+            degraded: data?.degraded ? { reason } : undefined,
           };
           return next;
         });
+        if (data?.degraded) {
+          setHalted({ reason });
+        }
         return;
       }
 
@@ -104,6 +127,25 @@ export function TestSandboxClient(props: {
               } else if (currentEvent === "done") {
                 if (json.conversation_id) {
                   setConversationId(json.conversation_id);
+                }
+                if (json.degraded) {
+                  // Runtime returned an unrecoverable error mid-stream.
+                  // Tag the assistant message as degraded + halt input so
+                  // the operator doesn't loop the same error trying to
+                  // type past it.
+                  const reason = json.reason ?? "unknown_error";
+                  setMessages((m) => {
+                    const next = [...m];
+                    const last = next[next.length - 1];
+                    if (last && last.role === "assistant") {
+                      next[next.length - 1] = {
+                        ...last,
+                        degraded: { reason },
+                      };
+                    }
+                    return next;
+                  });
+                  setHalted({ reason });
                 }
                 if (json.validators_critical_failed) {
                   setMessages((m) => [
@@ -151,20 +193,62 @@ export function TestSandboxClient(props: {
         ref={scrollRef}
         className="h-[480px] overflow-y-auto px-5 py-4 space-y-3 bg-[hsl(var(--color-surface-muted))]"
       >
-        {messages.map((m, i) => (
-          <div
-            key={i}
-            className={`max-w-[85%] rounded-2xl px-4 py-2 text-sm whitespace-pre-wrap ${
-              m.role === "user"
-                ? "ml-auto bg-primary text-primary-foreground"
-                : m.role === "assistant"
-                  ? "mr-auto bg-card border"
-                  : "mx-auto text-xs italic text-muted-foreground"
-            }`}
-          >
-            {m.content || (m.role === "assistant" && sending ? "…" : "")}
+        {messages.map((m, i) => {
+          if (m.degraded) {
+            return (
+              <div
+                key={i}
+                className="mr-auto max-w-[90%] rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-200"
+              >
+                <p className="font-medium text-xs uppercase tracking-wide opacity-70">
+                  ⛔ Runtime error · {m.degraded.reason}
+                </p>
+                <p className="mt-1 whitespace-pre-wrap">{m.content}</p>
+              </div>
+            );
+          }
+          return (
+            <div
+              key={i}
+              className={`max-w-[85%] rounded-2xl px-4 py-2 text-sm whitespace-pre-wrap ${
+                m.role === "user"
+                  ? "ml-auto bg-primary text-primary-foreground"
+                  : m.role === "assistant"
+                    ? "mr-auto bg-card border"
+                    : "mx-auto text-xs italic text-muted-foreground"
+              }`}
+            >
+              {m.content || (m.role === "assistant" && sending ? "…" : "")}
+            </div>
+          );
+        })}
+        {halted && (
+          <div className="mr-auto max-w-[90%] rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-900 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-200">
+            <p>
+              Conversation halted. Fix the issue above (typically: configure
+              an LLM key, add Anthropic credits, raise the daily token budget,
+              or wait out a rate limit), then click <strong>Reset & retry</strong>.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setHalted(null);
+                setConversationId(null);
+                setMessages([
+                  { role: "assistant", content: props.greeting },
+                  {
+                    role: "system",
+                    content:
+                      "↻ Conversation reset. The next turn will use a fresh session.",
+                  },
+                ]);
+              }}
+              className="mt-2 rounded-md border border-current/30 px-3 py-1 font-medium hover:bg-current/10"
+            >
+              ↻ Reset & retry
+            </button>
           </div>
-        ))}
+        )}
       </div>
       <form
         className="flex gap-2 border-t p-3"
@@ -177,13 +261,13 @@ export function TestSandboxClient(props: {
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Type a message..."
-          disabled={sending}
-          className="flex-1 rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+          placeholder={halted ? "Resolve the error above to continue" : "Type a message..."}
+          disabled={sending || !!halted}
+          className="flex-1 rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:border-primary disabled:opacity-50"
         />
         <button
           type="submit"
-          disabled={sending || !input.trim()}
+          disabled={sending || !input.trim() || !!halted}
           className="crm-button-primary h-10 px-5 text-sm"
         >
           {sending ? "…" : "Send"}
