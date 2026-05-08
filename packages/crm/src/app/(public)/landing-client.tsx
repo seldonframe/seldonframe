@@ -10,6 +10,16 @@
 //   e. Cost-visibility feature copy reframed (no concrete dollar claims)
 //   f. BYO note below pricing reframed (no concrete dollar claims)
 //   g. Added "See it built" section between HowItWorks and Pricing
+//
+// v1.31.0 — Hero rewrite. The previous hero showed a small terminal
+// mockup with a `claude mcp add` command and a workspace-creation
+// success block. That's true to the install flow but doesn't show
+// the launch story's actual magic moment: the eval gate passing
+// scenarios before an agent goes live. v1.31.0 replaces the terminal
+// with a bigger, animated AgentEvalCard that mocks the /agents/X/evals
+// surface — eight scenarios filling in green over ~2 seconds, eval
+// progress bar filling to 100%, "Publish unlocked" pill appearing.
+// Adds a subtle radial glow behind the hero for Linear-quality depth.
 
 import React from "react";
 import { motion } from "framer-motion";
@@ -60,25 +70,157 @@ const Nav = () => (
       {/* Fix (d): /pricing → #pricing anchor on same page */}
       <a href="#pricing" className="hidden md:block text-[14px] text-[#a1a1aa] hover:text-[#fafafa] transition-colors">Pricing</a>
       <a href="/blog" className="hidden md:block text-[14px] text-[#a1a1aa] hover:text-[#fafafa] transition-colors">Blog</a>
-      <a href="/docs/quickstart" className={`${PRIMARY_CTA_CLS} px-[18px] py-2 text-[13px]`}>
-        Start for $0 &rarr;
+      <a href="/signup" className={`${PRIMARY_CTA_CLS} px-[18px] py-2 text-[13px]`}>
+        Start for free &rarr;
       </a>
     </div>
   </nav>
 );
 
+// v1.31.0 — Animated AgentEvalCard mock. Shows the launch story's
+// actual magic moment: the eval gate flipping each scenario green
+// in sequence, the progress bar filling to 100%, the "Publish
+// unlocked" pill appearing. Pure CSS+SVG — no images, theme-aware,
+// fast, deploys instantly.
+const AgentEvalCard = () => {
+  const scenarios = [
+    "Greeting", "FAQ accuracy", "Booking",
+    "Reschedule", "Refusal", "PII handling",
+    "Escalation", "Tone consistency",
+  ];
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.97, y: 24 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      transition={{ delay: 1.0, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+      className="mt-14 mx-auto max-w-[820px] bg-[#0d0d10] border border-white/5 rounded-[14px] overflow-hidden text-left shadow-[0_30px_80px_-30px_rgba(31,174,133,0.25),0_0_0_1px_rgba(255,255,255,0.02)]"
+    >
+      {/* Browser chrome */}
+      <div className="flex items-center gap-2 px-[14px] py-[10px] bg-[#161619] border-b border-white/5">
+        <span className="w-[10px] h-[10px] rounded-full bg-[#ff5f57]" />
+        <span className="w-[10px] h-[10px] rounded-full bg-[#ffbd2e]" />
+        <span className="w-[10px] h-[10px] rounded-full bg-[#28c840]" />
+        <div className="flex-1 ml-3 px-3 py-[3px] rounded bg-[#0d0d10] border border-white/5 font-mono text-[11px] text-[#71717a]">
+          app.seldonframe.com/agents/acme-hvac/evals
+        </div>
+      </div>
+
+      {/* Agent header */}
+      <div className="px-6 pt-5 pb-4 flex items-center justify-between border-b border-white/5">
+        <div className="flex items-center gap-3">
+          <div className="size-9 rounded-[10px] bg-gradient-to-br from-[#1FAE85] to-[#0e8364] flex items-center justify-center text-[#09090b] text-[15px] font-bold">
+            A
+          </div>
+          <div>
+            <div className="text-[14px] font-semibold text-[#fafafa]">Acme HVAC Chatbot</div>
+            <div className="text-[11px] text-[#71717a] font-mono">v3 · website-chatbot</div>
+          </div>
+        </div>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 2.6, duration: 0.4 }}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#1FAE85]/10 border border-[#1FAE85]/30"
+        >
+          <span className="w-[6px] h-[6px] rounded-full bg-[#1FAE85]" />
+          <span className="text-[11px] font-semibold text-[#1FAE85]">Live</span>
+        </motion.div>
+      </div>
+
+      {/* Eval body */}
+      <div className="p-6">
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-[13px] font-semibold text-[#fafafa]">Eval gate</div>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 2.4, duration: 0.3 }}
+            className="text-[12px] font-mono text-[#1FAE85]"
+          >
+            8/8 passed
+          </motion.div>
+        </div>
+
+        {/* Progress bar */}
+        <div className="h-[6px] rounded-full bg-[#1a1a1e] overflow-hidden mb-5">
+          <motion.div
+            initial={{ width: "0%" }}
+            animate={{ width: "100%" }}
+            transition={{ delay: 1.3, duration: 1.6, ease: "easeOut" }}
+            className="h-full bg-gradient-to-r from-[#1FAE85] to-[#24c997]"
+          />
+        </div>
+
+        {/* Scenarios — fill in green sequentially */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {scenarios.map((label, i) => (
+            <motion.div
+              key={label}
+              initial={{ opacity: 0.3 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 1.3 + i * 0.18, duration: 0.3 }}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-[#0a1d18] border border-[#1FAE85]/15"
+            >
+              <motion.span
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ delay: 1.3 + i * 0.18, duration: 0.25, type: "spring", stiffness: 220 }}
+                className="size-3.5 rounded-full bg-[#1FAE85]/20 border border-[#1FAE85] flex items-center justify-center shrink-0"
+              >
+                <svg viewBox="0 0 12 12" className="size-2 text-[#1FAE85]" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M2.5 6.5l2.5 2.5L9.5 4" />
+                </svg>
+              </motion.span>
+              <span className="text-[11.5px] text-[#a1a1aa] truncate">{label}</span>
+            </motion.div>
+          ))}
+        </div>
+
+        {/* Publish unlocked */}
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 2.8, duration: 0.4 }}
+          className="mt-5 flex items-center justify-between p-3 rounded-[10px] bg-[#0a1d18] border border-[#1FAE85]/30"
+        >
+          <div className="flex items-center gap-2">
+            <span className="size-5 rounded-full bg-[#1FAE85] flex items-center justify-center shrink-0">
+              <svg viewBox="0 0 12 12" className="size-3 text-[#09090b]" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2.5 6.5l2.5 2.5L9.5 4" />
+              </svg>
+            </span>
+            <span className="text-[13px] font-semibold text-[#fafafa]">Publish unlocked</span>
+          </div>
+          <span className="text-[11px] font-mono text-[#71717a]">≥ 87.5% threshold</span>
+        </motion.div>
+      </div>
+    </motion.div>
+  );
+};
+
 const Hero = () => {
   const badges = ["Open Source", "MCP-native", "Claude Code ready"];
 
   return (
-    <section className="text-center pt-[72px] pb-[48px] px-5 md:px-12 max-w-[1140px] mx-auto">
+    <section className="relative text-center pt-[72px] pb-[64px] px-5 md:px-12 max-w-[1180px] mx-auto overflow-hidden">
+      {/* Subtle radial glow behind the hero */}
+      <div
+        aria-hidden
+        className="absolute inset-x-0 top-[-100px] h-[500px] -z-10 opacity-50"
+        style={{
+          background:
+            "radial-gradient(ellipse 60% 50% at 50% 30%, rgba(31,174,133,0.18), transparent 70%)",
+        }}
+      />
+
       <div className="flex justify-center gap-3 mb-8 flex-wrap">
         {badges.map((text, i) => (
           <motion.div
             key={text}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.2, duration: 0.4 }}
+            transition={{ delay: i * 0.15, duration: 0.4 }}
           >
             <Badge variant="outline" className="bg-[#1a1a1e] border-white/5 text-[#a1a1aa] font-mono text-[11px] tracking-[0.03em] px-3 py-[5px] rounded-full gap-1.5 flex items-center">
               <span className="w-[5px] h-[5px] rounded-full bg-[#1FAE85]" />
@@ -91,8 +233,8 @@ const Hero = () => {
       <motion.h1
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.4, duration: 0.5 }}
-        className="text-[clamp(34px,5vw,56px)] font-bold tracking-[-0.035em] leading-[1.1] mb-5 max-w-[780px] mx-auto text-[#fafafa]"
+        transition={{ delay: 0.35, duration: 0.55 }}
+        className="text-[clamp(36px,5.5vw,64px)] font-bold tracking-[-0.04em] leading-[1.05] mb-5 max-w-[840px] mx-auto text-[#fafafa]"
       >
         Build a complete AI-native<br />
         <span className="text-[#1FAE85]">Business OS</span> with natural language
@@ -101,57 +243,29 @@ const Hero = () => {
       <motion.p
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.6, duration: 0.5 }}
-        className="text-[17px] text-[#a1a1aa] max-w-[600px] mx-auto mb-9 leading-[1.7] font-normal"
+        transition={{ delay: 0.55, duration: 0.5 }}
+        className="text-[17px] text-[#a1a1aa] max-w-[640px] mx-auto mb-9 leading-[1.65] font-normal"
       >
-        Composable primitives to create customized business operating systems — branded portals, smart agents, automated workflows — for yourself or your clients. Describe what you need from your IDE. Ship in minutes.
+        CRM, website, AI agents, and automations — all in one workspace,
+        built and updated through natural language with Claude Code.
+        Eval-gated before going live.
       </motion.p>
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.8, duration: 0.5 }}
+        transition={{ delay: 0.75, duration: 0.5 }}
         className="flex justify-center gap-3 flex-wrap"
       >
-        <a href="/docs/quickstart" className={`${PRIMARY_CTA_CLS} hover:-translate-y-[1px] px-[26px] py-3 text-[14px]`}>
-          Start for $0 &rarr;
+        <a href="/signup" className={`${PRIMARY_CTA_CLS} hover:-translate-y-[1px] px-[28px] py-3 text-[14px]`}>
+          Start for free &rarr;
         </a>
-        <a href="/demo" className={`${OUTLINE_CTA_CLS} px-[26px] py-3 text-[14px]`}>
+        <a href="/demo" className={`${OUTLINE_CTA_CLS} px-[28px] py-3 text-[14px]`}>
           Watch the demo &#9654;
         </a>
       </motion.div>
 
-      <motion.div
-        initial={{ opacity: 0, scale: 0.97, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ delay: 1.0, duration: 0.5 }}
-        className="mt-12 max-w-[640px] mx-auto bg-[#111113] border border-white/5 rounded-[12px] overflow-hidden text-left"
-      >
-        <div className="flex items-center gap-[6px] px-[14px] py-[10px] bg-[#1a1a1e] border-b border-white/5">
-          <span className="w-[10px] h-[10px] rounded-full bg-[#ff5f57]" />
-          <span className="w-[10px] h-[10px] rounded-full bg-[#ffbd2e]" />
-          <span className="w-[10px] h-[10px] rounded-full bg-[#28c840]" />
-          <span className="ml-3 font-mono text-[11px] text-[#666]">claude code</span>
-        </div>
-        {/* May 1, 2026 — terminal mockup rewritten to show the REAL
-            MCP-native flow. SeldonFrame is not a CLI tool: there is
-            no `seldon init` or `seldon scaffold`. The only shell
-            command is the one-time `claude mcp add`. From there it
-            is all natural language inside Claude Code. */}
-        <div className="p-5 font-mono text-[13px] leading-loose text-[#a1a1aa]">
-          <span className="text-[#666]"># Add SeldonFrame to Claude Code (one-time setup)</span><br />
-          <span className="text-[#1FAE85]">$ claude mcp add seldonframe -- npx -y @seldonframe/mcp</span><br /><br />
-          <span className="text-[#666]"># Then in Claude Code, just describe your business:</span><br />
-          <span className="text-[#fafafa]">&gt; Create a Business OS for Desert Cool HVAC, a</span><br />
-          <span className="text-[#fafafa]">&nbsp;&nbsp;residential HVAC company in Phoenix, AZ.</span><br />
-          <span className="text-[#fafafa]">&nbsp;&nbsp;Phone: (602) 555-0188.</span><br /><br />
-          <span className="text-[#1FAE85]">✅ Workspace created!</span><br />
-          <span className="text-[#a1a1aa]">🌐 Landing page: <span className="text-[#1FAE85]">desert-cool-hvac.app.seldonframe.com</span></span><br />
-          <span className="text-[#a1a1aa]">📅 Booking: <span className="text-[#1FAE85]">desert-cool-hvac.app.seldonframe.com/book</span></span><br />
-          <span className="text-[#a1a1aa]">📝 Intake: <span className="text-[#1FAE85]">desert-cool-hvac.app.seldonframe.com/intake</span></span><br />
-          <span className="text-[#a1a1aa]">⚡ Admin: <span className="text-[#1FAE85]">app.seldonframe.com/admin/abc123?token=wst_...</span></span>
-        </div>
-      </motion.div>
+      <AgentEvalCard />
     </section>
   );
 };
@@ -443,8 +557,8 @@ const FinalCTA = () => (
       Clone. Scaffold. Deploy. Your first workspace is free. No lock-in — you own the code, the data, the keys.
     </p>
     <div className="flex justify-center gap-3 flex-wrap">
-      <a href="/docs/quickstart" className={`${PRIMARY_CTA_CLS} hover:-translate-y-[1px] px-[26px] py-3 text-[14px]`}>
-        Quick start &rarr;
+      <a href="/signup" className={`${PRIMARY_CTA_CLS} hover:-translate-y-[1px] px-[26px] py-3 text-[14px]`}>
+        Start for free &rarr;
       </a>
       <a href="/docs" className={`${OUTLINE_CTA_CLS} px-[26px] py-3 text-[14px]`}>
         Read the docs
