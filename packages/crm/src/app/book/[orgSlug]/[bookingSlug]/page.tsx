@@ -82,8 +82,18 @@ export default async function PublicBookingPage({
   // ship; for now React is the public face.
   void bookings;
 
+  // v1.36.3 — force light mode on customer-facing booking pages.
+  // The default workspace theme.mode is "dark" (which is fine for
+  // operator dashboards), but customer-facing booking pages should
+  // be light by industry convention (Cal.com, Calendly, every
+  // booking SaaS). Operators' brand color (primaryColor) still
+  // cascades — we only override the mode. If a workspace explicitly
+  // wants a dark booking page we'll add an opt-in toggle later;
+  // light is the right default for the 95% case.
+  const bookingTheme = { ...theme, mode: "light" as const };
+
   return (
-    <PublicThemeProvider theme={theme}>
+    <PublicThemeProvider theme={bookingTheme}>
       <PublicBookingForm
         orgSlug={orgSlug}
         bookingSlug={bookingSlug}
