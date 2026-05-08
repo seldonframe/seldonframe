@@ -2,6 +2,7 @@ import { requireAuth } from "@/lib/auth/helpers";
 import { getOrgId } from "@/lib/auth/helpers";
 import { isAdminTokenUserId } from "@/lib/auth/admin-token";
 import { isOperatorPortalUserId } from "@/lib/auth/operator-portal-context";
+import { isSuperAdminUser } from "@/lib/auth/super-admin";
 import { getEffectiveBrandingForWorkspace } from "@/lib/partner-agencies/branding";
 import { SoulProvider } from "@/components/soul/soul-provider";
 import { getSoul } from "@/lib/soul/server";
@@ -60,6 +61,13 @@ export default async function DashboardLayout({
   // not personal billing.
   const isOperatorSession = isOperatorPortalUserId(user?.id);
   const skipUserLookup = isAdminTokenSession || isOperatorSession;
+  // v1.35.6 — surface a "SF Admin" sidebar entry to platform admins
+  // (anyone whose email is in SF_SUPERADMIN_EMAILS) so they can hop
+  // from the operator dashboard to /super-admin without typing the
+  // URL. Operator portal sessions never get this — they're not on
+  // the SF team regardless of email.
+  const isSuperAdmin =
+    !isOperatorSession && (await isSuperAdminUser(user?.email));
   const [dbUserForPlan] = user?.id && !skipUserLookup
     ? await db.select({ planId: sql<string | null>`plan_id` }).from(users).where(eq(users.id, user.id)).limit(1)
     : [null];
@@ -198,6 +206,7 @@ export default async function DashboardLayout({
                   ? effectiveBranding.brand_name
                   : null
               }
+              isSuperAdmin={isSuperAdmin}
             />
             <div className="min-h-screen min-w-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
               <DemoBanner />

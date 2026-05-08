@@ -55,6 +55,11 @@ export function Sidebar(props: {
   /** v1.25.1 — agency name when the workspace is under an active
    *  partner agency. Surfaced as "<workspace> on <agency>" subtitle. */
   agencyBrandName?: string | null;
+  /** v1.35.6 — true when the signed-in user's email is in
+   *  SF_SUPERADMIN_EMAILS. Surfaces an "SF Admin" entry in the
+   *  SYSTEM nav section so platform admins can switch from the
+   *  operator dashboard to /super-admin without typing the URL. */
+  isSuperAdmin?: boolean;
 }) {
   const {
     hiddenBlocks = [],
@@ -67,6 +72,7 @@ export function Sidebar(props: {
     avatarFallback,
     isOperatorSession = false,
     agencyBrandName = null,
+    isSuperAdmin = false,
   } = props;
   const labels = useLabels();
   const pathname = usePathname();
@@ -140,6 +146,19 @@ export function Sidebar(props: {
               external: true,
             },
             { href: "/settings", label: "Settings", icon: "Settings" },
+            // v1.35.6 — SF Admin entry, only rendered for super-admins.
+            // Surfaces the platform-admin dashboard from inside the
+            // operator chrome so SF team members can switch surfaces
+            // without typing the URL.
+            ...(isSuperAdmin
+              ? [
+                  {
+                    href: "/super-admin",
+                    label: "SF Admin",
+                    icon: "Shield",
+                  },
+                ]
+              : []),
           ]),
         },
       ].filter((group) => group.items.length > 0);
