@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { Stagger } from "@/components/motion";
 import type { FeaturesSectionContent } from "./types";
 
 export function FeaturesSection({ headline, features, image }: FeaturesSectionContent) {
@@ -7,13 +8,15 @@ export function FeaturesSection({ headline, features, image }: FeaturesSectionCo
       <div className="mx-auto grid w-full max-w-6xl gap-8 md:grid-cols-[1.1fr,0.9fr] md:items-center">
         <div>
           <h2 className="text-3xl font-semibold text-foreground md:text-4xl">{headline}</h2>
-          <div className="mt-6 flex flex-wrap gap-2.5">
+          {/* v1.33.2 — Stagger pops each feature pill in. Tight childDelay
+              since there can be many — keeps the reveal under ~1s. */}
+          <Stagger className="mt-6 flex flex-wrap gap-2.5" childDelay={0.04} distance={6}>
             {features.map((feature, index) => (
               <span key={`${feature}-${index}`} className="rounded-full border border-border bg-muted/45 px-3.5 py-1.5 text-sm font-medium text-foreground">
                 {feature}
               </span>
             ))}
-          </div>
+          </Stagger>
         </div>
         <div className="rounded-xl border bg-card p-3 md:p-4">
           {image ? (

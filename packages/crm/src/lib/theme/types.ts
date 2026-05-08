@@ -1,3 +1,29 @@
+// v1.34.0 — Motion preset declares the intensity of motion across
+// the user's published surfaces.
+//   "minimal":   no motion — accessibility-first, prefers-reduced-motion.
+//   "subtle":    fade-up reveals only (the v1.33.0 default behavior).
+//   "balanced":  reveals + stagger + hover-lift (the v1.33.2 default,
+//                what every workspace now ships with).
+//   "editorial": full effects — counters, magnetic CTAs, text-reveal.
+//
+// Today, "balanced" is what every workspace gets at the renderer level
+// (sections wrap their grids in <Stagger>, CTAs in <HoverLift>, pages
+// in <RevealOnScroll>). The preset field stores the OPERATOR's intent
+// so that:
+//   1. Future renderers can gate primitives on the preset (e.g.
+//      `minimal` short-circuits all wrapping).
+//   2. Claude Code reads the preset via get_workspace_state and uses
+//      it as a hint when generating new content (e.g. avoids adding
+//      heavy animations to a workspace that picked "minimal").
+//   3. apply_motion_preset MCP tool lets operators set their intent
+//      via natural language: "make my pages feel more premium" →
+//      Claude Code calls apply_motion_preset({ preset: "editorial" }).
+//
+// Per the antifragile pattern: storing the intent matters more than
+// enforcing it everywhere on day one. Renderers progressively learn
+// to respect it; Claude Code already can.
+export type MotionPreset = "minimal" | "subtle" | "balanced" | "editorial";
+
 export interface OrgTheme {
   primaryColor: string;
   accentColor: string;
@@ -5,6 +31,8 @@ export interface OrgTheme {
   mode: "light" | "dark";
   borderRadius: "sharp" | "rounded" | "pill";
   logoUrl: string | null;
+  /** v1.34.0 — Operator's chosen motion intensity. Default "balanced". */
+  motionPreset?: MotionPreset;
 }
 
 export const DEFAULT_ORG_THEME: OrgTheme = {
@@ -14,4 +42,5 @@ export const DEFAULT_ORG_THEME: OrgTheme = {
   mode: "dark",
   borderRadius: "rounded",
   logoUrl: null,
+  motionPreset: "balanced",
 };

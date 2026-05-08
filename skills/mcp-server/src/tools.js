@@ -601,6 +601,18 @@ export const TOOLS = [
           ? `  • Welcome email sent, onboarding started`
           : `  • Welcome email NOT yet sent (rerun finalize_workspace to retry)`
       );
+      // v1.34.0 — Brief, optional next-step menu surfaced AFTER the
+      // operator's site is live. We don't lecture; we just list what's
+      // available. Claude Code reads this and decides whether to mention
+      // any of it based on the conversation vibe (e.g. user says
+      // "perfect, ship it" → skip; user says "can it look more
+      // impressive?" → call apply_motion_preset).
+      lines.push("");
+      lines.push("Optional upgrades (when you're ready):");
+      lines.push(`  • Tune motion: apply_motion_preset({ preset: "subtle" | "balanced" | "editorial" | "minimal" })`);
+      lines.push(`  • Apply your brand kit: apply_design_md({ design_md_content }) if you have a DESIGN.md`);
+      lines.push(`  • Import a Claude Design handoff: import_claude_design_handoff({ bundle })`);
+      lines.push(`  • Add real content: describe your services, pricing, FAQs in plain English`);
       const summary = lines.join("\n");
 
       return {
@@ -622,6 +634,30 @@ export const TOOLS = [
         lead_error: leadError,
         personality: personalityLabel,
         pipeline_stages: pipelineStages.map((s) => s?.name).filter(Boolean),
+        // v1.34.0 — Structured options Claude Code can reason about
+        // without parsing the human-facing summary string.
+        next_steps_available: [
+          {
+            action: "apply_motion_preset",
+            when: "operator says 'make it feel more premium', 'tone down animation', etc.",
+            example: 'apply_motion_preset({ preset: "editorial" })',
+          },
+          {
+            action: "apply_design_md",
+            when: "operator has a DESIGN.md file with their brand tokens",
+            example: "apply_design_md({ design_md_content: <file content> })",
+          },
+          {
+            action: "import_claude_design_handoff",
+            when: "operator just exported components from Claude Design",
+            example: "import_claude_design_handoff({ bundle: <bundle JSON> })",
+          },
+          {
+            action: "update_landing_content / configure_booking / customize_intake_form",
+            when: "operator wants to update specific page content, prices, services",
+            example: "(see get_workspace_state for the full surface map)",
+          },
+        ],
       };
     },
   },
@@ -841,6 +877,58 @@ export const TOOLS = [
       return api("POST", "/theme/apply-design-md", {
         body: {
           design_md_content: a.design_md_content,
+          workspace_id: ws,
+        },
+        workspace_id: ws,
+      });
+    },
+  },
+  // v1.34.0 — Natural-language motion intensity control.
+  //
+  // Sets the workspace's motion preset. Defaults: every new workspace
+  // ships at "balanced" (sections fade up, grids stagger, CTAs lift on
+  // hover). Operators with strong opinions tune up or down via a single
+  // natural-language prompt: "make my pages feel more premium" → editorial;
+  // "respect prefers-reduced-motion across my site" → minimal.
+  //
+  // PRESETS:
+  //   "minimal":   no motion. Accessibility-first.
+  //   "subtle":    fade-up reveals only. Quiet, professional.
+  //   "balanced":  reveals + stagger + hover-lift. The default.
+  //   "editorial": full effects — counters, magnetic CTAs, text-reveal.
+  //
+  // The preset is stored on OrgTheme.motionPreset. Renderers progressively
+  // gate primitives on it; today the "balanced" set is applied universally
+  // and the preset is read by Claude Code as a hint when generating new
+  // content (e.g. don't add Counter to a workspace that picked "subtle").
+  //
+  // USE-WHEN the operator says: "make my site feel more premium",
+  // "tone down the animation", "make it less flashy", "I want my pages
+  // to feel editorial", "respect reduced motion", "no animation please",
+  // or directly references one of the preset names.
+  {
+    name: "apply_motion_preset",
+    description:
+      "Set the workspace's motion intensity preset. Stored on OrgTheme.motionPreset and read by the renderer + Claude Code as a hint for content generation. Presets: 'minimal' (no motion, accessibility-first), 'subtle' (fade-up reveals only), 'balanced' (reveals + stagger + hover-lift — the default), 'editorial' (full effects: counters, magnetic CTAs, text-reveal). " +
+      "USE-WHEN the operator says: 'make my pages feel more premium', 'tone down the animation', 'I want it editorial', 'respect reduced motion', 'no animation please', or directly references a preset name. " +
+      "Example: apply_motion_preset({ preset: 'editorial' })",
+    inputSchema: obj(
+      {
+        preset: {
+          type: "string",
+          enum: ["minimal", "subtle", "balanced", "editorial"],
+          description:
+            "The motion intensity preset to apply. 'minimal'=no motion (accessibility-first). 'subtle'=fade-up reveals only. 'balanced'=reveals + stagger + hover-lift (default). 'editorial'=full effects (counters, magnetic CTAs, text-reveal).",
+        },
+        workspace_id: str("Optional workspace override."),
+      },
+      ["preset"]
+    ),
+    handler: async (a) => {
+      const ws = wsOrDefault(a.workspace_id);
+      return api("POST", "/theme/motion-preset", {
+        body: {
+          preset: a.preset,
           workspace_id: ws,
         },
         workspace_id: ws,

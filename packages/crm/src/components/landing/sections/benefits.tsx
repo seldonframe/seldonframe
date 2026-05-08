@@ -1,5 +1,6 @@
 import { CircleCheckBig, Rocket, ShieldCheck, Sparkles, Star } from "lucide-react";
 import type { ComponentType } from "react";
+import { Stagger } from "@/components/motion";
 import type { BenefitsSectionContent } from "./types";
 
 const iconByName: Record<string, ComponentType<{ className?: string }>> = {
@@ -15,7 +16,9 @@ export function BenefitsSection({ headline, benefits }: BenefitsSectionContent) 
     <section className="px-5 py-24">
       <div className="mx-auto w-full max-w-6xl space-y-10">
         <h2 className="text-center text-3xl font-semibold text-foreground md:text-4xl">{headline}</h2>
-        <div className="grid gap-4 md:grid-cols-3">
+        {/* v1.33.2 — Stagger fades each benefit card in sequentially as
+            the grid scrolls into view. Subtle, premium feel. */}
+        <Stagger className="grid gap-4 md:grid-cols-3" childDelay={0.08}>
           {benefits.map((benefit, index) => (
             <article key={`${benefit.title}-${index}`} className="rounded-xl border bg-card p-6 md:p-7">
               <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-muted/50 text-primary">
@@ -28,7 +31,7 @@ export function BenefitsSection({ headline, benefits }: BenefitsSectionContent) 
               <p className="mt-2 text-base text-muted-foreground">{benefit.description}</p>
             </article>
           ))}
-        </div>
+        </Stagger>
       </div>
     </section>
   );

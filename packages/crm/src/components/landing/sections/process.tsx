@@ -1,3 +1,4 @@
+import { Stagger } from "@/components/motion";
 import type { ProcessSectionContent } from "./types";
 
 export function ProcessSection({ headline, steps }: ProcessSectionContent) {
@@ -5,7 +6,10 @@ export function ProcessSection({ headline, steps }: ProcessSectionContent) {
     <section className="bg-muted/20 px-5 py-24">
       <div className="mx-auto w-full max-w-6xl space-y-10">
         <h2 className="text-center text-3xl font-semibold text-foreground md:text-4xl">{headline}</h2>
-        <div className="grid gap-4 md:grid-cols-3">
+        {/* v1.33.2 — Steps reveal in order (1 → 2 → 3 → ...) which
+            reinforces the sequential reading. Slightly slower childDelay
+            so each step lands clearly. */}
+        <Stagger className="grid gap-4 md:grid-cols-3" childDelay={0.12}>
           {steps.map((step, index) => (
             <div key={`${step.title}-${index}`} className="relative">
               <article className="rounded-xl border bg-card p-6 text-center md:p-7">
@@ -20,7 +24,7 @@ export function ProcessSection({ headline, steps }: ProcessSectionContent) {
               ) : null}
             </div>
           ))}
-        </div>
+        </Stagger>
       </div>
     </section>
   );
