@@ -33,6 +33,9 @@ import { resolvePersonalityForBusiness } from "@/lib/crm/personality-generator";
 import { classifyBusinessTypeFromSoul } from "@/lib/page-schema/classify-business";
 import { inferTimezone } from "@/lib/workspace/infer-timezone";
 import { trackEvent } from "@/lib/analytics/track";
+// v1.38.0 — Hormozi-quality block content via single Opus call inside the
+// orchestrator. See lib/workspace/enhance-blocks.ts for the design rationale.
+import { enhanceLandingForWorkspace } from "./enhance-blocks";
 import {
   logOutputContractResult,
   validateWorkspaceOutputContract,
@@ -439,7 +442,63 @@ export async function createFullWorkspace(
     }
   }
 
-  // v1.37.0 — Step 12.6: STAMP google_place_url on soul for audit trail.
+  // v1.38.0 — Step 12.7: HORMOZI-QUALITY BLOCK CONTENT via Opus 4.7.
+  //
+  // Pre-1.38.0, the landing page rendered via the BLUEPRINT path
+  // (contentHtml/contentCss seeded from canned personality.content_templates
+  // — generic "Welcome to X" copy, generic personality-bundle hero photo,
+  // no motion). Tirionforge HVAC happened to look great because Claude Code
+  // followed up with the BLOCK-AS-SKILL flow per block; atlantic-plumbing
+  // didn't, so it got the canned output. Same atomic create, very different
+  // visible quality.
+  //
+  // v1.38.0 closes the gap atomically — one server-side Opus call generates
+  // hero + servicesGrid + about + benefits + process + faq + cta using the
+  // SKILL.md files in src/blocks/*/SKILL.md as the fat skill. Output goes
+  // to landingPages.sections (LandingPageSection[]) and contentHtml/Css get
+  // NULLED so the route at /l/[orgSlug]/[slug] falls through to
+  // <PageRenderer sections={...}/>. PageRenderer wraps below-fold sections
+  // in <RevealOnScroll> for scroll-triggered motion. Two birds, one call:
+  // Hormozi copy + per-business Unsplash + motion all light up at once.
+  //
+  // Soft-fail: any error path leaves the workspace in pre-1.38 (canned)
+  // state. Never blocks workspace creation.
+  try {
+    const enhanceResult = await enhanceLandingForWorkspace({
+      orgId: createResult.orgId,
+      business_name: input.business_name,
+      city: input.city,
+      state: stateCode,
+      phone,
+      services: input.services,
+      business_description: input.business_description,
+      review_count: input.review_count,
+      review_rating: input.review_rating,
+      certifications: input.certifications,
+      trust_signals: input.trust_signals,
+      emergency_service: input.emergency_service,
+      same_day: input.same_day,
+      service_area: input.service_area,
+      weekly_hours: input.weekly_hours,
+    });
+    if (!enhanceResult.ok) {
+      console.warn(
+        JSON.stringify({
+          event: "enhance_blocks_skipped",
+          workspace_id: createResult.orgId,
+          reason: enhanceResult.reason,
+          detail: enhanceResult.detail,
+        }),
+      );
+    }
+  } catch (err) {
+    console.warn(
+      `[create-full] enhance-blocks threw for ${createResult.orgId}:`,
+      err instanceof Error ? err.message : String(err),
+    );
+  }
+
+  // v1.37.0 — Step 12.8: STAMP google_place_url on soul for audit trail.
   // Cheap O(1) write; if the operator ever wants to re-sync from the
   // same Maps listing later, the source URL is on record.
   //
