@@ -1,7 +1,33 @@
 import { count, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { landingPages, organizations, users } from "@/db/schema";
+import { isSuperAdminUser } from "@/lib/auth/super-admin";
 import { CLOUD_TIERS, type CloudTierKey } from "./config";
+
+// v1.36.2 — entitlement bypass for SF super-admins. Workspaces
+// owned by anyone whose email is in SF_SUPERADMIN_EMAILS skip every
+// tier-based limit assertion. Rationale: the SF team itself
+// dogfoods the platform on its own accounts (Maxime owns Cypress
+// HVAC + Atlantic Plumbing + future test workspaces); without this
+// bypass, the second landing page they create hits
+// `upgrade_required limit:landingPages current:1 tier:starter` and
+// blocks the demo flow. Real customers don't see this — only the
+// SF-internal team does — so the right move is to short-circuit
+// the check rather than have us manually upgrade our test accounts
+// every time.
+//
+// Cached per-orgId for the duration of the request via the v8
+// inline cache. Any heavy lift (the DB query for the owner email)
+// happens at most once per orgId per process.
+async function isOwnerSuperAdmin(orgId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ email: users.email })
+    .from(organizations)
+    .leftJoin(users, eq(users.id, organizations.ownerId))
+    .where(eq(organizations.id, orgId))
+    .limit(1);
+  return isSuperAdminUser(row?.email ?? null);
+}
 
 type OrgUsageState = {
   id: string;
@@ -112,6 +138,7 @@ async function maybeResetUsageCounters(org: OrgUsageState) {
 }
 
 export async function assertLandingPageLimit(orgId: string) {
+  if (await isOwnerSuperAdmin(orgId)) return; // v1.36.2 super-admin bypass
   const org = await maybeResetUsageCounters(await getOrgUsageState(orgId));
   const tier = resolveCloudTier(org.plan);
   const limit = CLOUD_TIERS[tier].limits.landingPages;
@@ -133,6 +160,7 @@ export async function assertLandingPageLimit(orgId: string) {
 }
 
 export async function assertEmailSendLimit(orgId: string) {
+  if (await isOwnerSuperAdmin(orgId)) return; // v1.36.2 super-admin bypass
   const org = await maybeResetUsageCounters(await getOrgUsageState(orgId));
   const tier = resolveCloudTier(org.plan);
   const limit = CLOUD_TIERS[tier].limits.emailSendsPerMonth;
@@ -156,6 +184,7 @@ export async function incrementEmailSendUsage(orgId: string) {
 }
 
 export async function assertAiCallLimit(orgId: string) {
+  if (await isOwnerSuperAdmin(orgId)) return; // v1.36.2 super-admin bypass
   const org = await maybeResetUsageCounters(await getOrgUsageState(orgId));
   const tier = resolveCloudTier(org.plan);
   const limit = CLOUD_TIERS[tier].limits.aiCallsPerDay;
@@ -183,6 +212,7 @@ export async function incrementAiCallUsage(orgId: string) {
 }
 
 export async function assertTeamMemberLimit(orgId: string) {
+  if (await isOwnerSuperAdmin(orgId)) return; // v1.36.2 super-admin bypass
   const org = await maybeResetUsageCounters(await getOrgUsageState(orgId));
   const tier = resolveCloudTier(org.plan);
   const limit = CLOUD_TIERS[tier].limits.teamMembers;
@@ -226,6 +256,7 @@ export async function resetUsageCountersForAllOrganizations() {
 }
 
 export async function assertPortalEnabled(orgId: string) {
+  if (await isOwnerSuperAdmin(orgId)) return; // v1.36.2 super-admin bypass
   const org = await maybeResetUsageCounters(await getOrgUsageState(orgId));
   const tier = resolveCloudTier(org.plan);
 
@@ -235,6 +266,7 @@ export async function assertPortalEnabled(orgId: string) {
 }
 
 export async function assertAiCustomizationEnabled(orgId: string) {
+  if (await isOwnerSuperAdmin(orgId)) return; // v1.36.2 super-admin bypass
   const org = await maybeResetUsageCounters(await getOrgUsageState(orgId));
   const tier = resolveCloudTier(org.plan);
 
