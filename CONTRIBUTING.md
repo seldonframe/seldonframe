@@ -237,9 +237,15 @@ Visit `http://localhost:3000`.
 
 ## License
 
-SeldonFrame is currently MIT-licensed; we may move to AGPL-3.0 (see [README discussion](README.md#license)) to better protect against closed-source clones while keeping community contributions flowing freely. Either way, your contribution will be under the project's license at the time of merge — we'll always be permissive enough that operators can self-host without legal review.
+SeldonFrame is **AGPL-3.0** licensed (as of v1.34.3 — previously MIT). See [LICENSING.md](LICENSING.md) for the full dual-license model.
 
-If we move to AGPL, the dual-license approach mirrors Postiz: AGPL for self-host, commercial license available via the hosted Agency tier.
+The short version for contributors:
+
+- **Your PRs are accepted under AGPL-3.0.** By opening a PR you agree your contribution is licensed under AGPL-3.0 to the project.
+- **Self-host stays free.** The 99% of operators who use SF as-is aren't affected by AGPL — they're using, not modifying.
+- **Commercial path exists.** Operators who need to embed SF in closed-source products or run forks as proprietary SaaS use the hosted Agency tier or a custom commercial license — we don't extract via the AGPL itself, we extract via the paid path.
+
+If you have a corporate policy against AGPL contributions, open an issue or email hello@seldonframe.com — we can usually work out a contributor agreement.
 
 ---
 

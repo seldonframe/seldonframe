@@ -8,7 +8,7 @@
 
 CRM, public site, AI agents, calendar, intake forms — wired together, branded the same, customizable to your edge cases. Not a chatbot. Not a CRM. The whole stack, built and updated through natural language in your IDE.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-1FAE85.svg)](LICENSE)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-1FAE85.svg)](LICENSE)
 [![npm version](https://img.shields.io/npm/v/@seldonframe/mcp.svg?color=1FAE85)](https://www.npmjs.com/package/@seldonframe/mcp)
 [![GitHub stars](https://img.shields.io/github/stars/seldonframe/seldonframe?color=1FAE85)](https://github.com/seldonframe/seldonframe/stargazers)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2.svg)](https://discord.gg/sbVUu976NW)
@@ -121,7 +121,7 @@ Pricing for paid tiers: $29/mo (Pro) or $99/mo (Agency, white-label). See [seldo
 
 ### Self-host
 
-Run the entire stack on your own infrastructure. MIT-licensed source code; full control over data, deploy target, and customization.
+Run the entire stack on your own infrastructure. AGPL-3.0-licensed source code; full control over data, deploy target, and customization. If you modify SF and run it as a network service, your modifications must be shared under AGPL terms — see [LICENSING.md](LICENSING.md). For closed-source embedding or commercial SaaS without the copyleft requirement, the hosted Agency tier is the commercial license alternative.
 
 ```bash
 git clone https://github.com/seldonframe/seldonframe
@@ -308,7 +308,11 @@ Sponsorship slots open. If your tool fits operators (Twilio, Resend, Stripe, Ant
 
 ## License
 
-[MIT](LICENSE) — for the platform, the MCP server, the docs, the marketing site, the eval suite, the skill packs. The whole monorepo.
+[AGPL-3.0](LICENSE) — for the platform, the MCP server, the docs, the marketing site, the eval suite, the skill packs. The whole monorepo.
+
+If you self-host SeldonFrame, your modifications stay open under AGPL terms. If you want to embed SF in a closed-source product or run a hosted SaaS without the copyleft requirement, our **hosted Agency tier** is the commercial license alternative — see [LICENSING.md](LICENSING.md) for details.
+
+This is the same dual-license model used by [Postiz](https://github.com/gitroomhq/postiz-app), [Mattermost](https://github.com/mattermost/mattermost), and [Plausible](https://github.com/plausible/analytics). It keeps the platform genuinely open, protects against closed-source clones, and creates a real commercial path for operators who need it.
 
 The architectural bets here — thin harness, fat skill, antifragile to LLM improvements — only work if everything's open. So everything is.
 

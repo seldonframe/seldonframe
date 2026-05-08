@@ -1,59 +1,115 @@
 # SeldonFrame Quickstart
 
-## Prerequisites
+Two paths. Same source code. Pick based on whether you want to host the database yourself or let SF host it.
+
+## Hosted (recommended for most operators)
+
+SF runs the Postgres database, the Next.js app, and the durable workflows on its own infrastructure (Vercel + Neon). You bring your LLM key, your customers, and your domain. Free tier; no credit card.
+
+You pick the chrome — same hosted backend either way:
+
+```bash
+# Drive it from Claude Code (or any MCP-aware IDE: Cursor, Windsurf, Devin)
+claude mcp add seldonframe -- npx -y @seldonframe/mcp
+```
+
+Then in Claude Code:
+
+```
+> Build a Business OS for [your business]. [city, state]. [services].
+  [phone, optional email].
+```
+
+Or sign up at the dashboard: [app.seldonframe.com/signup](https://app.seldonframe.com/signup) — same product, same backend, no setup time.
+
+Pricing for paid tiers: $29/mo (Pro) or $99/mo (Agency, white-label). See [seldonframe.com/#pricing](https://seldonframe.com/#pricing).
+
+## Self-host
+
+Run the entire stack on your own infrastructure. AGPL-3.0-licensed source code; full control over data, deploy target, and customization.
+
+### Prerequisites
+
 - Node.js 20+
-- `pnpm` 10+
-- Postgres/Neon connection string
+- pnpm 10+
+- Postgres 15+ (Neon, Supabase, or local)
+- Anthropic or OpenAI API key
 
-## 1) Install
+### Setup
+
 ```bash
+git clone https://github.com/seldonframe/seldonframe.git
+cd seldonframe
 pnpm install
+cp packages/crm/.env.example packages/crm/.env.local
 ```
 
-## 2) Configure environment
-Create `packages/crm/.env.local` with at least:
+Fill in `packages/crm/.env.local`:
 
 ```bash
-DATABASE_URL=...
-AUTH_SECRET=...
-NEXTAUTH_SECRET=...
+DATABASE_URL=postgresql://...
+AUTH_SECRET=...                 # generate with: openssl rand -hex 32
+NEXTAUTH_SECRET=$AUTH_SECRET
 NEXT_PUBLIC_APP_URL=http://localhost:3000
+ENCRYPTION_KEY=...              # generate with: openssl rand -hex 32
+
+# Pick one (operators bring their own; the runtime uses whichever is set)
+ANTHROPIC_API_KEY=sk-ant-...
+OPENAI_API_KEY=sk-...
+
+# Optional integrations (add as needed)
+RESEND_API_KEY=...              # transactional email
+TWILIO_ACCOUNT_SID=...          # SMS
+STRIPE_SECRET_KEY=...           # payments
 ```
 
-Optional for AI and integrations:
+### Database
 
-```bash
-ANTHROPIC_API_KEY=...
-OPENAI_API_KEY=...
-RESEND_API_KEY=...
-POSTHOG_API_KEY=...
-PLAUSIBLE_API_KEY=...
-```
-
-## 3) Run CRM only
-```bash
-pnpm dev:crm
-```
-
-## 4) Database lifecycle
 ```bash
 pnpm db:generate
 pnpm db:migrate
-pnpm db:seed
 ```
 
-## 5) Build checks
+### Run
+
+```bash
+pnpm dev:crm                    # → http://localhost:3000
+```
+
+### Build (for production deploy)
+
 ```bash
 pnpm build
 ```
 
-## Monorepo packages
-- `packages/crm` - main Next.js CRM app
-- `packages/core` - shared core modules (events, telemetry, integrations, virality)
-- `packages/payments` - Stripe/payment utilities
+The CRM app at `packages/crm/` is the deployable. Drop it into Vercel, Railway, Fly.io, or self-host on a VPS.
+
+## Monorepo layout
+
+```
+seldonframe/
+├── packages/
+│   ├── crm/          # Main Next.js app — dashboard + public site + API
+│   └── core/         # Shared utilities, telemetry, integrations
+├── skills/
+│   └── mcp-server/   # @seldonframe/mcp — the MCP server (npm package)
+├── README.md
+├── CONTRIBUTING.md
+└── LICENSING.md
+```
+
+Most contributions land in `packages/crm/src/` (UI, API routes, runtime) or `skills/mcp-server/src/tools.js` (MCP tools). See [CONTRIBUTING.md](CONTRIBUTING.md) for the six contribution recipes with file paths and expected line counts.
 
 ## Development guardrails
-- Every major step must end with a successful `pnpm build`.
-- Keep changes scoped to the requested step.
-- Preserve multi-tenant behavior (`orgId` scoping) in all data flows.
-- Use `@seldonframe/core` shared modules before adding app-local duplicates.
+
+- Build green = ready to commit. `pnpm build` from repo root.
+- Tenant scoping (`workspaceId` / `orgId`) is a hard invariant — never bypass it.
+- Skill packs (markdown) for behavior; MCP tools for capability. Don't mix.
+- For agent-behavior changes, add eval scenarios — the suite must stay ≥87.5% passing.
+
+## Next
+
+- [Connect Claude Code](https://seldonframe.com/docs/getting-started/connect-claude-code) — the MCP setup in detail
+- [Build a chatbot](https://seldonframe.com/docs/agents/build-chatbot) — the most common first ship
+- [Upgrade your UI](https://seldonframe.com/docs/your-business/upgrade-ui) — the four levers for power users
+- [CONTRIBUTING.md](CONTRIBUTING.md) — six concrete contribution recipes
