@@ -1,41 +1,62 @@
 "use client";
 
-// PublicBookingForm — migrated to SLICE 4b patterns.
+// v1.36.1 — booking page complete UI rebuild.
 //
-// Step 1 (pick-time) retains its specialized DayPicker + clickable
-// slot-grid implementation — no SLICE 4b pattern covers interactive
-// slot selection (CustomerDataView is read-only). Only token-level
-// styling is shared (--sf-* tokens unchanged).
+// PRE-v1.36.1: bare card with a left-column DayPicker and right-column
+// time-slot grid. Confirmed at atlantic-plumbing.app.seldonframe.com/book
+// to look unbranded, plain, and broken-feeling next to industry
+// references like Cal.com, Calendly, or hvac.tirionforge.com/book.
 //
-// Step 2 (enter-details) replaced: the hand-rolled <form> + inputs +
-// submit button now delegates to <CustomerActionForm mode="single">.
-// The form reads its fields via Zod-driven inference from
-// BookingDetailsSchema below.
+// v1.36.1 KEEPS the entire state machine + action calls (no
+// behavioral changes) and REPLACES the JSX shell with a richer
+// layout matching the industry-standard "schedule a meeting" pattern:
+//
+//   Top bar (full width):
+//     [Business name]                    [Tap-to-call phone CTA]
+//
+//   Body card (single rounded card, two columns):
+//     LEFT (~38%):
+//       SCHEDULE A SERVICE eyebrow
+//       Appointment title (large)
+//       Appointment description
+//       Meta list: duration · on-site · timezone
+//       BOOKING WITH eyebrow + business name
+//
+//     RIGHT (~62%):
+//       3-step progress (Pick a date · Choose a time · Confirm details)
+//       Calendar (when step 1) / Time slots (when step 2) / Form (when step 3)
+//
+// State machine extends from 2 steps to 3 ("pick-date" instead of
+// pick-time, then "pick-time", then "enter-details") so the time-slot
+// view gets its own dedicated step. Same actions, same handlers,
+// same success screen — just a richer flow.
 //
 // Invariants preserved:
-//   - 2-step flow (pick-time → enter-details → success)
 //   - calls listPublicBookingSlotsAction + submitPublicBookingAction
-//     unchanged
 //   - demo-readonly + demo-blocked-error handling via showDemoToast
 //   - Stripe checkout redirect via response.checkoutUrl
 //   - hidden timezone passed through on submit
-//   - "Change" button to go back to step 1 and clear selectedSlot
 //   - price-aware submit label ($X or "Book")
-//   - success confirmation screen with checkmark + message
+//   - success confirmation screen
 //
-// Migrated in SLICE 4b PR 1 C5 per audit §5.6 + G-4b-2 invariant.
+// New props (v1.36.1):
+//   - businessName: header
+//   - businessPhone: tap-to-call CTA in header (null = no CTA rendered)
+//   - appointmentName: left-sidebar title
+//   - appointmentDescription: left-sidebar paragraph
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { DayPicker } from "react-day-picker";
 import "react-day-picker/style.css";
 import { z } from "zod";
+import { Clock, MapPin, Globe2, Phone, Check } from "lucide-react";
 
 import { listPublicBookingSlotsAction, submitPublicBookingAction } from "@/lib/bookings/actions";
 import { isDemoBlockedError, isDemoReadonlyClient } from "@/lib/demo/client";
 import { useDemoToast } from "@/components/shared/demo-toast-provider";
 import { CustomerActionForm } from "@/components/ui-customer/customer-action-form";
 
-// Schema drives step-2 field generation via <CustomerActionForm>.
+// Schema drives step-3 field generation via <CustomerActionForm>.
 const BookingDetailsSchema = z.object({
   fullName: z.string(),
   email: z.string().email(),
@@ -58,18 +79,32 @@ function formatSelectedDateHeading(date: Date) {
   return date.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
 }
 
+function toTelLink(phone: string): string {
+  return `tel:${phone.replace(/[^\d+]/g, "")}`;
+}
+
+type Step = "pick-date" | "pick-time" | "enter-details";
+
 export function PublicBookingForm({
   orgSlug,
   bookingSlug,
   durationMinutes,
   confirmationFallback,
   price,
+  businessName,
+  businessPhone,
+  appointmentName,
+  appointmentDescription,
 }: {
   orgSlug: string;
   bookingSlug: string;
   durationMinutes: number;
   confirmationFallback: string;
   price: number;
+  businessName: string;
+  businessPhone: string | null;
+  appointmentName: string;
+  appointmentDescription: string;
 }) {
   const [pending, startTransition] = useTransition();
   const [success, setSuccess] = useState(false);
@@ -77,7 +112,7 @@ export function PublicBookingForm({
   const [slots, setSlots] = useState<string[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<string>("");
   const [slotsLoading, setSlotsLoading] = useState(false);
-  const [step, setStep] = useState<"pick-time" | "enter-details">("pick-time");
+  const [step, setStep] = useState<Step>("pick-date");
   const { showDemoToast } = useDemoToast();
 
   const today = useMemo(() => {
@@ -97,7 +132,7 @@ export function PublicBookingForm({
   const timezone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC", []);
 
   useEffect(() => {
-    if (!selectedDateISO) return;
+    if (step !== "pick-time" || !selectedDateISO) return;
 
     let cancelled = false;
     setSlotsLoading(true);
@@ -122,7 +157,7 @@ export function PublicBookingForm({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bookingSlug, orgSlug, selectedDateISO]);
+  }, [bookingSlug, orgSlug, selectedDateISO, step]);
 
   function handleDetailsSubmit(formData: FormData) {
     startTransition(async () => {
@@ -158,17 +193,18 @@ export function PublicBookingForm({
     });
   }
 
+  // ─── Success screen ───────────────────────────────────────────
   if (success) {
     return (
-      <div className="crm-card p-6 text-center">
-        <div className="mx-auto mb-4 inline-flex size-12 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--sf-primary,#21a38b)_15%,transparent)]">
-          <svg className="size-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: "var(--sf-primary, #21a38b)" }}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-          </svg>
+      <main className="min-h-screen flex items-center justify-center px-5 py-12" style={{ backgroundColor: "var(--sf-bg, #fafaf9)" }}>
+        <div className="w-full max-w-md rounded-2xl border bg-card p-8 text-center" style={{ borderColor: "var(--sf-border)" }}>
+          <div className="mx-auto mb-4 inline-flex size-14 items-center justify-center rounded-full" style={{ backgroundColor: "color-mix(in srgb, var(--sf-primary, #21a38b) 15%, transparent)" }}>
+            <Check className="size-7" style={{ color: "var(--sf-primary, #21a38b)" }} />
+          </div>
+          <h1 className="text-2xl font-semibold tracking-tight" style={{ color: "var(--sf-text)" }}>You&apos;re booked.</h1>
+          <p className="mt-2 text-sm leading-relaxed" style={{ color: "var(--sf-muted)" }}>{confirmationMessage}</p>
         </div>
-        <p className="text-lg font-semibold" style={{ color: "var(--sf-text)" }}>You&apos;re booked.</p>
-        <p className="mt-2 text-sm" style={{ color: "var(--sf-muted)" }}>{confirmationMessage}</p>
-      </div>
+      </main>
     );
   }
 
@@ -176,125 +212,360 @@ export function PublicBookingForm({
     ? "Booking…"
     : price > 0
     ? `Pay & book · $${price.toFixed(price % 1 === 0 ? 0 : 2)}`
-    : "Book";
+    : "Confirm booking";
 
   return (
-    <div className="crm-card overflow-hidden p-0">
-      {/* ───── Step 1 — pick a date + time ───── */}
-      {step === "pick-time" ? (
-        <div className="grid gap-0 lg:grid-cols-[auto_1fr]">
-          <div className="border-b p-4 lg:border-b-0 lg:border-r" style={{ borderColor: "var(--sf-border)" }}>
-            <DayPicker
-              mode="single"
-              required
-              selected={selectedDate}
-              onSelect={(day) => {
-                if (day) {
-                  const next = new Date(day);
-                  next.setHours(0, 0, 0, 0);
-                  setSelectedDate(next);
-                }
-              }}
-              disabled={{ before: today, after: horizon }}
-              showOutsideDays
-              classNames={{ today: "rdp-today", selected: "rdp-selected" }}
-              styles={{
-                caption_label: { fontWeight: 600, fontSize: "14px" },
-                day: { fontSize: "13px" },
-              }}
-            />
-          </div>
-
-          <div className="flex min-w-0 flex-col">
-            <div className="border-b p-4" style={{ borderColor: "var(--sf-border)" }}>
-              <p className="text-sm font-semibold" style={{ color: "var(--sf-text)" }}>
-                {formatSelectedDateHeading(selectedDate)}
-              </p>
-              <p className="mt-0.5 text-xs" style={{ color: "var(--sf-muted)" }}>
-                {durationMinutes}-min slot · {timezone}
-              </p>
-            </div>
-
-            <div className="flex-1 p-4">
-              {slotsLoading ? (
-                <p className="text-sm" style={{ color: "var(--sf-muted)" }}>Loading available times…</p>
-              ) : slots.length === 0 ? (
-                <div className="flex h-full flex-col items-center justify-center rounded-lg border border-dashed py-8 text-center" style={{ borderColor: "var(--sf-border)" }}>
-                  <p className="text-sm font-medium" style={{ color: "var(--sf-text)" }}>No times available.</p>
-                  <p className="mt-1 text-xs" style={{ color: "var(--sf-muted)" }}>Try another day.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {slots.map((slot) => {
-                    const isSelected = slot === selectedSlot;
-                    return (
-                      <button
-                        key={slot}
-                        type="button"
-                        className="h-10 rounded-lg border text-sm font-medium transition-all"
-                        style={{
-                          borderColor: isSelected ? "var(--sf-primary, #21a38b)" : "var(--sf-border)",
-                          backgroundColor: isSelected
-                            ? "color-mix(in srgb, var(--sf-primary, #21a38b) 12%, transparent)"
-                            : "transparent",
-                          color: isSelected ? "var(--sf-primary, #21a38b)" : "var(--sf-text)",
-                        }}
-                        onClick={() => {
-                          setSelectedSlot(slot);
-                          setStep("enter-details");
-                        }}
-                      >
-                        {toTimeLabel(slot)}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {/* ───── Step 2 — enter details (MIGRATED to <CustomerActionForm>) ───── */}
-      {step === "enter-details" && selectedSlot ? (
-        <div className="flex flex-col gap-4 p-4">
-          {/* Date+time summary + Change button — stays outside CustomerActionForm */}
-          <div
-            className="flex items-center justify-between gap-3 rounded-lg border p-3"
-            style={{
-              borderColor: "var(--sf-border)",
-              backgroundColor: "color-mix(in srgb, var(--sf-primary, #21a38b) 6%, transparent)",
-            }}
-          >
-            <div className="min-w-0">
-              <p className="text-sm font-semibold" style={{ color: "var(--sf-text)" }}>
-                {formatSelectedDateHeading(selectedDate)} · {toTimeLabel(selectedSlot)}
-              </p>
-              <p className="mt-0.5 text-xs" style={{ color: "var(--sf-muted)" }}>
-                {durationMinutes} min · {timezone}
-              </p>
-            </div>
-            <button
-              type="button"
-              className="shrink-0 text-xs font-medium underline underline-offset-2"
-              style={{ color: "var(--sf-muted)" }}
-              onClick={() => {
-                setStep("pick-time");
-                setSelectedSlot("");
+    <main className="min-h-screen px-4 py-6 md:px-8 md:py-10" style={{ backgroundColor: "var(--sf-bg, #fafaf9)" }}>
+      <div className="mx-auto w-full max-w-5xl space-y-6">
+        {/* ───── Top header (business name + phone CTA) ───── */}
+        <header className="flex items-center justify-between gap-4 rounded-2xl border bg-card px-5 py-4 md:px-6" style={{ borderColor: "var(--sf-border)" }}>
+          <h2 className="text-lg md:text-xl font-semibold tracking-tight truncate" style={{ color: "var(--sf-text)" }}>
+            {businessName}
+          </h2>
+          {businessPhone ? (
+            <a
+              href={toTelLink(businessPhone)}
+              className="inline-flex items-center gap-2 rounded-full bg-foreground text-background px-4 py-2 text-sm font-semibold hover:opacity-90 transition-opacity whitespace-nowrap"
+              style={{
+                backgroundColor: "var(--sf-text, #0a0a0a)",
+                color: "var(--sf-bg, #ffffff)",
               }}
             >
-              Change
-            </button>
-          </div>
+              <Phone className="size-3.5" />
+              <span>{businessPhone}</span>
+            </a>
+          ) : null}
+        </header>
 
-          <CustomerActionForm
-            mode="single"
-            schema={BookingDetailsSchema}
-            action={handleDetailsSubmit}
-            submitLabel={submitLabel}
-          />
+        {/* ───── Body: two-column card ───── */}
+        <div className="rounded-2xl border bg-card overflow-hidden" style={{ borderColor: "var(--sf-border)" }}>
+          <div className="grid md:grid-cols-[38%_62%]">
+            {/* LEFT — meeting / appointment summary */}
+            <aside className="border-b md:border-b-0 md:border-r p-6 md:p-8 space-y-6" style={{ borderColor: "var(--sf-border)" }}>
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.12em] font-semibold mb-2.5" style={{ color: "var(--sf-primary, #21a38b)" }}>
+                  Schedule a service
+                </p>
+                <h1 className="text-3xl md:text-[2.25rem] font-semibold tracking-tight leading-[1.1]" style={{ color: "var(--sf-text)" }}>
+                  {appointmentName}
+                </h1>
+                {appointmentDescription ? (
+                  <p className="mt-4 text-sm leading-relaxed" style={{ color: "var(--sf-muted)" }}>
+                    {appointmentDescription}
+                  </p>
+                ) : null}
+              </div>
+
+              <ul className="space-y-3 pt-2 border-t" style={{ borderColor: "var(--sf-border)" }}>
+                <MetaRow icon={<Clock className="size-4" />} label={`${durationMinutes} minutes`} />
+                <MetaRow icon={<MapPin className="size-4" />} label="On-site at your location" />
+                <MetaRow
+                  icon={<Globe2 className="size-4" />}
+                  eyebrow="Timezone"
+                  label={timezone}
+                />
+              </ul>
+
+              <div className="pt-4 border-t" style={{ borderColor: "var(--sf-border)" }}>
+                <p className="text-[10px] uppercase tracking-[0.12em] font-semibold mb-1" style={{ color: "var(--sf-muted)" }}>
+                  Booking with
+                </p>
+                <p className="text-sm font-medium" style={{ color: "var(--sf-text)" }}>{businessName}</p>
+              </div>
+            </aside>
+
+            {/* RIGHT — pick-date / pick-time / enter-details */}
+            <section className="p-6 md:p-8 space-y-6 min-w-0">
+              <StepIndicator
+                steps={[
+                  { id: "pick-date", label: "Pick a date" },
+                  { id: "pick-time", label: "Choose a time" },
+                  { id: "enter-details", label: "Confirm details" },
+                ]}
+                active={step}
+                onClick={(target) => {
+                  // Only allow going BACK via clicking earlier steps
+                  if (target === "pick-date") {
+                    setSelectedSlot("");
+                    setStep("pick-date");
+                  } else if (target === "pick-time" && step === "enter-details") {
+                    setSelectedSlot("");
+                    setStep("pick-time");
+                  }
+                }}
+              />
+
+              {/* Step 1 — pick a date */}
+              {step === "pick-date" ? (
+                <div className="rdp-wrapper">
+                  <DayPicker
+                    mode="single"
+                    required
+                    selected={selectedDate}
+                    onSelect={(day) => {
+                      if (day) {
+                        const next = new Date(day);
+                        next.setHours(0, 0, 0, 0);
+                        setSelectedDate(next);
+                        setStep("pick-time");
+                      }
+                    }}
+                    disabled={{ before: today, after: horizon }}
+                    showOutsideDays
+                  />
+                </div>
+              ) : null}
+
+              {/* Step 2 — pick a time */}
+              {step === "pick-time" ? (
+                <div className="space-y-5">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <div>
+                      <p className="text-base font-semibold" style={{ color: "var(--sf-text)" }}>
+                        {formatSelectedDateHeading(selectedDate)}
+                      </p>
+                      <p className="mt-0.5 text-xs" style={{ color: "var(--sf-muted)" }}>
+                        {durationMinutes}-minute slot · {timezone}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="text-xs font-medium underline underline-offset-2"
+                      style={{ color: "var(--sf-muted)" }}
+                      onClick={() => setStep("pick-date")}
+                    >
+                      Change date
+                    </button>
+                  </div>
+
+                  {slotsLoading ? (
+                    <div className="grid grid-cols-3 gap-2">
+                      {[...Array(6)].map((_, i) => (
+                        <div
+                          key={i}
+                          className="h-12 rounded-lg animate-pulse"
+                          style={{ backgroundColor: "color-mix(in srgb, var(--sf-text, #0a0a0a) 6%, transparent)" }}
+                        />
+                      ))}
+                    </div>
+                  ) : slots.length === 0 ? (
+                    <div className="rounded-xl border border-dashed py-12 text-center" style={{ borderColor: "var(--sf-border)" }}>
+                      <p className="text-sm font-medium" style={{ color: "var(--sf-text)" }}>No times available.</p>
+                      <p className="mt-1 text-xs" style={{ color: "var(--sf-muted)" }}>Try another day.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      {slots.map((slot) => {
+                        const isSelected = slot === selectedSlot;
+                        return (
+                          <button
+                            key={slot}
+                            type="button"
+                            className="h-12 rounded-xl border text-sm font-semibold transition-all hover:-translate-y-[1px]"
+                            style={{
+                              borderColor: isSelected ? "var(--sf-primary, #21a38b)" : "var(--sf-border)",
+                              backgroundColor: isSelected
+                                ? "color-mix(in srgb, var(--sf-primary, #21a38b) 12%, transparent)"
+                                : "var(--sf-card, transparent)",
+                              color: isSelected ? "var(--sf-primary, #21a38b)" : "var(--sf-text)",
+                            }}
+                            onClick={() => {
+                              setSelectedSlot(slot);
+                              setStep("enter-details");
+                            }}
+                          >
+                            {toTimeLabel(slot)}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ) : null}
+
+              {/* Step 3 — enter details */}
+              {step === "enter-details" && selectedSlot ? (
+                <div className="space-y-5">
+                  <div
+                    className="flex items-center justify-between gap-3 rounded-xl border p-4"
+                    style={{
+                      borderColor: "var(--sf-border)",
+                      backgroundColor: "color-mix(in srgb, var(--sf-primary, #21a38b) 6%, transparent)",
+                    }}
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold" style={{ color: "var(--sf-text)" }}>
+                        {formatSelectedDateHeading(selectedDate)} · {toTimeLabel(selectedSlot)}
+                      </p>
+                      <p className="mt-0.5 text-xs" style={{ color: "var(--sf-muted)" }}>
+                        {durationMinutes} min · {timezone}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="shrink-0 text-xs font-medium underline underline-offset-2"
+                      style={{ color: "var(--sf-muted)" }}
+                      onClick={() => {
+                        setStep("pick-time");
+                        setSelectedSlot("");
+                      }}
+                    >
+                      Change
+                    </button>
+                  </div>
+
+                  <CustomerActionForm
+                    mode="single"
+                    schema={BookingDetailsSchema}
+                    action={handleDetailsSubmit}
+                    submitLabel={submitLabel}
+                  />
+                </div>
+              ) : null}
+            </section>
+          </div>
         </div>
-      ) : null}
+      </div>
+
+      {/* DayPicker styling overrides — match the brand and tighten layout.
+          Using a plain dangerouslySetInnerHTML <style> rather than styled-jsx
+          so we don't pull in next/styled-jsx as a dependency. */}
+      <style dangerouslySetInnerHTML={{ __html: dayPickerCss }} />
+    </main>
+  );
+}
+
+const dayPickerCss = `
+.rdp-wrapper .rdp {
+  --rdp-cell-size: 44px;
+  --rdp-accent-color: var(--sf-primary, #21a38b);
+  --rdp-background-color: color-mix(in srgb, var(--sf-primary, #21a38b) 12%, transparent);
+  --rdp-accent-color-dark: var(--sf-primary, #21a38b);
+  --rdp-background-color-dark: color-mix(in srgb, var(--sf-primary, #21a38b) 24%, transparent);
+  --rdp-outline: 2px solid var(--sf-primary, #21a38b);
+  --rdp-outline-selected: 2px solid var(--sf-primary, #21a38b);
+  margin: 0;
+}
+.rdp-wrapper .rdp-caption_label {
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--sf-text);
+}
+.rdp-wrapper .rdp-head_cell {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--sf-muted);
+}
+.rdp-wrapper .rdp-day {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--sf-text);
+  border-radius: 10px;
+  transition: all 120ms ease;
+}
+.rdp-wrapper .rdp-day_selected {
+  background-color: var(--sf-primary, #21a38b);
+  color: white;
+  font-weight: 600;
+}
+.rdp-wrapper .rdp-day_today:not(.rdp-day_selected) {
+  color: var(--sf-primary, #21a38b);
+  font-weight: 600;
+}
+.rdp-wrapper .rdp-day_disabled {
+  color: color-mix(in srgb, var(--sf-text, #0a0a0a) 30%, transparent);
+}
+.rdp-wrapper .rdp-day:hover:not(.rdp-day_disabled):not(.rdp-day_selected) {
+  background-color: color-mix(in srgb, var(--sf-primary, #21a38b) 10%, transparent);
+}
+.rdp-wrapper .rdp-nav_button {
+  color: var(--sf-text);
+}
+`;
+
+// ─── Helpers ──────────────────────────────────────────────────────
+
+function MetaRow({
+  icon,
+  label,
+  eyebrow,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  eyebrow?: string;
+}) {
+  return (
+    <li className="flex items-start gap-3 text-sm">
+      <span className="mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: "color-mix(in srgb, var(--sf-primary, #21a38b) 12%, transparent)", color: "var(--sf-primary, #21a38b)" }}>
+        {icon}
+      </span>
+      <span className="min-w-0">
+        {eyebrow ? (
+          <span className="block text-[10px] uppercase tracking-[0.1em] font-semibold mb-0.5" style={{ color: "var(--sf-muted)" }}>
+            {eyebrow}
+          </span>
+        ) : null}
+        <span className="block font-medium" style={{ color: "var(--sf-text)" }}>{label}</span>
+      </span>
+    </li>
+  );
+}
+
+function StepIndicator<T extends string>({
+  steps,
+  active,
+  onClick,
+}: {
+  steps: Array<{ id: T; label: string }>;
+  active: T;
+  onClick: (id: T) => void;
+}) {
+  const activeIdx = steps.findIndex((s) => s.id === active);
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      {steps.map((s, i) => {
+        const isActive = i === activeIdx;
+        const isPast = i < activeIdx;
+        const baseStyles: React.CSSProperties = isActive
+          ? {
+              backgroundColor: "var(--sf-primary, #21a38b)",
+              color: "white",
+            }
+          : isPast
+          ? {
+              backgroundColor: "color-mix(in srgb, var(--sf-primary, #21a38b) 15%, transparent)",
+              color: "var(--sf-primary, #21a38b)",
+              cursor: "pointer",
+            }
+          : {
+              backgroundColor: "color-mix(in srgb, var(--sf-text, #0a0a0a) 6%, transparent)",
+              color: "var(--sf-muted)",
+            };
+        return (
+          <button
+            key={s.id}
+            type="button"
+            disabled={!isPast && !isActive}
+            onClick={() => isPast && onClick(s.id)}
+            className="inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors"
+            style={baseStyles}
+          >
+            <span
+              className="inline-flex size-5 items-center justify-center rounded-full text-[10px] font-bold"
+              style={{
+                backgroundColor: isActive ? "rgba(255,255,255,0.25)" : "transparent",
+                color: isActive ? "white" : "currentColor",
+                border: isActive || isPast ? "none" : "1px solid currentColor",
+              }}
+            >
+              {isPast ? <Check className="size-3" /> : i + 1}
+            </span>
+            <span>{s.label}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
