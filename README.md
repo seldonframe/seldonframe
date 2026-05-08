@@ -95,22 +95,33 @@ You own every layer. SeldonFrame is MIT-licensed; the LLM key is yours; the data
 
 ## Quick start
 
-### Path A — drive it from Claude Code (recommended)
+Two paths. Same source code. Pick based on whether you want to host the database yourself or let SF host it.
+
+### Hosted (recommended for most operators)
+
+SF runs the Postgres database, the Next.js app, and the durable workflows on its own infrastructure (Vercel + Neon). You bring your LLM key, your customers, and your domain. Free tier; no credit card.
+
+You get to pick the **chrome** — SF's hosted backend is identical either way:
 
 ```bash
+# Drive it from Claude Code:
 claude mcp add seldonframe -- npx -y @seldonframe/mcp
 ```
 
-Then, in Claude Code:
+Then in Claude Code:
 
 ```
 > Build a Business OS for [your business]. [city, state]. [services].
   [phone, optional email].
 ```
 
-Claude Code calls `create_full_workspace` (one MCP tool) which scaffolds your CRM, public site, booking system, intake form, and starter chatbot. Walks you through email collection, then mints your admin dashboard URL.
+Or skip the IDE entirely and sign up at the dashboard: [app.seldonframe.com/signup](https://app.seldonframe.com/signup) — free tier, no credit card. Both flows hit the same hosted backend; you can switch between them anytime.
 
-### Path B — self-host
+Pricing for paid tiers: $29/mo (Pro) or $99/mo (Agency, white-label). See [seldonframe.com/#pricing](https://seldonframe.com/#pricing).
+
+### Self-host
+
+Run the entire stack on your own infrastructure. MIT-licensed source code; full control over data, deploy target, and customization.
 
 ```bash
 git clone https://github.com/seldonframe/seldonframe
@@ -121,10 +132,6 @@ pnpm dev      # → http://localhost:3000
 
 Requires: Node 20+, Postgres 15+, an Anthropic or OpenAI API key. See [docs/getting-started/connect-claude-code](https://seldonframe.com/docs/getting-started/connect-claude-code) for the full setup.
 
-### Path C — hosted
-
-Free tier at [app.seldonframe.com/signup](https://app.seldonframe.com/signup). Same product, same source code, no setup time. Pricing: free / $29/mo / $99/mo. See [seldonframe.com/#pricing](https://seldonframe.com/#pricing).
-
 ---
 
 ## What's wired up by default
@@ -133,7 +140,7 @@ Every workspace ships with:
 
 - **CRM** — contacts, deals, custom fields, kanban pipeline, customer portal
 - **Public site** — landing page, services pages, blog (under your subdomain or custom domain)
-- **Booking** — Cal-style scheduling with Google Calendar sync
+- **Booking** — source-of-truth scheduling. Customers book on your branded SF page; the appointment lands in your CRM AND syncs out to your Google Calendar in real time. SF is the authority — Google Calendar is a downstream view.
 - **Intake forms** — multi-step, lead-routing, auto-CRM
 - **AI chatbot** — eval-gated, BYOK, embed-on-any-site
 - **Email + SMS** — Resend (email) + Twilio (SMS), templated, automation-ready
@@ -234,15 +241,27 @@ The architecture lets every AI design tool feel like a first-class extension. We
 
 ## Roadmap
 
-What's next, in priority order:
+The bets we're making, in rough order. Each is contributor-friendly — drop into Discord or open a GitHub Discussion to claim a piece.
 
-- **v1.34.x** — Renderer-level gating on `motionPreset` (`minimal` short-circuits motion; `editorial` adds Counter / MagneticButton / TextReveal)
-- **v1.4** — Voice + SMS transports for chatbots (the same Soul, three channels)
-- **v1.5** — Per-workspace custom block builder (operator-defined blocks, scoped to one tenant)
-- **v1.6** — Skill-pack marketplace (community-contributed skills for vertical-specific behaviors)
-- **v1.7** — Agency mode self-serve (current Agency tier requires manual setup)
+### Soon
 
-Comment on what's missing or vote on the roadmap in [GitHub Discussions](https://github.com/seldonframe/seldonframe/discussions).
+- **Voice + SMS transports** — same Soul, three channels. The chatbot you build today answers the phone tomorrow. Twilio + Vapi/Retell on the voice side; Twilio + WhatsApp Business on messaging. Eval-gated per channel (different scenarios for "phone interruptions" vs "late-night SMS").
+- **Self-improving agents** — runtime telemetry feeds back into skill-pack proposals. After 100 conversations, an agent can say *"I noticed customers ask about X 30 times — here's a draft skill addition. Approve or reject?"* Operator stays in the loop; agent does the work.
+- **Renderer-level motion preset gating** — `minimal` short-circuits motion entirely; `editorial` adds Counter, MagneticButton, TextReveal. The intent is already stored (v1.34.0); wiring is mechanical.
+
+### Mid-term — where the architecture starts to compound
+
+- **Multi-agent orchestration** — agents that hire other agents. Your booking agent calls a fraud-detection agent for high-value bookings. The intake-form agent calls a pricing-quote agent that calls a calendar-availability agent. Each agent has its own Soul, its own eval gate, and its own MCP tool surface. Composing them is one prompt.
+- **Skill-pack marketplace with revenue share** — community contributors publish vertical-specific skill packs ("Ambulance dispatch flow," "Real estate showing scheduling," "Wedding-photography pre-shoot intake"). The marketplace handles discovery, eval verification, and payouts. Contributors earn from operators who deploy their packs. The skill packs are markdown — barrier to entry is *writing*, not engineering.
+- **Vertical templates marketplace** — pre-built Souls for industries beyond the current 6 templates (HVAC, dental, coach, agency, e-commerce, consultant). Community-curated, eval-verified. *"Start a yoga studio"* → applies the yoga-studio Soul, instant Business OS with vertical-tuned chatbot, intake fields, pipeline stages.
+
+### Long-term — the agent era
+
+- **Federated agent network** — agents from different SF workspaces can negotiate. Your booking agent talks to a vendor's quote agent. A real-estate agent talks to a mortgage-lender agent. Agent-to-agent commerce as an emergent capability of the open MCP surface.
+- **Long-running operator agents** — an agent that operates your business for a week and reports back. *"I closed 12 deals, escalated 3, refunded 2, scheduled 47 appointments. Here's the trail."* This is what "AI-native Business OS" looks like at the limit.
+- **Agent fleet operations** — agencies running 100+ workspaces from one console. Bulk skill-pack deployment, fleet-wide eval rollouts, comparative analytics across client agents.
+
+Comment on what's missing or vote on priorities in [GitHub Discussions](https://github.com/seldonframe/seldonframe/discussions). The most interesting issues get labeled `architecture` and `help wanted`.
 
 ---
 
