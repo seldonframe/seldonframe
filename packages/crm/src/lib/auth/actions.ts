@@ -175,21 +175,43 @@ export async function signupAction(_: AuthActionState, formData: FormData): Prom
 // next request resolved as the operator portal user (per v1.25.2's
 // precedence order). Result: user appears stuck in operator-portal mode.
 //
-// signOutAllSessionsAction clears BOTH cookies in one call. Admin tokens
-// don't need clearing — they're stateless server-side credentials, never
-// stored in cookies.
+// v1.27.4 cleared #1 + #2.
+// v1.35.7 — bug fix: when a user had ALSO touched a Claude Code MCP
+// admin-token onboarding flow at any point, the `sf_admin_token`
+// cookie (workspace bearer token, format `wst_*`) survived logout.
+// proxy.ts line 196 treats hasAdminTokenCookie() as "authenticated",
+// so /login → /dashboard redirect kept them stuck. Symptom: clicking
+// "Log out" appears to do nothing — the page bounces back to the
+// dashboard.
+//
+// signOutAllSessionsAction now clears all three cookies in one call:
+// NextAuth session, operator-portal session, and admin-token. The
+// `wst_*` token IS NOT revoked server-side here — it's still valid
+// for MCP callers using it as a Bearer header. We just clear the
+// COOKIE so this browser session stops being "authenticated."
+// Server-side revocation requires a separate flow (delete the
+// api_keys row); not the same operation as sign-out.
+
+const ADMIN_TOKEN_COOKIE_NAME = "sf_admin_token";
 
 export async function signOutAllSessionsAction(): Promise<void> {
-  // Clear operator portal cookie first — it precedes NextAuth in helpers.ts
-  // resolution order, so leaving it would make signOut a no-op visually.
   const cookieStore = await cookies();
-  cookieStore.set(OPERATOR_SESSION_COOKIE, "", {
+
+  const cookieClearOpts = {
     httpOnly: true,
-    sameSite: "lax",
+    sameSite: "lax" as const,
     secure: process.env.NODE_ENV === "production",
     path: "/",
     maxAge: 0,
-  });
+  };
+
+  // Clear operator portal cookie first — it precedes NextAuth in helpers.ts
+  // resolution order, so leaving it would make signOut a no-op visually.
+  cookieStore.set(OPERATOR_SESSION_COOKIE, "", cookieClearOpts);
+
+  // v1.35.7 — also clear the admin-token cookie. proxy.ts treats this as
+  // "authenticated"; without clearing it /login bounces back to /dashboard.
+  cookieStore.set(ADMIN_TOKEN_COOKIE_NAME, "", cookieClearOpts);
 
   // Then clear NextAuth. signOut({ redirect: false }) clears the cookie
   // without redirecting; we control the redirect ourselves so the topbar
@@ -198,7 +220,7 @@ export async function signOutAllSessionsAction(): Promise<void> {
     await signOut({ redirect: false });
   } catch {
     // signOut throws if there's no NextAuth session to clear — that's fine,
-    // we still want to clear the operator cookie above and proceed.
+    // we still want to clear the operator + admin-token cookies above and proceed.
   }
 
   redirect("/login");
