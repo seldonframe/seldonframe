@@ -70,131 +70,299 @@ const Nav = () => (
       {/* Fix (d): /pricing → #pricing anchor on same page */}
       <a href="#pricing" className="hidden md:block text-[14px] text-[#a1a1aa] hover:text-[#fafafa] transition-colors">Pricing</a>
       <a href="/blog" className="hidden md:block text-[14px] text-[#a1a1aa] hover:text-[#fafafa] transition-colors">Blog</a>
-      <a href="/signup" className={`${PRIMARY_CTA_CLS} px-[18px] py-2 text-[13px]`}>
-        Start for free &rarr;
+      <a href="/#install" className={`${PRIMARY_CTA_CLS} px-[18px] py-2 text-[13px]`}>
+        Install the MCP &rarr;
       </a>
     </div>
   </nav>
 );
 
-// v1.31.0 — Animated AgentEvalCard mock. Shows the launch story's
-// actual magic moment: the eval gate flipping each scenario green
-// in sequence, the progress bar filling to 100%, the "Publish
-// unlocked" pill appearing. Pure CSS+SVG — no images, theme-aware,
+// v1.32.0 — Animated BuildAndShowCard. Replaces the v1.31.0
+// AgentEvalCard. Hero animation now shows what customers actually
+// want: a complete website + booking + intake + chatbot getting
+// built from one Claude Code prompt, live, in front of their eyes.
+//
+// Two-pane layout:
+//   LEFT  (38%): Claude Code terminal — user prompt + 4 tool calls
+//                fire sequentially with green status pills, then
+//                "✓ Live at acme-hvac.app.seldonframe.com" appears.
+//   RIGHT (62%): Live website preview — sections appear in sync
+//                with each tool call. Hero → booking calendar →
+//                intake form → chatbot bubble pops in.
+//
+// Total animation ~6 seconds. Pure CSS+SVG — no images, theme-aware,
 // fast, deploys instantly.
-const AgentEvalCard = () => {
-  const scenarios = [
-    "Greeting", "FAQ accuracy", "Booking",
-    "Reschedule", "Refusal", "PII handling",
-    "Escalation", "Tone consistency",
+//
+// Hormozi value equation hit:
+//  - Dream Outcome: complete wired Business OS (visualized).
+//  - Likelihood: shown working in <7 seconds.
+//  - Time Delay: animation IS the proof of "under 5 min."
+//  - Effort: one prompt builds everything.
+const BuildAndShowCard = () => {
+  const tools = [
+    { name: "build_landing_page", delay: 1.5 },
+    { name: "build_booking_page", delay: 2.5 },
+    { name: "build_intake_form", delay: 3.5 },
+    { name: "build_website_chatbot", delay: 4.5 },
   ];
 
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.97, y: 24 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
-      transition={{ delay: 1.0, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-      className="mt-14 mx-auto max-w-[820px] bg-[#0d0d10] border border-white/5 rounded-[14px] overflow-hidden text-left shadow-[0_30px_80px_-30px_rgba(31,174,133,0.25),0_0_0_1px_rgba(255,255,255,0.02)]"
+      transition={{ delay: 0.95, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+      className="mt-14 mx-auto max-w-[1100px] grid md:grid-cols-[40%_60%] gap-3 md:gap-4"
     >
-      {/* Browser chrome */}
-      <div className="flex items-center gap-2 px-[14px] py-[10px] bg-[#161619] border-b border-white/5">
-        <span className="w-[10px] h-[10px] rounded-full bg-[#ff5f57]" />
-        <span className="w-[10px] h-[10px] rounded-full bg-[#ffbd2e]" />
-        <span className="w-[10px] h-[10px] rounded-full bg-[#28c840]" />
-        <div className="flex-1 ml-3 px-3 py-[3px] rounded bg-[#0d0d10] border border-white/5 font-mono text-[11px] text-[#71717a]">
-          app.seldonframe.com/agents/acme-hvac/evals
+      {/* LEFT PANE: Claude Code terminal */}
+      <div className="bg-[#0d0d10] border border-white/5 rounded-[12px] overflow-hidden shadow-[0_30px_80px_-30px_rgba(31,174,133,0.25),0_0_0_1px_rgba(255,255,255,0.02)]">
+        <div className="flex items-center gap-2 px-3 py-2.5 bg-[#161619] border-b border-white/5">
+          <span className="w-[10px] h-[10px] rounded-full bg-[#ff5f57]" />
+          <span className="w-[10px] h-[10px] rounded-full bg-[#ffbd2e]" />
+          <span className="w-[10px] h-[10px] rounded-full bg-[#28c840]" />
+          <span className="ml-2 font-mono text-[11px] text-[#71717a]">claude-code</span>
         </div>
-      </div>
 
-      {/* Agent header */}
-      <div className="px-6 pt-5 pb-4 flex items-center justify-between border-b border-white/5">
-        <div className="flex items-center gap-3">
-          <div className="size-9 rounded-[10px] bg-gradient-to-br from-[#1FAE85] to-[#0e8364] flex items-center justify-center text-[#09090b] text-[15px] font-bold">
-            A
-          </div>
-          <div>
-            <div className="text-[14px] font-semibold text-[#fafafa]">Acme HVAC Chatbot</div>
-            <div className="text-[11px] text-[#71717a] font-mono">v3 · website-chatbot</div>
-          </div>
-        </div>
-        <motion.div
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 2.6, duration: 0.4 }}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#1FAE85]/10 border border-[#1FAE85]/30"
-        >
-          <span className="w-[6px] h-[6px] rounded-full bg-[#1FAE85]" />
-          <span className="text-[11px] font-semibold text-[#1FAE85]">Live</span>
-        </motion.div>
-      </div>
-
-      {/* Eval body */}
-      <div className="p-6">
-        <div className="flex items-center justify-between mb-3">
-          <div className="text-[13px] font-semibold text-[#fafafa]">Eval gate</div>
+        <div className="p-4 font-mono text-[12px] leading-[1.6] min-h-[420px]">
+          {/* User prompt */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: 2.4, duration: 0.3 }}
-            className="text-[12px] font-mono text-[#1FAE85]"
+            transition={{ delay: 0.5, duration: 0.35 }}
+            className="text-[#fafafa] mb-4"
           >
-            8/8 passed
+            <span className="text-[#71717a]">&gt;</span>{" "}
+            Build a website for Acme HVAC.
+            <br />
+            <span className="ml-3.5 text-[#a1a1aa]">Phoenix, AZ. AC repair</span>
+            <br />
+            <span className="ml-3.5 text-[#a1a1aa]">and install. Phone</span>
+            <br />
+            <span className="ml-3.5 text-[#a1a1aa]">(602) 555-0188.</span>
+          </motion.div>
+
+          {/* Tool calls fire sequentially */}
+          <div className="space-y-1.5">
+            {tools.map((tool) => (
+              <motion.div
+                key={tool.name}
+                initial={{ opacity: 0, x: -4 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: tool.delay, duration: 0.3 }}
+                className="flex items-center gap-2"
+              >
+                <motion.span
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ delay: tool.delay + 0.05, duration: 0.25, type: "spring", stiffness: 220 }}
+                  className="text-[#1FAE85]"
+                >
+                  ●
+                </motion.span>
+                <span className="text-[11.5px] text-[#a1a1aa] truncate">{tool.name}</span>
+                <motion.span
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: tool.delay + 0.3, duration: 0.2 }}
+                  className="ml-auto text-[10px] text-[#1FAE85] font-semibold"
+                >
+                  200 ok
+                </motion.span>
+              </motion.div>
+            ))}
+          </div>
+
+          {/* Final live confirmation */}
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 5.4, duration: 0.4 }}
+            className="mt-4 pt-3 border-t border-white/5"
+          >
+            <div className="flex items-start gap-2">
+              <span className="text-[#1FAE85] shrink-0 mt-[1px]">✓</span>
+              <div className="text-[11px]">
+                <div className="text-[#fafafa] font-semibold">Live</div>
+                <div className="text-[#1FAE85] break-all">acme-hvac.app.seldonframe.com</div>
+              </div>
+            </div>
           </motion.div>
         </div>
-
-        {/* Progress bar */}
-        <div className="h-[6px] rounded-full bg-[#1a1a1e] overflow-hidden mb-5">
-          <motion.div
-            initial={{ width: "0%" }}
-            animate={{ width: "100%" }}
-            transition={{ delay: 1.3, duration: 1.6, ease: "easeOut" }}
-            className="h-full bg-gradient-to-r from-[#1FAE85] to-[#24c997]"
-          />
-        </div>
-
-        {/* Scenarios — fill in green sequentially */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {scenarios.map((label, i) => (
-            <motion.div
-              key={label}
-              initial={{ opacity: 0.3 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 1.3 + i * 0.18, duration: 0.3 }}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-[#0a1d18] border border-[#1FAE85]/15"
-            >
-              <motion.span
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ delay: 1.3 + i * 0.18, duration: 0.25, type: "spring", stiffness: 220 }}
-                className="size-3.5 rounded-full bg-[#1FAE85]/20 border border-[#1FAE85] flex items-center justify-center shrink-0"
-              >
-                <svg viewBox="0 0 12 12" className="size-2 text-[#1FAE85]" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M2.5 6.5l2.5 2.5L9.5 4" />
-                </svg>
-              </motion.span>
-              <span className="text-[11.5px] text-[#a1a1aa] truncate">{label}</span>
-            </motion.div>
-          ))}
-        </div>
-
-        {/* Publish unlocked */}
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 2.8, duration: 0.4 }}
-          className="mt-5 flex items-center justify-between p-3 rounded-[10px] bg-[#0a1d18] border border-[#1FAE85]/30"
-        >
-          <div className="flex items-center gap-2">
-            <span className="size-5 rounded-full bg-[#1FAE85] flex items-center justify-center shrink-0">
-              <svg viewBox="0 0 12 12" className="size-3 text-[#09090b]" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M2.5 6.5l2.5 2.5L9.5 4" />
-              </svg>
-            </span>
-            <span className="text-[13px] font-semibold text-[#fafafa]">Publish unlocked</span>
-          </div>
-          <span className="text-[11px] font-mono text-[#71717a]">≥ 87.5% threshold</span>
-        </motion.div>
       </div>
+
+      {/* RIGHT PANE: Live website preview */}
+      <div className="bg-[#0d0d10] border border-white/5 rounded-[12px] overflow-hidden shadow-[0_30px_80px_-30px_rgba(31,174,133,0.18),0_0_0_1px_rgba(255,255,255,0.02)]">
+        {/* Browser chrome */}
+        <div className="flex items-center gap-2 px-3 py-2.5 bg-[#161619] border-b border-white/5">
+          <span className="w-[10px] h-[10px] rounded-full bg-[#ff5f57]" />
+          <span className="w-[10px] h-[10px] rounded-full bg-[#ffbd2e]" />
+          <span className="w-[10px] h-[10px] rounded-full bg-[#28c840]" />
+          <div className="flex-1 ml-2 px-3 py-[3px] rounded bg-[#0d0d10] border border-white/5 font-mono text-[10.5px] text-[#71717a] truncate">
+            acme-hvac.app.seldonframe.com
+          </div>
+        </div>
+
+        {/* Site body */}
+        <div className="relative bg-[#0a0a0a] min-h-[420px]">
+          {/* Empty-state skeleton — fades out once first tool fires */}
+          <motion.div
+            initial={{ opacity: 1 }}
+            animate={{ opacity: 0 }}
+            transition={{ delay: 1.5, duration: 0.4 }}
+            className="absolute inset-0 flex items-center justify-center pointer-events-none"
+          >
+            <div className="text-center">
+              <div className="size-8 mx-auto mb-2 rounded-full border-2 border-white/10 border-t-[#1FAE85] animate-spin" />
+              <div className="text-[10px] text-[#71717a] font-mono">building…</div>
+            </div>
+          </motion.div>
+
+          {/* Site navbar */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 1.5, duration: 0.4 }}
+            className="flex items-center justify-between px-5 py-3 border-b border-white/5"
+          >
+            <div className="flex items-center gap-2">
+              <div className="size-4 rounded bg-[#1FAE85]" />
+              <span className="text-[12px] font-bold text-[#fafafa]">Acme HVAC</span>
+            </div>
+            <span className="text-[10px] text-[#71717a]">Phoenix, AZ · (602) 555-0188</span>
+          </motion.div>
+
+          {/* Hero section */}
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 1.6, duration: 0.5 }}
+            className="px-5 py-5 border-b border-white/5"
+          >
+            <div className="text-[15px] font-bold tracking-tight text-[#fafafa] mb-1">
+              AC repair, fast.
+            </div>
+            <div className="text-[10.5px] text-[#a1a1aa] mb-3 leading-relaxed">
+              Same-day service across Phoenix. Licensed and insured.
+            </div>
+            <div className="h-14 rounded bg-gradient-to-br from-[#1FAE85]/25 via-[#1FAE85]/10 to-[#1FAE85]/5 border border-[#1FAE85]/20 flex items-center px-3">
+              <span className="text-[10px] text-[#a1a1aa]">[ Photo: Acme HVAC technician on a job ]</span>
+            </div>
+          </motion.div>
+
+          {/* Booking section */}
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 2.6, duration: 0.5 }}
+            className="px-5 py-4 border-b border-white/5"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-[10.5px] uppercase tracking-[0.08em] text-[#1FAE85] font-mono font-semibold">
+                Book a service
+              </div>
+              <div className="text-[9px] text-[#71717a]">May 2026</div>
+            </div>
+            <div className="grid grid-cols-7 gap-1">
+              {[...Array(14)].map((_, i) => (
+                <div
+                  key={i}
+                  className={`aspect-square rounded text-[8px] flex items-center justify-center ${
+                    i === 5
+                      ? "bg-[#1FAE85] text-[#09090b] font-bold"
+                      : i === 9 || i === 12
+                      ? "bg-white/5 text-[#fafafa]"
+                      : "bg-white/5 text-[#71717a]"
+                  }`}
+                >
+                  {i + 5}
+                </div>
+              ))}
+            </div>
+          </motion.div>
+
+          {/* Intake form */}
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 3.6, duration: 0.5 }}
+            className="px-5 py-4"
+          >
+            <div className="text-[10.5px] uppercase tracking-[0.08em] text-[#1FAE85] font-mono font-semibold mb-2">
+              Get a free quote
+            </div>
+            <div className="space-y-1.5">
+              <div className="h-7 rounded bg-white/5 border border-white/5 px-2 flex items-center text-[10px] text-[#71717a]">Name</div>
+              <div className="h-7 rounded bg-white/5 border border-white/5 px-2 flex items-center text-[10px] text-[#71717a]">Phone</div>
+              <div className="h-8 rounded bg-[#1FAE85] text-[#09090b] text-[11px] font-bold flex items-center justify-center">
+                Submit
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Chatbot bubble — pops in last */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.4 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 4.6, duration: 0.4, type: "spring", stiffness: 200 }}
+            className="absolute bottom-3 right-3 size-10 rounded-full bg-gradient-to-br from-[#1FAE85] to-[#0e8364] flex items-center justify-center shadow-[0_8px_24px_rgba(31,174,133,0.45)]"
+          >
+            <svg viewBox="0 0 24 24" className="size-5 text-[#09090b]" fill="currentColor">
+              <path d="M12 2C6.48 2 2 6.48 2 12c0 1.82.5 3.53 1.36 5L2 22l5.16-1.35C8.6 21.5 10.25 22 12 22c5.52 0 10-4.48 10-10S17.52 2 12 2z" />
+            </svg>
+          </motion.div>
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
+// v1.32.0 — Inline install command pill. Below the hero CTAs.
+// One-click copy. Shows the exact command operators run in their
+// terminal — Hormozi value equation: low effort, no abstraction.
+const InstallCommandPill = () => {
+  const command = "claude mcp add seldonframe -- npx -y @seldonframe/mcp";
+  const [copied, setCopied] = React.useState(false);
+
+  const onCopy = () => {
+    navigator.clipboard?.writeText(command).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    });
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.85, duration: 0.4 }}
+      className="mt-6 inline-flex items-center gap-2.5 pl-4 pr-2 py-2 rounded-full bg-[#0d0d10] border border-white/10"
+    >
+      <span className="font-mono text-[11px] text-[#71717a]">$</span>
+      <span className="font-mono text-[12px] text-[#fafafa] truncate max-w-[280px] sm:max-w-none">
+        {command}
+      </span>
+      <button
+        type="button"
+        onClick={onCopy}
+        aria-label="Copy install command"
+        className="ml-1 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/5 hover:bg-white/10 border border-white/5 text-[10.5px] font-mono text-[#a1a1aa] hover:text-[#fafafa] transition-colors"
+      >
+        {copied ? (
+          <>
+            <svg viewBox="0 0 12 12" className="size-3 text-[#1FAE85]" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M2.5 6.5l2.5 2.5L9.5 4" />
+            </svg>
+            copied
+          </>
+        ) : (
+          <>
+            <svg viewBox="0 0 24 24" className="size-3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" />
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+            </svg>
+            copy
+          </>
+        )}
+      </button>
     </motion.div>
   );
 };
@@ -203,7 +371,7 @@ const Hero = () => {
   const badges = ["Open Source", "MCP-native", "Claude Code ready"];
 
   return (
-    <section className="relative text-center pt-[72px] pb-[64px] px-5 md:px-12 max-w-[1180px] mx-auto overflow-hidden">
+    <section className="relative text-center pt-[72px] pb-[64px] px-5 md:px-12 max-w-[1200px] mx-auto overflow-hidden">
       {/* Subtle radial glow behind the hero */}
       <div
         aria-hidden
@@ -230,25 +398,31 @@ const Hero = () => {
         ))}
       </div>
 
+      {/* v1.32.0 — Headline rewritten for Hormozi value equation +
+          12-year-old reading level. Drops "Business OS" jargon. Lists
+          what you get (website, CRM, calendar, AI chatbot). States
+          the time (under 5 minutes). States the action (typing). */}
       <motion.h1
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.35, duration: 0.55 }}
-        className="text-[clamp(36px,5.5vw,64px)] font-bold tracking-[-0.04em] leading-[1.05] mb-5 max-w-[840px] mx-auto text-[#fafafa]"
+        className="text-[clamp(36px,5.5vw,64px)] font-bold tracking-[-0.04em] leading-[1.05] mb-5 max-w-[900px] mx-auto text-[#fafafa]"
       >
-        Build a complete AI-native<br />
-        <span className="text-[#1FAE85]">Business OS</span> with natural language
+        Your website, CRM, calendar, and{" "}
+        <span className="text-[#1FAE85]">AI chatbot</span>.<br />
+        Built in under 5 minutes by typing what you want.
       </motion.h1>
 
       <motion.p
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.55, duration: 0.5 }}
-        className="text-[17px] text-[#a1a1aa] max-w-[640px] mx-auto mb-9 leading-[1.65] font-normal"
+        className="text-[17px] text-[#a1a1aa] max-w-[680px] mx-auto mb-9 leading-[1.65] font-normal"
       >
-        CRM, website, AI agents, and automations — all in one workspace,
-        built and updated through natural language with Claude Code.
-        Eval-gated before going live.
+        One sentence in Claude Code. SeldonFrame builds your landing
+        page, booking calendar, intake forms, and CRM — all linked,
+        same brand. Change anything by saying so. No Zapier. No code.
+        No duct tape.
       </motion.p>
 
       <motion.div
@@ -257,15 +431,17 @@ const Hero = () => {
         transition={{ delay: 0.75, duration: 0.5 }}
         className="flex justify-center gap-3 flex-wrap"
       >
-        <a href="/signup" className={`${PRIMARY_CTA_CLS} hover:-translate-y-[1px] px-[28px] py-3 text-[14px]`}>
-          Start for free &rarr;
+        <a href="#install" className={`${PRIMARY_CTA_CLS} hover:-translate-y-[1px] px-[28px] py-3 text-[14px]`}>
+          Install the MCP &rarr;
         </a>
         <a href="/demo" className={`${OUTLINE_CTA_CLS} px-[28px] py-3 text-[14px]`}>
-          Watch the demo &#9654;
+          See a live build &#9654;
         </a>
       </motion.div>
 
-      <AgentEvalCard />
+      <InstallCommandPill />
+
+      <BuildAndShowCard />
     </section>
   );
 };
@@ -318,73 +494,111 @@ const ClaudeCodeMockVisual = () => (
   </div>
 );
 
-// Story 2 visual — runtime regeneration card
-const RuntimeRegenVisual = () => (
+// v1.32.0 — Story 2 visual. Hub-and-spokes diagram: SF logo at center,
+// 4 framework tiles (Website / Calendar / Forms / CRM) on the corners
+// connected by faint teal lines. Visualizes Becker's "wired together
+// frameworks with same branding" insight in one glance.
+const WiredFrameworkVisual = () => {
+  const tiles = [
+    { label: "Website", x: "10%", y: "10%" },
+    { label: "Calendar", x: "70%", y: "10%" },
+    { label: "Forms", x: "10%", y: "70%" },
+    { label: "CRM", x: "70%", y: "70%" },
+  ];
+
+  return (
+    <div className="relative bg-[#0d0d10] border border-white/5 rounded-[14px] overflow-hidden shadow-[0_30px_80px_-30px_rgba(31,174,133,0.18),0_0_0_1px_rgba(255,255,255,0.02)] aspect-[4/3]">
+      {/* Connecting lines (SVG positioned absolutely) */}
+      <svg className="absolute inset-0 w-full h-full" viewBox="0 0 400 300" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="line-gradient" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#1FAE85" stopOpacity="0.5" />
+            <stop offset="100%" stopColor="#1FAE85" stopOpacity="0.1" />
+          </linearGradient>
+        </defs>
+        {/* 4 lines from each corner tile to center */}
+        <line x1="80" y1="60" x2="200" y2="150" stroke="url(#line-gradient)" strokeWidth="1.2" strokeDasharray="3 3" />
+        <line x1="320" y1="60" x2="200" y2="150" stroke="url(#line-gradient)" strokeWidth="1.2" strokeDasharray="3 3" />
+        <line x1="80" y1="240" x2="200" y2="150" stroke="url(#line-gradient)" strokeWidth="1.2" strokeDasharray="3 3" />
+        <line x1="320" y1="240" x2="200" y2="150" stroke="url(#line-gradient)" strokeWidth="1.2" strokeDasharray="3 3" />
+      </svg>
+
+      {/* Center: SF logo + one-workspace label */}
+      <div className="absolute inset-0 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-2 px-4 py-3 rounded-[12px] bg-gradient-to-br from-[#1FAE85]/20 to-transparent border border-[#1FAE85]/30 shadow-[0_0_30px_-5px_rgba(31,174,133,0.5)]">
+          <div className="size-8 rounded-[8px] bg-gradient-to-br from-[#1FAE85] to-[#0e8364] flex items-center justify-center text-[#09090b] text-[14px] font-bold">
+            SF
+          </div>
+          <div className="text-[10px] font-mono text-[#a1a1aa] uppercase tracking-[0.05em]">
+            One workspace
+          </div>
+        </div>
+      </div>
+
+      {/* 4 framework tiles in corners */}
+      {tiles.map((tile) => (
+        <div
+          key={tile.label}
+          className="absolute w-[20%] aspect-square flex flex-col items-center justify-center gap-1 rounded-[10px] bg-[#0a0a0a] border border-white/10"
+          style={{ left: tile.x, top: tile.y }}
+        >
+          <span className="size-1.5 rounded-full bg-[#1FAE85]" />
+          <span className="text-[10px] font-mono text-[#a1a1aa]">{tile.label}</span>
+        </div>
+      ))}
+
+      {/* Bottom caption */}
+      <div className="absolute bottom-3 left-0 right-0 text-center">
+        <span className="text-[10px] font-mono text-[#71717a]">
+          Same database · Same brand · Same admin
+        </span>
+      </div>
+    </div>
+  );
+};
+
+// v1.32.0 — Story 3 visual. Mini "edit by typing" mockup. Shows a
+// follow-up prompt to Claude Code (raise prices, add a service area,
+// tweak a chatbot answer) → 3 small tool calls fire → "✓ Updated."
+// Carries the "edge cases are a feature, not a fight" message.
+const EditAnythingVisual = () => (
   <div className="bg-[#0d0d10] border border-white/5 rounded-[14px] overflow-hidden shadow-[0_30px_80px_-30px_rgba(31,174,133,0.18),0_0_0_1px_rgba(255,255,255,0.02)]">
     <div className="flex items-center gap-2 px-[14px] py-[10px] bg-[#161619] border-b border-white/5">
       <span className="w-[10px] h-[10px] rounded-full bg-[#ff5f57]" />
       <span className="w-[10px] h-[10px] rounded-full bg-[#ffbd2e]" />
       <span className="w-[10px] h-[10px] rounded-full bg-[#28c840]" />
-      <span className="ml-2 font-mono text-[11px] text-[#71717a]">agent runtime · live</span>
+      <span className="ml-2 font-mono text-[11px] text-[#71717a]">claude-code</span>
     </div>
-    <div className="p-5 space-y-3 text-[12px]">
-      <div className="rounded-[8px] border border-amber-500/30 bg-amber-500/5 px-3 py-2">
-        <div className="flex items-center gap-1.5 text-amber-400 font-semibold mb-0.5">
-          <span className="size-1.5 rounded-full bg-amber-400" />
-          critical-fail validator
+    <div className="p-5 font-mono text-[12px] leading-[1.65]">
+      <div className="text-[#fafafa] mb-4">
+        <span className="text-[#71717a]">&gt;</span>{" "}
+        Raise the AC repair price from{" "}
+        <span className="text-[#a1a1aa]">$89 to $99</span>.
+        <br />
+        <span className="ml-3.5 text-[#a1a1aa]">Add &quot;Glendale&quot; to service areas.</span>
+      </div>
+      <div className="space-y-1.5">
+        <div className="flex items-center gap-2 text-[#a1a1aa]">
+          <span className="text-[#1FAE85]">●</span>
+          <span className="text-[11.5px]">update_agent_pricing</span>
+          <span className="ml-auto text-[10px] text-[#1FAE85] font-semibold">200 ok</span>
         </div>
-        <div className="text-[#a1a1aa]">no_state_change_hallucination — agent claimed "rescheduled" with no tool call</div>
-      </div>
-
-      <div className="flex items-center gap-2 text-[#71717a] pl-3">
-        <svg viewBox="0 0 12 12" className="size-3" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M6 2v8M2 6l4 4 4-4" />
-        </svg>
-        <span className="text-[11px]">regenerate with correction prompt</span>
-      </div>
-
-      <div className="rounded-[8px] border border-[#1FAE85]/30 bg-[#1FAE85]/5 px-3 py-2">
-        <div className="flex items-center gap-1.5 text-[#1FAE85] font-semibold mb-0.5">
-          <svg viewBox="0 0 12 12" className="size-2.5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M2.5 6.5l2.5 2.5L9.5 4" />
-          </svg>
-          regenerated · clean
+        <div className="flex items-center gap-2 text-[#a1a1aa]">
+          <span className="text-[#1FAE85]">●</span>
+          <span className="text-[11.5px]">update_landing_page</span>
+          <span className="ml-auto text-[10px] text-[#1FAE85] font-semibold">200 ok</span>
         </div>
-        <div className="text-[#a1a1aa]">"Let me reschedule that for you — calling reschedule_appointment now…"</div>
-      </div>
-    </div>
-  </div>
-);
-
-// Story 3 visual — chatbot bubble on a fake site
-const EmbedBubbleVisual = () => (
-  <div className="relative bg-[#0d0d10] border border-white/5 rounded-[14px] overflow-hidden shadow-[0_30px_80px_-30px_rgba(31,174,133,0.18),0_0_0_1px_rgba(255,255,255,0.02)] aspect-[4/3]">
-    {/* Fake site background */}
-    <div className="absolute inset-0 p-5">
-      <div className="space-y-3">
-        <div className="h-3 w-32 rounded-full bg-white/10" />
-        <div className="h-6 w-3/4 rounded bg-white/10" />
-        <div className="h-2 w-full rounded bg-white/5" />
-        <div className="h-2 w-5/6 rounded bg-white/5" />
-        <div className="h-2 w-2/3 rounded bg-white/5" />
-        <div className="mt-4 grid grid-cols-3 gap-2">
-          <div className="h-12 rounded bg-white/5" />
-          <div className="h-12 rounded bg-white/5" />
-          <div className="h-12 rounded bg-white/5" />
+        <div className="flex items-center gap-2 text-[#a1a1aa]">
+          <span className="text-[#1FAE85]">●</span>
+          <span className="text-[11.5px]">run_agent_evals</span>
+          <span className="ml-auto text-[10px] text-[#1FAE85] font-semibold">8/8 passed</span>
         </div>
       </div>
-    </div>
-
-    {/* Chatbot bubble */}
-    <div className="absolute bottom-4 right-4 size-12 rounded-full bg-gradient-to-br from-[#1FAE85] to-[#0e8364] flex items-center justify-center shadow-[0_8px_24px_rgba(31,174,133,0.4)]">
-      <svg viewBox="0 0 24 24" className="size-6 text-[#09090b]" fill="currentColor">
-        <path d="M12 2C6.48 2 2 6.48 2 12c0 1.82.5 3.53 1.36 5L2 22l5.16-1.35C8.6 21.5 10.25 22 12 22c5.52 0 10-4.48 10-10S17.52 2 12 2z" />
-      </svg>
-    </div>
-
-    {/* Speech bubble */}
-    <div className="absolute bottom-[72px] right-4 max-w-[200px] rounded-[12px] rounded-br-[4px] bg-[#161619] border border-white/10 px-3 py-2 text-[11px] text-[#fafafa] shadow-lg">
-      Hi! Looking to book a service today?
+      <div className="mt-4 pt-3 border-t border-white/5 flex items-center gap-2">
+        <span className="text-[#1FAE85]">✓</span>
+        <span className="text-[11px] text-[#fafafa] font-semibold">Updated</span>
+        <span className="text-[10px] text-[#71717a] font-mono ml-auto">v3 → v4 · live</span>
+      </div>
     </div>
   </div>
 );
@@ -435,82 +649,91 @@ const FeatureStory = ({
   </motion.div>
 );
 
+// v1.32.0 — FeatureStories rewritten. Becker framework insight:
+// customers want frameworks (CRM + landing page + calendar + intake)
+// wired together with one brand, fully customizable by saying what
+// to change, no Zapier breaking. Three stories below frame this:
+//   1. Type, don't click. (Build with Claude Code)
+//   2. Wired. No Zapier. (Frameworks all linked, one brand)
+//   3. Edit anything by saying so. (Customize edge cases)
 const FeatureStories = () => (
   <section className="py-[80px] md:py-[120px] px-5 md:px-12 max-w-[1180px] mx-auto">
     <div className="text-center mb-16 md:mb-20">
       <h2 className="text-[clamp(28px,4vw,44px)] font-bold tracking-[-0.035em] leading-[1.1] mb-4 text-[#fafafa]">
-        What makes SeldonFrame different
+        Why this works when nothing else does
       </h2>
-      <p className="text-[16px] text-[#a1a1aa] max-w-[620px] mx-auto leading-[1.65]">
-        Three things you don't get anywhere else: agents you build through
-        natural language, a runtime that catches its own hallucinations,
-        and a chatbot that drops on any site in one line.
+      <p className="text-[16px] text-[#a1a1aa] max-w-[640px] mx-auto leading-[1.65]">
+        Other tools give you boxes to drag. Other AI builders give you a
+        fragile prompt that breaks the second your business doesn't fit
+        the template. SeldonFrame gives you frameworks — wired, branded,
+        and yours to change.
       </p>
     </div>
 
     <FeatureStory
       index={0}
-      pill="Build with Claude Code"
-      title="Describe what you want. Watch it ship."
-      body="SeldonFrame's MCP exposes 140+ tools for managing your CRM, agents, pages, and automations. Claude Code calls them based on what you describe in plain English. Build a chatbot, change a price, add a contact, run evals, publish — all from one prompt. The launch story isn't a demo, it's the actual flow."
-      ctaLabel="Connect Claude Code"
-      ctaHref="/docs/getting-started/connect-claude-code"
+      pill="Type, don't click"
+      title="One prompt. Five tools built."
+      body="SeldonFrame gives Claude Code 140+ commands for building your business — landing pages, booking, intake forms, CRM, AI agents. Tell it what you want. It builds. Tell it to change something. It changes. No drag-and-drop. No setup wizard. No three-hour onboarding call."
+      ctaLabel="See the install command"
+      ctaHref="#install"
       visual={<ClaudeCodeMockVisual />}
     />
 
     <FeatureStory
       index={1}
-      pill="Eval-gated, regen on fail"
-      title="Agents you can actually trust in production."
-      body="Every agent runs through 8 scenarios — booking, refusal, escalation, PII handling, tone — before publish unlocks at ≥87.5% pass rate. Once live, critical-fail validators keep watching: if the agent ever says 'I rescheduled it' without calling the tool, the runtime regenerates the response on the fly. Customers never see the bad answer."
-      ctaLabel="How the eval gate works"
-      ctaHref="/docs/agents/eval-gate"
+      pill="Wired. No Zapier"
+      title="Your tools share one brain."
+      body="Your landing page knows about your CRM. Your CRM knows about your bookings. Your bookings know about your AI chatbot. One database. One brand. One admin. When something breaks in a Zapier-stitched stack, you find out from a customer. Here, nothing's stitched."
+      ctaLabel="See what's included"
+      ctaHref="/docs/getting-started/what-is-seldonframe"
       reverse
-      visual={<RuntimeRegenVisual />}
+      visual={<WiredFrameworkVisual />}
     />
 
     <FeatureStory
       index={2}
-      pill="Embed anywhere"
-      title="One script tag. Brand-themed. Mobile-friendly."
-      body="Drop your published agent on any site in one line. Pulls workspace brand colors and logo automatically. Use SF-hosted pages and the chatbot is wired with no snippet at all. Conversations log back to your CRM, threaded by contact — ready for SMS and voice when those transports ship."
-      ctaLabel="Embed snippet docs"
-      ctaHref="/docs/agents/embed"
-      visual={<EmbedBubbleVisual />}
+      pill="Edge cases? Say so"
+      title="Change anything by typing the change."
+      body="Raise your prices. Add a new service area. Tweak your chatbot's tone. Swap a booking question. Just say it in Claude Code. SeldonFrame updates everything — site, CRM, agent — and runs safety checks on anything customers will see. Edge cases are a feature, not a fight."
+      ctaLabel="How updates work"
+      ctaHref="/docs/agents/update-agent"
+      visual={<EditAnythingVisual />}
     />
   </section>
 );
 
+// v1.32.0 — HowItWorks rewritten for Becker frameworks language +
+// 12yo reading level + Hormozi value equation. Three concrete steps,
+// each with the actual command/prompt. Step 1 lands at id="install"
+// so the hero CTA "Install the MCP →" scrolls here.
 const HowItWorks = () => {
-  // May 1, 2026 — collapsed to 3 steps. SeldonFrame is MCP-native, not
-  // a CLI tool, so the old four-step "init / scaffold / compose"
-  // sequence misrepresented the actual flow. The real flow is:
-  //   1. Install — one shell command, one time.
-  //   2. Describe — talk to Claude Code in plain English.
-  //   3. Launch — landing/booking/intake/CRM/agents go live automatically.
   const steps = [
     {
-      title: "Install",
-      desc: "One terminal command. SeldonFrame connects to Claude Code via Model Context Protocol — no separate CLI, no config files.",
+      title: "Install in Claude Code",
+      desc: "One command. One time. SeldonFrame plugs into Claude Code through MCP — no extra app to download, no config to fill in.",
       code: "claude mcp add seldonframe -- npx -y @seldonframe/mcp",
     },
     {
-      title: "Describe",
-      desc: "Tell Claude Code about your business in plain English. SeldonFrame extracts the right structure — name, phone, services, testimonials — and seeds your workspace from it.",
-      code: "\"Create a Business OS for Desert Cool HVAC, a residential HVAC company in Phoenix, AZ. Phone: (602) 555-0188.\"",
+      title: "Tell it about your business",
+      desc: "One sentence in Claude Code. Your business name, what you do, your phone, your services. SeldonFrame handles the rest.",
+      code: "> Build a website for Acme HVAC. Phoenix, AZ. AC repair and install. Phone (602) 555-0188.",
     },
     {
-      title: "Launch",
-      desc: "Landing page, booking, intake form, CRM, deal pipeline, and AI agents all deploy automatically. Live at <slug>.app.seldonframe.com in under a minute.",
-      code: "✅ Workspace live: desert-cool-hvac.app.seldonframe.com",
+      title: "Get your wired-up business",
+      desc: "Landing page, booking calendar, intake form, CRM, and an AI chatbot that books appointments — all live, all linked, same brand. Change anything by saying so.",
+      code: "✓ Live at acme-hvac.app.seldonframe.com",
     },
   ];
 
   return (
-    <section className="text-center py-[64px] md:py-[100px] px-5 md:px-12 max-w-[1140px] mx-auto">
-      <h2 className="text-[clamp(26px,3.5vw,38px)] font-bold tracking-[-0.03em] mb-4 text-[#fafafa]">How it works</h2>
-      <p className="text-[16px] text-[#a1a1aa] max-w-[560px] mx-auto mb-12">
-        Three steps. About a minute. A complete Business OS, live in production.
+    <section id="install" className="text-center py-[64px] md:py-[100px] px-5 md:px-12 max-w-[1180px] mx-auto scroll-mt-20">
+      <h2 className="text-[clamp(28px,4vw,44px)] font-bold tracking-[-0.035em] leading-[1.1] mb-4 text-[#fafafa]">
+        Three steps. Under five minutes.
+      </h2>
+      <p className="text-[16px] text-[#a1a1aa] max-w-[600px] mx-auto mb-12 leading-[1.65]">
+        No drag-and-drop. No setup wizards. No "let's hop on a call."
+        Just type, and it builds.
       </p>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
@@ -520,7 +743,7 @@ const HowItWorks = () => {
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: "-100px" }}
-            transition={{ delay: i * 0.2, duration: 0.5 }}
+            transition={{ delay: i * 0.15, duration: 0.5 }}
             className="relative"
           >
             <Card className="bg-[#111113] border-white/5 p-6 md:p-7 text-left rounded-[12px] h-full relative overflow-hidden">
@@ -529,7 +752,7 @@ const HowItWorks = () => {
               </span>
               <h3 className="text-[15px] font-semibold mb-2 text-[#fafafa] relative z-10">{step.title}</h3>
               <p className="text-[13px] text-[#a1a1aa] leading-[1.6] relative z-10">{step.desc}</p>
-              <code className="block mt-3 p-3 bg-[#1a1a1e] rounded-[8px] font-mono text-[11.5px] text-[#1FAE85] overflow-x-auto leading-[1.5] relative z-10">
+              <code className="block mt-3 p-3 bg-[#1a1a1e] rounded-[8px] font-mono text-[11.5px] text-[#1FAE85] overflow-x-auto leading-[1.5] relative z-10 whitespace-pre-wrap break-words">
                 {step.code}
               </code>
             </Card>
@@ -827,15 +1050,22 @@ const Infrastructure = () => {
   );
 };
 
+// v1.32.0 — FinalCTA rewritten for the install-MCP funnel + 12yo
+// language. Drops "Clone. Scaffold. Deploy." which assumed a developer
+// audience; this new copy works for any operator who has Claude Code.
 const FinalCTA = () => (
-  <section className="text-center py-[80px] px-5 md:px-12 border-t border-white/5 max-w-[1140px] mx-auto">
-    <h2 className="text-[clamp(26px,3.5vw,38px)] font-bold tracking-[-0.03em] mb-[14px] text-[#fafafa]">Start building in five minutes</h2>
-    <p className="text-[16px] text-[#a1a1aa] max-w-[500px] mx-auto mb-7">
-      Clone. Scaffold. Deploy. Your first workspace is free. No lock-in — you own the code, the data, the keys.
+  <section className="text-center py-[80px] px-5 md:px-12 border-t border-white/5 max-w-[1180px] mx-auto">
+    <h2 className="text-[clamp(28px,4vw,44px)] font-bold tracking-[-0.035em] leading-[1.1] mb-4 text-[#fafafa]">
+      Stop stitching. Start typing.
+    </h2>
+    <p className="text-[16px] text-[#a1a1aa] max-w-[560px] mx-auto mb-8 leading-[1.65]">
+      Install the MCP. Tell Claude Code about your business. Get a wired-up
+      website, calendar, intake form, CRM, and AI chatbot — in under five
+      minutes. Change anything by saying so.
     </p>
     <div className="flex justify-center gap-3 flex-wrap">
-      <a href="/signup" className={`${PRIMARY_CTA_CLS} hover:-translate-y-[1px] px-[26px] py-3 text-[14px]`}>
-        Start for free &rarr;
+      <a href="#install" className={`${PRIMARY_CTA_CLS} hover:-translate-y-[1px] px-[26px] py-3 text-[14px]`}>
+        Install the MCP &rarr;
       </a>
       <a href="/docs" className={`${OUTLINE_CTA_CLS} px-[26px] py-3 text-[14px]`}>
         Read the docs
