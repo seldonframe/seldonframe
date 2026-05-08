@@ -1,11 +1,17 @@
 "use client";
 
-// v1.30.0 — Docs top header.
+// v1.30.2 — Docs top header.
 //
 // Linear-style: brand on left, theme toggle + Sign up CTA on right.
 // Sticky (stays visible while scrolling long doc pages). Subtle border
 // at bottom — not a heavy shadow.
+//
+// v1.30.2 — replaced "SF" placeholder text logo with the actual
+// SeldonFrame icon used in the dashboard sidebar (/brand/seldonframe-icon.svg).
+// Brand-isolated, never themed — matches the dashboard exactly so
+// docs feel like the same product.
 
+import Image from "next/image";
 import Link from "next/link";
 import { useTheme } from "next-themes";
 import { Moon, Sun, Search } from "lucide-react";
@@ -23,10 +29,18 @@ export function DocsHeader() {
           href="/docs"
           className="flex items-center gap-2.5 font-medium text-sm hover:opacity-80 transition-opacity"
         >
-          <div className="size-7 rounded-md bg-primary text-primary-foreground flex items-center justify-center text-xs font-semibold">
-            SF
+          <div className="flex size-7 items-center justify-center overflow-hidden rounded-md border border-border/80 bg-card/80 shadow-(--shadow-xs)">
+            <Image
+              src="/brand/seldonframe-icon.svg"
+              alt="SeldonFrame"
+              width={18}
+              height={18}
+              priority
+            />
           </div>
-          <span className="text-foreground">Docs</span>
+          <span className="text-foreground">
+            SeldonFrame <span className="text-muted-foreground">Docs</span>
+          </span>
         </Link>
 
         <div className="flex-1 max-w-md mx-auto hidden md:block">

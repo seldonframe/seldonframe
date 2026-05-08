@@ -196,3 +196,118 @@
     border-color: color-mix(in srgb, var(--negative) 20%, transparent);
   }
 }
+
+/* ═══ /docs prose styling (v1.30.2) ═══
+   Article body styles for the docs route. Linear-style: tighter
+   leading, restrained heading scale, comfortable line length. We
+   roll our own instead of @tailwindcss/typography because it's
+   ~30 declarations and we want exact control. */
+
+.docs-prose {
+  color: var(--foreground);
+  font-size: 0.95rem;
+  line-height: 1.75;
+}
+
+.docs-prose > * + * {
+  margin-top: 1rem;
+}
+
+.docs-prose h2 {
+  font-size: 1.5rem;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  font-weight: 600;
+  margin-top: 2.5rem;
+  margin-bottom: 0.75rem;
+  color: var(--foreground);
+  scroll-margin-top: 5rem;
+}
+
+.docs-prose h3 {
+  font-size: 1.125rem;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  font-weight: 600;
+  margin-top: 1.75rem;
+  margin-bottom: 0.5rem;
+  color: var(--foreground);
+}
+
+.docs-prose p {
+  color: color-mix(in srgb, var(--foreground) 85%, transparent);
+}
+
+.docs-prose strong {
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.docs-prose a {
+  color: var(--primary);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  text-decoration-color: color-mix(in srgb, var(--primary) 40%, transparent);
+  transition: text-decoration-color 120ms ease;
+}
+.docs-prose a:hover {
+  text-decoration-color: var(--primary);
+}
+
+.docs-prose ul,
+.docs-prose ol {
+  padding-left: 1.5rem;
+  color: color-mix(in srgb, var(--foreground) 85%, transparent);
+}
+
+.docs-prose ul {
+  list-style-type: disc;
+}
+
+.docs-prose ol {
+  list-style-type: decimal;
+}
+
+.docs-prose li {
+  margin-top: 0.375rem;
+  padding-left: 0.25rem;
+}
+
+.docs-prose li::marker {
+  color: color-mix(in srgb, var(--foreground) 50%, transparent);
+}
+
+.docs-prose code {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 0.85em;
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--muted) 60%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  color: var(--foreground);
+}
+
+.docs-prose pre {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+.docs-prose pre code {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-size: inherit;
+}
+
+.docs-prose em {
+  color: color-mix(in srgb, var(--foreground) 90%, transparent);
+  font-style: italic;
+}
+
+.docs-prose blockquote {
+  border-left: 3px solid var(--border);
+  padding-left: 1rem;
+  margin-left: 0;
+  color: var(--muted-foreground);
+  font-style: italic;
+}
