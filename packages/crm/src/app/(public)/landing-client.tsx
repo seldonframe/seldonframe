@@ -270,95 +270,216 @@ const Hero = () => {
   );
 };
 
-const Personas = () => {
-  const personas = [
-    {
-      icon: "🛠️",
-      color: "rgba(31,174,133,0.1)",
-      title: "Build for yourself",
-      desc: "Solopreneurs, coaches, consultants, micro-SaaS builders. Launch your own AI-native business OS — one workspace, your brand, your agents, your workflows. Stop stitching 6 tools together.",
-    },
-    {
-      icon: "🏢",
-      color: "rgba(232,67,147,0.1)",
-      title: "Build for your clients",
-      desc: "Agencies, freelancers, productized service operators. Deploy a branded Business OS per client in 30 minutes. Charge recurring retainers. Scale to 20+ clients without hiring.",
-    },
-  ];
+// v1.31.1 — "Show, don't tell" feature stories.
+//
+// Replaces the flat 6-up Features grid with 3 detailed feature stories
+// alternating image-left / image-right. Each story has a small CSS+SVG
+// product mockup beside body copy. Linear-style: pick a few features,
+// show them in motion, link to the relevant doc.
 
-  return (
-    <section className="text-center py-[64px] md:py-[100px] px-5 md:px-12 max-w-[1140px] mx-auto">
-      <h2 className="text-[clamp(26px,3.5vw,38px)] font-bold tracking-[-0.03em] mb-11 text-[#fafafa]">Who is SeldonFrame for?</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 max-w-[800px] mx-auto">
-        {personas.map((p, i) => (
-          <motion.div
-            key={p.title}
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-100px" }}
-            transition={{ delay: i * 0.15, duration: 0.5 }}
-          >
-            <Card className="bg-[#111113] border-white/5 hover:border-[#1FAE85] transition-all duration-300 hover:-translate-y-[3px] p-7 md:p-9 text-left rounded-[12px]">
-              <div
-                className="w-11 h-11 mb-[18px] rounded-[8px] flex items-center justify-center text-[20px]"
-                style={{ background: p.color }}
-              >
-                {p.icon}
-              </div>
-              <h3 className="text-[18px] font-semibold tracking-[-0.02em] mb-2 text-[#fafafa]">{p.title}</h3>
-              <p className="text-[14px] text-[#a1a1aa] leading-[1.65]">{p.desc}</p>
-            </Card>
-          </motion.div>
-        ))}
+// Story 1 visual — Claude Code prompt with MCP tool calls
+const ClaudeCodeMockVisual = () => (
+  <div className="relative bg-[#0d0d10] border border-white/5 rounded-[14px] overflow-hidden shadow-[0_30px_80px_-30px_rgba(31,174,133,0.18),0_0_0_1px_rgba(255,255,255,0.02)]">
+    <div className="flex items-center gap-2 px-[14px] py-[10px] bg-[#161619] border-b border-white/5">
+      <span className="w-[10px] h-[10px] rounded-full bg-[#ff5f57]" />
+      <span className="w-[10px] h-[10px] rounded-full bg-[#ffbd2e]" />
+      <span className="w-[10px] h-[10px] rounded-full bg-[#28c840]" />
+      <span className="ml-2 font-mono text-[11px] text-[#71717a]">claude-code</span>
+    </div>
+    <div className="p-5 font-mono text-[12px] leading-[1.65]">
+      <span className="text-[#71717a]">&gt;</span>{" "}
+      <span className="text-[#fafafa]">Build a chatbot for Acme Dental that books cleanings.</span>
+      <div className="mt-3 space-y-1.5">
+        <div className="flex items-center gap-2 text-[#a1a1aa]">
+          <span className="text-[#1FAE85]">●</span>
+          <span>get_workspace_state</span>
+          <span className="ml-auto text-[10px] text-[#1FAE85]">200 ok</span>
+        </div>
+        <div className="flex items-center gap-2 text-[#a1a1aa]">
+          <span className="text-[#1FAE85]">●</span>
+          <span>build_website_chatbot</span>
+          <span className="ml-auto text-[10px] text-[#1FAE85]">200 ok</span>
+        </div>
+        <div className="flex items-center gap-2 text-[#a1a1aa]">
+          <span className="text-[#1FAE85]">●</span>
+          <span>run_agent_evals</span>
+          <span className="ml-auto text-[10px] text-[#1FAE85]">8/8 passed</span>
+        </div>
+        <div className="flex items-center gap-2 text-[#a1a1aa]">
+          <span className="text-[#1FAE85]">●</span>
+          <span>publish_agent</span>
+          <span className="ml-auto text-[10px] text-[#1FAE85]">live</span>
+        </div>
       </div>
-    </section>
-  );
-};
+      <div className="mt-3 text-[#1FAE85]">
+        ✓ Acme Dental Chatbot is live at acme-dental.app.seldonframe.com
+      </div>
+    </div>
+  </div>
+);
 
-const Features = () => {
-  // Fix (e): cost-visibility feature copy reframed.
-  // The marketing claim of "Daily digest: ~$0.05. Heat advisory cascade: ~$0.32"
-  // is unsupported by running code (per SLICE 11 audit §2.10 + close-out
-  // marketing reconciliation). Reframed to "Every LLM call is tracked
-  // and attributed."
-  const features = [
-    { title: "Per-client branding", desc: "Each workspace gets its own brand — colors, copy, domain, customer portal. End-customers see the workspace brand, not yours." },
-    { title: "Agents with memory", desc: "Soul gives agents persistent per-entity memory. Customer preferences, service history, relationship context — remembered across every interaction." },
-    { title: "Closed-loop attribution", desc: "Every workflow run produces a queryable event log. Every agent action attributes to a customer, a workspace, a cost. The system learns from what it does." },
-    { title: "Natural language scaffolding", desc: "Describe a new capability — booking system, intake form, SMS triage flow — and SeldonFrame scaffolds production-ready code. Zero hand-edits required." },
-    { title: "Approval gates", desc: "Agents draft; humans approve. Every automated action can require operator or client approval before executing. Build trust before you build autonomy." },
-    { title: "Cost visibility", desc: "BYO LLM keys. See per-run cost in your dashboard. Every LLM call is tracked and attributed. You see what you spend, where you spend it." },
-  ];
+// Story 2 visual — runtime regeneration card
+const RuntimeRegenVisual = () => (
+  <div className="bg-[#0d0d10] border border-white/5 rounded-[14px] overflow-hidden shadow-[0_30px_80px_-30px_rgba(31,174,133,0.18),0_0_0_1px_rgba(255,255,255,0.02)]">
+    <div className="flex items-center gap-2 px-[14px] py-[10px] bg-[#161619] border-b border-white/5">
+      <span className="w-[10px] h-[10px] rounded-full bg-[#ff5f57]" />
+      <span className="w-[10px] h-[10px] rounded-full bg-[#ffbd2e]" />
+      <span className="w-[10px] h-[10px] rounded-full bg-[#28c840]" />
+      <span className="ml-2 font-mono text-[11px] text-[#71717a]">agent runtime · live</span>
+    </div>
+    <div className="p-5 space-y-3 text-[12px]">
+      <div className="rounded-[8px] border border-amber-500/30 bg-amber-500/5 px-3 py-2">
+        <div className="flex items-center gap-1.5 text-amber-400 font-semibold mb-0.5">
+          <span className="size-1.5 rounded-full bg-amber-400" />
+          critical-fail validator
+        </div>
+        <div className="text-[#a1a1aa]">no_state_change_hallucination — agent claimed "rescheduled" with no tool call</div>
+      </div>
 
-  return (
-    <section className="text-center py-[64px] md:py-[100px] px-5 md:px-12 max-w-[1140px] mx-auto">
-      <h2 className="text-[clamp(26px,3.5vw,38px)] font-bold tracking-[-0.03em] mb-4 text-[#fafafa]">What is SeldonFrame?</h2>
-      <p className="text-[16px] text-[#a1a1aa] max-w-[620px] mx-auto mb-12 leading-[1.7]">
-        A platform with composable primitives that lets you create customized AI-native business operating systems — entirely through natural language from your IDE.
+      <div className="flex items-center gap-2 text-[#71717a] pl-3">
+        <svg viewBox="0 0 12 12" className="size-3" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M6 2v8M2 6l4 4 4-4" />
+        </svg>
+        <span className="text-[11px]">regenerate with correction prompt</span>
+      </div>
+
+      <div className="rounded-[8px] border border-[#1FAE85]/30 bg-[#1FAE85]/5 px-3 py-2">
+        <div className="flex items-center gap-1.5 text-[#1FAE85] font-semibold mb-0.5">
+          <svg viewBox="0 0 12 12" className="size-2.5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M2.5 6.5l2.5 2.5L9.5 4" />
+          </svg>
+          regenerated · clean
+        </div>
+        <div className="text-[#a1a1aa]">"Let me reschedule that for you — calling reschedule_appointment now…"</div>
+      </div>
+    </div>
+  </div>
+);
+
+// Story 3 visual — chatbot bubble on a fake site
+const EmbedBubbleVisual = () => (
+  <div className="relative bg-[#0d0d10] border border-white/5 rounded-[14px] overflow-hidden shadow-[0_30px_80px_-30px_rgba(31,174,133,0.18),0_0_0_1px_rgba(255,255,255,0.02)] aspect-[4/3]">
+    {/* Fake site background */}
+    <div className="absolute inset-0 p-5">
+      <div className="space-y-3">
+        <div className="h-3 w-32 rounded-full bg-white/10" />
+        <div className="h-6 w-3/4 rounded bg-white/10" />
+        <div className="h-2 w-full rounded bg-white/5" />
+        <div className="h-2 w-5/6 rounded bg-white/5" />
+        <div className="h-2 w-2/3 rounded bg-white/5" />
+        <div className="mt-4 grid grid-cols-3 gap-2">
+          <div className="h-12 rounded bg-white/5" />
+          <div className="h-12 rounded bg-white/5" />
+          <div className="h-12 rounded bg-white/5" />
+        </div>
+      </div>
+    </div>
+
+    {/* Chatbot bubble */}
+    <div className="absolute bottom-4 right-4 size-12 rounded-full bg-gradient-to-br from-[#1FAE85] to-[#0e8364] flex items-center justify-center shadow-[0_8px_24px_rgba(31,174,133,0.4)]">
+      <svg viewBox="0 0 24 24" className="size-6 text-[#09090b]" fill="currentColor">
+        <path d="M12 2C6.48 2 2 6.48 2 12c0 1.82.5 3.53 1.36 5L2 22l5.16-1.35C8.6 21.5 10.25 22 12 22c5.52 0 10-4.48 10-10S17.52 2 12 2z" />
+      </svg>
+    </div>
+
+    {/* Speech bubble */}
+    <div className="absolute bottom-[72px] right-4 max-w-[200px] rounded-[12px] rounded-br-[4px] bg-[#161619] border border-white/10 px-3 py-2 text-[11px] text-[#fafafa] shadow-lg">
+      Hi! Looking to book a service today?
+    </div>
+  </div>
+);
+
+const FeatureStory = ({
+  visual,
+  pill,
+  title,
+  body,
+  ctaLabel,
+  ctaHref,
+  reverse,
+  index,
+}: {
+  visual: React.ReactNode;
+  pill: string;
+  title: string;
+  body: string;
+  ctaLabel: string;
+  ctaHref: string;
+  reverse?: boolean;
+  index: number;
+}) => (
+  <motion.div
+    initial={{ opacity: 0, y: 30 }}
+    whileInView={{ opacity: 1, y: 0 }}
+    viewport={{ once: true, margin: "-80px" }}
+    transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+    className={`grid md:grid-cols-2 gap-8 md:gap-14 items-center ${index > 0 ? "mt-20 md:mt-32" : ""}`}
+  >
+    <div className={`order-1 ${reverse ? "md:order-2" : "md:order-1"}`}>
+      <span className="inline-block px-2.5 py-1 rounded-full bg-[#1FAE85]/10 border border-[#1FAE85]/20 text-[#1FAE85] font-mono text-[10.5px] tracking-[0.05em] uppercase mb-4">
+        {pill}
+      </span>
+      <h3 className="text-[clamp(24px,3vw,34px)] font-bold tracking-[-0.025em] leading-[1.1] mb-4 text-[#fafafa]">
+        {title}
+      </h3>
+      <p className="text-[15px] text-[#a1a1aa] leading-[1.7] mb-6">{body}</p>
+      <a
+        href={ctaHref}
+        className="inline-flex items-center gap-1.5 text-[14px] text-[#1FAE85] font-semibold hover:gap-2 transition-all"
+      >
+        {ctaLabel}
+        <span>&rarr;</span>
+      </a>
+    </div>
+    <div className={`order-2 ${reverse ? "md:order-1" : "md:order-2"}`}>{visual}</div>
+  </motion.div>
+);
+
+const FeatureStories = () => (
+  <section className="py-[80px] md:py-[120px] px-5 md:px-12 max-w-[1180px] mx-auto">
+    <div className="text-center mb-16 md:mb-20">
+      <h2 className="text-[clamp(28px,4vw,44px)] font-bold tracking-[-0.035em] leading-[1.1] mb-4 text-[#fafafa]">
+        What makes SeldonFrame different
+      </h2>
+      <p className="text-[16px] text-[#a1a1aa] max-w-[620px] mx-auto leading-[1.65]">
+        Three things you don't get anywhere else: agents you build through
+        natural language, a runtime that catches its own hallucinations,
+        and a chatbot that drops on any site in one line.
       </p>
+    </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {features.map((f, i) => (
-          <motion.div
-            key={f.title}
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-100px" }}
-            transition={{ delay: i * 0.1, duration: 0.5 }}
-          >
-            <Card className="bg-[#111113] border-white/5 p-6 md:p-8 text-left rounded-[12px] h-full">
-              <h3 className="text-[14px] font-semibold mb-2 flex items-center gap-2 text-[#fafafa]">
-                <span className="w-[7px] h-[7px] rounded-full bg-[#1FAE85] shrink-0" />
-                {f.title}
-              </h3>
-              <p className="text-[13px] text-[#a1a1aa] leading-[1.6]">{f.desc}</p>
-            </Card>
-          </motion.div>
-        ))}
-      </div>
-    </section>
-  );
-};
+    <FeatureStory
+      index={0}
+      pill="Build with Claude Code"
+      title="Describe what you want. Watch it ship."
+      body="SeldonFrame's MCP exposes 140+ tools for managing your CRM, agents, pages, and automations. Claude Code calls them based on what you describe in plain English. Build a chatbot, change a price, add a contact, run evals, publish — all from one prompt. The launch story isn't a demo, it's the actual flow."
+      ctaLabel="Connect Claude Code"
+      ctaHref="/docs/getting-started/connect-claude-code"
+      visual={<ClaudeCodeMockVisual />}
+    />
+
+    <FeatureStory
+      index={1}
+      pill="Eval-gated, regen on fail"
+      title="Agents you can actually trust in production."
+      body="Every agent runs through 8 scenarios — booking, refusal, escalation, PII handling, tone — before publish unlocks at ≥87.5% pass rate. Once live, critical-fail validators keep watching: if the agent ever says 'I rescheduled it' without calling the tool, the runtime regenerates the response on the fly. Customers never see the bad answer."
+      ctaLabel="How the eval gate works"
+      ctaHref="/docs/agents/eval-gate"
+      reverse
+      visual={<RuntimeRegenVisual />}
+    />
+
+    <FeatureStory
+      index={2}
+      pill="Embed anywhere"
+      title="One script tag. Brand-themed. Mobile-friendly."
+      body="Drop your published agent on any site in one line. Pulls workspace brand colors and logo automatically. Use SF-hosted pages and the chatbot is wired with no snippet at all. Conversations log back to your CRM, threaded by contact — ready for SMS and voice when those transports ship."
+      ctaLabel="Embed snippet docs"
+      ctaHref="/docs/agents/embed"
+      visual={<EmbedBubbleVisual />}
+    />
+  </section>
+);
 
 const HowItWorks = () => {
   // May 1, 2026 — collapsed to 3 steps. SeldonFrame is MCP-native, not
@@ -622,8 +743,12 @@ export default function SeldonFrameLandingPage() {
       <Nav />
       <main>
         <Hero />
-        <Personas />
-        <Features />
+        {/* v1.31.1 — replaced flat Personas + 6-up Features grid with
+            three "show, don't tell" feature stories alternating
+            image-left/right with CSS+SVG product mockups beside body
+            copy. Linear-style: pick a few features, show them in
+            motion, link to the relevant doc. */}
+        <FeatureStories />
         <HowItWorks />
         {/* Fix (g): SeeItBuilt between HowItWorks and Pricing */}
         <SeeItBuilt />
