@@ -540,31 +540,187 @@ const HowItWorks = () => {
   );
 };
 
-// Fix (g): NEW "See it built" section between HowItWorks and Pricing.
-const SeeItBuilt = () => (
-  <section className="text-center py-16 md:py-24 px-5 md:px-12 max-w-[1140px] mx-auto">
+// v1.31.3 — Replaced the centered CTA-card "See it built" with a
+// two-column case study: narrative on the left, stat-grid on the
+// right. Frames the Desert Cool HVAC fixture honestly as a worked
+// example (not a fabricated customer) so credibility holds.
+const CaseStudy = () => (
+  <section className="py-[80px] md:py-[120px] px-5 md:px-12 max-w-[1180px] mx-auto">
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 30 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-100px" }}
-      transition={{ duration: 0.5 }}
+      transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+      className="grid md:grid-cols-2 gap-8 md:gap-14 items-center"
     >
-      <Card className="bg-[#111113] border-white/5 p-8 md:p-12 rounded-[12px] max-w-[700px] mx-auto">
-        <h2 className="text-[clamp(24px,3vw,32px)] font-bold tracking-[-0.03em] mb-3 text-[#fafafa]">
-          See it built end-to-end
+      <div>
+        <span className="inline-block px-2.5 py-1 rounded-full bg-[#1FAE85]/10 border border-[#1FAE85]/20 text-[#1FAE85] font-mono text-[10.5px] tracking-[0.05em] uppercase mb-4">
+          Worked example
+        </span>
+        <h2 className="text-[clamp(28px,3.5vw,40px)] font-bold tracking-[-0.03em] leading-[1.1] mb-5 text-[#fafafa]">
+          What 12 minutes of Claude Code looks like
         </h2>
-        <p className="text-[15px] text-[#a1a1aa] mb-6 leading-[1.7] max-w-[500px] mx-auto">
-          Desert Cool HVAC. Phoenix, AZ. 14 technicians. ~1,800 customers.
-          Four production agent flows. Branded portal. Built in SeldonFrame
-          from clean repo to working product.
+        <p className="text-[15px] text-[#a1a1aa] leading-[1.7] mb-4">
+          Desert Cool HVAC. Phoenix, AZ. A residential HVAC contractor
+          with 14 technicians and ~1,800 customers, juggling Salesforce,
+          Cal.com, Mailchimp, Intercom, and Webflow.
         </p>
-        <a href="/demo" className={`${PRIMARY_CTA_CLS} px-6 py-3 text-[14px]`}>
+        <p className="text-[15px] text-[#a1a1aa] leading-[1.7] mb-6">
+          We built it end-to-end in SeldonFrame on camera in 12 minutes:
+          public landing page, booking system, intake form, CRM with
+          HVAC-specific fields, and a published chatbot that books
+          diagnostic visits. Every prompt is in the walkthrough; every
+          step works the same when you do it for your own business.
+        </p>
+        <a href="/demo" className={`${PRIMARY_CTA_CLS} px-6 py-3 text-[14px] hover:-translate-y-[1px]`}>
           Watch the walkthrough &rarr;
         </a>
-      </Card>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        {[
+          { stat: "12 min", label: "build to live" },
+          { stat: "5 → 1", label: "tools replaced" },
+          { stat: "8/8", label: "evals passed" },
+          { stat: "0", label: "lines hand-edited" },
+        ].map((tile, i) => (
+          <motion.div
+            key={tile.label}
+            initial={{ opacity: 0, scale: 0.95 }}
+            whileInView={{ opacity: 1, scale: 1 }}
+            viewport={{ once: true, margin: "-100px" }}
+            transition={{ delay: 0.15 + i * 0.08, duration: 0.4 }}
+            className="rounded-[12px] border border-white/5 bg-[#0d0d10] p-5 md:p-6 hover:border-[#1FAE85]/30 transition-colors"
+          >
+            <div className="text-[clamp(28px,3vw,40px)] font-bold tracking-[-0.03em] text-[#fafafa] mb-1 leading-none">
+              {tile.stat}
+            </div>
+            <div className="text-[12px] text-[#71717a] font-mono tracking-[0.02em]">
+              {tile.label}
+            </div>
+          </motion.div>
+        ))}
+      </div>
     </motion.div>
   </section>
 );
+
+// v1.31.3 — "Replaces" comparison row. Visual story for the
+// consolidation pitch: 5 generic tool tiles (the categories SF replaces
+// — CRM, scheduler, email, chatbot, builder) on the left, an arrow,
+// then the SF wordmark on the right. We use category labels rather
+// than competitor brand wordmarks to avoid trademark risks; the
+// shape of the comparison is what carries the message.
+const Replaces = () => {
+  const tools = [
+    { label: "CRM", icon: (
+      <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+      </svg>
+    )},
+    { label: "Scheduler", icon: (
+      <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="4" width="18" height="18" rx="2" />
+        <path d="M16 2v4M8 2v4M3 10h18" />
+      </svg>
+    )},
+    { label: "Email tool", icon: (
+      <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="4" width="20" height="16" rx="2" />
+        <path d="m22 7-10 5L2 7" />
+      </svg>
+    )},
+    { label: "Chatbot", icon: (
+      <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+      </svg>
+    )},
+    { label: "Site builder", icon: (
+      <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <path d="M3 9h18M9 21V9" />
+      </svg>
+    )},
+  ];
+
+  return (
+    <section className="py-[60px] md:py-[80px] px-5 md:px-12 max-w-[1180px] mx-auto">
+      <div className="text-center mb-10 md:mb-14">
+        <h2 className="text-[clamp(24px,3vw,34px)] font-bold tracking-[-0.03em] leading-[1.15] mb-3 text-[#fafafa]">
+          Replaces the stack you've been duct-taping together
+        </h2>
+        <p className="text-[15px] text-[#a1a1aa] max-w-[560px] mx-auto leading-[1.65]">
+          Five tools, one workspace. Same database. Same brand. Same admin.
+          And the AI agents come with it.
+        </p>
+      </div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: "-80px" }}
+        transition={{ duration: 0.6 }}
+        className="flex flex-col md:flex-row items-center justify-center gap-6 md:gap-8"
+      >
+        {/* Left side: 5 dimmed tool tiles in a grid */}
+        <div className="grid grid-cols-5 gap-2 md:gap-3 max-w-[480px]">
+          {tools.map((tool, i) => (
+            <motion.div
+              key={tool.label}
+              initial={{ opacity: 0 }}
+              whileInView={{ opacity: 1 }}
+              viewport={{ once: true }}
+              transition={{ delay: i * 0.08, duration: 0.4 }}
+              className="relative flex flex-col items-center gap-2 p-3 rounded-[10px] border border-white/5 bg-[#0d0d10]"
+            >
+              {/* Diagonal strikethrough */}
+              <span
+                aria-hidden
+                className="absolute inset-0 rounded-[10px] pointer-events-none overflow-hidden"
+              >
+                <span className="absolute top-1/2 left-[-10%] w-[120%] h-px bg-[#71717a] rotate-[-20deg] origin-center opacity-50" />
+              </span>
+              <span className="text-[#71717a]">{tool.icon}</span>
+              <span className="text-[10.5px] text-[#71717a] font-mono tracking-[0.02em]">
+                {tool.label}
+              </span>
+            </motion.div>
+          ))}
+        </div>
+
+        {/* Arrow */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.8 }}
+          whileInView={{ opacity: 1, scale: 1 }}
+          viewport={{ once: true }}
+          transition={{ delay: 0.5, duration: 0.4 }}
+          className="text-[#1FAE85]"
+        >
+          <svg viewBox="0 0 24 24" className="size-7 md:size-8 rotate-90 md:rotate-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M5 12h14M13 6l6 6-6 6" />
+          </svg>
+        </motion.div>
+
+        {/* Right side: SF tile, prominent */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.92 }}
+          whileInView={{ opacity: 1, scale: 1 }}
+          viewport={{ once: true }}
+          transition={{ delay: 0.7, duration: 0.5 }}
+          className="flex flex-col items-center gap-2.5 px-7 py-5 rounded-[12px] border border-[#1FAE85]/40 bg-gradient-to-br from-[#1FAE85]/10 to-transparent shadow-[0_0_40px_-10px_rgba(31,174,133,0.4)]"
+        >
+          <LogoSVG />
+          <span className="text-[14px] font-semibold tracking-[-0.01em] text-[#fafafa]">
+            SeldonFrame
+          </span>
+        </motion.div>
+      </motion.div>
+    </section>
+  );
+};
 
 const Pricing = () => {
   // April 30, 2026 — usage-based pricing migration. Tiers are
@@ -750,8 +906,14 @@ export default function SeldonFrameLandingPage() {
             motion, link to the relevant doc. */}
         <FeatureStories />
         <HowItWorks />
-        {/* Fix (g): SeeItBuilt between HowItWorks and Pricing */}
-        <SeeItBuilt />
+        {/* v1.31.3 — replaced the centered "See it built" CTA card
+            with a two-column case study (narrative + 4-stat grid) +
+            a "replaces" comparison row showing the 5-tool stack
+            consolidating into one SF workspace. Honest framing of
+            Desert Cool HVAC as a worked example, not a fabricated
+            customer. */}
+        <CaseStudy />
+        <Replaces />
         <Pricing />
         <Infrastructure />
         <FinalCTA />
