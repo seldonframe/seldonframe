@@ -62,6 +62,30 @@ export interface CreateFullWorkspaceInput {
   /** Optional contact channels — set when the operator volunteers them. */
   email?: string | null;
   address?: string | null;
+
+  /** v1.37.0 — Google Maps paste workflow. When the operator pastes a
+   *  Google Maps business listing, Claude Code parses the weekly hours
+   *  ("Monday: 9 AM-5 PM, Tuesday: closed, …") into the canonical
+   *  bookings.metadata.availability shape and passes it here. The
+   *  orchestrator then UPDATEs the default booking template's
+   *  availability with these real business hours instead of falling
+   *  back to the Mon-Fri 9-5 default. Closes the loop with v1.36.4
+   *  (which fixed the read path) — now the write path can carry real
+   *  data from a Google Maps paste through to the booking page on
+   *  workspace creation, no second tool call required.
+   *
+   *  Keys MUST be full names (sunday/monday/.../saturday). Times are
+   *  HH:MM 24-hour strings. `enabled: false` means closed that day —
+   *  start/end can be any valid placeholders. */
+  weekly_hours?: Partial<Record<
+    "sunday" | "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday",
+    { enabled: boolean; start: string; end: string }
+  >> | null;
+
+  /** v1.37.0 — optional source-of-truth URL when the workspace was
+   *  scaffolded from a Google Maps paste. Stored on soul.business.maps_url
+   *  for audit / future re-sync. Never user-facing. */
+  google_place_url?: string | null;
 }
 
 export interface CreateFullWorkspaceResult {
@@ -364,6 +388,91 @@ export async function createFullWorkspace(
       `[create-full] personality override failed for ${createResult.orgId}:`,
       err instanceof Error ? err.message : String(err)
     );
+  }
+
+  // v1.37.0 — Step 12.5: APPLY GOOGLE-MAPS-PASTED HOURS to booking templates.
+  //
+  // soul/install.ts seeds bookings.metadata.availability with `{}` (which
+  // normalizeAvailability rescues as Mon-Fri 9-5 defaults). When the
+  // operator pastes a Google Maps listing, Claude Code parses the
+  // hours block and threads them through here as `weekly_hours`. We
+  // overwrite the default `{}` on every booking template row for this
+  // workspace with the real schedule.
+  //
+  // Soft-fail: if the UPDATE throws, log + continue. The workspace is
+  // already valid (defaults are sane); worst case the operator edits
+  // hours from the dashboard. Never block workspace creation on this.
+  if (input.weekly_hours && Object.keys(input.weekly_hours).length > 0) {
+    try {
+      const templates = await db
+        .select({ id: bookings.id, metadata: bookings.metadata })
+        .from(bookings)
+        .where(
+          and(
+            eq(bookings.orgId, createResult.orgId),
+            eq(bookings.status, "template"),
+          ),
+        );
+
+      for (const tpl of templates) {
+        const meta = (tpl.metadata as Record<string, unknown> | null) ?? {};
+        const nextMeta = { ...meta, availability: input.weekly_hours };
+        await db
+          .update(bookings)
+          .set({ metadata: nextMeta, updatedAt: new Date() })
+          .where(eq(bookings.id, tpl.id));
+      }
+
+      console.log(
+        JSON.stringify({
+          event: "weekly_hours_applied",
+          workspace_id: createResult.orgId,
+          template_count: templates.length,
+          source: "google_maps_paste",
+        }),
+      );
+    } catch (err) {
+      console.warn(
+        `[create-full] weekly_hours UPDATE failed for ${createResult.orgId}:`,
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+  }
+
+  // v1.37.0 — Step 12.6: STAMP google_place_url on soul for audit trail.
+  // Cheap O(1) write; if the operator ever wants to re-sync from the
+  // same Maps listing later, the source URL is on record.
+  //
+  // Note: OrgSoul (lib/soul/types.ts) doesn't model a `business` namespace,
+  // but the live runtime shape carries one — extractBusinessPhone() in
+  // book/[orgSlug]/[bookingSlug]/page.tsx reads soul.business.phone
+  // defensively, and the soul-installer historically writes nested fields
+  // under `business`. We cast to OrgSoul on write to satisfy the strict
+  // jsonb $type while preserving the conventional shape on disk.
+  if (input.google_place_url && typeof input.google_place_url === "string") {
+    try {
+      const [orgRow] = await db
+        .select({ soul: organizations.soul })
+        .from(organizations)
+        .where(eq(organizations.id, createResult.orgId))
+        .limit(1);
+      const currentSoul = (orgRow?.soul as Record<string, unknown> | null) ?? {};
+      const currentBusiness = (currentSoul.business as Record<string, unknown> | undefined) ?? {};
+      const nextSoul = {
+        ...currentSoul,
+        business: { ...currentBusiness, maps_url: input.google_place_url.trim() },
+      };
+      await db
+        .update(organizations)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .set({ soul: nextSoul as any, updatedAt: new Date() })
+        .where(eq(organizations.id, createResult.orgId));
+    } catch (err) {
+      console.warn(
+        `[create-full] google_place_url stamp failed for ${createResult.orgId}:`,
+        err instanceof Error ? err.message : String(err),
+      );
+    }
   }
 
   // Step 13: VALIDATE OUTPUT

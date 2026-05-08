@@ -170,14 +170,26 @@ export async function POST(request: Request) {
         // Sensible default availability — Mon-Fri 9am-5pm. Dashboard edit
         // surface lets the builder override this; MCP create gives a usable
         // default instead of forcing every caller to specify availability.
+        //
+        // v1.36.4 — must use FULL-NAME day keys (monday/tuesday/...).
+        // Pre-1.36.4 we stored 3-letter keys (mon/tue/...) here, but
+        // normalizeAvailability() reads source["monday"] etc. — so every
+        // day got daySource=undefined → fell back to defaults. The
+        // visible symptom was "No times available" on workspaces whose
+        // booking templates were created via the MCP route (because
+        // workspaces with empty {} availability ALSO fall back to the
+        // same defaults — fine — but anyone whose dashboard later wrote
+        // partial overrides ended up with a mixed shape that didn't
+        // hydrate). Single source of truth: AvailabilityDayKey =
+        // "sunday" | "monday" | ... | "saturday" in lib/bookings/actions.ts.
         availability: {
-          mon: { enabled: true, start: "09:00", end: "17:00" },
-          tue: { enabled: true, start: "09:00", end: "17:00" },
-          wed: { enabled: true, start: "09:00", end: "17:00" },
-          thu: { enabled: true, start: "09:00", end: "17:00" },
-          fri: { enabled: true, start: "09:00", end: "17:00" },
-          sat: { enabled: false, start: "09:00", end: "17:00" },
-          sun: { enabled: false, start: "09:00", end: "17:00" },
+          monday: { enabled: true, start: "09:00", end: "17:00" },
+          tuesday: { enabled: true, start: "09:00", end: "17:00" },
+          wednesday: { enabled: true, start: "09:00", end: "17:00" },
+          thursday: { enabled: true, start: "09:00", end: "17:00" },
+          friday: { enabled: true, start: "09:00", end: "17:00" },
+          saturday: { enabled: false, start: "09:00", end: "17:00" },
+          sunday: { enabled: false, start: "09:00", end: "17:00" },
         },
       },
     })

@@ -108,13 +108,38 @@ function toMinutes(value: string) {
   return hours * 60 + minutes;
 }
 
+// v1.36.4 — short-key fallback for legacy rows. Pre-1.36.4 the MCP
+// `create_appointment_type` route stored availability with 3-letter
+// day keys (mon/tue/.../sun). All other writers (dashboard form,
+// blueprint persist, soul installer) used full names (monday/...).
+// Readers only know full names. So legacy rows came back as "all
+// undefined" → fell back to defaults silently, masking the bug at
+// create time but breaking partial overrides later. v1.36.4 fixes
+// the writer; this map lets us also rescue any rows already in the
+// DB without a backfill migration.
+const shortToFullDayKey: Record<string, AvailabilityDayKey> = {
+  sun: "sunday",
+  mon: "monday",
+  tue: "tuesday",
+  wed: "wednesday",
+  thu: "thursday",
+  fri: "friday",
+  sat: "saturday",
+};
+
 function normalizeAvailability(raw: unknown): AvailabilitySchedule {
   const defaults = defaultAvailabilitySchedule();
   const source = typeof raw === "object" && raw ? (raw as Record<string, unknown>) : {};
 
   const normalized = weekdayKeys.reduce((acc, dayKey) => {
     const dayDefaults = defaults[dayKey];
-    const daySource = source[dayKey] as Record<string, unknown> | undefined;
+    // v1.36.4 — read full-name key first, fall back to 3-letter key
+    // for legacy rows. The 3-letter shape was a bug; we accept it
+    // here so existing prod rows keep working without a migration.
+    const fullSource = source[dayKey] as Record<string, unknown> | undefined;
+    const shortKey = Object.entries(shortToFullDayKey).find(([, full]) => full === dayKey)?.[0];
+    const shortSource = shortKey ? (source[shortKey] as Record<string, unknown> | undefined) : undefined;
+    const daySource = fullSource ?? shortSource;
     const start = normalizeTimeValue(daySource?.start, dayDefaults.start);
     const end = normalizeTimeValue(daySource?.end, dayDefaults.end);
     const enabled = typeof daySource?.enabled === "boolean" ? daySource.enabled : dayDefaults.enabled;

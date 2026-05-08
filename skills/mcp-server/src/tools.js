@@ -190,6 +190,259 @@ export const TOOLS = [
       return firstEver ? withFirstCallBanner(payload) : payload;
     },
   },
+  // v1.37.0 — Google Maps PASTE → workspace (no Places API).
+  //
+  // Discoverability shim around create_full_workspace. Same backend
+  // pipeline (POST /workspaces/create-full), same atomic guarantees,
+  // same finalize_workspace follow-up. The value-add: a tool whose
+  // DESCRIPTION teaches Claude Code exactly how to extract structured
+  // fields from a raw Google Maps paste — name, address, phone,
+  // categories→services, rating, review count, weekly hours — and
+  // which fields the backend pipes into which artifact (hours →
+  // booking template's metadata.availability via the new weekly_hours
+  // input, closing the loop with the v1.36.4 read-path fix).
+  //
+  // Thin harness, fat skill: NO regex parser on the backend, NO LLM
+  // call on the backend. Claude Code (the agent) parses the paste
+  // and calls this tool with the structured fields. The MCP server
+  // is just a typed shim over the existing POST endpoint.
+  //
+  // Why a sibling tool instead of bolting `weekly_hours` onto
+  // create_full_workspace? Discoverability. When the operator says
+  // "make a workspace from this Google Maps listing", Claude Code
+  // sees a tool literally named `create_workspace_from_google_paste`
+  // with a docstring full of paste-extraction examples — no judgment
+  // call about whether create_full_workspace is the right tool. The
+  // surface area is the documentation.
+  {
+    name: "create_workspace_from_google_paste",
+    description:
+      "PREFERRED when the operator pastes a Google Maps business listing. Same atomic pipeline as create_full_workspace; this tool's docs guide the paste-to-fields extraction. Claude Code parses the paste BEFORE calling this tool — never pass the raw paste text. " +
+      "EXTRACTION RULES (apply in order): " +
+      "1) business_name → the bold business title at the top of the listing. " +
+      "2) phone → the digits next to the phone icon. " +
+      "3) address → the line next to the location pin. Parse city + state from this address into separate fields (city/state). " +
+      "4) services → derive from BOTH the categories chip row (e.g. 'Plumber · Emergency plumbing service') AND any explicit 'Services' section ('Drain cleaning', 'Water heater repair'). Dedupe; keep 5-12 distinct strings. " +
+      "5) business_description → synthesize 1-2 sentences from the categories + 'About' / 'From the business' section. Include industry words verbatim (the personality classifier reads this). " +
+      "6) review_rating + review_count → the '4.7 ★ (950)' element. " +
+      "7) trust_signals → 'Licensed', 'Bonded', 'Insured', 'Family-owned' if mentioned. " +
+      "8) emergency_service / same_day → set true if 'open 24 hours', '24/7', 'same-day service' appears. " +
+      "9) service_area → cities mentioned in 'Service area' section. " +
+      "10) weekly_hours → parse the hours block ('Monday: 9 AM-5 PM, Tuesday: closed, ...') into the canonical shape: {monday:{enabled:true,start:'09:00',end:'17:00'},tuesday:{enabled:false,start:'09:00',end:'17:00'},...}. Keys MUST be FULL DAY NAMES (sunday/monday/.../saturday); times MUST be HH:MM 24-hour. 'Closed' → enabled:false (start/end are placeholders). 'Open 24 hours' → start:'00:00', end:'23:59'. These hours are written DIRECTLY to the booking template's availability — wrong shape = booking page falls back to Mon-Fri 9-5 default. " +
+      "11) google_place_url → the Maps URL the operator pasted, if visible. Optional, stored on soul.business.maps_url for audit. " +
+      "MANDATORY FOLLOW-UP: same as create_full_workspace — after this returns `status: 'ready'`, ask 'What email should I use for your account?' and call finalize_workspace({ workspace_id, email }).",
+    inputSchema: obj(
+      {
+        business_name: str("Business display name (top of the Maps listing)."),
+        city: str("City parsed from the Maps address line."),
+        state: str("US state code or full name parsed from the Maps address line."),
+        phone: str("Phone number from the Maps phone icon row, any format."),
+        services: {
+          type: "array",
+          description:
+            "Services derived from the Maps categories + 'Services' chips, deduped. 5-12 strings.",
+          items: { type: "string" },
+        },
+        business_description: str(
+          "1-2 sentence summary synthesized from Maps categories + 'About' / 'From the business' section."
+        ),
+        review_count: { type: "number", description: "Optional — review count from '★ (N)' display." },
+        review_rating: { type: "number", description: "Optional — average star rating (e.g. 4.7)." },
+        certifications: {
+          type: "array",
+          description: "Optional — credentials mentioned in the listing (['EPA-certified', ...]).",
+          items: { type: "string" },
+        },
+        trust_signals: {
+          type: "array",
+          description: "Optional — 'Licensed', 'Bonded', 'Insured', 'Family-owned' if surfaced.",
+          items: { type: "string" },
+        },
+        emergency_service: { type: "boolean", description: "Optional — listing shows 'open 24 hours' or '24/7'." },
+        same_day: { type: "boolean", description: "Optional — listing mentions 'same-day service'." },
+        service_area: {
+          type: "array",
+          description: "Optional — cities/neighborhoods from the 'Service area' section.",
+          items: { type: "string" },
+        },
+        email: str("Optional contact email from the listing (NOT the operator's account email)."),
+        address: str("Optional full address line from the listing."),
+        weekly_hours: {
+          type: "object",
+          description:
+            "Canonical weekly schedule extracted from the Maps hours block. Keys are FULL DAY NAMES (sunday/monday/tuesday/wednesday/thursday/friday/saturday). Each value is { enabled: boolean, start: 'HH:MM', end: 'HH:MM' } in 24-hour format. Closed days use enabled:false. 'Open 24 hours' → enabled:true, start:'00:00', end:'23:59'. Wrong shape silently falls back to Mon-Fri 9-5 defaults — get the keys right.",
+          additionalProperties: false,
+          properties: {
+            sunday: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                enabled: { type: "boolean" },
+                start: { type: "string", description: "HH:MM 24-hour" },
+                end: { type: "string", description: "HH:MM 24-hour" },
+              },
+              required: ["enabled", "start", "end"],
+            },
+            monday: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                enabled: { type: "boolean" },
+                start: { type: "string" },
+                end: { type: "string" },
+              },
+              required: ["enabled", "start", "end"],
+            },
+            tuesday: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                enabled: { type: "boolean" },
+                start: { type: "string" },
+                end: { type: "string" },
+              },
+              required: ["enabled", "start", "end"],
+            },
+            wednesday: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                enabled: { type: "boolean" },
+                start: { type: "string" },
+                end: { type: "string" },
+              },
+              required: ["enabled", "start", "end"],
+            },
+            thursday: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                enabled: { type: "boolean" },
+                start: { type: "string" },
+                end: { type: "string" },
+              },
+              required: ["enabled", "start", "end"],
+            },
+            friday: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                enabled: { type: "boolean" },
+                start: { type: "string" },
+                end: { type: "string" },
+              },
+              required: ["enabled", "start", "end"],
+            },
+            saturday: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                enabled: { type: "boolean" },
+                start: { type: "string" },
+                end: { type: "string" },
+              },
+              required: ["enabled", "start", "end"],
+            },
+          },
+        },
+        google_place_url: str(
+          "Optional — the Google Maps share URL for the listing. Stored on soul.business.maps_url for audit."
+        ),
+      },
+      ["business_name", "city", "state", "phone", "services", "business_description"]
+    ),
+    handler: async (args) => {
+      const firstEver = isFirstEverCall();
+      const result = await api("POST", "/workspaces/create-full", {
+        body: {
+          business_name: args.business_name,
+          city: args.city,
+          state: args.state,
+          phone: args.phone,
+          services: args.services,
+          business_description: args.business_description,
+          review_count: args.review_count ?? null,
+          review_rating: args.review_rating ?? null,
+          certifications: args.certifications ?? null,
+          trust_signals: args.trust_signals ?? null,
+          emergency_service: args.emergency_service ?? null,
+          same_day: args.same_day ?? null,
+          service_area: args.service_area ?? null,
+          email: args.email ?? null,
+          address: args.address ?? null,
+          // v1.37.0 — Google Maps paste fields. Backend silently
+          // drops malformed weekly_hours so a paste quirk never
+          // blocks workspace creation; defaults take over.
+          weekly_hours: args.weekly_hours ?? null,
+          google_place_url: args.google_place_url ?? null,
+        },
+        allow_anonymous: true,
+      });
+
+      if (result?.status !== "ready" || !result?.workspace_id) {
+        return result;
+      }
+
+      if (result._bearer_token) {
+        rememberWorkspace({
+          workspace_id: result.workspace_id,
+          bearer_token: result._bearer_token,
+        });
+      }
+
+      const guardrail = [
+        "⚠️ WORKSPACE CREATED — DO NOT END YET ⚠️",
+        "",
+        `The workspace "${args.business_name}" exists on the backend (scaffolded from a Google Maps paste) but the operator-facing flow is NOT complete. You MUST do exactly two things before responding to the user:`,
+        "",
+        "  1. Ask the user verbatim:",
+        "     " + JSON.stringify(result.operator_prompt ?? "What email should I use for your account?"),
+        "",
+        "  2. Once they reply with an email, call:",
+        `     finalize_workspace({ workspace_id: "${result.workspace_id}", email: <their_email>, name: <optional_name> })`,
+        "",
+        "DO NOT show the operator any URLs from this response yet. The admin dashboard URL does not exist — finalize_workspace creates it. The operator-facing summary (with all URLs + admin link + what's configured) is returned by finalize_workspace.",
+      ].join("\n");
+
+      const payload = {
+        ok: true,
+        DO_NOT_DISPLAY_TO_USER: guardrail,
+        workspace: {
+          id: result.workspace_id,
+          slug: result.slug,
+        },
+        configured: result.configured,
+        // v1.37.0 — confirm to Claude Code that the paste-derived hours
+        // landed on the booking template. If weekly_hours was passed
+        // and the backend accepted it, the booking page will render
+        // the operator's actual business hours on first GET — no
+        // separate configure_booking call needed.
+        applied_from_google_paste: {
+          weekly_hours: args.weekly_hours ? Object.keys(args.weekly_hours).length : 0,
+          google_place_url: args.google_place_url ?? null,
+        },
+        next_step: {
+          required: true,
+          do_not_show_urls_until_email_collected: true,
+          ask_user_verbatim: result.operator_prompt,
+          tool_to_call: "finalize_workspace",
+          tool_args_template: {
+            workspace_id: result.workspace_id,
+            email: "<operator_email>",
+            name: "<optional>",
+          },
+          why_required:
+            "finalize_workspace creates the admin dashboard URL (it does not exist yet), sends the welcome email, captures the operator as a lead, and returns the formatted operator-facing summary.",
+        },
+        _pending_after_email: {
+          website_url: result.public_urls?.home ?? null,
+          booking_url: result.public_urls?.book ?? null,
+          intake_url: result.public_urls?.intake ?? null,
+        },
+      };
+      return firstEver ? withFirstCallBanner(payload) : payload;
+    },
+  },
   {
     name: "list_workspaces",
     description: "List all workspaces known to this device (plus any Pro workspaces if SELDONFRAME_API_KEY is set).",

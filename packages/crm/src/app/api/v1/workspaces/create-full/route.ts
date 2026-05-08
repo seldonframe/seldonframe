@@ -33,7 +33,45 @@ type Body = {
   service_area?: unknown;
   email?: unknown;
   address?: unknown;
+  // v1.37.0 — Google Maps paste workflow.
+  weekly_hours?: unknown;
+  google_place_url?: unknown;
 };
+
+// v1.37.0 — read & shape-check the canonical weekly_hours schedule.
+// We don't reject malformed entries; we silently drop them. Workspace
+// creation must NEVER fail on a paste-extraction format quirk.
+const VALID_DAYS = new Set([
+  "sunday",
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+]);
+type WeeklyHoursValue = Partial<Record<
+  "sunday" | "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday",
+  { enabled: boolean; start: string; end: string }
+>>;
+function readWeeklyHours(value: unknown): WeeklyHoursValue | null {
+  if (!value || typeof value !== "object") return null;
+  const source = value as Record<string, unknown>;
+  const out: Record<string, { enabled: boolean; start: string; end: string }> = {};
+  for (const [rawKey, rawDay] of Object.entries(source)) {
+    const key = rawKey.toLowerCase();
+    if (!VALID_DAYS.has(key)) continue;
+    if (!rawDay || typeof rawDay !== "object") continue;
+    const day = rawDay as Record<string, unknown>;
+    const enabled = typeof day.enabled === "boolean" ? day.enabled : false;
+    const start = typeof day.start === "string" ? day.start : "09:00";
+    const end = typeof day.end === "string" ? day.end : "17:00";
+    if (!/^([01]\d|2[0-3]):([0-5]\d)$/.test(start)) continue;
+    if (!/^([01]\d|2[0-3]):([0-5]\d)$/.test(end)) continue;
+    out[key] = { enabled, start, end };
+  }
+  return Object.keys(out).length > 0 ? (out as WeeklyHoursValue) : null;
+}
 
 function readString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -120,6 +158,11 @@ export async function POST(request: Request) {
     service_area: Array.isArray(body.service_area) ? readStringArray(body.service_area) : null,
     email: readString(body.email) || null,
     address: readString(body.address) || null,
+    // v1.37.0 — Google Maps paste workflow. Silent-drop on malformed
+    // shapes (per readWeeklyHours) so a paste quirk never blocks
+    // workspace creation; defaults take over instead.
+    weekly_hours: readWeeklyHours(body.weekly_hours),
+    google_place_url: readString(body.google_place_url) || null,
   };
 
   const result = await createFullWorkspace(input);
