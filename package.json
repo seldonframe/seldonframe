@@ -5,10 +5,8 @@
   "scripts": {
     "dev": "turbo run dev --parallel",
     "dev:crm": "turbo run dev --filter=@seldonframe/crm",
-    "dev:web": "turbo run dev --filter=@seldonframe/web",
     "build": "turbo run build",
     "build:crm": "turbo run build --filter=@seldonframe/crm",
-    "build:web": "turbo run build --filter=@seldonframe/web",
     "start:crm": "pnpm --filter @seldonframe/crm start",
     "lint": "turbo run lint",
     "test:cross-block": "pnpm --filter @seldonframe/crm test:cross-block",
