@@ -49,6 +49,7 @@ const CATEGORIES: DocCategory[] = [
       { label: "Custom domains", href: "/docs/your-business/custom-domains" },
       { label: "Branding & theme", href: "/docs/your-business/branding" },
       { label: "Team members", href: "/docs/your-business/team" },
+      { label: "Upgrade your UI", href: "/docs/your-business/upgrade-ui" },
     ],
   },
   {
