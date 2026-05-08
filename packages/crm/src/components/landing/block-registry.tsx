@@ -2,6 +2,7 @@ import type { Editor } from "grapesjs";
 import type { ReactNode } from "react";
 import { BenefitsSection } from "./sections/benefits";
 import { CTASection } from "./sections/cta";
+import { EmergencyStripSection } from "./sections/emergency-strip";
 import { FAQSection } from "./sections/faq";
 import { FeaturesSection } from "./sections/features";
 import { FooterSection } from "./sections/footer";
@@ -9,10 +10,13 @@ import { HeroSection } from "./sections/hero";
 import { NavbarSection } from "./sections/navbar";
 import { PricingSection } from "./sections/pricing";
 import { ProcessSection } from "./sections/process";
+import { ServiceAreaSection } from "./sections/service-area";
+import { ServicesGridSection } from "./sections/services-grid";
 import { TestimonialsSection } from "./sections/testimonials";
 import type {
   BenefitsSectionContent,
   CTASectionContent,
+  EmergencyStripSectionContent,
   FAQSectionContent,
   FeaturesSectionContent,
   FooterSectionContent,
@@ -21,6 +25,8 @@ import type {
   NavbarSectionContent,
   PricingSectionContent,
   ProcessSectionContent,
+  ServiceAreaSectionContent,
+  ServicesGridSectionContent,
   TestimonialsSectionContent,
   WhoItsForSectionContent,
 } from "./sections/types";
@@ -140,6 +146,46 @@ export const landingBlockRegistry: BlockRegistry = [
     grapesContent:
       '<footer class="py-10 border-t"><div class="container mx-auto text-center text-sm">Your Business · All rights reserved</div></footer>',
     render: (content, key) => <FooterSection key={key} {...(content as FooterSectionContent)} />,
+  },
+  // v1.36.0 — services-grid block. Per-service cards with price +
+  // duration + Book CTA. THE missing block on local-service business
+  // landing pages. Use INSTEAD of the generic pricing tiers block
+  // when pricing is per-service (trades, salons, mobile mechanics,
+  // etc.) rather than per-tier (SaaS, coaches, gyms).
+  {
+    type: "servicesGrid",
+    label: "Services Grid",
+    category: "SeldonFrame",
+    grapesId: "sf-services-grid",
+    grapesContent:
+      '<section class="py-20"><h2 class="text-3xl font-bold text-center mb-12">Our Services</h2><div class="grid grid-cols-3 gap-4 max-w-6xl mx-auto"><div class="p-6 border rounded-2xl"><h3 class="text-lg font-semibold">Service 1</h3><p class="text-muted mt-2">Description.</p><div class="mt-4 font-bold">From $99</div></div></div></section>',
+    render: (content, key) => <ServicesGridSection key={key} {...(content as ServicesGridSectionContent)} />,
+  },
+  // v1.36.0 — emergency-strip block. High-prominence "if it's an
+  // emergency, call X" banner for trades businesses where after-hours
+  // emergencies are the highest-LTV customer segment. Place
+  // immediately below the hero on plumbing / HVAC / locksmith /
+  // towing / roofing pages.
+  {
+    type: "emergencyStrip",
+    label: "Emergency Call Strip",
+    category: "SeldonFrame",
+    grapesId: "sf-emergency-strip",
+    grapesContent:
+      '<section class="py-8"><div class="rounded-2xl bg-primary text-white px-6 py-6 flex items-center justify-between max-w-6xl mx-auto"><div><p class="uppercase text-xs">Emergency</p><h3 class="text-xl font-bold">Pipe burst? Roof leaking? Don\'t wait.</h3></div><a href="tel:" class="inline-block bg-white text-primary px-5 py-3 rounded-full font-bold">(555) 555-0100</a></div></section>',
+    render: (content, key) => <EmergencyStripSection key={key} {...(content as EmergencyStripSectionContent)} />,
+  },
+  // v1.36.0 — service-area block. Chip cloud of cities/neighborhoods
+  // served. Answers "do you cover my city?" without forcing a map
+  // integration.
+  {
+    type: "serviceArea",
+    label: "Service Area",
+    category: "SeldonFrame",
+    grapesId: "sf-service-area",
+    grapesContent:
+      '<section class="py-20"><h2 class="text-3xl font-bold text-center mb-8">Service Area</h2><div class="flex flex-wrap justify-center gap-3 max-w-4xl mx-auto"><span class="px-4 py-2 border rounded-full">City 1</span><span class="px-4 py-2 border rounded-full">City 2</span><span class="px-4 py-2 border rounded-full">City 3</span></div></section>',
+    render: (content, key) => <ServiceAreaSection key={key} {...(content as ServiceAreaSectionContent)} />,
   },
 ];
 

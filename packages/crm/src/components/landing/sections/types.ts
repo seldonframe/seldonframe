@@ -75,6 +75,52 @@ export type FooterSectionContent = {
   socials?: Array<{ label: string; href: string }>;
 };
 
+// v1.36.0 — services-grid block. The single most-impactful section
+// for a local-service-business landing page. Each card has price,
+// duration, and a "Book" CTA. The chatbot pulls pricing from the
+// same Soul fact source so the price quoted in chat matches the
+// price on the page.
+export type ServicesGridSectionContent = {
+  headline: string;
+  subheadline?: string;
+  services: Array<{
+    name: string;
+    description: string;
+    price: string;
+    duration?: string;
+    ctaText?: string;
+    ctaLink?: string;
+    icon?: string;
+  }>;
+};
+
+// v1.36.0 — emergency-strip block. High-prominence "if this is an
+// emergency, call X now" banner. Critical for trades businesses
+// (plumbing, HVAC, locksmith, towing, etc.) where after-hours
+// emergencies are the highest-LTV customer segment.
+export type EmergencyStripSectionContent = {
+  /** Short headline e.g. "Pipe burst? Roof leaking? Don't wait." */
+  headline: string;
+  /** Phone number, formatted for display. */
+  phone: string;
+  /** Tel: link target — defaults to phone with non-digits stripped. */
+  phoneLink?: string;
+  /** Right-side text e.g. "24/7 emergency response — we answer the phone." */
+  hours?: string;
+};
+
+// v1.36.0 — service-area block. List of cities/neighborhoods served,
+// rendered as a tasteful chip cloud. Tells visitors "we cover you"
+// without forcing a map integration.
+export type ServiceAreaSectionContent = {
+  headline: string;
+  subheadline?: string;
+  /** Anchor location, displayed prominently. */
+  primaryLocation?: string;
+  /** Cities / neighborhoods served. */
+  areas: string[];
+};
+
 export type LandingPageSection = {
   type:
     | "navbar"
@@ -87,7 +133,10 @@ export type LandingPageSection = {
     | "pricing"
     | "faq"
     | "cta"
-    | "footer";
+    | "footer"
+    | "servicesGrid"
+    | "emergencyStrip"
+    | "serviceArea";
   content: Record<string, unknown>;
   order: number;
 };

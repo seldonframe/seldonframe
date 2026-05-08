@@ -37,8 +37,21 @@ export function HeroSection({
           ) : heroImage ? (
             <Image src={heroImage} alt={headline} width={960} height={720} className="h-full w-full rounded-2xl object-cover" />
           ) : (
-            <div className="flex min-h-72 items-center justify-center rounded-2xl bg-muted/35 text-sm text-muted-foreground">
-              Add hero media
+            // v1.36.0 — better empty state. The pre-v1.36 "Add hero
+            // media" gray box read as broken/unfinished on every
+            // freshly-generated workspace. Now: a brand-tinted gradient
+            // with the headline's first word as a typographic anchor.
+            // Looks intentional even before a real photo is uploaded.
+            <div className="relative flex min-h-72 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/15 via-primary/5 to-background overflow-hidden border border-primary/20">
+              <div
+                aria-hidden
+                className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_30%_30%,theme(colors.primary/.12),transparent_50%),radial-gradient(circle_at_70%_70%,theme(colors.primary/.08),transparent_50%)]"
+              />
+              <div className="relative z-10 text-center px-6">
+                <div className="text-[clamp(48px,8vw,96px)] font-bold tracking-tight text-primary/40 leading-none select-none">
+                  {(headline || "Welcome").split(/\s+/)[0]}
+                </div>
+              </div>
             </div>
           )}
         </div>
