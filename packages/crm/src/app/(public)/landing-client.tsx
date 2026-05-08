@@ -189,7 +189,14 @@ const BuildAndShowCard = () => {
         </div>
       </div>
 
-      {/* RIGHT PANE: Live website preview */}
+      {/* RIGHT PANE: Realistic admin dashboard preview (kanban + sidebar)
+          v1.32.1 — Replaced the stylized landing-page mockup with a
+          credible admin dashboard view. Same dark theme as the actual
+          SF dashboard. Sidebar nav items light up green sequentially
+          as build tools fire on the left pane. Pipeline kanban cards
+          appear in columns as the workspace fills with data. Visual
+          message: "this is real CRM software you can run a business
+          on" — not a designer mockup. */}
       <div className="bg-[#0d0d10] border border-white/5 rounded-[12px] overflow-hidden shadow-[0_30px_80px_-30px_rgba(31,174,133,0.18),0_0_0_1px_rgba(255,255,255,0.02)]">
         {/* Browser chrome */}
         <div className="flex items-center gap-2 px-3 py-2.5 bg-[#161619] border-b border-white/5">
@@ -197,123 +204,266 @@ const BuildAndShowCard = () => {
           <span className="w-[10px] h-[10px] rounded-full bg-[#ffbd2e]" />
           <span className="w-[10px] h-[10px] rounded-full bg-[#28c840]" />
           <div className="flex-1 ml-2 px-3 py-[3px] rounded bg-[#0d0d10] border border-white/5 font-mono text-[10.5px] text-[#71717a] truncate">
-            acme-hvac.app.seldonframe.com
+            app.seldonframe.com/dashboard
           </div>
         </div>
 
-        {/* Site body */}
-        <div className="relative bg-[#0a0a0a] min-h-[420px]">
-          {/* Empty-state skeleton — fades out once first tool fires */}
-          <motion.div
-            initial={{ opacity: 1 }}
-            animate={{ opacity: 0 }}
-            transition={{ delay: 1.5, duration: 0.4 }}
-            className="absolute inset-0 flex items-center justify-center pointer-events-none"
-          >
-            <div className="text-center">
-              <div className="size-8 mx-auto mb-2 rounded-full border-2 border-white/10 border-t-[#1FAE85] animate-spin" />
-              <div className="text-[10px] text-[#71717a] font-mono">building…</div>
-            </div>
-          </motion.div>
-
-          {/* Site navbar */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 1.5, duration: 0.4 }}
-            className="flex items-center justify-between px-5 py-3 border-b border-white/5"
-          >
-            <div className="flex items-center gap-2">
-              <div className="size-4 rounded bg-[#1FAE85]" />
-              <span className="text-[12px] font-bold text-[#fafafa]">Acme HVAC</span>
-            </div>
-            <span className="text-[10px] text-[#71717a]">Phoenix, AZ · (602) 555-0188</span>
-          </motion.div>
-
-          {/* Hero section */}
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 1.6, duration: 0.5 }}
-            className="px-5 py-5 border-b border-white/5"
-          >
-            <div className="text-[15px] font-bold tracking-tight text-[#fafafa] mb-1">
-              AC repair, fast.
-            </div>
-            <div className="text-[10.5px] text-[#a1a1aa] mb-3 leading-relaxed">
-              Same-day service across Phoenix. Licensed and insured.
-            </div>
-            <div className="h-14 rounded bg-gradient-to-br from-[#1FAE85]/25 via-[#1FAE85]/10 to-[#1FAE85]/5 border border-[#1FAE85]/20 flex items-center px-3">
-              <span className="text-[10px] text-[#a1a1aa]">[ Photo: Acme HVAC technician on a job ]</span>
-            </div>
-          </motion.div>
-
-          {/* Booking section */}
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 2.6, duration: 0.5 }}
-            className="px-5 py-4 border-b border-white/5"
-          >
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-[10.5px] uppercase tracking-[0.08em] text-[#1FAE85] font-mono font-semibold">
-                Book a service
+        {/* Dashboard body — sidebar + main content */}
+        <div className="relative bg-[#0a0a0a] min-h-[420px] grid grid-cols-[34%_66%]">
+          {/* SIDEBAR */}
+          <div className="border-r border-white/5 p-2.5 space-y-3">
+            {/* Workspace tile */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 1.5, duration: 0.4 }}
+              className="flex items-center gap-2 p-2 rounded-lg border border-white/5 bg-white/[0.02]"
+            >
+              <div className="size-6 rounded-md bg-gradient-to-br from-[#1FAE85] to-[#0e8364] flex items-center justify-center text-[#09090b] text-[10px] font-bold shrink-0">
+                A
               </div>
-              <div className="text-[9px] text-[#71717a]">May 2026</div>
-            </div>
-            <div className="grid grid-cols-7 gap-1">
-              {[...Array(14)].map((_, i) => (
-                <div
-                  key={i}
-                  className={`aspect-square rounded text-[8px] flex items-center justify-center ${
-                    i === 5
-                      ? "bg-[#1FAE85] text-[#09090b] font-bold"
-                      : i === 9 || i === 12
-                      ? "bg-white/5 text-[#fafafa]"
-                      : "bg-white/5 text-[#71717a]"
-                  }`}
-                >
-                  {i + 5}
-                </div>
-              ))}
-            </div>
-          </motion.div>
-
-          {/* Intake form */}
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 3.6, duration: 0.5 }}
-            className="px-5 py-4"
-          >
-            <div className="text-[10.5px] uppercase tracking-[0.08em] text-[#1FAE85] font-mono font-semibold mb-2">
-              Get a free quote
-            </div>
-            <div className="space-y-1.5">
-              <div className="h-7 rounded bg-white/5 border border-white/5 px-2 flex items-center text-[10px] text-[#71717a]">Name</div>
-              <div className="h-7 rounded bg-white/5 border border-white/5 px-2 flex items-center text-[10px] text-[#71717a]">Phone</div>
-              <div className="h-8 rounded bg-[#1FAE85] text-[#09090b] text-[11px] font-bold flex items-center justify-center">
-                Submit
+              <div className="min-w-0">
+                <div className="text-[10px] font-semibold text-[#fafafa] truncate">Acme HVAC</div>
+                <div className="text-[8px] text-[#71717a]">Active workspace</div>
               </div>
-            </div>
-          </motion.div>
+            </motion.div>
 
-          {/* Chatbot bubble — pops in last */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.4 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 4.6, duration: 0.4, type: "spring", stiffness: 200 }}
-            className="absolute bottom-3 right-3 size-10 rounded-full bg-gradient-to-br from-[#1FAE85] to-[#0e8364] flex items-center justify-center shadow-[0_8px_24px_rgba(31,174,133,0.45)]"
-          >
-            <svg viewBox="0 0 24 24" className="size-5 text-[#09090b]" fill="currentColor">
-              <path d="M12 2C6.48 2 2 6.48 2 12c0 1.82.5 3.53 1.36 5L2 22l5.16-1.35C8.6 21.5 10.25 22 12 22c5.52 0 10-4.48 10-10S17.52 2 12 2z" />
-            </svg>
-          </motion.div>
+            {/* Nav groups */}
+            <div className="space-y-2.5">
+              <NavGroup label="OVERVIEW" delay={1.6}>
+                <NavItem icon="dashboard" label="Dashboard" active />
+              </NavGroup>
+
+              <NavGroup label="RUN THE BUSINESS" delay={1.7}>
+                <NavItem icon="users" label="Customers" />
+                {/* These light up sequentially as tools fire */}
+                <NavItem icon="calendar" label="Bookings" lightUpAt={2.5} />
+                <NavItem icon="bot" label="Agents" lightUpAt={4.5} />
+                <NavItem icon="layout" label="Pages" lightUpAt={1.5} />
+                <NavItem icon="form" label="Intake Forms" lightUpAt={3.5} />
+              </NavGroup>
+            </div>
+          </div>
+
+          {/* MAIN CONTENT — Pipeline kanban */}
+          <div className="p-3 overflow-hidden">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 1.5, duration: 0.4 }}
+              className="flex items-center justify-between mb-3"
+            >
+              <div>
+                <div className="text-[11px] font-semibold text-[#fafafa]">Pipeline</div>
+                <div className="text-[9px] text-[#71717a]">Acme HVAC · Opportunities</div>
+              </div>
+              <span className="text-[9px] text-[#71717a] font-mono">⌘K</span>
+            </motion.div>
+
+            {/* Kanban columns */}
+            <div className="grid grid-cols-4 gap-1.5">
+              <KanbanColumn label="New Lead" color="#3b82f6" count={0} />
+              <KanbanColumn
+                label="Quoted"
+                color="#a855f7"
+                count={2}
+                cards={[
+                  { title: "AC repair", subtitle: "5012 N 32nd St", value: "$340", appearAt: 2.6 },
+                  { title: "Furnace tune-up", subtitle: "Glendale", value: "$120", appearAt: 3.6 },
+                ]}
+              />
+              <KanbanColumn
+                label="Scheduled"
+                color="#f59e0b"
+                count={1}
+                cards={[
+                  { title: "AC install", subtitle: "May 10 · 2pm", value: "$4,800", appearAt: 4.6 },
+                ]}
+              />
+              <KanbanColumn label="Won" color="#10b981" count={0} />
+            </div>
+
+            {/* Live chatbot indicator at the bottom */}
+            <motion.div
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 4.7, duration: 0.4 }}
+              className="mt-3 flex items-center justify-between p-2 rounded-md border border-[#1FAE85]/20 bg-[#1FAE85]/[0.04]"
+            >
+              <div className="flex items-center gap-1.5">
+                <span className="size-1.5 rounded-full bg-[#1FAE85]" />
+                <span className="text-[10px] text-[#fafafa] font-semibold">Acme HVAC Bot</span>
+                <span className="text-[8px] text-[#71717a]">v1 · live</span>
+              </div>
+              <span className="text-[8px] text-[#1FAE85] font-mono">200 ok</span>
+            </motion.div>
+          </div>
         </div>
       </div>
     </motion.div>
   );
 };
+
+// v1.32.1 — Helper components for the dashboard mockup in
+// BuildAndShowCard. Sidebar groups, nav items (with optional
+// "lightUpAt" delay so they turn green as build tools fire),
+// and kanban columns + cards (cards appear at staggered times).
+
+const NavIcon = ({ kind }: { kind: string }) => {
+  const stroke = "currentColor";
+  const sw = "1.5";
+  const common = { fill: "none", stroke, strokeWidth: sw, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+  switch (kind) {
+    case "dashboard":
+      return (
+        <svg viewBox="0 0 24 24" className="size-3" {...common}>
+          <rect x="3" y="3" width="7" height="9" rx="1" />
+          <rect x="14" y="3" width="7" height="5" rx="1" />
+          <rect x="14" y="12" width="7" height="9" rx="1" />
+          <rect x="3" y="16" width="7" height="5" rx="1" />
+        </svg>
+      );
+    case "users":
+      return (
+        <svg viewBox="0 0 24 24" className="size-3" {...common}>
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+        </svg>
+      );
+    case "calendar":
+      return (
+        <svg viewBox="0 0 24 24" className="size-3" {...common}>
+          <rect x="3" y="4" width="18" height="18" rx="2" />
+          <path d="M16 2v4M8 2v4M3 10h18" />
+        </svg>
+      );
+    case "bot":
+      return (
+        <svg viewBox="0 0 24 24" className="size-3" {...common}>
+          <rect x="3" y="8" width="18" height="12" rx="2" />
+          <circle cx="9" cy="14" r="1" />
+          <circle cx="15" cy="14" r="1" />
+          <path d="M12 4v4M8 4h8" />
+        </svg>
+      );
+    case "layout":
+      return (
+        <svg viewBox="0 0 24 24" className="size-3" {...common}>
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <path d="M3 9h18M9 21V9" />
+        </svg>
+      );
+    case "form":
+      return (
+        <svg viewBox="0 0 24 24" className="size-3" {...common}>
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+          <path d="M14 2v6h6M9 13h6M9 17h4" />
+        </svg>
+      );
+    default:
+      return null;
+  }
+};
+
+const NavGroup = ({
+  label,
+  children,
+  delay = 1.6,
+}: {
+  label: string;
+  children: React.ReactNode;
+  delay?: number;
+}) => (
+  <motion.div
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    transition={{ delay, duration: 0.35 }}
+  >
+    <div className="text-[7.5px] uppercase tracking-[0.12em] text-[#71717a] font-semibold mb-1 px-1.5">
+      {label}
+    </div>
+    <div className="space-y-0.5">{children}</div>
+  </motion.div>
+);
+
+const NavItem = ({
+  icon,
+  label,
+  active,
+  lightUpAt,
+}: {
+  icon: string;
+  label: string;
+  active?: boolean;
+  /** seconds — when this nav item should "light up" green during the
+   *  hero animation (matches when its corresponding build tool fires). */
+  lightUpAt?: number;
+}) => {
+  const baseColor = active ? "text-[#fafafa]" : "text-[#a1a1aa]";
+  return (
+    <div
+      className={`relative flex items-center gap-1.5 px-1.5 py-1 rounded text-[9.5px] ${
+        active ? "bg-white/[0.04]" : ""
+      } ${baseColor}`}
+    >
+      <NavIcon kind={icon} />
+      <span className="truncate">{label}</span>
+      {lightUpAt !== undefined && (
+        <motion.span
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: lightUpAt + 0.05, duration: 0.3, type: "spring", stiffness: 220 }}
+          className="ml-auto size-1.5 rounded-full bg-[#1FAE85] shadow-[0_0_6px_rgba(31,174,133,0.6)]"
+        />
+      )}
+    </div>
+  );
+};
+
+type KanbanCard = {
+  title: string;
+  subtitle: string;
+  value: string;
+  /** seconds — when this card should appear */
+  appearAt: number;
+};
+
+const KanbanColumn = ({
+  label,
+  color,
+  count,
+  cards = [],
+}: {
+  label: string;
+  color: string;
+  count: number;
+  cards?: KanbanCard[];
+}) => (
+  <div className="rounded-md border border-white/5 bg-white/[0.015] p-1.5 min-h-[160px]">
+    <div className="flex items-center gap-1 mb-1.5">
+      <span className="size-1.5 rounded-full" style={{ background: color }} />
+      <span className="text-[8.5px] font-semibold text-[#fafafa] truncate">{label}</span>
+      <span className="ml-auto text-[8.5px] text-[#71717a] font-mono">{count}</span>
+    </div>
+    <div className="space-y-1">
+      {cards.map((card) => (
+        <motion.div
+          key={card.title}
+          initial={{ opacity: 0, scale: 0.92, y: 4 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ delay: card.appearAt, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+          className="rounded p-1.5 bg-[#0d0d10] border border-white/5"
+        >
+          <div className="text-[8.5px] font-semibold text-[#fafafa] truncate">{card.title}</div>
+          <div className="text-[7.5px] text-[#71717a] truncate">{card.subtitle}</div>
+          <div className="mt-1 inline-block text-[7.5px] font-mono text-[#1FAE85] bg-[#1FAE85]/10 border border-[#1FAE85]/20 rounded px-1 py-px">
+            {card.value}
+          </div>
+        </motion.div>
+      ))}
+    </div>
+  </div>
+);
 
 // v1.32.0 — Inline install command pill. Below the hero CTAs.
 // One-click copy. Shows the exact command operators run in their
@@ -781,7 +931,7 @@ const CaseStudy = () => (
           Worked example
         </span>
         <h2 className="text-[clamp(28px,3.5vw,40px)] font-bold tracking-[-0.03em] leading-[1.1] mb-5 text-[#fafafa]">
-          What 12 minutes of Claude Code looks like
+          What 5 minutes of Claude Code looks like
         </h2>
         <p className="text-[15px] text-[#a1a1aa] leading-[1.7] mb-4">
           Desert Cool HVAC. Phoenix, AZ. A residential HVAC contractor
@@ -789,7 +939,7 @@ const CaseStudy = () => (
           Cal.com, Mailchimp, Intercom, and Webflow.
         </p>
         <p className="text-[15px] text-[#a1a1aa] leading-[1.7] mb-6">
-          We built it end-to-end in SeldonFrame on camera in 12 minutes:
+          We built it end-to-end in SeldonFrame on camera in 5 minutes:
           public landing page, booking system, intake form, CRM with
           HVAC-specific fields, and a published chatbot that books
           diagnostic visits. Every prompt is in the walkthrough; every
@@ -802,7 +952,7 @@ const CaseStudy = () => (
 
       <div className="grid grid-cols-2 gap-3">
         {[
-          { stat: "12 min", label: "build to live" },
+          { stat: "5 min", label: "build to live" },
           { stat: "5 → 1", label: "tools replaced" },
           { stat: "8/8", label: "evals passed" },
           { stat: "0", label: "lines hand-edited" },
@@ -1042,8 +1192,8 @@ const Infrastructure = () => {
         ))}
       </div>
       <div className="mt-8">
-        <a href="/docs/mcp-servers" className="text-[14px] text-[#1FAE85] hover:underline">
-          → Browse 25+ MCP servers for SMB operators
+        <a href="/docs" className="text-[14px] text-[#1FAE85] hover:underline">
+          → 140+ MCP tools your agent can call
         </a>
       </div>
     </section>
