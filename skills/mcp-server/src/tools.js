@@ -800,6 +800,117 @@ export const TOOLS = [
       });
     },
   },
+  // v1.33.1 — Bring-your-own-design-system path #1.
+  //
+  // Accepts the FULL CONTENT of a DESIGN.md file (the Google Labs
+  // format: YAML front matter for tokens + Markdown for rationale).
+  // Server parses it, maps tokens to OrgTheme, applies. Tokens that
+  // don't have a 1:1 OrgTheme equivalent (spacing scales, custom
+  // shadows, etc.) come back in `unmapped` so Claude Code can decide
+  // whether to surface them via update_landing_page or just inform
+  // the operator.
+  //
+  // USE-WHEN the operator has a DESIGN.md committed to their workspace
+  // or available locally and says "apply this design system" or
+  // "use this brand kit" or "match my company's design tokens".
+  //
+  // Example flow inside Claude Code:
+  //   const md = await readFile("./DESIGN.md", "utf8");
+  //   apply_design_md({ design_md_content: md });
+  //
+  // The MCP-client process reads the file (operator's machine has the
+  // tokens; we don't need a path-on-server). Server only sees the
+  // content string. 256KB cap server-side.
+  {
+    name: "apply_design_md",
+    description:
+      "Apply a DESIGN.md file (the Google Labs format: YAML front matter for tokens + Markdown for rationale) to the workspace theme. Maps tokens.colors.primary, tokens.colors.accent, tokens.mode, and tokens.typography.body to OrgTheme fields. Unmapped tokens (spacing, custom shadows, etc.) are returned so Claude Code can decide whether to apply them via update_landing_page or surface to the operator. " +
+      "USE-WHEN the operator says: 'apply my DESIGN.md', 'use this brand kit', 'match my company's design tokens', 'import my design system', or 'theme my workspace from this file'. " +
+      "Example: apply_design_md({ design_md_content: '<full file content as string>' })",
+    inputSchema: obj(
+      {
+        design_md_content: str(
+          "Full content of the DESIGN.md file as a string. The MCP client reads the file in the operator's process (e.g. via fs.readFile in Claude Code) and passes the content here. Server caps at 256KB."
+        ),
+        workspace_id: str("Optional workspace override."),
+      },
+      ["design_md_content"]
+    ),
+    handler: async (a) => {
+      const ws = wsOrDefault(a.workspace_id);
+      return api("POST", "/theme/apply-design-md", {
+        body: {
+          design_md_content: a.design_md_content,
+          workspace_id: ws,
+        },
+        workspace_id: ws,
+      });
+    },
+  },
+  // v1.33.1 — Bring-your-own-design-system path #2.
+  //
+  // Accepts a Claude Design "handoff bundle" — the artifact Anthropic's
+  // Claude Design produces when designs are ready for code (HTML or
+  // React components + design tokens + asset URLs). Server:
+  //   1. Applies the bundle's tokens (if any) to OrgTheme — same
+  //      mapping as apply_design_md.
+  //   2. Validates each component (name, surface, source size, props
+  //      schema) and returns a structured manifest with truncated
+  //      source previews + per-component "next_step" instructions.
+  //   3. Does NOT auto-execute generated React on live customer pages.
+  //      Claude Code reviews each component's source and chooses
+  //      whether to wire it via update_landing_page / add_custom_block
+  //      based on its eval-readiness. Customer-facing surfaces still
+  //      run through the eval gate before publish — Claude Design
+  //      output isn't trusted to bypass that.
+  //
+  // USE-WHEN the operator says "import this Claude Design handoff",
+  // "wire up these components", "I just exported a design from Claude
+  // Design", or "apply this design bundle to my workspace".
+  //
+  // Bundle schema (defensive read of the most likely format —
+  // Anthropic hasn't published a formal spec yet):
+  //   {
+  //     meta?: { project_name?, generated_at?, target?: "react"|"html" },
+  //     tokens?: { colors?, typography?, mode? },
+  //     components: [
+  //       { name, surface?, react_source? OR html_source?,
+  //         props_schema?, deps? }
+  //     ],
+  //     assets?: [{ name, url, type }]
+  //   }
+  //
+  // Limits: 1MB total bundle, 64KB per component source, 40 components
+  // per import. Larger bundles should be split.
+  {
+    name: "import_claude_design_handoff",
+    description:
+      "Validate a Claude Design handoff bundle (the artifact Claude Design produces when designs are ready for code), apply its embedded design tokens to the workspace theme, and return a structured manifest of the components with per-component next-step instructions for wiring them into pages. Does NOT auto-execute generated React on live pages — components route through human/eval review (the same gate that protects published agents) before customer-facing surfaces ship. " +
+      "USE-WHEN the operator says: 'import this Claude Design handoff', 'wire up these components', 'I just exported a design from Claude Design', or 'apply this design bundle to my workspace'. " +
+      "Example: import_claude_design_handoff({ bundle: { meta: { project_name: 'Acme HVAC' }, tokens: { colors: { primary: '#0e7490' } }, components: [{ name: 'TrustStrip', surface: 'landing', react_source: '<TSX content>' }] } })",
+    inputSchema: obj(
+      {
+        bundle: {
+          type: "object",
+          description:
+            "The handoff bundle as a JSON object. Required fields: bundle.components (array of {name, react_source OR html_source}). Optional: bundle.meta, bundle.tokens (DESIGN.md-shape), bundle.assets. Server caps at 1MB total, 64KB per component, 40 components per import.",
+          additionalProperties: true,
+        },
+        workspace_id: str("Optional workspace override."),
+      },
+      ["bundle"]
+    ),
+    handler: async (a) => {
+      const ws = wsOrDefault(a.workspace_id);
+      return api("POST", "/handoff/import", {
+        body: {
+          bundle: a.bundle,
+          workspace_id: ws,
+        },
+        workspace_id: ws,
+      });
+    },
+  },
   {
     name: "list_automations",
     description: "List automations configured in the active (or specified) workspace.",
