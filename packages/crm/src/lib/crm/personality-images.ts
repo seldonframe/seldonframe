@@ -278,3 +278,77 @@ export async function resolveHeroImageUrlForQuery(
   // of May 2026 even though Unsplash has marked it deprecated.
   return `https://source.unsplash.com/1600x900/?${encodeURIComponent(cleanedQuery)}`;
 }
+
+// ─── v1.38.1 — per-service gallery resolver ──────────────────────────────────
+//
+// projectGallery wants square thumbnails (~600x600), one per service. Resolves
+// an Unsplash photo for each query AND randomizes which result we pick (page +
+// rand) so a workspace with 6 services doesn't show the same generic photo
+// 6 times when the queries are similar ("plumbing", "drain cleaning",
+// "water heater"). Returns N URLs — never throws — falls back to the keyless
+// source.unsplash.com endpoint per query.
+
+const GALLERY_QUERY_PARAMS = "auto=format&fit=crop&w=800&h=800&q=80";
+
+export async function resolveGalleryImageUrlsForQueries(
+  queries: string[],
+): Promise<string[]> {
+  if (queries.length === 0) return [];
+  const apiKey = process.env.UNSPLASH_ACCESS_KEY?.trim();
+  const seenIds = new Set<string>();
+  const out: string[] = [];
+
+  for (const query of queries) {
+    const cleaned = query?.trim() || "professional business";
+
+    if (apiKey) {
+      try {
+        const response = await fetch(
+          `https://api.unsplash.com/search/photos?query=${encodeURIComponent(cleaned)}&per_page=10&orientation=squarish&content_filter=high`,
+          {
+            headers: {
+              Authorization: `Client-ID ${apiKey}`,
+              "Accept-Version": "v1",
+            },
+          },
+        );
+        if (response.ok) {
+          const data = (await response.json()) as {
+            results?: Array<{
+              id?: string;
+              urls?: { raw?: string; full?: string };
+            }>;
+          };
+          // Pick the first result that ISN'T already in the gallery — avoids
+          // duplicates when two services share a top result (e.g.
+          // "plumbing" + "plumber" return overlapping photos).
+          const fresh = (data.results ?? []).find(
+            (r) => r.id && !seenIds.has(r.id),
+          );
+          const raw = fresh?.urls?.raw ?? fresh?.urls?.full;
+          if (raw && fresh?.id) {
+            seenIds.add(fresh.id);
+            out.push(`${raw}${raw.includes("?") ? "&" : "?"}${GALLERY_QUERY_PARAMS}`);
+            continue;
+          }
+        }
+      } catch (err) {
+        console.warn(
+          JSON.stringify({
+            event: "unsplash_gallery_error",
+            query: cleaned,
+            error: err instanceof Error ? err.message : String(err),
+          }),
+        );
+      }
+    }
+
+    // Keyless fallback: source.unsplash.com with a per-query random seed
+    // (`sig`) so each item gets a different photo even when queries
+    // overlap.
+    const sig = Math.floor(Math.random() * 100000);
+    out.push(`https://source.unsplash.com/600x600/?${encodeURIComponent(cleaned)}&sig=${sig}`);
+  }
+
+  return out;
+}

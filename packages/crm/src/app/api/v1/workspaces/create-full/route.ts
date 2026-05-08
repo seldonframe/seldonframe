@@ -36,7 +36,41 @@ type Body = {
   // v1.37.0 — Google Maps paste workflow.
   weekly_hours?: unknown;
   google_place_url?: unknown;
+  // v1.38.3 — operator-supplied review excerpts as testimonials.
+  testimonials?: unknown;
 };
+
+// v1.38.3 — read & shape-check operator-supplied testimonials. We pass
+// quotes through verbatim (no LLM rewrite) so this is just a defensive
+// reader — drop entries missing a quote, cap to 8 to avoid abuse.
+type TestimonialEntry = {
+  quote: string;
+  name?: string | null;
+  role?: string | null;
+  company?: string | null;
+  rating?: number | null;
+};
+function readTestimonials(value: unknown): TestimonialEntry[] | null {
+  if (!Array.isArray(value)) return null;
+  const out: TestimonialEntry[] = [];
+  for (const raw of value.slice(0, 8)) {
+    if (!raw || typeof raw !== "object") continue;
+    const r = raw as Record<string, unknown>;
+    const quote = typeof r.quote === "string" ? r.quote.trim() : "";
+    if (!quote) continue;
+    out.push({
+      quote: quote.slice(0, 800),
+      name: typeof r.name === "string" ? r.name.trim() : null,
+      role: typeof r.role === "string" ? r.role.trim() : null,
+      company: typeof r.company === "string" ? r.company.trim() : null,
+      rating:
+        typeof r.rating === "number" && Number.isFinite(r.rating)
+          ? Math.max(1, Math.min(5, r.rating))
+          : null,
+    });
+  }
+  return out.length > 0 ? out : null;
+}
 
 // v1.37.0 — read & shape-check the canonical weekly_hours schedule.
 // We don't reject malformed entries; we silently drop them. Workspace
@@ -163,6 +197,8 @@ export async function POST(request: Request) {
     // workspace creation; defaults take over instead.
     weekly_hours: readWeeklyHours(body.weekly_hours),
     google_place_url: readString(body.google_place_url) || null,
+    // v1.38.3 — operator-supplied testimonials extracted from paste.
+    testimonials: readTestimonials(body.testimonials),
   };
 
   const result = await createFullWorkspace(input);

@@ -89,6 +89,20 @@ export interface CreateFullWorkspaceInput {
    *  scaffolded from a Google Maps paste. Stored on soul.business.maps_url
    *  for audit / future re-sync. Never user-facing. */
   google_place_url?: string | null;
+
+  /** v1.38.3 — operator-supplied testimonials, typically extracted by
+   *  Claude Code from a Google Maps paste's review excerpts. The
+   *  enhance-blocks step EMITS a testimonials section ONLY when this
+   *  array is non-empty — we never invent testimonials, ever. If the
+   *  operator has no real reviews to paste in, the testimonials block
+   *  is omitted from the page (better empty than fabricated). */
+  testimonials?: Array<{
+    quote: string;
+    name?: string | null;
+    role?: string | null;
+    company?: string | null;
+    rating?: number | null;
+  }> | null;
 }
 
 export interface CreateFullWorkspaceResult {
@@ -304,7 +318,17 @@ export async function createFullWorkspace(
           ? { name, description: enrichment.description }
           : { name };
       }),
-      testimonials: null,
+      // v1.38.3 — operator-supplied testimonials (typically extracted by
+      // Claude Code from Google Maps review excerpts). Flow into soul +
+      // landing render. Never fabricated server-side; null when absent.
+      testimonials: input.testimonials
+        ? input.testimonials.map((t) => ({
+            quote: t.quote,
+            name: t.name ?? null,
+            role: t.role ?? null,
+            company: t.company ?? null,
+          }))
+        : null,
       // v1.1.4 — proof + service-area enrichment fields. seedSoul
       // writes these onto organizations.soul where seedLandingFromSoul
       // picks them up via resolvePersonalityContent and feeds them
@@ -480,6 +504,7 @@ export async function createFullWorkspace(
       same_day: input.same_day,
       service_area: input.service_area,
       weekly_hours: input.weekly_hours,
+      testimonials: input.testimonials,
     });
     if (!enhanceResult.ok) {
       console.warn(

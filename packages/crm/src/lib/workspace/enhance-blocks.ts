@@ -47,7 +47,10 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { landingPages } from "@/db/schema";
 import { getAIClient } from "@/lib/ai/client";
-import { resolveHeroImageUrlForQuery } from "@/lib/crm/personality-images";
+import {
+  resolveGalleryImageUrlsForQueries,
+  resolveHeroImageUrlForQuery,
+} from "@/lib/crm/personality-images";
 import { loadSkillMd } from "@/lib/page-blocks/skill-loader";
 import type { LandingPageSection } from "@/components/landing/sections/types";
 
@@ -77,6 +80,18 @@ export interface EnhanceLandingInput {
     "sunday" | "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday",
     { enabled: boolean; start: string; end: string }
   >> | null;
+  /** v1.38.3 — operator-supplied testimonials extracted by Claude Code
+   *  from a Google Maps paste's review excerpts. We render them
+   *  VERBATIM — never let the LLM rewrite quotes. When absent, the
+   *  testimonials section is OMITTED from the page rather than
+   *  fabricated. */
+  testimonials?: Array<{
+    quote: string;
+    name?: string | null;
+    role?: string | null;
+    company?: string | null;
+    rating?: number | null;
+  }> | null;
 }
 
 export type EnhanceLandingResult =
@@ -192,6 +207,11 @@ ${buildBusinessContext(input)}
       { "name": "<service name verbatim from input>", "description": "<1 sentence — what the customer gets, not what we do>", "price": "<'from $X' or specific dollar; if unknown say 'Quote on request'>", "duration": "<optional 'X min' / '1-2 hours'>", "ctaText": "Book", "ctaLink": "/book" }
     ]
   },
+  "projectGallery": {
+    "headline": "<headline for the gallery — e.g. 'Recent work', 'Jobs done right', 'See our craftsmanship'>",
+    "subheadline": "<optional 1-line subhead about the work shown>",
+    "queries": ["<2-5 word Unsplash query for service 1, vertical-specific>", "<query for service 2>", "<query 3>", "<query 4>", "<query 5>", "<query 6>"]
+  },
   "about": {
     "headline": "<personal headline about THIS business — not a generic 'About Us'>",
     "body": "<2-3 sentences. Who you are, what you stand for, why customers choose you. NEVER lead with 'Welcome' or 'Founded in'. Lead with a concrete fact or claim.>"
@@ -259,6 +279,10 @@ ${skills.cta ?? "(skill missing — write one urgent-but-honest final CTA)"}
 # Service count
 
 Generate exactly ${Math.min(input.services.length, 6)} services in servicesGrid.services — one per service in the business context, in the order given. Do NOT invent services that aren't in the input.
+
+# Gallery queries
+
+Generate 6 Unsplash search queries in projectGallery.queries — vertical-specific, 2-5 words each, that produce real-looking job-site or business-context photos. Bias toward queries that return DIFFERENT photos (avoid all 6 being "plumber"). Each query becomes one square photo in a 6-photo masonry grid. Examples for HVAC: ["hvac technician outdoor unit", "ductwork installation", "thermostat residential", "air filter replacement", "rooftop commercial unit", "service van technician"]. For plumbing: ["plumber sink repair", "drain cleaning kitchen", "water heater install basement", "bathroom renovation", "pipe inspection camera", "emergency plumbing service van"].
 
 # FAQ count
 
@@ -492,6 +516,46 @@ async function payloadToSections(
     }
   }
 
+  // v1.38.1 — projectGallery. 6-photo masonry from per-service Unsplash
+  // queries the LLM generated. Closes the "feels populated" gap that's
+  // the single biggest visible difference between a fresh SF workspace
+  // and a real-business landing page. Soft-fails — if Unsplash is down
+  // we just skip the gallery (better than rendering broken-image icons).
+  const gallery = asObject(payload.projectGallery);
+  if (gallery) {
+    const queries = asArray<unknown>(gallery.queries)
+      .map((q) => (typeof q === "string" ? q.trim() : ""))
+      .filter((q) => q.length > 0)
+      .slice(0, 8);
+    if (queries.length > 0) {
+      try {
+        const urls = await resolveGalleryImageUrlsForQueries(queries);
+        if (urls.length > 0) {
+          sections.push({
+            type: "projectGallery",
+            order: order++,
+            content: {
+              headline: asString(gallery.headline, "Recent work"),
+              subheadline: asString(gallery.subheadline),
+              items: urls.map((url, idx) => ({
+                image: url,
+                alt: queries[idx] ?? "Recent project",
+                caption: queries[idx] ?? "",
+              })),
+              ctaText: "Book your job",
+              ctaLink: "/book",
+            },
+          });
+        }
+      } catch (err) {
+        console.warn(
+          `[enhance-blocks] gallery resolution failed:`,
+          err instanceof Error ? err.message : String(err),
+        );
+      }
+    }
+  }
+
   // Service area — chip cloud of cities served. Only when paste/operator
   // gave us cities; we don't invent them.
   if (input.service_area && input.service_area.length > 0) {
@@ -502,6 +566,29 @@ async function payloadToSections(
         headline: "Where we serve",
         primaryLocation: `${input.city}, ${input.state}`,
         areas: input.service_area,
+      },
+    });
+  }
+
+  // v1.38.3 — testimonials. We emit this section ONLY when the operator
+  // (typically via Claude Code parsing a Google Maps paste) supplied real
+  // review excerpts. NEVER fabricated — better empty than fake. Quotes
+  // are passed through verbatim; the LLM does not get to rewrite them.
+  if (input.testimonials && input.testimonials.length > 0) {
+    sections.push({
+      type: "testimonials",
+      order: order++,
+      content: {
+        headline: "What customers are saying",
+        testimonials: input.testimonials.map((t) => ({
+          quote: t.quote,
+          author: t.name ?? "Verified customer",
+          role: t.role ?? (t.company ?? ""),
+          rating: typeof t.rating === "number" ? t.rating : 5,
+          // No avatar — we don't have face photos and don't fake them.
+          // The TestimonialsSection component falls back to letter-
+          // avatar / no-avatar gracefully.
+        })),
       },
     });
   }
@@ -553,6 +640,27 @@ async function payloadToSections(
       ],
     },
   });
+
+  // v1.38.2 — sticky mobile CTA bar. Always last in the sections array
+  // (position:fixed pulls it out of flow at runtime, so visual order
+  // doesn't matter). Renders ONLY on mobile via the component's own
+  // `md:hidden` class. Industry standard for trades sites; ~2-3x
+  // mobile booking lift. Skipped when no phone — without a callable
+  // number the bar would be a single "Book" button which the navbar
+  // already provides.
+  if (input.phone) {
+    sections.push({
+      type: "stickyMobileCTA",
+      order: order++,
+      content: {
+        phone: input.phone,
+        phoneLink: `tel:${input.phone.replace(/[^\d+]/g, "")}`,
+        bookLink: "/book",
+        callText: "Call",
+        bookText: "Book",
+      },
+    });
+  }
 
   return sections;
 }

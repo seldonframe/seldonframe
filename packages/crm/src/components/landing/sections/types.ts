@@ -121,6 +121,57 @@ export type ServiceAreaSectionContent = {
   areas: string[];
 };
 
+// v1.38.1 — project-gallery block. Stock-photo masonry grid that
+// makes a trades-business landing page feel populated rather than
+// text-only. Auto-fetched per-service via Unsplash inside
+// enhanceLandingForWorkspace (one image per service, plus optional
+// extras keyed off vertical scenery — e.g. for HVAC: a thermostat,
+// outdoor unit, residential setting). Operators can replace any
+// image post-launch via update_landing_section.
+//
+// Why no LLM call to generate the gallery: Claude already produces
+// a `gallery_image_query` per service inside the v1.38.0 prompt;
+// the orchestrator just resolves each query to a real Unsplash URL
+// and renders. Captions are optional — usually the service name is
+// enough context.
+export type ProjectGallerySectionContent = {
+  headline: string;
+  subheadline?: string;
+  items: Array<{
+    image: string;
+    alt: string;
+    caption?: string;
+  }>;
+  /** Optional bottom CTA. Typically "See more work" → /book. */
+  ctaText?: string;
+  ctaLink?: string;
+};
+
+// v1.38.2 — sticky-mobile-cta block. Fixed bottom-of-screen bar that
+// renders ONLY on mobile (≤md breakpoint) with two large taps:
+// "Call now" (tel:) and "Book now" (/book). Industry consensus from
+// Cal.com, Calendly, and every conversion-tuned trades site is that
+// a sticky mobile CTA bar lifts mobile bookings by 2-3x. The bar
+// hides on desktop where the navbar's fixed CTAs are already
+// reachable.
+//
+// Rendered as a section in the LandingPageSection[] array but
+// position:fixed pulls it out of the document flow at runtime.
+// PageRenderer's RevealOnScroll wrapper still renders fine — the
+// motion never fires since the bar is always visible from page load.
+export type StickyMobileCTASectionContent = {
+  /** Phone number, formatted for display ("(555) 123-4567"). */
+  phone: string;
+  /** tel: link target — defaults to digits-only of phone. */
+  phoneLink?: string;
+  /** Booking link — defaults to "/book". */
+  bookLink?: string;
+  /** Override the call CTA text. Defaults to "Call". */
+  callText?: string;
+  /** Override the book CTA text. Defaults to "Book". */
+  bookText?: string;
+};
+
 export type LandingPageSection = {
   type:
     | "navbar"
@@ -136,7 +187,9 @@ export type LandingPageSection = {
     | "footer"
     | "servicesGrid"
     | "emergencyStrip"
-    | "serviceArea";
+    | "serviceArea"
+    | "projectGallery"
+    | "stickyMobileCTA";
   content: Record<string, unknown>;
   order: number;
 };

@@ -348,6 +348,28 @@ export const TOOLS = [
         google_place_url: str(
           "Optional — the Google Maps share URL for the listing. Stored on soul.business.maps_url for audit."
         ),
+        // v1.38.3 — testimonials extracted from review excerpts in the
+        // Maps paste. Pass these through VERBATIM — never rewrite or
+        // synthesize. The backend renders them as-is. When the paste
+        // has no review excerpts, OMIT this field entirely (do not
+        // pass an empty array, do not invent reviews).
+        testimonials: {
+          type: "array",
+          description:
+            "OPTIONAL real review excerpts extracted from the Maps paste, VERBATIM (do not rewrite). Each entry: { quote, name?, role?, rating? }. quote = the actual review text the customer wrote (≤800 chars). name = reviewer name as shown on Google. role = customer descriptor like 'Homeowner', 'Property manager' (omit if unknown). rating = 1-5 if visible. Pass 3-6 entries when paste contains genuine reviews; OMIT this entire field when paste has no review text. NEVER fabricate reviews.",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              quote: { type: "string", description: "Verbatim review text from the paste." },
+              name: { type: "string", description: "Reviewer name from Google. Optional." },
+              role: { type: "string", description: "Customer descriptor (e.g. 'Homeowner'). Optional." },
+              company: { type: "string", description: "Optional — only relevant for B2B reviews." },
+              rating: { type: "number", description: "1-5 star rating if visible." },
+            },
+            required: ["quote"],
+          },
+        },
       },
       ["business_name", "city", "state", "phone", "services", "business_description"]
     ),
@@ -375,6 +397,9 @@ export const TOOLS = [
           // blocks workspace creation; defaults take over.
           weekly_hours: args.weekly_hours ?? null,
           google_place_url: args.google_place_url ?? null,
+          // v1.38.3 — operator-supplied testimonials. Pass through
+          // verbatim; backend drops malformed entries silently.
+          testimonials: args.testimonials ?? null,
         },
         allow_anonymous: true,
       });

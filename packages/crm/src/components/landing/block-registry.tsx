@@ -10,8 +10,10 @@ import { HeroSection } from "./sections/hero";
 import { NavbarSection } from "./sections/navbar";
 import { PricingSection } from "./sections/pricing";
 import { ProcessSection } from "./sections/process";
+import { ProjectGallerySection } from "./sections/project-gallery";
 import { ServiceAreaSection } from "./sections/service-area";
 import { ServicesGridSection } from "./sections/services-grid";
+import { StickyMobileCTASection } from "./sections/sticky-mobile-cta";
 import { TestimonialsSection } from "./sections/testimonials";
 import type {
   BenefitsSectionContent,
@@ -25,8 +27,10 @@ import type {
   NavbarSectionContent,
   PricingSectionContent,
   ProcessSectionContent,
+  ProjectGallerySectionContent,
   ServiceAreaSectionContent,
   ServicesGridSectionContent,
+  StickyMobileCTASectionContent,
   TestimonialsSectionContent,
   WhoItsForSectionContent,
 } from "./sections/types";
@@ -186,6 +190,30 @@ export const landingBlockRegistry: BlockRegistry = [
     grapesContent:
       '<section class="py-20"><h2 class="text-3xl font-bold text-center mb-8">Service Area</h2><div class="flex flex-wrap justify-center gap-3 max-w-4xl mx-auto"><span class="px-4 py-2 border rounded-full">City 1</span><span class="px-4 py-2 border rounded-full">City 2</span><span class="px-4 py-2 border rounded-full">City 3</span></div></section>',
     render: (content, key) => <ServiceAreaSection key={key} {...(content as ServiceAreaSectionContent)} />,
+  },
+  // v1.38.1 — project-gallery block. Stock-photo masonry that makes a
+  // trades landing page feel populated. Auto-fetched per service via
+  // Unsplash inside enhanceLandingForWorkspace.
+  {
+    type: "projectGallery",
+    label: "Project Gallery",
+    category: "SeldonFrame",
+    grapesId: "sf-project-gallery",
+    grapesContent:
+      '<section class="py-20"><h2 class="text-3xl font-bold text-center mb-8">Recent Work</h2><div class="grid grid-cols-2 md:grid-cols-4 gap-3 max-w-6xl mx-auto"><div class="aspect-square bg-muted rounded-2xl"></div><div class="aspect-square bg-muted rounded-2xl"></div><div class="aspect-square bg-muted rounded-2xl"></div><div class="aspect-square bg-muted rounded-2xl"></div></div></section>',
+    render: (content, key) => <ProjectGallerySection key={key} {...(content as ProjectGallerySectionContent)} />,
+  },
+  // v1.38.2 — sticky-mobile-cta. Fixed bottom-of-screen call/book
+  // bar, MOBILE ONLY. Hides on desktop where the navbar's CTAs are
+  // already reachable.
+  {
+    type: "stickyMobileCTA",
+    label: "Sticky Mobile CTA",
+    category: "SeldonFrame",
+    grapesId: "sf-sticky-mobile-cta",
+    grapesContent:
+      '<div class="fixed bottom-0 inset-x-0 border-t bg-card md:hidden flex"><a class="flex-1 py-4 text-center" href="tel:">Call</a><a class="flex-1 py-4 text-center bg-primary text-white" href="/book">Book</a></div>',
+    render: (content, key) => <StickyMobileCTASection key={key} {...(content as StickyMobileCTASectionContent)} />,
   },
 ];
 
