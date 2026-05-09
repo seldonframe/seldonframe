@@ -204,7 +204,7 @@ ${buildBusinessContext(input)}
     "headline": "<value-driven headline for services section; speak to outcome not features>",
     "subheadline": "<optional 1-line subhead; can be empty string>",
     "services": [
-      { "name": "<service name verbatim from input>", "description": "<1 sentence — what the customer gets, not what we do>", "price": "<'from $X' or specific dollar; if unknown say 'Quote on request'>", "duration": "<optional 'X min' / '1-2 hours'>", "ctaText": "Book", "ctaLink": "/book" }
+      { "name": "<service name verbatim from input>", "description": "<1 sentence — what the customer gets, not what we do>", "price": "<'from $X' or specific dollar; if unknown say 'Quote on request'>", "duration": "<optional 'X min' / '1-2 hours'>", "icon": "<one lucide icon name OR alias that fits THIS specific service — see icon hints below>", "ctaText": "Book", "ctaLink": "/book" }
     ]
   },
   "projectGallery": {
@@ -279,6 +279,18 @@ ${skills.cta ?? "(skill missing — write one urgent-but-honest final CTA)"}
 # Service count
 
 Generate exactly ${Math.min(input.services.length, 6)} services in servicesGrid.services — one per service in the business context, in the order given. Do NOT invent services that aren't in the input.
+
+# Per-service icons (NEW v1.38.5 — required field)
+
+Each service MUST have a distinct \`icon\` value. Pick the lucide name OR vertical-alias that BEST matches that specific service — DO NOT use the same icon twice in the same workspace. Available names:
+- General: shield, shield-check, badge-check, clock, star, award, sparkles, thumbs-up, heart, zap, hammer, wrench, hard-hat, droplets, wind, cloud-rain, cloud-rain-wind, cloud-snow, leaf, home, house-plug, scissors, stethoscope, truck, phone, map-pin, dollar-sign
+- Roofing aliases: storm → cloud-rain-wind, shingle → home, metal → shield, gutter → droplets, tarp → shield, inspection → shield-check, hail → cloud-rain-wind
+- Plumbing aliases: drain → droplets, leak → droplets, heater → zap, pipe → wrench
+- HVAC aliases: cooling → wind, heating → zap, ductwork → home, thermostat → home
+- General trades aliases: emergency → zap, repair → wrench, install → hammer, installation → hammer, warranty → badge-check, estimate → dollar-sign, quote → dollar-sign, free → dollar-sign, sameday → clock
+- Service categories: cleaning → sparkles, treatment → leaf, dental → stethoscope
+
+Pick whatever READS most concretely as that service. "Storm damage repair" → "cloud-rain-wind" or "storm". "Shingle replacement" → "home" or "shingle". "Gutter repair" → "droplets" or "gutter". "Free roof inspection" → "shield-check" or "inspection". The renderer normalizes and resolves.
 
 # Gallery queries
 
@@ -456,6 +468,11 @@ async function payloadToSections(
           description: asString(item.description),
           price: asString(item.price, "Quote on request"),
           duration: asString(item.duration),
+          // v1.38.5 — propagate per-service icon. v1.38.4's
+          // services-grid.tsx has the dynamic resolver, but pre-1.38.5
+          // the prompt didn't ask for icons + payloadToSections didn't
+          // pass them through, so all cards rendered <Sparkles>.
+          icon: asString(item.icon),
           ctaText: asString(item.ctaText, "Book"),
           ctaLink: asString(item.ctaLink, "/book"),
         })),

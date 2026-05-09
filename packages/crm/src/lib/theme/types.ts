@@ -35,11 +35,21 @@ export interface OrgTheme {
   motionPreset?: MotionPreset;
 }
 
+// v1.38.5 — flipped default mode from "dark" to "light".
+// Customer-facing public surfaces (workspace landing, booking page,
+// intake form) should be light by industry convention (Cal.com,
+// Calendly, Squarespace, every SMB site builder). Operators who
+// genuinely want a dark public-facing brand can opt-in via the theme
+// settings page; they're the 5% case. The 95% case — local-service
+// businesses, agencies, dental, HVAC, legal — wants a clean light
+// palette by default. This change cascades: every newly-created
+// workspace inherits mode:"light", existing workspaces are
+// unaffected (their theme.mode is already stored in organizations.theme).
 export const DEFAULT_ORG_THEME: OrgTheme = {
   primaryColor: "#14b8a6",
   accentColor: "#0d9488",
   fontFamily: "Inter",
-  mode: "dark",
+  mode: "light",
   borderRadius: "rounded",
   logoUrl: null,
   motionPreset: "balanced",

@@ -25,6 +25,16 @@ export default async function PublicSPage({
   const showBadge = await shouldShowPoweredByBadgeForOrg(payload.orgId);
   const theme = await getPublicOrgThemeById(payload.orgId);
 
+  // v1.38.5 — workspace home subdomain ("/" → /s/[orgSlug]/[...slug])
+  // forced to light mode. v1.38.4 applied the same fix to /l/ and /book/
+  // routes but missed /s/ which is the actual home rewrite per
+  // proxy.ts. Without this override + className="light" wrapper, the
+  // landing renders against the workspace's stored theme — which is
+  // dark for any workspace created before v1.38.5's DEFAULT_ORG_THEME
+  // flip. Now both old + new workspaces render light by default; the
+  // operator can re-enable dark via theme settings if they want.
+  const publicTheme = { ...theme, mode: "light" as const };
+
   await trackLandingVisitAction({
     pageId: payload.page.id,
     visitorId: `${orgSlug}:${pageSlug}`,
@@ -54,8 +64,8 @@ export default async function PublicSPage({
   );
 
   return (
-    <PublicThemeProvider theme={theme}>
-      <main className="min-h-screen" style={{ backgroundColor: "var(--sf-bg)", color: "var(--sf-text)" }}>
+    <PublicThemeProvider theme={publicTheme}>
+      <main className="light min-h-screen" style={{ backgroundColor: "var(--sf-bg)", color: "var(--sf-text)" }}>
         {payload.page.puckData ? (
           <PuckPageRenderer data={payload.page.puckData as Record<string, unknown>} orgId={payload.orgId} />
         ) : payload.page.contentHtml && payload.page.contentCss ? (

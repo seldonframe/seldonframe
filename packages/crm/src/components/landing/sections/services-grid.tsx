@@ -100,6 +100,42 @@ const ICON_MAP: Record<string, LucideIcon> = {
   same: Clock,
   sameday: Clock,
   fast: Zap,
+  // v1.38.5 — vertical-specific aliases. Each maps to a lucide icon
+  // that reads as the right concept for that trade. The
+  // enhance-blocks prompt now lists these in the per-service icon
+  // hints so Claude picks descriptive names instead of "sparkles"
+  // for everything.
+  // Roofing
+  shingle: Home,
+  metal: Shield,
+  gutter: Droplets,
+  tarp: Shield,
+  hail: CloudRainWind,
+  roof: Home,
+  // Plumbing
+  drain: Droplets,
+  leak: Droplets,
+  heater: Zap,
+  pipe: Wrench,
+  water: Droplets,
+  // HVAC
+  cooling: Wind,
+  ac: Wind,
+  heating: Zap,
+  furnace: Zap,
+  ductwork: Home,
+  duct: Home,
+  thermostat: Home,
+  hvac: Wind,
+  // Treatments / spa / dental
+  treatment: Leaf,
+  facial: Sparkles,
+  massage: Heart,
+  laser: Zap,
+  // Auto / fleet
+  vehicle: Truck,
+  van: Truck,
+  fleet: Truck,
 };
 
 function resolveServiceIcon(iconName: string | undefined): LucideIcon {
