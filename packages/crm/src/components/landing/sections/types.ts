@@ -1,3 +1,21 @@
+// v1.40.5 — Unsplash attribution payload required by API guidelines.
+// Every hero / gallery image resolved via the Unsplash API ships with
+// this metadata so the rendered page can display the photographer
+// credit + link back to their Unsplash profile (with utm_source +
+// utm_medium params per Unsplash's spec). Without this, SF can't
+// pass production-tier review and stays capped at the 50-req/hour
+// demo limit.
+export type UnsplashAttribution = {
+  /** Photographer's display name as Unsplash returned it. */
+  photographer_name: string;
+  /** Photographer's Unsplash username (`@username` slug). */
+  photographer_username: string;
+  /** Photographer's Unsplash profile URL — link target for the credit. */
+  photographer_url: string;
+  /** Unsplash photo ID, useful for debugging + dedupe. */
+  photo_id: string;
+};
+
 export type NavbarSectionContent = {
   businessName: string;
   logoUrl?: string;
@@ -27,6 +45,11 @@ export type HeroSectionContent = {
    *  - founder-portrait: copy left, square portrait right with eyebrow
    *    treatment — best for solo-operator / coaching businesses */
   variant?: "split-screen-50-50" | "left-aligned-asymmetric" | "cinematic-fullbleed" | "founder-portrait";
+  /** v1.40.5 — Unsplash photographer attribution. Renders as a small
+   *  "Photo: NAME on Unsplash" pill in the hero composition. Required
+   *  by Unsplash API guidelines; absent only when the hero image came
+   *  from somewhere other than Unsplash (e.g. operator-uploaded). */
+  heroImageAttribution?: UnsplashAttribution;
   /** v1.40.0 — Hormozi-style risk-reversal badges rendered as a tight
    *  row under the primary CTA. License #s, "BBB A+ rated", "Bonded &
    *  insured", "Lifetime warranty" — proof underneath the click target
@@ -168,6 +191,10 @@ export type ProjectGallerySectionContent = {
     image: string;
     alt: string;
     caption?: string;
+    /** v1.40.5 — Unsplash photographer attribution per tile. Required
+     *  by Unsplash API guidelines; rendered as part of the caption
+     *  hover overlay. */
+    attribution?: UnsplashAttribution;
   }>;
   /** Optional bottom CTA. Typically "See more work" → /book. */
   ctaText?: string;

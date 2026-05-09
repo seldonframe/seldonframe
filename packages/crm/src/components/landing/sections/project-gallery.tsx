@@ -33,6 +33,13 @@ function GalleryTile({
 }) {
   const [failed, setFailed] = useState(false);
   if (failed) return null;
+  // v1.40.5 — Unsplash photographer credit appears as the bottom line
+  // of the hover overlay (alongside the existing caption). Required
+  // for production-tier API approval. Always rendered when attribution
+  // is present, regardless of whether the caption is — operators
+  // sometimes turn captions off but Unsplash credits stay on.
+  const attribution = item.attribution;
+  const hasOverlay = Boolean(item.caption) || Boolean(attribution);
   return (
     <figure className="group relative aspect-square overflow-hidden rounded-2xl border bg-muted/20 transition-all hover:-translate-y-[2px] hover:shadow-lg">
       <img
@@ -43,9 +50,31 @@ function GalleryTile({
         onError={() => setFailed(true)}
         className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
       />
-      {item.caption ? (
-        <figcaption className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-3 pt-8 text-xs font-medium text-white opacity-0 transition-opacity group-hover:opacity-100 md:text-sm">
-          {item.caption}
+      {hasOverlay ? (
+        <figcaption className="absolute inset-x-0 bottom-0 space-y-1 bg-gradient-to-t from-black/70 to-transparent px-3 py-3 pt-8 text-xs font-medium text-white opacity-0 transition-opacity group-hover:opacity-100 md:text-sm">
+          {item.caption ? <span className="block">{item.caption}</span> : null}
+          {attribution ? (
+            <span className="block text-[10px] font-normal text-white/70">
+              Photo by{" "}
+              <a
+                href={`${attribution.photographer_url}${attribution.photographer_url.includes("?") ? "&" : "?"}utm_source=seldonframe&utm_medium=referral`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline-offset-2 hover:underline hover:text-white"
+              >
+                {attribution.photographer_name}
+              </a>{" "}
+              on{" "}
+              <a
+                href="https://unsplash.com/?utm_source=seldonframe&utm_medium=referral"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline-offset-2 hover:underline hover:text-white"
+              >
+                Unsplash
+              </a>
+            </span>
+          ) : null}
         </figcaption>
       ) : null}
     </figure>

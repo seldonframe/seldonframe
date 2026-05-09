@@ -48,8 +48,8 @@ import { db } from "@/db";
 import { bookings, landingPages, organizations } from "@/db/schema";
 import { getAIClient } from "@/lib/ai/client";
 import {
-  resolveGalleryImageUrlsForQueries,
-  resolveHeroImageUrlForQuery,
+  resolveGalleryImages,
+  resolveHeroImage,
 } from "@/lib/crm/personality-images";
 import { loadSkillMd } from "@/lib/page-blocks/skill-loader";
 import {
@@ -521,10 +521,18 @@ async function payloadToSections(
   const hero = asObject(payload.hero);
   if (hero) {
     let heroImage = "";
+    let heroImageAttribution: import("@/components/landing/sections/types").UnsplashAttribution | undefined;
     const heroQuery = asString(hero.heroImage_query);
     if (heroQuery) {
       try {
-        heroImage = await resolveHeroImageUrlForQuery(heroQuery);
+        // v1.40.5 — resolveHeroImage returns { url, attribution } for
+        // Unsplash production-compliance (photographer credit + download
+        // tracking). Soft-fail: null triggers the gradient empty state.
+        const resolved = await resolveHeroImage(heroQuery);
+        if (resolved) {
+          heroImage = resolved.url;
+          heroImageAttribution = resolved.attribution;
+        }
       } catch {
         // Soft-fail: empty heroImage triggers the v1.36.0 branded-gradient
         // empty state, which still looks intentional.
@@ -571,6 +579,10 @@ async function payloadToSections(
         ctaLink: asString(hero.ctaLink, "/book"),
         secondaryCta,
         heroImage,
+        // v1.40.5 — Unsplash photographer attribution (required for
+        // production-tier compliance). Renderer shows it as a small
+        // "Photo: NAME on Unsplash" credit.
+        heroImageAttribution,
         // v1.40.0 — archetype-driven layout variant. Renderer picks
         // the matching composition; centered hero is banned.
         variant: archetype.heroVariant,
@@ -692,18 +704,25 @@ async function payloadToSections(
       .slice(0, 8);
     if (queries.length > 0) {
       try {
-        const urls = await resolveGalleryImageUrlsForQueries(queries);
-        if (urls.length > 0) {
+        // v1.40.5 — resolveGalleryImages returns { url, attribution }[]
+        // for production-compliant rendering. The order may differ
+        // from `queries` since failed slots are skipped, so the alt/
+        // caption mapping uses the index of items that successfully
+        // resolved (Claude's per-query intent is somewhat lost on
+        // skipped slots; better than rendering a wrong caption).
+        const resolved = await resolveGalleryImages(queries);
+        if (resolved.length > 0) {
           sections.push({
             type: "projectGallery",
             order: order++,
             content: {
               headline: asString(gallery.headline, "Recent work"),
               subheadline: asString(gallery.subheadline),
-              items: urls.map((url, idx) => ({
-                image: url,
+              items: resolved.map((image, idx) => ({
+                image: image.url,
                 alt: queries[idx] ?? "Recent project",
                 caption: queries[idx] ?? "",
+                attribution: image.attribution,
               })),
               ctaText: "Book your job",
               ctaLink: "/book",

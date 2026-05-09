@@ -35,9 +35,16 @@ let pass = 0;
 let fail = 0;
 let lastRateLimit = null;
 
-function broaden(q) {
-  const w = q.trim().split(/\s+/).filter(Boolean);
-  return w.length > 1 ? w.slice(1).join(" ") : null;
+// v1.40.5 — three-tier broadening (mirrors buildQueryCandidates in
+// packages/crm/src/lib/crm/personality-images.ts).
+function buildQueryCandidates(query) {
+  const cleaned = (query || "").trim();
+  if (!cleaned) return [];
+  const words = cleaned.split(/\s+/).filter(Boolean);
+  const candidates = [cleaned];
+  if (words.length >= 2) candidates.push(words.slice(1).join(" "));
+  if (words.length >= 3) candidates.push(words.slice(-2).join(" "));
+  return [...new Set(candidates)];
 }
 
 async function searchOnce(query, apiKey, perPage, orientation) {
@@ -57,7 +64,7 @@ for (const t of tests) {
   process.stdout.write(`[${t.kind.padEnd(7)}] "${t.query}" ... `);
 
   const perPage = t.kind === "hero" ? 15 : 10;
-  const candidates = [t.query, broaden(t.query)].filter(Boolean);
+  const candidates = buildQueryCandidates(t.query);
   let res, data, count = 0, usedQuery = null;
 
   for (const candidate of candidates) {

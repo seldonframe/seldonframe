@@ -26,7 +26,54 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Star } from "lucide-react";
-import type { HeroSectionContent } from "./types";
+import type { HeroSectionContent, UnsplashAttribution } from "./types";
+
+// v1.40.5 — Unsplash photographer credit. Required by Unsplash API
+// guidelines for production-tier approval. Both photographer name and
+// "Unsplash" link include the spec'd UTM params (utm_source +
+// utm_medium=referral) so Unsplash can attribute referral traffic to
+// SeldonFrame in their analytics.
+//
+// The `tone` prop chooses light text-on-dark (cinematic-fullbleed
+// where the credit overlays the photo) vs dark text-on-light
+// (side-image variants where the credit sits on the page background).
+function UnsplashCredit({
+  attribution,
+  tone = "light",
+}: {
+  attribution: UnsplashAttribution;
+  tone?: "light" | "dark";
+}) {
+  const utm = "?utm_source=seldonframe&utm_medium=referral";
+  const photographerHref = `${attribution.photographer_url}${attribution.photographer_url.includes("?") ? "&" : "?"}utm_source=seldonframe&utm_medium=referral`;
+  const unsplashHref = `https://unsplash.com/${utm}`;
+  const baseClass =
+    tone === "light"
+      ? "text-white/70 hover:text-white"
+      : "text-muted-foreground hover:text-foreground";
+  return (
+    <p className={`text-[10px] leading-tight tracking-wide ${baseClass}`}>
+      Photo by{" "}
+      <a
+        href={photographerHref}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="underline-offset-2 hover:underline"
+      >
+        {attribution.photographer_name}
+      </a>{" "}
+      on{" "}
+      <a
+        href={unsplashHref}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="underline-offset-2 hover:underline"
+      >
+        Unsplash
+      </a>
+    </p>
+  );
+}
 
 function ProofTile({ rating, label }: NonNullable<HeroSectionContent["proofTile"]>) {
   return (
@@ -121,6 +168,11 @@ export function HeroSection(props: HeroSectionContent) {
       props.heroImage.trim().length > 0;
     return (
       <section className="relative isolate overflow-hidden">
+        {hasImage && props.heroImageAttribution ? (
+          <div className="pointer-events-auto absolute bottom-3 right-4 z-20">
+            <UnsplashCredit attribution={props.heroImageAttribution} tone="light" />
+          </div>
+        ) : null}
         <div className="absolute inset-0 -z-10">
           {hasImage ? (
             <>
@@ -241,12 +293,17 @@ export function HeroSection(props: HeroSectionContent) {
             </div>
             <RiskReversalBadges badges={props.riskReversalBadges ?? []} />
           </div>
-          <div className="aspect-square overflow-hidden rounded-2xl border bg-card">
-            <HeroImage
-              src={imageFailed ? undefined : props.heroImage}
-              alt={props.headline}
-              onError={() => setImageFailed(true)}
-            />
+          <div className="space-y-2">
+            <div className="aspect-square overflow-hidden rounded-2xl border bg-card">
+              <HeroImage
+                src={imageFailed ? undefined : props.heroImage}
+                alt={props.headline}
+                onError={() => setImageFailed(true)}
+              />
+            </div>
+            {!imageFailed && props.heroImageAttribution && props.heroImage ? (
+              <UnsplashCredit attribution={props.heroImageAttribution} tone="dark" />
+            ) : null}
           </div>
         </div>
       </section>
@@ -290,6 +347,11 @@ export function HeroSection(props: HeroSectionContent) {
               onError={() => setImageFailed(true)}
               className="absolute inset-0"
             />
+            {!imageFailed && props.heroImageAttribution && props.heroImage ? (
+              <div className="absolute bottom-2 right-3 z-10">
+                <UnsplashCredit attribution={props.heroImageAttribution} tone="light" />
+              </div>
+            ) : null}
           </div>
         </div>
       </section>
@@ -325,16 +387,21 @@ export function HeroSection(props: HeroSectionContent) {
           </div>
           <RiskReversalBadges badges={props.riskReversalBadges ?? []} />
         </div>
-        <div className="aspect-[4/5] overflow-hidden rounded-2xl border bg-card">
-          {props.heroVideo ? (
-            <video controls className="h-full w-full object-cover" src={props.heroVideo} />
-          ) : (
-            <HeroImage
-              src={imageFailed ? undefined : props.heroImage}
-              alt={props.headline}
-              onError={() => setImageFailed(true)}
-            />
-          )}
+        <div className="space-y-2">
+          <div className="aspect-[4/5] overflow-hidden rounded-2xl border bg-card">
+            {props.heroVideo ? (
+              <video controls className="h-full w-full object-cover" src={props.heroVideo} />
+            ) : (
+              <HeroImage
+                src={imageFailed ? undefined : props.heroImage}
+                alt={props.headline}
+                onError={() => setImageFailed(true)}
+              />
+            )}
+          </div>
+          {!imageFailed && props.heroImageAttribution && props.heroImage && !props.heroVideo ? (
+            <UnsplashCredit attribution={props.heroImageAttribution} tone="dark" />
+          ) : null}
         </div>
       </div>
     </section>

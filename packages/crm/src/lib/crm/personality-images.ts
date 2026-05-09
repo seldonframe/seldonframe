@@ -28,6 +28,7 @@
 // Personalities without an entry render text-only (graceful fallback).
 
 import type { PersonalityVertical } from "./personality";
+import type { UnsplashAttribution } from "@/components/landing/sections/types";
 
 export interface PersonalityImageBundle {
   /** Single landscape hero background — 1600x900 ideal. */
@@ -242,6 +243,25 @@ interface UnsplashSearchResult {
   description?: string | null;
   alt_description?: string | null;
   urls?: { raw?: string; full?: string; regular?: string };
+  // v1.40.5 — production-tier compliance fields.
+  user?: {
+    name?: string | null;
+    username?: string | null;
+    links?: { html?: string | null };
+  };
+  links?: {
+    download_location?: string | null;
+  };
+}
+
+/**
+ * v1.40.5 — Unsplash production-compliance fields. Returned alongside
+ * every resolved image URL so the caller can render attribution + the
+ * resolver fires the required download tracking ping.
+ */
+export interface ResolvedUnsplashImage {
+  url: string;
+  attribution: UnsplashAttribution;
 }
 
 function pickBestHeroResult(
@@ -263,20 +283,45 @@ function pickBestHeroResult(
   return results[0];
 }
 
-// v1.40.4 — query broadening for 0-result retries.
+// v1.40.5 — three-tier query broadening for 0-result retries.
 //
-// Diagnostic test (scripts/test-unsplash.mjs) revealed that some Claude-
-// generated queries return ZERO Unsplash results even though closely-related
-// queries return 15+ results. Example: "minimalist medspa treatment room"
-// returned 0 (likely because "medspa" is a marketing term rarely tagged on
-// Unsplash) while "serene aesthetic clinic marble" returned 15. The first
-// adjective is usually the most-specific token; dropping it broadens the
-// query to a more-tagged subject. We try this once on a 0-result response
-// before giving up. Returns null when the input has ≤1 word (nothing to drop).
-function broadenQuery(query: string): string | null {
-  const words = query.trim().split(/\s+/).filter(Boolean);
-  if (words.length <= 1) return null;
-  return words.slice(1).join(" ");
+// v1.40.4 (single tier: drop first word) wasn't aggressive enough for niche
+// marketing terms. The HERO Aesthetic test revealed that "minimalist medspa
+// treatment room" still returned 0 results after broadening to "medspa
+// treatment room" — the word "medspa" itself is rarely tagged on Unsplash
+// (photographers tag spa/wellness/clinic/aesthetic, not "medspa"). v1.40.5
+// adds a third tier: take the LAST 2 words of the original. This drops
+// niche brand-marketing tokens entirely and falls back to the universal
+// noun phrase (e.g. "treatment room") which is well-tagged.
+//
+// Tier 1: original query unchanged
+// Tier 2: drop the first word
+// Tier 3: last 2 words of the original
+//
+// Examples:
+//   "minimalist medspa treatment room"
+//     → ["minimalist medspa treatment room", "medspa treatment room", "treatment room"]
+//   "asphalt shingle residential roof"
+//     → ["asphalt shingle residential roof", "shingle residential roof", "residential roof"]
+//   "facial treatment dermatology"
+//     → ["facial treatment dermatology", "treatment dermatology"]   (last 2 == tier 2, deduped)
+//   "spa wellness"
+//     → ["spa wellness", "wellness"]                                (last word as final tier)
+//
+// Empty + duplicate candidates filtered. Returns at least the original.
+function buildQueryCandidates(query: string): string[] {
+  const cleaned = query.trim();
+  if (!cleaned) return [];
+  const words = cleaned.split(/\s+/).filter(Boolean);
+  const candidates = [cleaned];
+  if (words.length >= 2) {
+    candidates.push(words.slice(1).join(" "));
+  }
+  if (words.length >= 3) {
+    candidates.push(words.slice(-2).join(" "));
+  }
+  // Dedupe while preserving order.
+  return [...new Set(candidates)];
 }
 
 async function searchUnsplash(
@@ -309,6 +354,54 @@ async function searchUnsplash(
   return data.results ?? [];
 }
 
+// v1.40.5 — Unsplash API guideline: when an image is "downloaded"
+// (Unsplash's term for "shown to a user as part of your application"),
+// you MUST send a GET to photo.links.download_location. This is how
+// Unsplash credits the photographer's download counter and is a
+// REQUIRED check during production-tier review. Without it, your app
+// stays capped at 50 req/hour and gets rejected on resubmission.
+//
+// We fire this server-side at URL-resolution time (when the photo
+// "enters use" for that workspace's landing page). Fire-and-forget —
+// the response body is `{ url: ... }` we don't need; only the request
+// itself matters. Failure of this ping doesn't break workspace
+// creation; we log and move on.
+function trackUnsplashDownload(downloadLocation: string, apiKey: string): void {
+  // Don't await — fire and continue. Workspace creation latency is
+  // already at ~30s, no need to add another round-trip on the
+  // critical path.
+  fetch(downloadLocation, {
+    headers: {
+      Authorization: `Client-ID ${apiKey}`,
+      "Accept-Version": "v1",
+    },
+  }).catch((err) => {
+    console.warn(
+      JSON.stringify({
+        event: "unsplash_download_track_failed",
+        url: downloadLocation,
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    );
+  });
+}
+
+// Build an UnsplashAttribution from a search-result. Falls back to
+// "Unsplash" / `unsplash` when photographer info is missing (rare —
+// the API almost always returns it).
+function buildAttribution(result: UnsplashSearchResult): UnsplashAttribution {
+  const name = result.user?.name?.trim() || "Unsplash";
+  const username = result.user?.username?.trim() || "unsplash";
+  const profileUrl =
+    result.user?.links?.html?.trim() || `https://unsplash.com/@${username}`;
+  return {
+    photographer_name: name,
+    photographer_username: username,
+    photographer_url: profileUrl,
+    photo_id: result.id?.trim() || "",
+  };
+}
+
 /**
  * Resolve a hero image URL from a free-text query. Returns a CDN URL
  * pointing to a real Unsplash photo when the API call succeeds and
@@ -339,21 +432,17 @@ async function searchUnsplash(
  * raise the hit rate from ~80% per query to ~99% for realistic vertical
  * queries.
  */
-export async function resolveHeroImageUrlForQuery(
+export async function resolveHeroImage(
   query: string,
-): Promise<string> {
+): Promise<ResolvedUnsplashImage | null> {
   const cleanedQuery = query?.trim() || "professional business interior";
   const apiKey = process.env.UNSPLASH_ACCESS_KEY?.trim();
 
   if (!apiKey) {
-    return "";
+    return null;
   }
 
-  // Try the original query, then a broadened version (drop first word) if
-  // the original returned 0 results. Stops as soon as a result is found.
-  const candidates = [cleanedQuery, broadenQuery(cleanedQuery)].filter(
-    (q): q is string => typeof q === "string" && q.length > 0,
-  );
+  const candidates = buildQueryCandidates(cleanedQuery);
 
   for (const candidate of candidates) {
     try {
@@ -373,8 +462,15 @@ export async function resolveHeroImageUrlForQuery(
       }
       const picked = pickBestHeroResult(results);
       const raw = picked?.urls?.raw ?? picked?.urls?.full;
-      if (raw) {
-        return `${raw}${raw.includes("?") ? "&" : "?"}${HERO_QUERY_PARAMS}`;
+      if (raw && picked) {
+        // v1.40.5 — fire required download-tracking ping before returning.
+        if (picked.links?.download_location) {
+          trackUnsplashDownload(picked.links.download_location, apiKey);
+        }
+        return {
+          url: `${raw}${raw.includes("?") ? "&" : "?"}${HERO_QUERY_PARAMS}`,
+          attribution: buildAttribution(picked),
+        };
       }
     } catch (err) {
       console.warn(
@@ -387,8 +483,20 @@ export async function resolveHeroImageUrlForQuery(
     }
   }
 
-  // No results from any candidate — gradient empty-state.
-  return "";
+  return null;
+}
+
+/**
+ * Legacy signature returning just the URL string. Kept for callers that
+ * don't render attribution (seed-landing-from-soul.ts, page-blocks/persist.ts).
+ * NEW callers should prefer resolveHeroImage() to get the attribution payload
+ * needed for production-compliant rendering.
+ */
+export async function resolveHeroImageUrlForQuery(
+  query: string,
+): Promise<string> {
+  const result = await resolveHeroImage(query);
+  return result?.url ?? "";
 }
 
 // ─── v1.38.1 — per-service gallery resolver ──────────────────────────────────
@@ -411,9 +519,9 @@ export async function resolveHeroImageUrlForQuery(
 
 const GALLERY_QUERY_PARAMS = "auto=format&fit=crop&w=800&h=800&q=80";
 
-export async function resolveGalleryImageUrlsForQueries(
+export async function resolveGalleryImages(
   queries: string[],
-): Promise<string[]> {
+): Promise<ResolvedUnsplashImage[]> {
   if (queries.length === 0) return [];
   const apiKey = process.env.UNSPLASH_ACCESS_KEY?.trim();
   if (!apiKey) {
@@ -421,15 +529,12 @@ export async function resolveGalleryImageUrlsForQueries(
   }
 
   const seenIds = new Set<string>();
-  const out: string[] = [];
+  const out: ResolvedUnsplashImage[] = [];
 
   for (const query of queries) {
     const cleaned = query?.trim() || "professional business";
-    const candidates = [cleaned, broadenQuery(cleaned)].filter(
-      (q): q is string => typeof q === "string" && q.length > 0,
-    );
+    const candidates = buildQueryCandidates(cleaned);
 
-    let pushed = false;
     for (const candidate of candidates) {
       try {
         const results = await searchUnsplash(candidate, apiKey, {
@@ -452,10 +557,14 @@ export async function resolveGalleryImageUrlsForQueries(
         const raw = fresh?.urls?.raw ?? fresh?.urls?.full;
         if (raw && fresh?.id) {
           seenIds.add(fresh.id);
-          out.push(
-            `${raw}${raw.includes("?") ? "&" : "?"}${GALLERY_QUERY_PARAMS}`,
-          );
-          pushed = true;
+          // v1.40.5 — fire required download-tracking ping per tile.
+          if (fresh.links?.download_location) {
+            trackUnsplashDownload(fresh.links.download_location, apiKey);
+          }
+          out.push({
+            url: `${raw}${raw.includes("?") ? "&" : "?"}${GALLERY_QUERY_PARAMS}`,
+            attribution: buildAttribution(fresh),
+          });
           break;
         }
       } catch (err) {
@@ -470,8 +579,19 @@ export async function resolveGalleryImageUrlsForQueries(
     }
 
     // No candidate produced a URL — skip this slot. Gallery auto-reflows.
-    void pushed;
   }
 
   return out;
+}
+
+/**
+ * Legacy signature returning just URL strings. Kept for callers that don't
+ * render attribution. NEW callers should prefer resolveGalleryImages() to
+ * get the attribution payload needed for production-compliant rendering.
+ */
+export async function resolveGalleryImageUrlsForQueries(
+  queries: string[],
+): Promise<string[]> {
+  const results = await resolveGalleryImages(queries);
+  return results.map((r) => r.url);
 }
