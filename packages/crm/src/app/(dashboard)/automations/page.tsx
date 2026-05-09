@@ -289,9 +289,14 @@ export default async function AutomationsPage() {
             );
           })}
 
-          {/* Custom Agent placeholder — the WS3 spec calls for 6 cards
-              including a Custom slot. Disabled for now; the synthesis
-              path for fully-custom triggers is V1.1. */}
+          {/* v1.40.6 — was "Custom Agent." Renamed to "Custom Workflow"
+              to disambiguate from the persistent AI-assistant primitive
+              that lives on /agents (chatbot, voice receptionist, SMS auto-
+              reply). Automations and Agents are different concepts:
+              automations fire on triggers + run-and-exit; agents are
+              always-on and hold conversational state. The "Custom Agent"
+              naming made operators search /agents looking for their
+              workflow templates and vice versa. */}
           <div className="flex flex-col gap-3 rounded-xl border border-dashed border-border bg-muted/10 p-5 opacity-70">
             <div className="flex items-start justify-between gap-3">
               <span className="inline-flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -303,11 +308,13 @@ export default async function AutomationsPage() {
             </div>
             <div className="space-y-1">
               <h3 className="text-sm font-semibold tracking-tight text-foreground">
-                Custom Agent
+                Custom Workflow
               </h3>
               <p className="line-clamp-3 text-xs text-muted-foreground">
-                Build a custom agent with your own triggers, prompts, and actions. Available
-                in the next release — for now use the typed archetypes above.
+                Build a custom workflow with your own triggers, conditions, and actions.
+                Available in the next release — for now use the typed templates above. For
+                conversational AI assistants (website chatbot, voice receptionist), see
+                Agents in the sidebar.
               </p>
             </div>
           </div>

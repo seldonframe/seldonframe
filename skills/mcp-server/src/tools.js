@@ -4980,7 +4980,11 @@ export const TOOLS = [
           `1. Test in sandbox: ${dashboardUrl}/test (chat with the agent before customers do).`,
           `2. Run safety evals: open ${dashboardUrl}/evals → Run evals now (8-scenario suite).`,
           `3. When ready, publish to live: call publish_agent({ agent_id: '${agentId}', status: 'live' }) — auto-runs eval gate, requires ≥87.5% pass.`,
-          `4. Drop on the operator's website: <script src="${createResult.embed_url}" async></script>`,
+          // v1.40.6 — explicit two-path embed instruction. Pre-1.40.6 only
+          // suggested manual drop, which the operator interpreted as "I have
+          // to copy-paste myself" — they didn't realize they could ask Claude
+          // Code to do it for them on the SF-hosted landing page.
+          `4. Add to the operator's SF-hosted landing page: ask me "add the chatbot to my landing page" and I'll inject the script via update_landing_section. (For an external website the operator owns, paste this snippet manually: <script src="${createResult.embed_url}" async></script>)`,
         ],
       };
     },
