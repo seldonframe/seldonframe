@@ -264,16 +264,28 @@ function pickBestHeroResult(
 }
 
 /**
- * Resolve a hero image URL from a free-text query. Tries the official
- * API first when UNSPLASH_ACCESS_KEY is set; otherwise constructs a
- * source.unsplash.com URL. Both paths return a string that the
- * renderer can embed directly. NEVER throws — falls back to a
- * deterministic URL on any error so workspaces always have an image.
+ * Resolve a hero image URL from a free-text query. Returns a CDN URL
+ * pointing to a real Unsplash photo when the API call succeeds and
+ * returns at least one valid result. Returns an EMPTY STRING when the
+ * API quota's exhausted, the request errors, or no results match —
+ * the hero component then renders its designed branded-gradient
+ * empty-state instead of a broken image.
  *
- * v1.39.0 — also rejects scenery/cityscape results (see
- * SCENERY_REJECTION_RE above) so a query like "austin roofing"
- * doesn't return a downtown-skyline hero. Fetches per_page=15 to give
- * the rejection logic enough alternatives to find a real subject.
+ * v1.39.0 — rejects scenery/cityscape results (SCENERY_REJECTION_RE)
+ * so queries like "austin roofing" don't return a downtown-skyline
+ * hero. Fetches per_page=15 to give the rejection logic enough
+ * alternatives to find a real subject.
+ *
+ * v1.40.3 — REMOVED the source.unsplash.com keyless fallback.
+ * Pre-1.40.3 we fell back to `https://source.unsplash.com/1600x900/?{q}`
+ * when the API path failed. That endpoint is DEPRECATED and frequently
+ * returns broken responses now, which produced stored-broken-URL pipelines:
+ * even though the hero's onError handler (added in v1.40.2) eventually
+ * caught the failure, the user briefly saw a broken-image icon in the
+ * corner before the React state flipped. The HERO Aesthetic Co. test
+ * exposed this. Eliminating the fallback path closes the loop: either
+ * we have a verified Unsplash API result, or we return "" and the hero
+ * renders the gradient empty-state from frame zero.
  */
 export async function resolveHeroImageUrlForQuery(
   query: string,
@@ -281,10 +293,92 @@ export async function resolveHeroImageUrlForQuery(
   const cleanedQuery = query?.trim() || "professional business interior";
   const apiKey = process.env.UNSPLASH_ACCESS_KEY?.trim();
 
-  if (apiKey) {
+  if (!apiKey) {
+    // No API key configured — return empty string so the hero
+    // component renders its designed branded-gradient empty-state.
+    return "";
+  }
+
+  try {
+    const response = await fetch(
+      `https://api.unsplash.com/search/photos?query=${encodeURIComponent(cleanedQuery)}&per_page=15&orientation=landscape&content_filter=high`,
+      {
+        headers: {
+          Authorization: `Client-ID ${apiKey}`,
+          "Accept-Version": "v1",
+        },
+      },
+    );
+    if (response.ok) {
+      const data = (await response.json()) as {
+        results?: UnsplashSearchResult[];
+      };
+      const picked = pickBestHeroResult(data.results ?? []);
+      const raw = picked?.urls?.raw ?? picked?.urls?.full;
+      if (raw) {
+        return `${raw}${raw.includes("?") ? "&" : "?"}${HERO_QUERY_PARAMS}`;
+      }
+    }
+    console.warn(
+      JSON.stringify({
+        event: "unsplash_api_no_results",
+        query: cleanedQuery,
+        status: response.status,
+      }),
+    );
+  } catch (err) {
+    console.warn(
+      JSON.stringify({
+        event: "unsplash_api_error",
+        query: cleanedQuery,
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    );
+  }
+
+  // No results / API error — empty string triggers the hero
+  // component's branded-gradient empty-state. Better than a known-
+  // broken keyless URL.
+  return "";
+}
+
+// ─── v1.38.1 — per-service gallery resolver ──────────────────────────────────
+//
+// projectGallery wants square thumbnails (~600x600), one per service. Resolves
+// an Unsplash photo for each query AND randomizes which result we pick (page +
+// rand) so a workspace with 6 services doesn't show the same generic photo
+// 6 times when the queries are similar ("plumbing", "drain cleaning",
+// "water heater").
+//
+// v1.40.3 — REMOVED the source.unsplash.com keyless fallback (matches the
+// hero resolver fix). When the API path fails for a given query we SKIP
+// that slot entirely instead of pushing a known-broken URL. The gallery
+// component (project-gallery.tsx) reflows around missing tiles via its
+// per-tile onError handler, so a 6-service gallery with 4 valid Unsplash
+// hits renders as a clean 4-tile composition rather than 4 photos + 2
+// broken-image icons.
+
+const GALLERY_QUERY_PARAMS = "auto=format&fit=crop&w=800&h=800&q=80";
+
+export async function resolveGalleryImageUrlsForQueries(
+  queries: string[],
+): Promise<string[]> {
+  if (queries.length === 0) return [];
+  const apiKey = process.env.UNSPLASH_ACCESS_KEY?.trim();
+  if (!apiKey) {
+    // No API key — gallery is empty rather than full of broken keyless URLs.
+    return [];
+  }
+
+  const seenIds = new Set<string>();
+  const out: string[] = [];
+
+  for (const query of queries) {
+    const cleaned = query?.trim() || "professional business";
+
     try {
       const response = await fetch(
-        `https://api.unsplash.com/search/photos?query=${encodeURIComponent(cleanedQuery)}&per_page=15&orientation=landscape&content_filter=high`,
+        `https://api.unsplash.com/search/photos?query=${encodeURIComponent(cleaned)}&per_page=10&orientation=squarish&content_filter=high`,
         {
           headers: {
             Authorization: `Client-ID ${apiKey}`,
@@ -294,108 +388,42 @@ export async function resolveHeroImageUrlForQuery(
       );
       if (response.ok) {
         const data = (await response.json()) as {
-          results?: UnsplashSearchResult[];
+          results?: Array<{
+            id?: string;
+            urls?: { raw?: string; full?: string };
+          }>;
         };
-        const picked = pickBestHeroResult(data.results ?? []);
-        const raw = picked?.urls?.raw ?? picked?.urls?.full;
-        if (raw) {
-          return `${raw}${raw.includes("?") ? "&" : "?"}${HERO_QUERY_PARAMS}`;
+        // Pick the first result that ISN'T already in the gallery — avoids
+        // duplicates when two services share a top result (e.g.
+        // "plumbing" + "plumber" return overlapping photos).
+        const fresh = (data.results ?? []).find(
+          (r) => r.id && !seenIds.has(r.id),
+        );
+        const raw = fresh?.urls?.raw ?? fresh?.urls?.full;
+        if (raw && fresh?.id) {
+          seenIds.add(fresh.id);
+          out.push(`${raw}${raw.includes("?") ? "&" : "?"}${GALLERY_QUERY_PARAMS}`);
+          continue;
         }
       }
       console.warn(
         JSON.stringify({
-          event: "unsplash_api_no_results",
-          query: cleanedQuery,
+          event: "unsplash_gallery_no_results",
+          query: cleaned,
           status: response.status,
         }),
       );
     } catch (err) {
       console.warn(
         JSON.stringify({
-          event: "unsplash_api_error",
-          query: cleanedQuery,
+          event: "unsplash_gallery_error",
+          query: cleaned,
           error: err instanceof Error ? err.message : String(err),
         }),
       );
-      // Fall through to the keyless fallback.
-    }
-  }
-
-  // Keyless fallback: source.unsplash.com legacy endpoint. Returns a
-  // 302 to a real Unsplash photo matching the query. Still works as
-  // of May 2026 even though Unsplash has marked it deprecated.
-  return `https://source.unsplash.com/1600x900/?${encodeURIComponent(cleanedQuery)}`;
-}
-
-// ─── v1.38.1 — per-service gallery resolver ──────────────────────────────────
-//
-// projectGallery wants square thumbnails (~600x600), one per service. Resolves
-// an Unsplash photo for each query AND randomizes which result we pick (page +
-// rand) so a workspace with 6 services doesn't show the same generic photo
-// 6 times when the queries are similar ("plumbing", "drain cleaning",
-// "water heater"). Returns N URLs — never throws — falls back to the keyless
-// source.unsplash.com endpoint per query.
-
-const GALLERY_QUERY_PARAMS = "auto=format&fit=crop&w=800&h=800&q=80";
-
-export async function resolveGalleryImageUrlsForQueries(
-  queries: string[],
-): Promise<string[]> {
-  if (queries.length === 0) return [];
-  const apiKey = process.env.UNSPLASH_ACCESS_KEY?.trim();
-  const seenIds = new Set<string>();
-  const out: string[] = [];
-
-  for (const query of queries) {
-    const cleaned = query?.trim() || "professional business";
-
-    if (apiKey) {
-      try {
-        const response = await fetch(
-          `https://api.unsplash.com/search/photos?query=${encodeURIComponent(cleaned)}&per_page=10&orientation=squarish&content_filter=high`,
-          {
-            headers: {
-              Authorization: `Client-ID ${apiKey}`,
-              "Accept-Version": "v1",
-            },
-          },
-        );
-        if (response.ok) {
-          const data = (await response.json()) as {
-            results?: Array<{
-              id?: string;
-              urls?: { raw?: string; full?: string };
-            }>;
-          };
-          // Pick the first result that ISN'T already in the gallery — avoids
-          // duplicates when two services share a top result (e.g.
-          // "plumbing" + "plumber" return overlapping photos).
-          const fresh = (data.results ?? []).find(
-            (r) => r.id && !seenIds.has(r.id),
-          );
-          const raw = fresh?.urls?.raw ?? fresh?.urls?.full;
-          if (raw && fresh?.id) {
-            seenIds.add(fresh.id);
-            out.push(`${raw}${raw.includes("?") ? "&" : "?"}${GALLERY_QUERY_PARAMS}`);
-            continue;
-          }
-        }
-      } catch (err) {
-        console.warn(
-          JSON.stringify({
-            event: "unsplash_gallery_error",
-            query: cleaned,
-            error: err instanceof Error ? err.message : String(err),
-          }),
-        );
-      }
     }
 
-    // Keyless fallback: source.unsplash.com with a per-query random seed
-    // (`sig`) so each item gets a different photo even when queries
-    // overlap.
-    const sig = Math.floor(Math.random() * 100000);
-    out.push(`https://source.unsplash.com/600x600/?${encodeURIComponent(cleaned)}&sig=${sig}`);
+    // No fallback URL — skip this slot. Gallery reflows around it.
   }
 
   return out;
