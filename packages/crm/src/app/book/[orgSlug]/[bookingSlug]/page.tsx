@@ -117,6 +117,12 @@ export default async function PublicBookingPage({
           businessPhone={businessPhone}
           appointmentName={bookingContext.appointmentName}
           appointmentDescription={bookingContext.appointmentDescription}
+          // v1.40.1 — vertical-aware booking intake field schema. When
+          // PublicBookingForm renders, it now appends these fields after
+          // name + email, populated per archetype during workspace
+          // creation. Empty array for legacy templates → renders the
+          // legacy name+email+notes flow.
+          intakeFields={bookingContext.intakeFields}
         />
         {(showBadge || isTestMode) ? (
           <div className="flex flex-col items-center gap-2 py-3">

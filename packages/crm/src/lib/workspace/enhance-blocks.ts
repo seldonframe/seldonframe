@@ -45,7 +45,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { landingPages, organizations } from "@/db/schema";
+import { bookings, landingPages, organizations } from "@/db/schema";
 import { getAIClient } from "@/lib/ai/client";
 import {
   resolveGalleryImageUrlsForQueries,
@@ -58,6 +58,7 @@ import {
   type AestheticArchetype,
   type AestheticArchetypeId,
 } from "./aesthetic-archetypes";
+import { getBookingIntakeFieldsForArchetype } from "./booking-intake-fields";
 import type { LandingPageSection } from "@/components/landing/sections/types";
 import type { OrgTheme } from "@/lib/theme/types";
 
@@ -286,7 +287,7 @@ ${buildBusinessContext(input)}
     "ctaText": "<2-4 words, action verb (e.g. 'Get Service Today', 'Book Appointment', 'Schedule a Visit')>",
     "ctaLink": "/book",
     "secondaryCta": { "text": "<optional verb action>", "link": "/intake or tel:<phone digits>" },
-    "heroImage_query": "<3-6 word Unsplash search query for the HERO photo. CRITICAL RULES (read carefully — bad queries return city skylines or stock-template scenery): MUST contain a craft-specific physical noun (shingle / roof / roofer / gutter / metal panel / plumber / pipe / hvac unit / technician / dentist / chair / etc.). MUST NOT lead with a city name — city goes LAST or omit entirely. SHOULD include a composition/framing hint: 'close-up', 'rooftop', 'aerial', 'worker on', 'detail of', 'hands installing'. AVOID generic vertical+city like 'austin roofing' or 'phoenix hvac' — those return scenery. PREFER 'asphalt shingle residential roof close-up' over 'austin storm roofing'. PREFER 'plumber repairing kitchen sink' over 'austin plumbing'. PREFER 'hvac technician on outdoor unit' over 'phoenix hvac'. Examples that work: 'asphalt shingle roof close-up sunny', 'roofer installing metal standing seam', 'plumber working on copper pipes', 'dentist examining patient bright clinic', 'electrician panel residential', 'hvac unit residential rooftop'. Include 'residential' if the business is residential-focused (most local-service businesses are)>"
+    "heroImage_query": "<3-6 word Unsplash query for the HERO photo. ARCHETYPE-AWARE — see archetype hints in the design brief above. UNIVERSAL RULES: MUST contain a concrete physical noun matching the archetype (a tool, a setting, a worker, a treatment, a material — NEVER just a vertical name); MUST NOT lead with a city name (city returns scenery); SHOULD include a composition hint ('close-up', 'on', 'detail of', 'interior', 'hands'). PER-ARCHETYPE GOOD EXAMPLES: bold-urgency (trades) → 'asphalt shingle roof close-up', 'roofer installing metal standing seam', 'plumber repairing copper pipes', 'hvac technician outdoor unit residential'. cinematic-aspirational (medspa/wellness/luxury) → 'minimalist spa treatment room interior', 'dermatology consultation room calm', 'serene aesthetic clinic marble', 'skincare products marble flatlay', 'modern medspa interior soft light'. clinical-trust (legal/dental/medical) → 'modern dental clinic interior bright', 'attorney consultation room', 'professional office handshake', 'medical exam room minimalist'. editorial-warm (craft/family) → 'craftsman hands wood detail', 'family business storefront', 'workshop natural light tools', 'restoration project before after'. soft-residential (cleaning/landscape) → 'tidy living room natural light', 'manicured residential lawn', 'home interior clean kitchen', 'gardener residential garden tools'. technical-restrained (B2B/agency) → 'modern office workspace minimalist', 'designer at desk monochrome', 'product strategy whiteboard'. brutalist (creative studios) → 'concrete loft natural light', 'design studio raw interior', 'industrial warehouse skylight'. AVOID 'austin roofing', 'phoenix hvac', 'houston medspa' — these return city scenery>"
   },
   "servicesGrid": {
     "headline": "<value-driven headline for services section; speak to outcome not features>",
@@ -892,6 +893,53 @@ export async function enhanceLandingForWorkspace(
     console.warn(
       JSON.stringify({
         event: "archetype_theme_apply_failed",
+        workspace_id: input.orgId,
+        archetype: archetypeId,
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    );
+  }
+
+  // v1.40.1 — 2.7. Apply archetype-specific booking intake fields to
+  // every booking template the workspace owns. PublicBookingForm reads
+  // these and renders dynamic inputs after name+email so the operator
+  // gets actionable lead data (address+issue+urgency for trades,
+  // skin-concern+previous-treatments for medspa, company+budget for
+  // B2B) on first booking — no follow-up call needed.
+  //
+  // Soft-fail. Worst case the booking form falls back to legacy
+  // name+email+notes; workspace stays valid.
+  try {
+    const intakeFields = getBookingIntakeFieldsForArchetype(archetypeId);
+    const templates = await db
+      .select({ id: bookings.id, metadata: bookings.metadata })
+      .from(bookings)
+      .where(
+        and(eq(bookings.orgId, input.orgId), eq(bookings.status, "template")),
+      );
+
+    for (const tpl of templates) {
+      const meta = (tpl.metadata as Record<string, unknown> | null) ?? {};
+      const nextMeta = { ...meta, intakeFields };
+      await db
+        .update(bookings)
+        .set({ metadata: nextMeta, updatedAt: new Date() })
+        .where(eq(bookings.id, tpl.id));
+    }
+
+    console.log(
+      JSON.stringify({
+        event: "intake_fields_applied",
+        workspace_id: input.orgId,
+        archetype: archetypeId,
+        template_count: templates.length,
+        field_count: intakeFields.length,
+      }),
+    );
+  } catch (err) {
+    console.warn(
+      JSON.stringify({
+        event: "intake_fields_apply_failed",
         workspace_id: input.orgId,
         archetype: archetypeId,
         error: err instanceof Error ? err.message : String(err),

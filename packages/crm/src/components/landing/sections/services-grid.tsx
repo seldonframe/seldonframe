@@ -24,6 +24,28 @@ import type { ServicesGridSectionContent } from "./types";
 // map. See that file for the full alias table (storm → CloudRainWind,
 // shingle → Home, drain → Droplets, etc.).
 
+// v1.40.1 — append ?service=<slug> to the service card's CTA so the
+// public booking form picks up which service the visitor clicked. The
+// slug is derived from the service name (lowercased, hyphenated). If
+// ctaLink already has query params, we append with &.
+function toServiceSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function appendServiceParam(ctaLink: string, serviceName: string): string {
+  const slug = toServiceSlug(serviceName);
+  if (!slug) return ctaLink;
+  const sep = ctaLink.includes("?") ? "&" : "?";
+  return `${ctaLink}${sep}service=${slug}`;
+}
+
 export function ServicesGridSection({
   headline,
   subheadline,
@@ -71,7 +93,11 @@ export function ServicesGridSection({
 
               {service.ctaLink ? (
                 <Link
-                  href={service.ctaLink}
+                  // v1.40.1 — append ?service=<slug> so the booking
+                  // form knows which service the visitor clicked, can
+                  // pre-fill the "Service requested" banner, and can
+                  // store it on the booking row for the operator.
+                  href={appendServiceParam(service.ctaLink, service.name)}
                   className="crm-button-primary mt-5 h-10 w-full justify-center text-sm font-semibold"
                 >
                   {service.ctaText ?? "Book now"}

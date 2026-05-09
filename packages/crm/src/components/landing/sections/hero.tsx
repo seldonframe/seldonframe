@@ -92,25 +92,76 @@ export function HeroSection(props: HeroSectionContent) {
   const variant = props.variant ?? "left-aligned-asymmetric";
 
   // Cinematic full-bleed: image is the page background, copy overlays.
+  // v1.40.1 — when heroImage is empty OR fails to load, render a
+  // brand-tinted gradient anchor INSTEAD of a broken <img>. Pre-1.40.1
+  // the alt-text fallback was visible in the corner ("Results That
+  // Look Like Rest..." showed as visible text in the upper-left of the
+  // gradient on Lumen). Fix: detect missing src + render a designed
+  // empty state, AND lighten the overlay so working images come
+  // through (was from-black/30 via-black/50 to-black/80 — too dark for
+  // most photography).
   if (variant === "cinematic-fullbleed") {
+    const hasImage = typeof props.heroImage === "string" && props.heroImage.trim().length > 0;
     return (
       <section className="relative isolate overflow-hidden">
         <div className="absolute inset-0 -z-10">
-          <HeroImage src={props.heroImage} alt={props.headline} className="absolute inset-0" />
-          <div
-            aria-hidden
-            className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/50 to-black/80"
-          />
+          {hasImage ? (
+            <>
+              <img
+                src={props.heroImage!}
+                alt=""
+                aria-hidden="true"
+                loading="eager"
+                referrerPolicy="no-referrer"
+                className="absolute inset-0 h-full w-full object-cover"
+              />
+              <div
+                aria-hidden
+                className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/40 to-black/65"
+              />
+            </>
+          ) : (
+            // Branded gradient empty state. Uses the workspace's primary
+            // color so the hero feels intentional even when no Unsplash
+            // result was available. The headline's first word renders as
+            // an enormous typographic anchor in primary/40 — looks like
+            // a designed editorial hero, not a broken image.
+            <>
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/30 via-primary/10 to-background" />
+              <div
+                aria-hidden
+                className="absolute inset-0 bg-[radial-gradient(circle_at_25%_30%,theme(colors.primary/.18),transparent_55%),radial-gradient(circle_at_75%_70%,theme(colors.primary/.12),transparent_55%)]"
+              />
+              <div className="absolute inset-y-0 right-0 flex w-1/2 items-center justify-end overflow-hidden pr-8 md:pr-16">
+                <div className="select-none whitespace-nowrap text-[clamp(120px,16vw,260px)] font-bold leading-none tracking-tighter text-primary/15">
+                  {(props.headline || "Welcome").split(/\s+/)[0]}
+                </div>
+              </div>
+            </>
+          )}
         </div>
         <div className="mx-auto flex min-h-[80vh] w-full max-w-[1400px] flex-col justify-end px-6 py-24 md:px-10 md:py-32">
           <div className="max-w-3xl">
             {props.kicker ? (
-              <p className="mb-3 text-[11px] uppercase tracking-[0.18em] text-white/80">{props.kicker}</p>
+              <p
+                className="mb-3 text-[11px] uppercase tracking-[0.18em]"
+                style={{ color: hasImage ? "rgba(255,255,255,0.85)" : "var(--sf-primary)" }}
+              >
+                {props.kicker}
+              </p>
             ) : null}
-            <h1 className="text-4xl font-semibold leading-[1.05] tracking-tighter text-white md:text-6xl lg:text-7xl">
+            <h1
+              className="text-4xl font-semibold leading-[1.05] tracking-tighter md:text-5xl lg:text-6xl"
+              style={{ color: hasImage ? "#ffffff" : "var(--sf-text)" }}
+            >
               {props.headline}
             </h1>
-            <p className="mt-6 max-w-2xl text-base text-white/80 md:text-lg">{props.subheadline}</p>
+            <p
+              className="mt-6 max-w-2xl text-base md:text-lg"
+              style={{ color: hasImage ? "rgba(255,255,255,0.85)" : "var(--sf-muted)" }}
+            >
+              {props.subheadline}
+            </p>
             {props.proofTile ? (
               <div className="mt-6">
                 <ProofTile {...props.proofTile} />
@@ -121,12 +172,18 @@ export function HeroSection(props: HeroSectionContent) {
                 {props.ctaText}
               </Link>
               {props.secondaryCta ? (
-                <Link
-                  href={props.secondaryCta.link}
-                  className="inline-flex h-12 items-center rounded-full border border-white/30 bg-white/10 px-7 text-base font-semibold text-white backdrop-blur-md hover:bg-white/15"
-                >
-                  {props.secondaryCta.text}
-                </Link>
+                hasImage ? (
+                  <Link
+                    href={props.secondaryCta.link}
+                    className="inline-flex h-12 items-center rounded-full border border-white/30 bg-white/10 px-7 text-base font-semibold text-white backdrop-blur-md hover:bg-white/15"
+                  >
+                    {props.secondaryCta.text}
+                  </Link>
+                ) : (
+                  <Link href={props.secondaryCta.link} className="crm-button-secondary h-12 px-7 text-base font-semibold">
+                    {props.secondaryCta.text}
+                  </Link>
+                )
               ) : null}
             </div>
             <RiskReversalBadges badges={props.riskReversalBadges ?? []} />

@@ -46,22 +46,18 @@
 //   - appointmentDescription: left-sidebar paragraph
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import { useSearchParams } from "next/navigation";
 import { DayPicker } from "react-day-picker";
 import "react-day-picker/style.css";
-import { z } from "zod";
 import { Clock, MapPin, Globe2, Phone, Check } from "lucide-react";
 
-import { listPublicBookingSlotsAction, submitPublicBookingAction } from "@/lib/bookings/actions";
+import {
+  listPublicBookingSlotsAction,
+  submitPublicBookingAction,
+  type BookingIntakeField,
+} from "@/lib/bookings/actions";
 import { isDemoBlockedError, isDemoReadonlyClient } from "@/lib/demo/client";
 import { useDemoToast } from "@/components/shared/demo-toast-provider";
-import { CustomerActionForm } from "@/components/ui-customer/customer-action-form";
-
-// Schema drives step-3 field generation via <CustomerActionForm>.
-const BookingDetailsSchema = z.object({
-  fullName: z.string(),
-  email: z.string().email(),
-  notes: z.string().optional(),
-});
 
 function toDateOnly(date: Date) {
   const year = date.getFullYear();
@@ -95,6 +91,7 @@ export function PublicBookingForm({
   businessPhone,
   appointmentName,
   appointmentDescription,
+  intakeFields = [],
 }: {
   orgSlug: string;
   bookingSlug: string;
@@ -105,7 +102,24 @@ export function PublicBookingForm({
   businessPhone: string | null;
   appointmentName: string;
   appointmentDescription: string;
+  /** v1.40.1 — vertical-aware booking form fields. Rendered after
+   *  name + email. Empty array → renders the legacy notes-only flow. */
+  intakeFields?: BookingIntakeField[];
 }) {
+  // v1.40.1 — surface the operator-supplied service hint when the
+  // visitor arrived via /book?service=<slug>. Used to pre-display the
+  // service they picked at the top of step 3 so they don't worry the
+  // operator picked up the wrong appointment type.
+  const searchParams = useSearchParams();
+  const requestedServiceParam = searchParams?.get("service") ?? null;
+  // Pretty-print "botox-dysport-injections" → "Botox Dysport Injections"
+  const requestedServiceLabel = requestedServiceParam
+    ? requestedServiceParam
+        .split(/[-_]+/)
+        .filter(Boolean)
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(" ")
+    : null;
   const [pending, startTransition] = useTransition();
   const [success, setSuccess] = useState(false);
   const [confirmationMessage, setConfirmationMessage] = useState(confirmationFallback);
@@ -159,7 +173,33 @@ export function PublicBookingForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bookingSlug, orgSlug, selectedDateISO, step]);
 
-  function handleDetailsSubmit(formData: FormData) {
+  // v1.40.1 — full-name + email + dynamic intake fields tracked in
+  // state. `intakeValues` is keyed by field id (e.g. {address: "...",
+  // urgency: "Today"}). Submit serializes everything to the action.
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [intakeValues, setIntakeValues] = useState<Record<string, string>>({});
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  function handleSubmitClick() {
+    setSubmitError(null);
+    if (!fullName.trim()) {
+      setSubmitError("Please enter your full name.");
+      return;
+    }
+    if (!email.trim() || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      setSubmitError("Please enter a valid email.");
+      return;
+    }
+    // Validate required intake fields.
+    const requiredField = intakeFields.find(
+      (f) => f.required && !(intakeValues[f.id] ?? "").trim(),
+    );
+    if (requiredField) {
+      setSubmitError(`Please fill out: ${requiredField.label}`);
+      return;
+    }
+
     startTransition(async () => {
       try {
         if (isDemoReadonlyClient) {
@@ -167,13 +207,33 @@ export function PublicBookingForm({
           return;
         }
 
+        // v1.40.1 — separate the universal "notes" field (free-text
+        // overflow channel) from the structured intake responses so
+        // notes still appears as the legacy field on the booking row,
+        // but address/issue/urgency etc. flow as structured data.
+        const notesValue = intakeValues.notes ?? "";
+        const structuredResponses: Record<string, string> = {};
+        for (const [k, v] of Object.entries(intakeValues)) {
+          if (k === "notes") continue;
+          if (typeof v === "string" && v.trim().length > 0) {
+            structuredResponses[k] = v.trim();
+          }
+        }
+
+        // Auto-include the requested service slug from URL when present —
+        // gives operators "they came in for X" context.
+        if (requestedServiceParam && !structuredResponses.requested_service) {
+          structuredResponses.requested_service = requestedServiceLabel ?? requestedServiceParam;
+        }
+
         const response = await submitPublicBookingAction({
           orgSlug,
           bookingSlug,
-          fullName: String(formData.get("fullName") ?? ""),
-          email: String(formData.get("email") ?? ""),
+          fullName,
+          email,
           startsAt: selectedSlot,
-          notes: String(formData.get("notes") ?? "") || undefined,
+          notes: notesValue.trim() || undefined,
+          intakeResponses: structuredResponses,
         });
 
         if (response.checkoutUrl) {
@@ -383,7 +443,8 @@ export function PublicBookingForm({
                 </div>
               ) : null}
 
-              {/* Step 3 — enter details */}
+              {/* Step 3 — enter details. v1.40.1 — custom dynamic form
+                   that renders intakeFields per archetype. */}
               {step === "enter-details" && selectedSlot ? (
                 <div className="space-y-5">
                   <div
@@ -414,12 +475,85 @@ export function PublicBookingForm({
                     </button>
                   </div>
 
-                  <CustomerActionForm
-                    mode="single"
-                    schema={BookingDetailsSchema}
-                    action={handleDetailsSubmit}
-                    submitLabel={submitLabel}
-                  />
+                  {/* v1.40.1 — show requested service when the visitor came
+                       in via /book?service=<slug>. Lets the operator see
+                       which menu item the customer clicked. */}
+                  {requestedServiceLabel ? (
+                    <div
+                      className="rounded-xl border p-4"
+                      style={{
+                        borderColor: "var(--sf-border)",
+                        backgroundColor: "var(--sf-card-bg, #fafafa)",
+                      }}
+                    >
+                      <p className="text-[11px] uppercase tracking-[0.12em] font-semibold" style={{ color: "var(--sf-muted)" }}>
+                        Service requested
+                      </p>
+                      <p className="mt-1 text-sm font-semibold" style={{ color: "var(--sf-text)" }}>
+                        {requestedServiceLabel}
+                      </p>
+                    </div>
+                  ) : null}
+
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      handleSubmitClick();
+                    }}
+                    className="space-y-4"
+                  >
+                    <FieldShell label="Full name" required>
+                      <input
+                        type="text"
+                        value={fullName}
+                        onChange={(e) => setFullName(e.target.value)}
+                        required
+                        className="crm-input h-11 w-full"
+                        autoComplete="name"
+                      />
+                    </FieldShell>
+                    <FieldShell label="Email" required>
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        required
+                        className="crm-input h-11 w-full"
+                        autoComplete="email"
+                      />
+                    </FieldShell>
+
+                    {/* v1.40.1 — vertical-aware intake fields. Renders
+                         dynamically based on archetype-supplied schema. */}
+                    {intakeFields.map((field) => (
+                      <DynamicIntakeField
+                        key={field.id}
+                        field={field}
+                        value={intakeValues[field.id] ?? ""}
+                        onChange={(v) =>
+                          setIntakeValues((prev) => ({ ...prev, [field.id]: v }))
+                        }
+                      />
+                    ))}
+
+                    {submitError ? (
+                      <p
+                        className="text-sm"
+                        style={{ color: "#dc2626" }}
+                        role="alert"
+                      >
+                        {submitError}
+                      </p>
+                    ) : null}
+
+                    <button
+                      type="submit"
+                      disabled={pending}
+                      className="crm-button-primary h-12 w-full justify-center text-base font-semibold disabled:opacity-60"
+                    >
+                      {submitLabel}
+                    </button>
+                  </form>
                 </div>
               ) : null}
             </section>
@@ -486,6 +620,121 @@ const dayPickerCss = `
 `;
 
 // ─── Helpers ──────────────────────────────────────────────────────
+
+// v1.40.1 — wraps a label + input with consistent SF spacing.
+function FieldShell({
+  label,
+  required,
+  helpText,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  helpText?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <label className="block text-sm font-medium" style={{ color: "var(--sf-text)" }}>
+        {label}
+        {required ? <span className="ml-0.5 text-red-500">*</span> : null}
+      </label>
+      {children}
+      {helpText ? (
+        <p className="text-xs" style={{ color: "var(--sf-muted)" }}>
+          {helpText}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+// v1.40.1 — renders a single archetype-defined intake field. Dispatches
+// on field.type to the appropriate input element. value/onChange are
+// controlled by the parent form's intakeValues state.
+function DynamicIntakeField({
+  field,
+  value,
+  onChange,
+}: {
+  field: BookingIntakeField;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  if (field.type === "textarea") {
+    return (
+      <FieldShell label={field.label} required={field.required} helpText={field.helpText}>
+        <textarea
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          required={field.required}
+          placeholder={field.placeholder}
+          rows={3}
+          className="crm-input w-full px-3 py-2"
+        />
+      </FieldShell>
+    );
+  }
+  if (field.type === "select") {
+    return (
+      <FieldShell label={field.label} required={field.required} helpText={field.helpText}>
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          required={field.required}
+          className="crm-input h-11 w-full"
+        >
+          <option value="">Select…</option>
+          {(field.options ?? []).map((opt) => (
+            <option key={opt} value={opt}>
+              {opt}
+            </option>
+          ))}
+        </select>
+      </FieldShell>
+    );
+  }
+  if (field.type === "radio") {
+    return (
+      <FieldShell label={field.label} required={field.required} helpText={field.helpText}>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {(field.options ?? []).map((opt) => (
+            <label
+              key={opt}
+              className="flex cursor-pointer items-center gap-2 rounded-lg border p-3 text-sm transition-colors hover:bg-muted/30"
+              style={{ borderColor: "var(--sf-border)" }}
+            >
+              <input
+                type="radio"
+                name={field.id}
+                value={opt}
+                checked={value === opt}
+                onChange={(e) => onChange(e.target.value)}
+                required={field.required}
+                className="size-4"
+              />
+              <span style={{ color: "var(--sf-text)" }}>{opt}</span>
+            </label>
+          ))}
+        </div>
+      </FieldShell>
+    );
+  }
+  // tel + text default to a single-line input
+  return (
+    <FieldShell label={field.label} required={field.required} helpText={field.helpText}>
+      <input
+        type={field.type === "tel" ? "tel" : "text"}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        required={field.required}
+        placeholder={field.placeholder}
+        autoComplete={field.type === "tel" ? "tel" : "off"}
+        className="crm-input h-11 w-full"
+      />
+    </FieldShell>
+  );
+}
 
 function MetaRow({
   icon,

@@ -29,6 +29,38 @@ function toBookingSlug(value: string) {
     .replace(/-+/g, "-");
 }
 
+// v1.40.1 — vertical-aware booking intake fields. Each appointment
+// type can define a custom set of additional questions the customer
+// fills out at booking time (address for trades, skin concern for
+// medspa, case type for legal, company size for B2B, etc.). Field
+// schema is populated during create_full_workspace based on the
+// classified aesthetic archetype; operators can edit per-appointment-
+// type from the dashboard later.
+export type BookingIntakeFieldType =
+  | "text"
+  | "textarea"
+  | "tel"
+  | "select"
+  | "radio";
+
+export type BookingIntakeField = {
+  /** Stable id used as the form key + storage key (e.g. "address",
+   *  "skin_concern", "issue_type"). Lowercase, snake_case. */
+  id: string;
+  /** Customer-facing label. */
+  label: string;
+  /** Input type. */
+  type: BookingIntakeFieldType;
+  /** Whether the customer must fill this out to submit. */
+  required?: boolean;
+  /** For select/radio: the choices. */
+  options?: string[];
+  /** Optional placeholder text for text/textarea/tel. */
+  placeholder?: string;
+  /** Optional help text under the input. */
+  helpText?: string;
+};
+
 type AppointmentTypeMeta = {
   kind?: string;
   durationMinutes?: number;
@@ -39,6 +71,11 @@ type AppointmentTypeMeta = {
   bufferAfterMinutes?: number;
   maxBookingsPerDay?: number;
   availability?: Partial<Record<AvailabilityDayKey, AvailabilityDaySettings>>;
+  /** v1.40.1 — vertical-aware booking form fields. When present, the
+   *  PublicBookingForm renders these as additional inputs after name +
+   *  email. When absent, defaults to the legacy fullName + email +
+   *  notes flow. */
+  intakeFields?: BookingIntakeField[];
 };
 
 type AvailabilityDayKey = "sunday" | "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday";
@@ -63,6 +100,9 @@ type PublicBookingContext = {
   bufferBeforeMinutes: number;
   bufferAfterMinutes: number;
   maxBookingsPerDay: number;
+  /** v1.40.1 — vertical-aware booking form fields. Empty array if
+   *  the appointment type doesn't define any (legacy templates). */
+  intakeFields: BookingIntakeField[];
 };
 
 const weekdayKeys: AvailabilityDayKey[] = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
@@ -337,6 +377,10 @@ async function resolvePublicBookingContext(orgSlug: string, bookingSlug: string)
     bufferBeforeMinutes,
     bufferAfterMinutes,
     maxBookingsPerDay,
+    // v1.40.1 — vertical-aware booking intake fields. Populated during
+    // create_full_workspace based on the classified archetype. Empty
+    // array for legacy templates (renders the default name+email+notes).
+    intakeFields: Array.isArray(metadata?.intakeFields) ? metadata!.intakeFields : [],
   };
 }
 
@@ -355,6 +399,8 @@ export async function getPublicBookingContext(orgSlug: string, bookingSlug: stri
     durationMinutes: context.durationMinutes,
     confirmationMessage: context.confirmationMessage,
     price: context.price,
+    // v1.40.1 — surface intake fields to the booking page.
+    intakeFields: context.intakeFields,
   };
 }
 
@@ -928,6 +974,7 @@ export async function submitPublicBookingAction({
   email,
   notes,
   startsAt,
+  intakeResponses,
 }: {
   orgSlug: string;
   bookingSlug: string;
@@ -935,6 +982,11 @@ export async function submitPublicBookingAction({
   email: string;
   notes?: string;
   startsAt: string;
+  /** v1.40.1 — vertical-aware intake field responses keyed by field id.
+   *  e.g. { address: "1234 Main St", urgency: "Today", issue_type: "..." }
+   *  Stored on the booking row's metadata so the operator sees actionable
+   *  context the moment the lead lands in their CRM. */
+  intakeResponses?: Record<string, string>;
 }) {
   assertWritable();
 
@@ -1118,6 +1170,11 @@ export async function submitPublicBookingAction({
         appointmentType: bookingContext.appointmentName,
         durationMinutes: bookingContext.durationMinutes,
         price: bookingContext.price,
+        // v1.40.1 — vertical-aware intake responses (address, issue,
+        // urgency, etc.) stored on the booking so operators see
+        // actionable lead context in their CRM the moment the lead
+        // lands. Empty object when no intake fields were defined.
+        intakeResponses: intakeResponses ?? {},
       },
     })
     .returning({ id: bookings.id });
