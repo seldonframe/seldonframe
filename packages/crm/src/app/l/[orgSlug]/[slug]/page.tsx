@@ -30,10 +30,29 @@ export default async function PublicLandingPage({
   const showBadge = await shouldShowPoweredByBadgeForOrg(payload.orgId);
   const theme = await getPublicOrgThemeById(payload.orgId);
 
+  // v1.38.4 — force light mode on customer-facing landing pages.
+  //
+  // Same fix v1.36.3 applied to the booking page, now extended here.
+  // Industry convention (Cal.com, Calendly, Squarespace, every SMB
+  // builder): customer-facing pages default to light. Operators tune
+  // their dashboard to whatever they want, but the public-facing
+  // surface should be readable + clean by default. Workspaces whose
+  // operators specifically want a dark public site can opt-in later.
+  //
+  // Two layers of override (both required because of how Tailwind v4
+  // resolves dark-mode utilities):
+  //   1. theme.mode = "light"  → fixes our --sf-* CSS variables
+  //   2. className="light"     → prevents Tailwind's `bg-card`,
+  //      `text-foreground` etc. from resolving to the global `.dark`
+  //      variants. Without this, our --sf-bg goes white but
+  //      `bg-card` stays dark because it points at `--card` which is
+  //      controlled globally.
+  const publicTheme = { ...theme, mode: "light" as const };
+
   if (payload.page.contentHtml && payload.page.contentCss) {
     return (
-      <PublicThemeProvider theme={theme}>
-        <main className="min-h-screen" style={{ backgroundColor: "var(--sf-bg)", color: "var(--sf-text)" }}>
+      <PublicThemeProvider theme={publicTheme}>
+        <main className="light min-h-screen" style={{ backgroundColor: "var(--sf-bg)", color: "var(--sf-text)" }}>
           <style dangerouslySetInnerHTML={{ __html: payload.page.contentCss }} />
           <div dangerouslySetInnerHTML={{ __html: payload.page.contentHtml }} />
           {showBadge ? (
@@ -48,8 +67,8 @@ export default async function PublicLandingPage({
   }
 
   return (
-    <PublicThemeProvider theme={theme}>
-      <main className="min-h-screen" style={{ backgroundColor: "var(--sf-bg)", color: "var(--sf-text)" }}>
+    <PublicThemeProvider theme={publicTheme}>
+      <main className="light min-h-screen" style={{ backgroundColor: "var(--sf-bg)", color: "var(--sf-text)" }}>
         <PageRenderer sections={(payload.page.sections as LandingSection[]) ?? []} />
         {showBadge ? (
           <div className="flex justify-center py-4" style={{ borderTop: "1px solid var(--sf-border)", backgroundColor: "color-mix(in oklab, var(--sf-bg) 92%, var(--sf-accent) 8%)" }}>

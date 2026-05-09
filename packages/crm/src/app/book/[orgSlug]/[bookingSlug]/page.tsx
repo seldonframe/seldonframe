@@ -90,27 +90,41 @@ export default async function PublicBookingPage({
   // cascades — we only override the mode. If a workspace explicitly
   // wants a dark booking page we'll add an opt-in toggle later;
   // light is the right default for the 95% case.
+  //
+  // v1.38.4 — paired with className="light" wrapper below. The mode
+  // override fixes our --sf-* CSS variables, but the booking form's
+  // Tailwind utility classes (bg-card, text-foreground, bg-muted/15)
+  // resolve to --card / --foreground / --muted-foreground which are
+  // controlled by the global .dark class on <html>. Without the
+  // explicit `light` class on the wrapper, those Tailwind utilities
+  // stayed dark even when our --sf-bg flipped to white — that's why
+  // v1.36.3's fix wasn't visible: half the page (header, calendar,
+  // detail card) used Tailwind classes and rendered dark while the
+  // outer main bg was white. Wrapping with `light` locally disables
+  // the global .dark cascade for everything inside.
   const bookingTheme = { ...theme, mode: "light" as const };
 
   return (
     <PublicThemeProvider theme={bookingTheme}>
-      <PublicBookingForm
-        orgSlug={orgSlug}
-        bookingSlug={bookingSlug}
-        durationMinutes={bookingContext.durationMinutes}
-        confirmationFallback={bookingContext.confirmationMessage}
-        price={bookingContext.price}
-        businessName={businessName}
-        businessPhone={businessPhone}
-        appointmentName={bookingContext.appointmentName}
-        appointmentDescription={bookingContext.appointmentDescription}
-      />
-      {(showBadge || isTestMode) ? (
-        <div className="flex flex-col items-center gap-2 py-3">
-          {isTestMode ? <TestModePublicBadge testMode={true} /> : null}
-          {showBadge ? <PoweredByBadge /> : null}
-        </div>
-      ) : null}
+      <div className="light">
+        <PublicBookingForm
+          orgSlug={orgSlug}
+          bookingSlug={bookingSlug}
+          durationMinutes={bookingContext.durationMinutes}
+          confirmationFallback={bookingContext.confirmationMessage}
+          price={bookingContext.price}
+          businessName={businessName}
+          businessPhone={businessPhone}
+          appointmentName={bookingContext.appointmentName}
+          appointmentDescription={bookingContext.appointmentDescription}
+        />
+        {(showBadge || isTestMode) ? (
+          <div className="flex flex-col items-center gap-2 py-3">
+            {isTestMode ? <TestModePublicBadge testMode={true} /> : null}
+            {showBadge ? <PoweredByBadge /> : null}
+          </div>
+        ) : null}
+      </div>
     </PublicThemeProvider>
   );
 }

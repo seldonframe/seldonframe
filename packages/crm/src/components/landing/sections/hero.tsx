@@ -1,5 +1,14 @@
+// v1.38.4 — switched from next/image to raw <img>. The Image
+// component requires next.config.js images.remotePatterns to
+// allow remote domains; without that allowlist, every Unsplash
+// URL silently failed and we rendered the alt-text fallback
+// (which is what the user saw on Hill Mountain Roofing). Same
+// pattern we already use in project-gallery.tsx — Unsplash CDN
+// already serves WebP at the edge, no Next.js optimization
+// needed. referrerPolicy="no-referrer" because some Unsplash
+// CDN responses behave better when no referrer is sent.
+/* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
-import Image from "next/image";
 import type { HeroSectionContent } from "./types";
 
 export function HeroSection({
@@ -35,7 +44,13 @@ export function HeroSection({
           {heroVideo ? (
             <video controls className="h-full w-full rounded-2xl object-cover" src={heroVideo} />
           ) : heroImage ? (
-            <Image src={heroImage} alt={headline} width={960} height={720} className="h-full w-full rounded-2xl object-cover" />
+            <img
+              src={heroImage}
+              alt={headline}
+              loading="eager"
+              referrerPolicy="no-referrer"
+              className="h-full w-full rounded-2xl object-cover"
+            />
           ) : (
             // v1.36.0 — better empty state. The pre-v1.36 "Add hero
             // media" gray box read as broken/unfinished on every

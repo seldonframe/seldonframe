@@ -9,6 +9,21 @@ const nextConfig: NextConfig = {
       allowedOrigins: ["localhost", "127.0.0.1", "127.0.0.1:54345"],
     },
   },
+  // v1.38.4 — allowlist Unsplash domains for next/image. Without this,
+  // any <Image src="https://images.unsplash.com/..."> silently fails
+  // and renders the alt-text fallback. v1.38.4 hero.tsx switched to
+  // raw <img> to bypass this entirely (gallery already does), but the
+  // remotePatterns are added as defense-in-depth for any future
+  // next/image usage with Unsplash content. Vercel Blob added so
+  // operator-uploaded photos via /upload work too.
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "images.unsplash.com" },
+      { protocol: "https", hostname: "source.unsplash.com" },
+      { protocol: "https", hostname: "*.public.blob.vercel-storage.com" },
+      { protocol: "https", hostname: "*.app.seldonframe.com" },
+    ],
+  },
 };
 
 // v1.28.4 — Vercel Workflow DevKit integration. withWorkflow() wraps the
