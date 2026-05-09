@@ -45,14 +45,21 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { landingPages } from "@/db/schema";
+import { landingPages, organizations } from "@/db/schema";
 import { getAIClient } from "@/lib/ai/client";
 import {
   resolveGalleryImageUrlsForQueries,
   resolveHeroImageUrlForQuery,
 } from "@/lib/crm/personality-images";
 import { loadSkillMd } from "@/lib/page-blocks/skill-loader";
+import {
+  ARCHETYPES,
+  classifyArchetype,
+  type AestheticArchetype,
+  type AestheticArchetypeId,
+} from "./aesthetic-archetypes";
 import type { LandingPageSection } from "@/components/landing/sections/types";
+import type { OrgTheme } from "@/lib/theme/types";
 
 // ─── Public input + output ──────────────────────────────────────────────────
 
@@ -92,10 +99,14 @@ export interface EnhanceLandingInput {
     company?: string | null;
     rating?: number | null;
   }> | null;
+  /** v1.40.0 — operator-supplied personality vertical (e.g. "roofing",
+   *  "dental"). Used for archetype classification. When absent,
+   *  classifier falls back to keyword detection over services + description. */
+  personality_vertical?: string | null;
 }
 
 export type EnhanceLandingResult =
-  | { ok: true; sections_count: number; model: string }
+  | { ok: true; sections_count: number; model: string; archetype: AestheticArchetypeId }
   | { ok: false; reason: string; detail?: string };
 
 // ─── Block selection + model defaults ───────────────────────────────────────
@@ -178,10 +189,87 @@ function buildBusinessContext(input: EnhanceLandingInput): string {
   return lines.join("\n");
 }
 
-function buildPrompt(skills: Record<string, string>, input: EnhanceLandingInput): string {
+// v1.40.0 — render the chosen archetype's design constraints as a
+// markdown brief the LLM consumes as system context. This is the
+// "design.md" Trevor Foyer's Stitch workflow generates manually; we
+// generate it server-side from the archetype registry + business
+// signals so every section flows from one design system instead of
+// drifting to LLM defaults section-by-section.
+function renderArchetypeBrief(archetype: AestheticArchetype): string {
+  return `# DESIGN BRIEF — Archetype: ${archetype.label}
+
+This workspace is classified as **${archetype.id}**. Every word and
+section you generate must conform to this brief.
+
+## Why this archetype
+${archetype.fits}
+
+## Voice
+- Tone: ${archetype.voice.tone}
+- Pace: ${archetype.voice.pace}
+- LEAN INTO these phrases / cadences when natural: ${archetype.voice.leanInto.join(", ")}
+- AVOID these words/phrases entirely: ${archetype.voice.avoid.join(", ")}
+
+## Visual language (informs your copy choices)
+- Primary color: ${archetype.palette.primary}
+- Secondary color: ${archetype.palette.secondary}
+- Background: ${archetype.palette.background}
+- Headline font: ${archetype.fonts.headline}
+- Body font: ${archetype.fonts.body}
+- Hero variant: ${archetype.heroVariant} (the renderer enforces this layout — do not propose centered hero copy)
+
+## Design dials (1-10)
+- DESIGN_VARIANCE: ${archetype.dials.designVariance} (higher = more asymmetric, more whitespace, less symmetrical)
+- MOTION_INTENSITY: ${archetype.dials.motionIntensity}
+- VISUAL_DENSITY: ${archetype.dials.visualDensity}
+
+## Tokens BANNED for this workspace specifically
+${archetype.bannedHere.map((b) => `- ${b}`).join("\n")}
+
+## Universal taste-skill rules (apply to EVERY workspace, not just this one)
+- NO Inter font ANYWHERE — use ${archetype.fonts.headline} / ${archetype.fonts.body} only
+- NO centered hero (DESIGN_VARIANCE > 4)
+- NO "3 equal cards horizontally" feature rows — when generating servicesGrid or benefits, the renderer will use an asymmetric / bento / numbered variant; do NOT propose 3 identical cards
+- NO oversized H1s that scream — first heading should be confident, not loud
+- NO pure black (#000000) — palette uses near-black like ${archetype.palette.text}
+- NO "AI purple/blue" — that aesthetic is banned
+- Max 1 accent color, saturation < 80%
+- NO generic startup names (Acme, Nexus, SmartFlow), NO fake numbers (99.99%, 10x), NO emojis in code/copy
+- Animate only via transform + opacity (renderer enforces; copy doesn't need to know)
+
+## Output discipline
+- Headlines convey VALUE STANDALONE — assume body text is never read.
+  Bad: "About Us" / "Our Services" / "Why Choose Us"
+  Good: "Restored 7,400 Round Rock Roofs Since 2014 — Most Insurance Approved"
+- "So that" principle in headlines — chain the dream outcome:
+  "Free roof inspection so that you know exactly what State Farm will cover"
+- Specific time numbers when soul provides them: "in 5 days", "within 24 hours", "by 6 PM today"
+- Effort-reduction subheads with "without/we handle" qualifiers:
+  "We handle the insurance paperwork — most clients never speak to their adjuster directly"
+`;
+}
+
+function buildPrompt(
+  skills: Record<string, string>,
+  input: EnhanceLandingInput,
+  archetype: AestheticArchetype,
+): string {
   return `You are generating landing-page block content for a real small-business website. The output goes DIRECTLY to a published landing page — there is no human editor between you and the visitor. Treat every word as production copy.
 
 OUTPUT: ONE JSON object, no prose, no markdown fences. The exact shape is below; every key required unless marked optional.
+
+${renderArchetypeBrief(archetype)}
+
+# HORMOZI VALUE EQUATION (the conversion framework you must apply throughout)
+
+Every section you generate must serve one or more of these:
+
+1. **Dream outcome** — say what the customer GETS, not what you do. Use "so that" chaining.
+2. **Perceived likelihood of success** — proof, ratings, license #s, real testimonials, specific local numbers.
+3. **Time delay** — minimize: "in 5 days", "by 6 PM", "same-day estimates", "first quote in 24 hours".
+4. **Effort & sacrifice** — minimize: "we handle the paperwork", "without insurance hassles", "no obligation".
+
+The first section above the fold (hero) carries 80-90% of conversion weight. Pour your best copy there. The headline alone, with no other context, must convey THE dream outcome + the time component. Below-the-fold sections support and expand; they don't have to do all the work.
 
 # Business Context
 
@@ -401,6 +489,7 @@ function asArray<T = unknown>(v: unknown): T[] {
 async function payloadToSections(
   payload: Record<string, unknown>,
   input: EnhanceLandingInput,
+  archetype: AestheticArchetype,
 ): Promise<LandingPageSection[]> {
   const sections: LandingPageSection[] = [];
   let order = 0;
@@ -422,7 +511,12 @@ async function payloadToSections(
     },
   });
 
-  // Hero — Hormozi-quality copy + Unsplash photo from heroImage_query.
+  // v1.40.0 — hero now includes archetype-driven `variant` so the
+  // renderer picks the right composition (split-screen, asymmetric,
+  // cinematic, founder-portrait). Centered hero is BANNED per
+  // taste-skill discipline. Also passes through `riskReversalBadges`
+  // pulled from input.trust_signals + input.certifications so the
+  // hero's CTA carries Hormozi-style risk-reversal proof underneath.
   const hero = asObject(payload.hero);
   if (hero) {
     let heroImage = "";
@@ -442,6 +536,29 @@ async function payloadToSections(
           link: asString(secondaryCtaRaw.link, `tel:${input.phone.replace(/[^\d+]/g, "")}`),
         }
       : undefined;
+
+    // Build risk-reversal badges from operator-supplied signals.
+    // Hormozi's "30% lift in conversions when risk-reversal under CTA"
+    // pattern. Filter out anything that's not a single-clause claim.
+    const riskReversalBadges = [
+      ...(input.trust_signals ?? []),
+      ...(input.certifications ?? []),
+    ]
+      .filter((b): b is string => typeof b === "string" && b.trim().length > 0 && b.length < 60)
+      .slice(0, 5);
+
+    // v1.40.0 — proof tile: review_count + review_rating cluster.
+    // Renders as a compact pill row above the CTA so visitors see
+    // social proof in the same eyeful as the headline.
+    const proofTile =
+      typeof input.review_rating === "number" && typeof input.review_count === "number"
+        ? {
+            rating: input.review_rating,
+            count: input.review_count,
+            label: `from ${input.review_count.toLocaleString()} ${input.city} customers`,
+          }
+        : undefined;
+
     sections.push({
       type: "hero",
       order: order++,
@@ -453,6 +570,13 @@ async function payloadToSections(
         ctaLink: asString(hero.ctaLink, "/book"),
         secondaryCta,
         heroImage,
+        // v1.40.0 — archetype-driven layout variant. Renderer picks
+        // the matching composition; centered hero is banned.
+        variant: archetype.heroVariant,
+        // v1.40.0 — Hormozi-style risk-reversal badges under CTA.
+        riskReversalBadges,
+        // v1.40.0 — visual proof tile above CTA.
+        proofTile,
       },
     });
   }
@@ -731,17 +855,62 @@ export async function enhanceLandingForWorkspace(
     return { ok: false, reason: "no_skills_loaded" };
   }
 
-  // 3. Build prompt + call Claude.
-  const prompt = buildPrompt(skills, input);
+  // v1.40.0 — 2.5. Pick aesthetic archetype for this workspace.
+  // Drives every downstream design decision: palette, fonts, hero
+  // variant, voice, banned tokens. Trevor Foyer's manual workflow
+  // calls this "design intent injection"; we automate it from the
+  // soul + business signals.
+  const archetypeId: AestheticArchetypeId = classifyArchetype({
+    vertical: input.personality_vertical ?? "",
+    emergencyService: input.emergency_service,
+    sameDay: input.same_day,
+    reviewRating: input.review_rating,
+    reviewCount: input.review_count,
+    businessDescription: input.business_description,
+  });
+  const archetype = ARCHETYPES[archetypeId];
+
+  // v1.40.0 — 2.6. Apply archetype theme tokens to org.theme so the
+  // PublicThemeProvider cascades the right palette + font on every
+  // public surface (landing, booking, intake). Soft-fail if the
+  // update errors; the page still renders with default theme.
+  try {
+    const newTheme: OrgTheme = {
+      primaryColor: archetype.palette.primary,
+      accentColor: archetype.palette.secondary,
+      fontFamily: archetype.fonts.headline as OrgTheme["fontFamily"],
+      mode: "light",
+      borderRadius: "rounded",
+      logoUrl: null,
+      motionPreset: archetype.motionPreset,
+    };
+    await db
+      .update(organizations)
+      .set({ theme: newTheme, updatedAt: new Date() })
+      .where(eq(organizations.id, input.orgId));
+  } catch (err) {
+    console.warn(
+      JSON.stringify({
+        event: "archetype_theme_apply_failed",
+        workspace_id: input.orgId,
+        archetype: archetypeId,
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    );
+  }
+
+  // 3. Build prompt + call Claude — now archetype-aware.
+  const prompt = buildPrompt(skills, input, archetype);
   const result = await callClaude(resolution.client, prompt);
   if (!result.ok) {
     return { ok: false, reason: result.reason, detail: result.detail };
   }
 
-  // 4. Convert payload → LandingPageSection[].
+  // 4. Convert payload → LandingPageSection[]. Now archetype-aware:
+  //    drives hero variant + RiskReversalStrip emission + VisualProofTile.
   let sections: LandingPageSection[];
   try {
-    sections = await payloadToSections(result.payload, input);
+    sections = await payloadToSections(result.payload, input, archetype);
   } catch (err) {
     return {
       ok: false,
@@ -784,11 +953,12 @@ export async function enhanceLandingForWorkspace(
     JSON.stringify({
       event: "enhance_blocks_succeeded",
       workspace_id: input.orgId,
+      archetype: archetypeId,
       sections_count: sections.length,
       model: result.model,
       ai_mode: resolution.mode,
     }),
   );
 
-  return { ok: true, sections_count: sections.length, model: result.model };
+  return { ok: true, sections_count: sections.length, model: result.model, archetype: archetypeId };
 }

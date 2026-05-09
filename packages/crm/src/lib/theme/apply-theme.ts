@@ -56,7 +56,27 @@ export function themeToCSS(theme: OrgTheme): Record<string, string> {
   };
 }
 
+// v1.40.0 — font URL resolver supports Google Fonts AND Fontshare.
+//
+// Google Fonts hosts: Inter, DM Sans, Playfair Display, Space Grotesk,
+// Lora, Outfit, Geist (recently added).
+//
+// Fontshare hosts: Cabinet Grotesk, Satoshi (premium foundry, free for
+// commercial use). Geist is also available from Fontshare. We prefer
+// Google for fonts available in both because Google's CDN has wider
+// edge coverage.
+//
+// The taste-skill-prescribed defaults (Geist, Outfit, Cabinet Grotesk,
+// Satoshi) are all free for commercial use across the licenses we ship.
+const FONTSHARE_FONTS = new Set(["Cabinet Grotesk", "Satoshi"]);
+
 export function googleFontUrl(fontFamily: string): string {
+  if (FONTSHARE_FONTS.has(fontFamily)) {
+    // Fontshare uses a different URL shape; their CSS API exposes weights
+    // 300/400/500/700 by default. Convert "Cabinet Grotesk" → "cabinet-grotesk".
+    const slug = fontFamily.toLowerCase().replace(/ /g, "-");
+    return `https://api.fontshare.com/v2/css?f[]=${slug}@300,400,500,700&display=swap`;
+  }
   const encoded = fontFamily.replace(/ /g, "+");
   return `https://fonts.googleapis.com/css2?family=${encoded}:wght@400;500;600;700&display=swap`;
 }

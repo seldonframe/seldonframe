@@ -27,7 +27,20 @@ export type MotionPreset = "minimal" | "subtle" | "balanced" | "editorial";
 export interface OrgTheme {
   primaryColor: string;
   accentColor: string;
-  fontFamily: "Inter" | "DM Sans" | "Playfair Display" | "Space Grotesk" | "Lora" | "Outfit";
+  /** v1.40.0 — added Geist, Cabinet Grotesk, Satoshi to the font allowlist
+   *  per taste-skill discipline (which explicitly bans Inter for AI-generated
+   *  marketing UIs). Inter remains in the union for backward compat with
+   *  workspaces created pre-1.40.0; DEFAULT_ORG_THEME flipped to Geist. */
+  fontFamily:
+    | "Geist"
+    | "Cabinet Grotesk"
+    | "Satoshi"
+    | "Outfit"
+    | "Inter" // legacy — pre-1.40 workspaces keep this
+    | "DM Sans"
+    | "Playfair Display"
+    | "Space Grotesk"
+    | "Lora";
   mode: "light" | "dark";
   borderRadius: "sharp" | "rounded" | "pill";
   logoUrl: string | null;
@@ -45,10 +58,19 @@ export interface OrgTheme {
 // palette by default. This change cascades: every newly-created
 // workspace inherits mode:"light", existing workspaces are
 // unaffected (their theme.mode is already stored in organizations.theme).
+// v1.40.0 — fontFamily flipped from Inter to Geist.
+// Per taste-skill discipline ("NO Inter Font: Banned. Use Geist, Outfit,
+// Cabinet Grotesk, or Satoshi"), Inter is the AI-default font that signals
+// "generic SaaS template" instantly. Geist (Vercel's open-source font) is
+// the new default — neutral enough for any vertical, distinctive enough to
+// not read as AI-template. The workspace theme is then OVERRIDDEN per
+// archetype during create_full_workspace (v1.40.0 design.md step) so a
+// roofing company gets Outfit + Geist, a medspa gets Cabinet Grotesk +
+// Satoshi, a legal firm gets Cabinet Grotesk + Geist, etc.
 export const DEFAULT_ORG_THEME: OrgTheme = {
-  primaryColor: "#14b8a6",
-  accentColor: "#0d9488",
-  fontFamily: "Inter",
+  primaryColor: "#1f2421", // archetype default (soft-residential primary)
+  accentColor: "#3d6e4f",
+  fontFamily: "Geist",
   mode: "light",
   borderRadius: "rounded",
   logoUrl: null,

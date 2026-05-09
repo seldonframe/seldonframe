@@ -15,6 +15,33 @@ export type HeroSectionContent = {
   secondaryCta?: { text: string; link: string };
   heroImage?: string;
   heroVideo?: string;
+  /** v1.40.0 — layout composition variant chosen by aesthetic archetype.
+   *  Centered hero is BANNED per taste-skill (DESIGN_VARIANCE > 4); the
+   *  allowed variants force asymmetric / split / editorial compositions
+   *  per the design discipline.
+   *  - split-screen-50-50: classic 50/50 split, image right, copy left
+   *  - left-aligned-asymmetric: copy spans 60%, image floats right with
+   *    intentional whitespace; the editorial default
+   *  - cinematic-fullbleed: image as full-bleed background, copy
+   *    overlaid on a dark gradient
+   *  - founder-portrait: copy left, square portrait right with eyebrow
+   *    treatment — best for solo-operator / coaching businesses */
+  variant?: "split-screen-50-50" | "left-aligned-asymmetric" | "cinematic-fullbleed" | "founder-portrait";
+  /** v1.40.0 — Hormozi-style risk-reversal badges rendered as a tight
+   *  row under the primary CTA. License #s, "BBB A+ rated", "Bonded &
+   *  insured", "Lifetime warranty" — proof underneath the click target
+   *  to reduce the perceived risk of converting. Empty array hides
+   *  the row entirely. */
+  riskReversalBadges?: string[];
+  /** v1.40.0 — visual proof tile shown above the CTA. Bundles rating
+   *  + count + descriptor in a compact pill row so visitors see the
+   *  social proof in the same eyeful as the headline (Hormozi: "your
+   *  proof is going to do more selling than any promise"). */
+  proofTile?: {
+    rating: number;
+    count: number;
+    label: string;
+  };
 };
 
 export type BenefitsSectionContent = {

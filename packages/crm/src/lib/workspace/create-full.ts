@@ -505,6 +505,11 @@ export async function createFullWorkspace(
       service_area: input.service_area,
       weekly_hours: input.weekly_hours,
       testimonials: input.testimonials,
+      // v1.40.0 — pass the personality vertical (resolved earlier in
+      // step 2-3) so the archetype classifier can pick the right
+      // aesthetic. Without this, classification falls back to keyword
+      // detection over services + description, which is less reliable.
+      personality_vertical: personality.vertical,
     });
     if (!enhanceResult.ok) {
       console.warn(
