@@ -216,12 +216,64 @@ export function getPersonalityImages(
 
 const HERO_QUERY_PARAMS = "auto=format&fit=crop&w=1600&h=900&q=80";
 
+// v1.39.0 — skyline / scenery rejection.
+//
+// Pre-1.39.0 the resolver picked Unsplash result[0] unconditionally.
+// For queries like "austin storm roofing" Unsplash interpreted the
+// city as the dominant subject and returned downtown skyline shots —
+// not roofs. The Bluebonnet Roofing test landed with an Austin-skyline
+// hero, which read as "stock template" instantly.
+//
+// Fix: scan the top N results for descriptions that match
+// scenery/cityscape patterns and SKIP them, picking the first result
+// whose description suggests the actual subject (a roof, a worker,
+// shingles, etc.). If every result looks like scenery, fall back to
+// the first one anyway (a hero is better than no hero).
+//
+// We rely on Unsplash's `description` + `alt_description` fields,
+// which photographers populate with real descriptive text. The
+// rejection regex covers obvious scenery markers without being
+// over-aggressive (e.g. "rooftop view of city" might pass — that's
+// fine, looks fine in a hero).
+const SCENERY_REJECTION_RE = /\b(skyline|cityscape|aerial view of (the )?city|downtown|panorama|landscape|sunset over|sunrise over|view from|tourism)\b/i;
+
+interface UnsplashSearchResult {
+  id?: string;
+  description?: string | null;
+  alt_description?: string | null;
+  urls?: { raw?: string; full?: string; regular?: string };
+}
+
+function pickBestHeroResult(
+  results: UnsplashSearchResult[],
+): UnsplashSearchResult | null {
+  if (results.length === 0) return null;
+  // Prefer the first result whose description doesn't read as scenery.
+  for (const r of results) {
+    const text = `${r.description ?? ""} ${r.alt_description ?? ""}`.trim();
+    if (text.length === 0) {
+      // No description — could be anything. Take it (better than rejecting).
+      return r;
+    }
+    if (!SCENERY_REJECTION_RE.test(text)) {
+      return r;
+    }
+  }
+  // All results matched scenery — fall back to first anyway.
+  return results[0];
+}
+
 /**
  * Resolve a hero image URL from a free-text query. Tries the official
  * API first when UNSPLASH_ACCESS_KEY is set; otherwise constructs a
  * source.unsplash.com URL. Both paths return a string that the
  * renderer can embed directly. NEVER throws — falls back to a
  * deterministic URL on any error so workspaces always have an image.
+ *
+ * v1.39.0 — also rejects scenery/cityscape results (see
+ * SCENERY_REJECTION_RE above) so a query like "austin roofing"
+ * doesn't return a downtown-skyline hero. Fetches per_page=15 to give
+ * the rejection logic enough alternatives to find a real subject.
  */
 export async function resolveHeroImageUrlForQuery(
   query: string,
@@ -232,7 +284,7 @@ export async function resolveHeroImageUrlForQuery(
   if (apiKey) {
     try {
       const response = await fetch(
-        `https://api.unsplash.com/search/photos?query=${encodeURIComponent(cleanedQuery)}&per_page=10&orientation=landscape&content_filter=high`,
+        `https://api.unsplash.com/search/photos?query=${encodeURIComponent(cleanedQuery)}&per_page=15&orientation=landscape&content_filter=high`,
         {
           headers: {
             Authorization: `Client-ID ${apiKey}`,
@@ -242,15 +294,11 @@ export async function resolveHeroImageUrlForQuery(
       );
       if (response.ok) {
         const data = (await response.json()) as {
-          results?: Array<{
-            urls?: { raw?: string; full?: string; regular?: string };
-          }>;
+          results?: UnsplashSearchResult[];
         };
-        const first = data.results?.[0];
-        // Prefer raw + our params so we get the right crop + size.
-        const raw = first?.urls?.raw ?? first?.urls?.full;
+        const picked = pickBestHeroResult(data.results ?? []);
+        const raw = picked?.urls?.raw ?? picked?.urls?.full;
         if (raw) {
-          // Append our standard params to the raw URL.
           return `${raw}${raw.includes("?") ? "&" : "?"}${HERO_QUERY_PARAMS}`;
         }
       }

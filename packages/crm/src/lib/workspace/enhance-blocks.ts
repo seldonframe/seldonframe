@@ -198,7 +198,7 @@ ${buildBusinessContext(input)}
     "ctaText": "<2-4 words, action verb (e.g. 'Get Service Today', 'Book Appointment', 'Schedule a Visit')>",
     "ctaLink": "/book",
     "secondaryCta": { "text": "<optional verb action>", "link": "/intake or tel:<phone digits>" },
-    "heroImage_query": "<2-5 word Unsplash search query matching this specific business; e.g. 'hvac technician outdoor unit phoenix' or 'plumber sink repair' — be specific to vertical + setting>"
+    "heroImage_query": "<3-6 word Unsplash search query for the HERO photo. CRITICAL RULES (read carefully — bad queries return city skylines or stock-template scenery): MUST contain a craft-specific physical noun (shingle / roof / roofer / gutter / metal panel / plumber / pipe / hvac unit / technician / dentist / chair / etc.). MUST NOT lead with a city name — city goes LAST or omit entirely. SHOULD include a composition/framing hint: 'close-up', 'rooftop', 'aerial', 'worker on', 'detail of', 'hands installing'. AVOID generic vertical+city like 'austin roofing' or 'phoenix hvac' — those return scenery. PREFER 'asphalt shingle residential roof close-up' over 'austin storm roofing'. PREFER 'plumber repairing kitchen sink' over 'austin plumbing'. PREFER 'hvac technician on outdoor unit' over 'phoenix hvac'. Examples that work: 'asphalt shingle roof close-up sunny', 'roofer installing metal standing seam', 'plumber working on copper pipes', 'dentist examining patient bright clinic', 'electrician panel residential', 'hvac unit residential rooftop'. Include 'residential' if the business is residential-focused (most local-service businesses are)>"
   },
   "servicesGrid": {
     "headline": "<value-driven headline for services section; speak to outcome not features>",
@@ -219,7 +219,7 @@ ${buildBusinessContext(input)}
   "benefits": {
     "headline": "<headline for differentiators section>",
     "benefits": [
-      { "icon": "<one of: clock, shield, star, badge-check, wrench, phone, map-pin, dollar-sign, thumbs-up, award, zap, heart>", "title": "<3-5 words>", "description": "<1 sentence>" }
+      { "icon": "<lucide name OR vertical-alias picked to fit the SPECIFIC benefit; see icon hints further down — required, must be DISTINCT across the 3 benefits>", "title": "<3-5 words>", "description": "<1 sentence>" }
     ]
   },
   "process": {
@@ -292,9 +292,30 @@ Each service MUST have a distinct \`icon\` value. Pick the lucide name OR vertic
 
 Pick whatever READS most concretely as that service. "Storm damage repair" → "cloud-rain-wind" or "storm". "Shingle replacement" → "home" or "shingle". "Gutter repair" → "droplets" or "gutter". "Free roof inspection" → "shield-check" or "inspection". The renderer normalizes and resolves.
 
-# Gallery queries
+# Gallery queries (CRITICAL — read all rules)
 
-Generate 6 Unsplash search queries in projectGallery.queries — vertical-specific, 2-5 words each, that produce real-looking job-site or business-context photos. Bias toward queries that return DIFFERENT photos (avoid all 6 being "plumber"). Each query becomes one square photo in a 6-photo masonry grid. Examples for HVAC: ["hvac technician outdoor unit", "ductwork installation", "thermostat residential", "air filter replacement", "rooftop commercial unit", "service van technician"]. For plumbing: ["plumber sink repair", "drain cleaning kitchen", "water heater install basement", "bathroom renovation", "pipe inspection camera", "emergency plumbing service van"].
+Generate 6 Unsplash search queries in projectGallery.queries. Each query becomes one square photo in a 6-photo masonry grid showing "Recent Work". RULES:
+
+1. EACH query MUST contain a craft-specific physical noun (shingle / roof / pipe / drain / hvac unit / shingle replacement / etc.) — NOT just a vertical name.
+2. NO city names in queries — they make Unsplash return scenery instead of work photos.
+3. Bias for VARIETY — the 6 queries should each return visibly different photos (a roof close-up, a worker on a job, a tool detail, a finished install, etc.). DO NOT repeat the same noun across all 6.
+4. INCLUDE "residential" if the business is residential-focused (most local-service businesses are). It dramatically improves photo quality vs commercial/stock.
+5. Each query 3-6 words.
+
+GOOD examples (roofing, residential):
+["asphalt shingle roof close-up", "roofer installing shingles residential", "metal standing seam roof house", "seamless gutter installation residential", "skylight on residential roof", "storm-damaged shingles close-up"]
+
+BAD examples (return scenery / random objects):
+["austin roofing"] (city name → city scenery)
+["roofing"] (too generic, returns logos/clip art)
+["roof"] (could return random roof types — barns, churches)
+["storm"] (returns weather photos, not roofing work)
+
+GOOD examples (plumbing, residential):
+["plumber repairing kitchen sink", "copper pipes installation residential", "drain cleaning equipment basement", "water heater install residential", "leaking pipe under sink close-up", "plumber working on toilet residential"]
+
+GOOD examples (HVAC, residential):
+["hvac technician on outdoor unit", "residential air conditioner install", "ductwork in residential attic", "thermostat installation hand close-up", "furnace residential basement", "hvac service van residential driveway"]
 
 # FAQ count
 
@@ -302,7 +323,7 @@ Generate 4-6 FAQ entries in faq.faqs. Cover the top customer concerns: pricing/q
 
 # Benefits count
 
-Generate exactly 3 benefit entries in benefits.benefits.
+Generate exactly 3 benefit entries in benefits.benefits. Each MUST have a DISTINCT \`icon\` value (do not repeat across the 3 cards). Pick whichever lucide name OR alias from the per-service hints above best matches that specific benefit. Common benefit-flavored picks: trust → shield-check, licensed → badge-check, insured → shield, family-owned → heart, local → map-pin, experienced → award, fast/same-day → clock or zap, free-estimates → dollar-sign, warranty → badge-check, 5-star → star.
 
 # Output
 

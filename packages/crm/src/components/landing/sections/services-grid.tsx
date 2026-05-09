@@ -15,134 +15,14 @@
 // stale icon string never breaks the render.
 
 import Link from "next/link";
-import {
-  Award,
-  BadgeCheck,
-  CheckCircle2,
-  Clock,
-  CloudRain,
-  CloudRainWind,
-  CloudSnow,
-  DollarSign,
-  Droplets,
-  Hammer,
-  HardHat,
-  Heart,
-  Home,
-  HousePlug,
-  Leaf,
-  MapPin,
-  Phone,
-  Scissors,
-  Shield,
-  ShieldCheck,
-  Sparkles,
-  Star,
-  Stethoscope,
-  ThumbsUp,
-  Truck,
-  Wind,
-  Wrench,
-  Zap,
-  type LucideIcon,
-} from "lucide-react";
+import { CheckCircle2 } from "lucide-react";
+import { resolveBlockIcon } from "./icon-resolver";
 import type { ServicesGridSectionContent } from "./types";
 
-// v1.38.4 — name → lucide component map. Covers the icon names the
-// hero/services SKILL.md prompts tell Claude to pick from, plus
-// vertical-appropriate aliases so close matches still resolve.
-// Lookup is normalized: lowercase, strip non-alphanumerics, so
-// "BadgeCheck", "badge-check", "badge_check" all work.
-const ICON_MAP: Record<string, LucideIcon> = {
-  award: Award,
-  badgecheck: BadgeCheck,
-  checkcircle: CheckCircle2,
-  clock: Clock,
-  cloudrain: CloudRain,
-  cloudrainwind: CloudRainWind,
-  cloudsnow: CloudSnow,
-  dollarsign: DollarSign,
-  droplets: Droplets,
-  hammer: Hammer,
-  hardhat: HardHat,
-  heart: Heart,
-  home: Home,
-  houseplug: HousePlug,
-  leaf: Leaf,
-  mappin: MapPin,
-  phone: Phone,
-  scissors: Scissors,
-  shield: Shield,
-  shieldcheck: ShieldCheck,
-  sparkles: Sparkles,
-  star: Star,
-  stethoscope: Stethoscope,
-  thumbsup: ThumbsUp,
-  truck: Truck,
-  wind: Wind,
-  wrench: Wrench,
-  zap: Zap,
-  // Aliases for common LLM outputs that don't match a lucide name 1:1
-  storm: CloudRainWind,
-  rain: CloudRain,
-  snow: CloudSnow,
-  inspection: ShieldCheck,
-  repair: Wrench,
-  install: Hammer,
-  installation: Hammer,
-  emergency: Zap,
-  warranty: BadgeCheck,
-  estimate: DollarSign,
-  quote: DollarSign,
-  free: DollarSign,
-  service: Wrench,
-  cleaning: Sparkles,
-  same: Clock,
-  sameday: Clock,
-  fast: Zap,
-  // v1.38.5 — vertical-specific aliases. Each maps to a lucide icon
-  // that reads as the right concept for that trade. The
-  // enhance-blocks prompt now lists these in the per-service icon
-  // hints so Claude picks descriptive names instead of "sparkles"
-  // for everything.
-  // Roofing
-  shingle: Home,
-  metal: Shield,
-  gutter: Droplets,
-  tarp: Shield,
-  hail: CloudRainWind,
-  roof: Home,
-  // Plumbing
-  drain: Droplets,
-  leak: Droplets,
-  heater: Zap,
-  pipe: Wrench,
-  water: Droplets,
-  // HVAC
-  cooling: Wind,
-  ac: Wind,
-  heating: Zap,
-  furnace: Zap,
-  ductwork: Home,
-  duct: Home,
-  thermostat: Home,
-  hvac: Wind,
-  // Treatments / spa / dental
-  treatment: Leaf,
-  facial: Sparkles,
-  massage: Heart,
-  laser: Zap,
-  // Auto / fleet
-  vehicle: Truck,
-  van: Truck,
-  fleet: Truck,
-};
-
-function resolveServiceIcon(iconName: string | undefined): LucideIcon {
-  if (!iconName) return Sparkles;
-  const normalized = iconName.toLowerCase().replaceAll(/[^a-z0-9]/g, "");
-  return ICON_MAP[normalized] ?? Sparkles;
-}
+// v1.39.0 — icon resolver extracted to ./icon-resolver.ts so benefits +
+// services + future blocks share the same 60+ entry name → component
+// map. See that file for the full alias table (storm → CloudRainWind,
+// shingle → Home, drain → Droplets, etc.).
 
 export function ServicesGridSection({
   headline,
@@ -161,7 +41,7 @@ export function ServicesGridSection({
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {services.map((service, index) => {
-            const Icon = resolveServiceIcon(service.icon);
+            const Icon = resolveBlockIcon(service.icon);
             return (
             <article
               key={`${service.name}-${index}`}
