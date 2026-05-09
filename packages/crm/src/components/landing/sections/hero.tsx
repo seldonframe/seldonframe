@@ -1,3 +1,5 @@
+"use client";
+
 // v1.40.0 — hero now supports archetype-driven layout variants.
 //
 // Centered hero is BANNED per taste-skill (DESIGN_VARIANCE > 4 is the
@@ -21,6 +23,7 @@
 // hide, no empty placeholders.
 
 /* eslint-disable @next/next/no-img-element */
+import { useState } from "react";
 import Link from "next/link";
 import { Star } from "lucide-react";
 import type { HeroSectionContent } from "./types";
@@ -59,7 +62,17 @@ function RiskReversalBadges({ badges }: { badges: string[] }) {
   );
 }
 
-function HeroImage({ src, alt, className = "" }: { src?: string; alt: string; className?: string }) {
+function HeroImage({
+  src,
+  alt,
+  className = "",
+  onError,
+}: {
+  src?: string;
+  alt: string;
+  className?: string;
+  onError?: () => void;
+}) {
   if (src) {
     return (
       <img
@@ -67,6 +80,7 @@ function HeroImage({ src, alt, className = "" }: { src?: string; alt: string; cl
         alt={alt}
         loading="eager"
         referrerPolicy="no-referrer"
+        onError={onError}
         className={`h-full w-full object-cover ${className}`}
       />
     );
@@ -90,18 +104,21 @@ function HeroImage({ src, alt, className = "" }: { src?: string; alt: string; cl
 
 export function HeroSection(props: HeroSectionContent) {
   const variant = props.variant ?? "left-aligned-asymmetric";
+  // v1.40.2 — onError-triggered fallback. Pre-1.40.2 the image's
+  // src-empty case had a graceful fallback, but a 404 / unreachable
+  // URL still rendered as a broken <img> with alt-text visible
+  // (which the Lumen test surfaced — alt text in the upper left of
+  // the gradient overlay). Now any side-image variant flips
+  // `imageFailed=true` on the <img>'s onError event and re-renders
+  // with the same branded gradient empty-state.
+  const [imageFailed, setImageFailed] = useState(false);
 
   // Cinematic full-bleed: image is the page background, copy overlays.
-  // v1.40.1 — when heroImage is empty OR fails to load, render a
-  // brand-tinted gradient anchor INSTEAD of a broken <img>. Pre-1.40.1
-  // the alt-text fallback was visible in the corner ("Results That
-  // Look Like Rest..." showed as visible text in the upper-left of the
-  // gradient on Lumen). Fix: detect missing src + render a designed
-  // empty state, AND lighten the overlay so working images come
-  // through (was from-black/30 via-black/50 to-black/80 — too dark for
-  // most photography).
   if (variant === "cinematic-fullbleed") {
-    const hasImage = typeof props.heroImage === "string" && props.heroImage.trim().length > 0;
+    const hasImage =
+      !imageFailed &&
+      typeof props.heroImage === "string" &&
+      props.heroImage.trim().length > 0;
     return (
       <section className="relative isolate overflow-hidden">
         <div className="absolute inset-0 -z-10">
@@ -113,6 +130,7 @@ export function HeroSection(props: HeroSectionContent) {
                 aria-hidden="true"
                 loading="eager"
                 referrerPolicy="no-referrer"
+                onError={() => setImageFailed(true)}
                 className="absolute inset-0 h-full w-full object-cover"
               />
               <div
@@ -224,7 +242,11 @@ export function HeroSection(props: HeroSectionContent) {
             <RiskReversalBadges badges={props.riskReversalBadges ?? []} />
           </div>
           <div className="aspect-square overflow-hidden rounded-2xl border bg-card">
-            <HeroImage src={props.heroImage} alt={props.headline} />
+            <HeroImage
+              src={imageFailed ? undefined : props.heroImage}
+              alt={props.headline}
+              onError={() => setImageFailed(true)}
+            />
           </div>
         </div>
       </section>
@@ -262,7 +284,12 @@ export function HeroSection(props: HeroSectionContent) {
             <RiskReversalBadges badges={props.riskReversalBadges ?? []} />
           </div>
           <div className="relative min-h-[420px] md:min-h-[600px]">
-            <HeroImage src={props.heroImage} alt={props.headline} className="absolute inset-0" />
+            <HeroImage
+              src={imageFailed ? undefined : props.heroImage}
+              alt={props.headline}
+              onError={() => setImageFailed(true)}
+              className="absolute inset-0"
+            />
           </div>
         </div>
       </section>
@@ -302,7 +329,11 @@ export function HeroSection(props: HeroSectionContent) {
           {props.heroVideo ? (
             <video controls className="h-full w-full object-cover" src={props.heroVideo} />
           ) : (
-            <HeroImage src={props.heroImage} alt={props.headline} />
+            <HeroImage
+              src={imageFailed ? undefined : props.heroImage}
+              alt={props.headline}
+              onError={() => setImageFailed(true)}
+            />
           )}
         </div>
       </div>

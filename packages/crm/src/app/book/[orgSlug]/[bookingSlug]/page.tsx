@@ -123,6 +123,10 @@ export default async function PublicBookingPage({
           // creation. Empty array for legacy templates → renders the
           // legacy name+email+notes flow.
           intakeFields={bookingContext.intakeFields}
+          // v1.40.2 — workspace IANA TZ. Slots are UTC ISO; the form
+          // formats them in this TZ for display so the customer sees
+          // the operator's hours, not their browser-local reinterp.
+          workspaceTimezone={bookingContext.workspaceTimezone}
         />
         {(showBadge || isTestMode) ? (
           <div className="flex flex-col items-center gap-2 py-3">

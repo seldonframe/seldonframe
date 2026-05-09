@@ -66,13 +66,40 @@ function toDateOnly(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
-function toTimeLabel(value: string) {
+// v1.40.2 — format a UTC ISO slot string in the workspace's timezone.
+// Pre-1.40.2 we used the browser's locale-default TZ which DISAGREED
+// with the slot generator's server-local UTC. Now slots are UTC ISO
+// (unambiguous) and we explicitly pass workspace TZ for display.
+function toTimeLabel(value: string, timeZone: string) {
   const date = new Date(value);
-  return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return date.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone,
+  });
 }
 
-function formatSelectedDateHeading(date: Date) {
-  return date.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
+function formatSelectedDateHeading(date: Date, timeZone: string) {
+  return date.toLocaleDateString([], {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    timeZone,
+  });
+}
+
+// Pretty short TZ abbreviation (CST, EDT, PT, etc.) for the picker
+// header so customers know which zone the slots represent.
+function shortTimezoneAbbr(timeZone: string, sample = new Date()): string {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      timeZoneName: "short",
+    }).formatToParts(sample);
+    return parts.find((p) => p.type === "timeZoneName")?.value ?? timeZone;
+  } catch {
+    return timeZone;
+  }
 }
 
 function toTelLink(phone: string): string {
@@ -92,6 +119,7 @@ export function PublicBookingForm({
   appointmentName,
   appointmentDescription,
   intakeFields = [],
+  workspaceTimezone,
 }: {
   orgSlug: string;
   bookingSlug: string;
@@ -105,6 +133,11 @@ export function PublicBookingForm({
   /** v1.40.1 — vertical-aware booking form fields. Rendered after
    *  name + email. Empty array → renders the legacy notes-only flow. */
   intakeFields?: BookingIntakeField[];
+  /** v1.40.2 — workspace IANA TZ (e.g. "America/Chicago"). Slots
+   *  are UTC ISO strings; we format them in this TZ for display so
+   *  customer sees operator's actual hours, not their browser-local
+   *  reinterpretation. Required — caller must thread this through. */
+  workspaceTimezone: string;
 }) {
   // v1.40.1 — surface the operator-supplied service hint when the
   // visitor arrived via /book?service=<slug>. Used to pre-display the
@@ -143,7 +176,12 @@ export function PublicBookingForm({
   const [selectedDate, setSelectedDate] = useState<Date>(today);
   const selectedDateISO = useMemo(() => toDateOnly(selectedDate), [selectedDate]);
 
-  const timezone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC", []);
+  // v1.40.2 — display TZ is the WORKSPACE's TZ, not the browser's.
+  // Customer's browser TZ doesn't matter — they're booking with an
+  // operator who runs hours in a specific local TZ; the picker has
+  // to honor that or slots get rejected on submit.
+  const timezone = workspaceTimezone;
+  const timezoneAbbr = useMemo(() => shortTimezoneAbbr(workspaceTimezone), [workspaceTimezone]);
 
   useEffect(() => {
     if (step !== "pick-time" || !selectedDateISO) return;
@@ -382,10 +420,10 @@ export function PublicBookingForm({
                   <div className="flex items-baseline justify-between gap-3">
                     <div>
                       <p className="text-base font-semibold" style={{ color: "var(--sf-text)" }}>
-                        {formatSelectedDateHeading(selectedDate)}
+                        {formatSelectedDateHeading(selectedDate, timezone)}
                       </p>
                       <p className="mt-0.5 text-xs" style={{ color: "var(--sf-muted)" }}>
-                        {durationMinutes}-minute slot · {timezone}
+                        {durationMinutes}-minute slot · times shown in {timezoneAbbr}
                       </p>
                     </div>
                     <button
@@ -434,7 +472,7 @@ export function PublicBookingForm({
                               setStep("enter-details");
                             }}
                           >
-                            {toTimeLabel(slot)}
+                            {toTimeLabel(slot, timezone)}
                           </button>
                         );
                       })}
@@ -456,10 +494,10 @@ export function PublicBookingForm({
                   >
                     <div className="min-w-0">
                       <p className="text-sm font-semibold" style={{ color: "var(--sf-text)" }}>
-                        {formatSelectedDateHeading(selectedDate)} · {toTimeLabel(selectedSlot)}
+                        {formatSelectedDateHeading(selectedDate, timezone)} · {toTimeLabel(selectedSlot, timezone)}
                       </p>
                       <p className="mt-0.5 text-xs" style={{ color: "var(--sf-muted)" }}>
-                        {durationMinutes} min · {timezone}
+                        {durationMinutes} min · {timezoneAbbr}
                       </p>
                     </div>
                     <button

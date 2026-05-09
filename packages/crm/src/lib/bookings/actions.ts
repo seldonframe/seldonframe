@@ -103,19 +103,24 @@ type PublicBookingContext = {
   /** v1.40.1 — vertical-aware booking form fields. Empty array if
    *  the appointment type doesn't define any (legacy templates). */
   intakeFields: BookingIntakeField[];
+  /** v1.40.2 — workspace IANA timezone (e.g. "America/Chicago").
+   *  Slots are generated AND displayed in this timezone so customer +
+   *  server agree on which moment in time the slot represents.
+   *  Pre-1.40.2 the slot generator used server-local time (UTC on
+   *  Vercel) but workspace hours are in operator's local TZ — when
+   *  the customer's browser parsed the resulting ambiguous strings
+   *  in their own TZ, slots that LOOKED valid were rejected by the
+   *  submit handler (which correctly validates in workspace TZ).
+   *  Returning workspace TZ here makes the whole flow consistent. */
+  workspaceTimezone: string;
 };
 
 const weekdayKeys: AvailabilityDayKey[] = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 
-const weekdayByIndex: Record<number, AvailabilityDayKey> = {
-  0: "sunday",
-  1: "monday",
-  2: "tuesday",
-  3: "wednesday",
-  4: "thursday",
-  5: "friday",
-  6: "saturday",
-};
+// v1.40.2 — weekdayByIndex (server-local Date.getDay() lookup) removed
+// because slot generation now resolves weekday via partsInTimezone(date,
+// workspaceTz).weekday — TZ-correct under DST. The submit handler also
+// uses partsInTimezone, so server-local-day lookups have no callers.
 
 function defaultAvailabilitySchedule(): AvailabilitySchedule {
   return {
@@ -271,14 +276,13 @@ function resolveDuration(duration: number | undefined) {
   return duration >= 60 ? 60 : 30;
 }
 
-function toDateTimeLocalValue(date: Date) {
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getDate()}`.padStart(2, "0");
-  const hours = `${date.getHours()}`.padStart(2, "0");
-  const minutes = `${date.getMinutes()}`.padStart(2, "0");
-  return `${year}-${month}-${day}T${hours}:${minutes}`;
-}
+// v1.40.2 — toDateTimeLocalValue removed. Pre-1.40.2 it produced
+// "YYYY-MM-DDTHH:MM" strings in server-local time (UTC on Vercel),
+// which the customer's browser then re-parsed in browser-local time,
+// creating a multi-hour drift between display and submit. Slots now
+// transit as full UTC ISO strings (date.toISOString()) — unambiguous
+// across both ends. The lone remaining mention in submitPublicBookingAction
+// is a comment noting why the strict slot-string match was relaxed.
 
 // v1.3.2 — extract date components in a specific IANA timezone using
 // Intl.DateTimeFormat. JS Date methods (.getHours/.getDay) are
@@ -335,7 +339,13 @@ function normalizeVoiceConfirmation(rawSoul: unknown) {
 
 async function resolvePublicBookingContext(orgSlug: string, bookingSlug: string): Promise<PublicBookingContext | null> {
   const [org] = await db
-    .select({ id: organizations.id, soul: organizations.soul })
+    .select({
+      id: organizations.id,
+      soul: organizations.soul,
+      // v1.40.2 — fetch workspace timezone so slot generation +
+      // display happen in the operator's TZ, not server-local UTC.
+      timezone: organizations.timezone,
+    })
     .from(organizations)
     .where(eq(organizations.slug, orgSlug))
     .limit(1);
@@ -381,6 +391,8 @@ async function resolvePublicBookingContext(orgSlug: string, bookingSlug: string)
     // create_full_workspace based on the classified archetype. Empty
     // array for legacy templates (renders the default name+email+notes).
     intakeFields: Array.isArray(metadata?.intakeFields) ? metadata!.intakeFields : [],
+    // v1.40.2 — workspace IANA TZ. Falls back to UTC if unset.
+    workspaceTimezone: org.timezone || "UTC",
   };
 }
 
@@ -401,6 +413,8 @@ export async function getPublicBookingContext(orgSlug: string, bookingSlug: stri
     price: context.price,
     // v1.40.1 — surface intake fields to the booking page.
     intakeFields: context.intakeFields,
+    // v1.40.2 — workspace timezone for slot display + submit alignment.
+    workspaceTimezone: context.workspaceTimezone,
   };
 }
 
@@ -419,27 +433,43 @@ export async function listPublicBookingSlotsAction({
     return { slots: [] as string[], durationMinutes: 30 };
   }
 
-  const requestedDay = new Date(`${date}T00:00:00`);
-
-  if (Number.isNaN(requestedDay.getTime())) {
+  // v1.40.2 — slot generation now happens entirely in workspace TZ.
+  // Pre-1.40.2 the generator used server-local time (Vercel UTC),
+  // which produced "10:00" strings that meant 10:00 UTC. Customers in
+  // any other TZ saw those parsed as their local time, which created
+  // a 4-12 hour drift between what the picker showed and what the
+  // submit handler validated. Vesper test exposed it: customer in
+  // Toronto picked "2:00 PM" → submit received 14:00 UTC = 9 AM CDT,
+  // outside Vesper's 10 AM – 8 PM CDT hours, REJECTED.
+  //
+  // New design:
+  //   1. Parse the requested date AS workspace-local "YYYY-MM-DD"
+  //   2. For each minute offset in the workday, build a UTC moment
+  //      whose workspace-TZ formatted hour/minute matches the offset
+  //   3. Return slots as full UTC ISO strings (with Z suffix) — the
+  //      client decodes them with toLocaleString({timeZone}) and the
+  //      server interprets them unambiguously
+  const tz = context.workspaceTimezone;
+  const [yearStr, monthStr, dayStr] = date.split("-");
+  const year = parseInt(yearStr ?? "0", 10);
+  const month = parseInt(monthStr ?? "0", 10);
+  const day = parseInt(dayStr ?? "0", 10);
+  if (!year || !month || !day) {
     return { slots: [] as string[], durationMinutes: context.durationMinutes };
   }
 
   const today = new Date();
-  const startWindow = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const endWindow = new Date(startWindow);
-  endWindow.setDate(endWindow.getDate() + 14);
-
-  if (requestedDay < startWindow || requestedDay > endWindow) {
+  // Window guards work fine in any TZ — a 14-day window has slop on
+  // both ends so DST shifts can't make a valid request fall outside.
+  const requestedNoon = utcMomentForLocalTime(year, month, day, 12, 0, tz);
+  const fourteenDaysFromNow = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000);
+  if (requestedNoon < today || requestedNoon > fourteenDaysFromNow) {
     return { slots: [] as string[], durationMinutes: context.durationMinutes };
   }
 
-  const dayStart = new Date(requestedDay);
-  dayStart.setHours(0, 0, 0, 0);
-  const dayEnd = new Date(dayStart);
-  dayEnd.setDate(dayEnd.getDate() + 1);
-
-  const weekdayKey = weekdayByIndex[requestedDay.getDay()];
+  // Determine weekday IN WORKSPACE TZ — not server local.
+  const requestedParts = partsInTimezone(requestedNoon, tz);
+  const weekdayKey: AvailabilityDayKey = requestedParts.weekday;
   const dayAvailability = context.availability[weekdayKey];
 
   if (!dayAvailability?.enabled) {
@@ -453,6 +483,11 @@ export async function listPublicBookingSlotsAction({
     return { slots: [] as string[], durationMinutes: context.durationMinutes };
   }
 
+  // Day window for conflict lookup: workspace-local day boundaries
+  // converted to UTC moments.
+  const dayStartUtc = utcMomentForLocalTime(year, month, day, 0, 0, tz);
+  const dayEndUtc = utcMomentForLocalTime(year, month, day + 1, 0, 0, tz);
+
   const bookedRows = await db
     .select({ startsAt: bookings.startsAt, endsAt: bookings.endsAt })
     .from(bookings)
@@ -462,9 +497,9 @@ export async function listPublicBookingSlotsAction({
         eq(bookings.bookingSlug, context.bookingSlug),
         ne(bookings.status, "template"),
         inArray(bookings.status, ["scheduled", "completed", "no_show"]),
-        gte(bookings.startsAt, dayStart),
-        lt(bookings.startsAt, dayEnd)
-      )
+        gte(bookings.startsAt, dayStartUtc),
+        lt(bookings.startsAt, dayEndUtc),
+      ),
     );
 
   if (context.maxBookingsPerDay > 0 && bookedRows.length >= context.maxBookingsPerDay) {
@@ -477,38 +512,66 @@ export async function listPublicBookingSlotsAction({
   for (let minuteOffset = workdayStartMinutes; minuteOffset < workdayEndMinutes; minuteOffset += slotStepMinutes) {
     const hour = Math.floor(minuteOffset / 60);
     const minute = minuteOffset % 60;
-      const slotStart = new Date(requestedDay);
-      slotStart.setHours(hour, minute, 0, 0);
 
-      const slotEnd = deriveEndsAt(slotStart, context.durationMinutes);
+    // Build the UTC moment for "Y-M-D HH:MM" in workspace TZ.
+    const slotStart = utcMomentForLocalTime(year, month, day, hour, minute, tz);
+    const slotEnd = new Date(slotStart.getTime() + context.durationMinutes * 60_000);
 
-      const slotEndMinutes = slotEnd.getHours() * 60 + slotEnd.getMinutes();
+    // Slot must fully fit inside the workday.
+    const slotEndMinutes = minuteOffset + context.durationMinutes;
+    if (slotEndMinutes > workdayEndMinutes) {
+      continue;
+    }
 
-      if (slotEndMinutes > workdayEndMinutes) {
-        continue;
-      }
+    // Skip slots in the past.
+    if (slotStart.getTime() <= today.getTime()) {
+      continue;
+    }
 
-      if (slotStart < today) {
-        continue;
-      }
+    const overlaps = bookedRows.some((row) => {
+      const bookedStart = new Date(row.startsAt);
+      const bookedEnd = new Date(row.endsAt);
+      const blockedStart = new Date(bookedStart.getTime() - context.bufferBeforeMinutes * 60_000);
+      const blockedEnd = new Date(bookedEnd.getTime() + context.bufferAfterMinutes * 60_000);
+      return slotStart < blockedEnd && slotEnd > blockedStart;
+    });
 
-      const overlaps = bookedRows.some((row) => {
-        const bookedStart = new Date(row.startsAt);
-        const bookedEnd = new Date(row.endsAt);
-        const blockedStart = new Date(bookedStart.getTime() - context.bufferBeforeMinutes * 60_000);
-        const blockedEnd = new Date(bookedEnd.getTime() + context.bufferAfterMinutes * 60_000);
-        return slotStart < blockedEnd && slotEnd > blockedStart;
-      });
-
-      if (!overlaps) {
-        slots.push(toDateTimeLocalValue(slotStart));
-      }
+    if (!overlaps) {
+      // v1.40.2 — emit UTC ISO strings (with Z). Client formats in
+      // workspace TZ for display; submit interprets as UTC.
+      slots.push(slotStart.toISOString());
+    }
   }
 
   return {
     slots,
     durationMinutes: context.durationMinutes,
+    // v1.40.2 — surface workspace TZ so the form can format slots
+    // and label the time zone clearly.
+    workspaceTimezone: tz,
   };
+}
+
+// v1.40.2 — build a UTC Date that, when formatted in `timeZone`,
+// shows the intended local Y-M-D H:M. Robust across DST transitions.
+//
+// Approach: start with a naive UTC moment, ask the formatter what
+// that moment LOOKS like in target TZ, compute the offset, apply.
+function utcMomentForLocalTime(
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute: number,
+  timeZone: string,
+): Date {
+  const naive = new Date(Date.UTC(year, month - 1, day, hour, minute));
+  if (timeZone === "UTC") return naive;
+  const parts = partsInTimezone(naive, timeZone);
+  const intendedMs = Date.UTC(year, month - 1, day, hour, minute);
+  const actualMs = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute);
+  const offsetMs = intendedMs - actualMs;
+  return new Date(naive.getTime() + offsetMs);
 }
 
 export async function createAppointmentTypeAction(formData: FormData) {
