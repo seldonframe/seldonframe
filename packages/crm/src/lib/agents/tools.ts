@@ -98,7 +98,7 @@ export const bookAppointment: AgentTool<
 > = {
   name: "book_appointment",
   description:
-    "Create a confirmed booking. Call this only after confirming the slot is available via look_up_availability and gathering name + email.",
+    "Create a confirmed booking. CALL ORDER: (1) look_up_availability({date}) FIRST to get real slot strings, (2) book_appointment with one of those slots passed VERBATIM as slotIso. Never invent or hand-edit a slot string — the slots returned by look_up_availability are full UTC ISO timestamps ('2026-05-13T16:00:00Z') that include timezone info; if you trim or reformat them, the server will misinterpret the time across timezones.",
   inputSchema: bookAppointmentInput,
   jsonSchema: {
     type: "object",
@@ -108,7 +108,8 @@ export const bookAppointment: AgentTool<
       phone: { type: "string" },
       slotIso: {
         type: "string",
-        description: "Slot start time, ISO local (e.g. 2026-05-14T14:30)",
+        description:
+          "MUST be one of the slot strings returned by look_up_availability, copied VERBATIM. Format is full UTC ISO with Z suffix (e.g. '2026-05-13T16:00:00Z'). Do NOT pass naive local times like '2026-05-13T09:00' — those get misinterpreted as UTC and book the wrong time.",
       },
       notes: { type: "string" },
       bookingSlug: { type: "string" },

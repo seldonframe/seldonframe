@@ -74,6 +74,11 @@ type BookingsPageContentProps = {
   contacts: ContactRow[];
   suggestedServices: SuggestedService[];
   orgSlug: string;
+  /** v1.40.9 — workspace IANA timezone (e.g. "America/Los_Angeles").
+   *  All booking time renders use this so the operator sees their
+   *  local time, not the viewer's browser timezone. Falls back to
+   *  "UTC" upstream when not configured. */
+  workspaceTimezone: string;
   calendarConnected: boolean;
   googleCalendarConnectUrl: string;
   createAppointmentTypeAction: (formData: FormData) => Promise<void>;
@@ -93,8 +98,10 @@ function statusClass(status: string) {
   return "bg-muted/50 text-muted-foreground";
 }
 
-function formatDateGroupLabel(value: Date) {
-  return new Intl.DateTimeFormat("en-US", { weekday: "long", month: "short", day: "numeric" }).format(value);
+// v1.40.9 — every formatter takes an explicit IANA timezone so
+// renders are stable regardless of viewer's browser locale.
+function formatDateGroupLabel(value: Date, tz: string) {
+  return new Intl.DateTimeFormat("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: tz }).format(value);
 }
 
 function addDaysLocal(date: Date, days: number) {
@@ -112,23 +119,27 @@ function startOfWeekMonday(date: Date) {
   return next;
 }
 
-function keyYmd(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+function keyYmd(date: Date, tz: string) {
+  // YYYY-MM-DD in the given timezone. en-CA is the locale that emits
+  // ISO-style YYYY-MM-DD when called with timeZone.
+  return new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone: tz,
+  }).format(date);
 }
 
-function labelRangeStart(date: Date) {
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "2-digit" }).format(date);
+function labelRangeStart(date: Date, tz: string) {
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "2-digit", timeZone: tz }).format(date);
 }
 
-function labelRangeEnd(date: Date) {
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "2-digit", year: "numeric" }).format(date);
+function labelRangeEnd(date: Date, tz: string) {
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "2-digit", year: "numeric", timeZone: tz }).format(date);
 }
 
-function dayHeaderLabel(date: Date) {
-  return new Intl.DateTimeFormat("en-US", { day: "2-digit", weekday: "short" }).format(date).toUpperCase();
+function dayHeaderLabel(date: Date, tz: string) {
+  return new Intl.DateTimeFormat("en-US", { day: "2-digit", weekday: "short", timeZone: tz }).format(date).toUpperCase();
 }
 
 const bookingBorderPalette = [
@@ -139,7 +150,7 @@ const bookingBorderPalette = [
   "border-l-positive",
 ];
 
-export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, suggestedServices, orgSlug, calendarConnected, googleCalendarConnectUrl, createAppointmentTypeAction }: BookingsPageContentProps) {
+export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, suggestedServices, orgSlug, workspaceTimezone, calendarConnected, googleCalendarConnectUrl, createAppointmentTypeAction }: BookingsPageContentProps) {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -172,12 +183,12 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
   const weekEventsByDay = useMemo(() => {
     const byDay = new Map<string, BookingRow[]>();
     for (const day of weekDays) {
-      byDay.set(keyYmd(day), []);
+      byDay.set(keyYmd(day, workspaceTimezone), []);
     }
 
     for (const row of bookings) {
       const startsAt = new Date(row.startsAt);
-      const key = keyYmd(startsAt);
+      const key = keyYmd(startsAt, workspaceTimezone);
       if (!byDay.has(key)) {
         continue;
       }
@@ -217,7 +228,7 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
 
     return [...grouped.entries()].map(([key, rows]) => ({
       key,
-      label: formatDateGroupLabel(new Date(rows[0].startsAt)),
+      label: formatDateGroupLabel(new Date(rows[0].startsAt), workspaceTimezone),
       rows,
     }));
   }, [bookings]);
@@ -281,7 +292,7 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
             <button type="button" className="inline-flex h-8 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground">
               <CalendarIcon className="size-4 text-muted-foreground" />
               <span className="text-xs text-foreground">
-                {labelRangeStart(weekDays[0])} - {labelRangeEnd(weekDays[6])}
+                {labelRangeStart(weekDays[0], workspaceTimezone)} - {labelRangeEnd(weekDays[6], workspaceTimezone)}
               </span>
             </button>
 
@@ -338,7 +349,7 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
             </div>
             {weekDays.map((day) => (
               <div key={day.toISOString()} className="flex-1 border-r border-border last:border-r-0 p-1.5 md:p-2 min-w-44 flex items-center">
-                <div className="text-xs md:text-sm font-medium text-foreground">{dayHeaderLabel(day)}</div>
+                <div className="text-xs md:text-sm font-medium text-foreground">{dayHeaderLabel(day, workspaceTimezone)}</div>
               </div>
             ))}
           </div>
@@ -351,7 +362,7 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
             </div>
 
             {weekDays.map((day) => {
-              const key = keyYmd(day);
+              const key = keyYmd(day, workspaceTimezone);
               const events = weekEventsByDay.get(key) ?? [];
               return (
                 <div key={key} className="flex-1 min-w-44 border-r border-border last:border-r-0">
@@ -368,7 +379,7 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
                           <article key={row.id} className={`rounded-lg border border-border border-l-4 ${borderClass} bg-card p-2 hover:bg-muted transition-colors`}>
                             <p className="text-xs font-medium text-foreground truncate">{row.title}</p>
                             <p className="mt-0.5 text-[10px] text-muted-foreground truncate">{person}</p>
-                            <p className="mt-1 text-[10px] text-primary">{startsAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</p>
+                            <p className="mt-1 text-[10px] text-primary">{startsAt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: workspaceTimezone })}</p>
                           </article>
                         );
                       })
@@ -555,7 +566,7 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
                           </div>
                           <div className="flex shrink-0 items-center gap-3">
                             <p className="text-xs tabular-nums text-foreground/85">
-                              {startsAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                              {startsAt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: workspaceTimezone })}
                             </p>
                             <span
                               className={`rounded-full px-2 py-0.5 text-[10px] font-medium capitalize ${statusClass(row.status)}`}

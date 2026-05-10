@@ -38,8 +38,12 @@ export async function BookingsListPageView({
       listContacts({ orgId }),
       getSoul(orgId),
       getIntegrationSettings().catch(() => null),
+      // v1.40.9 — also fetch workspace timezone so bookings render in the
+      // operator's local time (e.g. America/Los_Angeles), not in the
+      // viewer's browser timezone. Pre-1.40.9 a 9 AM PDT booking rendered
+      // as 12 PM EDT for a viewer in EDT.
       db
-        .select({ slug: organizations.slug })
+        .select({ slug: organizations.slug, timezone: organizations.timezone })
         .from(organizations)
         .where(eq(organizations.id, orgId))
         .limit(1)
@@ -48,6 +52,7 @@ export async function BookingsListPageView({
 
   void integrationSettings;
   const orgSlug = orgRow?.slug ?? "";
+  const workspaceTimezone = orgRow?.timezone ?? "UTC";
 
   return (
     <section className="animate-page-enter space-y-4 sm:space-y-6">
@@ -83,6 +88,7 @@ export async function BookingsListPageView({
         }))}
         suggestedServices={soul?.services ?? []}
         orgSlug={orgSlug}
+        workspaceTimezone={workspaceTimezone}
         calendarConnected={false}
         googleCalendarConnectUrl=""
         createAppointmentTypeAction={createAppointmentTypeAction}
