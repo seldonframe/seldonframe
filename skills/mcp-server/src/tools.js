@@ -4980,11 +4980,11 @@ export const TOOLS = [
           `1. Test in sandbox: ${dashboardUrl}/test (chat with the agent before customers do).`,
           `2. Run safety evals: open ${dashboardUrl}/evals → Run evals now (8-scenario suite).`,
           `3. When ready, publish to live: call publish_agent({ agent_id: '${agentId}', status: 'live' }) — auto-runs eval gate, requires ≥87.5% pass.`,
-          // v1.40.6 — explicit two-path embed instruction. Pre-1.40.6 only
-          // suggested manual drop, which the operator interpreted as "I have
-          // to copy-paste myself" — they didn't realize they could ask Claude
-          // Code to do it for them on the SF-hosted landing page.
-          `4. Add to the operator's SF-hosted landing page: ask me "add the chatbot to my landing page" and I'll inject the script via update_landing_section. (For an external website the operator owns, paste this snippet manually: <script src="${createResult.embed_url}" async></script>)`,
+          // v1.40.7 — embed-on-workspace-landing is now a real one-call MCP
+          // tool (was misleading guidance in v1.40.6). When the operator asks
+          // to put the chatbot on their site, call embed_chatbot_on_workspace_landing
+          // and the public landing renderer auto-injects the script tag.
+          `4. Add to the operator's SF-hosted landing page (one MCP call): embed_chatbot_on_workspace_landing({ workspace_id, agent_id: '${agentId}' }) — the chatbot bubble appears bottom-right on every public page. (For an external website the operator owns, paste this snippet manually: <script src="${createResult.embed_url}" async></script>)`,
         ],
       };
     },
@@ -5134,6 +5134,71 @@ export const TOOLS = [
           `If pass rate ≥ 87.5%, promote to live: publish_agent({ agent_id: '${agentId}', status: 'live' })`,
         ],
       };
+    },
+  },
+
+  // ───────────────────────────────────────────────────────────────────────
+  // v1.40.7 — workspace-level chatbot embed.
+  // The natural-language ask "add the chatbot to my landing page" /
+  // "embed this on the website" / "make the bubble appear on every
+  // page" maps to this single MCP call. Wires the agent's embed.js
+  // URL into organizations.settings.chatbot, and the public page
+  // renderer (/s/ + /l/ routes) injects <script src="..." async></script>
+  // automatically. No Pages → Edit, no copy-paste. One call, done.
+  // ───────────────────────────────────────────────────────────────────────
+
+  {
+    name: "embed_chatbot_on_workspace_landing",
+    description:
+      "USE WHEN USER SAYS: 'add the chatbot to my landing page', 'embed this on the website', 'put the agent on every page', 'make the chat bubble appear', 'wire the chatbot to the public site'. " +
+      "Wires a published agent's embed.js URL into the workspace's organization settings. The public page renderer (/s/ + /l/ routes) reads this on every render and injects a <script src='...' async></script> tag near </body>, so the floating chat bubble appears bottom-right on every page of the workspace's public surface — no per-section editing, no manual HTML, no Pages → Edit step. " +
+      "Agent must already be in status='test' or status='live' (call publish_agent first if it's still draft). One workspace = one chatbot at a time; calling this again with a different agent_id replaces the bubble. Pair with remove_chatbot_from_landing to clear it.",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id (bearer workspace)."),
+        agent_id: str(
+          "Agent id from build_website_chatbot's response or list_agents. Must belong to the workspace and be in status=test or live.",
+        ),
+      },
+      ["workspace_id", "agent_id"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/agents", {
+        body: { op: "embed_on_landing", agent_id: args.agent_id },
+        workspace_id: ws,
+      });
+      if (!result.ok) return result;
+      return {
+        ...result,
+        next_steps: [
+          `The chatbot is now live on every page of this workspace's public landing.`,
+          `Open the workspace's public URL to verify the bubble appears bottom-right.`,
+          `Conversations will appear in /agents/${args.agent_id}/conversations.`,
+          `To remove: call remove_chatbot_from_landing({ workspace_id }).`,
+        ],
+      };
+    },
+  },
+
+  {
+    name: "remove_chatbot_from_landing",
+    description:
+      "USE WHEN USER SAYS: 'remove the chatbot from the landing', 'take the chat bubble off the page', 'unembed the chatbot', 'hide the chat from visitors'. " +
+      "Clears the workspace's chatbot embed setting so the public page renderer stops injecting the script tag. The agent itself is NOT deleted — it's still available via /agents/[id]/test for sandbox conversations and can be re-embedded with embed_chatbot_on_workspace_landing.",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id (bearer workspace)."),
+      },
+      ["workspace_id"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/agents", {
+        body: { op: "remove_from_landing" },
+        workspace_id: ws,
+      });
+      return result;
     },
   },
 

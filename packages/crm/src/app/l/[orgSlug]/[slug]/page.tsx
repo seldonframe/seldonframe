@@ -1,11 +1,13 @@
 import { notFound } from "next/navigation";
 import { PoweredByBadge } from "@seldonframe/core/virality";
 import { PageRenderer } from "@/components/landing/page-renderer";
+import { ChatbotEmbedScript } from "@/components/landing/chatbot-script";
 import { VisitBeacon } from "@/components/landing/visit-beacon";
 import { PublicThemeProvider } from "@/components/theme/public-theme-provider";
 import { shouldShowPoweredByBadgeForOrg } from "@/lib/billing/public";
 import { getPublicLandingPage } from "@/lib/landing/actions";
 import { getPublicOrgThemeById } from "@/lib/theme/actions";
+import { getPublicChatbotEmbed } from "@/lib/agents/public-embed";
 import type { LandingSection } from "@/lib/landing/types";
 
 // Enable ISR with a 1-hour default revalidation window. On explicit
@@ -29,6 +31,8 @@ export default async function PublicLandingPage({
 
   const showBadge = await shouldShowPoweredByBadgeForOrg(payload.orgId);
   const theme = await getPublicOrgThemeById(payload.orgId);
+  // v1.40.7 — workspace-level chatbot embed.
+  const chatbotEmbed = await getPublicChatbotEmbed(payload.orgId);
 
   // v1.38.4 — force light mode on customer-facing landing pages.
   //
@@ -61,6 +65,7 @@ export default async function PublicLandingPage({
             </div>
           ) : null}
           <VisitBeacon pageId={payload.page.id} />
+          {chatbotEmbed ? <ChatbotEmbedScript embedUrl={chatbotEmbed.embedUrl} /> : null}
         </main>
       </PublicThemeProvider>
     );
@@ -76,6 +81,7 @@ export default async function PublicLandingPage({
           </div>
         ) : null}
         <VisitBeacon pageId={payload.page.id} />
+        {chatbotEmbed ? <ChatbotEmbedScript embedUrl={chatbotEmbed.embedUrl} /> : null}
       </main>
     </PublicThemeProvider>
   );

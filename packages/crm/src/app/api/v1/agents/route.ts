@@ -36,6 +36,11 @@ import {
 } from "@/lib/agents/store";
 import { runEvalSuite } from "@/lib/agents/eval-runner";
 import { executeTurn } from "@/lib/agents/runtime";
+// v1.40.7 — workspace-level chatbot embed.
+import {
+  setPublicChatbotEmbed,
+  clearPublicChatbotEmbed,
+} from "@/lib/agents/public-embed";
 
 type Body = {
   op?: unknown;
@@ -75,6 +80,9 @@ const VALID_OPS = [
   "get_conversation",
   "replay_conversation",
   "get_metrics",
+  // v1.40.7 — embed chatbot on workspace's public landing.
+  "embed_on_landing",
+  "remove_from_landing",
 ] as const;
 type Op = (typeof VALID_OPS)[number];
 
@@ -645,6 +653,96 @@ export async function POST(request: Request) {
       eval_pass_rate: evalTotal > 0 ? evalPassed / evalTotal : null,
       eval_total: evalTotal,
       eval_passed: evalPassed,
+    });
+  }
+
+  // v1.40.7 — embed_on_landing: stash the agent's embed.js URL on the
+  // organization so the public landing page renderer (/s/ + /l/ routes)
+  // injects <script src="..." async></script>. One-shot — no per-section
+  // editing, no Pages → Edit step, no copy-paste. The chatbot bubble
+  // floats on every public page of the workspace until removed.
+  if (op === "embed_on_landing") {
+    if (typeof body.agent_id !== "string" || !body.agent_id.trim()) {
+      return NextResponse.json(
+        { ok: false, error: "missing_required_field", required: ["agent_id"] },
+        { status: 400 },
+      );
+    }
+    const [agent] = await db
+      .select({
+        id: agents.id,
+        name: agents.name,
+        slug: agents.slug,
+        status: agents.status,
+        orgId: agents.orgId,
+        orgSlug: organizations.slug,
+      })
+      .from(agents)
+      .innerJoin(organizations, eq(organizations.id, agents.orgId))
+      .where(eq(agents.id, body.agent_id))
+      .limit(1);
+    if (!agent || agent.orgId !== guard.orgId) {
+      return NextResponse.json(
+        { ok: false, error: "agent_not_found" },
+        { status: 404 },
+      );
+    }
+    if (agent.status !== "live" && agent.status !== "test") {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "agent_not_published",
+          message:
+            "Publish the agent (status=test or live) before embedding it on the landing page.",
+        },
+        { status: 422 },
+      );
+    }
+    const baseDomain =
+      process.env.WORKSPACE_BASE_DOMAIN?.trim() || "app.seldonframe.com";
+    const embedUrl = `https://${baseDomain}/api/v1/public/agent/${agent.orgSlug}--${agent.slug}/embed.js`;
+    try {
+      await setPublicChatbotEmbed(agent.orgId, {
+        embedUrl,
+        agentId: agent.id,
+      });
+    } catch (err) {
+      logEvent("agent_embed_on_landing_error", {
+        agent_id: agent.id,
+        org_id: agent.orgId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return NextResponse.json(
+        { ok: false, error: "persist_failed" },
+        { status: 500 },
+      );
+    }
+    return NextResponse.json({
+      ok: true,
+      agent_id: agent.id,
+      agent_name: agent.name,
+      embed_url: embedUrl,
+      message: `${agent.name} is now live on every page of the workspace's public landing. Visitors see the chat bubble bottom-right; conversations appear in /agents/${agent.id}/conversations.`,
+    });
+  }
+
+  if (op === "remove_from_landing") {
+    try {
+      await clearPublicChatbotEmbed(guard.orgId);
+    } catch (err) {
+      logEvent("agent_remove_from_landing_error", {
+        org_id: guard.orgId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return NextResponse.json(
+        { ok: false, error: "persist_failed" },
+        { status: 500 },
+      );
+    }
+    return NextResponse.json({
+      ok: true,
+      message:
+        "Chatbot removed from public landing. The agent itself is unchanged and still serves /agents/[id]/test.",
     });
   }
 

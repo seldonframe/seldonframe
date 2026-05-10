@@ -1,11 +1,13 @@
 import { notFound } from "next/navigation";
 import { PoweredByBadge } from "@seldonframe/core/virality";
 import { PageRenderer } from "@/components/landing/page-renderer";
+import { ChatbotEmbedScript } from "@/components/landing/chatbot-script";
 import { PuckPageRenderer } from "@/components/puck/puck-page-renderer";
 import { PublicThemeProvider } from "@/components/theme/public-theme-provider";
 import { shouldShowPoweredByBadgeForOrg } from "@/lib/billing/public";
 import { getPublicLandingPage, trackLandingVisitAction } from "@/lib/landing/actions";
 import { getPublicOrgThemeById } from "@/lib/theme/actions";
+import { getPublicChatbotEmbed } from "@/lib/agents/public-embed";
 import { trackEvent } from "@/lib/analytics/track";
 import type { LandingSection } from "@/lib/landing/types";
 
@@ -24,6 +26,10 @@ export default async function PublicSPage({
 
   const showBadge = await shouldShowPoweredByBadgeForOrg(payload.orgId);
   const theme = await getPublicOrgThemeById(payload.orgId);
+  // v1.40.7 — workspace-level chatbot embed. Operator runs
+  // embed_chatbot_on_workspace_landing via Claude Code; we read the
+  // resulting URL here and inject the embed.js script tag below.
+  const chatbotEmbed = await getPublicChatbotEmbed(payload.orgId);
 
   // v1.38.5 — workspace home subdomain ("/" → /s/[orgSlug]/[...slug])
   // forced to light mode. v1.38.4 applied the same fix to /l/ and /book/
@@ -87,6 +93,9 @@ export default async function PublicSPage({
           >
             <PoweredByBadge />
           </div>
+        ) : null}
+        {chatbotEmbed ? (
+          <ChatbotEmbedScript embedUrl={chatbotEmbed.embedUrl} />
         ) : null}
       </main>
     </PublicThemeProvider>
