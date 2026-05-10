@@ -166,8 +166,16 @@ function renderEmbedScript(input: {
     ".sf-agent-close{background:transparent;border:none;color:#fff;cursor:pointer;font-size:24px;padding:4px 8px;opacity:.85;border-radius:6px;line-height:1}",
     ".sf-agent-close:hover{opacity:1;background:rgba(255,255,255,.12)}",
     ".sf-agent-close:focus-visible{outline:2px solid #fff;outline-offset:1px}",
-    ".sf-agent-messages{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;background:#f7f7f5;scroll-behavior:smooth}",
-    ".sf-agent-msg{max-width:85%;padding:10px 14px;border-radius:16px;font-size:14px;line-height:1.5;word-wrap:break-word;animation:sf-agent-msg-in .22s cubic-bezier(.34,1.56,.64,1)}",
+    // v1.40.11 — explicit overflow-x:hidden + min-width:0 so a long
+    // unbreakable token in an assistant reply (URL, code block, long
+    // ID) can't push the panel into horizontal scroll on mobile. min-width:0
+    // overrides the flex-default min-width:auto which would otherwise
+    // refuse to shrink below content size.
+    ".sf-agent-messages{flex:1;overflow-y:auto;overflow-x:hidden;min-width:0;padding:16px;display:flex;flex-direction:column;gap:10px;background:#f7f7f5;scroll-behavior:smooth}",
+    // v1.40.11 — overflow-wrap:anywhere + min-width:0 so long URLs,
+    // long emails, long tokens wrap inside the bubble instead of
+    // overflowing the panel width on mobile.
+    ".sf-agent-msg{max-width:85%;min-width:0;padding:10px 14px;border-radius:16px;font-size:14px;line-height:1.5;word-wrap:break-word;overflow-wrap:anywhere;animation:sf-agent-msg-in .22s cubic-bezier(.34,1.56,.64,1)}",
     "@keyframes sf-agent-msg-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}",
     "@media (prefers-reduced-motion:reduce){.sf-agent-msg{animation:none}}",
     ".sf-agent-msg.user{align-self:flex-end;background:" + CFG.primaryColor + ";color:#fff;border-bottom-right-radius:6px}",
@@ -279,6 +287,7 @@ function renderEmbedScript(input: {
   var msgsEl = panel.querySelector("#sf-agent-msgs");
   var formEl = panel.querySelector("#sf-agent-form");
   var inputEl = panel.querySelector("#sf-agent-input");
+  var sendBtn = panel.querySelector(".sf-agent-send");
   var closeBtn = panel.querySelector(".sf-agent-close");
 
   function appendMessage(role, content){
@@ -343,13 +352,26 @@ function renderEmbedScript(input: {
     }
   });
 
+  // v1.40.11 — sending flag prevents double-submit without disabling
+  // the input. Pre-1.40.11 we set inputEl.disabled = true during send,
+  // which on iOS Safari dismisses the soft keyboard. The later
+  // inputEl.focus() call (outside a user gesture context) couldn't
+  // reopen it, so the user had to tap the input again to send another
+  // message. Mobile UX death.
+  // Fix: leave the input enabled (keyboard stays up, focus preserved).
+  // Disable the send button instead — gives visual feedback that the
+  // send is in flight without breaking the input.
+  var sending = false;
+
   formEl.addEventListener("submit", async function(e){
     e.preventDefault();
+    if (sending) return; // ignore re-submits while a turn is in flight
     var msg = inputEl.value.trim();
     if (!msg) return;
+    sending = true;
     inputEl.value = "";
     inputEl.style.height = "auto"; // reset textarea height after send
-    inputEl.disabled = true;
+    if (sendBtn) sendBtn.disabled = true; // visual feedback, no keyboard impact
     appendMessage("user", msg);
     var typing = appendTyping();
     try {
@@ -442,8 +464,13 @@ function renderEmbedScript(input: {
       typing.remove();
       appendMessage("system", "Connection issue. Please try again.");
     } finally {
-      inputEl.disabled = false;
-      inputEl.focus();
+      // v1.40.11 — re-enable button only. Don't toggle inputEl.disabled
+      // and don't call inputEl.focus() — on iOS the programmatic focus
+      // call (outside a user gesture) doesn't reopen the keyboard. The
+      // input was never disabled, so focus + keyboard are preserved
+      // naturally. User can type the next message immediately.
+      sending = false;
+      if (sendBtn) sendBtn.disabled = false;
     }
   });
 
