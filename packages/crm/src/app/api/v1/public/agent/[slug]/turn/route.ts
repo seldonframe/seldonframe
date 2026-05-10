@@ -44,6 +44,33 @@ const CRITICAL_VALIDATORS = [
   "no_pii_leak",
 ];
 
+// v1.40.8 — CORS headers for cross-origin embed.
+//
+// The chat widget is loaded as <script src="https://app.seldonframe.com/...">
+// on workspace subdomain pages (e.g. sunset-plumbing-co.app.seldonframe.com),
+// AND on operator-owned external websites (foo.com). The fetch from
+// inside the widget to .../turn is therefore cross-origin in BOTH cases.
+//
+// Pre-1.40.8 this endpoint returned no CORS headers; browsers blocked the
+// fetch and the widget surfaced "Connection issue. Please try again." —
+// surfaced first on the v1.40.7 chatbot embed test on sunset-plumbing-co.
+//
+// Origin = "*" is correct here: the chatbot is intentionally embeddable on
+// any operator's site (that's the entire point), and the endpoint serves
+// only public, conversation-scoped data. The downstream agent runtime
+// already enforces per-conversation auth via conversation_id + anonymous
+// session id. Loosening CORS doesn't loosen application authorization.
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Accept",
+  "Access-Control-Max-Age": "86400",
+} as const;
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
+}
+
 export async function POST(
   request: NextRequest,
   context: { params: Promise<{ slug: string }> },
@@ -54,15 +81,24 @@ export async function POST(
   try {
     body = (await request.json()) as Body;
   } catch {
-    return NextResponse.json({ error: "invalid_json" }, { status: 400 });
+    return NextResponse.json(
+      { error: "invalid_json" },
+      { status: 400, headers: CORS_HEADERS },
+    );
   }
 
   const message = typeof body.message === "string" ? body.message.trim() : "";
   if (!message) {
-    return NextResponse.json({ error: "missing_message" }, { status: 400 });
+    return NextResponse.json(
+      { error: "missing_message" },
+      { status: 400, headers: CORS_HEADERS },
+    );
   }
   if (message.length > 2000) {
-    return NextResponse.json({ error: "message_too_long" }, { status: 400 });
+    return NextResponse.json(
+      { error: "message_too_long" },
+      { status: 400, headers: CORS_HEADERS },
+    );
   }
 
   const wantsStream =
@@ -95,13 +131,16 @@ export async function POST(
     .limit(1);
 
   if (!agentRow) {
-    return NextResponse.json({ error: "agent_not_found" }, { status: 404 });
+    return NextResponse.json(
+      { error: "agent_not_found" },
+      { status: 404, headers: CORS_HEADERS },
+    );
   }
 
   if (agentRow.status !== "live" && agentRow.status !== "test") {
     return NextResponse.json(
       { error: "agent_not_active", status: agentRow.status },
-      { status: 403 },
+      { status: 403, headers: CORS_HEADERS },
     );
   }
 
@@ -127,7 +166,7 @@ export async function POST(
     if (!created) {
       return NextResponse.json(
         { error: "conversation_create_failed" },
-        { status: 500 },
+        { status: 500, headers: CORS_HEADERS },
       );
     }
     conversationId = created.id;
@@ -192,6 +231,7 @@ export async function POST(
         "Cache-Control": "no-cache, no-transform",
         Connection: "keep-alive",
         "X-Accel-Buffering": "no",
+        ...CORS_HEADERS,
       },
     });
   }
@@ -203,21 +243,27 @@ export async function POST(
   });
 
   if (!result.ok) {
-    return NextResponse.json({
-      conversation_id: conversationId,
-      message: result.fallbackMessage,
-      degraded: true,
-      reason: result.reason,
-    });
+    return NextResponse.json(
+      {
+        conversation_id: conversationId,
+        message: result.fallbackMessage,
+        degraded: true,
+        reason: result.reason,
+      },
+      { headers: CORS_HEADERS },
+    );
   }
 
-  return NextResponse.json({
-    conversation_id: conversationId,
-    message: result.assistantMessage,
-    validators_critical_failed: result.validators.some(
-      (v) => !v.passed && CRITICAL_VALIDATORS.includes(v.name),
-    ),
-  });
+  return NextResponse.json(
+    {
+      conversation_id: conversationId,
+      message: result.assistantMessage,
+      validators_critical_failed: result.validators.some(
+        (v) => !v.passed && CRITICAL_VALIDATORS.includes(v.name),
+      ),
+    },
+    { headers: CORS_HEADERS },
+  );
 }
 
 // ─── helpers ────────────────────────────────────────────────────────────

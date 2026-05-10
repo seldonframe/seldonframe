@@ -186,7 +186,15 @@ function renderEmbedScript(input: {
     ".sf-agent-typing span:nth-child(3){animation-delay:.3s}",
     "@keyframes sf-agent-typing-bounce{0%,60%,100%{opacity:.3;transform:translateY(0)}30%{opacity:1;transform:translateY(-4px)}}",
     ".sf-agent-form{display:flex;gap:8px;padding:12px;border-top:1px solid #e5e5e1;background:#fff;align-items:flex-end}",
-    ".sf-agent-input{flex:1;padding:10px 14px;border:1px solid #e5e5e1;border-radius:12px;font-size:14px;outline:none;font-family:inherit;resize:none;max-height:120px;line-height:1.4;transition:border-color .15s}",
+    // v1.40.8 — explicit color + background on .sf-agent-input. Pre-1.40.8
+    // the input had no color rule and inherited from the host page's
+    // color: var(--sf-text). On workspaces whose stored theme is dark
+    // (e.g. operators who customized) or when the host page's CSS sets
+    // color globally, typed characters rendered white-on-white and were
+    // invisible. Hardcoding both color and background isolates the chat
+    // widget from host-page CSS — the input is always readable.
+    ".sf-agent-input{flex:1;padding:10px 14px;border:1px solid #e5e5e1;border-radius:12px;font-size:14px;outline:none;font-family:inherit;resize:none;max-height:120px;line-height:1.4;transition:border-color .15s;color:#111;background:#fff;-webkit-text-fill-color:#111}",
+    ".sf-agent-input::placeholder{color:#999;opacity:1}",
     ".sf-agent-input:focus{border-color:" + CFG.primaryColor + "}",
     ".sf-agent-send{padding:10px 16px;background:" + CFG.primaryColor + ";color:#fff;border:none;border-radius:12px;cursor:pointer;font-size:14px;font-weight:600;height:42px;flex-shrink:0;transition:transform .12s ease,opacity .15s ease}",
     ".sf-agent-send:hover:not(:disabled){transform:translateY(-1px)}",
