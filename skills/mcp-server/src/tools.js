@@ -4855,48 +4855,57 @@ export const TOOLS = [
       const ws = args.workspace_id;
       const steps = [];
 
-      // 1. Configure LLM (auto-detect from env if no explicit key)
-      // We try this BEFORE create_agent so failures surface clearly.
-      // If a key is already configured for this workspace, the set_llm_key
-      // op is idempotent (overwrites); harmless to call. If neither
-      // explicit nor env key is available, fail fast with a clear error
-      // so the user can paste a key.
+      // v1.40.10 — graceful no-key path.
+      //
+      // Pre-1.40.10 this tool blocked workspace chatbot creation when no
+      // Anthropic key was present in process.env. That assumed the
+      // operator had to BYOK upfront — but the SF backend already falls
+      // back to its platform ANTHROPIC_API_KEY (in lib/ai/client.ts ->
+      // getAIClient) for any workspace without BYOK. The chatbot WORKS
+      // without operator BYOK; pre-1.40.10 we just refused to create it.
+      //
+      // v1.40.10: if explicit key OR env key, set_llm_key as before
+      // (configures BYOK on the workspace, operator pays Anthropic
+      // directly). If NEITHER, skip set_llm_key entirely — the workspace
+      // will use SF platform key automatically. In the response we tell
+      // the operator they can BYOK later via /settings/integrations/llm.
+      // Removes the friction "where do I get an Anthropic key" step
+      // that v1.40.9 Sunset Plumbing test exposed.
       const explicitKey = args.anthropic_api_key;
       const envKey = process.env.ANTHROPIC_API_KEY;
       const keyToUse = explicitKey || envKey;
-      if (!keyToUse) {
-        return {
-          ok: false,
-          error: "no_anthropic_key",
-          hint:
-            "No Anthropic key available. Either: (a) set ANTHROPIC_API_KEY in your shell before launching Claude Code (most Claude Code users already have this), " +
-            "or (b) pass anthropic_api_key='sk-ant-...' explicitly to this tool, " +
-            "or (c) configure via the dashboard at /settings/integrations/llm before calling create_agent. " +
-            "Without a key, the agent will be created in draft but every customer turn will return 'I'm not set up yet'.",
-          steps,
-        };
+      let llmMode = "platform";
+      if (keyToUse) {
+        const configResult = await api("POST", "/agents", {
+          body: {
+            op: "set_llm_key",
+            provider: "anthropic",
+            api_key: keyToUse,
+          },
+          workspace_id: ws,
+        });
+        if (!configResult || configResult.ok === false) {
+          return {
+            ok: false,
+            error: "llm_config_failed",
+            detail: configResult,
+            steps,
+          };
+        }
+        llmMode = explicitKey ? "byok_explicit" : "byok_env";
+        steps.push({
+          step: "configure_llm_provider",
+          ok: true,
+          source: explicitKey ? "explicit" : "env_inherited",
+        });
+      } else {
+        steps.push({
+          step: "configure_llm_provider",
+          ok: true,
+          source: "platform_fallback",
+          note: "No BYOK key supplied — agent will use SeldonFrame platform Anthropic key. Operator can switch to BYOK later in /settings/integrations/llm.",
+        });
       }
-      const configResult = await api("POST", "/agents", {
-        body: {
-          op: "set_llm_key",
-          provider: "anthropic",
-          api_key: keyToUse,
-        },
-        workspace_id: ws,
-      });
-      if (!configResult || configResult.ok === false) {
-        return {
-          ok: false,
-          error: "llm_config_failed",
-          detail: configResult,
-          steps,
-        };
-      }
-      steps.push({
-        step: "configure_llm_provider",
-        ok: true,
-        source: explicitKey ? "explicit" : "env_inherited",
-      });
 
       // 2. Create the agent
       const createResult = await api("POST", "/agents", {
@@ -4968,6 +4977,15 @@ export const TOOLS = [
         process.env.WORKSPACE_BASE_DOMAIN?.trim() || "app.seldonframe.com";
       const dashboardUrl = `https://${baseDomain}/agents/${agentId}`;
 
+      // v1.40.10 — surface the LLM-key mode in the response so Claude
+      // Code can naturally tell the operator "your chatbot is using
+      // SeldonFrame's shared Anthropic key right now; switch to your
+      // own anytime in Settings."
+      const llmKeyNote =
+        llmMode === "platform"
+          ? `Note on LLM billing: this chatbot is using SeldonFrame's shared Anthropic key (no setup required from you). To switch to your own Anthropic billing (higher rate limits, separate invoice), open ${dashboardUrl.replace("/agents/" + agentId, "/settings/integrations/llm")} and paste your sk-ant-... key. The chatbot picks up the new key automatically — no code changes.`
+          : `LLM billing: this workspace is on BYOK (your Anthropic key). Switch in /settings/integrations/llm anytime.`;
+
       return {
         ok: true,
         agent: createResult.agent,
@@ -4975,16 +4993,14 @@ export const TOOLS = [
         turn_url: createResult.turn_url,
         dashboard_url: dashboardUrl,
         sandbox_url: `${dashboardUrl}/test`,
+        llm_mode: llmMode,
         steps,
         next_steps: [
           `1. Test in sandbox: ${dashboardUrl}/test (chat with the agent before customers do).`,
           `2. Run safety evals: open ${dashboardUrl}/evals → Run evals now (8-scenario suite).`,
           `3. When ready, publish to live: call publish_agent({ agent_id: '${agentId}', status: 'live' }) — auto-runs eval gate, requires ≥87.5% pass.`,
-          // v1.40.7 — embed-on-workspace-landing is now a real one-call MCP
-          // tool (was misleading guidance in v1.40.6). When the operator asks
-          // to put the chatbot on their site, call embed_chatbot_on_workspace_landing
-          // and the public landing renderer auto-injects the script tag.
           `4. Add to the operator's SF-hosted landing page (one MCP call): embed_chatbot_on_workspace_landing({ workspace_id, agent_id: '${agentId}' }) — the chatbot bubble appears bottom-right on every public page. (For an external website the operator owns, paste this snippet manually: <script src="${createResult.embed_url}" async></script>)`,
+          `5. ${llmKeyNote}`,
         ],
       };
     },
