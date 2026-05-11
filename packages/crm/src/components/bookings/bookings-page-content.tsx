@@ -98,6 +98,48 @@ function statusClass(status: string) {
   return "bg-muted/50 text-muted-foreground";
 }
 
+// v1.40.13 — week-view layout constants. The time column on the left
+// shows 12 hours (8:00 → 19:00); each hour is HOUR_HEIGHT_PX tall.
+// Booking cards in the day columns are absolutely positioned against
+// these same coordinates so a 1pm appointment lands at the 13:00 mark,
+// not floating at the top of the column.
+const WEEK_VIEW_START_HOUR = 8;
+const WEEK_VIEW_END_HOUR = 20; // exclusive — last hour label is 19:00
+const HOUR_HEIGHT_PX = 80; // matches the time column's h-20 rows
+const WEEK_VIEW_TOTAL_HEIGHT_PX =
+  (WEEK_VIEW_END_HOUR - WEEK_VIEW_START_HOUR) * HOUR_HEIGHT_PX;
+const DEFAULT_BOOKING_DURATION_MIN = 60;
+
+// Extract { hours, minutes } from a Date in a specific IANA timezone.
+// Browser-local getHours() drifts when viewer TZ ≠ workspace TZ;
+// Intl round-trip is the only reliable way.
+function timeInZone(date: Date, tz: string): { hours: number; minutes: number } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    hour12: false,
+    hour: "numeric",
+    minute: "numeric",
+  }).formatToParts(date);
+  const hourPart = parts.find((p) => p.type === "hour")?.value ?? "0";
+  const minutePart = parts.find((p) => p.type === "minute")?.value ?? "0";
+  // Intl hour12:false uses "24" for midnight on some engines — normalize.
+  const hours = parseInt(hourPart, 10) % 24;
+  const minutes = parseInt(minutePart, 10);
+  return { hours, minutes };
+}
+
+// Position a booking card vertically within the week-view day column.
+// Returns the top offset in px relative to the start of the visible grid
+// (WEEK_VIEW_START_HOUR). Clamps so off-hours bookings still render at
+// the top/bottom edge with their real time visible inside the card.
+function bookingTopPx(startsAt: Date, tz: string): number {
+  const { hours, minutes } = timeInZone(startsAt, tz);
+  const offsetHours = hours + minutes / 60 - WEEK_VIEW_START_HOUR;
+  const maxOffset = WEEK_VIEW_END_HOUR - WEEK_VIEW_START_HOUR;
+  const clamped = Math.max(0, Math.min(offsetHours, maxOffset - 0.5));
+  return clamped * HOUR_HEIGHT_PX;
+}
+
 // v1.40.9 — every formatter takes an explicit IANA timezone so
 // renders are stable regardless of viewer's browser locale.
 function formatDateGroupLabel(value: Date, tz: string) {
@@ -355,9 +397,23 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
           </div>
 
           <div className="flex min-w-full w-max">
-            <div className="w-[80px] md:w-[104px] border-r border-border shrink-0 bg-background p-2">
-              {Array.from({ length: 12 }, (_, index) => `${index + 8}:00`).map((hour) => (
-                <div key={hour} className="h-20 border-b border-border/60 text-[10px] text-muted-foreground">{hour}</div>
+            {/* v1.40.13 — time column. Each hour is exactly HOUR_HEIGHT_PX tall.
+                Day columns position their booking cards against this grid. */}
+            <div
+              className="w-[80px] md:w-[104px] border-r border-border shrink-0 bg-background"
+              style={{ height: `${WEEK_VIEW_TOTAL_HEIGHT_PX}px` }}
+            >
+              {Array.from(
+                { length: WEEK_VIEW_END_HOUR - WEEK_VIEW_START_HOUR },
+                (_, index) => `${index + WEEK_VIEW_START_HOUR}:00`,
+              ).map((hour) => (
+                <div
+                  key={hour}
+                  className="border-b border-border/60 text-[10px] text-muted-foreground px-2 pt-1"
+                  style={{ height: `${HOUR_HEIGHT_PX}px` }}
+                >
+                  {hour}
+                </div>
               ))}
             </div>
 
@@ -365,26 +421,61 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
               const key = keyYmd(day, workspaceTimezone);
               const events = weekEventsByDay.get(key) ?? [];
               return (
-                <div key={key} className="flex-1 min-w-44 border-r border-border last:border-r-0">
-                  <div className="min-h-[320px] p-2 space-y-2">
-                    {events.length === 0 ? (
-                      <div className="h-20 rounded-md border border-dashed border-border/70 bg-background/40" />
-                    ) : (
-                      events.map((row) => {
-                        const startsAt = new Date(row.startsAt);
-                        const linkedContact = row.contactId ? contactsById.get(row.contactId) : null;
-                        const person = linkedContact ? `${linkedContact.firstName} ${linkedContact.lastName ?? ""}`.trim() : labels.contact.singular;
-                        const borderClass = bookingTypeBorderByTitle.get(row.title.trim().toLowerCase()) ?? "border-l-primary";
-                        return (
-                          <article key={row.id} className={`rounded-lg border border-border border-l-4 ${borderClass} bg-card p-2 hover:bg-muted transition-colors`}>
-                            <p className="text-xs font-medium text-foreground truncate">{row.title}</p>
-                            <p className="mt-0.5 text-[10px] text-muted-foreground truncate">{person}</p>
-                            <p className="mt-1 text-[10px] text-primary">{startsAt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: workspaceTimezone })}</p>
-                          </article>
-                        );
-                      })
-                    )}
-                  </div>
+                <div
+                  key={key}
+                  className="flex-1 min-w-44 border-r border-border last:border-r-0 relative"
+                  style={{ height: `${WEEK_VIEW_TOTAL_HEIGHT_PX}px` }}
+                >
+                  {/* Hour grid lines — match the time column's row borders */}
+                  {Array.from(
+                    { length: WEEK_VIEW_END_HOUR - WEEK_VIEW_START_HOUR },
+                    (_, index) => (
+                      <div
+                        key={index}
+                        className="border-b border-border/60"
+                        style={{ height: `${HOUR_HEIGHT_PX}px` }}
+                      />
+                    ),
+                  )}
+                  {/* v1.40.13 — booking cards absolutely positioned by start
+                      time in workspace TZ. A 1pm appointment lands at the
+                      13:00 row regardless of viewer browser TZ. */}
+                  {events.map((row) => {
+                    const startsAt = new Date(row.startsAt);
+                    const linkedContact = row.contactId
+                      ? contactsById.get(row.contactId)
+                      : null;
+                    const person = linkedContact
+                      ? `${linkedContact.firstName} ${linkedContact.lastName ?? ""}`.trim()
+                      : labels.contact.singular;
+                    const borderClass =
+                      bookingTypeBorderByTitle.get(row.title.trim().toLowerCase()) ??
+                      "border-l-primary";
+                    const top = bookingTopPx(startsAt, workspaceTimezone);
+                    const height =
+                      (DEFAULT_BOOKING_DURATION_MIN / 60) * HOUR_HEIGHT_PX - 4;
+                    return (
+                      <article
+                        key={row.id}
+                        className={`absolute left-2 right-2 rounded-lg border border-border border-l-4 ${borderClass} bg-card p-2 hover:bg-muted transition-colors overflow-hidden`}
+                        style={{ top: `${top}px`, height: `${height}px` }}
+                      >
+                        <p className="text-xs font-medium text-foreground truncate">
+                          {row.title}
+                        </p>
+                        <p className="mt-0.5 text-[10px] text-muted-foreground truncate">
+                          {person}
+                        </p>
+                        <p className="mt-1 text-[10px] text-primary">
+                          {startsAt.toLocaleTimeString("en-US", {
+                            hour: "numeric",
+                            minute: "2-digit",
+                            timeZone: workspaceTimezone,
+                          })}
+                        </p>
+                      </article>
+                    );
+                  })}
                 </div>
               );
             })}
