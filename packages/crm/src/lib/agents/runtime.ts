@@ -414,6 +414,25 @@ export async function executeTurn(input: {
     contact?: { email?: string; phone?: string };
   } | null) ?? null;
 
+  // v1.40.12 — also build a set of tool names that succeeded in
+  // PREVIOUS turns of this conversation. Pattern that broke pre-1.40.12:
+  // Turn N agent successfully calls book_appointment + presents details.
+  // Turn N+1 user says "go ahead." Turn N+1 agent says "You're booked
+  // for Monday at 1pm." Validator scoped to THIS turn only saw no
+  // book_appointment call → flagged as hallucination → regen → flagged
+  // again → fallback. The booking was real; the validator was wrong.
+  // Fix: union this turn's successful tools with recent history.
+  const recentSuccessfulTools: string[] = [];
+  for (const turn of history) {
+    if (turn.role !== "assistant") continue;
+    const turnCalls = turn.toolCalls ?? [];
+    const turnResults = turn.toolResults ?? [];
+    for (const call of turnCalls) {
+      const result = turnResults.find((r) => r.toolCallId === call.id);
+      if (result?.ok) recentSuccessfulTools.push(call.name);
+    }
+  }
+
   let validatorResults: AgentValidatorResult[];
   let criticalFailed: boolean;
   ({ results: validatorResults, criticalFailed } = runValidators({
@@ -425,6 +444,9 @@ export async function executeTurn(input: {
     // claims are backed by successful tool calls.
     turnToolCalls: allToolCalls,
     turnToolResults: allToolResults,
+    // v1.40.12 — pass previous turns' successful tool names so the
+    // hallucination validator allows legitimate follow-up confirmations.
+    recentSuccessfulTools,
     blueprint,
     soul: soulForValidators,
   }));
@@ -479,6 +501,7 @@ export async function executeTurn(input: {
           conversationContext,
           turnToolCalls: allToolCalls,
           turnToolResults: allToolResults,
+          recentSuccessfulTools,
           blueprint,
           soul: soulForValidators,
         });

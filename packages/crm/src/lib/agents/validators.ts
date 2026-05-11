@@ -37,6 +37,16 @@ export type ValidatorContext = {
    *  capability-list case) at runtime. */
   turnToolCalls?: AgentToolCall[];
   turnToolResults?: AgentToolResult[];
+  /** v1.40.12 — tool names that succeeded in PREVIOUS turns of this
+   *  conversation. Lets no_hallucinated_state_change pass legitimate
+   *  follow-up acknowledgments. Pattern: Turn N agent calls
+   *  book_appointment successfully and presents details. Turn N+1
+   *  user says "great, thanks." Turn N+1 agent says "You're booked
+   *  for Monday at 1pm." Without recent-turns context the validator
+   *  rejects (no book_appointment in THIS turn). With it, the
+   *  validator sees book_appointment succeeded in Turn N and allows
+   *  the legitimate acknowledgment. */
+  recentSuccessfulTools?: string[];
   /** Agent blueprint for soul-derived facts. */
   blueprint: AgentBlueprint;
   /** Soul snapshot for voice / hours / services checks. */
@@ -312,7 +322,7 @@ const ACTION_PATTERNS: ActionPattern[] = [
 const noHallucinatedStateChange: Validator = {
   name: "no_hallucinated_state_change",
   severity: "critical",
-  run: ({ response, turnToolCalls, turnToolResults }) => {
+  run: ({ response, turnToolCalls, turnToolResults, recentSuccessfulTools }) => {
     const calls = turnToolCalls ?? [];
     const results = turnToolResults ?? [];
 
@@ -323,6 +333,13 @@ const noHallucinatedStateChange: Validator = {
     for (const call of calls) {
       const result = results.find((r) => r.toolCallId === call.id);
       if (result?.ok) successfulToolNames.add(call.name);
+    }
+    // v1.40.12 — union this turn's successful tools with the recent
+    // history's. The agent is allowed to acknowledge a tool call from
+    // a previous turn ("You're booked for Monday at 1pm" in turn N+1
+    // when book_appointment succeeded in turn N).
+    for (const name of recentSuccessfulTools ?? []) {
+      successfulToolNames.add(name);
     }
 
     const failures: string[] = [];
