@@ -1,7 +1,12 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { Geist, Geist_Mono } from "next/font/google";
 import { DemoToastProvider } from "@/components/shared/demo-toast-provider";
 import { ThemeProvider } from "@/components/shared/theme-provider";
+import {
+  GoogleAnalytics,
+  shouldRenderGoogleAnalytics,
+} from "@/components/analytics/google-analytics";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -44,16 +49,29 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // v1.40.14 — Google Analytics, host-aware. Only renders on
+  // SeldonFrame-owned hosts (seldonframe.com, app.seldonframe.com).
+  // Workspace subdomains and preview deploys get no GA injection
+  // — see components/analytics/google-analytics.tsx for the
+  // privacy rationale.
+  const measurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
+  const hostHeader = (await headers()).get("host") ?? "";
+  const renderGA =
+    Boolean(measurementId) && shouldRenderGoogleAnalytics(hostHeader);
+
   return (
     <html lang="en" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        {renderGA && measurementId ? (
+          <GoogleAnalytics measurementId={measurementId} />
+        ) : null}
         <ThemeProvider>
           <DemoToastProvider>{children}</DemoToastProvider>
         </ThemeProvider>
