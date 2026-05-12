@@ -27,6 +27,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Star } from "lucide-react";
 import type { HeroSectionContent, UnsplashAttribution } from "./types";
+import { HeroCinematicAura } from "./hero-cinematic-aura";
 
 // v1.40.5 — Unsplash photographer credit. Required by Unsplash API
 // guidelines for production-tier approval. Both photographer name and
@@ -151,6 +152,15 @@ function HeroImage({
 
 export function HeroSection(props: HeroSectionContent) {
   const variant = props.variant ?? "left-aligned-asymmetric";
+
+  // v1.41.0 — cinematic-aura (Aura-style: looping Pexels video + liquid
+  // glass + Instrument Serif). Dispatch first since it owns its own
+  // rendering tree (FadingVideo, BlurText, AppleButton) and doesn't
+  // need the imageFailed state below.
+  if (variant === "cinematic-aura") {
+    return <HeroCinematicAura {...props} />;
+  }
+
   // v1.40.2 — onError-triggered fallback. Pre-1.40.2 the image's
   // src-empty case had a graceful fallback, but a 404 / unreachable
   // URL still rendered as a broken <img> with alt-text visible

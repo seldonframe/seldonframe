@@ -1,0 +1,163 @@
+/* ============================================================================
+ * v1.41.0 — Cinematic Landing design system (the fat skill made CSS).
+ * ============================================================================
+ *
+ * Imported once via the hero-cinematic-aura component. All classes are
+ * prefixed `cin-` to avoid clashing with the existing landing styles, and
+ * everything is dark-mode-first: this design system intentionally ignores
+ * the workspace's light theme tokens — the cinematic look IS dark.
+ *
+ * If a builder wants the cinematic structure on white, that's a Phase 3
+ * task (light variant); for Phase 1 we ship the canonical dark Aura look.
+ *
+ * Sourced from the Aura reference spec the user pasted. Anti-fragility:
+ * this is pure markdown-of-design — Opus 5 produces the same liquid-glass
+ * card from the same CSS class without any code change.
+ * ========================================================================== */
+
+@import url("https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap");
+
+/* ─── Liquid glass — the subtle variant, for nav, chips, card surfaces ──── */
+.cin-liquid-glass {
+  background: rgba(255, 255, 255, 0.01);
+  background-blend-mode: luminosity;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border: none;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+.cin-liquid-glass::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.4px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.45) 0%,
+    rgba(255, 255, 255, 0.15) 20%,
+    rgba(255, 255, 255, 0) 40%,
+    rgba(255, 255, 255, 0) 60%,
+    rgba(255, 255, 255, 0.15) 80%,
+    rgba(255, 255, 255, 0.45) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* ─── Liquid glass — the strong variant, for the primary CTA ────────────── */
+.cin-liquid-glass-strong {
+  background: rgba(255, 255, 255, 0.01);
+  background-blend-mode: luminosity;
+  backdrop-filter: blur(50px);
+  -webkit-backdrop-filter: blur(50px);
+  border: none;
+  box-shadow:
+    4px 4px 4px rgba(0, 0, 0, 0.05),
+    inset 0 1px 1px rgba(255, 255, 255, 0.15);
+  position: relative;
+  overflow: hidden;
+}
+
+.cin-liquid-glass-strong::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.4px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.5) 0%,
+    rgba(255, 255, 255, 0.2) 20%,
+    rgba(255, 255, 255, 0) 40%,
+    rgba(255, 255, 255, 0) 60%,
+    rgba(255, 255, 255, 0.2) 80%,
+    rgba(255, 255, 255, 0.5) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* ─── Shiny gradient headline word ──────────────────────────────────────── */
+.cin-shiny {
+  background-image: linear-gradient(
+    to right,
+    #091020 0%,
+    #0b2551 12.5%,
+    #a4f4fd 32.5%,
+    #00d2ff 50%,
+    #0b2551 67.5%,
+    #091020 87.5%,
+    #091020 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: cin-shiny-anim 6s linear infinite;
+  font-style: italic;
+}
+
+@keyframes cin-shiny-anim {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+/* ─── Typography roles ──────────────────────────────────────────────────── */
+.cin-font-display {
+  font-family: "Instrument Serif", serif;
+}
+
+/* ─── Fade-rise entrance (server-side friendly: pure CSS, no JS) ─────────── */
+@keyframes cin-fade-rise {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.cin-fade-rise {
+  animation: cin-fade-rise 0.8s ease-out both;
+}
+
+.cin-fade-rise-d1 {
+  animation: cin-fade-rise 0.8s ease-out 0.15s both;
+}
+
+.cin-fade-rise-d2 {
+  animation: cin-fade-rise 0.8s ease-out 0.3s both;
+}
+
+.cin-fade-rise-d3 {
+  animation: cin-fade-rise 0.8s ease-out 0.45s both;
+}
+
+.cin-fade-rise-d4 {
+  animation: cin-fade-rise 0.8s ease-out 0.6s both;
+}
+
+/* ─── Section background — pinned underneath everything ──────────────────── */
+.cin-bg-base {
+  background: #0c0c0c;
+  color: #ffffff;
+}

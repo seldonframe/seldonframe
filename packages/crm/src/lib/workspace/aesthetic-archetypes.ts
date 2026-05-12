@@ -77,8 +77,15 @@ export interface AestheticArchetype {
     visualDensity: number;
   };
   /** Hero treatment. Centered is BANNED for variance > 4 per taste-skill;
-   *  these are the allowed alternatives. */
-  heroVariant: "split-screen-50-50" | "left-aligned-asymmetric" | "cinematic-fullbleed" | "founder-portrait";
+   *  these are the allowed alternatives.
+   *  v1.41.0 — cinematic-aura added for archetypes that want the
+   *  Aura-style looping-video + liquid-glass dark hero. */
+  heroVariant:
+    | "split-screen-50-50"
+    | "left-aligned-asymmetric"
+    | "cinematic-fullbleed"
+    | "founder-portrait"
+    | "cinematic-aura";
   /** Whether this archetype's pages should ship a desktop sticky CTA
    *  (urgency-driven trades benefit; restrained / clinical do NOT). */
   desktopStickyCTA: boolean;
@@ -258,7 +265,10 @@ export const ARCHETYPES: Record<AestheticArchetypeId, AestheticArchetype> = {
       motionIntensity: 8, // smooth, premium reveals
       visualDensity: 3, // generous whitespace
     },
-    heroVariant: "cinematic-fullbleed",
+    // v1.41.0 — upgraded from cinematic-fullbleed to cinematic-aura.
+    // Coaches and luxe businesses sell the dream; a looping Pexels MP4
+    // with liquid-glass chrome conveys that better than a still photo.
+    heroVariant: "cinematic-aura",
     desktopStickyCTA: false,
     bannedHere: [
       "Inter font",
@@ -302,7 +312,11 @@ export const ARCHETYPES: Record<AestheticArchetypeId, AestheticArchetype> = {
       motionIntensity: 5, // precise, not showy
       visualDensity: 7, // technical, info-rich
     },
-    heroVariant: "split-screen-50-50",
+    // v1.41.0 — upgraded from split-screen-50-50 to cinematic-aura.
+    // Modern B2B / agency landings (Velorah, Aethera, Asme, Aura) all
+    // lean on looping-video + liquid-glass + serif italics for the
+    // hero. The page body below the fold stays restrained.
+    heroVariant: "cinematic-aura",
     desktopStickyCTA: false,
     bannedHere: [
       "Inter font",

@@ -51,6 +51,7 @@ import {
   resolveGalleryImages,
   resolveHeroImage,
 } from "@/lib/crm/personality-images";
+import { searchPexelsVideo } from "@/lib/assets/pexels";
 import { loadSkillMd } from "@/lib/page-blocks/skill-loader";
 import {
   ARCHETYPES,
@@ -287,7 +288,9 @@ ${buildBusinessContext(input)}
     "ctaText": "<2-4 words, action verb (e.g. 'Get Service Today', 'Book Appointment', 'Schedule a Visit')>",
     "ctaLink": "/book",
     "secondaryCta": { "text": "<optional verb action>", "link": "/intake or tel:<phone digits>" },
-    "heroImage_query": "<3-6 word Unsplash query for the HERO photo. ARCHETYPE-AWARE — see archetype hints in the design brief above. UNIVERSAL RULES: MUST contain a concrete physical noun matching the archetype (a tool, a setting, a worker, a treatment, a material — NEVER just a vertical name); MUST NOT lead with a city name (city returns scenery); SHOULD include a composition hint ('close-up', 'on', 'detail of', 'interior', 'hands'). PER-ARCHETYPE GOOD EXAMPLES: bold-urgency (trades) → 'asphalt shingle roof close-up', 'roofer installing metal standing seam', 'plumber repairing copper pipes', 'hvac technician outdoor unit residential'. cinematic-aspirational (medspa/wellness/luxury) → 'minimalist spa treatment room interior', 'dermatology consultation room calm', 'serene aesthetic clinic marble', 'skincare products marble flatlay', 'modern medspa interior soft light'. clinical-trust (legal/dental/medical) → 'modern dental clinic interior bright', 'attorney consultation room', 'professional office handshake', 'medical exam room minimalist'. editorial-warm (craft/family) → 'craftsman hands wood detail', 'family business storefront', 'workshop natural light tools', 'restoration project before after'. soft-residential (cleaning/landscape) → 'tidy living room natural light', 'manicured residential lawn', 'home interior clean kitchen', 'gardener residential garden tools'. technical-restrained (B2B/agency) → 'modern office workspace minimalist', 'designer at desk monochrome', 'product strategy whiteboard'. brutalist (creative studios) → 'concrete loft natural light', 'design studio raw interior', 'industrial warehouse skylight'. AVOID 'austin roofing', 'phoenix hvac', 'houston medspa' — these return city scenery>"
+    "heroImage_query": "<3-6 word Unsplash query for the HERO photo. ARCHETYPE-AWARE — see archetype hints in the design brief above. UNIVERSAL RULES: MUST contain a concrete physical noun matching the archetype (a tool, a setting, a worker, a treatment, a material — NEVER just a vertical name); MUST NOT lead with a city name (city returns scenery); SHOULD include a composition hint ('close-up', 'on', 'detail of', 'interior', 'hands'). PER-ARCHETYPE GOOD EXAMPLES: bold-urgency (trades) → 'asphalt shingle roof close-up', 'roofer installing metal standing seam', 'plumber repairing copper pipes', 'hvac technician outdoor unit residential'. cinematic-aspirational (medspa/wellness/luxury) → 'minimalist spa treatment room interior', 'dermatology consultation room calm', 'serene aesthetic clinic marble', 'skincare products marble flatlay', 'modern medspa interior soft light'. clinical-trust (legal/dental/medical) → 'modern dental clinic interior bright', 'attorney consultation room', 'professional office handshake', 'medical exam room minimalist'. editorial-warm (craft/family) → 'craftsman hands wood detail', 'family business storefront', 'workshop natural light tools', 'restoration project before after'. soft-residential (cleaning/landscape) → 'tidy living room natural light', 'manicured residential lawn', 'home interior clean kitchen', 'gardener residential garden tools'. technical-restrained (B2B/agency) → 'modern office workspace minimalist', 'designer at desk monochrome', 'product strategy whiteboard'. brutalist (creative studios) → 'concrete loft natural light', 'design studio raw interior', 'industrial warehouse skylight'. AVOID 'austin roofing', 'phoenix hvac', 'houston medspa' — these return city scenery>",
+    "heroVideo_query": "<v1.41.0 — OPTIONAL 2-5 word Pexels VIDEO search query used ONLY when the archetype is cinematic-aspirational or technical-restrained (which renders the cinematic-aura hero variant — a looping background MP4). Pick motion-rich, niche-matched footage that conveys the operator's outcome, NOT a literal vertical photo. cinematic-aspirational examples: 'sunset beach running' for a fitness coach, 'phone scrolling social media' for an X-growth coach, 'spa water reflection slow' for a medspa, 'yoga sunrise studio' for a wellness studio. technical-restrained (agency) examples: 'abstract design motion graphics', 'team office collaboration cinematic', 'macbook typing close up', 'neon city night drive'. Omit this field for other archetypes; the cinematic-aura variant is not used there.>",
+    "shinyWord": "<v1.41.0 — OPTIONAL single word from the headline that gets the gradient-shiny italic treatment in the cinematic-aura variant. Pick the emphatic outcome word: the noun the visitor wants ('Pipeline', 'Empire', 'Future', 'Sold', 'Booked', 'Income', 'Calls', 'Leads'). Must appear verbatim in the headline (case-insensitive). Omit for non-cinematic archetypes.>"
   },
   "servicesGrid": {
     "headline": "<value-driven headline for services section; speak to outcome not features>",
@@ -538,6 +541,44 @@ async function payloadToSections(
         // empty state, which still looks intentional.
       }
     }
+
+    // v1.41.0 — Pexels video for the cinematic-aura hero variant.
+    // Single fire-and-forget call: if the archetype wants cinematic-aura,
+    // resolve a looping MP4 from Pexels and persist its URL into the hero
+    // JSONB. The render path (hero-cinematic-aura.tsx) treats a missing
+    // video as a beautiful branded-gradient empty state, so every failure
+    // mode here is non-blocking.
+    //
+    // Query strategy: prefer the LLM-supplied `heroVideo_query` when it
+    // produced one (lets it pick niche-specific footage like "phone
+    // scrolling x" for a coach), otherwise fall back to the same
+    // background image query that was already used for the still photo.
+    let heroVideo = "";
+    let heroVideoAttribution:
+      | import("@/components/landing/sections/types").HeroSectionContent["heroVideoAttribution"]
+      | undefined;
+    if (archetype.heroVariant === "cinematic-aura") {
+      const videoQuery = asString(hero.heroVideo_query) || heroQuery;
+      if (videoQuery) {
+        try {
+          const resolved = await searchPexelsVideo(videoQuery, {
+            orientation: "landscape",
+            size: "medium",
+          });
+          if (resolved) {
+            heroVideo = resolved.url;
+            heroVideoAttribution = {
+              photographer_name: resolved.attribution.photographer_name,
+              photographer_url: resolved.attribution.photographer_url,
+              source_url: resolved.attribution.source_url,
+              video_id: resolved.attribution.video_id,
+            };
+          }
+        } catch {
+          // Soft-fail: cinematic-aura renders fine without a video.
+        }
+      }
+    }
     const secondaryCtaRaw = asObject(hero.secondaryCta);
     const secondaryCta = secondaryCtaRaw
       ? {
@@ -583,6 +624,14 @@ async function payloadToSections(
         // production-tier compliance). Renderer shows it as a small
         // "Photo: NAME on Unsplash" credit.
         heroImageAttribution,
+        // v1.41.0 — Pexels video + attribution for the cinematic-aura
+        // variant. Empty string + undefined when no video was resolved;
+        // the renderer falls back to a branded gradient gracefully.
+        heroVideo,
+        heroVideoAttribution,
+        // v1.41.0 — optional emphatic word that gets the gradient
+        // shiny treatment in cinematic-aura. Only used by that variant.
+        shinyWord: asString(hero.shinyWord) || undefined,
         // v1.40.0 — archetype-driven layout variant. Renderer picks
         // the matching composition; centered hero is banned.
         variant: archetype.heroVariant,

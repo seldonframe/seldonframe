@@ -44,11 +44,22 @@ props:
     type: string
     min: 2
     description: Free-text Unsplash search query that matches the business's vertical. e.g. "barbershop interior warm light", "hvac technician outdoor unit", "law office consultation". Prompt-guidance length 2-5 words.
+  background_video_query:
+    type: string
+    required: false
+    min: 2
+    description: 'v1.41.0 — Free-text Pexels video search query for the cinematic-aura variant (agency / coaching archetypes). Pick footage that matches the operator''s niche, not their literal vertical: an X-growth coach wants "phone scrolling social media" not "coach", a creative agency wants "abstract design motion" not "agency office". Prompt-guidance length 2-5 words. Ignored when variant != cinematic-aura.'
+  shiny_word:
+    type: string
+    required: false
+    min: 2
+    max: 30
+    description: 'v1.41.0 — One emphatic word from `headline` that gets the gradient-shiny italic treatment in the cinematic-aura variant. Pick the outcome word, the metric, the proper noun ("Pipeline", "Empire", "Future", "Booked", "Sold"). Case-insensitive first-match. Ignored when variant != cinematic-aura.'
   variant:
     type: enum
     required: false
-    enum: ["split-image-right", "full-bleed", "founder-portrait"]
-    description: Layout variant. "full-bleed" works for ~95% of cases.
+    enum: ["split-image-right", "full-bleed", "founder-portrait", "cinematic-aura"]
+    description: 'Layout variant. "full-bleed" works for ~95% of cases. v1.41.0 — "cinematic-aura" auto-applied by the orchestrator for agency + cinematic-aspirational archetypes (loops a Pexels MP4 with liquid-glass chrome + Instrument Serif). The LLM should not pick cinematic-aura explicitly; the archetype routing does it.'
 validators:
   - rule: headline_quantified
     severity: error

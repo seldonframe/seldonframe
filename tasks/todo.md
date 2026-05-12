@@ -13,6 +13,14 @@ with a checkable plan, gets ticked off as it ships, and ends with a review block
       operator drag-drop tab on the contact record, merged client-portal list.
       Plan: [tasks/portal-documents-plan.md](./portal-documents-plan.md).
 
+- [x] **Cinematic landing (Phase 1 — hero)** — Aura-style cinematic hero
+      variant + Pexels video backgrounds, defaulted on for agency + coaching
+      archetypes. Shipped in v1.41.0 — preview-deploy verification pending
+      (the live regen check on signal-to-leads). Phase 2 (extending the
+      cinematic system to about/services/testimonials/pricing/CTA sections)
+      stays deferred.
+      Plan: [tasks/cinematic-landing-plan.md](./cinematic-landing-plan.md).
+
 ---
 
 ## Queued — post-staging

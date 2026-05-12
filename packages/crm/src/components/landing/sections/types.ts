@@ -43,13 +43,39 @@ export type HeroSectionContent = {
    *  - cinematic-fullbleed: image as full-bleed background, copy
    *    overlaid on a dark gradient
    *  - founder-portrait: copy left, square portrait right with eyebrow
-   *    treatment — best for solo-operator / coaching businesses */
-  variant?: "split-screen-50-50" | "left-aligned-asymmetric" | "cinematic-fullbleed" | "founder-portrait";
+   *    treatment — best for solo-operator / coaching businesses
+   *  - cinematic-aura (v1.41.0): looping Pexels MP4 background with
+   *    liquid-glass UI, Instrument Serif italic typography, BlurText
+   *    headline. The default for agency + cinematic-aspirational
+   *    archetypes whenever a hero video is available. */
+  variant?:
+    | "split-screen-50-50"
+    | "left-aligned-asymmetric"
+    | "cinematic-fullbleed"
+    | "founder-portrait"
+    | "cinematic-aura";
   /** v1.40.5 — Unsplash photographer attribution. Renders as a small
    *  "Photo: NAME on Unsplash" pill in the hero composition. Required
    *  by Unsplash API guidelines; absent only when the hero image came
    *  from somewhere other than Unsplash (e.g. operator-uploaded). */
   heroImageAttribution?: UnsplashAttribution;
+  /** v1.41.0 — Pexels video attribution. Renders as a small
+   *  "Video: NAME on Pexels" pill in the cinematic-aura variant.
+   *  Required by Pexels licence; absent only when the hero video came
+   *  from somewhere other than Pexels (e.g. operator-uploaded). */
+  heroVideoAttribution?: {
+    photographer_name: string;
+    photographer_url: string;
+    /** Pexels video page URL. */
+    source_url: string;
+    video_id: number;
+  };
+  /** v1.41.0 — Optional one word inside `headline` that gets the
+   *  gradient-shiny treatment in the cinematic-aura variant. Pick the
+   *  most emphatic word — the outcome word, the metric, the proper noun
+   *  ("Pipeline", "Empire", "Future"). First case-insensitive match is
+   *  highlighted. Ignored by non-cinematic variants. */
+  shinyWord?: string;
   /** v1.40.0 — Hormozi-style risk-reversal badges rendered as a tight
    *  row under the primary CTA. License #s, "BBB A+ rated", "Bonded &
    *  insured", "Lifetime warranty" — proof underneath the click target
