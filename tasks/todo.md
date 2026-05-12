@@ -21,6 +21,16 @@ with a checkable plan, gets ticked off as it ships, and ends with a review block
       stays deferred.
       Plan: [tasks/cinematic-landing-plan.md](./cinematic-landing-plan.md).
 
+- [x] **Parallel enhance Phase 1a (latency 116s → ~25s)** — shipped in
+      v1.42.0. 8 parallel per-section Opus calls via `Promise.allSettled`,
+      3 cache_control breakpoints (boilerplate + archetype brief + section
+      instructions), top-level Promise.allSettled for 3 asset classes.
+      Same Opus 4.7 for every call. `SF_PARALLEL_ENHANCE=false` rolls
+      back to the monolithic path. Live verification pending on prod
+      after merge. Phase 1b (async URL return via Next 16 `after()`)
+      stays deferred.
+      Plan: [tasks/parallel-enhance-plan.md](./parallel-enhance-plan.md).
+
 ---
 
 ## Queued — post-staging

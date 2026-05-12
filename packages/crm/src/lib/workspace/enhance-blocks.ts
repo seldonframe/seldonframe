@@ -118,6 +118,30 @@ export type EnhanceLandingResult =
 // independently in payloadToSections() below.
 const ENHANCE_BLOCKS = ["hero", "services", "about", "faq", "cta"] as const;
 
+// v1.42.0 — parallel-enhance feature flag.
+//
+// When true (the new default), enhanceLandingForWorkspace fans out to 8
+// per-section Opus calls via Promise.allSettled instead of one monolithic
+// call returning a 9-key JSON. Total wall-clock drops ~60-90s → ~10-15s
+// because token generation is sequential within a single call; spreading
+// the output across 8 short parallel calls beats one long sequential
+// call even on the same model.
+//
+// Same Opus 4.7 used for every parallel call — no model-tier mapping
+// (operator BYOK pays, cost isn't ours). To roll back to the monolithic
+// path in an emergency: set SF_PARALLEL_ENHANCE=false in env.
+//
+// Coherence is preserved by shared inputs: every parallel call receives
+// the same business context + archetype design brief + section-specific
+// SKILL.md. Hormozi-style copy is independent-by-section anyway (FAQ
+// doesn't quote hero; services don't reference about), so cross-section
+// LLM visibility isn't load-bearing.
+function isParallelEnhanceEnabled(): boolean {
+  const v = process.env.SF_PARALLEL_ENHANCE?.trim().toLowerCase();
+  // Default true. Only explicit "false" / "0" disables.
+  return v !== "false" && v !== "0";
+}
+
 // Latest Opus snapshot known to the codebase (matches personality-generator.ts
 // + puck/generate-with-claude.ts). Override via env for hot-swapping when a
 // newer Opus ships without redeploying.
@@ -422,6 +446,363 @@ Generate exactly 3 benefit entries in benefits.benefits. Each MUST have a DISTIN
 Respond with ONLY the JSON object — no prose before or after, no markdown fences. Start with \`{\` and end with \`}\`.`;
 }
 
+// ─── v1.42.0 — Parallel per-section orchestration ───────────────────────────
+
+// The 8 sections we fan out to LLM calls. Mechanical sections (navbar,
+// footer, emergencyStrip, serviceArea, testimonials, stickyMobileCTA) are
+// composed from input in payloadToSections() and need no LLM call.
+const SECTIONS_TO_GENERATE = [
+  "hero",
+  "servicesGrid",
+  "projectGallery",
+  "about",
+  "benefits",
+  "process",
+  "faq",
+  "cta",
+] as const;
+type SectionName = (typeof SECTIONS_TO_GENERATE)[number];
+
+// SKILL.md key per section. Some sections (projectGallery, benefits,
+// process) have no SKILL.md — their rules are inlined into the section
+// spec. The orchestrator handles missing skills gracefully.
+const SECTION_SKILL_KEY: Record<SectionName, string | null> = {
+  hero: "hero",
+  servicesGrid: "services",
+  projectGallery: null,
+  about: "about",
+  benefits: null,
+  process: null,
+  faq: "faq",
+  cta: "cta",
+};
+
+// Static boilerplate shared across every section call. Same bytes for
+// every workspace + every section → fully cacheable via Anthropic's
+// prompt cache (ephemeral, 5-min TTL). The variable parts (archetype
+// brief, section spec, business context) live in separate cache blocks
+// or in the uncached user message.
+const STATIC_PREAMBLE = `You are generating landing-page block content for a real small-business website. The output goes DIRECTLY to a published landing page — there is no human editor between you and the visitor. Treat every word as production copy.
+
+OUTPUT: ONE JSON object, no prose, no markdown fences. Start with \`{\` and end with \`}\`.
+
+# HORMOZI VALUE EQUATION (the conversion framework you must apply throughout)
+
+Every section you generate must serve one or more of these:
+
+1. **Dream outcome** — say what the customer GETS, not what you do. Use "so that" chaining.
+2. **Perceived likelihood of success** — proof, ratings, license #s, real testimonials, specific local numbers.
+3. **Time delay** — minimize: "in 5 days", "by 6 PM", "same-day estimates", "first quote in 24 hours".
+4. **Effort & sacrifice** — minimize: "we handle the paperwork", "without insurance hassles", "no obligation".
+
+The first section above the fold (hero) carries 80-90% of conversion weight. Pour your best copy there. The headline alone, with no other context, must convey THE dream outcome + the time component. Below-the-fold sections support and expand; they don't have to do all the work.
+
+# Voice rules (non-negotiable)
+
+1. Write for THIS business, not the vertical. "Plumbing services" is generic; "Family-owned plumbing in Arlington since 2009" is for a specific shop.
+2. Lead with quantification when possible — numbers, ratings, timeframes, "free", "guaranteed", "same-day". If you have NO numbers, anchor on proximity or tenure.
+3. Skip throat-clearing. Never start with "Welcome to", "Premier", "The leading", "Your trusted", "Professional X services". These are filler.
+4. Match the vertical's natural voice: HVAC = urgent + reliable, legal = calm authority, coaching = outcome-driven, dental = warm + clean, plumbing = no-nonsense + reassuring.
+5. CTAs are verbs: "Book Service", "Get a Quote", "Schedule a Visit". Never "Learn More", "Click Here", "Get Started".
+6. NEVER include the strings "SeldonFrame", "AI-native", "Business OS", "Replace 5 Tools" or any internal-platform marketing.
+
+# Lucide icon names available (use whichever fits best for any \`icon\` field)
+
+shield, shield-check, badge-check, clock, star, award, sparkles, thumbs-up, heart, zap, hammer, wrench, hard-hat, droplets, wind, cloud-rain, cloud-rain-wind, cloud-snow, leaf, home, house-plug, scissors, stethoscope, truck, phone, map-pin, dollar-sign
+
+Vertical aliases that map to lucide names:
+- Roofing: storm → cloud-rain-wind, shingle → home, metal → shield, gutter → droplets, tarp → shield, inspection → shield-check, hail → cloud-rain-wind
+- Plumbing: drain → droplets, leak → droplets, heater → zap, pipe → wrench
+- HVAC: cooling → wind, heating → zap, ductwork → home, thermostat → home
+- General trades: emergency → zap, repair → wrench, install → hammer, warranty → badge-check, estimate → dollar-sign, quote → dollar-sign, free → dollar-sign, sameday → clock
+- Service categories: cleaning → sparkles, treatment → leaf, dental → stethoscope`;
+
+// Per-section JSON output specs. These are the lifted-out slices of the
+// monolithic prompt's "Required output shape" — each section call asks
+// Opus for just ONE key, so we send just the matching spec.
+function getSectionSpec(name: SectionName, input: EnhanceLandingInput): string {
+  switch (name) {
+    case "hero":
+      return `# Section: hero
+
+Return ONE JSON object matching this exact shape:
+
+\`\`\`json
+{
+  "kicker": "<2-5 word eyebrow above the headline; OPTIONAL — empty string if no genuine angle>",
+  "headline": "<the single most important sentence on the page; 4-12 words; MUST contain quantification (number / star rating / 'free' / 'guaranteed' / 'same-day' / 'today' / 'instantly' / proximity word)>",
+  "subheadline": "<8-30 words; one sentence; MUST mention the business name OR the city/neighborhood; supporting proof>",
+  "ctaText": "<2-4 words, action verb (e.g. 'Get Service Today', 'Book Appointment', 'Schedule a Visit')>",
+  "ctaLink": "/book",
+  "secondaryCta": { "text": "<optional verb action>", "link": "/intake or tel:<phone digits>" },
+  "heroImage_query": "<3-6 word Unsplash query for the HERO photo. ARCHETYPE-AWARE — see archetype hints in the design brief above. UNIVERSAL RULES: MUST contain a concrete physical noun (a tool, a setting, a worker, a treatment, a material — NEVER just a vertical name); MUST NOT lead with a city name; SHOULD include a composition hint ('close-up', 'on', 'detail of', 'interior', 'hands'). Examples by archetype — bold-urgency: 'roofer installing metal standing seam' / 'hvac technician outdoor unit residential'. cinematic-aspirational: 'minimalist spa treatment room interior' / 'modern medspa interior soft light'. clinical-trust: 'modern dental clinic interior bright' / 'attorney consultation room'. editorial-warm: 'craftsman hands wood detail' / 'workshop natural light tools'. soft-residential: 'tidy living room natural light' / 'manicured residential lawn'. technical-restrained: 'modern office workspace minimalist' / 'designer at desk monochrome'. brutalist: 'concrete loft natural light'. AVOID 'austin roofing', 'phoenix hvac' — city names return scenery.>",
+  "heroVideo_query": "<v1.41.0 — OPTIONAL 2-5 word Pexels VIDEO search query used ONLY when the archetype is cinematic-aspirational or technical-restrained (which renders the cinematic-aura hero variant — a looping background MP4). Pick motion-rich, niche-matched footage that conveys the operator's outcome, NOT a literal vertical photo. cinematic-aspirational examples: 'sunset beach running' for a fitness coach, 'phone scrolling social media' for an X-growth coach, 'spa water reflection slow' for a medspa. technical-restrained (agency) examples: 'abstract design motion graphics', 'team office collaboration cinematic', 'macbook typing close up'. Omit (empty string or absent) for other archetypes.>",
+  "shinyWord": "<v1.41.0 — OPTIONAL single word from the headline that gets the gradient-shiny italic treatment in the cinematic-aura variant. Pick the emphatic outcome word — the noun the visitor wants ('Pipeline', 'Empire', 'Future', 'Sold', 'Booked', 'Income', 'Calls', 'Leads'). Must appear verbatim in the headline (case-insensitive). Omit for non-cinematic archetypes.>"
+}
+\`\`\``;
+
+    case "servicesGrid": {
+      const n = Math.min(input.services.length, 6);
+      return `# Section: servicesGrid
+
+Return ONE JSON object with exactly ${n} services — one per service in the business context, IN THE ORDER GIVEN. Do NOT invent services that aren't in the input.
+
+\`\`\`json
+{
+  "headline": "<value-driven headline for services section; speak to outcome not features>",
+  "subheadline": "<optional 1-line subhead; can be empty string>",
+  "services": [
+    {
+      "name": "<service name verbatim from business context>",
+      "description": "<1 sentence — what the customer GETS, not what we do>",
+      "price": "<'from $X' or specific dollar; if unknown say 'Quote on request'>",
+      "duration": "<optional 'X min' / '1-2 hours'; empty string if unknown>",
+      "icon": "<one lucide icon name OR vertical-alias picked to fit THIS specific service — must be DISTINCT across all services>",
+      "ctaText": "Book",
+      "ctaLink": "/book"
+    }
+  ]
+}
+\`\`\`
+
+Icon picking — examples for inspiration: "Storm damage repair" → "cloud-rain-wind", "Shingle replacement" → "home", "Gutter repair" → "droplets", "Free roof inspection" → "shield-check", "Water heater install" → "zap", "Same-day service" → "clock". Pick whatever READS most concretely as that service.`;
+    }
+
+    case "projectGallery":
+      return `# Section: projectGallery
+
+Return ONE JSON object with EXACTLY 6 Unsplash search queries. Each query becomes one square photo in a 6-photo masonry grid showing "Recent Work".
+
+\`\`\`json
+{
+  "headline": "<headline e.g. 'Recent work', 'Jobs done right', 'See our craftsmanship'>",
+  "subheadline": "<optional 1-line subhead; can be empty string>",
+  "queries": ["<query 1>", "<query 2>", "<query 3>", "<query 4>", "<query 5>", "<query 6>"]
+}
+\`\`\`
+
+# Gallery query rules (CRITICAL — read all)
+
+1. EACH query MUST contain a craft-specific physical noun (shingle / roof / pipe / drain / hvac unit / shingle replacement / etc.) — NOT just a vertical name.
+2. NO city names in queries — they make Unsplash return scenery instead of work photos.
+3. Bias for VARIETY — the 6 queries should each return visibly different photos (a roof close-up, a worker on a job, a tool detail, a finished install, etc.). DO NOT repeat the same noun across all 6.
+4. INCLUDE "residential" if the business is residential-focused (most local-service businesses are). It dramatically improves photo quality vs commercial/stock.
+5. Each query 3-6 words.
+
+GOOD (roofing, residential): ["asphalt shingle roof close-up", "roofer installing shingles residential", "metal standing seam roof house", "seamless gutter installation residential", "skylight on residential roof", "storm-damaged shingles close-up"]
+GOOD (plumbing): ["plumber repairing kitchen sink", "copper pipes installation residential", "drain cleaning equipment basement", "water heater install residential", "leaking pipe under sink close-up", "plumber working on toilet residential"]
+GOOD (HVAC): ["hvac technician on outdoor unit", "residential air conditioner install", "ductwork in residential attic", "thermostat installation hand close-up", "furnace residential basement", "hvac service van residential driveway"]
+BAD: ["austin roofing"] (city → scenery), ["roofing"] (too generic), ["storm"] (returns weather).`;
+
+    case "about":
+      return `# Section: about
+
+Return ONE JSON object:
+
+\`\`\`json
+{
+  "headline": "<personal headline about THIS business — NOT a generic 'About Us'>",
+  "body": "<2-3 sentences. Who you are, what you stand for, why customers choose you. NEVER lead with 'Welcome' or 'Founded in'. Lead with a concrete fact or claim.>"
+}
+\`\`\``;
+
+    case "benefits":
+      return `# Section: benefits
+
+Return ONE JSON object with EXACTLY 3 differentiator entries, each with a DISTINCT \`icon\` (do not repeat across the 3 cards).
+
+\`\`\`json
+{
+  "headline": "<headline for differentiators section>",
+  "benefits": [
+    { "icon": "<lucide name OR alias picked to fit the SPECIFIC benefit — distinct across all 3>", "title": "<3-5 words>", "description": "<1 sentence>" }
+  ]
+}
+\`\`\`
+
+Common benefit-flavored icon picks: trust → shield-check, licensed → badge-check, insured → shield, family-owned → heart, local → map-pin, experienced → award, fast/same-day → clock or zap, free-estimates → dollar-sign, warranty → badge-check, 5-star → star.`;
+
+    case "process":
+      return `# Section: process
+
+Return ONE JSON object with EXACTLY 3 sequential steps showing what happens after the customer books:
+
+\`\`\`json
+{
+  "headline": "<headline for the 3-step process>",
+  "steps": [
+    { "number": 1, "title": "<verb-led step name e.g. 'Book Online'>", "description": "<1 sentence>" },
+    { "number": 2, "title": "<verb-led step name>", "description": "<1 sentence>" },
+    { "number": 3, "title": "<verb-led step name>", "description": "<1 sentence>" }
+  ]
+}
+\`\`\``;
+
+    case "faq":
+      return `# Section: faq
+
+Return ONE JSON object with 4-6 honest FAQ entries. Cover the top customer concerns: pricing/quotes, availability/timing, qualifications/licensing, what to expect on the visit, payment.
+
+\`\`\`json
+{
+  "headline": "<FAQ headline; can be 'Frequently Asked Questions' OR something more specific>",
+  "faqs": [
+    { "question": "<a real customer concern; not a softball>", "answer": "<honest, specific, helpful answer>" }
+  ]
+}
+\`\`\``;
+
+    case "cta":
+      return `# Section: cta
+
+Return ONE JSON object for the final convert-now block at the bottom of the page:
+
+\`\`\`json
+{
+  "headline": "<final convert-now headline; create urgency without lying>",
+  "body": "<one supporting sentence — what happens when they click>",
+  "ctaText": "<verb action>",
+  "ctaLink": "/book"
+}
+\`\`\``;
+  }
+}
+
+// Build the per-section system instructions. Combined with the static
+// preamble and archetype brief in three cache_control breakpoints, the
+// per-section block is the smallest cacheable piece that varies.
+function buildSectionInstructions(
+  name: SectionName,
+  skillMd: string | null,
+  input: EnhanceLandingInput,
+): string {
+  const spec = getSectionSpec(name, input);
+  if (skillMd) {
+    return `${spec}\n\n# Section-specific rules (read carefully — they encode our quality bar)\n\n${skillMd}`;
+  }
+  return spec;
+}
+
+// Single per-section Opus call. Three cache_control breakpoints:
+//   1. STATIC_PREAMBLE (boilerplate, workspace-agnostic)
+//   2. renderArchetypeBrief (changes per archetype but stable for ~5 min)
+//   3. section instructions (SKILL.md + JSON spec, stable forever per section)
+// Business context goes in the uncached user message.
+async function enhanceSection(
+  client: Anthropic,
+  name: SectionName,
+  input: EnhanceLandingInput,
+  archetype: AestheticArchetype,
+  skillMd: string | null,
+  model: string,
+): Promise<{ name: SectionName; payload: Record<string, unknown> | null }> {
+  try {
+    const response = await client.messages.create({
+      model,
+      max_tokens: 2048,
+      system: [
+        {
+          type: "text",
+          text: STATIC_PREAMBLE,
+          cache_control: { type: "ephemeral" },
+        },
+        {
+          type: "text",
+          text: renderArchetypeBrief(archetype),
+          cache_control: { type: "ephemeral" },
+        },
+        {
+          type: "text",
+          text: buildSectionInstructions(name, skillMd, input),
+          cache_control: { type: "ephemeral" },
+        },
+      ],
+      messages: [
+        {
+          role: "user",
+          content: `# Business Context\n\n${buildBusinessContext(input)}\n\nGenerate the JSON for the **${name}** section now. Return ONLY the JSON object — no prose, no markdown fences. Start with \`{\` and end with \`}\`.`,
+        },
+      ],
+    });
+    const text = response.content
+      .map((b) => (b.type === "text" ? b.text : ""))
+      .join("");
+    const startIdx = text.indexOf("{");
+    const endIdx = text.lastIndexOf("}");
+    if (startIdx === -1 || endIdx === -1) {
+      console.warn(
+        JSON.stringify({ event: "enhance_section_no_json", section: name }),
+      );
+      return { name, payload: null };
+    }
+    try {
+      const parsed = JSON.parse(text.slice(startIdx, endIdx + 1));
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return { name, payload: parsed as Record<string, unknown> };
+      }
+      return { name, payload: null };
+    } catch (err) {
+      console.warn(
+        JSON.stringify({
+          event: "enhance_section_parse_failed",
+          section: name,
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
+      return { name, payload: null };
+    }
+  } catch (err) {
+    console.warn(
+      JSON.stringify({
+        event: "enhance_section_call_failed",
+        section: name,
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    );
+    return { name, payload: null };
+  }
+}
+
+// Fan out the 8 section calls in parallel. Promise.allSettled means one
+// section's failure doesn't kill the others — strictly better failure
+// mode than the monolithic call where any single bad section invalidates
+// the whole JSON.
+async function callClaudeParallel(
+  client: Anthropic,
+  input: EnhanceLandingInput,
+  archetype: AestheticArchetype,
+  skills: Record<string, string>,
+): Promise<
+  | { ok: true; payload: Record<string, unknown>; model: string }
+  | { ok: false; reason: string; detail: string }
+> {
+  const model = primaryModel();
+  const results = await Promise.allSettled(
+    SECTIONS_TO_GENERATE.map((name) => {
+      const skillKey = SECTION_SKILL_KEY[name];
+      const skillMd = skillKey ? skills[skillKey] ?? null : null;
+      return enhanceSection(client, name, input, archetype, skillMd, model);
+    }),
+  );
+
+  const payload: Record<string, unknown> = {};
+  let successCount = 0;
+  for (const r of results) {
+    if (r.status === "fulfilled" && r.value.payload) {
+      payload[r.value.name] = r.value.payload;
+      successCount++;
+    }
+  }
+  if (successCount === 0) {
+    return {
+      ok: false,
+      reason: "all_sections_failed",
+      detail: `0 of ${SECTIONS_TO_GENERATE.length} section calls returned valid JSON`,
+    };
+  }
+  return { ok: true, payload, model };
+}
+
 // ─── Claude call with model fallback ────────────────────────────────────────
 
 async function callClaude(
@@ -498,6 +879,44 @@ async function payloadToSections(
   const sections: LandingPageSection[] = [];
   let order = 0;
 
+  // v1.42.0 — pre-resolve all external assets in parallel. Pre-1.42.0
+  // each was awaited inline at the moment of section push: hero image
+  // (Unsplash) → cinematic hero video (Pexels) → 6× gallery images
+  // (Unsplash, sequential for dedup). That serialized ~10-15s of HTTP
+  // work behind the LLM call. Now the three asset classes (hero image,
+  // hero video, gallery) fire in one Promise.allSettled — the gallery's
+  // internal sequential dedup loop is preserved, the savings come from
+  // overlapping the three classes.
+  const heroPayload = asObject(payload.hero);
+  const galleryPayload = asObject(payload.projectGallery);
+
+  const heroImageQuery = heroPayload ? asString(heroPayload.heroImage_query) : "";
+  const heroVideoQueryRaw = heroPayload ? asString(heroPayload.heroVideo_query) : "";
+  const heroVideoQuery = heroVideoQueryRaw || heroImageQuery;
+  const wantsCinematicVideo = archetype.heroVariant === "cinematic-aura";
+  const galleryQueries = galleryPayload
+    ? asArray<unknown>(galleryPayload.queries)
+        .map((q) => (typeof q === "string" ? q.trim() : ""))
+        .filter((q) => q.length > 0)
+        .slice(0, 8)
+    : [];
+
+  const [heroImageSettled, heroVideoSettled, gallerySettled] = await Promise.allSettled([
+    heroImageQuery ? resolveHeroImage(heroImageQuery) : Promise.resolve(null),
+    wantsCinematicVideo && heroVideoQuery
+      ? searchPexelsVideo(heroVideoQuery, { orientation: "landscape", size: "medium" })
+      : Promise.resolve(null),
+    galleryQueries.length > 0
+      ? resolveGalleryImages(galleryQueries)
+      : Promise.resolve([] as Awaited<ReturnType<typeof resolveGalleryImages>>),
+  ]);
+  const resolvedHeroImage =
+    heroImageSettled.status === "fulfilled" ? heroImageSettled.value : null;
+  const resolvedHeroVideo =
+    heroVideoSettled.status === "fulfilled" ? heroVideoSettled.value : null;
+  const resolvedGallery =
+    gallerySettled.status === "fulfilled" ? gallerySettled.value : [];
+
   // Navbar — always render. Composed from input, not from LLM, since the
   // shape is mechanical (logo + business name + nav + book CTA).
   sections.push({
@@ -521,64 +940,21 @@ async function payloadToSections(
   // taste-skill discipline. Also passes through `riskReversalBadges`
   // pulled from input.trust_signals + input.certifications so the
   // hero's CTA carries Hormozi-style risk-reversal proof underneath.
-  const hero = asObject(payload.hero);
+  const hero = heroPayload;
   if (hero) {
-    let heroImage = "";
-    let heroImageAttribution: import("@/components/landing/sections/types").UnsplashAttribution | undefined;
-    const heroQuery = asString(hero.heroImage_query);
-    if (heroQuery) {
-      try {
-        // v1.40.5 — resolveHeroImage returns { url, attribution } for
-        // Unsplash production-compliance (photographer credit + download
-        // tracking). Soft-fail: null triggers the gradient empty state.
-        const resolved = await resolveHeroImage(heroQuery);
-        if (resolved) {
-          heroImage = resolved.url;
-          heroImageAttribution = resolved.attribution;
+    // v1.42.0 — assets were pre-resolved in parallel at the top of this
+    // function. Just consume the results here; no more inline awaits.
+    const heroImage = resolvedHeroImage?.url ?? "";
+    const heroImageAttribution = resolvedHeroImage?.attribution;
+    const heroVideo = resolvedHeroVideo?.url ?? "";
+    const heroVideoAttribution = resolvedHeroVideo
+      ? {
+          photographer_name: resolvedHeroVideo.attribution.photographer_name,
+          photographer_url: resolvedHeroVideo.attribution.photographer_url,
+          source_url: resolvedHeroVideo.attribution.source_url,
+          video_id: resolvedHeroVideo.attribution.video_id,
         }
-      } catch {
-        // Soft-fail: empty heroImage triggers the v1.36.0 branded-gradient
-        // empty state, which still looks intentional.
-      }
-    }
-
-    // v1.41.0 — Pexels video for the cinematic-aura hero variant.
-    // Single fire-and-forget call: if the archetype wants cinematic-aura,
-    // resolve a looping MP4 from Pexels and persist its URL into the hero
-    // JSONB. The render path (hero-cinematic-aura.tsx) treats a missing
-    // video as a beautiful branded-gradient empty state, so every failure
-    // mode here is non-blocking.
-    //
-    // Query strategy: prefer the LLM-supplied `heroVideo_query` when it
-    // produced one (lets it pick niche-specific footage like "phone
-    // scrolling x" for a coach), otherwise fall back to the same
-    // background image query that was already used for the still photo.
-    let heroVideo = "";
-    let heroVideoAttribution:
-      | import("@/components/landing/sections/types").HeroSectionContent["heroVideoAttribution"]
-      | undefined;
-    if (archetype.heroVariant === "cinematic-aura") {
-      const videoQuery = asString(hero.heroVideo_query) || heroQuery;
-      if (videoQuery) {
-        try {
-          const resolved = await searchPexelsVideo(videoQuery, {
-            orientation: "landscape",
-            size: "medium",
-          });
-          if (resolved) {
-            heroVideo = resolved.url;
-            heroVideoAttribution = {
-              photographer_name: resolved.attribution.photographer_name,
-              photographer_url: resolved.attribution.photographer_url,
-              source_url: resolved.attribution.source_url,
-              video_id: resolved.attribution.video_id,
-            };
-          }
-        } catch {
-          // Soft-fail: cinematic-aura renders fine without a video.
-        }
-      }
-    }
+      : undefined;
     const secondaryCtaRaw = asObject(hero.secondaryCta);
     const secondaryCta = secondaryCtaRaw
       ? {
@@ -745,46 +1121,29 @@ async function payloadToSections(
   // the single biggest visible difference between a fresh SF workspace
   // and a real-business landing page. Soft-fails — if Unsplash is down
   // we just skip the gallery (better than rendering broken-image icons).
-  const gallery = asObject(payload.projectGallery);
-  if (gallery) {
-    const queries = asArray<unknown>(gallery.queries)
-      .map((q) => (typeof q === "string" ? q.trim() : ""))
-      .filter((q) => q.length > 0)
-      .slice(0, 8);
-    if (queries.length > 0) {
-      try {
-        // v1.40.5 — resolveGalleryImages returns { url, attribution }[]
-        // for production-compliant rendering. The order may differ
-        // from `queries` since failed slots are skipped, so the alt/
-        // caption mapping uses the index of items that successfully
-        // resolved (Claude's per-query intent is somewhat lost on
-        // skipped slots; better than rendering a wrong caption).
-        const resolved = await resolveGalleryImages(queries);
-        if (resolved.length > 0) {
-          sections.push({
-            type: "projectGallery",
-            order: order++,
-            content: {
-              headline: asString(gallery.headline, "Recent work"),
-              subheadline: asString(gallery.subheadline),
-              items: resolved.map((image, idx) => ({
-                image: image.url,
-                alt: queries[idx] ?? "Recent project",
-                caption: queries[idx] ?? "",
-                attribution: image.attribution,
-              })),
-              ctaText: "Book your job",
-              ctaLink: "/book",
-            },
-          });
-        }
-      } catch (err) {
-        console.warn(
-          `[enhance-blocks] gallery resolution failed:`,
-          err instanceof Error ? err.message : String(err),
-        );
-      }
-    }
+  //
+  // v1.42.0 — gallery images were pre-resolved in parallel at the top
+  // of this function (in resolvedGallery). The order may differ from
+  // `galleryQueries` since failed slots are skipped, so the alt/caption
+  // mapping uses the index of items that successfully resolved.
+  const gallery = galleryPayload;
+  if (gallery && resolvedGallery.length > 0) {
+    sections.push({
+      type: "projectGallery",
+      order: order++,
+      content: {
+        headline: asString(gallery.headline, "Recent work"),
+        subheadline: asString(gallery.subheadline),
+        items: resolvedGallery.map((image, idx) => ({
+          image: image.url,
+          alt: galleryQueries[idx] ?? "Recent project",
+          caption: galleryQueries[idx] ?? "",
+          attribution: image.attribution,
+        })),
+        ctaText: "Book your job",
+        ctaLink: "/book",
+      },
+    });
   }
 
   // Service area — chip cloud of cities served. Only when paste/operator
@@ -1015,9 +1374,13 @@ export async function enhanceLandingForWorkspace(
     );
   }
 
-  // 3. Build prompt + call Claude — now archetype-aware.
-  const prompt = buildPrompt(skills, input, archetype);
-  const result = await callClaude(resolution.client, prompt);
+  // 3. Call Claude. v1.42.0 — by default, fan out to 8 parallel
+  //    per-section Opus calls via Promise.allSettled (much lower
+  //    wall-clock than one monolithic call returning a 9-key JSON).
+  //    Emergency rollback: SF_PARALLEL_ENHANCE=false in env.
+  const result = isParallelEnhanceEnabled()
+    ? await callClaudeParallel(resolution.client, input, archetype, skills)
+    : await callClaude(resolution.client, buildPrompt(skills, input, archetype));
   if (!result.ok) {
     return { ok: false, reason: result.reason, detail: result.detail };
   }
