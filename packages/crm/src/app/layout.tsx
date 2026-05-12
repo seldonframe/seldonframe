@@ -7,6 +7,10 @@ import {
   GoogleAnalytics,
   shouldRenderGoogleAnalytics,
 } from "@/components/analytics/google-analytics";
+import {
+  MarketingStructuredData,
+  shouldRenderMarketingStructuredData,
+} from "@/components/analytics/structured-data";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -24,6 +28,7 @@ const geistMono = Geist_Mono({
 // README). The legacy /logo.svg path is kept on disk for now (not
 // removed in this commit) but no longer referenced from layout meta.
 export const metadata: Metadata = {
+  metadataBase: new URL("https://seldonframe.com"),
   title: "SeldonFrame",
   description: "AI-native business OS — CRM, booking, intake, brain.",
   manifest: "/brand/manifest.webmanifest",
@@ -64,6 +69,14 @@ export default async function RootLayout({
   const renderGA =
     Boolean(measurementId) && shouldRenderGoogleAnalytics(hostHeader);
 
+  // SEO/GEO: marketing-only structured data. Renders Organization +
+  // WebSite + SoftwareApplication JSON-LD on seldonframe.com only.
+  // NOT on app.seldonframe.com (operator dashboard) or workspace
+  // subdomains (per-workspace LocalBusiness schema is generated
+  // separately per workspace). See structured-data.tsx for the
+  // host-allowlist rationale.
+  const renderMarketingSchema = shouldRenderMarketingStructuredData(hostHeader);
+
   return (
     <html lang="en" suppressHydrationWarning>
       <body
@@ -72,6 +85,7 @@ export default async function RootLayout({
         {renderGA && measurementId ? (
           <GoogleAnalytics measurementId={measurementId} />
         ) : null}
+        {renderMarketingSchema ? <MarketingStructuredData /> : null}
         <ThemeProvider>
           <DemoToastProvider>{children}</DemoToastProvider>
         </ThemeProvider>
