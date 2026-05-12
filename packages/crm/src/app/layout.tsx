@@ -29,8 +29,9 @@ const geistMono = Geist_Mono({
 // removed in this commit) but no longer referenced from layout meta.
 export const metadata: Metadata = {
   metadataBase: new URL("https://seldonframe.com"),
-  title: "SeldonFrame",
-  description: "AI-native business OS — CRM, booking, intake, brain.",
+  title: "SeldonFrame — Open-source alternative to GoHighLevel",
+  description:
+    "Pre-wired client ops stack agencies deploy per client in minutes. CRM, booking, intake, AI chatbot — already connected. Free tier, AGPL-3.0, no Zapier required.",
   manifest: "/brand/manifest.webmanifest",
   icons: {
     icon: [
@@ -42,14 +43,16 @@ export const metadata: Metadata = {
     apple: [{ url: "/brand/favicon-180.png", sizes: "180x180" }],
   },
   openGraph: {
-    title: "SeldonFrame",
-    description: "AI-native business OS — CRM, booking, intake, brain.",
+    title: "SeldonFrame — Open-source alternative to GoHighLevel",
+    description:
+      "Pre-wired client ops stack agencies deploy per client in minutes. CRM, booking, intake, AI chatbot — already connected.",
     images: [{ url: "/brand/og-image.png", width: 1200, height: 630 }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "SeldonFrame",
-    description: "AI-native business OS — CRM, booking, intake, brain.",
+    title: "SeldonFrame — Open-source alternative to GoHighLevel",
+    description:
+      "Pre-wired client ops stack agencies deploy per client in minutes. CRM, booking, intake, AI chatbot — already connected.",
     images: ["/brand/twitter-card.png"],
   },
 };
