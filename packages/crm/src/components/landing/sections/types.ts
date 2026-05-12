@@ -71,11 +71,28 @@ export type HeroSectionContent = {
     video_id: number;
   };
   /** v1.41.0 — Optional one word inside `headline` that gets the
-   *  gradient-shiny treatment in the cinematic-aura variant. Pick the
-   *  most emphatic word — the outcome word, the metric, the proper noun
-   *  ("Pipeline", "Empire", "Future"). First case-insensitive match is
-   *  highlighted. Ignored by non-cinematic variants. */
+   *  gradient-shiny treatment in the cinematic-aura variant, OR the
+   *  serif-italic treatment in viktor-light / velorah-editorial /
+   *  nexora-light, OR the gradient-text split point in
+   *  stellar-tabs-white. Pick the most emphatic word — the outcome
+   *  word, the metric, the proper noun ("Pipeline", "Empire",
+   *  "Future"). First case-insensitive match is highlighted. */
   shinyWord?: string;
+  /** v1.43.0 — Hero template ID. When set, the renderer dispatches to
+   *  the matching component in `hero-templates/registry.ts` instead of
+   *  the v1.40.0 variant system. Templates are richer, full-page hero
+   *  designs sourced from the marketplace reference set (Velorah,
+   *  Nexora, Viktor Oddy, Securify, Stellar.ai, Aura). The LLM picks
+   *  the template in `enhanceSection("hero")` based on archetype +
+   *  business signals. Absent → falls back to the v1.40.0 variant
+   *  dispatch (strictly additive). */
+  template?:
+    | "cinematic-aura"
+    | "viktor-light"
+    | "velorah-editorial"
+    | "nexora-light"
+    | "securify-bold"
+    | "stellar-tabs-white";
   /** v1.40.0 — Hormozi-style risk-reversal badges rendered as a tight
    *  row under the primary CTA. License #s, "BBB A+ rated", "Bonded &
    *  insured", "Lifetime warranty" — proof underneath the click target

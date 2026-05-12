@@ -79,13 +79,30 @@ export interface AestheticArchetype {
   /** Hero treatment. Centered is BANNED for variance > 4 per taste-skill;
    *  these are the allowed alternatives.
    *  v1.41.0 — cinematic-aura added for archetypes that want the
-   *  Aura-style looping-video + liquid-glass dark hero. */
+   *  Aura-style looping-video + liquid-glass dark hero.
+   *  v1.43.0 — kept as the *fallback* path; new workspaces prefer
+   *  `defaultTemplate` (richer designs from the template registry). */
   heroVariant:
     | "split-screen-50-50"
     | "left-aligned-asymmetric"
     | "cinematic-fullbleed"
     | "founder-portrait"
     | "cinematic-aura";
+  /** v1.43.0 — default hero template id from
+   *  `components/landing/hero-templates/registry.ts`. The LLM can
+   *  override per workspace (it picks from the catalog in the hero
+   *  block's section spec), but absent / unknown picks fall back to
+   *  this archetype-level default. Empty string means "no template —
+   *  use the legacy heroVariant path" (e.g., trades / bold-urgency
+   *  where no cinematic template fits yet). */
+  defaultTemplate:
+    | "cinematic-aura"
+    | "viktor-light"
+    | "velorah-editorial"
+    | "nexora-light"
+    | "securify-bold"
+    | "stellar-tabs-white"
+    | "";
   /** Whether this archetype's pages should ship a desktop sticky CTA
    *  (urgency-driven trades benefit; restrained / clinical do NOT). */
   desktopStickyCTA: boolean;
@@ -132,6 +149,7 @@ export const ARCHETYPES: Record<AestheticArchetypeId, AestheticArchetype> = {
       visualDensity: 4, // breathing room
     },
     heroVariant: "left-aligned-asymmetric",
+    defaultTemplate: "viktor-light",
     desktopStickyCTA: false,
     bannedHere: [
       "Inter font",
@@ -177,6 +195,7 @@ export const ARCHETYPES: Record<AestheticArchetypeId, AestheticArchetype> = {
       visualDensity: 6, // info-rich for fast decisions
     },
     heroVariant: "split-screen-50-50",
+    defaultTemplate: "", // trades use the legacy variant — no cinematic template fits the bold-urgency vibe
     desktopStickyCTA: true, // "Get help now" floating widget
     bannedHere: [
       "Inter font",
@@ -221,6 +240,7 @@ export const ARCHETYPES: Record<AestheticArchetypeId, AestheticArchetype> = {
       visualDensity: 5, // information-rich (credentials)
     },
     heroVariant: "left-aligned-asymmetric",
+    defaultTemplate: "nexora-light",
     desktopStickyCTA: false,
     bannedHere: [
       "Inter font",
@@ -269,6 +289,7 @@ export const ARCHETYPES: Record<AestheticArchetypeId, AestheticArchetype> = {
     // Coaches and luxe businesses sell the dream; a looping Pexels MP4
     // with liquid-glass chrome conveys that better than a still photo.
     heroVariant: "cinematic-aura",
+    defaultTemplate: "cinematic-aura",
     desktopStickyCTA: false,
     bannedHere: [
       "Inter font",
@@ -316,7 +337,11 @@ export const ARCHETYPES: Record<AestheticArchetypeId, AestheticArchetype> = {
     // Modern B2B / agency landings (Velorah, Aethera, Asme, Aura) all
     // lean on looping-video + liquid-glass + serif italics for the
     // hero. The page body below the fold stays restrained.
+    // v1.43.0 — defaultTemplate is viktor-light (the most common agency
+    // shape). LLM upgrades to nexora-light / stellar-tabs-white when
+    // the workspace IS a SaaS product, or securify-bold for dev tools.
     heroVariant: "cinematic-aura",
+    defaultTemplate: "viktor-light",
     desktopStickyCTA: false,
     bannedHere: [
       "Inter font",
@@ -361,6 +386,7 @@ export const ARCHETYPES: Record<AestheticArchetypeId, AestheticArchetype> = {
       visualDensity: 4, // breathing room
     },
     heroVariant: "left-aligned-asymmetric",
+    defaultTemplate: "viktor-light",
     desktopStickyCTA: false,
     bannedHere: [
       "Inter font",
@@ -403,6 +429,7 @@ export const ARCHETYPES: Record<AestheticArchetypeId, AestheticArchetype> = {
       visualDensity: 6, // dense type, raw layouts
     },
     heroVariant: "left-aligned-asymmetric",
+    defaultTemplate: "securify-bold",
     desktopStickyCTA: false,
     bannedHere: [
       "Inter font",

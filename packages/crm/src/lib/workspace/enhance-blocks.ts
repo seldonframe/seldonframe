@@ -536,10 +536,32 @@ Return ONE JSON object matching this exact shape:
   "ctaLink": "/book",
   "secondaryCta": { "text": "<optional verb action>", "link": "/intake or tel:<phone digits>" },
   "heroImage_query": "<3-6 word Unsplash query for the HERO photo. ARCHETYPE-AWARE — see archetype hints in the design brief above. UNIVERSAL RULES: MUST contain a concrete physical noun (a tool, a setting, a worker, a treatment, a material — NEVER just a vertical name); MUST NOT lead with a city name; SHOULD include a composition hint ('close-up', 'on', 'detail of', 'interior', 'hands'). Examples by archetype — bold-urgency: 'roofer installing metal standing seam' / 'hvac technician outdoor unit residential'. cinematic-aspirational: 'minimalist spa treatment room interior' / 'modern medspa interior soft light'. clinical-trust: 'modern dental clinic interior bright' / 'attorney consultation room'. editorial-warm: 'craftsman hands wood detail' / 'workshop natural light tools'. soft-residential: 'tidy living room natural light' / 'manicured residential lawn'. technical-restrained: 'modern office workspace minimalist' / 'designer at desk monochrome'. brutalist: 'concrete loft natural light'. AVOID 'austin roofing', 'phoenix hvac' — city names return scenery.>",
-  "heroVideo_query": "<v1.41.0 — OPTIONAL 2-5 word Pexels VIDEO search query used ONLY when the archetype is cinematic-aspirational or technical-restrained (which renders the cinematic-aura hero variant — a looping background MP4). Pick motion-rich, niche-matched footage that conveys the operator's outcome, NOT a literal vertical photo. cinematic-aspirational examples: 'sunset beach running' for a fitness coach, 'phone scrolling social media' for an X-growth coach, 'spa water reflection slow' for a medspa. technical-restrained (agency) examples: 'abstract design motion graphics', 'team office collaboration cinematic', 'macbook typing close up'. Omit (empty string or absent) for other archetypes.>",
-  "shinyWord": "<v1.41.0 — OPTIONAL single word from the headline that gets the gradient-shiny italic treatment in the cinematic-aura variant. Pick the emphatic outcome word — the noun the visitor wants ('Pipeline', 'Empire', 'Future', 'Sold', 'Booked', 'Income', 'Calls', 'Leads'). Must appear verbatim in the headline (case-insensitive). Omit for non-cinematic archetypes.>"
+  "heroVideo_query": "<2-5 word Pexels VIDEO search query — REQUIRED when template is cinematic-aura, velorah-editorial, or securify-bold (those templates render a looping background MP4). Pick motion-rich, niche-matched footage that conveys the operator's outcome, NOT a literal vertical photo. Examples: 'sunset beach running' for a fitness coach, 'phone scrolling social media' for an X-growth coach, 'spa water reflection slow' for a medspa, 'abstract design motion graphics' for an agency, 'code on screen close up' for a dev tool, 'data center server racks' for security infra. Omit for light templates (viktor-light, nexora-light, stellar-tabs-white) — they don't render a background video.>",
+  "shinyWord": "<v1.41.0 — OPTIONAL single word from the headline that gets template-specific emphasis. cinematic-aura: cyan-gradient shimmer. viktor-light / velorah-editorial / nexora-light: serif italic in a muted color. stellar-tabs-white: split point for the dark-to-gray gradient on line 2. securify-bold: ignored. Pick the emphatic word — outcome noun ('Pipeline', 'Empire', 'Sold'), differentiator adjective ('Smarter', 'Quieter'), or verb ('Closes', 'Earns'). Must appear verbatim in the headline (case-insensitive).>",
+  "template": "<v1.43.0 — REQUIRED — pick ONE template id from the catalog below based on archetype + business signals. The template controls the entire visual look of the hero. Picking the right template matters more than perfect copy.>"
 }
-\`\`\``;
+\`\`\`
+
+# TEMPLATE CATALOG — pick ONE for the \`template\` field
+
+- **cinematic-aura** — DARK + looping Pexels video + Instrument Serif italic + cyan-gradient shimmery word. For: luxe coaching, medspa, wellness, fitness, premium salons, lifestyle. Sensory + aspirational.
+- **velorah-editorial** — DARK + looping Pexels video + deep-navy wash + serif italic emphasis (softer than cinematic-aura, no gradient). For: luxe service businesses, premium coaches, creative studios that want cinematic motion without SaaS-shiny treatment.
+- **viktor-light** — WHITE + Instrument Serif italic accents + narrow centered column + NO video. For: solo coaches, indie founders, freelance creatives, boutique agencies. Light editorial restraint.
+- **nexora-light** — WHITE + Instrument Serif italic emphasis + custom CRM+booking dashboard mockup embedded below CTA. For: B2B SaaS founders, productivity tools, agencies that run client back-office. NO background video. The dashboard mockup IS the visual.
+- **securify-bold** — PURE BLACK + looping Pexels video + HUGE staggered typography (3 chunks at corners-and-center) + stat blocks in corners. For: dev tools, data security, AI infra, hard-tech SaaS. Confidence + scale + no warmth.
+- **stellar-tabs-white** — WHITE + dark-to-gray gradient on headline line 2 + 4-tab cycling product preview (Intake/Schedule/Convert/Deliver). For: AI workspace platforms, multi-feature SaaS, productivity suites. NO background video.
+
+## Archetype → template guidance (LLM has final say)
+
+- cinematic-aspirational → cinematic-aura (default) OR velorah-editorial (if editorial > sensory)
+- technical-restrained → viktor-light (default for coach/agency) OR nexora-light (if SaaS founder) OR stellar-tabs-white (if multi-feature AI tool) OR securify-bold (if dev/security tools)
+- editorial-warm → viktor-light
+- clinical-trust → nexora-light
+- soft-residential → viktor-light
+- bold-urgency → set template to empty string "" — tradesmen use the legacy split-screen-50-50 variant; no template fits them yet
+- brutalist → securify-bold
+
+**Tie-break rule:** when unsure between two templates, pick LIGHTER for B2B/agency/coach workspaces and DARKER for lifestyle/luxe.`;
 
     case "servicesGrid": {
       const n = Math.min(input.services.length, 6);
@@ -985,6 +1007,24 @@ async function payloadToSections(
           }
         : undefined;
 
+    // v1.43.0 — template picker. The LLM picks a template id from the
+    // catalog in the hero section spec; we validate it against the
+    // registry's known IDs and fall back to the archetype's default
+    // template if the LLM picked something unknown or omitted the field.
+    const llmPickedTemplate = asString(hero.template);
+    const knownTemplates = new Set([
+      "cinematic-aura",
+      "viktor-light",
+      "velorah-editorial",
+      "nexora-light",
+      "securify-bold",
+      "stellar-tabs-white",
+    ]);
+    const template =
+      knownTemplates.has(llmPickedTemplate)
+        ? llmPickedTemplate
+        : archetype.defaultTemplate;
+
     sections.push({
       type: "hero",
       order: order++,
@@ -1000,16 +1040,23 @@ async function payloadToSections(
         // production-tier compliance). Renderer shows it as a small
         // "Photo: NAME on Unsplash" credit.
         heroImageAttribution,
-        // v1.41.0 — Pexels video + attribution for the cinematic-aura
-        // variant. Empty string + undefined when no video was resolved;
-        // the renderer falls back to a branded gradient gracefully.
+        // v1.41.0 — Pexels video + attribution. Used by cinematic-aura,
+        // velorah-editorial, securify-bold. Empty string + undefined
+        // when no video was resolved; renderers fall back to branded
+        // gradients gracefully.
         heroVideo,
         heroVideoAttribution,
-        // v1.41.0 — optional emphatic word that gets the gradient
-        // shiny treatment in cinematic-aura. Only used by that variant.
+        // v1.41.0 — optional emphatic word that gets template-specific
+        // emphasis treatment (gradient shimmer in cinematic-aura, serif
+        // italic in light templates, split point in stellar-tabs).
         shinyWord: asString(hero.shinyWord) || undefined,
-        // v1.40.0 — archetype-driven layout variant. Renderer picks
-        // the matching composition; centered hero is banned.
+        // v1.43.0 — full hero template id. When present, the renderer
+        // dispatches to that template's component; absent → legacy
+        // variant dispatch.
+        template,
+        // v1.40.0 — archetype-driven layout variant. Kept as the
+        // fallback path for legacy renders + tradesmen archetypes that
+        // don't have a template yet.
         variant: archetype.heroVariant,
         // v1.40.0 — Hormozi-style risk-reversal badges under CTA.
         riskReversalBadges,

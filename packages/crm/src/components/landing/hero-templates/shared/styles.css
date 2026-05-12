@@ -1,0 +1,63 @@
+/* ============================================================================
+ * v1.43.0 — Shared template styles.
+ * ============================================================================
+ *
+ * Imported once by each hero template. Loads Instrument Serif (already
+ * imported by cinematic/styles.css; the @import is idempotent), adds
+ * light-mode helper classes for templates that don't use the dark
+ * cinematic system.
+ *
+ * Templates that use dark + liquid-glass (cinematic-aura, velorah-editorial,
+ * securify-bold) import from cinematic/styles.css directly for the
+ * .cin-liquid-glass family. This file adds the LIGHT-MODE counterparts.
+ * ========================================================================== */
+
+@import url("https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap");
+
+/* ─── Light-mode fade-rise entrance (mirrors cin-fade-rise for parity) ──── */
+@keyframes tpl-fade-rise {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tpl-fade-rise {
+  animation: tpl-fade-rise 0.8s ease-out both;
+}
+.tpl-fade-rise-d1 { animation: tpl-fade-rise 0.8s ease-out 0.1s both; }
+.tpl-fade-rise-d2 { animation: tpl-fade-rise 0.8s ease-out 0.2s both; }
+.tpl-fade-rise-d3 { animation: tpl-fade-rise 0.8s ease-out 0.3s both; }
+.tpl-fade-rise-d4 { animation: tpl-fade-rise 0.8s ease-out 0.4s both; }
+.tpl-fade-rise-d5 { animation: tpl-fade-rise 0.8s ease-out 0.5s both; }
+.tpl-fade-rise-d6 { animation: tpl-fade-rise 0.8s ease-out 0.6s both; }
+
+/* ─── Display serif role (Instrument Serif, italic by default) ──────────── */
+.tpl-display {
+  font-family: "Instrument Serif", serif;
+}
+.tpl-display-italic {
+  font-family: "Instrument Serif", serif;
+  font-style: italic;
+}
+
+/* ─── Gradient text for stellar-tabs (line 2 of headline) ───────────────── */
+.tpl-gradient-text {
+  background: linear-gradient(to right, #0a0a0a, #6b7280 60%, #9ca3af);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ─── Securify-style staggered-typography helpers (absolute positioning) ── */
+.tpl-stagger-word {
+  font-weight: 500;
+  letter-spacing: -0.04em;
+  line-height: 0.95;
+  text-transform: lowercase;
+}

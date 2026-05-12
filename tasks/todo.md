@@ -22,14 +22,17 @@ with a checkable plan, gets ticked off as it ships, and ends with a review block
       Plan: [tasks/cinematic-landing-plan.md](./cinematic-landing-plan.md).
 
 - [x] **Parallel enhance Phase 1a (latency 116s → ~25s)** — shipped in
-      v1.42.0. 8 parallel per-section Opus calls via `Promise.allSettled`,
-      3 cache_control breakpoints (boilerplate + archetype brief + section
-      instructions), top-level Promise.allSettled for 3 asset classes.
-      Same Opus 4.7 for every call. `SF_PARALLEL_ENHANCE=false` rolls
-      back to the monolithic path. Live verification pending on prod
-      after merge. Phase 1b (async URL return via Next 16 `after()`)
-      stays deferred.
+      v1.42.0. Merged to main. Vercel auto-promoted. Phase 1b (async
+      URL return via Next 16 `after()`) stays deferred.
       Plan: [tasks/parallel-enhance-plan.md](./parallel-enhance-plan.md).
+
+- [x] **Hero template registry (5 new templates)** — shipped in v1.43.0.
+      Added viktor-light, velorah-editorial, nexora-light, securify-bold,
+      stellar-tabs-white as pre-built hero designs the LLM picks from
+      based on archetype + business signals. Templates are fat skills
+      (1 .tsx + 1 .md per template). Adding template #7 = 2 files,
+      zero existing-code churn. Live verification pending after merge.
+      Plan: [tasks/hero-templates-plan.md](./hero-templates-plan.md).
 
 ---
 

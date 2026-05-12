@@ -28,6 +28,7 @@ import Link from "next/link";
 import { Star } from "lucide-react";
 import type { HeroSectionContent, UnsplashAttribution } from "./types";
 import { HeroCinematicAura } from "./hero-cinematic-aura";
+import { HERO_TEMPLATES, isHeroTemplateId } from "../hero-templates/registry";
 
 // v1.40.5 — Unsplash photographer credit. Required by Unsplash API
 // guidelines for production-tier approval. Both photographer name and
@@ -151,12 +152,21 @@ function HeroImage({
 }
 
 export function HeroSection(props: HeroSectionContent) {
+  // v1.43.0 — template dispatch. When `props.template` is set and matches
+  // a registered template, render that component directly. This is the
+  // new richer-template path; the v1.40.0 variant system stays as a
+  // fallback for archetypes / verticals that don't have a template yet.
+  if (props.template && isHeroTemplateId(props.template)) {
+    const Component = HERO_TEMPLATES[props.template];
+    return <Component {...props} />;
+  }
+
   const variant = props.variant ?? "left-aligned-asymmetric";
 
-  // v1.41.0 — cinematic-aura (Aura-style: looping Pexels video + liquid
-  // glass + Instrument Serif). Dispatch first since it owns its own
-  // rendering tree (FadingVideo, BlurText, AppleButton) and doesn't
-  // need the imageFailed state below.
+  // v1.41.0 — cinematic-aura via the legacy `variant` field (kept for
+  // backward compat with workspaces created before the template field
+  // existed). New workspaces use `template: "cinematic-aura"` via the
+  // path above.
   if (variant === "cinematic-aura") {
     return <HeroCinematicAura {...props} />;
   }
