@@ -131,13 +131,13 @@ const BuildAndShowCard = () => {
             className="text-[#fafafa] mb-4"
           >
             <span className="text-[#71717a]">&gt;</span>{" "}
-            Build a website for Acme HVAC.
+            Build a client workspace
             <br />
-            <span className="ml-3.5 text-[#a1a1aa]">Phoenix, AZ. AC repair</span>
+            <span className="ml-3.5 text-[#a1a1aa]">for Acme HVAC. Phoenix, AZ.</span>
             <br />
-            <span className="ml-3.5 text-[#a1a1aa]">and install. Phone</span>
+            <span className="ml-3.5 text-[#a1a1aa]">AC repair and install.</span>
             <br />
-            <span className="ml-3.5 text-[#a1a1aa]">(602) 555-0188.</span>
+            <span className="ml-3.5 text-[#a1a1aa]">Phone (602) 555-0188.</span>
           </motion.div>
 
           {/* Tool calls fire sequentially */}
@@ -548,31 +548,37 @@ const Hero = () => {
         ))}
       </div>
 
-      {/* v1.32.0 — Headline rewritten for Hormozi value equation +
-          12-year-old reading level. Drops "Business OS" jargon. Lists
-          what you get (website, CRM, calendar, AI chatbot). States
-          the time (under 5 minutes). States the action (typing). */}
+      {/* v1.45.0 — Agency-buyer repositioning (May 2026 brief).
+          Headline reframes from operator-buyer ("your website") to
+          agency-buyer ("deploy per client"). Subhead positions
+          SeldonFrame as the open-source alternative to GoHighLevel
+          and surfaces the "primitives, build anything" meta-
+          differentiation (unlimited landing pages, agents, funnels,
+          voice agents via Claude Code MCP). */}
       <motion.h1
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.35, duration: 0.55 }}
         className="text-[clamp(36px,5.5vw,64px)] font-bold tracking-[-0.04em] leading-[1.05] mb-5 max-w-[900px] mx-auto text-[#fafafa]"
       >
-        Your website, CRM, calendar, and{" "}
+        CRM. Booking. Intake.{" "}
         <span className="text-[#1FAE85]">AI chatbot</span>.<br />
-        Built in under 5 minutes by typing what you want.
+        Already wired. Deploy per client in 3 minutes.
       </motion.h1>
 
       <motion.p
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.55, duration: 0.5 }}
-        className="text-[17px] text-[#a1a1aa] max-w-[680px] mx-auto mb-9 leading-[1.65] font-normal"
+        className="text-[17px] text-[#a1a1aa] max-w-[720px] mx-auto mb-9 leading-[1.65] font-normal"
       >
-        One sentence in Claude Code. SeldonFrame builds your landing
-        page, booking calendar, intake forms, and CRM — all linked,
-        same brand. Change anything by saying so. No Zapier. No code.
-        No duct tape.
+        The open-source alternative to GoHighLevel. The consolidation
+        GHL agencies love, without the complexity they hate. Generate
+        a complete client ops stack from one Claude Code prompt in 3
+        minutes — then build anything else on top: unlimited landing
+        pages, intake forms, quiz funnels, AI agents, voice agents,
+        SMS sequences. All via Claude Code. No coding, no Zapier, no
+        feature requests waiting on a vendor.
       </motion.p>
 
       <motion.div
@@ -810,21 +816,23 @@ const FeatureStories = () => (
   <section className="py-[80px] md:py-[120px] px-5 md:px-12 max-w-[1180px] mx-auto">
     <div className="text-center mb-16 md:mb-20">
       <h2 className="text-[clamp(28px,4vw,44px)] font-bold tracking-[-0.035em] leading-[1.1] mb-4 text-[#fafafa]">
-        Why this works when nothing else does
+        Why agencies deploy faster on SeldonFrame
       </h2>
-      <p className="text-[16px] text-[#a1a1aa] max-w-[640px] mx-auto leading-[1.65]">
-        Other tools give you boxes to drag. Other AI builders give you a
-        fragile prompt that breaks the second your business doesn't fit
-        the template. SeldonFrame gives you frameworks — wired, branded,
-        and yours to change.
+      <p className="text-[16px] text-[#a1a1aa] max-w-[680px] mx-auto leading-[1.65]">
+        GoHighLevel takes days per client to configure. Webflow +
+        Calendly + HubSpot + Zapier takes weeks to stitch and breaks
+        on schedule. SeldonFrame gives you wired-by-default
+        frameworks — landing pages, CRM, booking, intake, agents —
+        generated per client in minutes. Customizable to any edge
+        case in natural language. No coding.
       </p>
     </div>
 
     <FeatureStory
       index={0}
       pill="Type, don't click"
-      title="One prompt. Five tools built."
-      body="SeldonFrame gives Claude Code 140+ commands for building your business — landing pages, booking, intake forms, CRM, AI agents. Tell it what you want. It builds. Tell it to change something. It changes. No drag-and-drop. No setup wizard. No three-hour onboarding call."
+      title="One prompt. The full client stack built."
+      body="SeldonFrame gives Claude Code a typed tool surface for everything an agency ships per client — landing pages, booking, intake forms, CRM, AI agents. Describe the client's business. The workspace generates. Tell it to change something. It changes. No drag-and-drop. No setup wizard. No three-hour client kickoff."
       ctaLabel="See the install command"
       ctaHref="#install"
       visual={<ClaudeCodeMockVisual />}
@@ -833,8 +841,8 @@ const FeatureStories = () => (
     <FeatureStory
       index={1}
       pill="Wired. No Zapier"
-      title="Your tools share one brain."
-      body="Your landing page knows about your CRM. Your CRM knows about your bookings. Your bookings know about your AI chatbot. One database. One brand. One admin. When something breaks in a Zapier-stitched stack, you find out from a customer. Here, nothing's stitched."
+      title="Every client's stack shares one brain."
+      body="The client's landing page knows their CRM. Their CRM knows their bookings. Their bookings know their AI chatbot. One database per client. One brand per client. One admin. When something breaks in a Zapier-stitched stack, the client calls you. Here, nothing's stitched — so nothing breaks."
       ctaLabel="See what's included"
       ctaHref="/docs/getting-started/what-is-seldonframe"
       reverse
@@ -843,9 +851,9 @@ const FeatureStories = () => (
 
     <FeatureStory
       index={2}
-      pill="Edge cases? Say so"
-      title="Change anything by typing the change."
-      body="Raise your prices. Add a new service area. Tweak your chatbot's tone. Swap a booking question. Just say it in Claude Code. SeldonFrame updates everything — site, CRM, agent — and runs safety checks on anything customers will see. Edge cases are a feature, not a fight."
+      pill="Unlimited customization"
+      title="Every client edge case, one prompt away."
+      body="Add a service area to a roofer client. Spin up a second intake form for a dental client's whitening promo. Build a new landing page for an HVAC client's seasonal AC campaign. Ship a specialized chatbot for a salon client's stylist booking. Unlimited intake forms, landing pages, and AI agents per client — all via Claude Code, no coding. SeldonFrame ships the change AND runs safety checks on anything the client's customers will see."
       ctaLabel="How updates work"
       ctaHref="/docs/agents/update-agent"
       visual={<EditAnythingVisual />}
@@ -865,13 +873,13 @@ const HowItWorks = () => {
       code: "claude mcp add seldonframe -- npx -y @seldonframe/mcp",
     },
     {
-      title: "Tell it about your business",
-      desc: "One sentence in Claude Code. Your business name, what you do, your phone, your services. SeldonFrame handles the rest.",
-      code: "> Build a website for Acme HVAC. Phoenix, AZ. AC repair and install. Phone (602) 555-0188.",
+      title: "Describe your client",
+      desc: "One sentence in Claude Code. Client name, what they do, their phone, their services. SeldonFrame detects the vertical, picks the right archetype, handles the rest.",
+      code: "> Build a client workspace for Acme HVAC. Phoenix, AZ. AC repair and install. Phone (602) 555-0188.",
     },
     {
-      title: "Get your wired-up business",
-      desc: "Landing page, booking calendar, intake form, CRM, and an AI chatbot that books appointments — all live, all linked, same brand. Change anything by saying so.",
+      title: "Ship the wired client workspace",
+      desc: "Landing page, booking calendar, intake form, CRM, and an AI chatbot that books real appointments — all live, all linked, branded as the client. Customize edge cases in natural language. Hand off to the client.",
       code: "✓ Live at acme-hvac.app.seldonframe.com",
     },
   ];
@@ -879,11 +887,12 @@ const HowItWorks = () => {
   return (
     <section id="install" className="text-center py-[64px] md:py-[100px] px-5 md:px-12 max-w-[1180px] mx-auto scroll-mt-20">
       <h2 className="text-[clamp(28px,4vw,44px)] font-bold tracking-[-0.035em] leading-[1.1] mb-4 text-[#fafafa]">
-        Three steps. Under five minutes.
+        Three steps. Three minutes per client.
       </h2>
       <p className="text-[16px] text-[#a1a1aa] max-w-[600px] mx-auto mb-12 leading-[1.65]">
-        No drag-and-drop. No setup wizards. No "let's hop on a call."
-        Just type, and it builds.
+        No drag-and-drop. No setup wizards. No multi-day client
+        onboarding. Describe the client; SeldonFrame ships their
+        wired workspace.
       </p>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
@@ -931,19 +940,23 @@ const CaseStudy = () => (
           Worked example
         </span>
         <h2 className="text-[clamp(28px,3.5vw,40px)] font-bold tracking-[-0.03em] leading-[1.1] mb-5 text-[#fafafa]">
-          What 5 minutes of Claude Code looks like
+          What 3 minutes of client deployment looks like
         </h2>
         <p className="text-[15px] text-[#a1a1aa] leading-[1.7] mb-4">
           Desert Cool HVAC. Phoenix, AZ. A residential HVAC contractor
-          with 14 technicians and ~1,800 customers, juggling Salesforce,
-          Cal.com, Mailchimp, Intercom, and Webflow.
+          with 14 technicians and ~1,800 customers — typical mid-market
+          agency client. Their previous agency stack: Salesforce +
+          Cal.com + Mailchimp + Intercom + Webflow, stitched with
+          Zapier. Days to deploy. Brittle to maintain.
         </p>
         <p className="text-[15px] text-[#a1a1aa] leading-[1.7] mb-6">
-          We built it end-to-end in SeldonFrame on camera in 5 minutes:
-          public landing page, booking system, intake form, CRM with
-          HVAC-specific fields, and a published chatbot that books
+          We deployed the SeldonFrame replacement on camera in 3
+          minutes: branded landing page, booking system in the right
+          timezone, intake form with HVAC-specific fields, CRM with
+          HVAC pipeline stages, and a published chatbot that books
           diagnostic visits. Every prompt is in the walkthrough; every
-          step works the same when you do it for your own business.
+          step works the same the next time your agency onboards a
+          client.
         </p>
         <a href="/demo" className={`${PRIMARY_CTA_CLS} px-6 py-3 text-[14px] hover:-translate-y-[1px]`}>
           Watch the walkthrough &rarr;
@@ -952,7 +965,7 @@ const CaseStudy = () => (
 
       <div className="grid grid-cols-2 gap-3">
         {[
-          { stat: "5 min", label: "build to live" },
+          { stat: "3 min", label: "client to live" },
           { stat: "5 → 1", label: "tools replaced" },
           { stat: "8/8", label: "evals passed" },
           { stat: "0", label: "lines hand-edited" },
@@ -1023,11 +1036,14 @@ const Replaces = () => {
     <section className="py-[60px] md:py-[80px] px-5 md:px-12 max-w-[1180px] mx-auto">
       <div className="text-center mb-10 md:mb-14">
         <h2 className="text-[clamp(24px,3vw,34px)] font-bold tracking-[-0.03em] leading-[1.15] mb-3 text-[#fafafa]">
-          Replaces the stack you've been duct-taping together
+          Replaces the stack agencies duct-tape for every client
         </h2>
-        <p className="text-[15px] text-[#a1a1aa] max-w-[560px] mx-auto leading-[1.65]">
-          Five tools, one workspace. Same database. Same brand. Same admin.
-          And the AI agents come with it.
+        <p className="text-[15px] text-[#a1a1aa] max-w-[640px] mx-auto leading-[1.65]">
+          Five vendors per client → one SeldonFrame workspace per
+          client. Same database. Same brand. Same admin. And every
+          agent your client needs — missed-call text back, review
+          requests, voice callbacks, lead nurture — buildable in
+          minutes from primitives.
         </p>
       </div>
 
@@ -1102,18 +1118,18 @@ const Pricing = () => {
   const tiers = [
     {
       name: "Free", badgeColor: "bg-[#222226] text-[#a1a1aa]", price: "$0",
-      workspaceCaption: "1 workspace · free forever",
-      features: ["1 workspace", "50 contacts", "100 agent runs / mo", "All core blocks", "BYO LLM keys", "Community support"],
+      workspaceCaption: "1 client workspace · free forever",
+      features: ["1 client workspace", "50 contacts", "100 agent runs / mo", "All core blocks", "BYO LLM keys", "Community support"],
     },
     {
       name: "Growth", badgeColor: "bg-[#1FAE85]/12 text-[#1FAE85]", price: "$29/mo + usage", isFeatured: true,
-      workspaceCaption: "3 workspaces included",
-      features: ["3 workspaces", "500 contacts + 1,000 runs included", "$0.02/contact + $0.03/run beyond", "Custom domain", "Remove SeldonFrame branding", "Client portal · email support"],
+      workspaceCaption: "3 client workspaces included",
+      features: ["3 client workspaces", "500 contacts + 1,000 runs included", "$0.02/contact + $0.03/run beyond", "Custom domain per client", "Remove SeldonFrame branding", "Client portal · email support"],
     },
     {
       name: "Scale", badgeColor: "bg-[#e84393]/10 text-[#e84393]", price: "$99/mo + usage",
-      workspaceCaption: "Unlimited workspaces",
-      features: ["Unlimited contacts", "Agent runs $0.02 each", "Full white-label", "Client portal with custom branding", "Brain Layer 2", "Priority support"],
+      workspaceCaption: "Unlimited client workspaces · full white-label SaaS",
+      features: ["Unlimited client workspaces", "Agent runs $0.02 each", "Full white-label SaaS reselling", "Per-client branded portal", "Brain Layer 2", "Priority support"],
     },
   ];
 
@@ -1123,7 +1139,7 @@ const Pricing = () => {
       <p className="text-[16px] text-[#a1a1aa] max-w-[560px] mx-auto mb-3">
         Open source. Self-host for free. Hosted tiers scale with your usage — pay only for what you use.
       </p>
-      <div className="text-[14px] text-[#1FAE85] font-semibold mb-11">Your first workspace is always free.</div>
+      <div className="text-[14px] text-[#1FAE85] font-semibold mb-11">Your first client workspace is always free.</div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {tiers.map((t, i) => (
@@ -1193,25 +1209,288 @@ const Infrastructure = () => {
       </div>
       <div className="mt-8">
         <a href="/docs" className="text-[14px] text-[#1FAE85] hover:underline">
-          → 140+ MCP tools your agent can call
+          → The full MCP tool surface your agent can call
         </a>
       </div>
     </section>
   );
 };
 
+// v1.45.0 — WhyGHLAgenciesSwitch — agency-buyer love/hate split.
+// Direct emotional rewire: surfaces the GHL pain points (steep
+// learning curve, complicated mess at scale, UI lag) alongside what
+// SeldonFrame keeps from the GHL value proposition (consolidation,
+// recurring-revenue agency model, white-label resale).
+const WhyGHLAgenciesSwitch = () => {
+  const keeps = [
+    "Consolidation — one platform, not five",
+    "Recurring-revenue agency model",
+    "Standardized delivery across clients",
+    "White-label SaaS reselling (Scale tier)",
+  ];
+  const drops = [
+    "Steep learning curve",
+    '"Complicated mess" at scale',
+    "UI lag, inconsistent reliability",
+    "Days-to-weeks per-client setup",
+    "$97-$497/mo before white-label add-ons",
+  ];
+
+  return (
+    <section className="py-[64px] md:py-[100px] px-5 md:px-12 max-w-[1100px] mx-auto">
+      <div className="text-center mb-12">
+        <h2 className="text-[clamp(28px,4vw,40px)] font-bold tracking-[-0.035em] leading-[1.1] mb-3 text-[#fafafa]">
+          Why agencies switch from GoHighLevel
+        </h2>
+        <p className="text-[16px] text-[#a1a1aa] max-w-[620px] mx-auto leading-[1.65]">
+          The consolidation GHL agencies love. Without the complexity
+          they hate.
+        </p>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-5">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-80px" }}
+          transition={{ duration: 0.5 }}
+          className="bg-[#0d0d10] border border-[#1FAE85]/30 rounded-[12px] p-6 md:p-8"
+        >
+          <div className="text-[11px] font-mono uppercase tracking-[0.08em] text-[#1FAE85] mb-4">
+            What SeldonFrame keeps
+          </div>
+          <ul className="space-y-3">
+            {keeps.map((item) => (
+              <li key={item} className="flex items-start gap-2.5 text-[14px] text-[#fafafa] leading-[1.55]">
+                <span className="text-[#1FAE85] font-bold mt-[2px] shrink-0">✓</span>
+                {item}
+              </li>
+            ))}
+          </ul>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-80px" }}
+          transition={{ duration: 0.5, delay: 0.1 }}
+          className="bg-[#0d0d10] border border-white/10 rounded-[12px] p-6 md:p-8"
+        >
+          <div className="text-[11px] font-mono uppercase tracking-[0.08em] text-[#a1a1aa] mb-4">
+            What SeldonFrame doesn&apos;t reproduce
+          </div>
+          <ul className="space-y-3">
+            {drops.map((item) => (
+              <li key={item} className="flex items-start gap-2.5 text-[14px] text-[#a1a1aa] leading-[1.55]">
+                <span className="text-[#71717a] font-bold mt-[2px] shrink-0">✗</span>
+                {item}
+              </li>
+            ))}
+          </ul>
+        </motion.div>
+      </div>
+    </section>
+  );
+};
+
+// v1.45.0 — BuildFromPrimitives — surfaces the meta-positioning.
+// Every feature GHL ships as a one-size template, SeldonFrame ships
+// as a Claude Code primitive. Agencies build per-client agents in
+// minutes from these primitives. Customization is the product.
+const BuildFromPrimitives = () => {
+  const capabilities = [
+    {
+      title: "Missed-call text back",
+      body: "Build per client. HVAC emergency-aware vs dental insurance-pre-qual vs salon stylist-preference capture.",
+    },
+    {
+      title: "Review-request automation",
+      body: "Post-completed-job SMS or email with the client's Google review link. Per-vertical timing logic.",
+    },
+    {
+      title: "Speed-to-lead agent",
+      body: "Inbound lead → response within seconds. Vertical-tuned qualifying questions, SMS + email + voice handoff.",
+    },
+    {
+      title: "Voice agent",
+      body: "Twilio + LiveKit + OpenAI Realtime. BYO keys; we orchestrate the agent via MCP. Per-client voice persona.",
+    },
+    {
+      title: "Quiz funnels",
+      body: "5-step lead-quiz funnel for a medspa client's botox-readiness check. Or a dental insurance eligibility quiz.",
+    },
+    {
+      title: "Multi-touch sequences",
+      body: "7-30 day SMS + email nurture flows. Vertical-aware copy. Conditional branching via natural-language rules.",
+    },
+  ];
+
+  return (
+    <section className="py-[64px] md:py-[100px] px-5 md:px-12 max-w-[1180px] mx-auto">
+      <div className="text-center mb-12">
+        <h2 className="text-[clamp(28px,4vw,40px)] font-bold tracking-[-0.035em] leading-[1.1] mb-3 text-[#fafafa]">
+          Build anything on top of the stack
+        </h2>
+        <p className="text-[16px] text-[#a1a1aa] max-w-[680px] mx-auto leading-[1.65]">
+          Every feature GHL ships as a one-size template, SeldonFrame
+          ships as a Claude Code primitive. Build it per client, in
+          minutes, no coding. BYO Twilio, OpenAI, Anthropic.
+          $0.02 per agent turn.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {capabilities.map((cap, i) => (
+          <motion.div
+            key={cap.title}
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-80px" }}
+            transition={{ delay: i * 0.06, duration: 0.4 }}
+            className="bg-[#0d0d10] border border-white/5 rounded-[10px] p-5 hover:border-[#1FAE85]/30 transition-colors"
+          >
+            <h3 className="text-[15px] font-semibold text-[#fafafa] mb-2 tracking-[-0.01em]">
+              {cap.title}
+            </h3>
+            <p className="text-[13px] text-[#a1a1aa] leading-[1.6]">{cap.body}</p>
+          </motion.div>
+        ))}
+      </div>
+    </section>
+  );
+};
+
+// v1.45.0 — RedditProof — paraphrased Reddit pain points from
+// r/gohighlevel + r/agency (May 2026), surfaced as honest agency
+// trust signals. Anchors the comparison in real-world evidence vs
+// abstract marketing claims.
+const RedditProof = () => (
+  <section className="py-[40px] md:py-[60px] px-5 md:px-12 max-w-[980px] mx-auto">
+    <div className="grid md:grid-cols-2 gap-4">
+      <motion.blockquote
+        initial={{ opacity: 0, y: 16 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: "-80px" }}
+        transition={{ duration: 0.5 }}
+        className="bg-[#0d0d10] border border-white/5 rounded-[10px] p-5 md:p-6"
+      >
+        <p className="text-[14px] text-[#fafafa] leading-[1.6] mb-3">
+          &ldquo;GHL became a complicated mess. The learning curve is
+          real. Tutorials are not great.&rdquo;
+        </p>
+        <footer className="text-[11px] font-mono text-[#71717a] uppercase tracking-[0.05em]">
+          paraphrased from r/gohighlevel, May 2026
+        </footer>
+      </motion.blockquote>
+
+      <motion.blockquote
+        initial={{ opacity: 0, y: 16 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: "-80px" }}
+        transition={{ duration: 0.5, delay: 0.1 }}
+        className="bg-[#0d0d10] border border-white/5 rounded-[10px] p-5 md:p-6"
+      >
+        <p className="text-[14px] text-[#fafafa] leading-[1.6] mb-3">
+          &ldquo;8 of 8 Zapier zaps broke in 2 weeks. Two weeks of
+          leads to manually recover.&rdquo;
+        </p>
+        <footer className="text-[11px] font-mono text-[#71717a] uppercase tracking-[0.05em]">
+          paraphrased from r/agency, May 2026
+        </footer>
+      </motion.blockquote>
+    </div>
+  </section>
+);
+
+// v1.45.0 — Roadmap — Q3 / Q4 2026 ship list. Honest transparency
+// on what's not yet shipped. Reduces objection-handling on sales
+// calls; signals momentum.
+const Roadmap = () => {
+  const q3 = [
+    "Missed-call text back recipe (Twilio webhook + skill pack)",
+    "Review-request automation recipe (post-job SMS/email)",
+    "Speed-to-lead agent recipe",
+    "Multi-touch SMS/email sequence primitive",
+    "Voice agent (Twilio + LiveKit + OpenAI Realtime, BYOK)",
+  ];
+  const q4 = [
+    "Marketplace: agencies sell skill packs to other agencies (revenue share)",
+    "Vertical skill-pack library (HVAC, dental, real-estate deeper logic)",
+    "Voice agent setup wizard (one-command BYOK telco configuration)",
+    "Branded mobile app option",
+  ];
+
+  return (
+    <section className="py-[64px] md:py-[100px] px-5 md:px-12 max-w-[1100px] mx-auto">
+      <div className="text-center mb-12">
+        <h2 className="text-[clamp(28px,4vw,40px)] font-bold tracking-[-0.035em] leading-[1.1] mb-3 text-[#fafafa]">
+          Roadmap
+        </h2>
+        <p className="text-[16px] text-[#a1a1aa] max-w-[620px] mx-auto leading-[1.65]">
+          What&apos;s shipping next. Build along with us — every recipe
+          ships as an open-source skill pack you can fork or extend.
+        </p>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-5">
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-80px" }}
+          transition={{ duration: 0.5 }}
+          className="bg-[#0d0d10] border border-white/5 rounded-[12px] p-6 md:p-7"
+        >
+          <div className="text-[11px] font-mono uppercase tracking-[0.08em] text-[#1FAE85] mb-4">
+            Shipping Q3 2026
+          </div>
+          <ul className="space-y-2.5">
+            {q3.map((item) => (
+              <li key={item} className="flex items-start gap-2.5 text-[13.5px] text-[#a1a1aa] leading-[1.55]">
+                <span className="text-[#1FAE85] mt-[2px] shrink-0">→</span>
+                {item}
+              </li>
+            ))}
+          </ul>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-80px" }}
+          transition={{ duration: 0.5, delay: 0.1 }}
+          className="bg-[#0d0d10] border border-white/5 rounded-[12px] p-6 md:p-7"
+        >
+          <div className="text-[11px] font-mono uppercase tracking-[0.08em] text-[#a1a1aa] mb-4">
+            Shipping Q4 2026
+          </div>
+          <ul className="space-y-2.5">
+            {q4.map((item) => (
+              <li key={item} className="flex items-start gap-2.5 text-[13.5px] text-[#a1a1aa] leading-[1.55]">
+                <span className="text-[#71717a] mt-[2px] shrink-0">→</span>
+                {item}
+              </li>
+            ))}
+          </ul>
+        </motion.div>
+      </div>
+    </section>
+  );
+};
+
 // v1.32.0 — FinalCTA rewritten for the install-MCP funnel + 12yo
-// language. Drops "Clone. Scaffold. Deploy." which assumed a developer
-// audience; this new copy works for any operator who has Claude Code.
+// language. v1.45.0 — agency-buyer emotional rewire ("build the
+// agency you wanted to build").
 const FinalCTA = () => (
   <section className="text-center py-[80px] px-5 md:px-12 border-t border-white/5 max-w-[1180px] mx-auto">
     <h2 className="text-[clamp(28px,4vw,44px)] font-bold tracking-[-0.035em] leading-[1.1] mb-4 text-[#fafafa]">
-      Stop stitching. Start typing.
+      Build the agency you wanted to build.
     </h2>
-    <p className="text-[16px] text-[#a1a1aa] max-w-[560px] mx-auto mb-8 leading-[1.65]">
-      Install the MCP. Tell Claude Code about your business. Get a wired-up
-      website, calendar, intake form, CRM, and AI chatbot — in under five
-      minutes. Change anything by saying so.
+    <p className="text-[16px] text-[#a1a1aa] max-w-[640px] mx-auto mb-8 leading-[1.65]">
+      GHL ships templates. SeldonFrame ships primitives. Your agency
+      builds anything per client — landing pages, agents, voice
+      callbacks, sequences, funnels — via Claude Code in minutes.
+      Sell your best work in the marketplace (shipping Q4 2026).
+      Open source. AGPL-3.0. $0.02 per agent turn.
     </p>
     <div className="flex justify-center gap-3 flex-wrap">
       <a href="#install" className={`${PRIMARY_CTA_CLS} hover:-translate-y-[1px] px-[26px] py-3 text-[14px]`}>
@@ -1252,7 +1531,7 @@ const Footer = () => {
         ))}
       </div>
       <div className="text-[11px] text-[#3f3f46]">
-        © 2026 SeldonFrame. Open source under MIT License.
+        © 2026 SeldonFrame. Open source under AGPL-3.0.
       </div>
     </footer>
   );
@@ -1279,22 +1558,36 @@ export default function SeldonFrameLandingPage() {
       <Nav />
       <main>
         <Hero />
-        {/* v1.31.1 — replaced flat Personas + 6-up Features grid with
-            three "show, don't tell" feature stories alternating
-            image-left/right with CSS+SVG product mockups beside body
-            copy. Linear-style: pick a few features, show them in
-            motion, link to the relevant doc. */}
+        {/* v1.45.0 — agency-buyer love/hate split inserted before
+            FeatureStories to anchor the emotional comparison early.
+            Quotes the GoHighLevel pain points the page rewires
+            against. */}
+        <WhyGHLAgenciesSwitch />
+        {/* v1.31.1 — three "show, don't tell" feature stories
+            alternating image-left/right. v1.45.0 — body copy
+            rewritten for agency-buyer ("client" not "your business")
+            and Story 3 surfaces the "unlimited customization per
+            client" framing. */}
         <FeatureStories />
+        {/* v1.45.0 — BuildFromPrimitives surfaces the meta-positioning
+            (primitives, not features) with 6 concrete capability
+            cards (missed-call, reviews, speed-to-lead, voice, quiz
+            funnels, sequences). BYOK + $0.02/turn called out. */}
+        <BuildFromPrimitives />
         <HowItWorks />
-        {/* v1.31.3 — replaced the centered "See it built" CTA card
-            with a two-column case study (narrative + 4-stat grid) +
-            a "replaces" comparison row showing the 5-tool stack
-            consolidating into one SF workspace. Honest framing of
-            Desert Cool HVAC as a worked example, not a fabricated
-            customer. */}
+        {/* v1.45.0 — Reddit-paraphrased proof quotes above the
+            CaseStudy. Anchors comparison in real-world evidence. */}
+        <RedditProof />
+        {/* v1.31.3 — Desert Cool HVAC worked example. v1.45.0 —
+            reframed from operator-buyer to agency-buyer (the agency
+            deploys for the client; the previous stack was the
+            agency's, not the operator's). */}
         <CaseStudy />
         <Replaces />
         <Pricing />
+        {/* v1.45.0 — Roadmap section, Q3/Q4 2026 ships. Honest
+            transparency on what's not yet shipped. */}
+        <Roadmap />
         <Infrastructure />
         <FinalCTA />
       </main>
