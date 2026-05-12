@@ -12,22 +12,22 @@ import { MarketingFaq } from "@/components/marketing/faq";
 import SeldonFrameLandingPage from "./landing-client";
 
 export const metadata: Metadata = {
-  title: "SeldonFrame — AI-native Business OS you build with natural language",
+  title: "SeldonFrame — Open-source alternative to GoHighLevel",
   description:
-    "Composable primitives to create customized business operating systems — branded portals, smart agents, automated workflows — for yourself or your clients.",
+    "Pre-wired client ops stack agencies deploy per client in minutes. CRM, booking, intake, and AI chatbot — already connected, no Zapier required. Free tier, AGPL-3.0, MCP-native via Claude Code.",
   openGraph: {
-    title: "SeldonFrame — AI-native Business OS",
+    title: "SeldonFrame — Open-source alternative to GoHighLevel",
     description:
-      "Build a complete AI-native Business OS with natural language. Open source. MCP-native. Free tier · Growth $29/mo · Scale $99/mo + usage.",
+      "Pre-wired client ops stack agencies deploy per client in minutes. CRM, booking, intake, AI chatbot — already connected. Open source. Free tier · Growth $29/mo · Scale $99/mo.",
     type: "website",
-    url: "https://app.seldonframe.com",
+    url: "https://seldonframe.com",
     images: [{ url: "/brand/og-image.png", width: 1200, height: 630 }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "SeldonFrame — AI-native Business OS",
+    title: "SeldonFrame — Open-source alternative to GoHighLevel",
     description:
-      "Build a complete AI-native Business OS with natural language.",
+      "Pre-wired client ops stack agencies deploy per client in minutes. CRM, booking, intake, AI chatbot — already connected.",
     images: ["/brand/twitter-card.png"],
   },
 };

@@ -4,18 +4,14 @@
 // on-page text MUST match the schema text exactly — Google's
 // structured-data validator drops the schema otherwise.
 //
-// Targets the highest-intent searches per the seldonframe-seo
-// research session (output/drafts/2026-05-11-geo-research-session-1):
-//   - "What is SeldonFrame"
-//   - "How does 3-minute generation work"
-//   - "What is MCP-native"
-//   - "Is SeldonFrame free"
-//   - "Can SeldonFrame replace Hubspot Calendly Wix"
-//   - "Which industries does SeldonFrame support"
-//   - "Where can I see a live demo"
+// Audience: agencies and freelancers (1-5 person shops) evaluating
+// SeldonFrame as an alternative to GoHighLevel for client ops
+// deployment. Operator-targeted questions (the prior version of
+// this file) were removed in the May 2026 repositioning — those
+// remain useful for end-operator marketing but belong on per-
+// vertical pages, not the agency-buyer homepage.
 //
-// Server-rendered (no client features). Imported into the
-// (public) marketing route group.
+// Server-rendered (no client features).
 
 type FaqEntry = {
   question: string;
@@ -24,39 +20,39 @@ type FaqEntry = {
 
 const FAQS: FaqEntry[] = [
   {
-    question: "What is SeldonFrame?",
+    question: "How does SeldonFrame compare to GoHighLevel?",
     answer:
-      "SeldonFrame is an open-source, MCP-native Business OS. It generates a complete operator stack — website, booking page, intake form, CRM, and AI receptionist — from a single Google Maps paste in about 3 minutes. The platform is designed for local service businesses like HVAC contractors, plumbers, electricians, dental practices, and real estate agents.",
+      "SeldonFrame is the open-source alternative to GoHighLevel. Both bundle CRM, booking, and chatbot for agencies serving local service businesses. The difference is deployment time and cost. GoHighLevel requires days to weeks of configuration per client and costs $97-$497/month per agency before white-label add-ons. SeldonFrame generates a pre-wired client stack from one Claude Code prompt in about 3 minutes, ships a free tier with no credit card, and is AGPL-3.0 if you want to self-host.",
   },
   {
-    question: "How does the 3-minute Business OS generation work?",
+    question: "How long does it take to deploy a client ops stack?",
     answer:
-      "You install the SeldonFrame MCP server in Claude Code with one command (claude mcp add seldonframe -- npx -y @seldonframe/mcp@latest), paste a public Google Maps listing into Claude Code, and run the create_workspace_from_google_paste tool. The MCP server detects the vertical, picks the right aesthetic archetype, and generates all five Business OS surfaces in roughly 3 minutes. The workspace is live at a subdomain on app.seldonframe.com immediately.",
+      "Approximately 3 minutes from a single Claude Code prompt. The SeldonFrame MCP server generates the CRM with vertical-specific pipeline stages, a booking page wired to the client's hours and timezone, an intake form with vertical-specific fields, and an AI chatbot that books appointments against the real calendar. All four surfaces share one database and are pre-wired on generation. No Zapier, no webhooks to configure, no integration work.",
   },
   {
-    question: "What does MCP-native mean?",
+    question: "Can I white-label SeldonFrame for my agency clients?",
     answer:
-      "MCP-native means every action an operator can take through the SeldonFrame dashboard is exposed as a Model Context Protocol tool that AI agents like Claude Code can call directly. The dashboard UI is a thin layer over the same tool surface — the AI agent and the human operator use the same primitives. This is different from MCP-enabled platforms that bolt an MCP connector onto an existing product.",
+      "Yes. Each generated workspace runs on its own subdomain (client-slug.app.seldonframe.com) or a custom domain on the Growth and Scale tiers. Per-workspace branding includes logo, colors, hero copy, and the chatbot's voice — the client sees their own brand, not SeldonFrame's. Full agency-tier dashboard white-label (operator portal without SeldonFrame chrome) is on the Q3 2026 roadmap. Until then, agencies typically present the per-workspace surface to clients and manage the agency-side workflow themselves.",
   },
   {
-    question: "Is SeldonFrame really free?",
+    question: "Is SeldonFrame really free for agencies?",
     answer:
-      "Yes. The Free tier includes 1 complete workspace with all five Business OS surfaces — website, booking page, intake form, CRM, and AI receptionist. No credit card required. You bring your own LLM key (BYOK) so you pay your own Anthropic or OpenAI bill for the AI receptionist's tokens, with no SeldonFrame token margin. The Growth tier at $29/month covers 3 workspaces and Scale at $99/month is unlimited.",
+      "The Free tier covers 1 complete workspace with CRM, booking, intake form, and AI chatbot. No credit card required. Growth at $29/month covers 3 workspaces — designed for solo agencies serving 2-3 clients. Scale at $99/month is unlimited workspaces — designed for agencies serving 5+ clients. You bring your own LLM key (BYOK) so you pay your own Anthropic or OpenAI bill with no SeldonFrame token margin, typically $3-$15/month per active workspace. Or self-host under AGPL-3.0 for $0.",
   },
   {
-    question: "Can SeldonFrame replace Hubspot, Calendly, and Wix?",
+    question: "What can agencies charge clients using SeldonFrame?",
     answer:
-      "Yes for local service businesses. SeldonFrame replaces Hubspot's CRM, Calendly's booking page, Wix's website, the intake form, and the standalone AI receptionist with one unified workspace. The five surfaces share one database — the chatbot reads the same calendar the booking page uses, the form writes to the same CRM the operator logs into. No Zapier glue. For enterprise sales teams with multi-touch nurture sequences, Hubspot remains the right call.",
+      "Reddit and freelance-community data from May 2026 shows agencies typically charge $2,500-$7,000 setup plus $500-$1,500/month retainer for a CRM + booking + intake + chatbot stack built on GoHighLevel or a Webflow + Calendly + HubSpot + Zapier combination. Your cost to generate the equivalent on SeldonFrame is approximately 3 minutes of agency time plus a few cents of LLM tokens. The margin is yours; SeldonFrame doesn't take a cut of agency-to-client billing.",
   },
   {
-    question: "Which industries does SeldonFrame support?",
+    question: "What verticals does SeldonFrame support?",
     answer:
-      "SeldonFrame ships 20+ vertical archetypes. Trades use bold-urgency (HVAC contractors, plumbers, electricians, roofers, locksmiths). Aesthetic verticals use cinematic-aspirational (medspas, salons). Medical and legal use clinical-trust (dental practices, chiropractors, attorneys, accountants). Creative verticals use editorial-warm (real estate agents, photographers). Each archetype changes the website hero, the intake form fields, the booking defaults, and the chatbot tone.",
+      "SeldonFrame ships 20+ vertical archetypes that change hero copy, intake fields, pipeline stages, and chatbot tone automatically. Trades use bold-urgency (HVAC, plumbers, electricians, roofers, locksmiths). Medical and legal use clinical-trust (dental practices, chiropractors, attorneys, accountants). Beauty verticals use cinematic-aspirational (medspas, salons). Creative verticals use editorial-warm (real estate agents, photographers). The MCP server detects the right archetype automatically from the client's business description.",
   },
   {
-    question: "Where can I see a live demo?",
+    question: "Do I need to know Claude Code to use SeldonFrame?",
     answer:
-      "A real HVAC contractor workspace is live at phoenix-ac-air-conditioning-heating-inc.app.seldonframe.com. It was generated in 3 minutes from a public Google Maps listing. The chatbot books real appointments in the America/Phoenix timezone. You can click the chat widget bottom-right and ask for a drain repair — the full flow runs in under 30 seconds.",
+      "Claude Code is the canonical agency interface — install the MCP with one command (claude mcp add seldonframe -- npx -y @seldonframe/mcp@latest), then describe the client in natural language. No integration code, no Zapier, no glue work. A web dashboard exists for non-Claude-Code users at app.seldonframe.com, but agencies that adopt the Claude Code workflow deploy 5-10x faster because structural changes that take 15 clicks in a dashboard happen in one sentence via MCP.",
   },
 ];
 
@@ -87,7 +83,7 @@ export function MarketingFaq() {
         Frequently asked questions
       </h2>
       <p className="mt-3 text-center text-sm text-muted-foreground md:text-base">
-        What operators ask before installing SeldonFrame.
+        What agencies and freelancers ask before installing SeldonFrame.
       </p>
 
       <div className="mt-10 divide-y divide-border rounded-2xl border border-border bg-card/40">

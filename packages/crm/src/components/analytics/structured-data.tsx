@@ -53,7 +53,7 @@ const organizationSchema = {
   url: "https://seldonframe.com",
   logo: "https://seldonframe.com/brand/seldonframe-icon.svg",
   description:
-    "Open-source, MCP-native Business OS. Generates a complete operator stack — website, booking page, intake form, CRM, and AI receptionist — from a single Google Maps paste in approximately 3 minutes.",
+    "Open-source alternative to GoHighLevel. SeldonFrame generates a pre-wired client operations stack — CRM, booking page, intake form, and AI chatbot — that agencies deploy per client in minutes. Built for freelance web designers and small agencies serving local service businesses.",
   sameAs: [
     "https://github.com/seldonframe/seldonframe",
     "https://www.npmjs.com/package/@seldonframe/mcp",
@@ -78,9 +78,9 @@ const softwareApplicationSchema = {
   "@type": "SoftwareApplication",
   name: "SeldonFrame",
   applicationCategory: "BusinessApplication",
-  operatingSystem: "Web, Self-hosted (Next.js)",
+  operatingSystem: "Web, Self-hosted (Next.js, AGPL-3.0)",
   description:
-    "MCP-native Business OS that generates a complete operator stack — website, booking page, intake form, CRM, and AI receptionist — from a single Google Maps paste in approximately 3 minutes. Built for local service businesses including HVAC contractors, plumbers, electricians, dental practices, real estate agents, and more.",
+    "Open-source alternative to GoHighLevel. SeldonFrame is a pre-wired client operations stack — CRM, booking page, intake form, and AI chatbot — that agencies deploy per client in minutes via Claude Code and the @seldonframe/mcp server. Everything is connected on generation: the chatbot books against the real calendar, the intake form writes to the real CRM, the booking page respects the client's hours and timezone. No Zapier, no integration work. Built for freelance web designers and small agencies serving local service businesses including HVAC contractors, plumbers, electricians, dental practices, salons, and roofers.",
   offers: [
     {
       "@type": "Offer",
@@ -88,7 +88,7 @@ const softwareApplicationSchema = {
       price: "0",
       priceCurrency: "USD",
       description:
-        "Free tier: 1 workspace with all 5 Business OS surfaces. BYOK LLM keys, no token margin.",
+        "Free tier: 1 complete client workspace (CRM, booking, intake, AI chatbot). No credit card. BYOK LLM keys, no token margin.",
     },
     {
       "@type": "Offer",
@@ -96,7 +96,7 @@ const softwareApplicationSchema = {
       price: "29",
       priceCurrency: "USD",
       description:
-        "Growth tier: 3 workspaces, custom domains, designed for solo agencies.",
+        "Growth tier: 3 client workspaces, custom domains. Designed for solo agencies serving 2-3 clients.",
     },
     {
       "@type": "Offer",
@@ -104,7 +104,7 @@ const softwareApplicationSchema = {
       price: "99",
       priceCurrency: "USD",
       description:
-        "Scale tier: unlimited workspaces, designed for agencies serving multiple clients.",
+        "Scale tier: unlimited client workspaces. Designed for agencies serving 5+ clients.",
     },
   ],
   url: "https://seldonframe.com",
