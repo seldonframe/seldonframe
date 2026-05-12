@@ -53,6 +53,35 @@ export default async function PublicLandingPage({
   //      controlled globally.
   const publicTheme = { ...theme, mode: "light" as const };
 
+  // v1.44.0 — priority flipped: prefer sections (React PageRenderer with
+  // hero-template dispatch + Framer Motion) when populated. Fall back to
+  // the legacy contentHtml static-HTML render only when sections is
+  // empty/null. Reason: sections is the richer path — it dispatches to
+  // HERO_TEMPLATES[template] via hero.tsx for hero blocks, and falls
+  // through to default React components for everything else. contentHtml
+  // is the v1.4 per-block builder's output, kept for backward compat
+  // with workspaces that haven't been re-built since v1.44 deployed.
+  const sections =
+    (payload.page.sections as LandingSection[] | null | undefined) ?? [];
+  const useSectionsRenderer = sections.length > 0;
+
+  if (useSectionsRenderer) {
+    return (
+      <PublicThemeProvider theme={publicTheme}>
+        <main className="light min-h-screen" style={{ backgroundColor: "var(--sf-bg)", color: "var(--sf-text)" }}>
+          <PageRenderer sections={sections} />
+          {showBadge ? (
+            <div className="flex justify-center py-4" style={{ borderTop: "1px solid var(--sf-border)", backgroundColor: "color-mix(in oklab, var(--sf-bg) 92%, var(--sf-accent) 8%)" }}>
+              <PoweredByBadge />
+            </div>
+          ) : null}
+          <VisitBeacon pageId={payload.page.id} />
+          {chatbotEmbed ? <ChatbotEmbedScript embedUrl={chatbotEmbed.embedUrl} /> : null}
+        </main>
+      </PublicThemeProvider>
+    );
+  }
+
   if (payload.page.contentHtml && payload.page.contentCss) {
     return (
       <PublicThemeProvider theme={publicTheme}>
@@ -71,10 +100,13 @@ export default async function PublicLandingPage({
     );
   }
 
+  // Last-resort: empty page when neither sections nor contentHtml exist.
+  // PageRenderer renders nothing for an empty array, which is the correct
+  // visual state for a workspace that hasn't been enhanced yet.
   return (
     <PublicThemeProvider theme={publicTheme}>
       <main className="light min-h-screen" style={{ backgroundColor: "var(--sf-bg)", color: "var(--sf-text)" }}>
-        <PageRenderer sections={(payload.page.sections as LandingSection[]) ?? []} />
+        <PageRenderer sections={[]} />
         {showBadge ? (
           <div className="flex justify-center py-4" style={{ borderTop: "1px solid var(--sf-border)", backgroundColor: "color-mix(in oklab, var(--sf-bg) 92%, var(--sf-accent) 8%)" }}>
             <PoweredByBadge />

@@ -59,7 +59,18 @@ props:
     type: enum
     required: false
     enum: ["split-image-right", "full-bleed", "founder-portrait", "cinematic-aura"]
-    description: 'Layout variant. "full-bleed" works for ~95% of cases. v1.41.0 — "cinematic-aura" auto-applied by the orchestrator for agency + cinematic-aspirational archetypes (loops a Pexels MP4 with liquid-glass chrome + Instrument Serif). The LLM should not pick cinematic-aura explicitly; the archetype routing does it.'
+    description: 'LEGACY layout variant. Prefer `template` for new workspaces — that uses the v1.43.0 hero template registry which produces production-quality designs. Variant kept as a fallback for the legacy static-HTML render path.'
+  template:
+    type: enum
+    required: false
+    enum:
+      - cinematic-aura
+      - viktor-light
+      - velorah-editorial
+      - nexora-light
+      - securify-bold
+      - stellar-tabs-white
+    description: 'v1.44.0 — Hero template id. PICK ONE OF THESE FOR EVERY HERO unless the workspace is a tradesman / emergency-service business. The template controls the entire visual look of the hero — picking the right template matters more than perfect copy. See "Template catalog" below for what each one does + when to use it.'
 validators:
   - rule: headline_quantified
     severity: error
@@ -180,6 +191,73 @@ executive coaching. 12 years' practice.
   "variant": "founder-portrait"
 }
 ```
+
+## Template catalog — pick ONE for the `template` field (v1.44.0)
+
+The template controls the FULL visual treatment of the hero. Picking the
+right template matters more than perfect copy. Match the archetype FIRST,
+then the niche signal SECOND.
+
+- **cinematic-aura** — DARK + looping Pexels video + Instrument Serif
+  italic + cyan-gradient shimmery word. For: luxe coaching, medspa,
+  wellness, fitness, premium salons, lifestyle. Sensory + aspirational.
+- **velorah-editorial** — DARK + looping Pexels video + deep-navy wash
+  + serif italic emphasis (softer than cinematic-aura, no gradient).
+  For: luxe service businesses, premium coaches, creative studios that
+  want cinematic motion without SaaS-shiny treatment.
+- **viktor-light** — WHITE + Instrument Serif italic accents + narrow
+  centered column + NO video. For: solo coaches, indie founders,
+  freelance creatives, boutique agencies. Light editorial restraint.
+- **nexora-light** — WHITE + Instrument Serif italic emphasis + custom
+  CRM+booking dashboard mockup embedded below CTA. NO background video.
+  For: B2B SaaS founders, productivity tools, agencies that run client
+  back-office. The dashboard mockup IS the visual.
+- **securify-bold** — PURE BLACK + looping Pexels video + HUGE staggered
+  typography (3 chunks at corners-and-center) + stat blocks in corners.
+  For: dev tools, data security, AI infra, hard-tech SaaS. Confidence +
+  scale + no warmth.
+- **stellar-tabs-white** — WHITE + dark-to-gray gradient on headline
+  line 2 + 4-tab cycling product preview (Intake/Schedule/Convert/
+  Deliver). NO background video. For: AI workspace platforms,
+  multi-feature SaaS, productivity suites.
+
+### Archetype → template guidance
+
+- cinematic-aspirational (medspa/wellness/lifestyle/coaching) → **cinematic-aura** (default)
+  OR velorah-editorial when the brand wants editorial > sensory
+- technical-restrained (B2B/agency/consultancy) → **viktor-light** (default for
+  coach/agency) OR nexora-light (if the workspace IS a SaaS product) OR
+  stellar-tabs-white (if multi-feature AI tool) OR securify-bold (if dev tools)
+- editorial-warm (craft / family-owned) → **viktor-light**
+- clinical-trust (legal/dental/medical) → **nexora-light**
+- soft-residential (cleaning/landscape) → **viktor-light**
+- bold-urgency (HVAC/plumbing/locksmith) → **omit template** — tradesmen
+  fall back to the legacy split-image-right variant
+- brutalist (creative studios) → **securify-bold**
+
+### Required field combinations per template
+
+| Template | Requires `background_video_query` | Uses `shiny_word` |
+| --- | --- | --- |
+| cinematic-aura | yes | yes (cyan gradient shimmer) |
+| velorah-editorial | yes | yes (serif italic muted) |
+| viktor-light | no | yes (serif italic muted) |
+| nexora-light | no | yes (serif italic muted) |
+| securify-bold | yes | no (3-chunk auto-split) |
+| stellar-tabs-white | no | yes (split point for gradient line 2) |
+
+When you pick a template that requires `background_video_query`, ALWAYS
+include one — pick motion-rich, niche-matched footage that conveys the
+operator's outcome, not a literal vertical photo. Examples:
+- fitness coach → "sunset beach running"
+- X-growth coach for indie devs → "code on screen close up" or
+  "phone scrolling social media"
+- medspa → "spa water reflection slow"
+- creative agency → "abstract design motion graphics"
+- dev tools → "data center server racks" or "terminal cursor blinking"
+
+**Tie-break rule:** when unsure between two templates, pick LIGHTER for
+B2B/agency/coach workspaces and DARKER for lifestyle/luxe.
 
 ## Output format
 

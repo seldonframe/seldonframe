@@ -138,6 +138,23 @@ export interface SectionHero {
   ctaSecondary?: CTA;
   imageUrl?: string | null;
   variant?: "split-image-right" | "full-bleed" | "founder-portrait";
+  // v1.44.0 — fields carried by the persist_block flow so the
+  // landing_pages.sections JSONB can render via the React template
+  // registry (HERO_TEMPLATES) instead of the legacy static-HTML path.
+  // Ignored by renderGeneralServiceV1 (the legacy renderer); consumed
+  // by lib/page-blocks/persist.ts when it ALSO writes the sections
+  // JSONB alongside contentHtml so the public page-renderer can
+  // dispatch to a hero template.
+  template?:
+    | "cinematic-aura"
+    | "viktor-light"
+    | "velorah-editorial"
+    | "nexora-light"
+    | "securify-bold"
+    | "stellar-tabs-white";
+  shinyWord?: string;
+  /** Pexels video search query — resolved to a real video URL in persist.ts. */
+  heroVideoQuery?: string;
 }
 
 export interface SectionTrustStrip {

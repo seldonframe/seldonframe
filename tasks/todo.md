@@ -27,12 +27,18 @@ with a checkable plan, gets ticked off as it ships, and ends with a review block
       Plan: [tasks/parallel-enhance-plan.md](./parallel-enhance-plan.md).
 
 - [x] **Hero template registry (5 new templates)** — shipped in v1.43.0.
-      Added viktor-light, velorah-editorial, nexora-light, securify-bold,
-      stellar-tabs-white as pre-built hero designs the LLM picks from
-      based on archetype + business signals. Templates are fat skills
-      (1 .tsx + 1 .md per template). Adding template #7 = 2 files,
-      zero existing-code churn. Live verification pending after merge.
       Plan: [tasks/hero-templates-plan.md](./hero-templates-plan.md).
+
+- [x] **persist_block ↔ template registry wiring** — shipped in v1.44.0.
+      Fixes the architectural disconnect where v1.43 templates lived in
+      enhance-blocks (server-side single-call path) but operator MCP flow
+      used persist_block (per-block, writes contentHtml). 5-file fix:
+      extends hero schema with template/shiny_word/background_video_query,
+      persist.ts now resolves Pexels + writes sections JSONB when template
+      is set, public page renderer prioritizes sections over contentHtml.
+      Output: every persist_block-built hero now renders via
+      HERO_TEMPLATES[template] React tree with Framer Motion + liquid
+      glass instead of legacy static HTML with Unsplash photo.
 
 ---
 

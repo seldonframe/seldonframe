@@ -56,8 +56,13 @@ import type {
   LandingSection,
   WeeklyHours,
 } from "@/lib/blueprint/types";
-import { resolveHeroImageUrlForQuery } from "@/lib/crm/personality-images";
+import {
+  resolveHeroImage,
+  resolveHeroImageUrlForQuery,
+} from "@/lib/crm/personality-images";
+import { searchPexelsVideo } from "@/lib/assets/pexels";
 import { getBlock, type BookingProps, type IntakeProps } from "./registry";
+import type { LandingPageSection } from "@/components/landing/sections/types";
 
 export interface PersistBlockInput {
   workspaceId: string;
@@ -231,17 +236,61 @@ async function persistLandingSectionBlock(
 
   let section = toSection(validatedProps);
 
-  // Hero-specific: resolve background_image_query → real Unsplash URL.
-  if (blockName === "hero") {
-    const query = (validatedProps as { background_image_query?: string })
+  // v1.44.0 — hero-specific asset resolution. We now resolve BOTH the
+  // Unsplash hero image (for legacy renders + heroImage prop) AND a
+  // Pexels video (for cinematic templates that need looping motion).
+  // Both fire in parallel via Promise.all so latency is just max(image,
+  // video) instead of image+video sequential.
+  let heroImageAttribution:
+    | LandingPageSection["content"]["heroImageAttribution"]
+    | undefined;
+  let heroVideoUrl: string | undefined;
+  let heroVideoAttribution:
+    | LandingPageSection["content"]["heroVideoAttribution"]
+    | undefined;
+  if (blockName === "hero" && section.type === "hero") {
+    const imageQuery = (validatedProps as { background_image_query?: string })
       .background_image_query;
-    if (query && section.type === "hero") {
+    const videoQuery = (validatedProps as { background_video_query?: string })
+      .background_video_query;
+    // Only fire the Pexels call when the chosen template actually uses
+    // a video (cinematic-aura, velorah-editorial, securify-bold). Light
+    // templates skip it — saves a Pexels call per workspace creation.
+    const templateUsesVideo = (() => {
+      const t = (validatedProps as { template?: string }).template;
+      return t === "cinematic-aura" || t === "velorah-editorial" || t === "securify-bold";
+    })();
+    const [imageResult, videoResult] = await Promise.allSettled([
+      imageQuery ? resolveHeroImage(imageQuery) : Promise.resolve(null),
+      videoQuery && templateUsesVideo
+        ? searchPexelsVideo(videoQuery, {
+            orientation: "landscape",
+            size: "medium",
+          })
+        : Promise.resolve(null),
+    ]);
+    if (imageResult.status === "fulfilled" && imageResult.value) {
+      section = { ...section, imageUrl: imageResult.value.url };
+      heroImageAttribution = imageResult.value.attribution;
+    } else if (imageQuery) {
+      // Fallback to the legacy URL-only resolver path that the pre-1.44
+      // code used (preserves behavior when resolveHeroImage returned a
+      // null result but the legacy resolver had a cached URL).
       try {
-        const url = await resolveHeroImageUrlForQuery(query);
-        section = { ...section, imageUrl: url };
+        const url = await resolveHeroImageUrlForQuery(imageQuery);
+        if (url) section = { ...section, imageUrl: url };
       } catch {
-        // resolveHeroImageUrlForQuery never throws today, but be defensive.
+        /* Soft-fail — empty image triggers the branded-gradient empty state. */
       }
+    }
+    if (videoResult.status === "fulfilled" && videoResult.value) {
+      heroVideoUrl = videoResult.value.url;
+      heroVideoAttribution = {
+        photographer_name: videoResult.value.attribution.photographer_name,
+        photographer_url: videoResult.value.attribution.photographer_url,
+        source_url: videoResult.value.attribution.source_url,
+        video_id: videoResult.value.attribution.video_id,
+      };
     }
   }
 
@@ -258,12 +307,34 @@ async function persistLandingSectionBlock(
   // Re-render the full landing.
   const { html, css } = renderGeneralServiceV1(replaced);
 
-  // Persist landing_pages update.
+  // v1.44.0 — when the hero carries a `template` field, ALSO populate
+  // landing_pages.sections with a LandingPageSection[] so the public
+  // page renderer can dispatch to the HERO_TEMPLATES registry instead
+  // of the legacy static-HTML path. We merge with any existing sections
+  // (enhance-blocks may have written them earlier) so non-hero sections
+  // stay intact.
+  const sectionsUpdate = await maybeBuildSectionsUpdate({
+    workspaceId,
+    landingPageId,
+    blockName,
+    section,
+    validatedProps,
+    heroImageAttribution,
+    heroVideoUrl,
+    heroVideoAttribution,
+  });
+
+  // Persist landing_pages update. When sectionsUpdate is non-null we
+  // also write to sections JSONB and NULL out contentHtml so the
+  // sections-based renderer wins (richer React tree with templates +
+  // Framer Motion). When sectionsUpdate is null (template not set) we
+  // keep the legacy static-HTML path intact.
   await db
     .update(landingPages)
     .set({
-      contentHtml: html,
-      contentCss: css,
+      ...(sectionsUpdate
+        ? { contentHtml: null, contentCss: null, sections: sectionsUpdate }
+        : { contentHtml: html, contentCss: css }),
       blueprintJson: replaced as unknown as Record<string, unknown>,
       updatedAt: new Date(),
     })
@@ -274,6 +345,79 @@ async function persistLandingSectionBlock(
   return (
     extractSectionHtml(html, sectionType as LandingSection["type"]) ?? html
   );
+}
+
+// v1.44.0 — when persist_block writes a hero with a `template` field,
+// also update landing_pages.sections JSONB so the React PageRenderer
+// can dispatch to HERO_TEMPLATES[template]. Loads the existing sections
+// array (which enhance-blocks may have populated) and upserts the
+// hero entry; returns null when no template is set (legacy path).
+async function maybeBuildSectionsUpdate(args: {
+  workspaceId: string;
+  landingPageId: string;
+  blockName: string;
+  section: LandingSection;
+  validatedProps: unknown;
+  heroImageAttribution: LandingPageSection["content"]["heroImageAttribution"] | undefined;
+  heroVideoUrl: string | undefined;
+  heroVideoAttribution: LandingPageSection["content"]["heroVideoAttribution"] | undefined;
+}): Promise<LandingPageSection[] | null> {
+  if (args.blockName !== "hero" || args.section.type !== "hero") return null;
+  const template = (args.validatedProps as { template?: string }).template;
+  if (!template) return null;
+
+  // Load existing sections (may have been populated by enhance-blocks
+  // during create_workspace_v2's server-side setup).
+  const [row] = await db
+    .select({ sections: landingPages.sections })
+    .from(landingPages)
+    .where(eq(landingPages.id, args.landingPageId))
+    .limit(1);
+  const existing = (row?.sections as LandingPageSection[] | null) ?? [];
+
+  const heroSection: LandingPageSection = {
+    type: "hero",
+    order: 1,
+    content: {
+      kicker: args.section.eyebrow,
+      headline: args.section.headline,
+      subheadline: args.section.subhead ?? "",
+      ctaText: args.section.ctaPrimary.label,
+      ctaLink: args.section.ctaPrimary.href,
+      secondaryCta: args.section.ctaSecondary
+        ? {
+            text: args.section.ctaSecondary.label,
+            link: args.section.ctaSecondary.href,
+          }
+        : undefined,
+      heroImage: args.section.imageUrl ?? "",
+      heroImageAttribution: args.heroImageAttribution,
+      heroVideo: args.heroVideoUrl ?? "",
+      heroVideoAttribution: args.heroVideoAttribution,
+      shinyWord: args.section.shinyWord,
+      template: template as LandingPageSection["content"]["template"],
+      variant: args.section.variant,
+    },
+  };
+
+  // Upsert the hero section (replace by type) while preserving any
+  // other sections enhance-blocks wrote (navbar, about, services, etc.).
+  // If existing has no hero, prepend; else replace.
+  const others = existing.filter((s) => s.type !== "hero");
+  if (existing.some((s) => s.type === "hero")) {
+    // Preserve other sections' order; just substitute hero in place.
+    return existing.map((s) => (s.type === "hero" ? heroSection : s));
+  }
+  // No prior hero — prepend after navbar if present, else at the front.
+  const navbarIdx = others.findIndex((s) => s.type === "navbar");
+  if (navbarIdx >= 0) {
+    return [
+      ...others.slice(0, navbarIdx + 1),
+      heroSection,
+      ...others.slice(navbarIdx + 1),
+    ];
+  }
+  return [heroSection, ...others];
 }
 
 // ─── surface: booking ───────────────────────────────────────────────────────

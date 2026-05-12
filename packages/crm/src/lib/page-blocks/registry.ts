@@ -135,6 +135,13 @@ const heroBlock: BlockDefinition<HeroProps> = {
     // background_image_query.
     imageUrl: null,
     variant: props.variant ?? "full-bleed",
+    // v1.44.0 — forward the new template-system fields so the React
+    // PageRenderer can dispatch to HERO_TEMPLATES[template] instead
+    // of the legacy static-HTML render path. heroVideo is resolved
+    // later in persist.ts via Pexels from background_video_query.
+    template: props.template,
+    shinyWord: props.shiny_word,
+    heroVideoQuery: props.background_video_query,
   }),
   validators: [
     (p) =>

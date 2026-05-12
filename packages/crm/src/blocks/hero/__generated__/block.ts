@@ -23,7 +23,23 @@ export const PropsSchema = z.object({
     "href": z.string()
   }).optional(),
   "background_image_query": z.string().min(2),
-  "variant": z.enum(["split-image-right", "full-bleed", "founder-portrait"] as const).optional()
+  "background_video_query": z.string().min(2).optional(),
+  "shiny_word": z.string().min(2).max(30).optional(),
+  "variant": z.enum(["split-image-right", "full-bleed", "founder-portrait"] as const).optional(),
+  // v1.44.0 — template id from hero-templates/registry.ts. When set, the
+  // public renderer dispatches to HERO_TEMPLATES[template] (cinematic-aura,
+  // viktor-light, velorah-editorial, nexora-light, securify-bold,
+  // stellar-tabs-white). Absent → renderer falls back to the legacy
+  // variant system. Hand-edited extension; matches the SKILL.md schema
+  // and will roundtrip through the next `pnpm blocks:emit` cleanly.
+  "template": z.enum([
+    "cinematic-aura",
+    "viktor-light",
+    "velorah-editorial",
+    "nexora-light",
+    "securify-bold",
+    "stellar-tabs-white",
+  ] as const).optional()
 });
 
 export type Props = z.infer<typeof PropsSchema>;
