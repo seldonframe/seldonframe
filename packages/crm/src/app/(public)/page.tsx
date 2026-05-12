@@ -7,6 +7,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
+import { MarketingFaq } from "@/components/marketing/faq";
 
 import SeldonFrameLandingPage from "./landing-client";
 
@@ -37,5 +38,10 @@ export default async function PublicHomePage() {
     redirect("/dashboard");
   }
 
-  return <SeldonFrameLandingPage />;
+  return (
+    <>
+      <SeldonFrameLandingPage />
+      <MarketingFaq />
+    </>
+  );
 }
