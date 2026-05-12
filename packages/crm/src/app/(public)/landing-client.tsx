@@ -1182,6 +1182,52 @@ const Pricing = () => {
           SeldonFrame connects to your Anthropic or OpenAI account directly. Per-run costs are visible in your admin dashboard. Every LLM call is tracked, attributed to the workflow run, and displayed alongside your agent traces.
         </p>
       </div>
+
+      {/* v1.46.0 — White-label SaaS reselling callout. Capability
+          audit showed the partner-agency chrome substitution system
+          is fully built (v1.17+) but the page was vague about what
+          it includes. Concrete sub-list anchors the Scale tier's
+          value vs GoHighLevel SaaS Mode ($497/mo + $497/mo branded
+          app add-on). */}
+      <div className="mt-5 p-6 md:px-[28px] md:py-[22px] bg-[#111113] border border-[#1FAE85]/30 rounded-[12px] text-left max-w-[660px] mx-auto">
+        <h4 className="text-[14px] font-semibold mb-[10px] text-[#fafafa]">
+          What &ldquo;full white-label SaaS reselling&rdquo; actually means.
+        </h4>
+        <p className="text-[13px] text-[#a1a1aa] leading-[1.65] mb-[14px]">
+          The Scale tier ($99/mo) ships partner-agency chrome
+          substitution — your brand replaces SeldonFrame&apos;s
+          throughout the operator-facing surface. Concretely:
+        </p>
+        <ul className="space-y-1.5 text-[13px] text-[#a1a1aa] leading-[1.55]">
+          <li className="flex items-start gap-2">
+            <span className="text-[#1FAE85] font-bold mt-[1px] shrink-0">✓</span>
+            Your brand name + logo + primary/accent colors across operator chrome
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-[#1FAE85] font-bold mt-[1px] shrink-0">✓</span>
+            Verified custom sender email (Resend integration, DNS-validated)
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-[#1FAE85] font-bold mt-[1px] shrink-0">✓</span>
+            DNS-verified agency-level custom domain (one for all your clients)
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-[#1FAE85] font-bold mt-[1px] shrink-0">✓</span>
+            Custom support email + URL throughout the dashboard
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-[#1FAE85] font-bold mt-[1px] shrink-0">✓</span>
+            Hide-Powered-By-SeldonFrame badge toggle
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-[#1FAE85] font-bold mt-[1px] shrink-0">✓</span>
+            Sub-account hierarchy (one agency master, unlimited client workspaces)
+          </li>
+        </ul>
+        <p className="text-[12px] text-[#71717a] leading-[1.6] mt-[14px]">
+          For comparison: GoHighLevel charges $497/mo for SaaS Mode and an additional $497/mo for the branded mobile app. Branded mobile app shipping Q4 2026 in SeldonFrame.
+        </p>
+      </div>
     </section>
   );
 };
@@ -1360,6 +1406,118 @@ const BuildFromPrimitives = () => {
   );
 };
 
+// v1.46.0 — AgentArchetypeLibrary — surfaces the 6 production-
+// ready agent archetypes shipped April 2026. The prior page
+// claimed these were "shipping Q3 2026" — wrong. They're in the
+// codebase at packages/crm/src/lib/agents/archetypes/ today, each
+// triggered by a specific event, eval-gated before publish, and
+// customizable per client via Claude Code. This section converts
+// the abstract "primitives" framing into 6 concrete agents an
+// agency can deploy in one prompt.
+const AgentArchetypeLibrary = () => {
+  const archetypes = [
+    {
+      name: "Speed-to-Lead",
+      tagline: "Inbound lead → text in seconds → qualify → book",
+      detail:
+        "Triggered by form.submitted. Texts the prospect via the Conversation Primitive runtime, qualifies them in natural language, extracts preferred appointment time + insurance, books the consultation, emails the confirmation. 5 steps. Validated determinism (5/5 probes converged on the same skeleton).",
+      trigger: "form.submitted",
+    },
+    {
+      name: "Review-Requester",
+      tagline: "Booking completed → email + SMS with review link",
+      detail:
+        "Triggered by booking.completed. Waits a reflect window (default 2 days), sends a warm review-request email with the configured Google/Yelp/internal review URL, waits 5 days, sends a shorter SMS reminder. FTC review-gating compliance flag built into the archetype.",
+      trigger: "booking.completed",
+    },
+    {
+      name: "Win-Back",
+      tagline: "Subscription cancelled → Stripe coupon + nurture",
+      detail:
+        "Triggered by subscription.cancelled. Creates a per-contact unique Stripe promotion code with max_redemptions: 1, waits 3 days, sends a warm brand-matched email with the code, waits 4 more days, sends an SMS reminder. Customer self-redeems at checkout — no auto-billing (chargeback risk + trust cost).",
+      trigger: "subscription.cancelled",
+    },
+    {
+      name: "Appointment-Confirm-SMS",
+      tagline: "Pre-appointment confirmation flow",
+      detail:
+        "Triggered ahead of scheduled bookings. Confirms with the customer, captures reschedule requests, updates the booking record. Reduces no-shows by surfacing scheduling conflicts before the operator's day starts.",
+      trigger: "scheduled.booking.upcoming",
+    },
+    {
+      name: "Daily-Digest",
+      tagline: "Operator end-of-day summary",
+      detail:
+        "Scheduled trigger (daily, operator timezone). Summarizes yesterday's new leads, closed deals, no-shows, and pending follow-ups. Email or SMS, configurable per operator. Keeps clients engaged with their workspace without requiring them to log in.",
+      trigger: "schedule.daily",
+    },
+    {
+      name: "Weather-Aware-Booking",
+      tagline: "Roofing/HVAC — booking with weather logic",
+      detail:
+        "Vertical-tuned for outdoor-service clients (roofers, HVAC, landscapers). Cross-references the booking date with weather forecasts and proactively reaches out to customers with weather-affected appointments to reschedule before they cancel. Vertical-specific copy per archetype.",
+      trigger: "booking.created + weather.forecast",
+    },
+  ];
+
+  return (
+    <section className="py-[64px] md:py-[100px] px-5 md:px-12 max-w-[1180px] mx-auto">
+      <div className="text-center mb-12">
+        <h2 className="text-[clamp(28px,4vw,40px)] font-bold tracking-[-0.035em] leading-[1.1] mb-3 text-[#fafafa]">
+          6 production-ready agent archetypes. Today.
+        </h2>
+        <p className="text-[16px] text-[#a1a1aa] max-w-[680px] mx-auto leading-[1.65]">
+          Each archetype: triggered by a specific event, runs the
+          conversation, calls the right MCP tools, ships eval-gated
+          (≥87.5% pass on 8 scenarios before publish). Customize the
+          copy and qualifying logic per client via Claude Code in
+          natural language. No coding.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {archetypes.map((a, i) => (
+          <motion.div
+            key={a.name}
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-80px" }}
+            transition={{ delay: i * 0.06, duration: 0.4 }}
+            className="bg-[#0d0d10] border border-white/5 rounded-[12px] p-5 md:p-6 hover:border-[#1FAE85]/30 transition-colors"
+          >
+            <div className="flex items-baseline justify-between mb-2 gap-2">
+              <h3 className="text-[15px] font-semibold text-[#fafafa] tracking-[-0.01em]">
+                {a.name}
+              </h3>
+              <span className="text-[9px] font-mono text-[#1FAE85] uppercase tracking-[0.05em] shrink-0">
+                live
+              </span>
+            </div>
+            <p className="text-[13px] text-[#fafafa] leading-[1.5] mb-3 font-medium">
+              {a.tagline}
+            </p>
+            <p className="text-[12px] text-[#a1a1aa] leading-[1.6] mb-3">
+              {a.detail}
+            </p>
+            <div className="font-mono text-[10px] text-[#71717a] tracking-[0.02em] pt-3 border-t border-white/5">
+              <span className="text-[#a1a1aa]">trigger:</span> {a.trigger}
+            </div>
+          </motion.div>
+        ))}
+      </div>
+
+      <div className="mt-10 text-center">
+        <p className="text-[13px] text-[#71717a] max-w-[600px] mx-auto leading-[1.65]">
+          More archetypes shipping Q3 + Q4 2026 (missed-call text
+          back, voice agent, quiz funnel). Or build your own —
+          archetypes are markdown skill packs you can fork, extend,
+          and sell on the marketplace.
+        </p>
+      </div>
+    </section>
+  );
+};
+
 // v1.45.0 — RedditProof — paraphrased Reddit pain points from
 // r/gohighlevel + r/agency (May 2026), surfaced as honest agency
 // trust signals. Anchors the comparison in real-world evidence vs
@@ -1405,48 +1563,66 @@ const RedditProof = () => (
 // v1.45.0 — Roadmap — Q3 / Q4 2026 ship list. Honest transparency
 // on what's not yet shipped. Reduces objection-handling on sales
 // calls; signals momentum.
+// v1.46.0 — Three-column rewrite. Capability audit (post-May 2026
+// brief) surfaced that 6 agent archetypes, the partner-agency
+// white-label system, the sequence runtime, and the marketplace
+// with Stripe payments are ALREADY SHIPPED — the prior version
+// understated. New left column shows what's available today; Q3
+// and Q4 columns list the genuinely-missing builds.
 const Roadmap = () => {
+  const today = [
+    "6 agent archetypes (Speed-to-Lead, Review-Requester, Win-Back, Weather-Aware-Booking, Daily-Digest, Appointment-Confirm-SMS)",
+    "Multi-touch SMS + email sequence runtime",
+    "White-label SaaS reselling (partner-agency chrome substitution)",
+    "Marketplace with Stripe-paid block buying + selling",
+    "Custom domain per client workspace",
+    "146-tool MCP surface, eval-gated agents (≥87.5% pass)",
+  ];
   const q3 = [
-    "Missed-call text back recipe (Twilio webhook + skill pack)",
-    "Review-request automation recipe (post-job SMS/email)",
-    "Speed-to-lead agent recipe",
-    "Multi-touch SMS/email sequence primitive",
-    "Voice agent (Twilio + LiveKit + OpenAI Realtime, BYOK)",
+    "Missed-call text back archetype (Twilio Voice webhook + recipe)",
+    "Voice agent infrastructure (Twilio + LiveKit + OpenAI Realtime, BYOK)",
+    "Quiz funnel archetype (multi-step + branching + lead scoring)",
+    "Sequence builder UX (visual composer over the existing runtime)",
+    "Partner-agency onboarding wizard (one-command brand setup)",
   ];
   const q4 = [
-    "Marketplace: agencies sell skill packs to other agencies (revenue share)",
     "Vertical skill-pack library (HVAC, dental, real-estate deeper logic)",
-    "Voice agent setup wizard (one-command BYOK telco configuration)",
+    "Voice agent BYOK setup wizard (Twilio + LiveKit + OpenAI in one flow)",
+    "Per-client agent observability dashboard",
     "Branded mobile app option",
+    "MCP-discoverable templates (search_archetypes by intent)",
   ];
 
   return (
-    <section className="py-[64px] md:py-[100px] px-5 md:px-12 max-w-[1100px] mx-auto">
+    <section className="py-[64px] md:py-[100px] px-5 md:px-12 max-w-[1240px] mx-auto">
       <div className="text-center mb-12">
         <h2 className="text-[clamp(28px,4vw,40px)] font-bold tracking-[-0.035em] leading-[1.1] mb-3 text-[#fafafa]">
-          Roadmap
+          What&apos;s shipped. What&apos;s shipping.
         </h2>
-        <p className="text-[16px] text-[#a1a1aa] max-w-[620px] mx-auto leading-[1.65]">
-          What&apos;s shipping next. Build along with us — every recipe
-          ships as an open-source skill pack you can fork or extend.
+        <p className="text-[16px] text-[#a1a1aa] max-w-[640px] mx-auto leading-[1.65]">
+          Honest transparency on what your agency can deploy today
+          versus what&apos;s on the build queue. Every recipe ships as
+          an open-source skill pack you can fork, extend, or sell on
+          the marketplace.
         </p>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-5">
+      <div className="grid md:grid-cols-3 gap-5">
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: "-80px" }}
           transition={{ duration: 0.5 }}
-          className="bg-[#0d0d10] border border-white/5 rounded-[12px] p-6 md:p-7"
+          className="bg-[#0d0d10] border border-[#1FAE85]/40 rounded-[12px] p-6 md:p-7 shadow-[0_0_30px_-10px_rgba(31,174,133,0.25)]"
         >
-          <div className="text-[11px] font-mono uppercase tracking-[0.08em] text-[#1FAE85] mb-4">
-            Shipping Q3 2026
+          <div className="text-[11px] font-mono uppercase tracking-[0.08em] text-[#1FAE85] mb-4 flex items-center gap-2">
+            <span className="size-1.5 rounded-full bg-[#1FAE85] shadow-[0_0_6px_rgba(31,174,133,0.7)]" />
+            Available today
           </div>
           <ul className="space-y-2.5">
-            {q3.map((item) => (
-              <li key={item} className="flex items-start gap-2.5 text-[13.5px] text-[#a1a1aa] leading-[1.55]">
-                <span className="text-[#1FAE85] mt-[2px] shrink-0">→</span>
+            {today.map((item) => (
+              <li key={item} className="flex items-start gap-2.5 text-[13.5px] text-[#fafafa] leading-[1.55]">
+                <span className="text-[#1FAE85] mt-[2px] shrink-0 font-bold">✓</span>
                 {item}
               </li>
             ))}
@@ -1461,11 +1637,31 @@ const Roadmap = () => {
           className="bg-[#0d0d10] border border-white/5 rounded-[12px] p-6 md:p-7"
         >
           <div className="text-[11px] font-mono uppercase tracking-[0.08em] text-[#a1a1aa] mb-4">
+            Shipping Q3 2026
+          </div>
+          <ul className="space-y-2.5">
+            {q3.map((item) => (
+              <li key={item} className="flex items-start gap-2.5 text-[13.5px] text-[#a1a1aa] leading-[1.55]">
+                <span className="text-[#a1a1aa] mt-[2px] shrink-0">→</span>
+                {item}
+              </li>
+            ))}
+          </ul>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-80px" }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+          className="bg-[#0d0d10] border border-white/5 rounded-[12px] p-6 md:p-7"
+        >
+          <div className="text-[11px] font-mono uppercase tracking-[0.08em] text-[#71717a] mb-4">
             Shipping Q4 2026
           </div>
           <ul className="space-y-2.5">
             {q4.map((item) => (
-              <li key={item} className="flex items-start gap-2.5 text-[13.5px] text-[#a1a1aa] leading-[1.55]">
+              <li key={item} className="flex items-start gap-2.5 text-[13.5px] text-[#71717a] leading-[1.55]">
                 <span className="text-[#71717a] mt-[2px] shrink-0">→</span>
                 {item}
               </li>
@@ -1574,6 +1770,13 @@ export default function SeldonFrameLandingPage() {
             cards (missed-call, reviews, speed-to-lead, voice, quiz
             funnels, sequences). BYOK + $0.02/turn called out. */}
         <BuildFromPrimitives />
+        {/* v1.46.0 — AgentArchetypeLibrary inserted to surface the 6
+            production-ready archetypes shipped April 2026. Converts
+            the abstract "primitives" framing into concrete pre-built
+            agents an agency can deploy in one prompt. Capability
+            audit (post-May 2026 brief) showed the prior page was
+            calling these Q3-2026 — wrong; they're live today. */}
+        <AgentArchetypeLibrary />
         <HowItWorks />
         {/* v1.45.0 — Reddit-paraphrased proof quotes above the
             CaseStudy. Anchors comparison in real-world evidence. */}
