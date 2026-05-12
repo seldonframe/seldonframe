@@ -1,29 +1,50 @@
-# Seldon Frame
+# SeldonFrame
 
-> Open source CRM framework that configures itself around your business model.
+> Open-source, MCP-native Business OS. Generate a complete website, booking page, intake form, CRM, and AI receptionist for a local service business in about 3 minutes from a single Google Maps paste.
 
-Build once, fork endlessly, and ship niche-specific CRM systems with your own voice, pipeline, and workflows.
+SeldonFrame is the all-in-one [AI website builder + CRM + booking calendar + intake forms + AI chatbot](https://seldonframe.com) for HVAC contractors, plumbers, electricians, dental practices, real estate agents, and other local service businesses. The platform is MCP-native: every action is exposed as a [Model Context Protocol](https://modelcontextprotocol.io) tool that [Claude Code](https://claude.com/claude-code) can call directly.
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/seldonframe/crm&env=DATABASE_URL,AUTH_SECRET,NEXTAUTH_SECRET,NEXTAUTH_URL,NEXT_PUBLIC_APP_URL,ANTHROPIC_API_KEY,NEXT_PUBLIC_DEMO_READONLY)
 ![Next.js](https://img.shields.io/badge/Next.js-16-black)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue)
+![MCP](https://img.shields.io/badge/MCP-native-purple)
 
-## Demo
+## Live demo
 
-![Seldon Frame Demo](public/demo/soul-setup.gif)
+A real HVAC contractor workspace generated in 3 minutes from a public Google Maps listing:
+**[phoenix-ac-air-conditioning-heating-inc.app.seldonframe.com](https://phoenix-ac-air-conditioning-heating-inc.app.seldonframe.com)**
+
+Open the live chatbot bottom-right and ask for a drain repair — it qualifies the lead, checks the booking calendar against `America/Phoenix` timezone, and writes the appointment to the CRM. End-to-end in under 30 seconds.
+
+## Install (Claude Code MCP)
+
+```bash
+claude mcp add seldonframe -- npx -y @seldonframe/mcp@latest
+```
+
+Then in Claude Code, paste a Google Maps business listing and say `create_workspace_from_google_paste`. Your [AI-native Business OS](https://seldonframe.com) is live in about 3 minutes.
+
+## Demo GIF
+
+![SeldonFrame Demo — paste a Google Maps listing, get a Business OS in 3 minutes](public/demo/soul-setup.gif)
 
 If the GIF does not load on your GitHub viewer, use the fallback notes in `DEMO_GIF.md`.
 
-## Why Seldon Frame
+## Why SeldonFrame
 
-Most OSS CRMs are finished products. Seldon Frame is a framework-first base you can shape into your own offer.
+Most local service businesses pay for 5 disconnected tools — website + booking page + intake form + CRM + AI chatbot — that don't share data. SeldonFrame is the [Hubspot alternative for local service businesses](https://seldonframe.com/alternatives/hubspot-business-os-approach) that replaces all five with one workspace.
 
-- Multi-tenant by default (`orgId` on core records)
-- AI-assisted Soul onboarding that changes labels, tone, stages, and branding
-- Headless API + modern dashboard out of the box
-- Public intake forms + webhook-ready submission flow
-- Demo read-only mode for safe live previews (`NEXT_PUBLIC_DEMO_READONLY=true`)
+- **MCP-native Business OS.** Every workspace surface is a [Claude Code-callable tool](https://seldonframe.com/blog/mcp-native-business-os). The dashboard is a polite human translation of the same calls — AI agents and humans use the same primitives.
+- **3-minute generation.** Paste a Google Maps listing into Claude Code, run one MCP tool, walk away. The website ranks in local search, the booking page accepts real appointments in the right timezone, the CRM is pre-seeded with the right vertical pipeline, and the chatbot is wired to book.
+- **20+ vertical archetypes.** Bold-urgency for HVAC and plumbing, cinematic-aspirational for medspas and salons, clinical-trust for dental and chiropractors, editorial-warm for real estate and photographers, and more.
+- **Chat-first AI receptionist.** A web-embedded chatbot that books real appointments against the live calendar. See [why chat-first beats phone-first](https://seldonframe.com/blog/chat-first-ai-receptionist-local-business) for local service businesses.
+- **Multi-tenant by default** (`orgId` on core records).
+- **AI-assisted Soul onboarding** that changes labels, tone, stages, and branding.
+- **Headless API + modern dashboard** out of the box.
+- **Public intake forms** + webhook-ready submission flow.
+- **Demo read-only mode** for safe live previews (`NEXT_PUBLIC_DEMO_READONLY=true`).
+- **MIT licensed.** Self-host or use the [hosted version at seldonframe.com](https://seldonframe.com).
 
 ## Ecosystem at a Glance
 
@@ -84,7 +105,7 @@ See `showcase/README.md` for usage details.
 
 ## Integrations
 
-Seldon Frame uses a typed adapter system in `packages/core/src/integrations`.
+SeldonFrame uses a typed adapter system in `packages/core/src/integrations`.
 
 | Tier | Integrations |
 | --- | --- |
@@ -212,4 +233,12 @@ MIT — see `LICENSE`.
 
 ---
 
-Built for developers, agencies, and builders who want to ship CRM systems faster.
+Built for developers, agencies, and local service business operators who want to ship a complete [Business OS](https://seldonframe.com) — website, booking, intake, CRM, and AI receptionist — from one Google Maps paste in 3 minutes.
+
+## Related reading
+
+- [What is an MCP-Native Business OS?](https://seldonframe.com/blog/mcp-native-business-os)
+- [Hubspot alternative for local service businesses](https://seldonframe.com/alternatives/hubspot-business-os-approach)
+- [AI receptionist for local service businesses: why chat-first beats phone-first](https://seldonframe.com/blog/chat-first-ai-receptionist-local-business)
+- [SeldonFrame on npm: @seldonframe/mcp](https://www.npmjs.com/package/@seldonframe/mcp)
+- [Live demo workspace: Phoenix HVAC](https://phoenix-ac-air-conditioning-heating-inc.app.seldonframe.com)

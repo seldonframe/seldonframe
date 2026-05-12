@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { Faq } from "@/components/faq";
 
 const BUSINESS_TYPES = ["coach", "therapist", "trainer", "consultant", "freelancer", "other"] as const;
 
@@ -257,6 +258,8 @@ export default function Page() {
               Clone on GitHub →
             </Link>
           </section>
+
+          <Faq />
 
           <footer className="mt-20 pb-8 text-center text-xs text-muted-foreground">
             <span>© 2026 SeldonFrame · </span>
