@@ -5371,6 +5371,216 @@ export const TOOLS = [
       return result;
     },
   },
+  // ─── v1.47.0 — Partner-agency onboarding (Build P1 #2) ─────────────────
+  //
+  // Thin MCP wrappers around the partner-agency API ops shipped in
+  // v1.17 - v1.20. The backend logic + state model already exist;
+  // these tools let Claude Code drive end-to-end agency setup in one
+  // conversation instead of routing the operator through dashboard
+  // pages.
+  //
+  // Canonical sequence Claude Code follows when an agency owner says
+  // "set up my agency brand":
+  //   1. register_partner_agency({ name, logo_url?, primary_color?, ... })
+  //      → returns agency_id + gated_pending flag
+  //   2. (optional) register_partner_agency_sender_domain({ agency_id,
+  //      domain }) → returns DNS records the operator adds at their
+  //      registrar
+  //   3. (after DNS propagates) verify_partner_agency_sender_domain(
+  //      { agency_id }) → polls Resend; flips verified_sender_at on
+  //      success so the agency's outbound emails can ship from
+  //      welcome@agency-domain.com
+  //   4. For each client workspace the agency manages:
+  //      attach_workspace_to_partner_agency({ workspace_id, agency_id })
+  //      → chrome substitution applies on next page load
+  //
+  // The full sequence + DNS gotchas + A2P 10DLC implications live in
+  // packages/crm/src/lib/partner-agencies/SETUP_GUIDE.md — point the
+  // operator there if they need depth beyond the tool descriptions.
+  {
+    name: "register_partner_agency",
+    description:
+      "Create a partner-agency entity for white-label SaaS reselling. STEP 1 of agency onboarding. " +
+      "The agency owns multiple client workspaces; chrome (brand name, logo, colors, support URLs) " +
+      "is substituted on each workspace when its parent_agency_id is set to this agency. " +
+      "Plan-gate: caller must own a workspace on the Scale tier ($99/mo). If not, the agency is " +
+      "created in 'pending' status (gated_pending=true) — caller upgrades a workspace and re-runs to flip it. " +
+      "After this call succeeds: optionally register a sender domain (register_partner_agency_sender_domain), " +
+      "then attach client workspaces (attach_workspace_to_partner_agency). " +
+      'Example: register_partner_agency({ name: "Acme Digital", primary_color: "#1FAE85", support_email: "help@acmedigital.com" })',
+    inputSchema: obj(
+      {
+        workspace_id: str(
+          "Workspace bearer that owns the agency. Falls back to default workspace if omitted.",
+        ),
+        name: str(
+          "Agency display name (2+ chars). Surfaces as the brand_name in operator-facing chrome.",
+        ),
+        slug: str(
+          "Optional URL-safe slug. Defaults to slugified name. Must be unique across all agencies.",
+        ),
+        logo_url: str(
+          "Optional logo URL (publicly accessible PNG/SVG). Replaces SeldonFrame logo in chrome.",
+        ),
+        primary_color: str(
+          "Optional brand primary color (hex, e.g. '#1FAE85'). Cascades to UI components.",
+        ),
+        accent_color: str(
+          "Optional brand accent color (hex). Used for secondary surfaces.",
+        ),
+        support_email: str(
+          "Optional support email shown in operator-facing chrome (e.g., 'help@acmedigital.com').",
+        ),
+        support_url: str(
+          "Optional support URL shown in chrome (e.g., 'https://acmedigital.com/help').",
+        ),
+        hide_powered_by_badge: {
+          type: "boolean",
+          description:
+            "Hide the 'Powered by SeldonFrame' footer badge. Defaults to false. Scale tier feature.",
+        },
+      },
+      ["name"],
+    ),
+    handler: async (a) => {
+      const ws = wsOrDefault(a.workspace_id);
+      return api("POST", "/partner-agencies", {
+        body: {
+          op: "register",
+          name: a.name,
+          slug: a.slug,
+          logo_url: a.logo_url,
+          primary_color: a.primary_color,
+          accent_color: a.accent_color,
+          support_email: a.support_email,
+          support_url: a.support_url,
+          hide_powered_by_badge: a.hide_powered_by_badge,
+        },
+        workspace_id: ws,
+      });
+    },
+  },
+  {
+    name: "register_partner_agency_sender_domain",
+    description:
+      "Register a custom email-sender domain for a partner-agency. STEP 2 of agency onboarding (optional but recommended — without it, agency emails ship from welcome@seldonframe.com). " +
+      "Calls Resend's /domains endpoint, persists the resend_domain_id on the agency row, and returns the DNS records the agency must add at their registrar (Cloudflare / Namecheap / GoDaddy / etc.). " +
+      "DNS propagation typically takes 5-60 minutes. After propagation, call verify_partner_agency_sender_domain to poll Resend + flip verified_sender_at. " +
+      "Requires: RESEND_API_KEY configured on the SeldonFrame backend. " +
+      'Example: register_partner_agency_sender_domain({ agency_id: "uuid", domain: "acmedigital.com", sender_local_part: "hello" })',
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace bearer that owns the agency."),
+        agency_id: str("Agency id from register_partner_agency response."),
+        domain: str(
+          "Domain to register (e.g., 'acmedigital.com'). The agency's customer-facing emails ship from <local>@<domain> once verified.",
+        ),
+        sender_local_part: str(
+          "Optional local part for the sender address. Defaults to 'welcome'. Final address: <local>@<domain>.",
+        ),
+      },
+      ["agency_id", "domain"],
+    ),
+    handler: async (a) => {
+      const ws = wsOrDefault(a.workspace_id);
+      return api("POST", "/partner-agencies", {
+        body: {
+          op: "register_sender_domain",
+          agency_id: a.agency_id,
+          domain: a.domain,
+          sender_local_part: a.sender_local_part,
+        },
+        workspace_id: ws,
+      });
+    },
+  },
+  {
+    name: "verify_partner_agency_sender_domain",
+    description:
+      "Poll Resend for sender-domain verification status. STEP 3 of agency onboarding. " +
+      "Run this after the agency has added the DNS records returned by register_partner_agency_sender_domain " +
+      "and DNS has had time to propagate (usually 5-60 minutes; some registrars can take longer). " +
+      "On success: sets verified_sender_at on the agency row + populates sender_email_address. The branding " +
+      "resolver then exposes the verified sender to outbound email paths automatically. " +
+      "Idempotent + safe to call repeatedly while waiting on DNS. " +
+      'Example: verify_partner_agency_sender_domain({ agency_id: "uuid" })',
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace bearer that owns the agency."),
+        agency_id: str("Agency id from register_partner_agency response."),
+      },
+      ["agency_id"],
+    ),
+    handler: async (a) => {
+      const ws = wsOrDefault(a.workspace_id);
+      return api("POST", "/partner-agencies", {
+        body: {
+          op: "verify_sender_domain",
+          agency_id: a.agency_id,
+        },
+        workspace_id: ws,
+      });
+    },
+  },
+  {
+    name: "attach_workspace_to_partner_agency",
+    description:
+      "Attach a client workspace to a partner-agency so chrome substitution applies on that workspace's operator-facing surfaces. " +
+      "STEP 4 of agency onboarding — run once per client workspace the agency manages. Caller must own both the workspace AND the agency. " +
+      "Effect is immediate: next page load in that workspace renders the agency's brand_name, logo, colors, support URLs " +
+      "(replacing SeldonFrame's defaults). The workspace's own data (contacts, bookings, agents, etc.) is unchanged. " +
+      "Reversible via detach_workspace_from_partner_agency. " +
+      'Example: attach_workspace_to_partner_agency({ workspace_id: "phoenix-hvac-uuid", agency_id: "acme-digital-uuid" })',
+    inputSchema: obj(
+      {
+        workspace_id: str(
+          "Client workspace id to attach. Caller's bearer workspace doesn't have to match — caller just has to own this workspace.",
+        ),
+        agency_id: str("Agency id the workspace will inherit chrome from."),
+      },
+      ["workspace_id", "agency_id"],
+    ),
+    handler: async (a) => {
+      // The attach op's auth derives the agency ownership from the
+      // caller's bearer (orgRow.ownerId). The bearer here is whichever
+      // workspace the agency operator is currently authenticated as
+      // (typically their own primary workspace, not the client's).
+      const ws = wsOrDefault(a.workspace_id);
+      return api("POST", "/partner-agencies", {
+        body: {
+          op: "attach",
+          workspace_id: a.workspace_id,
+          agency_id: a.agency_id,
+        },
+        workspace_id: ws,
+      });
+    },
+  },
+  {
+    name: "detach_workspace_from_partner_agency",
+    description:
+      "Detach a client workspace from its parent partner-agency. The workspace's chrome falls back to SeldonFrame defaults on next page load. " +
+      "Use when an agency loses a client or when the workspace transitions out of agency management. " +
+      "Caller must own the workspace OR own the agency the workspace is attached to (either authorizes detach). " +
+      "Workspace data is unchanged; only parent_agency_id is set to null. Reversible via attach_workspace_to_partner_agency. " +
+      'Example: detach_workspace_from_partner_agency({ workspace_id: "phoenix-hvac-uuid" })',
+    inputSchema: obj(
+      {
+        workspace_id: str("Client workspace id to detach from its agency."),
+      },
+      ["workspace_id"],
+    ),
+    handler: async (a) => {
+      const ws = wsOrDefault(a.workspace_id);
+      return api("POST", "/partner-agencies", {
+        body: {
+          op: "detach",
+          workspace_id: a.workspace_id,
+        },
+        workspace_id: ws,
+      });
+    },
+  },
 ];
 
 export const TOOL_MAP = Object.fromEntries(TOOLS.map((t) => [t.name, t]));
