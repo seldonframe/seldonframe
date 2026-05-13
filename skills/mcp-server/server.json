@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.seldonframe/seldonframe-mcp",
-  "description": "Open-source GoHighLevel alternative for agencies. 146+ MCP tools that let Claude Code spin up white-labeled client workspaces — CRM, booking, intake forms, landing pages, AI chatbot, and pre-wired agent archetypes (speed-to-lead, missed-call-text-back, review-requester) — in minutes.",
+  "description": "Open-source GoHighLevel alternative for agencies. White-label CRM, booking, intake, chatbot via MCP.",
   "repository": {
     "url": "https://github.com/seldonframe/seldonframe",
     "source": "github",
