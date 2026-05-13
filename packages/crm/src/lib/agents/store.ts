@@ -37,8 +37,18 @@ export type CreateAgentInput = {
    *  website-chatbot archetype). */
   capabilities?: string[];
   /** Optional FAQ pairs to seed. Operator can also attach via
-   *  updateAgentBlueprint later. */
-  faq?: Array<{ q: string; a: string }>;
+   *  updateAgentBlueprint later. v1.45 widened: callers may include
+   *  provenance fields (source/sourceUrl/synthesizedAt/synthesizedFromSoulVersion)
+   *  — the orchestrator in /api/v1/workspace/create passes these
+   *  through when auto-extracting FAQ from a website crawl. */
+  faq?: Array<{
+    q: string;
+    a: string;
+    source?: "extracted" | "synthesized" | "operator";
+    sourceUrl?: string;
+    synthesizedAt?: string;
+    synthesizedFromSoulVersion?: number;
+  }>;
   /** Optional explicit pricing facts. Defaults to empty (agent
    *  refuses to quote any price). */
   pricingFacts?: Array<{ label: string; amount: number; currency: string }>;

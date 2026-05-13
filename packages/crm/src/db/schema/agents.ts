@@ -31,7 +31,24 @@ export type AgentBlueprint = {
    *  provide_faq_answer. */
   capabilities?: string[];
   /** Inline FAQ knowledge (operator-provided Q&A pairs). */
-  faq?: Array<{ q: string; a: string }>;
+  faq?: Array<{
+    q: string;
+    a: string;
+    /** Where this FAQ entry came from. New v1.45 (faq-from-url feature).
+     *  - "extracted": Q&A pair scraped from the business's website.
+     *  - "synthesized": generated from soul services/pricing/voice when
+     *    extraction returned < 8 entries.
+     *  - "operator": manually added via build/update_website_chatbot. */
+    source?: "extracted" | "synthesized" | "operator";
+    /** Populated when source === "extracted". The exact page URL the
+     *  Q&A pair was found on. */
+    sourceUrl?: string;
+    /** ISO 8601 timestamp. Populated when source === "synthesized". */
+    synthesizedAt?: string;
+    /** Soul version at synthesis time. Helps audit synthesis quality
+     *  drift over time. */
+    synthesizedFromSoulVersion?: number;
+  }>;
   /** Greeting shown when the chat first opens. */
   greeting?: string;
   /** Allowed pricing facts the agent can quote. Generated from
