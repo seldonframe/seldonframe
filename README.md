@@ -64,6 +64,8 @@ Every generated client workspace ships with all four surfaces connected to one w
 - **Booking page** — source-of-truth scheduling. The customer books on the client's branded SeldonFrame page; the appointment lands in the CRM AND syncs to Google Calendar in real time. SeldonFrame is the authority; Google Calendar is a downstream view.
 - **Intake forms** — multi-step, vertical-specific fields, auto-CRM routing
 - **AI chatbot** — embeds on any site, eval-gated, BYOK, books appointments against the real calendar, refuses to invent prices outside the operator's configured rates
+- **Agent archetypes** — 7 production archetypes ship out of the box: `speed-to-lead`, `win-back`, `review-requester`, `daily-digest`, `weather-aware-booking`, `appointment-confirm-sms`, `missed-call-text-back`. Event-triggered automations on the SeldonEvent bus — configure once per workspace; the archetype fires on every matching event (e.g., a missed call texts the caller back within 30 seconds, with the agency's branded sender)
+- **Partner-agency white-label** — register an agency once, attach client workspaces, and the brand chrome (logo, colors, support email, verified sender domain, optional custom domain, hide-powered-by-badge on Scale) substitutes everywhere the agency operator sees the product. Driven by 5 MCP tools (`register_partner_agency`, `register_partner_agency_sender_domain`, `verify_partner_agency_sender_domain`, `attach_workspace_to_partner_agency`, `detach_workspace_from_partner_agency`)
 - **Email + SMS** — Resend (email) + Twilio (SMS), templated, automation-ready
 - **Durable workflows** — Vercel Workflows powering reminders, follow-ups, sequences
 - **Eval gate** — chatbots run an 8-scenario suite before going live (≥87.5% to publish)
@@ -223,6 +225,7 @@ If you want to read or hack on the codebase, these are the parts where the archi
 | Area | Path | What's interesting |
 |------|------|--------------------|
 | **MCP tool registry** | `skills/mcp-server/src/tools.js` | The typed tool surface and `USE-WHEN` triggers. Adding a new capability = one entry. |
+| **Agent archetypes** | `packages/crm/src/lib/agents/archetypes/` | Event-triggered agent definitions, one TypeScript file each. Adding a new archetype = new file + one import in `index.ts`. The thin-harness side of the agent loop. |
 | **Skill packs** | `packages/crm/src/lib/agents/skills/` | Agent intelligence as markdown. Edit prose, ship behavior. The fat-skill layer. |
 | **Eval gate** | `packages/crm/src/lib/agents/eval-runner.ts` + `fallbacks.ts` | LLM regeneration on critical-fail. The runtime that catches its own hallucinations. |
 | **Block library** | `packages/crm/src/components/landing/sections/` | The user-facing page primitives. New verticals = new blocks here. |
