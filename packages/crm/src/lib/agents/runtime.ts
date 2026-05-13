@@ -204,7 +204,7 @@ export async function executeTurn(input: {
 
   // 5. System prompt + tools
   const blueprint = (agent.blueprint ?? {}) as AgentBlueprint;
-  const systemPrompt = composeSystemPrompt({
+  const systemPrompt = await composeSystemPrompt({
     orgName: orgRow.name,
     soul: (orgRow.soul as Parameters<typeof composeSystemPrompt>[0]["soul"]) ?? null,
     blueprint,
