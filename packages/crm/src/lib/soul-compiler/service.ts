@@ -1,6 +1,8 @@
-import { compileWebsiteToMarkdown } from "./firecrawl";
+import { compileWebsiteToMarkdown, scrapeUrlListToMap } from "./firecrawl";
 import { compileSoulWithTwoCallPattern, createByokAnthropicClient } from "./anthropic";
 import { type RoutingResult, type SoulV4 } from "./schema";
+import { extractFaqsFromMarkdown, type ExtractedFaq } from "./faq-extractor";
+import { rankUrlsForFaqRelevance } from "./sitemap-priority";
 
 export type SoulCompileServiceResult =
   | {
@@ -10,6 +12,7 @@ export type SoulCompileServiceResult =
       attempts: 1 | 2;
       sourceText: string;
       pagesUsed: string[];
+      extractedFaqs: ExtractedFaq[];
     }
   | {
       status: "split_required";
@@ -30,8 +33,9 @@ export async function compileSoulService(params: {
   input: string;
   claudeApiKey: string;
   model?: string;
+  autoExtractFaq?: boolean;
 }): Promise<SoulCompileServiceResult> {
-  const { input, claudeApiKey, model } = params;
+  const { input, claudeApiKey, model, autoExtractFaq } = params;
 
   if (!input.trim()) {
     return {
@@ -90,13 +94,43 @@ export async function compileSoulService(params: {
       };
     }
 
+    // ── FAQ-from-URL extraction (v1.45) ─────────────────────────────
+    // When autoExtractFaq is requested AND the input was a URL, run a
+    // three-step pipeline: sitemap-priority rank → scrape → extract.
+    // Failures are tolerated (return [] FAQs rather than failing the
+    // whole compile).
+    let extractedFaqs: ExtractedFaq[] = [];
+    if (autoExtractFaq && (input.startsWith("http://") || input.startsWith("https://"))) {
+      try {
+        const domain = new URL(input).hostname;
+        const ranked = await rankUrlsForFaqRelevance({
+          domain,
+          apiKey: claudeApiKey,
+          limit: 10,
+        });
+        const markdownByUrl = await scrapeUrlListToMap(ranked.map((r) => r.url));
+        if (Object.keys(markdownByUrl).length > 0) {
+          extractedFaqs = await extractFaqsFromMarkdown({
+            markdownByUrl,
+            apiKey: claudeApiKey,
+          });
+        }
+      } catch {
+        // tolerate; ship with empty extracted FAQ
+        extractedFaqs = [];
+      }
+    }
+
     return {
       status: "ready",
       routing: result.routing,
-      soul: result.soul,
+      soul: extractedFaqs.length > 0
+        ? { ...result.soul, faqs: extractedFaqs }
+        : result.soul,
       attempts: result.attempts,
       sourceText,
       pagesUsed,
+      extractedFaqs,
     };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to compile soul. Please try again or simplify the description.";
