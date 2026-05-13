@@ -44,6 +44,8 @@ export const BUILT_IN_EVENT_TYPE_SUGGESTIONS = [
   "portal.login",
   "portal.message_sent",
   "portal.resource_viewed",
+  "call.missed",
+  "call.completed",
 ] as const;
 
 const EVENT_TYPE_PATTERN = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/;

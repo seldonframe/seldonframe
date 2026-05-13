@@ -214,3 +214,100 @@ Sophisticated implementations use an internal form that asks "how was your exper
 - `$reviewLink` is treated as opaque — the archetype doesn't know whether you're pointing at Google, Yelp, or an internal form. Copy in email + SMS is generic enough to work with any destination, but builders who want destination-specific copy ("leave us a Google review!") can hand-edit after synthesis.
 
 **Live probe evidence:** pending — see `tasks/phase-7-archetype-probes/review-requester.report.md` after the 3× probe run.
+
+---
+
+## Archetype: Missed-Call Text Back
+
+**ID:** `missed-call-text-back`
+**Shipped:** 2026-05-12 (v1.46.0)
+**Blocks required:** `crm`, `sms`
+**Events used:** trigger = `call.missed`; produces `sms.sent`, `activity.created`.
+**Tools used:** `send_sms`, `create_activity`.
+
+**What it does.** Fires on `call.missed` — emitted by the Twilio Voice
+status-callback webhook (`/api/webhooks/twilio/voice`) when an inbound
+call ends with `CallStatus ∈ no-answer | busy | failed`. Waits a short
+delay (default 30 seconds — fast enough to catch the caller before
+they dial the next contractor, slow enough to not interrupt a quick
+ring-back), sends a vertical-aware SMS qualifying message via the
+Conversation Primitive runtime, waits a follow-up window (default 4
+hours), and logs a sequence-complete activity. The follow-up SMS
+conversation flows back through the existing inbound-SMS pipeline,
+which routes to the workspace's chatbot agent for full qualification
++ booking.
+
+**Flow (4 steps):**
+
+```
+trigger (call.missed)
+  → wait $delaySeconds (default 30s)
+  → send_sms (with $textBackBody from the missed-call skill pack)
+  → wait $followupDelaySeconds (default 14400 = 4 hours)
+  → create_activity (type: missed_call, includes CallSid + status)
+```
+
+**Placeholders the user provides:**
+- `$delaySeconds` — seconds after `call.missed` before SMS fires.
+  Default 30. Lower for emergency-positioned verticals (HVAC: 15);
+  higher for low-urgency verticals (real estate: 120).
+- `$followupDelaySeconds` — seconds after SMS before still-pending
+  activity logs. Default 14400 (4 hours).
+
+**Placeholders Claude fills from Soul:**
+- `$textBackBody` — vertical-aware SMS body. Synthesis reads the
+  per-vertical templates at
+  `packages/crm/src/lib/agents/skills/missed-call/vertical-templates.md`.
+  HVAC gets emergency-vs-routine framing; dental gets insurance pre-
+  qualification; salon gets stylist preference; etc. The harness is
+  vertical-agnostic; the *intelligence* lives in the skill pack —
+  when Claude/GPT/Gemini get better, the synthesized SMS gets better
+  without code changes.
+
+### Twilio configuration (BYOK)
+
+The agency configures their workspace's Twilio number with the
+SeldonFrame voice webhook URL. Both the Voice URL and the
+StatusCallback URL point at `/api/webhooks/twilio/voice`:
+
+- **Voice URL** (when call arrives): returns empty TwiML, Twilio hangs
+  up cleanly. The agency's own voicemail/IVR/voice-agent runs on
+  their main phone line; Twilio is the catch-all that fires the
+  status callback when the main line doesn't answer.
+- **StatusCallback URL** (when call ends): receives the terminal
+  status. If `no-answer | busy | failed`, emits `call.missed` and
+  the archetype fires.
+
+For agencies that want Twilio to BE the main phone line (not a
+catch-all), the voice-agent infrastructure ships Q3 2026 — same
+endpoint, different TwiML response that connects the call to
+LiveKit + OpenAI Realtime for live AI answering. The archetype
+stays valid for unanswered calls regardless.
+
+### Known limitations
+
+- **Anonymous callers (caller-ID blocked).** Twilio sends
+  From="anonymous" or empty. The archetype skips the SMS step (the
+  SMS provider's E.164 validation rejects empty numbers). The call
+  still logs to the activity timeline; operator follows up manually
+  if voicemail was left.
+- **Voicemail-left calls do NOT fire `call.missed`.** When a caller
+  leaves voicemail, Twilio sends `CallStatus="completed"` with a
+  RecordingUrl — not a missed status. Voicemail-as-CRM-activity
+  (transcribe + emit `voicemail.left`) is a separate archetype
+  (Q4 2026). If the agency wants one text-back per unanswered call
+  regardless of voicemail, configure Twilio to disable voicemail.
+- **No conditional suppression on already-texted-back callers.**
+  Same caller within the follow-up window triggers the archetype
+  twice. Workaround: tighten `$delaySeconds` to >300 (5 min) so the
+  follow-up activity logs before a second call can fire. Real fix
+  is V1.1's branch step with external-state checks.
+- **A2P 10DLC compliance is the agency's responsibility.** Outbound
+  SMS to US numbers requires the agency's Twilio number to be A2P-
+  approved. Pre-flight check ships with the partner-agency onboarding
+  wizard (Q3 2026).
+
+**Live probe evidence:** pending — first deployment will be the live
+probe. Determinism: spec is structurally simpler than review-
+requester (4 steps, 1 mcp_tool_call before the activity log), so
+synthesis-shape variance should be ≤ review-requester's 5/5.

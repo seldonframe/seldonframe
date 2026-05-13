@@ -45,7 +45,17 @@ export type SeldonEvent =
   | { type: "portal.message_sent"; data: { contactId: string; messageId: string } }
   | { type: "portal.resource_viewed"; data: { contactId: string; resourceId: string } }
   | { type: "vehicle.added"; data: { vehicleId: string; contactId: string; vin: string | null } }
-  | { type: "service.logged"; data: { serviceEventId: string; vehicleId: string; contactId: string; serviceType: string } };
+  | { type: "service.logged"; data: { serviceEventId: string; vehicleId: string; contactId: string; serviceType: string } }
+  // v1.46.0 — voice channel events. Emitted by the Twilio Voice
+  // status-callback webhook. `call.missed` fires for unanswered
+  // calls (Twilio CallStatus ∈ no-answer | busy | failed) — the
+  // trigger for the Missed-Call-Text-Back archetype. The full voice
+  // agent (LiveKit + OpenAI Realtime, Q3 2026) emits `call.completed`
+  // when an answered call ends; archetypes targeting that event can
+  // chain follow-up actions (transcript-to-CRM, deal-creation, etc.)
+  // without depending on voice-agent infrastructure being live.
+  | { type: "call.missed"; data: { callSid: string; contactId: string | null; fromNumber: string; toNumber: string; status: "no-answer" | "busy" | "failed"; durationSeconds: number } }
+  | { type: "call.completed"; data: { callSid: string; contactId: string | null; fromNumber: string; toNumber: string; durationSeconds: number } };
 
 export type BuiltInEventType = SeldonEvent["type"];
 export type EventType = BuiltInEventType | `${string}.${string}`;
