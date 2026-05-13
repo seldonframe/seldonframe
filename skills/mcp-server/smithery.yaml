@@ -1,0 +1,48 @@
+# Smithery configuration file: https://smithery.ai/docs/config#smitheryyaml
+#
+# Publishes @seldonframe/mcp to https://smithery.ai/server/io.github.seldonframe/seldonframe-mcp
+# The npm package is the artifact; this YAML describes how Smithery should launch it.
+
+startCommand:
+  type: stdio
+  configSchema:
+    # JSON Schema for runtime configuration. All fields are optional —
+    # SeldonFrame's MCP mints a free workspace + device token on first
+    # call, so the server is usable without any config.
+    type: object
+    additionalProperties: false
+    properties:
+      seldonframeApiKey:
+        type: string
+        title: SeldonFrame API key
+        description: |
+          Optional. Bearer API key for hosted SeldonFrame workspaces beyond
+          the first one. The first workspace is free and the MCP mints a
+          device token automatically. Set this to unlock additional
+          workspaces, custom domains, and full Brain v2.
+          Get one at https://app.seldonframe.com/settings/api
+      seldonframeApiUrl:
+        type: string
+        title: SeldonFrame API base URL
+        description: |
+          Optional. Override the SeldonFrame API base URL. Defaults to
+          https://app.seldonframe.com. Set for self-hosted deployments
+          (e.g., https://crm.yourdomain.com).
+        default: https://app.seldonframe.com
+  commandFunction: |-
+    (config) => {
+      const env = {};
+      if (config && config.seldonframeApiKey) {
+        env.SELDONFRAME_API_KEY = config.seldonframeApiKey;
+      }
+      if (config && config.seldonframeApiUrl) {
+        env.SELDONFRAME_API_URL = config.seldonframeApiUrl;
+      }
+      return {
+        command: 'npx',
+        args: ['-y', '@seldonframe/mcp@latest'],
+        env,
+      };
+    }
+  exampleConfig:
+    seldonframeApiKey: sk-your-key-from-app.seldonframe.com-settings-api

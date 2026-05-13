@@ -1,0 +1,38 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.seldonframe/seldonframe-mcp",
+  "description": "Open-source GoHighLevel alternative for agencies. 146+ MCP tools that let Claude Code spin up white-labeled client workspaces — CRM, booking, intake forms, landing pages, AI chatbot, and pre-wired agent archetypes (speed-to-lead, missed-call-text-back, review-requester) — in minutes.",
+  "repository": {
+    "url": "https://github.com/seldonframe/seldonframe",
+    "source": "github",
+    "subfolder": "skills/mcp-server"
+  },
+  "version": "1.45.1",
+  "websiteUrl": "https://seldonframe.com",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@seldonframe/mcp",
+      "version": "1.45.1",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "SELDONFRAME_API_KEY",
+          "description": "Optional. Bearer API key for hosted SeldonFrame workspaces beyond the first one. The first workspace is free and the MCP mints a device token automatically. Set this to unlock additional workspaces, custom domains, and full Brain v2.",
+          "isRequired": false,
+          "isSecret": true,
+          "format": "string"
+        },
+        {
+          "name": "SELDONFRAME_API_URL",
+          "description": "Optional. Override the SeldonFrame API base URL. Defaults to https://app.seldonframe.com. Set for self-hosted deployments.",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        }
+      ]
+    }
+  ]
+}
