@@ -73,6 +73,10 @@ type ExecuteTurnResult =
 export async function executeTurn(input: {
   conversationId: string;
   userMessage: string;
+  /** Optional blueprint override — used by the eval runner to inject test
+   *  fixtures (e.g. poisoned FAQ entries) without mutating the DB. The
+   *  override replaces agent.blueprint for this turn only. */
+  blueprintOverride?: AgentBlueprint;
 }): Promise<ExecuteTurnResult> {
   const t0 = Date.now();
 
@@ -203,7 +207,9 @@ export async function executeTurn(input: {
   }
 
   // 5. System prompt + tools
-  const blueprint = (agent.blueprint ?? {}) as AgentBlueprint;
+  // blueprintOverride is set by the eval runner for fixture-injection scenarios
+  // (e.g. poisoned FAQ entries). Never present in production paths.
+  const blueprint = (input.blueprintOverride ?? agent.blueprint ?? {}) as AgentBlueprint;
   const systemPrompt = await composeSystemPrompt({
     orgName: orgRow.name,
     soul: (orgRow.soul as Parameters<typeof composeSystemPrompt>[0]["soul"]) ?? null,
