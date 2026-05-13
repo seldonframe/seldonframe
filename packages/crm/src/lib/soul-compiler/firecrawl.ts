@@ -434,3 +434,29 @@ export async function compileWebsiteToMarkdown(baseUrl: string): Promise<Compile
     }
   }
 }
+
+/**
+ * Scrape an explicit URL list and return markdown keyed by URL.
+ * Used by the FAQ-from-URL orchestrator after sitemap-priority ranking.
+ * Errors on individual URLs are tolerated; only successful scrapes are
+ * included in the returned record.
+ *
+ * Added v1.45 with the create_workspace_from_url feature.
+ */
+export async function scrapeUrlListToMap(urls: string[]): Promise<Record<string, string>> {
+  const result: Record<string, string> = {};
+
+  for (const url of urls) {
+    try {
+      const md = await scrapePage(url);
+      if (md && md.length > 0) {
+        result[url] = md;
+      }
+    } catch {
+      // skip; individual failures don't prevent processing the rest
+      continue;
+    }
+  }
+
+  return result;
+}
