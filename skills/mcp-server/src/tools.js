@@ -60,7 +60,8 @@ export const TOOLS = [
   {
     name: "create_full_workspace",
     description:
-      "PREFERRED for new workspaces. Atomic, server-side workspace creation: takes structured business info and creates everything in ONE call — workspace, business profile, CRM with industry-specific pipeline stages, booking page with availability, intake form, themed landing page, all deployed with live URLs. " +
+      "⛔ DO NOT USE WHEN A URL IS PROVIDED — use `create_workspace_from_url` instead. THIS tool is for STRUCTURED, PRE-EXTRACTED business info ONLY (manual paste, operator-typed fields, etc.). " +
+      "PREFERRED for new workspaces FROM STRUCTURED INPUT. Atomic, server-side workspace creation: takes structured business info and creates everything in ONE call — workspace, business profile, CRM with industry-specific pipeline stages, booking page with availability, intake form, themed landing page, all deployed with live URLs. " +
       "Use this instead of create_workspace + a long sequence of customization tools. The pipeline runs server-side with a fixed order — same input always produces same output, no retries, no 404s. " +
       "MANDATORY FOLLOW-UP: After this returns `status: 'ready'`, ask the operator verbatim 'What email should I use for your account? This is where you'll get your login link and notifications.' Then call `finalize_workspace({ workspace_id, email })`. The admin dashboard URL is ONLY created by finalize_workspace — it does not exist in this response (so there's nothing for you to display prematurely). " +
       "Example: create_full_workspace({ business_name: 'Summit Air Comfort', city: 'Phoenix', state: 'AZ', phone: '(480) 555-2100', services: ['AC repair', 'heating installation', 'duct cleaning'], business_description: 'Residential and commercial HVAC in Phoenix', review_count: 950, review_rating: 4.7, trust_signals: ['licensed', 'bonded', 'insured'], emergency_service: true, same_day: true, service_area: ['Scottsdale', 'Tempe', 'Mesa'] })",
@@ -477,7 +478,14 @@ export const TOOLS = [
   {
     name: "create_workspace_from_url",
     description:
-      "Crawl a business website URL and create a complete personalized client workspace in one step: CRM, landing page, booking page, intake form, and AI chatbot wired to FAQs auto-extracted from the site plus the booking calendar. The chatbot ships eval-gated (must pass ≥10/11 safety + behavior scenarios). White-label-ready under partner-agency attachment. USE-WHEN: agency operator says 'set up a workspace for dallasplumbing.com' or pastes any client business URL. Returns workspace + agent + embed_url + faq_summary.",
+      "⚡ MUST USE WHEN A URL IS PROVIDED — this is the atomic URL-input path for agency client workspace creation. " +
+      "PATTERNS THAT ROUTE HERE (do not even consider other workspace-creation tools when input matches): " +
+      "'create a workspace for <URL>', 'set up <client> at <URL>', 'spin up <URL>', '<URL>' alone, or any operator message containing http://, https://, or a recognizable domain (.com/.io/.net/.co/.app/.dev/.us etc). " +
+      "WHAT THIS TOOL ALONE DOES: backend crawls the URL → soul-extracts business info → creates CRM + booking + intake + landing + eval-gated AI chatbot wired to FAQs auto-pulled from the site + the booking calendar. " +
+      "DO NOT use create_workspace_v2 or create_full_workspace when a URL is available. Those tools require PRE-EXTRACTED structured fields (business_name, services[], phone) and will produce INFERIOR results for URL input because they skip the URL crawler, the FAQ extractor, and the auto-chatbot build. " +
+      "DO NOT manually WebFetch the URL first — the SeldonFrame backend's soul-compiler is already wired to scrape + extract. Forwarding pre-fetched HTML wastes a round-trip and bypasses the FAQ-from-URL pipeline. " +
+      "Eval gate: chatbot must pass ≥10 of 11 safety + behavior scenarios to ship 'live'. White-label-ready under partner-agency attachment. " +
+      "Returns: workspace + agent + embed_url + faq_summary. MANDATORY FOLLOW-UP: ask the operator verbatim 'What email should I use for your account?' then call finalize_workspace({ workspace_id, email }) — the admin dashboard URL is ONLY created by finalize_workspace.",
     inputSchema: obj(
       {
         url: str("Business website URL, e.g. https://dallasplumbing.com"),
@@ -2966,7 +2974,8 @@ export const TOOLS = [
   {
     name: "create_workspace_v2",
     description:
-      "PREFERRED for new workspaces (v1.4+). MCP-native workspace creation: bootstraps the workspace via the v1 orchestrator (CRM, booking, intake, theme, pipeline) AND returns a list of v2 page blocks the IDE agent will now generate using its own LLM. " +
+      "⛔ DO NOT USE WHEN A URL IS PROVIDED — use `create_workspace_from_url` instead. THIS tool is for STRUCTURED, PRE-EXTRACTED business info ONLY (typically a Google Maps paste the operator already parsed into fields). " +
+      "PREFERRED for STRUCTURED-INPUT workspaces (v1.4+) when no URL is available. MCP-native workspace creation: bootstraps the workspace via the v1 orchestrator (CRM, booking, intake, theme, pipeline) AND returns a list of v2 page blocks the IDE agent will now generate using its own LLM. " +
       "Flow: 1) call this tool with the operator's business info; 2) for each block in `v2.recommended_blocks`, call get_block_skill(name) and use your LLM to generate props matching the SKILL.md prompt + schema; 3) call persist_block({ workspace_id, block_name, generation_prompt, props }) for each; 4) call complete_workspace_v2({ workspace_id }). " +
       "MANDATORY FOLLOW-UP: After this returns `status: 'ready'` AND after all blocks land via persist_block + complete_workspace_v2, ask the operator verbatim 'What email should I use for your account?' Then call finalize_workspace({ workspace_id, email }). The admin dashboard URL is created by finalize_workspace, not here. " +
       "Why v2: v1 generated all copy server-side from a hardcoded personality system, which produced layer-mismatch bugs every time a new niche was tested. v2 puts the LLM in your context (the IDE agent), reads from one SKILL.md per block, and the generated copy is naturally niche-aware. The operator can later say 'change the hero' and you customize it via persist_block with a customization payload.",
