@@ -489,33 +489,22 @@ export const TOOLS = [
   {
     name: "create_workspace_from_url",
     description:
-      "⚡ MUST USE WHEN A URL IS PROVIDED — this is the LEAN atomic URL-input path for agency client workspace creation (v1.47, ~10-30s). " +
-      "PATTERNS THAT ROUTE HERE (do not even consider other workspace-creation tools when input matches): " +
-      "'create a workspace for <URL>', 'set up <client> at <URL>', 'spin up <URL>', '<URL>' alone, or any operator message containing http://, https://, or a recognizable domain (.com/.io/.net/.co/.app/.dev/.us etc). " +
-      "WHAT THIS TOOL DOES: backend crawls the URL → extracts business info → creates CRM + booking + intake + eval-gated AI chatbot wired to FAQs auto-pulled from the site. " +
-      "DOES NOT GENERATE A LANDING PAGE BY DEFAULT — agency clients typically already have their own website (the URL the operator passed). The chatbot ships as an embed snippet (`chatbot_embed_snippet` in the response) which the agency pastes onto the client's existing site. " +
-      "If you ALSO need a SeldonFrame-hosted landing page (only when the client has no site of their own), call `generate_landing_page({ workspace_id })` AFTER this returns — it's a separate ~30-60s opt-in step. " +
-      "DO NOT use create_workspace_v2 or create_full_workspace when a URL is available. Those tools require PRE-EXTRACTED structured fields (business_name, services[], phone) and will produce INFERIOR results for URL input because they skip the URL crawler, the FAQ extractor, and the auto-chatbot build. " +
-      "DO NOT manually WebFetch the URL first — the SeldonFrame backend's soul-compiler is already wired to scrape + extract. Forwarding pre-fetched HTML wastes a round-trip and bypasses the FAQ-from-URL pipeline. " +
-      "Eval gate: chatbot must pass ≥10 of 11 safety + behavior scenarios to ship 'live'. White-label-ready under partner-agency attachment. " +
-      "Returns: workspace + agent + chatbot_embed_snippet + faq_summary. MANDATORY FOLLOW-UP: ask the operator verbatim 'What email should I use for your account?' then call finalize_workspace({ workspace_id, email }) — the admin dashboard URL is ONLY created by finalize_workspace. " +
-      "⭐ WHEN RENDERING THE RESPONSE BACK TO THE OPERATOR: lead with `primary_deliverable.embed_snippet` + `primary_deliverable.paste_instruction`. The chatbot embed snippet is the agency's HEADLINE deliverable — the agency pastes it onto their CLIENT'S existing website (e.g. dallasplumbing.com), not onto a SeldonFrame-hosted page. DO NOT lead the response summary with 'Public URLs' or a `*.app.seldonframe.com` subdomain. When `include_landing_page: false` (the default for URL flow), there is NO SeldonFrame-hosted landing page — the subdomain is for previewing the chatbot only; don't promote it as a deliverable.",
+      "Entry point for URL-based workspace creation. Returns instructions Claude follows: WebFetch the URL, optionally WebFetch up to 2 priority sub-pages (e.g. /about, /services, /contact, /pricing), extract structured business facts, ask the operator for any required field that can't be determined, then call `create_workspace_v2` with the result. " +
+      "THIS TOOL DOES NOT CREATE A WORKSPACE — it returns the playbook. The workspace is created by the follow-up `create_workspace_v2` call (then per-block: get_block_skill + persist_block + complete_workspace_v2 + finalize_workspace). " +
+      "When operator provides ANY of: 'http://', 'https://', a domain (.com/.io/.net/.co/.app/.dev/.us etc), or 'create workspace for <URL>' — call this tool. Do NOT manually WebFetch first; the instructions returned by this tool tell you exactly what to fetch and in what order. " +
+      "MANDATORY FOLLOW-UP: After create_workspace_v2 returns 'ready' and all blocks land via persist_block + complete_workspace_v2, ask the operator 'What email should I use for your account?' and call finalize_workspace({ workspace_id, email }).",
     inputSchema: obj(
       {
-        url: str("Business website URL, e.g. https://dallasplumbing.com"),
+        url: str("Business website URL the operator provided, e.g. https://quigleyac.com"),
       },
       ["url"]
     ),
     handler: async (args) =>
-      api("POST", "/workspace/create", {
-        body: {
-          url: args.url,
-          include_chatbot: true,
-          auto_extract_faq: true,
-          include_landing_page: false,
-        },
-        allow_anonymous: true,
-      }),
+      api(
+        "GET",
+        `/workspace/extract-instructions?url=${encodeURIComponent(args.url)}`,
+        { allow_anonymous: true }
+      ),
   },
   // v1.47 — explicit opt-in landing-page generator. create_workspace_from_url
   // defaults to NO landing page (the client already has their own site);
