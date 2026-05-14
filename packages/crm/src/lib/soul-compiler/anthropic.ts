@@ -374,6 +374,7 @@ export type SoulCompileInput = {
   inputTextOrScrapedContent: string;
   client: Anthropic;
   model?: string;
+  lightMode?: boolean;
 };
 
 export type SoulCompileResult = {
@@ -483,8 +484,12 @@ async function runExtractionCall(params: {
   routing: RoutingResult;
   model?: string;
   validationErrorPrefix?: string;
+  lightMode?: boolean;
 }) {
   const validationPrefix = params.validationErrorPrefix?.trim();
+  const lightModeClause = params.lightMode
+    ? "\n\nLIGHT MODE: this workspace will NOT have a SeldonFrame-generated landing page. Set landing_page_sections=[], intelligence_hooks=[], custom_blocks=[]. Focus your effort on accurate pipeline_stages, intake_form_fields, booking_config, and tagline/soul_description. The chatbot will use the FAQ + soul facts — don't pad them with landing-page-style flourishes."
+    : "";
 
   const response = await params.client.messages.create({
     model: params.model || DEFAULT_MODEL,
@@ -495,7 +500,7 @@ async function runExtractionCall(params: {
         role: "user",
         content: `${validationPrefix ? `VALIDATION_ERROR: ${validationPrefix}\n\n` : ""}Business input: ${params.inputTextOrScrapedContent}\n\nRouting context from call 1:\n${JSON.stringify(
           params.routing
-        )}\n\nDetect audience, choose closest base framework, customize for every specific edge case mentioned. Output ONLY valid JSON matching the locked schema. Make it production-ready for immediate workspace creation.`,
+        )}${lightModeClause}\n\nDetect audience, choose closest base framework, customize for every specific edge case mentioned. Output ONLY valid JSON matching the locked schema. Make it production-ready for immediate workspace creation.`,
       },
     ],
   });
@@ -529,6 +534,7 @@ export async function compileSoulWithTwoCallPattern(input: SoulCompileInput): Pr
     inputTextOrScrapedContent: source,
     routing: routingResult.routing,
     model: input.model,
+    lightMode: input.lightMode,
   });
 
   if (firstAttempt.validated.success) {
@@ -550,6 +556,7 @@ export async function compileSoulWithTwoCallPattern(input: SoulCompileInput): Pr
     routing: routingResult.routing,
     model: input.model,
     validationErrorPrefix: retryReason,
+    lightMode: input.lightMode,
   });
 
   if (!retryAttempt.validated.success) {

@@ -35,8 +35,15 @@ export async function compileSoulService(params: {
   claudeApiKey: string;
   model?: string;
   autoExtractFaq?: boolean;
+  /**
+   * v1.47 — when true, the soul-compile prompt instructs Claude to
+   * SKIP landing_page_sections, intelligence_hooks, and custom_blocks
+   * generation. Used by the lean URL flow where the agency's client
+   * already has a website. Default false (full mode unchanged).
+   */
+  lightMode?: boolean;
 }): Promise<SoulCompileServiceResult> {
-  const { input, claudeApiKey, model, autoExtractFaq } = params;
+  const { input, claudeApiKey, model, autoExtractFaq, lightMode } = params;
 
   if (!input.trim()) {
     return {
@@ -81,6 +88,7 @@ export async function compileSoulService(params: {
       inputTextOrScrapedContent: sourceText,
       client,
       model,
+      lightMode,
     });
 
     if (result.routing.split_recommendation) {
