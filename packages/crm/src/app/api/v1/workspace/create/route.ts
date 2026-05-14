@@ -41,6 +41,8 @@ type WorkspaceCreateBody = {
   // v1.45 — FAQ-from-URL chatbot flags
   include_chatbot?: unknown;
   auto_extract_faq?: unknown;
+  // v1.47 — lean URL flow: skip landing-page generation when false
+  include_landing_page?: unknown;
 };
 
 const WORKSPACE_BASE_DOMAIN =
@@ -378,6 +380,11 @@ export async function POST(request: Request) {
 
   const includeChatbot = body.include_chatbot === true;
   const autoExtractFaq = body.auto_extract_faq === true;
+  // v1.47 — defaults to true for backward compatibility with
+  // create_full_workspace + create_workspace_v2. The new
+  // create_workspace_from_url tool explicitly passes false to skip
+  // landing-page generation (the client has their own site).
+  const includeLandingPage = body.include_landing_page === false ? false : true;
 
   const input = url || description;
   const compileResult = await compileSoulService({
@@ -385,6 +392,7 @@ export async function POST(request: Request) {
     claudeApiKey,
     model,
     autoExtractFaq,
+    lightMode: !includeLandingPage,  // v1.47 — lean mode when no landing page
   });
 
   if (compileResult.status === "error") {
@@ -438,6 +446,7 @@ export async function POST(request: Request) {
       soul: compileResult.soul,
       sourceText: compileResult.sourceText,
       pagesUsed: compileResult.pagesUsed,
+      includeLandingPage,  // v1.47
     }, { userId });
 
     const subdomain = `${workspace.slug}.${WORKSPACE_BASE_DOMAIN}`;
@@ -594,6 +603,25 @@ export async function POST(request: Request) {
             }
           : null,
         faq_summary: agentInfo.faqSummary ?? null,
+        // v1.47 — chatbot embed snippet as the headline deliverable for
+        // URL flows. Agency pastes this directly into the client's
+        // existing website (before </body>).
+        chatbot_embed_snippet: agentInfo.embedUrl
+          ? `<script src="${agentInfo.embedUrl}" async></script>`
+          : null,
+        chatbot_instructions: agentInfo.embedUrl
+          ? "Paste the chatbot_embed_snippet above into the client's existing website (anywhere before </body>). The chatbot appears bottom-right and starts booking appointments + answering FAQs immediately."
+          : null,
+        landing_page: includeLandingPage ? { url: subdomainUrl } : null,
+        next_steps: [
+          agentInfo.embedUrl
+            ? "Paste chatbot_embed_snippet onto the client's existing website."
+            : null,
+          !includeLandingPage
+            ? `Optional: generate a SeldonFrame-hosted landing page via generate_landing_page({ workspace_id: '${workspace.orgId}' }).`
+            : null,
+          "Attach to a partner agency via register_partner_agency + attach_workspace_to_partner_agency.",
+        ].filter((s): s is string => Boolean(s)),
       },
       { status: 200 }
     );
