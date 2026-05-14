@@ -468,6 +468,32 @@ export const TOOLS = [
       return firstEver ? withFirstCallBanner(payload) : payload;
     },
   },
+  // create_workspace_from_url — atomic crawl + workspace + chatbot.
+  // Thin wrapper around create_full_workspace with include_chatbot=true
+  // and auto_extract_faq=true. The orchestrator at /api/v1/workspace/create
+  // (POST) handles the multi-phase composition; this tool exists for
+  // discoverability — operators reading the MCP tool list see a name
+  // that matches the marketing pitch ("paste a URL → workspace").
+  {
+    name: "create_workspace_from_url",
+    description:
+      "Crawl a business website URL and create a complete personalized client workspace in one step: CRM, landing page, booking page, intake form, and AI chatbot wired to FAQs auto-extracted from the site plus the booking calendar. The chatbot ships eval-gated (must pass ≥10/11 safety + behavior scenarios). White-label-ready under partner-agency attachment. USE-WHEN: agency operator says 'set up a workspace for dallasplumbing.com' or pastes any client business URL. Returns workspace + agent + embed_url + faq_summary.",
+    inputSchema: obj(
+      {
+        url: str("Business website URL, e.g. https://dallasplumbing.com"),
+      },
+      ["url"]
+    ),
+    handler: async (args) =>
+      api("POST", "/workspace/create", {
+        body: {
+          url: args.url,
+          include_chatbot: true,
+          auto_extract_faq: true,
+        },
+        allow_anonymous: true,
+      }),
+  },
   {
     name: "list_workspaces",
     description: "List all workspaces known to this device (plus any Pro workspaces if SELDONFRAME_API_KEY is set).",
