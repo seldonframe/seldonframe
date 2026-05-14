@@ -60,11 +60,9 @@ export const TOOLS = [
   {
     name: "create_full_workspace",
     description:
-      "⛔ DO NOT USE WHEN A URL IS PROVIDED — use `create_workspace_from_url` instead. THIS tool is for STRUCTURED, PRE-EXTRACTED business info ONLY (manual paste, operator-typed fields, etc.). " +
-      "PREFERRED for new workspaces FROM STRUCTURED INPUT. Atomic, server-side workspace creation: takes structured business info and creates everything in ONE call — workspace, business profile, CRM with industry-specific pipeline stages, booking page with availability, intake form, themed landing page, all deployed with live URLs. " +
-      "Use this instead of create_workspace + a long sequence of customization tools. The pipeline runs server-side with a fixed order — same input always produces same output, no retries, no 404s. " +
-      "MANDATORY FOLLOW-UP: After this returns `status: 'ready'`, ask the operator verbatim 'What email should I use for your account? This is where you'll get your login link and notifications.' Then call `finalize_workspace({ workspace_id, email })`. The admin dashboard URL is ONLY created by finalize_workspace — it does not exist in this response (so there's nothing for you to display prematurely). " +
-      "Example: create_full_workspace({ business_name: 'Summit Air Comfort', city: 'Phoenix', state: 'AZ', phone: '(480) 555-2100', services: ['AC repair', 'heating installation', 'duct cleaning'], business_description: 'Residential and commercial HVAC in Phoenix', review_count: 950, review_rating: 4.7, trust_signals: ['licensed', 'bonded', 'insured'], emergency_service: true, same_day: true, service_area: ['Scottsdale', 'Tempe', 'Mesa'] })",
+      "Atomic workspace creation from pre-extracted business facts. Equivalent to create_workspace_v2 but single-call (no block-by-block iteration). Used as the follow-up after `create_workspace_from_url` for cases where the operator wants the workspace produced in one shot rather than block-iterated. " +
+      "Example: create_full_workspace({ business_name: 'Summit Air Comfort', city: 'Phoenix', state: 'AZ', phone: '(480) 555-2100', services: ['AC repair', 'heating installation', 'duct cleaning'], business_description: 'Residential and commercial HVAC in Phoenix', review_count: 950, review_rating: 4.7, trust_signals: ['licensed', 'bonded', 'insured'], emergency_service: true, same_day: true, service_area: ['Scottsdale', 'Tempe', 'Mesa'] }). " +
+      "MANDATORY FOLLOW-UP: same as create_workspace_v2 — after this returns `status: 'ready'`, ask 'What email should I use for your account?' and call finalize_workspace({ workspace_id, email }).",
     inputSchema: obj(
       {
         business_name: str("Business display name (e.g. 'Summit Air Comfort')."),
@@ -101,19 +99,8 @@ export const TOOLS = [
         },
         email: str("Optional contact email surfaced in the landing footer (NOT the operator's account email — that comes via finalize_workspace)."),
         address: str("Optional business address."),
-        // v1.48 — schema-level routing guard. The model MUST pass `true`
-        // to confirm no URL was available. When the operator's input
-        // contains a URL, this assertion is false (don't lie); use
-        // `create_workspace_from_url` instead. This makes the routing
-        // a hard schema constraint, not just description prose.
-        confirmed_no_url_available: {
-          type: "boolean",
-          enum: [true],
-          description:
-            "MUST be `true`. Set to true ONLY if the operator did NOT provide a website URL (e.g. they pasted Google Maps text or typed structured fields). If a URL IS available, use `create_workspace_from_url` instead — do NOT lie here. The schema rejects calls without this confirmation.",
-        },
       },
-      ["business_name", "city", "state", "phone", "services", "business_description", "confirmed_no_url_available"]
+      ["business_name", "city", "state", "phone", "services", "business_description"]
     ),
     handler: async (args) => {
       const firstEver = isFirstEverCall();
@@ -3007,11 +2994,9 @@ export const TOOLS = [
   {
     name: "create_workspace_v2",
     description:
-      "⛔ DO NOT USE WHEN A URL IS PROVIDED — use `create_workspace_from_url` instead. THIS tool is for STRUCTURED, PRE-EXTRACTED business info ONLY (typically a Google Maps paste the operator already parsed into fields). " +
-      "PREFERRED for STRUCTURED-INPUT workspaces (v1.4+) when no URL is available. MCP-native workspace creation: bootstraps the workspace via the v1 orchestrator (CRM, booking, intake, theme, pipeline) AND returns a list of v2 page blocks the IDE agent will now generate using its own LLM. " +
-      "Flow: 1) call this tool with the operator's business info; 2) for each block in `v2.recommended_blocks`, call get_block_skill(name) and use your LLM to generate props matching the SKILL.md prompt + schema; 3) call persist_block({ workspace_id, block_name, generation_prompt, props }) for each; 4) call complete_workspace_v2({ workspace_id }). " +
-      "MANDATORY FOLLOW-UP: After this returns `status: 'ready'` AND after all blocks land via persist_block + complete_workspace_v2, ask the operator verbatim 'What email should I use for your account?' Then call finalize_workspace({ workspace_id, email }). The admin dashboard URL is created by finalize_workspace, not here. " +
-      "Why v2: v1 generated all copy server-side from a hardcoded personality system, which produced layer-mismatch bugs every time a new niche was tested. v2 puts the LLM in your context (the IDE agent), reads from one SKILL.md per block, and the generated copy is naturally niche-aware. The operator can later say 'change the hero' and you customize it via persist_block with a customization payload.",
+      "Create a workspace from pre-extracted business facts. Used as the follow-up call after `create_workspace_from_url` returns extraction instructions, OR directly when the operator provides structured info (no URL). " +
+      "Flow: 1) call this tool with the business facts; 2) for each block in `v2.recommended_blocks`, call get_block_skill(name) and use your LLM to generate props matching the SKILL.md prompt + schema; 3) call persist_block({ workspace_id, block_name, generation_prompt, props }) for each; 4) call complete_workspace_v2({ workspace_id }). " +
+      "MANDATORY FOLLOW-UP: After this returns `status: 'ready'` AND after all blocks land via persist_block + complete_workspace_v2, ask the operator verbatim 'What email should I use for your account?' Then call finalize_workspace({ workspace_id, email }). The admin dashboard URL is created by finalize_workspace, not here.",
     inputSchema: obj(
       {
         business_name: str("Business display name."),
@@ -3035,18 +3020,8 @@ export const TOOLS = [
         service_area: { type: "array", items: { type: "string" } },
         email: str("Optional contact email surfaced in the landing footer (NOT the operator's account email)."),
         address: str("Optional business address."),
-        // v1.48 — schema-level routing guard (same as create_full_workspace).
-        // Forces the model to acknowledge no URL was available, preventing
-        // accidental routing to v2 when create_workspace_from_url is the
-        // correct path.
-        confirmed_no_url_available: {
-          type: "boolean",
-          enum: [true],
-          description:
-            "MUST be `true`. Set to true ONLY if the operator did NOT provide a website URL. If a URL IS available, use `create_workspace_from_url` instead — do NOT lie here.",
-        },
       },
-      ["business_name", "city", "state", "phone", "services", "business_description", "confirmed_no_url_available"],
+      ["business_name", "city", "state", "phone", "services", "business_description"],
     ),
     handler: async (args) => {
       const firstEver = isFirstEverCall();
