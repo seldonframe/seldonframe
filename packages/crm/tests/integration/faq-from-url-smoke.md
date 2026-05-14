@@ -166,3 +166,62 @@ Expected:
   persists, agent stays in `test` status
 - Firecrawl timeout: gracefully degrades to fallback (`compileWebsiteToMarkdown`
   already handles this; new flow inherits the behavior)
+
+---
+
+## v1.47 lean URL flow tests
+
+### Test 5: Lean URL flow (NEW DEFAULT — no landing page)
+
+```bash
+curl -X POST "https://staging.app.seldonframe.com/api/v1/workspace/create" \
+  -H "Content-Type: application/json" \
+  -H "x-claude-api-key: $ANTHROPIC_API_KEY" \
+  -d '{
+    "url": "https://www.haltexplumbing.com",
+    "include_chatbot": true,
+    "auto_extract_faq": true,
+    "include_landing_page": false
+  }'
+```
+
+Expected (within ~30s, NOT 7 minutes):
+- `response.chatbot_embed_snippet`: `<script src="https://..." async></script>`
+- `response.chatbot_instructions`: paste-onto-client-website hint
+- `response.landing_page`: `null`
+- `response.agent.status`: `"live"`
+- `response.faq_summary.total`: ≥ 8
+- `response.next_steps[0]`: "Paste chatbot_embed_snippet onto the client's existing website."
+- Server logs show NO `seedInitialBlocks` call, NO `enhance_blocks_succeeded`, NO `unsplash_*` events
+
+### Test 6: Hallucination defense
+
+Use a test URL whose source HTML does NOT contain license numbers or
+review counts. Run Test 5 against it, then fetch the soul. The tagline
+and soul_description should NOT contain `RMP <number>`-style license
+numbers or `<number>+ neighbors`-style review counts unless those
+numbers appear verbatim in the source page.
+
+### Test 7: Opt-in landing-page generation
+
+After Test 5 (workspace exists, no landing page):
+
+```bash
+curl -X POST "https://staging.app.seldonframe.com/api/v1/workspace/generate-landing-page" \
+  -H "Content-Type: application/json" \
+  -H "x-claude-api-key: $ANTHROPIC_API_KEY" \
+  -d '{ "workspace_id": "<org-id-from-test-5>" }'
+```
+
+Expected:
+- HTTP 200
+- `response.landing_url`: `https://<slug>.app.seldonframe.com`
+- Opening that URL serves a v2-rendered landing page
+- Latency ~30-60s (opt-in cost preserved — same as the old default)
+
+### Test 8: Parallel eval gate
+
+Check the server log for the eval summary after Test 5 — the eval gate's
+`duration_ms` should be ~3-5s, not ~30-40s. This verifies the 11
+scenarios ran via `Promise.all` (concurrent) instead of sequential
+`for...of`.
