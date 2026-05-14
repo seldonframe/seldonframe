@@ -129,6 +129,20 @@ export const soulV4Schema = z
     intelligence_hooks: z.array(intelligenceHookSchema),
     ucp_capabilities: ucpCapabilitiesSchema,
     custom_blocks: z.array(z.string()),
+    // NEW — extracted FAQ from URL crawl (optional, only present when
+    // auto_extract_faq was requested at workspace creation and the
+    // extractor found Q&A content on the site).
+    faqs: z
+      .array(
+        z
+          .object({
+            q: z.string().min(3).max(200),
+            a: z.string().min(3).max(800),
+            sourceUrl: z.string().url(),
+          })
+          .strict()
+      )
+      .optional(),
     split_recommendation: z.boolean(),
     custom_domain_suggestion: z.union([z.string(), z.null()]).optional(),
     framework_version: z.string().default("v4"),

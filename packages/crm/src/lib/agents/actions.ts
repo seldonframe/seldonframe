@@ -26,6 +26,12 @@ import { runEvalSuite, type EvalRunSummary } from "./eval-runner";
 const FaqRow = z.object({
   q: z.string().min(1),
   a: z.string().min(1),
+  // v1.45 (faq-from-url) — provenance fields, all optional for
+  // backward compatibility with operator-only FAQ payloads.
+  source: z.enum(["extracted", "synthesized", "operator"]).optional(),
+  sourceUrl: z.string().url().optional(),
+  synthesizedAt: z.string().optional(),
+  synthesizedFromSoulVersion: z.number().optional(),
 });
 const PricingFactRow = z.object({
   label: z.string().min(1),

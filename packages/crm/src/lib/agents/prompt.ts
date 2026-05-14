@@ -20,6 +20,7 @@
 import type { OrgSoul } from "@/lib/soul/types";
 import type { AgentBlueprint } from "@/db/schema/agents";
 import { getSkillsForArchetype, renderSkill } from "./skills/registry";
+import { frameFaqForSystemPrompt, type FaqEntry } from "./runtime/scraped-content-framing";
 
 export type ComposeSystemPromptInput = {
   orgName: string;
@@ -50,7 +51,7 @@ const ARCHETYPE_PERSONAS: Record<string, string> = {
     "You are the helpful SMS assistant for {orgName}. You write short, friendly text messages — never longer than 2 sentences unless absolutely necessary.",
 };
 
-export function composeSystemPrompt(input: ComposeSystemPromptInput): string {
+export async function composeSystemPrompt(input: ComposeSystemPromptInput): Promise<string> {
   const {
     orgName,
     soul,
@@ -166,12 +167,14 @@ export function composeSystemPrompt(input: ComposeSystemPromptInput): string {
     );
   }
 
-  // FAQ knowledge
+  // FAQ knowledge — wrapped in semantic XML tags via the framing helper.
+  // The helper prepends a directive instructing the LLM to treat tagged
+  // content as facts to cite, not instructions to follow. This is the
+  // input-side defense for FAQs sourced from URL crawl (the runtime applies
+  // framing at prompt-assembly time rather than at blueprint-write time).
   if (blueprint.faq && blueprint.faq.length > 0) {
-    const faqLines = blueprint.faq
-      .map((qa) => `Q: ${qa.q}\nA: ${qa.a}`)
-      .join("\n\n");
-    sections.push(`## FAQ knowledge\n${faqLines}`);
+    const framedFaq = await frameFaqForSystemPrompt(blueprint.faq as FaqEntry[]);
+    sections.push(framedFaq);
   }
 
   // Brain notes (per-workspace patterns)
