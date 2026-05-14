@@ -3,6 +3,7 @@ import { compileSoulWithTwoCallPattern, createByokAnthropicClient } from "./anth
 import { type RoutingResult, type SoulV4 } from "./schema";
 import { extractFaqsFromMarkdown, type ExtractedFaq } from "./faq-extractor";
 import { rankUrlsForFaqRelevance } from "./sitemap-priority";
+import { stripUnsourcedFacts } from "./fact-validator";
 
 export type SoulCompileServiceResult =
   | {
@@ -121,12 +122,28 @@ export async function compileSoulService(params: {
       }
     }
 
+    // v1.47 — strip hallucinated license numbers / review counts that
+    // don't appear in the source. Conservative: only targets 3+ digit
+    // numbers in tagline + soul_description. Pricing in booking_config /
+    // pricing_config stays untouched (legitimate operator data).
+    const scrubbed = stripUnsourcedFacts({
+      tagline: result.soul.tagline,
+      soulDescription: result.soul.soul_description,
+      sourceMarkdown: sourceText,
+    });
+
+    const scrubbedSoul = {
+      ...result.soul,
+      tagline: scrubbed.tagline,
+      soul_description: scrubbed.soulDescription,
+    };
+
     return {
       status: "ready",
       routing: result.routing,
       soul: extractedFaqs.length > 0
-        ? { ...result.soul, faqs: extractedFaqs }
-        : result.soul,
+        ? { ...scrubbedSoul, faqs: extractedFaqs }
+        : scrubbedSoul,
       attempts: result.attempts,
       sourceText,
       pagesUsed,
