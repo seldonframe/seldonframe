@@ -16,6 +16,9 @@ import {
 import { demoApiBlockedResponse, isDemoReadonly } from "@/lib/demo/server";
 import { logEvent } from "@/lib/observability/log";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
+// v1.51 — auto-chatbot + client portal URL + tier upsell.
+import { createAgent } from "@/lib/agents/store";
+import { buildTierUpsell } from "@/lib/workspace/tier-upsell";
 
 type Body = {
   business_name?: unknown;
@@ -218,5 +221,52 @@ export async function POST(request: Request) {
     { request, orgId: result.workspace_id, status: 200, durationMs: Date.now() - startedAt }
   );
 
-  return NextResponse.json(result, { status: 200 });
+  // v1.51 — auto-create a draft chatbot scaffold so every workspace
+  // ships with the AI chatbot ready to publish. Operator can refine
+  // FAQ + publish to live via update_website_chatbot + publish_agent.
+  // Failure here does NOT block workspace creation — the workspace
+  // is already persisted; chatbot is a follow-up.
+  let chatbotEmbedSnippet: string | null = null;
+  let chatbotAgentId: string | null = null;
+  try {
+    const agentResult = await createAgent({
+      orgId: result.workspace_id,
+      archetype: "website-chatbot",
+      channel: "web_chat",
+      name: `${input.business_name} Chatbot`,
+      // Empty FAQ scaffold — operator fills via update_website_chatbot.
+      // Soul-derived FAQ population could happen here in a future
+      // iteration; for now, the chatbot exists as a deployable scaffold
+      // the operator can customize before publishing.
+      faq: [],
+    });
+    if (agentResult.ok) {
+      chatbotAgentId = agentResult.agent.id;
+      chatbotEmbedSnippet = `<script src="${agentResult.embedUrl}" async></script>`;
+    }
+  } catch (err) {
+    logEvent(
+      "auto_chatbot_draft_failed",
+      { workspace_id: result.workspace_id, error: err instanceof Error ? err.message : String(err) },
+      { request, status: 200, severity: "warn" }
+    );
+  }
+
+  // v1.51 — surface client portal URL + tier upsell so Claude Code's
+  // delivery output tells the operator about the end-client CRM
+  // feature (gated to Growth/Scale tiers).
+  const upsell = buildTierUpsell({ slug: result.slug, currentTier: "free" });
+
+  return NextResponse.json(
+    {
+      ...result,
+      chatbot_embed_snippet: chatbotEmbedSnippet,
+      chatbot_instructions: chatbotEmbedSnippet
+        ? "Paste this <script> onto the client's existing website (anywhere before </body>). The chatbot is in TEST mode by default — call publish_agent({ agent_id, status: 'live' }) once you've reviewed/edited the FAQ via update_website_chatbot."
+        : null,
+      chatbot_agent_id: chatbotAgentId,
+      ...upsell,
+    },
+    { status: 200 }
+  );
 }

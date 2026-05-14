@@ -14,6 +14,8 @@ import { synthesizeFaqsFromSoul } from "@/lib/soul-compiler/faq-synthesizer";
 import { getByokClaudeKeyFromHeaders } from "@/lib/soul-compiler/anthropic";
 import { compileSoulService } from "@/lib/soul-compiler/service";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
+// v1.51 — client portal URL + tier upsell shared with create-full route.
+import { buildTierUpsell } from "@/lib/workspace/tier-upsell";
 
 type WorkspaceCreateBody = {
   url?: unknown;
@@ -704,6 +706,10 @@ export async function POST(request: Request) {
         bearer_token_expires_at: workspace.bearerTokenExpiresAt
           ? workspace.bearerTokenExpiresAt.toISOString()
           : null,
+        // v1.51 — client portal URL + tier upsell. Tells the operator
+        // about the end-client CRM feature (their HVAC client gets a
+        // private dashboard) and what unlocks at Growth/Scale tiers.
+        ...buildTierUpsell({ slug: workspace.slug, currentTier: "free" }),
         next_steps: [
           agentInfo.embedUrl
             ? "Send the operator the `primary_deliverable.embed_snippet` so they can paste it onto the client's existing website."
