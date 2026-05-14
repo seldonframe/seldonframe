@@ -578,22 +578,53 @@ export async function POST(request: Request) {
       }
     }
 
+    // v1.48 — response reshape. When `include_landing_page: false`
+    // (the lean URL flow), the response leads with the chatbot embed
+    // snippet as the agency's HEADLINE DELIVERABLE. Claude Code's
+    // natural summarization picks up `primary_deliverable` as the
+    // top-level semantically-meaningful field, so the operator sees
+    // "paste this onto your client's site" first — not the phantom
+    // SeldonFrame-hosted subdomain URL.
+    //
+    // When `include_landing_page: true` (full flow), the response
+    // shape preserves the legacy `workspace.url` + `subdomain_url`
+    // fields for backward compat. The phantom-URL problem doesn't
+    // exist in that flow because the operator EXPLICITLY asked for
+    // a landing page.
+    const primaryDeliverable = agentInfo.embedUrl
+      ? {
+          kind: "chatbot_embed" as const,
+          embed_snippet: `<script src="${agentInfo.embedUrl}" async></script>`,
+          paste_instruction:
+            "Paste this <script> tag onto the client's existing website anywhere before </body>. The chatbot appears bottom-right and starts answering FAQs + booking appointments against this workspace's calendar.",
+          what_it_does:
+            "Answers FAQs auto-extracted from the client's site + books appointments. Eval-gated (≥10/11 safety + behavior scenarios passed). White-label-ready under partner-agency attachment.",
+        }
+      : null;
+
+    const operatorDashboards = {
+      admin: dashboardUrl,
+      booking: `${subdomainUrl}/book`,
+      intake: `${subdomainUrl}/intake`,
+    };
+
     return NextResponse.json(
       {
         status: "ready",
+        // v1.48 — HEADLINE deliverable (the agency pastes this snippet
+        // onto their CLIENT'S existing website). Placed first so Claude
+        // Code's response summarization leads with it.
+        primary_deliverable: primaryDeliverable,
+        // Operator-facing surfaces (CRM + booking + intake). NOT customer-
+        // facing — these are for the agency to manage the client workspace.
+        operator_dashboards: operatorDashboards,
+        // Workspace identity (for follow-up MCP calls).
         workspace: {
           id: workspace.orgId,
           name: workspace.name,
           slug: workspace.slug,
           subdomain,
-          url: subdomainUrl,
         },
-        subdomain_url: subdomainUrl,
-        dashboard_url: dashboardUrl,
-        routing: compileResult.routing,
-        attempts: compileResult.attempts,
-        pagesUsed: compileResult.pagesUsed,
-        // NEW v1.45 (faq-from-url):
         agent: agentInfo.id
           ? {
               id: agentInfo.id,
@@ -603,24 +634,45 @@ export async function POST(request: Request) {
             }
           : null,
         faq_summary: agentInfo.faqSummary ?? null,
-        // v1.47 — chatbot embed snippet as the headline deliverable for
-        // URL flows. Agency pastes this directly into the client's
-        // existing website (before </body>).
+        // v1.47 fields kept for backward compat with operators who
+        // bookmarked these field names. New code should read from
+        // primary_deliverable above.
         chatbot_embed_snippet: agentInfo.embedUrl
           ? `<script src="${agentInfo.embedUrl}" async></script>`
           : null,
         chatbot_instructions: agentInfo.embedUrl
           ? "Paste the chatbot_embed_snippet above into the client's existing website (anywhere before </body>). The chatbot appears bottom-right and starts booking appointments + answering FAQs immediately."
           : null,
-        landing_page: includeLandingPage ? { url: subdomainUrl } : null,
+        // Landing page: ONLY surfaced as a deliverable when the operator
+        // explicitly asked (include_landing_page: true). Otherwise null
+        // so Claude Code doesn't promote a phantom URL.
+        landing_page: includeLandingPage
+          ? { url: subdomainUrl, kind: "seldonframe_hosted" }
+          : null,
+        // Transparent explanation when we skipped landing page generation.
+        what_we_skipped: !includeLandingPage
+          ? {
+              landing_page:
+                "Not generated. The agency's client likely already has their own website (the URL the operator passed). The chatbot embed snippet above is the canonical deliverable; paste it onto the client's existing site. If you DO want a SeldonFrame-hosted landing page, call `generate_landing_page({ workspace_id })`.",
+            }
+          : null,
+        routing: compileResult.routing,
+        attempts: compileResult.attempts,
+        pagesUsed: compileResult.pagesUsed,
+        // Legacy field names kept for backward compat with v1.45-1.47
+        // callers; new code should use operator_dashboards.admin and
+        // primary_deliverable.embed_snippet.
+        subdomain_url: subdomainUrl,
+        dashboard_url: dashboardUrl,
         next_steps: [
           agentInfo.embedUrl
-            ? "Paste chatbot_embed_snippet onto the client's existing website."
+            ? "Send the operator the `primary_deliverable.embed_snippet` so they can paste it onto the client's existing website."
             : null,
           !includeLandingPage
-            ? `Optional: generate a SeldonFrame-hosted landing page via generate_landing_page({ workspace_id: '${workspace.orgId}' }).`
+            ? `Optional follow-up: if the client doesn't already have a website, call generate_landing_page({ workspace_id: '${workspace.orgId}' }) for a SeldonFrame-hosted landing page (~30-60s).`
             : null,
-          "Attach to a partner agency via register_partner_agency + attach_workspace_to_partner_agency.",
+          "Attach to a partner agency via register_partner_agency + attach_workspace_to_partner_agency for white-label chrome.",
+          "Ask the operator for their email + call finalize_workspace({ workspace_id, email }) to mint the admin dashboard URL.",
         ].filter((s): s is string => Boolean(s)),
       },
       { status: 200 }
