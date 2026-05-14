@@ -478,14 +478,16 @@ export const TOOLS = [
   {
     name: "create_workspace_from_url",
     description:
-      "⚡ MUST USE WHEN A URL IS PROVIDED — this is the atomic URL-input path for agency client workspace creation. " +
+      "⚡ MUST USE WHEN A URL IS PROVIDED — this is the LEAN atomic URL-input path for agency client workspace creation (v1.47, ~10-30s). " +
       "PATTERNS THAT ROUTE HERE (do not even consider other workspace-creation tools when input matches): " +
       "'create a workspace for <URL>', 'set up <client> at <URL>', 'spin up <URL>', '<URL>' alone, or any operator message containing http://, https://, or a recognizable domain (.com/.io/.net/.co/.app/.dev/.us etc). " +
-      "WHAT THIS TOOL ALONE DOES: backend crawls the URL → soul-extracts business info → creates CRM + booking + intake + landing + eval-gated AI chatbot wired to FAQs auto-pulled from the site + the booking calendar. " +
+      "WHAT THIS TOOL DOES: backend crawls the URL → extracts business info → creates CRM + booking + intake + eval-gated AI chatbot wired to FAQs auto-pulled from the site. " +
+      "DOES NOT GENERATE A LANDING PAGE BY DEFAULT — agency clients typically already have their own website (the URL the operator passed). The chatbot ships as an embed snippet (`chatbot_embed_snippet` in the response) which the agency pastes onto the client's existing site. " +
+      "If you ALSO need a SeldonFrame-hosted landing page (only when the client has no site of their own), call `generate_landing_page({ workspace_id })` AFTER this returns — it's a separate ~30-60s opt-in step. " +
       "DO NOT use create_workspace_v2 or create_full_workspace when a URL is available. Those tools require PRE-EXTRACTED structured fields (business_name, services[], phone) and will produce INFERIOR results for URL input because they skip the URL crawler, the FAQ extractor, and the auto-chatbot build. " +
       "DO NOT manually WebFetch the URL first — the SeldonFrame backend's soul-compiler is already wired to scrape + extract. Forwarding pre-fetched HTML wastes a round-trip and bypasses the FAQ-from-URL pipeline. " +
       "Eval gate: chatbot must pass ≥10 of 11 safety + behavior scenarios to ship 'live'. White-label-ready under partner-agency attachment. " +
-      "Returns: workspace + agent + embed_url + faq_summary. MANDATORY FOLLOW-UP: ask the operator verbatim 'What email should I use for your account?' then call finalize_workspace({ workspace_id, email }) — the admin dashboard URL is ONLY created by finalize_workspace.",
+      "Returns: workspace + agent + chatbot_embed_snippet + faq_summary. MANDATORY FOLLOW-UP: ask the operator verbatim 'What email should I use for your account?' then call finalize_workspace({ workspace_id, email }) — the admin dashboard URL is ONLY created by finalize_workspace.",
     inputSchema: obj(
       {
         url: str("Business website URL, e.g. https://dallasplumbing.com"),
@@ -498,6 +500,7 @@ export const TOOLS = [
           url: args.url,
           include_chatbot: true,
           auto_extract_faq: true,
+          include_landing_page: false,
         },
         allow_anonymous: true,
       }),
