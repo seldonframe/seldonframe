@@ -8,6 +8,9 @@ import {
 import { createWorkspaceFromSoulAction } from "@/lib/billing/orgs";
 import { demoApiBlockedResponse, isDemoReadonly } from "@/lib/demo/server";
 import { logEvent } from "@/lib/observability/log";
+import { createAgent, publishAgent } from "@/lib/agents/store";
+import { setPublicChatbotEmbed } from "@/lib/agents/public-embed";
+import { synthesizeFaqsFromSoul } from "@/lib/soul-compiler/faq-synthesizer";
 import { getByokClaudeKeyFromHeaders } from "@/lib/soul-compiler/anthropic";
 import { compileSoulService } from "@/lib/soul-compiler/service";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
@@ -35,6 +38,9 @@ type WorkspaceCreateBody = {
   state?: unknown;
   services?: unknown;
   testimonials?: unknown;
+  // v1.45 — FAQ-from-URL chatbot flags
+  include_chatbot?: unknown;
+  auto_extract_faq?: unknown;
 };
 
 const WORKSPACE_BASE_DOMAIN =
@@ -370,11 +376,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing BYO Claude API key in headers." }, { status: 400 });
   }
 
+  const includeChatbot = body.include_chatbot === true;
+  const autoExtractFaq = body.auto_extract_faq === true;
+
   const input = url || description;
   const compileResult = await compileSoulService({
     input,
     claudeApiKey,
     model,
+    autoExtractFaq,
   });
 
   if (compileResult.status === "error") {
@@ -453,6 +463,112 @@ export async function POST(request: Request) {
       }
     );
 
+    // ── Optional chatbot build (v1.45 — create_workspace_from_url) ──────
+    let agentInfo: {
+      id: string | null;
+      status: "live" | "test" | null;
+      embedUrl: string | null;
+      faqSummary?: {
+        extractedCount: number;
+        synthesizedCount: number;
+        total: number;
+        extractedSourceUrls: string[];
+      };
+      evalDiagnostic?: { failedScenarios: Array<{ id: string }> };
+    } = { id: null, status: null, embedUrl: null };
+
+    if (includeChatbot && compileResult.status === "ready") {
+      const FAQ_TARGET_COUNT = parseInt(process.env.FAQ_TARGET_COUNT ?? "8", 10);
+      try {
+        const extracted = compileResult.extractedFaqs ?? [];
+        const needSynthesis = Math.max(0, FAQ_TARGET_COUNT - extracted.length);
+        const synthesized = needSynthesis > 0
+          ? await synthesizeFaqsFromSoul({
+              soul: compileResult.soul,
+              apiKey: claudeApiKey,
+              targetCount: needSynthesis,
+              existingFaqs: extracted.map((e) => ({ q: e.q, a: e.a })),
+            })
+          : [];
+
+        const blueprintFaq = [
+          ...extracted.map((e) => ({
+            q: e.q,
+            a: e.a,
+            source: "extracted" as const,
+            sourceUrl: e.sourceUrl,
+          })),
+          ...synthesized.map((s) => ({
+            q: s.q,
+            a: s.a,
+            source: "synthesized" as const,
+            synthesizedAt: new Date().toISOString(),
+            synthesizedFromSoulVersion: 4,
+          })),
+        ];
+
+        const createResult = await createAgent({
+          orgId: workspace.orgId,
+          archetype: "website-chatbot",
+          channel: "web_chat",
+          name: `${compileResult.soul.business_name} Chatbot`,
+          faq: blueprintFaq,
+        });
+
+        if (createResult.ok) {
+          const publishResult = await publishAgent({
+            agentId: createResult.agent.id,
+            orgId: workspace.orgId,
+            status: "live",
+          });
+
+          const faqSummary = {
+            extractedCount: extracted.length,
+            synthesizedCount: synthesized.length,
+            total: blueprintFaq.length,
+            extractedSourceUrls: [...new Set(extracted.map((e) => e.sourceUrl))],
+          };
+
+          if (publishResult.ok) {
+            await setPublicChatbotEmbed(workspace.orgId, {
+              agentId: createResult.agent.id,
+              embedUrl: createResult.embedUrl,
+            });
+            agentInfo = {
+              id: createResult.agent.id,
+              status: "live",
+              embedUrl: createResult.embedUrl,
+              faqSummary,
+            };
+          } else {
+            // Eval gate didn't pass; agent stays at test.
+            // Surface diagnostic info without failing the whole request.
+            const failedScenarios =
+              publishResult.evalSummary?.ok
+                ? (publishResult.evalSummary.summary.results ?? [])
+                    .filter((r) => !r.passed)
+                    .map((r) => ({ id: r.scenarioId }))
+                : [];
+            agentInfo = {
+              id: createResult.agent.id,
+              status: "test",
+              embedUrl: null,
+              faqSummary,
+              evalDiagnostic: { failedScenarios },
+            };
+          }
+        }
+      } catch (err) {
+        // Workspace was created; chatbot build failed. Log + surface in
+        // response but don't fail the whole request.
+        logEvent(
+          "workspace_compile_chatbot_build_failed",
+          { user_id: userId, error: err instanceof Error ? err.message : "unknown" },
+          { request, status: 200, severity: "warn" }
+        );
+      }
+    }
+
     return NextResponse.json(
       {
         status: "ready",
@@ -468,6 +584,16 @@ export async function POST(request: Request) {
         routing: compileResult.routing,
         attempts: compileResult.attempts,
         pagesUsed: compileResult.pagesUsed,
+        // NEW v1.45 (faq-from-url):
+        agent: agentInfo.id
+          ? {
+              id: agentInfo.id,
+              status: agentInfo.status,
+              embed_url: agentInfo.embedUrl,
+              eval_diagnostic: agentInfo.evalDiagnostic ?? null,
+            }
+          : null,
+        faq_summary: agentInfo.faqSummary ?? null,
       },
       { status: 200 }
     );
