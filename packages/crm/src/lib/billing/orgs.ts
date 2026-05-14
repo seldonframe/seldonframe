@@ -17,6 +17,7 @@ import { getOrgSubscription } from "@/lib/billing/subscription";
 import { installSoul, type FrameworkConfig } from "@/lib/soul/install";
 import { seedInitialBlocks } from "@/lib/soul-compiler/blocks";
 import type { SoulV4 } from "@/lib/soul-compiler/schema";
+import { mintWorkspaceToken } from "@/lib/auth/workspace-token";
 import {
   ADMIN_TOKEN_SENTINEL_USER_ID,
   resolveAdminTokenContext,
@@ -758,12 +759,34 @@ type CreateWorkspaceFromSoulInput = {
 
 type CreateWorkspaceFromSoulOptions = {
   userId?: string;
+  /**
+   * v1.49 — when true, skip user/billing requirements entirely. The
+   * workspace is created with `ownerId: null` + `plan: "free"` and a
+   * 7-day bearer token is minted for admin access. Used by the
+   * anonymous URL-input path in /api/v1/workspace/create so operators
+   * can create their first workspace from a URL without a
+   * SELDONFRAME_API_KEY (matches the existing anonymous Google-paste
+   * path's UX).
+   */
+  anonymous?: boolean;
 };
 
 export async function createWorkspaceFromSoulAction(input: CreateWorkspaceFromSoulInput, options?: CreateWorkspaceFromSoulOptions) {
   assertWritable();
 
-  const user = options?.userId ? await getBillingUserById(options.userId) : await requireBillingUser();
+  // v1.49 — three modes:
+  //  1. userId provided → look up that user (existing auth'd path)
+  //  2. anonymous: true → skip user/billing entirely (new lean URL path)
+  //  3. neither → fall back to requireBillingUser() (legacy form-submit)
+  let user: Awaited<ReturnType<typeof getBillingUserById>> | null = null;
+  if (options?.anonymous === true) {
+    user = null;
+  } else if (options?.userId) {
+    user = await getBillingUserById(options.userId);
+  } else {
+    user = await requireBillingUser();
+  }
+
   const soul = input.soul;
   const businessName = String(soul.business_name ?? "").trim();
 
@@ -772,8 +795,13 @@ export async function createWorkspaceFromSoulAction(input: CreateWorkspaceFromSo
     throw new Error("Business name is required");
   }
 
-  const existingWorkspaces = await getOwnedWorkspaceCount(user.id);
-  await ensureWorkspaceCreationBillingForUser(user, existingWorkspaces);
+  // Billing checks only apply when a user is attached (auth'd path).
+  // Anonymous workspaces are free-tier with bearer-token admin access;
+  // they don't count toward any user's workspace quota.
+  if (user) {
+    const existingWorkspaces = await getOwnedWorkspaceCount(user.id);
+    await ensureWorkspaceCreationBillingForUser(user, existingWorkspaces);
+  }
 
   const baseSlug = slugify(businessName) || `workspace-${randomUUID().slice(0, 8)}`;
   let slug = baseSlug;
@@ -792,9 +820,11 @@ export async function createWorkspaceFromSoulAction(input: CreateWorkspaceFromSo
     .values({
       name: businessName,
       slug,
-      ownerId: user.id,
-      parentUserId: user.id,
-      plan: "pro",
+      // v1.49 — anonymous workspaces have NULL ownership and free plan;
+      // auth'd workspaces tie to the billing user with pro plan.
+      ownerId: user?.id ?? null,
+      parentUserId: user?.id ?? null,
+      plan: user ? "pro" : "free",
       settings: {
         soulCompiler: {
           sourceType: (input.pagesUsed?.length ?? 0) > 0 ? "url" : "description",
@@ -813,11 +843,16 @@ export async function createWorkspaceFromSoulAction(input: CreateWorkspaceFromSo
 
   console.info(`Workspace record created successfully with id: ${org.id}, slug: ${org.slug}`);
 
-  await db.insert(orgMembers).values({
-    orgId: org.id,
-    userId: user.id,
-    role: "owner",
-  });
+  // orgMembers insert is auth'd-path only — anonymous workspaces have
+  // no user to add as a member. Operators who later claim the workspace
+  // via NextAuth signup get added to orgMembers at claim time.
+  if (user) {
+    await db.insert(orgMembers).values({
+      orgId: org.id,
+      userId: user.id,
+      role: "owner",
+    });
+  }
 
   const ownerName = businessName.split(" ")[0] || "";
   const framework = mapSoulToFrameworkConfig(soul);
@@ -847,18 +882,39 @@ export async function createWorkspaceFromSoulAction(input: CreateWorkspaceFromSo
     await seedInitialBlocks(org.id, soul.base_framework);
   }
 
-  const cookieStore = await cookies();
-  cookieStore.set("sf_active_org_id", org.id, {
-    path: "/",
-    httpOnly: true,
-    sameSite: "lax",
-    maxAge: 60 * 60 * 24 * 30,
-  });
+  // v1.49 — anonymous workspaces mint a 7-day bearer token for admin
+  // access (same lifetime as the existing anonymous Google-paste path).
+  // Auth'd workspaces don't need this — the operator logs in via
+  // NextAuth + has session cookies.
+  let bearerToken: string | undefined;
+  let bearerTokenExpiresAt: Date | null | undefined;
+  if (options?.anonymous === true) {
+    const minted = await mintWorkspaceToken(org.id, {
+      name: "mcp:anonymous-url-create",
+      expiresInDays: 7,
+    });
+    bearerToken = minted.token;
+    bearerTokenExpiresAt = minted.expiresAt;
+  }
+
+  // Cookie set is auth'd-path only — anonymous flow uses the bearer
+  // token via Authorization header instead of session cookies.
+  if (user) {
+    const cookieStore = await cookies();
+    cookieStore.set("sf_active_org_id", org.id, {
+      path: "/",
+      httpOnly: true,
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 30,
+    });
+  }
 
   return {
     orgId: org.id,
     slug: org.slug,
     name: org.name,
+    bearerToken,
+    bearerTokenExpiresAt,
   };
 }
 
