@@ -502,6 +502,35 @@ export const TOOLS = [
         allow_anonymous: true,
       }),
   },
+  // v1.47 — explicit opt-in landing-page generator. create_workspace_from_url
+  // defaults to NO landing page (the client already has their own site);
+  // when the operator DOES want a SeldonFrame-hosted landing page, this
+  // tool generates it on demand.
+  {
+    name: "generate_landing_page",
+    description:
+      "Generate a SeldonFrame-hosted landing page for an EXISTING workspace. " +
+      "USE-WHEN: operator explicitly asks for a landing page after the workspace exists, OR the client has no website of their own and the agency wants SeldonFrame to host the public-facing site. " +
+      "If the client already has a website (the common agency case), the chatbot embed snippet returned by create_workspace_from_url is the canonical deliverable; you do NOT need a generated landing page. " +
+      "Latency: ~30-60s. Returns the public landing URL. Operator can later customize per-block via update_landing_section / persist_block.",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace UUID (from create_workspace_from_url or other creation tool)."),
+        style: str(
+          "Optional archetype override: 'bold-urgency', 'editorial-warm', 'clinical-trust', 'cinematic-aspirational'. If omitted, the soul's base_framework picks the default style."
+        ),
+      },
+      ["workspace_id"]
+    ),
+    handler: async (args) =>
+      api("POST", "/workspace/generate-landing-page", {
+        body: {
+          workspace_id: args.workspace_id,
+          style: args.style ?? null,
+        },
+        allow_anonymous: true,
+      }),
+  },
   {
     name: "list_workspaces",
     description: "List all workspaces known to this device (plus any Pro workspaces if SELDONFRAME_API_KEY is set).",
