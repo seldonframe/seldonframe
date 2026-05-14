@@ -324,22 +324,43 @@ export async function POST(request: Request) {
     return handleAnonymousCreate(request, body);
   }
 
-  // --- Existing Soul-compile flow below; unchanged behavior. ---
+  // --- Existing Soul-compile flow below. ---
+
+  // v1.49 — URL-input anonymous path. The lean URL flow (
+  // create_workspace_from_url MCP tool) sends `{ url, include_chatbot,
+  // auto_extract_faq, include_landing_page: false }` without
+  // x-seldon-api-key. Before v1.49 this fell through to the auth-
+  // required branch and 401'd, breaking the marketing promise of
+  // "first workspace free, no key needed, paste a URL". Now we detect
+  // this shape and let it through to compileSoulService + the
+  // anonymous-mode createWorkspaceFromSoulAction (which mints a 7-day
+  // bearer token, same as the existing Google-paste anonymous path).
+  const hasAnonymousUrlShape =
+    typeof body.url === "string" &&
+    body.url.trim().length > 0 &&
+    typeof body.name !== "string" &&
+    !hasApiKeyHeader;
 
   const session = apiKeyUserId ? null : await auth();
   const userId = apiKeyUserId ?? session?.user?.id ?? null;
+  const isAnonymousUrlFlow = hasAnonymousUrlShape && !userId;
 
   if (hasApiKeyHeader && !apiKeyUserId) {
     logEvent("workspace_compile_invalid_api_key", {}, { request, status: 401 });
     return NextResponse.json({ error: "Invalid x-seldon-api-key." }, { status: 401 });
   }
 
-  if (!userId) {
+  if (!userId && !isAnonymousUrlFlow) {
     logEvent("workspace_compile_unauthorized", {}, { request, status: 401 });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const rateKey = `workspace-compile:${userId}`;
+  // v1.49 — anonymous URL flow uses IP-based rate limiting (matching
+  // the existing anonymous Google-paste path's pattern). Auth'd flow
+  // uses user-id-based rate limiting.
+  const rateKey = isAnonymousUrlFlow
+    ? `workspace-compile-anon-url:${resolveRequestIp(request.headers)}`
+    : `workspace-compile:${userId}`;
   const rateLimitPerHour = process.env.NODE_ENV === "development" ? 30 : 10;
 
   const allowed = await checkRateLimit(rateKey, rateLimitPerHour, 60 * 60 * 1000);
@@ -442,16 +463,27 @@ export async function POST(request: Request) {
   }
 
   try {
-    const workspace = await createWorkspaceFromSoulAction({
-      soul: compileResult.soul,
-      sourceText: compileResult.sourceText,
-      pagesUsed: compileResult.pagesUsed,
-      includeLandingPage,  // v1.47
-    }, { userId });
+    const workspace = await createWorkspaceFromSoulAction(
+      {
+        soul: compileResult.soul,
+        sourceText: compileResult.sourceText,
+        pagesUsed: compileResult.pagesUsed,
+        includeLandingPage,  // v1.47
+      },
+      // v1.49 — anonymous mode skips user/billing requirements and
+      // mints a 7-day bearer token. Auth'd mode behaves unchanged.
+      isAnonymousUrlFlow ? { anonymous: true } : { userId: userId ?? undefined }
+    );
 
     const subdomain = `${workspace.slug}.${WORKSPACE_BASE_DOMAIN}`;
     const subdomainUrl = `https://${subdomain}`;
-    const dashboardUrl = `https://app.seldonframe.com/dashboard?workspace=${workspace.orgId}`;
+    // v1.49 — admin dashboard URL. For anonymous flow, embed the
+    // bearer token in the URL (mirrors the existing anonymous
+    // Google-paste path's pattern). For auth'd flow, use the session-
+    // cookied dashboard URL.
+    const dashboardUrl = workspace.bearerToken
+      ? `https://app.seldonframe.com/admin/${workspace.orgId}?token=${workspace.bearerToken}`
+      : `https://app.seldonframe.com/dashboard?workspace=${workspace.orgId}`;
 
     logEvent(
       "workspace_compile_ready",
@@ -664,6 +696,14 @@ export async function POST(request: Request) {
         // primary_deliverable.embed_snippet.
         subdomain_url: subdomainUrl,
         dashboard_url: dashboardUrl,
+        // v1.49 — surface the bearer token + expiry for the anonymous
+        // URL flow. The MCP client stores this in ~/.seldonframe/device.json
+        // and threads it as Authorization: Bearer for subsequent calls.
+        // Null in the auth'd flow (session cookies handle auth there).
+        bearer_token: workspace.bearerToken ?? null,
+        bearer_token_expires_at: workspace.bearerTokenExpiresAt
+          ? workspace.bearerTokenExpiresAt.toISOString()
+          : null,
         next_steps: [
           agentInfo.embedUrl
             ? "Send the operator the `primary_deliverable.embed_snippet` so they can paste it onto the client's existing website."
