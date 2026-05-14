@@ -215,10 +215,35 @@ export async function POST(request: Request) {
     return NextResponse.json(result, { status: 422 });
   }
 
+  // CreateFullWorkspaceResult has workspace_id/slug as optional fields on
+  // the interface, so even after the error early-return TS won't narrow
+  // them to string. Hoist + guard so the rest of the handler can use
+  // non-undefined locals; the guarded branch should never fire on the
+  // ready path but keeps the type system honest.
+  const workspaceId = result.workspace_id;
+  const slug = result.slug;
+  if (!workspaceId || !slug) {
+    logEvent(
+      "atomic_workspace_create_inconsistent",
+      { ip, has_workspace_id: !!workspaceId, has_slug: !!slug },
+      { request, status: 500, durationMs: Date.now() - startedAt, severity: "error" }
+    );
+    return NextResponse.json(
+      {
+        status: "error",
+        error: {
+          step: "post_create",
+          message: "Internal: workspace_id or slug missing from ready result",
+        },
+      },
+      { status: 500 }
+    );
+  }
+
   logEvent(
     "atomic_workspace_create_succeeded",
-    { ip, slug: result.slug, personality: result.configured?.personality, timezone: result.configured?.timezone },
-    { request, orgId: result.workspace_id, status: 200, durationMs: Date.now() - startedAt }
+    { ip, slug, personality: result.configured?.personality, timezone: result.configured?.timezone },
+    { request, orgId: workspaceId, status: 200, durationMs: Date.now() - startedAt }
   );
 
   // v1.51 — auto-create a draft chatbot scaffold so every workspace
@@ -230,7 +255,7 @@ export async function POST(request: Request) {
   let chatbotAgentId: string | null = null;
   try {
     const agentResult = await createAgent({
-      orgId: result.workspace_id,
+      orgId: workspaceId,
       archetype: "website-chatbot",
       channel: "web_chat",
       name: `${input.business_name} Chatbot`,
@@ -247,7 +272,7 @@ export async function POST(request: Request) {
   } catch (err) {
     logEvent(
       "auto_chatbot_draft_failed",
-      { workspace_id: result.workspace_id, error: err instanceof Error ? err.message : String(err) },
+      { workspace_id: workspaceId, error: err instanceof Error ? err.message : String(err) },
       { request, status: 200, severity: "warn" }
     );
   }
@@ -255,7 +280,7 @@ export async function POST(request: Request) {
   // v1.51 — surface client portal URL + tier upsell so Claude Code's
   // delivery output tells the operator about the end-client CRM
   // feature (gated to Growth/Scale tiers).
-  const upsell = buildTierUpsell({ slug: result.slug, currentTier: "free" });
+  const upsell = buildTierUpsell({ slug, currentTier: "free" });
 
   return NextResponse.json(
     {
