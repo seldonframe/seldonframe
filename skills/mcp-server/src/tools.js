@@ -5086,6 +5086,11 @@ export const TOOLS = [
         publish_notes: str(
           "Optional one-line audit note (e.g. 'Added emergency-call FAQ').",
         ),
+        regenerate_synthesized: {
+          type: "boolean",
+          description:
+            "Optional. When true, regenerate the synthesized portion of the chatbot's FAQ from the current soul. Extracted and operator-added FAQ entries are preserved.",
+        },
       },
       ["workspace_id"],
     ),
@@ -5151,6 +5156,7 @@ export const TOOLS = [
           agent_id: agentId,
           patch,
           publish_notes: args.publish_notes ?? undefined,
+          regenerate_synthesized: args.regenerate_synthesized === true ? true : undefined,
         },
         workspace_id: ws,
       });

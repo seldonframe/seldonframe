@@ -41,6 +41,10 @@ import {
   setPublicChatbotEmbed,
   clearPublicChatbotEmbed,
 } from "@/lib/agents/public-embed";
+// v1.45 — faq-from-url: FAQ regeneration from soul.
+import { synthesizeFaqsFromSoul } from "@/lib/soul-compiler/faq-synthesizer";
+import { getByokClaudeKeyFromHeaders } from "@/lib/soul-compiler/anthropic";
+import type { AgentBlueprint } from "@/db/schema";
 
 type Body = {
   op?: unknown;
@@ -56,6 +60,9 @@ type Body = {
   agent_id?: unknown;
   patch?: unknown;
   publish_notes?: unknown;
+  // v1.45 — faq-from-url: optional FAQ regeneration from soul.
+  regenerate_synthesized?: unknown;
+  blueprint?: Record<string, unknown>;
   // publish
   status?: unknown;
   force?: unknown;
@@ -185,10 +192,92 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
+
+    // Mutable local patch — we may splice in a regenerated faq array below.
+    const patch = body.patch as Record<string, unknown>;
+
+    // Optional FAQ regeneration from soul (v1.45 — faq-from-url).
+    // When operator passes regenerate_synthesized: true, we replace all
+    // entries with source==='synthesized' with a fresh batch derived from
+    // the current soul. Extracted + operator entries are preserved.
+    if (body.regenerate_synthesized === true) {
+      // Load the agent to get its current blueprint.
+      const [agentRow] = await db
+        .select({ blueprint: agents.blueprint, orgId: agents.orgId })
+        .from(agents)
+        .where(and(eq(agents.id, body.agent_id), eq(agents.orgId, guard.orgId)))
+        .limit(1);
+
+      if (!agentRow) {
+        return NextResponse.json(
+          { ok: false, error: "agent_not_found" },
+          { status: 404 },
+        );
+      }
+
+      // Load the org's soul (the agent's parent org).
+      const [orgRow] = await db
+        .select({ soul: organizations.soul })
+        .from(organizations)
+        .where(eq(organizations.id, agentRow.orgId))
+        .limit(1);
+
+      if (!orgRow?.soul) {
+        return NextResponse.json(
+          { error: "Cannot regenerate synthesized FAQ — workspace has no soul yet." },
+          { status: 400 },
+        );
+      }
+
+      const claudeApiKey = getByokClaudeKeyFromHeaders(request.headers);
+      if (!claudeApiKey) {
+        return NextResponse.json(
+          { error: "Missing BYO Claude API key in headers for FAQ regeneration." },
+          { status: 400 },
+        );
+      }
+
+      const currentBlueprint = (agentRow.blueprint ?? {}) as AgentBlueprint;
+      const keptFaqs = (currentBlueprint.faq ?? []).filter(
+        (f) => f.source !== "synthesized",
+      );
+
+      const FAQ_TARGET_COUNT = parseInt(process.env.FAQ_TARGET_COUNT ?? "8", 10);
+      const needed = Math.max(0, FAQ_TARGET_COUNT - keptFaqs.length);
+
+      const synthesized =
+        needed > 0
+          ? await synthesizeFaqsFromSoul({
+              soul: orgRow.soul as unknown as Parameters<
+                typeof synthesizeFaqsFromSoul
+              >[0]["soul"],
+              apiKey: claudeApiKey,
+              targetCount: needed,
+              existingFaqs: keptFaqs.map((f) => ({ q: f.q, a: f.a })),
+            })
+          : [];
+
+      const newFaq = [
+        ...keptFaqs,
+        ...synthesized.map((s) => ({
+          q: s.q,
+          a: s.a,
+          source: "synthesized" as const,
+          synthesizedAt: new Date().toISOString(),
+          synthesizedFromSoulVersion: 4,
+        })),
+      ];
+
+      // Splice the regenerated FAQ into the patch BEFORE the existing
+      // update_blueprint flow processes it. The operator may have also
+      // supplied other patch fields (greeting, etc.); those still apply.
+      patch.faq = newFaq;
+    }
+
     const result = await updateAgentBlueprint({
       agentId: body.agent_id,
       orgId: guard.orgId,
-      patch: body.patch as Record<string, unknown>,
+      patch: patch,
       publishNotes:
         typeof body.publish_notes === "string" ? body.publish_notes : undefined,
     });
