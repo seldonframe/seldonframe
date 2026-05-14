@@ -101,8 +101,19 @@ export const TOOLS = [
         },
         email: str("Optional contact email surfaced in the landing footer (NOT the operator's account email — that comes via finalize_workspace)."),
         address: str("Optional business address."),
+        // v1.48 — schema-level routing guard. The model MUST pass `true`
+        // to confirm no URL was available. When the operator's input
+        // contains a URL, this assertion is false (don't lie); use
+        // `create_workspace_from_url` instead. This makes the routing
+        // a hard schema constraint, not just description prose.
+        confirmed_no_url_available: {
+          type: "boolean",
+          enum: [true],
+          description:
+            "MUST be `true`. Set to true ONLY if the operator did NOT provide a website URL (e.g. they pasted Google Maps text or typed structured fields). If a URL IS available, use `create_workspace_from_url` instead — do NOT lie here. The schema rejects calls without this confirmation.",
+        },
       },
-      ["business_name", "city", "state", "phone", "services", "business_description"]
+      ["business_name", "city", "state", "phone", "services", "business_description", "confirmed_no_url_available"]
     ),
     handler: async (args) => {
       const firstEver = isFirstEverCall();
@@ -487,7 +498,8 @@ export const TOOLS = [
       "DO NOT use create_workspace_v2 or create_full_workspace when a URL is available. Those tools require PRE-EXTRACTED structured fields (business_name, services[], phone) and will produce INFERIOR results for URL input because they skip the URL crawler, the FAQ extractor, and the auto-chatbot build. " +
       "DO NOT manually WebFetch the URL first — the SeldonFrame backend's soul-compiler is already wired to scrape + extract. Forwarding pre-fetched HTML wastes a round-trip and bypasses the FAQ-from-URL pipeline. " +
       "Eval gate: chatbot must pass ≥10 of 11 safety + behavior scenarios to ship 'live'. White-label-ready under partner-agency attachment. " +
-      "Returns: workspace + agent + chatbot_embed_snippet + faq_summary. MANDATORY FOLLOW-UP: ask the operator verbatim 'What email should I use for your account?' then call finalize_workspace({ workspace_id, email }) — the admin dashboard URL is ONLY created by finalize_workspace.",
+      "Returns: workspace + agent + chatbot_embed_snippet + faq_summary. MANDATORY FOLLOW-UP: ask the operator verbatim 'What email should I use for your account?' then call finalize_workspace({ workspace_id, email }) — the admin dashboard URL is ONLY created by finalize_workspace. " +
+      "⭐ WHEN RENDERING THE RESPONSE BACK TO THE OPERATOR: lead with `primary_deliverable.embed_snippet` + `primary_deliverable.paste_instruction`. The chatbot embed snippet is the agency's HEADLINE deliverable — the agency pastes it onto their CLIENT'S existing website (e.g. dallasplumbing.com), not onto a SeldonFrame-hosted page. DO NOT lead the response summary with 'Public URLs' or a `*.app.seldonframe.com` subdomain. When `include_landing_page: false` (the default for URL flow), there is NO SeldonFrame-hosted landing page — the subdomain is for previewing the chatbot only; don't promote it as a deliverable.",
     inputSchema: obj(
       {
         url: str("Business website URL, e.g. https://dallasplumbing.com"),
@@ -3034,8 +3046,18 @@ export const TOOLS = [
         service_area: { type: "array", items: { type: "string" } },
         email: str("Optional contact email surfaced in the landing footer (NOT the operator's account email)."),
         address: str("Optional business address."),
+        // v1.48 — schema-level routing guard (same as create_full_workspace).
+        // Forces the model to acknowledge no URL was available, preventing
+        // accidental routing to v2 when create_workspace_from_url is the
+        // correct path.
+        confirmed_no_url_available: {
+          type: "boolean",
+          enum: [true],
+          description:
+            "MUST be `true`. Set to true ONLY if the operator did NOT provide a website URL. If a URL IS available, use `create_workspace_from_url` instead — do NOT lie here.",
+        },
       },
-      ["business_name", "city", "state", "phone", "services", "business_description"],
+      ["business_name", "city", "state", "phone", "services", "business_description", "confirmed_no_url_available"],
     ),
     handler: async (args) => {
       const firstEver = isFirstEverCall();
