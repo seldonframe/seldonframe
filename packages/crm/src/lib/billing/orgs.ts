@@ -747,6 +747,13 @@ type CreateWorkspaceFromSoulInput = {
   soul: SoulV4;
   sourceText?: string;
   pagesUsed?: string[];
+  /**
+   * v1.47 — when false, skips landing-page block seeding. Used by the
+   * lean URL flow where the agency's client already has a website.
+   * Default true (full v2 flow unchanged for create_full_workspace +
+   * create_workspace_v2 callers).
+   */
+  includeLandingPage?: boolean;
 };
 
 type CreateWorkspaceFromSoulOptions = {
@@ -829,7 +836,16 @@ export async function createWorkspaceFromSoulAction(input: CreateWorkspaceFromSo
     markCompleted: true,
   });
 
-  await seedInitialBlocks(org.id, soul.base_framework);
+  // v1.47 — landing-page block seeding is now opt-out. The lean URL
+  // flow (create_workspace_from_url) passes includeLandingPage=false
+  // because the agency's client already has their own website; the
+  // chatbot embed snippet is the canonical deliverable. Operators who
+  // DO want a SeldonFrame-hosted landing page call generate_landing_page
+  // explicitly later.
+  const includeLandingPage = input.includeLandingPage !== false;
+  if (includeLandingPage) {
+    await seedInitialBlocks(org.id, soul.base_framework);
+  }
 
   const cookieStore = await cookies();
   cookieStore.set("sf_active_org_id", org.id, {
