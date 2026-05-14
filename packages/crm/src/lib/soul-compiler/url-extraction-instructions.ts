@@ -1,0 +1,99 @@
+// packages/crm/src/lib/soul-compiler/url-extraction-instructions.ts
+//
+// 2026-05-14 — Verbatim "playbook" returned by GET /api/v1/workspace/extract-instructions.
+// The MCP tool `create_workspace_from_url` proxies this payload through to Claude in CC.
+// Claude reads the instructions, runs WebFetch itself, extracts the structured fields
+// matching REQUIRED_FIELDS_SCHEMA, dialogues with the operator for any missing required
+// field, then calls create_workspace_v2. See spec
+// docs/superpowers/specs/2026-05-14-pull-firecrawl-out-of-backend-design.md.
+
+export const EXTRACTION_INSTRUCTIONS = `You are extracting business facts from a website to create a SeldonFrame workspace.
+
+URL: {url_echo}
+
+Step 1 — Fetch homepage.
+  Use the WebFetch tool to read {url_echo}. Look for: business name, services
+  offered, phone, city/state, business description, hours, emergency/same-day,
+  certifications, service area.
+
+Step 2 — Decide if sub-pages are needed.
+  If the homepage has all the REQUIRED fields below, skip to Step 3.
+  Otherwise, fetch up to 2 of these in this priority order (only if they exist
+  as links on the homepage): /about, /services, /contact, /pricing.
+  HARD LIMIT: 3 total WebFetch calls. Stop fetching after that even if
+  fields are still missing.
+
+Step 3 — Reason and extract.
+  Produce a JSON object matching the schema below. Use confident extractions
+  only; do not invent. If a REQUIRED field can't be determined from what you
+  fetched, leave it as null.
+
+Step 4 — Fill the gaps with operator dialog.
+  For every REQUIRED field that's still null, ask the operator ONE targeted
+  question per missing field, in the simplest form. Examples:
+    - "What's the business phone number?"
+    - "What city is the business based in?"
+  Don't ask for fields you already extracted with high confidence.
+
+Step 5 — Create the workspace.
+  Once every REQUIRED field is non-null, call create_workspace_v2 with the
+  full object. Then follow the v2 flow: for each block in
+  v2.recommended_blocks, call get_block_skill(name), generate props, call
+  persist_block. Then call complete_workspace_v2, then finalize_workspace.
+
+Failure modes:
+  - WebFetch returns empty/error: try the next priority page. If all 3 fetches
+    fail or return empty, tell the operator "I can't read the site — can you
+    paste a description of the business?" and route to description-based flow.
+  - WebFetch returns a Cloudflare/anti-bot challenge page (signs: "Just a
+    moment...", "Verifying you are human", < 500 chars of meaningful content):
+    same as empty — fall back to the operator-description dialog.
+  - JS-only SPA (HTML shell with no content): same — fall back to dialog.
+
+Do NOT:
+  - Pre-validate URLs (no HEAD requests, no probes — just WebFetch).
+  - Fetch more than 3 pages.
+  - Fabricate any field. If unsure, ask.
+  - Call create_full_workspace from this flow. Always use create_workspace_v2.
+`;
+
+export const REQUIRED_FIELDS_SCHEMA = {
+  type: "object",
+  required: [
+    "business_name",
+    "city",
+    "state",
+    "phone",
+    "services",
+    "business_description",
+  ],
+  properties: {
+    business_name: { type: "string", minLength: 1 },
+    city: { type: "string", minLength: 1 },
+    state: {
+      type: "string",
+      minLength: 1,
+      description: "2-letter or full name",
+    },
+    phone: { type: "string", minLength: 1 },
+    services: {
+      type: "array",
+      items: { type: "string" },
+      minItems: 1,
+    },
+    business_description: { type: "string", minLength: 1 },
+    review_count: { type: ["number", "null"] },
+    review_rating: { type: ["number", "null"] },
+    certifications: { type: ["array", "null"], items: { type: "string" } },
+    trust_signals: { type: ["array", "null"], items: { type: "string" } },
+    emergency_service: { type: ["boolean", "null"] },
+    same_day: { type: ["boolean", "null"] },
+    service_area: { type: ["array", "null"], items: { type: "string" } },
+    email: { type: ["string", "null"] },
+    address: { type: ["string", "null"] },
+    weekly_hours: { type: ["object", "null"] },
+    testimonials: { type: ["array", "null"] },
+  },
+} as const;
+
+export type RequiredFieldsSchema = typeof REQUIRED_FIELDS_SCHEMA;

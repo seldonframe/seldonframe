@@ -388,12 +388,31 @@ export async function POST(request: Request) {
   const description = typeof body.description === "string" ? body.description.trim() : "";
   const model = typeof body.model === "string" ? body.model.trim() : undefined;
 
-  if (!url && !description) {
-    return NextResponse.json({ error: "Provide either url or description." }, { status: 400 });
+  // 2026-05-14 — URL-based workspace creation moved to the MCP client.
+  // Legacy clients (MCP < 1.52) that POST a `url` body get an explicit
+  // upgrade message instead of silently degrading.
+  if (url) {
+    logEvent(
+      "workspace_compile_url_flow_moved",
+      { user_id: userId },
+      { request, status: 410 }
+    );
+    return NextResponse.json(
+      {
+        status: "error",
+        code: "url_flow_moved",
+        message:
+          "URL-based workspace creation has moved to the MCP client. Upgrade to @seldonframe/mcp v1.52+ (npx -y @seldonframe/mcp@latest) and retry.",
+      },
+      { status: 410 }
+    );
   }
 
-  if (url && description) {
-    return NextResponse.json({ error: "Provide either url or description, not both." }, { status: 400 });
+  if (!description) {
+    return NextResponse.json(
+      { error: "Provide a description." },
+      { status: 400 }
+    );
   }
 
   const claudeApiKey = getByokClaudeKeyFromHeaders(request.headers);
@@ -402,29 +421,20 @@ export async function POST(request: Request) {
   }
 
   const includeChatbot = body.include_chatbot === true;
-  const autoExtractFaq = body.auto_extract_faq === true;
   // v1.47 — defaults to true for backward compatibility with
   // create_full_workspace + create_workspace_v2. The new
   // create_workspace_from_url tool explicitly passes false to skip
   // landing-page generation (the client has their own site).
   const includeLandingPage = body.include_landing_page === false ? false : true;
 
-  const input = url || description;
   const compileResult = await compileSoulService({
-    input,
+    input: description,
     claudeApiKey,
     model,
-    autoExtractFaq,
-    lightMode: !includeLandingPage,  // v1.47 — lean mode when no landing page
   });
 
   if (compileResult.status === "error") {
-    const status =
-      compileResult.code === "invalid_input"
-        ? 400
-        : compileResult.code === "scrape_failed"
-          ? 422
-          : 500;
+    const status = compileResult.code === "invalid_input" ? 400 : 500;
 
     logEvent(
       "workspace_compile_error",
@@ -507,6 +517,10 @@ export async function POST(request: Request) {
     );
 
     // ── Optional chatbot build (v1.45 — create_workspace_from_url) ──────
+    // 2026-05-14 — Chatbot FAQ extraction removed from compileSoulService
+    // (FAQ extraction moved to MCP client via /extract-instructions endpoint).
+    // The description-only flow now skips chatbot auto-build. Operators can
+    // still create agents manually via create_agent + update_website_chatbot.
     let agentInfo: {
       id: string | null;
       status: "live" | "test" | null;
@@ -519,98 +533,6 @@ export async function POST(request: Request) {
       };
       evalDiagnostic?: { failedScenarios: Array<{ id: string }> };
     } = { id: null, status: null, embedUrl: null };
-
-    if (includeChatbot && compileResult.status === "ready") {
-      const FAQ_TARGET_COUNT = parseInt(process.env.FAQ_TARGET_COUNT ?? "8", 10);
-      try {
-        const extracted = compileResult.extractedFaqs ?? [];
-        const needSynthesis = Math.max(0, FAQ_TARGET_COUNT - extracted.length);
-        const synthesized = needSynthesis > 0
-          ? await synthesizeFaqsFromSoul({
-              soul: compileResult.soul,
-              apiKey: claudeApiKey,
-              targetCount: needSynthesis,
-              existingFaqs: extracted.map((e) => ({ q: e.q, a: e.a })),
-            })
-          : [];
-
-        const blueprintFaq = [
-          ...extracted.map((e) => ({
-            q: e.q,
-            a: e.a,
-            source: "extracted" as const,
-            sourceUrl: e.sourceUrl,
-          })),
-          ...synthesized.map((s) => ({
-            q: s.q,
-            a: s.a,
-            source: "synthesized" as const,
-            synthesizedAt: new Date().toISOString(),
-            synthesizedFromSoulVersion: 4,
-          })),
-        ];
-
-        const createResult = await createAgent({
-          orgId: workspace.orgId,
-          archetype: "website-chatbot",
-          channel: "web_chat",
-          name: `${compileResult.soul.business_name} Chatbot`,
-          faq: blueprintFaq,
-        });
-
-        if (createResult.ok) {
-          const publishResult = await publishAgent({
-            agentId: createResult.agent.id,
-            orgId: workspace.orgId,
-            status: "live",
-          });
-
-          const faqSummary = {
-            extractedCount: extracted.length,
-            synthesizedCount: synthesized.length,
-            total: blueprintFaq.length,
-            extractedSourceUrls: [...new Set(extracted.map((e) => e.sourceUrl))],
-          };
-
-          if (publishResult.ok) {
-            await setPublicChatbotEmbed(workspace.orgId, {
-              agentId: createResult.agent.id,
-              embedUrl: createResult.embedUrl,
-            });
-            agentInfo = {
-              id: createResult.agent.id,
-              status: "live",
-              embedUrl: createResult.embedUrl,
-              faqSummary,
-            };
-          } else {
-            // Eval gate didn't pass; agent stays at test.
-            // Surface diagnostic info without failing the whole request.
-            const failedScenarios =
-              publishResult.evalSummary?.ok
-                ? (publishResult.evalSummary.summary.results ?? [])
-                    .filter((r) => !r.passed)
-                    .map((r) => ({ id: r.scenarioId }))
-                : [];
-            agentInfo = {
-              id: createResult.agent.id,
-              status: "test",
-              embedUrl: null,
-              faqSummary,
-              evalDiagnostic: { failedScenarios },
-            };
-          }
-        }
-      } catch (err) {
-        // Workspace was created; chatbot build failed. Log + surface in
-        // response but don't fail the whole request.
-        logEvent(
-          "workspace_compile_chatbot_build_failed",
-          { user_id: userId, error: err instanceof Error ? err.message : "unknown" },
-          { request, status: 200, severity: "warn" }
-        );
-      }
-    }
 
     // v1.48 — response reshape. When `include_landing_page: false`
     // (the lean URL flow), the response leads with the chatbot embed
