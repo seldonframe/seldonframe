@@ -397,6 +397,29 @@ export function createByokAnthropicClient(apiKey: string) {
   return new Anthropic({ apiKey: normalized });
 }
 
+/**
+ * Resolves the Claude API key for soul-compiler + FAQ extraction +
+ * agent eval calls. Priority order (v1.50+):
+ *
+ *   1. Operator-provided header (`x-claude-api-key`, `anthropic-api-key`,
+ *      `x-anthropic-api-key`, `x-api-key`) — operator's own BYOK key.
+ *      Use case: operator pays for their own Claude usage with cost
+ *      transparency; no platform margin.
+ *
+ *   2. v1.50 — server's `process.env.ANTHROPIC_API_KEY` — platform-managed
+ *      fallback. Use case: anonymous URL workspace creation where the
+ *      operator hasn't configured a key (honors the "first workspace
+ *      free, no setup" marketing promise). SeldonFrame eats the
+ *      ~$0.05-$0.15 marginal cost per workspace; rate-limited per IP
+ *      by the existing anonymous-create gates (3/hour, 10/day from
+ *      v1.49.0).
+ *
+ *   3. Empty string — caller decides whether to fail with 400 (operator
+ *      explicitly required a header key) or skip the LLM step.
+ *
+ * Header takes precedence over env so operators can override the
+ * platform default per-request when they want cost transparency.
+ */
 export function getByokClaudeKeyFromHeaders(headers: Headers) {
   const candidates = [
     headers.get("x-claude-api-key"),
@@ -405,8 +428,19 @@ export function getByokClaudeKeyFromHeaders(headers: Headers) {
     headers.get("x-api-key"),
   ];
 
-  const key = candidates.find((value) => typeof value === "string" && value.trim().length > 0);
-  return key?.trim() || "";
+  const headerKey = candidates.find((value) => typeof value === "string" && value.trim().length > 0);
+  if (headerKey) {
+    return headerKey.trim();
+  }
+
+  // v1.50 — platform-managed fallback. Used by anonymous URL flow when
+  // operator doesn't bring a key. Configured in Vercel env.
+  const envKey = process.env.ANTHROPIC_API_KEY?.trim();
+  if (envKey) {
+    return envKey;
+  }
+
+  return "";
 }
 
 function extractText(content: Array<{ type: string; text?: string }>) {
