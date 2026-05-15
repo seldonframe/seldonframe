@@ -169,3 +169,48 @@ describe("resolveHeroImage — no UNSPLASH_ACCESS_KEY", () => {
     process.env.UNSPLASH_ACCESS_KEY = "test-key"; // restore for next test
   });
 });
+
+describe("resolveGalleryImages — Phase 2 per zero-result slot", () => {
+  test("LLM queries succeed → no Phase 2", async () => {
+    const { resolveGalleryImages } = await import("../../src/lib/crm/personality-images");
+    __setUnsplashFetchForTest(async (url: string) => {
+      const match = url.match(/query=([^&]+)/);
+      const query = match ? decodeURIComponent(match[1]) : "";
+      return fakeSearchResponse(5, query.replace(/\s+/g, "-"));
+    });
+
+    const results = await resolveGalleryImages(
+      ["dental crown", "dental cleaning", "dental implant"],
+      { archetype: "clinical-trust", businessName: "Smile Dental" },
+    );
+    assert.equal(results.length, 3);
+  });
+
+  test("All LLM queries zero-result → Phase 2 fills each slot", async () => {
+    const { resolveGalleryImages } = await import("../../src/lib/crm/personality-images");
+    const seenQueries: string[] = [];
+    __setUnsplashFetchForTest(async (url: string) => {
+      const match = url.match(/query=([^&]+)/);
+      const query = match ? decodeURIComponent(match[1]) : "";
+      seenQueries.push(query);
+      // Specific LLM queries zero-result; broad fallbacks succeed.
+      const { ARCHETYPES } = require("../../src/lib/workspace/aesthetic-archetypes");
+      const isFallback = ARCHETYPES["clinical-trust"].fallbackImageQueries.includes(query);
+      return isFallback ? fakeSearchResponse(5, query.replace(/\s+/g, "-")) : fakeZeroResponse();
+    });
+
+    const results = await resolveGalleryImages(
+      ["super specific dental crown procedure", "minimally invasive dental cleaning"],
+      { archetype: "clinical-trust", businessName: "Smile Dental" },
+    );
+    assert.equal(results.length, 2, "both slots should have been filled via Phase 2");
+  });
+
+  test("No archetypeContext → Phase 2 skipped, slots stay empty (existing behavior)", async () => {
+    const { resolveGalleryImages } = await import("../../src/lib/crm/personality-images");
+    __setUnsplashFetchForTest(async () => fakeZeroResponse());
+
+    const results = await resolveGalleryImages(["something nonexistent"]);
+    assert.equal(results.length, 0);
+  });
+});

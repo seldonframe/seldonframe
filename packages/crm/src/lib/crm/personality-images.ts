@@ -598,6 +598,7 @@ const GALLERY_QUERY_PARAMS = "auto=format&fit=crop&w=800&h=800&q=80";
 
 export async function resolveGalleryImages(
   queries: string[],
+  archetypeContext?: { archetype: AestheticArchetypeId; businessName: string },
 ): Promise<ResolvedUnsplashImage[]> {
   if (queries.length === 0) return [];
   const apiKey = process.env.UNSPLASH_ACCESS_KEY?.trim();
@@ -608,57 +609,91 @@ export async function resolveGalleryImages(
   const seenIds = new Set<string>();
   const out: ResolvedUnsplashImage[] = [];
 
-  for (const query of queries) {
+  for (let slotIdx = 0; slotIdx < queries.length; slotIdx++) {
+    const query = queries[slotIdx];
     const cleaned = query?.trim() || "professional business";
-    const candidates = buildQueryCandidates(cleaned);
 
+    let resolved = false;
+
+    // Phase 1 — try LLM-generated query + broadenings.
+    const candidates = buildQueryCandidates(cleaned);
     for (const candidate of candidates) {
-      try {
-        const results = await searchUnsplash(candidate, apiKey, {
-          perPage: 10,
-          orientation: "squarish",
-        });
-        if (!results) continue;
-        if (results.length === 0) {
-          console.warn(
-            JSON.stringify({
-              event: "unsplash_gallery_zero_results",
-              query: candidate,
-            }),
-          );
-          continue;
-        }
-        // Pick first result whose id isn't already used — avoids dup photos
-        // when neighbouring services share a top hit ("plumbing" + "plumber").
-        const fresh = results.find((r) => r.id && !seenIds.has(r.id));
-        const raw = fresh?.urls?.raw ?? fresh?.urls?.full;
-        if (raw && fresh?.id) {
-          seenIds.add(fresh.id);
-          // v1.40.5 — fire required download-tracking ping per tile.
-          if (fresh.links?.download_location) {
-            trackUnsplashDownload(fresh.links.download_location, apiKey);
-          }
-          out.push({
-            url: `${raw}${raw.includes("?") ? "&" : "?"}${GALLERY_QUERY_PARAMS}`,
-            attribution: buildAttribution(fresh),
-          });
-          break;
-        }
-      } catch (err) {
-        console.warn(
-          JSON.stringify({
-            event: "unsplash_gallery_throw",
-            query: candidate,
-            error: err instanceof Error ? err.message : String(err),
-          }),
-        );
+      const picked = await tryGalleryUnsplashFetch(candidate, apiKey, seenIds);
+      if (picked) {
+        out.push(picked);
+        resolved = true;
+        break;
       }
     }
 
-    // No candidate produced a URL — skip this slot. Gallery auto-reflows.
+    // Phase 2 — v1.54.0 — archetype-curated fallback. Index-based picking
+    // (NOT hash) so 6 services don't all land on the same fallback photo
+    // when their queries all zero-result. Modulo over the fallback array.
+    if (!resolved && archetypeContext) {
+      const fallbacks = ARCHETYPES[archetypeContext.archetype].fallbackImageQueries;
+      const fallbackQuery = fallbacks[slotIdx % fallbacks.length];
+      console.warn(
+        JSON.stringify({
+          event: "unsplash_archetype_fallback_used",
+          original_query: cleaned,
+          archetype: archetypeContext.archetype,
+          fallback_query: fallbackQuery,
+          context: "gallery",
+        }),
+      );
+      const picked = await tryGalleryUnsplashFetch(fallbackQuery, apiKey, seenIds);
+      if (picked) out.push(picked);
+    }
   }
 
   return out;
+}
+
+// Gallery-specific inner search: squarish orientation, perPage 10,
+// dedupes by photo id (shared seenIds set passed by caller).
+async function tryGalleryUnsplashFetch(
+  candidate: string,
+  apiKey: string,
+  seenIds: Set<string>,
+): Promise<ResolvedUnsplashImage | null> {
+  try {
+    const results = await searchUnsplash(candidate, apiKey, {
+      perPage: 10,
+      orientation: "squarish",
+    });
+    if (!results) return null;
+    if (results.length === 0) {
+      console.warn(
+        JSON.stringify({
+          event: "unsplash_gallery_zero_results",
+          query: candidate,
+        }),
+      );
+      return null;
+    }
+    const fresh = results.find((r) => r.id && !seenIds.has(r.id));
+    const raw = fresh?.urls?.raw ?? fresh?.urls?.full;
+    if (raw && fresh?.id) {
+      seenIds.add(fresh.id);
+      if (fresh.links?.download_location) {
+        trackUnsplashDownload(fresh.links.download_location, apiKey);
+      }
+      return {
+        url: `${raw}${raw.includes("?") ? "&" : "?"}${GALLERY_QUERY_PARAMS}`,
+        attribution: buildAttribution(fresh),
+      };
+    }
+    return null;
+  } catch (err) {
+    console.warn(
+      JSON.stringify({
+        event: "unsplash_gallery_throw",
+        query: candidate,
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    );
+    return null;
+  }
 }
 
 /**
