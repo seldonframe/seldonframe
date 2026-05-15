@@ -63,6 +63,12 @@ import {
 import { searchPexelsVideo } from "@/lib/assets/pexels";
 import { getBlock, type BookingProps, type IntakeProps } from "./registry";
 import type { LandingPageSection } from "@/components/landing/sections/types";
+import {
+  classifyArchetype,
+  type AestheticArchetypeId,
+} from "@/lib/workspace/aesthetic-archetypes";
+import type { OrgTheme } from "@/lib/theme/types";
+import type { OrgSoul } from "@/lib/soul/types";
 
 export interface PersistBlockInput {
   workspaceId: string;
@@ -91,6 +97,60 @@ export type PersistBlockResult =
       error: string;
       validation_errors: string[];
     };
+
+/**
+ * v1.54.0 — Resolves the aesthetic archetype for an org, with lazy
+ * backfill for workspaces created before v1.54 (whose theme JSONB
+ * lacks aestheticArchetype).
+ *
+ * Happy path: returns org.theme.aestheticArchetype, no DB write.
+ * Backfill: re-classifies from soul + writes patched theme via the
+ * dbUpdate callback, returns the freshly classified id.
+ *
+ * dbUpdate is injected for testability — the real callsite passes a
+ * closure over db.update(organizations).
+ */
+export async function resolveOrgArchetype(
+  workspaceId: string,
+  org: { theme: OrgTheme; soul: OrgSoul | null; name: string },
+  dbUpdate: (patch: { theme: OrgTheme }) => Promise<void>,
+): Promise<AestheticArchetypeId> {
+  if (org.theme.aestheticArchetype) {
+    return org.theme.aestheticArchetype;
+  }
+
+  // Lazy backfill — re-classify from soul + patch theme so subsequent
+  // persists read from theme directly.
+  //
+  // The organizations.soul JSONB stores snake_case keys (personality_vertical,
+  // emergency_service, etc. — see anonymous-workspace.ts) but the OrgSoul TS
+  // interface is camelCase. Cast through `Record<string, unknown>` to read
+  // the actual runtime shape — the same pattern used in create-full.ts,
+  // forms/submit, deals/actions, generate-with-claude, etc.
+  const soulRecord = (org.soul as unknown as Record<string, unknown> | null) ?? null;
+  const reclassified = classifyArchetype({
+    vertical: (soulRecord?.personality_vertical as string | undefined) ?? "",
+    emergencyService: (soulRecord?.emergency_service as boolean | null | undefined) ?? null,
+    sameDay: (soulRecord?.same_day as boolean | null | undefined) ?? null,
+    reviewRating: (soulRecord?.review_rating as number | null | undefined) ?? null,
+    reviewCount: (soulRecord?.review_count as number | null | undefined) ?? null,
+    businessDescription: (soulRecord?.business_description as string | null | undefined) ?? null,
+  });
+
+  console.warn(
+    JSON.stringify({
+      event: "org_archetype_lazy_backfilled",
+      workspace_id: workspaceId,
+      archetype: reclassified,
+    }),
+  );
+
+  await dbUpdate({
+    theme: { ...org.theme, aestheticArchetype: reclassified },
+  });
+
+  return reclassified;
+}
 
 export async function persistBlockForWorkspace(
   input: PersistBlockInput,
