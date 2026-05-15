@@ -54,6 +54,7 @@ import type {
   Intake as BlueprintIntake,
   IntakeQuestion,
   LandingSection,
+  SectionHero,
   WeeklyHours,
 } from "@/lib/blueprint/types";
 import {
@@ -426,7 +427,7 @@ async function persistLandingSectionBlock(
       }
       // Mutate downstream inputs to use the enforced values.
       (validatedProps as { template?: string }).template = enforcement.finalTemplate || undefined;
-      section = { ...section, variant: enforcement.finalVariant as typeof section.variant };
+      section = { ...section, variant: enforcement.finalVariant as SectionHero["variant"] };
     }
   }
 
