@@ -10,9 +10,10 @@
 // fixups (e.g. re-roll a block that failed a validator).
 
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { blockInstances, organizations } from "@/db/schema";
+import { agents, blockInstances, organizations } from "@/db/schema";
+import { createAgent } from "@/lib/agents/store";
 import { guardApiRequest } from "@/lib/api/guard";
 import { logEvent } from "@/lib/observability/log";
 import { listBlockNames } from "@/lib/page-blocks/registry";
@@ -75,6 +76,78 @@ export async function POST(request: Request) {
     { request, orgId: workspaceId, status: 200 },
   );
 
+  // 2026-05-15 — Auto-create a website-chatbot scaffold so finalize_workspace's
+  // operator summary can give the agency the embed snippet immediately.
+  // Soft-fail: if createAgent throws (or returns { ok: false }), we return
+  // null chatbot fields and the summary tells the operator to retry via
+  // create_agent. Never blocks workspace creation.
+  //
+  // Idempotency: if a website-chatbot already exists for this workspace
+  // (caller retried v2/complete, race, etc.), reuse it instead of creating
+  // a duplicate.
+  //
+  // NOTE: embedUrl format is `https://${WORKSPACE_BASE_DOMAIN}/api/v1/public/agent/${orgSlug}--${agentSlug}/embed.js`
+  // (verified against packages/crm/src/lib/agents/store.ts createAgent).
+  // SELDONFRAME_APP_BASE is NOT used here — the embed URL lives on the same
+  // base domain as workspaces.
+  let chatbotAgentId: string | null = null;
+  let chatbotEmbedUrl: string | null = null;
+  let chatbotEmbedSnippet: string | null = null;
+
+  const [existingChatbot] = await db
+    .select({ id: agents.id, slug: agents.slug })
+    .from(agents)
+    .where(
+      and(eq(agents.orgId, workspaceId), eq(agents.archetype, "website-chatbot")),
+    )
+    .limit(1);
+
+  if (existingChatbot) {
+    // Reconstruct the embed URL for an existing agent. Format matches
+    // what createAgent emits in packages/crm/src/lib/agents/store.ts:
+    // `https://${baseDomain}/api/v1/public/agent/${org.slug}--${slug}/embed.js`
+    // We already fetched org and baseDomain above — reuse them.
+    chatbotAgentId = existingChatbot.id;
+    chatbotEmbedUrl = `https://${baseDomain}/api/v1/public/agent/${org?.slug ?? workspaceId}--${existingChatbot.slug}/embed.js`;
+    chatbotEmbedSnippet = `<script src="${chatbotEmbedUrl}" async></script>`;
+  } else {
+    try {
+      const agentResult = await createAgent({
+        orgId: workspaceId,
+        archetype: "website-chatbot",
+        channel: "web_chat",
+        name: `${org?.slug ?? "Website"} Chatbot`,
+        // Empty FAQ scaffold — operator refines via update_website_chatbot
+        // before calling publish_agent.
+        faq: [],
+      });
+      if (agentResult.ok) {
+        chatbotAgentId = agentResult.agent.id;
+        chatbotEmbedUrl = agentResult.embedUrl;
+        chatbotEmbedSnippet = `<script src="${agentResult.embedUrl}" async></script>`;
+      } else {
+        logEvent(
+          "v2_auto_chatbot_failed",
+          {
+            reason: "create_agent_returned_not_ok",
+            error: agentResult.error,
+            validation_errors: agentResult.validation_errors,
+          },
+          { request, orgId: workspaceId, severity: "warn" },
+        );
+      }
+    } catch (err) {
+      logEvent(
+        "v2_auto_chatbot_failed",
+        {
+          reason: "create_agent_threw",
+          error: err instanceof Error ? err.message : String(err),
+        },
+        { request, orgId: workspaceId, severity: "warn" },
+      );
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     workspace_id: workspaceId,
@@ -88,6 +161,10 @@ export async function POST(request: Request) {
       })),
       missing,
     },
+    // NEW (2026-05-15): auto-chatbot scaffold. Null when soft-fail fired.
+    chatbot_agent_id: chatbotAgentId,
+    chatbot_embed_url: chatbotEmbedUrl,
+    chatbot_embed_snippet: chatbotEmbedSnippet,
     next_steps:
       missing.length > 0
         ? [
