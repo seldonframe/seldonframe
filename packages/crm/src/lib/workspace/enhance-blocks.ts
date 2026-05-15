@@ -1358,6 +1358,11 @@ export async function enhanceLandingForWorkspace(
       borderRadius: "rounded",
       logoUrl: null,
       motionPreset: archetype.motionPreset,
+      // v1.54.0 — persist the classified archetype id so persist_block
+      // can enforce template + variant + image-fallback overrides on
+      // every subsequent hero persist (including lean v2 flow's
+      // CC-agent-overwrites-server scenario).
+      aestheticArchetype: archetypeId,
     };
     await db
       .update(organizations)
