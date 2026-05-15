@@ -315,14 +315,51 @@ export function runChecks(inputs: ValidatorInputs): OutputContractResult {
 
   const html = landing?.contentHtml ?? "";
 
+  // 2026-05-15 — v2 mode detection. enhance-blocks.ts nulls contentHtml
+  // when it writes the `sections` JSON column (the new <PageRenderer>
+  // path renders from sections at request time). The v1 checks below
+  // for landing_page_exists and cta_primary_href assume contentHtml is
+  // populated — they need to look at sections instead in v2 mode.
+  const sections = (landing?.sections ?? []) as Array<{
+    content?: {
+      headline?: string;
+      body?: string;
+      subheadline?: string;
+      items?: unknown[];
+      [k: string]: unknown;
+    };
+  }>;
+  const isV2 = sections.length > 0 && (html === null || html.length === 0);
+  const hasV2Content = sections.some((s) => {
+    const c = s.content ?? {};
+    return Boolean(
+      c.headline ||
+        c.body ||
+        c.subheadline ||
+        ((c.items as unknown[] | undefined)?.length ?? 0) > 0
+    );
+  });
+
   // ─── LANDING PAGE checks ─────────────────────────────────────────────────
 
-  // 1. Landing page exists at all.
+  // 1. Landing page exists. v2 mode looks at the `sections` JSON column
+  // (which <PageRenderer> renders from at request time); v1 mode looks
+  // at the legacy contentHtml column.
   checks.push({
     surface: "landing_page_exists",
-    status: html.length > 100 ? "pass" : "fail",
-    expected: "rendered HTML > 100 chars",
-    actual: `${html.length} chars`,
+    status: isV2
+      ? hasV2Content
+        ? "pass"
+        : "fail"
+      : html.length > 100
+        ? "pass"
+        : "fail",
+    expected: isV2
+      ? "≥1 section with meaningful content (headline / body / items)"
+      : "rendered HTML > 100 chars",
+    actual: isV2
+      ? `${sections.length} sections, content ${hasV2Content ? "present" : "all empty"}`
+      : `${html.length} chars`,
     severity: "blocking",
   });
 
@@ -352,32 +389,33 @@ export function runChecks(inputs: ValidatorInputs): OutputContractResult {
     }
   }
 
-  // 4. CTA href contract — primary MUST be /book, secondary MUST be /intake.
-  // This is the structurally-enforced contract from the v1.1.9 spec.
-  // The renderer's btn class names are sf-btn--primary / sf-btn--secondary.
-  const primaryHref = extractHrefFor(html, "primary");
-  checks.push({
-    surface: "cta_primary_href",
-    status: primaryHref === "/book" ? "pass" : "fail",
-    expected: "/book",
-    actual: primaryHref ?? "(not extracted)",
-    severity: "blocking",
-  });
-  const secondaryHref = extractHrefFor(html, "secondary");
-  checks.push({
-    surface: "cta_secondary_href",
-    // Secondary may be missing on some packs (legitimate); only fail if
-    // it's present AND wrong. Absent secondary CTA is a warn at most.
-    status:
-      secondaryHref === null
-        ? "warn"
-        : secondaryHref === "/intake"
-          ? "pass"
-          : "fail",
-    expected: "/intake (or absent)",
-    actual: secondaryHref ?? "(not present)",
-    severity: secondaryHref === null ? "cosmetic" : "blocking",
-  });
+  // 4. CTA href contract (v1 mode only). In v2, CTAs are rendered at
+  // request time by <PageRenderer> from PageSchema.actions — fully
+  // renderer-controlled (always emits /book + /intake). The v1 regex-
+  // extract-from-HTML contract doesn't apply; skip in v2 mode.
+  if (!isV2) {
+    const primaryHref = extractHrefFor(html, "primary");
+    checks.push({
+      surface: "cta_primary_href",
+      status: primaryHref === "/book" ? "pass" : "fail",
+      expected: "/book",
+      actual: primaryHref ?? "(not extracted)",
+      severity: "blocking",
+    });
+    const secondaryHref = extractHrefFor(html, "secondary");
+    checks.push({
+      surface: "cta_secondary_href",
+      status:
+        secondaryHref === null
+          ? "warn"
+          : secondaryHref === "/intake"
+            ? "pass"
+            : "fail",
+      expected: "/intake (or absent)",
+      actual: secondaryHref ?? "(not present)",
+      severity: secondaryHref === null ? "cosmetic" : "blocking",
+    });
+  }
 
   // 5. Hero copy — when input.review_count is set, it should appear.
   if (typeof input.review_count === "number" && input.review_count > 0) {
