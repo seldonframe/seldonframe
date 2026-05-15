@@ -8,9 +8,6 @@ import {
 import { createWorkspaceFromSoulAction } from "@/lib/billing/orgs";
 import { demoApiBlockedResponse, isDemoReadonly } from "@/lib/demo/server";
 import { logEvent } from "@/lib/observability/log";
-import { createAgent, publishAgent } from "@/lib/agents/store";
-import { setPublicChatbotEmbed } from "@/lib/agents/public-embed";
-import { synthesizeFaqsFromSoul } from "@/lib/soul-compiler/faq-synthesizer";
 import { getByokClaudeKeyFromHeaders } from "@/lib/soul-compiler/anthropic";
 import { compileSoulService } from "@/lib/soul-compiler/service";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
@@ -328,15 +325,14 @@ export async function POST(request: Request) {
 
   // --- Existing Soul-compile flow below. ---
 
-  // v1.49 — URL-input anonymous path. The lean URL flow (
-  // create_workspace_from_url MCP tool) sends `{ url, include_chatbot,
-  // auto_extract_faq, include_landing_page: false }` without
-  // x-seldon-api-key. Before v1.49 this fell through to the auth-
-  // required branch and 401'd, breaking the marketing promise of
-  // "first workspace free, no key needed, paste a URL". Now we detect
-  // this shape and let it through to compileSoulService + the
-  // anonymous-mode createWorkspaceFromSoulAction (which mints a 7-day
-  // bearer token, same as the existing Google-paste anonymous path).
+  // v1.49 — anonymous URL-shape detection. Originally added to let
+  // unauthenticated URL bodies through to compileSoulService. As of
+  // 2026-05-15 (Firecrawl removal) the actual URL path returns 410
+  // url_flow_moved further down (line ~394) — but this gating is still
+  // LOAD-BEARING: the auth check below 401s unauthenticated bodies
+  // unless isAnonymousUrlFlow is true. Removing it would make the 410
+  // unreachable for legacy MCP < 1.52 clients (the exact callers it
+  // exists to help). The 410 must fire after auth so this gate stays.
   const hasAnonymousUrlShape =
     typeof body.url === "string" &&
     body.url.trim().length > 0 &&
