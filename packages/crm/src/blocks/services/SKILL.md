@@ -29,7 +29,7 @@ props:
         icon:
           type: string
           min: 2
-          description: Lucide icon name in snake_case from the allowlist (see body). Each item MUST pick a different icon.
+          description: Lucide icon name (snake_case, kebab-case, or PascalCase). Any valid lucide icon name from https://lucide.dev/icons — the renderer supports the full ~1500-icon library. Unknown names render a Sparkles fallback, so prefer names you're confident exist. Each item MUST pick a different icon.
         title:
           type: string
           min: 2
@@ -89,53 +89,23 @@ If a card fails any one, the visitor stalls. Three cards failing → bounce.
    don't say "Air Conditioning Repair Services". Use their words.
 4. **Distinct icons, every time.** Repeating an icon is the visible
    symptom of homogenized output. Each card picks a different icon from
-   the allowlist below.
+   the full lucide library.
 5. **Headline is vertical-specific.** "How We Cut" for a barbershop. "What
    We Fix" for a trade. "Practice Areas" for legal. NOT "Our Services".
 
-## Lucide icon allowlist (snake_case names)
+## Lucide icons
 
-Pick one icon per card from these. Each one represents a different visual
-shape so distinct picks read as distinct services even at small sizes.
+Use any valid lucide icon name from https://lucide.dev/icons — the renderer
+supports the full library via lucide-react. Names are case-insensitive and
+accept snake_case, kebab-case, or PascalCase (e.g. `shield_check`,
+`shield-check`, and `ShieldCheck` all resolve to the same icon).
 
-**Trade / service**: `wrench`, `hammer`, `paintbrush`, `screwdriver`,
-`drill`, `saw`, `pickaxe`, `axe`.
+Common concept aliases also work: `storm`, `repair`, `inspection`,
+`emergency`, `warranty`, `licensed`, `insured`, `drain`, `leak`, `cooling`,
+`heating`, etc.
 
-**Home / building**: `home`, `door_open`, `door_closed`, `key`, `lock`,
-`columns`, `fence`, `garage`, `bed`, `bath`, `kitchen_pot`, `sofa`.
-
-**Climate / utilities**: `thermometer`, `snowflake`, `flame`, `droplets`,
-`zap`, `lightbulb`, `plug`, `battery`, `wind`, `sun`, `cloud_rain`,
-`cloud_lightning`.
-
-**Vehicle / equipment**: `truck`, `car`, `bike`, `wheel`, `gauge`.
-
-**Care / health / beauty**: `scissors`, `comb`, `brush`, `sparkles`,
-`heart`, `stethoscope`, `pill`, `syringe`, `tooth`, `eye`, `smile`,
-`spray_can`.
-
-**Professional / office**: `briefcase`, `scale`, `gavel`, `book`,
-`book_open`, `file_text`, `clipboard`, `calculator`, `chart_bar`,
-`chart_line`, `pen_tool`, `signature`, `stamp`.
-
-**Tech / digital**: `monitor`, `laptop`, `smartphone`, `globe`, `code`,
-`terminal`, `database`, `cloud`, `bot`, `cpu`, `keyboard`, `mouse`.
-
-**Food / hospitality**: `coffee`, `utensils`, `wine`, `pizza`,
-`cake_slice`, `salad`, `chef_hat`.
-
-**Time / motion / quality**: `clock`, `calendar`, `timer`, `zap_off`,
-`shield`, `shield_check`, `award`, `medal`, `star`, `trophy`,
-`thumbs_up`, `check_circle`, `heart_handshake`.
-
-**Communication / community**: `phone`, `mail`, `message_circle`, `users`,
-`user_check`, `user_plus`, `handshake`, `mic`.
-
-**Movement / delivery**: `package`, `truck`, `map`, `map_pin`, `route`,
-`compass`, `navigation`.
-
-If none of the above fits perfectly, pick the closest match — *don't
-invent icon names*. The allowlist is enforced at validation time.
+If you pick a name that doesn't exist in lucide, the renderer falls back to
+a Sparkles icon — so prefer real lucide names you're confident exist.
 
 ## Worked examples
 
