@@ -34,7 +34,14 @@ import {
   type PersonalityTemplateVars,
   type ResolvedPersonalityContent,
 } from "@/lib/crm/personality";
-import { resolveIconComponent } from "@/lib/blueprint/renderers/icon-resolver";
+// 2026-05-15 hotfix — icon-resolver imports lucide-react at module top,
+// which crashes server-side imports (lucide-react v1.7.0 is client-only
+// per Next.js's RSC boundary). seed-landing-from-soul runs server-side;
+// the previously-added resolveIconComponent import was unused (icon
+// assignment happens via the LLM enrichment table or by passing the
+// title as a string name; the v2 <PageRenderer> resolves the string at
+// render time on the client). Dropping the import removes the transitive
+// lucide-react server bundle inclusion.
 import {
   getPersonalityImages,
   resolveHeroImageUrlForQuery,

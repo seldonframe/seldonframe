@@ -81,7 +81,16 @@ import {
   buildLightFontLink,
   isLightMode,
 } from "./light-overlay";
-import { renderIconToSvgString } from "./icon-resolver";
+// 2026-05-15 hotfix — v1 SSR icon rendering was depending on
+// icon-resolver.ts which imports lucide-react at module top. lucide-react
+// v1.7.0 is marked client-only by Next.js's RSC boundary, so any
+// server-side import (including transitive) crashes the workspace seed
+// pipeline (seed-landing-from-soul → renderWithGeneralServiceV1 →
+// HERE). v1 SSR is being deprecated; degraded all-Sparkles rendering is
+// acceptable until v1 is removed entirely. v2 PageRenderer (the dominant
+// path) renders rich icons via lucide-react on the CLIENT, where it
+// works correctly.
+const SPARKLES_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/><path d="M4 17v2"/><path d="M5 18H3"/></svg>`;
 
 // ─── Public entry point ────────────────────────────────────────────────
 
@@ -534,14 +543,15 @@ function findReviewItem(
 // ─── Inline SVG icons ─────────────────────────────────────────────────
 
 function iconSvg(name: string | undefined): string {
-  // 2026-05-15 — uses the shared resolver which tries (1) concept aliases,
-  // (2) full lucide-react library (~1500 icons), (3) Sparkles fallback.
-  // Always returns a non-empty SVG. The local ICON_MAP (chrome icons:
-  // phonecall, _default, etc.) is still used by the literal SVG constants
-  // below (CHEVRON_RIGHT_SVG_SMALL, PHONE_SVG_SMALL) — those keep their
-  // existing definitions; the general iconSvg path just delegates to the
-  // shared resolver now.
-  return `<span class="sf-icon" aria-hidden="true">${renderIconToSvgString(name)}</span>`;
+  // 2026-05-15 hotfix — v1 SSR can't import lucide-react (client-only),
+  // so we emit a hardcoded Sparkles SVG for every icon name. Degraded
+  // rendering acceptable; v1 SSR is being deprecated in favor of v2
+  // PageRenderer (which renders rich icons client-side via
+  // lucide-react). See the SPARKLES_SVG constant at the top of this
+  // file for the inline path data. `name` is intentionally unused —
+  // kept in the signature for callers that pass it.
+  void name;
+  return `<span class="sf-icon" aria-hidden="true">${SPARKLES_SVG}</span>`;
 }
 
 /**
