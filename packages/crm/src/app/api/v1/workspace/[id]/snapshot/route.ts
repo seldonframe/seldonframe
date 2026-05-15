@@ -2,6 +2,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import {
+  agents,
   bookings,
   contacts,
   intakeForms,
@@ -9,6 +10,8 @@ import {
   organizations,
 } from "@/db/schema";
 import { resolveV1Identity, userCanWriteWorkspace } from "@/lib/auth/v1-identity";
+import { buildTierUpsell } from "@/lib/workspace/tier-upsell";
+import { summarizeWeeklyHours, type WeeklyHours } from "@/lib/workspace/format-hours";
 
 // Returns a structured read-only snapshot of workspace state for Claude Code
 // to reason over. Pure DB read — zero LLM calls, zero Anthropic dependency.
@@ -113,6 +116,89 @@ export async function GET(
   const baseDomain = process.env.WORKSPACE_BASE_DOMAIN?.trim() || "app.seldonframe.com";
   const origin = `https://${org.slug}.${baseDomain}`;
 
+  // 2026-05-15 — Auto-chatbot info. Returns null when no website-chatbot
+  // agent has been created for this workspace yet.
+  const [chatbotAgent] = await db
+    .select({
+      id: agents.id,
+      slug: agents.slug,
+      name: agents.name,
+      status: agents.status,
+    })
+    .from(agents)
+    .where(
+      and(eq(agents.orgId, workspaceId), eq(agents.archetype, "website-chatbot")),
+    )
+    .limit(1);
+
+  // Embed URL pattern matches packages/crm/src/lib/agents/store.ts:
+  // https://${WORKSPACE_BASE_DOMAIN}/api/v1/public/agent/${orgSlug}--${agentSlug}/embed.js
+  const chatbot = chatbotAgent
+    ? (() => {
+        const embedUrl = `https://${baseDomain}/api/v1/public/agent/${org.slug}--${chatbotAgent.slug}/embed.js`;
+        return {
+          agent_id: chatbotAgent.id,
+          embed_url: embedUrl,
+          embed_snippet: `<script src="${embedUrl}" async></script>`,
+          status: chatbotAgent.status as "draft" | "test" | "live",
+          name: chatbotAgent.name,
+        };
+      })()
+    : null;
+
+  // 2026-05-15 — Tier info via buildTierUpsell. Always populated; currently
+  // hardcoded to "free" until billing-state read is wired in a separate spec.
+  const tierBase = buildTierUpsell({
+    slug: org.slug,
+    currentTier: "free",
+  });
+  const tierLabelMap = { free: "Free", growth: "Growth", scale: "Scale" } as const;
+  const tier = {
+    ...tierBase,
+    current_tier: tierBase.tier_features.current_tier,
+    current_tier_label: tierLabelMap[tierBase.tier_features.current_tier],
+  };
+
+  // 2026-05-15 — Booking summary. Pull the org's template-status booking
+  // row, read metadata.availability + metadata.duration_minutes.
+  const [bookingTemplate] = await db
+    .select({
+      metadata: bookings.metadata,
+    })
+    .from(bookings)
+    .where(
+      and(eq(bookings.orgId, workspaceId), eq(bookings.status, "template")),
+    )
+    .limit(1);
+
+  const bookingMeta = (bookingTemplate?.metadata ?? {}) as {
+    availability?: WeeklyHours;
+    duration_minutes?: number;
+  };
+  const bookingSummary = bookingTemplate
+    ? {
+        duration_minutes: bookingMeta.duration_minutes ?? 60,
+        hours_summary: summarizeWeeklyHours(bookingMeta.availability ?? {}),
+      }
+    : null;
+
+  // 2026-05-15 — Intake summary. Pull the org's intake form, count fields.
+  const [intakeForm] = await db
+    .select({
+      name: intakeForms.name,
+      fields: intakeForms.fields,
+    })
+    .from(intakeForms)
+    .where(eq(intakeForms.orgId, workspaceId))
+    .limit(1);
+
+  const intakeSummary = intakeForm
+    ? {
+        field_count: Array.isArray(intakeForm.fields) ? intakeForm.fields.length : 0,
+        title: intakeForm.name ?? null,
+      }
+    : null;
+
   return NextResponse.json({
     ok: true,
     workspace: {
@@ -149,5 +235,9 @@ export async function GET(
       book: `${origin}/book`,
       intake: `${origin}/intake`,
     },
+    chatbot,
+    tier,
+    booking: bookingSummary,
+    intake: intakeSummary,
   });
 }
