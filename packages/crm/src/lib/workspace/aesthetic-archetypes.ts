@@ -121,6 +121,14 @@ export interface AestheticArchetype {
     /** Words/phrases to AVOID. */
     avoid: string[];
   };
+  /** v1.54.0 — Curated Unsplash search terms verified to return non-zero
+   *  results. Used as last-resort fallback by personality-images.ts when
+   *  the LLM-generated query + all broadening tiers in
+   *  buildQueryCandidates all return zero results. Each entry must be
+   *  2-4 words: broad enough to guarantee hits, narrow enough not to be
+   *  generic stock-photo filler. Picked deterministically by
+   *  hash(business_name) % len so regenerate gives the same fallback. */
+  fallbackImageQueries: string[];
 }
 
 export const ARCHETYPES: Record<AestheticArchetypeId, AestheticArchetype> = {
@@ -168,6 +176,14 @@ export const ARCHETYPES: Record<AestheticArchetypeId, AestheticArchetype> = {
       leanInto: ["since [year]", "by hand", "every detail", "lifetime", "earned the trust"],
       avoid: ["disrupt", "revolutionary", "10x", "AI-powered", "synergize"],
     },
+    fallbackImageQueries: [
+      "craftsman workshop",
+      "artisan hands working",
+      "skilled tradesperson",
+      "family workshop",
+      "warm restoration project",
+      "craft detail",
+    ],
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -213,6 +229,14 @@ export const ARCHETYPES: Record<AestheticArchetypeId, AestheticArchetype> = {
       leanInto: ["right now", "we answer", "same-day", "24/7", "guaranteed", "no surprise charges"],
       avoid: ["luxury", "premium", "boutique", "curated", "artisan"],
     },
+    fallbackImageQueries: [
+      "plumber working",
+      "hvac technician",
+      "electrician work",
+      "service truck",
+      "uniform worker",
+      "trade professional",
+    ],
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -259,6 +283,14 @@ export const ARCHETYPES: Record<AestheticArchetypeId, AestheticArchetype> = {
       leanInto: ["consultation", "experience since", "board-certified", "represented", "trusted by"],
       avoid: ["disrupt", "ninja", "rockstar", "amazing", "best-in-class"],
     },
+    fallbackImageQueries: [
+      "modern dental office",
+      "medical practice interior",
+      "professional consultation",
+      "doctor office reception",
+      "law firm interior",
+      "professional handshake",
+    ],
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -307,6 +339,14 @@ export const ARCHETYPES: Record<AestheticArchetypeId, AestheticArchetype> = {
       leanInto: ["restorative", "intentional", "signature", "discreet", "quietly"],
       avoid: ["affordable", "deal", "discount", "starter package"],
     },
+    fallbackImageQueries: [
+      "luxury spa interior",
+      "modern wellness studio",
+      "minimalist treatment room",
+      "premium fitness studio",
+      "spa relaxation",
+      "aesthetic beauty",
+    ],
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -359,6 +399,14 @@ export const ARCHETYPES: Record<AestheticArchetypeId, AestheticArchetype> = {
       leanInto: ["measured", "shipped", "proven", "engineering team", "case study"],
       avoid: ["amazing", "revolutionary", "game-changing", "innovative"],
     },
+    fallbackImageQueries: [
+      "modern workspace",
+      "professional team meeting",
+      "minimalist office",
+      "design studio",
+      "tech workspace",
+      "professional collaboration",
+    ],
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -403,6 +451,14 @@ export const ARCHETYPES: Record<AestheticArchetypeId, AestheticArchetype> = {
       leanInto: ["your home", "weekly", "monthly", "we handle", "easy to book"],
       avoid: ["enterprise", "scale", "platform", "leverage"],
     },
+    fallbackImageQueries: [
+      "home garden",
+      "tidy modern home",
+      "residential lawn",
+      "clean home interior",
+      "pet grooming",
+      "homeowner happy",
+    ],
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -447,6 +503,14 @@ export const ARCHETYPES: Record<AestheticArchetypeId, AestheticArchetype> = {
       leanInto: ["we built", "we shipped", "selected work", "since [year]"],
       avoid: ["passionate", "love what we do", "team of experts"],
     },
+    fallbackImageQueries: [
+      "concrete architecture",
+      "industrial design",
+      "raw studio space",
+      "minimalist gallery",
+      "modern sculpture",
+      "design exhibit",
+    ],
   },
 };
 
