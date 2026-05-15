@@ -29,6 +29,49 @@
 
 import type { PersonalityVertical } from "./personality";
 import type { UnsplashAttribution } from "@/components/landing/sections/types";
+import { ARCHETYPES, type AestheticArchetypeId } from "@/lib/workspace/aesthetic-archetypes";
+
+// Test seam: production uses globalThis.fetch. Tests override via
+// __setUnsplashFetchForTest. Doing it module-scope keeps the fast-path
+// production call free of indirection. The seam's response type is
+// scoped to what searchUnsplash actually consumes (ok, status, json)
+// so tests can pass minimal stubs without satisfying the full DOM
+// Response surface.
+type UnsplashFetchResponse = {
+  ok: boolean;
+  status: number;
+  json(): Promise<unknown>;
+};
+type FetchFn = (url: string, init?: RequestInit) => Promise<UnsplashFetchResponse>;
+let unsplashFetch: FetchFn = (url, init) =>
+  fetch(url, init) as unknown as Promise<UnsplashFetchResponse>;
+
+export function __setUnsplashFetchForTest(fn: FetchFn): void {
+  unsplashFetch = fn;
+}
+
+export function __resetUnsplashFetchForTest(): void {
+  unsplashFetch = (url, init) =>
+    fetch(url, init) as unknown as Promise<UnsplashFetchResponse>;
+}
+
+/**
+ * v1.54.0 — Deterministic fallback query picker. Same business name
+ * always selects the same fallback query (so regenerate doesn't roll
+ * the dice on operator iteration). djb2-style hash.
+ */
+export function pickFallbackQuery(
+  archetype: AestheticArchetypeId,
+  businessName: string,
+): string {
+  const fallbacks = ARCHETYPES[archetype].fallbackImageQueries;
+  if (fallbacks.length === 0) return "professional business";
+  let hash = 5381;
+  for (let i = 0; i < businessName.length; i++) {
+    hash = ((hash << 5) + hash + businessName.charCodeAt(i)) | 0;
+  }
+  return fallbacks[Math.abs(hash) % fallbacks.length];
+}
 
 export interface PersonalityImageBundle {
   /** Single landscape hero background — 1600x900 ideal. */
@@ -329,7 +372,7 @@ async function searchUnsplash(
   apiKey: string,
   opts: { perPage: number; orientation: "landscape" | "squarish" },
 ): Promise<UnsplashSearchResult[] | null> {
-  const response = await fetch(
+  const response = await unsplashFetch(
     `https://api.unsplash.com/search/photos?query=${encodeURIComponent(
       query,
     )}&per_page=${opts.perPage}&orientation=${opts.orientation}&content_filter=low`,
@@ -434,6 +477,7 @@ function buildAttribution(result: UnsplashSearchResult): UnsplashAttribution {
  */
 export async function resolveHeroImage(
   query: string,
+  archetypeContext?: { archetype: AestheticArchetypeId; businessName: string },
 ): Promise<ResolvedUnsplashImage | null> {
   const cleanedQuery = query?.trim() || "professional business interior";
   const apiKey = process.env.UNSPLASH_ACCESS_KEY?.trim();
@@ -444,46 +488,79 @@ export async function resolveHeroImage(
 
   const candidates = buildQueryCandidates(cleanedQuery);
 
+  // Phase 1 — LLM-generated query + broadenings (existing behavior).
   for (const candidate of candidates) {
-    try {
-      const results = await searchUnsplash(candidate, apiKey, {
-        perPage: 15,
-        orientation: "landscape",
-      });
-      if (!results) continue; // API error — try next candidate
-      if (results.length === 0) {
-        console.warn(
-          JSON.stringify({
-            event: "unsplash_api_zero_results",
-            query: candidate,
-          }),
-        );
-        continue;
-      }
-      const picked = pickBestHeroResult(results);
-      const raw = picked?.urls?.raw ?? picked?.urls?.full;
-      if (raw && picked) {
-        // v1.40.5 — fire required download-tracking ping before returning.
-        if (picked.links?.download_location) {
-          trackUnsplashDownload(picked.links.download_location, apiKey);
-        }
-        return {
-          url: `${raw}${raw.includes("?") ? "&" : "?"}${HERO_QUERY_PARAMS}`,
-          attribution: buildAttribution(picked),
-        };
-      }
-    } catch (err) {
-      console.warn(
-        JSON.stringify({
-          event: "unsplash_api_throw",
-          query: candidate,
-          error: err instanceof Error ? err.message : String(err),
-        }),
-      );
-    }
+    const result = await tryHeroUnsplashFetch(candidate, apiKey);
+    if (result) return result;
+  }
+
+  // Phase 2 — v1.54.0 — archetype-curated fallback. Only fires when
+  // caller provided archetypeContext AND Phase 1 returned no usable
+  // image. The fallback query is picked deterministically so regenerate
+  // gives the same image (operator-iteration story).
+  if (archetypeContext) {
+    const fallbackQuery = pickFallbackQuery(
+      archetypeContext.archetype,
+      archetypeContext.businessName,
+    );
+    console.warn(
+      JSON.stringify({
+        event: "unsplash_archetype_fallback_used",
+        original_query: query,
+        archetype: archetypeContext.archetype,
+        fallback_query: fallbackQuery,
+      }),
+    );
+    const result = await tryHeroUnsplashFetch(fallbackQuery, apiKey);
+    if (result) return result;
   }
 
   return null;
+}
+
+// Inner search-and-pick logic, extracted so resolveHeroImage's Phase 1
+// loop and Phase 2 fallback path share the same try/zero/throw handling.
+async function tryHeroUnsplashFetch(
+  candidate: string,
+  apiKey: string,
+): Promise<ResolvedUnsplashImage | null> {
+  try {
+    const results = await searchUnsplash(candidate, apiKey, {
+      perPage: 15,
+      orientation: "landscape",
+    });
+    if (!results) return null; // API error — try next candidate
+    if (results.length === 0) {
+      console.warn(
+        JSON.stringify({
+          event: "unsplash_api_zero_results",
+          query: candidate,
+        }),
+      );
+      return null;
+    }
+    const picked = pickBestHeroResult(results);
+    const raw = picked?.urls?.raw ?? picked?.urls?.full;
+    if (raw && picked) {
+      if (picked.links?.download_location) {
+        trackUnsplashDownload(picked.links.download_location, apiKey);
+      }
+      return {
+        url: `${raw}${raw.includes("?") ? "&" : "?"}${HERO_QUERY_PARAMS}`,
+        attribution: buildAttribution(picked),
+      };
+    }
+    return null;
+  } catch (err) {
+    console.warn(
+      JSON.stringify({
+        event: "unsplash_api_throw",
+        query: candidate,
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    );
+    return null;
+  }
 }
 
 /**
