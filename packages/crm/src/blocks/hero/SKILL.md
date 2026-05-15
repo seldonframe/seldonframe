@@ -213,7 +213,7 @@ you a round-trip without changing the rendered output.
 When `context.aesthetic_archetype` is `null` (pre-v1.54 workspaces),
 fall back to the older archetype heuristics in the catalog below.
 Picking the archetype-correct template means your `headline` /
-`subheadline` copy ends up matching the visual treatment (urgent and
+`subhead` copy ends up matching the visual treatment (urgent and
 imperative for bold-urgency, editorial and warm for editorial-warm,
 cinematic and aspirational for cinematic-aspirational).
 
