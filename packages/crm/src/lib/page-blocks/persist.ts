@@ -64,6 +64,7 @@ import { searchPexelsVideo } from "@/lib/assets/pexels";
 import { getBlock, type BookingProps, type IntakeProps } from "./registry";
 import type { LandingPageSection } from "@/components/landing/sections/types";
 import {
+  ARCHETYPES,
   classifyArchetype,
   type AestheticArchetypeId,
 } from "@/lib/workspace/aesthetic-archetypes";
@@ -150,6 +151,71 @@ export async function resolveOrgArchetype(
   });
 
   return reclassified;
+}
+
+const KNOWN_TEMPLATES = new Set([
+  "cinematic-aura",
+  "viktor-light",
+  "velorah-editorial",
+  "nexora-light",
+  "securify-bold",
+  "stellar-tabs-white",
+]);
+
+export interface HeroEnforcementInput {
+  workspaceId: string;
+  archetypeId: AestheticArchetypeId;
+  /** What the CC agent's LLM put in the `template` prop (may be empty,
+   *  undefined, or invalid). */
+  llmTemplate: string | undefined;
+  /** What the CC agent's LLM put in the `variant` prop. */
+  llmVariant: string | undefined;
+}
+
+export interface HeroEnforcementResult {
+  /** Final template id to write into landing_pages.sections. */
+  finalTemplate: string;
+  /** Final variant to write. */
+  finalVariant: string;
+  /** True iff finalTemplate ≠ what the LLM picked. */
+  templateOverridden: boolean;
+  /** True iff finalVariant ≠ what the LLM picked. */
+  variantOverridden: boolean;
+}
+
+/**
+ * v1.54.0 — Pure decision function: given archetype + LLM picks, decide
+ * the final template + variant. Trust the LLM ONLY when it agrees with
+ * the archetype's defaults. Otherwise override to archetype defaults.
+ *
+ * Logging happens in the caller using the boolean flags returned here.
+ */
+export function enforceArchetypeOnHero(
+  input: HeroEnforcementInput,
+): HeroEnforcementResult {
+  const archetype = ARCHETYPES[input.archetypeId];
+  const llmTemplate = input.llmTemplate ?? "";
+  const llmVariant = input.llmVariant ?? "";
+
+  // Template: trust LLM only when it picked a known template that
+  // matches the archetype's default. Empty string also "matches" when
+  // archetype.defaultTemplate is "".
+  const llmTemplateValid =
+    llmTemplate === "" || KNOWN_TEMPLATES.has(llmTemplate);
+  const templateAgrees =
+    llmTemplateValid && llmTemplate === archetype.defaultTemplate;
+  const finalTemplate = templateAgrees ? llmTemplate : archetype.defaultTemplate;
+
+  // Variant: trust LLM only when it exactly matches archetype.heroVariant.
+  const variantAgrees = llmVariant === archetype.heroVariant;
+  const finalVariant = variantAgrees ? llmVariant : archetype.heroVariant;
+
+  return {
+    finalTemplate,
+    finalVariant,
+    templateOverridden: !templateAgrees,
+    variantOverridden: !variantAgrees,
+  };
 }
 
 export async function persistBlockForWorkspace(
@@ -296,6 +362,74 @@ async function persistLandingSectionBlock(
 
   let section = toSection(validatedProps);
 
+  // v1.54.0 — Resolve archetype for hero blocks BEFORE image resolution
+  // and section construction so we can (a) override template/variant
+  // server-side and (b) thread archetypeContext into resolveHeroImage's
+  // Phase 2 fallback.
+  let heroArchetypeContext:
+    | { archetype: AestheticArchetypeId; businessName: string }
+    | undefined = undefined;
+  if (blockName === "hero" && section.type === "hero") {
+    const [org] = await db
+      .select({
+        name: organizations.name,
+        theme: organizations.theme,
+        soul: organizations.soul,
+      })
+      .from(organizations)
+      .where(eq(organizations.id, workspaceId))
+      .limit(1);
+    if (org) {
+      const archetypeId = await resolveOrgArchetype(
+        workspaceId,
+        { theme: org.theme, soul: org.soul, name: org.name },
+        async (patch) => {
+          await db
+            .update(organizations)
+            .set({ theme: patch.theme })
+            .where(eq(organizations.id, workspaceId));
+        },
+      );
+      heroArchetypeContext = {
+        archetype: archetypeId,
+        businessName: org.name,
+      };
+
+      // Server-side enforcement of template + variant.
+      const enforcement = enforceArchetypeOnHero({
+        workspaceId,
+        archetypeId,
+        llmTemplate: (validatedProps as { template?: string }).template,
+        llmVariant: section.variant,
+      });
+      if (enforcement.templateOverridden) {
+        console.warn(
+          JSON.stringify({
+            event: "hero_template_overridden",
+            workspace_id: workspaceId,
+            archetype: archetypeId,
+            llm_picked: (validatedProps as { template?: string }).template ?? "",
+            archetype_default: enforcement.finalTemplate,
+          }),
+        );
+      }
+      if (enforcement.variantOverridden) {
+        console.warn(
+          JSON.stringify({
+            event: "hero_variant_overridden",
+            workspace_id: workspaceId,
+            archetype: archetypeId,
+            llm_picked: section.variant ?? "",
+            archetype_default: enforcement.finalVariant,
+          }),
+        );
+      }
+      // Mutate downstream inputs to use the enforced values.
+      (validatedProps as { template?: string }).template = enforcement.finalTemplate || undefined;
+      section = { ...section, variant: enforcement.finalVariant as typeof section.variant };
+    }
+  }
+
   // v1.44.0 — hero-specific asset resolution. We now resolve BOTH the
   // Unsplash hero image (for legacy renders + heroImage prop) AND a
   // Pexels video (for cinematic templates that need looping motion).
@@ -321,7 +455,7 @@ async function persistLandingSectionBlock(
       return t === "cinematic-aura" || t === "velorah-editorial" || t === "securify-bold";
     })();
     const [imageResult, videoResult] = await Promise.allSettled([
-      imageQuery ? resolveHeroImage(imageQuery) : Promise.resolve(null),
+      imageQuery ? resolveHeroImage(imageQuery, heroArchetypeContext) : Promise.resolve(null),
       videoQuery && templateUsesVideo
         ? searchPexelsVideo(videoQuery, {
             orientation: "landscape",
