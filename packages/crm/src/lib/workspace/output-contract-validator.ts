@@ -160,15 +160,50 @@ function countUniqueIcons(html: string): number {
 
 // ─── Main validator ─────────────────────────────────────────────────────────
 
-export async function validateWorkspaceOutputContract(
+/**
+ * Inputs the validator needs to evaluate. Loaded once via
+ * loadValidatorInputs(); passed to runChecks() for pure-logic evaluation.
+ * Splitting load + check lets unit tests inject synthetic inputs without
+ * a real DB.
+ */
+export interface ValidatorInputs {
+  workspaceId: string;
+  input: OutputContractInput;
+  personality: CRMPersonality;
+  expectedTimezone: string;
+  org: {
+    id: string;
+    name: string | null;
+    timezone: string | null;
+    theme: Record<string, unknown> | null;
+    settings: Record<string, unknown> | null;
+  } | null;
+  landing: {
+    contentHtml: string | null;
+    contentCss: string | null;
+    sections: Array<Record<string, unknown>> | null;
+  } | null;
+  pipeline: { stages: Array<{ name: string }> } | null;
+  intake: {
+    name: string | null;
+    fields: unknown;
+    contentHtml: string | null;
+  } | null;
+  bookingTemplate: {
+    title: string | null;
+    metadata: Record<string, unknown> | null;
+    startsAt: Date | null;
+    endsAt: Date | null;
+    contentHtml: string | null;
+  } | null;
+}
+
+async function loadValidatorInputs(
   workspaceId: string,
   input: OutputContractInput,
   personality: CRMPersonality,
   expectedTimezone: string,
-): Promise<OutputContractResult> {
-  const checks: ValidationCheck[] = [];
-
-  // Load all DB state once.
+): Promise<ValidatorInputs> {
   const [org] = await db
     .select({
       id: organizations.id,
@@ -180,6 +215,81 @@ export async function validateWorkspaceOutputContract(
     .from(organizations)
     .where(eq(organizations.id, workspaceId))
     .limit(1);
+
+  const [landing] = await db
+    .select({
+      contentHtml: landingPages.contentHtml,
+      contentCss: landingPages.contentCss,
+      sections: landingPages.sections,
+    })
+    .from(landingPages)
+    .where(
+      and(
+        eq(landingPages.orgId, workspaceId),
+        eq(landingPages.slug, "home"),
+      ),
+    )
+    .limit(1);
+
+  const [pipeline] = await db
+    .select({ stages: pipelines.stages })
+    .from(pipelines)
+    .where(
+      and(eq(pipelines.orgId, workspaceId), eq(pipelines.isDefault, true)),
+    )
+    .limit(1);
+
+  const [intake] = await db
+    .select({
+      name: intakeForms.name,
+      fields: intakeForms.fields,
+      contentHtml: intakeForms.contentHtml,
+    })
+    .from(intakeForms)
+    .where(eq(intakeForms.orgId, workspaceId))
+    .limit(1);
+
+  const [bookingTemplate] = await db
+    .select({
+      title: bookings.title,
+      metadata: bookings.metadata,
+      startsAt: bookings.startsAt,
+      endsAt: bookings.endsAt,
+      contentHtml: bookings.contentHtml,
+    })
+    .from(bookings)
+    .where(
+      and(eq(bookings.orgId, workspaceId), eq(bookings.status, "template")),
+    )
+    .limit(1);
+
+  return {
+    workspaceId,
+    input,
+    personality,
+    expectedTimezone,
+    org: (org as unknown as ValidatorInputs["org"]) ?? null,
+    landing: (landing as unknown as ValidatorInputs["landing"]) ?? null,
+    pipeline: (pipeline as unknown as ValidatorInputs["pipeline"]) ?? null,
+    intake: (intake as unknown as ValidatorInputs["intake"]) ?? null,
+    bookingTemplate:
+      (bookingTemplate as unknown as ValidatorInputs["bookingTemplate"]) ?? null,
+  };
+}
+
+export function runChecks(inputs: ValidatorInputs): OutputContractResult {
+  const {
+    input,
+    personality,
+    expectedTimezone,
+    org,
+    landing,
+    pipeline,
+    intake,
+    bookingTemplate,
+  } = inputs;
+
+  const checks: ValidationCheck[] = [];
 
   if (!org) {
     return {
@@ -203,50 +313,7 @@ export async function validateWorkspaceOutputContract(
     };
   }
 
-  const [landing] = await db
-    .select({
-      contentHtml: landingPages.contentHtml,
-      contentCss: landingPages.contentCss,
-    })
-    .from(landingPages)
-    .where(
-      and(
-        eq(landingPages.orgId, workspaceId),
-        eq(landingPages.slug, "home"),
-      ),
-    )
-    .limit(1);
   const html = landing?.contentHtml ?? "";
-
-  const [pipeline] = await db
-    .select({ stages: pipelines.stages })
-    .from(pipelines)
-    .where(
-      and(eq(pipelines.orgId, workspaceId), eq(pipelines.isDefault, true)),
-    )
-    .limit(1);
-
-  const [intake] = await db
-    .select({
-      name: intakeForms.name,
-      fields: intakeForms.fields,
-    })
-    .from(intakeForms)
-    .where(eq(intakeForms.orgId, workspaceId))
-    .limit(1);
-
-  const [bookingTemplate] = await db
-    .select({
-      title: bookings.title,
-      metadata: bookings.metadata,
-      startsAt: bookings.startsAt,
-      endsAt: bookings.endsAt,
-    })
-    .from(bookings)
-    .where(
-      and(eq(bookings.orgId, workspaceId), eq(bookings.status, "template")),
-    )
-    .limit(1);
 
   // ─── LANDING PAGE checks ─────────────────────────────────────────────────
 
@@ -590,17 +657,7 @@ export async function validateWorkspaceOutputContract(
   // is used and we should at least log it so we know which workspaces
   // shipped without the rich renderer.
   if (bookingTemplate) {
-    const [bookingRendered] = await db
-      .select({ contentHtml: bookings.contentHtml })
-      .from(bookings)
-      .where(
-        and(
-          eq(bookings.orgId, workspaceId),
-          eq(bookings.status, "template"),
-        ),
-      )
-      .limit(1);
-    const bookingHtml = bookingRendered?.contentHtml ?? "";
+    const bookingHtml = bookingTemplate.contentHtml ?? "";
     const hasIsland = bookingHtml.includes("sf-booking-data");
     const hasWeekly =
       bookingHtml.includes('"weekly"') &&
@@ -646,13 +703,8 @@ export async function validateWorkspaceOutputContract(
         severity: "cosmetic",
       });
 
-      // Pull the rendered intake HTML to check the form heading.
-      const [intakeRendered] = await db
-        .select({ contentHtml: intakeForms.contentHtml })
-        .from(intakeForms)
-        .where(eq(intakeForms.orgId, workspaceId))
-        .limit(1);
-      const intakeHtml = intakeRendered?.contentHtml ?? "";
+      // Check the rendered intake HTML for the form heading.
+      const intakeHtml = intake.contentHtml ?? "";
       const rendered = intakeHtml.includes(expectedTitle);
       checks.push({
         surface: "intake_title_rendered_html",
@@ -729,6 +781,21 @@ export async function validateWorkspaceOutputContract(
       blocking_failures: blockingFailures,
     },
   };
+}
+
+export async function validateWorkspaceOutputContract(
+  workspaceId: string,
+  input: OutputContractInput,
+  personality: CRMPersonality,
+  expectedTimezone: string,
+): Promise<OutputContractResult> {
+  const inputs = await loadValidatorInputs(
+    workspaceId,
+    input,
+    personality,
+    expectedTimezone,
+  );
+  return runChecks(inputs);
 }
 
 /**
