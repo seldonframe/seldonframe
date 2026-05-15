@@ -30,7 +30,6 @@
 
 import { z } from "zod";
 import type { LandingSection } from "@/lib/blueprint/types";
-import { ICON_NAMES } from "@/lib/blueprint/renderers/lucide-icons";
 
 // Generated schemas + metadata — one import per block.
 import {
@@ -210,25 +209,24 @@ const servicesBlock: BlockDefinition<ServicesProps> = {
   }),
   validators: [
     (p) => {
-      // v1.5.1 — enforce the lucide allowlist. Pre-1.5.1 the LLM picked
-      // names like "piano", "microphone", "wood_oven" that the renderer
-      // didn't have, so all those cards rendered with the same fallback
-      // icon (visible in the Coastline Music + Cinder & Salt tests).
-      // Now we reject and return the full allowlist so the LLM can
-      // self-correct on retry.
-      const allowed = new Set<string>(ICON_NAMES);
-      const offenders = p.items
-        .filter((i) => !allowed.has(i.icon))
-        .map((i) => `${i.title}: "${i.icon}"`);
-      if (offenders.length === 0) return null;
-      return `icon_in_allowlist: ${offenders.length} services use unknown icons (${offenders.join("; ")}). Pick from the lucide allowlist: ${ICON_NAMES.join(", ")}`;
+      // 2026-05-15 — soft validation. Accept any non-empty icon name. The
+      // renderer (resolveIconComponent in <PageRenderer>) maps the name to
+      // a lucide-react component (~1500 icons + concept aliases), falling
+      // back to Sparkles for genuinely-invalid names. No more retry loop;
+      // no allowlist to maintain. See spec
+      // docs/superpowers/specs/2026-05-15-soften-rigid-validators-design.md.
+      const blanks = p.items
+        .filter((i) => !i.icon || i.icon.trim().length === 0)
+        .map((i) => i.title);
+      if (blanks.length === 0) return null;
+      return `icon_required: ${blanks.length} services missing icons (${blanks.join("; ")})`;
     },
     (p) => {
       const icons = p.items.map((i) => i.icon);
       const unique = new Set(icons);
       return icons.length === unique.size
         ? null
-        : `distinct_icons: services items reuse icons (${icons.join(", ")}); each card must pick a different icon from the allowlist`;
+        : `distinct_icons: services items reuse icons (${icons.join(", ")}); each card must pick a different icon`;
     },
     (p) =>
       GENERIC_SERVICES_HEADLINES.some((re) => re.test(p.headline))

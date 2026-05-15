@@ -160,15 +160,50 @@ function countUniqueIcons(html: string): number {
 
 // ─── Main validator ─────────────────────────────────────────────────────────
 
-export async function validateWorkspaceOutputContract(
+/**
+ * Inputs the validator needs to evaluate. Loaded once via
+ * loadValidatorInputs(); passed to runChecks() for pure-logic evaluation.
+ * Splitting load + check lets unit tests inject synthetic inputs without
+ * a real DB.
+ */
+export interface ValidatorInputs {
+  workspaceId: string;
+  input: OutputContractInput;
+  personality: CRMPersonality;
+  expectedTimezone: string;
+  org: {
+    id: string;
+    name: string | null;
+    timezone: string | null;
+    theme: Record<string, unknown> | null;
+    settings: Record<string, unknown> | null;
+  } | null;
+  landing: {
+    contentHtml: string | null;
+    contentCss: string | null;
+    sections: Array<Record<string, unknown>> | null;
+  } | null;
+  pipeline: { stages: Array<{ name: string }> } | null;
+  intake: {
+    name: string | null;
+    fields: unknown;
+    contentHtml: string | null;
+  } | null;
+  bookingTemplate: {
+    title: string | null;
+    metadata: Record<string, unknown> | null;
+    startsAt: Date | null;
+    endsAt: Date | null;
+    contentHtml: string | null;
+  } | null;
+}
+
+async function loadValidatorInputs(
   workspaceId: string,
   input: OutputContractInput,
   personality: CRMPersonality,
   expectedTimezone: string,
-): Promise<OutputContractResult> {
-  const checks: ValidationCheck[] = [];
-
-  // Load all DB state once.
+): Promise<ValidatorInputs> {
   const [org] = await db
     .select({
       id: organizations.id,
@@ -180,6 +215,81 @@ export async function validateWorkspaceOutputContract(
     .from(organizations)
     .where(eq(organizations.id, workspaceId))
     .limit(1);
+
+  const [landing] = await db
+    .select({
+      contentHtml: landingPages.contentHtml,
+      contentCss: landingPages.contentCss,
+      sections: landingPages.sections,
+    })
+    .from(landingPages)
+    .where(
+      and(
+        eq(landingPages.orgId, workspaceId),
+        eq(landingPages.slug, "home"),
+      ),
+    )
+    .limit(1);
+
+  const [pipeline] = await db
+    .select({ stages: pipelines.stages })
+    .from(pipelines)
+    .where(
+      and(eq(pipelines.orgId, workspaceId), eq(pipelines.isDefault, true)),
+    )
+    .limit(1);
+
+  const [intake] = await db
+    .select({
+      name: intakeForms.name,
+      fields: intakeForms.fields,
+      contentHtml: intakeForms.contentHtml,
+    })
+    .from(intakeForms)
+    .where(eq(intakeForms.orgId, workspaceId))
+    .limit(1);
+
+  const [bookingTemplate] = await db
+    .select({
+      title: bookings.title,
+      metadata: bookings.metadata,
+      startsAt: bookings.startsAt,
+      endsAt: bookings.endsAt,
+      contentHtml: bookings.contentHtml,
+    })
+    .from(bookings)
+    .where(
+      and(eq(bookings.orgId, workspaceId), eq(bookings.status, "template")),
+    )
+    .limit(1);
+
+  return {
+    workspaceId,
+    input,
+    personality,
+    expectedTimezone,
+    org: (org as unknown as ValidatorInputs["org"]) ?? null,
+    landing: (landing as unknown as ValidatorInputs["landing"]) ?? null,
+    pipeline: (pipeline as unknown as ValidatorInputs["pipeline"]) ?? null,
+    intake: (intake as unknown as ValidatorInputs["intake"]) ?? null,
+    bookingTemplate:
+      (bookingTemplate as unknown as ValidatorInputs["bookingTemplate"]) ?? null,
+  };
+}
+
+export function runChecks(inputs: ValidatorInputs): OutputContractResult {
+  const {
+    input,
+    personality,
+    expectedTimezone,
+    org,
+    landing,
+    pipeline,
+    intake,
+    bookingTemplate,
+  } = inputs;
+
+  const checks: ValidationCheck[] = [];
 
   if (!org) {
     return {
@@ -203,59 +313,53 @@ export async function validateWorkspaceOutputContract(
     };
   }
 
-  const [landing] = await db
-    .select({
-      contentHtml: landingPages.contentHtml,
-      contentCss: landingPages.contentCss,
-    })
-    .from(landingPages)
-    .where(
-      and(
-        eq(landingPages.orgId, workspaceId),
-        eq(landingPages.slug, "home"),
-      ),
-    )
-    .limit(1);
   const html = landing?.contentHtml ?? "";
 
-  const [pipeline] = await db
-    .select({ stages: pipelines.stages })
-    .from(pipelines)
-    .where(
-      and(eq(pipelines.orgId, workspaceId), eq(pipelines.isDefault, true)),
-    )
-    .limit(1);
-
-  const [intake] = await db
-    .select({
-      name: intakeForms.name,
-      fields: intakeForms.fields,
-    })
-    .from(intakeForms)
-    .where(eq(intakeForms.orgId, workspaceId))
-    .limit(1);
-
-  const [bookingTemplate] = await db
-    .select({
-      title: bookings.title,
-      metadata: bookings.metadata,
-      startsAt: bookings.startsAt,
-      endsAt: bookings.endsAt,
-    })
-    .from(bookings)
-    .where(
-      and(eq(bookings.orgId, workspaceId), eq(bookings.status, "template")),
-    )
-    .limit(1);
+  // 2026-05-15 — v2 mode detection. enhance-blocks.ts nulls contentHtml
+  // when it writes the `sections` JSON column (the new <PageRenderer>
+  // path renders from sections at request time). The v1 checks below
+  // for landing_page_exists and cta_primary_href assume contentHtml is
+  // populated — they need to look at sections instead in v2 mode.
+  const sections = (landing?.sections ?? []) as Array<{
+    content?: {
+      headline?: string;
+      body?: string;
+      subheadline?: string;
+      items?: unknown[];
+      [k: string]: unknown;
+    };
+  }>;
+  const isV2 = sections.length > 0 && (html === null || html.length === 0);
+  const hasV2Content = sections.some((s) => {
+    const c = s.content ?? {};
+    return Boolean(
+      c.headline ||
+        c.body ||
+        c.subheadline ||
+        ((c.items as unknown[] | undefined)?.length ?? 0) > 0
+    );
+  });
 
   // ─── LANDING PAGE checks ─────────────────────────────────────────────────
 
-  // 1. Landing page exists at all.
+  // 1. Landing page exists. v2 mode looks at the `sections` JSON column
+  // (which <PageRenderer> renders from at request time); v1 mode looks
+  // at the legacy contentHtml column.
   checks.push({
     surface: "landing_page_exists",
-    status: html.length > 100 ? "pass" : "fail",
-    expected: "rendered HTML > 100 chars",
-    actual: `${html.length} chars`,
+    status: isV2
+      ? hasV2Content
+        ? "pass"
+        : "fail"
+      : html.length > 100
+        ? "pass"
+        : "fail",
+    expected: isV2
+      ? "≥1 section with meaningful content (headline / body / items)"
+      : "rendered HTML > 100 chars",
+    actual: isV2
+      ? `${sections.length} sections, content ${hasV2Content ? "present" : "all empty"}`
+      : `${html.length} chars`,
     severity: "blocking",
   });
 
@@ -285,32 +389,33 @@ export async function validateWorkspaceOutputContract(
     }
   }
 
-  // 4. CTA href contract — primary MUST be /book, secondary MUST be /intake.
-  // This is the structurally-enforced contract from the v1.1.9 spec.
-  // The renderer's btn class names are sf-btn--primary / sf-btn--secondary.
-  const primaryHref = extractHrefFor(html, "primary");
-  checks.push({
-    surface: "cta_primary_href",
-    status: primaryHref === "/book" ? "pass" : "fail",
-    expected: "/book",
-    actual: primaryHref ?? "(not extracted)",
-    severity: "blocking",
-  });
-  const secondaryHref = extractHrefFor(html, "secondary");
-  checks.push({
-    surface: "cta_secondary_href",
-    // Secondary may be missing on some packs (legitimate); only fail if
-    // it's present AND wrong. Absent secondary CTA is a warn at most.
-    status:
-      secondaryHref === null
-        ? "warn"
-        : secondaryHref === "/intake"
-          ? "pass"
-          : "fail",
-    expected: "/intake (or absent)",
-    actual: secondaryHref ?? "(not present)",
-    severity: secondaryHref === null ? "cosmetic" : "blocking",
-  });
+  // 4. CTA href contract (v1 mode only). In v2, CTAs are rendered at
+  // request time by <PageRenderer> from PageSchema.actions — fully
+  // renderer-controlled (always emits /book + /intake). The v1 regex-
+  // extract-from-HTML contract doesn't apply; skip in v2 mode.
+  if (!isV2) {
+    const primaryHref = extractHrefFor(html, "primary");
+    checks.push({
+      surface: "cta_primary_href",
+      status: primaryHref === "/book" ? "pass" : "fail",
+      expected: "/book",
+      actual: primaryHref ?? "(not extracted)",
+      severity: "blocking",
+    });
+    const secondaryHref = extractHrefFor(html, "secondary");
+    checks.push({
+      surface: "cta_secondary_href",
+      status:
+        secondaryHref === null
+          ? "warn"
+          : secondaryHref === "/intake"
+            ? "pass"
+            : "fail",
+      expected: "/intake (or absent)",
+      actual: secondaryHref ?? "(not present)",
+      severity: secondaryHref === null ? "cosmetic" : "blocking",
+    });
+  }
 
   // 5. Hero copy — when input.review_count is set, it should appear.
   if (typeof input.review_count === "number" && input.review_count > 0) {
@@ -590,17 +695,7 @@ export async function validateWorkspaceOutputContract(
   // is used and we should at least log it so we know which workspaces
   // shipped without the rich renderer.
   if (bookingTemplate) {
-    const [bookingRendered] = await db
-      .select({ contentHtml: bookings.contentHtml })
-      .from(bookings)
-      .where(
-        and(
-          eq(bookings.orgId, workspaceId),
-          eq(bookings.status, "template"),
-        ),
-      )
-      .limit(1);
-    const bookingHtml = bookingRendered?.contentHtml ?? "";
+    const bookingHtml = bookingTemplate.contentHtml ?? "";
     const hasIsland = bookingHtml.includes("sf-booking-data");
     const hasWeekly =
       bookingHtml.includes('"weekly"') &&
@@ -646,13 +741,8 @@ export async function validateWorkspaceOutputContract(
         severity: "cosmetic",
       });
 
-      // Pull the rendered intake HTML to check the form heading.
-      const [intakeRendered] = await db
-        .select({ contentHtml: intakeForms.contentHtml })
-        .from(intakeForms)
-        .where(eq(intakeForms.orgId, workspaceId))
-        .limit(1);
-      const intakeHtml = intakeRendered?.contentHtml ?? "";
+      // Check the rendered intake HTML for the form heading.
+      const intakeHtml = intake.contentHtml ?? "";
       const rendered = intakeHtml.includes(expectedTitle);
       checks.push({
         surface: "intake_title_rendered_html",
@@ -729,6 +819,21 @@ export async function validateWorkspaceOutputContract(
       blocking_failures: blockingFailures,
     },
   };
+}
+
+export async function validateWorkspaceOutputContract(
+  workspaceId: string,
+  input: OutputContractInput,
+  personality: CRMPersonality,
+  expectedTimezone: string,
+): Promise<OutputContractResult> {
+  const inputs = await loadValidatorInputs(
+    workspaceId,
+    input,
+    personality,
+    expectedTimezone,
+  );
+  return runChecks(inputs);
 }
 
 /**

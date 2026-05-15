@@ -1,5 +1,5 @@
 // v1.39.0 — replaced the 5-entry PascalCase iconByName map with the
-// shared resolveBlockIcon resolver (60+ entries, normalized lookup).
+// shared resolveIconComponent resolver (60+ entries, normalized lookup).
 //
 // Pre-1.39.0: iconByName was {Sparkles, Star, Rocket, ShieldCheck,
 // CircleCheckBig} keyed by exact PascalCase strings. The enhance-blocks
@@ -13,7 +13,7 @@
 // for future verticals is a one-file change.
 
 import { Stagger } from "@/components/motion";
-import { resolveBlockIcon } from "./icon-resolver";
+import { resolveIconComponent } from "@/lib/blueprint/renderers/icon-resolver";
 import type { BenefitsSectionContent } from "./types";
 
 export function BenefitsSection({ headline, benefits }: BenefitsSectionContent) {
@@ -25,7 +25,7 @@ export function BenefitsSection({ headline, benefits }: BenefitsSectionContent) 
             the grid scrolls into view. Subtle, premium feel. */}
         <Stagger className="grid gap-4 md:grid-cols-3" childDelay={0.08}>
           {benefits.map((benefit, index) => {
-            const Icon = resolveBlockIcon(benefit.icon);
+            const Icon = resolveIconComponent(benefit.icon);
             return (
               <article key={`${benefit.title}-${index}`} className="rounded-xl border bg-card p-6 md:p-7">
                 <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">

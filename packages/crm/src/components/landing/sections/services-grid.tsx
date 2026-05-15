@@ -16,7 +16,7 @@
 
 import Link from "next/link";
 import { CheckCircle2 } from "lucide-react";
-import { resolveBlockIcon } from "./icon-resolver";
+import { resolveIconComponent } from "@/lib/blueprint/renderers/icon-resolver";
 import type { ServicesGridSectionContent } from "./types";
 
 // v1.39.0 — icon resolver extracted to ./icon-resolver.ts so benefits +
@@ -63,7 +63,7 @@ export function ServicesGridSection({
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {services.map((service, index) => {
-            const Icon = resolveBlockIcon(service.icon);
+            const Icon = resolveIconComponent(service.icon);
             return (
             <article
               key={`${service.name}-${index}`}

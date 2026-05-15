@@ -81,11 +81,7 @@ import {
   buildLightFontLink,
   isLightMode,
 } from "./light-overlay";
-import {
-  hasIcon as hasLucideIcon,
-  iconForTitle as lucideIconForTitle,
-  renderIcon as renderLucideIcon,
-} from "./lucide-icons";
+import { renderIconToSvgString } from "./icon-resolver";
 
 // ─── Public entry point ────────────────────────────────────────────────
 
@@ -538,31 +534,26 @@ function findReviewItem(
 // ─── Inline SVG icons ─────────────────────────────────────────────────
 
 function iconSvg(name: string | undefined): string {
-  const key = (name ?? "").toLowerCase();
-  // May 1, 2026 — Lucide-first icon resolution. The legacy ICON_MAP
-  // (chrome icons: phonecall, star, shieldcheck, etc.) stays as a
-  // fallback for the trust-strip + emergency-strip + reviews-badge that
-  // reference it directly. New content cards (services, features, stats)
-  // resolve through Lucide first so item.icon = "calendar" → the proper
-  // calendar SVG, not the generic placeholder.
-  if (hasLucideIcon(name)) {
-    return `<span class="sf-icon" aria-hidden="true">${renderLucideIcon(name as string)}</span>`;
-  }
-  const svg = ICON_MAP[key] ?? ICON_MAP._default;
-  return `<span class="sf-icon" aria-hidden="true">${svg}</span>`;
+  // 2026-05-15 — uses the shared resolver which tries (1) concept aliases,
+  // (2) full lucide-react library (~1500 icons), (3) Sparkles fallback.
+  // Always returns a non-empty SVG. The local ICON_MAP (chrome icons:
+  // phonecall, _default, etc.) is still used by the literal SVG constants
+  // below (CHEVRON_RIGHT_SVG_SMALL, PHONE_SVG_SMALL) — those keep their
+  // existing definitions; the general iconSvg path just delegates to the
+  // shared resolver now.
+  return `<span class="sf-icon" aria-hidden="true">${renderIconToSvgString(name)}</span>`;
 }
 
 /**
- * Icon for a content card. Honors `item.icon` if known (Lucide or chrome
- * map); otherwise infers from the item title via `iconForTitle`. Always
- * returns a non-empty SVG — better than a blank slot when the operator's
- * Soul didn't carry icon hints.
+ * Icon for a content card. Always returns a non-empty SVG — the shared
+ * resolver handles unknown icons gracefully (Sparkles fallback), so the
+ * title-based fallback path is no longer necessary.
  */
 function iconForContentItem(item: { icon?: string; title?: string }): string {
-  if (item.icon && (hasLucideIcon(item.icon) || ICON_MAP[item.icon.toLowerCase()])) {
-    return iconSvg(item.icon);
-  }
-  return `<span class="sf-icon" aria-hidden="true">${renderLucideIcon(lucideIconForTitle(item.title))}</span>`;
+  // 2026-05-15 — the new resolver handles unknown icons gracefully (
+  // Sparkles fallback), so the title-based fallback path is no longer
+  // necessary. iconSvg handles all cases via renderIconToSvgString.
+  return iconSvg(item.icon ?? "");
 }
 
 const CHEVRON_RIGHT_SVG_SMALL = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>`;

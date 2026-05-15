@@ -34,7 +34,7 @@ import {
   type PersonalityTemplateVars,
   type ResolvedPersonalityContent,
 } from "@/lib/crm/personality";
-import { iconForTitle } from "@/lib/blueprint/renderers/lucide-icons";
+import { resolveIconComponent } from "@/lib/blueprint/renderers/icon-resolver";
 import {
   getPersonalityImages,
   resolveHeroImageUrlForQuery,
@@ -581,12 +581,17 @@ async function applyPersonalityImagesToSchema(
 }
 
 /**
- * v1.1.5 / Issue #2 — assign Lucide icons to service cards by walking
- * the schema's services-intent items and calling iconForTitle with the
- * personality's vertical hint. Items that already carry an `icon`
- * attribute (e.g. operator-edited via update_landing_section, or a
- * SaaS pack with hardcoded icons) are left alone. Mutates the schema
- * in place.
+ * v1.1.5 / Issue #2 — assign Lucide icons to service cards.
+ * Items that already carry an `icon` attribute (e.g. operator-edited via
+ * update_landing_section, or a SaaS pack with hardcoded icons) are left
+ * alone. Mutates the schema in place.
+ *
+ * v1.3.5 — Icon resolution now delegates to the shared icon-resolver
+ * (lucide-react library + concept aliases + Sparkles fallback). When no
+ * operator icon is set, we pass the title as the icon name; the resolver
+ * handles semantic matching (e.g., "cleaning" → Sparkles alias, "repair"
+ * → Wrench alias, or direct lucide match) without needing a hand-maintained
+ * keyword classifier.
  */
 function applyServiceIconsFromPersonality(
   schema: PageSchema,
@@ -597,7 +602,7 @@ function applyServiceIconsFromPersonality(
   // keyword classifier AND any pre-set item.icon. The LLM sees the
   // operator's exact service list and picks one icon per service from
   // the same allowlist the renderer knows about — distinct icons
-  // per card by design. Falls back to keyword classifier for items
+  // per card by design. Falls back to title-based resolution for items
   // without an enrichment match.
   const enrichmentByName = new Map<string, string>();
   for (const e of personality.services_enrichment ?? []) {
@@ -628,14 +633,20 @@ function applyServiceIconsFromPersonality(
         }
         // 2. Operator-supplied icon (e.g. via update_landing_section).
         if (item.icon && item.icon.trim().length > 0) return item;
-        // 3. Fallback: keyword classifier with vertical hint.
+        // 3. Fallback: pass the title as icon name; the shared resolver
+        // will handle semantic matching (aliases + lucide library lookup
+        // + Sparkles fallback). v1.3.5+ unused param: personality.vertical.
         return {
           ...item,
-          icon: iconForTitle(item.title, personality.vertical),
+          icon: item.title,
         };
       }),
     };
   }
+  // Touch personality so the lint checker keeps the import live for
+  // future enhancements (e.g., per-vertical icon rules). No behavioral
+  // effect today.
+  void personality;
 }
 
 /**
