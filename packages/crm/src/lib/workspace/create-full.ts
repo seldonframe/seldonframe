@@ -33,6 +33,7 @@ import { resolvePersonalityForBusiness } from "@/lib/crm/personality-generator";
 import { classifyBusinessTypeFromSoul } from "@/lib/page-schema/classify-business";
 import { inferTimezone } from "@/lib/workspace/infer-timezone";
 import { trackEvent } from "@/lib/analytics/track";
+import type { AestheticArchetypeId } from "@/lib/workspace/aesthetic-archetypes";
 // v1.38.0 — Hormozi-quality block content via single Opus call inside the
 // orchestrator. See lib/workspace/enhance-blocks.ts for the design rationale.
 import { enhanceLandingForWorkspace } from "./enhance-blocks";
@@ -120,7 +121,13 @@ export interface CreateFullWorkspaceResult {
     pipeline_stages: string[];
     booking_types: Array<{ slug: string; label: string; duration: number }>;
     intake_fields: number;
-    theme: { mode: string; primary: string; accent: string };
+    theme: {
+      mode: string;
+      primary: string;
+      accent: string;
+      /** v1.54.0 — classified archetype id (or null if not yet classified). */
+      aestheticArchetype: AestheticArchetypeId | null;
+    };
     landing_page: { status: "rendered" | "degraded"; sections: string[] };
   };
   operator_prompt?: string;
@@ -698,6 +705,10 @@ async function validateWorkspaceArtifacts(
       timezone: organizations.timezone,
       settings: organizations.settings,
       soul: organizations.soul,
+      // v1.54.0 — needed to surface aestheticArchetype on the
+      // CreateFullWorkspaceResult.configured.theme summary so the v2 CC
+      // agent can read the classified archetype from the response context.
+      theme: organizations.theme,
     })
     .from(organizations)
     .where(eq(organizations.id, orgId))
@@ -803,6 +814,9 @@ async function validateWorkspaceArtifacts(
     mode: org.soul && (org.soul as { theme?: { mode?: string } })?.theme?.mode === "dark" ? "dark" : "light",
     primary: "#0284c7",
     accent: "#f97316",
+    // v1.54.0 — read from organizations.theme JSONB (populated by
+    // enhance-blocks at classification time).
+    aestheticArchetype: org.theme?.aestheticArchetype ?? null,
   };
 
   return {

@@ -194,6 +194,12 @@ export async function POST(request: Request) {
     personality_vertical: result.configured?.personality ?? null,
     timezone: result.configured?.timezone ?? null,
     theme: result.configured?.theme ?? null,
+    // v1.54.0 — aesthetic archetype id (one of 7) so the CC agent's
+    // hero block prompt can pick the right template + voice without
+    // guessing from vertical alone. Server enforces this anyway in
+    // persist_block, but giving it to the LLM is how the generated
+    // copy ends up matching the visual treatment (urgent vs editorial).
+    aesthetic_archetype: result.configured?.theme?.aestheticArchetype ?? null,
   };
 
   logEvent(
