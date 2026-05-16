@@ -143,40 +143,51 @@ export function LandingMarketingPricingSection() {
       </div>
 
       <div className="mt-12 grid grid-cols-1 gap-4 md:grid-cols-3">
-        {TIERS.map((tier) => (
-          <article
-            key={tier.key}
-            data-tier={tier.key}
-            className={`relative flex flex-col rounded-xl border p-6 ${
-              tier.highlighted
-                ? "border-[#14b8a6]/50 bg-zinc-900"
-                : "border-zinc-800 bg-zinc-900"
-            }`}
-          >
-            {tier.highlighted ? (
-              <span className="absolute right-4 top-4 rounded-full border border-[#14b8a6]/40 bg-[#14b8a6]/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#14b8a6]">
-                Recommended
-              </span>
-            ) : null}
-            <h3 className="text-lg font-semibold text-zinc-100">{tier.name}</h3>
-            <p className="mt-1 text-sm text-zinc-400">{tier.tagline}</p>
-            <div className="mt-4 flex items-baseline gap-1">
-              <span className="text-4xl font-bold text-zinc-100">{tier.price}</span>
-              <span className="text-sm text-zinc-500">{tier.period}</span>
-            </div>
-            <Link
-              href={tier.ctaHref}
-              data-tier-cta={tier.key}
-              className={`mt-6 inline-flex items-center justify-center rounded-xl px-6 py-3 font-semibold transition-opacity focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#14b8a6] ${
-                tier.highlighted
-                  ? "bg-[#14b8a6] text-white hover:opacity-90"
-                  : "border border-zinc-700 text-zinc-200 hover:border-zinc-500"
-              }`}
+        {TIERS.map((tier) => {
+          // design-critique May 2026: Scale cannot visually compete
+          // with Growth (the "obvious next step"). Free and Scale both
+          // run at slightly demoted background opacity so the eye
+          // catches Growth's teal border first; Growth stays at full
+          // opacity to anchor the row.
+          const cardSurface = tier.highlighted
+            ? "border-[#14b8a6]/60 bg-zinc-900 shadow-lg shadow-[#14b8a6]/5"
+            : "border-zinc-800/80 bg-zinc-900/60";
+          return (
+            <article
+              key={tier.key}
+              data-tier={tier.key}
+              className={`relative flex flex-col rounded-xl border p-6 ${cardSurface}`}
             >
-              {tier.ctaLabel}
-            </Link>
-          </article>
-        ))}
+              {tier.highlighted ? (
+                // Lifted above the card top edge so it reads as a
+                // stamp, not part of the H3. ring-zinc-950 inset
+                // mimics a punch-through to the page background.
+                <span className="absolute -top-2.5 right-4 rounded-full border border-[#14b8a6]/50 bg-[#14b8a6]/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#14b8a6] ring-2 ring-[#09090b]">
+                  Recommended
+                </span>
+              ) : null}
+              <h3 className="text-lg font-semibold text-zinc-100">{tier.name}</h3>
+              {/* min-h holds the price baseline aligned across all 3
+                  cards even when one tagline wraps to 2 lines. */}
+              <p className="mt-1 min-h-[2.5rem] text-sm text-zinc-400">{tier.tagline}</p>
+              <div className="mt-4 flex items-baseline gap-1">
+                <span className="text-4xl font-bold text-zinc-100">{tier.price}</span>
+                <span className="text-sm text-zinc-500">{tier.period}</span>
+              </div>
+              <Link
+                href={tier.ctaHref}
+                data-tier-cta={tier.key}
+                className={`mt-6 inline-flex items-center justify-center rounded-xl px-6 py-3 font-semibold transition-opacity focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#14b8a6] ${
+                  tier.highlighted
+                    ? "bg-[#14b8a6] text-white hover:opacity-90"
+                    : "border border-zinc-700 text-zinc-200 hover:border-zinc-500"
+                }`}
+              >
+                {tier.ctaLabel}
+              </Link>
+            </article>
+          );
+        })}
       </div>
 
       <div className="mt-10 overflow-x-auto rounded-xl border border-zinc-800">
@@ -199,9 +210,14 @@ export function LandingMarketingPricingSection() {
             </tr>
           </thead>
           <tbody>
+            {/* Zebra-stripe rows so the eye tracks horizontally without
+                losing the row at 1366px on long feature labels. */}
             {FEATURES.map((row) => (
-              <tr key={row.label} className="border-t border-zinc-800/60">
-                <th scope="row" className="p-4 text-left font-normal text-zinc-300">
+              <tr
+                key={row.label}
+                className="border-t border-zinc-800/60 odd:bg-zinc-900/30"
+              >
+                <th scope="row" className="p-4 text-left font-normal text-zinc-200">
                   {row.label}
                 </th>
                 {TIERS.map((tier) => (
