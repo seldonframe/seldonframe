@@ -95,6 +95,44 @@ export function buildFinalizeSummary({ snapshot, durationSec, aestheticArchetype
   );
   lines.push("");
 
+  // v1.55.x — derive appHost for the LLM-settings + client-portal links.
+  // SELDONFRAME_APP_BASE wins when set (white-label/staging); falls back
+  // to https://app.seldonframe.com. Trailing slash stripped to match the
+  // pattern used by v2/complete when building ops_stack.automations_url.
+  const appHost = (
+    process.env.SELDONFRAME_APP_BASE ?? "https://app.seldonframe.com"
+  ).replace(/\/$/, "");
+
+  // LLM key clarity — operators kept asking "which key is the chatbot
+  // using?" + had no recovery path when llm_credit_exhausted fired.
+  lines.push(
+    `🔑 Chatbot LLM key: uses your Claude Code key by default. Change at ${appHost}/settings/integrations/llm.`,
+  );
+  lines.push(
+    `   (If you see "llm_credit_exhausted", top up at console.anthropic.com/settings/billing.)`,
+  );
+  lines.push("");
+
+  // v1.55.x — Client portal demo callout. Closes the demo loop:
+  // chatbot (above) → booking → CRM → portal demo for the client.
+  // Slug is required; skip gracefully if absent (shouldn't happen in
+  // practice but the snapshot can theoretically lack it).
+  const slug = ws.slug ?? "";
+  if (slug) {
+    const portalUrl = `${appHost}/customer/${slug}/login`;
+    lines.push(`🎬 Demo the client portal: ${portalUrl}`);
+    lines.push(
+      `   This is what your client (the SMB owner) sees — their CRM dashboard, their leads, their bookings, their chatbot conversations.`,
+    );
+    lines.push(
+      `   Sign in with a magic link (use your own email; it's gated by email so each client gets their own private portal).`,
+    );
+    lines.push(
+      `   Free tier shows the portal with SeldonFrame branding. Growth ($29/mo) unlocks custom domain + the agency's logo.`,
+    );
+    lines.push("");
+  }
+
   // Landing-page nudge (closing)
   const archetypeClause = aestheticArchetype ? ` in ${aestheticArchetype} style` : "";
   lines.push(

@@ -177,6 +177,108 @@ export async function composeSystemPrompt(input: ComposeSystemPromptInput): Prom
     sections.push(framedFaq);
   }
 
+  // v1.55.x — Snake-case soul enrichment.
+  //
+  // The OrgSoul TS interface above gives us camelCase (industry,
+  // businessDescription, services). But the organizations.soul JSONB
+  // ALSO carries snake_case fields written by the URL-scrape +
+  // soul-compiler path: business_description, services (richer),
+  // review_count, review_rating, certifications, trust_signals,
+  // emergency_service, same_day, service_area. Cast through
+  // Record<string, unknown> to read them (codebase convention; see
+  // resolveOrgArchetype in lib/page-blocks/persist.ts).
+  //
+  // Without this section the chatbot is a generic SDR; with it, the
+  // chatbot can answer "do you do emergency service?" / "what's your
+  // rating?" / "what cities do you cover?" with the real client facts.
+  const soulRaw = (soul as unknown as Record<string, unknown> | null) ?? null;
+  if (soulRaw && typeof soulRaw === "object") {
+    const factLines: string[] = [];
+
+    const businessDesc =
+      typeof soulRaw.business_description === "string"
+        ? soulRaw.business_description.trim()
+        : "";
+    if (businessDesc) {
+      factLines.push(`About this business: ${businessDesc}`);
+    }
+
+    // services — may be array of strings OR array of { name, description } objects.
+    // Skip if the camelCase soul.services already populated the "Services we offer"
+    // section above — avoid duplicating service lists in two places. We only emit
+    // here when soul.services is empty/unset but the snake_case shape has entries.
+    const hasCamelServices = !!(soul?.services && soul.services.length > 0);
+    const rawServices = Array.isArray(soulRaw.services) ? soulRaw.services : null;
+    if (!hasCamelServices && rawServices && rawServices.length > 0) {
+      const serviceLines: string[] = [];
+      for (const svc of rawServices) {
+        if (typeof svc === "string") {
+          serviceLines.push(`- ${svc}`);
+        } else if (svc && typeof svc === "object") {
+          const s = svc as Record<string, unknown>;
+          const name = typeof s.name === "string" ? s.name : "";
+          const desc = typeof s.description === "string" ? s.description : "";
+          if (name) {
+            serviceLines.push(`- ${name}${desc ? ` — ${desc}` : ""}`);
+          }
+        }
+      }
+      if (serviceLines.length > 0) {
+        factLines.push(`\nServices we offer:\n${serviceLines.join("\n")}`);
+      }
+    }
+
+    const reviewCount =
+      typeof soulRaw.review_count === "number" ? soulRaw.review_count : null;
+    const reviewRating =
+      typeof soulRaw.review_rating === "number" ? soulRaw.review_rating : null;
+    if (reviewCount && reviewRating) {
+      factLines.push(
+        `\nSocial proof: ${reviewCount} reviews averaging ${reviewRating}★`,
+      );
+    }
+
+    const certs = Array.isArray(soulRaw.certifications)
+      ? soulRaw.certifications.filter((c): c is string => typeof c === "string")
+      : null;
+    if (certs && certs.length > 0) {
+      factLines.push(`Certifications / credentials: ${certs.join(", ")}`);
+    }
+
+    const trustSignals = Array.isArray(soulRaw.trust_signals)
+      ? soulRaw.trust_signals.filter((t): t is string => typeof t === "string")
+      : null;
+    if (trustSignals && trustSignals.length > 0) {
+      factLines.push(`Trust signals: ${trustSignals.join(", ")}`);
+    }
+
+    const emergencyService = soulRaw.emergency_service === true;
+    const sameDay = soulRaw.same_day === true;
+    if (emergencyService || sameDay) {
+      const flags: string[] = [];
+      if (emergencyService) flags.push("24/7 emergency service");
+      if (sameDay) flags.push("same-day appointments");
+      factLines.push(`Availability: ${flags.join(", ")}`);
+    }
+
+    const serviceArea = Array.isArray(soulRaw.service_area)
+      ? soulRaw.service_area.filter((a): a is string => typeof a === "string")
+      : null;
+    if (serviceArea && serviceArea.length > 0) {
+      factLines.push(`Service area: ${serviceArea.join(", ")}`);
+    }
+
+    if (factLines.length > 0) {
+      sections.push(
+        `## Business facts\n\n${factLines.join("\n")}\n\n` +
+          `Use this information to answer business-specific questions accurately. ` +
+          `Don't make up facts not in this section — if asked about something not ` +
+          `listed (e.g., specific pricing, exact hours), say so honestly and offer ` +
+          `to escalate to a human or schedule a call.`,
+      );
+    }
+  }
+
   // Brain notes (per-workspace patterns)
   if (brainNotes && brainNotes.length > 0) {
     sections.push(

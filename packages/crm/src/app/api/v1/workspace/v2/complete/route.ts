@@ -194,6 +194,10 @@ export async function POST(request: Request) {
         orgId: workspaceId,
         agentSlug,
         workspaceBaseDomain: baseDomain,
+        // v1.55.x — Forward the agent id so the 6-step wizard on the
+        // preview page can deep-link to /agents/<id>/{test,evals,settings}
+        // instead of the generic /agents listing.
+        agentId: chatbotAgentId,
       });
       if (!seedResult.ok) {
         logEvent(

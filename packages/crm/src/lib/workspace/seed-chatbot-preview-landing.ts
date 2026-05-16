@@ -27,6 +27,10 @@ export interface SeedChatbotPreviewInput {
   agentSlug: string;
   /** Defaults to process.env.WORKSPACE_BASE_DOMAIN if set, else "app.seldonframe.com". */
   workspaceBaseDomain?: string;
+  /** v1.55.x — Optional agent id for the 6-step wizard's deep links to
+   *  /agents/<id>/{test,evals,settings}. When absent, the wizard falls
+   *  back to the generic /agents listing. */
+  agentId?: string;
 }
 
 const TAGLINE_MAX_CHARS = 200;
@@ -60,6 +64,7 @@ export function buildChatbotPreviewSection(
       businessName: input.businessName,
       tagline,
       embedUrl,
+      ...(input.agentId ? { agentId: input.agentId } : {}),
     },
   };
 }
@@ -146,6 +151,10 @@ export async function seedChatbotPreviewLandingForOrg(args: {
   orgId: string;
   agentSlug: string;
   workspaceBaseDomain?: string;
+  /** v1.55.x — Optional agent id; forwarded to the seeded section's
+   *  content.agentId so the 6-step wizard can deep-link into
+   *  /agents/<id>/{test,evals,settings}. */
+  agentId?: string;
 }): Promise<{ ok: true } | { ok: false; reason: string }> {
   const [org] = await db
     .select({
@@ -177,5 +186,6 @@ export async function seedChatbotPreviewLandingForOrg(args: {
     orgSlug: org.slug,
     agentSlug: args.agentSlug,
     workspaceBaseDomain: args.workspaceBaseDomain,
+    agentId: args.agentId,
   });
 }
