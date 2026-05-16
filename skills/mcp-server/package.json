@@ -1,6 +1,6 @@
 {
   "name": "@seldonframe/mcp",
-  "version": "1.53.0",
+  "version": "1.55.0",
   "mcpName": "io.github.seldonframe/seldonframe-mcp",
   "description": "Open-source GoHighLevel alternative for agencies. 146+ MCP tools that let Claude Code spin up white-labeled client workspaces — CRM, booking, intake forms, landing pages, AI chatbot, and pre-wired agent archetypes (speed-to-lead, missed-call-text-back, review-requester) — in minutes. AGPL-3.0.",
   "license": "AGPL-3.0-or-later",

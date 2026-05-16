@@ -598,10 +598,36 @@ async function maybeBuildSectionsUpdate(args: {
   // Upsert the hero section (replace by type) while preserving any
   // other sections enhance-blocks wrote (navbar, about, services, etc.).
   // If existing has no hero, prepend; else replace.
-  const others = existing.filter((s) => s.type !== "hero");
+  //
+  // v1.55.0 — Always evict the chatbotPreview placeholder section
+  // (default public surface for new workspaces) when ANY real landing
+  // block is persisted. The chatbotPreview is the demo shown until
+  // the operator runs the landing-page-creation SKILL.md; once they
+  // do, hero/services/etc replace it. Without this filter, the
+  // chatbotPreview would persist BELOW the new landing sections and
+  // produce a hybrid page that overlaps the marketing landing with
+  // the chatbot demo.
+  const hadChatbotPreview = existing.some(
+    (s) => s.type === "chatbotPreview",
+  );
+  if (hadChatbotPreview) {
+    console.warn(
+      JSON.stringify({
+        event: "chatbot_preview_evicted",
+        workspace_id: args.workspaceId,
+        replaced_by_block: args.blockName,
+      }),
+    );
+  }
+  const others = existing.filter(
+    (s) => s.type !== "hero" && s.type !== "chatbotPreview",
+  );
   if (existing.some((s) => s.type === "hero")) {
-    // Preserve other sections' order; just substitute hero in place.
-    return existing.map((s) => (s.type === "hero" ? heroSection : s));
+    // Preserve other sections' order; just substitute hero in place
+    // AND strip any chatbotPreview placeholder in the same pass.
+    return existing
+      .filter((s) => s.type !== "chatbotPreview")
+      .map((s) => (s.type === "hero" ? heroSection : s));
   }
   // No prior hero — prepend after navbar if present, else at the front.
   const navbarIdx = others.findIndex((s) => s.type === "navbar");

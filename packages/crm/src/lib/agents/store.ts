@@ -54,6 +54,11 @@ export type CreateAgentInput = {
   pricingFacts?: Array<{ label: string; amount: number; currency: string }>;
   /** Optional greeting override. */
   greeting?: string;
+  /** v1.55.0 — Optional initial status. Defaults to "draft" when
+   *  omitted (preserves behavior for callers that don't specify).
+   *  v2/complete sets this to "test" so the auto-created website
+   *  chatbot is responsive on the preview page immediately. */
+  status?: "draft" | "test" | "live";
 };
 
 export type CreateAgentResult =
@@ -162,7 +167,8 @@ export async function createAgent(input: CreateAgentInput): Promise<CreateAgentR
       archetype: input.archetype,
       blueprint,
       currentVersion: 1,
-      status: "draft",
+      // v1.55.0 — honor input.status (default "draft" for backward compat).
+      status: input.status ?? "draft",
     })
     .returning();
   if (!created) {

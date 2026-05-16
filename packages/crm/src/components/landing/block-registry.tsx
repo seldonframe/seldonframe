@@ -1,6 +1,7 @@
 import type { Editor } from "grapesjs";
 import type { ReactNode } from "react";
 import { BenefitsSection } from "./sections/benefits";
+import { ChatbotPreviewSection } from "./sections/chatbot-preview";
 import { CTASection } from "./sections/cta";
 import { EmergencyStripSection } from "./sections/emergency-strip";
 import { FAQSection } from "./sections/faq";
@@ -17,6 +18,7 @@ import { StickyMobileCTASection } from "./sections/sticky-mobile-cta";
 import { TestimonialsSection } from "./sections/testimonials";
 import type {
   BenefitsSectionContent,
+  ChatbotPreviewSectionContent,
   CTASectionContent,
   EmergencyStripSectionContent,
   FAQSectionContent,
@@ -214,6 +216,24 @@ export const landingBlockRegistry: BlockRegistry = [
     grapesContent:
       '<div class="fixed bottom-0 inset-x-0 border-t bg-card md:hidden flex"><a class="flex-1 py-4 text-center" href="tel:">Call</a><a class="flex-1 py-4 text-center bg-primary text-white" href="/book">Book</a></div>',
     render: (content, key) => <StickyMobileCTASection key={key} {...(content as StickyMobileCTASectionContent)} />,
+  },
+  // v1.55.0 — chatbot-preview block. Default public surface for a fresh
+  // workspace BEFORE the operator generates a landing page: a full-page
+  // branded chat interface that loads the workspace's website-chatbot
+  // agent via embed.js. Operator can share this URL with their client
+  // to demo the AI receptionist, then copy the visible snippet onto the
+  // client's existing site. Evicted whenever a real landing page is
+  // persisted.
+  {
+    type: "chatbotPreview",
+    label: "Chatbot Preview (default public surface)",
+    category: "SeldonFrame",
+    grapesId: "sf-chatbot-preview",
+    grapesContent:
+      '<section class="py-20 text-center"><h1 class="text-4xl font-semibold">Your Business</h1><p class="mt-3 opacity-70">AI receptionist — ask anything</p><div class="mt-12 rounded-2xl border p-8 min-h-[400px]">Loading your AI receptionist…</div></section>',
+    render: (content, key) => (
+      <ChatbotPreviewSection key={key} {...(content as ChatbotPreviewSectionContent)} />
+    ),
   },
 ];
 

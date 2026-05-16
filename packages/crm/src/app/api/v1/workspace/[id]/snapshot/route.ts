@@ -12,6 +12,7 @@ import {
 import { resolveV1Identity, userCanWriteWorkspace } from "@/lib/auth/v1-identity";
 import { buildTierUpsell } from "@/lib/workspace/tier-upsell";
 import { summarizeWeeklyHours, type WeeklyHours } from "@/lib/workspace/format-hours";
+import { listArchetypes } from "@/lib/agents/archetypes";
 
 // Returns a structured read-only snapshot of workspace state for Claude Code
 // to reason over. Pure DB read — zero LLM calls, zero Anthropic dependency.
@@ -199,6 +200,31 @@ export async function GET(
       }
     : null;
 
+  const publicUrls = {
+    home: origin,
+    book: `${origin}/book`,
+    intake: `${origin}/intake`,
+  };
+
+  // v1.55.0 — Ops-stack URLs + automations callout for the new
+  // finalize_workspace summary template. Computed inline rather than
+  // stored anywhere — these are derived from existing data.
+  const appHost = (process.env.SELDONFRAME_APP_BASE ?? `https://${process.env.WORKSPACE_BASE_DOMAIN ?? "app.seldonframe.com"}`).replace(/\/$/, "");
+  const opsStack = {
+    admin_url: `${appHost}/admin/${encodeURIComponent(workspaceId)}`,
+    booking_url: publicUrls.book,
+    intake_url: publicUrls.intake,
+    automations_url: `${appHost}/automations`,
+  };
+
+  const availableAutomations = listArchetypes()
+    .filter((a) => a.id !== "website-chatbot")
+    .map((a) => ({
+      id: a.id,
+      name: a.name ?? a.id,
+      configured: false,
+    }));
+
   return NextResponse.json({
     ok: true,
     workspace: {
@@ -230,14 +256,12 @@ export async function GET(
       seldon_it: recentSeldonItEvents,
       events: recentEvents,
     },
-    public_urls: {
-      home: origin,
-      book: `${origin}/book`,
-      intake: `${origin}/intake`,
-    },
+    public_urls: publicUrls,
     chatbot,
     tier,
     booking: bookingSummary,
     intake: intakeSummary,
+    ops_stack: opsStack,
+    available_automations: availableAutomations,
   });
 }
