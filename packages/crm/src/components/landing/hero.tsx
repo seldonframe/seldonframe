@@ -34,10 +34,9 @@ export function LandingHero() {
           className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 px-8 py-4 font-semibold text-zinc-200 transition-colors hover:border-zinc-500"
         >
           Set up via Claude Code
-          <ArrowRight size={18} />
         </Link>
       </div>
-      <p className="mt-6 text-xs text-zinc-600">Free forever — 1 workspace, BYO Anthropic key, no credit card.</p>
+      <p className="mt-6 text-sm text-zinc-500">Free forever — 1 workspace, BYO Anthropic key, no credit card.</p>
 
       <div className="mt-12 w-full max-w-4xl overflow-hidden rounded-xl border border-zinc-800/50 bg-zinc-900">
         <Image
@@ -52,6 +51,9 @@ export function LandingHero() {
         <div className="hidden h-[60px] items-center justify-center bg-zinc-900 px-6 text-sm text-zinc-500 motion-reduce:flex">
           A 6-second loop shows: paste URL → CRM, booking page, intake form, and AI chatbot appear.
         </div>
+        <p className="border-t border-zinc-800/50 bg-zinc-950 px-6 py-3 text-center text-xs text-zinc-500">
+          Live 6-second hero loop lands in week 6.
+        </p>
       </div>
     </section>
   );
