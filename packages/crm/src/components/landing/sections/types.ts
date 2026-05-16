@@ -269,6 +269,18 @@ export type StickyMobileCTASectionContent = {
   bookText?: string;
 };
 
+/** v1.55.0 — content for the chatbot-preview section type. */
+export interface ChatbotPreviewSectionContent {
+  /** Business name (h1 on the page). */
+  businessName: string;
+  /** One-line tagline below the h1. Falls back to `AI receptionist — ask ${businessName} anything`. */
+  tagline: string;
+  /** Full https:// URL to the agent's embed.js. */
+  embedUrl: string;
+  /** Theme mode for the page background. */
+  themeMode: "light" | "dark";
+}
+
 export type LandingPageSection = {
   type:
     | "navbar"
@@ -286,7 +298,12 @@ export type LandingPageSection = {
     | "emergencyStrip"
     | "serviceArea"
     | "projectGallery"
-    | "stickyMobileCTA";
+    | "stickyMobileCTA"
+    // v1.55.0 — default public surface when no landing page is generated.
+    // Renders a full-page branded chat interface for the workspace's
+    // website-chatbot agent. Evicted when an operator persists hero/services
+    // /etc via the landing-page-creation SKILL.md flow.
+    | "chatbot-preview";
   content: Record<string, unknown>;
   order: number;
 };
