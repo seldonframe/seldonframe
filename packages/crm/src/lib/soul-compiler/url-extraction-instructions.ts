@@ -23,6 +23,24 @@ Step 2 — Decide if sub-pages are needed.
   HARD LIMIT: 3 total WebFetch calls. Stop fetching after that even if
   fields are still missing.
 
+Step 2.5 — Extract weekly_hours specifically.
+  Hours are commonly in headers, footers, sidebars, contact pages, or
+  Google Business listing embeds. The shape MUST be:
+    {
+      "monday": { "enabled": true, "start": "09:00", "end": "17:00" },
+      "tuesday": { "enabled": true, "start": "09:00", "end": "17:00" },
+      ...all 7 days using full lowercase day names...
+      "saturday": { "enabled": false, "start": "00:00", "end": "00:00" },
+      "sunday": { "enabled": false, "start": "00:00", "end": "00:00" }
+    }
+  - Times MUST be 24-hour HH:MM strings (e.g. "07:30", "17:00", "23:59").
+  - \`enabled: false\` means closed that day; start/end can be any valid placeholders.
+  - Convert "9 AM - 5 PM" → "09:00" / "17:00". Convert "7:30 AM - 5 PM" → "07:30" / "17:00".
+  - "Open 24 hours" → enabled: true, start: "00:00", end: "23:59".
+  - If hours appear but you cannot parse cleanly, leave weekly_hours as null — the
+    backend will default to Mon-Fri 9-5 and the chatbot will disclaim them as assumed.
+  - Do NOT invent hours. Only extract what's actually on the page.
+
 Step 3 — Reason and extract.
   Produce a JSON object matching the schema below. Use confident extractions
   only; do not invent. If a REQUIRED field can't be determined from what you

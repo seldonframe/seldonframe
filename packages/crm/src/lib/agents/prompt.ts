@@ -21,6 +21,10 @@ import type { OrgSoul } from "@/lib/soul/types";
 import type { AgentBlueprint } from "@/db/schema/agents";
 import { getSkillsForArchetype, renderSkill } from "./skills/registry";
 import { frameFaqForSystemPrompt, type FaqEntry } from "./runtime/scraped-content-framing";
+import {
+  summarizeWeeklyHours,
+  type WeeklyHours,
+} from "@/lib/workspace/format-hours";
 
 export type ComposeSystemPromptInput = {
   orgName: string;
@@ -266,6 +270,23 @@ export async function composeSystemPrompt(input: ComposeSystemPromptInput): Prom
       : null;
     if (serviceArea && serviceArea.length > 0) {
       factLines.push(`Service area: ${serviceArea.join(", ")}`);
+    }
+
+    // v1.56.0 — Business hours.
+    //
+    // soul.business_hours is the canonical WeeklyHours shape written
+    // by create-full.ts. When business_hours_assumed is true, the
+    // backend defaulted to Mon-Fri 9-5 (no real hours on the site) —
+    // suffix the line so the chatbot knows to disclaim them rather
+    // than present them as ground truth.
+    const businessHours = soulRaw.business_hours as WeeklyHours | undefined;
+    const businessHoursAssumed = Boolean(soulRaw.business_hours_assumed);
+    if (businessHours && Object.keys(businessHours).length > 0) {
+      const summary = summarizeWeeklyHours(businessHours);
+      const suffix = businessHoursAssumed
+        ? " (assumed standard hours — confirm with caller before quoting)"
+        : "";
+      factLines.push(`**Hours:** ${summary}${suffix}`);
     }
 
     if (factLines.length > 0) {
