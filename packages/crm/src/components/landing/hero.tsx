@@ -24,14 +24,14 @@ export function LandingHero() {
       <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row">
         <Link
           href="/signup"
-          className="inline-flex items-center gap-2 rounded-xl bg-[#14b8a6] px-10 py-4 font-semibold text-white transition-opacity hover:opacity-90"
+          className="inline-flex items-center gap-2 rounded-xl bg-[#14b8a6] px-10 py-4 font-semibold text-white transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#14b8a6]"
         >
           Start free
           <ArrowRight size={18} />
         </Link>
         <Link
           href="/docs/getting-started/connect-claude-code"
-          className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 px-8 py-4 font-semibold text-zinc-200 transition-colors hover:border-zinc-500"
+          className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 px-8 py-4 font-semibold text-zinc-200 transition-colors hover:border-zinc-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#14b8a6]"
         >
           Set up via Claude Code
         </Link>
@@ -41,14 +41,17 @@ export function LandingHero() {
       <div className="mt-12 w-full max-w-4xl overflow-hidden rounded-xl border border-zinc-800/50 bg-zinc-900">
         <Image
           src="/marketing/hero-loop.gif"
-          alt="A 6-second loop of an operator pasting a URL and watching a SeldonFrame workspace appear: CRM, booking page, intake form, and AI chatbot."
+          alt="Live 6-second hero loop coming in week 6."
           width={1280}
           height={720}
           className="h-auto w-full motion-reduce:hidden"
           unoptimized
           priority
         />
-        <div className="hidden h-[60px] items-center justify-center bg-zinc-900 px-6 text-sm text-zinc-500 motion-reduce:flex">
+        <div
+          aria-hidden="true"
+          className="hidden h-[60px] items-center justify-center bg-zinc-900 px-6 text-sm text-zinc-500 motion-reduce:flex"
+        >
           A 6-second loop shows: paste URL → CRM, booking page, intake form, and AI chatbot appear.
         </div>
         <p className="border-t border-zinc-800/50 bg-zinc-950 px-6 py-3 text-center text-xs text-zinc-500">
