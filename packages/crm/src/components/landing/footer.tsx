@@ -16,7 +16,9 @@
 // GitHub repo: seldonframe/crm (matches nav.tsx and the rest of Cut C).
 
 import Link from "next/link";
-import { Github, ExternalLink } from "lucide-react";
+import { GitFork, ExternalLink } from "lucide-react";
+// lucide-react@1.7 doesn't export a Github icon — GitFork pairs with
+// the "fork it" CTA copy.
 
 type FooterLink = { label: string; href: string; external?: boolean };
 
@@ -95,7 +97,7 @@ export function LandingFooter() {
             // was 2.6:1 — fails WCAG AA). Matches the pricing CTA fix.
             className="inline-flex items-center gap-2 rounded-lg bg-[#14b8a6] px-4 py-2 text-sm font-semibold text-zinc-950 transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#14b8a6]"
           >
-            <Github size={16} aria-hidden="true" />
+            <GitFork size={16} aria-hidden="true" />
             View on GitHub
             <ExternalLink size={12} aria-hidden="true" />
           </Link>

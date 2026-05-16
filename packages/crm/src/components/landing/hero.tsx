@@ -24,10 +24,13 @@ export function LandingHero() {
       <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row">
         <Link
           href="/signup"
-          className="inline-flex items-center gap-2 rounded-xl bg-[#14b8a6] px-10 py-4 font-semibold text-white transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#14b8a6]"
+          /* Cut C Phase 8 page-wide a11y: text-white on #14b8a6 = 2.6:1
+             (fails WCAG AA 1.4.3 normal-text 4.5:1). zinc-950 is 7.2:1.
+             Matches the pricing-CTA and footer-GitHub fixes. */
+          className="inline-flex items-center gap-2 rounded-xl bg-[#14b8a6] px-10 py-4 font-semibold text-zinc-950 transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#14b8a6]"
         >
           Start free
-          <ArrowRight size={18} />
+          <ArrowRight size={18} aria-hidden="true" />
         </Link>
         <Link
           href="/docs/getting-started/connect-claude-code"
