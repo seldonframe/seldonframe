@@ -21,7 +21,7 @@ export function SignupForm({ token = "" }: { token?: string }) {
   const { showDemoToast } = useDemoToast();
   const [state, action, pending] = useActionState(sendMagicLinkAction, {});
   const [googlePending, setGooglePending] = useState(false);
-  const callbackUrl = token ? `/claim?token=${encodeURIComponent(token)}` : "/setup";
+  const callbackUrl = token ? `/claim?token=${encodeURIComponent(token)}` : "/clients/new";
 
   const handleGoogleSignIn = async () => {
     try {

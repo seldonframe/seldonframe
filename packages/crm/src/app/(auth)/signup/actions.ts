@@ -37,7 +37,7 @@ function isRedirectControlFlowError(error: unknown) {
 function sanitizeRedirectTo(value: unknown) {
   const raw = typeof value === "string" ? value.trim() : "";
   if (!raw.startsWith("/") || raw.startsWith("//")) {
-    return "/setup";
+    return "/clients/new";
   }
 
   return raw;
@@ -46,7 +46,7 @@ function sanitizeRedirectTo(value: unknown) {
 export async function signInWithGoogleAction() {
   assertWritable();
 
-  await signIn("google", { redirectTo: "/setup" });
+  await signIn("google", { redirectTo: "/clients/new" });
 }
 
 export async function sendMagicLinkAction(_: MagicLinkActionState, formData: FormData): Promise<MagicLinkActionState> {

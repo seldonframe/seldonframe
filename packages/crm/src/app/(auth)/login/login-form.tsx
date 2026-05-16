@@ -49,7 +49,7 @@ export function LoginForm() {
       const callbackInput = document.createElement("input");
       callbackInput.type = "hidden";
       callbackInput.name = "callbackUrl";
-      callbackInput.value = "/setup";
+      callbackInput.value = "/clients/new";
 
       form.appendChild(csrfInput);
       form.appendChild(callbackInput);
