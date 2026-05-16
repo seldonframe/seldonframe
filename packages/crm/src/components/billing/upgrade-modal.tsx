@@ -31,6 +31,11 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { startCheckout } from "@/lib/billing/start-checkout";
+import {
+  GROWTH_MONTHLY_PRICE_ID,
+  SCALE_MONTHLY_PRICE_ID,
+} from "@/lib/billing/price-ids";
 
 // User-facing strings — output of design:ux-copy (Task 7.2).
 const COPY = {
@@ -65,12 +70,14 @@ const COPY = {
   cancel: "Maybe later",
 };
 
-// Real Stripe priceIds live in `lib/billing/price-ids.ts`; the consumer site
-// hot-swaps these via env. We pass the tier slug and the server resolves the
-// priceId. Keeps secrets out of the client bundle.
-const TIER_TO_REQUEST = {
-  growth: { tier: "growth" as const, priceLookupKey: "cloud_growth_monthly" },
-  scale: { tier: "scale" as const, priceLookupKey: "cloud_scale_monthly" },
+// Real Stripe priceIds live in `lib/billing/price-ids.ts` (Growth + Scale
+// monthly IDs added in Cut B Phase 1). We pass both the priceId and the tier
+// slug; the existing /api/stripe/checkout route at line 117+136 recognizes
+// the tier field and assembles the multi-price line items server-side via
+// buildCheckoutLineItemsForTier. Keeps secrets out of the client bundle.
+const TIER_TO_PRICE_ID: Record<"growth" | "scale", string> = {
+  growth: GROWTH_MONTHLY_PRICE_ID,
+  scale: SCALE_MONTHLY_PRICE_ID,
 };
 
 export type UpgradeModalProps = {
@@ -83,27 +90,19 @@ export type UpgradeModalProps = {
 
 export function UpgradeModal({ open, onOpenChange, used, limit }: UpgradeModalProps) {
   const [pending, setPending] = useState<"growth" | "scale" | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   async function upgrade(target: "growth" | "scale") {
     setPending(target);
+    setError(null);
     try {
-      const res = await fetch("/api/stripe/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          priceId: TIER_TO_REQUEST[target].priceLookupKey,
-          tier: TIER_TO_REQUEST[target].tier,
-        }),
+      const { url } = await startCheckout({
+        priceId: TIER_TO_PRICE_ID[target],
+        tier: target,
       });
-      if (res.ok) {
-        const data = (await res.json()) as { url?: string };
-        if (data.url) {
-          window.location.assign(data.url);
-          return;
-        }
-      }
-      setPending(null);
-    } catch {
+      window.location.href = url;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Checkout could not start. Try again.");
       setPending(null);
     }
   }
@@ -164,6 +163,15 @@ export function UpgradeModal({ open, onOpenChange, used, limit }: UpgradeModalPr
             );
           })}
         </div>
+
+        {error ? (
+          <p
+            role="alert"
+            className="mt-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          >
+            {error}
+          </p>
+        ) : null}
 
         <p className="mt-4 text-center text-xs text-muted-foreground">{COPY.footer}</p>
 
