@@ -49,3 +49,58 @@ describe("runListMineWorkspaces — auth", () => {
     assert.deepEqual(result.body, { error: "Unauthorized" });
   });
 });
+
+describe("runListMineWorkspaces — empty user", () => {
+  test("returns empty workspaces + free-tier envelope when user owns nothing", async () => {
+    const deps = baseDeps({
+      listManagedOrganizationsForUser: async () => [],
+      getWorkspaceLimitStatusForUser: async () => ({
+        tier: "free",
+        currentOrgs: 0,
+        maxOrgs: 1,
+        canCreate: true,
+        plan: null,
+        features: {},
+      }),
+    });
+
+    const result = await runListMineWorkspaces({
+      deps,
+      sessionUser: { id: "user-1" },
+    });
+
+    assert.equal(result.status, 200);
+    if (result.status !== 200) throw new Error("unreachable");
+    assert.deepEqual(result.body, {
+      workspaces: [],
+      tier: "free",
+      used: 0,
+      limit: 1,
+    });
+  });
+
+  test("reads tier + used + limit straight from the injected helpers", async () => {
+    const deps = baseDeps({
+      listManagedOrganizationsForUser: async () => [],
+      getWorkspaceLimitStatusForUser: async () => ({
+        tier: "growth",
+        currentOrgs: 0,
+        maxOrgs: 3,
+        canCreate: true,
+        plan: null,
+        features: {},
+      }),
+    });
+
+    const result = await runListMineWorkspaces({
+      deps,
+      sessionUser: { id: "user-1" },
+    });
+
+    assert.equal(result.status, 200);
+    if (result.status !== 200) throw new Error("unreachable");
+    assert.equal(result.body.tier, "growth");
+    assert.equal(result.body.used, 0);
+    assert.equal(result.body.limit, 3);
+  });
+});
