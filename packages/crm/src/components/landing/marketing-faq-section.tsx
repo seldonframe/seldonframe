@@ -22,7 +22,22 @@
 
 type FaqItem = { question: string; answer: string };
 
+// Question order is intentional, refined by design-critique (May 2026):
+//   1. workspace count — the upgrade-trigger question; first thing the
+//      buyer's mind goes to after seeing pricing two sections above.
+//   2. white-label — second-most-frequent agency objection.
+//   3. domain — completes the "what does my client see?" arc.
+//   4. Anthropic key — addresses "is my bill predictable?"
+//   5. Claude Code — power-user reassurance, smaller audience but
+//      load-bearing for the segment that cares.
+//   6. data isolation — closing trust-builder, the question buyers
+//      don't ask out loud but want answered.
 const FAQS: readonly FaqItem[] = [
+  {
+    question: "How many client workspaces can I run?",
+    answer:
+      "One on Free, three on Growth, unlimited on Scale. The workspace cap is the only thing tiers gate on count — features like custom domains, white-label, and AI agents stack on top per tier.",
+  },
   {
     question: "Can I white-label this for my clients?",
     answer:
@@ -37,11 +52,6 @@ const FAQS: readonly FaqItem[] = [
     question: "Does it work with my Anthropic key?",
     answer:
       "Yes. Bring-your-own Anthropic key is supported on every tier including Free. You pay Anthropic directly, we never charge a token margin, and the key is encrypted at rest with no plaintext logs.",
-  },
-  {
-    question: "How many client workspaces can I run?",
-    answer:
-      "One on Free, three on Growth, unlimited on Scale. The workspace cap is the only thing tiers gate on count — features like custom domains, white-label, and AI agents stack on top per tier.",
   },
   {
     question: "Can I use Claude Code instead of the web app?",
@@ -86,7 +96,7 @@ export function LandingMarketingFaqSection() {
           id="faq-heading"
           className="text-3xl font-bold text-zinc-100 md:text-4xl"
         >
-          Last 6 questions agencies ask.
+          Last 6 questions agencies ask
         </h2>
       </div>
 
