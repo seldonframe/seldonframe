@@ -22,7 +22,6 @@ import { NextResponse } from "next/server";
 import { createFullWorkspace, type CreateFullWorkspaceInput } from "@/lib/workspace/create-full";
 import { demoApiBlockedResponse, isDemoReadonly } from "@/lib/demo/server";
 import { logEvent } from "@/lib/observability/log";
-import { listBlockNames } from "@/lib/page-blocks/registry";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
 
 type Body = {
@@ -133,15 +132,6 @@ export async function POST(request: Request) {
     return NextResponse.json(result, { status: 422 });
   }
 
-  // Recommended blocks for the IDE agent. Order matters — hero first
-  // (most operator-visible), services second (most likely to fail
-  // generic-output validators), faq last (purely supplementary).
-  const recommendedBlocks = listBlockNames().map((name) => ({
-    name,
-    skill_url: `/api/v1/public/blocks/${name}/skill`,
-    persist_endpoint: "/api/v1/workspace/v2/blocks",
-  }));
-
   // v1.6.0 — brain layer: pre-fetch any cross-workspace patterns the
   // IDE agent should know about for THIS vertical. Layer-2 patterns
   // are anonymized aggregations (the cron promotes them once 3+
@@ -221,10 +211,14 @@ export async function POST(request: Request) {
       // calls. Same admin-token semantics as v1 — magic-link auth lands later.
       _bearer_token: result._bearer_token,
       _bearer_token_expires_at: result._bearer_token_expires_at,
-      // The v2-specific addition: catalogue of blocks the agent should now
-      // generate, plus the workspace context to feed into each block's prompt.
+      // v1.55.0 — ops-stack-only: the default public surface is a
+      // chatbot-preview page seeded by complete_workspace_v2. CC does not
+      // persist any blocks during workspace creation. If the operator later
+      // wants a marketing landing page, they invoke the landing-page-creation
+      // SKILL.md which calls persist_block per block (evicting the
+      // chatbotPreview placeholder via the eviction logic in persist.ts).
       v2: {
-        recommended_blocks: recommendedBlocks,
+        recommended_blocks: [],
         context,
         // v1.6.0 — brain patterns for this vertical. Layer-2 cross-
         // workspace patterns the IDE agent should fold into its block
@@ -233,12 +227,10 @@ export async function POST(request: Request) {
         // their successful patterns get promoted by the weekly cron.
         brain_patterns: brainPatterns,
         next_steps: [
-          "1. For each block in recommended_blocks: GET skill_url to load SKILL.md (markdown text).",
-          "2. Optionally: call read_brain_path / list_brain_dir to pull workspace-specific notes (voice/copy-that-works.md, customers/recurring.md, learnings.md). For NEW workspaces these will be empty; for re-rolls they accumulate insights.",
-          "3. Fold brain_patterns (above) AND any workspace-scoped brain notes into your block-generation prompt alongside the SKILL.md.",
-          "4. Use your LLM to generate props matching the prop schema in the SKILL.md frontmatter, using the context object + brain context as input.",
-          "5. POST { workspace_id, block_name, generation_prompt, props } to persist_endpoint with Authorization: Bearer <_bearer_token>.",
-          "6. After all blocks are persisted, POST { workspace_id } to /api/v1/workspace/v2/complete with the same bearer.",
+          "1. Workspace is ready. CRM + booking + intake + chatbot agent are auto-created.",
+          "2. POST { workspace_id } to /api/v1/workspace/v2/complete — this auto-creates the website-chatbot agent in TEST status, seeds the chatbot-preview public page, and returns the embed snippet for the operator to paste on their client's existing site.",
+          "3. After complete returns, ask the operator for their email and call finalize_workspace({ workspace_id, email }) to produce the operator summary + send the welcome email.",
+          "4. If the operator later asks to 'build a landing page for X in <archetype> style', invoke the landing-page-creation skill which uses persist_block per block (hero, services, faq, etc.). The skill-driven flow REPLACES the chatbot-preview with a real marketing landing.",
         ],
       },
     },
