@@ -23,7 +23,7 @@
 // reassures "Your URL is still here" — first-run anxiety relief.
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { Check } from "lucide-react";
 
@@ -120,6 +120,19 @@ export function ClientsNewForm() {
   const [byokSaving, setByokSaving] = useState(false);
   const [upgradeInfo, setUpgradeInfo] = useState<LimitInfo | null>(null);
   const esRef = useRef<EventSource | null>(null);
+  // a11y: only autoFocus the URL input on the initial mount. After a BYOK
+  // retry the form re-renders with the URL value still populated, and
+  // re-focusing the URL input would yank focus away from wherever the user
+  // last acted (Save and continue). Tracked via a ref so it persists across
+  // renders without triggering them.
+  const hasMountedRef = useRef(false);
+  useEffect(() => {
+    hasMountedRef.current = true;
+  }, []);
+  // a11y: stable ids so error banner can be linked via aria-describedby and
+  // the BYOK region can be linked via aria-labelledby.
+  const errorBannerId = useId();
+  const byokHeadingId = useId();
 
   function startStream(targetUrl: string) {
     // Close any prior connection (BYOK retry path).
@@ -245,30 +258,35 @@ export function ClientsNewForm() {
               startStream(url);
             }}
           >
+            {/* a11y: <Label htmlFor> provides the accessible name. No
+                aria-label override (would silence the visible Label
+                semantics and create a duplicate name source). */}
             <Label htmlFor="client-url" className="sr-only">
               {COPY.inputLabel}
             </Label>
             <Input
               id="client-url"
-              autoFocus
+              // a11y: autoFocus only on initial mount. See hasMountedRef.
+              autoFocus={!hasMountedRef.current}
               type="url"
               placeholder={COPY.placeholder}
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               required
               className="h-12 text-base"
-              aria-label={COPY.inputLabel}
             />
             <Button type="submit" disabled={submitted} className="h-12 w-full">
               {submitted ? COPY.primaryPending : COPY.primary}
             </Button>
             {/* design-critique: moved the skip link to a smaller right-aligned
                 affordance so it stays available without competing with the
-                primary path. inline-block + py-2 gives a 36px+ touch zone. */}
+                primary path. inline-block + py-2 gives a 36px+ touch zone.
+                a11y: solid text-muted-foreground (no /80) so contrast stays
+                >=4.5:1 in both light and dark themes. */}
             <p className="text-right">
               <Link
                 href="/dashboard"
-                className="inline-block py-2 text-xs text-muted-foreground/80 underline underline-offset-2 hover:text-foreground"
+                className="inline-block py-2 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
               >
                 {COPY.secondary}
               </Link>
@@ -277,8 +295,18 @@ export function ClientsNewForm() {
         ) : (
           // design-critique: animate-in fade so the BYOK swap doesn't feel
           // like the form glitched.
-          <div className="mt-6 space-y-3 animate-in fade-in-0 duration-200">
-            <h2 className="text-lg font-medium">{COPY.errors.byokHeading}</h2>
+          // a11y: wrap as a region with the heading as its accessible name
+          // so SR users navigating by landmark/region hear "Add your
+          // Anthropic key first" announced as the region context, not a
+          // bare mid-page heading.
+          <section
+            role="region"
+            aria-labelledby={byokHeadingId}
+            className="mt-6 space-y-3 animate-in fade-in-0 duration-200"
+          >
+            <h2 id={byokHeadingId} className="text-lg font-medium">
+              {COPY.errors.byokHeading}
+            </h2>
             <p className="text-sm text-muted-foreground">{COPY.errors.byokBody}</p>
             <Label htmlFor="byok-key" className="block text-sm">
               {COPY.errors.byokLabel}
@@ -312,7 +340,7 @@ export function ClientsNewForm() {
             >
               {COPY.errors.byokCancel}
             </Button>
-          </div>
+          </section>
         )}
 
         {errorBanner ? (
@@ -320,7 +348,10 @@ export function ClientsNewForm() {
             role="alert"
             className="mt-4 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
           >
-            <p>{errorBanner}</p>
+            {/* a11y: link the retry button to the banner copy via
+                aria-describedby so SR users hear the error reason as
+                supplementary text after the button label. */}
+            <p id={errorBannerId}>{errorBanner}</p>
             <Button
               type="button"
               variant="outline"
@@ -329,6 +360,7 @@ export function ClientsNewForm() {
                 setErrorBanner(null);
                 startStream(url);
               }}
+              aria-describedby={errorBannerId}
               className="mt-2"
             >
               {COPY.errors.internal_retry}
@@ -350,7 +382,9 @@ export function ClientsNewForm() {
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           {COPY.asideHeading}
         </p>
-        <p className="mt-1 text-xs text-muted-foreground/80">{COPY.asideSubhead}</p>
+        {/* a11y: solid text-muted-foreground (no /80) so the subhead stays
+            >=4.5:1 in light theme at this small size. */}
+        <p className="mt-1 text-xs text-muted-foreground">{COPY.asideSubhead}</p>
         <ol className="mt-4 space-y-3 text-sm">
           {PROGRESS_KEYS.map((key) => {
             const isDone = done[key];
@@ -366,23 +400,28 @@ export function ClientsNewForm() {
                 }
               >
                 {/* design-critique: fixed 20x20 slot prevents reflow when
-                    pending dot is swapped for the Check icon. */}
+                    pending dot is swapped for the Check icon.
+                    a11y: state is exposed on the slot via aria-label so SR
+                    users get "Step done" / "Step pending" as a clean rotor
+                    entry instead of an inline suffix appended to the row
+                    text. */}
                 <span
                   className="flex h-5 w-5 shrink-0 items-center justify-center"
-                  aria-hidden="true"
+                  role="img"
+                  aria-label={isDone ? "Step done" : "Step pending"}
                 >
                   {isDone ? (
-                    <Check className="size-4 text-primary" />
+                    <Check className="size-4 text-primary" aria-hidden="true" />
                   ) : (
                     // design-critique + a11y: bumped opacity from /40 to /60
                     // to satisfy WCAG 2.1 non-text contrast.
-                    <span className="size-1.5 rounded-full bg-muted-foreground/60" />
+                    <span
+                      className="size-1.5 rounded-full bg-muted-foreground/60"
+                      aria-hidden="true"
+                    />
                   )}
                 </span>
                 <span>{COPY.progress[key]}</span>
-                <span className="sr-only">
-                  {isDone ? " — done" : " — pending"}
-                </span>
               </li>
             );
           })}
