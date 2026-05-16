@@ -229,7 +229,7 @@ export async function updateIntegration(orgId: string, service: string, credenti
     .where(eq(organizations.id, orgId));
 
   revalidatePath("/settings/integrations");
-  revalidatePath("/setup");
+  revalidatePath("/clients/new");
   revalidatePath("/automations");
   revalidatePath("/emails");
 }
@@ -295,7 +295,7 @@ export async function disconnectIntegration(orgId: string, service: string) {
     .where(eq(organizations.id, orgId));
 
   revalidatePath("/settings/integrations");
-  revalidatePath("/setup");
+  revalidatePath("/clients/new");
   revalidatePath("/automations");
   revalidatePath("/emails");
 }

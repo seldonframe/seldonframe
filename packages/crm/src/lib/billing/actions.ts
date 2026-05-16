@@ -73,7 +73,7 @@ async function createStripeCheckoutSession(params: {
       "subscription_data[trial_period_days]": "14",
       "subscription_data[metadata][seldonframe_user_id]": params.userId,
       "subscription_data[metadata][seldonframe_plan_id]": params.planId,
-      success_url: `${appBaseUrl}/setup?plan=${encodeURIComponent(params.planId)}&billing=${params.billingPeriod}`,
+      success_url: `${appBaseUrl}/clients/new?plan=${encodeURIComponent(params.planId)}&billing=${params.billingPeriod}`,
       cancel_url: `${appBaseUrl}/pricing?billing=${params.billingPeriod}`,
       allow_promotion_codes: "true",
     }),
@@ -183,7 +183,7 @@ export async function selectPlanAction(formData: FormData) {
     .where(eq(users.id, userId));
 
   if (!secretKey) {
-    redirect(`/setup?plan=${encodeURIComponent(planId)}&billing=${normalizedPeriod}`);
+    redirect(`/clients/new?plan=${encodeURIComponent(planId)}&billing=${normalizedPeriod}`);
   }
 
   if (!selectedPriceId) {
