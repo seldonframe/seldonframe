@@ -26,6 +26,7 @@ import { LandingHowItWorksSection } from "@/components/landing/how-it-works-sect
 import { LandingSoulSection } from "@/components/landing/soul-section";
 import { LandingSeldonItSection } from "@/components/landing/seldon-it-section";
 import { LandingBentoSection } from "@/components/landing/bento-section";
+import { LandingDemoVideoSection } from "@/components/landing/demo-video-section";
 import { LandingAgenciesSection } from "@/components/landing/agencies-section";
 import { LandingMarketplaceSection } from "@/components/landing/marketplace-section";
 import { LandingWhyNowSection } from "@/components/landing/why-now-section";
@@ -68,6 +69,7 @@ export default async function PublicHomePage() {
         <LandingSoulSection />
         <LandingSeldonItSection />
         <LandingBentoSection />
+        <LandingDemoVideoSection />
         <LandingAgenciesSection />
         <LandingMarketplaceSection />
         <LandingWhyNowSection />
