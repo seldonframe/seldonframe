@@ -31,8 +31,19 @@ export async function POST(request: Request) {
   const session = await auth();
   const body = (await request.json().catch(() => ({}))) as { url?: unknown };
 
+  // The session callback in lib/auth/config.ts exposes `orgId` (NOT
+  // `primaryOrgId`). For this route's purposes the user's primary org IS
+  // their `orgId` — a 1:1 mapping per the agency-identity-on-user-record
+  // model from the spec. Map it across the wire here so the orchestrator's
+  // RunDeps contract stays clean.
   const sessionUser = session?.user?.id
-    ? { id: session.user.id, primaryOrgId: (session.user as { primaryOrgId?: string | null }).primaryOrgId ?? null }
+    ? {
+        id: session.user.id,
+        primaryOrgId:
+          (session.user as { orgId?: string | null; primaryOrgId?: string | null }).orgId ??
+          (session.user as { primaryOrgId?: string | null }).primaryOrgId ??
+          null,
+      }
     : null;
 
   const { stream, headers } = await runCreateFromUrl({
