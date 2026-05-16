@@ -73,9 +73,9 @@ export function AgencyProfileForm({ initial }: Props) {
       </div>
 
       <div className="space-y-1">
-        <label htmlFor="logo" className="text-label">
+        <span id="logoLabel" className="text-label">
           {C.fields.logo.label}
-        </label>
+        </span>
         <div className="flex items-center gap-3">
           {logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -87,30 +87,43 @@ export function AgencyProfileForm({ initial }: Props) {
           ) : (
             <div className="size-12 rounded-lg border border-dashed border-border" aria-hidden="true" />
           )}
+          {/* Styled file input — native chrome would clash with the rest
+              of the form. The visible <label> acts as the click target;
+              the actual <input type="file"> is sr-only but keyboard-
+              focusable, so screen readers still announce it correctly. */}
+          <label
+            htmlFor="logo"
+            className="inline-flex h-9 cursor-pointer items-center rounded-md border border-border bg-card px-3 text-sm font-medium text-foreground hover:bg-muted"
+          >
+            {uploading ? "Uploading..." : logoUrl ? "Replace image" : "Choose image"}
+          </label>
           <input
             id="logo"
             type="file"
             accept="image/png,image/svg+xml,image/jpeg"
             onChange={handleLogoSelect}
             disabled={uploading}
-            className="text-sm"
+            aria-labelledby="logoLabel"
+            className="sr-only"
           />
         </div>
         <p className="text-xs text-muted-foreground">{C.fields.logo.help}</p>
-        {uploading ? <p className="text-xs text-muted-foreground">Uploading...</p> : null}
       </div>
 
       <div className="space-y-1">
         <label htmlFor="brandColor" className="text-label">
           {C.fields.brandColor.label}
         </label>
-        <div className="flex items-center gap-3">
+        {/* Compound input — picker swatch + hex live inside one bordered
+            container so they read as a single field, not two adjacent
+            widgets. */}
+        <div className="inline-flex items-center gap-2 rounded-md border border-border bg-background py-1 pl-1 pr-2 focus-within:ring-2 focus-within:ring-ring">
           <input
             id="brandColor"
             name="brandColor"
             type="color"
             defaultValue={initial.brand_color ?? "#7c3aed"}
-            className="size-10 cursor-pointer rounded-md border border-border"
+            className="size-8 cursor-pointer rounded border-0 bg-transparent p-0"
             aria-describedby="brandColorHex"
           />
           <input
@@ -125,7 +138,7 @@ export function AgencyProfileForm({ initial }: Props) {
               }
             }}
             placeholder="#7c3aed"
-            className="crm-input h-10 w-32 px-3 font-mono text-sm"
+            className="h-8 w-24 border-0 bg-transparent font-mono text-sm focus:outline-none"
             aria-label="Brand color hex value"
           />
         </div>
@@ -158,9 +171,11 @@ export function AgencyProfileForm({ initial }: Props) {
         </p>
       ) : null}
 
-      <button type="submit" disabled={pending || uploading} className="crm-button-primary h-10 px-5 text-sm">
-        {pending ? "Saving..." : C.saveButton}
-      </button>
+      <div className="border-t border-border pt-5">
+        <button type="submit" disabled={pending || uploading} className="crm-button-primary h-10 px-4 text-sm">
+          {pending ? "Saving..." : C.saveButton}
+        </button>
+      </div>
     </form>
   );
 }
