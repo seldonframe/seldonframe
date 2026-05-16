@@ -55,38 +55,56 @@ export function CreateClientCta({ tier, used, limit }: CreateClientCtaProps) {
   const [open, setOpen] = useState(false);
   const finite = Number.isFinite(limit);
   const atLimit = finite && used >= limit;
-  // a11y: badge text uses " / " with spaces so screen readers read it as
-  // "X slash Y workspaces" (which announces sensibly in NVDA/VoiceOver
-  // tests). Without the spaces, "/" gets glued to digits and rotors trip.
+  // a11y-review: visible label uses " / " for compactness; SR-only
+  // aria-label rephrases as "X of Y client workspaces used" so screen
+  // reader users hear meaning, not punctuation. The visible "/" stays
+  // because it's the convention agencies expect.
   const usageLabel = finite
     ? `${used} / ${limit} workspaces`
     : `${used} workspaces`;
-  // Tooltip describes the badge — use aria-describedby via id linkage so
-  // SR users get the plan context without the visual hover.
-  const tooltipId = "create-client-cta-usage-tooltip";
+  const usageAriaLabel = finite
+    ? `${used} of ${limit} client workspaces used`
+    : `${used} client workspaces in use`;
 
   return (
     <TooltipProvider delay={150}>
       <div className="flex items-center gap-3">
         <Tooltip>
+          {/* a11y-review:
+              - tabIndex=0 makes the Badge focusable so keyboard users can
+                summon the tooltip (base-ui shows the popup on focus too).
+              - aria-label rephrases "X / Y workspaces" as a sentence so
+                SR users don't hear "slash". base-ui's TooltipTrigger wires
+                aria-describedby automatically when the tooltip opens — no
+                manual id linkage needed. */}
           <TooltipTrigger
             render={
               <Badge
                 variant={atLimit ? "destructive" : "secondary"}
-                aria-describedby={tooltipId}
+                tabIndex={0}
+                aria-label={usageAriaLabel}
               />
             }
           >
             {usageLabel}
           </TooltipTrigger>
-          <TooltipContent id={tooltipId}>
+          <TooltipContent>
             {COPY.tooltipTemplate(tier, used, limit)}
           </TooltipContent>
         </Tooltip>
 
         {atLimit ? (
           <>
-            <Button onClick={() => setOpen(true)}>{COPY.cta}</Button>
+            {/* a11y-review: aria-haspopup="dialog" tells SR rotors the
+                button opens a modal — users hear "Add client workspace,
+                button, has popup dialog" instead of being surprised by
+                the modal opening on activation. */}
+            <Button
+              onClick={() => setOpen(true)}
+              aria-haspopup="dialog"
+            >
+              {COPY.cta}
+            </Button>
             <UpgradeModal
               open={open}
               onOpenChange={setOpen}
