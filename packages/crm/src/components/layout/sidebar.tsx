@@ -117,6 +117,18 @@ export function Sidebar(props: {
           title: "OVERVIEW",
           items: filterHidden([
             { href: "/dashboard", label: "Dashboard", icon: "LayoutDashboard" },
+            // Cut B Phase 3 Task 23 — /clients is the agency's daily
+            // landing surface (lists every client workspace they've
+            // built). Belongs in OVERVIEW next to Dashboard since
+            // it's a workspace-level surface, not a CRM record type.
+            // Label is "Client workspaces" (not just "Clients") to
+            // avoid colliding with the CRM "Contacts" entry below,
+            // which several personality templates re-label as
+            // "Clients" (see lib/crm/personality.ts coaching/agency/
+            // consulting templates). Operator-session branch above
+            // intentionally omits this (operators don't manage
+            // agency workspaces).
+            { href: "/clients", label: "Client workspaces", icon: "Building2" },
           ]),
         },
         {
