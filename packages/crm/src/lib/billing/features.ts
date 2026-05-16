@@ -3,6 +3,18 @@
 // to gate UI affordances + entitlements. The shape is preserved (so
 // callers reading `features.maxWorkspaces` still work); only the keys
 // changed (free / growth / scale, with legacy keys aliased).
+//
+// Cut B (web-onboarding pivot) layered on a typed FeatureFlag surface
+// for binary UI gates (e.g. "should this org see the custom-domain
+// settings page?"). FEATURE_TIERS lives in ./feature-flags so both
+// the modal layout and the hasFeature() DB call share one source of
+// truth.
+
+import { FEATURE_TIERS, tierMeetsMinimum, type FeatureFlag } from "./feature-flags";
+import { getOrgSubscription as getOrgSubscriptionDb } from "./subscription";
+
+export type { FeatureFlag } from "./feature-flags";
+export { FEATURE_FLAGS, FEATURE_TIERS, tierMeetsMinimum } from "./feature-flags";
 
 export const TIER_FEATURES = {
   free: {
@@ -87,4 +99,37 @@ export function normalizeTierId(raw: string | null | undefined): BillingTier {
 
 export function getOrgFeatures(tier: string | null | undefined) {
   return TIER_FEATURES[normalizeTierId(tier)];
+}
+
+/**
+ * Async tier-gated check: does the given org's current subscription
+ * tier meet the minimum tier required to unlock `featureName`?
+ *
+ * Resolves the org's subscription, normalizes the legacy tier id, and
+ * compares it against FEATURE_TIERS[featureName]. Defensive: null /
+ * undefined orgId short-circuits to false WITHOUT hitting the DB.
+ *
+ * Tests inject `deps.getOrgSubscription` to stay pure (no DB). Real
+ * callers omit `deps` and get the production reader.
+ */
+export async function hasFeature(
+  orgId: string | null | undefined,
+  featureName: FeatureFlag,
+  deps: {
+    getOrgSubscription?: (orgId: string | null | undefined) => Promise<{ tier?: string | null }>;
+  } = {}
+): Promise<boolean> {
+  if (!orgId) {
+    return false;
+  }
+
+  const getSubscription = deps.getOrgSubscription ?? getOrgSubscriptionDb;
+  const subscription = await getSubscription(orgId);
+  // Normalize legacy tier ids (cloud_pro, pro_3, etc.) into the modern
+  // free/growth/scale trichotomy before the rank comparison. Otherwise
+  // a grandfathered paying customer on "cloud_pro" would fail every
+  // hasFeature check.
+  const normalizedTier = normalizeTierId(subscription.tier ?? null);
+  const minimumTier = FEATURE_TIERS[featureName];
+  return tierMeetsMinimum(normalizedTier, minimumTier);
 }
