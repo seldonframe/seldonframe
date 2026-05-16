@@ -28,7 +28,7 @@ export function LandingDemoVideoSection() {
         </p>
       </div>
 
-      <div className="mt-10 overflow-hidden rounded-2xl border border-zinc-800/50 bg-zinc-900">
+      <div className="mx-auto mt-10 w-full max-w-4xl overflow-hidden rounded-xl border border-zinc-800/50 bg-zinc-900">
         <Image
           src="/marketing/demo-placeholder.gif"
           alt=""
