@@ -28,7 +28,7 @@ const staticTitleMap: Record<string, string> = {
   "/automations": "Automations",
   "/hub": "Hub",
   "/settings": "Settings",
-  "/setup": "Soul Setup",
+  "/clients/new": "New Client",
 };
 
 function getTitle(pathname: string, labels: ReturnType<typeof useLabels>) {

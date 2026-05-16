@@ -138,7 +138,7 @@ function isAppHost(host: string) {
 }
 
 function isAuthPath(pathname: string) {
-  return pathname === "/login" || pathname === "/signup" || pathname === "/setup" || pathname === "/welcome";
+  return pathname === "/login" || pathname === "/signup" || pathname === "/clients/new" || pathname === "/welcome";
 }
 
 function isProtectedPath(pathname: string) {
@@ -205,7 +205,7 @@ const authProxy = auth(async (request) => {
   // C6: admin-token sessions skip Soul / Welcome onboarding. They're
   // workspace-scoped guests, not signed-up users — there's nothing to
   // complete in the user-onboarding flow, and forcing them through
-  // /setup or /welcome would drop them into a dead-end with no auth
+  // /clients/new or /welcome would drop them into a dead-end with no auth
   // chrome. Treat both gates as already passed.
   const isSoulCompleted = hasNextAuth ? Boolean(user?.soulCompleted) : true;
   let isWelcomeShown = hasNextAuth ? Boolean(user?.welcomeShown) : true;
@@ -245,7 +245,7 @@ const authProxy = auth(async (request) => {
 
   if ((pathname === "/login" || pathname === "/signup") && isAuthenticated) {
     if (!isSoulCompleted) {
-      return NextResponse.redirect(new URL("/setup", request.url));
+      return NextResponse.redirect(new URL("/clients/new", request.url));
     }
     return NextResponse.redirect(new URL(isWelcomeShown ? "/dashboard" : "/welcome", request.url));
   }
@@ -258,15 +258,15 @@ const authProxy = auth(async (request) => {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  if (isAuthenticated && !isSoulCompleted && pathname !== "/setup" && !isPublicPath(pathname)) {
-    return NextResponse.redirect(new URL("/setup", request.url));
+  if (isAuthenticated && !isSoulCompleted && pathname !== "/clients/new" && !isPublicPath(pathname)) {
+    return NextResponse.redirect(new URL("/clients/new", request.url));
   }
 
   if (isAuthenticated && isSoulCompleted && !isWelcomeShown && pathname !== "/welcome" && !isPublicPath(pathname)) {
     return NextResponse.redirect(new URL("/welcome", request.url));
   }
 
-  if (isAuthenticated && isSoulCompleted && pathname === "/setup" && !isPublicPath(pathname)) {
+  if (isAuthenticated && isSoulCompleted && pathname === "/clients/new" && !isPublicPath(pathname)) {
     return NextResponse.redirect(new URL(isWelcomeShown ? "/dashboard" : "/welcome", request.url));
   }
 
@@ -430,7 +430,7 @@ export const config = {
     "/forms/:path*",
     "/intake",
     "/intake/:path*",
-    "/setup",
+    "/clients/new",
     "/welcome",
     "/orgs/:path*",
     "/hub/:path*",

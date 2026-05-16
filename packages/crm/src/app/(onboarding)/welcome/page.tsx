@@ -22,7 +22,7 @@ async function enterDashboardAction() {
     .limit(1);
 
   if (!dbUser?.orgId) {
-    redirect("/setup");
+    redirect("/clients/new");
   }
 
   const [org] = await db
