@@ -4,7 +4,13 @@
 
 **Goal:** Ship the web front door for SeldonFrame — agencies sign up, paste a client URL on `/clients/new`, and a workspace is created in under 60 seconds via Anthropic `web_fetch` extraction streamed back over SSE.
 
-**Architecture:** Add `agency_profile` JSONB to `users` for agency identity. Introduce one new SSE endpoint `POST /api/v1/web/workspaces/create-from-url` that auths, enforces a workspace-creation tier limit, requires a BYOK Anthropic key, calls Anthropic `web_fetch` with the operator's key, parses the extracted business facts, then composes the existing `createWorkspaceFromSoulAction` helper while emitting phase events. The frontend `/clients/new` page consumes the stream, renders inline narration, and handles 412 (BYOK prompt), 402 (UpgradeModal — defined here, reused by Cut B/C), and 422/500 (error banners). Dashboard gets a CTA + usage badge. SetupWizard is deleted; every `/setup` redirect retargets `/clients/new`.
+**Architecture:** Add `agency_profile` JSONB to `users` for agency identity. Introduce one new SSE endpoint `POST /api/v1/web/workspaces/create-from-url` that auths, enforces the existing `enforceWorkspaceLimit` from `lib/billing/limits.ts`, requires a BYOK Anthropic key, calls Anthropic `web_fetch` using the existing `EXTRACTION_INSTRUCTIONS` from `lib/soul-compiler/url-extraction-instructions.ts`, parses the extracted business facts, then calls the existing `createFullWorkspace` from `lib/workspace/create-full.ts` (the canonical orchestrator that handles soul + landing + chatbot + demo seeding atomically). The frontend `/clients/new` page consumes the stream, renders inline narration, and handles 412 (BYOK prompt), 402 (UpgradeModal — defined here, reused by Cut B/C), and 422/500 (error banners). Dashboard gets a CTA + usage badge. SetupWizard is deleted; every `/setup` redirect retargets `/clients/new`.
+
+> **PLAN CORRECTION NOTE (2026-05-16):** This plan was originally written with 3 existing primitives miscategorized as missing. Patches applied below redirect implementer to existing code:
+> - **`EXTRACTION_INSTRUCTIONS`** lives at `packages/crm/src/lib/soul-compiler/url-extraction-instructions.ts:10` (with `REQUIRED_FIELDS_SCHEMA` already defined). Task 2.3 patched to import instead of reinventing.
+> - **`createFullWorkspace`** lives at `packages/crm/src/lib/workspace/create-full.ts:181` (atomic orchestrator: validates input, classifies business, generates personality from cache/LLM/keyword, installs soul, seeds blocks, builds landing page, creates chatbot in TEST status, seeds demo portal contact + booking + message, persists hours to soul + booking metadata). Tasks 6.5-6.8 patched to call this instead of routing around it via `createWorkspaceFromSoulAction`. Dropping `mapFactsToSoul` — `createFullWorkspace` accepts `CreateFullWorkspaceInput` (business_name, services, hours, etc.) directly.
+> - **`enforceWorkspaceLimit`** lives at `packages/crm/src/lib/billing/limits.ts:113` (takes `{ primaryOrgId, ownedWorkspaceCount }`, returns `LimitDecision`). Tasks 6.1+6.2 patched to use this with a thin user-id-to-org-id resolver instead of reinventing the tier-limit machinery.
+> Because `createFullWorkspace` is a single atomic call (no internal progress hooks), the SSE event sequence is simplified to **fetching → extracting → building → done** (4 events instead of 7). UI narrates "Building your client's CRM, booking page, intake form, and AI chatbot..." during the build phase.
 
 **Tech Stack:** Next.js 16.2 App Router (`packages/crm`), Drizzle ORM + Postgres, NextAuth (existing `@/auth`), Anthropic SDK 0.x (`@anthropic-ai/sdk`), `node:test` + `tsx` for unit tests at `packages/crm/tests/unit/**`, Tailwind v4 + shadcn primitives.
 
@@ -28,11 +34,10 @@
 | `packages/crm/src/db/schema/agency-profile.ts` | TypeScript type `AgencyProfile` (`name`, `logo_url`, `brand_color`, `website_url`) |
 | `packages/crm/src/lib/web-onboarding/byok-resolver.ts` | `getOperatorByokAnthropicKey({ orgId })` — loads `organizations.integrations`, decrypts `anthropic.apiKey`, returns `{ key, source }` or `null` |
 | `packages/crm/src/lib/web-onboarding/url-validator.ts` | `validateCreateFromUrlInput(raw)` — trims, regex-tests, returns `{ ok, url }` or `{ ok: false, code: "invalid_url" }` |
-| `packages/crm/src/lib/web-onboarding/extraction-prompt.ts` | `EXTRACTION_INSTRUCTIONS` constant + `REQUIRED_FIELDS_SCHEMA` shape (TypeScript type + JSON Schema for the system prompt) |
-| `packages/crm/src/lib/web-onboarding/extraction-parser.ts` | `parseExtraction(rawText: string)` — extracts JSON, validates against `extractedBusinessFactsSchema` (Zod), returns `{ ok, data }` or `{ ok: false, reason }` |
+| `packages/crm/src/lib/web-onboarding/extraction-parser.ts` | `parseExtraction(rawText: string)` — extracts JSON from Anthropic response, validates required keys (`business_name`, `city`, `state`, `phone`, `services`, `business_description`) per the existing `REQUIRED_FIELDS_SCHEMA` from `lib/soul-compiler/url-extraction-instructions.ts`, returns `{ ok, data }` or `{ ok: false, reason }` |
 | `packages/crm/src/lib/web-onboarding/sse.ts` | SSE helper: `createSseStream()` returns `{ stream, emit(event, data), close(), error(code, body) }` |
-| `packages/crm/src/lib/web-onboarding/workspace-limit.ts` | `enforceWorkspaceLimit({ userId })` — returns `{ allowed: true, tier, used, limit }` or `{ allowed: false, tier, used, limit, upgradeUrl }` |
-| `packages/crm/src/lib/web-onboarding/web-fetch-extractor.ts` | `extractBusinessFactsFromUrl({ url, byokKey })` — instantiates Anthropic SDK, calls `messages.create` with `web_fetch` server tool, returns parsed facts or throws typed `WebFetchError` |
+| `packages/crm/src/lib/web-onboarding/owned-workspace-count.ts` | `getOwnedWorkspaceCount(userId)` — small Drizzle query helper returning the count of orgs the user owns (memberships with role `owner`). Used to populate `enforceWorkspaceLimit`'s `ownedWorkspaceCount` arg. |
+| `packages/crm/src/lib/web-onboarding/web-fetch-extractor.ts` | `extractBusinessFactsFromUrl({ url, byokKey })` — instantiates Anthropic SDK, calls `messages.create` with the `web_fetch_20250910` server tool (with `anthropic-beta: web-fetch-2025-09-10` header) using the existing `EXTRACTION_INSTRUCTIONS` from `lib/soul-compiler/url-extraction-instructions.ts`, returns parsed facts or throws typed `WebFetchError` |
 | `packages/crm/src/app/api/v1/web/workspaces/create-from-url/route.ts` | The SSE endpoint — composes all of the above |
 
 ### Created — frontend
@@ -51,10 +56,9 @@
 | `packages/crm/tests/unit/web-onboarding/url-validator.spec.ts` | URL validator (5 cases per spec) |
 | `packages/crm/tests/unit/web-onboarding/extraction-parser.spec.ts` | Parser (well-formed, malformed, missing required fields, fenced ```json block) |
 | `packages/crm/tests/unit/web-onboarding/byok-resolver.spec.ts` | BYOK precondition (key present + encrypted, empty string, undecryptable, no integrations row) |
-| `packages/crm/tests/unit/web-onboarding/workspace-limit.spec.ts` | Tier-limit branch (Free under limit, Free at limit, Growth under, Growth at, Scale unlimited) |
+| `packages/crm/tests/unit/web-onboarding/owned-workspace-count.spec.ts` | Counts user's owned orgs only (excludes orgs where user is member but not owner) |
 | `packages/crm/tests/unit/web-onboarding/sse.spec.ts` | SSE helper emits `event:` + `data:` framing, closes cleanly, error frames |
-| `packages/crm/tests/unit/web-onboarding/extraction-prompt.spec.ts` | The prompt mentions REQUIRED_FIELDS_SCHEMA keys (snapshot guard) |
-| `packages/crm/tests/unit/web-onboarding/web-fetch-extractor.spec.ts` | Calls mocked Anthropic SDK with `tools: [{ type: "web_fetch_20250910" }]`, correct beta header, surfaces `extraction_failed` on bad output |
+| `packages/crm/tests/unit/web-onboarding/web-fetch-extractor.spec.ts` | Calls mocked Anthropic SDK with `tools: [{ type: "web_fetch_20250910" }]`, correct beta header, surfaces `extraction_failed` on bad output, imports `EXTRACTION_INSTRUCTIONS` from existing `lib/soul-compiler/url-extraction-instructions.ts` |
 | `packages/crm/tests/unit/web-onboarding/route-create-from-url.spec.ts` | End-to-end SSE flow with all dependencies mocked: 401, 400, 412, 402, 422, success-path event sequence |
 | `packages/crm/tests/unit/web-onboarding/upgrade-modal.spec.tsx` | UpgradeModal renders both tiers, both upgrade buttons POST to `/api/stripe/checkout`, "Maybe later" closes |
 | `packages/crm/tests/unit/web-onboarding/clients-new-form.spec.tsx` | Form submit opens EventSource; renders narration checkmarks per event; 412 swaps to BYOK form; 402 opens modal |
@@ -83,9 +87,15 @@
 | `packages/crm/src/components/soul/setup-wizard.tsx` | The wizard itself — no remaining importer after this Cut |
 | `packages/crm/src/app/orgs/new/page.tsx` | Imports `SetupWizard`; out of scope path — remove rather than keep dead |
 
+**REUSED (existing primitives — import, do NOT redefine):**
+- `packages/crm/src/lib/soul-compiler/url-extraction-instructions.ts` exports `EXTRACTION_INSTRUCTIONS` (system prompt) + `REQUIRED_FIELDS_SCHEMA` (JSON Schema for the extracted fields). Import both in `web-fetch-extractor.ts` and `extraction-parser.ts`.
+- `packages/crm/src/lib/workspace/create-full.ts` exports `createFullWorkspace(input: CreateFullWorkspaceInput): Promise<CreateFullWorkspaceResult>`. Atomic orchestrator — handles validation, personality resolution (cache/LLM/keyword), soul installation, block seeding, landing page rendering, chatbot creation in TEST status, demo portal seeding, and business hours persistence in a single call. The new route calls this once; the SSE event sequence collapses to `fetching → extracting → building → done`.
+- `packages/crm/src/lib/workspace/create-full.ts` also exports the input type `CreateFullWorkspaceInput` and result type `CreateFullWorkspaceResult`. Use these directly — no `mapFactsToSoul` adapter needed; the extracted facts map field-for-field to `CreateFullWorkspaceInput` (business_name, services, city, state, phone, business_description, weekly_hours, review_count, review_rating, certifications, trust_signals, emergency_service, same_day, service_area).
+- `packages/crm/src/lib/billing/limits.ts` exports `enforceWorkspaceLimit({ primaryOrgId, ownedWorkspaceCount }): Promise<LimitDecision>` and `LimitDecision` type. Call this with values resolved from the new `owned-workspace-count.ts` helper + `session.user.primaryOrgId`.
+- `packages/crm/src/lib/encryption.ts` exports `decryptValue` for the BYOK key decrypt path. The `byok-resolver.ts` mirrors the existing pattern in `lib/ai/client.ts:decryptIfNeeded`.
+
 **NOT modified (out of scope):**
 - `packages/crm/src/app/(onboarding)/welcome/` directory body — keep as a celebration page (spec §7 says future spec decides its fate)
-- `packages/crm/src/lib/billing/orgs.ts createWorkspaceFromSoulAction` — reused as-is for the workspace-build call from inside the new SSE route
 - Cut B's `/clients` page, `/api/v1/web/workspaces/mine`, `hasFeature`, `/settings/agency-profile` — separate plan
 - Cut C's marketing site rebuild — separate plan
 
@@ -98,7 +108,7 @@ These are referenced (not redefined) by Cut B and Cut C plans:
 1. **`<UpgradeModal>`** at `packages/crm/src/components/billing/upgrade-modal.tsx` — exports `UpgradeModal`, `UpgradeModalProps = { open: boolean; onOpenChange: (open: boolean) => void; tier: "free"|"growth"; used: number; limit: number }`
 2. **`users.agency_profile`** JSONB column — shape `AgencyProfile` at `packages/crm/src/db/schema/agency-profile.ts`
 3. **`POST /api/v1/web/workspaces/create-from-url`** — SSE shape documented inline in the route file
-4. **`enforceWorkspaceLimit({ userId })`** at `packages/crm/src/lib/web-onboarding/workspace-limit.ts` — returns `{ allowed: boolean, tier: "free"|"growth"|"scale", used: number, limit: number, upgradeUrl: string }`
+4. **`enforceWorkspaceLimit({ primaryOrgId, ownedWorkspaceCount })`** — EXISTING at `packages/crm/src/lib/billing/limits.ts:113`, NOT created by Cut A. Returns `LimitDecision` (allowed/denied with tier/used/limit/upgradeUrl). Cut A consumes it; Cut B consumes it the same way.
 
 ---
 
@@ -417,157 +427,100 @@ git add packages/crm/src/lib/web-onboarding/byok-resolver.ts packages/crm/tests/
 git commit -m "feat(web-onboarding): byok resolver pulls operator anthropic key from integrations"
 ```
 
-### Task 2.3: Write the EXTRACTION_INSTRUCTIONS prompt + schema
+### Task 2.3: Confirm the existing EXTRACTION_INSTRUCTIONS + add typed parsing surface
+
+> **PATCHED:** The original task wrote a parallel `EXTRACTION_INSTRUCTIONS` constant at a new path. The canonical prompt already exists at `packages/crm/src/lib/soul-compiler/url-extraction-instructions.ts:10` (along with `REQUIRED_FIELDS_SCHEMA` as JSON Schema). This patched task imports + re-exports the existing prompt so the web-onboarding module has a stable surface, and defines a small `ExtractedBusinessFacts` TypeScript type that mirrors the JSON Schema's `required` keys for downstream parsing in Task 4.
 
 **Files:**
-- Create: `packages/crm/src/lib/web-onboarding/extraction-prompt.ts`
-- Create: `packages/crm/tests/unit/web-onboarding/extraction-prompt.spec.ts`
+- Read (do NOT modify): `packages/crm/src/lib/soul-compiler/url-extraction-instructions.ts`
+- Create: `packages/crm/src/lib/web-onboarding/extraction-prompt.ts` (~20 lines — re-export + type only, NO new prompt copy)
 
-- [ ] **Step 1: Write the prompt file**
+- [ ] **Step 1: Read the existing file to confirm what's exported**
+
+```bash
+head -100 packages/crm/src/lib/soul-compiler/url-extraction-instructions.ts
+```
+
+Expected: see `export const EXTRACTION_INSTRUCTIONS = ...` (verbatim playbook for Claude Code WebFetch), `export const REQUIRED_FIELDS_SCHEMA = { ... }` (JSON Schema with `required: ["business_name", "city", "state", "phone", "services", "business_description"]` + optional `review_count`, `review_rating`, `certifications`, `trust_signals`, `emergency_service`, `same_day`, `service_area`, `email`, `address`, `weekly_hours`, `testimonials`).
+
+- [ ] **Step 2: Create the web-onboarding re-export shim**
 
 ```typescript
 // packages/crm/src/lib/web-onboarding/extraction-prompt.ts
-// The single prompt the SSE endpoint sends to Anthropic alongside web_fetch.
-// Mirrors the Claude Code MCP url-extraction-instructions playbook by asking
-// the model to fetch up to 3 priority pages (home, about, services) and emit
-// a strict JSON block. Schema kept narrow on purpose — the soul compiler
-// downstream fills in extras.
 //
-// Spec: 2026-05-16-seldonframe-web-onboarding-pivot-design.md, "Extraction call"
-// and "Parse extracted fields".
+// PATCHED PER PLAN CORRECTION (2026-05-16):
+// The canonical EXTRACTION_INSTRUCTIONS prompt + REQUIRED_FIELDS_SCHEMA
+// already live in lib/soul-compiler/url-extraction-instructions.ts (used by
+// the Claude Code MCP path). The web-onboarding endpoint imports them
+// verbatim — there must be exactly one source of truth for the extraction
+// prompt so the two surfaces (Claude Code MCP + web) stay in sync.
+//
+// This file exists only to:
+//   1. Give the web-onboarding module a stable local import path
+//   2. Add a TypeScript type ExtractedBusinessFacts that mirrors the
+//      JSON Schema's required + optional keys, used by the parser in Task 4.
 
-import { z } from "zod";
-
-export const extractedBusinessFactsSchema = z.object({
-  business_name: z.string().min(1),
-  tagline: z.string().default(""),
-  description: z.string().min(1),
-  audience_type: z.enum(["service", "product"]),
-  services: z
-    .array(
-      z.object({
-        name: z.string().min(1),
-        description: z.string().default(""),
-        price: z.number().nullable().optional(),
-      })
-    )
-    .default([]),
-  contact: z
-    .object({
-      email: z.string().email().nullable().optional(),
-      phone: z.string().nullable().optional(),
-      address: z.string().nullable().optional(),
-    })
-    .default({}),
-  hours: z.string().default(""),
-  source_pages: z.array(z.string().url()).default([]),
-});
-
-export type ExtractedBusinessFacts = z.infer<typeof extractedBusinessFactsSchema>;
-
-export const REQUIRED_FIELDS_SCHEMA_DESCRIPTION = `{
-  "business_name": string (required),
-  "tagline": string,
-  "description": string (required),
-  "audience_type": "service" | "product",
-  "services": [{ "name": string, "description": string, "price": number | null }],
-  "contact": { "email": string | null, "phone": string | null, "address": string | null },
-  "hours": string,
-  "source_pages": [string url]
-}`;
-
-export const EXTRACTION_INSTRUCTIONS = `You are SeldonFrame's URL-to-business extractor. The user just pasted a URL. Use the web_fetch tool to:
-
-1. Fetch the homepage at the URL.
-2. If the homepage clearly links to an "About", "Services", "Pricing", or "Work" page, fetch up to TWO more priority pages.
-3. Stop after 3 fetches total. If all 3 fetches fail (404, blocked, JS-only with no useful content), output a JSON object with "_error": "fetch_failed" and stop.
-
-Once you have content, emit EXACTLY ONE JSON object matching this shape (no prose, no markdown fences, no comments):
-
-${REQUIRED_FIELDS_SCHEMA_DESCRIPTION}
-
-Rules:
-- "audience_type" is "service" if the business sells human-delivered services (coaching, consulting, agencies, HVAC, dental). "product" if it sells software/SaaS.
-- "services" lists up to 6 of the highest-value offerings. Omit price if not on the page.
-- "description" is 1-3 sentences describing what the business does and for whom.
-- "tagline" is at most one sentence.
-- "source_pages" lists the URLs you actually fetched.
-- Output ONLY the JSON object. No "Here is the data:" preamble.`;
-```
-
-- [ ] **Step 2: Write the prompt guard test**
-
-```typescript
-// packages/crm/tests/unit/web-onboarding/extraction-prompt.spec.ts
-import { describe, test } from "node:test";
-import assert from "node:assert/strict";
-
-import {
+export {
   EXTRACTION_INSTRUCTIONS,
-  REQUIRED_FIELDS_SCHEMA_DESCRIPTION,
-  extractedBusinessFactsSchema,
-} from "../../../src/lib/web-onboarding/extraction-prompt";
+  REQUIRED_FIELDS_SCHEMA,
+} from "@/lib/soul-compiler/url-extraction-instructions";
 
-describe("EXTRACTION_INSTRUCTIONS", () => {
-  test("includes every required field name in the inlined schema description", () => {
-    for (const key of [
-      "business_name",
-      "tagline",
-      "description",
-      "audience_type",
-      "services",
-      "contact",
-      "hours",
-      "source_pages",
-    ]) {
-      assert.match(REQUIRED_FIELDS_SCHEMA_DESCRIPTION, new RegExp(`"${key}"`));
-    }
-  });
-
-  test("mentions the web_fetch tool by name so the model knows it can call it", () => {
-    assert.match(EXTRACTION_INSTRUCTIONS, /web_fetch/);
-  });
-
-  test("caps the fetch count at 3", () => {
-    assert.match(EXTRACTION_INSTRUCTIONS, /3 fetches/);
-  });
-});
-
-describe("extractedBusinessFactsSchema", () => {
-  test("accepts a minimum-viable payload", () => {
-    const parsed = extractedBusinessFactsSchema.parse({
-      business_name: "Acme",
-      description: "A small business",
-      audience_type: "service",
-    });
-    assert.equal(parsed.business_name, "Acme");
-    assert.deepEqual(parsed.services, []);
-  });
-
-  test("rejects a payload missing business_name", () => {
-    const result = extractedBusinessFactsSchema.safeParse({
-      description: "x",
-      audience_type: "service",
-    });
-    assert.equal(result.success, false);
-  });
-});
+/**
+ * TypeScript shape mirroring REQUIRED_FIELDS_SCHEMA. Maps field-for-field
+ * to CreateFullWorkspaceInput in lib/workspace/create-full.ts — no adapter
+ * layer needed downstream.
+ */
+export type ExtractedBusinessFacts = {
+  // Required
+  business_name: string;
+  city: string;
+  state: string;
+  phone: string;
+  services: string[];
+  business_description: string;
+  // Optional enrichment
+  review_count?: number | null;
+  review_rating?: number | null;
+  certifications?: string[] | null;
+  trust_signals?: string[] | null;
+  emergency_service?: boolean | null;
+  same_day?: boolean | null;
+  service_area?: string[] | null;
+  // Optional contact channels
+  email?: string | null;
+  address?: string | null;
+  // Optional weekly hours (existing format from create-full.ts:86)
+  weekly_hours?: Partial<Record<
+    "sunday" | "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday",
+    { enabled: boolean; start: string; end: string }
+  >> | null;
+  // Optional testimonials
+  testimonials?: Array<{
+    quote: string;
+    name?: string | null;
+    role?: string | null;
+    company?: string | null;
+    rating?: number | null;
+  }> | null;
+};
 ```
 
-- [ ] **Step 3: Run the test, expect pass**
+- [ ] **Step 3: Verify the re-export typechecks**
 
 ```bash
-cd packages/crm && node --import tsx --test tests/unit/web-onboarding/extraction-prompt.spec.ts
+cd packages/crm && pnpm exec tsc --noEmit src/lib/web-onboarding/extraction-prompt.ts
 ```
 
-Expected: PASS — 5 tests green.
+Expected: zero output (typecheck clean — the `@/lib/soul-compiler/...` import path resolves via tsconfig `paths`).
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add packages/crm/src/lib/web-onboarding/extraction-prompt.ts packages/crm/tests/unit/web-onboarding/extraction-prompt.spec.ts
-git commit -m "feat(web-onboarding): add EXTRACTION_INSTRUCTIONS prompt + Zod schema"
+git add packages/crm/src/lib/web-onboarding/extraction-prompt.ts
+git commit -m "feat(web-onboarding): re-export existing EXTRACTION_INSTRUCTIONS + add ExtractedBusinessFacts type"
 ```
+
+> **NO test file** for this task — the existing prompt is already proven by the Claude Code MCP path. The parser test in Task 4 covers the field shapes. The `web-fetch-extractor.spec.ts` (Task 6) covers that the prompt is actually passed to Anthropic.
 
 ---
 
@@ -690,6 +643,8 @@ git commit -m "feat(web-onboarding): URL validator for create-from-url endpoint"
 
 ### Task 4.1: Write the parser test
 
+> **PATCHED:** Uses the real `REQUIRED_FIELDS_SCHEMA` shape (`business_name`, `city`, `state`, `phone`, `services` as `string[]`, `business_description`) instead of the made-up shape in the original task. Validation is plain runtime checks against the required keys — no Zod (the existing schema is JSON Schema, and the parser only needs to confirm the required keys are present and well-typed before passing the object to `createFullWorkspace`, which does its own input validation).
+
 **Files:**
 - Create: `packages/crm/tests/unit/web-onboarding/extraction-parser.spec.ts`
 
@@ -704,22 +659,25 @@ import { parseExtraction } from "../../../src/lib/web-onboarding/extraction-pars
 
 const validJson = JSON.stringify({
   business_name: "Acme Plumbing",
-  tagline: "Pipes done right.",
-  description: "Family-owned plumbing serving Phoenix since 1998.",
-  audience_type: "service",
-  services: [{ name: "Drain cleaning", description: "", price: null }],
-  contact: { email: "hi@acme.com", phone: "555-0100", address: null },
-  hours: "Mon-Fri 8-5",
-  source_pages: ["https://acme.com/"],
+  city: "Phoenix",
+  state: "AZ",
+  phone: "(602) 555-0100",
+  services: ["Drain cleaning", "Water heater repair", "Leak detection"],
+  business_description: "Family-owned residential and commercial plumbing serving Phoenix since 1998.",
+  review_count: 412,
+  review_rating: 4.8,
+  emergency_service: true,
+  service_area: ["Phoenix", "Scottsdale", "Tempe"],
 });
 
 describe("parseExtraction", () => {
-  test("parses a clean JSON payload", () => {
+  test("parses a clean JSON payload with all required fields", () => {
     const result = parseExtraction(validJson);
     assert.equal(result.ok, true);
     if (result.ok) {
       assert.equal(result.data.business_name, "Acme Plumbing");
-      assert.equal(result.data.services.length, 1);
+      assert.equal(result.data.services.length, 3);
+      assert.equal(result.data.city, "Phoenix");
     }
   });
 
@@ -741,12 +699,27 @@ describe("parseExtraction", () => {
     }
   });
 
-  test("returns extraction_failed when required fields are missing", () => {
-    const result = parseExtraction(JSON.stringify({ tagline: "no business name" }));
+  test("returns extraction_failed when a required field is missing (no business_name)", () => {
+    const result = parseExtraction(JSON.stringify({
+      city: "Phoenix",
+      state: "AZ",
+      phone: "(602) 555-0100",
+      services: ["x"],
+      business_description: "y",
+    }));
     assert.equal(result.ok, false);
     if (!result.ok) {
       assert.equal(result.reason, "extraction_failed");
     }
+  });
+
+  test("returns extraction_failed when services is not an array", () => {
+    const result = parseExtraction(JSON.stringify({
+      business_name: "x", city: "x", state: "x", phone: "x",
+      services: "not an array",
+      business_description: "x",
+    }));
+    assert.equal(result.ok, false);
   });
 
   test("returns extraction_failed when the model emitted _error", () => {
@@ -774,13 +747,15 @@ Expected: FAIL — module not found.
 ```typescript
 // packages/crm/src/lib/web-onboarding/extraction-parser.ts
 // Parses the raw text Anthropic emits after the web_fetch tool turn finishes.
-// Looks for the first JSON object (optionally fenced) and validates against
-// extractedBusinessFactsSchema. Pure — no IO, fully unit-testable.
+// Looks for the first JSON object (optionally fenced) and validates that the
+// 6 required keys from REQUIRED_FIELDS_SCHEMA are present + well-typed. Pure
+// — no IO, fully unit-testable.
+//
+// Downstream typed validation happens inside createFullWorkspace's own
+// validateInput() — this parser is just the "did we get a usable shape from
+// the LLM?" gate.
 
-import {
-  extractedBusinessFactsSchema,
-  type ExtractedBusinessFacts,
-} from "./extraction-prompt";
+import type { ExtractedBusinessFacts } from "./extraction-prompt";
 
 export type ExtractionParseResult =
   | { ok: true; data: ExtractedBusinessFacts }
@@ -806,23 +781,58 @@ function extractFirstJsonObject(input: string): unknown | null {
   }
 }
 
+const REQUIRED_KEYS = [
+  "business_name",
+  "city",
+  "state",
+  "phone",
+  "services",
+  "business_description",
+] as const;
+
+function isNonEmptyString(v: unknown): v is string {
+  return typeof v === "string" && v.trim().length > 0;
+}
+
+function isStringArray(v: unknown): v is string[] {
+  return Array.isArray(v) && v.length > 0 && v.every(isNonEmptyString);
+}
+
 export function parseExtraction(rawText: string): ExtractionParseResult {
   const parsed = extractFirstJsonObject(rawText);
 
-  if (!parsed || typeof parsed !== "object") {
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     return { ok: false, reason: "extraction_failed" };
   }
 
-  if ("_error" in parsed) {
+  const obj = parsed as Record<string, unknown>;
+
+  if ("_error" in obj) {
     return { ok: false, reason: "extraction_failed" };
   }
 
-  const validated = extractedBusinessFactsSchema.safeParse(parsed);
-  if (!validated.success) {
+  // Required field presence + type checks (mirror REQUIRED_FIELDS_SCHEMA).
+  for (const key of REQUIRED_KEYS) {
+    if (!(key in obj)) {
+      return { ok: false, reason: "extraction_failed" };
+    }
+  }
+
+  if (
+    !isNonEmptyString(obj.business_name) ||
+    !isNonEmptyString(obj.city) ||
+    !isNonEmptyString(obj.state) ||
+    !isNonEmptyString(obj.phone) ||
+    !isNonEmptyString(obj.business_description) ||
+    !isStringArray(obj.services)
+  ) {
     return { ok: false, reason: "extraction_failed" };
   }
 
-  return { ok: true, data: validated.data };
+  // The object is structurally sound. Pass through to createFullWorkspace's
+  // own validator for the deeper checks (state-code normalization, phone
+  // format, etc.) — we don't duplicate that logic here.
+  return { ok: true, data: obj as unknown as ExtractedBusinessFacts };
 }
 ```
 
@@ -832,13 +842,13 @@ export function parseExtraction(rawText: string): ExtractionParseResult {
 cd packages/crm && node --import tsx --test tests/unit/web-onboarding/extraction-parser.spec.ts
 ```
 
-Expected: PASS — 6 tests green.
+Expected: PASS — 7 tests green.
 
 - [ ] **Step 3: Commit**
 
 ```bash
 git add packages/crm/src/lib/web-onboarding/extraction-parser.ts packages/crm/tests/unit/web-onboarding/extraction-parser.spec.ts
-git commit -m "feat(web-onboarding): extraction parser with fenced-block + zod validation"
+git commit -m "feat(web-onboarding): extraction parser validates REQUIRED_FIELDS_SCHEMA keys"
 ```
 
 ---
@@ -991,55 +1001,46 @@ git commit -m "feat(web-onboarding): SSE stream helper with event/data framing"
 
 ---
 
-## Phase 6 — Workspace limit + web_fetch extractor + main route handler
+## Phase 6 — Owned-workspace-count helper + web_fetch extractor + main route handler
 
-### Task 6.1: Write workspace-limit test
+> **PATCHED:** Tasks 6.1 + 6.2 originally reinvented `enforceWorkspaceLimit` + a `computeWorkspaceLimit` decision helper. The canonical `enforceWorkspaceLimit({ primaryOrgId, ownedWorkspaceCount })` already exists at `packages/crm/src/lib/billing/limits.ts:113` and returns `LimitDecision` with the correct Free=1/Growth=3/Scale=unlimited mapping (via `getPlan(tier).limits.maxOrgs`). Patched tasks below build only the small helper that resolves `ownedWorkspaceCount` from a `userId` — everything else is reused.
+
+### Task 6.1: Write the owned-workspace-count test
 
 **Files:**
-- Create: `packages/crm/tests/unit/web-onboarding/workspace-limit.spec.ts`
+- Create: `packages/crm/tests/unit/web-onboarding/owned-workspace-count.spec.ts`
 
 - [ ] **Step 1: Create the test file**
 
 ```typescript
-// packages/crm/tests/unit/web-onboarding/workspace-limit.spec.ts
-// Spec §"Workspace limit check" — Free=1, Growth=3, Scale=unlimited (matches
-// CLOUD_TIERS in packages/crm/src/lib/tier/config.ts).
+// packages/crm/tests/unit/web-onboarding/owned-workspace-count.spec.ts
+//
+// PATCHED PER PLAN CORRECTION (2026-05-16): we no longer test a parallel
+// tier-limit decision helper — that machinery lives in lib/billing/limits.ts
+// and is already covered there. This file only tests the small Drizzle
+// helper that counts how many orgs the user owns. The result feeds the
+// existing enforceWorkspaceLimit's `ownedWorkspaceCount` arg.
+//
+// We mock the db dependency rather than spinning up a real DB — keep this
+// fully unit-testable. The shape we mock matches the actual query.
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import { computeWorkspaceLimit } from "../../../src/lib/web-onboarding/workspace-limit";
+import { countOwnedWorkspacesFromRows } from "../../../src/lib/web-onboarding/owned-workspace-count";
 
-describe("computeWorkspaceLimit", () => {
-  test("Free tier with 0 owned workspaces is allowed", () => {
-    const result = computeWorkspaceLimit({ tier: "free", ownedCount: 0 });
-    assert.equal(result.allowed, true);
-    assert.equal(result.limit, 1);
-    assert.equal(result.used, 0);
+describe("countOwnedWorkspacesFromRows", () => {
+  test("returns 0 when the user owns no orgs", () => {
+    assert.equal(countOwnedWorkspacesFromRows([]), 0);
   });
 
-  test("Free tier with 1 owned workspace is denied", () => {
-    const result = computeWorkspaceLimit({ tier: "free", ownedCount: 1 });
-    assert.equal(result.allowed, false);
-    assert.equal(result.tier, "free");
-    assert.equal(result.upgradeUrl, "/settings/billing?upgrade=growth");
+  test("returns the count of rows when the user owns N orgs", () => {
+    const rows = [{ orgId: "a" }, { orgId: "b" }, { orgId: "c" }];
+    assert.equal(countOwnedWorkspacesFromRows(rows), 3);
   });
 
-  test("Growth tier with 2 owned workspaces is allowed", () => {
-    const result = computeWorkspaceLimit({ tier: "growth", ownedCount: 2 });
-    assert.equal(result.allowed, true);
-    assert.equal(result.limit, 3);
-  });
-
-  test("Growth tier with 3 owned workspaces is denied", () => {
-    const result = computeWorkspaceLimit({ tier: "growth", ownedCount: 3 });
-    assert.equal(result.allowed, false);
-    assert.equal(result.upgradeUrl, "/settings/billing?upgrade=scale");
-  });
-
-  test("Scale tier with 100 owned workspaces is allowed (unlimited)", () => {
-    const result = computeWorkspaceLimit({ tier: "scale", ownedCount: 100 });
-    assert.equal(result.allowed, true);
-    assert.equal(result.limit, Number.POSITIVE_INFINITY);
+  test("deduplicates if the same orgId appears twice (defensive)", () => {
+    const rows = [{ orgId: "a" }, { orgId: "a" }, { orgId: "b" }];
+    assert.equal(countOwnedWorkspacesFromRows(rows), 2);
   });
 });
 ```
@@ -1047,114 +1048,85 @@ describe("computeWorkspaceLimit", () => {
 - [ ] **Step 2: Run the test, expect compile failure**
 
 ```bash
-cd packages/crm && node --import tsx --test tests/unit/web-onboarding/workspace-limit.spec.ts
+cd packages/crm && node --import tsx --test tests/unit/web-onboarding/owned-workspace-count.spec.ts
 ```
 
 Expected: FAIL — module not found.
 
-### Task 6.2: Implement workspace-limit
+### Task 6.2: Implement owned-workspace-count
 
 **Files:**
-- Create: `packages/crm/src/lib/web-onboarding/workspace-limit.ts`
+- Create: `packages/crm/src/lib/web-onboarding/owned-workspace-count.ts`
 
 - [ ] **Step 1: Write the helper**
 
 ```typescript
-// packages/crm/src/lib/web-onboarding/workspace-limit.ts
-// Determines whether the given user is allowed to create another workspace.
-// Tier mapping per spec §5: Free=1, Growth=3, Scale=unlimited.
-// The DB wrapper (enforceWorkspaceLimit) is what the route handler calls;
-// computeWorkspaceLimit is the pure decision function exposed for tests.
+// packages/crm/src/lib/web-onboarding/owned-workspace-count.ts
+//
+// PATCHED PER PLAN CORRECTION (2026-05-16): tiny helper that resolves the
+// number of orgs a user owns, so the route handler can populate the
+// existing enforceWorkspaceLimit's `ownedWorkspaceCount` arg without
+// reinventing the tier-limit logic.
+//
+// The "owner" relationship in this codebase is via orgMembers.role === "owner".
 
-import { eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { organizations, users } from "@/db/schema";
+import { orgMembers } from "@/db/schema";
 
-export type WorkspaceTier = "free" | "growth" | "scale";
-
-const TIER_LIMITS: Record<WorkspaceTier, number> = {
-  free: 1,
-  growth: 3,
-  scale: Number.POSITIVE_INFINITY,
-};
-
-const UPGRADE_TARGETS: Record<WorkspaceTier, string> = {
-  free: "/settings/billing?upgrade=growth",
-  growth: "/settings/billing?upgrade=scale",
-  scale: "/settings/billing",
-};
-
-export type WorkspaceLimitDecision =
-  | { allowed: true; tier: WorkspaceTier; used: number; limit: number }
-  | { allowed: false; tier: WorkspaceTier; used: number; limit: number; upgradeUrl: string };
-
-export function computeWorkspaceLimit(params: {
-  tier: WorkspaceTier;
-  ownedCount: number;
-}): WorkspaceLimitDecision {
-  const limit = TIER_LIMITS[params.tier];
-  const allowed = params.ownedCount < limit;
-  if (allowed) {
-    return { allowed: true, tier: params.tier, used: params.ownedCount, limit };
-  }
-  return {
-    allowed: false,
-    tier: params.tier,
-    used: params.ownedCount,
-    limit,
-    upgradeUrl: UPGRADE_TARGETS[params.tier],
-  };
+/** Pure helper extracted for testability — dedupes by orgId (defensive). */
+export function countOwnedWorkspacesFromRows(
+  rows: Array<{ orgId: string }>,
+): number {
+  return new Set(rows.map((r) => r.orgId)).size;
 }
 
-function resolveTier(planId: string | null | undefined): WorkspaceTier {
-  const normalized = (planId ?? "").toLowerCase();
-  if (normalized.includes("scale") || normalized.includes("enterprise")) return "scale";
-  if (normalized.includes("growth") || normalized.includes("pro")) return "growth";
-  return "free";
-}
+/**
+ * Count orgs where this user is the owner. Returns 0 if the user has no
+ * owner-role memberships.
+ */
+export async function getOwnedWorkspaceCount(userId: string): Promise<number> {
+  const rows = await db
+    .select({ orgId: orgMembers.orgId })
+    .from(orgMembers)
+    .where(and(eq(orgMembers.userId, userId), eq(orgMembers.role, "owner")));
 
-export async function enforceWorkspaceLimit(params: { userId: string }): Promise<WorkspaceLimitDecision> {
-  const [user] = await db
-    .select({ id: users.id, planId: users.planId })
-    .from(users)
-    .where(eq(users.id, params.userId))
-    .limit(1);
-
-  if (!user) {
-    return {
-      allowed: false,
-      tier: "free",
-      used: 0,
-      limit: 1,
-      upgradeUrl: "/auth/login",
-    };
-  }
-
-  const [countRow] = await db
-    .select({ value: sql<number>`count(*)::int` })
-    .from(organizations)
-    .where(eq(organizations.ownerId, user.id));
-
-  const ownedCount = Number(countRow?.value ?? 0);
-  const tier = resolveTier(user.planId);
-  return computeWorkspaceLimit({ tier, ownedCount });
+  return countOwnedWorkspacesFromRows(rows);
 }
 ```
 
 - [ ] **Step 2: Run the test, expect pass**
 
 ```bash
-cd packages/crm && node --import tsx --test tests/unit/web-onboarding/workspace-limit.spec.ts
+cd packages/crm && node --import tsx --test tests/unit/web-onboarding/owned-workspace-count.spec.ts
 ```
 
-Expected: PASS — 5 tests green.
+Expected: PASS — 3 tests green.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add packages/crm/src/lib/web-onboarding/workspace-limit.ts packages/crm/tests/unit/web-onboarding/workspace-limit.spec.ts
-git commit -m "feat(web-onboarding): enforceWorkspaceLimit with pure decision helper"
+git add packages/crm/src/lib/web-onboarding/owned-workspace-count.ts packages/crm/tests/unit/web-onboarding/owned-workspace-count.spec.ts
+git commit -m "feat(web-onboarding): getOwnedWorkspaceCount helper for enforceWorkspaceLimit input"
 ```
+
+> **IMPORTANT for downstream tasks (6.6, 6.7, 6.8):** The route handler imports `enforceWorkspaceLimit` from `@/lib/billing/limits` (NOT from `@/lib/web-onboarding/workspace-limit` — that file is NOT created). It calls it like this:
+> ```typescript
+> import { enforceWorkspaceLimit } from "@/lib/billing/limits";
+> import { getOwnedWorkspaceCount } from "@/lib/web-onboarding/owned-workspace-count";
+>
+> const ownedWorkspaceCount = await getOwnedWorkspaceCount(sessionUser.id);
+> const decision = await enforceWorkspaceLimit({
+>   primaryOrgId: sessionUser.primaryOrgId,
+>   ownedWorkspaceCount,
+> });
+> if (!decision.allowed) {
+>   sse.error(402, { reason: decision.reason, message: decision.message, upgradeUrl: decision.upgradeUrl, used: decision.used, limit: decision.limit });
+>   sse.close();
+>   return;
+> }
+> ```
+> The `LimitDecision` type (returned by `enforceWorkspaceLimit`) has shape: `{ allowed: true; tier } | { allowed: false; tier; reason: "workspace_limit_reached"; message; upgradeUrl; used; limit }` — see `lib/billing/limits.ts:30-40`.
 
 ### Task 6.3: Write web_fetch extractor test
 
@@ -1380,6 +1352,390 @@ Expected: PASS — 3 tests green.
 git add packages/crm/src/lib/web-onboarding/web-fetch-extractor.ts packages/crm/tests/unit/web-onboarding/web-fetch-extractor.spec.ts
 git commit -m "feat(web-onboarding): web_fetch extractor wrapping Anthropic SDK"
 ```
+
+> ## ⚠ PATCHED REPLACEMENT FOR TASKS 6.5–6.8 (PER PLAN CORRECTION 2026-05-16)
+>
+> The original Tasks 6.5–6.8 (visible below this patched section, lines ~1545+) build a `mapFactsToSoul` adapter then call `createWorkspaceFromSoulAction` from `lib/billing/orgs.ts`. That bypasses the existing `createFullWorkspace` orchestrator at `lib/workspace/create-full.ts:181`, which already handles soul + landing + chatbot + demo seeding atomically.
+>
+> **Execute the patched Tasks 6.5'–6.8' below INSTEAD of the originals.** Skip the original content from "### Task 6.5: Map extracted facts to the soul shape" through the end of Task 6.8.
+>
+> ---
+>
+> ### Task 6.5' (PATCHED): Skip the facts-to-soul mapper
+>
+> **No file to create.** The extracted facts (typed as `ExtractedBusinessFacts` from `lib/web-onboarding/extraction-prompt.ts`) map field-for-field to `CreateFullWorkspaceInput` from `lib/workspace/create-full.ts:50`. Pass the extraction result directly. No adapter, no `mapFactsToSoul`, no SoulV4 construction here — `createFullWorkspace` handles soul installation internally.
+>
+> - [ ] **Step 1: Verify the field mapping**
+>
+> Open both files and confirm field-for-field:
+>
+> ```bash
+> grep -E "^\s*(business_name|city|state|phone|services|business_description|review_count|review_rating|certifications|trust_signals|emergency_service|same_day|service_area|email|address|weekly_hours|testimonials)" packages/crm/src/lib/workspace/create-full.ts | head -25
+> ```
+>
+> Expected: each of the 17 fields appears in `CreateFullWorkspaceInput`. Same names. Same types.
+>
+> - [ ] **Step 2: Commit a no-op marker file (optional)**
+>
+> If you want a paper trail, add a one-line README in the web-onboarding directory:
+>
+> ```bash
+> echo "# No facts-to-soul adapter — extraction output maps directly to CreateFullWorkspaceInput. See plan correction note in cut-a plan." > packages/crm/src/lib/web-onboarding/README.md
+> git add packages/crm/src/lib/web-onboarding/README.md
+> git commit -m "docs(web-onboarding): note that no facts-to-soul adapter is needed"
+> ```
+>
+> Otherwise skip this task entirely and proceed to 6.6'.
+>
+> ---
+>
+> ### Task 6.6' (PATCHED): Write the route-handler integration test
+>
+> **Files:**
+> - Create: `packages/crm/tests/unit/web-onboarding/route-create-from-url.spec.ts`
+>
+> - [ ] **Step 1: Create the test file**
+>
+> The route hoists its SSE-building logic into `runCreateFromUrl({ deps, body, sessionUser })` for testability. The deps shape now includes `createFullWorkspace` (the real orchestrator) instead of `createWorkspaceFromSoulAction`.
+>
+> ```typescript
+> // packages/crm/tests/unit/web-onboarding/route-create-from-url.spec.ts
+> //
+> // PATCHED PER PLAN CORRECTION (2026-05-16): uses the real createFullWorkspace
+> // from lib/workspace/create-full.ts (mocked here) instead of the bypassed
+> // createWorkspaceFromSoulAction. SSE event sequence is fetching →
+> // extracting → building → done (4 events, atomic build phase).
+>
+> import { describe, test } from "node:test";
+> import assert from "node:assert/strict";
+>
+> import { runCreateFromUrl } from "../../../src/lib/web-onboarding/run-create-from-url";
+>
+> async function readAll(stream: ReadableStream<Uint8Array>): Promise<string> {
+>   const reader = stream.getReader();
+>   const decoder = new TextDecoder();
+>   let out = "";
+>   while (true) {
+>     const { done, value } = await reader.read();
+>     if (done) break;
+>     out += decoder.decode(value);
+>   }
+>   return out;
+> }
+>
+> const validFacts = {
+>   business_name: "Acme Plumbing",
+>   city: "Phoenix",
+>   state: "AZ",
+>   phone: "(602) 555-0100",
+>   services: ["Drain cleaning"],
+>   business_description: "Plumbing in Phoenix.",
+> };
+>
+> function baseDeps() {
+>   return {
+>     enforceWorkspaceLimit: async () => ({ allowed: true as const, tier: "free" as const }),
+>     getOwnedWorkspaceCount: async () => 0,
+>     getOperatorByokAnthropicKey: async () => ({ key: "sk-ant-test", source: "byok" as const }),
+>     extractBusinessFactsFromUrl: async () => validFacts,
+>     createFullWorkspace: async () => ({
+>       status: "ready" as const,
+>       workspace_id: "org-1",
+>       slug: "acme-plumbing",
+>       public_urls: { home: "https://acme-plumbing.app.seldonframe.com", book: "...", intake: "..." },
+>     }),
+>     workspaceBaseDomain: "app.seldonframe.com",
+>   };
+> }
+>
+> describe("runCreateFromUrl", () => {
+>   test("emits 401 then closes when sessionUser is null", async () => {
+>     const sse = await runCreateFromUrl({ deps: baseDeps(), body: { url: "https://x.com" }, sessionUser: null });
+>     const text = await readAll(sse.stream);
+>     assert.match(text, /event: error\n.*"code":401/);
+>   });
+>
+>   test("emits 400 when URL is invalid", async () => {
+>     const sse = await runCreateFromUrl({ deps: baseDeps(), body: { url: "not-a-url" }, sessionUser: { id: "u1", primaryOrgId: "o1" } });
+>     const text = await readAll(sse.stream);
+>     assert.match(text, /event: error\n.*"code":400/);
+>   });
+>
+>   test("emits 402 with upgradeUrl when at workspace limit", async () => {
+>     const deps = { ...baseDeps(), enforceWorkspaceLimit: async () => ({ allowed: false as const, tier: "free" as const, reason: "workspace_limit_reached" as const, message: "...", upgradeUrl: "/settings/billing", used: 1, limit: 1 }) };
+>     const sse = await runCreateFromUrl({ deps, body: { url: "https://x.com" }, sessionUser: { id: "u1", primaryOrgId: "o1" } });
+>     const text = await readAll(sse.stream);
+>     assert.match(text, /event: error\n.*"code":402.*upgradeUrl/);
+>   });
+>
+>   test("emits 412 with needs_byok when BYOK key is missing", async () => {
+>     const deps = { ...baseDeps(), getOperatorByokAnthropicKey: async () => null };
+>     const sse = await runCreateFromUrl({ deps, body: { url: "https://x.com" }, sessionUser: { id: "u1", primaryOrgId: "o1" } });
+>     const text = await readAll(sse.stream);
+>     assert.match(text, /event: error\n.*"code":412.*needs_byok/);
+>   });
+>
+>   test("emits the success sequence: fetching → extracting → building → done", async () => {
+>     const sse = await runCreateFromUrl({ deps: baseDeps(), body: { url: "https://acme.com" }, sessionUser: { id: "u1", primaryOrgId: "o1" } });
+>     const text = await readAll(sse.stream);
+>     const fetchingIdx = text.indexOf("event: fetching");
+>     const extractingIdx = text.indexOf("event: extracting");
+>     const buildingIdx = text.indexOf("event: building");
+>     const doneIdx = text.indexOf("event: done");
+>     assert.ok(fetchingIdx >= 0 && extractingIdx > fetchingIdx && buildingIdx > extractingIdx && doneIdx > buildingIdx, "events out of order: " + text);
+>     assert.match(text, /event: done\n.*"workspaceId":"org-1".*"slug":"acme-plumbing"/);
+>   });
+>
+>   test("emits 422 when extraction throws WebFetchError with extraction_failed", async () => {
+>     const deps = { ...baseDeps(), extractBusinessFactsFromUrl: async () => { const e = new Error("bad output"); (e as any).reason = "extraction_failed"; (e as any).name = "WebFetchError"; throw e; } };
+>     const sse = await runCreateFromUrl({ deps, body: { url: "https://x.com" }, sessionUser: { id: "u1", primaryOrgId: "o1" } });
+>     const text = await readAll(sse.stream);
+>     assert.match(text, /event: error\n.*"code":422.*extraction_failed/);
+>   });
+> });
+> ```
+>
+> - [ ] **Step 2: Run the test, expect compile failure**
+>
+> ```bash
+> cd packages/crm && node --import tsx --test tests/unit/web-onboarding/route-create-from-url.spec.ts
+> ```
+>
+> Expected: FAIL — `run-create-from-url` module not found.
+>
+> ---
+>
+> ### Task 6.7' (PATCHED): Implement the runCreateFromUrl orchestrator
+>
+> **Files:**
+> - Create: `packages/crm/src/lib/web-onboarding/run-create-from-url.ts`
+>
+> - [ ] **Step 1: Write the orchestrator**
+>
+> ```typescript
+> // packages/crm/src/lib/web-onboarding/run-create-from-url.ts
+> //
+> // PATCHED PER PLAN CORRECTION (2026-05-16):
+> // Calls the canonical createFullWorkspace orchestrator from
+> // lib/workspace/create-full.ts (handles soul + landing + chatbot + demo
+> // atomically). SSE event sequence is fetching → extracting → building →
+> // done. No mapFactsToSoul adapter — extracted facts are passed directly
+> // because they're already CreateFullWorkspaceInput-shaped.
+>
+> import { createSseStream, SSE_RESPONSE_HEADERS } from "./sse";
+> import { validateCreateFromUrlInput } from "./url-validator";
+> import type { CreateFullWorkspaceInput, CreateFullWorkspaceResult } from "@/lib/workspace/create-full";
+> import type { LimitDecision } from "@/lib/billing/limits";
+> import type { ExtractedBusinessFacts } from "./extraction-prompt";
+>
+> export type RunDeps = {
+>   enforceWorkspaceLimit: (args: { primaryOrgId: string | null; ownedWorkspaceCount: number }) => Promise<LimitDecision>;
+>   getOwnedWorkspaceCount: (userId: string) => Promise<number>;
+>   getOperatorByokAnthropicKey: (orgId: string) => Promise<{ key: string; source: "byok" } | null>;
+>   extractBusinessFactsFromUrl: (args: { url: string; byokKey: string }) => Promise<ExtractedBusinessFacts>;
+>   createFullWorkspace: (input: CreateFullWorkspaceInput) => Promise<CreateFullWorkspaceResult>;
+>   workspaceBaseDomain: string;
+> };
+>
+> export type RunInput = {
+>   deps: RunDeps;
+>   body: { url: unknown };
+>   sessionUser: { id: string; primaryOrgId: string | null } | null;
+> };
+>
+> export type RunResult = {
+>   stream: ReadableStream<Uint8Array>;
+>   headers: Record<string, string>;
+> };
+>
+> export async function runCreateFromUrl(input: RunInput): Promise<RunResult> {
+>   const sse = createSseStream();
+>
+>   // Drive in the background so the response can return immediately.
+>   (async () => {
+>     try {
+>       // 1. Auth gate
+>       if (!input.sessionUser) {
+>         sse.error(401, { reason: "unauthorized" });
+>         sse.close();
+>         return;
+>       }
+>
+>       // 2. URL validation
+>       const validation = validateCreateFromUrlInput(input.body.url);
+>       if (!validation.ok) {
+>         sse.error(400, { reason: validation.code });
+>         sse.close();
+>         return;
+>       }
+>
+>       // 3. Workspace limit (uses REAL enforceWorkspaceLimit from lib/billing/limits.ts)
+>       const ownedCount = await input.deps.getOwnedWorkspaceCount(input.sessionUser.id);
+>       const decision = await input.deps.enforceWorkspaceLimit({
+>         primaryOrgId: input.sessionUser.primaryOrgId,
+>         ownedWorkspaceCount: ownedCount,
+>       });
+>       if (!decision.allowed) {
+>         sse.error(402, {
+>           reason: decision.reason,
+>           message: decision.message,
+>           upgradeUrl: decision.upgradeUrl,
+>           used: decision.used,
+>           limit: decision.limit,
+>           tier: decision.tier,
+>         });
+>         sse.close();
+>         return;
+>       }
+>
+>       // 4. BYOK precondition
+>       if (!input.sessionUser.primaryOrgId) {
+>         sse.error(412, { reason: "needs_byok", message: "Add your Anthropic API key to extract from URLs." });
+>         sse.close();
+>         return;
+>       }
+>       const byok = await input.deps.getOperatorByokAnthropicKey(input.sessionUser.primaryOrgId);
+>       if (!byok) {
+>         sse.error(412, { reason: "needs_byok", message: "Add your Anthropic API key to extract from URLs." });
+>         sse.close();
+>         return;
+>       }
+>
+>       // 5. Fetch + extract (one call — Anthropic does the web_fetch server-side)
+>       sse.emit("fetching", { url: validation.url });
+>       let facts: ExtractedBusinessFacts;
+>       try {
+>         facts = await input.deps.extractBusinessFactsFromUrl({ url: validation.url, byokKey: byok.key });
+>       } catch (err: unknown) {
+>         const reason = (err as { reason?: string }).reason ?? "extraction_failed";
+>         sse.error(422, { reason });
+>         sse.close();
+>         return;
+>       }
+>       sse.emit("extracting", { fields: Object.keys(facts).sort() });
+>
+>       // 6. Build workspace (atomic — createFullWorkspace handles soul, landing,
+>       //    chatbot, demo seeding all in one call).
+>       sse.emit("building", { phase: "soul_landing_chatbot_demo" });
+>       const result = await input.deps.createFullWorkspace(facts as CreateFullWorkspaceInput);
+>       if (result.status !== "ready") {
+>         sse.error(500, {
+>           reason: "internal_error",
+>           detail: result.error?.message ?? "createFullWorkspace failed",
+>           step: result.error?.step ?? "unknown",
+>         });
+>         sse.close();
+>         return;
+>       }
+>
+>       // 7. Done
+>       sse.emit("done", {
+>         workspaceId: result.workspace_id,
+>         slug: result.slug,
+>         dashboardUrl: `/dashboard?ws=${result.slug}`,
+>         publicHomeUrl: result.public_urls?.home,
+>       });
+>       sse.close();
+>     } catch (err: unknown) {
+>       sse.error(500, { reason: "internal_error", detail: err instanceof Error ? err.message : String(err) });
+>       sse.close();
+>     }
+>   })();
+>
+>   return { stream: sse.stream, headers: SSE_RESPONSE_HEADERS };
+> }
+> ```
+>
+> - [ ] **Step 2: Run the test, expect pass**
+>
+> ```bash
+> cd packages/crm && node --import tsx --test tests/unit/web-onboarding/route-create-from-url.spec.ts
+> ```
+>
+> Expected: PASS — 6 tests green.
+>
+> - [ ] **Step 3: Commit**
+>
+> ```bash
+> git add packages/crm/src/lib/web-onboarding/run-create-from-url.ts packages/crm/tests/unit/web-onboarding/route-create-from-url.spec.ts
+> git commit -m "feat(web-onboarding): runCreateFromUrl orchestrator (4-event SSE, uses createFullWorkspace)"
+> ```
+>
+> ---
+>
+> ### Task 6.8' (PATCHED): Write the thin route file
+>
+> **Files:**
+> - Create: `packages/crm/src/app/api/v1/web/workspaces/create-from-url/route.ts`
+>
+> - [ ] **Step 1: Write the route**
+>
+> ```typescript
+> // packages/crm/src/app/api/v1/web/workspaces/create-from-url/route.ts
+> //
+> // PATCHED PER PLAN CORRECTION (2026-05-16): wires the REAL primitives:
+> //   - enforceWorkspaceLimit from @/lib/billing/limits (existing)
+> //   - createFullWorkspace from @/lib/workspace/create-full (existing)
+> //   - getOwnedWorkspaceCount from @/lib/web-onboarding/owned-workspace-count (new)
+> //   - getOperatorByokAnthropicKey from @/lib/web-onboarding/byok-resolver (new, Phase 2)
+> //   - extractBusinessFactsFromUrl from @/lib/web-onboarding/web-fetch-extractor (new, Task 6.4)
+>
+> import { auth } from "@/auth";
+> import { runCreateFromUrl } from "@/lib/web-onboarding/run-create-from-url";
+> import { enforceWorkspaceLimit } from "@/lib/billing/limits";
+> import { createFullWorkspace } from "@/lib/workspace/create-full";
+> import { getOwnedWorkspaceCount } from "@/lib/web-onboarding/owned-workspace-count";
+> import { getOperatorByokAnthropicKey } from "@/lib/web-onboarding/byok-resolver";
+> import { extractBusinessFactsFromUrl } from "@/lib/web-onboarding/web-fetch-extractor";
+>
+> export const runtime = "nodejs";
+> export const dynamic = "force-dynamic";
+>
+> export async function POST(request: Request) {
+>   const session = await auth();
+>   const body = (await request.json().catch(() => ({}))) as { url?: unknown };
+>
+>   const { stream, headers } = await runCreateFromUrl({
+>     deps: {
+>       enforceWorkspaceLimit,
+>       getOwnedWorkspaceCount,
+>       getOperatorByokAnthropicKey,
+>       extractBusinessFactsFromUrl,
+>       createFullWorkspace,
+>       workspaceBaseDomain: process.env.WORKSPACE_BASE_DOMAIN ?? "app.seldonframe.com",
+>     },
+>     body: { url: body.url },
+>     sessionUser: session?.user?.id
+>       ? { id: session.user.id, primaryOrgId: (session.user as { primaryOrgId?: string | null }).primaryOrgId ?? null }
+>       : null,
+>   });
+>
+>   return new Response(stream, { headers });
+> }
+> ```
+>
+> - [ ] **Step 2: Typecheck**
+>
+> ```bash
+> pnpm typecheck
+> ```
+>
+> Expected: clean.
+>
+> - [ ] **Step 3: Commit**
+>
+> ```bash
+> git add packages/crm/src/app/api/v1/web/workspaces/create-from-url/route.ts
+> git commit -m "feat(web-onboarding): SSE route wiring real deps (createFullWorkspace + enforceWorkspaceLimit)"
+> ```
+>
+> ---
+>
+> ## ⏭ STOP — original Tasks 6.5–6.8 below are SUPERSEDED. Skip to Phase 7.
+>
+> The content below this line (through end of Task 6.8) is the original plan content kept for archaeology only. The patched Tasks 6.5'–6.8' above are authoritative.
+
+---
 
 ### Task 6.5: Map extracted facts to the soul shape
 
