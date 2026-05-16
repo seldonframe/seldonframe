@@ -69,17 +69,27 @@ export function SignupForm({ token = "" }: { token?: string }) {
 
   return (
     <div className="space-y-5 text-foreground">
+      {/* a11y-review:
+          - aria-busy surfaces the "Redirecting..." pending state to SR users
+            (otherwise SR only hears the original label).
+          - focus-visible ring matches the rest of the form's CTAs (the other
+            buttons use crm-button-* utility classes which include their own
+            focus ring; this raw Google button needs an explicit one). */}
       <button
         type="button"
         disabled={googlePending}
-        className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md border border-border bg-white px-4 text-sm font-medium text-zinc-900 shadow-xs transition-all hover:bg-zinc-100"
+        aria-busy={googlePending}
+        className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md border border-border bg-white px-4 text-sm font-medium text-zinc-900 shadow-xs transition-all hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         onClick={handleGoogleSignIn}
       >
         <GoogleIcon />
-        {googlePending ? "Redirecting to Google..." : "Sign in with Google"}
+        {googlePending ? "Redirecting to Google..." : "Continue with Google"}
       </button>
 
-      <div className="relative flex items-center justify-center py-1">
+      {/* a11y-review: the divider is purely decorative — SR users get the
+          structure from the button → form transition. aria-hidden removes
+          the stray "or" announcement between the two sections. */}
+      <div className="relative flex items-center justify-center py-1" aria-hidden="true">
         <span className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-border" />
         <span className="relative bg-card px-3 text-xs uppercase tracking-[0.08em] text-muted-foreground">
           or
@@ -108,10 +118,14 @@ export function SignupForm({ token = "" }: { token?: string }) {
         </button>
       </form>
 
-      {state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
+      {/* a11y-review: role="alert" makes SR users hear the error
+          immediately on render (assertive live region). */}
+      {state.error ? <p role="alert" className="text-sm text-destructive">{state.error}</p> : null}
 
       {state.sent && state.email ? (
-        <div className="space-y-3 rounded-xl border border-border bg-card p-4">
+        /* a11y-review: role="status" announces the success card to SR
+           users without interrupting (polite live region). */
+        <div role="status" className="space-y-3 rounded-xl border border-border bg-card p-4">
           <p className="text-sm text-foreground">
             Magic link sent ✨ Check your inbox for <span className="font-medium">{state.email}</span>. Click the link to sign in.
           </p>
