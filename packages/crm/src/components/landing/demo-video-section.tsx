@@ -20,11 +20,11 @@ export function LandingDemoVideoSection() {
           See it in action
         </p>
         <h2 id="demo-heading" className="text-3xl font-bold text-zinc-100 md:text-4xl">
-          60 seconds. Signup to live workspace.
+          60 seconds. Paste to live workspace.
         </h2>
         <p className="mx-auto mt-4 max-w-2xl text-zinc-400">
-          Watch the full flow: sign up with Google, paste a client URL, and walk through the CRM, booking
-          page, intake form, AI chatbot, and demo portal that get built in under a minute.
+          Sign up, paste a client URL, and watch the CRM, booking page, intake form, AI chatbot, and demo
+          portal build themselves — narrated, end-to-end, in one minute.
         </p>
       </div>
 
@@ -45,7 +45,7 @@ export function LandingDemoVideoSection() {
           Animated preview hidden because you prefer reduced motion. The full narrated demo lands soon.
         </div>
         <p className="border-t border-zinc-800/50 bg-zinc-950 px-6 py-3 text-center text-xs text-zinc-400">
-          Polished 60-second narrated demo ships in week 6.
+          Polished 60-second walkthrough lands in week 6.
         </p>
       </div>
     </section>
