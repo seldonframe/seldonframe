@@ -65,7 +65,7 @@ export default async function PublicHomePage() {
   return (
     <div className="min-h-screen bg-[#09090b] text-zinc-100">
       <LandingNav />
-      <main>
+      <main id="main-content">
         <LandingHero />
         <LandingHowItWorksSection />
         <LandingSoulSection />

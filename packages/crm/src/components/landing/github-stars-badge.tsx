@@ -15,7 +15,10 @@
 // `seldonframe/seldonframe` placeholder some early docs used).
 
 import Link from "next/link";
-import { Star, Github } from "lucide-react";
+import { Star, GitFork } from "lucide-react";
+// Note: lucide-react@1.7 doesn't export a Github icon — GitFork is the
+// closest semantic match for "open source repo on GitHub" and aligns
+// with the section H2 ("If we ever get weird about pricing, fork us.")
 
 function formatStars(stars: number): string {
   if (stars >= 1000) {
@@ -45,7 +48,7 @@ export function GitHubStarsBadge({ stars }: { stars: number | null }) {
       // py-2.5 so the click target clears WCAG 2.5.5 (>=44px).
       className="inline-flex items-center gap-2 rounded-full border border-zinc-700/60 bg-transparent px-4 py-2.5 text-sm font-medium text-zinc-300 transition-colors hover:border-zinc-500 hover:text-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#14b8a6]"
     >
-      <Github size={16} aria-hidden="true" />
+      <GitFork size={16} aria-hidden="true" />
       <span>seldonframe/crm</span>
       {stars !== null ? (
         <span
