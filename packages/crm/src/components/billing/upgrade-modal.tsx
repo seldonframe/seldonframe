@@ -1,0 +1,170 @@
+// packages/crm/src/components/billing/upgrade-modal.tsx
+// Cut A first consumer is /clients/new's 402 path; Cut B reuses this from
+// /clients and from the dashboard CTA at-limit click; Cut C may surface it
+// from marketing CTAs. DO NOT redefine this component in later Cuts.
+//
+// Design system recommendation (Task 7.1):
+//   - Dialog / DialogContent / DialogHeader / DialogTitle / DialogDescription
+//     from @/components/ui/dialog (shadcn/base-ui shell)
+//   - Card / CardContent / CardHeader / CardTitle from @/components/ui/card
+//     for tier cards
+//   - Button from @/components/ui/button — variant="default" for upgrade CTAs,
+//     variant="ghost" for "Maybe later"
+//   - Badge from @/components/ui/badge — mark Scale tier as "Recommended"
+//   - Check icon from lucide-react for feature bullets
+//   - Override DialogContent max-w to max-w-3xl for side-by-side cards
+//   - No new design tokens needed
+//
+// Copy (Task 7.2 via design:ux-copy):
+//   See COPY const below — value-forward, no exclamation marks, no emoji.
+"use client";
+
+import { useState } from "react";
+import { Check } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+
+// User-facing strings — output of design:ux-copy (Task 7.2).
+const COPY = {
+  title: "Add another client workspace",
+  subtitleTemplate: (used: number, limit: number) =>
+    `You're on Free with ${used} of ${limit} workspaces used`,
+  growth: {
+    name: "Growth",
+    price: "$29/mo per agency",
+    features: [
+      "3 client workspaces",
+      "Custom domain per client",
+      "No SeldonFrame branding",
+      "Client portal access",
+    ],
+    cta: "Upgrade to Growth",
+  },
+  scale: {
+    name: "Scale",
+    price: "$99/mo per agency",
+    features: [
+      "Unlimited client workspaces",
+      "AI agents for every workspace",
+      "Full white-label client portal",
+      "Priority support response",
+    ],
+    cta: "Upgrade to Scale",
+    recommendedLabel: "Recommended",
+  },
+  footer:
+    "Both tiers include unlimited contacts, bookings, and Claude Code MCP access.",
+  cancel: "Maybe later",
+};
+
+// Real Stripe priceIds live in `lib/billing/price-ids.ts`; the consumer site
+// hot-swaps these via env. We pass the tier slug and the server resolves the
+// priceId. Keeps secrets out of the client bundle.
+const TIER_TO_REQUEST = {
+  growth: { tier: "growth" as const, priceLookupKey: "cloud_growth_monthly" },
+  scale: { tier: "scale" as const, priceLookupKey: "cloud_scale_monthly" },
+};
+
+export type UpgradeModalProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  tier: "free" | "growth";
+  used: number;
+  limit: number;
+};
+
+export function UpgradeModal({ open, onOpenChange, used, limit }: UpgradeModalProps) {
+  const [pending, setPending] = useState<"growth" | "scale" | null>(null);
+
+  async function upgrade(target: "growth" | "scale") {
+    setPending(target);
+    try {
+      const res = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          priceId: TIER_TO_REQUEST[target].priceLookupKey,
+          tier: TIER_TO_REQUEST[target].tier,
+        }),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { url?: string };
+        if (data.url) {
+          window.location.assign(data.url);
+          return;
+        }
+      }
+      setPending(null);
+    } catch {
+      setPending(null);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>{COPY.title}</DialogTitle>
+          <DialogDescription>{COPY.subtitleTemplate(used, limit)}</DialogDescription>
+        </DialogHeader>
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {(["growth", "scale"] as const).map((tier) => {
+            const card = COPY[tier];
+            const isScale = tier === "scale";
+            return (
+              <Card key={tier}>
+                <CardHeader>
+                  <div className="flex items-center justify-between gap-2">
+                    <CardTitle>{card.name}</CardTitle>
+                    {isScale ? (
+                      <Badge variant="default">{COPY.scale.recommendedLabel}</Badge>
+                    ) : null}
+                  </div>
+                  <p className="text-sm text-muted-foreground">{card.price}</p>
+                </CardHeader>
+                <CardContent>
+                  <ul className="mb-4 space-y-2 text-sm">
+                    {card.features.map((f) => (
+                      <li key={f} className="flex items-start gap-2">
+                        <Check className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+                        <span>{f}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <Button
+                    onClick={() => upgrade(tier)}
+                    disabled={pending !== null}
+                    className="w-full"
+                  >
+                    {pending === tier ? "Redirecting..." : card.cta}
+                  </Button>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+
+        <p className="mt-4 text-center text-xs text-muted-foreground">{COPY.footer}</p>
+
+        <div className="mt-2 text-center">
+          <button
+            type="button"
+            className="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
+            onClick={() => onOpenChange(false)}
+          >
+            {COPY.cancel}
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
