@@ -87,7 +87,10 @@ export function ClientsGrid({ workspaces, tier, used, limit }: ClientsGridProps)
 
   return (
     <>
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      {/* design-critique: sm:items-end → sm:items-center so the right
+          cluster doesn't land mid-heading on narrow viewports where
+          the heading wraps to two lines. */}
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-lg sm:text-[22px] font-semibold leading-relaxed text-foreground">
             {CLIENTS_COPY.pageHeading}
@@ -96,35 +99,45 @@ export function ClientsGrid({ workspaces, tier, used, limit }: ClientsGridProps)
             {CLIENTS_COPY.pageSubheading}
           </p>
         </div>
-        <TooltipProvider delay={150}>
-          <div className="flex items-center gap-3">
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Badge
-                    variant={atLimit ? "destructive" : "secondary"}
-                    tabIndex={0}
-                    aria-label={usageAriaLabel(used, limit, tier)}
-                  />
-                }
+        {/* design-critique: hide the header CTA when empty. The empty
+            state's own CTA is the only call to action on the page, so
+            two competing CTAs (with different labels) flatten the
+            hierarchy. Keep the header CTA only when workspaces exist. */}
+        {workspaces.length > 0 ? (
+          <TooltipProvider delay={150}>
+            <div className="flex items-center gap-3">
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Badge
+                      variant={atLimit ? "destructive" : "secondary"}
+                      tabIndex={0}
+                      aria-label={usageAriaLabel(used, limit, tier)}
+                    />
+                  }
+                >
+                  {usageLabel(used, limit, tier)}
+                </TooltipTrigger>
+                <TooltipContent>
+                  {atLimit
+                    ? CLIENTS_COPY.atLimitTooltip
+                    : usageAriaLabel(used, limit, tier)}
+                </TooltipContent>
+              </Tooltip>
+              {/* design-critique: at-limit drops the CTA to outline so
+                  it stops competing with the destructive badge. Under
+                  limit it stays as the default primary. */}
+              <Button
+                type="button"
+                onClick={handleCreateClick}
+                variant={atLimit ? "outline" : "default"}
+                aria-haspopup={atLimit ? "dialog" : undefined}
               >
-                {usageLabel(used, limit, tier)}
-              </TooltipTrigger>
-              <TooltipContent>
-                {atLimit
-                  ? CLIENTS_COPY.atLimitTooltip
-                  : usageAriaLabel(used, limit, tier)}
-              </TooltipContent>
-            </Tooltip>
-            <Button
-              type="button"
-              onClick={handleCreateClick}
-              aria-haspopup={atLimit ? "dialog" : undefined}
-            >
-              {CLIENTS_COPY.primaryCta}
-            </Button>
-          </div>
-        </TooltipProvider>
+                {CLIENTS_COPY.primaryCta}
+              </Button>
+            </div>
+          </TooltipProvider>
+        ) : null}
       </header>
 
       {workspaces.length === 0 ? (

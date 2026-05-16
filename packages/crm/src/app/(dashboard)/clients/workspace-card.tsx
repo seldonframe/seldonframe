@@ -70,9 +70,13 @@ export function WorkspaceCard({ workspace }: WorkspaceCardProps) {
   const publicHost = workspace.publicUrl.replace(/^https?:\/\//, "");
 
   return (
+    // design-critique: dropped hover ring — the card isn't a single
+    // clickable target (URL + CTA are independent links), so a
+    // card-level hover affordance is misleading. focus-within ring
+    // stays since it reflects a real focus state on a child element.
     <Card
       data-slot="workspace-card"
-      className="transition-shadow hover:ring-foreground/20 focus-within:ring-foreground/30"
+      className="transition-shadow focus-within:ring-foreground/30"
     >
       <CardHeader>
         <div className="flex items-start justify-between gap-3">
@@ -116,7 +120,15 @@ export function WorkspaceCard({ workspace }: WorkspaceCardProps) {
           </div>
         </dl>
 
-        <p className="text-xs text-muted-foreground">
+        {/* design-critique: promoted from orphaned body text to a
+            bullet-prefixed metadata strip. The dot anchors the row
+            visually so it doesn't get skipped between the stat tiles
+            and the CTA, but stays lighter than either neighbor. */}
+        <p className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span
+            aria-hidden="true"
+            className="inline-block size-1.5 shrink-0 rounded-full bg-muted-foreground/60"
+          />
           {CLIENTS_COPY.formatLeadsThisWeek(workspace.newLeadsThisWeek)}
         </p>
 
