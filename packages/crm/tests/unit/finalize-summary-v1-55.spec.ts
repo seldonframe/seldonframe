@@ -152,19 +152,36 @@ describe("buildFinalizeSummary — v1.55.x LLM key + client portal callouts", ()
     );
   });
 
-  test("includes the client-portal demo callout with slug + tier upgrade nudge", () => {
+  test("includes the client-portal demo callout pointing at the new /demo URL", () => {
     const out = buildFinalizeSummary({ snapshot: baseSnapshot, durationSec: 32, aestheticArchetype: "bold-urgency" });
     assert.ok(
       out.includes("Demo the client portal"),
       "client-portal callout should appear",
     );
+    // v1.55.x — switched the demo callout from /login (magic-link gated)
+    // to /demo (one-click, no login). Demo data is auto-seeded at
+    // workspace creation so the prospect lands in a populated portal.
     assert.ok(
-      out.includes("/customer/ignitify-cooling-and-heating/login"),
-      "callout should use the workspace slug to build the portal login URL",
+      out.includes("/customer/ignitify-cooling-and-heating/demo"),
+      "callout should point at the new /demo one-click URL",
+    );
+    // The demo CALLOUT specifically must point at /demo, not /login.
+    // (The fixture's tier.client_portal_url still includes a /login
+    // path — that's a separate snapshot field surfaced in the Tier
+    // line, distinct from the demo callout's URL.)
+    const calloutStart = out.indexOf("Demo the client portal");
+    const calloutSlice = out.slice(calloutStart, calloutStart + 400);
+    assert.ok(
+      calloutSlice.includes("/demo"),
+      "the demo callout slice should contain the /demo URL",
     );
     assert.ok(
-      out.includes("magic link"),
-      "should explain the magic-link sign-in",
+      !calloutSlice.includes("/customer/ignitify-cooling-and-heating/login"),
+      "the demo callout slice should NOT contain the legacy /login URL",
+    );
+    assert.ok(
+      out.includes("one-click") || out.includes("no login"),
+      "should signal the demo is one-click / no-login",
     );
     assert.ok(
       out.includes("Growth ($29/mo)"),
