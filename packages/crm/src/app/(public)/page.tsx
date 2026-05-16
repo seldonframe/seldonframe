@@ -1,15 +1,35 @@
 // Marketing landing page (server wrapper).
-// Workstream 2 — replaces the prior LandingHero/LandingNav composition
-// with the Gemini-authored landing client (`./landing-client.tsx`).
-// Preserves the existing auth redirect: signed-in users go straight to
-// the dashboard, unauthenticated visitors see the marketing surface.
+//
+// Cut C pivot: composes the named Landing* section components
+// (hero, soul, seldon-it, bento, agencies, marketplace, why-now,
+// final-cta, footer) so the marketing site funnels signed-out
+// agency visitors into /signup (Cut A's Google OAuth + email
+// signup). Earlier Workstream-2 surface (landing-client.tsx) shipped
+// without a Sign Up CTA, which made the entire web-onboarding flow
+// (Cuts A + B) invisible to prospective users.
+//
+// Preserves the existing auth redirect: signed-in users go to the
+// dashboard; unauthenticated visitors see the marketing surface.
+//
+// Order of <main> children is curated for funnel flow:
+//   hero → how-it-works → soul → seldon-it → bento
+//   → demo → agencies → marketplace → why-now → final-cta
 
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { MarketingFaq } from "@/components/marketing/faq";
 
-import SeldonFrameLandingPage from "./landing-client";
+import { LandingNav } from "@/components/landing/nav";
+import { LandingHero } from "@/components/landing/hero";
+import { LandingSoulSection } from "@/components/landing/soul-section";
+import { LandingSeldonItSection } from "@/components/landing/seldon-it-section";
+import { LandingBentoSection } from "@/components/landing/bento-section";
+import { LandingAgenciesSection } from "@/components/landing/agencies-section";
+import { LandingMarketplaceSection } from "@/components/landing/marketplace-section";
+import { LandingWhyNowSection } from "@/components/landing/why-now-section";
+import { LandingFinalCta } from "@/components/landing/final-cta";
+import { LandingFooter } from "@/components/landing/footer";
 
 export const metadata: Metadata = {
   title: "SeldonFrame — Open-source alternative to GoHighLevel",
@@ -39,9 +59,20 @@ export default async function PublicHomePage() {
   }
 
   return (
-    <>
-      <SeldonFrameLandingPage />
+    <div className="min-h-screen bg-[#09090b] text-zinc-100">
+      <LandingNav />
+      <main>
+        <LandingHero />
+        <LandingSoulSection />
+        <LandingSeldonItSection />
+        <LandingBentoSection />
+        <LandingAgenciesSection />
+        <LandingMarketplaceSection />
+        <LandingWhyNowSection />
+        <LandingFinalCta />
+      </main>
       <MarketingFaq />
-    </>
+      <LandingFooter />
+    </div>
   );
 }
