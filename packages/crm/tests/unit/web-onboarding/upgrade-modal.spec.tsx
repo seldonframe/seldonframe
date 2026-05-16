@@ -1,6 +1,13 @@
 // packages/crm/tests/unit/web-onboarding/upgrade-modal.spec.tsx
-// React Testing Library is already a transitive dep via the existing
-// component snapshot tests in packages/crm/tests/unit/blocks/.
+//
+// Bootstrap: run with `node --import tsx --import ./tests/setup-dom.ts --test ...`
+// (see packages/crm/tests/setup-dom.ts) — jsdom is mounted before React imports
+// so the Dialog/Card/Button shadcn primitives render into a real DOM.
+//
+// Query discipline: base-ui's Dialog mirrors title/description into both the
+// visible content and a screen-reader-only node, so plain `getByText` matches
+// multiple elements. Prefer `getAllByText(...).length > 0` for presence checks
+// and `getByRole("button", ...)` for click targets.
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { render, screen, fireEvent } from "@testing-library/react";
@@ -11,32 +18,53 @@ import { UpgradeModal } from "../../../src/components/billing/upgrade-modal";
 describe("UpgradeModal", () => {
   test("renders both tier cards when open", () => {
     render(<UpgradeModal open={true} onOpenChange={() => {}} tier="free" used={1} limit={1} />);
-    assert.ok(screen.getByText(/Growth/i));
-    assert.ok(screen.getByText(/Scale/i));
-    assert.ok(screen.getByText(/\$29/));
-    assert.ok(screen.getByText(/\$99/));
+    // base-ui Dialog renders title/description into a visible + an SR-only
+    // node, so plain getByText fails with "multiple elements". Use queryAllByText
+    // for presence-only assertions.
+    assert.ok(screen.queryAllByText(/Growth/i).length > 0, "Growth card not rendered");
+    assert.ok(screen.queryAllByText(/Scale/i).length > 0, "Scale card not rendered");
+    assert.ok(screen.queryAllByText(/\$29/).length > 0, "Growth price not rendered");
+    assert.ok(screen.queryAllByText(/\$99/).length > 0, "Scale price not rendered");
   });
 
   test("interpolates used and limit into the subtitle", () => {
     render(<UpgradeModal open={true} onOpenChange={() => {}} tier="free" used={1} limit={1} />);
-    assert.ok(screen.getByText(/1 of 1 workspaces used/));
+    assert.ok(
+      screen.queryAllByText(/1 of 1 workspaces used/).length > 0,
+      "Dynamic subtitle missing"
+    );
   });
 
-  test("calls onOpenChange(false) when the close link is clicked", () => {
+  test("calls onOpenChange(false) when the close button is clicked", () => {
     let opened = true;
     render(
-      <UpgradeModal open={opened} onOpenChange={(next) => { opened = next; }} tier="free" used={1} limit={1} />
+      <UpgradeModal
+        open={opened}
+        onOpenChange={(next) => {
+          opened = next;
+        }}
+        tier="free"
+        used={1}
+        limit={1}
+      />
     );
-    fireEvent.click(screen.getByText(/Maybe later/i));
+    // Use role-based query so we hit the actual button element (not the
+    // aria-label string that getByText would also match).
+    const closeBtn = screen.getByRole("button", {
+      name: /maybe later.*close upgrade dialog/i,
+    });
+    fireEvent.click(closeBtn);
     assert.equal(opened, false);
   });
 
   test("upgrade buttons POST to /api/stripe/checkout with the correct priceId", async () => {
-    const fetchMock = async (url: string, init?: RequestInit) => {
-      fetchMock.calls.push({ url, body: init?.body ? JSON.parse(String(init.body)) : null });
-      return new Response(JSON.stringify({ url: "https://checkout.stripe.com/test" }), { status: 200 });
-    };
-    fetchMock.calls = [] as Array<{ url: string; body: unknown }>;
+    const fetchMock = Object.assign(
+      async (url: string, init?: RequestInit) => {
+        fetchMock.calls.push({ url, body: init?.body ? JSON.parse(String(init.body)) : null });
+        return new Response(JSON.stringify({ url: "https://checkout.stripe.com/test" }), { status: 200 });
+      },
+      { calls: [] as Array<{ url: string; body: unknown }> }
+    );
     const originalFetch = globalThis.fetch;
     globalThis.fetch = fetchMock as unknown as typeof fetch;
     try {
@@ -44,7 +72,8 @@ describe("UpgradeModal", () => {
       fireEvent.click(screen.getByRole("button", { name: /upgrade to growth/i }));
       // Allow the click handler microtask to flush.
       await Promise.resolve();
-      assert.equal(fetchMock.calls.length, 1);
+      await Promise.resolve();
+      assert.equal(fetchMock.calls.length, 1, "Stripe checkout endpoint was not called");
       assert.equal(fetchMock.calls[0]!.url, "/api/stripe/checkout");
       assert.match(JSON.stringify(fetchMock.calls[0]!.body), /priceId/);
     } finally {
