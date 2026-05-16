@@ -18,7 +18,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { MarketingFaq } from "@/components/marketing/faq";
 
 import { LandingNav } from "@/components/landing/nav";
 import { LandingHero } from "@/components/landing/hero";
@@ -31,6 +30,7 @@ import { LandingAgenciesSection } from "@/components/landing/agencies-section";
 import { LandingMarketplaceSection } from "@/components/landing/marketplace-section";
 import { LandingMarketingPricingSection } from "@/components/landing/marketing-pricing-section";
 import { LandingOpenSourceSection } from "@/components/landing/open-source-section";
+import { LandingMarketingFaqSection } from "@/components/landing/marketing-faq-section";
 import { LandingWhyNowSection } from "@/components/landing/why-now-section";
 import { LandingFinalCta } from "@/components/landing/final-cta";
 import { LandingFooter } from "@/components/landing/footer";
@@ -76,10 +76,10 @@ export default async function PublicHomePage() {
         <LandingMarketplaceSection />
         <LandingMarketingPricingSection />
         <LandingOpenSourceSection />
+        <LandingMarketingFaqSection />
         <LandingWhyNowSection />
         <LandingFinalCta />
       </main>
-      <MarketingFaq />
       <LandingFooter />
     </div>
   );
