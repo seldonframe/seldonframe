@@ -24,3 +24,18 @@ export const FEATURE_TIERS: Record<FeatureFlag, MinimumTier> = {
   white_label_portal: "scale",
   priority_support: "scale",
 };
+
+const TIER_RANK: Record<string, number> = {
+  free: 0,
+  growth: 1,
+  scale: 2,
+};
+
+export function tierMeetsMinimum(
+  currentTier: string | null | undefined,
+  minimumTier: MinimumTier
+): boolean {
+  const currentRank = TIER_RANK[currentTier ?? "free"] ?? 0;
+  const minimumRank = TIER_RANK[minimumTier];
+  return currentRank >= minimumRank;
+}
