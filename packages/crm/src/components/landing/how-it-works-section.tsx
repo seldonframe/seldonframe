@@ -43,13 +43,14 @@ export function LandingHowItWorksSection() {
   return (
     <section
       id="how-it-works"
+      aria-labelledby="how-it-works-heading"
       className="mx-auto max-w-5xl border-t border-zinc-800/30 px-6 py-16 md:py-20"
     >
       <div className="text-center">
         <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">
           How it works
         </p>
-        <h2 className="text-3xl font-bold text-zinc-100 md:text-4xl">
+        <h2 id="how-it-works-heading" className="text-3xl font-bold text-zinc-100 md:text-4xl">
           Paste a URL. Walk away with a client-ready workspace. 3 steps.
         </h2>
       </div>
@@ -69,13 +70,14 @@ export function LandingHowItWorksSection() {
             <div className="mt-5 overflow-hidden rounded-lg border border-zinc-800">
               <Image
                 src={step.screenshot}
-                alt={step.alt}
+                alt=""
+                role="presentation"
                 width={640}
                 height={400}
                 className="h-auto w-full"
                 unoptimized
               />
-              <p className="border-t border-zinc-800 bg-zinc-950 px-3 py-2 text-center text-[10px] uppercase tracking-widest text-zinc-600">
+              <p className="border-t border-zinc-800 bg-zinc-950 px-3 py-2 text-center text-[10px] uppercase tracking-widest text-zinc-400">
                 Real screenshot lands in week 6
               </p>
             </div>

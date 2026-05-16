@@ -49,7 +49,12 @@ describe("LandingHowItWorksSection — 3-step layout", () => {
     assert.match(text, /60 seconds/i);
   });
 
-  test("all 3 step screenshots have non-empty alt text", () => {
+  test("all 3 step screenshots are a11y-correct (decorative or descriptive)", () => {
+    // Week 5: screenshots are 1x1 placeholders → marked decorative
+    // (alt="" + role="presentation") so screen readers don't announce
+    // content that isn't shown. Week 6 (Phase 9) swaps in real
+    // captures and restores non-empty alt text. Test accepts either
+    // shape so the assertion survives both states.
     const result = LandingHowItWorksSection();
     const imgs = flatten(result).filter((el) => {
       const p = el.props as { src?: string } | undefined;
@@ -57,8 +62,14 @@ describe("LandingHowItWorksSection — 3-step layout", () => {
     });
     assert.equal(imgs.length, 3);
     for (const img of imgs) {
-      const alt = (img.props as { alt?: string }).alt;
-      assert.ok(typeof alt === "string" && alt.length > 0);
+      const props = img.props as { alt?: string; role?: string };
+      const altIsString = typeof props.alt === "string";
+      const isDecorative = props.alt === "" && props.role === "presentation";
+      const isDescriptive = altIsString && (props.alt?.length ?? 0) > 0;
+      assert.ok(
+        isDecorative || isDescriptive,
+        "screenshot must be either decorative (alt='' + role='presentation') or descriptive (non-empty alt)",
+      );
     }
   });
 });
