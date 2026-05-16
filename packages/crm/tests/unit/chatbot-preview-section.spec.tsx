@@ -1,9 +1,14 @@
-// Tests for the v1.55.0 ChatbotPreview section component.
+// Tests for the v1.55.1 ChatbotPreview section component.
 //
-// Renders the workspace name, tagline, an embedded chatbot script tag,
+// Renders the workspace name, tagline, a 6-step operator launch wizard,
 // and the copy-snippet helper for the agency operator. Uses
 // renderToString (no jsdom) — matches the existing test patterns
 // for other landing section components.
+//
+// v1.55.1 — replaced the "Try the AI receptionist" pill test with
+// wizard-content tests. The wizard guides operators through test →
+// customize → eval → promote → embed → watch leads, with deep links
+// into the agents + contacts dashboards.
 
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
@@ -38,7 +43,7 @@ describe("ChatbotPreviewSection", () => {
     );
   });
 
-  test("renders the chat-bubble SVG icon in the 'Try the AI receptionist' pill", () => {
+  test("renders the 6-step operator launch wizard", () => {
     const html = renderToString(
       <ChatbotPreviewSection
         businessName="Acme"
@@ -46,13 +51,44 @@ describe("ChatbotPreviewSection", () => {
         embedUrl="https://example.com/embed.js"
       />,
     );
-    // SVG path data from the chat-bubble icon — verifies the new icon is
-    // rendered instead of the ↘ arrow.
+    // Header copy for the wizard card.
+    assert.ok(
+      html.includes("6 steps to launch"),
+      "wizard heading should appear",
+    );
+    // At least three step labels — confirms ordered list is rendered.
+    assert.ok(
+      html.includes("Test the chatbot"),
+      "step 1 label should be present",
+    );
+    assert.ok(
+      html.includes("Customize behavior"),
+      "step 2 label should be present",
+    );
+    assert.ok(
+      html.includes("Paste on your client"),
+      "step 5 label should be present",
+    );
+    // SVG chat-bubble icon still rendered as a visual anchor for the
+    // wizard (moved out of the pill, now sits next to the wizard heading).
     assert.ok(
       html.includes('d="M9 18h-3'),
-      "chat-bubble SVG path should be present in the pill",
+      "chat-bubble SVG path should be present in the wizard",
     );
-    assert.ok(html.includes("Try the AI receptionist"), "pill label still present");
+  });
+
+  test("links to the agents dashboard from the wizard", () => {
+    const html = renderToString(
+      <ChatbotPreviewSection
+        businessName="Acme"
+        tagline="test"
+        embedUrl="https://example.com/embed.js"
+      />,
+    );
+    assert.ok(
+      html.includes("app.seldonframe.com/agents"),
+      "wizard should link to the agents dashboard URL",
+    );
   });
 
   test("shows the paste-snippet helper for the agency operator", () => {
