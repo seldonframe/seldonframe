@@ -1,8 +1,8 @@
 // v1.55.0 — Default public surface for new workspaces when no landing
-// page is generated. Renders a full-page branded chat interface
-// (NOT the floating widget) so the agency operator can share a URL
-// with their client to demo the AI receptionist before pasting the
-// embed snippet on the client's existing site.
+// page is generated. The chatbot loads as a floating widget in the
+// bottom corner (via embed.js). This page renders the workspace's
+// branded header, a callout pointing to the corner widget, and the
+// copy-snippet helper for the agency operator.
 //
 // Theme tokens (--sf-bg, --sf-text, --sf-primary, --sf-accent) are
 // applied by the existing PublicThemeProvider higher in the tree.
@@ -23,7 +23,7 @@ export function ChatbotPreviewSection(props: ChatbotPreviewSectionContent) {
         color: "var(--sf-text)",
       }}
     >
-      <div className="max-w-3xl w-full mx-auto text-center">
+      <div className="max-w-2xl w-full mx-auto text-center">
         <h1 className="text-4xl md:text-5xl font-semibold tracking-tight">
           {businessName}
         </h1>
@@ -34,26 +34,32 @@ export function ChatbotPreviewSection(props: ChatbotPreviewSectionContent) {
           {tagline}
         </p>
 
-        {/* The actual chatbot — embed.js loads the floating widget.
-            On this demo page, the widget is the primary content; on
-            real client sites where the snippet gets pasted, it's an
-            unobtrusive floating button. */}
-        <div className="mt-12">
-          <div
-            id="seldonframe-chatbot-preview-root"
-            className="rounded-2xl border p-8 min-h-[400px] flex items-center justify-center"
-            style={{ borderColor: "var(--sf-accent)" }}
-          >
-            <p className="opacity-60">
-              Loading your AI receptionist…
-            </p>
-          </div>
-          <script async src={embedUrl} />
+        {/* Callout pointing to the floating widget. The embed.js script
+            below mounts the chatbot as a floating widget in the bottom
+            corner (bottom-right or bottom-left depending on theme).
+            We don't render a placeholder div here — the widget is the
+            chat UI. */}
+        <div
+          className="mt-12 inline-flex items-center gap-3 rounded-full px-6 py-3 text-sm font-medium"
+          style={{
+            backgroundColor: "var(--sf-accent)",
+            color: "var(--sf-bg)",
+            opacity: 0.95,
+          }}
+        >
+          <span>Try the AI receptionist</span>
+          <span className="text-lg" aria-hidden="true">↘</span>
         </div>
+        <p className="mt-3 text-xs opacity-50">
+          Chat widget loads in the corner of this page.
+        </p>
+
+        {/* Embed script — mounts the floating widget */}
+        <script async src={embedUrl} />
 
         {/* Operator helper: the embed snippet to copy onto the client's
-            existing site. Rendered as a literal code block so the
-            operator can select + copy. */}
+            existing site. The agency operator's primary takeaway from
+            this page. */}
         <div
           className="mt-16 pt-8 border-t text-left"
           style={{ borderColor: "var(--sf-accent)", opacity: 0.85 }}
