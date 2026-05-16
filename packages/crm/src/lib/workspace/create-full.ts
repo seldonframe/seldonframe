@@ -18,7 +18,7 @@
 // theme tokens, booking duration). Adding a new business type =
 // adding one entry in lib/crm/personality.ts.
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   bookings,
@@ -34,6 +34,7 @@ import { classifyBusinessTypeFromSoul } from "@/lib/page-schema/classify-busines
 import { inferTimezone } from "@/lib/workspace/infer-timezone";
 import { trackEvent } from "@/lib/analytics/track";
 import type { AestheticArchetypeId } from "@/lib/workspace/aesthetic-archetypes";
+import { buildBusinessHoursSoulPatch } from "@/lib/workspace/business-hours-soul";
 // v1.55.0 — enhanceLandingForWorkspace is no longer called from the
 // default workspace creation path. The landing-page-creation SKILL.md
 // triggers it indirectly via persist_block when operators opt into
@@ -473,6 +474,51 @@ export async function createFullWorkspace(
         err instanceof Error ? err.message : String(err),
       );
     }
+  }
+
+  // v1.56.0 — Step 12.6: PERSIST business_hours to soul JSONB.
+  //
+  // The chatbot's system prompt reads soul.business_hours to answer
+  // "what are your hours?" with confidence. When the URL-extraction
+  // flow surfaced hours, we write them with assumed: false. When the
+  // operator didn't have hours visible on their site (or paste flow),
+  // we still write the Mon-Fri 9-5 default but mark assumed: true so
+  // the chatbot disclaims them ("standard hours — confirm with caller
+  // before quoting") instead of presenting them as ground truth.
+  //
+  // ALWAYS runs (even when no weekly_hours provided) — the assumed-true
+  // default is intentional. Soft-fail: never block creation on this.
+  //
+  // Uses JSONB || operator so we merge into the existing soul without
+  // clobbering whatever the soul installer wrote earlier (industry,
+  // services, business_description, …).
+  try {
+    const patch = buildBusinessHoursSoulPatch(input.weekly_hours ?? null);
+    await db
+      .update(organizations)
+      .set({
+        soul: sql`COALESCE(${organizations.soul}, '{}'::jsonb) || ${JSON.stringify(
+          patch,
+        )}::jsonb`,
+        updatedAt: new Date(),
+      })
+      .where(eq(organizations.id, createResult.orgId));
+
+    console.log(
+      JSON.stringify({
+        event: "business_hours_persisted_to_soul",
+        workspace_id: createResult.orgId,
+        source: patch.business_hours_assumed
+          ? "default_assumed"
+          : "url_extraction",
+        assumed: patch.business_hours_assumed,
+      }),
+    );
+  } catch (err) {
+    console.warn(
+      `[create-full] business_hours soul write failed for ${createResult.orgId}:`,
+      err instanceof Error ? err.message : String(err),
+    );
   }
 
   // v1.55.0 — REMOVED: enhanceLandingForWorkspace (the LLM-driven block
