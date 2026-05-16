@@ -38,19 +38,21 @@ describe("ChatbotPreviewSection", () => {
     );
   });
 
-  test("injects the embed.js script tag for the agent", () => {
+  test("renders the chat-bubble SVG icon in the 'Try the AI receptionist' pill", () => {
     const html = renderToString(
       <ChatbotPreviewSection
         businessName="Acme"
         tagline="test"
-        embedUrl="https://app.seldonframe.com/api/v1/public/agent/acme--default/embed.js"
+        embedUrl="https://example.com/embed.js"
       />,
     );
+    // SVG path data from the chat-bubble icon — verifies the new icon is
+    // rendered instead of the ↘ arrow.
     assert.ok(
-      html.includes('src="https://app.seldonframe.com/api/v1/public/agent/acme--default/embed.js"'),
-      "embed URL should appear as a script tag src attribute",
+      html.includes('d="M9 18h-3'),
+      "chat-bubble SVG path should be present in the pill",
     );
-    assert.ok(html.includes("async"), "script tag should be async");
+    assert.ok(html.includes("Try the AI receptionist"), "pill label still present");
   });
 
   test("shows the paste-snippet helper for the agency operator", () => {

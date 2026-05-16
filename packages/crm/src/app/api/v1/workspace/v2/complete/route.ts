@@ -18,6 +18,7 @@ import { listArchetypes } from "@/lib/agents/archetypes";
 import { guardApiRequest } from "@/lib/api/guard";
 import { logEvent } from "@/lib/observability/log";
 import { listBlockNames } from "@/lib/page-blocks/registry";
+import { setPublicChatbotEmbed } from "@/lib/agents/public-embed";
 import { seedChatbotPreviewLandingForOrg } from "@/lib/workspace/seed-chatbot-preview-landing";
 
 type Body = {
@@ -150,6 +151,27 @@ export async function POST(request: Request) {
           reason: "create_agent_threw",
           error: err instanceof Error ? err.message : String(err),
         },
+        { request, orgId: workspaceId, severity: "warn" },
+      );
+    }
+  }
+
+  // v1.55.0 — Register the chatbot embed at the workspace level so the
+  // public page route handler (s/[orgSlug]/[...slug]/page.tsx) injects
+  // <ChatbotEmbedScript> on every render. This is the EXISTING proven
+  // pattern used by the embed_chatbot_on_workspace_landing MCP tool;
+  // calling it here makes auto-created chatbots visible on the preview
+  // page without operator intervention.
+  if (chatbotAgentId && chatbotEmbedUrl) {
+    try {
+      await setPublicChatbotEmbed(workspaceId, {
+        embedUrl: chatbotEmbedUrl,
+        agentId: chatbotAgentId,
+      });
+    } catch (err) {
+      logEvent(
+        "v2_chatbot_embed_register_failed",
+        { reason: err instanceof Error ? err.message : String(err) },
         { request, orgId: workspaceId, severity: "warn" },
       );
     }
