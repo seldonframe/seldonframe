@@ -14,9 +14,11 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { agents, blockInstances, organizations } from "@/db/schema";
 import { createAgent } from "@/lib/agents/store";
+import { listArchetypes } from "@/lib/agents/archetypes";
 import { guardApiRequest } from "@/lib/api/guard";
 import { logEvent } from "@/lib/observability/log";
 import { listBlockNames } from "@/lib/page-blocks/registry";
+import { seedChatbotPreviewLandingForOrg } from "@/lib/workspace/seed-chatbot-preview-landing";
 
 type Body = {
   workspace_id?: unknown;
@@ -93,6 +95,7 @@ export async function POST(request: Request) {
   let chatbotAgentId: string | null = null;
   let chatbotEmbedUrl: string | null = null;
   let chatbotEmbedSnippet: string | null = null;
+  let agentResult: Awaited<ReturnType<typeof createAgent>> | null = null;
 
   const [existingChatbot] = await db
     .select({ id: agents.id, slug: agents.slug })
@@ -112,7 +115,7 @@ export async function POST(request: Request) {
     chatbotEmbedSnippet = `<script src="${chatbotEmbedUrl}" async></script>`;
   } else {
     try {
-      const agentResult = await createAgent({
+      agentResult = await createAgent({
         orgId: workspaceId,
         archetype: "website-chatbot",
         channel: "web_chat",
@@ -120,6 +123,10 @@ export async function POST(request: Request) {
         // Empty FAQ scaffold — operator refines via update_website_chatbot
         // before calling publish_agent.
         faq: [],
+        // v1.55.0 — TEST status so the chatbot responds on the preview page
+        // immediately. Operator promotes to LIVE via publish_agent when the
+        // client is ready to paste the embed on their real site.
+        status: "test",
       });
       if (agentResult.ok) {
         chatbotAgentId = agentResult.agent.id;
@@ -148,6 +155,50 @@ export async function POST(request: Request) {
     }
   }
 
+  // v1.55.0 — Replace the legacy soul-driven landing with a chatbotPreview
+  // section. This IS the default public surface for new workspaces.
+  // Operator can replace it later via the landing-page-creation SKILL.md.
+  //
+  // Soft-fail: if the seed fails, the workspace still has its legacy
+  // landing in place (created by anonymous-workspace.ts upstream) — the
+  // preview just shows the old generic content instead of the chatbot.
+  if (chatbotAgentId) {
+    const agentSlug =
+      (existingChatbot?.slug as string | undefined) ??
+      (agentResult?.ok ? agentResult.agent.slug : undefined);
+
+    if (agentSlug) {
+      const seedResult = await seedChatbotPreviewLandingForOrg({
+        orgId: workspaceId,
+        agentSlug,
+        workspaceBaseDomain: baseDomain,
+      });
+      if (!seedResult.ok) {
+        logEvent(
+          "v2_chatbot_preview_seed_failed",
+          { reason: seedResult.reason },
+          { request, orgId: workspaceId, severity: "warn" },
+        );
+      }
+    }
+  }
+
+  // v1.55.0 — Build the static 7-automation list from the archetype
+  // registry. Excludes "website-chatbot" since we already auto-created
+  // that one above. configured: false is a v1.55 placeholder — Brain v2
+  // can later flip these per workspace.
+  const availableAutomations = listArchetypes()
+    .filter((a) => a.id !== "website-chatbot")
+    .map((a) => ({
+      id: a.id,
+      name: a.name ?? a.id,
+      configured: false,
+    }));
+
+  const appHost = (process.env.SELDONFRAME_APP_BASE ?? `https://${baseDomain}`).replace(/\/$/, "");
+  const automationsUrl = `${appHost}/automations`;
+  const adminUrl = `${appHost}/admin/${encodeURIComponent(workspaceId)}`;
+
   return NextResponse.json({
     ok: true,
     workspace_id: workspaceId,
@@ -161,10 +212,34 @@ export async function POST(request: Request) {
       })),
       missing,
     },
-    // NEW (2026-05-15): auto-chatbot scaffold. Null when soft-fail fired.
+
+    // v1.55.0 — chatbot promoted to first-class object
+    chatbot: chatbotAgentId
+      ? {
+          agent_id: chatbotAgentId,
+          embed_url: chatbotEmbedUrl,
+          embed_snippet: chatbotEmbedSnippet,
+          preview_url: publicUrl,
+          status: "test" as const,
+        }
+      : null,
+
+    // v1.55.0 — ops surfaces grouped
+    ops_stack: {
+      admin_url: adminUrl,
+      booking_url: `${publicUrl}/book`,
+      intake_url: `${publicUrl}/intake`,
+      automations_url: automationsUrl,
+    },
+
+    // v1.55.0 — 7 ready-to-deploy automations (statically derived from registry)
+    available_automations: availableAutomations,
+
+    // Legacy fields retained for backward compat with v1.53 MCP clients.
     chatbot_agent_id: chatbotAgentId,
     chatbot_embed_url: chatbotEmbedUrl,
     chatbot_embed_snippet: chatbotEmbedSnippet,
+
     next_steps:
       missing.length > 0
         ? [
