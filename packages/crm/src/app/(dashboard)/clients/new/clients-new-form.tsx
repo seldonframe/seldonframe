@@ -36,13 +36,20 @@ import { UpgradeModal } from "@/components/billing/upgrade-modal";
 // to stay consistent — do not edit ad-hoc.
 const COPY = {
   hero: "Spin up a client workspace",
+  // design-critique: pulled "in 60 seconds" out of the body subtext and into
+  // the hero as a two-tone accent so the speed promise IS the headline.
+  heroAccent: "in 60 seconds",
   subtext:
-    "Paste your client's website. We'll build their CRM, booking page, intake form, and AI chatbot in about 60 seconds.",
+    "Paste your client's website. We'll build their CRM, booking page, intake form, and AI chatbot in one pass.",
   inputLabel: "Client website URL",
   placeholder: "https://your-client-business.com",
   primary: "Build workspace",
   primaryPending: "Building...",
   secondary: "Skip and set one up by hand",
+  // design-critique: gave the right column a deliberate heading + subhead so
+  // the at-rest state reads as a status surface, not as broken placeholder rows.
+  asideHeading: "Live build",
+  asideSubhead: "We'll narrate every step.",
   progress: {
     fetching: "Reading the site",
     extracting: "Pulling business facts",
@@ -66,6 +73,9 @@ const COPY = {
     byokLabel: "Anthropic API key",
     byokSave: "Save key and continue",
     byokSaving: "Saving...",
+    // design-critique: bail-out affordance so the BYOK swap-in doesn't feel
+    // like a one-way trap.
+    byokCancel: "Use a different approach",
   },
 };
 
@@ -218,7 +228,13 @@ export function ClientsNewForm() {
   return (
     <div className="grid grid-cols-1 gap-8 md:grid-cols-[1fr_320px]">
       <section>
-        <h1 className="text-3xl font-semibold tracking-tight">{COPY.hero}</h1>
+        {/* design-critique: two-tone hero pulls "in 60 seconds" into the
+            headline so the speed promise is the first thing the eye lands on,
+            not buried in body copy. */}
+        <h1 className="text-4xl font-semibold tracking-tight">
+          {COPY.hero}{" "}
+          <span className="text-muted-foreground">{COPY.heroAccent}</span>
+        </h1>
         <p className="mt-2 text-sm text-muted-foreground">{COPY.subtext}</p>
 
         {!needsByok ? (
@@ -246,17 +262,22 @@ export function ClientsNewForm() {
             <Button type="submit" disabled={submitted} className="h-12 w-full">
               {submitted ? COPY.primaryPending : COPY.primary}
             </Button>
-            <p className="text-center text-xs">
+            {/* design-critique: moved the skip link to a smaller right-aligned
+                affordance so it stays available without competing with the
+                primary path. inline-block + py-2 gives a 36px+ touch zone. */}
+            <p className="text-right">
               <Link
                 href="/dashboard"
-                className="text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                className="inline-block py-2 text-xs text-muted-foreground/80 underline underline-offset-2 hover:text-foreground"
               >
                 {COPY.secondary}
               </Link>
             </p>
           </form>
         ) : (
-          <div className="mt-6 space-y-3">
+          // design-critique: animate-in fade so the BYOK swap doesn't feel
+          // like the form glitched.
+          <div className="mt-6 space-y-3 animate-in fade-in-0 duration-200">
             <h2 className="text-lg font-medium">{COPY.errors.byokHeading}</h2>
             <p className="text-sm text-muted-foreground">{COPY.errors.byokBody}</p>
             <Label htmlFor="byok-key" className="block text-sm">
@@ -277,6 +298,19 @@ export function ClientsNewForm() {
               className="h-12 w-full"
             >
               {byokSaving ? COPY.errors.byokSaving : COPY.errors.byokSave}
+            </Button>
+            {/* design-critique: bail-out so the BYOK prompt isn't a trap. */}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setNeedsByok(false);
+                setByokKey("");
+              }}
+              className="w-full text-muted-foreground"
+            >
+              {COPY.errors.byokCancel}
             </Button>
           </div>
         )}
@@ -303,12 +337,21 @@ export function ClientsNewForm() {
         ) : null}
       </section>
 
+      {/* design-critique: dropped bg-card (page bg already card-tinted in
+          light theme → invisible edge), added pt-8 to push the column below
+          the hero so the eye reads left first. */}
       <aside
         aria-live="polite"
         aria-label="Workspace build progress"
-        className="rounded-lg border bg-card p-4"
+        className="rounded-lg border p-4 md:mt-8"
       >
-        <ol className="space-y-3 text-sm">
+        {/* design-critique: heading + subhead so the at-rest state reads as
+            a deliberate status surface, not six greyed-out empty rows. */}
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          {COPY.asideHeading}
+        </p>
+        <p className="mt-1 text-xs text-muted-foreground/80">{COPY.asideSubhead}</p>
+        <ol className="mt-4 space-y-3 text-sm">
           {PROGRESS_KEYS.map((key) => {
             const isDone = done[key];
             return (
@@ -318,21 +361,24 @@ export function ClientsNewForm() {
                 data-state={isDone ? "done" : "pending"}
                 className={
                   isDone
-                    ? "flex items-start gap-2 text-foreground transition-colors"
-                    : "flex items-start gap-2 text-muted-foreground transition-colors"
+                    ? "flex items-center gap-2 text-foreground transition-colors"
+                    : "flex items-center gap-2 text-muted-foreground transition-colors"
                 }
               >
-                {isDone ? (
-                  <Check
-                    className="mt-0.5 size-4 shrink-0 text-primary"
-                    aria-hidden="true"
-                  />
-                ) : (
-                  <span
-                    className="mt-1 size-1.5 shrink-0 rounded-full bg-muted-foreground/40"
-                    aria-hidden="true"
-                  />
-                )}
+                {/* design-critique: fixed 20x20 slot prevents reflow when
+                    pending dot is swapped for the Check icon. */}
+                <span
+                  className="flex h-5 w-5 shrink-0 items-center justify-center"
+                  aria-hidden="true"
+                >
+                  {isDone ? (
+                    <Check className="size-4 text-primary" />
+                  ) : (
+                    // design-critique + a11y: bumped opacity from /40 to /60
+                    // to satisfy WCAG 2.1 non-text contrast.
+                    <span className="size-1.5 rounded-full bg-muted-foreground/60" />
+                  )}
+                </span>
                 <span>{COPY.progress[key]}</span>
                 <span className="sr-only">
                   {isDone ? " — done" : " — pending"}
