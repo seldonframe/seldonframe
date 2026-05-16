@@ -167,9 +167,17 @@ export function ClientsGrid({ workspaces, tier, used, limit }: ClientsGridProps)
         </Card>
       ) : (
         <section
-          aria-label="Client workspaces"
+          aria-labelledby="clients-grid-heading"
           className="mt-8 grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3"
         >
+          {/* a11y-review: sr-only heading so screen-reader heading
+              navigation (H key) lands on a labeled section before
+              diving into the first card's CardTitle. Replaces the
+              aria-label-only approach so users have a true H2 in the
+              outline tree. */}
+          <h2 id="clients-grid-heading" className="sr-only">
+            Client workspaces
+          </h2>
           {workspaces.map((workspace) => (
             <WorkspaceCard key={workspace.id} workspace={workspace} />
           ))}
