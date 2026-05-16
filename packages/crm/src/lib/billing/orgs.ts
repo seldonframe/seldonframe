@@ -22,6 +22,7 @@ import {
   ADMIN_TOKEN_SENTINEL_USER_ID,
   resolveAdminTokenContext,
 } from "@/lib/auth/admin-token";
+import { logEvent } from "@/lib/observability/log";
 
 const FREE_WORKSPACE_ALLOWANCE = 1;
 
@@ -288,17 +289,24 @@ async function logOrgListDiag(tag: string, membershipIds: unknown, extra: Record
     host = "unknown";
   }
 
-  console.error("[ORG-LIST-DIAG]", {
-    tag,
-    requestPath,
-    host,
-    pid: process.pid,
-    membershipIdsRaw: membershipIds,
-    isArray: Array.isArray(membershipIds),
-    typeofValue: typeof membershipIds,
-    length: Array.isArray(membershipIds) ? membershipIds.length : null,
-    ...extra,
-  });
+  // Successful read diagnostic — info severity, NOT error.
+  // (Earlier this was console.error during incident triage; left at error
+  // by mistake and polluted Sentry/Vercel error budgets. See v1.55 cleanup.)
+  logEvent(
+    "org_list_diag",
+    {
+      tag,
+      request_path: requestPath,
+      host,
+      pid: process.pid,
+      membership_ids_raw: membershipIds,
+      is_array: Array.isArray(membershipIds),
+      typeof_value: typeof membershipIds,
+      length: Array.isArray(membershipIds) ? membershipIds.length : null,
+      ...extra,
+    },
+    { severity: "info" },
+  );
 }
 
 export async function getWorkspaceLimitStatus() {

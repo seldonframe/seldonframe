@@ -19,6 +19,7 @@ import type { PersonalityUrgencyIndicator } from "@/lib/crm/personality";
 import { getHiddenBlocks } from "@/lib/blocks/visibility-actions";
 import { BlockVisibilityToggle } from "@/components/dashboard/block-visibility-toggle";
 import { setActiveOrgAction } from "@/lib/billing/orgs";
+import { logEvent } from "@/lib/observability/log";
 import { DealsCrmSurface } from "@/components/crm/deals-crm-surface";
 import { getCrmSurfaceConfig } from "@/lib/crm/view-config";
 import { mapDealRowToCrmRecord } from "@/lib/crm/view-models";
@@ -270,18 +271,22 @@ export default async function DashboardPage({
       : [];
 
   const membershipOrgIds = membershipRows.map((row) => row.orgId);
-  console.error("[ORG-LIST-DIAG]", {
-    tag: "dashboard.workspaceRows",
-    requestPath: "/dashboard",
-    host: "unknown",
-    pid: process.pid,
-    membershipIdsRaw: membershipOrgIds,
-    isArray: Array.isArray(membershipOrgIds),
-    typeofValue: typeof membershipOrgIds,
-    length: Array.isArray(membershipOrgIds) ? membershipOrgIds.length : null,
-    userId: user?.id ?? null,
-    userOrgId: user?.orgId ?? null,
-  });
+  // Successful read diagnostic — info severity, NOT error.
+  logEvent(
+    "org_list_diag",
+    {
+      tag: "dashboard.workspaceRows",
+      request_path: "/dashboard",
+      pid: process.pid,
+      membership_ids_raw: membershipOrgIds,
+      is_array: Array.isArray(membershipOrgIds),
+      typeof_value: typeof membershipOrgIds,
+      length: Array.isArray(membershipOrgIds) ? membershipOrgIds.length : null,
+      user_id: user?.id ?? null,
+      user_org_id: user?.orgId ?? null,
+    },
+    { severity: "info" },
+  );
   // v1.25.2 — operator sessions have a synthetic non-UUID id, so the
   // ownerId/parentUserId equality clauses crash. Operator sessions
   // are workspace-scoped; just look up the active workspace by orgId.

@@ -6,7 +6,7 @@ import { decryptValue } from "@/lib/encryption";
 
 export type AIClientMode = "byok" | "included" | "metered";
 
-type OrganizationAiIntegrations = {
+export type OrganizationAiIntegrations = {
   anthropic?: { apiKey?: string };
   openai?: { apiKey?: string };
 };
@@ -95,6 +95,74 @@ async function resolvePlanIdForOrg(params: { orgId: string; userId?: string | nu
     .limit(1);
 
   return ownerRow?.planId ?? null;
+}
+
+/**
+ * Lightweight key-resolution diagnostic for UI surfaces (e.g. the agent test
+ * sandbox at /agents/<id>/test). Mirrors the resolution order in `getAIClient`
+ * — BYOK first, then the platform env-var fallback — without instantiating an
+ * Anthropic client or querying usage tables.
+ *
+ * Why this exists: the dashboard previously read `org.integrations.anthropic.apiKey`
+ * directly and showed "No Anthropic API key configured" when no BYOK key was
+ * stored, even though production turns succeeded via the platform fallback.
+ * That mismatch confused operators and obscured the real failure mode
+ * (`llm_credit_exhausted` when the platform key hits its quota).
+ *
+ * Returns:
+ *   - mode: "byok" if the org has a decryptable BYOK key
+ *           "platform" if no BYOK but `process.env.ANTHROPIC_API_KEY` is set
+ *           "none" if no key is resolvable from any source
+ *   - hasKey: convenience boolean; true if mode !== "none"
+ *   - provider: "anthropic" | "openai" | null — which BYOK key resolved
+ */
+export type AgentKeyStatus = {
+  hasKey: boolean;
+  mode: "byok" | "platform" | "none";
+  provider: "anthropic" | "openai" | null;
+};
+
+/**
+ * Pure resolution helper. Inputs:
+ *   - integrations: org.integrations JSONB (or {})
+ *   - hasPlatformKey: whether process.env.ANTHROPIC_API_KEY is set
+ *   - decrypt: function that turns a stored value (possibly v1.<ciphertext>)
+ *              into a usable plaintext key, or "" if it fails to decrypt
+ *
+ * Extracted so the resolution order can be unit-tested without DB / env.
+ */
+export function resolveAgentKeyStatusFromInputs(
+  integrations: OrganizationAiIntegrations,
+  hasPlatformKey: boolean,
+  decrypt: (value: string | undefined) => string,
+): AgentKeyStatus {
+  if (decrypt(integrations.anthropic?.apiKey)) {
+    return { hasKey: true, mode: "byok", provider: "anthropic" };
+  }
+
+  if (decrypt(integrations.openai?.apiKey)) {
+    return { hasKey: true, mode: "byok", provider: "openai" };
+  }
+
+  if (hasPlatformKey) {
+    return { hasKey: true, mode: "platform", provider: null };
+  }
+
+  return { hasKey: false, mode: "none", provider: null };
+}
+
+export async function resolveAgentKeyStatus(orgId: string): Promise<AgentKeyStatus> {
+  const [org] = await db
+    .select({ integrations: organizations.integrations })
+    .from(organizations)
+    .where(eq(organizations.id, orgId))
+    .limit(1);
+
+  return resolveAgentKeyStatusFromInputs(
+    readOrgAiIntegrations(org?.integrations),
+    Boolean(process.env.ANTHROPIC_API_KEY),
+    decryptIfNeeded,
+  );
 }
 
 export async function getAIClient(params: { orgId: string; userId?: string | null }): Promise<AIClientResolution> {
