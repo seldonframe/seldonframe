@@ -225,17 +225,14 @@ export const landingBlockRegistry: BlockRegistry = [
   // client's existing site. Evicted whenever a real landing page is
   // persisted.
   {
-    type: "chatbot-preview",
+    type: "chatbotPreview",
     label: "Chatbot Preview (default public surface)",
     category: "SeldonFrame",
     grapesId: "sf-chatbot-preview",
     grapesContent:
       '<section class="py-20 text-center"><h1 class="text-4xl font-semibold">Your Business</h1><p class="mt-3 opacity-70">AI receptionist — ask anything</p><div class="mt-12 rounded-2xl border p-8 min-h-[400px]">Loading your AI receptionist…</div></section>',
     render: (content, key) => (
-      <ChatbotPreviewSection
-        key={key}
-        {...(content as unknown as ChatbotPreviewSectionContent)}
-      />
+      <ChatbotPreviewSection key={key} {...(content as ChatbotPreviewSectionContent)} />
     ),
   },
 ];

@@ -269,17 +269,17 @@ export type StickyMobileCTASectionContent = {
   bookText?: string;
 };
 
-/** v1.55.0 — content for the chatbot-preview section type. */
-export interface ChatbotPreviewSectionContent {
+/** v1.55.0 — content for the chatbotPreview section type. */
+export type ChatbotPreviewSectionContent = {
   /** Business name (h1 on the page). */
   businessName: string;
-  /** One-line tagline below the h1. Falls back to `AI receptionist — ask ${businessName} anything`. */
+  /** One-line tagline below the h1. Computed by seedChatbotPreviewLanding —
+   *  falls back to `AI receptionist — ask ${businessName} anything` when
+   *  the soul has no business_description. */
   tagline: string;
   /** Full https:// URL to the agent's embed.js. */
   embedUrl: string;
-  /** Theme mode for the page background. */
-  themeMode: "light" | "dark";
-}
+};
 
 export type LandingPageSection = {
   type:
@@ -303,7 +303,7 @@ export type LandingPageSection = {
     // Renders a full-page branded chat interface for the workspace's
     // website-chatbot agent. Evicted when an operator persists hero/services
     // /etc via the landing-page-creation SKILL.md flow.
-    | "chatbot-preview";
+    | "chatbotPreview";
   content: Record<string, unknown>;
   order: number;
 };

@@ -18,7 +18,6 @@ describe("ChatbotPreviewSection", () => {
         businessName="Ignitify Cooling"
         tagline="AI receptionist — ask anything"
         embedUrl="https://example.com/embed.js"
-        themeMode="light"
       />,
     );
     assert.ok(html.includes("<h1"), "should have an h1");
@@ -31,7 +30,6 @@ describe("ChatbotPreviewSection", () => {
         businessName="Acme"
         tagline="AI receptionist — ask anything"
         embedUrl="https://example.com/embed.js"
-        themeMode="light"
       />,
     );
     assert.ok(
@@ -46,7 +44,6 @@ describe("ChatbotPreviewSection", () => {
         businessName="Acme"
         tagline="test"
         embedUrl="https://app.seldonframe.com/api/v1/public/agent/acme--default/embed.js"
-        themeMode="light"
       />,
     );
     assert.ok(
@@ -62,7 +59,6 @@ describe("ChatbotPreviewSection", () => {
         businessName="Acme"
         tagline="test"
         embedUrl="https://example.com/embed.js"
-        themeMode="light"
       />,
     );
     assert.ok(
@@ -75,20 +71,20 @@ describe("ChatbotPreviewSection", () => {
     );
   });
 
-  test("light mode uses light background", () => {
+  test("renders against the theme-provided background", () => {
+    // Background + text colors come from CSS variables set by
+    // PublicThemeProvider higher in the tree. The component just
+    // consumes them — no light/dark branching at this layer.
     const html = renderToString(
       <ChatbotPreviewSection
         businessName="Acme"
         tagline="test"
         embedUrl="https://example.com/embed.js"
-        themeMode="light"
       />,
     );
     assert.ok(
-      /background[^"]*:\s*var\(--sf-bg\)/.test(html) ||
-        html.includes("--sf-bg") ||
-        /bg-(white|background)/.test(html),
-      "light mode should set a light background via theme var or class",
+      html.includes("--sf-bg"),
+      "component should render against the theme-provided --sf-bg variable",
     );
   });
 });
