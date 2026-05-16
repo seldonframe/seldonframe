@@ -7,11 +7,19 @@
 // Don't merge the two — different audiences, different copy contracts.
 //
 // Source of truth for the FEATURES matrix is spec §Cut B (Phase 1).
-// FEATURE_FLAGS shipped by Cut B (lib/billing/features.ts):
+// FEATURE_FLAGS shipped by Cut B (lib/billing/feature-flags.ts):
 //   - branding_hidden, custom_domain, client_portal  (Growth+)
 //   - ai_agents, white_label_portal, priority_support  (Scale only)
 // Workspace caps and BYOK are not feature flags — they're tier limits
-// resolved at runtime from TIER_FEATURES.
+// resolved at runtime from TIER_FEATURES in lib/billing/features.ts.
+//
+// Copy: refined by design:ux-copy (Phase 4 Task 4.3, May 2026). The
+// audience is an agency owner deciding whether $29 is worth it; we
+// surface what they save by upgrading (no branding shown, custom
+// domain per client) without sounding pushy. CTAs say "Upgrade to X"
+// rather than "Start free trial" because we have not yet committed
+// to a trial length — see TRIAL_LENGTH judgment call in the Cut C
+// final report.
 
 import Link from "next/link";
 import { Check, Minus } from "lucide-react";
@@ -34,14 +42,17 @@ type FeatureRow = {
   values: Readonly<Record<TierKey, string | boolean>>;
 };
 
+// Tagline copy: from design:ux-copy output, May 2026. Each tagline is
+// one sentence long and answers "what do I get for this price?" in
+// the agency owner's own terms.
 const TIERS: readonly Tier[] = [
   {
     key: "free",
     name: "Free",
     price: "$0",
     period: "forever",
-    tagline: "1 workspace. BYO Anthropic key. Try the whole product.",
-    ctaLabel: "Sign Up Free",
+    tagline: "1 workspace. Your Anthropic key. The whole product, free forever.",
+    ctaLabel: "Start free",
     ctaHref: "/signup",
   },
   {
@@ -49,8 +60,8 @@ const TIERS: readonly Tier[] = [
     name: "Growth",
     price: "$29",
     period: "/month",
-    tagline: "3 workspaces, custom domains, no SeldonFrame branding.",
-    ctaLabel: "Start free trial",
+    tagline: "Run 3 clients without SeldonFrame branding showing anywhere.",
+    ctaLabel: "Upgrade to Growth",
     ctaHref: "/signup?plan=growth",
     highlighted: true,
   },
@@ -59,36 +70,47 @@ const TIERS: readonly Tier[] = [
     name: "Scale",
     price: "$99",
     period: "/month",
-    tagline: "Unlimited workspaces, AI agents, full white-label.",
-    ctaLabel: "Start free trial",
+    tagline: "Unlimited clients. AI agents working leads while you sleep.",
+    ctaLabel: "Upgrade to Scale",
     ctaHref: "/signup?plan=scale",
   },
 ];
 
 // Source of truth: spec §Cut B tier features table. Each row label is
-// the marketing copy; the corresponding Cut B feature flag (where one
-// exists) is named in the trailing comment so a future flag rename is
-// obvious to the grep-er.
+// the refined marketing copy from design:ux-copy; the corresponding
+// Cut B feature flag (where one exists) is named in the trailing
+// comment so a future flag rename is obvious to the grep-er.
 const FEATURES: readonly FeatureRow[] = [
-  { label: "Workspaces", values: { free: "1", growth: "3", scale: "Unlimited" } },
-  { label: "BYOK Anthropic key", values: { free: true, growth: true, scale: "✓ (or managed)" } },
-  { label: "Unlimited contacts per workspace", values: { free: true, growth: true, scale: true } },
+  { label: "Client workspaces", values: { free: "1", growth: "3", scale: "Unlimited" } },
+  { label: "Bring your own Anthropic key", values: { free: true, growth: true, scale: true } },
+  { label: "Unlimited contacts per client", values: { free: true, growth: true, scale: true } },
   // Cut B flag: branding_hidden
-  { label: "SeldonFrame branding hidden", values: { free: false, growth: true, scale: true } },
+  {
+    label: "No SeldonFrame branding shown to clients",
+    values: { free: false, growth: true, scale: true },
+  },
   // Cut B flag: custom_domain
-  { label: "Custom domain per client", values: { free: false, growth: true, scale: true } },
+  {
+    label: "Custom domain per client (theirs, not yours)",
+    values: { free: false, growth: true, scale: true },
+  },
   // Cut B flag: client_portal
-  { label: "Client portal access", values: { free: false, growth: true, scale: true } },
+  { label: "Branded client portal", values: { free: false, growth: true, scale: true } },
   // Cut B flag: ai_agents
   {
-    label: "AI agents (Speed-to-Lead, Win-Back, Review Requester)",
+    label: "AI agents: Speed-to-Lead, Win-Back, Reviews",
     values: { free: false, growth: false, scale: true },
   },
   // Cut B flag: white_label_portal
-  { label: "Full white-label client portal", values: { free: false, growth: false, scale: true } },
-  // Cut B flag: priority_support
+  {
+    label: "Full white-label (your logo, your domain)",
+    values: { free: false, growth: false, scale: true },
+  },
+  // Cut B flag: priority_support — dropped the SLA promise from the
+  // copy since no SLA is committed yet (see SLA judgment call in
+  // Cut C final report).
   { label: "Priority support", values: { free: false, growth: false, scale: true } },
-  { label: "Claude Code MCP access", values: { free: true, growth: true, scale: true } },
+  { label: "Claude Code MCP (power-user CLI)", values: { free: true, growth: true, scale: true } },
 ];
 
 function renderCell(value: string | boolean) {
@@ -112,11 +134,11 @@ export function LandingMarketingPricingSection() {
           Pricing
         </p>
         <h2 className="text-3xl font-bold text-zinc-100 md:text-4xl">
-          Start free. Upgrade when you need more clients.
+          Start free. Charge $29 the day you land your second client.
         </h2>
         <p className="mx-auto mt-4 max-w-2xl text-zinc-400">
-          Workspaces are per-client. Every tier includes unlimited contacts, bookings, and your own
-          Anthropic key.
+          One workspace per client. Unlimited contacts, bookings, and AI chat on every tier —
+          running on your Anthropic key.
         </p>
       </div>
 

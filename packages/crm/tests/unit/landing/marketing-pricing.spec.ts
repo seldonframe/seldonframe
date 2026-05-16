@@ -90,15 +90,21 @@ describe("LandingMarketingPricingSection — 3-column matrix", () => {
   });
 
   test("all 10 feature rows from spec §Cut B render", () => {
+    // Labels here are deliberately short substrings of the real
+    // (longer) marketing copy so a future copy polish that adds
+    // qualifiers — "Bring your own Anthropic key" instead of
+    // "BYOK Anthropic key", "Branded client portal" instead of
+    // "Client portal" — doesn't break the test. The substrings
+    // must still uniquely identify each spec row.
     const result = LandingMarketingPricingSection();
     const text = safeText(result);
     for (const label of [
-      "Workspaces",
-      "BYOK Anthropic key",
+      "workspaces",
+      "Anthropic key",
       "Unlimited contacts",
-      "branding hidden",
+      "No SeldonFrame branding",
       "Custom domain",
-      "Client portal",
+      "client portal",
       "AI agents",
       "white-label",
       "Priority support",
