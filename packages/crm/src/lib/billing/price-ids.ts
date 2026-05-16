@@ -85,6 +85,18 @@ export const SELF_SERVICE_WORKSPACE_MONTHLY_PRICE_ID = LEGACY_CLOUD_PRO_PRICE_ID
 /** @deprecated Use SCALE_BASE_PRICE_ID + tier="scale". */
 export const CLOUD_AGENCY_MONTHLY_PRICE_ID = LEGACY_CLOUD_AGENCY_PRICE_ID;
 
+// ─── Cut B agency tier aliases (UX-readable names) ───────────────────
+
+/** Cut B alias for GROWTH_BASE_PRICE_ID. The upgrade modal +
+ *  checkout caller use this name because it reads cleanly in copy
+ *  ("Upgrade to Growth $29/mo"). Same live Stripe price ID; aliasing
+ *  keeps the two names in lockstep so the checkout allowlist accepts
+ *  whichever one the caller used. */
+export const GROWTH_MONTHLY_PRICE_ID = GROWTH_BASE_PRICE_ID;
+
+/** Cut B alias for SCALE_BASE_PRICE_ID. See GROWTH_MONTHLY_PRICE_ID. */
+export const SCALE_MONTHLY_PRICE_ID = SCALE_BASE_PRICE_ID;
+
 // ─── Allowlist + helpers ─────────────────────────────────────────────
 
 const ALLOWED_PRICE_IDS = new Set<string>([
@@ -130,4 +142,19 @@ export function isSelfServiceCheckoutPriceId(priceId: string | null | undefined)
  *  tier we can build a multi-price subscription for. */
 export function isTierBasePriceId(priceId: string): boolean {
   return priceId === GROWTH_BASE_PRICE_ID || priceId === SCALE_BASE_PRICE_ID;
+}
+
+/** Cut B helper for the upgrade-modal CTA: maps a price ID back to
+ *  the tier name ("growth" | "scale") so the modal can render
+ *  tier-specific copy + entitlement bullets. Returns null for any
+ *  non-tier price (legacy ids, metered overages, unknown). The
+ *  upgrade flow uses this to decide which feature list to show
+ *  before sending the user to Stripe Checkout. */
+export function isAgencyTierCheckoutPriceId(
+  priceId: string | null | undefined
+): "growth" | "scale" | null {
+  if (!priceId) return null;
+  if (priceId === GROWTH_MONTHLY_PRICE_ID) return "growth";
+  if (priceId === SCALE_MONTHLY_PRICE_ID) return "scale";
+  return null;
 }
