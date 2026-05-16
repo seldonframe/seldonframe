@@ -39,13 +39,17 @@ export function GitHubStarsBadge({ stars }: { stars: number | null }) {
           ? `Star seldonframe/crm on GitHub — ${stars} stars`
           : "View seldonframe/crm on GitHub"
       }
-      className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm font-semibold text-zinc-200 transition-colors hover:border-zinc-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#14b8a6]"
+      // design-critique May 2026: demoted from CTA-styled button to
+      // chip — transparent surface, thin border. Reads as proof of
+      // existence, not a primary action. Vertical padding bumped to
+      // py-2.5 so the click target clears WCAG 2.5.5 (>=44px).
+      className="inline-flex items-center gap-2 rounded-full border border-zinc-700/60 bg-transparent px-4 py-2.5 text-sm font-medium text-zinc-300 transition-colors hover:border-zinc-500 hover:text-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#14b8a6]"
     >
       <Github size={16} aria-hidden="true" />
       <span>seldonframe/crm</span>
       {stars !== null ? (
         <span
-          className="flex items-center gap-1 rounded-md bg-zinc-800 px-2 py-0.5 text-xs text-zinc-200"
+          className="flex items-center gap-1 text-zinc-400"
           aria-hidden="true"
         >
           <Star size={12} className="text-[#14b8a6]" />
