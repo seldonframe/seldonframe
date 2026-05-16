@@ -12,7 +12,7 @@ import { ArrowRight } from "lucide-react";
 // for the MCP-native crowd.
 export function LandingHero() {
   return (
-    <section className="flex flex-col items-center justify-center px-6 py-20 text-center md:py-28">
+    <section className="mx-auto flex max-w-5xl flex-col items-center justify-center px-6 py-20 text-center md:py-28">
       <h1 className="max-w-4xl text-5xl font-bold tracking-tight text-zinc-100 md:text-6xl lg:leading-[1.1]">
         The open-source Business OS your agency builds for clients in 60 seconds.
       </h1>
@@ -24,7 +24,7 @@ export function LandingHero() {
       <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row">
         <Link
           href="/signup"
-          className="inline-flex items-center gap-2 rounded-xl bg-[#14b8a6] px-8 py-4 font-semibold text-white transition-opacity hover:opacity-90"
+          className="inline-flex items-center gap-2 rounded-xl bg-[#14b8a6] px-10 py-4 font-semibold text-white transition-opacity hover:opacity-90"
         >
           Sign Up Free
           <ArrowRight size={18} />
@@ -37,9 +37,9 @@ export function LandingHero() {
           <ArrowRight size={18} />
         </Link>
       </div>
-      <p className="mt-3 text-xs text-zinc-600">Free tier — 1 workspace, no credit card.</p>
+      <p className="mt-6 text-xs text-zinc-600">Free tier — 1 workspace, no credit card.</p>
 
-      <div className="mt-12 w-full max-w-4xl overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900">
+      <div className="mt-12 w-full max-w-4xl overflow-hidden rounded-xl border border-zinc-800/50 bg-zinc-900">
         <Image
           src="/marketing/hero-loop.gif"
           alt="A 6-second loop of an operator pasting a URL and watching a SeldonFrame workspace appear: CRM, booking page, intake form, and AI chatbot."
