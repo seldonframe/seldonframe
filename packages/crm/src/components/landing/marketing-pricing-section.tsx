@@ -118,7 +118,17 @@ function renderCell(value: string | boolean) {
     return <Check size={16} className="mx-auto text-[#14b8a6]" aria-label="Included" />;
   }
   if (value === false) {
-    return <Minus size={16} className="mx-auto text-zinc-700" aria-label="Not included" />;
+    // a11y May 2026: bumped from zinc-700 (1.5:1) to zinc-500 (3.1:1)
+    // to clear WCAG 2.1 AA 1.4.11 non-text contrast on zinc-900 +
+    // zebra-strip rows. Label switched from "Not included" to "Not
+    // available" — clearer inside a feature comparison row.
+    return (
+      <Minus
+        size={16}
+        className="mx-auto text-zinc-500"
+        aria-label="Not available"
+      />
+    );
   }
   return <span className="text-sm text-zinc-200">{value}</span>;
 }
@@ -127,13 +137,17 @@ export function LandingMarketingPricingSection() {
   return (
     <section
       id="pricing"
+      aria-labelledby="pricing-heading"
       className="mx-auto max-w-5xl border-t border-zinc-800/30 px-6 py-16 md:py-20"
     >
       <div className="text-center">
         <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">
           Pricing
         </p>
-        <h2 className="text-3xl font-bold text-zinc-100 md:text-4xl">
+        <h2
+          id="pricing-heading"
+          className="text-3xl font-bold text-zinc-100 md:text-4xl"
+        >
           Start free. Charge $29 the day you land your second client.
         </h2>
         <p className="mx-auto mt-4 max-w-2xl text-zinc-400">
@@ -152,21 +166,34 @@ export function LandingMarketingPricingSection() {
           const cardSurface = tier.highlighted
             ? "border-[#14b8a6]/60 bg-zinc-900 shadow-lg shadow-[#14b8a6]/5"
             : "border-zinc-800/80 bg-zinc-900/60";
+          // a11y May 2026: chain the article → badge so SRs announce
+          // "Growth tier, Recommended" instead of just "Growth tier"
+          // (the visual-only badge is otherwise invisible to AT).
+          const badgeId = `pricing-tier-${tier.key}-badge`;
+          const nameId = `pricing-tier-${tier.key}-name`;
           return (
             <article
               key={tier.key}
               data-tier={tier.key}
+              aria-labelledby={
+                tier.highlighted ? `${nameId} ${badgeId}` : nameId
+              }
               className={`relative flex flex-col rounded-xl border p-6 ${cardSurface}`}
             >
               {tier.highlighted ? (
                 // Lifted above the card top edge so it reads as a
-                // stamp, not part of the H3. ring-zinc-950 inset
-                // mimics a punch-through to the page background.
-                <span className="absolute -top-2.5 right-4 rounded-full border border-[#14b8a6]/50 bg-[#14b8a6]/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#14b8a6] ring-2 ring-[#09090b]">
+                // stamp, not part of the H3. ring of page-bg color
+                // creates a punch-through effect.
+                <span
+                  id={badgeId}
+                  className="absolute -top-2.5 right-4 rounded-full border border-[#14b8a6]/50 bg-[#14b8a6]/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#14b8a6] ring-2 ring-[#09090b]"
+                >
                   Recommended
                 </span>
               ) : null}
-              <h3 className="text-lg font-semibold text-zinc-100">{tier.name}</h3>
+              <h3 id={nameId} className="text-lg font-semibold text-zinc-100">
+                {tier.name}
+              </h3>
               {/* min-h holds the price baseline aligned across all 3
                   cards even when one tagline wraps to 2 lines. */}
               <p className="mt-1 min-h-[2.5rem] text-sm text-zinc-400">{tier.tagline}</p>
@@ -177,9 +204,13 @@ export function LandingMarketingPricingSection() {
               <Link
                 href={tier.ctaHref}
                 data-tier-cta={tier.key}
+                /* a11y May 2026: white-on-teal #14b8a6 was 2.6:1 — fails
+                   WCAG 2.1 AA 1.4.3 (4.5:1 normal text). zinc-950 on
+                   teal is ~7.2:1, well clear. Outline tier CTA stays
+                   zinc-200 on dark which already passes. */
                 className={`mt-6 inline-flex items-center justify-center rounded-xl px-6 py-3 font-semibold transition-opacity focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#14b8a6] ${
                   tier.highlighted
-                    ? "bg-[#14b8a6] text-white hover:opacity-90"
+                    ? "bg-[#14b8a6] text-zinc-950 hover:opacity-90"
                     : "border border-zinc-700 text-zinc-200 hover:border-zinc-500"
                 }`}
               >
