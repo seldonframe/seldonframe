@@ -105,7 +105,7 @@ export function LandingMarketingPricingSection() {
   return (
     <section
       id="pricing"
-      className="mx-auto max-w-6xl border-t border-zinc-800/30 px-6 py-16 md:py-24"
+      className="mx-auto max-w-5xl border-t border-zinc-800/30 px-6 py-16 md:py-20"
     >
       <div className="text-center">
         <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">
@@ -125,14 +125,14 @@ export function LandingMarketingPricingSection() {
           <article
             key={tier.key}
             data-tier={tier.key}
-            className={`relative flex flex-col rounded-2xl border p-6 ${
+            className={`relative flex flex-col rounded-xl border p-6 ${
               tier.highlighted
                 ? "border-[#14b8a6]/50 bg-zinc-900"
                 : "border-zinc-800 bg-zinc-900"
             }`}
           >
             {tier.highlighted ? (
-              <span className="absolute right-4 top-4 rounded-full border border-[#14b8a6]/40 bg-[#14b8a6]/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#14b8a6]">
+              <span className="absolute right-4 top-4 rounded-full border border-[#14b8a6]/40 bg-[#14b8a6]/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#14b8a6]">
                 Recommended
               </span>
             ) : null}
