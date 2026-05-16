@@ -50,10 +50,7 @@ export function LandingDemoVideoSection() {
             <p className="text-sm text-zinc-500">Walkthrough recording in progress</p>
           </div>
         </div>
-        <div
-          aria-hidden="true"
-          className="hidden h-[60px] items-center justify-center bg-zinc-900 px-6 text-sm text-zinc-500 motion-reduce:flex"
-        >
+        <div className="hidden h-[60px] items-center justify-center bg-zinc-900 px-6 text-sm text-zinc-500 motion-reduce:flex">
           Animated preview hidden because you prefer reduced motion. Full narrated demo lands soon.
         </div>
         <p className="border-t border-zinc-800/50 bg-zinc-950 px-6 py-3 text-center text-xs text-zinc-400">
