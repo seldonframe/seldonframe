@@ -19,21 +19,21 @@ const STEPS: readonly Step[] = [
   {
     number: 1,
     title: "Sign up free",
-    body: "Google OAuth or email. 30 seconds. No credit card.",
+    body: "Google or email. 30 seconds. No credit card.",
     screenshot: "/marketing/how-it-works-step-1.png",
     alt: "Screenshot of the SeldonFrame signup form showing a Continue with Google button above an email field.",
   },
   {
     number: 2,
     title: "Paste your client's URL",
-    body: "We extract their business, services, hours, and reviews automatically using your Anthropic key.",
+    body: "SeldonFrame reads their site — services, hours, reviews — using your Anthropic key.",
     screenshot: "/marketing/how-it-works-step-2.png",
     alt: "Screenshot of the /clients/new page mid-extraction, with progress checkmarks for Fetching site, Extracting business facts, and Generating personality.",
   },
   {
     number: 3,
     title: "Workspace ready in 60 seconds",
-    body: "CRM, booking page, intake form, AI chatbot, demo portal — all pre-wired and ready to hand over.",
+    body: "CRM, booking page, intake form, AI chatbot, demo portal. Pre-wired. White-label. Ready to hand over.",
     screenshot: "/marketing/how-it-works-step-3.png",
     alt: "Screenshot of a fresh SeldonFrame workspace dashboard with the CRM kanban, booking page link, and AI chatbot status all visible.",
   },
@@ -50,7 +50,7 @@ export function LandingHowItWorksSection() {
           How it works
         </p>
         <h2 className="text-3xl font-bold text-zinc-100 md:text-4xl">
-          From URL to a fully-wired client workspace, in 3 steps.
+          Paste a URL. Walk away with a client-ready workspace. 3 steps.
         </h2>
       </div>
 
