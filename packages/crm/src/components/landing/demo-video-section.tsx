@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { Play } from "lucide-react";
 
 // Cut C Phase 3 — Demo video section (week-5 placeholder).
 //
@@ -29,20 +30,31 @@ export function LandingDemoVideoSection() {
       </div>
 
       <div className="mx-auto mt-10 w-full max-w-4xl overflow-hidden rounded-xl border border-zinc-800/50 bg-zinc-900">
-        <Image
-          src="/marketing/demo-placeholder.gif"
-          alt=""
-          role="presentation"
-          width={1280}
-          height={720}
-          className="h-auto w-full motion-reduce:hidden"
-          unoptimized
-        />
+        {/* Week 5: placeholder frame with centered Play affordance so the empty
+            box reads as "video placeholder", not "broken image". Week 6 swaps
+            in the real demo asset and removes the Play icon overlay. */}
+        <div className="relative aspect-video w-full motion-reduce:hidden">
+          <Image
+            src="/marketing/demo-placeholder.gif"
+            alt=""
+            role="presentation"
+            fill
+            className="object-cover"
+            unoptimized
+          />
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3"
+          >
+            <Play size={64} className="text-[#14b8a6] opacity-40" />
+            <p className="text-sm text-zinc-500">Walkthrough recording in progress</p>
+          </div>
+        </div>
         <div
           aria-hidden="true"
           className="hidden h-[60px] items-center justify-center bg-zinc-900 px-6 text-sm text-zinc-500 motion-reduce:flex"
         >
-          Animated preview hidden because you prefer reduced motion. The full narrated demo lands soon.
+          Animated preview hidden because you prefer reduced motion. Full narrated demo lands soon.
         </div>
         <p className="border-t border-zinc-800/50 bg-zinc-950 px-6 py-3 text-center text-xs text-zinc-400">
           Polished 60-second walkthrough lands in week 6.
