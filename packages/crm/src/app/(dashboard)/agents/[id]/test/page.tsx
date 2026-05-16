@@ -24,6 +24,7 @@ import {
   type AgentBlueprint,
 } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
+import { resolveAgentKeyStatus } from "@/lib/ai/client";
 import { TestSandboxClient } from "./test-client";
 
 export const dynamic = "force-dynamic";
@@ -82,14 +83,12 @@ export default async function AgentTestPage({
     });
   }
 
-  const integrations = (row.orgIntegrations ?? {}) as Record<string, unknown>;
-  const anthropicCfg = integrations.anthropic as
-    | { apiKey?: string }
-    | undefined;
-  const hasAnthropicKey =
-    typeof anthropicCfg?.apiKey === "string" && anthropicCfg.apiKey.length > 0;
+  // v1.55 — key resolution now mirrors getAIClient: BYOK first, then the
+  // platform env-var fallback. Previously this only checked BYOK and showed
+  // "No key" even when production worked fine via the platform key.
+  const keyStatus = await resolveAgentKeyStatus(row.orgId);
 
-  if (!hasAnthropicKey) {
+  if (keyStatus.mode === "none") {
     diagnostics.push({
       level: "block",
       title: "No Anthropic API key configured",
@@ -99,6 +98,20 @@ export default async function AgentTestPage({
         "configure_llm_provider from Claude Code.",
       actionHref: "/settings/integrations/llm",
       actionLabel: "Add key",
+    });
+  } else if (keyStatus.mode === "platform") {
+    // Platform/Claude-Code key fallback is active — sandbox works, but the
+    // operator should know they're on shared quota. Surface the recovery
+    // path before they hit llm_credit_exhausted in front of a real prospect.
+    diagnostics.push({
+      level: "warn",
+      title: "Using SeldonFrame's included Anthropic quota",
+      message:
+        "No BYOK key on this workspace — turns run on the included platform " +
+        "key. If you hit llm_credit_exhausted, add your own Anthropic key in " +
+        "Settings → Integrations → AI / LLM.",
+      actionHref: "/settings/integrations/llm",
+      actionLabel: "Add BYOK key",
     });
   }
 
