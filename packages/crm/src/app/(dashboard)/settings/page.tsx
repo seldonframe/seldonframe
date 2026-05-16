@@ -179,6 +179,12 @@ export default async function SettingsPage() {
           status: null,
         },
         {
+          href: "/settings/agency-profile",
+          title: "Agency Profile",
+          description: "How your agency shows up on client-facing screens",
+          status: null,
+        },
+        {
           href: "/settings/theme",
           title: "Brand & Theme",
           description: "Colors, fonts, logo for your public pages and chatbot",
