@@ -117,10 +117,11 @@ export function UpgradeModal({ open, onOpenChange, used, limit }: UpgradeModalPr
         </DialogHeader>
 
         {/* design-critique: Scale gets ring-2 + shadow-md to visually back the
-            "Recommended" badge; CTAs differentiate (Growth=outline, Scale=default)
-            so the eye lands on the upgrade path first. */}
+            "Recommended" badge; CTAs differentiate (Growth=outline, Scale=default).
+            a11y-review: Scale renders first so initial focus lands on the
+            recommended upgrade path (matches visual hierarchy + SR reading order). */}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          {(["growth", "scale"] as const).map((tier) => {
+          {(["scale", "growth"] as const).map((tier) => {
             const card = COPY[tier];
             const isScale = tier === "scale";
             return (
@@ -135,7 +136,10 @@ export function UpgradeModal({ open, onOpenChange, used, limit }: UpgradeModalPr
                       <Badge variant="default">{COPY.scale.recommendedLabel}</Badge>
                     ) : null}
                   </div>
-                  <p className="text-sm text-muted-foreground">{card.price}</p>
+                  {/* a11y-review: promoted from text-muted-foreground to
+                      text-foreground+font-medium to guarantee >=4.5:1 contrast
+                      across all themes (was at risk in light theme). */}
+                  <p className="text-sm font-medium text-foreground">{card.price}</p>
                 </CardHeader>
                 <CardContent>
                   <ul className="mb-4 space-y-2 text-sm">
@@ -149,6 +153,7 @@ export function UpgradeModal({ open, onOpenChange, used, limit }: UpgradeModalPr
                   <Button
                     onClick={() => upgrade(tier)}
                     disabled={pending !== null}
+                    aria-busy={pending === tier}
                     variant={isScale ? "default" : "outline"}
                     className="w-full"
                   >
@@ -164,12 +169,15 @@ export function UpgradeModal({ open, onOpenChange, used, limit }: UpgradeModalPr
 
         {/* design-critique: "Maybe later" sits below the footer (not adjacent to
             the upgrade CTAs) so the decision flow reads cards → value confirmation
-            → escape. Uses Button ghost variant per design-system audit. */}
+            → escape. Uses Button ghost variant per design-system audit.
+            a11y-review: aria-label disambiguates the SR rotor label so users
+            scanning interactive elements know what "Maybe later" closes. */}
         <div className="mt-6 text-center">
           <Button
             type="button"
             variant="ghost"
             onClick={() => onOpenChange(false)}
+            aria-label="Maybe later — close upgrade dialog"
             className="text-sm text-muted-foreground hover:text-foreground"
           >
             {COPY.cancel}
