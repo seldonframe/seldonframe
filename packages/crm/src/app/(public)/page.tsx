@@ -22,6 +22,7 @@ import { MarketingFaq } from "@/components/marketing/faq";
 
 import { LandingNav } from "@/components/landing/nav";
 import { LandingHero } from "@/components/landing/hero";
+import { LandingHowItWorksSection } from "@/components/landing/how-it-works-section";
 import { LandingSoulSection } from "@/components/landing/soul-section";
 import { LandingSeldonItSection } from "@/components/landing/seldon-it-section";
 import { LandingBentoSection } from "@/components/landing/bento-section";
@@ -63,6 +64,7 @@ export default async function PublicHomePage() {
       <LandingNav />
       <main>
         <LandingHero />
+        <LandingHowItWorksSection />
         <LandingSoulSection />
         <LandingSeldonItSection />
         <LandingBentoSection />
