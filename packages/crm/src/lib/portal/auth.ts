@@ -15,6 +15,7 @@ import {
   sendPortalAccessCodeEmail,
   pickFromAddress as pickPortalAccessCodeFromAddress,
 } from "@/lib/emails/portal-access-code";
+import { findDemoContactForOrg } from "@/lib/workspace/seed-demo-portal";
 
 function hashCode(code: string) {
   return crypto.createHash("sha256").update(code).digest("hex");
@@ -433,4 +434,65 @@ export async function requirePortalSessionForOrg(orgSlug: string) {
   }
 
   return session;
+}
+
+/** v1.55.x — Demo-login session establishment for the one-click
+ *  /customer/<slug>/demo route. Resolves the workspace by slug, finds
+ *  the seeded "__demo__" contact, signs a 7-day portal session, sets
+ *  the cookie, and emits the same `portal.login` events the magic-link
+ *  path emits (with login_method="demo" for analytics segmentation).
+ *
+ *  Returns { ok: true, redirectTo: "/customer/<slug>" } on success.
+ *  Returns { ok: false, reason } when the org is unknown or no demo
+ *  contact exists (the route handler decides whether to 404 or fall
+ *  back to /login). NEVER throws — operator-pasted demo links must
+ *  fail gracefully into the magic-link path so they're still useful
+ *  even when the seed soft-failed at workspace creation. */
+export async function establishPortalDemoSession(input: {
+  orgSlug: string;
+}): Promise<
+  | { ok: true; orgSlug: string; orgId: string; contactId: string; redirectTo: string }
+  | { ok: false; reason: "org_not_found" | "no_demo_contact" }
+> {
+  const org = await getOrgBySlug(input.orgSlug);
+
+  if (!org) {
+    return { ok: false, reason: "org_not_found" };
+  }
+
+  const demoContact = await findDemoContactForOrg(org.id);
+
+  if (!demoContact?.id) {
+    return { ok: false, reason: "no_demo_contact" };
+  }
+
+  const token = signPortalSession({
+    orgId: org.id,
+    contactId: demoContact.id,
+    email: demoContact.email ?? `demo+${input.orgSlug}@example.com`,
+    exp: Date.now() + 7 * 24 * 60 * 60 * 1000,
+  });
+
+  await setPortalSessionCookie(token);
+
+  await emitSeldonEvent("portal.login", { contactId: demoContact.id }, { orgId: org.id });
+
+  // v1.55.x — Measurement Layer 2: demo-login path. Same event name
+  // as the magic-link verify path, with login_method="demo" so the
+  // ops dashboards can split "real customer logins" from "operator
+  // pasting the demo URL at a prospect." Critical for measuring the
+  // "/demo URL pasted → live conversation" funnel.
+  trackEvent(
+    "portal_login",
+    { login_method: "demo" },
+    { orgId: org.id, contactId: demoContact.id }
+  );
+
+  return {
+    ok: true,
+    orgSlug: input.orgSlug,
+    orgId: org.id,
+    contactId: demoContact.id,
+    redirectTo: `/customer/${input.orgSlug}/`,
+  };
 }

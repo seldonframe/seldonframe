@@ -20,6 +20,7 @@ import { logEvent } from "@/lib/observability/log";
 import { listBlockNames } from "@/lib/page-blocks/registry";
 import { setPublicChatbotEmbed } from "@/lib/agents/public-embed";
 import { seedChatbotPreviewLandingForOrg } from "@/lib/workspace/seed-chatbot-preview-landing";
+import { seedDemoPortalContentForOrg } from "@/lib/workspace/seed-demo-portal";
 
 type Body = {
   workspace_id?: unknown;
@@ -207,6 +208,29 @@ export async function POST(request: Request) {
         );
       }
     }
+  }
+
+  // v1.55.x — Seed ONE demo contact + welcome message (+ booking when
+  // the org has a booking template) so operators can paste the
+  // /customer/<slug>/demo link to a prospect and watch them land in a
+  // populated portal immediately. SOFT-FAIL by design: any error logs
+  // but never blocks workspace creation. /demo route falls back to
+  // /login if the seed soft-failed (the contact isn't there).
+  try {
+    const demoSeedResult = await seedDemoPortalContentForOrg({ orgId: workspaceId });
+    if (!demoSeedResult.ok) {
+      logEvent(
+        "v2_demo_portal_seed_failed",
+        { reason: demoSeedResult.reason ?? "unknown" },
+        { request, orgId: workspaceId, severity: "warn" },
+      );
+    }
+  } catch (err) {
+    logEvent(
+      "v2_demo_portal_seed_failed",
+      { reason: err instanceof Error ? err.message : String(err) },
+      { request, orgId: workspaceId, severity: "warn" },
+    );
   }
 
   // v1.55.0 — Build the static 7-automation list from the archetype

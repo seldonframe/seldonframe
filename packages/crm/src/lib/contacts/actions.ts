@@ -1,12 +1,13 @@
 "use server";
 
-import { and, asc, desc, eq, gte, ilike, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, not, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { contacts, pipelines } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
 import { assertWritable } from "@/lib/demo/server";
 import { emitSeldonEvent } from "@/lib/events/bus";
 import { inferClientLifecycleFromStatus } from "@/lib/soul/learning";
+import { DEMO_CONTACT_TAG } from "@/lib/workspace/seed-demo-portal";
 
 type ContactListSort = "recent" | "name_asc" | "name_desc" | "score_desc" | "score_asc";
 
@@ -19,6 +20,12 @@ type ContactListOptions = {
    *  based getOrgId() resolution. Used by the operator portal mirror
    *  which has a different session source than NextAuth. */
   orgId?: string;
+  /** v1.55.x — include the demo contact (tag '__demo__') seeded by
+   *  v2/complete for one-click portal previews. Defaults to false so
+   *  the operator-facing CRM grid stays clean. A single-contact-by-id
+   *  lookup elsewhere still returns the demo contact (so the operator
+   *  can inspect it from a deep link if curious). */
+  includeDemo?: boolean;
 };
 
 type ImportedContactRow = {
@@ -45,8 +52,18 @@ export async function listContacts(options?: ContactListOptions) {
   const status = options?.status?.trim();
   const sort = options?.sort ?? "recent";
   const createdAfter = options?.createdAfter;
+  const includeDemo = options?.includeDemo ?? false;
 
   const conditions = [eq(contacts.orgId, orgId)];
+
+  // v1.55.x — filter the seeded demo contact ('__demo__' tag) from the
+  // operator-facing CRM grid by default. Tag exists so the /customer/
+  // <slug>/demo route can find the contact (one-click portal preview)
+  // without polluting operator views. Caller can set includeDemo=true
+  // to override (e.g., admin diagnostics).
+  if (!includeDemo) {
+    conditions.push(not(sql`${DEMO_CONTACT_TAG} = ANY(${contacts.tags})`));
+  }
 
   if (search) {
     const searchCondition = or(

@@ -117,16 +117,27 @@ export function buildFinalizeSummary({ snapshot, durationSec, aestheticArchetype
   // chatbot (above) → booking → CRM → portal demo for the client.
   // Slug is required; skip gracefully if absent (shouldn't happen in
   // practice but the snapshot can theoretically lack it).
+  //
+  // The /demo URL is a one-click deep link: workspace creation seeds
+  // a "Demo Customer" contact + sample upcoming appointment + welcome
+  // message, and visiting /customer/<slug>/demo auto-establishes a
+  // portal session for that contact — no email, no magic link. The
+  // operator can paste this URL to a prospect and they land directly
+  // in a populated portal instead of a magic-link form with empty
+  // tabs. Demo data is filtered out of operator-facing CRM / pipeline
+  // / analytics by tag, so it stays isolated from real customer data.
   const slug = ws.slug ?? "";
   if (slug) {
-    const portalUrl = `${appHost}/customer/${slug}/login`;
-    lines.push(`🎬 Demo the client portal: ${portalUrl}`);
+    const portalUrl = `${appHost}/customer/${slug}/demo`;
+    lines.push(`🎬 Demo the client portal (one-click, no login):`);
+    lines.push(`   ${portalUrl}`);
     lines.push(
-      `   This is what your client (the SMB owner) sees — their CRM dashboard, their leads, their bookings, their chatbot conversations.`,
+      `   Share this link with the prospect — opens directly as "Demo Customer" with a`,
     );
     lines.push(
-      `   Sign in with a magic link (use your own email; it's gated by email so each client gets their own private portal).`,
+      `   sample appointment and welcome message. Demo data stays isolated from your`,
     );
+    lines.push(`   real CRM and pipelines.`);
     lines.push(
       `   Free tier shows the portal with SeldonFrame branding. Growth ($29/mo) unlocks custom domain + the agency's logo.`,
     );
