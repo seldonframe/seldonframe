@@ -125,3 +125,72 @@ describe("buildFinalizeSummary — null archetype fallback (pre-v1.54 workspaces
     assert.ok(!out.includes("null"), "the literal string 'null' should not appear");
   });
 });
+
+// v1.55.x — LLM key story + client portal demo callout.
+describe("buildFinalizeSummary — v1.55.x LLM key + client portal callouts", () => {
+  test("includes the LLM key clarity line with settings URL + billing path", () => {
+    const out = buildFinalizeSummary({ snapshot: baseSnapshot, durationSec: 32, aestheticArchetype: "bold-urgency" });
+    assert.ok(
+      out.includes("Chatbot LLM key"),
+      "should label the LLM-key callout clearly",
+    );
+    assert.ok(
+      out.includes("Claude Code key by default"),
+      "should explain the BYOK default (Claude Code key)",
+    );
+    assert.ok(
+      out.includes("settings/integrations/llm"),
+      "should link to the LLM-settings page",
+    );
+    assert.ok(
+      out.includes("llm_credit_exhausted"),
+      "should name the error code operators see",
+    );
+    assert.ok(
+      out.includes("console.anthropic.com/settings/billing"),
+      "should point operators at the Anthropic billing page for top-up",
+    );
+  });
+
+  test("includes the client-portal demo callout with slug + tier upgrade nudge", () => {
+    const out = buildFinalizeSummary({ snapshot: baseSnapshot, durationSec: 32, aestheticArchetype: "bold-urgency" });
+    assert.ok(
+      out.includes("Demo the client portal"),
+      "client-portal callout should appear",
+    );
+    assert.ok(
+      out.includes("/customer/ignitify-cooling-and-heating/login"),
+      "callout should use the workspace slug to build the portal login URL",
+    );
+    assert.ok(
+      out.includes("magic link"),
+      "should explain the magic-link sign-in",
+    );
+    assert.ok(
+      out.includes("Growth ($29/mo)"),
+      "should nudge the tier upgrade for custom domain + agency logo",
+    );
+  });
+
+  test("LLM key + client portal callouts appear before the landing-page nudge", () => {
+    const out = buildFinalizeSummary({ snapshot: baseSnapshot, durationSec: 32, aestheticArchetype: "bold-urgency" });
+    const llmIdx = out.indexOf("Chatbot LLM key");
+    const portalIdx = out.indexOf("Demo the client portal");
+    const landingNudgeIdx = out.indexOf("Want a landing page");
+    assert.ok(llmIdx > 0 && portalIdx > 0 && landingNudgeIdx > 0, "all three sections present");
+    assert.ok(llmIdx < landingNudgeIdx, "LLM key callout precedes landing-page nudge");
+    assert.ok(portalIdx < landingNudgeIdx, "portal callout precedes landing-page nudge");
+  });
+
+  test("portal callout is gracefully omitted when workspace.slug is missing", () => {
+    const fixture = {
+      ...baseSnapshot,
+      workspace: { ...baseSnapshot.workspace, slug: "" },
+    };
+    const out = buildFinalizeSummary({ snapshot: fixture, durationSec: 32, aestheticArchetype: null });
+    assert.ok(
+      !out.includes("Demo the client portal"),
+      "should not emit broken portal URL when slug is empty",
+    );
+  });
+});

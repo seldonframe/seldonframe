@@ -4,11 +4,12 @@
 // branded header, a 6-step launch wizard for the agency operator,
 // and a copy-snippet helper.
 //
-// The wizard replaces the v1.55.0 "Try the AI receptionist" pill —
-// operators landed on this preview page asking "what now?" The wizard
-// answers that explicitly: test → customize → eval → promote → embed →
-// watch leads. Each numbered step links to the exact dashboard URL the
-// operator needs.
+// v1.55.x — Wizard steps now deep-link to the SPECIFIC agent's
+// dashboard pages (/agents/<id>/test, /evals, /settings) when content
+// .agentId is present. Falls back to the generic /agents listing on
+// legacy workspaces created before agentId was plumbed through.
+// Added an LLM-key info box explaining the BYOK story + how to handle
+// llm_credit_exhausted errors.
 //
 // Theme tokens (--sf-bg, --sf-text, --sf-primary, --sf-accent) are
 // applied by the existing PublicThemeProvider higher in the tree.
@@ -17,108 +18,145 @@
 
 import type { ChatbotPreviewSectionContent } from "./types";
 
-const AGENTS_URL = "https://app.seldonframe.com/agents";
+const AGENTS_BASE_URL = "https://app.seldonframe.com/agents";
 const CONTACTS_URL = "https://app.seldonframe.com/contacts";
+const LLM_SETTINGS_URL = "https://app.seldonframe.com/settings/integrations/llm";
+const ANTHROPIC_BILLING_URL = "https://console.anthropic.com/settings/billing";
 
 type WizardStep = {
   /** Emoji rendered before the heading — visual anchor for scanning. */
   emoji: string;
   /** Short bold heading. */
   title: string;
-  /** Optional href — when set, the description text and any inline
-   *  URLs become a single clickable link. */
-  href?: string;
   /** Body content. Inline JSX so we can mix prose and links. */
   body: React.ReactNode;
 };
 
-const STEPS: WizardStep[] = [
-  {
-    emoji: "✅",
-    title: "Test the chatbot",
-    body: "It's live in the bottom-right corner — try a question.",
-  },
-  {
-    emoji: "📝",
-    title: "Customize behavior",
-    body: (
-      <>
-        Edit FAQ, voice, tools at{" "}
+function buildSteps(args: {
+  sandboxUrl: string;
+  settingsUrl: string;
+  evalsUrl: string;
+}): WizardStep[] {
+  const { sandboxUrl, settingsUrl, evalsUrl } = args;
+  return [
+    {
+      emoji: "✅",
+      title: "Test the chatbot",
+      body: (
+        <>
+          It&apos;s live in the bottom-right corner — try a question. Or use the
+          dashboard sandbox at{" "}
+          <a
+            href={sandboxUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: "var(--sf-accent)", textDecoration: "underline" }}
+          >
+            {sandboxUrl.replace("https://", "")}
+          </a>
+          .
+        </>
+      ),
+    },
+    {
+      emoji: "📝",
+      title: "Customize behavior",
+      body: (
+        <>
+          Edit FAQ, voice, tools at{" "}
+          <a
+            href={settingsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: "var(--sf-accent)", textDecoration: "underline" }}
+          >
+            {settingsUrl.replace("https://", "")}
+          </a>
+          . Or ask Claude Code:{" "}
+          <em>&ldquo;update the chatbot&apos;s FAQ to mention financing&rdquo;</em>
+        </>
+      ),
+    },
+    {
+      emoji: "🧪",
+      title: "Run evals to ensure safety",
+      body: (
+        <>
+          Go to{" "}
+          <a
+            href={evalsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: "var(--sf-accent)", textDecoration: "underline" }}
+          >
+            {evalsUrl.replace("https://", "")}
+          </a>{" "}
+          → Run evals. Make sure it answers correctly before going live.
+        </>
+      ),
+    },
+    {
+      emoji: "🚀",
+      title: "Promote TEST → LIVE",
+      body: (
+        <>
+          Go to{" "}
+          <a
+            href={settingsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: "var(--sf-accent)", textDecoration: "underline" }}
+          >
+            {settingsUrl.replace("https://", "")}
+          </a>{" "}
+          → Publish.
+        </>
+      ),
+    },
+    {
+      emoji: "🌐",
+      title: "Paste on your client's site",
+      body: (
+        <>
+          Snippet is below — paste before <code>&lt;/body&gt;</code>.
+        </>
+      ),
+    },
+    {
+      emoji: "📊",
+      title: "Watch leads come in",
+      body: (
         <a
-          href={AGENTS_URL}
+          href={CONTACTS_URL}
           target="_blank"
           rel="noopener noreferrer"
           style={{ color: "var(--sf-accent)", textDecoration: "underline" }}
         >
-          app.seldonframe.com/agents
+          app.seldonframe.com/contacts
         </a>
-        . Or ask Claude Code:{" "}
-        <em>&ldquo;update the chatbot&apos;s FAQ to mention financing&rdquo;</em>
-      </>
-    ),
-  },
-  {
-    emoji: "🧪",
-    title: "Run evals to ensure safety",
-    body: (
-      <>
-        <a
-          href={AGENTS_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{ color: "var(--sf-accent)", textDecoration: "underline" }}
-        >
-          app.seldonframe.com/agents
-        </a>{" "}
-        → Run evals. Make sure it answers correctly before going live.
-      </>
-    ),
-  },
-  {
-    emoji: "🚀",
-    title: "Promote TEST → LIVE",
-    body: (
-      <>
-        <a
-          href={AGENTS_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{ color: "var(--sf-accent)", textDecoration: "underline" }}
-        >
-          app.seldonframe.com/agents
-        </a>{" "}
-        → Publish.
-      </>
-    ),
-  },
-  {
-    emoji: "🌐",
-    title: "Paste on your client's site",
-    body: (
-      <>
-        Snippet is below — paste before <code>&lt;/body&gt;</code>.
-      </>
-    ),
-  },
-  {
-    emoji: "📊",
-    title: "Watch leads come in",
-    body: (
-      <a
-        href={CONTACTS_URL}
-        target="_blank"
-        rel="noopener noreferrer"
-        style={{ color: "var(--sf-accent)", textDecoration: "underline" }}
-      >
-        app.seldonframe.com/contacts
-      </a>
-    ),
-  },
-];
+      ),
+    },
+  ];
+}
 
 export function ChatbotPreviewSection(props: ChatbotPreviewSectionContent) {
-  const { businessName, tagline, embedUrl } = props;
+  const { businessName, tagline, embedUrl, agentId } = props;
   const snippet = `<script src="${embedUrl}" async></script>`;
+
+  // v1.55.x — When agentId is present, deep-link wizard steps into the
+  // specific agent's dashboard pages. Falls back to the generic /agents
+  // listing on legacy workspaces (created before agentId was plumbed).
+  const sandboxUrl = agentId
+    ? `${AGENTS_BASE_URL}/${agentId}/test`
+    : AGENTS_BASE_URL;
+  const settingsUrl = agentId
+    ? `${AGENTS_BASE_URL}/${agentId}/settings`
+    : AGENTS_BASE_URL;
+  const evalsUrl = agentId
+    ? `${AGENTS_BASE_URL}/${agentId}/evals`
+    : AGENTS_BASE_URL;
+
+  const steps = buildSteps({ sandboxUrl, settingsUrl, evalsUrl });
 
   return (
     <section
@@ -178,7 +216,7 @@ export function ChatbotPreviewSection(props: ChatbotPreviewSectionContent) {
             </h2>
           </div>
           <ol className="mt-6 space-y-5">
-            {STEPS.map((step, idx) => (
+            {steps.map((step, idx) => (
               <li key={step.title} className="flex gap-4">
                 <span
                   className="flex-shrink-0 flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold"
@@ -205,6 +243,47 @@ export function ChatbotPreviewSection(props: ChatbotPreviewSectionContent) {
               </li>
             ))}
           </ol>
+
+          {/* v1.55.x — LLM key info box. The chatbot uses the operator's
+              Anthropic key (BYOK); this callout makes that explicit + tells
+              them where to change it + how to recover from
+              llm_credit_exhausted errors. Inverted color so it visually
+              distinguishes from the wizard steps above. */}
+          <div
+            className="mt-8 p-4 rounded-xl text-xs"
+            style={{
+              backgroundColor: "var(--sf-text)",
+              color: "var(--sf-bg)",
+              opacity: 0.85,
+            }}
+          >
+            <p className="font-medium mb-2">⚡ About the LLM key</p>
+            <p className="opacity-80 leading-relaxed">
+              The chatbot uses your Claude Code Anthropic key by default. To use
+              a different key (different account, different rate limits,
+              different model provider), change it at{" "}
+              <a
+                href={LLM_SETTINGS_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: "var(--sf-bg)", textDecoration: "underline" }}
+              >
+                app.seldonframe.com/settings/integrations/llm
+              </a>
+              . If the chatbot errors with{" "}
+              <code style={{ fontSize: "0.95em" }}>llm_credit_exhausted</code>,
+              top up your Anthropic account at{" "}
+              <a
+                href={ANTHROPIC_BILLING_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: "var(--sf-bg)", textDecoration: "underline" }}
+              >
+                console.anthropic.com/settings/billing
+              </a>
+              .
+            </p>
+          </div>
         </div>
 
         {/* Operator helper: the embed snippet to copy onto the client's

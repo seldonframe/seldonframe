@@ -279,6 +279,11 @@ export type ChatbotPreviewSectionContent = {
   tagline: string;
   /** Full https:// URL to the agent's embed.js. */
   embedUrl: string;
+  /** v1.55.x — Optional agent id for deep links to /agents/<id>/{test,evals,settings}.
+   *  When present, the 6-step wizard links to the specific agent's dashboard
+   *  pages instead of the generic /agents listing. Null/undefined on legacy
+   *  workspaces created before this field was added. */
+  agentId?: string;
 };
 
 export type LandingPageSection = {

@@ -91,6 +91,79 @@ describe("ChatbotPreviewSection", () => {
     );
   });
 
+  // v1.55.x — when agentId is provided, the wizard links should be
+  // agent-scoped (/agents/<id>/test, /agents/<id>/evals,
+  // /agents/<id>/settings) instead of the generic /agents listing.
+  test("uses agent-scoped wizard URLs when agentId is present", () => {
+    const html = renderToString(
+      <ChatbotPreviewSection
+        businessName="Acme"
+        tagline="test"
+        embedUrl="https://example.com/embed.js"
+        agentId="ag_xyz789"
+      />,
+    );
+    assert.ok(
+      html.includes("app.seldonframe.com/agents/ag_xyz789/test"),
+      "sandbox link should target /agents/<id>/test",
+    );
+    assert.ok(
+      html.includes("app.seldonframe.com/agents/ag_xyz789/evals"),
+      "evals link should target /agents/<id>/evals",
+    );
+    assert.ok(
+      html.includes("app.seldonframe.com/agents/ag_xyz789/settings"),
+      "settings link should target /agents/<id>/settings",
+    );
+  });
+
+  test("falls back to generic /agents URL when agentId is absent", () => {
+    const html = renderToString(
+      <ChatbotPreviewSection
+        businessName="Acme"
+        tagline="test"
+        embedUrl="https://example.com/embed.js"
+      />,
+    );
+    // Without agentId the wizard should NOT include the per-agent path
+    // segments (no /test, /evals, /settings suffix).
+    assert.ok(
+      !html.includes("/agents/ag_"),
+      "should not link to a specific agent id when none was provided",
+    );
+  });
+
+  // v1.55.x — LLM key info box explains BYOK + recovery path.
+  test("renders the LLM key info box with BYOK + recovery copy", () => {
+    const html = renderToString(
+      <ChatbotPreviewSection
+        businessName="Acme"
+        tagline="test"
+        embedUrl="https://example.com/embed.js"
+      />,
+    );
+    assert.ok(
+      html.includes("About the LLM key"),
+      "LLM-key callout heading should appear",
+    );
+    assert.ok(
+      html.includes("Claude Code"),
+      "BYOK source (Claude Code key) should be named",
+    );
+    assert.ok(
+      html.includes("llm_credit_exhausted"),
+      "the error code operators see should be called out by name",
+    );
+    assert.ok(
+      html.includes("app.seldonframe.com/settings/integrations/llm"),
+      "should link to the LLM-settings page so operators can swap keys",
+    );
+    assert.ok(
+      html.includes("console.anthropic.com/settings/billing"),
+      "should link to the Anthropic billing page so operators can top up",
+    );
+  });
+
   test("shows the paste-snippet helper for the agency operator", () => {
     const html = renderToString(
       <ChatbotPreviewSection
