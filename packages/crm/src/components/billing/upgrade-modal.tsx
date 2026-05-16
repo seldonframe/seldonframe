@@ -116,12 +116,18 @@ export function UpgradeModal({ open, onOpenChange, used, limit }: UpgradeModalPr
           <DialogDescription>{COPY.subtitleTemplate(used, limit)}</DialogDescription>
         </DialogHeader>
 
+        {/* design-critique: Scale gets ring-2 + shadow-md to visually back the
+            "Recommended" badge; CTAs differentiate (Growth=outline, Scale=default)
+            so the eye lands on the upgrade path first. */}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {(["growth", "scale"] as const).map((tier) => {
             const card = COPY[tier];
             const isScale = tier === "scale";
             return (
-              <Card key={tier}>
+              <Card
+                key={tier}
+                className={isScale ? "shadow-md ring-2 ring-primary" : undefined}
+              >
                 <CardHeader>
                   <div className="flex items-center justify-between gap-2">
                     <CardTitle>{card.name}</CardTitle>
@@ -143,6 +149,7 @@ export function UpgradeModal({ open, onOpenChange, used, limit }: UpgradeModalPr
                   <Button
                     onClick={() => upgrade(tier)}
                     disabled={pending !== null}
+                    variant={isScale ? "default" : "outline"}
                     className="w-full"
                   >
                     {pending === tier ? "Redirecting..." : card.cta}
@@ -155,14 +162,18 @@ export function UpgradeModal({ open, onOpenChange, used, limit }: UpgradeModalPr
 
         <p className="mt-4 text-center text-xs text-muted-foreground">{COPY.footer}</p>
 
-        <div className="mt-2 text-center">
-          <button
+        {/* design-critique: "Maybe later" sits below the footer (not adjacent to
+            the upgrade CTAs) so the decision flow reads cards → value confirmation
+            → escape. Uses Button ghost variant per design-system audit. */}
+        <div className="mt-6 text-center">
+          <Button
             type="button"
-            className="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
+            variant="ghost"
             onClick={() => onOpenChange(false)}
+            className="text-sm text-muted-foreground hover:text-foreground"
           >
             {COPY.cancel}
-          </button>
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
