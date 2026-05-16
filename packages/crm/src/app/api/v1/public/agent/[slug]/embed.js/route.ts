@@ -62,7 +62,14 @@ export async function GET(
   const url = new URL(request.url);
   const turnUrl = `${url.protocol}//${url.host}/api/v1/public/agent/${orgSlugPart}--${agentSlugPart}/turn`;
 
-  if (!agentRow || agentRow.slug !== agentSlugPart || agentRow.status !== "live") {
+  if (!agentRow || agentRow.slug !== agentSlugPart || !["live", "test"].includes(agentRow.status)) {
+    console.warn(JSON.stringify({
+      event: "embed_js_noop_returned",
+      slug: agentSlugPath,
+      reason: !agentRow ? "agent_not_found" :
+              agentRow.slug !== agentSlugPart ? "slug_mismatch" :
+              `status_${agentRow.status}`,
+    }));
     return new NextResponse(
       `// SF agent embed: agent not live or not found (org=${orgSlugPart}, agent=${agentSlugPart})\n`,
       {
@@ -148,7 +155,7 @@ function renderEmbedScript(input: {
   var style = document.createElement("style");
   style.textContent = [
     // v1.28.2 — bubble: subtle rest pulse → wakes attention without nagging
-    ".sf-agent-bubble{position:fixed;bottom:20px;right:20px;width:56px;height:56px;border-radius:50%;background:" + CFG.primaryColor + ";color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,0.15),0 1px 4px rgba(0,0,0,0.08);z-index:2147483646;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;border:none;font-size:24px;transition:transform .2s cubic-bezier(.34,1.56,.64,1),box-shadow .2s ease}",
+    ".sf-agent-bubble{position:fixed;bottom:20px;right:20px;width:56px;height:56px;border-radius:50%;background:" + CFG.primaryColor + ";color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,0.15),0 1px 4px rgba(0,0,0,0.08);z-index:2147483646;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;border:none;transition:transform .2s cubic-bezier(.34,1.56,.64,1),box-shadow .2s ease}",
     ".sf-agent-bubble:hover{transform:scale(1.08)}",
     ".sf-agent-bubble:active{transform:scale(.95)}",
     ".sf-agent-bubble:focus-visible{outline:2px solid " + CFG.primaryColor + ";outline-offset:3px}",
@@ -219,7 +226,7 @@ function renderEmbedScript(input: {
   bubble.className = "sf-agent-bubble";
   bubble.setAttribute("aria-label", "Open chat");
   bubble.setAttribute("aria-expanded", "false");
-  bubble.innerHTML = "&#128172;";
+  bubble.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9h8"/><path d="M8 13h6"/><path d="M9 18h-3a3 3 0 0 1 -3 -3v-8a3 3 0 0 1 3 -3h12a3 3 0 0 1 3 3v8a3 3 0 0 1 -3 3h-3l-3 3l-3 -3z"/></svg>';
 
   var panel = document.createElement("div");
   panel.className = "sf-agent-panel";

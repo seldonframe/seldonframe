@@ -34,11 +34,10 @@ export function ChatbotPreviewSection(props: ChatbotPreviewSectionContent) {
           {tagline}
         </p>
 
-        {/* Callout pointing to the floating widget. The embed.js script
-            below mounts the chatbot as a floating widget in the bottom
-            corner (bottom-right or bottom-left depending on theme).
-            We don't render a placeholder div here — the widget is the
-            chat UI. */}
+        {/* Callout pointing to the floating widget. The widget itself is
+            mounted by the public page route handler via
+            setPublicChatbotEmbed (registered at v2/complete time) — we
+            don't inject a <script> tag from this component. */}
         <div
           className="mt-12 inline-flex items-center gap-3 rounded-full px-6 py-3 text-sm font-medium"
           style={{
@@ -48,14 +47,26 @@ export function ChatbotPreviewSection(props: ChatbotPreviewSectionContent) {
           }}
         >
           <span>Try the AI receptionist</span>
-          <span className="text-lg" aria-hidden="true">↘</span>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M8 9h8" />
+            <path d="M8 13h6" />
+            <path d="M9 18h-3a3 3 0 0 1 -3 -3v-8a3 3 0 0 1 3 -3h12a3 3 0 0 1 3 3v8a3 3 0 0 1 -3 3h-3l-3 3l-3 -3z" />
+          </svg>
         </div>
         <p className="mt-3 text-xs opacity-50">
-          Chat widget loads in the corner of this page.
+          Chat widget loads in the bottom-right corner.
         </p>
-
-        {/* Embed script — mounts the floating widget */}
-        <script async src={embedUrl} />
 
         {/* Operator helper: the embed snippet to copy onto the client's
             existing site. The agency operator's primary takeaway from
