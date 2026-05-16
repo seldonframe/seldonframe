@@ -192,6 +192,33 @@ executive coaching. 12 years' practice.
 }
 ```
 
+## v1.54 — Archetype-driven template selection (read this FIRST)
+
+The workspace has been classified into one of 7 aesthetic archetypes
+at server-side workspace creation. The classified id is available in
+`context.aesthetic_archetype`. **Use this table verbatim** to pick the
+`template` field — the server enforces it anyway, so deviating costs
+you a round-trip without changing the rendered output.
+
+| `context.aesthetic_archetype` | `template` field |
+|--------------------------------|------------------|
+| `"bold-urgency"`               | `""` (omit) — tradesmen use the legacy split-screen variant; no template fits the bold-urgency vibe yet |
+| `"clinical-trust"`             | `"nexora-light"` |
+| `"cinematic-aspirational"`     | `"cinematic-aura"` |
+| `"editorial-warm"`             | `"viktor-light"` |
+| `"technical-restrained"`       | `"viktor-light"` (or `"stellar-tabs-white"` when the workspace is clearly a SaaS product, or `"securify-bold"` for dev-tools) |
+| `"soft-residential"`           | `"viktor-light"` |
+| `"brutalist"`                  | `"securify-bold"` |
+
+When `context.aesthetic_archetype` is `null` (pre-v1.54 workspaces),
+fall back to the older archetype heuristics in the catalog below.
+Picking the archetype-correct template means your `headline` /
+`subhead` copy ends up matching the visual treatment (urgent and
+imperative for bold-urgency, editorial and warm for editorial-warm,
+cinematic and aspirational for cinematic-aspirational).
+
+---
+
 ## Template catalog — pick ONE for the `template` field (v1.44.0)
 
 The template controls the FULL visual treatment of the hero. Picking the

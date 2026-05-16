@@ -1,3 +1,5 @@
+import type { AestheticArchetypeId } from "@/lib/workspace/aesthetic-archetypes";
+
 // v1.34.0 — Motion preset declares the intensity of motion across
 // the user's published surfaces.
 //   "minimal":   no motion — accessibility-first, prefers-reduced-motion.
@@ -46,6 +48,11 @@ export interface OrgTheme {
   logoUrl: string | null;
   /** v1.34.0 — Operator's chosen motion intensity. Default "balanced". */
   motionPreset?: MotionPreset;
+  /** v1.54.0 — Aesthetic archetype id chosen at workspace creation.
+   *  Drives persist_block's hero template/variant enforcement and
+   *  archetype-curated Unsplash fallback. Optional for backward compat:
+   *  workspaces created pre-1.54 lazy-reclassify on first hero persist. */
+  aestheticArchetype?: AestheticArchetypeId;
 }
 
 // v1.38.5 — flipped default mode from "dark" to "light".

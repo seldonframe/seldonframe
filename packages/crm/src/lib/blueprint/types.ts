@@ -137,7 +137,20 @@ export interface SectionHero {
   ctaPrimary: CTA;
   ctaSecondary?: CTA;
   imageUrl?: string | null;
-  variant?: "split-image-right" | "full-bleed" | "founder-portrait";
+  /** Hero layout variant. v1.40.0 extended the legacy narrow union
+   *  (split-image-right / full-bleed / founder-portrait) with the
+   *  archetype-driven variants (split-screen-50-50, left-aligned-
+   *  asymmetric, cinematic-fullbleed, cinematic-aura). v1.54.0
+   *  enforcement at persist.ts:429 writes the archetype.heroVariant
+   *  here; the React Hero component switches on these values. */
+  variant?:
+    | "cinematic-aura"
+    | "cinematic-fullbleed"
+    | "founder-portrait"
+    | "full-bleed"
+    | "left-aligned-asymmetric"
+    | "split-image-right"
+    | "split-screen-50-50";
   // v1.44.0 — fields carried by the persist_block flow so the
   // landing_pages.sections JSONB can render via the React template
   // registry (HERO_TEMPLATES) instead of the legacy static-HTML path.

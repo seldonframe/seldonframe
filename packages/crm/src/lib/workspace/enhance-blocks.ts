@@ -923,13 +923,18 @@ async function payloadToSections(
         .slice(0, 8)
     : [];
 
+  const archetypeContext = {
+    archetype: archetype.id,
+    businessName: input.business_name,
+  };
+
   const [heroImageSettled, heroVideoSettled, gallerySettled] = await Promise.allSettled([
-    heroImageQuery ? resolveHeroImage(heroImageQuery) : Promise.resolve(null),
+    heroImageQuery ? resolveHeroImage(heroImageQuery, archetypeContext) : Promise.resolve(null),
     wantsCinematicVideo && heroVideoQuery
       ? searchPexelsVideo(heroVideoQuery, { orientation: "landscape", size: "medium" })
       : Promise.resolve(null),
     galleryQueries.length > 0
-      ? resolveGalleryImages(galleryQueries)
+      ? resolveGalleryImages(galleryQueries, archetypeContext)
       : Promise.resolve([] as Awaited<ReturnType<typeof resolveGalleryImages>>),
   ]);
   const resolvedHeroImage =
@@ -1358,6 +1363,11 @@ export async function enhanceLandingForWorkspace(
       borderRadius: "rounded",
       logoUrl: null,
       motionPreset: archetype.motionPreset,
+      // v1.54.0 — persist the classified archetype id so persist_block
+      // can enforce template + variant + image-fallback overrides on
+      // every subsequent hero persist (including lean v2 flow's
+      // CC-agent-overwrites-server scenario).
+      aestheticArchetype: archetypeId,
     };
     await db
       .update(organizations)
