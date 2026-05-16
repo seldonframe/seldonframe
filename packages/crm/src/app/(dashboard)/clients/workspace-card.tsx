@@ -70,35 +70,51 @@ export function WorkspaceCard({ workspace }: WorkspaceCardProps) {
   const publicHost = workspace.publicUrl.replace(/^https?:\/\//, "");
 
   return (
+    // a11y-review: wrap Card in <article> so screen-reader landmark
+    // navigation announces "article" framing for each workspace
+    // (Card primitive is hardcoded to <div>; outside wrapper is the
+    // simpler fix).
+    //
     // design-critique: dropped hover ring — the card isn't a single
     // clickable target (URL + CTA are independent links), so a
     // card-level hover affordance is misleading. focus-within ring
     // stays since it reflects a real focus state on a child element.
-    <Card
-      data-slot="workspace-card"
-      className="transition-shadow focus-within:ring-foreground/30"
-    >
-      <CardHeader>
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <CardTitle className="truncate">{workspace.name}</CardTitle>
-            <a
-              href={workspace.publicUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-1 inline-block max-w-full truncate text-xs text-muted-foreground hover:text-foreground"
+    <article aria-labelledby={`workspace-${workspace.id}-title`}>
+      <Card
+        data-slot="workspace-card"
+        className="transition-shadow focus-within:ring-foreground/30"
+      >
+        <CardHeader>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <CardTitle
+                id={`workspace-${workspace.id}-title`}
+                className="truncate"
+              >
+                {workspace.name}
+              </CardTitle>
+              {/* a11y-review: aria-label disambiguates the SR rotor
+                  label so users hear "{host} link, opens in new tab"
+                  instead of just "{host}". The visible text stays as
+                  the bare host so the design isn't cluttered. */}
+              <a
+                href={workspace.publicUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={`${publicHost} — opens in a new tab`}
+                className="mt-1 inline-block max-w-full truncate text-xs text-muted-foreground hover:text-foreground"
+              >
+                {publicHost}
+              </a>
+            </div>
+            <Badge
+              variant={statusBadgeVariant(workspace.status)}
+              className={statusBadgeClassName(workspace.status)}
             >
-              {publicHost}
-            </a>
+              {statusLabel}
+            </Badge>
           </div>
-          <Badge
-            variant={statusBadgeVariant(workspace.status)}
-            className={statusBadgeClassName(workspace.status)}
-          >
-            {statusLabel}
-          </Badge>
-        </div>
-      </CardHeader>
+        </CardHeader>
 
       <CardContent className="flex flex-1 flex-col gap-3">
         <dl className="grid grid-cols-2 gap-3 text-sm">
@@ -143,6 +159,7 @@ export function WorkspaceCard({ workspace }: WorkspaceCardProps) {
           </Button>
         </div>
       </CardContent>
-    </Card>
+      </Card>
+    </article>
   );
 }
