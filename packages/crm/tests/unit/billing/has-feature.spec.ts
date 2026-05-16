@@ -42,3 +42,59 @@ describe("hasFeature — Growth+ flags", () => {
     assert.equal(result, false);
   });
 });
+
+describe("hasFeature — Scale-only flags", () => {
+  test("scale tier passes ai_agents", async () => {
+    const result = await hasFeature("org-1", "ai_agents", {
+      getOrgSubscription: fakeSubscription("scale"),
+    });
+    assert.equal(result, true);
+  });
+
+  test("growth tier FAILS ai_agents (Scale-only)", async () => {
+    const result = await hasFeature("org-1", "ai_agents", {
+      getOrgSubscription: fakeSubscription("growth"),
+    });
+    assert.equal(result, false);
+  });
+
+  test("growth tier FAILS white_label_portal (Scale-only)", async () => {
+    const result = await hasFeature("org-1", "white_label_portal", {
+      getOrgSubscription: fakeSubscription("growth"),
+    });
+    assert.equal(result, false);
+  });
+});
+
+describe("hasFeature — defensive cases", () => {
+  test("null orgId returns false without reading subscription", async () => {
+    let called = false;
+    const result = await hasFeature(null, "ai_agents", {
+      getOrgSubscription: async () => {
+        called = true;
+        return { tier: "scale" };
+      },
+    });
+    assert.equal(result, false);
+    assert.equal(called, false, "must not query DB when orgId is null");
+  });
+
+  test("undefined orgId returns false without reading subscription", async () => {
+    let called = false;
+    const result = await hasFeature(undefined, "ai_agents", {
+      getOrgSubscription: async () => {
+        called = true;
+        return { tier: "scale" };
+      },
+    });
+    assert.equal(result, false);
+    assert.equal(called, false);
+  });
+
+  test("subscription with no tier defaults to free behavior", async () => {
+    const result = await hasFeature("org-1", "custom_domain", {
+      getOrgSubscription: async () => ({}),
+    });
+    assert.equal(result, false);
+  });
+});
