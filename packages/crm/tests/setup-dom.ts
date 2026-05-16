@@ -74,6 +74,23 @@ for (const key of globals) {
   }
 }
 
+// `self` is referenced by `next/link`'s prefetch warmup (calls
+// `requestIdleCallback` through `self`). jsdom doesn't put it on globalThis,
+// so we alias it. Also alias `requestIdleCallback` / `cancelIdleCallback`
+// since not all jsdom versions ship them — fall back to setTimeout.
+Object.defineProperty(globalThis, "self", {
+  value: globalThis,
+  writable: true,
+  configurable: true,
+  enumerable: false,
+});
+if (typeof (globalThis as Record<string, unknown>).requestIdleCallback !== "function") {
+  (globalThis as Record<string, unknown>).requestIdleCallback = (cb: () => void) => setTimeout(cb, 0);
+}
+if (typeof (globalThis as Record<string, unknown>).cancelIdleCallback !== "function") {
+  (globalThis as Record<string, unknown>).cancelIdleCallback = (id: number) => clearTimeout(id);
+}
+
 // Mark the test environment so React doesn't print "act()" warnings
 // for every microtask flush in fireEvent.click.
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
