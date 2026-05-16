@@ -33,7 +33,11 @@ const PILLARS: readonly Pillar[] = [
   {
     icon: Terminal,
     label: "Claude Code first",
-    body: "Spin up a client workspace from your terminal. The web app is the same backend.",
+    // design-critique May 2026: appended a 4-word qualifier so readers
+    // who don't know Claude Code still get the gist (it's a CLI tool
+    // we integrate with). The web app caveat is the reassurance that
+    // they don't have to learn it to use the product.
+    body: "Spin up a client workspace from your terminal via the official MCP integration. The web app is the same backend.",
   },
   {
     icon: Database,
@@ -77,7 +81,12 @@ export async function LandingOpenSourceSection() {
             <article
               key={pillar.label}
               data-pillar={pillar.label}
-              className="flex flex-col items-start rounded-xl border border-zinc-800 bg-zinc-900 p-5"
+              // design-critique May 2026: bg-zinc-900/60 instead of
+              // bg-zinc-900 so these credential cards visually demote
+              // below the how-it-works step cards above (which use
+              // full opacity). The eye reads "these are proofs, not
+              // numbered actions".
+              className="flex flex-col items-start rounded-xl border border-zinc-800 bg-zinc-900/60 p-5"
             >
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#14b8a6]/10 text-[#14b8a6]">
                 <Icon size={20} aria-hidden="true" />
