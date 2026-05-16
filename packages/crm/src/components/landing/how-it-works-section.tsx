@@ -75,6 +75,9 @@ export function LandingHowItWorksSection() {
                 className="h-auto w-full"
                 unoptimized
               />
+              <p className="border-t border-zinc-800 bg-zinc-950 px-3 py-2 text-center text-[10px] uppercase tracking-widest text-zinc-600">
+                Real screenshot lands in week 6
+              </p>
             </div>
           </div>
         ))}
