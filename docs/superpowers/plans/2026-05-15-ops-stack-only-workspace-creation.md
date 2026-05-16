@@ -18,7 +18,7 @@
 
 | Path | Change | Why |
 |------|--------|-----|
-| `packages/crm/src/components/landing/sections/types.ts` | Extend `LandingPageSection["type"]` union with `"chatbot-preview"` | New section type the page renderer dispatches on |
+| `packages/crm/src/components/landing/sections/types.ts` | Extend `LandingPageSection["type"]` union with `"chatbotPreview"` | New section type the page renderer dispatches on |
 | `packages/crm/src/components/landing/block-registry.tsx` | Import + register a `chatbot-preview` block manifest | Dispatch the new section type to the ChatbotPreview component |
 | `packages/crm/src/lib/agents/store.ts` | Add optional `status?: "draft" \| "test" \| "live"` field to `CreateAgentInput`; use `input.status ?? "draft"` at the insert | Lets `v2/complete` pass `status: "test"` explicitly without changing default for other callers |
 | `packages/crm/src/lib/workspace/create-full.ts` | Remove the `enhanceLandingForWorkspace` try/catch block (lines ~497-536) | Eliminates the ~2.5-min LLM block generation from the default workspace creation path |
@@ -63,9 +63,9 @@ grep -n "LandingPageSection\b" packages/crm/src/components/landing/sections/type
 
 Expected: line ~272 has `export type LandingPageSection = { type: ... }` with the existing union of section types.
 
-- [ ] **Step 2: Add `"chatbot-preview"` to the union**
+- [ ] **Step 2: Add `"chatbotPreview"` to the union**
 
-Open `packages/crm/src/components/landing/sections/types.ts`. Find the `LandingPageSection` type (around line 272). Add `"chatbot-preview"` at the end of the `type` union:
+Open `packages/crm/src/components/landing/sections/types.ts`. Find the `LandingPageSection` type (around line 272). Add `"chatbotPreview"` at the end of the `type` union:
 
 ```typescript
 export type LandingPageSection = {
@@ -90,7 +90,7 @@ export type LandingPageSection = {
     // Renders a full-page branded chat interface for the workspace's
     // website-chatbot agent. Evicted when an operator persists hero/services
     // /etc via the landing-page-creation SKILL.md flow.
-    | "chatbot-preview";
+    | "chatbotPreview";
   content: Record<string, unknown>;
   order: number;
 };
@@ -355,7 +355,7 @@ Then add a new manifest entry to the `landingBlockRegistry` array. Place it at t
 
 ```typescript
 {
-  type: "chatbot-preview",
+  type: "chatbotPreview",
   label: "Chatbot Preview (default public surface)",
   category: "SeldonFrame",
   grapesId: "sf-chatbot-preview",
@@ -583,7 +583,7 @@ describe("buildChatbotPreviewSection — pure shape construction", () => {
       workspaceBaseDomain: "app.seldonframe.com",
     };
     const section = buildChatbotPreviewSection(input);
-    assert.equal(section.type, "chatbot-preview");
+    assert.equal(section.type, "chatbotPreview");
     assert.equal(section.order, 1);
     assert.equal(section.content.businessName, "Ignitify Cooling");
     assert.equal(section.content.tagline, "BBB-accredited HVAC team serving El Paso");
@@ -735,7 +735,7 @@ export function buildChatbotPreviewSection(
       : rawTagline;
 
   return {
-    type: "chatbot-preview",
+    type: "chatbotPreview",
     order: 1,
     content: {
       businessName: input.businessName,

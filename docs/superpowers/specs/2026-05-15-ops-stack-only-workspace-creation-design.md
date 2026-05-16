@@ -63,7 +63,7 @@ v1.54 (just shipped) ensures that WHEN a landing page is generated, the archetyp
 
 **Change 1 — Strip landing-page generation from `createFullWorkspace`.** The enhance-blocks step (the LLM-driven block generation that costs ~2.5 of the 3 minutes) is removed from the pipeline. The seed-landing-from-soul canned fallback is also removed (irrelevant when no landing page is generated). Both are replaced with a single ~30-line `seedChatbotPreviewLanding` function.
 
-**Change 2 — NEW chatbot-preview page replaces empty landing at the public URL.** A new `ChatbotPreview` React component renders a branded, theme-tinted, full-page chat interface (NOT the floating-widget pattern from embed.js, because the whole preview page is the demo). It reuses the existing `landing_pages.sections` JSONB pipeline by adding a new `"chatbot-preview"` section type. Operator can later replace it with hero/services/etc via the SKILL.md (block persistence evicts the chatbot-preview section naturally).
+**Change 2 — NEW chatbot-preview page replaces empty landing at the public URL.** A new `ChatbotPreview` React component renders a branded, theme-tinted, full-page chat interface (NOT the floating-widget pattern from embed.js, because the whole preview page is the demo). It reuses the existing `landing_pages.sections` JSONB pipeline by adding a new `"chatbotPreview"` section type. Operator can later replace it with hero/services/etc via the SKILL.md (block persistence evicts the chatbot-preview section naturally).
 
 **Change 3 — Landing-page generation becomes operator-prompted via NEW `skills/landing-page-creation/SKILL.md`.** Operator says "build a landing page for X in bold-urgency style", Claude Code reads the SKILL.md, walks through `get_workspace_state → get_block_skill per block → persist_block per block`. v1.54's server-side archetype enforcement still fires at persist time. All existing block SKILL.md files (hero, services, FAQ, etc.) get composed.
 
@@ -145,7 +145,7 @@ export type LandingPageSection =
   | ChatbotPreviewSection;
 
 export interface ChatbotPreviewSection {
-  type: "chatbot-preview";
+  type: "chatbotPreview";
   order: number;
   content: {
     businessName: string;
@@ -196,7 +196,7 @@ switch (section.type) {
   case "hero":              return <HeroSection {...section.content} />;
   case "services":          return <ServicesGrid {...section.content} />;
   // ... other existing cases ...
-  case "chatbot-preview":   return <ChatbotPreview {...section.content} />;  // NEW
+  case "chatbotPreview":   return <ChatbotPreview {...section.content} />;  // NEW
 }
 ```
 
@@ -225,7 +225,7 @@ export async function seedChatbotPreviewLanding(input: {
     title: input.businessName,
     sections: [
       {
-        type: "chatbot-preview",
+        type: "chatbotPreview",
         order: 1,
         content: {
           businessName: input.businessName,
