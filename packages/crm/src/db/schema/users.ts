@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
-import { index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { index, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
+import type { AgencyProfile } from "./agency-profile";
 
 export const users = pgTable(
   "users",
@@ -23,6 +24,10 @@ export const users = pgTable(
     billingPeriod: text("billing_period").notNull().default("monthly"),
     subscriptionStatus: text("subscription_status").notNull().default("trialing"),
     trialEndsAt: timestamp("trial_ends_at", { withTimezone: true }),
+    agencyProfile: jsonb("agency_profile")
+      .$type<AgencyProfile>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
