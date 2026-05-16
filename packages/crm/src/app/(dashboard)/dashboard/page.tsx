@@ -23,6 +23,9 @@ import { logEvent } from "@/lib/observability/log";
 import { DealsCrmSurface } from "@/components/crm/deals-crm-surface";
 import { getCrmSurfaceConfig } from "@/lib/crm/view-config";
 import { mapDealRowToCrmRecord } from "@/lib/crm/view-models";
+import { CreateClientCta } from "@/components/dashboard/create-client-cta";
+import { enforceWorkspaceLimit } from "@/lib/billing/limits";
+import { getOwnedWorkspaceCount } from "@/lib/web-onboarding/owned-workspace-count";
 
 /*
   Square UI class reference (source of truth):
@@ -261,6 +264,47 @@ export default async function DashboardPage({
   // sessions are scoped to ONE workspace by design — their
   // membershipOrgIds list is just [their orgId].
   const isOperatorSession = isOperatorPortalUserId(user?.id);
+
+  // Phase 9 — agency dashboard header CTA. Compute workspace-limit
+  // decision so the header can render <CreateClientCta> with tier-aware
+  // usage badge + at-limit modal trigger. Operator sessions never see
+  // the CTA, so skip the lookup for them (and skip when the user.id
+  // isn't a real UUID).
+  let agencyWorkspaceLimit:
+    | { tier: "free" | "growth" | "scale"; used: number; limit: number }
+    | null = null;
+  if (!isOperatorSession && user?.id) {
+    try {
+      const ownedWorkspaceCount = await getOwnedWorkspaceCount(user.id);
+      const decision = await enforceWorkspaceLimit({
+        userId: user.id,
+        primaryOrgId: orgId,
+        ownedWorkspaceCount,
+      });
+      // The `limit` field is -1 for unlimited tiers; normalise to
+      // POSITIVE_INFINITY so the CTA component's Number.isFinite check
+      // does the right thing. When the decision is `allowed: true`
+      // (unlimited), there's no `used`/`limit` on the shape, so derive
+      // them from the inputs.
+      if ("limit" in decision) {
+        agencyWorkspaceLimit = {
+          tier: decision.tier as "free" | "growth" | "scale",
+          used: decision.used,
+          limit: decision.limit === -1 ? Number.POSITIVE_INFINITY : decision.limit,
+        };
+      } else {
+        agencyWorkspaceLimit = {
+          tier: decision.tier as "free" | "growth" | "scale",
+          used: ownedWorkspaceCount,
+          limit: Number.POSITIVE_INFINITY,
+        };
+      }
+    } catch (err) {
+      // Defensive: a billing-table read shouldn't crash the dashboard.
+      // Logging keeps the signal; rendering proceeds without the CTA.
+      logEvent("dashboard_cta_limit_lookup_failed", { error: String(err) }, { severity: "warn" });
+    }
+  }
   const membershipRows = user?.id && !isOperatorSession
     ? await db
         .select({ orgId: orgMembers.orgId })
@@ -836,13 +880,17 @@ export default async function DashboardPage({
 
         {/* v1.25.3 — "Create New Client OS" is an SF-agency action
             (creating a new white-label client workspace). Operator
-            sessions never need it; their workspace is fixed. */}
-        {!isOperatorSession ? (
-          <div className="flex items-center gap-2 sm:gap-3">
-            <Link href="/orgs/new" className="crm-button-secondary h-9 gap-2 px-4 text-sm">
-              <Plus className="size-4" />
-              <span>New workspace</span>
-            </Link>
+            sessions never need it; their workspace is fixed.
+            Phase 9 — replaced the old `/orgs/new` link with the
+            tier-aware <CreateClientCta>, which shows the usage badge
+            + opens UpgradeModal when the operator is at their limit. */}
+        {!isOperatorSession && agencyWorkspaceLimit ? (
+          <div className="ml-auto">
+            <CreateClientCta
+              tier={agencyWorkspaceLimit.tier}
+              used={agencyWorkspaceLimit.used}
+              limit={agencyWorkspaceLimit.limit}
+            />
           </div>
         ) : null}
       </header>
