@@ -18,6 +18,7 @@
 
 import temporalReasoning from "./website-chatbot/temporal-reasoning";
 import beSmartByDefault from "./website-chatbot/be-smart-by-default";
+import sdr from "./website-chatbot/sdr";
 import hardRules from "./website-chatbot/hard-rules";
 
 export type Skill = {
@@ -48,6 +49,18 @@ const REGISTRY: Skill[] = [
     id: "be-smart-by-default",
     content: beSmartByDefault,
     archetypes: ["website-chatbot", "voice-receptionist", "sms-followup-bot"],
+  },
+  // v1.55.1 — SDR-tuned playbook for website-chatbot. Turns a generic
+  // chat assistant into a front-desk SDR with a 3-5 turn funnel:
+  // emergency triage → identify service → qualify location → capture
+  // contact → book or escalate. References capabilities already in
+  // DEFAULT_CAPABILITIES_BY_ARCHETYPE["website-chatbot"] — no tool
+  // additions required. Scoped to website-chatbot only; voice / SMS
+  // archetypes have different turn cadences and need their own playbooks.
+  {
+    id: "website-chatbot-sdr",
+    content: sdr,
+    archetypes: ["website-chatbot"],
   },
   {
     id: "hard-rules",
