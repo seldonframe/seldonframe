@@ -43,7 +43,7 @@ export function LandingHowItWorksSection() {
   return (
     <section
       id="how-it-works"
-      className="mx-auto max-w-6xl border-t border-zinc-800/30 px-6 py-16 md:py-24"
+      className="mx-auto max-w-5xl border-t border-zinc-800/30 px-6 py-16 md:py-20"
     >
       <div className="text-center">
         <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">
@@ -54,7 +54,7 @@ export function LandingHowItWorksSection() {
         </h2>
       </div>
 
-      <div className="mt-12 grid grid-cols-1 gap-8 md:grid-cols-3">
+      <div className="mt-12 grid grid-cols-1 gap-3 md:grid-cols-3">
         {STEPS.map((step) => (
           <div
             key={step.number}
