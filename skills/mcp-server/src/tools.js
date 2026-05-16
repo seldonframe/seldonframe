@@ -20,6 +20,10 @@ import {
 // drafts assumed VERSION leaked in via client.js's transitive import;
 // it doesn't. Direct import = no runtime "VERSION is not defined".
 import { FIRST_CALL_BANNER, VERSION } from "./welcome.js";
+// v1.55.0 — finalize_workspace summary builder extracted into its own
+// module so it can be unit-tested in isolation. See
+// packages/crm/tests/unit/finalize-summary-v1-55.spec.ts.
+import { buildFinalizeSummary } from "./finalize-summary.js";
 // v1.10.1 — upload_workspace_image local_file_path branch reads the file
 // directly in the MCP-client process (which runs on the operator's
 // machine via the npm package). Reading + base64-encoding here means
@@ -840,8 +844,6 @@ export const TOOLS = [
       const wsName = snapshot?.workspace?.name ?? "Your workspace";
       const chatbot = snapshot?.chatbot ?? null;
       const tier = snapshot?.tier ?? null;
-      const bookingInfo = snapshot?.booking ?? null;
-      const intakeInfo = snapshot?.intake ?? null;
       if (!publicUrls.home || !publicUrls.book || !publicUrls.intake) {
         throw new Error(
           "Snapshot did not return public_urls (home/book/intake). Re-check the workspace.",
@@ -894,9 +896,8 @@ export const TOOLS = [
       }
 
       // Step 3: closing summary — formatted exactly the way Claude Code
-      // should paraphrase to the operator. Pulls the personality label
-      // + pipeline stages from the snapshot so the "What's configured"
-      // section reflects the actual workspace shape.
+      // should paraphrase to the operator. Personality + pipeline are
+      // surfaced in the response payload (not the summary text).
       const personality =
         snapshot?.workspace?.settings?.crmPersonality ?? null;
       const personalityLabel =
@@ -905,125 +906,15 @@ export const TOOLS = [
           : null;
       const pipelineStages = personality?.pipeline?.stages ?? [];
 
-      // 2026-05-15 — Agency-voice product moment summary. See spec
-      // docs/superpowers/specs/2026-05-15-agency-output-product-moment-design.md
-      const intakeSpecialNote =
-        personality?.vertical === "hvac" || personality?.vertical === "plumbing"
-          ? "emergency-line fallback"
-          : "structured lead-qualification";
-
-      const tierLabel = tier?.current_tier_label ?? "Free";
-      const isPaid =
-        tier?.current_tier === "growth" || tier?.current_tier === "scale";
-      const isScale = tier?.current_tier === "scale";
-
-      const intakeFieldCount = intakeInfo?.field_count ?? 0;
-      const intakeTitle = intakeInfo?.title ?? "lead qualification";
-
-      const lines = [];
-
-      // Header
-      lines.push(`✅ ${wsName} — client OS shipped.`);
-      lines.push("");
-      lines.push("Your client's stack is wired and live:");
-      lines.push("");
-
-      // Public site
-      lines.push("🌐 Public site (paste a screenshot in your Slack)");
-      lines.push(`   ${publicUrls.home}`);
-      lines.push("");
-
-      // Chatbot
-      if (chatbot && chatbot.embed_snippet) {
-        lines.push("🤖 AI chatbot — paste on the client's existing site (before </body>):");
-        lines.push(`   ${chatbot.embed_snippet}`);
-        lines.push(
-          `   In ${String(chatbot.status).toUpperCase()} mode. Powered by your Claude Code key (swap in settings).`,
-        );
-        lines.push(
-          `   Publish live: publish_agent({ agent_id: "${chatbot.agent_id}", status: "live" })`,
-        );
-      } else {
-        lines.push("🤖 AI chatbot — scaffold pending. Retry:");
-        lines.push(`   create_agent({ archetype: "website-chatbot", channel: "web_chat" })`);
-      }
-      lines.push("");
-
-      // Booking
-      lines.push("📋 Booking page (client's customers self-serve appointments)");
-      lines.push(`   ${publicUrls.book}`);
-      lines.push("");
-
-      // Intake
-      lines.push(`📝 Intake form (${intakeFieldCount}-question ${intakeTitle})`);
-      lines.push(`   ${publicUrls.intake}`);
-      lines.push("");
-
-      // Admin
-      lines.push("🔐 Your admin (CRM, pipeline, leads, deals)");
-      lines.push(`   ${adminUrl}`);
-      lines.push("");
-
-      // Client portal
-      if (tier?.client_portal_url) {
-        lines.push("👥 Client portal (your client logs in here to see their leads + bookings)");
-        lines.push(`   ${tier.client_portal_url}`);
-        if (isPaid) {
-          lines.push(`   ✅ Active. Forward this URL to your client; they log in via magic email.`);
-        } else {
-          lines.push(`   🔒 Growth tier ($29/mo) unlocks this for your client. Preview it`);
-          lines.push(`       yourself at the URL above right now.`);
-        }
-        lines.push("");
-      }
-
-      // What's wired
-      lines.push("What's wired:");
-      if (personalityLabel) {
-        const stageCount = pipelineStages.length;
-        lines.push(`   • ${personalityLabel} personality • ${stageCount}-stage CRM pipeline`);
-      }
-      if (bookingInfo) {
-        lines.push(
-          `   • ${bookingInfo.hours_summary} bookings, ${bookingInfo.duration_minutes}-min slots`,
-        );
-      }
-      if (intakeInfo) {
-        lines.push(`   • ${intakeFieldCount}-question intake with ${intakeSpecialNote}`);
-      }
-      if (chatbot) {
-        lines.push(`   • AI chatbot trained on the homepage (FAQ scaffold ready to refine)`);
-      }
-      lines.push(
-        emailSent
-          ? `   • Welcome email + admin link sent to ${a.email}`
-          : `   • Welcome email NOT yet sent (rerun finalize_workspace to retry)`,
-      );
-      lines.push("");
-
-      // What you can prompt next (5 agency-meaningful examples)
-      lines.push("What you can prompt next:");
-      lines.push(`   • "Refine the chatbot FAQ from the site" → update_website_chatbot`);
-      lines.push(`   • "Add SMS missed-call-text-back automation" → install_archetype`);
-      lines.push(`   • "Customize the hero with the client's brand voice" → customize_block`);
-      lines.push(`   • "Wire Google Calendar so bookings sync" → connect_integration`);
-      lines.push(`   • "Add a Spanish version of the landing page" → clone_workspace + translate`);
-      lines.push("");
-
-      // Tier ladder (omit on Scale tier)
-      if (!isScale) {
-        lines.push(`Tier ladder (you're on ${tierLabel}):`);
-        lines.push(`   Free  → 1 client workspace, everything above wired`);
-        lines.push(`   Growth $29/mo → 3 workspaces, client portal goes live, custom domain`);
-        lines.push(`                   (e.g. crm.youragency.com), SMS/email automations`);
-        lines.push(`   Scale $99/mo → unlimited workspaces, full white-label, reseller pricing`);
-        lines.push("");
-      }
-
-      // Closer
-      lines.push("Forward your client this admin link when ready. Or stay here and iterate.");
-
-      const summary = lines.join("\n");
+      // v1.55.0 — Ops-stack-only workspace creation. The summary is
+      // built by buildFinalizeSummary in ./finalize-summary.js; we
+      // pass the snapshot + duration + archetype here.
+      const aestheticArchetype = snapshot?.theme?.aestheticArchetype ?? null;
+      const summary = buildFinalizeSummary({
+        snapshot,
+        durationSec: 0, // smoke test reports actual duration via Vercel logs, not the summary text
+        aestheticArchetype,
+      });
 
       return {
         ok: emailSent || leadRecorded,
@@ -1050,37 +941,52 @@ export const TOOLS = [
         lead_error: leadError,
         personality: personalityLabel,
         pipeline_stages: pipelineStages.map((s) => s?.name).filter(Boolean),
-        // 2026-05-15 — agency-meaningful next-step examples
+        // v1.55.0 — Ops-stack-first next-step ladder. Surfaces the
+        // chatbot-paste workflow + the 7 ready automations + the
+        // landing-page nudge so Claude Code can pick from a tight
+        // curated list rather than improvise tool calls.
         next_steps_available: [
           {
+            id: "deploy_chatbot_embed",
+            label: "Paste chatbot embed on client's existing site",
+            action: "user_action",
+            payload: {
+              snippet: chatbot?.embed_snippet ?? null,
+              target: snapshot?.workspace?.settings?.source_url ?? null,
+            },
+          },
+          {
+            id: "promote_chatbot_to_live",
+            label: "Promote chatbot from TEST to LIVE (when ready for production)",
             action: "publish_agent",
-            when: "operator has reviewed the chatbot and is ready to take it live for the client's website",
-            example: `publish_agent({ agent_id: "${chatbot?.agent_id ?? "ag_..."}", status: "live" })`,
+            payload: { agent_id: chatbot?.agent_id ?? null },
           },
           {
-            action: "update_website_chatbot",
-            when: "operator wants to refine the chatbot's FAQ before publishing",
-            example: `update_website_chatbot({ workspace_id, faq: [{ q: '...', a: '...' }] })`,
+            id: "activate_automation",
+            label: "Activate one of the 7 ready automations",
+            action: "open_dashboard",
+            payload: { url: snapshot?.ops_stack?.automations_url ?? null },
           },
           {
-            action: "install_archetype",
-            when: "operator wants to wire pre-built automations (missed-call-text-back, speed-to-lead, review-requester)",
-            example: `install_archetype({ archetype: "missed-call-text-back" })`,
+            id: "configure_integration",
+            label: "Configure Twilio / Resend / Stripe for SMS / email / payments",
+            action: "claude_assisted",
+            payload: { available_providers: ["twilio", "resend", "stripe"] },
           },
           {
-            action: "customize_block",
-            when: "operator wants to refine landing-page hero / services / FAQ with brand voice",
-            example: `customize_block({ workspace_id, block_name: "hero", prompt: "make this feel more premium" })`,
+            id: "build_landing_page",
+            label: "Build a landing page (uses landing-page-creation skill)",
+            action: "claude_assisted",
+            payload: {
+              skill: "landing-page-creation",
+              archetype: snapshot?.theme?.aestheticArchetype ?? null,
+            },
           },
           {
-            action: "connect_integration",
-            when: "operator wants Google Calendar sync, Stripe payments, Twilio SMS",
-            example: `connect_integration({ workspace_id, provider: "google_calendar" })`,
-          },
-          {
-            action: "configure_llm_provider",
-            when: "operator wants to swap from the default Claude Code key to a different Anthropic key",
-            example: `configure_llm_provider({ workspace_id, provider: "anthropic", api_key: "sk-ant-..." })`,
+            id: "customize_chatbot_faq",
+            label: "Refine the chatbot's FAQ from source site content",
+            action: "claude_assisted",
+            payload: { agent_id: chatbot?.agent_id ?? null },
           },
         ],
       };
