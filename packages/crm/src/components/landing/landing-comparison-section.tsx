@@ -101,11 +101,17 @@ export function LandingComparisonSection() {
                 </span>
                 {item.price ? (
                   item.struck ? (
-                    // Bumped to 1.5px decoration and opacity-80 so the
-                    // "these prices are dying" frame reads at glance
-                    // distance (design-critique #3).
-                    <del className="shrink-0 text-sm font-medium tabular-nums text-zinc-500 opacity-80 decoration-rose-500/80 decoration-[1.5px]">
+                    // Text steps from zinc-500 to zinc-400 (drops the
+                    // opacity-80 modifier) so the struck price meets
+                    // WCAG AA 4.5:1 against bg-zinc-900/40 over body.
+                    // The rose decoration still carries the "this is
+                    // dying" frame (a11y-review C1). The visually-
+                    // hidden suffix carries the same frame to SR users
+                    // whose verbosity setting skips <del> announcement
+                    // (a11y-review M4).
+                    <del className="shrink-0 text-sm font-medium tabular-nums text-zinc-400 decoration-rose-500/80 decoration-[1.5px]">
                       {item.price}
+                      <span className="sr-only"> — no longer needed</span>
                     </del>
                   ) : (
                     <span className="shrink-0 text-sm font-medium tabular-nums text-zinc-400">
@@ -122,9 +128,18 @@ export function LandingComparisonSection() {
             </span>
             <del className="text-2xl font-bold tabular-nums text-zinc-300 decoration-rose-500/80 decoration-2">
               ~$1,744/mo
+              <span className="sr-only"> — what you stop paying</span>
             </del>
           </div>
         </div>
+
+        {/* Visually-hidden bridge — gives screen reader users the
+            same comparison frame the central arrow gives sighted
+            users (a11y-review M2). The visual arrow stays purely
+            decorative. */}
+        <p className="sr-only">
+          Instead of all of the above, with SeldonFrame you ship:
+        </p>
 
         {/* Central arrow — desktop only.
             z-10 to lift above the cards on the seam; size-14 + size-6

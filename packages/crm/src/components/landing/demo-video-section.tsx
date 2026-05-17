@@ -13,8 +13,13 @@ export function LandingDemoVideoSection() {
   return (
     <section
       id="demo"
+      // tabIndex=-1 makes the section a programmatic focus target so
+      // the hero's "Watch the 60-second build" CTA (href="#demo")
+      // moves focus here on jump for screen reader announcement
+      // (a11y-review N2). Does not enter the natural Tab order.
+      tabIndex={-1}
       aria-labelledby="demo-heading"
-      className="mx-auto max-w-5xl border-t border-zinc-800/30 px-6 py-16 md:py-20"
+      className="mx-auto max-w-5xl border-t border-zinc-800/30 px-6 py-16 outline-none md:py-20"
     >
       <div className="text-center">
         <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">
