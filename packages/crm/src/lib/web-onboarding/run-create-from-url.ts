@@ -90,6 +90,12 @@ export type RunDeps = {
     phone?: string | null;
     sourceUrl?: string | null;
   }) => Promise<unknown>;
+  /**
+   * 2026-05-17 — seed a soul_sources row with the source URL the
+   * operator pasted so /settings/soul-wiki shows it as a pre-populated
+   * source they can iterate on. Best-effort, non-fatal.
+   */
+  seedSoulWikiSourceUrl: (orgId: string, sourceUrl: string) => Promise<unknown>;
   workspaceBaseDomain: string;
 };
 
@@ -233,6 +239,25 @@ export async function runCreateFromUrl(input: RunInput): Promise<RunResult> {
             JSON.stringify({
               event: "auto_chatbot_failed",
               workspace_id: result.workspace_id,
+              detail: err instanceof Error ? err.message : String(err),
+            }),
+          );
+        }
+
+        // 7c2. Seed the client workspace's soul_sources with the URL
+        //      the operator pasted, so /settings/soul-wiki shows it as
+        //      a pre-populated source on first visit. Operators can add
+        //      YouTube videos / testimonials / pasted text afterward
+        //      without needing to re-enter the website. Best-effort +
+        //      non-fatal (HTTP fetch can fail).
+        try {
+          await input.deps.seedSoulWikiSourceUrl(result.workspace_id, validation.url);
+        } catch (err) {
+          console.warn(
+            JSON.stringify({
+              event: "seed_soul_wiki_source_failed",
+              workspace_id: result.workspace_id,
+              source_url: validation.url,
               detail: err instanceof Error ? err.message : String(err),
             }),
           );

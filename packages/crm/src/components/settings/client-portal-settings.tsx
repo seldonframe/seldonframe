@@ -43,6 +43,11 @@ export interface ClientPortalSettingsProps {
   totalContactsCount: number;
   /** Public app origin to build the portal URL — server resolves it. */
   portalUrl: string | null;
+  /** 2026-05-17 — when true (agency operator switched INTO a client
+   *  workspace), swap SeldonFrame-internal tier copy ("Scale plan",
+   *  "Growth tier") for generic phrasing. SMB operators shouldn't see
+   *  SF pricing tier names — they're their AGENCY's customer, not SF's. */
+  hideTierMentions?: boolean;
 }
 
 export function ClientPortalSettings({
@@ -56,6 +61,7 @@ export function ClientPortalSettings({
   activeContactsCount,
   totalContactsCount,
   portalUrl,
+  hideTierMentions = false,
 }: ClientPortalSettingsProps) {
   const [copyState, setCopyState] = useState<"idle" | "copied">("idle");
 
@@ -82,7 +88,9 @@ export function ClientPortalSettings({
             <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-600" />
             <div>
               <p className="text-sm font-medium text-foreground">
-                Client portal is active on the {tierLabel} plan
+                {hideTierMentions
+                  ? "Client portal is active for this workspace"
+                  : `Client portal is active on the ${tierLabel} plan`}
               </p>
               <p className="mt-1 text-sm text-muted-foreground">
                 Toggle access for individual clients from the Portal Access
@@ -131,7 +139,7 @@ export function ClientPortalSettings({
         </div>
 
         {planAllowed ? (
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <div className={`mt-4 grid gap-3 ${hideTierMentions ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
             <Stat
               label="Portal-enabled clients"
               value={`${enabledContactsCount}`}
@@ -146,11 +154,15 @@ export function ClientPortalSettings({
                   : "No activity yet"
               }
             />
-            <Stat
-              label="Plan"
-              value={tierLabel}
-              caption={tier === "scale" ? "Scale tier" : "Growth tier"}
-            />
+            {/* Plan tile hidden inside a client workspace — that's
+                SeldonFrame's commercial layer, not the SMB's. */}
+            {hideTierMentions ? null : (
+              <Stat
+                label="Plan"
+                value={tierLabel}
+                caption={tier === "scale" ? "Scale tier" : "Growth tier"}
+              />
+            )}
           </div>
         ) : null}
       </article>
@@ -280,12 +292,15 @@ export function ClientPortalSettings({
                   </span>
                 </div>
               </div>
+              {/* 2026-05-17 — inside a client workspace, swap the
+                  "Plan" tile for a "Powered by" tile that doesn't leak
+                  SF-internal tier names to the SMB-shaped operator. */}
               <div className="rounded-lg border border-zinc-200 p-3">
                 <p className="text-[10px] uppercase tracking-wide text-zinc-500">
-                  Plan
+                  {hideTierMentions ? "Powered by" : "Plan"}
                 </p>
                 <p className="mt-1 text-xs font-medium text-zinc-900">
-                  {tierLabel}
+                  {hideTierMentions ? workspaceName : tierLabel}
                 </p>
               </div>
             </div>

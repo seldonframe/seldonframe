@@ -20,6 +20,13 @@ import { canSeldonIt, resolvePlanFromPlanId } from "@/lib/billing/entitlements";
 import { listManagedOrganizations, setActiveOrgAction } from "@/lib/billing/orgs";
 import { getHiddenBlocks } from "@/lib/blocks/visibility-actions";
 import { getNotificationFeed } from "@/lib/notifications/feed";
+// 2026-05-17 — pulls the workspace's brand color / accent / radius
+// into the admin chrome so theme settings actually affect the
+// operator's own dashboard (not just public pages). Previously the
+// provider existed but wasn't mounted anywhere — saved themes only
+// applied to /l/, /book/, /forms/ surfaces.
+import { AdminThemeProvider } from "@/components/theme/admin-theme-provider";
+import { getThemeSettings } from "@/lib/theme/actions";
 import { db } from "@/db";
 import { activities, contacts, deals, landingPages, organizations, users } from "@/db/schema";
 import { desc, eq, sql } from "drizzle-orm";
@@ -85,6 +92,14 @@ export default async function DashboardLayout({
   const notifications = user?.id && !skipUserLookup
     ? await getNotificationFeed(user.id, user.orgId ?? null)
     : [];
+
+  // 2026-05-17 — fetch the workspace theme so the AdminThemeProvider
+  // can override --primary / --ring / --accent / --radius in admin
+  // chrome. Best-effort: failures just skip the override (chrome falls
+  // back to default shadcn tokens).
+  const adminThemeSettings = orgId
+    ? await getThemeSettings().catch(() => null)
+    : null;
 
   const [activeOrg, orgMemberCount, effectiveBranding] = orgId
     ? await Promise.all([
@@ -190,6 +205,7 @@ export default async function DashboardLayout({
 
   return (
     <SoulProvider soul={soul} personality={personality}>
+      <AdminThemeProvider theme={adminThemeSettings?.theme ?? null}>
       <div className="min-h-screen w-full lg:p-3">
         <div className="flex min-h-screen w-full flex-col items-center justify-start bg-background/95 lg:rounded-2xl lg:border lg:border-border/80 lg:shadow-(--shadow-card)">
           <div className="animate-page-enter flex min-h-screen w-full flex-col md:flex-row">
@@ -271,6 +287,7 @@ export default async function DashboardLayout({
           {!isOperatorSession ? <HelpButton /> : null}
         </div>
       </div>
+      </AdminThemeProvider>
     </SoulProvider>
   );
 }
