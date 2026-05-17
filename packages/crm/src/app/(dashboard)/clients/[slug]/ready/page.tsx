@@ -38,6 +38,11 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { agents, bookings, intakeForms, organizations, orgMembers } from "@/db/schema";
 import { buildWorkspaceUrls } from "@/lib/billing/anonymous-workspace";
+// 2026-05-17 — Invite SMB owner card. Wraps the existing
+// /portal/<slug>/login magic-link flow so the agency operator can
+// hand off the workspace to its actual SMB owner without copy-pasting
+// URLs.
+import { InviteSmbOwner } from "./invite-smb-owner";
 
 export const dynamic = "force-dynamic";
 
@@ -67,6 +72,12 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
       name: organizations.name,
       slug: organizations.slug,
       ownerId: organizations.ownerId,
+      // 2026-05-17 — parentUserId is the agency operator who CREATED
+      // this workspace (set by linkWorkspaceToOperator step 7 in
+      // run-create-from-url). Without checking it, the original
+      // ownerId-only gate would reject the operator on any workspace
+      // they created via the v2 flow before the link step ran.
+      parentUserId: organizations.parentUserId,
     })
     .from(organizations)
     .where(eq(organizations.slug, slug))
@@ -75,16 +86,28 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
   if (!workspace) redirect("/clients");
 
   // Allow the page if (a) the user is the owner OR (b) they have an
-  // org_members row (covers team members + the operator). Same gate
+  // org_members row (covers team members + the operator) OR (c) they
+  // are the parentUser (agency-managed client workspaces). Same gate
   // /clients uses for the workspace listing.
+  //
+  // 2026-05-17 — bug fix: previously the membership query did
+  // `WHERE org_id = ? LIMIT 1` (no user filter) then compared the
+  // first row's userId to the session — so when a workspace had
+  // multiple members only the alphabetically-first one passed. Every
+  // other agency operator switching INTO that workspace silently
+  // redirected back to /clients, which manifested as "switcher did
+  // nothing" (the URL flicked to /clients/<slug>/ready, the auth
+  // gate redirected back to /clients, the operator never saw it).
+  // Now filtered by user_id and parentUserId fallback added.
   const isOwner = workspace.ownerId === session.user.id;
-  if (!isOwner) {
+  const isParent = workspace.parentUserId === session.user.id;
+  if (!isOwner && !isParent) {
     const [member] = await db
       .select({ userId: orgMembers.userId })
       .from(orgMembers)
-      .where(eq(orgMembers.orgId, workspace.id))
+      .where(and(eq(orgMembers.orgId, workspace.id), eq(orgMembers.userId, session.user.id)))
       .limit(1);
-    if (!member || member.userId !== session.user.id) redirect("/clients");
+    if (!member) redirect("/clients");
   }
 
   const urls = buildWorkspaceUrls(workspace.slug, WORKSPACE_BASE_DOMAIN, workspace.id);
@@ -384,6 +407,20 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
                       >
                         {d.adminLabel}
                       </Link>
+                      {/* 2026-05-17 — Operator card gets an extra
+                          "Invite SMB owner" affordance that fires
+                          the operator-portal magic link so the SMB
+                          can sign in to their own workspace at
+                          /portal/<slug>/. End-customer + deliverable
+                          cards don't show this. */}
+                      {d.audience === "operator" ? (
+                        <InviteSmbOwner
+                          workspaceSlug={workspace.slug}
+                          workspaceName={workspace.name}
+                          portalLoginUrl={`${APP_BASE}/portal/${workspace.slug}/login`}
+                          invitedByName={session.user.name ?? undefined}
+                        />
+                      ) : null}
                     </div>
                   </article>
                 );
