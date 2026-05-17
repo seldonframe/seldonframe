@@ -36,6 +36,11 @@ import { linkWorkspaceToOperator } from "@/lib/workspace/link-workspace-to-opera
 // workspace creation so the Ready hub's "Test chatbot →" link points
 // at a real /agents/<id>/test page. Replicates the v2/complete pattern.
 import { createAgent } from "@/lib/agents/store";
+// 2026-05-17 — Seed a contact row in the AGENCY's own CRM representing
+// the newly-created client SMB. SeldonFrame becomes the agency's
+// business OS too — every client they create lands as a contact in
+// their /contacts list. Idempotent, non-fatal.
+import { seedClientContactInAgencyCrm } from "@/lib/workspace/seed-client-contact-in-agency";
 // 2026-05-16 — swapped from web-fetch-extractor (Anthropic web_fetch tool
 // path) to markdown-extractor (server-side fetch -> MD -> LLM). Same
 // signature, same SSE events, same error codes. See markdown-extractor.ts
@@ -104,6 +109,7 @@ async function dispatchCreateFromUrl(url: unknown): Promise<Response> {
           status: "test",
         });
       },
+      seedClientContactInAgencyCrm,
       workspaceBaseDomain: process.env.WORKSPACE_BASE_DOMAIN ?? "app.seldonframe.com",
     },
     body: { url },

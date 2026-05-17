@@ -90,6 +90,9 @@ export async function createLandingPageAction(formData: FormData) {
       template,
     },
   });
+  // 2026-05-17 — revalidate so the new page shows up in the listing
+  // without a manual reload (operator feedback: "had to refresh").
+  revalidatePath("/landing");
 }
 
 export async function createLandingPageForSeldonAction(input: {

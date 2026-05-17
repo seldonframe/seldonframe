@@ -1,6 +1,7 @@
 "use server";
 
 import { and, eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import { contacts, intakeForms, intakeSubmissions, organizations } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
@@ -97,6 +98,9 @@ export async function createSuggestedFormAction() {
     slug: "default-intake",
     fields: soul.suggestedIntakeForm.fields,
   });
+  // 2026-05-17 — revalidate the listing page so the new form appears
+  // without an operator-initiated refresh.
+  revalidatePath("/forms");
 }
 
 export async function createFormAction(formData: FormData) {
@@ -132,6 +136,12 @@ export async function createFormAction(formData: FormData) {
     })
     .returning({ id: intakeForms.id });
 
+  // 2026-05-17 — revalidate /forms list + the new form's edit page so
+  // navigating back from the create-drawer doesn't show a stale list.
+  revalidatePath("/forms");
+  if (created?.id) {
+    revalidatePath(`/forms/${created.id}/edit`);
+  }
   return { id: created?.id ?? null };
 }
 
@@ -172,6 +182,10 @@ export async function updateFormAction(formData: FormData) {
     })
     .where(and(eq(intakeForms.orgId, orgId), eq(intakeForms.id, formId)));
 
+  // 2026-05-17 — revalidate list + this form's edit page so operator
+  // sees their changes immediately on navigation.
+  revalidatePath("/forms");
+  revalidatePath(`/forms/${formId}/edit`);
   return { success: true };
 }
 
