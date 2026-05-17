@@ -127,6 +127,7 @@ export function DashboardTopbar({
   switchWorkspaceAction,
   isOperatorSession = false,
   notifications = [],
+  primaryOrgId = null,
 }: {
   userName: string;
   userEmail: string;
@@ -143,6 +144,11 @@ export function DashboardTopbar({
    *  layout. Empty array hides the unread badge and shows "all caught
    *  up". */
   notifications?: NotificationItem[];
+  /** 2026-05-17 — agency's primary workspace id, used to mark the
+   *  "YOUR AGENCY" row in the dropdown and to route the agency's own
+   *  workspace flip to /dashboard (not the Ready hub, which is
+   *  meaningless for the agency's own workspace). */
+  primaryOrgId?: string | null;
 }) {
   const pathname = usePathname();
   const labels = useLabels();
@@ -232,16 +238,24 @@ export function DashboardTopbar({
 
         {workspaceMenuOpen ? (
           <div className="absolute right-0 z-30 mt-2 w-[320px] rounded-2xl border border-border/80 bg-card/96 p-2.5 shadow-(--shadow-dropdown) backdrop-blur-xl">
-            <p className="px-2 pb-1 text-[10px] font-semibold tracking-[0.16em] text-muted-foreground/80">CLIENT WORKSPACES</p>
+            <p className="px-2 pb-1 text-[10px] font-semibold tracking-[0.16em] text-muted-foreground/80">YOUR WORKSPACES</p>
             <div className="space-y-1">
-              {workspaceOptions.map((workspace) => (
-                <form key={workspace.id} action={switchWorkspaceAction}>
-                  <input type="hidden" name="orgId" value={workspace.id} />
-                  {/* 2026-05-17 — workspace flips land on the per-workspace
-                      Ready hub (matches sidebar — see its copy block). */}
-                  <input type="hidden" name="redirectTo" value={`/clients/${workspace.slug}/ready`} />
-                  <button
-                    type="submit"
+              {/* 2026-05-17 — see sidebar.tsx for the rationale on
+                  switching from <form action={switchWorkspaceAction}>
+                  to plain Links targeting /switch-workspace?to=…&next=…
+                  TL;DR: onClick closes the menu (popover unmounts)
+                  BEFORE the form's server action dispatch completes,
+                  so the switch silently never happened. */}
+              {workspaceOptions.map((workspace) => {
+                const isPrimaryAgencyOrg = workspace.id === primaryOrgId;
+                const nextPath = isPrimaryAgencyOrg
+                  ? "/dashboard"
+                  : `/clients/${workspace.slug}/ready`;
+                const href = `/switch-workspace?to=${encodeURIComponent(workspace.id)}&next=${encodeURIComponent(nextPath)}`;
+                return (
+                  <Link
+                    key={workspace.id}
+                    href={href}
                     className="crm-pressable flex w-full items-start gap-2 rounded-xl px-2.5 py-2.5 text-left transition-[background-color,transform] duration-150 ease-out hover:bg-accent/60"
                     onClick={() => setWorkspaceMenuOpen(false)}
                   >
@@ -249,12 +263,19 @@ export function DashboardTopbar({
                       {activeWorkspaceId === workspace.id ? <Check className="size-3.5" /> : null}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium text-foreground">{workspace.name}</span>
+                      <span className="block truncate text-sm font-medium text-foreground">
+                        {workspace.name}
+                        {isPrimaryAgencyOrg ? (
+                          <span className="ml-1.5 inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 align-middle text-[9px] font-semibold tracking-[0.08em] text-emerald-700 dark:text-emerald-300">
+                            YOUR AGENCY
+                          </span>
+                        ) : null}
+                      </span>
                       <span className="block truncate text-xs text-muted-foreground">{workspace.contactCount.toLocaleString()} clients · {workspace.soulId ? workspace.soulId.charAt(0).toUpperCase() + workspace.soulId.slice(1) : "Custom"}</span>
                     </span>
-                  </button>
-                </form>
-              ))}
+                  </Link>
+                );
+              })}
             </div>
           </div>
         ) : null}

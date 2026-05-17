@@ -68,6 +68,13 @@ export function Sidebar(props: {
    *  owner logging into their own workspace would see. Independent
    *  of isOperatorSession (which is the magic-link operator portal). */
   isInsideClientWorkspace?: boolean;
+  /** 2026-05-17 — the user's PRIMARY workspace id (user.orgId). Used
+   *  to build the "← Back to agency" switch link so the operator
+   *  actually flips the cookie back to their agency workspace and
+   *  sees the full nav + their own contacts/deals/bookings. Without
+   *  this, the back link would just navigate without switching the
+   *  active org cookie. */
+  primaryOrgId?: string | null;
 }) {
   const {
     hiddenBlocks = [],
@@ -82,6 +89,7 @@ export function Sidebar(props: {
     agencyBrandName = null,
     isSuperAdmin = false,
     isInsideClientWorkspace = false,
+    primaryOrgId = null,
   } = props;
   const labels = useLabels();
   const pathname = usePathname();
@@ -133,10 +141,28 @@ export function Sidebar(props: {
           title: "OVERVIEW",
           items: filterHidden([
             { href: "/dashboard", label: "Dashboard", icon: "LayoutDashboard" },
-            // Escape hatch back to the agency-level view. Same
-            // "/clients" target as the agency-mode sidebar so the
-            // route doesn't surprise.
-            { href: "/clients", label: "← Back to agency", icon: "ChevronLeft" },
+            // Escape hatch back to the agency workspace. Hits the
+            // /switch-workspace route which sets sf_active_org_id back
+            // to the agency's primary org id BEFORE redirecting —
+            // crucial so the operator lands on the agency dashboard
+            // with the full nav restored (Agents/Automations/Templates/
+            // Client workspaces). Without flipping the cookie the back
+            // link would just navigate but leave us pinned to the
+            // client's workspace context.
+            ...(primaryOrgId
+              ? [
+                  {
+                    href: `/switch-workspace?to=${encodeURIComponent(primaryOrgId)}&next=${encodeURIComponent("/dashboard")}`,
+                    label: "← Back to agency",
+                    icon: "ChevronLeft",
+                  },
+                ]
+              : [
+                  // Fallback: no primary org id (rare — synthesised
+                  // user). Send them to /clients which at least lists
+                  // their workspaces.
+                  { href: "/clients", label: "← Back to agency", icon: "ChevronLeft" },
+                ]),
           ]),
         },
         {
@@ -305,19 +331,32 @@ export function Sidebar(props: {
               <div className="absolute left-0 right-0 top-full z-30 mt-3 rounded-2xl border border-border/80 bg-card/96 p-2.5 shadow-(--shadow-dropdown) backdrop-blur-xl">
                 <p className="px-2 pb-1 text-[10px] font-semibold tracking-[0.16em] text-muted-foreground/80">YOUR WORKSPACES</p>
                 <div className="space-y-1">
-                  {workspaceOptions.map((workspace) => (
-                    <form key={workspace.id} action={switchWorkspaceAction}>
-                      <input type="hidden" name="orgId" value={workspace.id} />
-                      {/* 2026-05-17 — workspace flips land on the Ready hub
-                          (deliverables + public URLs + admin shortcuts) so
-                          agency operators have one-click access to the
-                          customer portal, booking, intake, chatbot test,
-                          etc. every time they hop between clients. Previous
-                          target was /dashboard which dumped them into an
-                          empty pipeline + KPI view. */}
-                      <input type="hidden" name="redirectTo" value={`/clients/${workspace.slug}/ready`} />
-                      <button
-                        type="submit"
+                  {/* 2026-05-17 — switched from <form action={switchWorkspaceAction}>
+                      to plain Links targeting /switch-workspace?to=…&next=…
+                      because the form-in-popover pattern silently failed:
+                      onClick closed the menu (popover unmounts) BEFORE the
+                      server action dispatch completed, so the cookie was
+                      never set and the switch never happened. The
+                      /switch-workspace route does the same cookie set +
+                      redirect server-side, but as a regular GET that doesn't
+                      depend on the form staying mounted.
+
+                      Workspace flips land on the Ready hub for CLIENT
+                      workspaces (deliverables + admin shortcuts), but on
+                      the primary AGENCY workspace they go straight to
+                      /dashboard — the Ready hub is meaningless for the
+                      agency's own workspace (it doesn't have a customer
+                      portal / public landing / etc.) */}
+                  {workspaceOptions.map((workspace) => {
+                    const isPrimaryAgencyOrg = workspace.id === primaryOrgId;
+                    const nextPath = isPrimaryAgencyOrg
+                      ? "/dashboard"
+                      : `/clients/${workspace.slug}/ready`;
+                    const href = `/switch-workspace?to=${encodeURIComponent(workspace.id)}&next=${encodeURIComponent(nextPath)}`;
+                    return (
+                      <Link
+                        key={workspace.id}
+                        href={href}
                         className="flex w-full items-start gap-2 rounded-xl px-2.5 py-2.5 text-left transition-colors hover:bg-accent/60"
                         onClick={() => setWorkspaceMenuOpen(false)}
                       >
@@ -325,14 +364,21 @@ export function Sidebar(props: {
                           {activeWorkspaceId === workspace.id ? <Check className="size-3.5" /> : null}
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-xs font-medium text-foreground sm:text-sm">{workspace.name}</span>
+                          <span className="block truncate text-xs font-medium text-foreground sm:text-sm">
+                            {workspace.name}
+                            {isPrimaryAgencyOrg ? (
+                              <span className="ml-1.5 inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 align-middle text-[9px] font-semibold tracking-[0.08em] text-emerald-700 dark:text-emerald-300">
+                                YOUR AGENCY
+                              </span>
+                            ) : null}
+                          </span>
                           <span className="block truncate text-[10px] text-muted-foreground sm:text-xs">
                             {workspace.contactCount.toLocaleString()} clients · {workspace.soulId ? workspace.soulId.charAt(0).toUpperCase() + workspace.soulId.slice(1) : "Custom"}
                           </span>
                         </span>
-                      </button>
-                    </form>
-                  ))}
+                      </Link>
+                    );
+                  })}
                 </div>
 
                 <div className="my-2 h-px bg-border" />
