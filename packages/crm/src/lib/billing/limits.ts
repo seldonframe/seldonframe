@@ -22,6 +22,7 @@ import { db } from "@/db";
 import { organizations } from "@/db/schema";
 import { normalizeTierId } from "./features";
 import { getPlan, type TierId } from "./plans";
+import { resolveTierForWorkspace } from "./tier-resolver";
 import {
   getAgentRunsThisMonth,
   getCurrentContactCount,
@@ -40,16 +41,12 @@ export type LimitDecision =
     };
 
 async function loadOrgTier(orgId: string): Promise<TierId> {
-  if (!orgId) return "free";
-  const [row] = await db
-    .select({ subscription: organizations.subscription, plan: organizations.plan })
-    .from(organizations)
-    .where(eq(organizations.id, orgId))
-    .limit(1);
-  if (!row) return "free";
-  // Prefer subscription.tier (set by the webhook on every event),
-  // fall back to the column-level `plan` field.
-  return normalizeTierId(row.subscription?.tier ?? row.plan ?? "free");
+  // 2026-05-17 — delegated to resolveTierForWorkspace, which walks the
+  // parent_user_id chain for agency-managed workspaces (so a Scale-
+  // paying operator's client workspaces inherit Scale automatically
+  // instead of staying on free until manually backfilled). See
+  // ./tier-resolver.ts header for the full resolution order.
+  return resolveTierForWorkspace(orgId);
 }
 
 /**
