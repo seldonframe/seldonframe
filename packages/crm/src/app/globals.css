@@ -85,12 +85,24 @@
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    /* Prevent horizontal scroll on mobile when any descendant briefly
+       overflows (e.g. the hero dashboard mockup at narrow viewports,
+       wide tables, or motion transforms that extend past the viewport
+       during entry animation). Pairs with `min-w-0` on flex/grid
+       descendants. The user explicitly flagged horizontal sliding as a
+       UX failure on mobile. */
+    overflow-x: hidden;
+  }
   body {
     @apply bg-background text-foreground;
     min-height: 100dvh;
     font-feature-settings: "ss01" 1, "cv01" 1, "cv11" 1;
     background-image: radial-gradient(circle at top, rgb(255 255 255 / 0.03), transparent 38%);
     background-attachment: fixed;
+    /* Belt-and-suspenders: defense against any iOS Safari quirk where
+       <html> overflow-x:hidden alone isn't enough. */
+    overflow-x: hidden;
   }
 
   .dark body {
