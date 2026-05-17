@@ -131,7 +131,7 @@ export function DashboardTopbar({
   canAccessSeldon: boolean;
   workspaceName: string;
   activeWorkspaceId: string | null;
-  workspaceOptions: Array<{ id: string; name: string; contactCount: number; soulId: string | null }>;
+  workspaceOptions: Array<{ id: string; name: string; slug: string; contactCount: number; soulId: string | null }>;
   switchWorkspaceAction: (formData: FormData) => void | Promise<void>;
   /** v1.25.3 — operator session: hide Docs link (SF developer docs).
    *  Their support comes from their agency, not SF documentation. */
@@ -223,9 +223,9 @@ export function DashboardTopbar({
               {workspaceOptions.map((workspace) => (
                 <form key={workspace.id} action={switchWorkspaceAction}>
                   <input type="hidden" name="orgId" value={workspace.id} />
-                  {/* 2026-05-17 — always /dashboard so the switch is
-                      visibly applied (sidebar copy explains why). */}
-                  <input type="hidden" name="redirectTo" value="/dashboard" />
+                  {/* 2026-05-17 — workspace flips land on the per-workspace
+                      Ready hub (matches sidebar — see its copy block). */}
+                  <input type="hidden" name="redirectTo" value={`/clients/${workspace.slug}/ready`} />
                   <button
                     type="submit"
                     className="flex w-full items-start gap-2 rounded-xl px-2.5 py-2.5 text-left transition-colors hover:bg-accent/60"

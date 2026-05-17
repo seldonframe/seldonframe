@@ -192,6 +192,7 @@ export default async function DashboardLayout({
               workspaceOptions={workspaceOptions.map((workspace) => ({
                 id: workspace.id,
                 name: workspace.name,
+                slug: workspace.slug,
                 contactCount: workspace.contactCount,
                 soulId: workspace.soulId,
               }))}
@@ -230,6 +231,7 @@ export default async function DashboardLayout({
                   workspaceOptions={workspaceOptions.map((workspace) => ({
                     id: workspace.id,
                     name: workspace.name,
+                    slug: workspace.slug,
                     contactCount: workspace.contactCount,
                     soulId: workspace.soulId,
                   }))}

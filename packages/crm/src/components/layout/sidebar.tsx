@@ -40,7 +40,7 @@ export function Sidebar(props: {
   hiddenBlocks?: string[];
   workspaceName: string;
   activeWorkspaceId: string | null;
-  workspaceOptions: Array<{ id: string; name: string; contactCount: number; soulId: string | null }>;
+  workspaceOptions: Array<{ id: string; name: string; slug: string; contactCount: number; soulId: string | null }>;
   switchWorkspaceAction: (formData: FormData) => void | Promise<void>;
   workspaceMembers?: number;
   userName: string;
@@ -247,14 +247,14 @@ export function Sidebar(props: {
                   {workspaceOptions.map((workspace) => (
                     <form key={workspace.id} action={switchWorkspaceAction}>
                       <input type="hidden" name="orgId" value={workspace.id} />
-                      {/* 2026-05-17 — always land on /dashboard after switching
-                          (not the current pathname). Reason: when on /clients
-                          (agency-level surface that lists ALL workspaces),
-                          redirecting back to /clients meant the page looked
-                          identical after switch — user complaint "nothing
-                          happens". /dashboard re-renders with the new active
-                          org so the switch is visible. */}
-                      <input type="hidden" name="redirectTo" value="/dashboard" />
+                      {/* 2026-05-17 — workspace flips land on the Ready hub
+                          (deliverables + public URLs + admin shortcuts) so
+                          agency operators have one-click access to the
+                          customer portal, booking, intake, chatbot test,
+                          etc. every time they hop between clients. Previous
+                          target was /dashboard which dumped them into an
+                          empty pipeline + KPI view. */}
+                      <input type="hidden" name="redirectTo" value={`/clients/${workspace.slug}/ready`} />
                       <button
                         type="submit"
                         className="flex w-full items-start gap-2 rounded-xl px-2.5 py-2.5 text-left transition-colors hover:bg-accent/60"
