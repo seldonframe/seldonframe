@@ -1,9 +1,15 @@
 // packages/crm/src/lib/web-onboarding/markdown-extractor.ts
 //
 // Replaces web-fetch-extractor.ts (kept as legacy) with a thin
-// server-side fetch -> HTML->MD -> LLM pipeline. No web_fetch tool. No
-// tool-use turns. The LLM does one job: extract structured business
-// facts from a Markdown document we hand it.
+// scraper -> LLM pipeline. No web_fetch tool. No tool-use turns. The
+// LLM does one job: extract structured business facts from a Markdown
+// document we hand it.
+//
+// REQUIRED ENV: FIRECRAWL_API_KEY
+//   - Sign up at https://firecrawl.dev (500 scrapes/month free)
+//   - Self-host alternative: https://github.com/firecrawl/firecrawl
+//   - To swap to a different scraper (Browserless, ScrapingBee, Bright
+//     Data), only firecrawl-scrape.ts changes — this file stays.
 //
 // Why this exists (2026-05-16):
 //   - Vercel logs showed every URL failing parse with Claude returning
@@ -13,10 +19,13 @@
 //   - We never saw what HTML reached the model (no observability).
 //   - JS-only SPAs couldn't be fetched at all.
 //
-// New architecture:
-//   1. fetch-page.ts  -> server-side fetch with timeout + UA + redirect
-//   2. html-to-markdown.ts -> strip noise, keep facts, cap at 8k chars
-//   3. THIS FILE -> call any LLM with strict JSON-only prompt
+// 2026-05-16 (later same day):
+//   - First cut used server-side fetch() + node-html-markdown. Vercel
+//     logs immediately showed http_error_403 on every Cloudflare-fronted
+//     agency site (HVAC, dental, etc.) — Vercel egress IPs are bot-flagged.
+//   - Replaced with Firecrawl which runs a real browser fingerprint behind
+//     rotating proxies and returns Markdown directly. fetch-page.ts and
+//     html-to-markdown.ts are gone.
 //
 // THIN HARNESS + ANTIFRAGILE TO LLM IMPROVEMENTS:
 // To swap to GPT-5 / Gemini / Llama, only this file changes — the prompt
@@ -30,8 +39,7 @@ import {
   type ExtractedBusinessFacts,
 } from "./extraction-prompt";
 import { parseExtraction } from "./extraction-parser";
-import { fetchPage } from "./fetch-page";
-import { htmlToMarkdown } from "./html-to-markdown";
+import { firecrawlScrape, type ScrapeDeps } from "./firecrawl-scrape";
 import { WebFetchError, type WebFetchErrorReason } from "./web-fetch-extractor";
 
 // Re-export the error type so callers can import it from either path
@@ -53,12 +61,6 @@ const DEFAULT_MODEL =
 // the full ExtractedBusinessFacts shape comfortably (~2k tokens for the
 // JSON body) with slack for whitespace.
 const MAX_TOKENS = 4096;
-
-// Minimum MD length for a meaningful page. Below this we assume a JS-only
-// SPA / Cloudflare challenge / 404-routed-to-homepage / blank page —
-// none of which give the LLM enough signal to extract real facts. 200
-// chars is roughly "a heading + a paragraph" — anything less is noise.
-const MIN_MD_CHARS = 200;
 
 // System prompt — strongest format constraint Anthropic offers. The new
 // architecture eliminates tool-use turns so the model can't go
@@ -88,17 +90,18 @@ function pickText(content: Array<AnthropicContentBlock>): string {
 
 /**
  * Drop-in replacement for the old extractBusinessFactsFromUrl signature
- * (web-fetch-extractor.ts). Same params, same return type, same error
+ * (web-fetch-extractor.ts). Same params except the HTTP test seam is
+ * now `firecrawlClient` (was `fetchImpl`); same return type; same error
  * surface (WebFetchError with the same four reason codes).
  *
- * Test seams: fetchImpl (HTTP layer) and anthropicClient (LLM layer)
- * are independently injectable. Production callers pass neither.
+ * Test seams: firecrawlClient (scrape layer) and anthropicClient (LLM
+ * layer) are independently injectable. Production callers pass neither.
  */
 export async function extractBusinessFactsFromUrl(params: {
   url: string;
   byokKey: string;
-  /** Test seam — defaults to global fetch. */
-  fetchImpl?: typeof fetch;
+  /** Test seam — defaults to a real Firecrawl client built from env. */
+  firecrawlClient?: ScrapeDeps["firecrawlClient"];
   /** Test seam — defaults to a real Anthropic client built from byokKey. */
   anthropicClient?: unknown;
   model?: string;
@@ -107,40 +110,36 @@ export async function extractBusinessFactsFromUrl(params: {
     new Anthropic({ apiKey: params.byokKey })) as AnthropicLike;
   const modelInUse = params.model || DEFAULT_MODEL;
 
-  // Step 1: server-side HTTP fetch.
-  const fetchResult = await fetchPage(params.url, { fetchImpl: params.fetchImpl });
-  if (!fetchResult.ok) {
+  // Step 1: Firecrawl scrape -> Markdown.
+  const scrape = await firecrawlScrape(params.url, {
+    firecrawlClient: params.firecrawlClient,
+  });
+  if (!scrape.ok) {
     console.warn(
       JSON.stringify({
-        event: "markdown_extractor_fetch_failed",
+        event: "markdown_extractor_firecrawl_failed",
         url: params.url,
-        reason: fetchResult.reason,
+        reason: scrape.reason,
+        detail: scrape.detail?.slice(0, 200) ?? null,
       }),
     );
+    if (scrape.reason === "not_configured") {
+      throw new WebFetchError(
+        "internal_error",
+        "FIRECRAWL_API_KEY not set on this deployment",
+      );
+    }
     throw new WebFetchError(
       "extraction_failed",
-      `Fetch failed: ${fetchResult.reason}`,
+      `Firecrawl fetch failed: ${scrape.reason}${
+        scrape.detail ? `: ${scrape.detail}` : ""
+      }`,
     );
   }
 
-  // Step 2: HTML -> Markdown.
-  const md = htmlToMarkdown(fetchResult.html);
-  if (md.length < MIN_MD_CHARS) {
-    console.warn(
-      JSON.stringify({
-        event: "markdown_extractor_empty_page",
-        url: params.url,
-        final_url: fetchResult.url,
-        md_chars: md.length,
-      }),
-    );
-    throw new WebFetchError(
-      "extraction_failed",
-      "Page returned no meaningful content (likely JS-only SPA or anti-bot challenge).",
-    );
-  }
+  const md = scrape.markdown;
 
-  // Step 3: Anthropic call — NO TOOLS, NO web_fetch. Just system +
+  // Step 2: Anthropic call — NO TOOLS, NO web_fetch. Just system +
   // user-message-with-MD -> JSON response.
   let response: { content: Array<AnthropicContentBlock>; stop_reason?: string };
   try {
@@ -188,7 +187,7 @@ export async function extractBusinessFactsFromUrl(params: {
     );
   }
 
-  // Step 4: extract and parse the JSON text.
+  // Step 3: extract and parse the JSON text.
   const text = pickText(response.content);
   if (!text) {
     console.warn(

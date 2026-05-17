@@ -1,8 +1,8 @@
 // packages/crm/tests/unit/web-onboarding/markdown-extractor.spec.ts
 //
-// Uses DI seams (fetchImpl + anthropicClient) so no network / Anthropic
-// calls during tests. All 5 tests cover the error-surface contract that
-// the SSE route depends on.
+// Uses DI seams (firecrawlClient + anthropicClient) so no network /
+// Firecrawl / Anthropic calls during tests. All 5 tests cover the
+// error-surface contract that the SSE route depends on.
 
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
@@ -11,46 +11,33 @@ import {
   extractBusinessFactsFromUrl,
   WebFetchError,
 } from "../../../src/lib/web-onboarding/markdown-extractor";
+import type { FirecrawlClientLike } from "../../../src/lib/web-onboarding/firecrawl-scrape";
 
-// Sample HTML sized so the resulting Markdown comfortably exceeds the
-// MIN_MD_CHARS (200) threshold — otherwise the extractor would short-
-// circuit on "no meaningful content" before reaching the LLM step.
-const SAMPLE_HTML = `
-  <html><body>
-    <header>
-      <a href="tel:602-555-0100">(602) 555-0100</a>
-      <a href="mailto:hello@acme-plumbing.com">hello@acme-plumbing.com</a>
-    </header>
-    <h1>Acme Plumbing</h1>
-    <h2>Our Services</h2>
-    <ul>
-      <li>Drain cleaning and hydro-jetting</li>
-      <li>Water heater repair and replacement</li>
-      <li>Slab leak detection and repair</li>
-      <li>Sewer line camera inspection</li>
-      <li>Emergency 24/7 plumbing</li>
-    </ul>
-    <h2>About Us</h2>
-    <p>Acme Plumbing is a family-owned plumbing company serving Phoenix, AZ and the greater Maricopa County area since 1998. Licensed, bonded, and insured. Same-day service available for emergencies.</p>
-    <h2>Service Area</h2>
-    <p>Phoenix, Scottsdale, Tempe, Mesa, Chandler, Glendale, and surrounding communities.</p>
-    <footer>
-      <address>123 Main St, Phoenix, AZ 85001</address>
-      <p>Family-owned since 1998. BBB A+ rated. 412 five-star reviews.</p>
-    </footer>
-  </body></html>
-`;
+// Markdown body comfortably above firecrawl-scrape's MIN_MARKDOWN_CHARS
+// (200) floor — otherwise the extractor short-circuits on "empty_content"
+// before reaching the LLM step.
+const SAMPLE_MARKDOWN =
+  "# Acme Plumbing\n\n" +
+  "Phone: (602) 555-0100  \n" +
+  "Email: hello@acme-plumbing.com\n\n" +
+  "## Our Services\n\n" +
+  "- Drain cleaning and hydro-jetting\n" +
+  "- Water heater repair and replacement\n" +
+  "- Slab leak detection and repair\n" +
+  "- Sewer line camera inspection\n" +
+  "- Emergency 24/7 plumbing\n\n" +
+  "## About Us\n\n" +
+  "Acme Plumbing is a family-owned plumbing company serving Phoenix, AZ " +
+  "and the greater Maricopa County area since 1998. Licensed, bonded, " +
+  "and insured. Same-day service available for emergencies.\n\n" +
+  "## Service Area\n\n" +
+  "Phoenix, Scottsdale, Tempe, Mesa, Chandler, Glendale.\n\n" +
+  "123 Main St, Phoenix, AZ 85001. Family-owned since 1998. BBB A+ rated.\n";
 
-function makeFakeFetch(init: {
-  status?: number;
-  contentType?: string;
-  body?: string;
-}): typeof fetch {
-  return (async () =>
-    new Response(init.body ?? "", {
-      status: init.status ?? 200,
-      headers: { "content-type": init.contentType ?? "text/html; charset=utf-8" },
-    })) as typeof fetch;
+function makeFakeFirecrawl(impl: (url: string) => Promise<unknown>): FirecrawlClientLike {
+  return {
+    scrape: async (url) => impl(url),
+  };
 }
 
 function makeFakeAnthropic(messageResponse: {
@@ -83,7 +70,7 @@ function makeThrowingAnthropic(status: number, message: string) {
 }
 
 describe("extractBusinessFactsFromUrl (markdown-extractor)", () => {
-  test("happy path: fetch -> MD -> mocked Anthropic returns valid JSON", async () => {
+  test("happy path: Firecrawl -> MD -> mocked Anthropic returns valid JSON", async () => {
     const validFacts = {
       business_name: "Acme Plumbing",
       city: "Phoenix",
@@ -92,7 +79,10 @@ describe("extractBusinessFactsFromUrl (markdown-extractor)", () => {
       services: ["Drain cleaning", "Water heater repair"],
       business_description: "Family-owned plumbing serving Phoenix since 1998.",
     };
-    const fakeFetch = makeFakeFetch({ body: SAMPLE_HTML });
+    const firecrawl = makeFakeFirecrawl(async () => ({
+      markdown: SAMPLE_MARKDOWN,
+      metadata: { sourceURL: "https://acme.com/", title: "Acme Plumbing", statusCode: 200 },
+    }));
     const { client, calls } = makeFakeAnthropic({
       content: [{ type: "text", text: JSON.stringify(validFacts) }],
     });
@@ -100,7 +90,7 @@ describe("extractBusinessFactsFromUrl (markdown-extractor)", () => {
     const result = await extractBusinessFactsFromUrl({
       url: "https://acme.com",
       byokKey: "sk-ant-test",
-      fetchImpl: fakeFetch,
+      firecrawlClient: firecrawl,
       anthropicClient: client,
     });
 
@@ -112,59 +102,67 @@ describe("extractBusinessFactsFromUrl (markdown-extractor)", () => {
     const call = calls[0] as { tools?: unknown; system?: string; messages?: unknown[] };
     assert.equal(call.tools, undefined, "must NOT send any tools");
     assert.ok(call.system, "must set system prompt");
-    // The MD content (drained from sample HTML) should be in the user msg.
+    // The MD content (from Firecrawl) should be in the user msg.
     const userMsg = (call.messages as Array<{ content: string }>)[0]?.content ?? "";
     assert.ok(userMsg.includes("Acme Plumbing"), "MD content in user message");
     assert.ok(userMsg.includes("URL: https://acme.com"), "URL in user message");
   });
 
-  test("fetch returns 404 -> WebFetchError(extraction_failed) with Fetch failed: http_error_404", async () => {
-    const fakeFetch = makeFakeFetch({ status: 404 });
+  test("Firecrawl throws -> WebFetchError(extraction_failed) with 'Firecrawl fetch failed' prefix", async () => {
+    const firecrawl = makeFakeFirecrawl(async () => {
+      throw new Error("Cloudflare challenge: status 403");
+    });
     const { client } = makeFakeAnthropic({ content: [{ type: "text", text: "{}" }] });
     await assert.rejects(
       () =>
         extractBusinessFactsFromUrl({
           url: "https://acme.com/missing",
           byokKey: "sk-ant-test",
-          fetchImpl: fakeFetch,
+          firecrawlClient: firecrawl,
           anthropicClient: client,
         }),
       (err: unknown) =>
         err instanceof WebFetchError &&
         err.reason === "extraction_failed" &&
-        err.message.includes("Fetch failed: http_error_404"),
+        err.message.includes("Firecrawl fetch failed: fetch_failed"),
     );
   });
 
-  test("near-empty page (MD < 200 chars) -> WebFetchError(extraction_failed)", async () => {
-    // A minimal page below the MIN_MD_CHARS threshold (200) — JS-only
-    // SPA shell, anti-bot challenge, blank doc.
-    const fakeFetch = makeFakeFetch({ body: "<html><body><p>Loading</p></body></html>" });
+  test("near-empty markdown (< 200 chars) -> WebFetchError(extraction_failed)", async () => {
+    // JS-only SPA shell / anti-bot challenge / blank doc — Firecrawl
+    // returns markdown but well below the MIN_MARKDOWN_CHARS floor.
+    const firecrawl = makeFakeFirecrawl(async () => ({
+      markdown: "# Loading\n\nEnable JavaScript.",
+      metadata: { sourceURL: "https://spa.example/", statusCode: 200 },
+    }));
     const { client } = makeFakeAnthropic({ content: [{ type: "text", text: "{}" }] });
     await assert.rejects(
       () =>
         extractBusinessFactsFromUrl({
           url: "https://spa.example",
           byokKey: "sk-ant-test",
-          fetchImpl: fakeFetch,
+          firecrawlClient: firecrawl,
           anthropicClient: client,
         }),
       (err: unknown) =>
         err instanceof WebFetchError &&
         err.reason === "extraction_failed" &&
-        err.message.includes("no meaningful content"),
+        err.message.includes("empty_content"),
     );
   });
 
   test("Anthropic 401 -> WebFetchError(anthropic_unauthorized)", async () => {
-    const fakeFetch = makeFakeFetch({ body: SAMPLE_HTML });
+    const firecrawl = makeFakeFirecrawl(async () => ({
+      markdown: SAMPLE_MARKDOWN,
+      metadata: { sourceURL: "https://acme.com/", statusCode: 200 },
+    }));
     const client = makeThrowingAnthropic(401, "unauthorized");
     await assert.rejects(
       () =>
         extractBusinessFactsFromUrl({
           url: "https://acme.com",
           byokKey: "sk-ant-bad",
-          fetchImpl: fakeFetch,
+          firecrawlClient: firecrawl,
           anthropicClient: client,
         }),
       (err: unknown) =>
@@ -173,7 +171,10 @@ describe("extractBusinessFactsFromUrl (markdown-extractor)", () => {
   });
 
   test("LLM returns prose, not JSON -> parse fails -> WebFetchError(extraction_failed)", async () => {
-    const fakeFetch = makeFakeFetch({ body: SAMPLE_HTML });
+    const firecrawl = makeFakeFirecrawl(async () => ({
+      markdown: SAMPLE_MARKDOWN,
+      metadata: { sourceURL: "https://acme.com/", statusCode: 200 },
+    }));
     const { client } = makeFakeAnthropic({
       content: [
         {
@@ -187,7 +188,7 @@ describe("extractBusinessFactsFromUrl (markdown-extractor)", () => {
         extractBusinessFactsFromUrl({
           url: "https://acme.com",
           byokKey: "sk-ant-test",
-          fetchImpl: fakeFetch,
+          firecrawlClient: firecrawl,
           anthropicClient: client,
         }),
       (err: unknown) =>
