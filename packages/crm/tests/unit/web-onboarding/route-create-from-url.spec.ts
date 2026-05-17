@@ -107,6 +107,10 @@ describe("runCreateFromUrl", () => {
       "events out of order: " + text,
     );
     assert.match(text, /event: done\n.*"workspaceId":"org-1".*"slug":"acme-plumbing"/);
+    // 2026-05-17 — redirect target now points at the deliverables hub,
+    // not the generic /dashboard?ws=<slug> view, so the operator lands
+    // on a screen that surfaces public URLs + next steps.
+    assert.match(text, /"dashboardUrl":"\/clients\/acme-plumbing\/ready"/);
   });
 
   test("calls markOperatorOnboarded with both the operator's primaryOrgId AND userId on success", async () => {
