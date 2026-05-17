@@ -74,7 +74,19 @@ function renderSeldonFrameSignInEmail({
         <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;background:#ffffff;border-radius:16px;border:1px solid #e5e7eb;overflow:hidden;">
           <tr>
             <td style="padding:32px 32px 16px 32px;text-align:center;">
-              <img src="${wordmark}" alt="SeldonFrame" width="180" height="36" style="display:inline-block;height:36px;width:auto;" />
+              <!-- Inline brand wordmark — Gmail/Outlook reliably strip external SVGs
+                   or render them at their native width which can break our layout.
+                   Inline SVG with explicit width + viewBox renders correctly across
+                   Gmail web/mobile + Apple Mail + Outlook. The wordmark text is part
+                   of the SVG, not an external font, so no font-loading issues. -->
+              <svg xmlns="http://www.w3.org/2000/svg" width="220" height="36" viewBox="0 0 240 40" style="display:inline-block;max-width:220px;height:36px;" role="img" aria-label="SeldonFrame">
+                <g fill="none">
+                  <!-- Mark: square outline + dot, matching brand/seldonframe-wordmark.svg -->
+                  <rect x="6" y="8" width="24" height="24" rx="3" stroke="${primary}" stroke-width="2" />
+                  <circle cx="32" cy="8" r="3" fill="${primary}" />
+                </g>
+                <text x="44" y="27" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif" font-size="20" font-weight="600" fill="${ink}" letter-spacing="-0.5">SeldonFrame</text>
+              </svg>
             </td>
           </tr>
           <tr>
