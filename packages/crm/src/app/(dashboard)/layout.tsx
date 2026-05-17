@@ -19,6 +19,7 @@ import { getAllBlocksForOrg } from "@/lib/blocks/registry";
 import { canSeldonIt, resolvePlanFromPlanId } from "@/lib/billing/entitlements";
 import { listManagedOrganizations, setActiveOrgAction } from "@/lib/billing/orgs";
 import { getHiddenBlocks } from "@/lib/blocks/visibility-actions";
+import { getNotificationFeed } from "@/lib/notifications/feed";
 import { db } from "@/db";
 import { activities, contacts, deals, landingPages, organizations, users } from "@/db/schema";
 import { desc, eq, sql } from "drizzle-orm";
@@ -75,6 +76,15 @@ export default async function DashboardLayout({
   const canAccessSeldon = canSeldonIt(plan);
   const workspaceOptions =
     user?.id && !skipUserLookup ? await listManagedOrganizations(user.id) : [];
+
+  // 2026-05-17 — pre-fetch the notification feed on the server so the
+  // bell popover renders with full state on first paint (no skeleton
+  // flash). Synthetic sessions (admin token, operator portal) return []
+  // because the access-predicate query crashes on non-uuid ids; both
+  // session types are workspace-scoped so the empty feed is fine.
+  const notifications = user?.id && !skipUserLookup
+    ? await getNotificationFeed(user.id, user.orgId ?? null)
+    : [];
 
   const [activeOrg, orgMemberCount, effectiveBranding] = orgId
     ? await Promise.all([
@@ -237,6 +247,7 @@ export default async function DashboardLayout({
                   }))}
                   switchWorkspaceAction={setActiveOrgAction}
                   isOperatorSession={isOperatorSession}
+                  notifications={notifications}
                 />
                 {children}
               </div>

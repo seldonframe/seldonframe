@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
-import { Bell, Check, Command, ChevronsUpDown, Menu, Moon, Search, Sun } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Check, Command, ChevronsUpDown, Menu, Moon, Search, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import { usePathname } from "next/navigation";
 import { useLabels } from "@/lib/hooks/use-labels";
 import { signOutAllSessionsAction } from "@/lib/auth/actions";
+import { NotificationsBell } from "@/components/layout/notifications-bell";
+import type { NotificationItem } from "@/lib/notifications/feed";
 
 /*
   Square UI class reference (source of truth):
@@ -124,6 +126,7 @@ export function DashboardTopbar({
   workspaceOptions,
   switchWorkspaceAction,
   isOperatorSession = false,
+  notifications = [],
 }: {
   userName: string;
   userEmail: string;
@@ -136,6 +139,10 @@ export function DashboardTopbar({
   /** v1.25.3 — operator session: hide Docs link (SF developer docs).
    *  Their support comes from their agency, not SF documentation. */
   isOperatorSession?: boolean;
+  /** 2026-05-17 — pre-fetched notification feed from the dashboard
+   *  layout. Empty array hides the unread badge and shows "all caught
+   *  up". */
+  notifications?: NotificationItem[];
 }) {
   const pathname = usePathname();
   const labels = useLabels();
@@ -145,6 +152,13 @@ export function DashboardTopbar({
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const workspaceMenuRef = useRef<HTMLDivElement>(null);
+  const workspaceIdBySlug = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const workspace of workspaceOptions) {
+      map[workspace.slug] = workspace.id;
+    }
+    return map;
+  }, [workspaceOptions]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -277,9 +291,12 @@ export function DashboardTopbar({
           {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </button>
 
-        <button type="button" className="crm-topbar-icon-btn relative" aria-label="Notifications">
-          <Bell className="h-4 w-4" />
-        </button>
+        <NotificationsBell
+          items={notifications}
+          switchWorkspaceAction={switchWorkspaceAction}
+          activeWorkspaceId={activeWorkspaceId}
+          workspaceIdBySlug={workspaceIdBySlug}
+        />
 
         <div className="relative" ref={menuRef}>
           <button
