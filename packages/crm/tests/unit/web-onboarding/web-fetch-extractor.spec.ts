@@ -56,7 +56,12 @@ describe("extractBusinessFactsFromUrl", () => {
     assert.deepEqual(call.tools, [
       { type: "web_fetch_20250910", name: "web_fetch" },
     ]);
-    assert.ok((call.model as string).startsWith("claude-sonnet-"));
+    // Antifragility-by-design: assert it's a Claude model, not a specific
+    // family. Default model is intentionally configurable via env
+    // (WEB_ONBOARDING_MODEL) so newer/better models slot in without code
+    // changes. The test pins "starts with claude-" — that contract holds
+    // whether default is Sonnet, Opus, Haiku, or a future class.
+    assert.ok((call.model as string).startsWith("claude-"));
   });
 
   test("throws WebFetchError(extraction_failed) when the model emits malformed JSON", async () => {

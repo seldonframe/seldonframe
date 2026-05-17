@@ -40,8 +40,32 @@ export class WebFetchError extends Error {
   }
 }
 
+// Default model: claude-opus-4-7 — Anthropic's current best-in-class
+// reasoning model (highest extraction accuracy on the messy real-world
+// agency websites this pipeline ingests). Justifies the higher per-token
+// cost ($15/$75 vs Sonnet's $3/$15 per MTok) because:
+//   1. Operator only pays this once per workspace creation (~$0.05-0.15 on
+//      Opus vs ~$0.01-0.03 on Sonnet — both negligible for a paid agency).
+//   2. Extraction quality compounds: better signal → better soul → better
+//      chatbot answers → better client demo.
+//   3. The whole pipeline downstream assumes the structured fields are
+//      accurate. A worse extractor poisons every downstream artifact.
+//
+// THIN HARNESS + ANTIFRAGILE TO LLM IMPROVEMENTS:
+// This module is intentionally a ~80-line wrapper. When Anthropic ships
+// Opus 4.8 / Opus 5 / a new GA Sonnet, flip the env var and ship — no
+// code changes. To swap providers entirely (e.g. add OpenAI GPT-5 with
+// function-calling + a server-side fetch instead of web_fetch), the
+// surface area to change is this single file + the byok-resolver. The
+// EXTRACTION_INSTRUCTIONS prompt is the "skill" — improvements there
+// help every model.
+//
+// Override priority (highest to lowest):
+//   1. params.model (caller passes per-call — used for tests + A/B)
+//   2. process.env.WEB_ONBOARDING_MODEL (deployment-level override)
+//   3. claude-opus-4-7 (default — kept current via this comment block)
 const DEFAULT_MODEL =
-  process.env.WEB_ONBOARDING_MODEL?.trim() || "claude-sonnet-4-5-20250929";
+  process.env.WEB_ONBOARDING_MODEL?.trim() || "claude-opus-4-7";
 const MAX_TOKENS = 4096;
 // Tool spec per official docs — `type` AND `name` are both required.
 const WEB_FETCH_TOOL_TYPE = "web_fetch_20250910";
