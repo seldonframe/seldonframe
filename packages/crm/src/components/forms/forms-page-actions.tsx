@@ -128,9 +128,17 @@ export function FormsPageActions({ buttonLabel = "+ New Form" }: { buttonLabel?:
                       handleClose(false);
                       if (result?.id) {
                         router.push(`/forms/${result.id}/edit`);
+                        // 2026-05-17 — router.push alone landed on the
+                        // new edit page but Next's client cache could
+                        // hold a stale render of /forms behind it, so
+                        // hitting Back showed the old list without the
+                        // new row. router.refresh() invalidates that
+                        // cached render so navigating back is fresh.
+                        router.refresh();
                         return;
                       }
                       router.push("/forms");
+                      router.refresh();
                     });
                   }}
                   className="space-y-4"

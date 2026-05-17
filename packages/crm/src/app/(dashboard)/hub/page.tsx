@@ -15,7 +15,9 @@ export default async function HubPage() {
     { href: "/contacts", title: "CRM", subtitle: "Contacts and core relationship workflows" },
     { href: "/deals", title: "Deals", subtitle: "Pipeline and opportunity flow" },
     { href: "/bookings", title: "Booking", subtitle: "Scheduling and calendar-linked sessions" },
-    { href: "/landing", title: "Pages", subtitle: "Section-based marketing pages" },
+    // 2026-05-17 — Pages (/landing) removed from Hub. SF isn't a
+    // landing-page builder; the chatbot + booking + intake are the
+    // public-facing deliverables now.
     { href: "/emails", title: "Email", subtitle: "Resend-first outbound communications" },
     { href: `/customer/${org?.slug ?? "demo"}/login`, title: "Customer Portal", subtitle: "Where your customers sign in to view their account with you" },
     { href: `/portal/${org?.slug ?? "demo"}`, title: "Operator Portal", subtitle: "Branded mini-CRM for sub-tenant operators (white-label)" },
