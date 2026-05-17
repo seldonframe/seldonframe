@@ -50,7 +50,12 @@ describe("extractBusinessFactsFromUrl", () => {
     assert.equal(result.business_name, "Acme");
     // Confirm we passed the web_fetch server tool and the model is the spec default.
     const call = calls[0] as { tools?: unknown[]; model?: string };
-    assert.deepEqual(call.tools, [{ type: "web_fetch_20250910" }]);
+    // Tool spec MUST include both `type` and `name` per Anthropic docs.
+    // Bug fix 2026-05-16: prior impl omitted `name` → API 400 silently
+    // and we masked it as extraction_failed for every URL.
+    assert.deepEqual(call.tools, [
+      { type: "web_fetch_20250910", name: "web_fetch" },
+    ]);
     assert.ok((call.model as string).startsWith("claude-sonnet-"));
   });
 
