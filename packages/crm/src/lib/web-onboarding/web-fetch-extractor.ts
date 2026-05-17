@@ -66,10 +66,23 @@ export class WebFetchError extends Error {
 //   3. claude-opus-4-7 (default — kept current via this comment block)
 const DEFAULT_MODEL =
   process.env.WEB_ONBOARDING_MODEL?.trim() || "claude-opus-4-7";
-const MAX_TOKENS = 4096;
+// Bumped 4096 → 8192 — Vercel logs showed Claude getting cut off mid-
+// reasoning before producing the JSON object. With web_fetch the model
+// uses ~2k input tokens (the fetched page) + several hundred reasoning
+// tokens + ~1-2k for the JSON. 4096 was too tight when the model decided
+// to think out loud about ambiguous fields. 8192 gives slack.
+const MAX_TOKENS = 8192;
 // Tool spec per official docs — `type` AND `name` are both required.
 const WEB_FETCH_TOOL_TYPE = "web_fetch_20250910";
 const WEB_FETCH_TOOL_NAME = "web_fetch";
+
+// System prompt — strongest constraint Anthropic offers for shape control.
+// Setting role + format here is more reliable than putting the same rules
+// in a user message because system messages get higher attention weight.
+// Combined with the strict user-message prompt in extraction-prompt.ts,
+// this gives us belt-and-suspenders against Claude's natural tendency to
+// preface tool-use turns with "I'll fetch...".
+const SYSTEM_PROMPT = `You are a JSON-only business-fact extraction service. You fetch a single URL and return exactly one JSON object describing the business. You NEVER speak conversationally. You NEVER explain your reasoning. You NEVER preface your response with "I'll fetch..." or "Let me start...". Your output is consumed by a parser that requires exactly one valid JSON object as the entire response. If you cannot extract the required fields from the fetched content, output exactly {"_error": "fetch_failed"} and nothing else.`;
 
 type AnthropicContentBlock = {
   type: string;
@@ -140,6 +153,12 @@ export async function extractBusinessFactsFromUrl(params: {
     response = await client.messages.create({
       model: modelInUse,
       max_tokens: MAX_TOKENS,
+      // System prompt = strongest format/role constraint Anthropic offers.
+      // Vercel logs showed every URL failing because Claude was outputting
+      // conversational prose ("I'll fetch the homepage...") and getting
+      // truncated mid-reasoning before producing JSON. The system prompt
+      // forces the role; the user-message prompt provides the schema.
+      system: SYSTEM_PROMPT,
       // Tool spec MUST include both `type` and `name` per the Anthropic docs.
       // Omitting `name` causes the API to 400 silently from our perspective.
       tools: [{ type: WEB_FETCH_TOOL_TYPE, name: WEB_FETCH_TOOL_NAME }],
