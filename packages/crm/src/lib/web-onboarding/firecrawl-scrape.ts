@@ -78,6 +78,14 @@ export async function firecrawlScrape(
   deps: ScrapeDeps = {},
 ): Promise<FirecrawlScrapeResult> {
   const apiKey = process.env.FIRECRAWL_API_KEY?.trim();
+  // Self-host support — operators running their own Firecrawl instance
+  // (Docker / Railway / Fly / VPS) set FIRECRAWL_API_URL to their host's
+  // base URL (e.g. "https://firecrawl.your-domain.com" or "http://localhost:3002"
+  // for local dev). When unset, the SDK defaults to the hosted SaaS at
+  // api.firecrawl.dev. The self-hosted Firecrawl image accepts any string
+  // as apiKey (auth is at the network layer), so a self-hoster can set
+  // FIRECRAWL_API_KEY=local-dev or similar.
+  const apiUrl = process.env.FIRECRAWL_API_URL?.trim();
   if (!apiKey && !deps.firecrawlClient) {
     return {
       ok: false,
@@ -87,7 +95,13 @@ export async function firecrawlScrape(
   }
 
   const client: FirecrawlClientLike =
-    deps.firecrawlClient ?? new Firecrawl({ apiKey: apiKey ?? "" });
+    deps.firecrawlClient ??
+    new Firecrawl({
+      apiKey: apiKey ?? "",
+      // Only pass apiUrl when set so the SaaS default still applies
+      // when the operator hasn't opted into self-hosting.
+      ...(apiUrl ? { apiUrl } : {}),
+    });
 
   let doc: DocumentLike;
   try {
