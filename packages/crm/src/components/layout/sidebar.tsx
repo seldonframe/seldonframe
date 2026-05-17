@@ -191,8 +191,12 @@ export function Sidebar(props: {
 
   function renderSidebarShell(isMobile = false) {
     return (
+      // 2026-05-17 — Vercel-style compact density. Outer horizontal padding
+      // pulled in (px-3 / lg:px-4) so the nav links use more of the 240px
+      // column. Top padding kept generous so the brand mark doesn't crowd
+      // the OS chrome.
       <div className={isMobile ? "flex h-full w-full flex-col" : "flex w-full flex-col"}>
-        <div className="px-4 pb-0 pt-4 sm:px-5 sm:pt-5 lg:px-6 lg:pt-6">
+        <div className="px-3 pb-0 pt-4 sm:px-3.5 sm:pt-5 lg:px-4">
           <div className="flex min-h-8 items-center gap-3">
             <div className="flex size-8 items-center justify-center overflow-hidden rounded-xl border border-border/80 bg-card/80 shadow-(--shadow-xs)">
               {/* SLICE 9 PR 2 C1: SeldonFrame icon (brand-isolated; never themed) */}
@@ -218,22 +222,22 @@ export function Sidebar(props: {
           </div>
         </div>
 
-        <div className="px-4 sm:px-5 lg:px-6">
-          <div className="relative mb-5 mt-5">
+        <div className="px-3 sm:px-3.5 lg:px-4">
+          <div className="relative mb-3 mt-3">
             <button
               type="button"
               onClick={() => setWorkspaceMenuOpen((open) => !open)}
-              className="flex w-full items-center gap-3 rounded-2xl border border-border/80 bg-card/80 p-3 text-left shadow-(--shadow-xs) transition-all hover:border-border hover:bg-card"
+              className="flex w-full items-center gap-2.5 rounded-xl border border-border/80 bg-card/80 p-2 text-left shadow-(--shadow-xs) transition-all hover:border-border hover:bg-card"
             >
-              <div className="flex size-10 items-center justify-center overflow-hidden rounded-xl border border-border/70 bg-muted/30 shrink-0">
+              <div className="flex size-8 items-center justify-center overflow-hidden rounded-lg border border-border/70 bg-muted/30 shrink-0">
                 {/* SLICE 9 PR 2 C1: workspace tile uses SeldonFrame icon as default avatar; per-workspace logo override is post-launch */}
-                <Image src="/brand/seldonframe-icon.svg" alt="Workspace" width={34} height={34} className="h-full w-full" />
+                <Image src="/brand/seldonframe-icon.svg" alt="Workspace" width={28} height={28} className="h-full w-full" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-foreground">{workspaceName}</p>
-                <p className="truncate text-[11px] text-muted-foreground">Active workspace</p>
+                <p className="truncate text-[13px] font-semibold text-foreground">{workspaceName}</p>
+                <p className="truncate text-[10px] text-muted-foreground">Active workspace</p>
               </div>
-              <ChevronsUpDown className="size-4 text-muted-foreground" />
+              <ChevronsUpDown className="size-3.5 text-muted-foreground" />
             </button>
 
             {workspaceMenuOpen ? (
@@ -282,16 +286,16 @@ export function Sidebar(props: {
           <SidebarNav groups={navGroups} onNavigate={() => setMobileOpen(false)} />
         </div>
 
-        <div className="mt-auto px-4 pb-4 pt-6 sm:px-5 sm:pb-5 lg:px-6 lg:pb-6 lg:pt-8">
-          <button type="button" className="flex w-full items-center gap-3 rounded-2xl border border-border/80 bg-card/72 p-3 text-left shadow-(--shadow-xs) transition-all hover:border-border hover:bg-card/92 hover:shadow-(--shadow-sm)">
-            <div className="flex size-9 items-center justify-center rounded-xl border border-border/70 bg-muted/30 text-xs font-semibold text-foreground">
+        <div className="mt-auto px-3 pb-3 pt-5 sm:px-3.5 sm:pb-4 lg:px-4 lg:pb-4">
+          <button type="button" className="flex w-full items-center gap-2.5 rounded-xl border border-border/80 bg-card/72 p-2 text-left shadow-(--shadow-xs) transition-all hover:border-border hover:bg-card/92 hover:shadow-(--shadow-sm)">
+            <div className="flex size-8 items-center justify-center rounded-lg border border-border/70 bg-muted/30 text-xs font-semibold text-foreground">
               {avatarFallback}
             </div>
             <div className="min-w-0 flex-1 text-left">
-              <p className="truncate text-sm font-semibold text-foreground">{userName}</p>
-              <p className="truncate text-[11px] text-muted-foreground">{userEmail}</p>
+              <p className="truncate text-[13px] font-semibold text-foreground">{userName}</p>
+              <p className="truncate text-[10px] text-muted-foreground">{userEmail}</p>
             </div>
-            <ChevronsUpDown className="size-4 text-muted-foreground" />
+            <ChevronsUpDown className="size-3.5 text-muted-foreground" />
           </button>
         </div>
       </div>

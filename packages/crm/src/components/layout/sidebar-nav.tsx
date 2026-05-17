@@ -62,9 +62,12 @@ function isActivePath(pathname: string, href: string) {
 
 function NavItemLink({ item, pathname, onNavigate, icon: Icon }: { item: NavItem; pathname: string; onNavigate?: () => void; icon: React.ComponentType<{ className?: string }> }) {
   const active = !item.external && isActivePath(pathname, item.href);
+  // 2026-05-17 — Vercel-style compact rows. The base .crm-sidebar-link
+  // class drives min-height (2rem desktop / 2.125rem mobile) + 13px font;
+  // here we only tune the horizontal padding for the same effect.
   const className = item.disabled
-    ? "crm-sidebar-link cursor-not-allowed border border-transparent px-3.5 text-sm font-medium opacity-55"
-    : "crm-sidebar-link border px-3.5 text-sm font-medium";
+    ? "crm-sidebar-link cursor-not-allowed border border-transparent px-2.5 font-medium opacity-55"
+    : "crm-sidebar-link border px-2.5 font-medium";
 
   // May 1, 2026 — external links (Discord, etc.) render as plain
   // <a target="_blank"> so they don't trip Next.js client-side
@@ -128,11 +131,15 @@ export function SidebarNav({ nav, groups, onNavigate }: { nav?: NavItem[]; group
       : [];
 
   return (
-    <nav className="space-y-5">
+    // 2026-05-17 — tightened group spacing (was space-y-5) so the sidebar
+    // sits comfortably above the fold without scrolling on common laptop
+    // heights. The internal space-y-0.5 between items lets the per-row
+    // padding handle the air between them.
+    <nav className="space-y-3">
       {resolvedGroups.map((group, groupIndex) => (
-        <div key={group.title ?? `group-${groupIndex}`} className="space-y-1">
+        <div key={group.title ?? `group-${groupIndex}`} className="space-y-0.5">
           {group.title ? (
-            <p className="px-3.5 pb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/80">{group.title}</p>
+            <p className="px-2.5 pb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/80">{group.title}</p>
           ) : null}
           {group.items.map((item) => (
             <NavItemLink key={item.href} item={item} pathname={pathname} onNavigate={onNavigate} icon={resolveIcon(item.icon)} />

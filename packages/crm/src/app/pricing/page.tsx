@@ -1,16 +1,25 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { and, eq, isNull } from "drizzle-orm";
 import { auth } from "@/auth";
+import { db } from "@/db";
+import { users } from "@/db/schema";
+import { assertWritable } from "@/lib/demo/server";
 
 // Public pricing page. Mirrors the marketing landing's #pricing section.
 //
-// April 30, 2026 — usage-based pricing migration. Tiers are Free /
-// Growth / Scale + Self-host (with no per-workspace charge — Growth
-// caps at 3, Scale is unlimited). Hosted on this CRM app shell so
-// it's reachable from both `seldonframe.com/pricing` (marketing host)
-// and `app.seldonframe.com/pricing` (in-app shell).
+// April 30, 2026 — usage-based pricing migration. Tiers are Free / Growth /
+// Scale. Self-host (open-source MIT) is mentioned in the footer CTA so it
+// doesn't take a whole card slot from the three hosted tiers operators are
+// actually deciding between.
+//
+// 2026-05-17 — "Self-host Free" tier card removed (info dupes the footer
+// CTA) so the three hosted tiers (Free / Growth / Scale) get equal visual
+// weight and the operator's eye lands on Growth without the Self-host
+// option competing for attention as a $0 alternative.
 
 type Tier = {
-  id: "self_host" | "free" | "growth" | "scale";
+  id: "free" | "growth" | "scale";
   name: string;
   price: string;
   badgeNote: string;
@@ -19,19 +28,6 @@ type Tier = {
 };
 
 const TIERS: Tier[] = [
-  {
-    id: "self_host",
-    name: "Self-host",
-    price: "Free",
-    badgeNote: "MIT licensed · run on your infra",
-    features: [
-      "Unlimited workspaces",
-      "BYO Stripe / Resend / Twilio keys",
-      "BYO LLM keys",
-      "All blocks, all archetypes",
-      "Community support",
-    ],
-  },
   {
     id: "free",
     name: "Free",
@@ -81,6 +77,34 @@ type PricingPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
+/**
+ * Server action: pick the Free tier in one click. Stamps users.planId =
+ * 'free' on the signed-in user (only if currently NULL) and redirects to
+ * /dashboard. Without this action, clicking "Go to dashboard" on the Free
+ * card sent the user to /dashboard, where plan-gate.ts:74 saw !planId and
+ * 307'd them straight back to /pricing in an infinite loop.
+ *
+ * 2026-05-17 fix — surfaced from user smoke test on prod ("i tried clicking
+ * on the free workspace option... but nothing happens").
+ */
+async function selectFreeTierAction() {
+  "use server";
+
+  assertWritable();
+
+  const session = await auth();
+  if (!session?.user?.id) {
+    redirect("/signup");
+  }
+
+  await db
+    .update(users)
+    .set({ planId: "free", updatedAt: new Date() })
+    .where(and(eq(users.id, session.user.id), isNull(users.planId)));
+
+  redirect("/dashboard");
+}
+
 export default async function PricingPage({ searchParams }: PricingPageProps) {
   const session = await auth();
   if (searchParams) await searchParams; // keep Next.js happy if callers pass params
@@ -101,7 +125,7 @@ export default async function PricingPage({ searchParams }: PricingPageProps) {
           </p>
         </header>
 
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-6 md:grid-cols-3">
           {TIERS.map((tier) => (
             <article
               key={tier.id}
@@ -130,32 +154,40 @@ export default async function PricingPage({ searchParams }: PricingPageProps) {
                 ))}
               </ul>
               <div className="mt-auto">
-                <Link
-                  href={
-                    tier.id === "self_host"
-                      ? "https://github.com/seldonframe/seldonframe"
-                      : tier.id === "free"
-                        ? session?.user
-                          ? "/dashboard"
-                          : "/signup"
+                {/* Free tier is a Server Action form — clicking the button
+                    must stamp planId='free' on the user record so the
+                    plan-gate stops 307'ing /dashboard back to /pricing.
+                    Other tiers are plain links to /signup or
+                    /settings/billing where Stripe checkout takes over. */}
+                {tier.id === "free" && session?.user ? (
+                  <form action={selectFreeTierAction}>
+                    <button
+                      type="submit"
+                      className="crm-button-secondary inline-flex h-11 w-full items-center justify-center px-4 text-sm font-medium"
+                    >
+                      Go to dashboard
+                    </button>
+                  </form>
+                ) : (
+                  <Link
+                    href={
+                      tier.id === "free"
+                        ? "/signup"
                         : session?.user
                           ? `${ctaHref}?plan=${tier.id}`
                           : `/signup?plan=${tier.id}`
-                  }
-                  className={`${
-                    tier.featured ? "crm-button-primary" : "crm-button-secondary"
-                  } inline-flex h-11 w-full items-center justify-center px-4 text-sm font-medium`}
-                >
-                  {tier.id === "self_host"
-                    ? "View on GitHub"
-                    : tier.id === "free"
-                      ? session?.user
-                        ? "Go to dashboard"
-                        : "Start for $0"
+                    }
+                    className={`${
+                      tier.featured ? "crm-button-primary" : "crm-button-secondary"
+                    } inline-flex h-11 w-full items-center justify-center px-4 text-sm font-medium`}
+                  >
+                    {tier.id === "free"
+                      ? "Start for $0"
                       : session?.user
                         ? `Upgrade to ${tier.name}`
                         : `Start ${tier.name}`}
-                </Link>
+                  </Link>
+                )}
               </div>
             </article>
           ))}
@@ -173,7 +205,7 @@ export default async function PricingPage({ searchParams }: PricingPageProps) {
         </div>
 
         <p className="text-center text-sm text-muted-foreground">
-          Self-host for free. No limits. Deploy on your own infrastructure.{" "}
+          Developers?{" "}
           <a
             href="https://github.com/seldonframe/seldonframe"
             target="_blank"

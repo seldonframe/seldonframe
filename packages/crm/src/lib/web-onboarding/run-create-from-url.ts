@@ -46,12 +46,15 @@ export type RunDeps = {
   extractBusinessFactsFromUrl: (args: { url: string; byokKey: string }) => Promise<ExtractedBusinessFacts>;
   createFullWorkspace: (input: CreateFullWorkspaceInput) => Promise<CreateFullWorkspaceResult>;
   /**
-   * Stamps soulCompletedAt on the OPERATOR's own org so proxy.ts:261 stops
-   * redirecting them to /clients/new after the first successful workspace
-   * creation. Idempotent — safe to call on every create. See
-   * mark-operator-onboarded.ts for the SQL.
+   * Three-in-one onboarding stamp on the OPERATOR's own org + user row:
+   * sets soulCompletedAt, welcomeShown=true, and planId='free' (all
+   * idempotent / non-clobbering). Without this, every successful workspace
+   * creation would (a) bounce them back to /clients/new via proxy.ts:261,
+   * (b) detour through /welcome via proxy.ts:265, and (c) bounce them to
+   * /pricing via plan-gate.ts:74. See mark-operator-onboarded.ts for the
+   * full story.
    */
-  markOperatorOnboarded: (operatorOrgId: string) => Promise<void>;
+  markOperatorOnboarded: (operatorOrgId: string, operatorUserId?: string) => Promise<void>;
   workspaceBaseDomain: string;
 };
 
@@ -157,14 +160,20 @@ export async function runCreateFromUrl(input: RunInput): Promise<RunResult> {
       sse.emit("chatbot_built", { workspaceId: result.workspace_id });
       sse.emit("demo_seeded", { workspaceId: result.workspace_id });
 
-      // 8. Mark the OPERATOR's own org as onboarded so the proxy.ts:261
-      //    redirect-to-/clients/new gate stops firing on their next page
-      //    navigation. Idempotent — safe to call every time. Wrapped in a
-      //    try/catch because a failure here must not block the user from
-      //    reaching their freshly-created workspace; we just log + continue.
+      // 8. Mark the OPERATOR as onboarded — stamps soulCompletedAt,
+      //    welcomeShown=true, and planId='free' in one shot so the next
+      //    page navigation passes proxy.ts:261 (soul gate), proxy.ts:265
+      //    (welcome gate), AND plan-gate.ts:74 (plan gate) without
+      //    detouring through /clients/new, /welcome, or /pricing.
+      //    Idempotent — safe to call every time. Wrapped in try/catch
+      //    because a failure here must not block the user from reaching
+      //    their freshly-created workspace; we just log + continue.
       if (input.sessionUser.primaryOrgId) {
         try {
-          await input.deps.markOperatorOnboarded(input.sessionUser.primaryOrgId);
+          await input.deps.markOperatorOnboarded(
+            input.sessionUser.primaryOrgId,
+            input.sessionUser.id,
+          );
         } catch (err) {
           console.warn(
             JSON.stringify({
