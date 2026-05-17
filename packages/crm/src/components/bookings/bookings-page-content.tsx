@@ -306,12 +306,16 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
   }
 
   return (
-    <>
+    <div className="flex flex-col">
       {/* May 1, 2026 — Connect Google Calendar banner removed. The
           Cal.diy booking page IS the operator's calendar; external sync
-          was redundant and the OAuth prefetch caused CORS errors. */}
+          was redundant and the OAuth prefetch caused CORS errors.
+          2026-05-17 — Flex column + per-section `order-*` so Appointment
+          Types renders ABOVE the calendar (per user feedback: the
+          create/copy/edit link actions need to be easily accessible,
+          not buried below the calendar grid). */}
 
-      <section className="space-y-4">
+      <section className="space-y-4 order-2">
         <div className="px-3 md:px-6 py-4 border-b border-border">
           <div className="flex items-center gap-2 md:gap-3 flex-wrap">
             <div className="relative flex-1 min-w-[200px] max-w-[280px] shrink-0">
@@ -483,7 +487,7 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
         </div>
       </section>
 
-      <section className="space-y-3">
+      <section className="space-y-3 order-1">
         <div className="flex flex-wrap items-center gap-3 border-b border-border/70 px-3 py-3 md:px-6">
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-foreground">Appointment Types</p>
@@ -612,7 +616,7 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
         )}
       </section>
 
-      <section className="space-y-3">
+      <section className="space-y-3 order-3">
         <div className="flex items-center gap-3 border-b border-border/70 px-3 py-3 md:px-6">
           <p className="truncate text-sm font-semibold text-foreground">
             Upcoming {labels.activity.plural}
@@ -854,6 +858,6 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
       {showFilterNotice ? (
         <div className="fixed bottom-4 right-4 z-70 rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground shadow-sm">Coming soon</div>
       ) : null}
-    </>
+    </div>
   );
 }
