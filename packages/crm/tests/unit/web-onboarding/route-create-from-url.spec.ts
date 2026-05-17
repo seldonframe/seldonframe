@@ -1,9 +1,15 @@
 // packages/crm/tests/unit/web-onboarding/route-create-from-url.spec.ts
 //
-// PATCHED PER PLAN CORRECTION (2026-05-16): uses the real createFullWorkspace
-// from lib/workspace/create-full.ts (mocked here) instead of the bypassed
-// createWorkspaceFromSoulAction. SSE event sequence is fetching →
-// extracting → building → done (4 events, atomic build phase).
+// 2026-05-17 UPDATE: success sequence is now
+//   fetching → extracting → soul_built → chatbot_built → demo_seeded → done
+// (6 events). This matches what the UI's PROGRESS_KEYS array listens for —
+// previously the backend emitted a single "building" event that the UI
+// ignored, so the LIVE BUILD checklist pulsed on "Shaping the personality"
+// forever even though the workspace had been created server-side.
+//
+// Also: on success, markOperatorOnboarded is called with the OPERATOR's
+// primaryOrgId so the next request's JWT picks up soulCompletedAt and the
+// proxy.ts:261 redirect-to-/clients/new loop is broken.
 
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
@@ -43,6 +49,10 @@ function baseDeps() {
       slug: "acme-plumbing",
       public_urls: { home: "https://acme-plumbing.app.seldonframe.com", book: "...", intake: "..." },
     }),
+    // 2026-05-17 — new dep added so proxy.ts:261 doesn't bounce the operator
+    // back to /clients/new after the first successful workspace creation.
+    // Default no-op stub; specific tests assert the call.
+    markOperatorOnboarded: async () => {},
     workspaceBaseDomain: "app.seldonframe.com",
   };
 }
@@ -74,15 +84,45 @@ describe("runCreateFromUrl", () => {
     assert.match(text, /event: error\n.*"code":412.*needs_byok/);
   });
 
-  test("emits the success sequence: fetching → extracting → building → done", async () => {
+  test("emits the success sequence: fetching → extracting → soul_built → chatbot_built → demo_seeded → done", async () => {
     const sse = await runCreateFromUrl({ deps: baseDeps(), body: { url: "https://acme.com" }, sessionUser: { id: "u1", primaryOrgId: "o1" } });
     const text = await readAll(sse.stream);
     const fetchingIdx = text.indexOf("event: fetching");
     const extractingIdx = text.indexOf("event: extracting");
-    const buildingIdx = text.indexOf("event: building");
+    const soulBuiltIdx = text.indexOf("event: soul_built");
+    const chatbotBuiltIdx = text.indexOf("event: chatbot_built");
+    const demoSeededIdx = text.indexOf("event: demo_seeded");
     const doneIdx = text.indexOf("event: done");
-    assert.ok(fetchingIdx >= 0 && extractingIdx > fetchingIdx && buildingIdx > extractingIdx && doneIdx > buildingIdx, "events out of order: " + text);
+    assert.ok(
+      fetchingIdx >= 0 &&
+        extractingIdx > fetchingIdx &&
+        soulBuiltIdx > extractingIdx &&
+        chatbotBuiltIdx > soulBuiltIdx &&
+        demoSeededIdx > chatbotBuiltIdx &&
+        doneIdx > demoSeededIdx,
+      "events out of order: " + text,
+    );
     assert.match(text, /event: done\n.*"workspaceId":"org-1".*"slug":"acme-plumbing"/);
+  });
+
+  test("calls markOperatorOnboarded with the operator's primaryOrgId on success", async () => {
+    const calls: Array<string> = [];
+    const deps = { ...baseDeps(), markOperatorOnboarded: async (orgId: string) => { calls.push(orgId); } };
+    const sse = await runCreateFromUrl({ deps, body: { url: "https://acme.com" }, sessionUser: { id: "u1", primaryOrgId: "operator-org-99" } });
+    await readAll(sse.stream);
+    assert.deepEqual(calls, ["operator-org-99"], "markOperatorOnboarded should be called once with the operator's primaryOrgId");
+  });
+
+  test("does NOT call markOperatorOnboarded when createFullWorkspace fails", async () => {
+    const calls: Array<string> = [];
+    const deps = {
+      ...baseDeps(),
+      createFullWorkspace: async () => ({ status: "error" as const, error: { step: "soul", message: "boom" } }),
+      markOperatorOnboarded: async (orgId: string) => { calls.push(orgId); },
+    };
+    const sse = await runCreateFromUrl({ deps, body: { url: "https://acme.com" }, sessionUser: { id: "u1", primaryOrgId: "operator-org-99" } });
+    await readAll(sse.stream);
+    assert.deepEqual(calls, [], "markOperatorOnboarded must not run when workspace creation failed");
   });
 
   test("emits 422 when extraction throws WebFetchError with extraction_failed", async () => {

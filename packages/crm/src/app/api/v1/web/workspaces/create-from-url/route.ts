@@ -23,6 +23,11 @@ import { enforceWorkspaceLimit } from "@/lib/billing/limits";
 import { createFullWorkspace } from "@/lib/workspace/create-full";
 import { getOwnedWorkspaceCount } from "@/lib/web-onboarding/owned-workspace-count";
 import { getOperatorByokAnthropicKey } from "@/lib/web-onboarding/byok-resolver";
+// 2026-05-17 — marks the OPERATOR's own org as onboarded once their first
+// client workspace is successfully created so proxy.ts:261 stops 307'ing
+// every authed page request back to /clients/new. See the file header for
+// the full story.
+import { markOperatorOnboarded } from "@/lib/web-onboarding/mark-operator-onboarded";
 // 2026-05-16 — swapped from web-fetch-extractor (Anthropic web_fetch tool
 // path) to markdown-extractor (server-side fetch -> MD -> LLM). Same
 // signature, same SSE events, same error codes. See markdown-extractor.ts
@@ -77,6 +82,7 @@ async function dispatchCreateFromUrl(url: unknown): Promise<Response> {
       },
       extractBusinessFactsFromUrl,
       createFullWorkspace,
+      markOperatorOnboarded,
       workspaceBaseDomain: process.env.WORKSPACE_BASE_DOMAIN ?? "app.seldonframe.com",
     },
     body: { url },
