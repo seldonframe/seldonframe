@@ -266,9 +266,18 @@ const authProxy = auth(async (request) => {
     return NextResponse.redirect(new URL("/welcome", request.url));
   }
 
-  if (isAuthenticated && isSoulCompleted && pathname === "/clients/new" && !isPublicPath(pathname)) {
-    return NextResponse.redirect(new URL(isWelcomeShown ? "/dashboard" : "/welcome", request.url));
-  }
+  // 2026-05-17 — REMOVED the redirect-/clients/new-to-dashboard rule
+  // that used to live here. It was written for the old single-workspace
+  // onboarding model where /clients/new was a one-shot "complete your
+  // setup" screen, so once `soulCompleted` flipped true we shoved the
+  // user to /dashboard to keep them from re-doing onboarding.
+  //
+  // In the agency model /clients/new is the RECURRING "add another
+  // client workspace" page — operators need to reach it every time they
+  // onboard a new client. The redirect was bouncing every click on the
+  // dashboard's "Add client workspace" CTA back to /dashboard, making
+  // the button look completely dead. /clients/new is now allowed for
+  // any authed user regardless of soulCompleted state.
 
   // C6: skip plan-gate for admin-token sessions. They're attached to
   // a workspace, not a user, and the workspace's plan is enforced at
