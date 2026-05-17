@@ -98,9 +98,14 @@ export function LandingHeroMockup() {
       aria-label="SeldonFrame workspace dashboard for Acme HVAC: pipeline showing one scheduled $4,800 AC install, AI chatbot live, white-label sidebar."
       className="relative w-full overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900 shadow-2xl shadow-black/40 ring-1 ring-white/[0.04]"
     >
+      {/*
+        Entire subtree is aria-hidden so the screen reader announces
+        only the aria-label sentence above and never leaks the
+        decorative kanban / nav / status content (a11y-review M1).
+      */}
+      <div aria-hidden="true">
       {/* Soft teal radial behind the card — sells "primary surface" */}
       <div
-        aria-hidden="true"
         className="pointer-events-none absolute -top-32 right-0 h-72 w-72 rounded-full bg-[#14b8a6]/10 blur-3xl"
       />
 
@@ -110,7 +115,7 @@ export function LandingHeroMockup() {
         <span className="size-2.5 rounded-full bg-zinc-700" aria-hidden="true" />
         <span className="size-2.5 rounded-full bg-zinc-700" aria-hidden="true" />
         <span className="ml-3 inline-flex items-center gap-1.5 text-xs text-zinc-500">
-          <Lock className="size-3 text-zinc-600" strokeWidth={2.25} aria-hidden="true" />
+          <Lock className="size-3 text-zinc-600" strokeWidth={2.25} />
           acme-hvac.app.seldonframe.com
         </span>
       </div>
@@ -131,8 +136,8 @@ export function LandingHeroMockup() {
             </div>
           </div>
 
-          {/* Nav */}
-          <nav className="mt-4 space-y-0.5" aria-hidden="true">
+          {/* Nav (decorative — subtree is aria-hidden at the root) */}
+          <nav className="mt-4 space-y-0.5">
             {NAV_ITEMS.map((item, i) => {
               const Icon = item.icon;
               const isActive = i === 0;
@@ -146,10 +151,13 @@ export function LandingHeroMockup() {
                   }
                 >
                   <span className="flex items-center gap-2">
-                    <Icon className="size-3.5" strokeWidth={1.75} aria-hidden="true" />
+                    <Icon className="size-3.5" strokeWidth={1.75} />
                     {item.label}
                   </span>
-                  <span className="size-1.5 rounded-full bg-emerald-500/70" />
+                  {/* Status dot bumped from emerald-500/70 to full
+                      opacity to clear WCAG 1.4.11 non-text contrast
+                      (a11y-review C2). */}
+                  <span className="size-1.5 rounded-full bg-emerald-500" />
                 </div>
               );
             })}
@@ -186,10 +194,9 @@ export function LandingHeroMockup() {
                     // Silent rail — reads as "no cards yet" without
                     // a textual "Empty" label that would feel like a
                     // designer placeholder (design-critique #2).
-                    <div
-                      aria-hidden="true"
-                      className="h-12 rounded-md border border-dashed border-zinc-800/40"
-                    />
+                    // Border opacity bumped to /70 so the dashed rail
+                    // clears WCAG 1.4.11 (a11y-review N3).
+                    <div className="h-12 rounded-md border border-dashed border-zinc-800/70" />
                   ) : (
                     col.cards.map((card, cardIdx) => {
                       // Cumulative delay across columns so cards
@@ -224,7 +231,7 @@ export function LandingHeroMockup() {
           {/* Bottom status strip — agent health */}
           <div className="mt-5 flex items-center justify-between gap-3 rounded-lg border border-zinc-800/80 bg-zinc-950/60 px-3 py-2">
             <div className="flex items-center gap-2">
-              <span className="relative flex size-2.5" aria-hidden="true">
+              <span className="relative flex size-2.5">
                 <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-500/60 motion-reduce:hidden" />
                 <span className="relative inline-flex size-2.5 rounded-full bg-emerald-500" />
               </span>
@@ -238,6 +245,7 @@ export function LandingHeroMockup() {
             </span>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

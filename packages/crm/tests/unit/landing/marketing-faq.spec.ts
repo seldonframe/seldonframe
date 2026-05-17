@@ -1,9 +1,11 @@
-// Snapshot-shape tests for LandingMarketingFaqSection (Cut C Phase 6).
+// Snapshot-shape tests for LandingMarketingFaqSection (Cut C Phase 6 +
+// onboarding-pivot Q7/Q8 additions).
 //
-// Six agency-focused Q&As. The tests check (a) exactly 6 <details>
+// Eight agency-focused Q&As. The tests check (a) exactly 8 <details>
 // rendered, (b) each expected concept is present (white-label, domain,
-// Anthropic key, workspace count, Claude Code, isolation), (c) a few
-// load-bearing claims (Growth+Scale mention, "every tier" for BYOK),
+// Anthropic key, workspace count, Claude Code, isolation, GHL
+// comparison, tool-stack replacement), (c) a few load-bearing claims
+// (Growth+Scale mention, "every tier" for BYOK, $29/$497 comparison),
 // (d) the FAQPage JSON-LD schema script is emitted with the same
 // answer text — Google's structured-data validator drops the schema
 // otherwise.
@@ -35,13 +37,15 @@ const EXPECTED_QUESTIONS = [
   /how many .*workspaces/i,
   /Claude Code/i,
   /isolated|isolation/i,
+  /GoHighLevel/i,
+  /Zapier|Calendly|Typeform/i,
 ];
 
-describe("LandingMarketingFaqSection — 6 agency-focused Q&A", () => {
-  test("renders exactly 6 <details> entries", () => {
+describe("LandingMarketingFaqSection — 8 agency-focused Q&A", () => {
+  test("renders exactly 8 <details> entries", () => {
     const result = LandingMarketingFaqSection();
     const details = flatten(result).filter((el) => el.type === "details");
-    assert.equal(details.length, 6);
+    assert.equal(details.length, 8);
   });
 
   test("each expected question concept appears at least once", () => {
@@ -68,6 +72,22 @@ describe("LandingMarketingFaqSection — 6 agency-focused Q&A", () => {
     assert.match(text, /(all tiers|every tier)/i);
   });
 
+  test("GHL-comparison answer carries the $29 vs $497 wallet math", () => {
+    const result = LandingMarketingFaqSection();
+    const text = JSON.stringify(result);
+    assert.match(text, /\$29/);
+    assert.match(text, /\$497/);
+    assert.match(text, /AGPL-3\.0/);
+  });
+
+  test("tool-stack answer opens with 'No' and lists the displaced stack", () => {
+    const result = LandingMarketingFaqSection();
+    const text = JSON.stringify(result);
+    // Q8 leads with "No." to do the heavy lifting up front.
+    assert.match(text, /"No\./);
+    assert.match(text, /Zapier task fees/i);
+  });
+
   test("embeds FAQPage JSON-LD schema for Google rich results", () => {
     const result = LandingMarketingFaqSection();
     const scripts = flatten(result).filter((el) => el.type === "script");
@@ -78,8 +98,8 @@ describe("LandingMarketingFaqSection — 6 agency-focused Q&A", () => {
         ?.dangerouslySetInnerHTML?.__html ?? ""
     );
     assert.match(html, /"@type":"FAQPage"/);
-    // Schema mainEntity must enumerate exactly 6 Question entries.
+    // Schema mainEntity must enumerate exactly 8 Question entries.
     const questionMatches = html.match(/"@type":"Question"/g) ?? [];
-    assert.equal(questionMatches.length, 6, "schema must contain 6 Question entries");
+    assert.equal(questionMatches.length, 8, "schema must contain 8 Question entries");
   });
 });
