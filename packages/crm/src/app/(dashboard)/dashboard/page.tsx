@@ -389,6 +389,130 @@ export default async function DashboardPage({
 
   const workspaceRows = Array.from(new Map([...directWorkspaceRows, ...membershipWorkspaceRows].map((row) => [row.id, row])).values());
 
+  // 2026-05-17 — first-time agency operator early-return.
+  //
+  // Why: the full dashboard was leading new agency users (zero client
+  // workspaces yet) with 9+ empty widgets (pipeline / blocks grid /
+  // CSV import row / watch list / 4 KPI cards / lead-source pie chart /
+  // revenue flow chart). All zeroes. The "where dreams go to die"
+  // anti-pattern from B2B SaaS onboarding research.
+  //
+  // Replacement: single focused hero with one CTA — "Add your first
+  // client → /clients/new" — matching how Linear, Loom, and Postiz
+  // handle their first-run experience. Time-to-value drops from
+  // "scroll through 9 empty widgets and try to figure out what to do
+  // first" to "click the obvious primary CTA."
+  //
+  // Bonus: short-circuits ~7 expensive DB queries below
+  // (workspaceStats, snapshotRows, paymentRows, dealsSurface, etc.)
+  // that all return empty results anyway for a 0-workspace user.
+  const isFirstTimeAgency = !isOperatorSession && workspaceRows.length === 0;
+  if (isFirstTimeAgency) {
+    const firstName =
+      user?.name?.split(" ").filter(Boolean)[0]?.trim() || "there";
+    const greeting = `Good ${timeOfDay()}, ${firstName}`;
+
+    return (
+      <main className="animate-page-enter flex-1 overflow-auto w-full p-4 sm:p-6 md:p-8">
+        <div className="mx-auto max-w-2xl py-10 sm:py-16">
+          <div className="space-y-6 sm:space-y-8">
+            {/* Eyebrow personalises without burning a full row on the
+                generic "Welcome" pattern the research flagged. */}
+            <p className="text-sm text-muted-foreground">{greeting} 👋</p>
+
+            <h1 className="text-3xl font-semibold leading-[1.1] tracking-tight sm:text-4xl lg:text-[2.75rem]">
+              Your first client is{" "}
+              <span className="text-primary">60 seconds</span> away.
+            </h1>
+
+            <p className="text-base text-muted-foreground sm:text-lg">
+              Paste their website. We&apos;ll build their CRM, booking page,
+              intake form, and AI chatbot in one pass. You&apos;ll have a real
+              workspace to show them today.
+            </p>
+
+            {/* Single primary CTA — no competing actions above the fold.
+                The action verb ("Add your first client") locks the user
+                onto a concrete next step rather than browsing for one. */}
+            <div className="flex flex-wrap items-center gap-3 pt-2">
+              <Link
+                href="/clients/new"
+                className="inline-flex h-11 items-center justify-center rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-(--shadow-sm) transition-colors hover:bg-primary/90"
+              >
+                Add your first client →
+              </Link>
+              <span className="text-xs text-muted-foreground">
+                Takes about a minute. No card required.
+              </span>
+            </div>
+
+            {/* What-happens-next preview. Three steps mirror the LIVE BUILD
+                checklist on /clients/new so the operator knows what's
+                coming before they click. No metrics, no charts, no setup
+                rows — that all comes later, once they have data. */}
+            <div className="mt-8 grid gap-3 sm:grid-cols-3">
+              {[
+                {
+                  step: "1",
+                  title: "Paste a URL",
+                  detail: "Their existing site is the source of truth.",
+                },
+                {
+                  step: "2",
+                  title: "AI builds it",
+                  detail: "CRM, booking, intake, chatbot — all wired up.",
+                },
+                {
+                  step: "3",
+                  title: "You customize",
+                  detail: "Tweak copy, brand, agents, automations.",
+                },
+              ].map((item) => (
+                <div
+                  key={item.step}
+                  className="rounded-2xl border border-border/70 bg-card/40 p-4"
+                >
+                  <p className="flex size-6 items-center justify-center rounded-full bg-primary/15 text-[11px] font-semibold text-primary">
+                    {item.step}
+                  </p>
+                  <p className="mt-3 text-sm font-medium text-foreground">
+                    {item.title}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {item.detail}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            {/* Subtle bail-out for operators who already know what they're
+                doing and want to skip the URL paste. Linked button, not a
+                second primary CTA. */}
+            <div className="border-t border-border/60 pt-6">
+              <p className="text-xs text-muted-foreground">
+                Already have client data to import?{" "}
+                <Link
+                  href="/contacts"
+                  className="font-medium text-primary underline underline-offset-4 hover:text-primary/80"
+                >
+                  Add contacts manually
+                </Link>{" "}
+                or{" "}
+                <Link
+                  href="/docs"
+                  className="font-medium text-primary underline underline-offset-4 hover:text-primary/80"
+                >
+                  read the docs
+                </Link>
+                .
+              </p>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   const workspaceStats = await Promise.all(
     workspaceRows.map(async (workspace) => {
       const [contactCount] = await db
