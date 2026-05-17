@@ -171,7 +171,7 @@ export function BusinessPreview({ data, claimToken }: { data: PreviewPayload; cl
         >
           Go Live with Google
         </a>
-        <p className="mt-4 text-sm text-zinc-500">Free forever. No credit card required.</p>
+        <p className="mt-4 text-sm text-zinc-500">Free forever. Cancel anytime.</p>
         <p className="mt-2 text-xs text-zinc-600">
           Or{" "}
           <Link href={`/signup?token=${encodeURIComponent(claimToken)}`} className="underline hover:text-zinc-400">

@@ -31,6 +31,20 @@ if (googleClientId && googleClientSecret) {
     Google({
       clientId: googleClientId,
       clientSecret: googleClientSecret,
+      // 2026-05-17 — production smoke test surfaced OAuthAccountNotLinked
+      // errors when an operator who signed up via email magic-link later
+      // tried "Sign in with Google" with the same address. NextAuth's
+      // default policy is to refuse silent linking across providers
+      // because an attacker controlling an unverified OAuth provider
+      // could hijack the email-based account.
+      //
+      // For Google specifically this is safe — Google verifies the
+      // email before issuing the OAuth token, so receiving a Google
+      // session for X means the holder really controls X. Setting
+      // `allowDangerousEmailAccountLinking: true` is the documented
+      // NextAuth way to opt INTO same-email linking for trusted
+      // providers. See https://authjs.dev/getting-started/providers/google
+      allowDangerousEmailAccountLinking: true,
     })
   );
 }

@@ -53,6 +53,10 @@ function baseDeps() {
     // back to /clients/new after the first successful workspace creation.
     // Default no-op stub; specific tests assert the call.
     markOperatorOnboarded: async () => {},
+    // 2026-05-17 — new dep that links the freshly-created workspace to the
+    // operator (ownerId + org_members 'owner' row). Without it the user
+    // creates a workspace they can't see. Default no-op stub.
+    linkWorkspaceToOperator: async () => ({ ok: true, alreadyOwned: false }),
     workspaceBaseDomain: "app.seldonframe.com",
   };
 }
@@ -132,6 +136,39 @@ describe("runCreateFromUrl", () => {
     const sse = await runCreateFromUrl({ deps, body: { url: "https://acme.com" }, sessionUser: { id: "u1", primaryOrgId: "operator-org-99" } });
     await readAll(sse.stream);
     assert.deepEqual(calls, [], "markOperatorOnboarded must not run when workspace creation failed");
+  });
+
+  test("calls linkWorkspaceToOperator with the new workspace_id + operator's userId on success", async () => {
+    const calls: Array<{ workspaceId: string; userId: string }> = [];
+    const deps = {
+      ...baseDeps(),
+      linkWorkspaceToOperator: async (workspaceId: string, userId: string) => {
+        calls.push({ workspaceId, userId });
+        return { ok: true, alreadyOwned: false };
+      },
+    };
+    const sse = await runCreateFromUrl({ deps, body: { url: "https://acme.com" }, sessionUser: { id: "operator-user-42", primaryOrgId: "operator-org-99" } });
+    await readAll(sse.stream);
+    assert.deepEqual(
+      calls,
+      [{ workspaceId: "org-1", userId: "operator-user-42" }],
+      "linkWorkspaceToOperator must be called with the newly-created workspace id + the operator's userId so the new workspace appears in their /clients listing",
+    );
+  });
+
+  test("does NOT call linkWorkspaceToOperator when createFullWorkspace fails", async () => {
+    const calls: Array<{ workspaceId: string; userId: string }> = [];
+    const deps = {
+      ...baseDeps(),
+      createFullWorkspace: async () => ({ status: "error" as const, error: { step: "soul", message: "boom" } }),
+      linkWorkspaceToOperator: async (workspaceId: string, userId: string) => {
+        calls.push({ workspaceId, userId });
+        return { ok: true, alreadyOwned: false };
+      },
+    };
+    const sse = await runCreateFromUrl({ deps, body: { url: "https://acme.com" }, sessionUser: { id: "u1", primaryOrgId: "operator-org-99" } });
+    await readAll(sse.stream);
+    assert.deepEqual(calls, [], "linkWorkspaceToOperator must not run when workspace creation failed");
   });
 
   test("emits 422 when extraction throws WebFetchError with extraction_failed", async () => {

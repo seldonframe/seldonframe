@@ -88,7 +88,7 @@ const softwareApplicationSchema = {
       price: "0",
       priceCurrency: "USD",
       description:
-        "Free tier: 1 complete client workspace (CRM, booking, intake, AI chatbot). No credit card. BYOK LLM keys, no token margin.",
+        "Free tier: 1 complete client workspace (CRM, booking, intake, AI chatbot). Card on file at signup, never charged on Free. BYOK LLM keys, no token margin.",
     },
     {
       "@type": "Offer",

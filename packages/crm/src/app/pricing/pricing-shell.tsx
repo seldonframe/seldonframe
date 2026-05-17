@@ -125,11 +125,14 @@ export function PricingShell({ isAuthed, stripe }: PricingShellProps) {
   //  - SetupIntent bundle was provisioned server-side (publishable key set)
   const showEmbeddedForm = selected.id === "free" && isAuthed && Boolean(stripe);
 
-  // Trust signals flip the middle item when the embedded form will be
-  // mounted. Honest up-front about why we want a card on a $0 plan.
+  // Trust signals — honest about the card-on-file policy regardless of
+  // whether the embedded form is currently mounted. (When stripe is null
+  // — e.g. unauthed visitor — they'll still see the card field after
+  // signup, so promising "no card required" would be a lie even when
+  // the current page isn't asking.)
   const trustSignals = [
     "First workspace always free",
-    stripe ? "Card on file, never charged on Free" : "No card required to start",
+    "Card on file, never charged on Free",
     "Cancel anytime in Settings",
   ];
 
@@ -366,7 +369,7 @@ function PricingStickyBar({
     if (selected.id === "free") {
       return showEmbeddedForm
         ? "Save a card now — never charged on Free. One-click upgrades later."
-        : "Your first workspace is always free — no card to start. Cancel anytime.";
+        : "Your first workspace is always free. Card on file at signup. Cancel anytime.";
     }
     return `${selected.price}${selected.cadence} · cancel anytime from Settings`;
   })();

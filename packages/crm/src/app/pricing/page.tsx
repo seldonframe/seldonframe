@@ -37,7 +37,7 @@ const FAQS: Array<{ q: string; a: string }> = [
   },
   {
     q: "Do I need a credit card to get started?",
-    a: "No — you can start free with no card. If you'd like one-click upgrades later, you can save a card on file at signup (never charged on Free). Cancel anytime from Settings → Billing.",
+    a: "Yes — we collect a card at signup so future upgrades are one-click. You are NEVER charged while you stay on the Free tier. Upgrade to Growth or Scale only when you're ready. Cancel anytime from Settings → Billing.",
   },
   {
     q: "Whose Claude / OpenAI key gets used?",
