@@ -24,11 +24,12 @@ export function AgentTabs({ agentId }: { agentId: string }) {
           <Link
             key={t.slug || "overview"}
             href={href}
-            className={`px-4 py-2 text-sm border-b-2 -mb-px transition-colors ${
+            className={`relative px-4 py-2 text-sm border-b-2 -mb-px transition-[color,border-color,background-color] duration-150 ease-out rounded-t-md ${
               isActive
                 ? "border-primary text-primary font-medium"
-                : "border-transparent text-muted-foreground hover:text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground hover:bg-accent/40"
             }`}
+            aria-current={isActive ? "page" : undefined}
           >
             {t.label}
           </Link>

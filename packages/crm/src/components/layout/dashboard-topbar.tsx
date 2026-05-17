@@ -242,7 +242,7 @@ export function DashboardTopbar({
                   <input type="hidden" name="redirectTo" value={`/clients/${workspace.slug}/ready`} />
                   <button
                     type="submit"
-                    className="flex w-full items-start gap-2 rounded-xl px-2.5 py-2.5 text-left transition-colors hover:bg-accent/60"
+                    className="crm-pressable flex w-full items-start gap-2 rounded-xl px-2.5 py-2.5 text-left transition-[background-color,transform] duration-150 ease-out hover:bg-accent/60"
                     onClick={() => setWorkspaceMenuOpen(false)}
                   >
                     <span className="mt-0.5 inline-flex size-4 items-center justify-center text-primary">

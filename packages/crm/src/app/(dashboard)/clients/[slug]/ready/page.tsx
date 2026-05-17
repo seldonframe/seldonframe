@@ -272,14 +272,14 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
               href={urls.home}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-(--shadow-sm) transition-colors hover:bg-primary/90"
+              className="crm-pressable inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-(--shadow-sm) transition-[background-color,transform] duration-150 ease-out hover:bg-primary/90"
             >
               Visit public site
               <ExternalLink className="size-4" aria-hidden="true" />
             </a>
             <Link
               href={sw("/dashboard")}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-border bg-card/60 px-5 text-sm font-medium text-foreground transition-colors hover:bg-card"
+              className="crm-pressable inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-border bg-card/60 px-5 text-sm font-medium text-foreground transition-[background-color,transform] duration-150 ease-out hover:bg-card"
             >
               Continue to dashboard
               <ArrowRight className="size-4" aria-hidden="true" />
@@ -296,7 +296,7 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
             {deliverables.map((d) => (
               <article
                 key={d.label}
-                className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card/40 p-5"
+                className="crm-hover-lift flex flex-col gap-3 rounded-2xl border border-border/70 bg-card/40 p-5"
               >
                 <div className="flex items-center gap-2.5">
                   <span aria-hidden="true" className="text-xl leading-none">
@@ -314,14 +314,14 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
                       href={d.publicHref}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex h-8 items-center gap-1 rounded-lg bg-primary/15 px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/25"
+                      className="crm-pressable inline-flex h-8 items-center gap-1 rounded-lg bg-primary/15 px-2.5 text-xs font-medium text-primary transition-[background-color,transform] duration-150 ease-out hover:bg-primary/25"
                     >
                       {d.publicLabel}
                     </a>
                   ) : null}
                   <Link
                     href={d.adminHref}
-                    className="inline-flex h-8 items-center gap-1 rounded-lg border border-border bg-background/40 px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-background/80 hover:text-foreground"
+                    className="crm-pressable inline-flex h-8 items-center gap-1 rounded-lg border border-border bg-background/40 px-2.5 text-xs font-medium text-muted-foreground transition-[background-color,color,transform] duration-150 ease-out hover:bg-background/80 hover:text-foreground"
                   >
                     {d.adminLabel}
                   </Link>

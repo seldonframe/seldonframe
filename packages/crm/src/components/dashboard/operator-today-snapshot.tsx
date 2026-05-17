@@ -220,7 +220,7 @@ function SnapshotCard({
   return (
     <Link
       href={href}
-      className="group rounded-xl border border-border/80 bg-background/40 p-3 transition-colors hover:border-border hover:bg-background/70"
+      className="crm-hover-lift group rounded-xl border border-border/80 bg-background/40 p-3 transition-[background-color,border-color,transform,box-shadow] duration-150 ease-out hover:border-border hover:bg-background/70"
     >
       <div className="flex items-center justify-between">
         <span className="inline-flex size-7 items-center justify-center rounded-md bg-muted text-muted-foreground">
