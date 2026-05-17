@@ -14,7 +14,7 @@ export function LandingFinalCta() {
         >
           Try it now <ArrowRight size={18} className="rotate-[-45deg]" />
         </button>
-        <p className="mt-6 text-xs text-zinc-600">Free. No credit card. No setup.</p>
+        <p className="mt-6 text-xs text-zinc-600">Free to start. Cancel anytime.</p>
       </div>
     </section>
   );

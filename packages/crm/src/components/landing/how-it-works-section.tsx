@@ -19,7 +19,7 @@ const STEPS: readonly Step[] = [
   {
     number: 1,
     title: "Sign up free",
-    body: "Google or email. 30 seconds. No credit card.",
+    body: "Google or email. 30 seconds. Free to start.",
     screenshot: "/marketing/how-it-works-step-1.png",
     alt: "Screenshot of the SeldonFrame signup form showing a Continue with Google button above an email field.",
   },

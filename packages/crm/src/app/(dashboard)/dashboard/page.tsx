@@ -442,7 +442,7 @@ export default async function DashboardPage({
                 Add your first client →
               </Link>
               <span className="text-xs text-muted-foreground">
-                Takes about a minute. No card required.
+                Takes about a minute. Free forever.
               </span>
             </div>
 

@@ -37,7 +37,7 @@ const FAQS: FaqEntry[] = [
   {
     question: "Is SeldonFrame really free for agencies?",
     answer:
-      "The Free tier covers 1 complete workspace with CRM, booking, intake form, and AI chatbot. No credit card required. Growth at $29/month covers 3 workspaces — designed for solo agencies serving 2-3 clients. Scale at $99/month is unlimited workspaces — designed for agencies serving 5+ clients. You bring your own LLM key (BYOK) so you pay your own Anthropic or OpenAI bill with no SeldonFrame token margin, typically $3-$15/month per active workspace. Or self-host under AGPL-3.0 for $0.",
+      "The Free tier covers 1 complete workspace with CRM, booking, intake form, and AI chatbot. Card on file so future upgrades are one-click — never charged on Free. Growth at $29/month covers 3 workspaces — designed for solo agencies serving 2-3 clients. Scale at $99/month is unlimited workspaces — designed for agencies serving 5+ clients. You bring your own LLM key (BYOK) so you pay your own Anthropic or OpenAI bill with no SeldonFrame token margin, typically $3-$15/month per active workspace. Or self-host under AGPL-3.0 for $0.",
   },
   {
     question: "What can agencies charge clients using SeldonFrame?",

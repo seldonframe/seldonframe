@@ -55,6 +55,17 @@ export type RunDeps = {
    * full story.
    */
   markOperatorOnboarded: (operatorOrgId: string, operatorUserId?: string) => Promise<void>;
+  /**
+   * Make the operator the owner of the freshly-created workspace by
+   * stamping organizations.ownerId AND inserting an org_members row
+   * with role='owner'. Without this, createAnonymousWorkspace leaves
+   * ownerId=null and the new workspace becomes invisible to the
+   * operator's dashboard/clients listing — they create a workspace,
+   * the SSE redirects them to /dashboard?ws=<slug>, but /clients shows
+   * nothing because they aren't a member. See link-workspace-to-
+   * operator.ts for the SQL + idempotency story.
+   */
+  linkWorkspaceToOperator: (workspaceId: string, userId: string) => Promise<unknown>;
   workspaceBaseDomain: string;
 };
 
@@ -149,7 +160,36 @@ export async function runCreateFromUrl(input: RunInput): Promise<RunResult> {
         return;
       }
 
-      // 7. Emit the granular progress events the UI listens for. createFull-
+      // 7. Link the new workspace to the operator. createAnonymousWorkspace
+      //    inserts the org with ownerId=null + no org_members row, which
+      //    made sense in the MCP claim flow but breaks the web-onboarding
+      //    flow — the operator can't see the workspace they just made
+      //    because they aren't an owner OR a member. We stamp both now so
+      //    /dashboard, /clients, and the workspace-switch flow all
+      //    recognise them as authorized. Failures here are logged but
+      //    non-fatal — the workspace exists, the operator just won't see
+      //    it until link-owner is called separately. See
+      //    lib/workspace/link-workspace-to-operator.ts for the SQL.
+      // The result.status === "ready" check above narrows the discriminated
+      // union, but the workspace_id field is still typed as optional on
+      // the success variant. Guard explicitly so TS is happy and so a
+      // malformed `ready` response (no id) doesn't crash the SSE thread.
+      if (result.workspace_id) {
+        try {
+          await input.deps.linkWorkspaceToOperator(result.workspace_id, input.sessionUser.id);
+        } catch (err) {
+          console.warn(
+            JSON.stringify({
+              event: "link_workspace_to_operator_failed",
+              user_id: input.sessionUser.id,
+              workspace_id: result.workspace_id,
+              detail: err instanceof Error ? err.message : String(err),
+            }),
+          );
+        }
+      }
+
+      // 8. Emit the granular progress events the UI listens for. createFull-
       //    Workspace is atomic from our perspective (no internal callbacks),
       //    so the three events fire in fast succession. The user briefly sees
       //    each step tick green right before the redirect — clean visual
