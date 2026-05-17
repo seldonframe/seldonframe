@@ -2,9 +2,22 @@
 // Wraps Anthropic SDK messages.create with the web_fetch server tool enabled.
 // Returns the parsed business facts, or throws WebFetchError with a typed reason.
 //
-// Spec §"Extraction call" — we pass tools: [{ type: "web_fetch_20250910" }] and
-// the beta header "web-fetch-2025-09-10". Anthropic fetches the pages server-side
-// and returns the model's text turn containing the JSON extraction.
+// 2026-05-16 fix — every smoke-test URL was returning extraction_failed.
+// Root causes (per https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-fetch-tool):
+//   1. Tool spec was missing the REQUIRED `name: "web_fetch"` field. The
+//      Anthropic API silently 400'd and we masked it as extraction_failed.
+//   2. Sent an unnecessary `anthropic-beta: web-fetch-2025-09-10` header.
+//      web_fetch is GA, no beta header required, and the wrong value may
+//      have contributed to silent failures.
+//   3. Default model was claude-sonnet-4-20250514 — a stale snapshot from
+//      the original Sonnet 4 release. Updated to claude-sonnet-4-5-20250929
+//      (current GA Sonnet, used elsewhere in the agent runtime).
+//   4. When Anthropic returns 200 with an inline web_fetch_tool_error
+//      (url_not_accessible, too_many_requests, etc.), we missed the error
+//      block and fell through to "no usable JSON". Now we scan for it.
+//   5. Zero observability — every failure was a black box. Now we log
+//      the full Anthropic error + the inline tool error code + the
+//      response shape so the next failure is diagnosable in Vercel logs.
 
 import Anthropic from "@anthropic-ai/sdk";
 
@@ -27,24 +40,65 @@ export class WebFetchError extends Error {
   }
 }
 
-const DEFAULT_MODEL = process.env.WEB_ONBOARDING_MODEL?.trim() || "claude-sonnet-4-20250514";
+const DEFAULT_MODEL =
+  process.env.WEB_ONBOARDING_MODEL?.trim() || "claude-sonnet-4-5-20250929";
 const MAX_TOKENS = 4096;
+// Tool spec per official docs — `type` AND `name` are both required.
 const WEB_FETCH_TOOL_TYPE = "web_fetch_20250910";
-const WEB_FETCH_BETA_HEADER = "web-fetch-2025-09-10";
+const WEB_FETCH_TOOL_NAME = "web_fetch";
+
+type AnthropicContentBlock = {
+  type: string;
+  text?: string;
+  // Server tool result block — Anthropic returns the fetch result inline.
+  // When the fetch fails, the inner content has type "web_fetch_tool_error"
+  // with an error_code field.
+  content?: {
+    type?: string;
+    error_code?: string;
+    [key: string]: unknown;
+  };
+};
 
 type AnthropicLike = {
   messages: {
-    create: (params: Record<string, unknown>, opts?: { headers?: Record<string, string> }) => Promise<{
-      content: Array<{ type: string; text?: string }>;
+    create: (
+      params: Record<string, unknown>,
+      opts?: { headers?: Record<string, string> },
+    ) => Promise<{
+      content: Array<AnthropicContentBlock>;
+      stop_reason?: string;
     }>;
   };
 };
 
-function pickText(content: Array<{ type: string; text?: string }>): string {
+function pickText(content: Array<AnthropicContentBlock>): string {
   return content
     .map((part) => (part.type === "text" ? part.text ?? "" : ""))
     .join("\n")
     .trim();
+}
+
+/**
+ * Scan the response for an embedded web_fetch_tool_error block. Anthropic
+ * returns 200 with the error inline when the fetch itself fails
+ * (url_not_accessible, unsupported_content_type, too_many_requests,
+ * url_not_allowed, etc.). Surfacing the specific error_code is the
+ * fastest path to diagnosing why a given URL failed (vs. lumping all
+ * into extraction_failed).
+ */
+function findWebFetchToolError(
+  content: Array<AnthropicContentBlock>,
+): string | null {
+  for (const block of content) {
+    if (
+      block.type === "web_fetch_tool_result" &&
+      block.content?.type === "web_fetch_tool_error"
+    ) {
+      return block.content.error_code ?? "unknown_web_fetch_error";
+    }
+  }
+  return null;
 }
 
 export async function extractBusinessFactsFromUrl(params: {
@@ -55,25 +109,37 @@ export async function extractBusinessFactsFromUrl(params: {
   model?: string;
 }): Promise<ExtractedBusinessFacts> {
   const client = (params.anthropicClient ?? new Anthropic({ apiKey: params.byokKey })) as AnthropicLike;
+  const modelInUse = params.model || DEFAULT_MODEL;
 
-  let response: { content: Array<{ type: string; text?: string }> };
+  let response: { content: Array<AnthropicContentBlock>; stop_reason?: string };
   try {
-    response = await client.messages.create(
-      {
-        model: params.model || DEFAULT_MODEL,
-        max_tokens: MAX_TOKENS,
-        tools: [{ type: WEB_FETCH_TOOL_TYPE }],
-        messages: [
-          {
-            role: "user",
-            content: `${EXTRACTION_INSTRUCTIONS}\n\nURL to extract: ${params.url}`,
-          },
-        ],
-      },
-      { headers: { "anthropic-beta": WEB_FETCH_BETA_HEADER } }
-    );
+    response = await client.messages.create({
+      model: modelInUse,
+      max_tokens: MAX_TOKENS,
+      // Tool spec MUST include both `type` and `name` per the Anthropic docs.
+      // Omitting `name` causes the API to 400 silently from our perspective.
+      tools: [{ type: WEB_FETCH_TOOL_TYPE, name: WEB_FETCH_TOOL_NAME }],
+      messages: [
+        {
+          role: "user",
+          content: `${EXTRACTION_INSTRUCTIONS}\n\nURL to extract: ${params.url}`,
+        },
+      ],
+    });
   } catch (err: unknown) {
+    // Log the full error payload so the next failure isn't a black box.
+    // NEVER log the BYOK key.
     const status = (err as { status?: number } | null)?.status;
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(
+      JSON.stringify({
+        event: "web_fetch_extractor_anthropic_error",
+        url: params.url,
+        model: modelInUse,
+        status: status ?? null,
+        message: message.slice(0, 500),
+      }),
+    );
     if (status === 401 || status === 403) {
       throw new WebFetchError("anthropic_unauthorized", "Anthropic rejected the BYOK key.", err);
     }
@@ -91,10 +157,60 @@ export async function extractBusinessFactsFromUrl(params: {
     );
   }
 
+  // Inline web_fetch_tool_error check — Anthropic returns 200 with the
+  // error in the response body when the fetch itself fails.
+  const toolError = findWebFetchToolError(response.content);
+  if (toolError) {
+    console.warn(
+      JSON.stringify({
+        event: "web_fetch_extractor_tool_error",
+        url: params.url,
+        model: modelInUse,
+        error_code: toolError,
+        stop_reason: response.stop_reason ?? null,
+      }),
+    );
+    throw new WebFetchError(
+      "extraction_failed",
+      `Anthropic web_fetch failed for ${params.url}: ${toolError}`,
+    );
+  }
+
   const text = pickText(response.content);
+
+  // If there's no text block at all, the response is malformed.
+  if (!text) {
+    console.warn(
+      JSON.stringify({
+        event: "web_fetch_extractor_empty_text",
+        url: params.url,
+        model: modelInUse,
+        stop_reason: response.stop_reason ?? null,
+        content_types: response.content.map((b) => b.type),
+      }),
+    );
+    throw new WebFetchError(
+      "extraction_failed",
+      "Anthropic returned no text content block.",
+    );
+  }
+
   const parsed = parseExtraction(text);
   if (!parsed.ok) {
-    throw new WebFetchError("extraction_failed", "The model returned no usable JSON.");
+    // Log the first 500 chars of the model output so we can see if it's
+    // malformed JSON, missing required keys, or just plain prose.
+    console.warn(
+      JSON.stringify({
+        event: "web_fetch_extractor_parse_failed",
+        url: params.url,
+        model: modelInUse,
+        text_preview: text.slice(0, 500),
+      }),
+    );
+    throw new WebFetchError(
+      "extraction_failed",
+      "The model returned no usable JSON.",
+    );
   }
 
   return parsed.data;
