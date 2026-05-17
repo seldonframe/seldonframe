@@ -282,6 +282,16 @@
     width: 240px;
     border-radius: 0;
     background: linear-gradient(180deg, var(--sidebar) 0%, color-mix(in srgb, var(--sidebar) 96%, transparent) 100%);
+    /* 2026-05-17 — Vercel-style: keep the sidebar scrollable so it never
+       traps content on tall menus, but hide the chrome of the scrollbar.
+       It reads as one clean column instead of a UI-track-with-thumb. */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .crm-sidebar::-webkit-scrollbar {
+    display: none;
+  }
     border-right: 1px solid var(--sidebar-border);
     padding: 0;
     transition: width var(--transition-slow);
@@ -296,19 +306,22 @@
     position: relative;
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    min-height: 2.75rem;
-    border-radius: 0.875rem;
+    gap: 0.625rem;            /* was 0.75rem — tighter icon→text gap */
+    min-height: 2.125rem;     /* was 2.75rem — Vercel-style 34px row */
+    padding-top: 0.25rem;     /* explicit so the row stays compact even
+                                 when content forces line-height growth */
+    padding-bottom: 0.25rem;
+    border-radius: 0.625rem;  /* was 0.875rem — softer but less heavy */
     background: transparent;
     color: var(--muted-foreground);
-    font-size: 0.875rem;
-    line-height: 1.25rem;
+    font-size: 0.8125rem;     /* was 0.875rem (14px) — now 13px */
+    line-height: 1.125rem;
     transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
   }
 
   @media (min-width: 640px) {
     .crm-sidebar-link {
-      min-height: 2.375rem;
+      min-height: 2rem;       /* was 2.375rem — 32px target on desktop */
     }
   }
 

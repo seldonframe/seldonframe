@@ -105,20 +105,29 @@ describe("runCreateFromUrl", () => {
     assert.match(text, /event: done\n.*"workspaceId":"org-1".*"slug":"acme-plumbing"/);
   });
 
-  test("calls markOperatorOnboarded with the operator's primaryOrgId on success", async () => {
-    const calls: Array<string> = [];
-    const deps = { ...baseDeps(), markOperatorOnboarded: async (orgId: string) => { calls.push(orgId); } };
-    const sse = await runCreateFromUrl({ deps, body: { url: "https://acme.com" }, sessionUser: { id: "u1", primaryOrgId: "operator-org-99" } });
+  test("calls markOperatorOnboarded with both the operator's primaryOrgId AND userId on success", async () => {
+    const calls: Array<{ orgId: string; userId?: string }> = [];
+    const deps = {
+      ...baseDeps(),
+      markOperatorOnboarded: async (orgId: string, userId?: string) => {
+        calls.push({ orgId, userId });
+      },
+    };
+    const sse = await runCreateFromUrl({ deps, body: { url: "https://acme.com" }, sessionUser: { id: "operator-user-42", primaryOrgId: "operator-org-99" } });
     await readAll(sse.stream);
-    assert.deepEqual(calls, ["operator-org-99"], "markOperatorOnboarded should be called once with the operator's primaryOrgId");
+    assert.deepEqual(
+      calls,
+      [{ orgId: "operator-org-99", userId: "operator-user-42" }],
+      "markOperatorOnboarded should receive BOTH the orgId (for org-level soulCompletedAt + welcomeShown) and userId (for user-level planId='free')",
+    );
   });
 
   test("does NOT call markOperatorOnboarded when createFullWorkspace fails", async () => {
-    const calls: Array<string> = [];
+    const calls: Array<{ orgId: string; userId?: string }> = [];
     const deps = {
       ...baseDeps(),
       createFullWorkspace: async () => ({ status: "error" as const, error: { step: "soul", message: "boom" } }),
-      markOperatorOnboarded: async (orgId: string) => { calls.push(orgId); },
+      markOperatorOnboarded: async (orgId: string, userId?: string) => { calls.push({ orgId, userId }); },
     };
     const sse = await runCreateFromUrl({ deps, body: { url: "https://acme.com" }, sessionUser: { id: "u1", primaryOrgId: "operator-org-99" } });
     await readAll(sse.stream);

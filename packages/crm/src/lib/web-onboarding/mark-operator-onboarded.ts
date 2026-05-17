@@ -29,25 +29,55 @@
 //   for the solo path. Keeping the two paths separate avoids accidental
 //   coupling — neither knows about the other, both write the same column.
 
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { organizations } from "@/db/schema";
+import { organizations, users } from "@/db/schema";
 
 /**
- * Stamp soulCompletedAt = NOW() on the operator's own org if it's currently
- * NULL. Idempotent: subsequent calls are no-ops (the WHERE clause filters
- * out already-stamped rows). Safe to call after every workspace creation.
+ * Three-in-one onboarding stamp. After an agency operator successfully
+ * creates their first client workspace via /clients/new, run this to:
  *
+ *   1. organizations.soulCompletedAt := NOW() on the operator's OWN org
+ *      (only if currently NULL). Stops proxy.ts:261 from redirecting every
+ *      authed page back to /clients/new.
+ *
+ *   2. organizations.settings.welcomeShown := true on the operator's OWN
+ *      org. Stops proxy.ts:265 from redirecting them to /welcome — they
+ *      just watched the SSE LIVE BUILD checklist tick green, they don't
+ *      need a second "you have a soul!" explainer screen. Skips a step.
+ *
+ *   3. users.planId := 'free' (only if currently NULL). Stops the
+ *      plan-gate at proxy.ts:74 from redirecting them to /pricing on every
+ *      /dashboard load. The Free tier is the safe default — they can
+ *      upgrade later from /settings/billing. Without this, every new agency
+ *      operator would hit a paywall the instant they tried to enter the
+ *      dashboard they just built.
+ *
+ * All three writes are idempotent (the WHERE clauses filter out already-
+ * set rows), so it's safe to call this after every workspace creation.
  * Pure DB call, no auth gating — the caller is responsible for verifying
  * the request belongs to this operator.
+ *
+ * IMPORTANT: this updates the operator's USER row, not their org row, for
+ * planId. The schema stores planId on users.plan_id (not organizations).
+ * So we resolve userId by joining org -> owner. We accept an explicit
+ * operatorUserId arg to keep this a pure DB helper.
  */
-export async function markOperatorOnboarded(operatorOrgId: string): Promise<void> {
+export async function markOperatorOnboarded(
+  operatorOrgId: string,
+  operatorUserId?: string,
+): Promise<void> {
   if (!operatorOrgId) return;
 
   await db
     .update(organizations)
     .set({
       soulCompletedAt: new Date(),
+      // Merge welcomeShown=true into the existing settings JSON object so
+      // we don't clobber any other keys the org has accumulated. Drizzle's
+      // sql tag handles the JSON merge safely with COALESCE for new orgs
+      // where settings is still NULL.
+      settings: sql`COALESCE(${organizations.settings}, '{}'::jsonb) || '{"welcomeShown": true}'::jsonb`,
       updatedAt: new Date(),
     })
     .where(
@@ -58,4 +88,11 @@ export async function markOperatorOnboarded(operatorOrgId: string): Promise<void
         isNull(organizations.soulCompletedAt),
       ),
     );
+
+  if (operatorUserId) {
+    await db
+      .update(users)
+      .set({ planId: "free", updatedAt: new Date() })
+      .where(and(eq(users.id, operatorUserId), isNull(users.planId)));
+  }
 }
