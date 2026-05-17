@@ -60,6 +60,14 @@ export function Sidebar(props: {
    *  SYSTEM nav section so platform admins can switch from the
    *  operator dashboard to /super-admin without typing the URL. */
   isSuperAdmin?: boolean;
+  /** 2026-05-17 — true when the agency operator has switched INTO a
+   *  client workspace (active orgId !== user's primary orgId). When
+   *  set, the sidebar hides agency-only items (Client workspaces,
+   *  Agents, Automations, Templates) and adds a "← Back to agency"
+   *  link, giving the operator the same lighter view that an SMB
+   *  owner logging into their own workspace would see. Independent
+   *  of isOperatorSession (which is the magic-link operator portal). */
+  isInsideClientWorkspace?: boolean;
 }) {
   const {
     hiddenBlocks = [],
@@ -73,6 +81,7 @@ export function Sidebar(props: {
     isOperatorSession = false,
     agencyBrandName = null,
     isSuperAdmin = false,
+    isInsideClientWorkspace = false,
   } = props;
   const labels = useLabels();
   const pathname = usePathname();
@@ -86,6 +95,16 @@ export function Sidebar(props: {
   // CRM essentials only. The full SF nav (Soul Marketplace, Pages, Email,
   // Forms, Automations, Studio) belongs to the SF agency operator
   // (Acme AI), not the sub-tenant operator (HVAC owner).
+  //
+  // 2026-05-17 — agency operators who have SWITCHED into a client
+  // workspace get a similar lighter view (between the trimmed operator
+  // portal and the full agency view). This is what the SMB owner
+  // would see if they signed into their own workspace: contacts/deals/
+  // bookings + their own pages/email/forms, but NOT the agency-level
+  // builder items (Client workspaces, Agents, Automations, Templates).
+  // Per operator feedback 2026-05-17 — "they see the same /contacts,
+  // /deals, /bookings but they dont see pages like agents, automations,
+  // templates, etc — these are for the agency."
   const navGroups: NavGroup[] = isOperatorSession
     ? [
         // v1.25.3 — operator sidebar trimmed further: no SF Discord
@@ -105,6 +124,48 @@ export function Sidebar(props: {
             { href: "/contacts", label: labels.contact.plural, icon: "Users" },
             { href: "/deals", label: labels.deal.plural, icon: "Building2" },
             { href: "/bookings", label: "Booking", icon: "Calendar" },
+          ]),
+        },
+      ].filter((group) => group.items.length > 0)
+    : isInsideClientWorkspace
+    ? [
+        {
+          title: "OVERVIEW",
+          items: filterHidden([
+            { href: "/dashboard", label: "Dashboard", icon: "LayoutDashboard" },
+            // Escape hatch back to the agency-level view. Same
+            // "/clients" target as the agency-mode sidebar so the
+            // route doesn't surprise.
+            { href: "/clients", label: "← Back to agency", icon: "ChevronLeft" },
+          ]),
+        },
+        {
+          title: "WORKSPACE",
+          items: filterHidden([
+            { href: "/contacts", label: labels.contact.plural, icon: "Users" },
+            { href: "/deals", label: labels.deal.plural, icon: "Building2" },
+            { href: "/bookings", label: "Bookings", icon: "Calendar" },
+            { href: "/landing", label: "Pages", icon: "Layout" },
+            { href: "/emails", label: "Email", icon: "Mail" },
+            { href: "/forms", label: labels.intakeForm.plural, icon: "FileText" },
+            // Agents, Automations, Templates intentionally hidden —
+            // operator manages chatbots via the Ready hub's "Test
+            // chatbot" deep link.
+          ]),
+        },
+        {
+          title: "SYSTEM",
+          items: filterHidden([
+            { href: "/settings", label: "Settings", icon: "Settings" },
+            ...(isSuperAdmin
+              ? [
+                  {
+                    href: "/super-admin",
+                    label: "SF Admin",
+                    icon: "Shield",
+                  },
+                ]
+              : []),
           ]),
         },
       ].filter((group) => group.items.length > 0)

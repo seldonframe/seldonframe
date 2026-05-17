@@ -3,7 +3,7 @@ import Link from "next/link";
 import { DollarSign, Users, CalendarDays, Activity, Plus, ChartLine, MoreHorizontal, BarChart2, ClipboardList, Search, Filter, FileInput, Sparkles, AlertTriangle, AlertCircle, Info } from "lucide-react";
 import { db } from "@/db";
 import { activities, bookings as bookingsTable, contacts as contactsTable, metricsSnapshots, organizations, orgMembers, paymentRecords, pipelines as pipelinesTable, stripeConnections, type OrganizationIntegrations, type PipelineStage } from "@/db/schema";
-import { getCurrentUser } from "@/lib/auth/helpers";
+import { getCurrentUser, getOrgId } from "@/lib/auth/helpers";
 import { isOperatorPortalUserId } from "@/lib/auth/operator-portal-context";
 import { OperatorTodaySnapshot } from "@/components/dashboard/operator-today-snapshot";
 import { listAppointmentTypes } from "@/lib/bookings/actions";
@@ -238,8 +238,15 @@ export default async function DashboardPage({
       `/switch-workspace?to=${encodeURIComponent(params.workspace)}&next=/dashboard`
     );
   }
-  const [user, contactRows, dealRows, bookingRows, appointmentTypeRows, emailTemplateRows, landingPageRows, intakeFormRows, soul, hiddenBlocks, personality] = await Promise.all([
+  const [user, activeOrgId, contactRows, dealRows, bookingRows, appointmentTypeRows, emailTemplateRows, landingPageRows, intakeFormRows, soul, hiddenBlocks, personality] = await Promise.all([
     getCurrentUser(),
+    // 2026-05-17 — use the COOKIE-backed active org id (set by
+    // setActiveOrgAction when the operator switches workspaces) rather
+    // than user.orgId (their primary). Previously this page used the
+    // primary, so the "isSwitchedForDashboard" gate below was always
+    // false — operators landed on the all-workspaces grid even after
+    // explicitly switching into a client.
+    getOrgId(),
     listContacts(),
     listDeals(),
     listBookings(),
@@ -251,7 +258,7 @@ export default async function DashboardPage({
     getHiddenBlocks(),
     getPersonality(),
   ]);
-  const orgId = user?.orgId;
+  const orgId = activeOrgId ?? user?.orgId;
 
   if (!orgId) {
     return null;
@@ -539,8 +546,25 @@ export default async function DashboardPage({
   const totalWorkspaceContacts = workspaceStats.reduce((sum, row) => sum + row.contactCount, 0);
   const totalWorkspaceRevenue = workspaceStats.reduce((sum, row) => sum + row.monthlyRevenue, 0);
 
+  // 2026-05-17 — when the operator has switched INTO a specific client
+  // workspace (active orgId !== user's primary orgId), default to the
+  // single-workspace view. Previously this defaulted to "all" — operators
+  // clicking "Open operator dashboard" from the Ready hub landed on the
+  // all-workspaces grid instead of the workspace they just opened.
+  // Explicit ?view=all from the operator still overrides.
   const showWorkspaceTabs = workspaceRows.length > 1;
-  const activeDashboardView = showWorkspaceTabs ? (params?.view === "workspace" ? "workspace" : "all") : "workspace";
+  const isSwitchedForDashboard = Boolean(
+    user?.orgId && orgId && user.orgId !== orgId,
+  );
+  const activeDashboardView = showWorkspaceTabs
+    ? params?.view === "workspace"
+      ? "workspace"
+      : params?.view === "all"
+        ? "all"
+        : isSwitchedForDashboard
+          ? "workspace"
+          : "all"
+    : "workspace";
 
   const [snapshotRowsRaw, activityRows, paymentRows, orgRow, stripeRow, bookingTemplateRow, defaultPipelineRow, dealsSurface] = await Promise.all([
     db.select().from(metricsSnapshots).where(eq(metricsSnapshots.orgId, orgId)).orderBy(asc(metricsSnapshots.date)).limit(180),
