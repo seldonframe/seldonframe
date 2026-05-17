@@ -258,6 +258,7 @@ export function DashboardTopbar({
                   <Link
                     key={workspace.id}
                     href={href}
+                    prefetch={false}
                     className="crm-pressable flex w-full items-start gap-2 rounded-xl px-2.5 py-2.5 text-left transition-[background-color,transform] duration-150 ease-out hover:bg-accent/60"
                     onClick={() => setWorkspaceMenuOpen(false)}
                   >
