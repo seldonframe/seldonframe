@@ -22,6 +22,7 @@ import { auth } from "@/auth";
 import { LandingNav } from "@/components/landing/nav";
 import { LandingHero } from "@/components/landing/hero";
 import { LandingHowItWorksSection } from "@/components/landing/how-it-works-section";
+import { LandingComparisonSection } from "@/components/landing/landing-comparison-section";
 import { LandingSoulSection } from "@/components/landing/soul-section";
 import { LandingSeldonItSection } from "@/components/landing/seldon-it-section";
 import { LandingBentoSection } from "@/components/landing/bento-section";
@@ -68,6 +69,7 @@ export default async function PublicHomePage() {
       <main id="main-content">
         <LandingHero />
         <LandingHowItWorksSection />
+        <LandingComparisonSection />
         <LandingSoulSection />
         <LandingSeldonItSection />
         <LandingBentoSection />
