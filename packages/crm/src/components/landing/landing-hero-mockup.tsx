@@ -33,6 +33,7 @@ import {
   ClipboardList,
   FileText,
   LayoutDashboard,
+  Lock,
   Users,
 } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
@@ -108,7 +109,10 @@ export function LandingHeroMockup() {
         <span className="size-2.5 rounded-full bg-zinc-700" aria-hidden="true" />
         <span className="size-2.5 rounded-full bg-zinc-700" aria-hidden="true" />
         <span className="size-2.5 rounded-full bg-zinc-700" aria-hidden="true" />
-        <span className="ml-3 text-[11px] text-zinc-500">acme-hvac.app.seldonframe.com</span>
+        <span className="ml-3 inline-flex items-center gap-1.5 text-xs text-zinc-500">
+          <Lock className="size-3 text-zinc-600" strokeWidth={2.25} aria-hidden="true" />
+          acme-hvac.app.seldonframe.com
+        </span>
       </div>
 
       <div className="relative flex min-h-[360px] flex-col md:flex-row">
@@ -179,13 +183,19 @@ export function LandingHeroMockup() {
                 </div>
                 <div className="space-y-2">
                   {col.cards.length === 0 ? (
-                    <div className="rounded-md border border-dashed border-zinc-800/70 bg-zinc-950/40 px-2 py-3 text-center text-[10px] text-zinc-600">
-                      Empty
-                    </div>
+                    // Silent rail — reads as "no cards yet" without
+                    // a textual "Empty" label that would feel like a
+                    // designer placeholder (design-critique #2).
+                    <div
+                      aria-hidden="true"
+                      className="h-12 rounded-md border border-dashed border-zinc-800/40"
+                    />
                   ) : (
                     col.cards.map((card, cardIdx) => {
                       // Cumulative delay across columns so cards
                       // animate left-to-right rather than per-column.
+                      // Starts at 0.5s (after mockup wrapper at 0.36
+                      // has settled) per design-critique #7.
                       const flatIdx =
                         COLUMNS.slice(0, colIdx).reduce(
                           (acc, c) => acc + c.cards.length,
@@ -194,7 +204,7 @@ export function LandingHeroMockup() {
                       return (
                         <motion.div
                           key={card.title}
-                          {...cardEntry(0.3 + flatIdx * 0.06)}
+                          {...cardEntry(0.5 + flatIdx * 0.07)}
                           className="rounded-md border border-zinc-800 bg-zinc-900 p-2.5 text-[11px] shadow-sm shadow-black/20"
                         >
                           <p className="font-medium text-zinc-100">{card.title}</p>

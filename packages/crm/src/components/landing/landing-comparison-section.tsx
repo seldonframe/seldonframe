@@ -101,7 +101,10 @@ export function LandingComparisonSection() {
                 </span>
                 {item.price ? (
                   item.struck ? (
-                    <del className="shrink-0 text-sm font-medium tabular-nums text-zinc-500 decoration-rose-500/70 decoration-1">
+                    // Bumped to 1.5px decoration and opacity-80 so the
+                    // "these prices are dying" frame reads at glance
+                    // distance (design-critique #3).
+                    <del className="shrink-0 text-sm font-medium tabular-nums text-zinc-500 opacity-80 decoration-rose-500/80 decoration-[1.5px]">
                       {item.price}
                     </del>
                   ) : (
@@ -123,20 +126,27 @@ export function LandingComparisonSection() {
           </div>
         </div>
 
-        {/* Central arrow — desktop only */}
+        {/* Central arrow — desktop only.
+            z-10 to lift above the cards on the seam; size-14 + size-6
+            icon + stronger glow per design-critique #4 so the arrow
+            reads as the intentional "transition" rather than an
+            afterthought. */}
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 md:block"
+          className="pointer-events-none absolute left-1/2 top-1/2 z-10 hidden -translate-x-1/2 -translate-y-1/2 md:block"
         >
-          <div className="flex size-12 items-center justify-center rounded-full border border-[#14b8a6]/30 bg-zinc-900 shadow-[0_0_30px_-5px_rgba(20,184,166,0.35)]">
-            <ArrowRight className="size-5 text-[#14b8a6]" strokeWidth={2.25} />
+          <div className="flex size-14 items-center justify-center rounded-full border border-[#14b8a6]/40 bg-zinc-900 shadow-[0_0_40px_-5px_rgba(20,184,166,0.45)]">
+            <ArrowRight className="size-6 text-[#14b8a6]" strokeWidth={2.25} />
           </div>
         </div>
 
-        {/* RIGHT — what you ship with SeldonFrame */}
+        {/* RIGHT — what you ship with SeldonFrame.
+            border opacity lifted to /40 per design-critique #5 so the
+            destination card has clearly higher border presence than
+            the LEFT/60 escape card. */}
         <div
           aria-labelledby="destination-heading"
-          className="rounded-xl border border-[#14b8a6]/30 bg-zinc-900 p-6 shadow-[0_0_60px_-15px_rgba(20,184,166,0.25)] md:p-7"
+          className="rounded-xl border border-[#14b8a6]/40 bg-zinc-900 p-6 shadow-[0_0_60px_-15px_rgba(20,184,166,0.25)] md:p-7"
         >
           <h3
             id="destination-heading"

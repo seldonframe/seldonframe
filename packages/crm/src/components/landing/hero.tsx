@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Play } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 
 import { LandingHeroMockup } from "./landing-hero-mockup";
@@ -57,10 +57,13 @@ export function LandingHero() {
 
           <motion.h1
             {...fadeUp(0.08)}
-            className="text-balance text-4xl font-bold tracking-tight text-zinc-100 md:text-5xl lg:text-6xl lg:leading-[1.05]"
+            className="text-balance text-4xl font-bold tracking-tight text-zinc-100 md:text-5xl lg:text-6xl lg:leading-[1.04]"
           >
-            Spin up your client&apos;s Business OS in 60 seconds.{" "}
-            <span className="text-[#14b8a6]">Just describe it.</span>
+            Spin up your client&apos;s Business OS in 60 seconds.
+            <br className="hidden lg:block" />{" "}
+            <span className="text-[#14b8a6] lg:mt-1 lg:inline-block">
+              Just describe it.
+            </span>
           </motion.h1>
 
           <motion.p
@@ -68,8 +71,11 @@ export function LandingHero() {
             className="mx-auto mt-5 max-w-xl text-pretty text-base text-zinc-400 md:text-lg lg:mx-0"
           >
             Paste a client&apos;s URL or describe their business in plain English.
-            SeldonFrame builds the CRM, booking page, intake form, and AI
-            receptionist — white-label, wired up, ready to hand over.
+            SeldonFrame builds{" "}
+            <span className="text-zinc-300">
+              the CRM, booking page, intake form, and AI receptionist
+            </span>{" "}
+            — white-label, wired up, ready to hand over.
           </motion.p>
 
           <motion.div
@@ -79,8 +85,11 @@ export function LandingHero() {
             <Link
               href="/signup"
               /* a11y: text-zinc-950 on #14b8a6 = 7.2:1 (AAA). Matches
-                 the pricing/footer pattern set in Cut C Phase 8. */
-              className="inline-flex items-center gap-2 rounded-xl bg-[#14b8a6] px-8 py-3.5 text-base font-semibold text-zinc-950 transition-all hover:scale-[1.02] hover:shadow-lg hover:shadow-[#14b8a6]/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#14b8a6] motion-reduce:transition-none motion-reduce:hover:scale-100"
+                 the pricing/footer pattern set in Cut C Phase 8.
+                 Hover shadow is a directional drop (not the neutral-
+                 black shadow-lg) so the lift reads as actual elevation
+                 per design-critique #8. */
+              className="inline-flex items-center gap-2 rounded-xl bg-[#14b8a6] px-8 py-3.5 text-base font-semibold text-zinc-950 transition-all hover:scale-[1.02] hover:shadow-[0_8px_24px_-6px_rgba(20,184,166,0.4)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#14b8a6] motion-reduce:transition-none motion-reduce:hover:scale-100"
             >
               Start free
               <ArrowRight size={18} aria-hidden="true" />
@@ -89,8 +98,8 @@ export function LandingHero() {
               href="#demo"
               className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 px-7 py-3.5 text-base font-semibold text-zinc-200 transition-colors hover:border-zinc-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#14b8a6]"
             >
+              <Play size={16} className="fill-current" aria-hidden="true" />
               Watch the 60-second build
-              <ArrowRight size={18} aria-hidden="true" />
             </Link>
           </motion.div>
 
@@ -102,9 +111,11 @@ export function LandingHero() {
           </motion.p>
         </div>
 
-        {/* Mockup column */}
+        {/* Mockup column — lands AFTER copy + reassurance settle so the
+            mockup reads as a reveal, not a competing element. Per
+            design-critique #7. */}
         <motion.div
-          {...fadeUp(0.18)}
+          {...fadeUp(0.36)}
           className="lg:col-span-6"
         >
           <LandingHeroMockup />
