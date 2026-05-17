@@ -3,7 +3,7 @@ import { and, count, eq, gt, sql } from "drizzle-orm";
 import { ChevronLeft } from "lucide-react";
 import { db } from "@/db";
 import { contacts, organizations } from "@/db/schema";
-import { getOrgId } from "@/lib/auth/helpers";
+import { getCurrentUser, getOrgId } from "@/lib/auth/helpers";
 import { getBrandingSettings } from "@/lib/branding/actions";
 import { checkPortalPlanGate } from "@/lib/portal/plan-gate";
 import { ClientPortalSettings } from "@/components/settings/client-portal-settings";
@@ -35,6 +35,13 @@ function getAppOrigin() {
 
 export default async function ClientPortalSettingsPage() {
   const orgId = await getOrgId();
+  // 2026-05-17 — when the agency operator is INSIDE a client workspace,
+  // hide SeldonFrame-internal tier copy ("Scale plan", "Growth tier").
+  // The SMB-shaped operator isn't SF's customer — they're the agency's.
+  const currentUser = await getCurrentUser();
+  const isInsideClientWorkspace = Boolean(
+    currentUser?.orgId && orgId && currentUser.orgId !== orgId,
+  );
 
   if (!orgId) {
     return (
@@ -125,6 +132,7 @@ export default async function ClientPortalSettingsPage() {
         activeContactsCount={Number(activeCountRow.c ?? 0)}
         totalContactsCount={Number(totalCountRow.c ?? 0)}
         portalUrl={portalUrl}
+        hideTierMentions={isInsideClientWorkspace}
       />
     </section>
   );

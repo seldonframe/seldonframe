@@ -41,6 +41,9 @@ import { createAgent } from "@/lib/agents/store";
 // business OS too — every client they create lands as a contact in
 // their /contacts list. Idempotent, non-fatal.
 import { seedClientContactInAgencyCrm } from "@/lib/workspace/seed-client-contact-in-agency";
+// 2026-05-17 — Seed the new workspace's soul_sources with the URL the
+// operator pasted, so /settings/soul-wiki shows it on first visit.
+import { seedSoulWikiSourceUrl } from "@/lib/workspace/seed-soul-wiki-source";
 // 2026-05-16 — swapped from web-fetch-extractor (Anthropic web_fetch tool
 // path) to markdown-extractor (server-side fetch -> MD -> LLM). Same
 // signature, same SSE events, same error codes. See markdown-extractor.ts
@@ -110,6 +113,7 @@ async function dispatchCreateFromUrl(url: unknown): Promise<Response> {
         });
       },
       seedClientContactInAgencyCrm,
+      seedSoulWikiSourceUrl,
       workspaceBaseDomain: process.env.WORKSPACE_BASE_DOMAIN ?? "app.seldonframe.com",
     },
     body: { url },

@@ -101,6 +101,7 @@ export async function BookingsListPageView({
         }))}
         suggestedServices={soul?.services ?? []}
         orgSlug={orgSlug}
+        publicBaseUrl={`https://${process.env.WORKSPACE_BASE_DOMAIN?.trim() || "app.seldonframe.com"}`}
         workspaceTimezone={workspaceTimezone}
         calendarConnected={false}
         googleCalendarConnectUrl=""

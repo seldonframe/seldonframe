@@ -74,6 +74,13 @@ type BookingsPageContentProps = {
   contacts: ContactRow[];
   suggestedServices: SuggestedService[];
   orgSlug: string;
+  /** 2026-05-17 — base origin for the public booking URL
+   *  (https://app.seldonframe.com). Threaded from the server so
+   *  operators see + copy the FULL public URL straight from the
+   *  appointment-type card. Previously rendered as `/book/<slug>/...`
+   *  (relative path), which copy-pasted into a chat with a client as
+   *  "/book/..." — unusable. */
+  publicBaseUrl: string;
   /** v1.40.9 — workspace IANA timezone (e.g. "America/Los_Angeles").
    *  All booking time renders use this so the operator sees their
    *  local time, not the viewer's browser timezone. Falls back to
@@ -197,7 +204,7 @@ const bookingBorderPalette = [
   "border-l-positive",
 ];
 
-export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, suggestedServices, orgSlug, workspaceTimezone, calendarConnected, googleCalendarConnectUrl, createAppointmentTypeAction, bookingDefaults }: BookingsPageContentProps) {
+export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, suggestedServices, orgSlug, publicBaseUrl, workspaceTimezone, calendarConnected, googleCalendarConnectUrl, createAppointmentTypeAction, bookingDefaults }: BookingsPageContentProps) {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -526,7 +533,14 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
           <div className="grid gap-3 px-3 pb-3 md:grid-cols-2 md:px-6 xl:grid-cols-3">
             {bookingTypes.map((row) => {
               const metadata = (row.metadata as AppointmentTypeMeta | null) ?? null;
-              const publicUrl = orgSlug ? `/book/${orgSlug}/${row.bookingSlug}` : "";
+              // 2026-05-17 — render the FULL public URL (https://…)
+              // not a relative `/book/<slug>/…` path. Operators paste
+              // this directly into a client's chat / email / SMS, so
+              // the relative form was unusable. publicBaseUrl threaded
+              // from the server (process.env.WORKSPACE_BASE_DOMAIN).
+              const publicUrl = orgSlug && publicBaseUrl
+                ? `${publicBaseUrl}/book/${orgSlug}/${row.bookingSlug}`
+                : "";
               const duration = metadata?.durationMinutes ?? 30;
               const price = Number(metadata?.price ?? 0);
               const bufferBefore = metadata?.bufferBeforeMinutes ?? 0;
