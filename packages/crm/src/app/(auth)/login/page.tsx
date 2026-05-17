@@ -5,9 +5,11 @@ export default function LoginPage() {
   return (
     <div className="space-y-6">
       <div className="space-y-4">
-        <div>
+        <div className="text-center">
           <h1 className="text-section-title text-foreground">Welcome to SeldonFrame</h1>
-          <p className="text-label text-[hsl(var(--color-text-secondary))]">The operating system for your business.</p>
+          <p className="mt-1 text-label text-[hsl(var(--color-text-secondary))]">
+            The operating system for your business.
+          </p>
         </div>
         <LoginForm />
       </div>

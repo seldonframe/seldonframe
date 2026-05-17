@@ -35,11 +35,143 @@ if (googleClientId && googleClientSecret) {
   );
 }
 
+/**
+ * Render the SeldonFrame-branded sign-in email. Inline styles because email
+ * clients (Gmail, Outlook, Apple Mail) strip <style> blocks and ignore most
+ * CSS classes. Width capped at 560px for desktop comfort; mobile clients
+ * shrink-to-fit. Dark-mode friendly colors via a wash that reads as ink on
+ * both light + dark client backgrounds.
+ *
+ * Wordmark URL points at the production public asset. NEXTAUTH_URL gives us
+ * the right host (app.seldonframe.com in prod, localhost in dev).
+ */
+function renderSeldonFrameSignInEmail({
+  url,
+  baseUrl,
+}: {
+  url: string;
+  baseUrl: string;
+}): { subject: string; html: string; text: string } {
+  const wordmark = `${baseUrl}/brand/seldonframe-wordmark.svg`;
+  const primary = "#14b8a6"; // matches --primary teal in the design system
+  const ink = "#0a0e1a";
+  const bg = "#f6f7f9";
+  const muted = "#6b7280";
+
+  const subject = "Your SeldonFrame sign-in link";
+
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>${subject}</title>
+</head>
+<body style="margin:0;padding:0;background:${bg};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;color:${ink};">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${bg};padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;background:#ffffff;border-radius:16px;border:1px solid #e5e7eb;overflow:hidden;">
+          <tr>
+            <td style="padding:32px 32px 16px 32px;text-align:center;">
+              <img src="${wordmark}" alt="SeldonFrame" width="180" height="36" style="display:inline-block;height:36px;width:auto;" />
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:8px 32px 0 32px;text-align:center;">
+              <h1 style="margin:0;font-size:24px;line-height:1.3;font-weight:600;color:${ink};letter-spacing:-0.01em;">Sign in to SeldonFrame</h1>
+              <p style="margin:12px 0 0 0;font-size:15px;line-height:1.5;color:${muted};">
+                Click the button below to sign in. This link is valid for 15 minutes and works once.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:28px 32px 8px 32px;text-align:center;">
+              <a href="${url}" style="display:inline-block;background:${primary};color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:14px 32px;border-radius:10px;line-height:1;">
+                Sign in to SeldonFrame
+              </a>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:16px 32px 0 32px;text-align:center;">
+              <p style="margin:0;font-size:13px;line-height:1.5;color:${muted};">
+                Button not working? Copy and paste this link into your browser:
+              </p>
+              <p style="margin:8px 0 0 0;font-size:12px;line-height:1.4;color:${muted};word-break:break-all;">
+                <a href="${url}" style="color:${primary};text-decoration:underline;">${url}</a>
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:24px 32px 32px 32px;border-top:1px solid #f1f3f5;margin-top:24px;text-align:center;">
+              <p style="margin:24px 0 0 0;font-size:12px;line-height:1.5;color:${muted};">
+                If you didn't request this email, you can safely ignore it.<br />
+                Questions? Reply to this email or visit <a href="${baseUrl.replace("app.", "")}" style="color:${primary};text-decoration:underline;">seldonframe.com</a>.
+              </p>
+              <p style="margin:16px 0 0 0;font-size:11px;color:${muted};">
+                The open-source Business OS your agency builds for clients in 60 seconds.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  const text = `Sign in to SeldonFrame
+
+Click this link to sign in (valid for 15 minutes, single use):
+
+${url}
+
+If you didn't request this email, you can safely ignore it.
+
+— The SeldonFrame team
+seldonframe.com`;
+
+  return { subject, html, text };
+}
+
 if (resendApiKey) {
   authProviders.push(
     Resend({
       apiKey: resendApiKey,
       from: resendFrom,
+      // Override the default NextAuth Resend email with a SeldonFrame-branded
+      // template. The default ships a generic "Sign in" button with no brand
+      // context — on a fresh signup the recipient sees a blue blob from a
+      // domain they may not recognize, which trips spam filters and erodes
+      // trust on the very first touchpoint.
+      async sendVerificationRequest({ identifier, url, provider }) {
+        const baseUrl = (
+          process.env.NEXTAUTH_URL?.trim() || "https://app.seldonframe.com"
+        ).replace(/\/+$/, "");
+        const { subject, html, text } = renderSeldonFrameSignInEmail({ url, baseUrl });
+
+        const response = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${provider.apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            from: provider.from,
+            to: identifier,
+            subject,
+            html,
+            text,
+          }),
+        });
+
+        if (!response.ok) {
+          const detail = await response.text().catch(() => "<no-body>");
+          throw new Error(
+            `Failed to send sign-in email (${response.status}): ${detail.slice(0, 200)}`,
+          );
+        }
+      },
     })
   );
 }

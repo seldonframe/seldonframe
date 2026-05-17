@@ -30,6 +30,14 @@ function isBillingExemptPath(pathname: string) {
     pathname === "/pricing" ||
     pathname === "/login" ||
     pathname === "/signup" ||
+    // Cut A onboarding paths must be exempt — a freshly signed-up user has
+    // no planId yet, so plan-gate would 307 them to /pricing. Then proxy.ts
+    // line 261 sees !isSoulCompleted and 307s back to /clients/new. Loop.
+    // Both /clients/new (Cut A signup destination) and /welcome (legacy
+    // celebration screen still reachable from some signup paths) need the
+    // same exemption.
+    pathname === "/clients/new" ||
+    pathname === "/welcome" ||
     pathname === "/api/webhooks/stripe-billing" ||
     pathname.startsWith("/api/auth")
   );
