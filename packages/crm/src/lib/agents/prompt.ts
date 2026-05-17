@@ -73,6 +73,31 @@ export async function composeSystemPrompt(input: ComposeSystemPromptInput): Prom
 
   const sections: string[] = [persona];
 
+  // 2026-05-17 — operator-supplied SKILL.md override.
+  //
+  // Layered RIGHT AFTER the persona so it influences how the agent
+  // interprets every subsequent platform skill, business fact, and
+  // safety rule. We intentionally place it BEFORE hard-rules (which
+  // still go last) so the operator can't override safety invariants
+  // like "never quote prices not in pricingFacts" — the platform
+  // sections after this one re-assert those constraints and the
+  // hard-rules section at the very end has the final word.
+  //
+  // Wrapped in an <operator_playbook> tag so the LLM treats it as
+  // operator guidance to apply (vs the persona's voice or an external
+  // instruction that needs validation).
+  const trimmedCustomSkillMd = blueprint.customSkillMd?.trim();
+  if (trimmedCustomSkillMd && trimmedCustomSkillMd.length > 0) {
+    sections.push(
+      `## Operator playbook\n\n` +
+        `The workspace operator has provided the following playbook. Treat ` +
+        `it as house style and operational guidance — follow it, but never ` +
+        `at the expense of the safety rules and pricing constraints set ` +
+        `later in this prompt.\n\n` +
+        `<operator_playbook>\n${trimmedCustomSkillMd}\n</operator_playbook>`,
+    );
+  }
+
   // ── PLATFORM INTELLIGENCE BASELINE ────────────────────────────────────
   // v1.28.3 — skill-pack architecture. Behavioral guidance lives in
   // lib/agents/skills/<archetype>/*.ts (markdown-shaped string exports).

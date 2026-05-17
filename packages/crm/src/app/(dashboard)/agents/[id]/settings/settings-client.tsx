@@ -19,9 +19,12 @@ type Props = {
     capabilities: string[];
     faq: FaqRow[];
     pricingFacts: PricingRow[];
+    customSkillMd: string;
   };
   allCapabilities: string[];
 };
+
+const CUSTOM_SKILL_MD_MAX = 8000;
 
 export function SettingsClient(props: Props) {
   const [greeting, setGreeting] = useState(props.initialBlueprint.greeting);
@@ -31,6 +34,9 @@ export function SettingsClient(props: Props) {
   const [faq, setFaq] = useState<FaqRow[]>(props.initialBlueprint.faq);
   const [pricingFacts, setPricingFacts] = useState<PricingRow[]>(
     props.initialBlueprint.pricingFacts,
+  );
+  const [customSkillMd, setCustomSkillMd] = useState(
+    props.initialBlueprint.customSkillMd,
   );
   const [publishNotes, setPublishNotes] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -51,6 +57,9 @@ export function SettingsClient(props: Props) {
           pricingFacts: pricingFacts.filter(
             (r) => r.label.trim() && r.amount >= 0,
           ),
+          // Empty string clears the override. Trim trailing whitespace
+          // so the prompt budget isn't wasted on padding.
+          customSkillMd: customSkillMd.trim(),
         },
         publishNotes: publishNotes.trim() || undefined,
       });
@@ -167,6 +176,44 @@ export function SettingsClient(props: Props) {
             ))}
           </div>
         )}
+      </div>
+
+      <div className="rounded-xl border bg-card p-5">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <h2 className="text-card-title">Custom SKILL.md</h2>
+            <p className="text-xs text-muted-foreground">
+              Optional. Markdown prepended to the system prompt — your
+              own playbook layered on top of the platform's defaults.
+              Use it for things like escalation rules, brand voice
+              nuances, or "always offer X when the visitor mentions Y."
+            </p>
+          </div>
+          <span
+            className={`text-[10px] font-mono ${
+              customSkillMd.length > CUSTOM_SKILL_MD_MAX
+                ? "text-rose-600"
+                : "text-muted-foreground"
+            }`}
+            aria-live="polite"
+          >
+            {customSkillMd.length.toLocaleString()} / {CUSTOM_SKILL_MD_MAX.toLocaleString()}
+          </span>
+        </div>
+        <textarea
+          value={customSkillMd}
+          onChange={(e) => setCustomSkillMd(e.target.value)}
+          rows={10}
+          maxLength={CUSTOM_SKILL_MD_MAX + 256}
+          className="mt-3 w-full rounded-md border bg-background px-3 py-2 font-mono text-xs leading-relaxed focus:border-primary focus:outline-none"
+          placeholder={`## Playbook overrides\n\n- Always confirm the visitor's neighborhood before quoting service.\n- If they mention "emergency", offer the same-day slot first.\n- Sign off with our tagline: "Trusted in your home since 1998."`}
+          spellCheck={false}
+        />
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          Prepended verbatim to the system prompt. Pricing rules and safety
+          guardrails always still apply — this override can't unlock prices
+          you haven't listed above.
+        </p>
       </div>
 
       <div className="rounded-xl border bg-card p-5">

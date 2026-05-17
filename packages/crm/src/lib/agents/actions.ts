@@ -51,6 +51,10 @@ const BlueprintPatchSchema = z
         formality: z.number().min(0).max(1).optional(),
       })
       .optional(),
+    // 2026-05-17 — operator-supplied SKILL.md override. Capped at 8k
+    // chars (~2k tokens) so a runaway operator can't blow up the
+    // system prompt. Empty string clears the override.
+    customSkillMd: z.string().max(8000).optional(),
   })
   .strict();
 
