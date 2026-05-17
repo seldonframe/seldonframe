@@ -282,6 +282,9 @@
     width: 240px;
     border-radius: 0;
     background: linear-gradient(180deg, var(--sidebar) 0%, color-mix(in srgb, var(--sidebar) 96%, transparent) 100%);
+    border-right: 1px solid var(--sidebar-border);
+    padding: 0;
+    transition: width var(--transition-slow);
     /* 2026-05-17 — Vercel-style: keep the sidebar scrollable so it never
        traps content on tall menus, but hide the chrome of the scrollbar.
        It reads as one clean column instead of a UI-track-with-thumb. */
@@ -291,10 +294,6 @@
 
   .crm-sidebar::-webkit-scrollbar {
     display: none;
-  }
-    border-right: 1px solid var(--sidebar-border);
-    padding: 0;
-    transition: width var(--transition-slow);
   }
 
   .dark .crm-sidebar {
