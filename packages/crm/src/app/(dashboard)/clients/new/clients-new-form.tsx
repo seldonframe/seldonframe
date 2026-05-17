@@ -411,9 +411,13 @@ export function ClientsNewForm() {
                   isDone
                     ? "flex items-center gap-2 text-foreground transition-colors"
                     : isActive
-                      ? // Active step gets foreground color + medium weight so
-                        // it visually pops above the still-pending rows.
-                        "flex items-center gap-2 text-foreground font-medium transition-colors"
+                      ? // Active step: foreground color + medium weight + a
+                        // subtle pulse on the ENTIRE row (not just the dot).
+                        // User feedback: dot alone is too subtle to read as
+                        // "this is alive" — text needs to breathe too.
+                        // Tailwind animate-pulse cycles opacity 1.0→0.5→1.0
+                        // at 2s. motion-reduce: drop the pulse (animate-none).
+                        "flex items-center gap-2 text-foreground font-medium transition-colors animate-pulse motion-reduce:animate-none"
                       : "flex items-center gap-2 text-muted-foreground transition-colors"
                 }
               >
