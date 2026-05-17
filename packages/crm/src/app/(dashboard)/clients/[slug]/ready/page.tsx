@@ -31,12 +31,12 @@
 
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { ArrowRight, ExternalLink, Sparkles } from "lucide-react";
 
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { organizations, orgMembers } from "@/db/schema";
+import { bookings, intakeForms, organizations, orgMembers } from "@/db/schema";
 import { buildWorkspaceUrls } from "@/lib/billing/anonymous-workspace";
 
 export const dynamic = "force-dynamic";
@@ -89,6 +89,47 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
 
   const urls = buildWorkspaceUrls(workspace.slug, WORKSPACE_BASE_DOMAIN, workspace.id);
 
+  // Query the actual block slugs for the public deep links.
+  //
+  // Why: buildWorkspaceUrls outputs convenience strings like
+  // `${publicOrigin}/book` and `${publicOrigin}/intake` — but the public
+  // booking + intake routes need the SPECIFIC template slug
+  // (/book/<orgSlug>/<bookingSlug>, /forms/<orgSlug>/<formSlug>). Without
+  // the template slug those URLs 404 (you hit that on
+  // app.seldonframe.com/book and /forms/<slug>/intake earlier today).
+  //
+  // We grab the first active template per block — workspace creation
+  // seeds exactly one of each via createFullWorkspace, so this lookup is
+  // O(1). If a workspace operator later adds a second template (e.g.
+  // separate "Free quote" vs "Service call" booking flows), this page
+  // still points at the canonical default; the per-template URLs live
+  // under /bookings and /forms admin where they belong.
+  const [bookingTemplateRow] = await db
+    .select({ slug: bookings.bookingSlug, title: bookings.title })
+    .from(bookings)
+    .where(and(eq(bookings.orgId, workspace.id), eq(bookings.status, "template")))
+    .limit(1);
+
+  const [intakeFormRow] = await db
+    .select({ slug: intakeForms.slug, name: intakeForms.name })
+    .from(intakeForms)
+    .where(and(eq(intakeForms.orgId, workspace.id), eq(intakeForms.isActive, true)))
+    .limit(1);
+
+  // Public deep links use the canonical /book/<org>/<slug> +
+  // /forms/<org>/<slug> patterns on the app host (those routes exist in
+  // app/book/[orgSlug]/[bookingSlug] + app/forms/[id]/[formSlug]).
+  // We don't use the subdomain shortcuts because proxy.ts's rewrite for
+  // /book/* and /forms/* paths is a pass-through — both rely on the
+  // orgSlug being in the path, not in the host.
+  const APP_BASE = `https://${WORKSPACE_BASE_DOMAIN}`;
+  const publicBookingUrl = bookingTemplateRow
+    ? `${APP_BASE}/book/${workspace.slug}/${bookingTemplateRow.slug}`
+    : null;
+  const publicIntakeUrl = intakeFormRow
+    ? `${APP_BASE}/forms/${workspace.slug}/${intakeFormRow.slug}`
+    : null;
+
   // Deliverable cards. Each card maps a block to its public preview URL
   // + an admin "Customize" link that switches the operator into this
   // workspace before deep-linking to the right admin surface. Cards are
@@ -118,22 +159,22 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
     {
       icon: "📝",
       label: "Intake form",
-      title: "Request a quote",
+      title: intakeFormRow?.name ?? "Request a quote",
       description:
         "Branded form with the fields your client's vertical actually needs. Submissions land in their CRM as contacts.",
-      publicHref: urls.intake,
-      publicLabel: "View public form →",
+      publicHref: publicIntakeUrl,
+      publicLabel: publicIntakeUrl ? "View public form →" : "Set up form",
       adminHref: urls.admin_dashboard.replace("/dashboard", "/forms"),
       adminLabel: "Edit fields",
     },
     {
       icon: "📅",
       label: "Booking page",
-      title: "Book an appointment",
+      title: bookingTemplateRow?.title ?? "Book an appointment",
       description:
         "Public scheduler with the right service types pre-loaded. Syncs to Google Calendar once connected.",
-      publicHref: urls.book,
-      publicLabel: "View public booking →",
+      publicHref: publicBookingUrl,
+      publicLabel: publicBookingUrl ? "View public booking →" : "Set up booking",
       adminHref: urls.admin_dashboard.replace("/dashboard", "/bookings"),
       adminLabel: "Edit availability",
     },
