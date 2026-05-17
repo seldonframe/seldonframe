@@ -103,18 +103,38 @@ function NavItemLink({ item, pathname, onNavigate, icon: Icon }: { item: NavItem
     );
   }
 
-  // 2026-05-17 — disable prefetch for /switch-workspace links. The
-  // route is a side-effect-bearing GET that sets the active-org cookie
-  // before redirecting; prefetching silently fires the request and
-  // either (a) sets the cookie too early, or (b) caches the redirect
-  // and consumes the click without the browser actually following
-  // it. Plain navigation lets the redirect chain happen cleanly.
-  const shouldPrefetch = !item.href.startsWith("/switch-workspace");
+  // 2026-05-17 — /switch-workspace items use a plain <a> instead of
+  // <Link>. Next.js soft navigation keeps the cached layout chrome
+  // (sidebar, topbar) so even after the cookie flips on the redirect
+  // response, the active workspace name in the sidebar header stayed
+  // stale until manual refresh. Hard navigation re-renders the
+  // layout server-side with the new cookie applied. Also implicitly
+  // disables prefetch (no Link = no prefetch).
+  const isSwitchWorkspaceLink = item.href.startsWith("/switch-workspace");
+
+  if (isSwitchWorkspaceLink) {
+    return (
+      <a
+        href={item.href}
+        data-active={item.disabled ? false : active}
+        className={className}
+        title={item.tooltip}
+        onClick={() => {
+          if (!item.disabled) {
+            onNavigate?.();
+          }
+        }}
+      >
+        <Icon className={`crm-sidebar-icon size-4 shrink-0 ${active && !item.disabled ? "text-primary" : ""}`} />
+        <span className="crm-sidebar-text flex-1 text-[13px] sm:text-sm">{item.label}</span>
+        {trailing}
+      </a>
+    );
+  }
 
   return (
     <Link
       href={item.href}
-      prefetch={shouldPrefetch ? undefined : false}
       data-active={item.disabled ? false : active}
       className={className}
       title={item.tooltip}
