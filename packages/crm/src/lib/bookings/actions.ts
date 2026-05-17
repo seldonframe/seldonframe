@@ -1,6 +1,7 @@
 "use server";
 
 import { and, asc, eq, gte, inArray, lt, ne } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import { activities, bookings, contacts, deals, organizations, users } from "@/db/schema";
 import { getCurrentUser, getOrgId } from "@/lib/auth/helpers";
@@ -620,6 +621,9 @@ export async function createAppointmentTypeAction(formData: FormData) {
       maxBookingsPerDay: maxBookingsPerDay,
     },
   });
+  // 2026-05-17 — revalidate the listing page so the new appointment
+  // type appears without an operator-initiated refresh.
+  revalidatePath("/bookings");
 }
 
 export async function createBookingTypeForSeldonAction(input: {
@@ -745,6 +749,10 @@ export async function updateBookingTypeAction(input: {
       updatedAt: new Date(),
     })
     .where(and(eq(bookings.orgId, orgId), eq(bookings.id, bookingId), eq(bookings.status, "template")));
+
+  // 2026-05-17 — revalidate so edits show up in the bookings list
+  // immediately on navigate-back.
+  revalidatePath("/bookings");
 
   return {
     id: bookingId,

@@ -3,7 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { ChevronRight } from "lucide-react";
 import { db } from "@/db";
 import { contacts, orgMembers, organizations, soulSources, soulWiki, type OrganizationSubscription } from "@/db/schema";
-import { getOrgId } from "@/lib/auth/helpers";
+import { getCurrentUser, getOrgId } from "@/lib/auth/helpers";
 import { getOrgSubscription } from "@/lib/billing/subscription";
 import { getStripeConnectionStatus } from "@/lib/payments/actions";
 import { getLabels } from "@/lib/soul/labels";
@@ -25,6 +25,17 @@ import { checkPortalPlanGate } from "@/lib/portal/plan-gate";
 
 export default async function SettingsPage() {
   const orgId = await getOrgId();
+  // 2026-05-17 — when the agency operator has switched INTO a client
+  // workspace (active org !== primary), hide agency-level + developer
+  // surfaces and show only the workspace-shape cards the SMB owner
+  // would actually configure: profile / theme / workspace / pipeline /
+  // fields / client-portal / soul-wiki / suppression. Billing, integrations,
+  // team, custom domain, API keys, white-label, etc. all collapse out —
+  // those belong in the agency's own settings page.
+  const currentUser = await getCurrentUser();
+  const isInsideClientWorkspace = Boolean(
+    currentUser?.orgId && orgId && currentUser.orgId !== orgId,
+  );
   const subscriptionPromise: Promise<OrganizationSubscription> = orgId
     ? getOrgSubscription(orgId).catch((): OrganizationSubscription => ({}))
     : Promise.resolve<OrganizationSubscription>({});
@@ -312,6 +323,107 @@ export default async function SettingsPage() {
     { href: "/settings/frameworks", title: "Industry Packs", description: "Reusable presets for industry-specific setups", status: <span className="text-xs text-zinc-400">{frameworksStatus}</span> },
     { href: "/settings/soul-transfer", title: "Export / Import", description: "Download or upload your full workspace configuration as JSON", status: null },
   ] as const;
+
+  // 2026-05-17 — trimmed cards for the client-workspace context.
+  // Just the 8 surfaces the SMB owner (or the agency operator working
+  // inside that workspace) actually needs to configure. Same href
+  // targets as the full view so deep links keep working.
+  const clientWorkspaceCards = [
+    {
+      href: "/settings/workspace",
+      title: "Workspace",
+      description: "Workspace name, timezone, public URLs",
+      status: <span className="text-xs text-zinc-400">{orgRow?.timezone ?? "UTC"}</span>,
+    },
+    {
+      href: "/settings/profile",
+      title: "Business Profile",
+      description: "Name, industry, description — used by your AI assistants",
+      status: null,
+    },
+    {
+      href: "/settings/theme",
+      title: "Brand & Theme",
+      description: "Colors, fonts, logo for public pages and the chatbot",
+      status: (
+        <span className="inline-flex items-center gap-2 text-xs text-zinc-400">
+          <span className="h-2.5 w-2.5 rounded-full border border-zinc-600" style={{ backgroundColor: themeSettings?.theme.primaryColor || "#14b8a6" }} />
+          {themeSettings?.theme.primaryColor || "Primary color"}
+        </span>
+      ),
+    },
+    {
+      href: "/settings/pipeline",
+      title: "Pipeline Stages",
+      description: `Stages ${labels.deal.plural.toLowerCase()} move through (lead → won)`,
+      status: <span className="text-xs text-zinc-400">{pipelineStagesCount} stages</span>,
+    },
+    {
+      href: "/settings/fields",
+      title: "Custom Fields",
+      description: "Workspace-specific fields (warranty type, SQFT, etc.)",
+      status: null,
+    },
+    {
+      href: "/settings/client-portal",
+      title: "Customer Portal",
+      description: "Private dashboard where this workspace's customers see bookings + messages",
+      status: <span className="text-xs text-zinc-400">{portalStatus}</span>,
+    },
+    {
+      href: "/settings/soul-wiki",
+      title: "Knowledge Base",
+      description: "Feed this workspace's AI assistants its website, FAQs, and policy documents",
+      status: <span className="text-xs text-zinc-400">{soulSourceCount} sources · {soulArticleCount} articles</span>,
+    },
+    {
+      href: "/settings/suppression",
+      title: "Suppression List",
+      description: "Email/phone opt-outs for compliance",
+      status: null,
+    },
+  ];
+
+  if (isInsideClientWorkspace) {
+    return (
+      <section className="animate-page-enter space-y-6 sm:space-y-8">
+        <div className="space-y-2">
+          <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground">Settings</h1>
+          <p className="text-sm text-muted-foreground">
+            Configure this workspace. Billing, integrations, API keys,
+            and team management stay in your agency's settings.
+          </p>
+        </div>
+
+        <article className="rounded-xl border bg-card p-5 space-y-4">
+          <div>
+            <p className="font-semibold text-foreground">Workspace settings</p>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Anything you change here applies only to this workspace.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {clientWorkspaceCards.map((section) => (
+              <Link
+                key={section.href}
+                href={section.href}
+                className="rounded-lg border border-zinc-800 p-5 hover:border-zinc-700 transition-colors cursor-pointer"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="font-medium text-zinc-100">{section.title}</h3>
+                    <p className="text-sm text-zinc-500 mt-1">{section.description}</p>
+                    {section.status ? <div className="mt-2">{section.status}</div> : null}
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-zinc-600 mt-1 shrink-0" />
+                </div>
+              </Link>
+            ))}
+          </div>
+        </article>
+      </section>
+    );
+  }
 
   return (
     <section className="animate-page-enter space-y-6 sm:space-y-8">

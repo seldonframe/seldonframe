@@ -74,6 +74,22 @@ export type RunDeps = {
    * runCreateFromUrl impl for the try/catch.
    */
   createWebsiteChatbot: (args: { workspaceId: string; workspaceSlug: string }) => Promise<unknown>;
+  /**
+   * 2026-05-17 — auto-seed a contact row in the AGENCY's own CRM
+   * representing the new client SMB (Rain Pros, Seattle Heating, etc.).
+   * Lets the agency operator see every client they manage as a contact
+   * in their own /contacts list without manual data entry. Non-fatal —
+   * runCreateFromUrl just logs failures and continues.
+   */
+  seedClientContactInAgencyCrm: (args: {
+    agencyOrgId: string;
+    clientWorkspaceId: string;
+    clientWorkspaceSlug: string;
+    businessName: string;
+    email?: string | null;
+    phone?: string | null;
+    sourceUrl?: string | null;
+  }) => Promise<unknown>;
   workspaceBaseDomain: string;
 };
 
@@ -220,6 +236,35 @@ export async function runCreateFromUrl(input: RunInput): Promise<RunResult> {
               detail: err instanceof Error ? err.message : String(err),
             }),
           );
+        }
+
+        // 7c. Seed a contact row in the AGENCY's own CRM so the agency
+        //     operator sees every client they manage as a contact in
+        //     their own /contacts list. Operator can convert to a deal,
+        //     log activities, etc. — SeldonFrame becomes a real business
+        //     OS for the agency, not just a tool for managing client
+        //     workspaces in isolation. Idempotent + non-fatal.
+        if (input.sessionUser.primaryOrgId) {
+          try {
+            await input.deps.seedClientContactInAgencyCrm({
+              agencyOrgId: input.sessionUser.primaryOrgId,
+              clientWorkspaceId: result.workspace_id,
+              clientWorkspaceSlug: result.slug ?? result.workspace_id,
+              businessName: facts.business_name,
+              email: facts.email ?? null,
+              phone: facts.phone ?? null,
+              sourceUrl: validation.url,
+            });
+          } catch (err) {
+            console.warn(
+              JSON.stringify({
+                event: "seed_client_contact_failed",
+                agency_org_id: input.sessionUser.primaryOrgId,
+                client_workspace_id: result.workspace_id,
+                detail: err instanceof Error ? err.message : String(err),
+              }),
+            );
+          }
         }
       }
 

@@ -61,6 +61,10 @@ function baseDeps() {
     // can deep-link "Test chatbot →" to a real test page. Stub returns
     // ok:true; production wires createAgent(... archetype:'website-chatbot').
     createWebsiteChatbot: async () => ({ ok: true }),
+    // 2026-05-17 — auto-seed a contact in the AGENCY's CRM representing
+    // the new client SMB. Stub returns ok:true; production wires
+    // seedClientContactInAgencyCrm(... agencyOrgId, clientWorkspaceId, ...).
+    seedClientContactInAgencyCrm: async () => ({ ok: true, created: true, contactId: "contact-1" }),
     workspaceBaseDomain: "app.seldonframe.com",
   };
 }
