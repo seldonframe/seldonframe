@@ -28,13 +28,25 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { provisionSetupIntent } from "@/lib/billing/setup-intent";
 import { PricingPicker } from "./pricing-picker";
 
-const TRUST_SIGNALS = [
-  "First workspace always free",
-  "No card required to start",
-  "Cancel anytime in Settings",
-];
+// Trust signals shown under the hero. Copy reflects the actual flow:
+//   - "No card required to start" when the embedded Stripe form isn't
+//     mounted (unauthed user, or NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+//     missing — falls back to 1-click no-card Free).
+//   - "Card on file, never charged on Free" when the operator IS going
+//     to be asked for a card via the embedded PaymentElement. Honest
+//     up-front about why we want the card.
+function getTrustSignals(hasEmbeddedPayment: boolean): string[] {
+  return [
+    "First workspace always free",
+    hasEmbeddedPayment
+      ? "Card on file, never charged on Free"
+      : "No card required to start",
+    "Cancel anytime in Settings",
+  ];
+}
 
 const FAQS: Array<{ q: string; a: string }> = [
   {
@@ -69,6 +81,38 @@ export default async function PricingPage({ searchParams }: PricingPageProps) {
 
   const isAuthed = Boolean(session?.user);
 
+  // Provision a SetupIntent server-side ONCE per page load — only when
+  // the user is authed. Unauthed visitors don't get the embedded payment
+  // form (they need an account first, /signup handles the upgrade-then-
+  // create flow). When the SetupIntent provisioning fails (e.g. no
+  // publishable key in env, or Stripe credentials missing), `stripeBundle`
+  // is null and the PricingPicker falls back to its existing 1-click Free
+  // flow — the page never breaks.
+  let stripeBundle: { publishableKey: string; clientSecret: string } | null = null;
+  if (isAuthed && session?.user?.id) {
+    const result = await provisionSetupIntent(session.user.id);
+    if (result.ok) {
+      stripeBundle = {
+        publishableKey: result.data.publishableKey,
+        clientSecret: result.data.clientSecret,
+      };
+    } else if (result.reason === "stripe_error") {
+      // Log so we can spot infra problems (Stripe outage, invalid key,
+      // etc.). NOT a hard failure for the page — fall back to no-card.
+      console.warn(
+        JSON.stringify({
+          event: "pricing_setup_intent_provision_failed",
+          user_id: session.user.id,
+          detail: result.detail ?? null,
+        }),
+      );
+    }
+    // reason === "not_configured" (no publishable key) is the common
+    // expected case in self-hosted / dev environments — silent fallback.
+  }
+
+  const trustSignals = getTrustSignals(Boolean(stripeBundle));
+
   return (
     <main className="crm-page">
       {/* pb-28 reserves space for the fixed sticky bar so the FAQ never
@@ -93,7 +137,7 @@ export default async function PricingPage({ searchParams }: PricingPageProps) {
             </header>
 
             <ul className="space-y-2.5">
-              {TRUST_SIGNALS.map((text) => (
+              {trustSignals.map((text) => (
                 <li key={text} className="flex items-center gap-2.5 text-sm">
                   <Check className="size-4 shrink-0 text-primary" aria-hidden="true" />
                   <span className="text-foreground">{text}</span>
@@ -116,7 +160,7 @@ export default async function PricingPage({ searchParams }: PricingPageProps) {
 
           {/* ============= RIGHT COLUMN: interactive picker + FAQ ============= */}
           <div className="space-y-10">
-            <PricingPicker isAuthed={isAuthed} />
+            <PricingPicker isAuthed={isAuthed} stripe={stripeBundle} />
 
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
