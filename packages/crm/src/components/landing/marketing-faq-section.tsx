@@ -32,6 +32,13 @@ type FaqItem = { question: string; answer: string };
 //      load-bearing for the segment that cares.
 //   6. data isolation — closing trust-builder, the question buyers
 //      don't ask out loud but want answered.
+//
+// Q7/Q8 (onboarding-pivot, May 2026): added after the new comparison
+// section ships above. Buyers who scrolled past "Stop renting 5 tools"
+// reach the FAQ already asking "ok, but how does this really compare
+// to GHL?" and "do I really not need Zapier?" — Q7/Q8 answer those
+// directly, factual-first, with the same numbers the comparison
+// section displays so the two surfaces never drift.
 const FAQS: readonly FaqItem[] = [
   {
     question: "How many client workspaces can I run?",
@@ -62,6 +69,16 @@ const FAQS: readonly FaqItem[] = [
     question: "Is each client's data isolated from the others?",
     answer:
       "Yes. Every workspace is a separate org with its own CRM contacts, booking calendar, intake submissions, and chatbot transcripts. No cross-workspace read path exists in the codebase.",
+  },
+  {
+    question: "How does this compare to GoHighLevel?",
+    answer:
+      "SeldonFrame builds your client's CRM, booking page, intake form, and AI chatbot in 60 seconds from a URL or a plain-English description — no 2-4 week onboarding curve. Pricing starts at $29/mo per agency vs. GoHighLevel Agency Pro at $497/mo. SeldonFrame is open source under AGPL-3.0, so you can self-host or use SeldonFrame Cloud. Email deliverability is wired by default — no manual DNS setup.",
+  },
+  {
+    question: "Do I still need Zapier, Calendly, Typeform, Mailchimp, or HubSpot?",
+    answer:
+      "No. CRM, scheduling, intake forms, email broadcasts, and contact management are native — no Zapier task fees, no broken integrations, no 5-tool tab switching. Bring your Anthropic key, paste your client's URL, and the stack assembles itself.",
   },
 ];
 
@@ -96,7 +113,7 @@ export function LandingMarketingFaqSection() {
           id="faq-heading"
           className="text-3xl font-bold text-zinc-100 md:text-4xl"
         >
-          Last 6 questions agencies ask
+          Last 8 questions agencies ask
         </h2>
       </div>
 
