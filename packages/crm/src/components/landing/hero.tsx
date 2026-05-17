@@ -1,65 +1,114 @@
+"use client";
+
 import Link from "next/link";
-import Image from "next/image";
 import { ArrowRight } from "lucide-react";
+import { motion, useReducedMotion } from "motion/react";
 
-// Cut C Phase 1 — Hero refresh.
+import { LandingHeroMockup } from "./landing-hero-mockup";
+
+// Cut C onboarding-pivot — Hero rewrite.
 //
-// The previous hero embedded <UrlAnalyzer /> for anonymous URL paste.
-// That moment now lives at /clients/new (Cut A), reached after signup.
-// Hero's job here is to funnel signed-out agency visitors into
-// /signup. Two CTAs: primary "Sign Up Free" → /signup, secondary
-// "Continue in Claude Code" → /docs/getting-started/connect-claude-code
-// for the MCP-native crowd.
+// Previous hero (Cut C Phase 1) positioned against GoHighLevel with a
+// defensive "Open-source GHL alternative" eyebrow and a "Spin up an
+// agency-ready Business OS in 60 seconds. Open source. Your Anthropic
+// key." H1 — anti-competitor framing that burned the lede on a free-
+// tier hunter audience. The user explicitly rejected that positioning:
+// SeldonFrame's paying ICP (agencies + freelancers serving SMBs) wants
+// the PRODUCT MOMENT (natural language → AI-built Business OS in 60s),
+// not freebie messaging.
+//
+// Copy refined by design:ux-copy (this pass). The H1 hits Hormozi's
+// Value Equation in one line — dream outcome (Business OS), likelihood
+// of success (AI), time delay (60s), effort (just describe). The
+// risk-reversal line "Create a real functioning Business OS in 60
+// seconds" is user-dictated verbatim — do not edit.
+//
+// Layout shift vs previous hero: stacks copy left / mockup right on
+// md+, single column on mobile (mockup below CTAs so the conversion
+// frame stays above the fold). The mockup replaces a placeholder GIF —
+// see landing-hero-mockup.tsx.
+//
+// Motion: motion@12.38 ("motion/react"). 80ms stagger on copy
+// (H1 → subhead → CTAs → reassurance). useReducedMotion() switches
+// to instant render. Mockup card stagger lives inside the mockup
+// component and continues from this hero's cadence.
 export function LandingHero() {
+  const reduced = useReducedMotion();
+  const fadeUp = (delay: number) =>
+    reduced
+      ? { initial: false as const, animate: { opacity: 1, y: 0 } }
+      : {
+          initial: { opacity: 0, y: 12 },
+          animate: { opacity: 1, y: 0 },
+          transition: { duration: 0.45, delay, ease: [0.22, 1, 0.36, 1] as const },
+        };
+
   return (
-    <section className="mx-auto flex max-w-5xl flex-col items-center justify-center px-6 py-20 text-center md:py-28">
-      <h1 className="max-w-4xl text-5xl font-bold tracking-tight text-zinc-100 md:text-6xl lg:leading-[1.1]">
-        Spin up an agency-ready Business OS in 60 seconds. Open source. Your Anthropic key.
-      </h1>
-      <p className="mx-auto mt-6 max-w-2xl text-lg text-zinc-400">
-        Paste your client&apos;s URL. SeldonFrame builds their CRM, booking page, intake form, and AI chatbot —
-        wired up, white-label, ready to hand over.
-      </p>
+    <section className="mx-auto max-w-6xl px-6 py-16 md:py-24">
+      <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-12 lg:gap-12">
+        {/* Copy column */}
+        <div className="text-center lg:col-span-6 lg:text-left">
+          <motion.p
+            {...fadeUp(0)}
+            className="mb-5 inline-flex items-center rounded-full border border-zinc-800 bg-zinc-900/80 px-3 py-1 text-xs font-medium text-zinc-400"
+          >
+            Built for agencies and freelancers serving SMBs
+          </motion.p>
 
-      <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row">
-        <Link
-          href="/signup"
-          /* Cut C Phase 8 page-wide a11y: text-white on #14b8a6 = 2.6:1
-             (fails WCAG AA 1.4.3 normal-text 4.5:1). zinc-950 is 7.2:1.
-             Matches the pricing-CTA and footer-GitHub fixes. */
-          className="inline-flex items-center gap-2 rounded-xl bg-[#14b8a6] px-10 py-4 font-semibold text-zinc-950 transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#14b8a6]"
-        >
-          Start free
-          <ArrowRight size={18} aria-hidden="true" />
-        </Link>
-        <Link
-          href="/docs/getting-started/connect-claude-code"
-          className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 px-8 py-4 font-semibold text-zinc-200 transition-colors hover:border-zinc-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#14b8a6]"
-        >
-          Set up via Claude Code
-        </Link>
-      </div>
-      <p className="mt-6 text-sm text-zinc-500">Free forever — 1 workspace, BYO Anthropic key, no credit card.</p>
+          <motion.h1
+            {...fadeUp(0.08)}
+            className="text-balance text-4xl font-bold tracking-tight text-zinc-100 md:text-5xl lg:text-6xl lg:leading-[1.05]"
+          >
+            Spin up your client&apos;s Business OS in 60 seconds.{" "}
+            <span className="text-[#14b8a6]">Just describe it.</span>
+          </motion.h1>
 
-      <div className="mt-12 w-full max-w-4xl overflow-hidden rounded-xl border border-zinc-800/50 bg-zinc-900">
-        <Image
-          src="/marketing/hero-loop.gif"
-          alt="Live 6-second hero loop coming in week 6."
-          width={1280}
-          height={720}
-          className="h-auto w-full motion-reduce:hidden"
-          unoptimized
-          priority
-        />
-        <div
-          aria-hidden="true"
-          className="hidden h-[60px] items-center justify-center bg-zinc-900 px-6 text-sm text-zinc-500 motion-reduce:flex"
-        >
-          A 6-second loop shows: paste URL → CRM, booking page, intake form, and AI chatbot appear.
+          <motion.p
+            {...fadeUp(0.16)}
+            className="mx-auto mt-5 max-w-xl text-pretty text-base text-zinc-400 md:text-lg lg:mx-0"
+          >
+            Paste a client&apos;s URL or describe their business in plain English.
+            SeldonFrame builds the CRM, booking page, intake form, and AI
+            receptionist — white-label, wired up, ready to hand over.
+          </motion.p>
+
+          <motion.div
+            {...fadeUp(0.24)}
+            className="mt-7 flex flex-col items-center gap-3 sm:flex-row sm:justify-center lg:justify-start"
+          >
+            <Link
+              href="/signup"
+              /* a11y: text-zinc-950 on #14b8a6 = 7.2:1 (AAA). Matches
+                 the pricing/footer pattern set in Cut C Phase 8. */
+              className="inline-flex items-center gap-2 rounded-xl bg-[#14b8a6] px-8 py-3.5 text-base font-semibold text-zinc-950 transition-all hover:scale-[1.02] hover:shadow-lg hover:shadow-[#14b8a6]/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#14b8a6] motion-reduce:transition-none motion-reduce:hover:scale-100"
+            >
+              Start free
+              <ArrowRight size={18} aria-hidden="true" />
+            </Link>
+            <Link
+              href="#demo"
+              className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 px-7 py-3.5 text-base font-semibold text-zinc-200 transition-colors hover:border-zinc-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#14b8a6]"
+            >
+              Watch the 60-second build
+              <ArrowRight size={18} aria-hidden="true" />
+            </Link>
+          </motion.div>
+
+          <motion.p
+            {...fadeUp(0.32)}
+            className="mt-5 text-sm text-zinc-500"
+          >
+            Create a real functioning Business OS in 60 seconds
+          </motion.p>
         </div>
-        <p className="border-t border-zinc-800/50 bg-zinc-950 px-6 py-3 text-center text-xs text-zinc-500">
-          Live 6-second hero loop lands in week 6.
-        </p>
+
+        {/* Mockup column */}
+        <motion.div
+          {...fadeUp(0.18)}
+          className="lg:col-span-6"
+        >
+          <LandingHeroMockup />
+        </motion.div>
       </div>
     </section>
   );
