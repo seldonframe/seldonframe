@@ -358,10 +358,18 @@ export function Sidebar(props: {
                       : `/clients/${workspace.slug}/ready`;
                     const href = `/switch-workspace?to=${encodeURIComponent(workspace.id)}&next=${encodeURIComponent(nextPath)}`;
                     return (
-                      <Link
+                      // 2026-05-17 — plain <a> instead of <Link> so the
+                      // browser does a HARD navigation. Soft navigation
+                      // (Next.js Link) keeps the cached layout chrome
+                      // in-memory client-side, so even after the cookie
+                      // is set on the redirect response the sidebar +
+                      // topbar kept showing the previous workspace name
+                      // until the user manually refreshed. <a> forces a
+                      // full document load so the layout server-renders
+                      // with the new cookie applied.
+                      <a
                         key={workspace.id}
                         href={href}
-                        prefetch={false}
                         className="flex w-full items-start gap-2 rounded-xl px-2.5 py-2.5 text-left transition-colors hover:bg-accent/60"
                         onClick={() => setWorkspaceMenuOpen(false)}
                       >
@@ -381,7 +389,7 @@ export function Sidebar(props: {
                             {workspace.contactCount.toLocaleString()} clients · {workspace.soulId ? workspace.soulId.charAt(0).toUpperCase() + workspace.soulId.slice(1) : "Custom"}
                           </span>
                         </span>
-                      </Link>
+                      </a>
                     );
                   })}
                 </div>

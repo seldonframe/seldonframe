@@ -255,10 +255,15 @@ export function DashboardTopbar({
                   : `/clients/${workspace.slug}/ready`;
                 const href = `/switch-workspace?to=${encodeURIComponent(workspace.id)}&next=${encodeURIComponent(nextPath)}`;
                 return (
-                  <Link
+                  // 2026-05-17 — plain <a> not <Link>: see sidebar.tsx
+                  // for the rationale. TL;DR — soft navigation keeps
+                  // the cached layout chrome so the new workspace name
+                  // doesn't appear in the sidebar/topbar until refresh.
+                  // <a> forces a hard navigation that re-renders the
+                  // layout with the new cookie applied.
+                  <a
                     key={workspace.id}
                     href={href}
-                    prefetch={false}
                     className="crm-pressable flex w-full items-start gap-2 rounded-xl px-2.5 py-2.5 text-left transition-[background-color,transform] duration-150 ease-out hover:bg-accent/60"
                     onClick={() => setWorkspaceMenuOpen(false)}
                   >
@@ -276,7 +281,7 @@ export function DashboardTopbar({
                       </span>
                       <span className="block truncate text-xs text-muted-foreground">{workspace.contactCount.toLocaleString()} clients · {workspace.soulId ? workspace.soulId.charAt(0).toUpperCase() + workspace.soulId.slice(1) : "Custom"}</span>
                     </span>
-                  </Link>
+                  </a>
                 );
               })}
             </div>
