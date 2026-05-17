@@ -32,6 +32,10 @@ import { markOperatorOnboarded } from "@/lib/web-onboarding/mark-operator-onboar
 // it actually shows up in their /clients listing + workspace switcher.
 // See lib/workspace/link-workspace-to-operator.ts header.
 import { linkWorkspaceToOperator } from "@/lib/workspace/link-workspace-to-operator";
+// 2026-05-17 — Auto-create the website-chatbot agent immediately after
+// workspace creation so the Ready hub's "Test chatbot →" link points
+// at a real /agents/<id>/test page. Replicates the v2/complete pattern.
+import { createAgent } from "@/lib/agents/store";
 // 2026-05-16 — swapped from web-fetch-extractor (Anthropic web_fetch tool
 // path) to markdown-extractor (server-side fetch -> MD -> LLM). Same
 // signature, same SSE events, same error codes. See markdown-extractor.ts
@@ -88,6 +92,18 @@ async function dispatchCreateFromUrl(url: unknown): Promise<Response> {
       createFullWorkspace,
       markOperatorOnboarded,
       linkWorkspaceToOperator,
+      createWebsiteChatbot: async ({ workspaceId, workspaceSlug }) => {
+        // Same shape v2/complete uses — status:'test' so the chatbot
+        // responds on the test page immediately, name derived from slug.
+        return createAgent({
+          orgId: workspaceId,
+          archetype: "website-chatbot",
+          channel: "web_chat",
+          name: `${workspaceSlug} Chatbot`,
+          faq: [],
+          status: "test",
+        });
+      },
       workspaceBaseDomain: process.env.WORKSPACE_BASE_DOMAIN ?? "app.seldonframe.com",
     },
     body: { url },

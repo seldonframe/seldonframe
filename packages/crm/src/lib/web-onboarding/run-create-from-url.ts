@@ -66,6 +66,14 @@ export type RunDeps = {
    * operator.ts for the SQL + idempotency story.
    */
   linkWorkspaceToOperator: (workspaceId: string, userId: string) => Promise<unknown>;
+  /**
+   * Auto-create the website-chatbot agent so the Ready hub's "Test
+   * chatbot →" link goes to a real /agents/<id>/test page instead of
+   * the landing page. Replicates the v2/complete inline-create pattern
+   * (status:'test' so it responds immediately). Non-fatal — see
+   * runCreateFromUrl impl for the try/catch.
+   */
+  createWebsiteChatbot: (args: { workspaceId: string; workspaceSlug: string }) => Promise<unknown>;
   workspaceBaseDomain: string;
 };
 
@@ -182,6 +190,32 @@ export async function runCreateFromUrl(input: RunInput): Promise<RunResult> {
             JSON.stringify({
               event: "link_workspace_to_operator_failed",
               user_id: input.sessionUser.id,
+              workspace_id: result.workspace_id,
+              detail: err instanceof Error ? err.message : String(err),
+            }),
+          );
+        }
+
+        // 7b. Auto-create the website-chatbot agent for the new workspace.
+        //     createFullWorkspace seeds CRM/booking/intake/landing but NOT
+        //     the agent (that's historically done by /v2/complete or the
+        //     MCP build_website_chatbot call). For the web onboarding flow
+        //     we replicate the v2/complete pattern inline so the Ready hub
+        //     can deep-link "Test chatbot →" to a real /agents/<id>/test
+        //     page instead of dumping the user on the landing page.
+        //
+        //     Non-fatal: a failure here just means the Ready hub renders
+        //     the "Create chatbot" CTA fallback instead of the test link;
+        //     the workspace is still usable.
+        try {
+          await input.deps.createWebsiteChatbot({
+            workspaceId: result.workspace_id,
+            workspaceSlug: result.slug ?? result.workspace_id,
+          });
+        } catch (err) {
+          console.warn(
+            JSON.stringify({
+              event: "auto_chatbot_failed",
               workspace_id: result.workspace_id,
               detail: err instanceof Error ? err.message : String(err),
             }),

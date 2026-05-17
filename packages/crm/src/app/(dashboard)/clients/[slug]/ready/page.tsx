@@ -36,7 +36,7 @@ import { ArrowRight, ExternalLink, Sparkles } from "lucide-react";
 
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { bookings, intakeForms, organizations, orgMembers } from "@/db/schema";
+import { agents, bookings, intakeForms, organizations, orgMembers } from "@/db/schema";
 import { buildWorkspaceUrls } from "@/lib/billing/anonymous-workspace";
 
 export const dynamic = "force-dynamic";
@@ -116,6 +116,17 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
     .where(and(eq(intakeForms.orgId, workspace.id), eq(intakeForms.isActive, true)))
     .limit(1);
 
+  // Look up the auto-created website-chatbot agent so the "Test chatbot"
+  // card can deep-link straight to /agents/<id>/test (Claude Code style).
+  // Workspaces created BEFORE the auto-chatbot wiring landed won't have
+  // an agent — for those the card falls back to a "Create chatbot →"
+  // CTA pointing at /agents (the user clicks once to provision).
+  const [chatbotAgentRow] = await db
+    .select({ id: agents.id, slug: agents.slug })
+    .from(agents)
+    .where(and(eq(agents.orgId, workspace.id), eq(agents.archetype, "website-chatbot")))
+    .limit(1);
+
   // Public deep links use the canonical /book/<org>/<slug> +
   // /forms/<org>/<slug> patterns on the app host (those routes exist in
   // app/book/[orgSlug]/[bookingSlug] + app/forms/[id]/[formSlug]).
@@ -130,12 +141,25 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
     ? `${APP_BASE}/forms/${workspace.slug}/${intakeFormRow.slug}`
     : null;
 
-  // Deliverable cards. Each card maps a block to its public preview URL
-  // + an admin "Customize" link that switches the operator into this
-  // workspace before deep-linking to the right admin surface. Cards are
-  // ordered by what the operator will share with the client first:
-  // landing (public face) → intake (lead capture) → booking (the
-  // money-making action) → chatbot → CRM → email.
+  // Public customer-portal URL — this is what the SMB client (the
+  // agency's customer) will see and use, no signup required. Different
+  // from the agency's own CRM admin which is what /switch-workspace +
+  // /contacts opens.
+  const publicCustomerPortalUrl = `${APP_BASE}/customer/${workspace.slug}/login`;
+
+  // Chatbot test page — Claude-Code-style live test surface. Opens the
+  // workspace's chatbot in a chat-with-it page so the operator can
+  // verify it answers questions correctly before sharing.
+  const chatbotTestUrl = chatbotAgentRow
+    ? urls.admin_dashboard.replace("/dashboard", `/agents/${chatbotAgentRow.id}/test`)
+    : null;
+
+  // Deliverable cards. Ordered by what the operator wants to test +
+  // share with their client FIRST. User feedback (2026-05-17): "the
+  // magic of SeldonFrame isn't in creating the landing page" → CRM
+  // customer portal goes first, landing goes last.
+  //
+  // Order: CRM portal → Booking → Intake → Chatbot → Email → Landing.
   const deliverables: Array<{
     icon: string;
     label: string;
@@ -147,25 +171,15 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
     adminLabel: string;
   }> = [
     {
-      icon: "🌐",
-      label: "Landing page",
-      title: "Public site",
-      description: `Live at ${workspace.slug}.${WORKSPACE_BASE_DOMAIN}. Share this URL with your client.`,
-      publicHref: urls.home,
-      publicLabel: "View public site →",
-      adminHref: urls.admin_dashboard.replace("/dashboard", "/landing"),
-      adminLabel: "Edit landing",
-    },
-    {
-      icon: "📝",
-      label: "Intake form",
-      title: intakeFormRow?.name ?? "Request a quote",
+      icon: "📊",
+      label: "Customer portal",
+      title: "What your client's customers see",
       description:
-        "Branded form with the fields your client's vertical actually needs. Submissions land in their CRM as contacts.",
-      publicHref: publicIntakeUrl,
-      publicLabel: publicIntakeUrl ? "View public form →" : "Set up form",
-      adminHref: urls.admin_dashboard.replace("/dashboard", "/forms"),
-      adminLabel: "Edit fields",
+        "Branded login + portal where your client's customers track appointments, messages, and documents — without signing into anything SeldonFrame-branded.",
+      publicHref: publicCustomerPortalUrl,
+      publicLabel: "View customer portal →",
+      adminHref: urls.admin_contacts,
+      adminLabel: "Open CRM admin",
     },
     {
       icon: "📅",
@@ -179,37 +193,47 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
       adminLabel: "Edit availability",
     },
     {
+      icon: "📝",
+      label: "Intake form",
+      title: intakeFormRow?.name ?? "Request a quote",
+      description:
+        "Branded form with the fields your client's vertical actually needs. Submissions land in their CRM as contacts. Add more forms anytime.",
+      publicHref: publicIntakeUrl,
+      publicLabel: publicIntakeUrl ? "View public form →" : "Set up form",
+      adminHref: urls.admin_dashboard.replace("/dashboard", "/forms"),
+      adminLabel: "Add another form",
+    },
+    {
       icon: "🤖",
       label: "AI chatbot",
       title: "Grounded in their data",
       description:
-        "Trained on their site copy + services + hours. Drop the embed snippet on their existing site or use the test page.",
-      publicHref: urls.home,
-      publicLabel: "Test chatbot →",
+        "Trained on their site copy + services + hours. Test it like a real customer would, then drop the embed snippet on their existing site.",
+      publicHref: chatbotTestUrl,
+      publicLabel: chatbotTestUrl ? "Test chatbot →" : "Create chatbot",
       adminHref: urls.admin_dashboard.replace("/dashboard", "/agents"),
-      adminLabel: "Embed + tune",
-    },
-    {
-      icon: "📊",
-      label: "CRM",
-      title: "Vertical-tuned pipeline",
-      description:
-        "Contacts, deals, activities, pipeline — pre-configured for your client's industry terminology.",
-      publicHref: null,
-      publicLabel: "",
-      adminHref: urls.admin_contacts,
-      adminLabel: "Open CRM",
+      adminLabel: chatbotTestUrl ? "Embed + tune" : "Set up",
     },
     {
       icon: "📨",
-      label: "Email",
+      label: "Email + SMS",
       title: "Drip + transactional",
       description:
-        "Templates wired to lead capture + booking confirmations. Plug in your client's Resend key when ready.",
+        "Templates wired to lead capture + booking confirmations. Plug in your client's Resend / Twilio keys when ready.",
       publicHref: null,
       publicLabel: "",
       adminHref: urls.admin_dashboard.replace("/dashboard", "/emails"),
-      adminLabel: "Set up email",
+      adminLabel: "Set up channels",
+    },
+    {
+      icon: "🌐",
+      label: "Landing page",
+      title: "Optional public site",
+      description: `Default landing at ${workspace.slug}.${WORKSPACE_BASE_DOMAIN}. Most agencies prefer to embed the chatbot + booking on the client's existing site rather than replace it.`,
+      publicHref: urls.home,
+      publicLabel: "View landing →",
+      adminHref: urls.admin_dashboard.replace("/dashboard", "/landing"),
+      adminLabel: "Edit landing",
     },
   ];
 
