@@ -223,7 +223,9 @@ export function DashboardTopbar({
               {workspaceOptions.map((workspace) => (
                 <form key={workspace.id} action={switchWorkspaceAction}>
                   <input type="hidden" name="orgId" value={workspace.id} />
-                  <input type="hidden" name="redirectTo" value={pathname || "/dashboard"} />
+                  {/* 2026-05-17 — always /dashboard so the switch is
+                      visibly applied (sidebar copy explains why). */}
+                  <input type="hidden" name="redirectTo" value="/dashboard" />
                   <button
                     type="submit"
                     className="flex w-full items-start gap-2 rounded-xl px-2.5 py-2.5 text-left transition-colors hover:bg-accent/60"

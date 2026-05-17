@@ -185,6 +185,48 @@ const adapter = {
 export const { handlers, signIn, signOut, auth } = NextAuth({
   debug: true,
   trustHost: true,
+  // 2026-05-17 — explicit cookie config to fix the PKCE-cookie-missing-on-
+  // callback bug we hit repeatedly on prod Google OAuth.
+  //
+  // Symptom: NextAuth set `__Secure-authjs.pkce.code_verifier` on the
+  // /signin/google POST (log event 19: CREATE_PKCECODEVERIFIER), then
+  // the cookie was NOT sent back on the /callback/google GET (event 11:
+  // present:false) → "pkceCodeVerifier value could not be parsed" →
+  // /api/auth/error?error=Configuration. Setting AUTH_URL didn't fix it.
+  //
+  // Hypothesis: the __Secure- prefix is enforced strictly by some
+  // browser configurations during cross-site OAuth callbacks. Even though
+  // we're on HTTPS and the Secure flag is set, the cookie gets dropped
+  // somewhere in the round trip. Removing the __Secure- prefix
+  // (cookie name `authjs.pkce.code_verifier`) keeps all other security
+  // properties (httpOnly + sameSite=lax + secure=true) intact but
+  // removes the browser-level prefix-enforcement layer that's breaking us.
+  //
+  // Lax SameSite is still correct for the OAuth callback (top-level
+  // navigation from accounts.google.com → app.seldonframe.com). The
+  // state cookie gets the same treatment for consistency.
+  cookies: {
+    pkceCodeVerifier: {
+      name: "authjs.pkce.code_verifier",
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: true,
+        maxAge: 60 * 15,
+      },
+    },
+    state: {
+      name: "authjs.state",
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: true,
+        maxAge: 60 * 15,
+      },
+    },
+  },
   logger: {
     error(code, ...message) {
       console.error("[auth][logger][error]", code, ...message);

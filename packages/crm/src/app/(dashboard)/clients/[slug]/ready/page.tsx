@@ -89,6 +89,15 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
 
   const urls = buildWorkspaceUrls(workspace.slug, WORKSPACE_BASE_DOMAIN, workspace.id);
 
+  // Build switch-workspace URLs ourselves instead of mutating the
+  // `urls.admin_*` strings via .replace() — the URL stored in
+  // urls.admin_dashboard is `…/switch-workspace?to=<id>&next=%2Fdashboard`
+  // (URL-encoded), so .replace("/dashboard", "/whatever") matches
+  // NOTHING and every admin button silently fell back to /dashboard.
+  // That was the "Test chatbot redirects to dashboard" bug.
+  const sw = (next: string) =>
+    `https://${WORKSPACE_BASE_DOMAIN}/switch-workspace?to=${encodeURIComponent(workspace.id)}&next=${encodeURIComponent(next)}`;
+
   // Query the actual block slugs for the public deep links.
   //
   // Why: buildWorkspaceUrls outputs convenience strings like
@@ -151,7 +160,7 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
   // workspace's chatbot in a chat-with-it page so the operator can
   // verify it answers questions correctly before sharing.
   const chatbotTestUrl = chatbotAgentRow
-    ? urls.admin_dashboard.replace("/dashboard", `/agents/${chatbotAgentRow.id}/test`)
+    ? sw(`/agents/${chatbotAgentRow.id}/test`)
     : null;
 
   // Deliverable cards. Ordered by what the operator wants to test +
@@ -178,7 +187,7 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
         "Branded login + portal where your client's customers track appointments, messages, and documents — without signing into anything SeldonFrame-branded.",
       publicHref: publicCustomerPortalUrl,
       publicLabel: "View customer portal →",
-      adminHref: urls.admin_contacts,
+      adminHref: sw("/contacts"),
       adminLabel: "Open CRM admin",
     },
     {
@@ -189,7 +198,7 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
         "Public scheduler with the right service types pre-loaded. Syncs to Google Calendar once connected.",
       publicHref: publicBookingUrl,
       publicLabel: publicBookingUrl ? "View public booking →" : "Set up booking",
-      adminHref: urls.admin_dashboard.replace("/dashboard", "/bookings"),
+      adminHref: sw("/bookings"),
       adminLabel: "Edit availability",
     },
     {
@@ -200,7 +209,7 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
         "Branded form with the fields your client's vertical actually needs. Submissions land in their CRM as contacts. Add more forms anytime.",
       publicHref: publicIntakeUrl,
       publicLabel: publicIntakeUrl ? "View public form →" : "Set up form",
-      adminHref: urls.admin_dashboard.replace("/dashboard", "/forms"),
+      adminHref: sw("/forms"),
       adminLabel: "Add another form",
     },
     {
@@ -211,7 +220,7 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
         "Trained on their site copy + services + hours. Test it like a real customer would, then drop the embed snippet on their existing site.",
       publicHref: chatbotTestUrl,
       publicLabel: chatbotTestUrl ? "Test chatbot →" : "Create chatbot",
-      adminHref: urls.admin_dashboard.replace("/dashboard", "/agents"),
+      adminHref: sw("/agents"),
       adminLabel: chatbotTestUrl ? "Embed + tune" : "Set up",
     },
     {
@@ -222,7 +231,7 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
         "Templates wired to lead capture + booking confirmations. Plug in your client's Resend / Twilio keys when ready.",
       publicHref: null,
       publicLabel: "",
-      adminHref: urls.admin_dashboard.replace("/dashboard", "/emails"),
+      adminHref: sw("/emails"),
       adminLabel: "Set up channels",
     },
     {
@@ -232,7 +241,7 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
       description: `Default landing at ${workspace.slug}.${WORKSPACE_BASE_DOMAIN}. Most agencies prefer to embed the chatbot + booking on the client's existing site rather than replace it.`,
       publicHref: urls.home,
       publicLabel: "View landing →",
-      adminHref: urls.admin_dashboard.replace("/dashboard", "/landing"),
+      adminHref: sw("/landing"),
       adminLabel: "Edit landing",
     },
   ];
@@ -269,7 +278,7 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
               <ExternalLink className="size-4" aria-hidden="true" />
             </a>
             <Link
-              href={urls.admin_dashboard}
+              href={sw("/dashboard")}
               className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-border bg-card/60 px-5 text-sm font-medium text-foreground transition-colors hover:bg-card"
             >
               Continue to dashboard
@@ -363,7 +372,7 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
                   <>
                     Grab the embed snippet from{" "}
                     <Link
-                      href={urls.admin_dashboard.replace("/dashboard", "/agents")}
+                      href={sw("/agents")}
                       className="font-medium text-primary underline underline-offset-2"
                     >
                       Agents

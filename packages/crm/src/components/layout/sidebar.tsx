@@ -247,7 +247,14 @@ export function Sidebar(props: {
                   {workspaceOptions.map((workspace) => (
                     <form key={workspace.id} action={switchWorkspaceAction}>
                       <input type="hidden" name="orgId" value={workspace.id} />
-                      <input type="hidden" name="redirectTo" value={pathname || "/dashboard"} />
+                      {/* 2026-05-17 — always land on /dashboard after switching
+                          (not the current pathname). Reason: when on /clients
+                          (agency-level surface that lists ALL workspaces),
+                          redirecting back to /clients meant the page looked
+                          identical after switch — user complaint "nothing
+                          happens". /dashboard re-renders with the new active
+                          org so the switch is visible. */}
+                      <input type="hidden" name="redirectTo" value="/dashboard" />
                       <button
                         type="submit"
                         className="flex w-full items-start gap-2 rounded-xl px-2.5 py-2.5 text-left transition-colors hover:bg-accent/60"
