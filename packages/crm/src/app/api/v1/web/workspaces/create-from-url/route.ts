@@ -23,7 +23,11 @@ import { enforceWorkspaceLimit } from "@/lib/billing/limits";
 import { createFullWorkspace } from "@/lib/workspace/create-full";
 import { getOwnedWorkspaceCount } from "@/lib/web-onboarding/owned-workspace-count";
 import { getOperatorByokAnthropicKey } from "@/lib/web-onboarding/byok-resolver";
-import { extractBusinessFactsFromUrl } from "@/lib/web-onboarding/web-fetch-extractor";
+// 2026-05-16 — swapped from web-fetch-extractor (Anthropic web_fetch tool
+// path) to markdown-extractor (server-side fetch -> MD -> LLM). Same
+// signature, same SSE events, same error codes. See markdown-extractor.ts
+// header for the why.
+import { extractBusinessFactsFromUrl } from "@/lib/web-onboarding/markdown-extractor";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
