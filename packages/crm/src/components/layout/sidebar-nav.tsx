@@ -103,9 +103,18 @@ function NavItemLink({ item, pathname, onNavigate, icon: Icon }: { item: NavItem
     );
   }
 
+  // 2026-05-17 — disable prefetch for /switch-workspace links. The
+  // route is a side-effect-bearing GET that sets the active-org cookie
+  // before redirecting; prefetching silently fires the request and
+  // either (a) sets the cookie too early, or (b) caches the redirect
+  // and consumes the click without the browser actually following
+  // it. Plain navigation lets the redirect chain happen cleanly.
+  const shouldPrefetch = !item.href.startsWith("/switch-workspace");
+
   return (
     <Link
       href={item.href}
+      prefetch={shouldPrefetch ? undefined : false}
       data-active={item.disabled ? false : active}
       className={className}
       title={item.tooltip}
