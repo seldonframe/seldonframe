@@ -6,12 +6,9 @@
 // operator settings UI, the per-contact toggle, and the auth flow all
 // agree on who's allowed.
 
-import { eq } from "drizzle-orm";
-import { db } from "@/db";
-import { organizations } from "@/db/schema";
 import { canUseClientPortal } from "@/lib/billing/entitlements";
 import { resolvePlanFromPlanId } from "@/lib/billing/entitlements";
-import { normalizeTierId } from "@/lib/billing/features";
+import { resolveTierForWorkspace } from "@/lib/billing/tier-resolver";
 
 export interface PortalGateResult {
   allowed: boolean;
@@ -35,18 +32,12 @@ export async function checkPortalPlanGate(orgId: string): Promise<PortalGateResu
     return { allowed: false, tier: "free", reason: "missing_org_id" };
   }
 
-  const [row] = await db
-    .select({ subscription: organizations.subscription, plan: organizations.plan })
-    .from(organizations)
-    .where(eq(organizations.id, orgId))
-    .limit(1);
-
-  if (!row) return { allowed: false, tier: "free", reason: "org_not_found" };
-
-  const storedTier = row.subscription?.tier ?? row.plan ?? "free";
-  const tier = normalizeTierId(storedTier);
-  // canUseClientPortal returns true on growth + scale via the entitlements
-  // helper (plan.limits.clientPortal).
+  // 2026-05-17 — delegated to resolveTierForWorkspace so agency-managed
+  // client workspaces inherit the agency operator's tier instead of
+  // their own (always-free) row. Fixes "Upgrade to enable portal"
+  // appearing on every new client workspace despite the operator
+  // paying Scale.
+  const tier = await resolveTierForWorkspace(orgId);
   const plan = resolvePlanFromPlanId(tier);
   const allowed = canUseClientPortal(plan);
 
