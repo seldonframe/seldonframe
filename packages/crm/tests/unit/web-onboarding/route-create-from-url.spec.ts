@@ -57,6 +57,10 @@ function baseDeps() {
     // operator (ownerId + org_members 'owner' row). Without it the user
     // creates a workspace they can't see. Default no-op stub.
     linkWorkspaceToOperator: async () => ({ ok: true, alreadyOwned: false }),
+    // 2026-05-17 — auto-create the website-chatbot agent so the Ready hub
+    // can deep-link "Test chatbot →" to a real test page. Stub returns
+    // ok:true; production wires createAgent(... archetype:'website-chatbot').
+    createWebsiteChatbot: async () => ({ ok: true }),
     workspaceBaseDomain: "app.seldonframe.com",
   };
 }
