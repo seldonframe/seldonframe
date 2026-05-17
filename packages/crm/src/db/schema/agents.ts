@@ -56,6 +56,15 @@ export type AgentBlueprint = {
   pricingFacts?: Array<{ label: string; amount: number; currency: string }>;
   /** Tone overrides (otherwise inherits soul.voice). */
   toneOverrides?: { warmth?: number; formality?: number };
+  /** 2026-05-17 — operator-supplied SKILL.md override. Prepended to
+   *  the system prompt at runtime (before persona, after no other
+   *  content) so the operator can layer custom playbook prose on top
+   *  of the platform skill pack without forking the codebase.
+   *
+   *  Capped at 8000 characters (~2000 tokens) so a runaway operator
+   *  can't blow up the system prompt budget. Empty/undefined → no
+   *  override, runtime composes the prompt as it did before. */
+  customSkillMd?: string;
 };
 
 export const agents = pgTable(

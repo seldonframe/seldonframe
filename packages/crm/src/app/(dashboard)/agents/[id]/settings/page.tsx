@@ -52,6 +52,7 @@ export default async function AgentSettingsPage({
         capabilities: blueprint.capabilities ?? [...ALL_CAPABILITIES],
         faq: blueprint.faq ?? [],
         pricingFacts: blueprint.pricingFacts ?? [],
+        customSkillMd: blueprint.customSkillMd ?? "",
       }}
       allCapabilities={ALL_CAPABILITIES}
     />
