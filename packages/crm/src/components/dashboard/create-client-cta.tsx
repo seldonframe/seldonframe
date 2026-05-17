@@ -23,7 +23,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   Tooltip,
@@ -117,13 +117,18 @@ export function CreateClientCta({ tier, used, limit }: CreateClientCtaProps) {
             />
           </>
         ) : (
-          // base-ui Button uses the `render` prop (not shadcn's `asChild`)
-          // to swap the underlying element. `nativeButton={false}` tells
-          // base-ui to skip the `<button>` defaults and let the <a>
-          // (Link's underlying tag) carry the role.
-          <Button render={<Link href="/clients/new" />} nativeButton={false}>
+          // 2026-05-17 — replaced `<Button render={<Link/>} nativeButton={false}>`
+          // with a plain styled <Link>. The base-ui render-prop pattern was
+          // swallowing clicks on Next.js Link (button rendered correctly,
+          // text visible, but clicks never navigated). Using buttonVariants
+          // directly on the Link keeps the visual treatment identical and
+          // navigation works out of the box.
+          <Link
+            href="/clients/new"
+            className={buttonVariants({ variant: "default" })}
+          >
             {COPY.cta}
-          </Button>
+          </Link>
         )}
       </div>
     </TooltipProvider>

@@ -17,9 +17,9 @@
 "use client";
 
 import Link from "next/link";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import type { WorkspaceSummary, WorkspaceStatus } from "@/lib/workspaces/summarize";
 import { CLIENTS_COPY } from "./copy";
 
@@ -149,14 +149,16 @@ export function WorkspaceCard({ workspace }: WorkspaceCardProps) {
         </p>
 
         <div className="mt-auto pt-2">
-          <Button
-            variant="outline"
-            size="sm"
-            render={<Link href={workspace.dashboardUrl} />}
-            nativeButton={false}
+          {/* 2026-05-17 — replaced `<Button render={<Link/>} nativeButton={false}>`
+              with a plain styled <Link>. base-ui's render-prop pattern was
+              swallowing clicks on Next.js Link (renders fine, no navigation).
+              See create-client-cta.tsx for the same fix. */}
+          <Link
+            href={workspace.dashboardUrl}
+            className={buttonVariants({ variant: "outline", size: "sm" })}
           >
             {CLIENTS_COPY.cardCta}
-          </Button>
+          </Link>
         </div>
       </CardContent>
       </Card>

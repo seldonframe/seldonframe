@@ -24,7 +24,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Folder } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Tooltip,
@@ -156,13 +156,16 @@ export function ClientsGrid({ workspaces, tier, used, limit }: ClientsGridProps)
             <p className="max-w-md text-sm text-muted-foreground">
               {CLIENTS_COPY.emptyState.body}
             </p>
-            <Button
-              size="lg"
-              render={<Link href="/clients/new" />}
-              nativeButton={false}
+            {/* 2026-05-17 — replaced `<Button render={<Link/>} nativeButton={false}>`
+                with a plain styled <Link>. base-ui render-prop pattern
+                swallowed clicks on Next.js Link. Same fix applied in
+                create-client-cta.tsx and workspace-card.tsx. */}
+            <Link
+              href="/clients/new"
+              className={buttonVariants({ size: "lg" })}
             >
               {CLIENTS_COPY.emptyState.cta}
-            </Button>
+            </Link>
           </CardContent>
         </Card>
       ) : (
