@@ -226,11 +226,16 @@ export async function runCreateFromUrl(input: RunInput): Promise<RunResult> {
         }
       }
 
-      // 9. Done
+      // 9. Done — redirect to the dedicated "Workspace Ready" deliverables
+      //    hub instead of the generic /dashboard?ws=<slug> view. The new
+      //    page surfaces the public URLs (landing/intake/booking/chatbot)
+      //    with correct slug-scoped links + next-step guidance, instead
+      //    of dumping the operator into the empty agency dashboard. See
+      //    app/(dashboard)/clients/[slug]/ready/page.tsx.
       sse.emit("done", {
         workspaceId: result.workspace_id,
         slug: result.slug,
-        dashboardUrl: `/dashboard?ws=${result.slug}`,
+        dashboardUrl: `/clients/${result.slug}/ready`,
         publicHomeUrl: result.public_urls?.home,
       });
       sse.close();

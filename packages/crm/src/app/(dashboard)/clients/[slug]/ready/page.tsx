@@ -1,0 +1,335 @@
+// packages/crm/src/app/(dashboard)/clients/[slug]/ready/page.tsx
+//
+// 2026-05-17 — "Workspace Ready" deliverables hub.
+//
+// Strategic context: when an agency operator finishes /clients/new, the
+// old flow dumped them on /dashboard?ws=<slug> — a generic dashboard
+// view showing empty pipelines, empty blocks grid, and no clue that we
+// just built them a complete client OS. The Claude Code path through
+// finalize_workspace gets a 7-section summary listing the chatbot
+// embed, public landing URL, intake form, booking page, etc.; the web
+// path got nothing equivalent.
+//
+// This page is that equivalent. After SSE completes, run-create-from-
+// url redirects here instead of /dashboard?ws=<slug>. It renders:
+//
+//   1. Celebratory hero with the workspace name + public subdomain +
+//      "Visit public site" + "Continue to dashboard" CTAs.
+//   2. A "What you built in 60 seconds" grid of deliverable cards
+//      (Landing / Intake / Booking / Chatbot / CRM / Email), each with
+//      the correct PUBLIC url (built via buildWorkspaceUrls so the
+//      subdomain matches the new workspace's slug, not the operator's)
+//      and a "Customize" admin link via /switch-workspace.
+//   3. "Next 3 steps" panel — concrete copy-able actions: test the
+//      chatbot, share the public link, add embed snippet to existing
+//      site.
+//
+// Access control: the page redirects to /clients if the user isn't
+// authed, or if the workspace they're viewing isn't owned by them
+// (matches the previous behaviour where /clients lists only owned
+// workspaces).
+
+import { redirect } from "next/navigation";
+import Link from "next/link";
+import { eq } from "drizzle-orm";
+import { ArrowRight, ExternalLink, Sparkles } from "lucide-react";
+
+import { auth } from "@/auth";
+import { db } from "@/db";
+import { organizations, orgMembers } from "@/db/schema";
+import { buildWorkspaceUrls } from "@/lib/billing/anonymous-workspace";
+
+export const dynamic = "force-dynamic";
+
+const WORKSPACE_BASE_DOMAIN =
+  process.env.WORKSPACE_BASE_DOMAIN?.trim() || "app.seldonframe.com";
+
+type ReadyPageProps = {
+  params: Promise<{ slug: string }>;
+};
+
+export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    const { slug } = await params;
+    redirect(`/login?callbackUrl=/clients/${slug}/ready`);
+  }
+
+  const { slug } = await params;
+  if (!slug) redirect("/clients");
+
+  // Resolve the workspace by slug + verify ownership. Without this any
+  // signed-in user could view the celebratory page for any workspace
+  // (low-impact privacy leak but still worth gating).
+  const [workspace] = await db
+    .select({
+      id: organizations.id,
+      name: organizations.name,
+      slug: organizations.slug,
+      ownerId: organizations.ownerId,
+    })
+    .from(organizations)
+    .where(eq(organizations.slug, slug))
+    .limit(1);
+
+  if (!workspace) redirect("/clients");
+
+  // Allow the page if (a) the user is the owner OR (b) they have an
+  // org_members row (covers team members + the operator). Same gate
+  // /clients uses for the workspace listing.
+  const isOwner = workspace.ownerId === session.user.id;
+  if (!isOwner) {
+    const [member] = await db
+      .select({ userId: orgMembers.userId })
+      .from(orgMembers)
+      .where(eq(orgMembers.orgId, workspace.id))
+      .limit(1);
+    if (!member || member.userId !== session.user.id) redirect("/clients");
+  }
+
+  const urls = buildWorkspaceUrls(workspace.slug, WORKSPACE_BASE_DOMAIN, workspace.id);
+
+  // Deliverable cards. Each card maps a block to its public preview URL
+  // + an admin "Customize" link that switches the operator into this
+  // workspace before deep-linking to the right admin surface. Cards are
+  // ordered by what the operator will share with the client first:
+  // landing (public face) → intake (lead capture) → booking (the
+  // money-making action) → chatbot → CRM → email.
+  const deliverables: Array<{
+    icon: string;
+    label: string;
+    title: string;
+    description: string;
+    publicHref: string | null;
+    publicLabel: string;
+    adminHref: string;
+    adminLabel: string;
+  }> = [
+    {
+      icon: "🌐",
+      label: "Landing page",
+      title: "Public site",
+      description: `Live at ${workspace.slug}.${WORKSPACE_BASE_DOMAIN}. Share this URL with your client.`,
+      publicHref: urls.home,
+      publicLabel: "View public site →",
+      adminHref: urls.admin_dashboard.replace("/dashboard", "/landing"),
+      adminLabel: "Edit landing",
+    },
+    {
+      icon: "📝",
+      label: "Intake form",
+      title: "Request a quote",
+      description:
+        "Branded form with the fields your client's vertical actually needs. Submissions land in their CRM as contacts.",
+      publicHref: urls.intake,
+      publicLabel: "View public form →",
+      adminHref: urls.admin_dashboard.replace("/dashboard", "/forms"),
+      adminLabel: "Edit fields",
+    },
+    {
+      icon: "📅",
+      label: "Booking page",
+      title: "Book an appointment",
+      description:
+        "Public scheduler with the right service types pre-loaded. Syncs to Google Calendar once connected.",
+      publicHref: urls.book,
+      publicLabel: "View public booking →",
+      adminHref: urls.admin_dashboard.replace("/dashboard", "/bookings"),
+      adminLabel: "Edit availability",
+    },
+    {
+      icon: "🤖",
+      label: "AI chatbot",
+      title: "Grounded in their data",
+      description:
+        "Trained on their site copy + services + hours. Drop the embed snippet on their existing site or use the test page.",
+      publicHref: urls.home,
+      publicLabel: "Test chatbot →",
+      adminHref: urls.admin_dashboard.replace("/dashboard", "/agents"),
+      adminLabel: "Embed + tune",
+    },
+    {
+      icon: "📊",
+      label: "CRM",
+      title: "Vertical-tuned pipeline",
+      description:
+        "Contacts, deals, activities, pipeline — pre-configured for your client's industry terminology.",
+      publicHref: null,
+      publicLabel: "",
+      adminHref: urls.admin_contacts,
+      adminLabel: "Open CRM",
+    },
+    {
+      icon: "📨",
+      label: "Email",
+      title: "Drip + transactional",
+      description:
+        "Templates wired to lead capture + booking confirmations. Plug in your client's Resend key when ready.",
+      publicHref: null,
+      publicLabel: "",
+      adminHref: urls.admin_dashboard.replace("/dashboard", "/emails"),
+      adminLabel: "Set up email",
+    },
+  ];
+
+  return (
+    <main className="animate-page-enter mx-auto flex-1 overflow-auto w-full max-w-5xl p-4 sm:p-6 md:p-8">
+      <div className="space-y-10">
+        {/* ============== HERO ============== */}
+        <header className="space-y-5">
+          <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+            <Sparkles className="size-3.5" aria-hidden="true" />
+            Workspace ready — 60 seconds
+          </div>
+          <h1 className="text-3xl font-semibold leading-[1.05] tracking-tight sm:text-4xl lg:text-[2.75rem]">
+            <span className="text-foreground">{workspace.name}</span>{" "}
+            <span className="text-muted-foreground">is live.</span>
+          </h1>
+          <p className="text-base text-muted-foreground sm:text-lg">
+            CRM, booking, intake, and AI chatbot — all wired together and
+            published at{" "}
+            <span className="font-medium text-foreground">
+              {workspace.slug}.{WORKSPACE_BASE_DOMAIN}
+            </span>
+            . Share the public URL with your client or keep tuning before you do.
+          </p>
+          <div className="flex flex-wrap items-center gap-3 pt-2">
+            <a
+              href={urls.home}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-(--shadow-sm) transition-colors hover:bg-primary/90"
+            >
+              Visit public site
+              <ExternalLink className="size-4" aria-hidden="true" />
+            </a>
+            <Link
+              href={urls.admin_dashboard}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-border bg-card/60 px-5 text-sm font-medium text-foreground transition-colors hover:bg-card"
+            >
+              Continue to dashboard
+              <ArrowRight className="size-4" aria-hidden="true" />
+            </Link>
+          </div>
+        </header>
+
+        {/* ============== DELIVERABLE GRID ============== */}
+        <section>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            What you built in 60 seconds
+          </p>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {deliverables.map((d) => (
+              <article
+                key={d.label}
+                className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card/40 p-5"
+              >
+                <div className="flex items-center gap-2.5">
+                  <span aria-hidden="true" className="text-xl leading-none">
+                    {d.icon}
+                  </span>
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                    {d.label}
+                  </span>
+                </div>
+                <h2 className="text-sm font-semibold text-foreground">{d.title}</h2>
+                <p className="text-xs text-muted-foreground">{d.description}</p>
+                <div className="mt-auto flex flex-wrap items-center gap-2 pt-2">
+                  {d.publicHref ? (
+                    <a
+                      href={d.publicHref}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex h-8 items-center gap-1 rounded-lg bg-primary/15 px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/25"
+                    >
+                      {d.publicLabel}
+                    </a>
+                  ) : null}
+                  <Link
+                    href={d.adminHref}
+                    className="inline-flex h-8 items-center gap-1 rounded-lg border border-border bg-background/40 px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-background/80 hover:text-foreground"
+                  >
+                    {d.adminLabel}
+                  </Link>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        {/* ============== NEXT STEPS ============== */}
+        <section className="rounded-2xl border border-border/70 bg-card/30 p-5 sm:p-6">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            Next 3 steps
+          </p>
+          <ol className="mt-4 space-y-3">
+            {[
+              {
+                step: "1",
+                title: "Test the chatbot",
+                detail: (
+                  <>
+                    Open{" "}
+                    <a href={urls.home} target="_blank" rel="noreferrer" className="font-medium text-primary underline underline-offset-2">
+                      the public site
+                    </a>{" "}
+                    and ask the chatbot a question like &ldquo;what are your hours?&rdquo;
+                    or &ldquo;do you do emergency calls?&rdquo;
+                  </>
+                ),
+              },
+              {
+                step: "2",
+                title: "Share the public link with your client",
+                detail: (
+                  <>
+                    Send them{" "}
+                    <code className="rounded bg-muted/40 px-1 py-0.5 text-xs">
+                      {workspace.slug}.{WORKSPACE_BASE_DOMAIN}
+                    </code>{" "}
+                    so they can see what their new Business OS looks like.
+                  </>
+                ),
+              },
+              {
+                step: "3",
+                title: "Embed the chatbot on their existing site",
+                detail: (
+                  <>
+                    Grab the embed snippet from{" "}
+                    <Link
+                      href={urls.admin_dashboard.replace("/dashboard", "/agents")}
+                      className="font-medium text-primary underline underline-offset-2"
+                    >
+                      Agents
+                    </Link>
+                    {" "}and paste it before the closing &lt;/body&gt; tag on their current site.
+                  </>
+                ),
+              },
+            ].map((item) => (
+              <li key={item.step} className="flex items-start gap-3">
+                <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[11px] font-semibold text-primary">
+                  {item.step}
+                </span>
+                <div>
+                  <p className="text-sm font-medium text-foreground">{item.title}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{item.detail}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </section>
+
+        <div className="flex justify-center pt-2">
+          <Link
+            href="/dashboard"
+            className="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
+          >
+            ← Back to my agency dashboard
+          </Link>
+        </div>
+      </div>
+    </main>
+  );
+}
