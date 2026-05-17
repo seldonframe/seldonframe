@@ -82,6 +82,11 @@ type BookingsPageContentProps = {
   calendarConnected: boolean;
   googleCalendarConnectUrl: string;
   createAppointmentTypeAction: (formData: FormData) => Promise<void>;
+  /** 2026-05-17 — personality-aware placeholders + duration options + quick-
+   *  start templates for the Create Type drawer. Falls back to coaching-
+   *  flavoured defaults if the workspace has no crmPersonality set. See
+   *  lib/crm/template-suggestions.ts. */
+  bookingDefaults: import("@/lib/crm/template-suggestions").BookingDefaults;
 };
 
 function statusClass(status: string) {
@@ -192,7 +197,7 @@ const bookingBorderPalette = [
   "border-l-positive",
 ];
 
-export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, suggestedServices, orgSlug, workspaceTimezone, calendarConnected, googleCalendarConnectUrl, createAppointmentTypeAction }: BookingsPageContentProps) {
+export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, suggestedServices, orgSlug, workspaceTimezone, calendarConnected, googleCalendarConnectUrl, createAppointmentTypeAction, bookingDefaults }: BookingsPageContentProps) {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -701,6 +706,36 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
               }}
               className="space-y-4"
             >
+              {/* 2026-05-17 — personality-aware quick-start templates. Surfaces
+                  BEFORE the soul-services chips so the operator sees plumbing-
+                  or HVAC-shaped names ("Service Call", "Tune-up", "Emergency")
+                  instead of having to extrapolate from their service list.
+                  Soul-services chips stay below as a second row. */}
+              {bookingDefaults.quickStartTemplates.length > 0 ? (
+                <div>
+                  <p className="mb-2 text-sm text-muted-foreground">Quick start</p>
+                  <div className="flex flex-wrap gap-2">
+                    {bookingDefaults.quickStartTemplates.map((template) => (
+                      <button
+                        key={template.name}
+                        type="button"
+                        className="crm-button-secondary h-8 px-3 text-xs transition-transform duration-150 ease-out hover:scale-[1.02] active:scale-[0.98]"
+                        onClick={() => {
+                          setDraftName(template.name);
+                          setDraftDescription(template.description);
+                          setDraftDuration(String(template.durationMinutes));
+                          setDraftPrice("0");
+                          setDraftSlug(toSlug(template.name));
+                        }}
+                        title={`${template.durationMinutes} min · ${template.description}`}
+                      >
+                        {template.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
               {suggestedServices.length > 0 ? (
                 <div>
                   <p className="mb-2 text-sm text-muted-foreground">From your soul services</p>
@@ -709,7 +744,7 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
                       <button
                         key={service.name}
                         type="button"
-                        className="crm-button-secondary h-8 px-3 text-xs"
+                        className="crm-button-secondary h-8 px-3 text-xs transition-transform duration-150 ease-out hover:scale-[1.02] active:scale-[0.98]"
                         onClick={() => applySuggestedService(service)}
                       >
                         {service.name}
@@ -725,7 +760,7 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
                   id="appointment-name"
                   className="crm-input h-9 w-full px-3"
                   name="name"
-                  placeholder="Strategy Call"
+                  placeholder={bookingDefaults.namePlaceholder}
                   required
                   value={draftName}
                   onChange={(event) => setDraftName(event.target.value)}
@@ -741,8 +776,11 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
                   value={draftDuration}
                   onChange={(event) => setDraftDuration(event.target.value)}
                 >
-                  <option value="30">30 min</option>
-                  <option value="60">60 min</option>
+                  {bookingDefaults.durationOptions.map((minutes) => (
+                    <option key={minutes} value={String(minutes)}>
+                      {minutes < 60 ? `${minutes} min` : minutes % 60 === 0 ? `${minutes / 60}h` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`}
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -766,7 +804,7 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
                   id="appointment-description"
                   className="crm-input h-9 w-full px-3"
                   name="description"
-                  placeholder="Initial planning session"
+                  placeholder={bookingDefaults.descriptionPlaceholder}
                   value={draftDescription}
                   onChange={(event) => setDraftDescription(event.target.value)}
                 />
@@ -839,7 +877,7 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
                   id="appointment-slug"
                   className="crm-input h-9 w-full px-3"
                   name="slug"
-                  placeholder="strategy-call"
+                  placeholder={bookingDefaults.slugPlaceholder}
                   required
                   value={draftSlug}
                   onChange={(event) => setDraftSlug(event.target.value)}
