@@ -172,6 +172,71 @@
     animation: page-enter 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
+  /* ═══ 2026-05-17 — uniform interactive feedback ═══
+     Shared utilities so every clickable surface in the CRM gets the
+     same "feel" without 25 components hand-rolling slightly different
+     transitions. Pair them on a button:
+
+       <button className="crm-pressable crm-hover-lift">…</button>
+
+     - crm-pressable: 150ms scale on hover/active — visible affordance.
+       Use on icon buttons, chips, segment pills.
+     - crm-hover-lift: subtle 1px translateY on hover. Use on rows +
+       cards. Most crm-button-* classes already include this.
+     - crm-skeleton: shimmer placeholder for content that's loading. */
+  .crm-pressable {
+    transition: transform 150ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .crm-pressable:hover {
+    transform: scale(1.03);
+  }
+
+  .crm-pressable:active {
+    transform: scale(0.97);
+  }
+
+  .crm-hover-lift {
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
+  }
+
+  .crm-hover-lift:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-card-hover);
+  }
+
+  @keyframes crm-skeleton-shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+
+  .crm-skeleton {
+    background: linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--muted) 60%, transparent) 0%,
+      color-mix(in srgb, var(--muted) 90%, transparent) 50%,
+      color-mix(in srgb, var(--muted) 60%, transparent) 100%
+    );
+    background-size: 200% 100%;
+    animation: crm-skeleton-shimmer 1500ms ease-in-out infinite;
+    border-radius: 0.5rem;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .crm-pressable,
+    .crm-hover-lift {
+      transition: none;
+    }
+    .crm-pressable:hover,
+    .crm-pressable:active,
+    .crm-hover-lift:hover {
+      transform: none;
+    }
+    .crm-skeleton {
+      animation: none;
+    }
+  }
+
   .text-positive {
     color: var(--positive);
   }

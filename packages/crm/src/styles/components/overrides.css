@@ -94,6 +94,16 @@
     transform: translateY(-1px);
   }
 
+  /* 2026-05-17 — uniform "press" affordance so every primary CTA
+     gives the same tactile feedback when clicked. Reduced-motion
+     consumers are handled by the .crm-pressable media query in
+     globals.css; CSS itself doesn't need a guard here because the
+     transform property is overridden when --transition-fast is
+     `0ms` (which the reduced-motion token override sets). */
+  .crm-button-primary:active:not(:disabled) {
+    transform: translateY(0) scale(0.98);
+  }
+
   .crm-button-primary:focus-visible {
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 50%, transparent);
   }
@@ -127,6 +137,10 @@
     transform: translateY(-1px);
   }
 
+  .crm-button-secondary:active:not(:disabled) {
+    transform: translateY(0) scale(0.98);
+  }
+
   .crm-button-secondary:focus-visible {
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 50%, transparent);
   }
@@ -156,6 +170,10 @@
     background: var(--accent);
     color: var(--accent-foreground);
     transform: translateY(-1px);
+  }
+
+  .crm-button-ghost:active:not(:disabled) {
+    transform: translateY(0) scale(0.98);
   }
 
   .crm-button-ghost:focus-visible {
@@ -405,6 +423,10 @@
     border-color: color-mix(in srgb, var(--border) 100%, transparent);
     color: var(--foreground);
     transform: translateY(-1px);
+  }
+
+  .crm-topbar-icon-btn:active:not(:disabled) {
+    transform: translateY(0) scale(0.96);
   }
 
   .dark .crm-topbar-icon-btn {

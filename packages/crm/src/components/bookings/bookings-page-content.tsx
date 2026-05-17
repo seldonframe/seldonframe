@@ -336,11 +336,11 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
               </button>
             </div>
 
-            <button type="button" className="inline-flex h-8 items-center rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground" onClick={() => setWeekOffset(0)}>
+            <button type="button" className="crm-pressable inline-flex h-8 items-center rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-[background-color,color,transform] duration-150 ease-out hover:bg-accent hover:text-accent-foreground" onClick={() => setWeekOffset(0)}>
               Today
             </button>
 
-            <button type="button" className="inline-flex h-8 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground">
+            <button type="button" className="crm-pressable inline-flex h-8 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-[background-color,color,transform] duration-150 ease-out hover:bg-accent hover:text-accent-foreground">
               <CalendarIcon className="size-4 text-muted-foreground" />
               <span className="text-xs text-foreground">
                 {labelRangeStart(weekDays[0], workspaceTimezone)} - {labelRangeEnd(weekDays[6], workspaceTimezone)}
@@ -352,7 +352,7 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
             <div className="relative">
               <button
                 type="button"
-                className="inline-flex h-8 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground"
+                className="crm-pressable inline-flex h-8 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-[background-color,color,transform] duration-150 ease-out hover:bg-accent hover:text-accent-foreground"
                 onClick={() => setShowFilterMenu((current) => !current)}
               >
                 <SlidersHorizontal className="size-4" />
@@ -391,10 +391,10 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
         <div className="flex flex-col h-full overflow-x-auto w-full rounded-xl border bg-card">
           <div className="flex border-b border-border sticky top-0 z-30 bg-background w-max min-w-full">
             <div className="w-[80px] md:w-[104px] flex items-center gap-1 md:gap-2 p-1.5 md:p-2 border-r border-border shrink-0">
-              <button type="button" className="inline-flex size-7 md:size-8 items-center justify-center rounded hover:bg-accent" onClick={() => setWeekOffset((current) => current - 1)}>
+              <button type="button" className="crm-pressable inline-flex size-7 md:size-8 items-center justify-center rounded transition-[background-color,transform] duration-150 ease-out hover:bg-accent" onClick={() => setWeekOffset((current) => current - 1)}>
                 <ChevronLeft className="size-4 md:size-5" />
               </button>
-              <button type="button" className="inline-flex size-7 md:size-8 items-center justify-center rounded hover:bg-accent" onClick={() => setWeekOffset((current) => current + 1)}>
+              <button type="button" className="crm-pressable inline-flex size-7 md:size-8 items-center justify-center rounded transition-[background-color,transform] duration-150 ease-out hover:bg-accent" onClick={() => setWeekOffset((current) => current + 1)}>
                 <ChevronRight className="size-4 md:size-5" />
               </button>
             </div>
