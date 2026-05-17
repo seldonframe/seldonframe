@@ -54,7 +54,10 @@ const COPY = {
     fetching: "Reading the site",
     extracting: "Pulling business facts",
     soul_built: "Shaping the personality",
-    landing_built: "Designing the landing page",
+    // 2026-05-17 — "Designing the landing page" removed. Ops-stack-only flow
+    // now skips the landing page by default; operators add one later via the
+    // landing-page-creation skill. Showing the step would imply a landing was
+    // built and then the user would not find it in the dashboard.
     chatbot_built: "Wiring up the chatbot",
     demo_seeded: "Seeding demo data",
   },
@@ -79,11 +82,14 @@ const COPY = {
   },
 };
 
+// 2026-05-17 — dropped "landing_built" because the ops-stack-only flow now
+// skips landing page generation by default (see run-create-from-url.ts
+// comments + landing-page-creation skill). Backend emits these five in
+// order: fetching, extracting, soul_built, chatbot_built, demo_seeded.
 const PROGRESS_KEYS = [
   "fetching",
   "extracting",
   "soul_built",
-  "landing_built",
   "chatbot_built",
   "demo_seeded",
 ] as const;
@@ -100,7 +106,6 @@ const EMPTY_PROGRESS: Record<ProgressKey, boolean> = {
   fetching: false,
   extracting: false,
   soul_built: false,
-  landing_built: false,
   chatbot_built: false,
   demo_seeded: false,
 };

@@ -1,11 +1,37 @@
 // packages/crm/src/lib/web-onboarding/run-create-from-url.ts
 //
+// 2026-05-17 UPDATE — TWO BUG FIXES:
+//
+//  (1) SSE event-name alignment. Previously emitted a single "building" event
+//      that the UI didn't listen for; the UI's PROGRESS_KEYS array expects
+//      soul_built → chatbot_built → demo_seeded after extracting. Result was
+//      the LIVE BUILD checklist pulsing on "Shaping the personality" forever
+//      even though the workspace had been fully created server-side. Now we
+//      emit all three between extracting and done. createFullWorkspace is
+//      still atomic (no internal callbacks) so the three events fire in fast
+//      succession right before done — the user sees the checklist complete
+//      cleanly instead of getting stuck.
+//
+//  (2) Operator-onboarding marker. proxy.ts:261 redirects any non-public
+//      authed page to /clients/new when isSoulCompleted is false. That flag
+//      is read from the operator's OWN organization's soulCompletedAt. For
+//      agency operators (who create client workspaces as separate orgs and
+//      never "complete" their own org's onboarding), the flag stayed false
+//      forever — so after a successful /clients/new run, the browser would
+//      navigate to /dashboard and get 307'd straight back to /clients/new.
+//      We now call markOperatorOnboarded(primaryOrgId) right after the
+//      workspace is provisioned so the next request's JWT refresh picks up
+//      soulCompletedAt and the redirect gate passes.
+//
+// SSE event sequence is now:
+//   fetching → extracting → soul_built → chatbot_built → demo_seeded → done
+//
 // PATCHED PER PLAN CORRECTION (2026-05-16):
 // Calls the canonical createFullWorkspace orchestrator from
-// lib/workspace/create-full.ts (handles soul + landing + chatbot + demo
-// atomically). SSE event sequence is fetching → extracting → building →
-// done. No mapFactsToSoul adapter — extracted facts are passed directly
-// because they're already CreateFullWorkspaceInput-shaped.
+// lib/workspace/create-full.ts (handles soul + chatbot + demo atomically;
+// landing is opt-in per the ops-stack-only flow). No mapFactsToSoul
+// adapter — extracted facts are passed directly because they're already
+// CreateFullWorkspaceInput-shaped.
 
 import { createSseStream, SSE_RESPONSE_HEADERS } from "./sse";
 import { validateCreateFromUrlInput } from "./url-validator";
@@ -19,6 +45,13 @@ export type RunDeps = {
   getOperatorByokAnthropicKey: (orgId: string) => Promise<{ key: string; source: "byok" } | null>;
   extractBusinessFactsFromUrl: (args: { url: string; byokKey: string }) => Promise<ExtractedBusinessFacts>;
   createFullWorkspace: (input: CreateFullWorkspaceInput) => Promise<CreateFullWorkspaceResult>;
+  /**
+   * Stamps soulCompletedAt on the OPERATOR's own org so proxy.ts:261 stops
+   * redirecting them to /clients/new after the first successful workspace
+   * creation. Idempotent — safe to call on every create. See
+   * mark-operator-onboarded.ts for the SQL.
+   */
+  markOperatorOnboarded: (operatorOrgId: string) => Promise<void>;
   workspaceBaseDomain: string;
 };
 
@@ -99,9 +132,9 @@ export async function runCreateFromUrl(input: RunInput): Promise<RunResult> {
       }
       sse.emit("extracting", { fields: Object.keys(facts).sort() });
 
-      // 6. Build workspace (atomic — createFullWorkspace handles soul, landing,
-      //    chatbot, demo seeding all in one call).
-      sse.emit("building", { phase: "soul_landing_chatbot_demo" });
+      // 6. Build workspace (atomic — createFullWorkspace handles soul +
+      //    chatbot + demo seeding in one call; landing is opt-in per the
+      //    ops-stack-only flow so we no longer emit landing_built).
       const result = await input.deps.createFullWorkspace(facts as CreateFullWorkspaceInput);
       if (result.status !== "ready") {
         sse.error(500, {
@@ -113,7 +146,38 @@ export async function runCreateFromUrl(input: RunInput): Promise<RunResult> {
         return;
       }
 
-      // 7. Done
+      // 7. Emit the granular progress events the UI listens for. createFull-
+      //    Workspace is atomic from our perspective (no internal callbacks),
+      //    so the three events fire in fast succession. The user briefly sees
+      //    each step tick green right before the redirect — clean visual
+      //    confirmation that every part of the workspace is ready, instead
+      //    of the previous behaviour where the UI pulsed on "Shaping the
+      //    personality" forever while we silently completed the build.
+      sse.emit("soul_built", { workspaceId: result.workspace_id });
+      sse.emit("chatbot_built", { workspaceId: result.workspace_id });
+      sse.emit("demo_seeded", { workspaceId: result.workspace_id });
+
+      // 8. Mark the OPERATOR's own org as onboarded so the proxy.ts:261
+      //    redirect-to-/clients/new gate stops firing on their next page
+      //    navigation. Idempotent — safe to call every time. Wrapped in a
+      //    try/catch because a failure here must not block the user from
+      //    reaching their freshly-created workspace; we just log + continue.
+      if (input.sessionUser.primaryOrgId) {
+        try {
+          await input.deps.markOperatorOnboarded(input.sessionUser.primaryOrgId);
+        } catch (err) {
+          console.warn(
+            JSON.stringify({
+              event: "mark_operator_onboarded_failed",
+              operator_org_id: input.sessionUser.primaryOrgId,
+              workspace_id: result.workspace_id,
+              detail: err instanceof Error ? err.message : String(err),
+            }),
+          );
+        }
+      }
+
+      // 9. Done
       sse.emit("done", {
         workspaceId: result.workspace_id,
         slug: result.slug,
