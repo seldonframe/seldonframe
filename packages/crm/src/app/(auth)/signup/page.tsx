@@ -11,9 +11,11 @@ export default async function SignupPage({
   return (
     <div className="space-y-6">
       <div className="space-y-4">
-        <div>
-        <h1 className="text-section-title text-foreground">Welcome to SeldonFrame</h1>
-        <p className="text-label text-[hsl(var(--color-text-secondary))]">One Soul powering every block in your business.</p>
+        <div className="text-center">
+          <h1 className="text-section-title text-foreground">Welcome to SeldonFrame</h1>
+          <p className="mt-1 text-label text-[hsl(var(--color-text-secondary))]">
+            One Soul powering every block in your business.
+          </p>
         </div>
         <SignupForm token={typeof params.token === "string" ? params.token : ""} />
       </div>
