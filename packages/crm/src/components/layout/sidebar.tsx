@@ -270,7 +270,9 @@ export function Sidebar(props: {
                 <div className="my-2 h-px bg-border" />
 
                 <div className="space-y-1">
-                  <Link href="/orgs/new" className="flex items-center gap-2 rounded-xl px-2.5 py-2.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60 sm:text-sm" onClick={() => setWorkspaceMenuOpen(false)}>
+                  {/* 2026-05-17 — /orgs/new was deleted in Cut B (404'd).
+                      /clients/new is the canonical create-workspace entry. */}
+                  <Link href="/clients/new" className="flex items-center gap-2 rounded-xl px-2.5 py-2.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60 sm:text-sm" onClick={() => setWorkspaceMenuOpen(false)}>
                     <Plus className="size-3.5 text-primary" />
                     Create new workspace
                   </Link>

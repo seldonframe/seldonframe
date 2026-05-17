@@ -795,7 +795,10 @@ export default async function DashboardPage({
               <p className="text-sm text-muted-foreground">A calm overview of every client workspace.</p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Link href="/orgs/new" className="crm-button-secondary h-9 px-4 text-xs sm:text-sm">
+              {/* 2026-05-17 — /orgs/new was deleted in Cut B; was leading
+                  to a 404. /clients/new is the canonical create-workspace
+                  entry. */}
+              <Link href="/clients/new" className="crm-button-secondary h-9 px-4 text-xs sm:text-sm">
                 Create New Client OS
               </Link>
             </div>
