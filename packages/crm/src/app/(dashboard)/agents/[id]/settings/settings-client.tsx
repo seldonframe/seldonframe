@@ -21,6 +21,11 @@ type Props = {
     pricingFacts: PricingRow[];
     customSkillMd: string;
   };
+  /** Platform skill pack rendered for this agent's archetype, as it
+   *  would appear in the live system prompt (minus hard-rules). Shown
+   *  as the textarea's initial value when no override is set, and used
+   *  by "Reset to default" to revert. */
+  defaultSkillMd: string;
   allCapabilities: string[];
 };
 
@@ -35,9 +40,16 @@ export function SettingsClient(props: Props) {
   const [pricingFacts, setPricingFacts] = useState<PricingRow[]>(
     props.initialBlueprint.pricingFacts,
   );
+  // Pre-fill with the operator's override when set, otherwise the
+  // platform default — so the textarea always reflects what's
+  // actually running. Edits to "the default" become an override
+  // (same shape as if the operator typed their own from scratch).
   const [customSkillMd, setCustomSkillMd] = useState(
-    props.initialBlueprint.customSkillMd,
+    props.initialBlueprint.customSkillMd?.trim().length > 0
+      ? props.initialBlueprint.customSkillMd
+      : props.defaultSkillMd,
   );
+  const isUnchangedFromDefault = customSkillMd.trim() === props.defaultSkillMd.trim();
   const [publishNotes, setPublishNotes] = useState("");
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -57,9 +69,12 @@ export function SettingsClient(props: Props) {
           pricingFacts: pricingFacts.filter(
             (r) => r.label.trim() && r.amount >= 0,
           ),
-          // Empty string clears the override. Trim trailing whitespace
-          // so the prompt budget isn't wasted on padding.
-          customSkillMd: customSkillMd.trim(),
+          // If the textarea still matches the platform default
+          // verbatim, store an empty string — keeps the blueprint
+          // clean and means future platform skill-pack edits will
+          // automatically flow through. Operator edits → store the
+          // edited copy as an override.
+          customSkillMd: isUnchangedFromDefault ? "" : customSkillMd.trim(),
         },
         publishNotes: publishNotes.trim() || undefined,
       });
@@ -179,41 +194,60 @@ export function SettingsClient(props: Props) {
       </div>
 
       <div className="rounded-xl border bg-card p-5">
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex items-start justify-between gap-2">
           <div>
-            <h2 className="text-card-title">Custom SKILL.md</h2>
+            <h2 className="text-card-title">SKILL.md</h2>
             <p className="text-xs text-muted-foreground">
-              Optional. Markdown prepended to the system prompt — your
-              own playbook layered on top of the platform's defaults.
-              Use it for things like escalation rules, brand voice
-              nuances, or "always offer X when the visitor mentions Y."
+              This is the playbook the agent is using right now (rendered
+              from the platform's default skill pack). Edit any line and
+              save — your edits become the agent's SKILL.md. Reset to
+              default any time to fall back to the platform copy.
             </p>
           </div>
-          <span
-            className={`text-[10px] font-mono ${
-              customSkillMd.length > CUSTOM_SKILL_MD_MAX
-                ? "text-rose-600"
-                : "text-muted-foreground"
-            }`}
-            aria-live="polite"
-          >
-            {customSkillMd.length.toLocaleString()} / {CUSTOM_SKILL_MD_MAX.toLocaleString()}
-          </span>
+          <div className="flex flex-col items-end gap-1.5">
+            <span
+              className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.1em] ${
+                isUnchangedFromDefault
+                  ? "bg-muted text-muted-foreground"
+                  : "bg-primary/10 text-primary"
+              }`}
+              aria-live="polite"
+            >
+              {isUnchangedFromDefault ? "Platform default" : "Customized"}
+            </span>
+            <span
+              className={`font-mono text-[10px] ${
+                customSkillMd.length > CUSTOM_SKILL_MD_MAX
+                  ? "text-rose-600"
+                  : "text-muted-foreground"
+              }`}
+            >
+              {customSkillMd.length.toLocaleString()} / {CUSTOM_SKILL_MD_MAX.toLocaleString()}
+            </span>
+          </div>
         </div>
         <textarea
           value={customSkillMd}
           onChange={(e) => setCustomSkillMd(e.target.value)}
-          rows={10}
+          rows={18}
           maxLength={CUSTOM_SKILL_MD_MAX + 256}
           className="mt-3 w-full rounded-md border bg-background px-3 py-2 font-mono text-xs leading-relaxed focus:border-primary focus:outline-none"
-          placeholder={`## Playbook overrides\n\n- Always confirm the visitor's neighborhood before quoting service.\n- If they mention "emergency", offer the same-day slot first.\n- Sign off with our tagline: "Trusted in your home since 1998."`}
           spellCheck={false}
         />
-        <p className="mt-2 text-[11px] text-muted-foreground">
-          Prepended verbatim to the system prompt. Pricing rules and safety
-          guardrails always still apply — this override can't unlock prices
-          you haven't listed above.
-        </p>
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-[11px] text-muted-foreground">
+            Hard safety rules + pricing facts are always appended below
+            this section — you can't disable them by editing here.
+          </p>
+          <button
+            type="button"
+            onClick={() => setCustomSkillMd(props.defaultSkillMd)}
+            disabled={isUnchangedFromDefault}
+            className="crm-button-ghost h-7 px-2.5 text-[11px] disabled:opacity-40"
+          >
+            Reset to default
+          </button>
+        </div>
       </div>
 
       <div className="rounded-xl border bg-card p-5">

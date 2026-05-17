@@ -88,3 +88,27 @@ export function renderSkill(skill: Skill, vars: Record<string, string>): string 
     return key in vars ? vars[key] : `{{${key}}}`;
   });
 }
+
+/**
+ * 2026-05-17 — Composes the "up-front" SKILL.md exactly as the runtime
+ * would render it for `archetype`. Hard-rules are intentionally
+ * EXCLUDED — they stay platform-enforced and the operator can never
+ * remove them, so showing them in the editor would be misleading
+ * (editing them does nothing).
+ *
+ * Two consumers:
+ *   - Settings page: pre-fills the customSkillMd textarea so the
+ *     operator sees what's actually running and can edit specific
+ *     lines instead of writing from scratch.
+ *   - composeSystemPrompt(): when customSkillMd is set, this default
+ *     is what got REPLACED; when unset, this is what gets rendered.
+ */
+export function composeDefaultSkillMd(
+  archetype: string,
+  vars: Record<string, string>,
+): string {
+  const skills = getSkillsForArchetype(archetype).filter(
+    (s) => s.id !== "hard-rules",
+  );
+  return skills.map((skill) => renderSkill(skill, vars)).join("\n\n");
+}
