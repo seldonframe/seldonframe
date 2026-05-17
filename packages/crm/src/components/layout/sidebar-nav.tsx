@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, Bot, Briefcase, Building2, Calendar, ChevronRight, ExternalLink, FileText, Layout, LayoutDashboard, Mail, MessageCircle, Puzzle, Settings, Shield, Sparkles, Users, Zap } from "lucide-react";
+import { BookOpen, Bot, Briefcase, Building2, Calendar, ChevronLeft, ChevronRight, ExternalLink, FileText, Layout, LayoutDashboard, Mail, MessageCircle, Puzzle, Settings, Shield, Sparkles, Users, Zap } from "lucide-react";
 
 type NavItem = {
   href: string;
@@ -49,6 +49,7 @@ const iconMap = {
   messagecircle: MessageCircle,
   discord: MessageCircle,
   shield: Shield,
+  chevronleft: ChevronLeft,
 } as const;
 
 function resolveIcon(iconName: string) {
