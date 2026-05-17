@@ -61,11 +61,15 @@ export default async function OrganizationsPage({
                 <p>Contacts: {org.contactCount}</p>
               </div>
               <div className="flex gap-2">
+                {/* 2026-05-17 — land on Ready hub (matches every other
+                    workspace switcher in the app). See sidebar / topbar
+                    / dashboard "All Workspaces" tab — all four entry
+                    points now agree on the destination. */}
                 <form action={setActiveOrgAction} className="flex-1">
                   <input type="hidden" name="orgId" value={org.id} />
-                  <input type="hidden" name="redirectTo" value="/dashboard" />
+                  <input type="hidden" name="redirectTo" value={`/clients/${org.slug}/ready`} />
                   <button type="submit" className="crm-button-primary h-9 w-full px-3 text-sm">
-                    Open
+                    Open workspace hub
                   </button>
                 </form>
                 <form action={setActiveOrgAction} className="flex-1">

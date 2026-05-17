@@ -163,14 +163,26 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
     ? sw(`/agents/${chatbotAgentRow.id}/test`)
     : null;
 
-  // Deliverable cards. Ordered by what the operator wants to test +
-  // share with their client FIRST. User feedback (2026-05-17): "the
-  // magic of SeldonFrame isn't in creating the landing page" → CRM
-  // customer portal goes first, landing goes last.
+  // Deliverable cards. Two-tier ordering as of 2026-05-17:
   //
-  // Order: CRM portal → Booking → Intake → Chatbot → Email → Landing.
+  //   1. OPERATOR DASHBOARD — the "Plumbing Owner" view. The most-used
+  //      surface for the SMB operator. Lighter version of the agency's
+  //      dashboard (Contacts / Deals / Bookings — no Agents / Automations
+  //      / Templates since those are agency-only).
+  //   2. CUSTOMER PORTAL — what the SMB's end-customers (homeowner Bob /
+  //      dental patient / etc.) see. Branded login, no SeldonFrame chrome.
+  //
+  // These two get a distinct audience label so the operator can't
+  // confuse "the dashboard I use to run the business" with "the portal
+  // my customer uses to see their appointments."
+  //
+  // Then: deliverables they can share publicly — booking, intake,
+  // chatbot, email, landing. Landing last because the magic isn't the
+  // landing page (operator feedback 2026-05-17).
   const deliverables: Array<{
     icon: string;
+    /** Who uses this surface. Renders as a chip above the title. */
+    audience: "operator" | "end-customer" | "deliverable";
     label: string;
     title: string;
     description: string;
@@ -180,18 +192,32 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
     adminLabel: string;
   }> = [
     {
+      icon: "🏠",
+      audience: "operator",
+      label: "Operator dashboard",
+      title: `${workspace.name}'s own admin view`,
+      description:
+        "What the SMB owner uses to run their business — contacts, deals, bookings, billing. Lighter than the agency view (no agents / automations / templates — those stay in your agency console).",
+      publicHref: null,
+      publicLabel: "",
+      adminHref: sw("/dashboard"),
+      adminLabel: "Open operator dashboard",
+    },
+    {
       icon: "📊",
+      audience: "end-customer",
       label: "Customer portal",
       title: "What your client's customers see",
       description:
-        "Branded login + portal where your client's customers track appointments, messages, and documents — without signing into anything SeldonFrame-branded.",
+        "Branded login + portal where the SMB's end-customers (homeowner, patient, client) track their appointments, messages, and documents — no SeldonFrame branding shown.",
       publicHref: publicCustomerPortalUrl,
       publicLabel: "View customer portal →",
       adminHref: sw("/contacts"),
-      adminLabel: "Open CRM admin",
+      adminLabel: "Manage portal access",
     },
     {
       icon: "📅",
+      audience: "deliverable",
       label: "Booking page",
       title: bookingTemplateRow?.title ?? "Book an appointment",
       description:
@@ -203,6 +229,7 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
     },
     {
       icon: "📝",
+      audience: "deliverable",
       label: "Intake form",
       title: intakeFormRow?.name ?? "Request a quote",
       description:
@@ -214,6 +241,7 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
     },
     {
       icon: "🤖",
+      audience: "deliverable",
       label: "AI chatbot",
       title: "Grounded in their data",
       description:
@@ -225,6 +253,7 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
     },
     {
       icon: "📨",
+      audience: "deliverable",
       label: "Email + SMS",
       title: "Drip + transactional",
       description:
@@ -236,6 +265,7 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
     },
     {
       icon: "🌐",
+      audience: "deliverable",
       label: "Landing page",
       title: "Optional public site",
       description: `Default landing at ${workspace.slug}.${WORKSPACE_BASE_DOMAIN}. Most agencies prefer to embed the chatbot + booking on the client's existing site rather than replace it.`,
@@ -245,6 +275,26 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
       adminLabel: "Edit landing",
     },
   ];
+
+  // Audience chip styling. The two foundational cards (operator dashboard
+  // + customer portal) get colored chips so the "who uses this?" answer
+  // is unmistakable at a glance. Plain deliverable cards get a neutral
+  // chip — they're the same surface for both audiences (booking page is
+  // a booking page).
+  const AUDIENCE_CHIP: Record<typeof deliverables[number]["audience"], { label: string; cls: string }> = {
+    "operator": {
+      label: "FOR THE SMB OWNER",
+      cls: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+    },
+    "end-customer": {
+      label: "FOR THEIR CUSTOMERS",
+      cls: "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+    },
+    "deliverable": {
+      label: "PUBLIC DELIVERABLE",
+      cls: "border-border/70 bg-muted/30 text-muted-foreground",
+    },
+  };
 
   return (
     <main className="animate-page-enter mx-auto flex-1 overflow-auto w-full max-w-5xl p-4 sm:p-6 md:p-8">
@@ -268,24 +318,84 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
             . Share the public URL with your client or keep tuning before you do.
           </p>
           <div className="flex flex-wrap items-center gap-3 pt-2">
+            <Link
+              href={sw("/dashboard")}
+              className="crm-pressable inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-(--shadow-sm) transition-[background-color,transform] duration-150 ease-out hover:bg-primary/90"
+            >
+              Open {workspace.name}'s dashboard
+              <ArrowRight className="size-4" aria-hidden="true" />
+            </Link>
             <a
               href={urls.home}
               target="_blank"
               rel="noreferrer"
-              className="crm-pressable inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-(--shadow-sm) transition-[background-color,transform] duration-150 ease-out hover:bg-primary/90"
+              className="crm-pressable inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-border bg-card/60 px-5 text-sm font-medium text-foreground transition-[background-color,transform] duration-150 ease-out hover:bg-card"
             >
               Visit public site
               <ExternalLink className="size-4" aria-hidden="true" />
             </a>
-            <Link
-              href={sw("/dashboard")}
-              className="crm-pressable inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-border bg-card/60 px-5 text-sm font-medium text-foreground transition-[background-color,transform] duration-150 ease-out hover:bg-card"
-            >
-              Continue to dashboard
-              <ArrowRight className="size-4" aria-hidden="true" />
-            </Link>
           </div>
         </header>
+
+        {/* ============== AUDIENCE-SCOPED CARDS ==============
+            Two-row layout: foundational surfaces (operator dashboard +
+            customer portal) get their own promoted row at the top so
+            the audience distinction is obvious; deliverables (booking,
+            intake, chatbot, etc.) fill the grid below. */}
+        <section>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            Two views, two audiences
+          </p>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            {deliverables
+              .filter((d) => d.audience !== "deliverable")
+              .map((d) => {
+                const chip = AUDIENCE_CHIP[d.audience];
+                return (
+                  <article
+                    key={d.label}
+                    className="crm-hover-lift flex flex-col gap-3 rounded-2xl border border-border/70 bg-card/55 p-5"
+                  >
+                    <div className="flex items-center justify-between gap-2.5">
+                      <div className="flex items-center gap-2.5">
+                        <span aria-hidden="true" className="text-2xl leading-none">
+                          {d.icon}
+                        </span>
+                        <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                          {d.label}
+                        </span>
+                      </div>
+                      <span
+                        className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-[0.1em] ${chip.cls}`}
+                      >
+                        {chip.label}
+                      </span>
+                    </div>
+                    <h2 className="text-base font-semibold text-foreground">{d.title}</h2>
+                    <p className="text-xs text-muted-foreground">{d.description}</p>
+                    <div className="mt-auto flex flex-wrap items-center gap-2 pt-2">
+                      {d.publicHref ? (
+                        <a
+                          href={d.publicHref}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="crm-pressable inline-flex h-8 items-center gap-1 rounded-lg bg-primary/15 px-2.5 text-xs font-medium text-primary transition-[background-color,transform] duration-150 ease-out hover:bg-primary/25"
+                        >
+                          {d.publicLabel}
+                        </a>
+                      ) : null}
+                      <Link
+                        href={d.adminHref}
+                        className="crm-pressable inline-flex h-8 items-center gap-1 rounded-lg border border-border bg-background/40 px-2.5 text-xs font-medium text-muted-foreground transition-[background-color,color,transform] duration-150 ease-out hover:bg-background/80 hover:text-foreground"
+                      >
+                        {d.adminLabel}
+                      </Link>
+                    </div>
+                  </article>
+                );
+              })}
+          </div>
+        </section>
 
         {/* ============== DELIVERABLE GRID ============== */}
         <section>
@@ -293,41 +403,43 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
             What you built in 60 seconds
           </p>
           <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {deliverables.map((d) => (
-              <article
-                key={d.label}
-                className="crm-hover-lift flex flex-col gap-3 rounded-2xl border border-border/70 bg-card/40 p-5"
-              >
-                <div className="flex items-center gap-2.5">
-                  <span aria-hidden="true" className="text-xl leading-none">
-                    {d.icon}
-                  </span>
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                    {d.label}
-                  </span>
-                </div>
-                <h2 className="text-sm font-semibold text-foreground">{d.title}</h2>
-                <p className="text-xs text-muted-foreground">{d.description}</p>
-                <div className="mt-auto flex flex-wrap items-center gap-2 pt-2">
-                  {d.publicHref ? (
-                    <a
-                      href={d.publicHref}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="crm-pressable inline-flex h-8 items-center gap-1 rounded-lg bg-primary/15 px-2.5 text-xs font-medium text-primary transition-[background-color,transform] duration-150 ease-out hover:bg-primary/25"
+            {deliverables
+              .filter((d) => d.audience === "deliverable")
+              .map((d) => (
+                <article
+                  key={d.label}
+                  className="crm-hover-lift flex flex-col gap-3 rounded-2xl border border-border/70 bg-card/40 p-5"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span aria-hidden="true" className="text-xl leading-none">
+                      {d.icon}
+                    </span>
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                      {d.label}
+                    </span>
+                  </div>
+                  <h2 className="text-sm font-semibold text-foreground">{d.title}</h2>
+                  <p className="text-xs text-muted-foreground">{d.description}</p>
+                  <div className="mt-auto flex flex-wrap items-center gap-2 pt-2">
+                    {d.publicHref ? (
+                      <a
+                        href={d.publicHref}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="crm-pressable inline-flex h-8 items-center gap-1 rounded-lg bg-primary/15 px-2.5 text-xs font-medium text-primary transition-[background-color,transform] duration-150 ease-out hover:bg-primary/25"
+                      >
+                        {d.publicLabel}
+                      </a>
+                    ) : null}
+                    <Link
+                      href={d.adminHref}
+                      className="crm-pressable inline-flex h-8 items-center gap-1 rounded-lg border border-border bg-background/40 px-2.5 text-xs font-medium text-muted-foreground transition-[background-color,color,transform] duration-150 ease-out hover:bg-background/80 hover:text-foreground"
                     >
-                      {d.publicLabel}
-                    </a>
-                  ) : null}
-                  <Link
-                    href={d.adminHref}
-                    className="crm-pressable inline-flex h-8 items-center gap-1 rounded-lg border border-border bg-background/40 px-2.5 text-xs font-medium text-muted-foreground transition-[background-color,color,transform] duration-150 ease-out hover:bg-background/80 hover:text-foreground"
-                  >
-                    {d.adminLabel}
-                  </Link>
-                </div>
-              </article>
-            ))}
+                      {d.adminLabel}
+                    </Link>
+                  </div>
+                </article>
+              ))}
           </div>
         </section>
 

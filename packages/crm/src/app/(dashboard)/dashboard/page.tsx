@@ -962,11 +962,19 @@ export default async function DashboardPage({
                   </div>
 
                   <div className="mt-4 flex flex-wrap gap-2">
+                    {/* 2026-05-17 — flip workspace + land on Ready hub
+                        (matches sidebar + topbar switchers). The Ready hub
+                        is the operator's "home" for the workspace: it has
+                        deep links into the SMB's own admin dashboard, the
+                        customer portal, booking, intake, chatbot test, etc.
+                        Bypassing it (the old `/dashboard?view=workspace`
+                        target) dropped operators into a blank dashboard
+                        with no signposting back to the deliverables. */}
                     <form action={setActiveOrgAction}>
                       <input type="hidden" name="orgId" value={workspace.id} />
-                      <input type="hidden" name="redirectTo" value="/dashboard?view=workspace" />
+                      <input type="hidden" name="redirectTo" value={`/clients/${workspace.slug}/ready`} />
                       <button type="submit" className="crm-button-secondary h-9 px-4 text-xs sm:text-sm">
-                        Open dashboard
+                        Open workspace hub
                       </button>
                     </form>
                   </div>
