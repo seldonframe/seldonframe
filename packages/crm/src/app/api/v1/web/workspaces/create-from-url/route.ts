@@ -16,6 +16,7 @@
 //      the adapter narrows it down to `{ key, source: "byok" } | null` so the
 //      orchestrator's needs_byok branch fires for all non-byok outcomes.
 
+import type { NextRequest } from "next/server";
 import { auth } from "@/auth";
 import { runCreateFromUrl } from "@/lib/web-onboarding/run-create-from-url";
 import { enforceWorkspaceLimit } from "@/lib/billing/limits";
@@ -27,9 +28,18 @@ import { extractBusinessFactsFromUrl } from "@/lib/web-onboarding/web-fetch-extr
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function POST(request: Request) {
+// Shared SSE dispatcher used by both GET and POST entry points.
+//
+// Why two methods: the /clients/new client form opens an `EventSource`
+// (browser-native, very small bundle), and EventSource ONLY supports GET
+// — it cannot POST a JSON body. Smoke test surfaced this as a 405 when
+// the form opened `?url=...` against the original POST-only route. The
+// GET path reads the URL from query string. The POST path stays for
+// future programmatic callers (curl, future SDKs) that prefer JSON body
+// posting; both call the same runCreateFromUrl orchestrator with the same
+// RunDeps.
+async function dispatchCreateFromUrl(url: unknown): Promise<Response> {
   const session = await auth();
-  const body = (await request.json().catch(() => ({}))) as { url?: unknown };
 
   // The session callback in lib/auth/config.ts exposes `orgId` (NOT
   // `primaryOrgId`). For this route's purposes the user's primary org IS
@@ -65,9 +75,24 @@ export async function POST(request: Request) {
       createFullWorkspace,
       workspaceBaseDomain: process.env.WORKSPACE_BASE_DOMAIN ?? "app.seldonframe.com",
     },
-    body: { url: body.url },
+    body: { url },
     sessionUser,
   });
 
   return new Response(stream, { headers });
+}
+
+export async function GET(request: NextRequest): Promise<Response> {
+  // EventSource entry point — the /clients/new form opens this from the
+  // browser. The URL travels as a query param because EventSource cannot
+  // POST a body.
+  const url = request.nextUrl.searchParams.get("url");
+  return dispatchCreateFromUrl(url);
+}
+
+export async function POST(request: Request): Promise<Response> {
+  // Programmatic JSON-body entry point — for future SDKs, server-side
+  // callers, or non-browser clients that prefer POST + JSON.
+  const body = (await request.json().catch(() => ({}))) as { url?: unknown };
+  return dispatchCreateFromUrl(body.url);
 }
