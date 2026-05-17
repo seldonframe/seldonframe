@@ -1,4 +1,15 @@
 // packages/crm/src/lib/web-onboarding/web-fetch-extractor.ts
+//
+// LEGACY — replaced by markdown-extractor.ts on 2026-05-16 after the
+// Anthropic web_fetch tool path proved fragile (model frequently returned
+// conversational prose, hit max_tokens mid-reasoning, locked us into
+// Anthropic-only, gave us no visibility into what HTML reached the model,
+// couldn't handle JS-only sites). Kept as a fallback if needed and so
+// that WebFetchError / WebFetchErrorReason remain importable from this
+// module (markdown-extractor.ts re-exports both, but historic call sites
+// may still pull them from here).
+//
+// Original docstring:
 // Wraps Anthropic SDK messages.create with the web_fetch server tool enabled.
 // Returns the parsed business facts, or throws WebFetchError with a typed reason.
 //
