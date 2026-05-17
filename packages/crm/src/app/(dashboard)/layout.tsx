@@ -162,7 +162,8 @@ export default async function DashboardLayout({
         ...(dbUserForPlan?.planId?.startsWith("pro-") ? [{ label: "Organizations", href: "/orgs", group: "Navigate" as const }] : []),
         { label: "Contacts", href: "/contacts", group: "Navigate" },
         { label: "Deals", href: "/deals", group: "Navigate" },
-        { label: "Pages", href: "/landing", group: "Navigate" },
+        // 2026-05-17 — Pages (/landing) dropped from the command palette.
+        // Existing pages still load via their direct /landing/<id> URL.
         { label: "Bookings", href: "/bookings", group: "Navigate" },
         { label: "Email", href: "/emails", group: "Navigate" },
         { label: "Settings", href: "/settings", group: "Navigate" },
@@ -176,11 +177,10 @@ export default async function DashboardLayout({
           href: `/deals/${row.id}`,
           group: "Deals",
         })),
-        ...pageHits.map((row) => ({
-          label: row.title,
-          href: `/landing/${row.id}`,
-          group: "Pages",
-        })),
+        // 2026-05-17 — Pages no longer surfaced in the command palette
+        // recents. Operators with legacy /landing pages can still load
+        // them via direct URL.
+        ...([] as Array<{ label: string; href: string; group: "Pages" }>).map((row) => row),
         ...activityHits.map((row) => ({
           label: row.subject || "Untitled activity",
           href: row.contactId ? `/contacts/${row.contactId}` : row.dealId ? `/deals/${row.dealId}` : "/dashboard",

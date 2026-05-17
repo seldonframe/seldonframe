@@ -25,7 +25,9 @@ const staticTitleMap: Record<string, string> = {
   "/seldon": "Seldon It",
   "/orgs": "Organizations",
   "/bookings": "Booking",
-  "/landing": "Pages",
+  // 2026-05-17 — "/landing" page title kept out of the map since the
+  // nav item is gone. Existing /landing pages still render (no route
+  // deletion) but they aren't a first-class workspace surface anymore.
   "/emails": "Email",
   "/automations": "Automations",
   "/hub": "Hub",

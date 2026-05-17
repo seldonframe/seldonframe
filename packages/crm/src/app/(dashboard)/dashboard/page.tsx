@@ -1270,14 +1270,8 @@ export default async function DashboardPage({
               detail: `${emailTemplateRows.length} templates`,
               customizePrompt: "Customize my email templates with brand voice, conditional sections, and better follow-up timing.",
             },
-            {
-              slug: "pages",
-              name: "Pages",
-              href: "/landing",
-              status: landingPageRows.length > 0 ? "Active" : "Not set up",
-              detail: `${landingPageRows.length} pages`,
-              customizePrompt: "Customize my landing pages with testimonials, comparison sections, and stronger conversion CTA blocks.",
-            },
+            // 2026-05-17 — Pages tile removed from the dashboard quick-
+            // setup grid. SF isn't a landing builder anymore.
             {
               slug: "forms",
               name: "Forms",

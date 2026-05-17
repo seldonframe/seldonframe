@@ -186,3 +186,65 @@ export async function updateSoulBusinessProfileAction(input: {
     },
   };
 }
+
+/**
+ * 2026-05-17 — save edits to the workspace's custom field schema
+ * (suggestedFields.contact + suggestedFields.deal on the soul).
+ * Surfaces in /settings/fields, which was a 19-line read-only display
+ * before this — operators can now rename / add / remove fields that
+ * appear on contact + deal records and pre-populate the suggested
+ * intake form fields.
+ */
+export async function saveSuggestedFieldsAction(input: {
+  contact: Array<{ key: string; label: string; type: string; options?: string[] }>;
+  deal: Array<{ key: string; label: string; type: string; options?: string[] }>;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  assertWritable();
+  const orgId = await getCurrentOrgId();
+  if (!orgId) return { ok: false, error: "unauthorized" };
+
+  const [org] = await db
+    .select({ soul: organizations.soul })
+    .from(organizations)
+    .where(eq(organizations.id, orgId))
+    .limit(1);
+  const existingSoul = (org?.soul as OrgSoul | null) ?? null;
+  if (!existingSoul) {
+    return { ok: false, error: "soul_not_configured" };
+  }
+
+  const normalize = (
+    rows: Array<{ key: string; label: string; type: string; options?: string[] }>,
+  ) =>
+    rows
+      .map((r) => ({
+        key: String(r.key ?? "").trim().toLowerCase().replace(/[^a-z0-9_]/g, "_"),
+        label: String(r.label ?? "").trim(),
+        type: ["text", "number", "email", "phone", "select", "textarea"].includes(r.type)
+          ? r.type
+          : "text",
+        options: Array.isArray(r.options)
+          ? r.options.map((o) => String(o ?? "")).filter((o) => o.length > 0)
+          : undefined,
+      }))
+      .filter((r) => r.key.length > 0 && r.label.length > 0);
+
+  const nextSoul: OrgSoul = {
+    ...existingSoul,
+    suggestedFields: {
+      contact: normalize(input.contact ?? []),
+      deal: normalize(input.deal ?? []),
+    },
+  };
+
+  await db
+    .update(organizations)
+    .set({ soul: nextSoul, updatedAt: new Date() })
+    .where(eq(organizations.id, orgId));
+
+  revalidatePath("/settings/fields");
+  revalidatePath("/settings");
+  revalidatePath("/contacts");
+  revalidatePath("/deals");
+  return { ok: true };
+}

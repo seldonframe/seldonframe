@@ -171,9 +171,12 @@ export function Sidebar(props: {
             { href: "/contacts", label: labels.contact.plural, icon: "Users" },
             { href: "/deals", label: labels.deal.plural, icon: "Building2" },
             { href: "/bookings", label: "Bookings", icon: "Calendar" },
-            { href: "/landing", label: "Pages", icon: "Layout" },
             { href: "/emails", label: "Email", icon: "Mail" },
             { href: "/forms", label: labels.intakeForm.plural, icon: "FileText" },
+            // 2026-05-17 — Pages (/landing) dropped from the nav. SF
+            // isn't a landing-page builder; existing rows still render
+            // via the public /l/<slug>/<page> route for backward compat
+            // but operators no longer create new ones from the dashboard.
             // Agents, Automations, Templates intentionally hidden —
             // operator manages chatbots via the Ready hub's "Test
             // chatbot" deep link.
@@ -225,7 +228,8 @@ export function Sidebar(props: {
             { href: "/deals", label: labels.deal.plural, icon: "Building2" },
             { href: "/bookings", label: "Bookings", icon: "Calendar" },
             { href: "/agents", label: "Agents", icon: "Bot" },
-            { href: "/landing", label: "Pages", icon: "Layout" },
+            // 2026-05-17 — Pages (/landing) dropped from nav. See
+            // the matching comment in the isInsideClientWorkspace branch.
             { href: "/emails", label: "Email", icon: "Mail" },
             { href: "/forms", label: labels.intakeForm.plural, icon: "FileText" },
             { href: "/automations", label: "Automations", icon: "Zap" },

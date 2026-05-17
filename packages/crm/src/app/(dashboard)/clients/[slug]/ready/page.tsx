@@ -263,17 +263,11 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
       adminHref: sw("/emails"),
       adminLabel: "Set up channels",
     },
-    {
-      icon: "🌐",
-      audience: "deliverable",
-      label: "Landing page",
-      title: "Optional public site",
-      description: `Default landing at ${workspace.slug}.${WORKSPACE_BASE_DOMAIN}. Most agencies prefer to embed the chatbot + booking on the client's existing site rather than replace it.`,
-      publicHref: urls.home,
-      publicLabel: "View landing →",
-      adminHref: sw("/landing"),
-      adminLabel: "Edit landing",
-    },
+    // 2026-05-17 — Landing page deliverable removed. SeldonFrame
+    // isn't a landing-page builder; the chatbot + booking + intake
+    // are the deliverables agencies actually share. Public landing
+    // pages created via the legacy /landing route still render but
+    // we no longer prompt operators to make new ones.
   ];
 
   // Audience chip styling. The two foundational cards (operator dashboard

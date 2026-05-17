@@ -1,8 +1,9 @@
 "use server";
 
 import { and, eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
 import { db } from "@/db";
-import { contacts, deals, organizations, pipelines } from "@/db/schema";
+import { contacts, deals, organizations, pipelines, type PipelineStage } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
 import { assertWritable } from "@/lib/demo/server";
 import { emitSeldonEvent } from "@/lib/events/bus";
@@ -37,6 +38,45 @@ export async function getDefaultPipeline(orgIdOverride?: string) {
     .limit(1);
 
   return pipeline ?? null;
+}
+
+/**
+ * 2026-05-17 — save edits to the default pipeline's stages.
+ * Operators rename stages, drop unused ones, or reorder them via
+ * /settings/pipeline. Stages persist as a JSONB array on the
+ * pipelines row.
+ *
+ * Validates: each stage must have a non-empty name. Empty arrays
+ * are rejected — every workspace needs at least one stage.
+ */
+export async function saveDefaultPipelineStagesAction(input: {
+  stages: PipelineStage[];
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  assertWritable();
+  const orgId = await getOrgId();
+  if (!orgId) return { ok: false, error: "unauthorized" };
+
+  const stages = (input.stages ?? [])
+    .map((s) => ({
+      name: String(s.name ?? "").trim(),
+      color: String(s.color ?? "#9ca3af"),
+      probability: Math.max(0, Math.min(100, Number(s.probability ?? 0))),
+    }))
+    .filter((s) => s.name.length > 0);
+
+  if (stages.length === 0) {
+    return { ok: false, error: "at_least_one_stage_required" };
+  }
+
+  await db
+    .update(pipelines)
+    .set({ stages, updatedAt: new Date() })
+    .where(and(eq(pipelines.orgId, orgId), eq(pipelines.isDefault, true)));
+
+  revalidatePath("/settings/pipeline");
+  revalidatePath("/settings");
+  revalidatePath("/deals");
+  return { ok: true };
 }
 
 export async function createDealAction(formData: FormData) {
