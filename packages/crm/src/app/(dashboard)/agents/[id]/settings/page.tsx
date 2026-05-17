@@ -6,8 +6,9 @@
 import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { agents, type AgentBlueprint } from "@/db/schema";
+import { agents, organizations, type AgentBlueprint } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
+import { composeDefaultSkillMd } from "@/lib/agents/skills/registry";
 import { SettingsClient } from "./settings-client";
 
 const ALL_CAPABILITIES = [
@@ -32,6 +33,7 @@ export default async function AgentSettingsPage({
   const [agent] = await db
     .select({
       id: agents.id,
+      archetype: agents.archetype,
       blueprint: agents.blueprint,
       currentVersion: agents.currentVersion,
       orgId: agents.orgId,
@@ -42,6 +44,38 @@ export default async function AgentSettingsPage({
   if (!agent || agent.orgId !== orgId) notFound();
 
   const blueprint = (agent.blueprint ?? {}) as AgentBlueprint;
+
+  // 2026-05-17 — render the platform skill pack the same way the
+  // runtime will, so the SKILL.md editor's textarea can be pre-filled
+  // with what's ACTUALLY running. Operator edits this in place; saving
+  // stores it as customSkillMd and the runtime substitutes their copy
+  // for the platform up-front skills (hard-rules + pricing facts +
+  // business facts are appended later and still platform-enforced).
+  const [orgRow] = await db
+    .select({ timezone: organizations.timezone })
+    .from(organizations)
+    .where(eq(organizations.id, orgId))
+    .limit(1);
+  const tz = orgRow?.timezone ?? "America/New_York";
+  const now = new Date();
+  const dateFormatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+  const timeFormatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+  const defaultSkillMd = composeDefaultSkillMd(agent.archetype, {
+    currentDate: dateFormatter.format(now),
+    currentTime: timeFormatter.format(now),
+    timezone: tz,
+  });
 
   return (
     <SettingsClient
@@ -54,6 +88,7 @@ export default async function AgentSettingsPage({
         pricingFacts: blueprint.pricingFacts ?? [],
         customSkillMd: blueprint.customSkillMd ?? "",
       }}
+      defaultSkillMd={defaultSkillMd}
       allCapabilities={ALL_CAPABILITIES}
     />
   );

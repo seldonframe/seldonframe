@@ -19,7 +19,7 @@
 
 import type { OrgSoul } from "@/lib/soul/types";
 import type { AgentBlueprint } from "@/db/schema/agents";
-import { getSkillsForArchetype, renderSkill } from "./skills/registry";
+import { composeDefaultSkillMd, getSkillsForArchetype, renderSkill } from "./skills/registry";
 import { frameFaqForSystemPrompt, type FaqEntry } from "./runtime/scraped-content-framing";
 import {
   summarizeWeeklyHours,
@@ -73,31 +73,6 @@ export async function composeSystemPrompt(input: ComposeSystemPromptInput): Prom
 
   const sections: string[] = [persona];
 
-  // 2026-05-17 — operator-supplied SKILL.md override.
-  //
-  // Layered RIGHT AFTER the persona so it influences how the agent
-  // interprets every subsequent platform skill, business fact, and
-  // safety rule. We intentionally place it BEFORE hard-rules (which
-  // still go last) so the operator can't override safety invariants
-  // like "never quote prices not in pricingFacts" — the platform
-  // sections after this one re-assert those constraints and the
-  // hard-rules section at the very end has the final word.
-  //
-  // Wrapped in an <operator_playbook> tag so the LLM treats it as
-  // operator guidance to apply (vs the persona's voice or an external
-  // instruction that needs validation).
-  const trimmedCustomSkillMd = blueprint.customSkillMd?.trim();
-  if (trimmedCustomSkillMd && trimmedCustomSkillMd.length > 0) {
-    sections.push(
-      `## Operator playbook\n\n` +
-        `The workspace operator has provided the following playbook. Treat ` +
-        `it as house style and operational guidance — follow it, but never ` +
-        `at the expense of the safety rules and pricing constraints set ` +
-        `later in this prompt.\n\n` +
-        `<operator_playbook>\n${trimmedCustomSkillMd}\n</operator_playbook>`,
-    );
-  }
-
   // ── PLATFORM INTELLIGENCE BASELINE ────────────────────────────────────
   // v1.28.3 — skill-pack architecture. Behavioral guidance lives in
   // lib/agents/skills/<archetype>/*.ts (markdown-shaped string exports).
@@ -133,12 +108,26 @@ export async function composeSystemPrompt(input: ComposeSystemPromptInput): Prom
   // 'hard-rules' goes LAST in the prompt (after dynamic operator-supplied
   // sections like FAQ / pricing / brain notes), so it appears as the
   // final word the LLM reads — anchoring on safety invariants.
-  // Other skills (temporal-reasoning, be-smart-by-default) belong here
-  // up front, before the dynamic content.
+  // Other skills (temporal-reasoning, be-smart-by-default, sdr) belong
+  // here up front, before the dynamic content.
+  //
+  // 2026-05-17 — when the operator has set `customSkillMd` on the
+  // blueprint, it REPLACES the up-front platform skills verbatim.
+  // This is the "edit the SKILL.md in place" UX — the settings page
+  // pre-fills the textarea with composeDefaultSkillMd(), the operator
+  // edits the lines they care about, and saving stores their edited
+  // copy. Hard-rules + pricing + business facts still get appended
+  // below regardless, so the operator cannot disable safety invariants.
+  // Empty/whitespace customSkillMd → fall back to the platform default.
   const allSkills = getSkillsForArchetype(archetype);
-  const upFrontSkills = allSkills.filter((s) => s.id !== "hard-rules");
-  for (const skill of upFrontSkills) {
-    sections.push(renderSkill(skill, skillVars));
+  const trimmedCustomSkillMd = blueprint.customSkillMd?.trim() ?? "";
+  if (trimmedCustomSkillMd.length > 0) {
+    sections.push(trimmedCustomSkillMd);
+  } else {
+    const upFrontSkills = allSkills.filter((s) => s.id !== "hard-rules");
+    for (const skill of upFrontSkills) {
+      sections.push(renderSkill(skill, skillVars));
+    }
   }
 
   // Industry + offering
