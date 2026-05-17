@@ -219,6 +219,7 @@ export default async function DashboardLayout({
               }
               isSuperAdmin={isSuperAdmin}
               isInsideClientWorkspace={isSwitchedOrg}
+              primaryOrgId={user?.orgId ?? null}
             />
             <div className="min-h-screen min-w-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
               <DemoBanner />
@@ -249,6 +250,7 @@ export default async function DashboardLayout({
                   switchWorkspaceAction={setActiveOrgAction}
                   isOperatorSession={isOperatorSession}
                   notifications={notifications}
+                  primaryOrgId={user?.orgId ?? null}
                 />
                 {children}
               </div>
