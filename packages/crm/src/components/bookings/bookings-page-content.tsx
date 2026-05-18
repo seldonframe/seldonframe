@@ -481,12 +481,17 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
                     const top = bookingTopPx(startsAt, workspaceTimezone);
                     const height =
                       (DEFAULT_BOOKING_DURATION_MIN / 60) * HOUR_HEIGHT_PX - 4;
-                    return (
-                      <article
-                        key={row.id}
-                        className={`absolute left-2 right-2 rounded-lg border border-border border-l-4 ${borderClass} bg-card p-2 hover:bg-muted transition-colors overflow-hidden`}
-                        style={{ top: `${top}px`, height: `${height}px` }}
-                      >
+                    // 2026-05-18 — clicking an event in the calendar now
+                    // jumps to the linked contact's record (where the
+                    // operator sees name + email + phone + address +
+                    // booking history + the SOUL-aware intake answers).
+                    // Falls back to a non-clickable <article> when the
+                    // booking has no contactId (rare — every public
+                    // submit attaches one; manual creates may not).
+                    const cardClass = `absolute left-2 right-2 rounded-lg border border-border border-l-4 ${borderClass} bg-card p-2 hover:bg-muted transition-colors overflow-hidden`;
+                    const cardStyle = { top: `${top}px`, height: `${height}px` };
+                    const cardInner = (
+                      <>
                         <p className="text-xs font-medium text-foreground truncate">
                           {row.title}
                         </p>
@@ -500,6 +505,24 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
                             timeZone: workspaceTimezone,
                           })}
                         </p>
+                      </>
+                    );
+                    return row.contactId ? (
+                      <Link
+                        key={row.id}
+                        href={`/contacts/${row.contactId}`}
+                        className={`${cardClass} block`}
+                        style={cardStyle}
+                      >
+                        {cardInner}
+                      </Link>
+                    ) : (
+                      <article
+                        key={row.id}
+                        className={cardClass}
+                        style={cardStyle}
+                      >
+                        {cardInner}
                       </article>
                     );
                   })}
@@ -685,11 +708,14 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
                       const borderClass =
                         bookingTypeBorderByTitle.get(row.title.trim().toLowerCase()) ?? "border-l-primary";
 
-                      return (
-                        <li
-                          key={row.id}
-                          className={`flex items-center gap-3 rounded-lg border border-border/60 border-l-[3px] ${borderClass} bg-background/40 px-3 py-2 transition-colors hover:bg-accent/30`}
-                        >
+                      // 2026-05-18 — same click-through-to-contact pattern
+                      // as the calendar event cards above. Operator
+                      // expects every booking row across the page to
+                      // open the contact (with their booking history,
+                      // intake answers, projects, etc.) on click.
+                      const rowClass = `flex items-center gap-3 rounded-lg border border-border/60 border-l-[3px] ${borderClass} bg-background/40 px-3 py-2 transition-colors hover:bg-accent/30`;
+                      const rowInner = (
+                        <>
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-sm font-medium text-foreground">{row.title}</p>
                             <p className="truncate text-xs text-muted-foreground">{person}</p>
@@ -704,6 +730,18 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
                               {row.status}
                             </span>
                           </div>
+                        </>
+                      );
+
+                      return row.contactId ? (
+                        <li key={row.id} className="list-none">
+                          <Link href={`/contacts/${row.contactId}`} className={rowClass}>
+                            {rowInner}
+                          </Link>
+                        </li>
+                      ) : (
+                        <li key={row.id} className={rowClass}>
+                          {rowInner}
                         </li>
                       );
                     })}
