@@ -235,15 +235,25 @@ export function Sidebar(props: {
             // 2026-05-18 — messaging-layer slice 4. See sibling comment
             // in the isInsideClientWorkspace branch.
             { href: "/conversations", label: "Conversations", icon: "MessageCircle" },
-            { href: "/agents", label: "Agents", icon: "Bot" },
+            // 2026-05-18 — Per operator feedback, "Agents" and
+            // "Automations" labels were ambiguous (both feel AI-ish).
+            // /agents manages conversational chatbots (status, version,
+            // conversations, evals) → label "Chatbots" makes the
+            // distinction clear. /automations stays "Automations" since
+            // it's workflow recipes (speed-to-lead, win-back, etc.) that
+            // operate on CRM data, not on conversation flows.
+            { href: "/agents", label: "Chatbots", icon: "Bot" },
             // 2026-05-17 — Pages (/landing) dropped from nav. See
             // the matching comment in the isInsideClientWorkspace branch.
             { href: "/emails", label: "Email", icon: "Mail" },
             { href: "/forms", label: labels.intakeForm.plural, icon: "FileText" },
             { href: "/automations", label: "Automations", icon: "Zap" },
-            // Renamed: Soul Marketplace → Templates. Route fixed:
-            // /soul-marketplace was a 404 — actual route is /marketplace.
-            { href: "/marketplace", label: "Templates", icon: "Puzzle" },
+            // 2026-05-18 — Removed "Templates" (route /marketplace).
+            // Per operator feedback: the marketplace is future scope and
+            // surfacing it now just clutters the agency sidebar. The
+            // /marketplace route still resolves (no 404) for anyone who
+            // bookmarked it; we just don't link to it from the nav until
+            // the marketplace product is real.
           ]),
         },
         {
