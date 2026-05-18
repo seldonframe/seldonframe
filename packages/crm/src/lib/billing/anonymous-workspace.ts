@@ -622,11 +622,27 @@ function buildSeedSoul(
     input.state;
   if (!hasContent) return null;
 
+  // 2026-05-18 — write BOTH snake_case AND camelCase keys so the
+  // settings UI (which reads OrgSoul.businessName / industry /
+  // businessDescription per the TS interface in lib/soul/types.ts)
+  // sees populated fields without a downstream migration. Operator
+  // reported empty /settings/profile for every URL-flow workspace —
+  // root cause was this casing mismatch.
+  const industry = input.industry?.trim() || null;
   const soul: Record<string, unknown> = {
+    // snake_case for backward compat with existing readers (schema-
+    // from-soul, hero block renderer, etc. all read business_name).
     business_name: workspaceName,
+    // camelCase that matches the OrgSoul TS interface so
+    // /settings/profile + any new readers get a value.
+    businessName: workspaceName,
   };
   if (tagline) soul.tagline = tagline;
-  if (description) soul.soul_description = description;
+  if (description) {
+    soul.soul_description = description;
+    soul.businessDescription = description;
+  }
+  if (industry) soul.industry = industry;
   if (phone) soul.phone = phone;
   if (email) soul.email = email;
   if (address) soul.address = address;
