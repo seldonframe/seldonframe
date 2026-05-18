@@ -80,11 +80,22 @@ export function Sidebar(props: {
    *  place of the SeldonFrame icon when set. Per-workspace; the
    *  layout fetches it from the active org and threads it through. */
   workspaceLogoUrl?: string | null;
+  /** 2026-05-18 (later) — agency-level white-label logo. When an
+   *  active partner agency owns this workspace (is_white_label), this
+   *  is the agency's logoUrl from partner_agencies.logoUrl. Threaded
+   *  separately from workspaceLogoUrl because the brand HEADER (top-
+   *  left) should show the AGENCY identity while the workspace
+   *  switcher TILE shows the client's own logo. Operator feedback:
+   *  "when an agency wants to whitelabel all workspaces they should
+   *   be able to add their logo... so their clients dont see
+   *   seldonframe logo top left of dashboard". */
+  agencyLogoUrl?: string | null;
 }) {
   const {
     hiddenBlocks = [],
     workspaceName,
     workspaceLogoUrl = null,
+    agencyLogoUrl = null,
     activeWorkspaceId,
     workspaceOptions,
     switchWorkspaceAction,
@@ -317,23 +328,39 @@ export function Sidebar(props: {
         <div className="px-3 pb-0 pt-4 sm:px-3.5 sm:pt-5 lg:px-4">
           <div className="flex min-h-8 items-center gap-3">
             <div className="flex size-8 items-center justify-center overflow-hidden rounded-xl border border-border/80 bg-card/80 shadow-(--shadow-xs)">
-              {/* SLICE 9 PR 2 C1: SeldonFrame icon (brand-isolated; never themed) */}
-              <Image src="/brand/seldonframe-icon.svg" alt="SeldonFrame" width={20} height={20} />
+              {/* 2026-05-18 (later) — agency-level white-label brand
+                  mark. When an active partner agency owns this workspace,
+                  the agency's logo replaces the SeldonFrame icon top-
+                  left. Falls back to the SF icon when no agency logo is
+                  set (agency that registered without uploading one). */}
+              {agencyLogoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={agencyLogoUrl}
+                  alt={agencyBrandName ? `${agencyBrandName} logo` : "Brand logo"}
+                  className="h-full w-full object-contain"
+                />
+              ) : (
+                <Image src="/brand/seldonframe-icon.svg" alt="SeldonFrame" width={20} height={20} />
+              )}
             </div>
             <div className="min-w-0">
-              {/* v1.25.1 — operator-session brand override: show the
-                  agency name as the primary brand, with "Powered by
-                  SeldonFrame" subtitle (or hide it when agency has
-                  hide_powered_by_badge=true via the chrome wrapper).
-                  Default SF branding stays for non-operator sessions. */}
+              {/* 2026-05-18 (later) — agency-level brand name. Previously
+                  gated on isOperatorSession (only flipped for sub-tenant
+                  magic-link sessions). Now flips whenever a white-label
+                  agency owns the workspace — both the sub-tenant operator
+                  AND the agency operator looking at their own dashboard
+                  see the agency identity instead of "SeldonFrame". */}
               <p className="text-sm font-semibold tracking-tight text-foreground">
-                {isOperatorSession && agencyBrandName ? agencyBrandName : "SeldonFrame"}
+                {agencyBrandName ?? "SeldonFrame"}
               </p>
               <p className="text-[11px] text-muted-foreground">
-                {isOperatorSession
-                  ? agencyBrandName
+                {agencyBrandName
+                  ? isOperatorSession
                     ? `${workspaceName}'s CRM`
-                    : `${workspaceName} portal`
+                    : isInsideClientWorkspace
+                      ? `${workspaceName} workspace`
+                      : "Agency dashboard"
                   : "Operating system for modern teams"}
               </p>
             </div>

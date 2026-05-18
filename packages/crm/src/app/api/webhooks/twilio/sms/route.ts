@@ -309,24 +309,67 @@ export async function POST(request: Request) {
     metadata: { twilio: body },
   });
 
+  // 2026-05-18 — precedence check (moved up). If a conversation step
+  // is currently paused on sms.replied for this contact (e.g.
+  // speed-to-lead's qualify_conversation), the conversation engine
+  // owns this reply. We must skip BOTH the message-trigger dispatcher
+  // AND the chatbot auto-reply, so the customer doesn't get three
+  // replies (agent LLM + appointment-confirm-sms agent + soul-aware
+  // chatbot). Without this guard, "tomorrow at 10am" routes to
+  // appointment-confirm-sms which then says "no upcoming appointment".
+  //
+  // The conversation engine still resumes through the sms.replied
+  // event below — we just block the OTHER paths.
+  let conversationOwnsReply = false;
+  if (contactId) {
+    const activeConversationWait = await db
+      .select({ id: workflowWaits.id })
+      .from(workflowWaits)
+      .innerJoin(workflowRuns, eq(workflowWaits.runId, workflowRuns.id))
+      .where(
+        and(
+          eq(workflowRuns.orgId, orgId),
+          eq(workflowWaits.eventType, "sms.replied"),
+          isNull(workflowWaits.resumedAt),
+          sql`${workflowWaits.matchPredicate}->>'contactId' = ${contactId}`,
+        ),
+      )
+      .limit(1);
+    if (activeConversationWait.length > 0) {
+      conversationOwnsReply = true;
+      logEvent("twilio_webhook_skipped_for_conversation", {
+        org_id: orgId,
+        contact_id: contactId,
+        wait_id: activeConversationWait[0].id,
+      });
+    }
+  }
+
   // SLICE 7 PR 1 C6: dispatch matching message-triggered agents.
   // Best-effort: errors are caught + logged inside the wrapper; never
   // propagate to the webhook response. PR 1 dispatcher is no-op until
   // message_triggers rows exist (PR 2 ships the first archetype +
   // installer + real runtime startRun wiring). Runs BEFORE handleIncomingTurn
   // so message-triggered agents can run concurrently with the Soul-aware
-  // reply path.
-  await dispatchTwilioInboundForMessageTriggers({
-    orgId,
-    from: fromNumber,
-    to: toNumber,
-    body: inboundBody,
-    externalMessageId,
-    receivedAt: new Date(),
-    contactId,
-    conversationId: null,
-  });
+  // reply path — UNLESS a conversation step is currently in flight,
+  // in which case the conversation owns the reply.
+  if (!conversationOwnsReply) {
+    await dispatchTwilioInboundForMessageTriggers({
+      orgId,
+      from: fromNumber,
+      to: toNumber,
+      body: inboundBody,
+      externalMessageId,
+      receivedAt: new Date(),
+      contactId,
+      conversationId: null,
+    });
+  }
 
+  // Always emit sms.replied — the conversation engine's pause_event
+  // listener is the path that resumes a paused conversation step. The
+  // chatbot path (handleIncomingTurn below) is gated separately by
+  // conversationOwnsReply.
   await emitSeldonEvent("sms.replied", {
     smsMessageId: inbound.id,
     contactId,
@@ -345,34 +388,7 @@ export async function POST(request: Request) {
   // falls back to the existing always-reply behavior so a degraded
   // classifier doesn't break currently-working workspaces.
   if (contactId) {
-    // 2026-05-18 — precedence check: if there's an ACTIVE conversation
-    // step (e.g. speed-to-lead's qualify_conversation) currently
-    // paused on sms.replied for this contact, the conversation engine
-    // owns this reply. Skip the chatbot auto-reply path entirely so
-    // the customer doesn't get TWO replies (one from the agent's LLM
-    // conversation, one from the soul-aware FAQ chatbot). Without this
-    // guard, the customer's reply gets a confused "we couldn't find
-    // your appointment" while the agent's qualification LLM also
-    // responds. Visible bug: operator received both replies.
-    const activeConversationWait = await db
-      .select({ id: workflowWaits.id })
-      .from(workflowWaits)
-      .innerJoin(workflowRuns, eq(workflowWaits.runId, workflowRuns.id))
-      .where(
-        and(
-          eq(workflowRuns.orgId, orgId),
-          eq(workflowWaits.eventType, "sms.replied"),
-          isNull(workflowWaits.resumedAt),
-          sql`${workflowWaits.matchPredicate}->>'contactId' = ${contactId}`,
-        ),
-      )
-      .limit(1);
-    if (activeConversationWait.length > 0) {
-      logEvent("twilio_webhook_skipped_for_conversation", {
-        org_id: orgId,
-        contact_id: contactId,
-        wait_id: activeConversationWait[0].id,
-      });
+    if (conversationOwnsReply) {
       return NextResponse.json({
         ok: true,
         matched: true,
