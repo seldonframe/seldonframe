@@ -1252,8 +1252,31 @@ export async function submitPublicBookingAction({
     });
   }
 
+  // 2026-05-18 — derive structured contact data from the public form.
+  // Operator reported the contact's PHONE was empty even though the
+  // booking form's SOUL-aware fields ask for phone. Root cause: the
+  // submit action only wrote firstName + email to contacts and stored
+  // everything else on booking metadata. Now we ALSO sync:
+  //   - first/last name split from fullName
+  //   - phone (if the intake form captured one)
+  //   - structured intake responses → contact.customFields so the
+  //     operator sees address / urgency / scope / timeline / budget
+  //     on the contact's record, not buried inside booking metadata
+  const responses = intakeResponses ?? {};
+  const trimmedName = fullName.trim();
+  const nameParts = trimmedName.split(/\s+/);
+  const firstName = nameParts.length > 0 ? nameParts[0] : trimmedName;
+  const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : null;
+  // Intake field keys come from booking-intake-fields.ts. Phone may
+  // arrive as "phone" (most archetypes) or with a custom id; pull
+  // the canonical one. Address: "address" across archetypes.
+  const intakePhone =
+    typeof responses.phone === "string" && responses.phone.trim().length > 0
+      ? responses.phone.trim()
+      : null;
+
   const [existing] = await db
-    .select({ id: contacts.id })
+    .select({ id: contacts.id, phone: contacts.phone, customFields: contacts.customFields, lastName: contacts.lastName })
     .from(contacts)
     .where(and(eq(contacts.orgId, bookingContext.orgId), eq(contacts.email, email)))
     .limit(1);
@@ -1265,10 +1288,13 @@ export async function submitPublicBookingAction({
       .insert(contacts)
       .values({
         orgId: bookingContext.orgId,
-        firstName: fullName,
+        firstName,
+        lastName,
         email,
+        phone: intakePhone,
         status: "lead",
         source: "booking",
+        customFields: { ...responses },
       })
       .returning({ id: contacts.id });
 
@@ -1276,6 +1302,26 @@ export async function submitPublicBookingAction({
 
     if (contactId) {
       await emitSeldonEvent("contact.created", { contactId }, { orgId: bookingContext.orgId });
+    }
+  } else {
+    // 2026-05-18 — backfill missing fields on an existing contact when
+    // the booking form gave us more data than we previously had. Never
+    // clobber an existing phone / lastName / customFields with empty
+    // values; only fill blanks. customFields merges shallowly with the
+    // previous JSON so older keys (e.g. from a prior booking) survive.
+    const updates: Record<string, unknown> = {};
+    if (!existing.phone && intakePhone) updates.phone = intakePhone;
+    if (!existing.lastName && lastName) updates.lastName = lastName;
+    const existingCustom = (existing.customFields as Record<string, unknown> | null) ?? {};
+    const mergedCustom = { ...existingCustom, ...responses };
+    if (Object.keys(responses).length > 0) {
+      updates.customFields = mergedCustom;
+    }
+    if (Object.keys(updates).length > 0) {
+      await db
+        .update(contacts)
+        .set({ ...updates, updatedAt: new Date() })
+        .where(eq(contacts.id, contactId));
     }
   }
 

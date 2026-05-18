@@ -170,8 +170,20 @@ export function registerCrmEventListeners() {
     // were all correct, the dispatch just never ran to completion
     // because emitSeldonEvent's Promise.allSettled resolved before
     // the inner .then() chain finished.
+    //
+    // 2026-05-18 (even later) — payload key mismatch was ALSO blocking
+    // dispatch. submitPublicBookingAction emits booking.created with
+    // payload {appointmentId, contactId} (per lib/bookings/actions.ts
+    // line ~1483). Reading data.bookingId returned undefined, so
+    // resolveOrgIdForBookingId('') returned null and the whole if()
+    // block silently no-op'd. Read BOTH keys so we cover all emit
+    // sites: appointmentId is the public-submit shape; bookingId is
+    // the agency/admin create shape.
     const data = event.data as Record<string, unknown>;
-    const bookingId = typeof data.bookingId === "string" ? data.bookingId : "";
+    const bookingId =
+      (typeof data.bookingId === "string" && data.bookingId) ||
+      (typeof data.appointmentId === "string" && data.appointmentId) ||
+      "";
     const apptTypeId =
       typeof data.appointmentTypeId === "string" ? data.appointmentTypeId : null;
     const bookingOrgId = await resolveOrgIdForBookingId(bookingId).catch(() => null);
