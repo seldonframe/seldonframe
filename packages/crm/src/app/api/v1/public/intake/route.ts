@@ -44,7 +44,35 @@ type SubmitBody = {
   formSlug?: unknown;
   answers?: unknown;
   workspace?: unknown;
+  // 2026-05-18 (later) — client-supplied dedup key. The form client
+  // generates a fresh idempotencyKey on its FIRST submit() call and
+  // resends it with the same value if a network retry happens.
+  // Server uses it to short-circuit duplicate submissions inside a
+  // 60s window so the agent dispatcher doesn't start two parallel
+  // speed-to-lead runs for the same form submission. Header
+  // `Idempotency-Key` is also accepted (and preferred — survives JSON
+  // body parse failures).
+  idempotencyKey?: unknown;
 };
+
+// 2026-05-18 (later) — in-memory dedup cache. Lives for the lifetime
+// of the lambda instance (~minutes). Maps idempotencyKey → expiresAt.
+// Cheap enough at the volume we operate at; a DB-backed cache is the
+// follow-up if we ever see cross-instance double-submits.
+const IDEMPOTENCY_CACHE = new Map<string, number>();
+const IDEMPOTENCY_TTL_MS = 60_000;
+
+function dedupSeen(key: string): boolean {
+  const now = Date.now();
+  // Sweep expired entries opportunistically.
+  for (const [k, expires] of IDEMPOTENCY_CACHE) {
+    if (expires < now) IDEMPOTENCY_CACHE.delete(k);
+  }
+  const existing = IDEMPOTENCY_CACHE.get(key);
+  if (existing && existing > now) return true;
+  IDEMPOTENCY_CACHE.set(key, now + IDEMPOTENCY_TTL_MS);
+  return false;
+}
 
 export async function POST(request: Request) {
   let body: SubmitBody;
@@ -52,6 +80,28 @@ export async function POST(request: Request) {
     body = (await request.json()) as SubmitBody;
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
+
+  // 2026-05-18 (later) — idempotency check. Header takes precedence
+  // over body field (header survives partial JSON parse failures).
+  // When the same key arrives twice within IDEMPOTENCY_TTL_MS, return
+  // a 200 OK with `deduplicated: true` so the form client still shows
+  // the completion UI but the backend doesn't double-emit form.submitted.
+  //
+  // Why both header AND body field: edge proxies sometimes strip
+  // custom headers; the body field is the bulletproof fallback. The
+  // form client sends both — we accept either.
+  const idempotencyKey =
+    request.headers.get("idempotency-key") ||
+    (typeof body.idempotencyKey === "string" ? body.idempotencyKey.trim() : "");
+  if (idempotencyKey && dedupSeen(idempotencyKey)) {
+    console.log(
+      JSON.stringify({
+        event: "public_intake_deduplicated",
+        idempotency_key: idempotencyKey,
+      }),
+    );
+    return NextResponse.json({ ok: true, deduplicated: true });
   }
 
   // v1.3.5 — orgSlug resolution: body-FIRST, host-FALLBACK on the

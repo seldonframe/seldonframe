@@ -724,6 +724,25 @@ const INTAKE_INTERACTIVITY_SCRIPT = `<script data-sf-intake="formbricks-stack-v1
   }
 
   function submit(){
+    // 2026-05-18 (later) — debounce. A fast double-click on Next was
+    // firing submit() twice (verified in prod logs: TWO POSTs to
+    // /api/v1/public/intake at ~1s apart with identical body, which
+    // spawned TWO agent runs that each sent the opener SMS to the
+    // customer). Once submit() is called we set state.submitting and
+    // every subsequent call is a no-op. Also generate an idempotency
+    // key on the FIRST submit and pass it on every retry so the
+    // server can dedupe even if the network retried under the hood.
+    if (state.submitting) return;
+    state.submitting = true;
+    // RFC-4122-ish random key. Crypto-grade isn't required — the
+    // server only uses this for short-window dedup. Math.random is
+    // fine for collisions within a 30s window per (orgSlug,formSlug).
+    if (!state.idempotencyKey) {
+      state.idempotencyKey =
+        Date.now().toString(36) + '-' +
+        Math.random().toString(36).slice(2, 10) + '-' +
+        Math.random().toString(36).slice(2, 10);
+    }
     // v1.3.5 — orgSlug resolution is path-FIRST, subdomain-FALLBACK.
     // Path shape: /forms/<orgSlug>/<formSlug> on canonical URLs. On a
     // workspace subdomain (<slug>.app.seldonframe.com/intake) the proxy
@@ -747,10 +766,14 @@ const INTAKE_INTERACTIVITY_SCRIPT = `<script data-sf-intake="formbricks-stack-v1
       formSlug: formSlug,
       answers: state.answers,
       workspace: data.workspaceName,
+      idempotencyKey: state.idempotencyKey,
     };
     fetch('/api/v1/public/intake', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': state.idempotencyKey,
+      },
       body: JSON.stringify(payload),
     }).then(function(res){
       // Show completion regardless of response — submission failures are
