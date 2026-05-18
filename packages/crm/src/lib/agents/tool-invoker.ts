@@ -1,10 +1,46 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { activities, bookings, contacts } from "@/db/schema";
+import {
+  activities,
+  bookings,
+  contacts,
+  organizations,
+  orgMembers,
+} from "@/db/schema";
 import type { ToolInvoker } from "@/lib/workflow/types";
 import { sendEmailFromApi } from "@/lib/emails/api";
 import { sendSmsFromApi } from "@/lib/sms/api";
 import { emitSeldonEvent } from "@/lib/events/bus";
+
+// 2026-05-18 — agent-initiated activities have no human actor, but
+// activities.user_id is NOT NULL with FK to users. We resolve a sane
+// actor in this order:
+//   1. organizations.ownerId (typical workspace shape)
+//   2. orgMembers.userId for this org (any team member as fallback)
+//   3. throw — no user to attribute the activity to, fail loudly so
+//      the operator sees the configuration gap rather than silently
+//      losing audit rows
+// A dedicated `agent_user` per workspace is a cleaner V1.1 — for now
+// the org owner is the right semantic owner of agent actions.
+async function resolveAgentActorUserId(orgId: string): Promise<string> {
+  const [org] = await db
+    .select({ ownerId: organizations.ownerId })
+    .from(organizations)
+    .where(eq(organizations.id, orgId))
+    .limit(1);
+  if (org?.ownerId) return org.ownerId;
+
+  const [member] = await db
+    .select({ userId: orgMembers.userId })
+    .from(orgMembers)
+    .where(eq(orgMembers.orgId, orgId))
+    .limit(1);
+  if (member?.userId) return member.userId;
+
+  throw new Error(
+    `resolveAgentActorUserId: no owner or member found for org ${orgId} — agent activities require a user_id (activities.user_id is NOT NULL)`,
+  );
+}
 
 /**
  * WS3.1.3 — minimal in-process tool invoker for the agent runtime.
@@ -54,20 +90,19 @@ const TOOL_HANDLERS: Record<string, ToolHandler> = {
       throw new Error("create_activity: contact_id is required");
     }
 
-    // We deliberately don't require a userId here — agent-initiated
-    // activities don't have an interactive user. Schema requires
-    // userId NOT NULL though, so we fall back to the org's owner.
-    // Looking up owner inline keeps this slice surgical; a dedicated
-    // `agent_user` row per workspace is V1.1.
+    // 2026-05-18 — resolve a real user_id (org owner or fallback to
+    // a member). Previously this passed orgId-as-userId which crashed
+    // every speed-to-lead run at step 4 (log_booking_activity) with
+    // FK violation against users(id). Visible in
+    // workflow_step_results.error_message.
+    const actorUserId = await resolveAgentActorUserId(orgId);
+
     const [created] = await db
       .insert(activities)
       .values({
         orgId,
         contactId,
-        // userId NOT NULL — use a sentinel that tests the agent owner
-        // path. For an MVP we'll use a placeholder; replace with the
-        // org owner lookup once the agent-actor table lands.
-        userId: orgId, // FK constraint will catch this if it doesn't resolve
+        userId: actorUserId,
         type,
         subject,
         body,
