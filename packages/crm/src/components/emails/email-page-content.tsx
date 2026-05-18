@@ -41,6 +41,17 @@ type Tab = "templates" | "sent" | "settings";
 
 type EmailIntegrationsState = {
   resend: { connected: boolean; maskedKey: string };
+  // 2026-05-18 — Twilio surfaced alongside Resend because the
+  // /clients/:slug/ready marketing CTA mentions "Email + SMS Drip"
+  // and routes operators to /emails. Before this prop, /emails had
+  // no Twilio surface and operators had to wander to
+  // /settings/integrations to connect SMS.
+  twilio: {
+    connected: boolean;
+    accountSid: string;
+    fromNumber: string;
+    authTokenHint: string;
+  };
   newsletter: {
     kit: { connected: boolean; maskedKey: string };
     mailchimp: { connected: boolean; maskedKey: string };
@@ -223,6 +234,49 @@ export function EmailPageContent({
                   <input type="hidden" name="service" value="resend" />
                   <input className="crm-input h-10 w-full px-3" name="apiKey" placeholder="re_xxxxxxxxx" type="password" required />
                   <button type="submit" className="crm-button-secondary h-9 px-4 text-xs">Connect Resend</button>
+                </form>
+              )}
+            </div>
+
+            {/* 2026-05-18 — Transactional SMS (Twilio) block. Mirrors
+                the Resend block above but takes the three Twilio
+                fields (Account SID, Auth Token, From Number). Routes
+                through the same saveIntegrationAction with
+                service="twilio" — the server-side updateIntegration
+                already knows how to handle Twilio. */}
+            <div className="rounded-lg border p-4 space-y-3">
+              <div>
+                <h4 className="text-sm font-medium text-foreground">Transactional SMS (Twilio)</h4>
+                <p className="mt-1 text-xs text-muted-foreground">Bring your own Twilio credentials for outbound SMS (booking confirmations, 24h reminders, intake auto-replies).</p>
+              </div>
+
+              {emailIntegrations.twilio.connected ? (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="rounded-full border border-positive/30 bg-positive/10 px-2 py-0.5 text-[11px] text-positive">Connected</span>
+                    <p className="text-xs font-mono text-muted-foreground">
+                      {emailIntegrations.twilio.fromNumber || emailIntegrations.twilio.accountSid}
+                    </p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Account SID: <span className="font-mono text-foreground">{emailIntegrations.twilio.accountSid}</span>
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    From: <span className="font-mono text-foreground">{emailIntegrations.twilio.fromNumber || "—"}</span> &nbsp;·&nbsp;
+                    Auth token: <span className="font-mono text-foreground">{emailIntegrations.twilio.authTokenHint}</span>
+                  </p>
+                  <form action={disconnectIntegrationAction}>
+                    <input type="hidden" name="service" value="twilio" />
+                    <button type="submit" className="crm-button-secondary h-9 px-4 text-xs">Disconnect Twilio</button>
+                  </form>
+                </div>
+              ) : (
+                <form action={saveIntegrationAction} className="space-y-2">
+                  <input type="hidden" name="service" value="twilio" />
+                  <input className="crm-input h-10 w-full px-3" name="accountSid" placeholder="Twilio Account SID (ACxxxxxxxx)" required />
+                  <input className="crm-input h-10 w-full px-3" name="authToken" placeholder="Twilio Auth Token" type="password" required />
+                  <input className="crm-input h-10 w-full px-3" name="fromNumber" placeholder="From number (+15551234567)" required />
+                  <button type="submit" className="crm-button-secondary h-9 px-4 text-xs">Connect Twilio</button>
                 </form>
               )}
             </div>

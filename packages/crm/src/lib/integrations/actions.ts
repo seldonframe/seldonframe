@@ -320,6 +320,17 @@ export async function disconnectIntegrationAction(formData: FormData) {
 
 export type EmailIntegrationsViewModel = {
   resend: { connected: boolean; maskedKey: string };
+  // 2026-05-18 — Twilio surfaced on /emails because the "Email + SMS
+  // Drip" CTA on /clients/:slug/ready routes operators here expecting
+  // to wire BOTH transactional channels. Before this prop, operators
+  // could connect Resend but had no path to add a Twilio key without
+  // wandering into /settings/integrations.
+  twilio: {
+    connected: boolean;
+    accountSid: string;
+    fromNumber: string;
+    authTokenHint: string;
+  };
   newsletter: {
     kit: { connected: boolean; maskedKey: string };
     mailchimp: { connected: boolean; maskedKey: string };
@@ -348,11 +359,22 @@ export async function getEmailIntegrationsSettings(): Promise<EmailIntegrationsV
   const resendKey = tryDecrypt(integrations.resend?.apiKey);
   const newsletterKey = tryDecrypt(integrations.newsletter?.apiKey);
   const activeProvider = integrations.newsletter?.provider ?? null;
+  // 2026-05-18 — Twilio auth token isn't surfaced to the UI; we only
+  // expose a "•••" hint so the operator can see something IS stored
+  // without leaking the secret. accountSid + fromNumber are not
+  // secrets and ARE surfaced (operator chose them at connect time).
+  const twilioAuthToken = tryDecrypt(integrations.twilio?.authToken);
 
   return {
     resend: {
       connected: Boolean(integrations.resend?.connected && resendKey),
       maskedKey: maskLastEight(resendKey),
+    },
+    twilio: {
+      connected: Boolean(integrations.twilio?.connected && twilioAuthToken),
+      accountSid: integrations.twilio?.accountSid ?? "",
+      fromNumber: integrations.twilio?.fromNumber ?? "",
+      authTokenHint: twilioAuthToken ? "••••••••" : "",
     },
     newsletter: {
       kit: {
@@ -424,6 +446,14 @@ export async function saveEmailIntegrationAction(formData: FormData) {
     fromName: String(formData.get("fromName") ?? ""),
     listId: String(formData.get("listId") ?? ""),
     publicationId: String(formData.get("publicationId") ?? ""),
+    // 2026-05-18 — Twilio fields now accepted by the same action so
+    // /emails can connect Twilio without redirecting to
+    // /settings/integrations. The user's marketing copy on
+    // /clients/:slug/ready promised "Email + SMS Drip" but the
+    // landing surface had no Twilio block until this change.
+    accountSid: String(formData.get("accountSid") ?? ""),
+    authToken: String(formData.get("authToken") ?? ""),
+    fromNumber: String(formData.get("fromNumber") ?? ""),
   });
 }
 

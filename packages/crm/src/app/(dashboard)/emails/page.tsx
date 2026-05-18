@@ -13,6 +13,14 @@ import {
 // is rendered ABOVE the existing template/sent/integrations content so
 // operators land on the new editor first.
 import { listOutboundTriggers } from "@/lib/messaging/actions";
+// 2026-05-18 — Lazy-seed backfill for workspaces that pre-date the
+// trigger-seeding code (or whose creation flow somehow missed it).
+// seedDefaultOutboundTriggers is idempotent (unique index +
+// onConflictDoNothing) so calling it on every /emails visit is safe
+// and self-healing. Without this, workspaces created before the
+// 2026-05-18 messaging-layer slices never get triggers and bookings
+// silently produce no confirmation emails.
+import { seedDefaultOutboundTriggers } from "@/lib/messaging/seed-default-triggers";
 import { OutboundTriggersSection } from "@/components/messaging/outbound-triggers-section";
 import { EmailPageContent } from "@/components/emails/email-page-content";
 
@@ -26,6 +34,18 @@ import { EmailPageContent } from "@/components/emails/email-page-content";
 
 export default async function EmailsPage() {
   const orgId = await getOrgId();
+
+  // 2026-05-18 — Lazy-seed default outbound triggers for workspaces
+  // that pre-date the trigger-seeding code (or whose creation flow
+  // somehow skipped it). Idempotent (unique index + onConflictDoNothing)
+  // so calling on every /emails visit is safe and self-healing.
+  // Without this, the dispatcher silently no-ops for pre-existing
+  // workspaces (triggers.length === 0) and no confirmation emails fire.
+  if (orgId) {
+    await seedDefaultOutboundTriggers(orgId).catch((err) => {
+      console.warn("[emails] seedDefaultOutboundTriggers failed:", err);
+    });
+  }
 
   const [templates, rows, emailIntegrations, newLeadsRow, outboundTriggers] = await Promise.all([
     listEmailTemplates(),
@@ -104,6 +124,12 @@ export default async function EmailsPage() {
         emailIntegrations={
           emailIntegrations ?? {
             resend: { connected: false, maskedKey: "" },
+            twilio: {
+              connected: false,
+              accountSid: "",
+              fromNumber: "",
+              authTokenHint: "",
+            },
             newsletter: {
               kit: { connected: false, maskedKey: "" },
               mailchimp: { connected: false, maskedKey: "" },
