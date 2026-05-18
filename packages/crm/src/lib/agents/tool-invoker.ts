@@ -103,14 +103,29 @@ const TOOL_HANDLERS: Record<string, ToolHandler> = {
     if (!appointmentTypeId)
       throw new Error("create_booking: appointment_type_id is required");
 
-    const startsAt =
+    // 2026-05-18 — try to parse starts_at. If the value is missing,
+    // the literal placeholder string "{{preferred_start}}" (conversation
+    // engine didn't extract it), or any other unparseable shape, fall
+    // back to the next business-hours slot 24h+ from now. This
+    // accommodates the speed-to-lead pipeline's current limitation:
+    // the conversation step no-ops (engine not wired yet), so
+    // preferred_start is never captured. Booking the next reasonable
+    // slot is more useful than failing the run.
+    const parseAttempt =
       startsAtRaw instanceof Date
         ? startsAtRaw
-        : typeof startsAtRaw === "string" || typeof startsAtRaw === "number"
+        : typeof startsAtRaw === "string" && !startsAtRaw.includes("{{")
           ? new Date(startsAtRaw)
-          : null;
-    if (!startsAt || Number.isNaN(startsAt.getTime())) {
-      throw new Error("create_booking: starts_at must be a valid date");
+          : typeof startsAtRaw === "number"
+            ? new Date(startsAtRaw)
+            : null;
+    let startsAt: Date;
+    let usedFallback = false;
+    if (parseAttempt && !Number.isNaN(parseAttempt.getTime())) {
+      startsAt = parseAttempt;
+    } else {
+      startsAt = nextBusinessHourSlot(new Date());
+      usedFallback = true;
     }
 
     // Load the appointment-type template (status='template') to get
@@ -203,6 +218,7 @@ const TOOL_HANDLERS: Record<string, ToolHandler> = {
         contact_id: contactId,
         starts_at: startsAt.toISOString(),
         ends_at: endsAt.toISOString(),
+        used_fallback_slot: usedFallback,
       },
     };
   },
@@ -273,6 +289,31 @@ const TOOL_HANDLERS: Record<string, ToolHandler> = {
     };
   },
 };
+
+// 2026-05-18 — fallback slot picker when create_booking is called
+// without a valid starts_at. The speed-to-lead conversation engine
+// isn't wired (separate slice), so {{preferred_start}} captures
+// don't happen and the placeholder reaches create_booking unresolved.
+// Rather than fail the run, we book the next reasonable slot.
+//
+// Heuristic:
+//   - 24 hours from now
+//   - Bumped to Monday if it lands on Sat or Sun
+//   - Snapped to 10:00 UTC (rough business-hours anchor; per-workspace
+//     timezone-aware version is a follow-up)
+//
+// This is intentionally crude — operators get a real meeting slot
+// they can adjust through the contact's booking record. Better than
+// "form submitted but no follow-through" which is the current state.
+function nextBusinessHourSlot(now: Date): Date {
+  const candidate = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  // 0 = Sun, 6 = Sat — bump forward to Monday in either case.
+  const day = candidate.getUTCDay();
+  if (day === 0) candidate.setUTCDate(candidate.getUTCDate() + 1); // Sun → Mon
+  if (day === 6) candidate.setUTCDate(candidate.getUTCDate() + 2); // Sat → Mon
+  candidate.setUTCHours(15, 0, 0, 0); // 10 AM ET / 3 PM UTC — rough default
+  return candidate;
+}
 
 /**
  * Build a runtime ToolInvoker for a given workspace. Closes over
