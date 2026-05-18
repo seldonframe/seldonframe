@@ -6,11 +6,13 @@ import { decryptValue } from "@/lib/encryption";
 import { emitSeldonEvent } from "@/lib/events/bus";
 import { logEvent } from "@/lib/observability/log";
 import { handleIncomingTurn } from "@/lib/conversation/runtime";
+import { classifyInboundIntent, shouldAutoReplyForIntent } from "@/lib/messaging/classify-intent";
 import { findContactByPhone, persistInboundSms } from "@/lib/sms/api";
 import { toE164 } from "@/lib/sms/providers";
-import { addPhoneSuppression, isStopKeyword } from "@/lib/sms/suppression";
+import { addPhoneSuppression, isHelpKeyword, isStopKeyword } from "@/lib/sms/suppression";
 import { verifyTwilioSignature } from "@/lib/sms/webhook-verify";
 import { dispatchTwilioInboundForMessageTriggers } from "@/lib/agents/message-trigger-wiring";
+import type { OrgSoul } from "@/lib/soul/types";
 
 export const runtime = "nodejs";
 
@@ -35,6 +37,33 @@ async function resolveOrgByFromNumber(fromNumber: string) {
   }
 
   return null;
+}
+
+/**
+ * Build the boilerplate response sent when a customer texts HELP / INFO
+ * (Slice 4). Carriers expect a deterministic, non-marketing reply that
+ * names the business and offers a support contact. We pull the
+ * workspace name + the soul-stored business phone when present.
+ */
+async function buildHelpReply(orgId: string): Promise<string> {
+  const [row] = await db
+    .select({ name: organizations.name, soul: organizations.soul })
+    .from(organizations)
+    .where(eq(organizations.id, orgId))
+    .limit(1);
+
+  const businessName = row?.name?.trim() || "this business";
+  const soul = (row?.soul ?? null) as OrgSoul | null;
+  const soulRaw = (soul ?? {}) as unknown as Record<string, unknown>;
+  const businessPhone = typeof soulRaw.phone === "string" ? soulRaw.phone.trim() : "";
+
+  const supportLine = businessPhone
+    ? `Reach ${businessName} at ${businessPhone}.`
+    : `Reach ${businessName} by replying to this thread.`;
+
+  // Keep under 160 chars including the STOP footer so this lands in
+  // one SMS segment for the operator's customer.
+  return `${businessName}: ${supportLine} Reply STOP to unsubscribe.`;
 }
 
 async function loadTwilioAuthTokenForOrg(orgId: string) {
@@ -244,6 +273,30 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, action: "auto_suppressed" });
   }
 
+  // HELP / INFO keyword (Slice 4): Carriers expect a deterministic
+  // non-marketing reply that names the business and offers a support
+  // contact. Unlike STOP, we don't suppress — the contact can still
+  // receive transactional + conversational messages. We send via
+  // sendSmsFromApi for the full audit-log treatment (so the reply lands
+  // in /conversations alongside other operator outbound).
+  if (isHelpKeyword(inboundBody)) {
+    const reply = await buildHelpReply(orgId);
+    const { sendSmsFromApi } = await import("@/lib/sms/api");
+    await sendSmsFromApi({
+      orgId,
+      userId: null,
+      contactId: null,
+      toNumber: fromNumber,
+      body: reply,
+    }).catch((error) => {
+      logEvent("twilio_webhook_help_send_failed", {
+        org_id: orgId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
+    return NextResponse.json({ ok: true, action: "help_reply" });
+  }
+
   const contactId = await findContactByPhone(orgId, fromNumber);
 
   const inbound = await persistInboundSms({
@@ -283,34 +336,58 @@ export async function POST(request: Request) {
   // If we know which contact this is from, route through the runtime
   // for a Soul-aware reply. Anonymous inbound (phone not in CRM) is
   // persisted but not auto-replied to.
+  //
+  // Slice 4: gate the auto-reply on intent classification. Per the
+  // plan's locked decision #2, only FAQ / pricing / scheduling intents
+  // get an auto-reply — anything ambiguous (complaints, unclear asks)
+  // lands in the operator's inbox unread instead. classifyInboundIntent
+  // returns null on failure, in which case shouldAutoReplyForIntent
+  // falls back to the existing always-reply behavior so a degraded
+  // classifier doesn't break currently-working workspaces.
   if (contactId) {
-    const result = await handleIncomingTurn({
-      orgId,
-      contactId,
-      channel: "sms",
-      incomingMessage: inboundBody,
-      smsMessageId: inbound.id,
+    const intent = await classifyInboundIntent({ orgId, body: inboundBody });
+    const autoReply = shouldAutoReplyForIntent(intent);
+
+    logEvent("twilio_webhook_intent_classified", {
+      org_id: orgId,
+      contact_id: contactId,
+      intent: intent ?? "unknown",
+      auto_reply: autoReply,
     });
 
-    // Send the generated reply back via the outbound SMS path.
-    if (result.responseText) {
-      // Intentionally re-export through sendSmsFromApi for the full
-      // suppression-check + activity-log + webhook dispatch treatment.
-      const { sendSmsFromApi } = await import("@/lib/sms/api");
-      await sendSmsFromApi({
+    if (autoReply) {
+      const result = await handleIncomingTurn({
         orgId,
-        userId: null,
         contactId,
-        toNumber: fromNumber,
-        body: result.responseText,
-      }).catch((error) => {
-        logEvent("twilio_webhook_reply_send_failed", {
-          org_id: orgId,
-          contact_id: contactId,
-          error: error instanceof Error ? error.message : String(error),
-        });
+        channel: "sms",
+        incomingMessage: inboundBody,
+        smsMessageId: inbound.id,
       });
+
+      // Send the generated reply back via the outbound SMS path.
+      if (result.responseText) {
+        // Intentionally re-export through sendSmsFromApi for the full
+        // suppression-check + activity-log + webhook dispatch treatment.
+        const { sendSmsFromApi } = await import("@/lib/sms/api");
+        await sendSmsFromApi({
+          orgId,
+          userId: null,
+          contactId,
+          toNumber: fromNumber,
+          body: result.responseText,
+        }).catch((error) => {
+          logEvent("twilio_webhook_reply_send_failed", {
+            org_id: orgId,
+            contact_id: contactId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
+      }
     }
+    // else: classified as 'other' (complaint / ambiguous). Inbound row
+    // is already persisted + sms.replied was emitted earlier, so the
+    // /conversations inbox will surface it as unread for the operator
+    // to handle manually.
   }
 
   return NextResponse.json({ ok: true, matched: true, contactId });
