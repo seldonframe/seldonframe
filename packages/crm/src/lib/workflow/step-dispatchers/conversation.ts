@@ -32,6 +32,11 @@ import { smsMessages, contacts, organizations } from "@/db/schema";
 import { getAIClient } from "@/lib/ai/client";
 import type { ConversationStep } from "../../agents/validator";
 import type { NextAction, RuntimeContext, StoredRun } from "../types";
+// 2026-05-18 — V1.1 tool-use: LLM can call check_availability +
+// create_booking inside the conversation so it can propose real
+// open slots instead of just asking "what time works?" The handler
+// table is shared with mcp_tool_call steps; same orgId-bound invoker.
+import { makeAgentToolInvoker } from "@/lib/agents/tool-invoker";
 
 // 2026-05-18 — final placeholder interpolation before sending the
 // initial/reply message. The synthesizer fills $placeholders at
@@ -69,7 +74,11 @@ async function buildRunTimeVars(
       .where(and(eq(contacts.orgId, orgId), eq(contacts.id, contactId)))
       .limit(1),
     db
-      .select({ name: organizations.name, soul: organizations.soul })
+      .select({
+        name: organizations.name,
+        soul: organizations.soul,
+        timezone: organizations.timezone,
+      })
       .from(organizations)
       .where(eq(organizations.id, orgId))
       .limit(1),
@@ -87,6 +96,7 @@ async function buildRunTimeVars(
     "contact.phone": contactRow?.phone ?? "",
     businessName: orgRow?.name ?? "",
     businessPhone,
+    timezone: orgRow?.timezone ?? "UTC",
   };
 }
 
@@ -208,11 +218,18 @@ function parseExitBlock(output: string): {
   return { exiting: true, extracted, replyText: "" };
 }
 
-async function buildSystemPrompt(step: ConversationStep): Promise<string> {
+async function buildSystemPrompt(
+  step: ConversationStep,
+  runtimeVars: Record<string, string>,
+  appointmentTypeId: string | null,
+): Promise<string> {
   const extractFields = Object.entries(step.on_exit.extract)
     .map(([key, desc]) => `  - "${key}": ${desc}`)
     .join("\n");
-  return `You are qualifying a customer lead over ${step.channel.toUpperCase()}. Your goal:
+  const toolsHint = appointmentTypeId
+    ? `\nYou have a tool available: check_availability(appointment_type_id="${appointmentTypeId}", from_date?, max_results?). Call it BEFORE proposing a specific time so you only suggest slots that are actually open. The returned slots are UTC ISO timestamps — convert to the customer's local time (workspace TZ is ${runtimeVars.timezone || "UTC"}) when discussing with them.\n`
+    : "";
+  return `You are qualifying a customer lead over ${step.channel.toUpperCase()} for ${runtimeVars.businessName || "the business"}. Your goal:
 
 ${step.exit_when}
 
@@ -225,13 +242,53 @@ Required extracted fields (each MUST be in the <exit> JSON):
 ${extractFields}
 
 Until the criteria are met, respond CONVERSATIONALLY (one short ${step.channel.toUpperCase()}-friendly message, under 320 characters). Ask one specific follow-up question at a time. Do not emit the <exit> block until you have ALL required fields and the criteria are clearly met.
-
+${toolsHint}
 Critical:
 - Never mention "Seldon" or "SeldonFrame".
 - Sound like a real person from the business — friendly, concise, no corporate-speak.
+- Use the customer's first name (${runtimeVars["contact.firstName"] || "the contact"}) when you know it. Refer to the business as "${runtimeVars.businessName || "us"}".
+- Never emit literal {{placeholder}} tokens in your reply — always say the actual name / business / phone.
 - If the customer goes off-topic, gently steer back.
 - Hard limit: 6 turns total. On turn 6, emit the <exit> block with whatever you have (use "unknown" or "not_asked" for missing values).`;
 }
+
+// 2026-05-18 — V1.1 tool-use enabled LLM call. The LLM can request
+// check_availability (read real open slots) or create_booking (book
+// the slot directly) inside the conversation. The agentic inner loop
+// (call → tool → result → call again) runs synchronously within one
+// inbound-SMS → reply cycle. Capped at MAX_TOOL_ITERS to prevent
+// runaway. When the LLM returns a text response (or <exit> block),
+// the loop exits.
+const MAX_TOOL_ITERS = 3;
+const AGENT_TOOLS: Array<{
+  name: string;
+  description: string;
+  input_schema: Record<string, unknown>;
+}> = [
+  {
+    name: "check_availability",
+    description:
+      "List the next open booking slots for the appointment type. Use this BEFORE proposing a time so you only suggest slots that are actually open. Returns up to max_results slots grouped by day.",
+    input_schema: {
+      type: "object",
+      properties: {
+        appointment_type_id: {
+          type: "string",
+          description: "The appointment type id (use the value from $appointmentTypeId in the agent config).",
+        },
+        from_date: {
+          type: "string",
+          description: "ISO date (YYYY-MM-DD) to start looking from. Default: today.",
+        },
+        max_results: {
+          type: "number",
+          description: "Maximum number of slots to return. Default 10, max 20.",
+        },
+      },
+      required: ["appointment_type_id"],
+    },
+  },
+];
 
 async function callLLM(
   orgId: string,
@@ -240,21 +297,86 @@ async function callLLM(
 ): Promise<string | null> {
   const ai = await getAIClient({ orgId });
   if (!ai.client) return null;
+  const toolInvoker = makeAgentToolInvoker(orgId);
+  type AnthropicMessage = { role: "user" | "assistant"; content: unknown };
+  const messages: AnthropicMessage[] = transcript.map((t) => ({
+    role: t.role,
+    content: t.content,
+  }));
+
   try {
-    const response = await ai.client.messages.create({
-      model: "claude-sonnet-4-5",
-      max_tokens: 800,
-      system: systemPrompt,
-      messages: transcript.map((t) => ({
-        role: t.role,
-        content: t.content,
-      })),
-    });
-    return response.content
-      .filter((block) => block.type === "text")
-      .map((b) => (b as { type: "text"; text: string }).text)
-      .join("\n")
-      .trim();
+    for (let iter = 0; iter < MAX_TOOL_ITERS; iter += 1) {
+      const response = await ai.client.messages.create({
+        model: "claude-sonnet-4-5",
+        max_tokens: 800,
+        system: systemPrompt,
+        tools: AGENT_TOOLS as never,
+        messages: messages as never,
+      });
+
+      const blocks = response.content as Array<{
+        type: string;
+        text?: string;
+        id?: string;
+        name?: string;
+        input?: Record<string, unknown>;
+      }>;
+      const toolUses = blocks.filter((b) => b.type === "tool_use");
+
+      if (toolUses.length === 0) {
+        // No tool calls — gather text and return.
+        return blocks
+          .filter((b) => b.type === "text")
+          .map((b) => b.text ?? "")
+          .join("\n")
+          .trim();
+      }
+
+      // Tool calls present — execute each, append to messages, loop.
+      // Append the assistant's tool-use turn first (Anthropic
+      // requires the prior assistant content in order).
+      messages.push({ role: "assistant", content: blocks });
+
+      const toolResults: Array<{
+        type: "tool_result";
+        tool_use_id: string;
+        content: string;
+        is_error?: boolean;
+      }> = [];
+      for (const use of toolUses) {
+        try {
+          const result = await toolInvoker(
+            use.name ?? "",
+            (use.input ?? {}) as Record<string, unknown>,
+          );
+          toolResults.push({
+            type: "tool_result",
+            tool_use_id: use.id ?? "",
+            content: JSON.stringify(result),
+          });
+        } catch (err) {
+          toolResults.push({
+            type: "tool_result",
+            tool_use_id: use.id ?? "",
+            content:
+              err instanceof Error ? err.message : String(err),
+            is_error: true,
+          });
+        }
+      }
+      messages.push({ role: "user", content: toolResults });
+      // Loop continues — LLM gets tool results and decides what's next.
+    }
+    // Hit MAX_TOOL_ITERS without a text response. Return null so the
+    // dispatcher falls through to advancing without a reply (rare).
+    console.warn(
+      JSON.stringify({
+        event: "conversation.tool_iter_cap_hit",
+        orgId,
+        max: MAX_TOOL_ITERS,
+      }),
+    );
+    return null;
   } catch (err) {
     console.warn(
       JSON.stringify({
@@ -481,7 +603,30 @@ export async function dispatchConversation(
     },
   ];
 
-  const systemPrompt = await buildSystemPrompt(step);
+  // Pull the appointment_type_id from the run's spec — find the
+  // downstream create_booking step (if any) and grab its arg. The
+  // value was substituted at synthesis time, so it's a real id.
+  // Used by buildSystemPrompt to teach the LLM the tool signature.
+  let appointmentTypeId: string | null = null;
+  try {
+    const specSteps = (run.specSnapshot as unknown as { steps?: Array<Record<string, unknown>> })?.steps ?? [];
+    for (const s of specSteps) {
+      if (
+        s.type === "mcp_tool_call" &&
+        s.tool === "create_booking" &&
+        s.args &&
+        typeof s.args === "object" &&
+        typeof (s.args as Record<string, unknown>).appointment_type_id === "string"
+      ) {
+        appointmentTypeId = (s.args as Record<string, unknown>).appointment_type_id as string;
+        break;
+      }
+    }
+  } catch {
+    appointmentTypeId = null;
+  }
+
+  const systemPrompt = await buildSystemPrompt(step, runtimeVars, appointmentTypeId);
   const llmOutput = await callLLM(run.orgId, systemPrompt, updatedTranscript);
 
   // If LLM failed entirely, advance to next step with empty extract —
