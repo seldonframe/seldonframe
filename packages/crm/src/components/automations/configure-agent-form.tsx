@@ -98,6 +98,15 @@ const PLACEHOLDER_LABELS: Record<string, string> = {
   $smsKeyword: "SMS keyword to listen for",
   $bookingSlug: "Booking type",
   $weatherProvider: "Weather provider",
+  // soul_copy fields — these are the agent's voice
+  $openingMessage: "Opening SMS",
+  $qualificationCriteria: "Qualification criteria",
+  $confirmationSubject: "Confirmation email — subject",
+  $confirmationBody: "Confirmation email — body",
+  $reviewRequestBody: "Review request message",
+  $winbackBody: "Win-back message",
+  $digestBody: "Daily digest content",
+  $reminderMessage: "Reminder message",
 };
 
 function placeholderLabel(key: string): string {
@@ -154,6 +163,14 @@ export function ConfigureAgentForm({
   specTemplate,
 }: ConfigureAgentFormProps) {
   const userInputPlaceholders = placeholders.filter((p) => p.kind === "user_input");
+  // 2026-05-18 — surface soul_copy placeholders too. These are the
+  // "fat skill" (Karpathy frame): natural-language prose that drives
+  // what the agent SAYS — opening SMS, qualification criteria, email
+  // copy. Synthesized by Claude at agent-create time, but operators
+  // should be able to override per-workspace without involving us.
+  // Antifragile: when Claude improves, the operator's edits stay; the
+  // synthesized defaults just get smarter under them.
+  const soulCopyPlaceholders = placeholders.filter((p) => p.kind === "soul_copy");
   const initial = savedConfig ?? {
     placeholders: {},
     temperature: 0.7,
@@ -276,6 +293,55 @@ export function ConfigureAgentForm({
                 formOptions={formOptions}
                 appointmentOptions={appointmentOptions}
               />
+            ))}
+          </fieldset>
+        ) : null}
+
+        {/* 2026-05-18 — Agent voice (soul_copy placeholders).
+            Editable prose that drives what the agent says — opening
+            SMS, qualification criteria, confirmation email. Each
+            field has a "Reset" button that clears the override and
+            lets Claude's synthesized default take over again. Karpathy
+            frame: this is the fat skill; the harness above is thin. */}
+        {soulCopyPlaceholders.length > 0 ? (
+          <fieldset className="rounded-xl border bg-card p-5 space-y-4">
+            <legend className="-ml-1 px-1 text-sm font-semibold text-foreground">
+              Agent voice
+            </legend>
+            <p className="text-xs text-muted-foreground -mt-1">
+              How the agent talks to your customers. Each field starts with a smart default Claude synthesized from your business soul — override per workspace to match your voice. Edits don&apos;t lose the default; click Reset to restore.
+            </p>
+            {soulCopyPlaceholders.map((p) => (
+              <div key={p.key} className="space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <label
+                    htmlFor={`soul-${p.key}`}
+                    className="text-sm font-medium text-foreground"
+                  >
+                    {placeholderLabel(p.key)}
+                  </label>
+                  {placeholderValues[p.key] ? (
+                    <button
+                      type="button"
+                      onClick={() => setPlaceholder(p.key, "")}
+                      className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
+                    >
+                      Reset to default
+                    </button>
+                  ) : null}
+                </div>
+                <textarea
+                  id={`soul-${p.key}`}
+                  value={placeholderValues[p.key] ?? ""}
+                  onChange={(e) => setPlaceholder(p.key, e.target.value)}
+                  placeholder={p.example ?? p.description}
+                  rows={p.key === "$qualificationCriteria" || p.key === "$confirmationBody" ? 5 : 3}
+                  className="crm-input w-full p-3 text-sm font-normal leading-relaxed"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  {p.description}
+                </p>
+              </div>
             ))}
           </fieldset>
         ) : null}
