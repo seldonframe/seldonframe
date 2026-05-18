@@ -469,6 +469,14 @@ export async function saveEmailIntegrationAction(formData: FormData) {
     authToken: String(formData.get("authToken") ?? ""),
     fromNumber: String(formData.get("fromNumber") ?? ""),
   });
+
+  // 2026-05-18 (later) — redirect after save with a ?saved=<service>
+  // param so the UI can show explicit confirmation. Without this the
+  // form re-rendered with the operator's typed values still in the
+  // inputs (revalidatePath refreshes server state but doesn't clear
+  // client form fields), which felt like "save didn't work" — user
+  // had to refresh the page to see whether anything actually persisted.
+  redirect(`/emails?saved=${encodeURIComponent(service)}`);
 }
 
 export async function saveIntegrationFromWizard(service: string, credentials: Record<string, string>) {
