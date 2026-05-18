@@ -9,6 +9,11 @@ import {
   getEmailIntegrationsSettings,
   saveEmailIntegrationAction,
 } from "@/lib/integrations/actions";
+// 2026-05-18 — Slice 5: outbound trigger editor. The OutboundTriggersSection
+// is rendered ABOVE the existing template/sent/integrations content so
+// operators land on the new editor first.
+import { listOutboundTriggers } from "@/lib/messaging/actions";
+import { OutboundTriggersSection } from "@/components/messaging/outbound-triggers-section";
 import { EmailPageContent } from "@/components/emails/email-page-content";
 
 /*
@@ -22,7 +27,7 @@ import { EmailPageContent } from "@/components/emails/email-page-content";
 export default async function EmailsPage() {
   const orgId = await getOrgId();
 
-  const [templates, rows, emailIntegrations, newLeadsRow] = await Promise.all([
+  const [templates, rows, emailIntegrations, newLeadsRow, outboundTriggers] = await Promise.all([
     listEmailTemplates(),
     listEmails(),
     getEmailIntegrationsSettings(),
@@ -48,6 +53,10 @@ export default async function EmailsPage() {
           .then((r) => r[0] ?? { c: 0 })
           .catch(() => ({ c: 0 }))
       : Promise.resolve({ c: 0 }),
+    // 2026-05-18 (Slice 5) — load outbound triggers for the editor.
+    // Same getOrgId check the helper already performs internally; we
+    // just pull it in parallel with the rest of the page data.
+    listOutboundTriggers().catch(() => []),
   ]);
   const newLeadsLast30Days = Number(newLeadsRow.c ?? 0);
 
@@ -67,6 +76,12 @@ export default async function EmailsPage() {
           )}
         </p>
       </div>
+
+      {/* 2026-05-18 — Slice 5: per-trigger SKILL.md editor. Surfaces
+          BOTH email + SMS triggers in one section since the email page
+          is the only "messaging hub" surface today. /sms gets its own
+          page (or this page gets renamed to /messaging) in a follow-up. */}
+      <OutboundTriggersSection triggers={outboundTriggers} />
 
       <EmailPageContent
         templates={templates.map((t) => ({
