@@ -9,6 +9,12 @@ import { PublicThemeProvider } from "@/components/theme/public-theme-provider";
 import { shouldShowPoweredByBadgeForOrg } from "@/lib/billing/public";
 import { getPublicBookingContext } from "@/lib/bookings/actions";
 import { getPublicOrgThemeBySlug } from "@/lib/theme/actions";
+// 2026-05-18 — agency-wide white-label. When the workspace is
+// attached to an active parent agency, the agency's logo wins over
+// the workspace's own theme.logoUrl. That's the "one logo across all
+// my workspaces" behavior — the agency operator sets it once at
+// /settings/agency-profile and every attached workspace inherits.
+import { getEffectiveBrandingForWorkspace } from "@/lib/partner-agencies/branding";
 
 // v1.36.1 — extract a business phone from the soul JSONB (best-effort).
 // SeldonFrame doesn't have a dedicated `organizations.phone` column;
@@ -48,6 +54,19 @@ export default async function PublicBookingPage({
 
   const showBadge = await shouldShowPoweredByBadgeForOrg(bookingContext.orgId);
   const theme = await getPublicOrgThemeBySlug(orgSlug);
+  // 2026-05-18 — effective branding (agency-wide override). Falls
+  // back to SF defaults (is_white_label=false, logo_url=null) when
+  // the workspace has no active parent agency.
+  const effectiveBranding = await getEffectiveBrandingForWorkspace(
+    bookingContext.orgId,
+  );
+  // Agency logo wins when chrome substitution is active; else the
+  // workspace's own theme.logoUrl. Empty string is treated as "no
+  // logo" so the booking page just shows the business name text.
+  const headerLogoUrl =
+    (effectiveBranding.is_white_label && effectiveBranding.logo_url) ||
+    theme.logoUrl ||
+    null;
 
   // v1.36.1 — fetch org name + soul + testMode in one query. Replaces
   // the separate testMode lookup. Soul is parsed for business phone
@@ -127,13 +146,12 @@ export default async function PublicBookingPage({
           // formats them in this TZ for display so the customer sees
           // the operator's hours, not their browser-local reinterp.
           workspaceTimezone={bookingContext.workspaceTimezone}
-          // 2026-05-18 — workspace logo from theme.logoUrl. Renders
-          // in the booking page header next to the business name when
-          // set. The /settings/theme page already persists this; this
-          // is the first public surface to consume it. The same prop
-          // is plumbed through bookingTheme (for CSS vars) — passing
-          // it explicitly so the form can render the <img> directly.
-          logoUrl={theme.logoUrl ?? null}
+          // 2026-05-18 — header logo. Prefers the agency-wide override
+          // (partner_agencies.logo_url, via getEffectiveBrandingForWorkspace)
+          // when the workspace is attached to an active agency. Falls
+          // back to theme.logoUrl for unattached / SF-default workspaces.
+          // null → text-only header.
+          logoUrl={headerLogoUrl}
         />
         {(showBadge || isTestMode) ? (
           <div className="flex flex-col items-center gap-2 py-3">
