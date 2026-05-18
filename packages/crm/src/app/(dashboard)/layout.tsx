@@ -215,14 +215,26 @@ export default async function DashboardLayout({
               canAccessSeldon={canAccessSeldon}
               hiddenBlocks={hiddenBlocks}
               workspaceName={activeOrg?.name || "SeldonFrame"}
-              // 2026-05-18 — workspace logo from /settings/theme. Agency
-              // white-label override takes precedence when active;
-              // otherwise the per-workspace theme.logoUrl wins. Falls
-              // back to the SeldonFrame icon when neither set.
+              // 2026-05-18 — workspace logo from /settings/theme. The
+              // workspace SWITCHER tile shows the client's own per-
+              // workspace logo (theme.logoUrl) — falling back to the
+              // agency logo when the workspace hasn't uploaded its own,
+              // and to the SF icon when neither is set.
               workspaceLogoUrl={
-                (effectiveBranding?.is_white_label && effectiveBranding.logo_url) ||
                 adminThemeSettings?.theme.logoUrl ||
+                (effectiveBranding?.is_white_label && effectiveBranding.logo_url) ||
                 null
+              }
+              // 2026-05-18 (later) — agency-level white-label logo for
+              // the top-left BRAND header. When an active partner agency
+              // owns this workspace, the agency's logo replaces the
+              // SeldonFrame icon. Separate from workspaceLogoUrl because
+              // the brand header is about the AGENCY's chrome while the
+              // workspace switcher tile shows the CLIENT's own identity.
+              agencyLogoUrl={
+                effectiveBranding?.is_white_label
+                  ? effectiveBranding.logo_url
+                  : null
               }
               activeWorkspaceId={orgId}
               workspaceOptions={workspaceOptions.map((workspace) => ({

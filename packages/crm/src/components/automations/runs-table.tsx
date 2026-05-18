@@ -38,6 +38,36 @@ export type PendingApproval = {
   isCallerBound: boolean;
 };
 
+// 2026-05-18 — observability surface. Each step execution + each
+// message that went out is surfaced in the expanded row so the
+// operator can audit what the agent actually did end-to-end
+// (instead of having to dig through workflow_step_results + sms_messages
+// + emails in three separate places).
+export type StepTraceEntry = {
+  stepId: string;
+  stepType: string;
+  outcome: string; // advanced | paused | failed
+  captureValue: Record<string, unknown> | null;
+  errorMessage: string | null;
+  durationMs: number;
+  createdAt: string;
+};
+
+export type RunMessage = {
+  kind: "outbound_trigger" | "sms";
+  id: string;
+  channel: "email" | "sms" | "voice";
+  direction: "outbound" | "inbound";
+  toAddress: string;
+  fromAddress: string | null;
+  subject: string | null;
+  body: string;
+  status: string;
+  error: string | null;
+  externalMessageId: string | null;
+  createdAt: string;
+};
+
 export type RunRow = {
   id: string;
   runStatus: string; // raw workflow_runs.status
@@ -51,6 +81,8 @@ export type RunRow = {
   totalTokensOutput: number;
   totalCostUsdEstimate: string;
   pendingApprovals: PendingApproval[];
+  stepTrace: StepTraceEntry[];
+  messages: RunMessage[];
 };
 
 type FilterValue = "all" | RunRow["uiStatus"];
@@ -272,11 +304,17 @@ function RunRowItem({
   actionPending: boolean;
 }) {
   const style = STATUS_STYLE[row.uiStatus];
+  // 2026-05-18 — when a run is in_progress because a conversation
+  // step is paused waiting for the customer's reply, swap the generic
+  // "In progress" label for the more specific "Awaiting reply".
+  // Operator confusion: looked at /automations/speed-to-lead/runs and
+  // saw "In progress" even though the SMS had been sent — couldn't
+  // tell whether the agent was stuck or simply waiting on the lead.
+  const refinedLabel =
+    row.uiStatus === "in_progress" && row.runStatus === "waiting" && isConversationStep(row.currentStepId)
+      ? "Awaiting reply"
+      : style.label;
   const triggerSnippet = stringifyForSnippet(row.triggerPayload);
-  const captureSnippet =
-    Object.keys(row.captureScope).length > 0
-      ? stringifyForSnippet(row.captureScope)
-      : "—";
 
   return (
     <li>
@@ -302,7 +340,7 @@ function RunRowItem({
           }
         >
           <span className={`size-1.5 rounded-full ${style.dot}`} />
-          {style.label}
+          {refinedLabel}
         </span>
         <span className="truncate text-xs text-muted-foreground">{triggerSnippet}</span>
         <span className="text-[11px] tabular-nums text-muted-foreground">
@@ -326,6 +364,36 @@ function RunRowItem({
                 />
               ))}
             </div>
+          ) : null}
+
+          {/* 2026-05-18 — Messages sent. The top-level question for
+              every run is "what did the customer actually receive?"
+              Surface that BEFORE the technical sections so the
+              operator can answer it without expanding more details. */}
+          {row.messages.length > 0 ? (
+            <Section title={`Messages (${row.messages.length})`}>
+              <ul className="space-y-2">
+                {row.messages.map((m) => (
+                  <MessageRow key={`${m.kind}:${m.id}`} message={m} />
+                ))}
+              </ul>
+            </Section>
+          ) : null}
+
+          {/* 2026-05-18 — Step trace. Every step the agent executed
+              with outcome + duration. "advanced" = clean execution,
+              "paused" = waiting for an event (sms.replied, approval),
+              "failed" = something broke (error message surfaced).
+              Reads from workflow_step_results — the durable audit log
+              that's been collected since Scope 3 Step 2c PR 3. */}
+          {row.stepTrace.length > 0 ? (
+            <Section title={`Step trace (${row.stepTrace.length})`}>
+              <ul className="space-y-1.5">
+                {row.stepTrace.map((s, i) => (
+                  <StepTraceRow key={`${s.stepId}:${i}`} step={s} />
+                ))}
+              </ul>
+            </Section>
           ) : null}
 
           {/* Trigger payload */}
@@ -450,6 +518,121 @@ function PendingApprovalCard({
   );
 }
 
+/* ─── 2026-05-18 — message + step-trace rows ─── */
+
+function MessageRow({ message }: { message: RunMessage }) {
+  const isInbound = message.direction === "inbound";
+  // Status pill colors match the rest of the surface — green for sent,
+  // red for failed, amber for queued/pending, gray otherwise.
+  const statusStyles: Record<string, { bg: string; text: string }> = {
+    sent: { bg: "bg-emerald-500/10", text: "text-emerald-700 dark:text-emerald-400" },
+    delivered: { bg: "bg-emerald-500/10", text: "text-emerald-700 dark:text-emerald-400" },
+    failed: { bg: "bg-rose-500/10", text: "text-rose-700 dark:text-rose-400" },
+    suppressed: { bg: "bg-rose-500/10", text: "text-rose-700 dark:text-rose-400" },
+    queued: { bg: "bg-amber-500/10", text: "text-amber-700 dark:text-amber-400" },
+    skipped: { bg: "bg-zinc-500/10", text: "text-zinc-600 dark:text-zinc-400" },
+    received: { bg: "bg-sky-500/10", text: "text-sky-700 dark:text-sky-400" },
+  };
+  const style = statusStyles[message.status] ?? { bg: "bg-zinc-500/10", text: "text-zinc-600 dark:text-zinc-400" };
+  const channelIcon = message.channel === "email" ? "✉" : message.channel === "sms" ? "💬" : "📞";
+  return (
+    <li
+      className={
+        "rounded-md border bg-background/70 px-3 py-2.5 text-xs " +
+        (isInbound ? "border-sky-500/30" : "border-border")
+      }
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <span aria-hidden className="text-sm shrink-0">{channelIcon}</span>
+          <span className="font-medium text-foreground shrink-0">
+            {isInbound ? "Inbound" : "Outbound"} {message.channel.toUpperCase()}
+          </span>
+          <span className="truncate text-muted-foreground">
+            {isInbound
+              ? `from ${message.fromAddress ?? "—"}`
+              : `to ${message.toAddress}`}
+          </span>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <span
+            className={
+              "inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium " +
+              `${style.bg} ${style.text}`
+            }
+          >
+            {message.status}
+          </span>
+          <span className="text-[10px] text-muted-foreground tabular-nums">
+            {formatTimestamp(message.createdAt)}
+          </span>
+        </div>
+      </div>
+      {message.subject ? (
+        <p className="mt-1.5 text-[11px] font-medium text-foreground">{message.subject}</p>
+      ) : null}
+      <p className="mt-1 whitespace-pre-wrap text-[11px] leading-relaxed text-foreground/85">
+        {truncate(message.body, 280)}
+      </p>
+      {message.error ? (
+        <p className="mt-1.5 text-[10px] text-rose-600 dark:text-rose-400">
+          Error: {message.error}
+        </p>
+      ) : null}
+      {message.externalMessageId ? (
+        <p className="mt-1.5 font-mono text-[10px] text-muted-foreground">
+          {message.channel === "sms" ? "Twilio SID" : "Provider ID"}: {message.externalMessageId}
+        </p>
+      ) : null}
+    </li>
+  );
+}
+
+function StepTraceRow({ step }: { step: StepTraceEntry }) {
+  // outcome-driven coloring + an at-a-glance dot.
+  const dot =
+    step.outcome === "advanced"
+      ? "bg-emerald-500"
+      : step.outcome === "paused"
+        ? "bg-sky-500"
+        : step.outcome === "failed"
+          ? "bg-rose-500"
+          : "bg-zinc-400";
+  return (
+    <li className="flex items-start gap-2 rounded-md border bg-background/70 px-3 py-2 text-xs">
+      <span className={`mt-1.5 size-1.5 shrink-0 rounded-full ${dot}`} />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <code className="font-mono text-[11px] font-medium text-foreground">{step.stepId}</code>
+          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            {step.stepType}
+          </span>
+          <span className="text-[10px] text-muted-foreground">·</span>
+          <span className="text-[10px] text-foreground/80">{step.outcome}</span>
+          {step.durationMs > 0 ? (
+            <span className="text-[10px] text-muted-foreground tabular-nums">
+              ({step.durationMs}ms)
+            </span>
+          ) : null}
+          <span className="ml-auto text-[10px] text-muted-foreground tabular-nums">
+            {formatTimestamp(step.createdAt)}
+          </span>
+        </div>
+        {step.errorMessage ? (
+          <p className="mt-1 text-[11px] text-rose-600 dark:text-rose-400">
+            {step.errorMessage}
+          </p>
+        ) : null}
+        {step.captureValue && Object.keys(step.captureValue).length > 0 ? (
+          <p className="mt-1 truncate font-mono text-[10px] text-muted-foreground">
+            capture: {truncate(JSON.stringify(step.captureValue), 120)}
+          </p>
+        ) : null}
+      </div>
+    </li>
+  );
+}
+
 /* ─── small helpers ─── */
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -499,6 +682,23 @@ function stringifyForSnippet(payload: Record<string, unknown>): string {
 function truncate(s: string, max: number): string {
   if (s.length <= max) return s;
   return s.slice(0, max - 1) + "…";
+}
+
+// Heuristic: does this currentStepId look like a conversation step
+// paused on sms.replied? Used to refine the "In progress" pill to
+// "Awaiting reply" so the operator can distinguish a stuck run from
+// a healthy one mid-conversation. Substring match keeps this loose —
+// archetype authors name conversation steps with words like
+// "conversation" / "qualify" / "chat" / "ask".
+function isConversationStep(stepId: string | null): boolean {
+  if (!stepId) return false;
+  const lower = stepId.toLowerCase();
+  return (
+    lower.includes("conversation") ||
+    lower.includes("qualify") ||
+    lower.includes("chat") ||
+    lower.includes("ask_")
+  );
 }
 
 function formatTimestamp(value: string): string {

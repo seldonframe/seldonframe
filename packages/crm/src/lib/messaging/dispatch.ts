@@ -45,6 +45,13 @@ import { hydrateMessagingPayload } from "./hydrate-payload";
 // triggers.length === 0, so the very first booking.created for any
 // workspace auto-bootstraps its defaults and fires immediately.
 import { seedDefaultOutboundTriggers } from "./seed-default-triggers";
+// 2026-05-18 — dispatch-time guard: when a deployed agent owns the
+// event (speed-to-lead handles form.submitted, etc.) we skip the basic
+// outbound trigger to avoid double-sending. Belt-and-suspenders with
+// the auto-disable in setAgentDeployStateAction — that one only fires
+// on a NEW deploy, this runtime check also covers agents that were
+// already deployed before the auto-disable code shipped.
+import { findDeployedAgentForEvent } from "@/lib/agents/configure-actions";
 
 // 2026-05-18 — TCPA / A2P 10DLC footer. Auto-appended to every
 // outbound SMS so operators can never accidentally skip it. Detection
@@ -80,6 +87,48 @@ export async function dispatchOutboundMessagesForEvent(
     input.eventType,
     input.payload,
   );
+
+  // 2026-05-18 — dispatch-time guard. If a deployed agent owns this
+  // event (e.g. speed-to-lead on form.submitted), it will handle the
+  // customer response itself. Skip the basic intake-auto-reply trigger
+  // to prevent double-sending. We check BEFORE the trigger query so
+  // an enabled-but-superseded trigger never fires.
+  //
+  // Visible bug fixed: operator received TWO SMS on every form
+  // submission — one from speed-to-lead's conversation step (sending
+  // the qualifier question), one from the intake-auto-reply trigger
+  // (sending the generic "Thanks for reaching out!"). Customer is
+  // confused about which one to reply to.
+  try {
+    const deployedAgentId = await findDeployedAgentForEvent(
+      input.orgId,
+      input.eventType,
+    );
+    if (deployedAgentId) {
+      console.log(
+        JSON.stringify({
+          event: "dispatch.skipped_for_deployed_agent",
+          orgId: input.orgId,
+          eventType: input.eventType,
+          agentId: deployedAgentId,
+        }),
+      );
+      return;
+    }
+  } catch (err) {
+    // Soft-fail — if the lookup throws (DB hiccup, unexpected settings
+    // shape), fall through to the normal dispatch path. Worst case is
+    // the legacy double-send; better than blocking all outbound on a
+    // bad config row.
+    console.warn(
+      JSON.stringify({
+        event: "dispatch.agent_guard_lookup_failed",
+        orgId: input.orgId,
+        eventType: input.eventType,
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    );
+  }
 
   let triggers = await db
     .select()
