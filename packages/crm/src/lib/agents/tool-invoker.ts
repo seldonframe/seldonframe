@@ -309,6 +309,94 @@ const TOOL_HANDLERS: Record<string, ToolHandler> = {
     };
   },
 
+  // 2026-05-18 — read-only availability lookup so the LLM can propose
+  // real slots inside a conversation ("Tuesday 2pm or Wednesday 10am
+  // work — which do you prefer?"). Returns the next N open slots for
+  // an appointment type starting from `from_date` (ISO) up to
+  // `max_results` (default 10). Each slot is a UTC ISO string the LLM
+  // can echo back in a {{preferred_start}} extract or pass directly
+  // to create_booking.
+  check_availability: async (orgId, args) => {
+    const appointmentTypeId =
+      typeof args.appointment_type_id === "string"
+        ? args.appointment_type_id
+        : null;
+    const fromDate =
+      typeof args.from_date === "string" ? args.from_date : null;
+    const maxResults =
+      typeof args.max_results === "number" && args.max_results > 0
+        ? Math.min(20, Math.floor(args.max_results))
+        : 10;
+    if (!appointmentTypeId) {
+      throw new Error("check_availability: appointment_type_id is required");
+    }
+
+    // Load the appointment-type template + workspace slug — slot
+    // listing API is keyed on orgSlug/bookingSlug for public use; we
+    // resolve both from the appointment-type row.
+    const [template] = await db
+      .select({ bookingSlug: bookings.bookingSlug, metadata: bookings.metadata })
+      .from(bookings)
+      .where(
+        and(
+          eq(bookings.orgId, orgId),
+          eq(bookings.id, appointmentTypeId),
+          eq(bookings.status, "template"),
+        ),
+      )
+      .limit(1);
+    if (!template) {
+      throw new Error(
+        `check_availability: appointment type ${appointmentTypeId} not found`,
+      );
+    }
+    const [orgRow] = await db
+      .select({ slug: organizations.slug })
+      .from(organizations)
+      .where(eq(organizations.id, orgId))
+      .limit(1);
+    if (!orgRow?.slug) {
+      throw new Error("check_availability: workspace slug not resolvable");
+    }
+
+    // Walk the next 14 days starting from from_date or today, collect
+    // slots until we hit max_results. Each day query reuses the public
+    // listPublicBookingSlotsAction so availability + conflict checks
+    // stay consistent with what the booking page renders.
+    const { listPublicBookingSlotsAction } = await import(
+      "@/lib/bookings/actions"
+    );
+    const start = fromDate ? new Date(fromDate) : new Date();
+    const collected: Array<{ date: string; slots: string[] }> = [];
+    let total = 0;
+    for (let i = 0; i < 14 && total < maxResults; i += 1) {
+      const d = new Date(start.getTime() + i * 24 * 60 * 60 * 1000);
+      const yyyy = d.getUTCFullYear();
+      const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+      const dd = String(d.getUTCDate()).padStart(2, "0");
+      const dateStr = `${yyyy}-${mm}-${dd}`;
+      const { slots } = await listPublicBookingSlotsAction({
+        orgSlug: orgRow.slug,
+        bookingSlug: template.bookingSlug,
+        date: dateStr,
+      });
+      const take = slots.slice(0, maxResults - total);
+      if (take.length > 0) {
+        collected.push({ date: dateStr, slots: take });
+        total += take.length;
+      }
+    }
+    const meta = (template.metadata as Record<string, unknown> | null) ?? {};
+    return {
+      data: {
+        appointment_type_id: appointmentTypeId,
+        duration_minutes: typeof meta.durationMinutes === "number" ? meta.durationMinutes : 30,
+        by_day: collected,
+        total_slots: total,
+      },
+    };
+  },
+
   send_sms: async (orgId, args) => {
     const rawTo =
       typeof args.to === "string"
