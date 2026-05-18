@@ -17,6 +17,7 @@ import { ConfigureAgentForm } from "@/components/automations/configure-agent-for
 // configure, save. Reuses the existing setActiveOrgAction (same one
 // the sidebar workspace switcher uses) so behavior is consistent.
 import { listManagedOrganizations, setActiveOrgAction } from "@/lib/billing/orgs";
+import { WorkspaceAutoApplySelect } from "@/components/automations/workspace-auto-apply-select";
 
 /**
  * /automations/[id]/configure — agent configuration form + live
@@ -101,26 +102,16 @@ export default async function ConfigureAutomationPage({
             <p className="font-medium text-foreground">Apply to workspace</p>
           </div>
           <p className="text-xs text-muted-foreground">
-            Pick which workspace this automation should run in. Configuration is per-workspace.
+            Pick which workspace this automation should run in. Switches happen instantly when you change the selection.
           </p>
-          <form action={setActiveOrgAction} className="flex flex-col sm:flex-row gap-2 sm:items-center">
-            <input type="hidden" name="redirectTo" value={`/automations/${id}/configure`} />
-            <select
-              name="orgId"
-              defaultValue={orgId ?? ""}
-              className="crm-input h-10 px-3 flex-1"
-            >
-              {managedOrgs.map((org) => (
-                <option key={org.id} value={org.id}>
-                  {org.name}
-                  {org.id === orgId ? " (active)" : ""}
-                </option>
-              ))}
-            </select>
-            <button type="submit" className="crm-button-secondary h-10 px-4 text-xs">
-              Switch & configure
-            </button>
-          </form>
+          {/* 2026-05-18 — auto-applies on select change (no separate
+              "Switch & configure" button) per operator feedback. */}
+          <WorkspaceAutoApplySelect
+            orgs={managedOrgs.map((o) => ({ id: o.id, name: o.name }))}
+            activeOrgId={orgId}
+            switchAction={setActiveOrgAction}
+            redirectTo={`/automations/${id}/configure`}
+          />
         </article>
       ) : null}
 

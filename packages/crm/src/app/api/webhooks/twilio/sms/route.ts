@@ -1,7 +1,7 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { organizations, smsEvents, smsMessages } from "@/db/schema";
+import { organizations, smsEvents, smsMessages, workflowRuns, workflowWaits } from "@/db/schema";
 import { decryptValue } from "@/lib/encryption";
 import { emitSeldonEvent } from "@/lib/events/bus";
 import { logEvent } from "@/lib/observability/log";
@@ -345,6 +345,42 @@ export async function POST(request: Request) {
   // falls back to the existing always-reply behavior so a degraded
   // classifier doesn't break currently-working workspaces.
   if (contactId) {
+    // 2026-05-18 — precedence check: if there's an ACTIVE conversation
+    // step (e.g. speed-to-lead's qualify_conversation) currently
+    // paused on sms.replied for this contact, the conversation engine
+    // owns this reply. Skip the chatbot auto-reply path entirely so
+    // the customer doesn't get TWO replies (one from the agent's LLM
+    // conversation, one from the soul-aware FAQ chatbot). Without this
+    // guard, the customer's reply gets a confused "we couldn't find
+    // your appointment" while the agent's qualification LLM also
+    // responds. Visible bug: operator received both replies.
+    const activeConversationWait = await db
+      .select({ id: workflowWaits.id })
+      .from(workflowWaits)
+      .innerJoin(workflowRuns, eq(workflowWaits.runId, workflowRuns.id))
+      .where(
+        and(
+          eq(workflowRuns.orgId, orgId),
+          eq(workflowWaits.eventType, "sms.replied"),
+          isNull(workflowWaits.resumedAt),
+          sql`${workflowWaits.matchPredicate}->>'contactId' = ${contactId}`,
+        ),
+      )
+      .limit(1);
+    if (activeConversationWait.length > 0) {
+      logEvent("twilio_webhook_skipped_for_conversation", {
+        org_id: orgId,
+        contact_id: contactId,
+        wait_id: activeConversationWait[0].id,
+      });
+      return NextResponse.json({
+        ok: true,
+        matched: true,
+        contactId,
+        handled_by: "conversation_step",
+      });
+    }
+
     const intent = await classifyInboundIntent({ orgId, body: inboundBody });
     const autoReply = shouldAutoReplyForIntent(intent);
 

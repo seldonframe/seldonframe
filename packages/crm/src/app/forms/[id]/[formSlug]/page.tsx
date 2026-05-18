@@ -59,9 +59,52 @@ export default async function PublicIntakePage({
   const useBlueprintRender = Boolean(form.contentHtml && form.contentCss);
 
   if (useBlueprintRender) {
+    // 2026-05-18 — inject the workspace logo + business name floating
+    // above the pre-rendered blueprint HTML. The blueprint render was
+    // produced before theme.logoUrl existed as a concept; rather than
+    // regenerate it (expensive — would re-run the formbricks-stack-v1
+    // renderer on every form), we overlay a small absolutely-positioned
+    // header. fixed top-center; matches the booking page treatment.
+    // No logo set → nothing renders, blueprint shows as-is.
     return (
       <>
         <style dangerouslySetInnerHTML={{ __html: form.contentCss! }} />
+        {headerLogoUrl ? (
+          <div
+            style={{
+              position: "fixed",
+              top: 24,
+              left: "50%",
+              transform: "translateX(-50%)",
+              zIndex: 50,
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              padding: "8px 16px",
+              background: "rgba(255,255,255,0.92)",
+              borderRadius: 12,
+              boxShadow: "0 4px 12px rgba(15,23,42,0.08)",
+              backdropFilter: "blur(8px)",
+            }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={headerLogoUrl}
+              alt={`${headerName} logo`}
+              style={{ height: 28, width: "auto", objectFit: "contain" }}
+            />
+            <span
+              style={{
+                fontSize: 13,
+                fontWeight: 600,
+                color: "#0f172a",
+                fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+              }}
+            >
+              {headerName}
+            </span>
+          </div>
+        ) : null}
         <div dangerouslySetInnerHTML={{ __html: form.contentHtml! }} />
         {showBadge ? (
           <div className="flex justify-center py-2">

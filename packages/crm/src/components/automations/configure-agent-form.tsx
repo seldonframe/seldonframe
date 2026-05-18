@@ -347,53 +347,13 @@ export function ConfigureAgentForm({
         ) : null}
 
         {/* Model + temperature */}
-        <fieldset className="rounded-xl border bg-card p-5 space-y-4">
-          <legend className="-ml-1 px-1 text-sm font-semibold text-foreground">
-            LLM
-          </legend>
-          <div>
-            <label className="block text-xs font-medium text-muted-foreground mb-1.5">
-              Model
-            </label>
-            <select
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              className="crm-input h-9 w-full"
-            >
-              {MODEL_OPTIONS.map((m) => (
-                <option key={m.value} value={m.value}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              Uses your{" "}
-              <Link href="/settings/integrations" className="underline hover:text-foreground">
-                Anthropic API key
-              </Link>{" "}
-              — runs are billed directly to Anthropic.
-            </p>
-          </div>
-          <div>
-            <label className="flex items-center justify-between text-xs font-medium text-muted-foreground mb-1.5">
-              <span>Temperature</span>
-              <span className="tabular-nums text-foreground">{temperature.toFixed(2)}</span>
-            </label>
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.05}
-              value={temperature}
-              onChange={(e) => setTemperature(Number(e.target.value))}
-              className="w-full"
-            />
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              0.0 = deterministic / cheap. 0.7 = sweet spot for conversational agents.
-              1.0 = creative but unpredictable.
-            </p>
-          </div>
-        </fieldset>
+        {/* 2026-05-18 — LLM model + temperature pickers removed per
+            operator feedback ("do we really need llm model section?").
+            We always use the recommended model (claude-sonnet-4-5)
+            with temperature 0.7. Per-agent override is power-user
+            scope; reintroduce in /settings/advanced if needed.
+            The saved config still carries model+temperature for
+            backward compat; we just don't surface them in the UI. */}
 
         {/* Safety */}
         {/* 2026-05-18 — speed-to-lead is real-time response (the WHOLE

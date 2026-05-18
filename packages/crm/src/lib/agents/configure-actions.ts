@@ -1,6 +1,6 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import { organizations } from "@/db/schema";
@@ -188,7 +188,60 @@ export async function setAgentDeployStateAction(input: {
     })
     .where(eq(organizations.id, orgId));
 
+  // 2026-05-18 — when an agent that handles form.submitted (speed-to-lead,
+  // missed-call-text-back, etc.) is DEPLOYED, auto-disable the basic
+  // outbound_message_triggers on the same event. Operator was getting
+  // TWO replies on every form submission (one from the agent's
+  // conversation, one from the intake-auto-reply trigger). Restoring
+  // the triggers when the agent is PAUSED keeps the safety net active
+  // when the agent isn't running.
+  try {
+    const archetypeEventType = await resolveArchetypeTriggerEventType(input.archetypeId);
+    if (archetypeEventType) {
+      const { outboundMessageTriggers } = await import("@/db/schema");
+      await db
+        .update(outboundMessageTriggers)
+        .set({
+          enabled: input.state !== "deployed",
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(outboundMessageTriggers.orgId, orgId),
+            eq(outboundMessageTriggers.eventType, archetypeEventType),
+          ),
+        );
+    }
+  } catch (err) {
+    // Soft-fail — the agent state change still landed; the trigger
+    // toggle is a UX nicety, not a correctness boundary.
+    console.warn(
+      JSON.stringify({
+        event: "setAgentDeployStateAction.trigger_toggle_failed",
+        orgId,
+        archetypeId: input.archetypeId,
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    );
+  }
+
   revalidatePath(`/automations/${input.archetypeId}/configure`);
   revalidatePath("/automations");
+  revalidatePath("/emails");
   return { ok: true };
+}
+
+// 2026-05-18 — lookup the trigger event type for an archetype. Used to
+// know which outbound_message_triggers to disable when an agent deploys
+// (so we don't double-send on the same event).
+async function resolveArchetypeTriggerEventType(archetypeId: string): Promise<string | null> {
+  const { getArchetype } = await import("@/lib/agents/archetypes");
+  const { getTriggerEventType } = await import("@/lib/agents/synthesis");
+  const archetype = getArchetype(archetypeId);
+  if (!archetype) return null;
+  try {
+    return getTriggerEventType(archetype.specTemplate) ?? null;
+  } catch {
+    return null;
+  }
 }
