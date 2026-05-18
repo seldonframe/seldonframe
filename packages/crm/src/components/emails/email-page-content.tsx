@@ -297,7 +297,12 @@ export function EmailPageContent({
                     name="fromName"
                     placeholder="From name (e.g. Roofs by Shiloh) — optional"
                   />
-                  <button type="submit" className="crm-button-secondary h-9 px-4 text-xs">Connect Resend</button>
+                  {/* 2026-05-18 — button is labelled "Save & Connect"
+                      (not just "Connect") because it's the SAVE button
+                      for the API key + from-email + from-name combo.
+                      Operator feedback: previous "Connect Resend"
+                      label felt like it wouldn't persist the form. */}
+                  <button type="submit" className="crm-button-primary h-10 px-4 text-sm">Save &amp; Connect Resend</button>
                 </form>
               )}
             </div>

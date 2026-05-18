@@ -32,7 +32,20 @@ import { EmailPageContent } from "@/components/emails/email-page-content";
     - helper text tone: "text-xs text-muted-foreground"
 */
 
-export default async function EmailsPage() {
+export default async function EmailsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ saved?: string }>;
+}) {
+  // 2026-05-18 (later) — read ?saved=<service> from the redirect that
+  // saveEmailIntegrationAction performs. Used to render a green
+  // confirmation banner so the operator can see save DID succeed.
+  // Was previously invisible — the form persisted, the page revalidated,
+  // but the form fields stayed filled with the typed values which
+  // looked identical to the "before save" state.
+  const params = await searchParams;
+  const savedService = params?.saved ?? null;
+
   const orgId = await getOrgId();
 
   // 2026-05-18 — Lazy-seed default outbound triggers for workspaces
@@ -82,6 +95,16 @@ export default async function EmailsPage() {
 
   return (
     <section className="animate-page-enter space-y-4 sm:space-y-6">
+      {/* 2026-05-18 — saved banner. saveEmailIntegrationAction
+          redirects to /emails?saved=<service> after every successful
+          persist. Without this banner the operator couldn't tell if
+          their Resend/Twilio save took effect — the form fields kept
+          their typed values and looked unchanged. */}
+      {savedService ? (
+        <div className="rounded-lg border border-positive/30 bg-positive/10 px-4 py-3 text-sm text-positive">
+          Saved your <span className="font-medium capitalize">{savedService}</span> settings.
+        </div>
+      ) : null}
       <div>
         <div className="flex items-center gap-2">
           <Mail className="size-5 text-foreground" />
