@@ -34,7 +34,7 @@ Output MUST be under 200 characters TOTAL. The system auto-appends " Reply STOP 
 - Customer first name: {{contactFirstName}}
 - Appointment title: {{bookingTitle}}
 - Starts at (local time): {{bookingStartsAtLocal}}
-- Booking page URL (for reschedule/cancel): {{bookingPageUrl}}
+- Manage URL (per-booking, signed — for reschedule/cancel): {{bookingManageUrl}}
 - Business name: {{businessName}}
 
 ## Output format
@@ -42,7 +42,7 @@ Plain text only. No SUBJECT: line, no markdown, no quotes around the message. Ju
 
 Example shape (don't copy verbatim, adapt to {{businessName}}'s voice):
 
-Hi {{contactFirstName}}, you're booked for {{bookingTitle}} on {{bookingStartsAtLocal}}. Reschedule: {{bookingPageUrl}} — {{businessName}}
+Hi {{contactFirstName}}, you're booked for {{bookingTitle}} on {{bookingStartsAtLocal}}. Manage: {{bookingManageUrl}} — {{businessName}}
 `;
 
 export default BOOKING_CONFIRMATION_SMS_SKILL;

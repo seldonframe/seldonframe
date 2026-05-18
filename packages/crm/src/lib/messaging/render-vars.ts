@@ -14,6 +14,9 @@
 // historical placeholders land in slices 3 + 7.
 
 import type { OrgSoul } from "@/lib/soul/types";
+// 2026-05-18 — booking manage URL (signed token) so customers can
+// cancel / pick a new time directly from email + SMS.
+import { buildBookingManageUrl } from "@/lib/bookings/manage-token";
 
 export type DispatchEventPayload = Record<string, unknown>;
 
@@ -77,6 +80,12 @@ export function buildRenderVars(input: RenderVarsInput): Record<string, string> 
     const endsAt = input.payload.endsAt;
     const bookingSlug =
       typeof input.payload.bookingSlug === "string" ? input.payload.bookingSlug : "";
+    const bookingId =
+      typeof input.payload.bookingId === "string"
+        ? input.payload.bookingId
+        : typeof input.payload.appointmentId === "string"
+          ? input.payload.appointmentId
+          : "";
 
     vars.bookingTitle = title;
     vars.bookingStartsAt = isoStringFrom(startsAt);
@@ -86,6 +95,13 @@ export function buildRenderVars(input: RenderVarsInput): Record<string, string> 
     vars.bookingPageUrl = bookingSlug
       ? `https://${WORKSPACE_BASE_DOMAIN}/book/${input.org.slug}/${bookingSlug}`
       : `https://${WORKSPACE_BASE_DOMAIN}/book/${input.org.slug}`;
+    // 2026-05-18 — per-booking signed manage URL. Customer lands on
+    // /booking/manage/<id>?token=<signed> where they can cancel or
+    // jump to picking a different time. Replaces the generic
+    // /book/<slug> link (which forced re-booking from scratch).
+    vars.bookingManageUrl = bookingId
+      ? buildBookingManageUrl(`https://${WORKSPACE_BASE_DOMAIN}`, bookingId)
+      : vars.bookingPageUrl;
   }
 
   return vars;
