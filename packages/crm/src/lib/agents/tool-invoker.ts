@@ -259,7 +259,7 @@ const TOOL_HANDLERS: Record<string, ToolHandler> = {
   },
 
   send_email: async (orgId, args) => {
-    const to = typeof args.to === "string" ? args.to : null;
+    const rawTo = typeof args.to === "string" ? args.to : null;
     const subject = typeof args.subject === "string" ? args.subject : null;
     const body = typeof args.body === "string" ? args.body : null;
     const contactId =
@@ -269,7 +269,26 @@ const TOOL_HANDLERS: Record<string, ToolHandler> = {
           ? args.contact_id
           : null;
 
-    if (!to) throw new Error("send_email: to is required");
+    // 2026-05-18 — "to" is often supplied as a {{trigger.contact.email}}
+    // placeholder that the variable resolver doesn't always match
+    // (form.submitted payload nests email under data.email, not
+    // contact.email). When the resolved value is empty, unresolved
+    // placeholder (literal "{{...}}"), or missing, fall back to the
+    // contact's email looked up by contactId. Same fallback shape as
+    // create_booking's starts_at handling.
+    let to: string | null = rawTo;
+    if (!to || to.trim().length === 0 || to.includes("{{")) {
+      if (contactId) {
+        const [contactRow] = await db
+          .select({ email: contacts.email })
+          .from(contacts)
+          .where(and(eq(contacts.orgId, orgId), eq(contacts.id, contactId)))
+          .limit(1);
+        if (contactRow?.email) to = contactRow.email;
+      }
+    }
+
+    if (!to) throw new Error("send_email: to is required (and contactId lookup found no email)");
     if (!subject) throw new Error("send_email: subject is required");
     if (!body) throw new Error("send_email: body is required");
 
@@ -291,7 +310,7 @@ const TOOL_HANDLERS: Record<string, ToolHandler> = {
   },
 
   send_sms: async (orgId, args) => {
-    const to =
+    const rawTo =
       typeof args.to === "string"
         ? args.to
         : typeof args.to_number === "string"
@@ -305,7 +324,21 @@ const TOOL_HANDLERS: Record<string, ToolHandler> = {
           ? args.contact_id
           : null;
 
-    if (!to) throw new Error("send_sms: to is required");
+    // Same contact-fallback pattern as send_email — recover from
+    // unresolved placeholders like "{{trigger.contact.phone}}".
+    let to: string | null = rawTo;
+    if (!to || to.trim().length === 0 || to.includes("{{")) {
+      if (contactId) {
+        const [contactRow] = await db
+          .select({ phone: contacts.phone })
+          .from(contacts)
+          .where(and(eq(contacts.orgId, orgId), eq(contacts.id, contactId)))
+          .limit(1);
+        if (contactRow?.phone) to = contactRow.phone;
+      }
+    }
+
+    if (!to) throw new Error("send_sms: to is required (and contactId lookup found no phone)");
     if (!body) throw new Error("send_sms: body is required");
 
     const result = await sendSmsFromApi({
