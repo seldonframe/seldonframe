@@ -341,24 +341,35 @@ export async function resumeWait(
           typeof resumingEventPayload.smsMessageId === "string"
             ? resumingEventPayload.smsMessageId
             : null;
-        if (smsMessageId) {
-          await context.storage.updateRun(run.id, {
-            captureScope: {
-              ...run.captureScope,
-              __lastInboundSmsId: smsMessageId,
-            },
-          });
-        }
+        await context.storage.updateRun(run.id, {
+          captureScope: {
+            ...run.captureScope,
+            __lastInboundSmsId: smsMessageId,
+            // Clear any prior timeout marker — customer replied, we're
+            // back in the normal flow.
+            __conversationTimeout: null,
+          },
+        });
         // Re-advance to the SAME step (re-dispatches the conversation
         // engine which checks transcript + calls LLM + decides).
         await advanceTo(context, run.id, step.id);
         await advanceRun(context, run.id);
         return { resumed: true, runId: run.id };
       }
-      // Timeout: customer never replied. Advance to on_exit.next so
-      // downstream steps (book_consultation etc.) still execute with
-      // whatever defaults the create_booking fallback handles.
-      await advanceTo(context, run.id, step.on_exit.next);
+      // 2026-05-18 — Timeout: re-dispatch the conversation step with a
+      // sentinel in captureScope so the dispatcher can handle the
+      // silence path (send a nudge SMS, or close out after the second
+      // timeout). Previously this advanced straight to on_exit.next
+      // which felt cold — customer got a fallback booking with zero
+      // outreach when they didn't reply.
+      await context.storage.updateRun(run.id, {
+        captureScope: {
+          ...run.captureScope,
+          __conversationTimeout: true,
+          __lastInboundSmsId: null,
+        },
+      });
+      await advanceTo(context, run.id, step.id);
       await advanceRun(context, run.id);
       return { resumed: true, runId: run.id };
     }

@@ -96,15 +96,39 @@ type TranscriptTurn = {
   ts: string; // ISO
 };
 
+type ConversationPhase = "active" | "nudged" | "closed";
+
 type ConversationState = {
   transcript: TranscriptTurn[];
   turns: number;
   startedAt: string; // ISO
+  /** 2026-05-18 — silence-handling phase. "active" = waiting for first
+   *  reply with the regular 6h timeout. "nudged" = we already sent the
+   *  6h reminder; another 24h with no reply triggers the close-out
+   *  message and exits the step. "closed" = we sent the goodbye; no
+   *  further sends from this step. */
+  phase?: ConversationPhase;
 };
 
 const MAX_TURNS = 6;
-const REPLY_WAIT_MINUTES = 60 * 24; // 24h for the customer to reply
 const STATE_KEY_PREFIX = "__conversation_";
+
+// 2026-05-18 — silence-handling tier durations.
+// First timeout: 6h after the LAST assistant message → send gentle
+// nudge ("still interested?"). Second timeout: another 24h → send
+// close-out goodbye and exit.
+const ACTIVE_TIMEOUT_MINUTES = 60 * 6; // 6h
+const NUDGED_TIMEOUT_MINUTES = 60 * 24; // 24h after the nudge
+
+function nudgeMessage(firstName: string, businessName: string): string {
+  const name = firstName ? `, ${firstName}` : "";
+  return `Hi${name} — just checking in! Still happy to help when you're ready. Anything I can answer?\n\n— ${businessName || "Team"}`;
+}
+
+function closeOutMessage(firstName: string, businessName: string): string {
+  const name = firstName ? `, ${firstName}` : "";
+  return `No worries${name} — we'll close this out for now. Text us anytime you'd like to pick this back up.\n\n— ${businessName || "Team"}`;
+}
 
 function getState(run: StoredRun, stepId: string): ConversationState | null {
   const raw = (run.variableScope[STATE_KEY_PREFIX + stepId] ?? null) as
@@ -297,6 +321,96 @@ export async function dispatchConversation(
   // system prompt didn't fully scrub them).
   const runtimeVars = await buildRunTimeVars(run.orgId, triggerInfo.contactId);
 
+  // ─── Timeout dispatch (silence handling) ──────────────────────────
+  // resumeWait sets __conversationTimeout=true in captureScope when
+  // a pause_event timed out (customer didn't reply). Handle the
+  // 6h-nudge → 24h-close-out → exit ladder here.
+  const timeoutHit = run.captureScope.__conversationTimeout === true;
+  if (timeoutHit && state && state.transcript.length > 0) {
+    const phase: ConversationPhase = state.phase ?? "active";
+    if (phase === "active") {
+      // First timeout: send the gentle nudge, re-pause with the
+      // longer 24h timeout, flip phase to "nudged".
+      const nudge = nudgeMessage(
+        runtimeVars["contact.firstName"] ?? "",
+        runtimeVars.businessName ?? "",
+      );
+      try {
+        await sendSmsReply(run.orgId, triggerInfo.contactId, phoneNumber, nudge);
+      } catch (err) {
+        // Send failed — don't keep retrying, advance to exit.
+        console.warn(
+          JSON.stringify({
+            event: "conversation.nudge_send_failed",
+            runId: run.id,
+            error: err instanceof Error ? err.message : String(err),
+          }),
+        );
+        return { kind: "advance", next: step.on_exit.next };
+      }
+      await _context.storage.updateRun(run.id, {
+        variableScope: {
+          ...run.variableScope,
+          [stateKey]: {
+            ...state,
+            phase: "nudged" as ConversationPhase,
+            transcript: [
+              ...state.transcript,
+              { role: "assistant", content: nudge, ts: new Date().toISOString() },
+            ],
+          },
+        },
+        // Clear timeout marker so the next resume distinguishes
+        // event_match (customer replied) from timeout (silence again).
+        captureScope: { ...run.captureScope, __conversationTimeout: null },
+      });
+      return {
+        kind: "pause_event",
+        eventType: "sms.replied",
+        matchPredicate: { contactId: triggerInfo.contactId },
+        timeoutAt: new Date(Date.now() + NUDGED_TIMEOUT_MINUTES * 60 * 1000),
+        onResumeNext: step.id,
+        onResumeCapture: "__lastInboundSmsId",
+        onTimeoutNext: step.on_exit.next,
+      };
+    }
+    // Phase = "nudged" (or "closed", unreachable but defensive).
+    // Second timeout: send close-out goodbye + advance with empty
+    // extract. create_booking's fallback path handles a missing
+    // preferred_start by picking the next available slot — operator
+    // can still review the lead in /contacts even if no booking.
+    const goodbye = closeOutMessage(
+      runtimeVars["contact.firstName"] ?? "",
+      runtimeVars.businessName ?? "",
+    );
+    try {
+      await sendSmsReply(run.orgId, triggerInfo.contactId, phoneNumber, goodbye);
+    } catch (err) {
+      console.warn(
+        JSON.stringify({
+          event: "conversation.closeout_send_failed",
+          runId: run.id,
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
+    }
+    await _context.storage.updateRun(run.id, {
+      variableScope: {
+        ...run.variableScope,
+        [stateKey]: {
+          ...state,
+          phase: "closed" as ConversationPhase,
+          transcript: [
+            ...state.transcript,
+            { role: "assistant", content: goodbye, ts: new Date().toISOString() },
+          ],
+        },
+      },
+      captureScope: { ...run.captureScope, __conversationTimeout: null },
+    });
+    return { kind: "advance", next: step.on_exit.next };
+  }
+
   // ─── First dispatch: send initial message + pause ─────────────────
   if (!state || state.transcript.length === 0) {
     const resolvedInitial = interpolateRunTimeVars(step.initial_message, runtimeVars);
@@ -318,6 +432,7 @@ export async function dispatchConversation(
       ],
       turns: 1,
       startedAt: new Date().toISOString(),
+      phase: "active",
     };
     await _context.storage.updateRun(run.id, {
       variableScope: { ...run.variableScope, [stateKey]: newState },
@@ -326,10 +441,14 @@ export async function dispatchConversation(
       kind: "pause_event",
       eventType: "sms.replied",
       matchPredicate: { contactId: triggerInfo.contactId },
-      timeoutAt: new Date(Date.now() + REPLY_WAIT_MINUTES * 60 * 1000),
-      onResumeNext: step.id, // re-dispatch THIS step on reply
+      // 2026-05-18 — first wait is the short 6h tier. If the customer
+      // doesn't reply, the cron sweeps the wait, resumeWait re-dispatches
+      // with __conversationTimeout=true, and the silence-handling
+      // branch above sends the nudge + flips phase to "nudged".
+      timeoutAt: new Date(Date.now() + ACTIVE_TIMEOUT_MINUTES * 60 * 1000),
+      onResumeNext: step.id,
       onResumeCapture: "__lastInboundSmsId",
-      onTimeoutNext: step.on_exit.next, // give up after 24h with empty extract
+      onTimeoutNext: step.id, // re-dispatch on timeout too (silence-handler branch decides)
     };
   }
 
@@ -446,9 +565,12 @@ export async function dispatchConversation(
     kind: "pause_event",
     eventType: "sms.replied",
     matchPredicate: { contactId: triggerInfo.contactId },
-    timeoutAt: new Date(Date.now() + REPLY_WAIT_MINUTES * 60 * 1000),
+    // Mid-conversation re-pause uses the same 6h active tier as the
+    // first pause. Customer just sent something a moment ago, so 6h
+    // of further silence is a real signal worth nudging on.
+    timeoutAt: new Date(Date.now() + ACTIVE_TIMEOUT_MINUTES * 60 * 1000),
     onResumeNext: step.id,
     onResumeCapture: "__lastInboundSmsId",
-    onTimeoutNext: step.on_exit.next,
+    onTimeoutNext: step.id,
   };
 }
