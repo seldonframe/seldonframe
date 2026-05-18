@@ -751,6 +751,41 @@ export async function createAppointmentTypeAction(formData: FormData) {
   revalidatePath("/bookings");
 }
 
+// 2026-05-18 — FormData-shaped wrapper for the existing typed
+// updateBookingTypeAction. /bookings list page calls this from a slide-out
+// sheet so operators can edit appointment-type name / slug / duration /
+// description / price the same way they edit intake forms. Authoritative
+// validation still lives in the typed action below — this just unpacks
+// the form fields and threads them through.
+export async function editAppointmentTypeAction(formData: FormData) {
+  assertWritable();
+
+  const orgId = await getOrgId();
+  if (!orgId) {
+    throw new Error("Unauthorized");
+  }
+
+  const bookingId = String(formData.get("bookingId") ?? "").trim();
+  if (!bookingId) {
+    throw new Error("Booking ID is required");
+  }
+
+  const name = String(formData.get("name") ?? "").trim() || "Consultation";
+  const slug = String(formData.get("slug") ?? name);
+  const durationMinutes = Number(formData.get("durationMinutes") ?? 30);
+  const description = String(formData.get("description") ?? "").trim();
+  const price = Math.max(0, Number(formData.get("price") ?? 0));
+
+  await updateBookingTypeAction({
+    bookingId,
+    name,
+    slug,
+    durationMinutes,
+    description,
+    price,
+  });
+}
+
 export async function createBookingTypeForSeldonAction(input: {
   name: string;
   slug: string;
@@ -1318,15 +1353,24 @@ export async function submitPublicBookingAction({
   dayStartUtc.setUTCHours(0, 0, 0, 0);
   const dayEndUtc = new Date(dayStartUtc);
   dayEndUtc.setUTCDate(dayEndUtc.getUTCDate() + 1);
+  // 2026-05-18 — conflict check now scoped to the whole workspace
+  // (no eq(bookingSlug)). Previously we'd scope to a single
+  // appointment-type slug, which meant a workspace with multiple
+  // types ("default", "free-roof-inspection", "site-visit") could
+  // accidentally double-book the operator's time at 12pm across
+  // different types. The operator only has one calendar — guard
+  // against ALL appointment types overlapping at the same instant.
+  // Also include pending_payment in the conflict set so a half-paid
+  // booking blocks a parallel reservation until checkout completes
+  // (or expires). status='template' rows are always excluded.
   const conflicts = await db
     .select({ startsAt: bookings.startsAt, endsAt: bookings.endsAt })
     .from(bookings)
     .where(
       and(
         eq(bookings.orgId, bookingContext.orgId),
-        eq(bookings.bookingSlug, bookingSlug),
         ne(bookings.status, "template"),
-        inArray(bookings.status, ["scheduled", "completed"]),
+        inArray(bookings.status, ["scheduled", "completed", "pending_payment"]),
         gte(bookings.startsAt, dayStartUtc),
         lt(bookings.startsAt, dayEndUtc),
       ),

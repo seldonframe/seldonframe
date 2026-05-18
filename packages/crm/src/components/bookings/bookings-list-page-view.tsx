@@ -7,6 +7,9 @@
 import { eq } from "drizzle-orm";
 import {
   createAppointmentTypeAction,
+  // 2026-05-18 — edit action for the slide-out sheet on /bookings.
+  // Operator reported the Edit button did nothing.
+  editAppointmentTypeAction,
   listAppointmentTypes,
   listBookings,
 } from "@/lib/bookings/actions";
@@ -106,6 +109,7 @@ export async function BookingsListPageView({
         calendarConnected={false}
         googleCalendarConnectUrl=""
         createAppointmentTypeAction={createAppointmentTypeAction}
+        editAppointmentTypeAction={editAppointmentTypeAction}
         bookingDefaults={bookingDefaults}
       />
     </section>
