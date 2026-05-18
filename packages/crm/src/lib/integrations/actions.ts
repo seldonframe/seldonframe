@@ -319,7 +319,19 @@ export async function disconnectIntegrationAction(formData: FormData) {
 }
 
 export type EmailIntegrationsViewModel = {
-  resend: { connected: boolean; maskedKey: string };
+  // 2026-05-18 (later) — fromEmail + fromName surfaced. Operators
+  // connected Resend with an API key but no from-address; sends fell
+  // back to hello@seldonframe.local (resolveDefaultFromEmail) which
+  // Resend rejects because the .local TLD isn't verifiable. Booking
+  // confirmations silently failed at the Resend API even though the
+  // dispatcher reached send. Now the UI captures fromEmail at
+  // connect time and surfaces it after.
+  resend: {
+    connected: boolean;
+    maskedKey: string;
+    fromEmail: string;
+    fromName: string;
+  };
   // 2026-05-18 — Twilio surfaced on /emails because the "Email + SMS
   // Drip" CTA on /clients/:slug/ready routes operators here expecting
   // to wire BOTH transactional channels. Before this prop, operators
@@ -369,6 +381,8 @@ export async function getEmailIntegrationsSettings(): Promise<EmailIntegrationsV
     resend: {
       connected: Boolean(integrations.resend?.connected && resendKey),
       maskedKey: maskLastEight(resendKey),
+      fromEmail: integrations.resend?.fromEmail ?? "",
+      fromName: integrations.resend?.fromName ?? "",
     },
     twilio: {
       connected: Boolean(integrations.twilio?.connected && twilioAuthToken),
