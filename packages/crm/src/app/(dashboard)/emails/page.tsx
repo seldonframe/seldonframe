@@ -1,4 +1,8 @@
 import { Mail } from "lucide-react";
+import { and, eq, gte, isNotNull, ne, sql } from "drizzle-orm";
+import { db } from "@/db";
+import { contacts } from "@/db/schema";
+import { getOrgId } from "@/lib/auth/helpers";
 import { createEmailTemplateAction, listEmails, listEmailTemplates } from "@/lib/emails/actions";
 import {
   disconnectIntegrationAction,
@@ -16,11 +20,36 @@ import { EmailPageContent } from "@/components/emails/email-page-content";
 */
 
 export default async function EmailsPage() {
-  const [templates, rows, emailIntegrations] = await Promise.all([
+  const orgId = await getOrgId();
+
+  const [templates, rows, emailIntegrations, newLeadsRow] = await Promise.all([
     listEmailTemplates(),
     listEmails(),
     getEmailIntegrationsSettings(),
+    // 2026-05-18 (messaging-layer slice 1) — count contacts with an
+    // email created in the last 30 days. Used as a proxy for "leads
+    // synced to newsletter" — every contact.created event in this
+    // window already fires syncContactToNewsletter via the events bus.
+    orgId
+      ? db
+          .select({ c: sql<number>`count(*)::int` })
+          .from(contacts)
+          .where(
+            and(
+              eq(contacts.orgId, orgId),
+              isNotNull(contacts.email),
+              ne(contacts.email, ""),
+              gte(
+                contacts.createdAt,
+                new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+              ),
+            ),
+          )
+          .then((r) => r[0] ?? { c: 0 })
+          .catch(() => ({ c: 0 }))
+      : Promise.resolve({ c: 0 }),
   ]);
+  const newLeadsLast30Days = Number(newLeadsRow.c ?? 0);
 
   return (
     <section className="animate-page-enter space-y-4 sm:space-y-6">
@@ -69,6 +98,7 @@ export default async function EmailsPage() {
         }
         saveIntegrationAction={saveEmailIntegrationAction}
         disconnectIntegrationAction={disconnectIntegrationAction}
+        newLeadsLast30Days={newLeadsLast30Days}
       />
     </section>
   );

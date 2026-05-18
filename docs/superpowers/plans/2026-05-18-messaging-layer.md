@@ -1,8 +1,17 @@
 # Messaging Layer — Plan
 
-**Status:** Design draft v2. Not implemented. Operator approval required before any code lands.
+**Status:** v2 — operator approved 2026-05-18. Implementation underway, slice-by-slice.
 
 **Author:** 2026-05-18 round of operator feedback on `/emails`, transactional confirmations, SMS, and operator-branded sends. Revised after researching what SMB operators actually love + hate about GoHighLevel's communication tools (see "Competitive read" section below).
+
+## Decisions locked 2026-05-18
+
+| Open question | Decision |
+| ------------- | -------- |
+| Resend not connected → what happens to confirmation email? | Send from default `no-reply@<slug>.app.seldonframe.com`. Operator gets a nag in the dashboard. After 30 days nag becomes a hard banner. |
+| AI auto-reply scope on inbound SMS? | **Intent-gated.** FAQ / pricing / scheduling intents auto-reply 24/7. Anything ambiguous (complaints, unclear asks) lands in the operator inbox without an auto-response. |
+| Inbound SMS routing across multiple client workspaces? | **Dedicated Twilio number per workspace.** Cleanest disambiguation; agency passes ~$1/mo cost through. |
+| A2P 10DLC compliance walkthrough surfacing? | **Inline banner on first non-test send.** Operator self-serves with trial numbers until they hit a real send, then we walk them through Twilio brand+campaign registration. |
 
 ---
 
