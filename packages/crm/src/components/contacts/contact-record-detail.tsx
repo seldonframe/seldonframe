@@ -728,6 +728,54 @@ function OverviewTab({
           </div>
         ) : null}
 
+        {/* 2026-05-18 — Booking-page intake answers panel. Surfaces
+            SOUL-aware fields the customer answered on the public booking
+            form (address, phone, scope, timeline, budget, urgency, ...).
+            These keys come from lib/workspace/booking-intake-fields.ts
+            and are NOT registered as industry-level custom fields on
+            the workspace, so they'd otherwise be invisible. We only
+            render keys NOT already covered by industryFields above so
+            this panel doesn't duplicate them. */}
+        {(() => {
+          const allKeys = Object.keys(contact.customFields ?? {});
+          const industryKeySet = new Set(industryFields.map((f) => f.key));
+          const intakeKeys = allKeys.filter(
+            (k) => !industryKeySet.has(k) && (contact.customFields?.[k] ?? "") !== "",
+          );
+          if (intakeKeys.length === 0) return null;
+          return (
+            <div className="rounded-xl border bg-card p-5">
+              <h3 className="text-sm font-semibold text-foreground pb-3 border-b">
+                Booking page answers
+              </h3>
+              <dl className="mt-3 space-y-2 text-sm">
+                {intakeKeys.map((key) => {
+                  const raw = contact.customFields?.[key];
+                  const label = key
+                    .replace(/[_-]+/g, " ")
+                    .replace(/\b\w/g, (c) => c.toUpperCase());
+                  const value =
+                    typeof raw === "string"
+                      ? raw
+                      : typeof raw === "number" || typeof raw === "boolean"
+                        ? String(raw)
+                        : raw === null || raw === undefined
+                          ? "—"
+                          : JSON.stringify(raw);
+                  return (
+                    <div key={key} className="flex items-start justify-between gap-3">
+                      <dt className="text-xs text-muted-foreground">{label}</dt>
+                      <dd className="text-right text-xs text-foreground max-w-[60%] break-words">
+                        {value}
+                      </dd>
+                    </div>
+                  );
+                })}
+              </dl>
+            </div>
+          );
+        })()}
+
         {/* May 1, 2026 — Client Portal V1: operator-side access toggle. */}
         {orgId && portalGate ? (
           <PortalAccessCard
