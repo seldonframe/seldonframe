@@ -49,6 +49,12 @@ export function buildRenderVars(input: RenderVarsInput): Record<string, string> 
   vars.businessName = input.org.name || "";
   vars.timezone = input.org.timezone || "UTC";
   vars.customerPortalUrl = `https://${WORKSPACE_BASE_DOMAIN}/customer/${input.org.slug}`;
+  // 2026-05-18 — workspace-level booking page URL. Set unconditionally
+  // so intake-auto-reply (form.submitted) can reference {{bookingPageUrl}}
+  // without leaving a literal placeholder in the prose. The
+  // booking.* branch below OVERRIDES this with a per-template URL if
+  // bookingSlug is on the payload.
+  vars.bookingPageUrl = `https://${WORKSPACE_BASE_DOMAIN}/book/${input.org.slug}/default`;
 
   const soul = (input.org.soul as OrgSoul | null) ?? null;
   if (soul) {

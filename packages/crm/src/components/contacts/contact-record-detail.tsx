@@ -580,6 +580,52 @@ function OverviewTab({
             onSaved={(v) => onContactChange({ ...contact, status: v })}
           />
           <ReadonlyField label="Created" value={formatDate(contact.createdAt)} />
+          {/* 2026-05-18 — surface high-signal intake-form / booking-form
+              answers (address, service, urgency, description, damage_type,
+              property_type, scope, timeline, budget) DIRECTLY in the
+              Contact details grid so the operator sees the lead context
+              the moment they open the record — not buried in a separate
+              "Booking page answers" panel below. These keys come from
+              lib/workspace/booking-intake-fields.ts archetypes; we render
+              whichever subset the customer actually filled in. */}
+          {(() => {
+            const cf = (contact.customFields ?? {}) as Record<string, unknown>;
+            const order = [
+              "address",
+              "service",
+              "description",
+              "damage_type",
+              "property_type",
+              "issue_type",
+              "scope",
+              "urgency",
+              "timeline",
+              "budget_range",
+              "frequency",
+              "concern",
+              "primary_goal",
+              "company",
+              "role",
+              "team_size",
+            ];
+            return order
+              .filter((key) => {
+                const v = cf[key];
+                return typeof v === "string" && v.trim().length > 0;
+              })
+              .map((key) => {
+                const label = key
+                  .replace(/_/g, " ")
+                  .replace(/\b\w/g, (c) => c.toUpperCase());
+                return (
+                  <ReadonlyField
+                    key={key}
+                    label={label}
+                    value={String(cf[key])}
+                  />
+                );
+              });
+          })()}
         </dl>
       </section>
 
@@ -739,8 +785,34 @@ function OverviewTab({
         {(() => {
           const allKeys = Object.keys(contact.customFields ?? {});
           const industryKeySet = new Set(industryFields.map((f) => f.key));
+          // 2026-05-18 — these keys are now shown inline in the
+          // Contact details panel above, so skip them here to avoid
+          // duplication. Anything else (operator-defined customs,
+          // less-common archetype keys) still shows up.
+          const inlineSurfaced = new Set([
+            "address",
+            "service",
+            "description",
+            "damage_type",
+            "property_type",
+            "issue_type",
+            "scope",
+            "urgency",
+            "timeline",
+            "budget_range",
+            "frequency",
+            "concern",
+            "primary_goal",
+            "company",
+            "role",
+            "team_size",
+            "phone",
+          ]);
           const intakeKeys = allKeys.filter(
-            (k) => !industryKeySet.has(k) && (contact.customFields?.[k] ?? "") !== "",
+            (k) =>
+              !industryKeySet.has(k) &&
+              !inlineSurfaced.has(k) &&
+              (contact.customFields?.[k] ?? "") !== "",
           );
           if (intakeKeys.length === 0) return null;
           return (
