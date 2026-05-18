@@ -7,13 +7,18 @@ import {
   resolveEmailProvider,
 } from "./providers";
 import { isEmailSuppressed, normalizeEmail } from "./suppression";
-import { renderPlainEmailTemplate } from "./templates";
+import { renderPlainEmailTemplate, type EmailBrandingInput } from "./templates";
 import { decryptValue } from "@/lib/encryption";
 import { emitSeldonEvent } from "@/lib/events/bus";
 import { resolveResendConfig } from "@/lib/test-mode/resolvers";
 import { DrizzleWorkspaceTestModeStore } from "@/lib/test-mode/store-drizzle";
 import { assertEmailSendLimit, incrementEmailSendUsage } from "@/lib/tier/limits";
 import { dispatchWebhook } from "@/lib/utils/webhooks";
+// 2026-05-18 — pull workspace branding (name, logo, primary color,
+// phone, address) into outbound emails so they look like real
+// customer-facing comms instead of plain dark-mode test cards.
+import { getEffectiveBrandingForWorkspace } from "@/lib/partner-agencies/branding";
+import { shouldShowPoweredByBadgeForOrg } from "@/lib/billing/public";
 
 async function loadLiveResendConfig(orgId: string) {
   const [org] = await db
@@ -98,9 +103,17 @@ export async function sendEmailFromApi(params: {
   const fromEmail = resolved.fromEmail;
   const isTestMode = resolved.mode === "test";
 
+  // 2026-05-18 — workspace branding for the email chrome. We pull
+  // effective branding (which respects agency white-label override)
+  // alongside the workspace's own name/theme/soul so the email shows
+  // logo + brand color + footer with business name + phone + address.
+  // Soft-fails: if any of these queries hit an error the email still
+  // sends with neutral defaults rather than crashing the send.
+  const branding = await loadEmailBranding(params.orgId);
   const rendered = renderPlainEmailTemplate({
     heading: params.subject,
     body: params.body,
+    branding,
   });
 
   const [created] = await db
@@ -200,4 +213,73 @@ export async function getEmailWithEvents(orgId: string, emailId: string) {
     .orderBy(desc(emailEvents.createdAt));
 
   return { email: row, events };
+}
+
+// 2026-05-18 — assemble the branding payload for the email chrome.
+// Reads from THREE sources in priority order:
+//   1. partner_agencies (effective branding) — agency-level white-label
+//      override; wins when chrome substitution is active.
+//   2. organizations.theme — per-workspace logo + primary color.
+//   3. organizations.soul — business name + phone + city/state for
+//      the footer "questions? call us" line.
+// Errors silently degrade to neutral defaults so a malformed soul
+// never blocks an outbound email.
+async function loadEmailBranding(orgId: string): Promise<EmailBrandingInput> {
+  try {
+    const [orgRow] = await db
+      .select({
+        name: organizations.name,
+        soul: organizations.soul,
+        theme: organizations.theme,
+      })
+      .from(organizations)
+      .where(eq(organizations.id, orgId))
+      .limit(1);
+    const effective = await getEffectiveBrandingForWorkspace(orgId).catch(() => null);
+    const showPoweredBy = await shouldShowPoweredByBadgeForOrg(orgId).catch(() => true);
+
+    // Phone + address — pull from soul shape (snake + camel). Soul
+    // schema isn't strict; check both variants.
+    const soul = (orgRow?.soul ?? {}) as Record<string, unknown>;
+    const business = (soul.business && typeof soul.business === "object" ? soul.business : null) as Record<string, unknown> | null;
+    const contact = (soul.contact && typeof soul.contact === "object" ? soul.contact : null) as Record<string, unknown> | null;
+    const pickStr = (...candidates: unknown[]): string | null => {
+      for (const c of candidates) if (typeof c === "string" && c.trim()) return c.trim();
+      return null;
+    };
+    const businessPhone = pickStr(
+      soul.phone,
+      business?.phone,
+      business?.phoneNumber,
+      contact?.phone,
+      contact?.phoneNumber,
+    );
+    const city = pickStr(soul.city, business?.city, contact?.city);
+    const state = pickStr(soul.state, business?.state, contact?.state);
+    const addressLine = pickStr(soul.address, business?.address, contact?.address);
+    const businessAddress = [addressLine, [city, state].filter(Boolean).join(", ")]
+      .filter(Boolean)
+      .join(" · ") || null;
+
+    // Theme + agency overrides — agency wins when active. Theme is
+    // typed as OrgTheme so the index access goes via unknown to avoid
+    // the strict-conversion TS2352 from the typed jsonb.
+    const theme = (orgRow?.theme ?? {}) as unknown as Record<string, unknown>;
+    const themeLogo = typeof theme.logoUrl === "string" ? theme.logoUrl : null;
+    const themePrimary = typeof theme.primaryColor === "string" ? theme.primaryColor : null;
+    const logoUrl = (effective?.is_white_label && effective.logo_url) || themeLogo;
+    const brandName = (effective?.is_white_label && effective.brand_name) || orgRow?.name || "";
+    const primaryColor = (effective?.is_white_label && effective.primary_color) || themePrimary;
+
+    return {
+      brandName,
+      logoUrl,
+      primaryColor,
+      businessPhone,
+      businessAddress,
+      showPoweredBy,
+    };
+  } catch {
+    return { showPoweredBy: true };
+  }
 }
