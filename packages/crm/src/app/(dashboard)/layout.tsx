@@ -13,7 +13,8 @@ import { DemoBanner } from "@/components/layout/demo-banner";
 import { TestModeBanner } from "@/components/layout/test-mode-banner";
 import { DashboardTopbar } from "@/components/layout/dashboard-topbar";
 import { HelpButton } from "@/components/layout/help-button";
-import { SeldonChat } from "@/components/seldon-chat";
+// 2026-05-18 — SeldonChat removed; see comment near the dock placement
+// below. Power users now go through Claude Code + the SF MCP server.
 import { registerCrmEventListeners } from "@/lib/events/listeners";
 import { getAllBlocksForOrg } from "@/lib/blocks/registry";
 import { canSeldonIt, resolvePlanFromPlanId } from "@/lib/billing/entitlements";
@@ -272,12 +273,12 @@ export default async function DashboardLayout({
               </div>
             </div>
           </div>
-          {/* v1.25.4 — SeldonChat is the SF assistant for the SF
-              agency operator (configures their workspace, runs Seldon
-              tools). Operators (HVAC owner / dentist) have their own
-              support channel via their agency, and we don't want to
-              expose Seldon-internal tooling to them. */}
-          {!isOperatorSession ? <SeldonChat enabled={canAccessSeldon} /> : null}
+          {/* 2026-05-18 — SeldonChat floating dock removed.
+              Power users configure workspaces via Claude Code + the
+              SeldonFrame MCP server directly. Non-tech operators
+              didn't engage with the in-dashboard chat (it competed
+              with the HelpButton + Docs link without adding signal).
+              Less floating UI = cleaner view. */}
           <CommandPalette items={paletteItems} />
           {/* May 1, 2026 — persistent help escape hatch on every
               admin page. Floating bottom-right button opens a popover

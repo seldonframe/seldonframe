@@ -1613,12 +1613,10 @@ export default async function DashboardPage({
         </>
       )}
 
-      <Link
-        href="/seldon?prompt=Help%20me%20improve%20this%20client%20workspace%2C%20tell%20me%20the%20next%20best%20action%2C%20and%20start%20building%20it."
-        className="fixed bottom-5 right-5 z-20 inline-flex h-12 items-center rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground shadow-(--shadow-dropdown) transition hover:opacity-95"
-      >
-        Ask Seldon
-      </Link>
+      {/* 2026-05-18 — "Ask Seldon" floating CTA removed. Power users
+          customize via Claude Code + SF MCP tools directly; non-tech
+          operators don't actually use the in-dashboard chat. Less
+          floating UI = cleaner view. */}
 
     </main>
   );
