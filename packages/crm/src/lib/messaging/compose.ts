@@ -63,6 +63,22 @@ const MAX_EMAIL_BODY = 4000;
 const MAX_SMS_BODY = 290;
 const FORBIDDEN_STRINGS = ["seldon", "seldonframe"];
 
+// 2026-05-18 (later) — strip URLs before the forbidden-string scan.
+// The check's intent is to prevent the LLM (or template) from
+// advertising "SeldonFrame" to the operator's customer in the prose.
+// But functional URLs like https://app.seldonframe.com/book/<slug> are
+// REQUIRED for the customer to reschedule — and operators using the
+// default app domain (which they always do until they configure a
+// custom domain) all carry "seldonframe" in the URL. Without this
+// strip, every confirmation message under the default domain was
+// failing with forbidden_string:seldon. URLs are recognized by the
+// http(s):// prefix; bare-domain references like "seldonframe.com"
+// in PROSE still get caught.
+const URL_PATTERN = /https?:\/\/\S+/gi;
+function bodyWithoutUrls(body: string): string {
+  return body.replace(URL_PATTERN, " ");
+}
+
 export async function composeOutboundMessage(
   input: ComposeInput,
 ): Promise<ComposeSuccess | ComposeFailure> {
@@ -151,10 +167,13 @@ export async function composeOutboundMessage(
     return renderViaTemplate(input);
   }
 
-  // Validators — fail-closed.
-  const lowered = parsed.body.toLowerCase();
+  // Validators — fail-closed. URLs are stripped from the scan because
+  // the booking page URL contains "app.seldonframe.com" under the
+  // default domain; that's functional, not promotional. See URL_PATTERN
+  // above.
+  const proseOnly = bodyWithoutUrls(parsed.body).toLowerCase();
   for (const forbidden of FORBIDDEN_STRINGS) {
-    if (lowered.includes(forbidden)) {
+    if (proseOnly.includes(forbidden)) {
       return { ok: false, reason: `forbidden_string:${forbidden}` };
     }
   }
@@ -185,10 +204,12 @@ function renderViaTemplate(input: ComposeInput): ComposeSuccess | ComposeFailure
   });
 
   // Validators — same fail-closed posture as the LLM path so a buggy
-  // template doesn't slip past TCPA/forbidden-string guarantees.
-  const lowered = rendered.body.toLowerCase();
+  // template doesn't slip past TCPA/forbidden-string guarantees. URLs
+  // are stripped before scanning since functional links to
+  // app.seldonframe.com under the default domain are not promotional.
+  const proseOnly = bodyWithoutUrls(rendered.body).toLowerCase();
   for (const forbidden of FORBIDDEN_STRINGS) {
-    if (lowered.includes(forbidden)) {
+    if (proseOnly.includes(forbidden)) {
       return { ok: false, reason: `forbidden_string_in_template:${forbidden}` };
     }
   }
