@@ -38,6 +38,13 @@ import { scheduleOutboundMessage } from "./schedule";
 // payload. Hydrate to full {bookingId, title, startsAt, endsAt, slug}
 // before composing so {{bookingTitle}} et al. actually resolve.
 import { hydrateMessagingPayload } from "./hydrate-payload";
+// 2026-05-18 (later) — self-healing trigger seed at dispatch time.
+// Operator reported "booked a job, no confirmation email" even after
+// the /emails lazy-seed fix shipped — because they booked BEFORE
+// visiting /emails. We now seed inside the dispatcher itself when
+// triggers.length === 0, so the very first booking.created for any
+// workspace auto-bootstraps its defaults and fires immediately.
+import { seedDefaultOutboundTriggers } from "./seed-default-triggers";
 
 // 2026-05-18 — TCPA / A2P 10DLC footer. Auto-appended to every
 // outbound SMS so operators can never accidentally skip it. Detection
@@ -74,7 +81,7 @@ export async function dispatchOutboundMessagesForEvent(
     input.payload,
   );
 
-  const triggers = await db
+  let triggers = await db
     .select()
     .from(outboundMessageTriggers)
     .where(
@@ -85,7 +92,61 @@ export async function dispatchOutboundMessagesForEvent(
       ),
     );
 
-  if (triggers.length === 0) return;
+  // 2026-05-18 — self-healing seed. If this workspace has no
+  // triggers for this event type, it almost certainly means the
+  // workspace was created before the trigger-seeding code shipped
+  // (or via a flow that skipped it). Seed the defaults now and
+  // re-query. Idempotent (unique index + onConflictDoNothing), so
+  // this is safe even if another request seeded concurrently.
+  // Without this self-heal, the first booking on a pre-existing
+  // workspace silently produces no confirmation email even after
+  // /emails was visited (the operator's actual flow was: connect
+  // Resend → book → no email, never visited /emails).
+  if (triggers.length === 0) {
+    try {
+      await seedDefaultOutboundTriggers(input.orgId);
+    } catch (err) {
+      console.warn(
+        JSON.stringify({
+          event: "dispatch.lazy_seed_failed",
+          orgId: input.orgId,
+          eventType: input.eventType,
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
+    }
+    triggers = await db
+      .select()
+      .from(outboundMessageTriggers)
+      .where(
+        and(
+          eq(outboundMessageTriggers.orgId, input.orgId),
+          eq(outboundMessageTriggers.eventType, input.eventType),
+          eq(outboundMessageTriggers.enabled, true),
+        ),
+      );
+    if (triggers.length === 0) {
+      // Still empty after seed — log + bail. This branch is rare:
+      // means seeding ran but no defaults exist for this event type
+      // (e.g. an event we haven't defined a default skill for).
+      console.log(
+        JSON.stringify({
+          event: "dispatch.no_triggers_after_seed",
+          orgId: input.orgId,
+          eventType: input.eventType,
+        }),
+      );
+      return;
+    }
+    console.log(
+      JSON.stringify({
+        event: "dispatch.lazy_seeded_ok",
+        orgId: input.orgId,
+        eventType: input.eventType,
+        trigger_count: triggers.length,
+      }),
+    );
+  }
 
   // Pre-fetch workspace + contact data once; render-vars uses both.
   const [org] = await db
