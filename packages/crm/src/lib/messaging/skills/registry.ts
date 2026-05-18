@@ -9,6 +9,9 @@
 
 import bookingConfirmationSkill from "./booking-confirmation";
 import bookingConfirmationSmsSkill from "./booking-confirmation-sms";
+import bookingCancellationSkill from "./booking-cancellation";
+import intakeAutoReplySkill from "./intake-auto-reply";
+import intakeAutoReplySmsSkill from "./intake-auto-reply-sms";
 
 export type OutboundMessageSkill = {
   /** Stable id matching outbound_message_triggers.skill_id. */
@@ -39,6 +42,27 @@ const REGISTRY: OutboundMessageSkill[] = [
     content: bookingConfirmationSmsSkill,
     channels: ["sms"],
     defaultEvents: ["booking.created"],
+  },
+  {
+    id: "booking-cancellation",
+    label: "Booking cancellation (email)",
+    content: bookingCancellationSkill,
+    channels: ["email"],
+    defaultEvents: ["booking.cancelled"],
+  },
+  {
+    id: "intake-auto-reply",
+    label: "Intake auto-reply (email)",
+    content: intakeAutoReplySkill,
+    channels: ["email"],
+    defaultEvents: ["form.submitted"],
+  },
+  {
+    id: "intake-auto-reply-sms",
+    label: "Intake auto-reply (SMS)",
+    content: intakeAutoReplySmsSkill,
+    channels: ["sms"],
+    defaultEvents: ["form.submitted"],
   },
 ];
 
