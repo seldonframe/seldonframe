@@ -55,7 +55,15 @@ export type ApiSendEmailResult =
 
 export async function sendEmailFromApi(params: {
   orgId: string;
-  userId: string;
+  // 2026-05-18 (later) — allow null for system-initiated sends (e.g.
+  // outbound messaging dispatcher fires booking confirmations on
+  // event with no human actor). The emails.user_id column is a
+  // nullable UUID with FK to users.id, so passing null is correct.
+  // Previously dispatch.ts passed the literal string "system" here
+  // which crashed the insert with "invalid input syntax for type
+  // uuid" and resulted in status='failed' on every booking-confirmation
+  // email even though SMS via the parallel path succeeded.
+  userId: string | null;
   contactId: string | null;
   toEmail: string;
   subject: string;
