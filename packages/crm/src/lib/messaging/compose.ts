@@ -21,6 +21,15 @@ import {
   renderSkillPrompt,
   type OutboundMessageSkill,
 } from "./skills/registry";
+// 2026-05-18 — deterministic template fallback. Operator reported
+// "booked a job, no email" after Resend was connected. Root cause:
+// no Anthropic key configured on the workspace, so getAIClient()
+// returned no client and compose silently failed with
+// no_llm_available. The fallback below makes sure SOMETHING ships
+// even without an LLM — a generic-but-real confirmation message
+// with the customer's name + booking time + business name slotted in.
+// Once an Anthropic key is set, the LLM path takes over automatically.
+import { renderTemplateMessage } from "./compose-template";
 
 export type ComposeInput = {
   orgId: string;
@@ -71,7 +80,21 @@ export async function composeOutboundMessage(
   // compose; SF doesn't touch their bill.
   const ai = await getAIClient({ orgId: input.orgId });
   if (!ai.client) {
-    return { ok: false, reason: "no_llm_available" };
+    // 2026-05-18 — fall back to the deterministic template so the
+    // customer always gets a confirmation. See compose-template.ts
+    // for per-skill body shapes. Logs a structured event so the
+    // dispatcher's audit row records WHY this send is generic
+    // (operator can wire an Anthropic key to upgrade to LLM compose).
+    console.log(
+      JSON.stringify({
+        event: "compose.template_fallback",
+        orgId: input.orgId,
+        skillId: input.skillId,
+        channel: input.channel,
+        reason: "no_llm_available",
+      }),
+    );
+    return renderViaTemplate(input);
   }
 
   let response: Anthropic.Messages.Message;
@@ -87,17 +110,46 @@ export async function composeOutboundMessage(
       messages: [{ role: "user", content: renderedPrompt }],
     });
   } catch (err) {
-    return {
-      ok: false,
-      reason: err instanceof Error ? `llm_error:${err.message}` : "llm_error",
-    };
+    // 2026-05-18 — LLM errored (rate limit, invalid key, network).
+    // Same fallback path so customer still gets the confirmation.
+    console.warn(
+      JSON.stringify({
+        event: "compose.llm_error_fallback",
+        orgId: input.orgId,
+        skillId: input.skillId,
+        channel: input.channel,
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    );
+    return renderViaTemplate(input);
   }
 
   const text = extractText(response);
-  if (!text) return { ok: false, reason: "empty_llm_response" };
+  if (!text) {
+    console.warn(
+      JSON.stringify({
+        event: "compose.empty_llm_response_fallback",
+        orgId: input.orgId,
+        skillId: input.skillId,
+      }),
+    );
+    return renderViaTemplate(input);
+  }
 
   const parsed = parseChannelResponse(text, input.channel);
-  if (!parsed.ok) return parsed;
+  if (!parsed.ok) {
+    // Subject prefix missing or empty body — fall back rather than
+    // rejecting so the customer still gets a confirmation.
+    console.warn(
+      JSON.stringify({
+        event: "compose.parse_failed_fallback",
+        orgId: input.orgId,
+        skillId: input.skillId,
+        reason: parsed.reason,
+      }),
+    );
+    return renderViaTemplate(input);
+  }
 
   // Validators — fail-closed.
   const lowered = parsed.body.toLowerCase();
@@ -116,6 +168,45 @@ export async function composeOutboundMessage(
     subject: parsed.subject,
     body: parsed.body,
     model: response.model,
+  };
+}
+
+// 2026-05-18 — wrap the deterministic template renderer to match the
+// ComposeSuccess/Failure shape the dispatcher already handles. We tag
+// model="template-fallback" so audit rows make the source obvious in
+// outbound_message_sends.metadata. Validators still apply: if the
+// template somehow generated forbidden strings or over-length output,
+// we surface the same failure shape as the LLM path.
+function renderViaTemplate(input: ComposeInput): ComposeSuccess | ComposeFailure {
+  const rendered = renderTemplateMessage({
+    skillId: input.skillId,
+    channel: input.channel,
+    vars: input.vars,
+  });
+
+  // Validators — same fail-closed posture as the LLM path so a buggy
+  // template doesn't slip past TCPA/forbidden-string guarantees.
+  const lowered = rendered.body.toLowerCase();
+  for (const forbidden of FORBIDDEN_STRINGS) {
+    if (lowered.includes(forbidden)) {
+      return { ok: false, reason: `forbidden_string_in_template:${forbidden}` };
+    }
+  }
+  const cap = input.channel === "sms" ? MAX_SMS_BODY : MAX_EMAIL_BODY;
+  if (rendered.body.length > cap) {
+    return { ok: false, reason: `template_over_length:${rendered.body.length}>${cap}` };
+  }
+  // Email path requires non-empty subject; template fallback always
+  // sets one but we double-check.
+  if (input.channel === "email" && !rendered.subject) {
+    return { ok: false, reason: "template_missing_subject" };
+  }
+
+  return {
+    ok: true,
+    subject: rendered.subject,
+    body: rendered.body,
+    model: "template-fallback",
   };
 }
 
