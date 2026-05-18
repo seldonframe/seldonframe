@@ -181,7 +181,7 @@ export default async function SettingsPage() {
           href: "/settings/workspace",
           title: "Workspace",
           description: "Workspace name, timezone, public URLs",
-          status: <span className="text-xs text-zinc-400">{orgRow?.timezone ?? "UTC"}</span>,
+          status: <span className="text-xs text-muted-foreground">{orgRow?.timezone ?? "UTC"}</span>,
         },
         {
           href: "/settings/profile",
@@ -200,8 +200,8 @@ export default async function SettingsPage() {
           title: "Brand & Theme",
           description: "Colors, fonts, logo for your public pages and chatbot",
           status: (
-            <span className="inline-flex items-center gap-2 text-xs text-zinc-400">
-              <span className="h-2.5 w-2.5 rounded-full border border-zinc-600" style={{ backgroundColor: themeSettings?.theme.primaryColor || "#14b8a6" }} />
+            <span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="h-2.5 w-2.5 rounded-full border border-border" style={{ backgroundColor: themeSettings?.theme.primaryColor || "#14b8a6" }} />
               {themeSettings?.theme.primaryColor || "Primary color"}
             </span>
           ),
@@ -210,7 +210,7 @@ export default async function SettingsPage() {
           href: "/settings/team",
           title: "Team",
           description: "Members and roles",
-          status: <span className="text-xs text-zinc-400">{teamCount} member{teamCount === 1 ? "" : "s"}</span>,
+          status: <span className="text-xs text-muted-foreground">{teamCount} member{teamCount === 1 ? "" : "s"}</span>,
         },
       ],
     },
@@ -223,7 +223,7 @@ export default async function SettingsPage() {
           href: "/settings/billing",
           title: "Plan & Subscription",
           description: "Plan tier, billing cycle, and Stripe customer portal",
-          status: <span className="text-xs text-zinc-400">{billingStatus}</span>,
+          status: <span className="text-xs text-muted-foreground">{billingStatus}</span>,
         },
         {
           href: "/settings/payments",
@@ -232,14 +232,14 @@ export default async function SettingsPage() {
           status: stripeStatus ? (
             <span className="text-xs text-emerald-400">Connected</span>
           ) : (
-            <span className="text-xs text-zinc-400">Not connected</span>
+            <span className="text-xs text-muted-foreground">Not connected</span>
           ),
         },
         {
           href: "/settings/domain",
           title: "Custom Domain",
           description: "Use your own domain for booking pages, forms, and the chat widget",
-          status: <span className="text-xs text-zinc-400">{domainStatus}</span>,
+          status: <span className="text-xs text-muted-foreground">{domainStatus}</span>,
         },
       ],
     },
@@ -271,7 +271,7 @@ export default async function SettingsPage() {
           href: "/settings/integrations",
           title: "Other Integrations",
           description: "Email (Resend), SMS (Twilio), newsletters (Kit), Google Calendar",
-          status: <span className="text-xs text-zinc-400">{connectedIntegrations} connected</span>,
+          status: <span className="text-xs text-muted-foreground">{connectedIntegrations} connected</span>,
         },
       ],
     },
@@ -284,7 +284,7 @@ export default async function SettingsPage() {
           href: "/settings/pipeline",
           title: "Pipeline Stages",
           description: `Stages that ${labels.deal.plural.toLowerCase()} move through (lead → won)`,
-          status: <span className="text-xs text-zinc-400">{pipelineStagesCount} stages</span>,
+          status: <span className="text-xs text-muted-foreground">{pipelineStagesCount} stages</span>,
         },
         {
           href: "/settings/fields",
@@ -296,13 +296,13 @@ export default async function SettingsPage() {
           href: "/settings/client-portal",
           title: "Customer Portal",
           description: "Private dashboard where customers see their bookings + messages",
-          status: <span className="text-xs text-zinc-400">{portalStatus}</span>,
+          status: <span className="text-xs text-muted-foreground">{portalStatus}</span>,
         },
         {
           href: "/settings/soul-wiki",
           title: "Knowledge Base",
           description: "Feed your AI assistants your website, FAQs, and policy documents",
-          status: <span className="text-xs text-zinc-400">{soulSourceCount} sources · {soulArticleCount} articles</span>,
+          status: <span className="text-xs text-muted-foreground">{soulSourceCount} sources · {soulArticleCount} articles</span>,
         },
         {
           href: "/settings/suppression",
@@ -320,7 +320,7 @@ export default async function SettingsPage() {
     { href: "/settings/api", title: "API Keys", description: "Programmatic access for custom integrations", status: null },
     { href: "/settings/webhooks", title: "Webhooks", description: "Push events to external services", status: null },
     { href: "/settings/branding", title: "White-label Branding", description: "Hide 'Powered by SeldonFrame' (agency tier)", status: brandingStatus ? <span className="text-xs text-emerald-400">{brandingStatus}</span> : null },
-    { href: "/settings/frameworks", title: "Industry Packs", description: "Reusable presets for industry-specific setups", status: <span className="text-xs text-zinc-400">{frameworksStatus}</span> },
+    { href: "/settings/frameworks", title: "Industry Packs", description: "Reusable presets for industry-specific setups", status: <span className="text-xs text-muted-foreground">{frameworksStatus}</span> },
     { href: "/settings/soul-transfer", title: "Export / Import", description: "Download or upload your full workspace configuration as JSON", status: null },
   ] as const;
 
@@ -333,7 +333,7 @@ export default async function SettingsPage() {
       href: "/settings/workspace",
       title: "Workspace",
       description: "Workspace name, timezone, public URLs",
-      status: <span className="text-xs text-zinc-400">{orgRow?.timezone ?? "UTC"}</span>,
+      status: <span className="text-xs text-muted-foreground">{orgRow?.timezone ?? "UTC"}</span>,
     },
     {
       href: "/settings/profile",
@@ -346,8 +346,8 @@ export default async function SettingsPage() {
       title: "Brand & Theme",
       description: "Colors, fonts, logo for public pages and the chatbot",
       status: (
-        <span className="inline-flex items-center gap-2 text-xs text-zinc-400">
-          <span className="h-2.5 w-2.5 rounded-full border border-zinc-600" style={{ backgroundColor: themeSettings?.theme.primaryColor || "#14b8a6" }} />
+        <span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+          <span className="h-2.5 w-2.5 rounded-full border border-border" style={{ backgroundColor: themeSettings?.theme.primaryColor || "#14b8a6" }} />
           {themeSettings?.theme.primaryColor || "Primary color"}
         </span>
       ),
@@ -356,7 +356,7 @@ export default async function SettingsPage() {
       href: "/settings/pipeline",
       title: "Pipeline Stages",
       description: `Stages ${labels.deal.plural.toLowerCase()} move through (lead → won)`,
-      status: <span className="text-xs text-zinc-400">{pipelineStagesCount} stages</span>,
+      status: <span className="text-xs text-muted-foreground">{pipelineStagesCount} stages</span>,
     },
     {
       href: "/settings/fields",
@@ -368,13 +368,13 @@ export default async function SettingsPage() {
       href: "/settings/client-portal",
       title: "Customer Portal",
       description: "Private dashboard where this workspace's customers see bookings + messages",
-      status: <span className="text-xs text-zinc-400">{portalStatus}</span>,
+      status: <span className="text-xs text-muted-foreground">{portalStatus}</span>,
     },
     {
       href: "/settings/soul-wiki",
       title: "Knowledge Base",
       description: "Feed this workspace's AI assistants its website, FAQs, and policy documents",
-      status: <span className="text-xs text-zinc-400">{soulSourceCount} sources · {soulArticleCount} articles</span>,
+      status: <span className="text-xs text-muted-foreground">{soulSourceCount} sources · {soulArticleCount} articles</span>,
     },
     {
       href: "/settings/suppression",
@@ -407,15 +407,15 @@ export default async function SettingsPage() {
               <Link
                 key={section.href}
                 href={section.href}
-                className="rounded-lg border border-zinc-800 p-5 hover:border-zinc-700 transition-colors cursor-pointer"
+                className="rounded-lg border border-border p-5 hover:border-border transition-colors cursor-pointer"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <h3 className="font-medium text-zinc-100">{section.title}</h3>
-                    <p className="text-sm text-zinc-500 mt-1">{section.description}</p>
+                    <h3 className="font-medium text-foreground">{section.title}</h3>
+                    <p className="text-sm text-muted-foreground mt-1">{section.description}</p>
                     {section.status ? <div className="mt-2">{section.status}</div> : null}
                   </div>
-                  <ChevronRight className="h-4 w-4 text-zinc-600 mt-1 shrink-0" />
+                  <ChevronRight className="h-4 w-4 text-muted-foreground/70 mt-1 shrink-0" />
                 </div>
               </Link>
             ))}
@@ -442,14 +442,14 @@ export default async function SettingsPage() {
 
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {group.items.map((section) => (
-                <Link key={section.href} href={section.href} className="rounded-lg border border-zinc-800 p-5 hover:border-zinc-700 transition-colors cursor-pointer">
+                <Link key={section.href} href={section.href} className="rounded-lg border border-border p-5 hover:border-border transition-colors cursor-pointer">
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <h3 className="font-medium text-zinc-100">{section.title}</h3>
-                      <p className="text-sm text-zinc-500 mt-1">{section.description}</p>
+                      <h3 className="font-medium text-foreground">{section.title}</h3>
+                      <p className="text-sm text-muted-foreground mt-1">{section.description}</p>
                       {section.status ? <div className="mt-2">{section.status}</div> : null}
                     </div>
-                    <ChevronRight className="h-4 w-4 text-zinc-600 mt-1 shrink-0" />
+                    <ChevronRight className="h-4 w-4 text-muted-foreground/70 mt-1 shrink-0" />
                   </div>
                 </Link>
               ))}
@@ -464,20 +464,20 @@ export default async function SettingsPage() {
                 <p className="font-semibold text-foreground">Developer</p>
                 <p className="text-sm text-muted-foreground mt-0.5">For power users — API keys, webhooks, white-label, export/import. Most operators never need this.</p>
               </div>
-              <ChevronRight className="h-4 w-4 text-zinc-600 mt-1 shrink-0" />
+              <ChevronRight className="h-4 w-4 text-muted-foreground/70 mt-1 shrink-0" />
             </div>
           </summary>
 
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 mt-4">
             {advancedItems.map((section) => (
-              <Link key={section.href} href={section.href} className="rounded-lg border border-zinc-800 p-5 hover:border-zinc-700 transition-colors cursor-pointer">
+              <Link key={section.href} href={section.href} className="rounded-lg border border-border p-5 hover:border-border transition-colors cursor-pointer">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <h3 className="font-medium text-zinc-100">{section.title}</h3>
-                    <p className="text-sm text-zinc-500 mt-1">{section.description}</p>
+                    <h3 className="font-medium text-foreground">{section.title}</h3>
+                    <p className="text-sm text-muted-foreground mt-1">{section.description}</p>
                     {section.status ? <div className="mt-2">{section.status}</div> : null}
                   </div>
-                  <ChevronRight className="h-4 w-4 text-zinc-600 mt-1 shrink-0" />
+                  <ChevronRight className="h-4 w-4 text-muted-foreground/70 mt-1 shrink-0" />
                 </div>
               </Link>
             ))}
