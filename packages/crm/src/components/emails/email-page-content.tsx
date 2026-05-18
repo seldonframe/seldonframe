@@ -73,6 +73,7 @@ export function EmailPageContent({
   emailIntegrations,
   saveIntegrationAction,
   disconnectIntegrationAction,
+  newLeadsLast30Days = 0,
 }: {
   templates: TemplateRow[];
   sent: SentRow[];
@@ -80,6 +81,13 @@ export function EmailPageContent({
   emailIntegrations: EmailIntegrationsState;
   saveIntegrationAction: (formData: FormData) => Promise<void>;
   disconnectIntegrationAction: (formData: FormData) => Promise<void>;
+  /** 2026-05-18 (messaging-layer slice 1) — count of contacts with
+   *  an email created in the last 30 days. Used as a proxy for
+   *  "leads synced to newsletter" — every contact_created event in
+   *  this window fires syncContactToNewsletter for any connected
+   *  provider. Shown per-provider when connected so operators can
+   *  see the integration is actually working. */
+  newLeadsLast30Days?: number;
 }) {
   const [activeTab, setActiveTab] = useState<Tab>("templates");
   const [showCreate, setShowCreate] = useState(false);
@@ -117,9 +125,46 @@ export function EmailPageContent({
             <div>
               <h3 className="text-base font-medium text-foreground">Newsletter Connections</h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                New contacts sync to your list. You keep your newsletter tool. SeldonFrame handles 1:1 transactional emails.
+                When connected, every new lead from a booking or intake form
+                is added to your list automatically. You keep your newsletter
+                tool; SeldonFrame doesn't store subscribers.
               </p>
             </div>
+
+            {/* 2026-05-18 (messaging-layer slice 1) — surface the
+                sync activity so operators know the integration is
+                actually working. Until this banner shipped, operators
+                connected Kit and had no signal anything was happening. */}
+            {newLeadsLast30Days > 0 ? (
+              <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-3 py-2">
+                <p className="text-xs text-foreground">
+                  <span className="font-medium">{newLeadsLast30Days}</span>{" "}
+                  new lead{newLeadsLast30Days === 1 ? "" : "s"} captured in
+                  the last 30 days
+                  {[
+                    emailIntegrations.newsletter.kit.connected ? "Kit" : null,
+                    emailIntegrations.newsletter.mailchimp.connected ? "Mailchimp" : null,
+                    emailIntegrations.newsletter.beehiiv.connected ? "Beehiiv" : null,
+                  ].filter(Boolean).length > 0 ? (
+                    <>
+                      {" "}
+                      — relayed automatically to{" "}
+                      {[
+                        emailIntegrations.newsletter.kit.connected ? "Kit" : null,
+                        emailIntegrations.newsletter.mailchimp.connected ? "Mailchimp" : null,
+                        emailIntegrations.newsletter.beehiiv.connected ? "Beehiiv" : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" + ")}
+                      .
+                    </>
+                  ) : (
+                    <>. Connect a provider below to start syncing them automatically.</>
+                  )}
+                </p>
+              </div>
+            ) : null}
+
             <div className="grid gap-4 md:grid-cols-3">
               {[
                 { id: "kit", title: "Kit", placeholder: "Kit API key", state: emailIntegrations.newsletter.kit },
@@ -137,6 +182,9 @@ export function EmailPageContent({
                   {provider.state.connected ? (
                     <div className="space-y-2">
                       <p className="text-xs font-mono text-muted-foreground">{provider.state.maskedKey}</p>
+                      {/* When connected, the cross-system message above
+                          already summarises sync activity. Keep this card
+                          minimal — just the masked key + disconnect. */}
                       <form action={disconnectIntegrationAction}>
                         <input type="hidden" name="service" value={provider.id} />
                         <button type="submit" className="crm-button-secondary h-9 px-4 text-xs w-full">Disconnect</button>
