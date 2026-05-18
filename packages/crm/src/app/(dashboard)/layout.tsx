@@ -215,6 +215,15 @@ export default async function DashboardLayout({
               canAccessSeldon={canAccessSeldon}
               hiddenBlocks={hiddenBlocks}
               workspaceName={activeOrg?.name || "SeldonFrame"}
+              // 2026-05-18 — workspace logo from /settings/theme. Agency
+              // white-label override takes precedence when active;
+              // otherwise the per-workspace theme.logoUrl wins. Falls
+              // back to the SeldonFrame icon when neither set.
+              workspaceLogoUrl={
+                (effectiveBranding?.is_white_label && effectiveBranding.logo_url) ||
+                adminThemeSettings?.theme.logoUrl ||
+                null
+              }
               activeWorkspaceId={orgId}
               workspaceOptions={workspaceOptions.map((workspace) => ({
                 id: workspace.id,

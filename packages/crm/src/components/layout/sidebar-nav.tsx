@@ -96,8 +96,8 @@ function NavItemLink({ item, pathname, onNavigate, icon: Icon }: { item: NavItem
           if (!item.disabled) onNavigate?.();
         }}
       >
-        <Icon className="crm-sidebar-icon size-4 shrink-0" />
-        <span className="crm-sidebar-text flex-1 text-[13px] sm:text-sm">{item.label}</span>
+        <Icon className="crm-sidebar-icon size-[18px] shrink-0" />
+        <span className="crm-sidebar-text flex-1 text-sm">{item.label}</span>
         {trailing}
       </a>
     );
@@ -125,8 +125,8 @@ function NavItemLink({ item, pathname, onNavigate, icon: Icon }: { item: NavItem
           }
         }}
       >
-        <Icon className={`crm-sidebar-icon size-4 shrink-0 ${active && !item.disabled ? "text-primary" : ""}`} />
-        <span className="crm-sidebar-text flex-1 text-[13px] sm:text-sm">{item.label}</span>
+        <Icon className={`crm-sidebar-icon size-[18px] shrink-0 ${active && !item.disabled ? "text-primary" : ""}`} />
+        <span className="crm-sidebar-text flex-1 text-sm">{item.label}</span>
         {trailing}
       </a>
     );
@@ -144,7 +144,7 @@ function NavItemLink({ item, pathname, onNavigate, icon: Icon }: { item: NavItem
         }
       }}
     >
-      <Icon className={`crm-sidebar-icon size-4 shrink-0 ${active && !item.disabled ? "text-primary" : ""}`} />
+      <Icon className={`crm-sidebar-icon size-[18px] shrink-0 ${active && !item.disabled ? "text-primary" : ""}`} />
       <span className="crm-sidebar-text flex-1 text-[13px] sm:text-sm">{item.label}</span>
       {trailing}
     </Link>
