@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CheckCircle2, FileText, Eye, ListTodo } from "lucide-react";
+import { CheckCircle2, FileText, Eye, ListTodo, Palette } from "lucide-react";
 import { listForms } from "@/lib/forms/actions";
 import { getLabels } from "@/lib/soul/labels";
 import { getOrgId } from "@/lib/auth/helpers";
@@ -7,6 +7,11 @@ import { db } from "@/db";
 import { organizations } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { FormsPageActions } from "@/components/forms/forms-page-actions";
+// 2026-05-18 — surface the theme controls that govern intake form
+// design (logo / colors / fonts) so operators don't think they need
+// a separate visual editor. Theme already drives the Formbricks-style
+// rendering of public intake forms; the gap was discoverability.
+import { getThemeSettings } from "@/lib/theme/actions";
 
 /*
   Square UI class reference (source of truth):
@@ -18,9 +23,20 @@ import { FormsPageActions } from "@/components/forms/forms-page-actions";
 */
 
 export default async function FormsPage() {
-  const [labels, forms, orgId] = await Promise.all([getLabels(), listForms(), getOrgId()]);
+  const [labels, forms, orgId, themeSettings] = await Promise.all([
+    getLabels(),
+    listForms(),
+    getOrgId(),
+    getThemeSettings().catch(() => null),
+  ]);
   const [org] = orgId ? await db.select({ slug: organizations.slug }).from(organizations).where(eq(organizations.id, orgId)).limit(1) : [null];
   const orgSlug = org?.slug ?? "";
+  // 2026-05-18 — design callout state. We highlight EITHER "your
+  // intake design is using the workspace theme — open Brand & Theme
+  // to customize" (with a primary-color swatch + logo thumb when
+  // available) OR a CTA when theme.logoUrl is empty.
+  const themeLogoUrl = themeSettings?.theme.logoUrl ?? null;
+  const themePrimary = themeSettings?.theme.primaryColor ?? "#0ea5e9";
 
   // v1.29.1 — show stats grid only when there's meaningful data.
   // Empty stats with "+0 vs last month" labels feel like dashboard
@@ -47,6 +63,43 @@ export default async function FormsPage() {
         </div>
         <FormsPageActions buttonLabel={`+ New ${labels.intakeForm.singular}`} />
       </div>
+
+      {/* 2026-05-18 — design customization callout. The Formbricks-style
+          single-question-at-a-time rendering picks up logo / primary
+          color / font from the workspace theme. We surface that here
+          so operators don't think they need a separate visual editor.
+          Clicking "Customize design" lands on /settings/theme where
+          they can upload a logo, pick fonts, and tune the brand color
+          — every saved field cascades to all intake forms automatically. */}
+      <Link
+        href="/settings/theme"
+        className="flex items-center gap-4 rounded-xl border border-border bg-card p-4 hover:bg-accent/30 transition-colors"
+      >
+        <div
+          className="flex size-10 shrink-0 items-center justify-center rounded-lg"
+          style={{ backgroundColor: `${themePrimary}1a`, color: themePrimary }}
+        >
+          {themeLogoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={themeLogoUrl} alt="Workspace logo" className="size-8 rounded object-contain" />
+          ) : (
+            <Palette className="size-5" />
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-foreground">
+            {themeLogoUrl
+              ? "Intake forms inherit your workspace theme"
+              : "Make your intake forms beautiful"}
+          </p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {themeLogoUrl
+              ? "Logo, primary color, and font cascade automatically. Tweak anytime in Brand & Theme."
+              : "Upload a logo and pick brand colors / fonts in Brand & Theme. Every intake form picks them up automatically."}
+          </p>
+        </div>
+        <span className="text-xs font-medium text-foreground shrink-0">Customize design →</span>
+      </Link>
 
       {showStats && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
