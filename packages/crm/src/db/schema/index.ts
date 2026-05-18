@@ -98,3 +98,10 @@ export * from "./agency-support-sessions";
 // agent_evals (test scenarios per version). Web chat archetype
 // ships first; voice / SMS / email queued.
 export * from "./agents";
+
+// 2026-05-18 — outbound messaging layer (plan v2):
+// outbound_message_triggers + outbound_message_sends. Symmetric to
+// the existing message_triggers (inbound SMS routing from SLICE 7),
+// but for the outbound side: event fires → dispatch rule → compose
+// + send via operator's Resend/Twilio. See db/schema/outbound-messages.ts.
+export * from "./outbound-messages";
