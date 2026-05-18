@@ -323,7 +323,12 @@ export function PublicBookingForm({
     <main className="min-h-screen px-4 py-6 md:px-8 md:py-10" style={{ backgroundColor: "var(--sf-bg, #fafaf9)" }}>
       <div className="mx-auto w-full max-w-5xl space-y-6">
         {/* ───── Top header (business name + phone CTA) ───── */}
-        <header className="flex items-center justify-between gap-4 rounded-2xl border bg-card px-5 py-4 md:px-6" style={{ borderColor: "var(--sf-border)" }}>
+        {/* 2026-05-18 — radius now consumes --sf-radius (operator's
+            /settings/theme borderRadius choice: sharp=0 / rounded=8 /
+            pill=9999). Tailwind's rounded-2xl override is removed so
+            the inline style wins. Fallback 1rem matches the prior
+            visual when no theme is set. */}
+        <header className="flex items-center justify-between gap-4 border bg-card px-5 py-4 md:px-6" style={{ borderColor: "var(--sf-border)", borderRadius: "var(--sf-radius, 1rem)" }}>
           {/* 2026-05-18 — workspace logo render. If theme.logoUrl is
               set, show it AT the front of the header next to (not
               instead of) the business name. White-label expectation
@@ -362,7 +367,7 @@ export function PublicBookingForm({
         </header>
 
         {/* ───── Body: two-column card ───── */}
-        <div className="rounded-2xl border bg-card overflow-hidden" style={{ borderColor: "var(--sf-border)" }}>
+        <div className="border bg-card overflow-hidden" style={{ borderColor: "var(--sf-border)", borderRadius: "var(--sf-radius, 1rem)" }}>
           <div className="grid md:grid-cols-[38%_62%]">
             {/* LEFT — meeting / appointment summary */}
             <aside className="border-b md:border-b-0 md:border-r p-6 md:p-8 space-y-6" style={{ borderColor: "var(--sf-border)" }}>
@@ -614,6 +619,19 @@ export function PublicBookingForm({
                       type="submit"
                       disabled={pending}
                       className="crm-button-primary h-12 w-full justify-center text-base font-semibold disabled:opacity-60"
+                      style={{
+                        // 2026-05-18 — radius cascade from theme:
+                        // sharp / rounded / pill via --sf-radius. The
+                        // primary button is the most-clicked element
+                        // on the booking page; honoring radius here
+                        // makes the operator's choice visibly land.
+                        borderRadius: "var(--sf-radius, 0.5rem)",
+                        // Accent rendering on hover/focus is too
+                        // disruptive on the primary CTA — keep primary
+                        // bg, but use accent color as a focus-ring
+                        // tint via outlineColor.
+                        outlineColor: "var(--sf-accent, var(--sf-primary, #21a38b))",
+                      }}
                     >
                       {submitLabel}
                     </button>

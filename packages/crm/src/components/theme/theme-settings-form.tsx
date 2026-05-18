@@ -181,15 +181,40 @@ export function ThemeSettingsForm({
           >
             <p className="text-base font-semibold">{orgName}</p>
             <p className="text-xs" style={{ color: theme.mode === "dark" ? "#a1a1aa" : "#71717a" }}>Client-facing page style preview</p>
-            <button
-              type="button"
-              className="inline-flex h-9 items-center px-4 text-sm text-white"
-              style={{ backgroundColor: theme.primaryColor, borderRadius: radius }}
+            {/* 2026-05-18 — preview now also renders an Accent button
+                + a small card so the operator can see what each
+                control does. Was previously primary-only, which made
+                accent / font / radius feel inert. */}
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="inline-flex h-9 items-center px-4 text-sm text-white"
+                style={{ backgroundColor: theme.primaryColor, borderRadius: radius }}
+              >
+                Primary action
+              </button>
+              <button
+                type="button"
+                className="inline-flex h-9 items-center px-4 text-sm text-white"
+                style={{ backgroundColor: theme.accentColor, borderRadius: radius }}
+              >
+                Accent action
+              </button>
+            </div>
+            <div
+              className="p-3 border text-xs"
+              style={{
+                borderColor: theme.mode === "dark" ? "#27272a" : "#e4e4e7",
+                borderRadius: radius,
+              }}
             >
-              Primary action
-            </button>
+              Card surface — radius + font + mode applied
+            </div>
           </div>
         </div>
+        <p className="text-xs text-muted-foreground">
+          What each control affects today: primary color drives buttons + selected slots + accents on public pages; accent color is used for focus rings + secondary CTAs; font cascades to all public pages; border radius applies to booking-page cards and the primary CTA; mode affects the live preview here (booking pages stay light by industry convention).
+        </p>
       </aside>
     </div>
   );
