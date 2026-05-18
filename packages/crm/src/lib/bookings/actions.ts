@@ -16,6 +16,19 @@ import {
   syncBookingWithGoogleCalendar,
 } from "./google-calendar-sync";
 import { buildMeetingUrl, resolveBookingProvider } from "./providers";
+// 2026-05-18 — lazy-resolve intake fields from theme.aestheticArchetype
+// for workspaces created before enhance-blocks ran the booking-intake
+// field seeding (or whose creation flow skipped it entirely, like the
+// lean URL flow create_workspace_v2 → complete_workspace_v2). Without
+// this, /book renders the legacy name+email+notes flow for every
+// pre-v1.40 workspace — operator-reported as "booking pages aren't
+// SOUL-aware". The function is pure (in-memory lookup), so it's safe
+// to call on every booking page render.
+import {
+  classifyArchetype,
+  type AestheticArchetypeId,
+} from "@/lib/workspace/aesthetic-archetypes";
+import { getBookingIntakeFieldsForArchetype } from "@/lib/workspace/booking-intake-fields";
 
 function deriveEndsAt(startsAt: Date, durationMinutes: number) {
   return new Date(startsAt.getTime() + durationMinutes * 60_000);
@@ -346,6 +359,12 @@ async function resolvePublicBookingContext(orgSlug: string, bookingSlug: string)
       // v1.40.2 — fetch workspace timezone so slot generation +
       // display happen in the operator's TZ, not server-local UTC.
       timezone: organizations.timezone,
+      // 2026-05-18 — fetch the theme so we can lazy-resolve intake
+      // fields from theme.aestheticArchetype for workspaces created
+      // before enhance-blocks ran (or via the lean URL flow that
+      // doesn't fan out into enhance-blocks at all). See lazy-resolve
+      // block below.
+      theme: organizations.theme,
     })
     .from(organizations)
     .where(eq(organizations.slug, orgSlug))
@@ -376,6 +395,20 @@ async function resolvePublicBookingContext(orgSlug: string, bookingSlug: string)
   const bufferAfterMinutes = resolveBufferMinutes(metadata?.bufferAfterMinutes);
   const maxBookingsPerDay = resolveMaxBookingsPerDay(metadata?.maxBookingsPerDay);
 
+  // 2026-05-18 — lazy-resolve intake fields from theme.aestheticArchetype
+  // (or classify from soul.industry as a last resort) when the booking
+  // template doesn't have them pre-seeded. Solves the "booking pages
+  // aren't SOUL-aware" complaint for workspaces created before v1.40.1
+  // OR via the lean URL flow (create_workspace_v2) which doesn't run
+  // enhance-blocks. Pure in-memory lookup — no DB writes (the booking
+  // metadata stays as-is so operator-edited custom fields aren't
+  // clobbered the next time the page renders).
+  const seededFields = Array.isArray(metadata?.intakeFields) ? metadata!.intakeFields : [];
+  const resolvedIntakeFields =
+    seededFields.length > 0
+      ? seededFields
+      : resolveIntakeFieldsFromSoul(org.theme, org.soul);
+
   return {
     orgId: org.id,
     bookingSlug,
@@ -391,10 +424,70 @@ async function resolvePublicBookingContext(orgSlug: string, bookingSlug: string)
     // v1.40.1 — vertical-aware booking intake fields. Populated during
     // create_full_workspace based on the classified archetype. Empty
     // array for legacy templates (renders the default name+email+notes).
-    intakeFields: Array.isArray(metadata?.intakeFields) ? metadata!.intakeFields : [],
+    // 2026-05-18 — now falls back to archetype-driven lazy resolve so
+    // pre-v1.40 / lean-URL-flow workspaces also get the right fields.
+    intakeFields: resolvedIntakeFields,
     // v1.40.2 — workspace IANA TZ. Falls back to UTC if unset.
     workspaceTimezone: org.timezone || "UTC",
   };
+}
+
+// 2026-05-18 — lazy-resolve helper. Tries (in order):
+//   1. theme.aestheticArchetype (set during create_full_workspace +
+//      detected during the lean URL flow's enhance step)
+//   2. classify from soul.industry + soul.businessDescription
+//   3. fall back to "editorial-warm" (the catch-all default)
+// Returns the archetype's intake field set, or [] if classification fails.
+function resolveIntakeFieldsFromSoul(
+  rawTheme: unknown,
+  rawSoul: unknown,
+): BookingIntakeField[] {
+  // 1. Try the explicit archetype on the theme.
+  const theme = (rawTheme && typeof rawTheme === "object" ? (rawTheme as Record<string, unknown>) : null);
+  const explicitArchetype = typeof theme?.aestheticArchetype === "string" ? theme.aestheticArchetype as AestheticArchetypeId : null;
+
+  if (explicitArchetype) {
+    try {
+      return getBookingIntakeFieldsForArchetype(explicitArchetype);
+    } catch {
+      // Unknown archetype id — fall through to classify-from-soul.
+    }
+  }
+
+  // 2. Classify from soul.
+  const soul = (rawSoul && typeof rawSoul === "object" ? (rawSoul as Record<string, unknown>) : null) ?? null;
+  const business = (soul?.business && typeof soul.business === "object" ? (soul.business as Record<string, unknown>) : null) ?? null;
+  const vertical = typeof soul?.industry === "string"
+    ? soul.industry
+    : typeof business?.industry === "string"
+      ? business.industry
+      : typeof business?.vertical === "string"
+        ? business.vertical
+        : null;
+  const description = typeof business?.description === "string"
+    ? business.description
+    : typeof soul?.summary === "string"
+      ? soul.summary
+      : null;
+
+  if (!vertical && !description) {
+    // Nothing to classify on — return [] so the legacy
+    // name+email+notes flow renders. Better than guessing wrong.
+    return [];
+  }
+
+  try {
+    const archetypeId = classifyArchetype({
+      // classifyArchetype expects vertical as a non-null string; empty
+      // string still cleanly falls through to the catch-all
+      // "editorial-warm" path inside the classifier.
+      vertical: vertical ?? "",
+      businessDescription: description ?? null,
+    });
+    return getBookingIntakeFieldsForArchetype(archetypeId);
+  } catch {
+    return [];
+  }
 }
 
 export async function getPublicBookingContext(orgSlug: string, bookingSlug: string) {
