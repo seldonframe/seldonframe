@@ -176,7 +176,10 @@ export function Sidebar(props: {
             // with an inline operator reply box. Placed adjacent to
             // Bookings since both are inbound-customer surfaces.
             { href: "/conversations", label: "Conversations", icon: "MessageCircle" },
-            { href: "/emails", label: "Email", icon: "Mail" },
+            // 2026-05-18 — renamed "Email" → "Messaging" because the
+            // page now also hosts Twilio SMS connect + outbound trigger
+            // editor for both channels. "Email" was misleading.
+            { href: "/emails", label: "Messaging", icon: "Mail" },
             { href: "/forms", label: labels.intakeForm.plural, icon: "FileText" },
             // 2026-05-17 — Pages (/landing) dropped from the nav. SF
             // isn't a landing-page builder; existing rows still render
@@ -235,17 +238,17 @@ export function Sidebar(props: {
             // 2026-05-18 — messaging-layer slice 4. See sibling comment
             // in the isInsideClientWorkspace branch.
             { href: "/conversations", label: "Conversations", icon: "MessageCircle" },
-            // 2026-05-18 — Per operator feedback, "Agents" and
-            // "Automations" labels were ambiguous (both feel AI-ish).
-            // /agents manages conversational chatbots (status, version,
-            // conversations, evals) → label "Chatbots" makes the
-            // distinction clear. /automations stays "Automations" since
-            // it's workflow recipes (speed-to-lead, win-back, etc.) that
-            // operate on CRM data, not on conversation flows.
-            { href: "/agents", label: "Chatbots", icon: "Bot" },
+            // 2026-05-18 — /agents removed from sidebar entirely per
+            // operator feedback ("/agents page is confusing, just keep
+            // /automations"). Route still resolves for deep links from
+            // the Ready hub's "Test chatbot" CTA, but agency operators
+            // manage AI surfaces exclusively through /automations now.
             // 2026-05-17 — Pages (/landing) dropped from nav. See
             // the matching comment in the isInsideClientWorkspace branch.
-            { href: "/emails", label: "Email", icon: "Mail" },
+            // 2026-05-18 — renamed "Email" → "Messaging" because the
+            // page now also hosts SMS (Twilio connect + per-trigger
+            // skill editor for both channels).
+            { href: "/emails", label: "Messaging", icon: "Mail" },
             { href: "/forms", label: labels.intakeForm.plural, icon: "FileText" },
             { href: "/automations", label: "Automations", icon: "Zap" },
             // 2026-05-18 — Removed "Templates" (route /marketplace).
