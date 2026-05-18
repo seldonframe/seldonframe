@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, Building2 } from "lucide-react";
 import { getArchetype } from "@/lib/agents/archetypes";
 import { getAgentConfig } from "@/lib/agents/configure-actions";
 import { getArchetypeSetupChecklist } from "@/lib/agents/setup-checklist";
@@ -8,6 +8,15 @@ import { getOrgId } from "@/lib/auth/helpers";
 import { listForms } from "@/lib/forms/actions";
 import { listAppointmentTypes } from "@/lib/bookings/actions";
 import { ConfigureAgentForm } from "@/components/automations/configure-agent-form";
+// 2026-05-18 — workspace selector for /automations/[id]/configure.
+// Operator feedback: "it should be easy to select to which workspace
+// to apply [the automation]." Today the configure page reads from the
+// active org cookie (getOrgId) — so the agency operator first has to
+// switch into a client workspace, then navigate to /automations.
+// Surfacing a picker here makes the flow obvious: pick workspace,
+// configure, save. Reuses the existing setActiveOrgAction (same one
+// the sidebar workspace switcher uses) so behavior is consistent.
+import { listManagedOrganizations, setActiveOrgAction } from "@/lib/billing/orgs";
 
 /**
  * /automations/[id]/configure — agent configuration form + live
@@ -33,13 +42,14 @@ export default async function ConfigureAutomationPage({
   if (!archetype) notFound();
 
   const orgId = await getOrgId();
-  const [config, formsResult, appointmentTypesResult, checklist] = await Promise.all([
+  const [config, formsResult, appointmentTypesResult, checklist, managedOrgs] = await Promise.all([
     getAgentConfig(id),
     listForms().catch(() => []),
     listAppointmentTypes().catch(() => []),
     orgId
       ? getArchetypeSetupChecklist(id, orgId).catch(() => null)
       : Promise.resolve(null),
+    listManagedOrganizations().catch(() => []),
   ]);
 
   // Surface the typed picker options so the form doesn't have to
@@ -77,6 +87,42 @@ export default async function ConfigureAutomationPage({
           {archetype.detailedDescription}
         </p>
       </header>
+
+      {/* 2026-05-18 — workspace selector. Renders only when the
+          operator manages 2+ workspaces (a single-workspace operator
+          has no selection to make — the active workspace IS the only
+          one). Submits orgId + redirectTo back to this configure
+          page so the cookie flips and the page re-renders against
+          the picked workspace. */}
+      {managedOrgs.length > 1 ? (
+        <article className="rounded-xl border bg-card p-4 space-y-3">
+          <div className="flex items-center gap-2 text-sm">
+            <Building2 className="size-4 text-muted-foreground" />
+            <p className="font-medium text-foreground">Apply to workspace</p>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Pick which workspace this automation should run in. Configuration is per-workspace.
+          </p>
+          <form action={setActiveOrgAction} className="flex flex-col sm:flex-row gap-2 sm:items-center">
+            <input type="hidden" name="redirectTo" value={`/automations/${id}/configure`} />
+            <select
+              name="orgId"
+              defaultValue={orgId ?? ""}
+              className="crm-input h-10 px-3 flex-1"
+            >
+              {managedOrgs.map((org) => (
+                <option key={org.id} value={org.id}>
+                  {org.name}
+                  {org.id === orgId ? " (active)" : ""}
+                </option>
+              ))}
+            </select>
+            <button type="submit" className="crm-button-secondary h-10 px-4 text-xs">
+              Switch & configure
+            </button>
+          </form>
+        </article>
+      ) : null}
 
       {archetype.knownLimitations.length > 0 ? (
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-xs">
