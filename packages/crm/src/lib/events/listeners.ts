@@ -120,6 +120,24 @@ export function registerCrmEventListeners() {
           err
         )
       );
+
+    // 2026-05-18 — Slice 7 — outbound messaging dispatch for
+    // form.submitted (intake auto-reply email + SMS). Non-fatal.
+    void resolveOrgIdForFormId(formId)
+      .then((orgId) => {
+        if (!orgId) return;
+        return dispatchOutboundMessagesForEvent({
+          orgId,
+          eventType: "form.submitted",
+          payload: event.data as Record<string, unknown>,
+        });
+      })
+      .catch((err) =>
+        console.warn(
+          `[listeners] dispatchOutboundMessagesForEvent form.submitted failed:`,
+          err,
+        ),
+      );
   });
 
   bus.on("booking.created", async (event) => {
@@ -205,6 +223,30 @@ export function registerCrmEventListeners() {
       no_show_rate: 0,
       conversion_rate: 0,
     });
+
+    // 2026-05-18 — Slice 7 — outbound messaging dispatch for
+    // booking.cancelled (booking-cancellation email by default).
+    // Payload only carries appointmentId + contactId; dispatcher
+    // resolves the rest via render-vars from the contact + workspace
+    // soul. orgId arrives on the meta of the event.
+    const data = event.data as Record<string, unknown>;
+    const appointmentId =
+      typeof data.appointmentId === "string" ? data.appointmentId : "";
+    void resolveOrgIdForBookingId(appointmentId)
+      .then((orgId) => {
+        if (!orgId) return;
+        return dispatchOutboundMessagesForEvent({
+          orgId,
+          eventType: "booking.cancelled",
+          payload: data,
+        });
+      })
+      .catch((err) =>
+        console.warn(
+          `[listeners] dispatchOutboundMessagesForEvent booking.cancelled failed:`,
+          err,
+        ),
+      );
   });
 
   bus.on("booking.no_show", async (event) => {

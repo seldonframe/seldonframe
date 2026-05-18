@@ -37,6 +37,29 @@ const DEFAULTS: DefaultTrigger[] = [
     skillId: "booking-confirmation-sms",
     delayMinutes: 0,
   },
+  // 2026-05-18 — Slice 7 adds the intake auto-reply (email + SMS)
+  // and booking cancellation (email-only) defaults. Cancellation is
+  // intentionally email-only — an SMS on the cancellation moment
+  // feels intrusive, and the operator can wire an SMS cancellation
+  // trigger from the editor on /emails if they want it.
+  {
+    eventType: "form.submitted",
+    channel: "email",
+    skillId: "intake-auto-reply",
+    delayMinutes: 0,
+  },
+  {
+    eventType: "form.submitted",
+    channel: "sms",
+    skillId: "intake-auto-reply-sms",
+    delayMinutes: 0,
+  },
+  {
+    eventType: "booking.cancelled",
+    channel: "email",
+    skillId: "booking-cancellation",
+    delayMinutes: 0,
+  },
 ];
 
 export async function seedDefaultOutboundTriggers(orgId: string): Promise<void> {
