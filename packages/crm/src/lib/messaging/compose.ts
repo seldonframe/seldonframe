@@ -44,7 +44,14 @@ export type ComposeSuccess = {
 export type ComposeFailure = { ok: false; reason: string };
 
 const MAX_EMAIL_BODY = 4000;
-const MAX_SMS_BODY = 320;
+// 2026-05-18 — Slice 3: SMS body cap leaves room for the auto-appended
+// STOP footer (~27 chars including the leading space). Two standard
+// SMS segments = 320 chars total; we cap composed body at 290 so the
+// final payload (body + footer) fits in 2 segments with room to spare.
+// Carriers charge per segment; a 290+27 = 317-char send is one
+// concatenated message billed as 2 segments. Going over starts to
+// chunk in unpredictable ways.
+const MAX_SMS_BODY = 290;
 const FORBIDDEN_STRINGS = ["seldon", "seldonframe"];
 
 export async function composeOutboundMessage(

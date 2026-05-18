@@ -25,8 +25,26 @@ import {
   outboundMessageTriggers,
 } from "@/db/schema";
 import { sendEmailFromApi } from "@/lib/emails/api";
+// 2026-05-18 — Slice 3 wires SMS sends. sendSmsFromApi has existed
+// for a while (the inbound webhook + auto-reply piece is what Slice 4
+// adds); we just plug it in.
+import { sendSmsFromApi } from "@/lib/sms/api";
 import { composeOutboundMessage } from "./compose";
 import { buildRenderVars, type DispatchEventPayload } from "./render-vars";
+
+// 2026-05-18 — TCPA / A2P 10DLC footer. Auto-appended to every
+// outbound SMS so operators can never accidentally skip it. Detection
+// is case-insensitive substring match so we don't double-append if
+// the operator's skill already includes it.
+const SMS_STOP_FOOTER = "Reply STOP to unsubscribe.";
+
+function appendStopFooter(body: string): string {
+  if (body.toLowerCase().includes("reply stop")) return body;
+  const trimmed = body.trimEnd();
+  // Use a space separator (not a newline) — many carriers fold
+  // multi-line SMS in a way that hides trailing lines.
+  return `${trimmed} ${SMS_STOP_FOOTER}`;
+}
 
 export type DispatchInput = {
   orgId: string;
@@ -92,10 +110,11 @@ export async function dispatchOutboundMessagesForEvent(
   });
 
   for (const trigger of triggers) {
-    // Slice 2: only email is wired through composeOutboundMessage.
-    // SMS lands in slice 3 — skip with an audit row so the gap is
-    // visible.
-    if (trigger.channel !== "email") {
+    // Slice 3 — SMS now wired. Both 'email' and 'sms' route through
+    // composeOutboundMessage; the channel-specific send happens after
+    // composition. Any other channel (future: WhatsApp, voice drop)
+    // still skips with a "channel_not_wired_yet" audit row.
+    if (trigger.channel !== "email" && trigger.channel !== "sms") {
       await db.insert(outboundMessageSends).values({
         orgId: input.orgId,
         triggerId: trigger.id,
@@ -112,7 +131,9 @@ export async function dispatchOutboundMessagesForEvent(
       continue;
     }
 
-    const toAddress = vars.contactEmail || "";
+    // Route to the right recipient address per channel.
+    const toAddress =
+      trigger.channel === "email" ? vars.contactEmail || "" : vars.contactPhone || "";
     if (!toAddress) {
       await db.insert(outboundMessageSends).values({
         orgId: input.orgId,
@@ -124,7 +145,8 @@ export async function dispatchOutboundMessagesForEvent(
         subject: null,
         body: "",
         status: "skipped",
-        error: "no_recipient_email",
+        error:
+          trigger.channel === "email" ? "no_recipient_email" : "no_recipient_phone",
         metadata: { skill: trigger.skillId },
       });
       continue;
@@ -135,7 +157,7 @@ export async function dispatchOutboundMessagesForEvent(
       skillId: trigger.skillId,
       customSkillMd: trigger.customSkillMd ?? null,
       vars,
-      channel: "email",
+      channel: trigger.channel,
     });
 
     if (!composed.ok) {
@@ -155,14 +177,21 @@ export async function dispatchOutboundMessagesForEvent(
       continue;
     }
 
-    // Queue + send. sendEmailFromApi handles the Resend resolution
-    // (operator's key OR fallback to platform key via process.env.
-    // RESEND_API_KEY + DEFAULT_FROM_EMAIL). It also handles the
-    // suppression check + records into the existing `emails` table.
+    // Auto-append the STOP footer on SMS (TCPA / A2P 10DLC compliance
+    // — see appendStopFooter at the top of this file). Email doesn't
+    // need this — unsubscribe links live in the Resend template chrome.
+    const finalBody =
+      trigger.channel === "sms" ? appendStopFooter(composed.body) : composed.body;
+
+    // Queue + send. Channel-specific:
+    //   email → sendEmailFromApi (Resend resolution, suppression,
+    //     fallback to platform key when not connected).
+    //   sms → sendSmsFromApi (Twilio config required; throws if
+    //     fromNumber missing — caught + logged below).
     //
-    // We additionally record into outbound_message_sends so the
-    // operator can see the trigger-attributed audit log on /emails
-    // and /sms separate from the generic email_log.
+    // We additionally record into outbound_message_sends so /emails
+    // and /sms surface the trigger-attributed audit log separate from
+    // the generic emails / sms_messages tables.
     const [sendRow] = await db
       .insert(outboundMessageSends)
       .values({
@@ -173,39 +202,66 @@ export async function dispatchOutboundMessagesForEvent(
         contactId: contactRow?.id ?? null,
         toAddress,
         subject: composed.subject,
-        body: composed.body,
+        body: finalBody,
         status: "queued",
         metadata: { skill: trigger.skillId, model: composed.model },
       })
       .returning({ id: outboundMessageSends.id });
 
     try {
-      const result = await sendEmailFromApi({
-        orgId: input.orgId,
-        userId: "system",
-        contactId: contactRow?.id ?? null,
-        toEmail: toAddress,
-        subject: composed.subject ?? "Confirmation",
-        body: composed.body,
-      });
+      if (trigger.channel === "email") {
+        const result = await sendEmailFromApi({
+          orgId: input.orgId,
+          userId: "system",
+          contactId: contactRow?.id ?? null,
+          toEmail: toAddress,
+          subject: composed.subject ?? "Confirmation",
+          body: finalBody,
+        });
 
-      if (result.suppressed) {
-        await db
-          .update(outboundMessageSends)
-          .set({
-            status: "suppressed",
-            error: result.reason,
-          })
-          .where(eq(outboundMessageSends.id, sendRow.id));
+        if (result.suppressed) {
+          await db
+            .update(outboundMessageSends)
+            .set({ status: "suppressed", error: result.reason })
+            .where(eq(outboundMessageSends.id, sendRow.id));
+        } else {
+          await db
+            .update(outboundMessageSends)
+            .set({
+              status: "sent",
+              externalMessageId: result.emailId,
+              sentAt: new Date(),
+            })
+            .where(eq(outboundMessageSends.id, sendRow.id));
+        }
       } else {
-        await db
-          .update(outboundMessageSends)
-          .set({
-            status: "sent",
-            externalMessageId: result.emailId,
-            sentAt: new Date(),
-          })
-          .where(eq(outboundMessageSends.id, sendRow.id));
+        // sms — sendSmsFromApi throws on suppression / config errors,
+        // so we don't get the same { suppressed } shape email has.
+        // Wrap the call so config-missing errors land in the audit
+        // row instead of bubbling up to the event listener.
+        const result = await sendSmsFromApi({
+          orgId: input.orgId,
+          userId: null,
+          contactId: contactRow?.id ?? null,
+          toNumber: toAddress,
+          body: finalBody,
+        });
+
+        if (result.suppressed) {
+          await db
+            .update(outboundMessageSends)
+            .set({ status: "suppressed", error: result.reason })
+            .where(eq(outboundMessageSends.id, sendRow.id));
+        } else {
+          await db
+            .update(outboundMessageSends)
+            .set({
+              status: "sent",
+              externalMessageId: result.externalMessageId,
+              sentAt: new Date(),
+            })
+            .where(eq(outboundMessageSends.id, sendRow.id));
+        }
       }
     } catch (err) {
       await db
