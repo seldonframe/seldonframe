@@ -72,22 +72,43 @@ export function renderPlainEmailTemplate({
   if (phone) footerLines.push(`<a href="tel:${escapeAttr(phone.replace(/[^\d+]/g, ""))}" style="color:#475569;text-decoration:none;">${escapeHtml(phone)}</a>`);
   if (address) footerLines.push(escapeHtml(address));
   const footerBlock = footerLines.length > 0
-    ? `<div style="margin-top:32px;padding-top:20px;border-top:1px solid #e2e8f0;font-size:13px;color:#64748b;line-height:1.6;">${footerLines.join(" · ")}</div>`
+    ? `<div class="sf-footer" style="margin-top:32px;padding-top:20px;border-top:1px solid #e2e8f0;font-size:13px;color:#64748b;line-height:1.6;">${footerLines.join(" · ")}</div>`
     : "";
 
   const poweredByBlock = showPoweredBy
     ? `<div style="margin-top:16px;font-size:11px;color:#94a3b8;text-align:center;">Powered by SeldonFrame</div>`
     : "";
 
+  // 2026-05-18 — color-scheme meta + style tag forces light rendering
+  // even when the recipient's Gmail / iOS Mail / Outlook is in dark
+  // mode. Without these, Gmail auto-inverts the colors and the white
+  // card with dark text becomes a dark card with light text — the
+  // "why does it still look dark mode" bug. The msoStyle / [data-ogsc]
+  // selectors target Outlook + Gmail.com dark-theme processors.
   const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(heading)}</title></head>
-<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light only">
+<meta name="supported-color-schemes" content="light">
+<title>${escapeHtml(heading)}</title>
+<style>
+  :root { color-scheme: light only; supported-color-schemes: light; }
+  body, .sf-card { color-scheme: light only; }
+  [data-ogsc] body { background:#f8fafc !important; }
+  [data-ogsc] .sf-card { background:#ffffff !important; color:#0f172a !important; }
+  [data-ogsc] .sf-body-text { color:#334155 !important; }
+  [data-ogsc] .sf-heading { color:#0f172a !important; }
+  [data-ogsc] .sf-footer { color:#64748b !important; }
+</style>
+</head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;color-scheme:light only;">
   <div style="max-width:560px;margin:0 auto;padding:32px 16px;">
-    <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;padding:32px 28px;box-shadow:0 1px 3px rgba(15,23,42,0.04);">
+    <div class="sf-card" style="background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;padding:32px 28px;box-shadow:0 1px 3px rgba(15,23,42,0.04);">
       ${logoBlock}
       <div style="height:3px;background:${primary};border-radius:2px;margin-bottom:24px;width:48px;"></div>
-      <h1 style="margin:0 0 16px;font-size:22px;line-height:1.3;color:#0f172a;font-weight:600;">${escapeHtml(heading)}</h1>
-      <div style="margin:0 0 0;color:#334155;font-size:15px;line-height:1.65;white-space:pre-wrap;">${linkifiedBody}</div>
+      <h1 class="sf-heading" style="margin:0 0 16px;font-size:22px;line-height:1.3;color:#0f172a;font-weight:600;">${escapeHtml(heading)}</h1>
+      <div class="sf-body-text" style="margin:0 0 0;color:#334155;font-size:15px;line-height:1.65;white-space:pre-wrap;">${linkifiedBody}</div>
       ${ctaBlock}
       ${footerBlock}
     </div>

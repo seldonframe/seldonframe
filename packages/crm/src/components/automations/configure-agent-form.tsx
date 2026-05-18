@@ -21,6 +21,17 @@ import {
 } from "@/lib/agents/configure-actions";
 import type { Checklist } from "@/lib/agents/setup-checklist";
 
+// 2026-05-18 — archetypes whose entire value prop depends on sending
+// the moment a trigger fires (no human in the loop). For these, the
+// "Require approval before sending" toggle is hidden because using it
+// would defeat the archetype's purpose. Operator-reported: "this
+// isn't useful for speed-to-lead" — agreed.
+const REAL_TIME_ARCHETYPES = new Set<string>([
+  "speed-to-lead",
+  "appointment-confirm-sms",
+  "missed-call-text-back",
+]);
+
 /**
  * WS3 — agent configure form.
  *
@@ -319,28 +330,36 @@ export function ConfigureAgentForm({
         </fieldset>
 
         {/* Safety */}
+        {/* 2026-05-18 — speed-to-lead is real-time response (the WHOLE
+            value prop is "answer leads within seconds before competitors").
+            An approval queue defeats that — operator confirmed via dogfood.
+            Hide the toggle for archetypes whose value depends on instant
+            send; keep it for everything else (review-requester,
+            daily-digest, etc.) where operator review is the norm. */}
         <fieldset className="rounded-xl border bg-card p-5 space-y-4">
           <legend className="-ml-1 px-1 text-sm font-semibold text-foreground">
             Safety &amp; rate limits
           </legend>
-          <label className="flex items-start gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={approvalRequired}
-              onChange={(e) => setApprovalRequired(e.target.checked)}
-              className="mt-1 size-4 rounded border-border"
-            />
-            <div className="flex-1">
-              <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
-                <ShieldCheck className="size-3.5 text-primary" />
-                Require approval before sending
-              </span>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Outputs are held for your review before SMS / email / booking actions
-                fire. Recommended for new agents until you trust the behavior.
-              </p>
-            </div>
-          </label>
+          {!REAL_TIME_ARCHETYPES.has(archetypeId) ? (
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={approvalRequired}
+                onChange={(e) => setApprovalRequired(e.target.checked)}
+                className="mt-1 size-4 rounded border-border"
+              />
+              <div className="flex-1">
+                <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                  <ShieldCheck className="size-3.5 text-primary" />
+                  Require approval before sending
+                </span>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Outputs are held for your review before SMS / email / booking actions
+                  fire. Recommended for new agents until you trust the behavior.
+                </p>
+              </div>
+            </label>
+          ) : null}
           <div>
             <label className="block text-xs font-medium text-muted-foreground mb-1.5">
               Max runs per day
