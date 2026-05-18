@@ -10,6 +10,7 @@
 import bookingConfirmationSkill from "./booking-confirmation";
 import bookingConfirmationSmsSkill from "./booking-confirmation-sms";
 import bookingCancellationSkill from "./booking-cancellation";
+import bookingReminder24hSkill from "./booking-reminder-24h";
 import intakeAutoReplySkill from "./intake-auto-reply";
 import intakeAutoReplySmsSkill from "./intake-auto-reply-sms";
 
@@ -49,6 +50,13 @@ const REGISTRY: OutboundMessageSkill[] = [
     content: bookingCancellationSkill,
     channels: ["email"],
     defaultEvents: ["booking.cancelled"],
+  },
+  {
+    id: "booking-reminder-24h",
+    label: "Booking reminder 24h before (email)",
+    content: bookingReminder24hSkill,
+    channels: ["email"],
+    defaultEvents: ["booking.created"],
   },
   {
     id: "intake-auto-reply",

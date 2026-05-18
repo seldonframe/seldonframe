@@ -9,6 +9,9 @@ import { sendTriggeredEmailsForContactEvent, sendWelcomeEmailForContact } from "
 import { syncContactToNewsletter } from "@/lib/integrations/newsletter-sync";
 // 2026-05-18 — Outbound messaging dispatch (plan v2, slice 2).
 import { dispatchOutboundMessagesForEvent } from "@/lib/messaging/dispatch";
+// 2026-05-18 — Slice 6: cancel pending scheduled sends (e.g. 24h
+// reminders) when their target booking is cancelled.
+import { cancelScheduledSendsForBooking } from "@/lib/messaging/schedule";
 
 /**
  * The SeldonEvent typed schema doesn't include orgId on form.submitted /
@@ -244,6 +247,33 @@ export function registerCrmEventListeners() {
       .catch((err) =>
         console.warn(
           `[listeners] dispatchOutboundMessagesForEvent booking.cancelled failed:`,
+          err,
+        ),
+      );
+
+    // 2026-05-18 — Slice 6: cancel pending scheduled sends targeted
+    // at this booking (e.g. the 24h reminder). Without this hook the
+    // reminder would still fire post-cancellation. The booking event
+    // payload uses 'appointmentId' for the booking id; the scheduler
+    // stores the payload verbatim, so we look up by 'bookingId' in
+    // payload. The booking.created event uses 'bookingId' though, so
+    // we need to use the right key — see render-vars to verify.
+    // booking.created emits with 'bookingId' per packages/crm/src/lib/
+    // bookings/actions.ts; we match against that.
+    const bookingIdForCancel =
+      typeof data.bookingId === "string"
+        ? data.bookingId
+        : typeof data.appointmentId === "string"
+          ? data.appointmentId
+          : "";
+    void resolveOrgIdForBookingId(bookingIdForCancel)
+      .then((orgId) => {
+        if (!orgId || !bookingIdForCancel) return;
+        return cancelScheduledSendsForBooking(orgId, bookingIdForCancel);
+      })
+      .catch((err) =>
+        console.warn(
+          `[listeners] cancelScheduledSendsForBooking failed:`,
           err,
         ),
       );
