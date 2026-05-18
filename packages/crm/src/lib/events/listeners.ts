@@ -7,6 +7,8 @@ import { bookings, intakeForms } from "@/db/schema";
 import { dispatchEventToDeployedAgents } from "@/lib/agents/dispatcher";
 import { sendTriggeredEmailsForContactEvent, sendWelcomeEmailForContact } from "@/lib/emails/actions";
 import { syncContactToNewsletter } from "@/lib/integrations/newsletter-sync";
+// 2026-05-18 — Outbound messaging dispatch (plan v2, slice 2).
+import { dispatchOutboundMessagesForEvent } from "@/lib/messaging/dispatch";
 
 /**
  * The SeldonEvent typed schema doesn't include orgId on form.submitted /
@@ -155,6 +157,27 @@ export function registerCrmEventListeners() {
           `[listeners] dispatchEventToDeployedAgents booking.created failed:`,
           err
         )
+      );
+
+    // 2026-05-18 — outbound messaging dispatch (plan v2, slice 2).
+    // Fire the matching outbound_message_triggers (default seeded
+    // when the workspace was created: email booking-confirmation).
+    // Non-fatal — dispatcher logs to outbound_message_sends rather
+    // than throwing.
+    void resolveOrgIdForBookingId(bookingId)
+      .then((orgId) => {
+        if (!orgId) return;
+        return dispatchOutboundMessagesForEvent({
+          orgId,
+          eventType: "booking.created",
+          payload: data,
+        });
+      })
+      .catch((err) =>
+        console.warn(
+          `[listeners] dispatchOutboundMessagesForEvent booking.created failed:`,
+          err,
+        ),
       );
   });
 

@@ -68,6 +68,10 @@ function baseDeps() {
     // 2026-05-17 — auto-seed the soul_sources URL for the new workspace
     // so /settings/soul-wiki shows it on first visit. Stub returns ok:true.
     seedSoulWikiSourceUrl: async () => ({ ok: true, created: true, sourceId: "source-1" }),
+    // 2026-05-18 — seed default outbound message triggers (messaging
+    // plan v2, slice 2). Stub no-ops; production wires
+    // seedDefaultOutboundTriggers(orgId).
+    seedDefaultOutboundTriggers: async () => undefined,
     workspaceBaseDomain: "app.seldonframe.com",
   };
 }

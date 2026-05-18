@@ -96,6 +96,12 @@ export type RunDeps = {
    * source they can iterate on. Best-effort, non-fatal.
    */
   seedSoulWikiSourceUrl: (orgId: string, sourceUrl: string) => Promise<unknown>;
+  /**
+   * 2026-05-18 (messaging plan v2, slice 2) — seed the default outbound
+   * message triggers (booking-confirmation email on booking.created,
+   * etc.) so new workspaces ship with sane defaults. Idempotent.
+   */
+  seedDefaultOutboundTriggers: (orgId: string) => Promise<unknown>;
   workspaceBaseDomain: string;
 };
 
@@ -238,6 +244,23 @@ export async function runCreateFromUrl(input: RunInput): Promise<RunResult> {
           console.warn(
             JSON.stringify({
               event: "auto_chatbot_failed",
+              workspace_id: result.workspace_id,
+              detail: err instanceof Error ? err.message : String(err),
+            }),
+          );
+        }
+
+        // 7c1. Seed default outbound message triggers (messaging plan
+        //      v2, slice 2). New workspaces ship with one trigger
+        //      enabled by default: booking-confirmation email on
+        //      booking.created. Slices 3/7 add SMS + intake + reminders.
+        //      Idempotent — re-runs are no-ops.
+        try {
+          await input.deps.seedDefaultOutboundTriggers(result.workspace_id);
+        } catch (err) {
+          console.warn(
+            JSON.stringify({
+              event: "seed_default_outbound_triggers_failed",
               workspace_id: result.workspace_id,
               detail: err instanceof Error ? err.message : String(err),
             }),
