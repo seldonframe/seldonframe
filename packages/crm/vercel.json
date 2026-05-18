@@ -26,6 +26,10 @@
     {
       "path": "/api/cron/brain-promote",
       "schedule": "0 5 * * 0"
+    },
+    {
+      "path": "/api/cron/outbound-scheduled-sends",
+      "schedule": "* * * * *"
     }
   ]
 }

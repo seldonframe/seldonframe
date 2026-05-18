@@ -31,6 +31,13 @@ import { sendEmailFromApi } from "@/lib/emails/api";
 import { sendSmsFromApi } from "@/lib/sms/api";
 import { composeOutboundMessage } from "./compose";
 import { buildRenderVars, type DispatchEventPayload } from "./render-vars";
+// 2026-05-18 — Slice 6: triggers with delayMinutes > 0 land in
+// outbound_scheduled_sends instead of dispatching immediately.
+import { scheduleOutboundMessage } from "./schedule";
+// 2026-05-18 — booking events emit a sparse {appointmentId, contactId}
+// payload. Hydrate to full {bookingId, title, startsAt, endsAt, slug}
+// before composing so {{bookingTitle}} et al. actually resolve.
+import { hydrateMessagingPayload } from "./hydrate-payload";
 
 // 2026-05-18 — TCPA / A2P 10DLC footer. Auto-appended to every
 // outbound SMS so operators can never accidentally skip it. Detection
@@ -58,6 +65,15 @@ export type DispatchInput = {
 export async function dispatchOutboundMessagesForEvent(
   input: DispatchInput,
 ): Promise<void> {
+  // 2026-05-18 — hydrate sparse booking payloads so render-vars +
+  // scheduler have title/startsAt/endsAt/slug available. No-op for
+  // events that aren't booking.* OR that already carry the data.
+  const payload = await hydrateMessagingPayload(
+    input.orgId,
+    input.eventType,
+    input.payload,
+  );
+
   const triggers = await db
     .select()
     .from(outboundMessageTriggers)
@@ -86,7 +102,7 @@ export async function dispatchOutboundMessagesForEvent(
   if (!org) return;
 
   const contactId =
-    typeof input.payload.contactId === "string" ? input.payload.contactId : null;
+    typeof payload.contactId === "string" ? payload.contactId : null;
   const contactRow = contactId
     ? await db
         .select({
@@ -104,12 +120,44 @@ export async function dispatchOutboundMessagesForEvent(
 
   const vars = buildRenderVars({
     eventType: input.eventType,
-    payload: input.payload,
+    payload,
     org,
     contact: contactRow,
   });
 
   for (const trigger of triggers) {
+    // 2026-05-18 — Slice 6: delay-aware queue. Anything with
+    // delayMinutes > 0 lands in outbound_scheduled_sends; the cron
+    // worker at /api/cron/outbound-scheduled-sends picks it up at
+    // fireAt and runs the same compose+send path this function
+    // would have run inline.
+    if (trigger.delayMinutes > 0) {
+      try {
+        await scheduleOutboundMessage({
+          orgId: input.orgId,
+          trigger,
+          eventType: input.eventType,
+          payload,
+        });
+      } catch (err) {
+        // Non-fatal — log + record as a failed audit row.
+        await db.insert(outboundMessageSends).values({
+          orgId: input.orgId,
+          triggerId: trigger.id,
+          channel: trigger.channel,
+          eventType: input.eventType,
+          contactId: contactRow?.id ?? null,
+          toAddress: "",
+          subject: null,
+          body: "",
+          status: "failed",
+          error: `schedule_failed:${err instanceof Error ? err.message : String(err)}`,
+          metadata: { skill: trigger.skillId, delayMinutes: trigger.delayMinutes },
+        });
+      }
+      continue;
+    }
+
     // Slice 3 — SMS now wired. Both 'email' and 'sms' route through
     // composeOutboundMessage; the channel-specific send happens after
     // composition. Any other channel (future: WhatsApp, voice drop)

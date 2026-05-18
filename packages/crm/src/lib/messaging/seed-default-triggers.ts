@@ -60,6 +60,19 @@ const DEFAULTS: DefaultTrigger[] = [
     skillId: "booking-cancellation",
     delayMinutes: 0,
   },
+  // 2026-05-18 — Slice 6: 24h-before-appointment reminder. The
+  // scheduler computes fireAt = startsAt - delayMinutes (so 1440 =
+  // 24h before, NOT 24h after the event), enqueues a row in
+  // outbound_scheduled_sends, and the /api/cron/outbound-scheduled-sends
+  // cron worker picks it up at fire time. If the booking is cancelled
+  // before fireAt, the cancellation hook flips the pending row to
+  // 'cancelled' so the reminder doesn't fire post-cancellation.
+  {
+    eventType: "booking.created",
+    channel: "email",
+    skillId: "booking-reminder-24h",
+    delayMinutes: 1440,
+  },
 ];
 
 export async function seedDefaultOutboundTriggers(orgId: string): Promise<void> {

@@ -105,3 +105,8 @@ export * from "./agents";
 // but for the outbound side: event fires → dispatch rule → compose
 // + send via operator's Resend/Twilio. See db/schema/outbound-messages.ts.
 export * from "./outbound-messages";
+
+// 2026-05-18 — slice 6: outbound_scheduled_sends queue for time-
+// delayed messages (booking reminders, intake followups). See
+// db/schema/outbound-scheduled-sends.ts.
+export * from "./outbound-scheduled-sends";
