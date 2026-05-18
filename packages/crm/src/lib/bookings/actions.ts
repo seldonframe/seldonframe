@@ -355,6 +355,7 @@ async function resolvePublicBookingContext(orgSlug: string, bookingSlug: string)
   const [org] = await db
     .select({
       id: organizations.id,
+      name: organizations.name,
       soul: organizations.soul,
       // v1.40.2 — fetch workspace timezone so slot generation +
       // display happen in the operator's TZ, not server-local UTC.
@@ -403,11 +404,24 @@ async function resolvePublicBookingContext(orgSlug: string, bookingSlug: string)
   // enhance-blocks. Pure in-memory lookup — no DB writes (the booking
   // metadata stays as-is so operator-edited custom fields aren't
   // clobbered the next time the page renders).
+  //
+  // 2026-05-18 (later) — operator reported "Roofs by Shiloh" still
+  // shows name+email only. Root cause: soul.industry empty AND theme
+  // archetype unset, so the original implementation returned []
+  // early. The classifier itself has a sensible "editorial-warm"
+  // catch-all — we now ALWAYS call it, passing the workspace name +
+  // appointment title as extra hints so "Roofs by Shiloh" / "Roof
+  // Inspection" land in editorial-warm even with no soul data.
   const seededFields = Array.isArray(metadata?.intakeFields) ? metadata!.intakeFields : [];
   const resolvedIntakeFields =
     seededFields.length > 0
       ? seededFields
-      : resolveIntakeFieldsFromSoul(org.theme, org.soul);
+      : resolveIntakeFieldsFromSoul(
+          org.theme,
+          org.soul,
+          org.name,
+          template?.title ?? null,
+        );
 
   return {
     orgId: org.id,
@@ -435,12 +449,17 @@ async function resolvePublicBookingContext(orgSlug: string, bookingSlug: string)
 // 2026-05-18 — lazy-resolve helper. Tries (in order):
 //   1. theme.aestheticArchetype (set during create_full_workspace +
 //      detected during the lean URL flow's enhance step)
-//   2. classify from soul.industry + soul.businessDescription
-//   3. fall back to "editorial-warm" (the catch-all default)
-// Returns the archetype's intake field set, or [] if classification fails.
+//   2. classify from soul.industry + soul.businessDescription PLUS
+//      workspace name + appointment title as extra signal
+//   3. fall back to "editorial-warm" via the classifier's catch-all
+// ALWAYS returns a non-empty field set — even with zero soul data we
+// get the editorial-warm baseline (address + phone + scope + timeline
+// + budget) which is universally useful for a service business.
 function resolveIntakeFieldsFromSoul(
   rawTheme: unknown,
   rawSoul: unknown,
+  workspaceName: string | null,
+  appointmentTitle: string | null,
 ): BookingIntakeField[] {
   // 1. Try the explicit archetype on the theme.
   const theme = (rawTheme && typeof rawTheme === "object" ? (rawTheme as Record<string, unknown>) : null);
@@ -454,39 +473,52 @@ function resolveIntakeFieldsFromSoul(
     }
   }
 
-  // 2. Classify from soul.
+  // 2. Classify from soul + workspace-name + appointment-title hints.
+  // Why blend three fields into one classification: the classifier
+  // greps for keywords like "roof", "hvac", "dental", "medspa" — those
+  // often live in the workspace name ("Roofs by Shiloh", "Dr. Smith
+  // Dental") or in the appointment title ("Free Roof Inspection")
+  // even when soul.industry was never set by the operator.
   const soul = (rawSoul && typeof rawSoul === "object" ? (rawSoul as Record<string, unknown>) : null) ?? null;
   const business = (soul?.business && typeof soul.business === "object" ? (soul.business as Record<string, unknown>) : null) ?? null;
-  const vertical = typeof soul?.industry === "string"
+  const soulVertical = typeof soul?.industry === "string"
     ? soul.industry
     : typeof business?.industry === "string"
       ? business.industry
       : typeof business?.vertical === "string"
         ? business.vertical
-        : null;
-  const description = typeof business?.description === "string"
+        : "";
+  const soulDescription = typeof business?.description === "string"
     ? business.description
     : typeof soul?.summary === "string"
       ? soul.summary
-      : null;
+      : "";
 
-  if (!vertical && !description) {
-    // Nothing to classify on — return [] so the legacy
-    // name+email+notes flow renders. Better than guessing wrong.
-    return [];
-  }
+  // Blend everything into ONE string the classifier can pattern-match
+  // against. We pass it as both `vertical` (for the .test(v + " " +
+  // desc) checks) and `businessDescription` (for the desc-only checks)
+  // so a hit on either branch fires.
+  const blendedHints = [
+    soulVertical,
+    workspaceName ?? "",
+    appointmentTitle ?? "",
+    soulDescription,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
 
   try {
     const archetypeId = classifyArchetype({
-      // classifyArchetype expects vertical as a non-null string; empty
-      // string still cleanly falls through to the catch-all
-      // "editorial-warm" path inside the classifier.
-      vertical: vertical ?? "",
-      businessDescription: description ?? null,
+      vertical: blendedHints,
+      businessDescription: soulDescription || blendedHints,
     });
     return getBookingIntakeFieldsForArchetype(archetypeId);
   } catch {
-    return [];
+    // Last-resort fallback — pick editorial-warm directly. The
+    // classifier itself uses this as its catch-all, so we get the
+    // same shape but bypass any unforeseen throw inside it.
+    return getBookingIntakeFieldsForArchetype("editorial-warm");
   }
 }
 
