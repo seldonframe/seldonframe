@@ -28,10 +28,67 @@
 
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { smsMessages, contacts } from "@/db/schema";
+import { smsMessages, contacts, organizations } from "@/db/schema";
 import { getAIClient } from "@/lib/ai/client";
 import type { ConversationStep } from "../../agents/validator";
 import type { NextAction, RuntimeContext, StoredRun } from "../types";
+
+// 2026-05-18 — final placeholder interpolation before sending the
+// initial/reply message. The synthesizer fills $placeholders at
+// agent-create time, but Twig-style {{contact.firstName}} and
+// {{businessName}} need run-time resolution against actual contact
+// + workspace data. Without this we shipped messages like
+// "Hi {{contact.firstName}}, thanks for reaching out to Bright Smile
+// Dental..." (LITERAL example text in production SMS) — visible bug.
+function interpolateRunTimeVars(
+  template: string,
+  vars: Record<string, string>,
+): string {
+  return template.replace(/\{\{([\w.]+)\}\}/g, (match, key) => {
+    if (key in vars) return vars[key];
+    // Unknown placeholder — strip the braces but leave the bare word
+    // so we never ship "{{foo}}" to a customer. Better to show "foo"
+    // (which someone might recognize as a label) than the raw token.
+    return "";
+  });
+}
+
+async function buildRunTimeVars(
+  orgId: string,
+  contactId: string,
+): Promise<Record<string, string>> {
+  const [[contactRow], [orgRow]] = await Promise.all([
+    db
+      .select({
+        firstName: contacts.firstName,
+        lastName: contacts.lastName,
+        email: contacts.email,
+        phone: contacts.phone,
+      })
+      .from(contacts)
+      .where(and(eq(contacts.orgId, orgId), eq(contacts.id, contactId)))
+      .limit(1),
+    db
+      .select({ name: organizations.name, soul: organizations.soul })
+      .from(organizations)
+      .where(eq(organizations.id, orgId))
+      .limit(1),
+  ]);
+  const soul = (orgRow?.soul ?? {}) as Record<string, unknown>;
+  const businessPhone =
+    (typeof soul.phone === "string" && soul.phone) ||
+    (typeof (soul.business as Record<string, unknown>)?.phone === "string" &&
+      ((soul.business as Record<string, unknown>).phone as string)) ||
+    "";
+  return {
+    "contact.firstName": contactRow?.firstName ?? "",
+    "contact.lastName": contactRow?.lastName ?? "",
+    "contact.email": contactRow?.email ?? "",
+    "contact.phone": contactRow?.phone ?? "",
+    businessName: orgRow?.name ?? "",
+    businessPhone,
+  };
+}
 
 type TranscriptTurn = {
   role: "assistant" | "user";
@@ -234,10 +291,17 @@ export async function dispatchConversation(
   const state = getState(run, step.id);
   const stateKey = STATE_KEY_PREFIX + step.id;
 
+  // Build run-time variables for {{contact.firstName}} / {{businessName}}
+  // / etc. interpolation. Happens for BOTH the initial message and any
+  // subsequent LLM-generated replies (LLM might emit {{...}} if the
+  // system prompt didn't fully scrub them).
+  const runtimeVars = await buildRunTimeVars(run.orgId, triggerInfo.contactId);
+
   // ─── First dispatch: send initial message + pause ─────────────────
   if (!state || state.transcript.length === 0) {
+    const resolvedInitial = interpolateRunTimeVars(step.initial_message, runtimeVars);
     try {
-      await sendSmsReply(run.orgId, triggerInfo.contactId, phoneNumber, step.initial_message);
+      await sendSmsReply(run.orgId, triggerInfo.contactId, phoneNumber, resolvedInitial);
     } catch (err) {
       return {
         kind: "fail",
@@ -248,7 +312,7 @@ export async function dispatchConversation(
       transcript: [
         {
           role: "assistant",
-          content: step.initial_message,
+          content: resolvedInitial,
           ts: new Date().toISOString(),
         },
       ],
@@ -346,9 +410,13 @@ export async function dispatchConversation(
     return { kind: "advance", next: step.on_exit.next };
   }
 
-  // Continue conversation: send reply, append, pause again.
+  // Continue conversation: send reply, append, pause again. Resolve
+  // any stray placeholders the LLM may have echoed back (safety net —
+  // the system prompt instructs against this but models occasionally
+  // mirror placeholders from the transcript).
+  const resolvedReply = interpolateRunTimeVars(parsed.replyText, runtimeVars);
   try {
-    await sendSmsReply(run.orgId, triggerInfo.contactId, phoneNumber, parsed.replyText);
+    await sendSmsReply(run.orgId, triggerInfo.contactId, phoneNumber, resolvedReply);
   } catch (err) {
     return {
       kind: "fail",
@@ -365,7 +433,7 @@ export async function dispatchConversation(
           ...updatedTranscript,
           {
             role: "assistant",
-            content: parsed.replyText,
+            content: resolvedReply,
             ts: new Date().toISOString(),
           },
         ],

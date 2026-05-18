@@ -75,10 +75,16 @@ export function Sidebar(props: {
    *  this, the back link would just navigate without switching the
    *  active org cookie. */
   primaryOrgId?: string | null;
+  /** 2026-05-18 — workspace logo from organizations.theme.logoUrl.
+   *  Renders in the workspace switcher tile + the brand header in
+   *  place of the SeldonFrame icon when set. Per-workspace; the
+   *  layout fetches it from the active org and threads it through. */
+  workspaceLogoUrl?: string | null;
 }) {
   const {
     hiddenBlocks = [],
     workspaceName,
+    workspaceLogoUrl = null,
     activeWorkspaceId,
     workspaceOptions,
     switchWorkspaceAction,
@@ -342,8 +348,22 @@ export function Sidebar(props: {
               className="flex w-full items-center gap-2.5 rounded-xl border border-border/80 bg-card/80 p-2 text-left shadow-(--shadow-xs) transition-all hover:border-border hover:bg-card"
             >
               <div className="flex size-8 items-center justify-center overflow-hidden rounded-lg border border-border/70 bg-muted/30 shrink-0">
-                {/* SLICE 9 PR 2 C1: workspace tile uses SeldonFrame icon as default avatar; per-workspace logo override is post-launch */}
-                <Image src="/brand/seldonframe-icon.svg" alt="Workspace" width={28} height={28} className="h-full w-full" />
+                {/* 2026-05-18 — per-workspace logo (theme.logoUrl) now
+                    wins over the default SeldonFrame icon. When the
+                    operator uploads a logo at /settings/theme, that
+                    image becomes the workspace's identity in the
+                    sidebar tile (and emails / public pages already
+                    consume it). Falls back to the SF icon when unset. */}
+                {workspaceLogoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={workspaceLogoUrl}
+                    alt={`${workspaceName} logo`}
+                    className="h-full w-full object-contain"
+                  />
+                ) : (
+                  <Image src="/brand/seldonframe-icon.svg" alt="Workspace" width={28} height={28} className="h-full w-full" />
+                )}
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[13px] font-semibold text-foreground">{workspaceName}</p>

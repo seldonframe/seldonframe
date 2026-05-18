@@ -53,7 +53,7 @@ export const speedToLeadArchetype: Archetype = {
         "The opening SMS to the prospect. Warm, on-brand, mentions business name + what was requested, asks two concrete questions so the reply is easy. Keep under 320 chars.",
       soulFields: ["businessName", "tone", "offer", "services"],
       example:
-        "Hi {{contact.firstName}}, thanks for reaching out to Bright Smile Dental! Happy to get you booked. Any preference on day/time? And do you have dental insurance you'd like us to check?",
+        "Hi {{contact.firstName}}, thanks for reaching out to {{businessName}}! Happy to get you booked. Any preference on day/time? And anything else we should know before we connect?",
     },
     $qualificationCriteria: {
       kind: "soul_copy",

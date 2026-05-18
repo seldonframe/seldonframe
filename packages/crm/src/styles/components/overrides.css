@@ -320,25 +320,29 @@
   }
 
   .crm-sidebar-link {
+    /* 2026-05-18 — bumped to Supabase-style spacing per operator feedback
+       ("they look a bit too thin"). Supabase + Linear + Vercel dashboard
+       use ~36-40px rows with 14px text; we were at 32px with 13px which
+       felt cramped on dense surfaces. New defaults are the comfortable
+       baseline; large surface like Settings still feels balanced. */
     position: relative;
     display: flex;
     align-items: center;
-    gap: 0.625rem;            /* was 0.75rem — tighter icon→text gap */
-    min-height: 2.125rem;     /* was 2.75rem — Vercel-style 34px row */
-    padding-top: 0.25rem;     /* explicit so the row stays compact even
-                                 when content forces line-height growth */
-    padding-bottom: 0.25rem;
-    border-radius: 0.625rem;  /* was 0.875rem — softer but less heavy */
+    gap: 0.75rem;             /* 12px icon→text */
+    min-height: 2.375rem;     /* 38px mobile */
+    padding-top: 0.375rem;
+    padding-bottom: 0.375rem;
+    border-radius: 0.625rem;
     background: transparent;
     color: var(--muted-foreground);
-    font-size: 0.8125rem;     /* was 0.875rem (14px) — now 13px */
-    line-height: 1.125rem;
+    font-size: 0.875rem;      /* 14px — Supabase/Linear baseline */
+    line-height: 1.25rem;
     transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
   }
 
   @media (min-width: 640px) {
     .crm-sidebar-link {
-      min-height: 2rem;       /* was 2.375rem — 32px target on desktop */
+      min-height: 2.25rem;    /* 36px desktop — generous but not loose */
     }
   }
 
