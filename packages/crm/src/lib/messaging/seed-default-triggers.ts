@@ -26,6 +26,17 @@ const DEFAULTS: DefaultTrigger[] = [
     skillId: "booking-confirmation",
     delayMinutes: 0,
   },
+  // 2026-05-18 — Slice 3 adds the SMS confirmation default. Fires
+  // only when the contact has a phone number AND the workspace has
+  // Twilio configured; otherwise the dispatcher records status=skipped
+  // or status=failed in the audit log (sendSmsFromApi throws on
+  // missing config).
+  {
+    eventType: "booking.created",
+    channel: "sms",
+    skillId: "booking-confirmation-sms",
+    delayMinutes: 0,
+  },
 ];
 
 export async function seedDefaultOutboundTriggers(orgId: string): Promise<void> {

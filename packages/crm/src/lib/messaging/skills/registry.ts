@@ -8,6 +8,7 @@
 // directory + add an entry to REGISTRY. No dispatcher code change.
 
 import bookingConfirmationSkill from "./booking-confirmation";
+import bookingConfirmationSmsSkill from "./booking-confirmation-sms";
 
 export type OutboundMessageSkill = {
   /** Stable id matching outbound_message_triggers.skill_id. */
@@ -30,6 +31,13 @@ const REGISTRY: OutboundMessageSkill[] = [
     label: "Booking confirmation (email)",
     content: bookingConfirmationSkill,
     channels: ["email"],
+    defaultEvents: ["booking.created"],
+  },
+  {
+    id: "booking-confirmation-sms",
+    label: "Booking confirmation (SMS)",
+    content: bookingConfirmationSmsSkill,
+    channels: ["sms"],
     defaultEvents: ["booking.created"],
   },
 ];
