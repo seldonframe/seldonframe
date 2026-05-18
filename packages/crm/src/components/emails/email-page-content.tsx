@@ -40,7 +40,11 @@ type SentRow = {
 type Tab = "templates" | "sent" | "settings";
 
 type EmailIntegrationsState = {
-  resend: { connected: boolean; maskedKey: string };
+  // 2026-05-18 (later) — fromEmail + fromName captured at connect
+  // time. Without a verified from-address Resend rejects every send
+  // with "domain not verified". Was the cause of silent booking
+  // confirmation failures even after the dispatcher was wired.
+  resend: { connected: boolean; maskedKey: string; fromEmail: string; fromName: string };
   // 2026-05-18 — Twilio surfaced alongside Resend because the
   // /clients/:slug/ready marketing CTA mentions "Email + SMS Drip"
   // and routes operators to /emails. Before this prop, /emails had
@@ -215,7 +219,9 @@ export function EmailPageContent({
             <div className="rounded-lg border p-4 space-y-3">
               <div>
                 <h4 className="text-sm font-medium text-foreground">Transactional Email (Resend)</h4>
-                <p className="mt-1 text-xs text-muted-foreground">Bring your own Resend API key for outbound transactional email.</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Bring your own Resend API key for outbound transactional email. The from-address MUST be on a domain you've verified in Resend, otherwise sends are rejected.
+                </p>
               </div>
 
               {emailIntegrations.resend.connected ? (
@@ -224,15 +230,73 @@ export function EmailPageContent({
                     <span className="rounded-full border border-positive/30 bg-positive/10 px-2 py-0.5 text-[11px] text-positive">Connected</span>
                     <p className="text-xs font-mono text-muted-foreground">{emailIntegrations.resend.maskedKey}</p>
                   </div>
+                  {/* 2026-05-18 — surface the from-address back to the
+                      operator + let them edit it without disconnecting.
+                      Empty fromEmail is the silent-failure footgun —
+                      Resend rejects sends from hello@seldonframe.local
+                      (our fallback) so the operator sees no email arrive
+                      but no error in the dashboard either. Highlighting
+                      the input red when empty makes the gap visible. */}
+                  <form action={saveIntegrationAction} className="space-y-2">
+                    <input type="hidden" name="service" value="resend" />
+                    <div className="space-y-1">
+                      <label htmlFor="resend-from-email" className="text-xs text-muted-foreground">
+                        From email <span className="text-negative">*</span>
+                      </label>
+                      <input
+                        id="resend-from-email"
+                        className={`crm-input h-10 w-full px-3 ${emailIntegrations.resend.fromEmail ? "" : "border-negative/40"}`}
+                        name="fromEmail"
+                        type="email"
+                        defaultValue={emailIntegrations.resend.fromEmail}
+                        placeholder="bookings@yourdomain.com"
+                        required
+                      />
+                      {!emailIntegrations.resend.fromEmail ? (
+                        <p className="text-[11px] text-negative">
+                          No from-address set — every outbound email will fail at Resend. Save a verified address to fix.
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className="space-y-1">
+                      <label htmlFor="resend-from-name" className="text-xs text-muted-foreground">From name (optional)</label>
+                      <input
+                        id="resend-from-name"
+                        className="crm-input h-10 w-full px-3"
+                        name="fromName"
+                        defaultValue={emailIntegrations.resend.fromName}
+                        placeholder="Roofs by Shiloh"
+                      />
+                    </div>
+                    <button type="submit" className="crm-button-primary h-9 px-4 text-xs">Save from address</button>
+                  </form>
                   <form action={disconnectIntegrationAction}>
                     <input type="hidden" name="service" value="resend" />
                     <button type="submit" className="crm-button-secondary h-9 px-4 text-xs">Disconnect Resend</button>
                   </form>
                 </div>
               ) : (
-                <form action={saveIntegrationAction} className="space-y-2 md:flex md:items-center md:gap-2 md:space-y-0">
+                <form action={saveIntegrationAction} className="space-y-2">
                   <input type="hidden" name="service" value="resend" />
-                  <input className="crm-input h-10 w-full px-3" name="apiKey" placeholder="re_xxxxxxxxx" type="password" required />
+                  <input
+                    className="crm-input h-10 w-full px-3"
+                    name="apiKey"
+                    placeholder="Resend API key (re_xxxxxxxxx)"
+                    type="password"
+                    required
+                  />
+                  <input
+                    className="crm-input h-10 w-full px-3"
+                    name="fromEmail"
+                    type="email"
+                    placeholder="From email (bookings@yourverifieddomain.com)"
+                    required
+                  />
+                  <input
+                    className="crm-input h-10 w-full px-3"
+                    name="fromName"
+                    placeholder="From name (e.g. Roofs by Shiloh) — optional"
+                  />
                   <button type="submit" className="crm-button-secondary h-9 px-4 text-xs">Connect Resend</button>
                 </form>
               )}

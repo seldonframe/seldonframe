@@ -123,7 +123,7 @@ export default async function EmailsPage() {
         createTemplateAction={createEmailTemplateAction}
         emailIntegrations={
           emailIntegrations ?? {
-            resend: { connected: false, maskedKey: "" },
+            resend: { connected: false, maskedKey: "", fromEmail: "", fromName: "" },
             twilio: {
               connected: false,
               accountSid: "",
