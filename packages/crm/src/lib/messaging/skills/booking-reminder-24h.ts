@@ -34,7 +34,7 @@ const BOOKING_REMINDER_24H_SKILL = `## When this fires
 - Appointment title: {{bookingTitle}}
 - Starts at (local time): {{bookingStartsAtLocal}}
 - Duration: {{bookingDuration}}
-- Booking page URL (for reschedule/cancel): {{bookingPageUrl}}
+- Manage URL (per-booking, signed — for reschedule/cancel): {{bookingManageUrl}}
 - Business phone: {{businessPhone}}
 - Business name: {{businessName}}
 
@@ -47,7 +47,7 @@ Hi {{contactFirstName}},
 
 Just a quick heads-up: you're scheduled for {{bookingTitle}} tomorrow at {{bookingStartsAtLocal}} ({{bookingDuration}}).
 
-Need to reschedule? {{bookingPageUrl}} — or call us at {{businessPhone}}.
+Need to reschedule or cancel? {{bookingManageUrl}} — or call us at {{businessPhone}}.
 
 See you then.
 

@@ -1146,6 +1146,91 @@ export async function cancelBookingAction(bookingId: string) {
   }
 }
 
+// 2026-05-18 — public customer-managed cancel. The booking confirmation
+// email + SMS now include a URL like /booking/manage/<id>?token=<signed>
+// so the customer can cancel without re-authenticating. This action is
+// the SECURE counterpart to cancelBookingAction (which requires
+// getOrgId + session auth). Here, the HMAC-signed token IS the auth.
+//
+// Idempotent: cancelling an already-cancelled booking returns ok=true
+// without re-emitting the event so we don't double-fire the
+// booking.cancelled outbound message.
+export async function cancelBookingByTokenAction(input: {
+  bookingId: string;
+  token: string;
+}): Promise<
+  | { ok: true; alreadyCancelled: boolean }
+  | { ok: false; error: string }
+> {
+  const { signBookingManageToken: _sign, verifyBookingManageToken } =
+    await import("./manage-token");
+  void _sign;
+
+  if (!input.bookingId || !input.token) {
+    return { ok: false, error: "missing_token_or_id" };
+  }
+  if (!verifyBookingManageToken(input.bookingId, input.token)) {
+    return { ok: false, error: "invalid_token" };
+  }
+
+  const [row] = await db
+    .select({
+      id: bookings.id,
+      orgId: bookings.orgId,
+      status: bookings.status,
+      contactId: bookings.contactId,
+      userId: bookings.userId,
+      externalEventId: bookings.externalEventId,
+    })
+    .from(bookings)
+    .where(eq(bookings.id, input.bookingId))
+    .limit(1);
+  if (!row) {
+    return { ok: false, error: "booking_not_found" };
+  }
+  if (row.status === "cancelled") {
+    return { ok: true, alreadyCancelled: true };
+  }
+
+  await db
+    .update(bookings)
+    .set({ status: "cancelled", cancelledAt: new Date(), updatedAt: new Date() })
+    .where(eq(bookings.id, row.id));
+
+  // Soft-fail Google Calendar cleanup — never block the cancel.
+  try {
+    await deleteGoogleCalendarBookingEvent({
+      userId: row.userId,
+      externalEventId: row.externalEventId,
+    });
+  } catch (err) {
+    console.warn(
+      JSON.stringify({
+        event: "cancelBookingByTokenAction.gcal_delete_failed",
+        bookingId: row.id,
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    );
+  }
+
+  // Fire booking.cancelled so the messaging dispatcher sends the
+  // cancellation confirmation. Same event the auth'd path emits.
+  if (row.contactId) {
+    await emitSeldonEvent(
+      "booking.cancelled",
+      {
+        appointmentId: row.id,
+        contactId: row.contactId,
+      },
+      { orgId: row.orgId },
+    );
+  }
+
+  revalidatePath(`/booking/manage/${row.id}`);
+
+  return { ok: true, alreadyCancelled: false };
+}
+
 export async function markBookingNoShowAction(bookingId: string) {
   assertWritable();
 

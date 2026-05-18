@@ -14,7 +14,7 @@ A customer just booked an appointment with {{businessName}}. They expect an emai
 ## Required content
 - Greet the customer by first name if available, otherwise a warm generic ("Hi there").
 - Confirm the appointment: title, date, time (in the business's local timezone), and duration.
-- Mention how to reschedule or cancel — include the public booking page URL.
+- Mention how to reschedule or cancel — include the per-booking manage URL {{bookingManageUrl}}. That URL lets the customer self-cancel or pick a different time WITHOUT re-doing the entire booking; never describe it as a generic "booking page".
 - Sign off as {{businessName}}. Include the business phone number if it's set so the customer can reach a real person.
 
 ## Forbidden content
@@ -29,7 +29,7 @@ A customer just booked an appointment with {{businessName}}. They expect an emai
 - Appointment title: {{bookingTitle}}
 - Starts at (local time): {{bookingStartsAtLocal}}
 - Duration: {{bookingDuration}}
-- Booking page URL (for reschedule/cancel): {{bookingPageUrl}}
+- Manage URL (per-booking, signed — for reschedule/cancel): {{bookingManageUrl}}
 - Business phone: {{businessPhone}}
 - Business name: {{businessName}}
 - Timezone: {{timezone}}
@@ -43,7 +43,7 @@ Hi {{contactFirstName}},
 
 Quick confirmation: you're booked for {{bookingTitle}} on {{bookingStartsAtLocal}} ({{bookingDuration}}). See you then.
 
-Need to reschedule? Use {{bookingPageUrl}} or text us at {{businessPhone}}.
+Need to reschedule or cancel? {{bookingManageUrl}} — or call us at {{businessPhone}}.
 
 — The team at {{businessName}}
 `;

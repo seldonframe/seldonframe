@@ -42,13 +42,17 @@ export function renderTemplateMessage(input: TemplateInput): TemplateResult {
   const bookingTitle = pick(vars, "bookingTitle") || "your appointment";
   const startsAt = pick(vars, "bookingStartsAtLocal") || "your scheduled time";
   const businessPhone = pick(vars, "businessPhone");
-  const bookingPageUrl = pick(vars, "bookingPageUrl");
+  // 2026-05-18 — prefer the per-booking signed manage URL (lets the
+  // customer cancel + pick a new time without re-doing the booking).
+  // Falls back to the generic booking page URL only when manageUrl
+  // wasn't provided (e.g. intake events have no bookingId).
+  const manageUrl = pick(vars, "bookingManageUrl") || pick(vars, "bookingPageUrl");
 
   const trailerEmail = businessPhone
     ? `\n\nQuestions? Call us at ${businessPhone}.`
     : "";
-  const trailerReschedule = bookingPageUrl
-    ? `\n\nNeed to reschedule? ${bookingPageUrl}`
+  const trailerReschedule = manageUrl
+    ? `\n\nNeed to reschedule or cancel? ${manageUrl}`
     : "";
 
   if (input.channel === "sms") {
@@ -68,18 +72,23 @@ export function renderTemplateMessage(input: TemplateInput): TemplateResult {
           trailerEmail +
           `\n\n— The team at ${business}`,
       };
-    case "booking-cancellation":
+    case "booking-cancellation": {
+      // Cancellation copy uses bookingPageUrl (NEW booking) rather
+      // than the manage URL — the cancelled booking's manage page
+      // would just confirm "cancelled" with no useful action.
+      const newBookingUrl = pick(vars, "bookingPageUrl");
       return {
         subject: `Booking cancelled — ${bookingTitle}`,
         body:
           `Hi ${firstName},\n\n` +
           `Your booking for ${bookingTitle} on ${startsAt} has been cancelled.\n\n` +
-          (bookingPageUrl
-            ? `If you'd like to reschedule, you can pick a new time here: ${bookingPageUrl}\n\n`
+          (newBookingUrl
+            ? `If you'd like to reschedule, you can pick a new time here: ${newBookingUrl}\n\n`
             : ``) +
           trailerEmail +
           `\n\n— The team at ${business}`,
       };
+    }
     case "booking-reminder-24h":
       return {
         subject: `Reminder — ${bookingTitle} tomorrow`,
