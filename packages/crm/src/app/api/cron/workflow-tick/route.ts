@@ -26,13 +26,22 @@
 //     and no archetype ships yet that would hit this path).
 
 import { NextResponse } from "next/server";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { db } from "@/db";
 import { workflowRuns } from "@/db/schema/workflow-runs";
 import { resumeWait, runtimeResumeApproval } from "@/lib/workflow/runtime";
 import { DrizzleRuntimeStorage } from "@/lib/workflow/storage-drizzle";
 import { notImplementedToolInvoker, type RuntimeContext } from "@/lib/workflow/types";
+// 2026-05-18 — real ToolInvoker for cron-driven advancement of waits.
+// Before this, cron-resumed waits that advanced into mcp_tool_call
+// steps (create_booking, send_email, send_sms) failed with
+// "ToolInvoker not configured." Speed-to-lead failed deterministically:
+// the wait step paused, the cron resumed it, the next step was
+// create_booking → throw. The approval-sweep branch below still
+// uses notImplementedToolInvoker — approval-driven mcp_tool_call
+// is a separate, less-common path that needs its own orgId resolver.
+import { makeAgentToolInvoker } from "@/lib/agents/tool-invoker";
 import { runSubscriptionTick } from "@/lib/subscriptions/dispatcher";
 import { DrizzleSubscriptionStorage } from "@/lib/subscriptions/storage-drizzle";
 import { getSubscriptionHandlerRegistry } from "@/lib/subscriptions/handler-registry";
@@ -68,24 +77,39 @@ export async function GET(request: Request) {
   }
 
   const storage = new DrizzleRuntimeStorage(db);
-  const context: RuntimeContext = {
-    storage,
-    // PR 2 ships with the not-implemented invoker. A timeout-path run
-    // that advances into an mcp_tool_call step will surface
-    // kind:"fail" on that dispatcher's try/catch — correct behavior
-    // until the real transport lands. Client Onboarding can't reach
-    // this path today because the archetype isn't shipped (3b scope).
-    invokeTool: notImplementedToolInvoker,
-    now: () => new Date(),
-  };
 
   const startedAt = Date.now();
   const dueWaits = await storage.findDueWaits(new Date(), BATCH_LIMIT);
+
+  // 2026-05-18 — resolve orgId per wait (via the run row) and build
+  // a per-wait RuntimeContext with the real agent invoker bound to
+  // that workspace. Was previously a single context with
+  // notImplementedToolInvoker which crashed every mcp_tool_call.
+  const waitRunIds = Array.from(new Set(dueWaits.map((w) => w.runId)));
+  const runOrgRows = waitRunIds.length
+    ? await db
+        .select({ id: workflowRuns.id, orgId: workflowRuns.orgId })
+        .from(workflowRuns)
+        .where(inArray(workflowRuns.id, waitRunIds))
+    : [];
+  const orgByRunId = new Map(runOrgRows.map((r) => [r.id, r.orgId]));
 
   let claimed = 0;
   let failed = 0;
   for (const wait of dueWaits) {
     try {
+      const waitOrgId = orgByRunId.get(wait.runId) ?? null;
+      const context: RuntimeContext = {
+        storage,
+        invokeTool: waitOrgId
+          ? makeAgentToolInvoker(waitOrgId)
+          : // No run row? Wait is orphaned. notImplemented-style throw
+            // surfaces the gap rather than silently no-op'ing.
+            (async () => {
+              throw new Error(`wait ${wait.id} has no resolvable orgId`);
+            }) as RuntimeContext["invokeTool"],
+        now: () => new Date(),
+      };
       const result = await resumeWait(context, wait, "timeout", null, null);
       if (result.resumed) claimed += 1;
       await storage.appendEventLog({

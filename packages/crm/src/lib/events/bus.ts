@@ -35,10 +35,17 @@ import { getSeldonEventBus, type EventPayload, type EventType } from "@seldonfra
 import { resumeWait } from "@/lib/workflow/runtime";
 import { DrizzleRuntimeStorage } from "@/lib/workflow/storage-drizzle";
 import { evaluatePredicate } from "@/lib/workflow/predicate-eval";
-import { notImplementedToolInvoker, type RuntimeContext } from "@/lib/workflow/types";
+import { type RuntimeContext } from "@/lib/workflow/types";
 import { enqueueSubscriptionDeliveriesForEventInContext } from "@/lib/subscriptions/bus-extension";
 import { DrizzleSubscriptionStorage } from "@/lib/subscriptions/storage-drizzle";
 import { registerCrmEventListeners } from "@/lib/events/listeners";
+// 2026-05-18 — sync-resume path now uses the real agent ToolInvoker
+// so mcp_tool_call steps (create_booking, send_email, send_sms,
+// create_activity) actually execute when the event-driven resume
+// fires them. Previously this branch used notImplementedToolInvoker
+// and every tool call threw — visible in workflow_step_results
+// as "ToolInvoker not configured."
+import { makeAgentToolInvoker } from "@/lib/agents/tool-invoker";
 
 export type EmitOptions = {
   /**
@@ -100,7 +107,7 @@ export async function emitSeldonEvent<T extends EventType>(
     const storage = new DrizzleRuntimeStorage(db);
     const context: RuntimeContext = {
       storage,
-      invokeTool: notImplementedToolInvoker,
+      invokeTool: makeAgentToolInvoker(options.orgId),
       now: () => new Date(),
     };
     await resumePendingWaitsForEventInContext(
