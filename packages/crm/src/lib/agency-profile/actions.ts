@@ -10,6 +10,12 @@ import {
   runSaveAgencyProfile,
   type RunSaveAgencyProfileResult,
 } from "./run-save";
+// 2026-05-18 — sync the saved profile to partner_agencies so the
+// existing white-label chrome substitution (getEffectiveBrandingForWorkspace)
+// returns the operator's logo / color / name for every workspace they own.
+// Without this, /settings/agency-profile is a dead control panel — the
+// data is stored but no public surface reads it.
+import { syncAgencyProfileToPartnerAgency } from "./sync-to-partner-agency";
 
 export type { AgencyProfile } from "@/db/schema/agency-profile";
 
@@ -54,6 +60,55 @@ export async function saveAgencyProfile(formData: FormData): Promise<SaveResult>
   });
 
   if (result.ok) {
+    // 2026-05-18 — agency-wide white-label sync. Non-fatal — if this
+    // fails (e.g. slug collision under a race), the user-profile
+    // write still landed; chrome substitution catches up on the
+    // next save. We swallow + log rather than failing the user-
+    // visible save.
+    if (sessionUser?.id) {
+      try {
+        const syncResult = await syncAgencyProfileToPartnerAgency({
+          userId: sessionUser.id,
+          profile: result.profile,
+        });
+        if (!syncResult.ok) {
+          console.warn(
+            JSON.stringify({
+              event: "agency_profile.partner_sync_failed",
+              user_id: sessionUser.id,
+              error: syncResult.error,
+            }),
+          );
+        } else {
+          console.log(
+            JSON.stringify({
+              event: "agency_profile.partner_sync_ok",
+              user_id: sessionUser.id,
+              agency_id: syncResult.agencyId,
+              attached_workspaces: syncResult.attachedWorkspaces,
+              created: syncResult.created,
+            }),
+          );
+          // Revalidate /clients so the agency's workspace list picks
+          // up any newly-attached parent_agency_id pointers. Also
+          // revalidate /book + /forms + /l so chrome substitution
+          // re-renders with the new branding.
+          revalidatePath("/clients");
+          revalidatePath("/book");
+          revalidatePath("/forms");
+          revalidatePath("/l");
+        }
+      } catch (err) {
+        console.warn(
+          JSON.stringify({
+            event: "agency_profile.partner_sync_threw",
+            user_id: sessionUser.id,
+            error: err instanceof Error ? err.message : String(err),
+          }),
+        );
+      }
+    }
+
     revalidatePath("/settings/agency-profile");
   }
 
