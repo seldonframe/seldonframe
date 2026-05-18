@@ -671,9 +671,16 @@ async function markRunFailed(
   // Emit to the event log for observability. Log-only per G-6 —
   // NOT added to SeldonEvent. Agencies read these via the admin
   // surface (PR 3).
-  await context.storage.appendEventLog({
-    orgId: run?.orgId ?? "unknown",
-    eventType: "workflow.run_failed",
-    payload: { runId, reason },
-  });
+  // 2026-05-18 (later) — when the run row can't be loaded (e.g. it
+  // was deleted mid-flight), skip the log entry rather than passing
+  // the literal "unknown" string as an orgId. Postgres rejects
+  // "unknown" as a UUID and the whole markRunFailed transaction
+  // throws, which masks the original failure reason in logs.
+  if (run?.orgId) {
+    await context.storage.appendEventLog({
+      orgId: run.orgId,
+      eventType: "workflow.run_failed",
+      payload: { runId, reason },
+    });
+  }
 }

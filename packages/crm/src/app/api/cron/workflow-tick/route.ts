@@ -112,16 +112,24 @@ export async function GET(request: Request) {
       };
       const result = await resumeWait(context, wait, "timeout", null, null);
       if (result.resumed) claimed += 1;
-      await storage.appendEventLog({
-        orgId: "unknown", // orgId derivable via run lookup; §6 dashboard surface will join
-        eventType: "workflow.wait_timed_out",
-        payload: {
-          waitId: wait.id,
-          runId: wait.runId,
-          stepId: wait.stepId,
-          scheduledEvent: wait.eventType,
-        },
-      });
+      // 2026-05-18 (later) — pass the resolved orgId, NOT the literal
+      // string "unknown" (which Postgres rejected as a UUID, throwing
+      // the entire timeout-resume path). When the wait is orphaned
+      // (no run row), skip the log entry — there's nothing useful to
+      // surface, and an unlogged-but-cleaned-up timeout is much
+      // better than a transaction failure that prevents resume.
+      if (waitOrgId) {
+        await storage.appendEventLog({
+          orgId: waitOrgId,
+          eventType: "workflow.wait_timed_out",
+          payload: {
+            waitId: wait.id,
+            runId: wait.runId,
+            stepId: wait.stepId,
+            scheduledEvent: wait.eventType,
+          },
+        });
+      }
     } catch (err) {
       failed += 1;
       // Keep visible for triage; don't fail the tick on a single
