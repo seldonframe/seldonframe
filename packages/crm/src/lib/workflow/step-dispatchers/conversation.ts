@@ -26,9 +26,9 @@
 // smarter at deciding when to exit and what to extract. No code
 // change required.
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { smsMessages, contacts, organizations } from "@/db/schema";
+import { smsMessages, contacts, organizations, workflowRuns } from "@/db/schema";
 import { getAIClient } from "@/lib/ai/client";
 import type { ConversationStep } from "../../agents/validator";
 import type { NextAction, RuntimeContext, StoredRun } from "../types";
@@ -61,6 +61,7 @@ function interpolateRunTimeVars(
 async function buildRunTimeVars(
   orgId: string,
   contactId: string,
+  triggerPayload: Record<string, unknown> | null,
 ): Promise<Record<string, string>> {
   const [[contactRow], [orgRow]] = await Promise.all([
     db
@@ -89,11 +90,31 @@ async function buildRunTimeVars(
     (typeof (soul.business as Record<string, unknown>)?.phone === "string" &&
       ((soul.business as Record<string, unknown>).phone as string)) ||
     "";
+
+  // 2026-05-18 (later) — prefer the trigger payload's name over the
+  // contact-row name. Customer just submitted the form as "leonie"
+  // but the contact upserter matched by phone and kept the previously-
+  // stored firstName "maxime" → the SMS opener said "Hi maxime".
+  // Fixed by reading the form payload's fullName/firstName/name field
+  // first, falling back to the contact row only when absent.
+  const data = (triggerPayload?.data && typeof triggerPayload.data === "object"
+    ? (triggerPayload.data as Record<string, unknown>)
+    : (triggerPayload ?? {})) as Record<string, unknown>;
+  const payloadFullName =
+    (typeof data.fullName === "string" && data.fullName.trim()) ||
+    (typeof data.name === "string" && data.name.trim()) ||
+    "";
+  const payloadFirstName =
+    (typeof data.firstName === "string" && data.firstName.trim()) ||
+    (payloadFullName ? payloadFullName.split(/\s+/)[0] : "");
+
   return {
-    "contact.firstName": contactRow?.firstName ?? "",
+    "contact.firstName": payloadFirstName || contactRow?.firstName || "",
     "contact.lastName": contactRow?.lastName ?? "",
-    "contact.email": contactRow?.email ?? "",
-    "contact.phone": contactRow?.phone ?? "",
+    "contact.email":
+      (typeof data.email === "string" && data.email) || contactRow?.email || "",
+    "contact.phone":
+      (typeof data.phone === "string" && data.phone) || contactRow?.phone || "",
     businessName: orgRow?.name ?? "",
     businessPhone,
     timezone: orgRow?.timezone ?? "UTC",
@@ -441,7 +462,11 @@ export async function dispatchConversation(
   // / etc. interpolation. Happens for BOTH the initial message and any
   // subsequent LLM-generated replies (LLM might emit {{...}} if the
   // system prompt didn't fully scrub them).
-  const runtimeVars = await buildRunTimeVars(run.orgId, triggerInfo.contactId);
+  const runtimeVars = await buildRunTimeVars(
+    run.orgId,
+    triggerInfo.contactId,
+    (run.triggerPayload ?? null) as Record<string, unknown> | null,
+  );
 
   // ─── Timeout dispatch (silence handling) ──────────────────────────
   // resumeWait sets __conversationTimeout=true in captureScope when
@@ -535,7 +560,73 @@ export async function dispatchConversation(
 
   // ─── First dispatch: send initial message + pause ─────────────────
   if (!state || state.transcript.length === 0) {
+    // 2026-05-18 (later) — double-send race fix via CAS UPDATE. If two
+    // workers race to dispatch the same run (cron worker + event-resume,
+    // or two concurrent cron sweeps), only ONE wins this atomic
+    // conditional update; the loser sees rowcount=0 and bails out
+    // without sending.
+    //
+    // The predicate: WHERE variable_scope->'<stateKey>'->'transcript'
+    // IS NULL OR equals '[]'::jsonb. Only the first worker matches; the
+    // second sees the populated transcript from the first and the
+    // update affects 0 rows.
+    //
+    // Visible bug: form submission → speed-to-lead fired the opener
+    // SMS twice (two Twilio SIDs, same body, seconds apart). Operator
+    // received "Hi maxime..." TWICE — cron worker race because Vercel
+    // can retry cron invocations.
     const resolvedInitial = interpolateRunTimeVars(step.initial_message, runtimeVars);
+    const sendStartedAt = new Date().toISOString();
+    const pendingState: ConversationState = {
+      transcript: [
+        {
+          role: "assistant",
+          content: resolvedInitial,
+          ts: sendStartedAt,
+        },
+      ],
+      turns: 1,
+      startedAt: sendStartedAt,
+      phase: "active",
+    };
+    const newScope = { ...run.variableScope, [stateKey]: pendingState };
+    // CAS UPDATE — only writes if no other worker has populated the
+    // transcript yet. RETURNING id gives us a row when we won. The
+    // JSON path is parameterised to keep the query safe; stateKey is
+    // a code-defined token (STATE_KEY_PREFIX + step.id) so it can't
+    // contain injection chars, but we still go through the JSONB ops.
+    const wonRace = await db
+      .update(workflowRuns)
+      .set({ variableScope: newScope, updatedAt: new Date() })
+      .where(
+        and(
+          eq(workflowRuns.id, run.id),
+          sql`COALESCE(${workflowRuns.variableScope} #> ARRAY[${stateKey}, 'transcript']::text[], '[]'::jsonb) = '[]'::jsonb`,
+        ),
+      )
+      .returning({ id: workflowRuns.id });
+    if (wonRace.length === 0) {
+      // Another worker beat us — they own the send + the pause. We
+      // re-pause on sms.replied with the same predicate so the wait
+      // row is in place (idempotent — createWait is OK with a
+      // duplicate; the conversation engine resumes on either).
+      console.log(
+        JSON.stringify({
+          event: "conversation.opener_race_lost",
+          runId: run.id,
+          stepId: step.id,
+        }),
+      );
+      return {
+        kind: "pause_event",
+        eventType: "sms.replied",
+        matchPredicate: { contactId: triggerInfo.contactId },
+        timeoutAt: new Date(Date.now() + ACTIVE_TIMEOUT_MINUTES * 60 * 1000),
+        onResumeNext: step.id,
+        onResumeCapture: "__lastInboundSmsId",
+        onTimeoutNext: step.id,
+      };
+    }
     try {
       await sendSmsReply(run.orgId, triggerInfo.contactId, phoneNumber, resolvedInitial);
     } catch (err) {
@@ -544,21 +635,6 @@ export async function dispatchConversation(
         reason: `conversation: failed to send initial SMS: ${err instanceof Error ? err.message : String(err)}`,
       };
     }
-    const newState: ConversationState = {
-      transcript: [
-        {
-          role: "assistant",
-          content: resolvedInitial,
-          ts: new Date().toISOString(),
-        },
-      ],
-      turns: 1,
-      startedAt: new Date().toISOString(),
-      phase: "active",
-    };
-    await _context.storage.updateRun(run.id, {
-      variableScope: { ...run.variableScope, [stateKey]: newState },
-    });
     return {
       kind: "pause_event",
       eventType: "sms.replied",

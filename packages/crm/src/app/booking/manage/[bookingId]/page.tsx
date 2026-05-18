@@ -16,7 +16,8 @@ import { db } from "@/db";
 import { bookings, organizations } from "@/db/schema";
 import { verifyBookingManageToken } from "@/lib/bookings/manage-token";
 import { getPublicOrgThemeById } from "@/lib/theme/actions";
-import { getEffectiveBrandingForWorkspace } from "@/lib/partner-agencies/branding";
+// 2026-05-18 (later) — agency white-label removed from this page.
+// SMB identity only; agency chrome stays in admin dashboard.
 import { PublicThemeProvider } from "@/components/theme/public-theme-provider";
 import { BookingManageView } from "@/components/bookings/booking-manage-view";
 
@@ -81,12 +82,12 @@ export default async function BookingManagePage({
   }
 
   const theme = await getPublicOrgThemeById(orgRow.id);
-  const effective = await getEffectiveBrandingForWorkspace(orgRow.id).catch(() => null);
-  const headerLogoUrl =
-    (effective?.is_white_label && effective.logo_url) || theme.logoUrl || null;
-  const headerName = effective?.is_white_label
-    ? effective.brand_name
-    : orgRow.name;
+  // 2026-05-18 (later) — SMB identity ONLY on customer-managed booking
+  // page. The customer rescheduling their appointment shouldn't see the
+  // agency that built the system — they should see the SMB they booked
+  // with. Agency chrome is admin-dashboard-only.
+  const headerLogoUrl = theme.logoUrl || null;
+  const headerName = orgRow.name;
 
   // Soul phone for the "questions? call us" line.
   const soul = (orgRow.soul ?? {}) as Record<string, unknown>;

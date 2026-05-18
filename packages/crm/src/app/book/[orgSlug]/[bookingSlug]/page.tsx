@@ -9,12 +9,12 @@ import { PublicThemeProvider } from "@/components/theme/public-theme-provider";
 import { shouldShowPoweredByBadgeForOrg } from "@/lib/billing/public";
 import { getPublicBookingContext } from "@/lib/bookings/actions";
 import { getPublicOrgThemeBySlug } from "@/lib/theme/actions";
-// 2026-05-18 — agency-wide white-label. When the workspace is
-// attached to an active parent agency, the agency's logo wins over
-// the workspace's own theme.logoUrl. That's the "one logo across all
-// my workspaces" behavior — the agency operator sets it once at
-// /settings/agency-profile and every attached workspace inherits.
-import { getEffectiveBrandingForWorkspace } from "@/lib/partner-agencies/branding";
+// 2026-05-18 (later) — agency-wide white-label REMOVED from public
+// booking page. The end customer (the homeowner clicking the booking
+// link) should see the SMB's identity ("Roofs by Shiloh"), not the
+// agency that built the system ("Max agency"). Agency chrome lives
+// in the OPERATOR's admin dashboard sidebar only — never on
+// customer-facing surfaces. See operator dogfood feedback 2026-05-18.
 
 // v1.36.1 — extract a business phone from the soul JSONB (best-effort).
 // SeldonFrame doesn't have a dedicated `organizations.phone` column;
@@ -54,19 +54,9 @@ export default async function PublicBookingPage({
 
   const showBadge = await shouldShowPoweredByBadgeForOrg(bookingContext.orgId);
   const theme = await getPublicOrgThemeBySlug(orgSlug);
-  // 2026-05-18 — effective branding (agency-wide override). Falls
-  // back to SF defaults (is_white_label=false, logo_url=null) when
-  // the workspace has no active parent agency.
-  const effectiveBranding = await getEffectiveBrandingForWorkspace(
-    bookingContext.orgId,
-  );
-  // Agency logo wins when chrome substitution is active; else the
-  // workspace's own theme.logoUrl. Empty string is treated as "no
-  // logo" so the booking page just shows the business name text.
-  const headerLogoUrl =
-    (effectiveBranding.is_white_label && effectiveBranding.logo_url) ||
-    theme.logoUrl ||
-    null;
+  // 2026-05-18 (later) — SMB identity only on public booking page.
+  // No agency override (see import comment above).
+  const headerLogoUrl = theme.logoUrl || null;
 
   // v1.36.1 — fetch org name + soul + testMode in one query. Replaces
   // the separate testMode lookup. Soul is parsed for business phone
@@ -146,11 +136,8 @@ export default async function PublicBookingPage({
           // formats them in this TZ for display so the customer sees
           // the operator's hours, not their browser-local reinterp.
           workspaceTimezone={bookingContext.workspaceTimezone}
-          // 2026-05-18 — header logo. Prefers the agency-wide override
-          // (partner_agencies.logo_url, via getEffectiveBrandingForWorkspace)
-          // when the workspace is attached to an active agency. Falls
-          // back to theme.logoUrl for unattached / SF-default workspaces.
-          // null → text-only header.
+          // 2026-05-18 (later) — SMB's own theme.logoUrl only.
+          // null → text-only header showing the SMB business name.
           logoUrl={headerLogoUrl}
         />
         {(showBadge || isTestMode) ? (

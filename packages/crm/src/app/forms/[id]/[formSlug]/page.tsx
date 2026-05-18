@@ -7,12 +7,13 @@ import { PublicThemeProvider } from "@/components/theme/public-theme-provider";
 import { PoweredByBadge } from "@seldonframe/core/virality";
 import { shouldShowPoweredByBadgeForOrg } from "@/lib/billing/public";
 import { getPublicOrgThemeBySlug } from "@/lib/theme/actions";
-// 2026-05-18 — white-label slice 2: agency-wide logo header on the
-// public intake page. Mirrors the slice 1 treatment we shipped for
-// /book/[orgSlug]/[bookingSlug]. Effective branding picks the agency
-// logo when chrome substitution is active; falls back to the
-// workspace's own theme.logoUrl when it isn't.
-import { getEffectiveBrandingForWorkspace } from "@/lib/partner-agencies/branding";
+// 2026-05-18 (later) — agency-wide branding REMOVED from public-facing
+// intake pages. The agency's chrome substitution only applies to the
+// SMB operator's admin dashboard; their CUSTOMERS (the people filling
+// out the intake form) must see the SMB's own identity ("Roofs by
+// Shiloh"), not the agency name ("Max agency"). Operator dogfood
+// feedback: customer received an intake form with the agency logo at
+// the top instead of the actual roofing company, which was confusing.
 
 export default async function PublicIntakePage({
   params,
@@ -43,15 +44,11 @@ export default async function PublicIntakePage({
 
   const showBadge = await shouldShowPoweredByBadgeForOrg(org.id);
   const theme = await getPublicOrgThemeBySlug(orgSlug);
-  // 2026-05-18 — effective branding for the white-label header.
-  const effectiveBranding = await getEffectiveBrandingForWorkspace(org.id);
-  const headerLogoUrl =
-    (effectiveBranding.is_white_label && effectiveBranding.logo_url) ||
-    theme.logoUrl ||
-    null;
-  const headerName = effectiveBranding.is_white_label
-    ? effectiveBranding.brand_name
-    : org.name;
+  // 2026-05-18 (later) — public surfaces use SMB identity ONLY. The
+  // agency logo never appears here even when the workspace is under
+  // an active partner agency — that's admin-chrome-only.
+  const headerLogoUrl = theme.logoUrl || null;
+  const headerName = org.name;
 
   // Wiring task: prefer the blueprint-rendered HTML/CSS pair
   // (formbricks-stack-v1) when present on the row. Falls back to the
