@@ -104,43 +104,48 @@ export function registerCrmEventListeners() {
     // events. The dispatcher filters by configured `$formId` so only
     // agents wired to THIS form fire. orgId isn't on the typed event
     // payload (bus design), so we resolve it from the form id.
+    //
+    // 2026-05-18 (later) — switched from fire-and-forget
+    // `void .then().catch()` to await. In Vercel serverless, the
+    // function returns once this handler returns, and any pending
+    // promises die with the worker before they finish. The previous
+    // pattern silently produced no auto-reply emails / SMS for
+    // intake submissions. Same fix applied to booking.created +
+    // booking.cancelled below.
     const formId = event.data.formId;
-    void resolveOrgIdForFormId(formId)
-      .then((orgId) => {
-        if (!orgId) return;
-        return dispatchEventToDeployedAgents({
-          orgId,
+    const formOrgId = await resolveOrgIdForFormId(formId).catch(() => null);
+    if (formOrgId) {
+      try {
+        await dispatchEventToDeployedAgents({
+          orgId: formOrgId,
           triggerEventType: "form.submitted",
           triggerEventId: null,
           triggerPayload: event.data as Record<string, unknown>,
           matcherPlaceholder: "$formId",
           matcherValue: formId,
         });
-      })
-      .catch((err) =>
+      } catch (err) {
         console.warn(
           `[listeners] dispatchEventToDeployedAgents form.submitted failed:`,
-          err
-        )
-      );
+          err,
+        );
+      }
 
-    // 2026-05-18 — Slice 7 — outbound messaging dispatch for
-    // form.submitted (intake auto-reply email + SMS). Non-fatal.
-    void resolveOrgIdForFormId(formId)
-      .then((orgId) => {
-        if (!orgId) return;
-        return dispatchOutboundMessagesForEvent({
-          orgId,
+      // 2026-05-18 — Slice 7 — outbound messaging dispatch for
+      // form.submitted (intake auto-reply email + SMS). Non-fatal.
+      try {
+        await dispatchOutboundMessagesForEvent({
+          orgId: formOrgId,
           eventType: "form.submitted",
           payload: event.data as Record<string, unknown>,
         });
-      })
-      .catch((err) =>
+      } catch (err) {
         console.warn(
           `[listeners] dispatchOutboundMessagesForEvent form.submitted failed:`,
           err,
-        ),
-      );
+        );
+      }
+    }
   });
 
   bus.on("booking.created", async (event) => {
@@ -157,49 +162,54 @@ export function registerCrmEventListeners() {
     // Matcher: appointmentTypeId — agents are configured per booking
     // type so a workspace with multiple types can wire different
     // agents to each. orgId resolved from the booking row.
+    //
+    // 2026-05-18 (later) — AWAITED (was fire-and-forget). In Vercel
+    // serverless the handler's return ends the worker, killing any
+    // pending dispatch promises. The operator-reported "booked a job,
+    // no email" bug was THIS — compose-template / lazy-seed / etc.
+    // were all correct, the dispatch just never ran to completion
+    // because emitSeldonEvent's Promise.allSettled resolved before
+    // the inner .then() chain finished.
     const data = event.data as Record<string, unknown>;
     const bookingId = typeof data.bookingId === "string" ? data.bookingId : "";
     const apptTypeId =
       typeof data.appointmentTypeId === "string" ? data.appointmentTypeId : null;
-    void resolveOrgIdForBookingId(bookingId)
-      .then((orgId) => {
-        if (!orgId) return;
-        return dispatchEventToDeployedAgents({
-          orgId,
+    const bookingOrgId = await resolveOrgIdForBookingId(bookingId).catch(() => null);
+    if (bookingOrgId) {
+      try {
+        await dispatchEventToDeployedAgents({
+          orgId: bookingOrgId,
           triggerEventType: "booking.created",
           triggerEventId: null,
           triggerPayload: data,
           matcherPlaceholder: "$appointmentTypeId",
           matcherValue: apptTypeId,
         });
-      })
-      .catch((err) =>
+      } catch (err) {
         console.warn(
           `[listeners] dispatchEventToDeployedAgents booking.created failed:`,
-          err
-        )
-      );
+          err,
+        );
+      }
 
-    // 2026-05-18 — outbound messaging dispatch (plan v2, slice 2).
-    // Fire the matching outbound_message_triggers (default seeded
-    // when the workspace was created: email booking-confirmation).
-    // Non-fatal — dispatcher logs to outbound_message_sends rather
-    // than throwing.
-    void resolveOrgIdForBookingId(bookingId)
-      .then((orgId) => {
-        if (!orgId) return;
-        return dispatchOutboundMessagesForEvent({
-          orgId,
+      // 2026-05-18 — outbound messaging dispatch (plan v2, slice 2).
+      // Fire the matching outbound_message_triggers (default seeded
+      // when the workspace was created: email booking-confirmation).
+      // Non-fatal — dispatcher logs to outbound_message_sends rather
+      // than throwing.
+      try {
+        await dispatchOutboundMessagesForEvent({
+          orgId: bookingOrgId,
           eventType: "booking.created",
           payload: data,
         });
-      })
-      .catch((err) =>
+      } catch (err) {
         console.warn(
           `[listeners] dispatchOutboundMessagesForEvent booking.created failed:`,
           err,
-        ),
-      );
+        );
+      }
+    }
   });
 
   bus.on("booking.completed", async (event) => {
@@ -232,51 +242,49 @@ export function registerCrmEventListeners() {
     // Payload only carries appointmentId + contactId; dispatcher
     // resolves the rest via render-vars from the contact + workspace
     // soul. orgId arrives on the meta of the event.
+    //
+    // 2026-05-18 (later) — AWAITED (was fire-and-forget). See
+    // booking.created above for context — Vercel serverless kills
+    // the worker once the handler returns, so void .then() chains
+    // never finished running.
     const data = event.data as Record<string, unknown>;
     const appointmentId =
       typeof data.appointmentId === "string" ? data.appointmentId : "";
-    void resolveOrgIdForBookingId(appointmentId)
-      .then((orgId) => {
-        if (!orgId) return;
-        return dispatchOutboundMessagesForEvent({
-          orgId,
+    const cancelOrgId = await resolveOrgIdForBookingId(appointmentId).catch(() => null);
+    if (cancelOrgId) {
+      try {
+        await dispatchOutboundMessagesForEvent({
+          orgId: cancelOrgId,
           eventType: "booking.cancelled",
           payload: data,
         });
-      })
-      .catch((err) =>
+      } catch (err) {
         console.warn(
           `[listeners] dispatchOutboundMessagesForEvent booking.cancelled failed:`,
           err,
-        ),
-      );
+        );
+      }
 
-    // 2026-05-18 — Slice 6: cancel pending scheduled sends targeted
-    // at this booking (e.g. the 24h reminder). Without this hook the
-    // reminder would still fire post-cancellation. The booking event
-    // payload uses 'appointmentId' for the booking id; the scheduler
-    // stores the payload verbatim, so we look up by 'bookingId' in
-    // payload. The booking.created event uses 'bookingId' though, so
-    // we need to use the right key — see render-vars to verify.
-    // booking.created emits with 'bookingId' per packages/crm/src/lib/
-    // bookings/actions.ts; we match against that.
-    const bookingIdForCancel =
-      typeof data.bookingId === "string"
-        ? data.bookingId
-        : typeof data.appointmentId === "string"
-          ? data.appointmentId
-          : "";
-    void resolveOrgIdForBookingId(bookingIdForCancel)
-      .then((orgId) => {
-        if (!orgId || !bookingIdForCancel) return;
-        return cancelScheduledSendsForBooking(orgId, bookingIdForCancel);
-      })
-      .catch((err) =>
-        console.warn(
-          `[listeners] cancelScheduledSendsForBooking failed:`,
-          err,
-        ),
-      );
+      // 2026-05-18 — Slice 6: cancel pending scheduled sends targeted
+      // at this booking (e.g. the 24h reminder). Without this hook the
+      // reminder would still fire post-cancellation.
+      const bookingIdForCancel =
+        typeof data.bookingId === "string"
+          ? data.bookingId
+          : typeof data.appointmentId === "string"
+            ? data.appointmentId
+            : "";
+      if (bookingIdForCancel) {
+        try {
+          await cancelScheduledSendsForBooking(cancelOrgId, bookingIdForCancel);
+        } catch (err) {
+          console.warn(
+            `[listeners] cancelScheduledSendsForBooking failed:`,
+            err,
+          );
+        }
+      }
+    }
   });
 
   bus.on("booking.no_show", async (event) => {
