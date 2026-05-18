@@ -329,8 +329,41 @@ export async function resumeWait(
       await advanceRun(context, run.id);
       return { resumed: true, runId: run.id };
     }
+    // 2026-05-18 — Conversation step pauses via pause_event waiting
+    // for sms.replied. On resume we want to re-dispatch the SAME
+    // step (it runs the multi-turn loop internally) — not advance to
+    // a sibling. Capture the inbound smsMessageId into captureScope
+    // so the dispatcher can look up the body. Timeout resumes
+    // advance to on_exit.next with whatever was extracted so far.
+    if (step && isConversationStep(step)) {
+      if (reason === "event_match" && resumingEventPayload) {
+        const smsMessageId =
+          typeof resumingEventPayload.smsMessageId === "string"
+            ? resumingEventPayload.smsMessageId
+            : null;
+        if (smsMessageId) {
+          await context.storage.updateRun(run.id, {
+            captureScope: {
+              ...run.captureScope,
+              __lastInboundSmsId: smsMessageId,
+            },
+          });
+        }
+        // Re-advance to the SAME step (re-dispatches the conversation
+        // engine which checks transcript + calls LLM + decides).
+        await advanceTo(context, run.id, step.id);
+        await advanceRun(context, run.id);
+        return { resumed: true, runId: run.id };
+      }
+      // Timeout: customer never replied. Advance to on_exit.next so
+      // downstream steps (book_consultation etc.) still execute with
+      // whatever defaults the create_booking fallback handles.
+      await advanceTo(context, run.id, step.on_exit.next);
+      await advanceRun(context, run.id);
+      return { resumed: true, runId: run.id };
+    }
     throw new RuntimeError(
-      `Wait ${wait.id} references step ${wait.stepId} which is not await_event or wait`,
+      `Wait ${wait.id} references step ${wait.stepId} which is not await_event, wait, or conversation`,
       run.id,
     );
   }

@@ -155,10 +155,16 @@ export interface RuntimeStorage {
   /** Fetch by id. Null if not found. */
   getRun(runId: string): Promise<StoredRun | null>;
 
-  /** Patch the run. Updates `updatedAt` implicitly. */
+  /** Patch the run. Updates `updatedAt` implicitly.
+   *
+   *  2026-05-18 — added variableScope to the writable set so the
+   *  conversation step dispatcher can persist transcript + turn count
+   *  across pause/resume cycles. captureScope is reserved for
+   *  step-output captures; variableScope is the right home for
+   *  per-step mutable state like a conversation transcript. */
   updateRun(
     runId: string,
-    patch: Partial<Pick<StoredRun, "status" | "currentStepId" | "captureScope" | "failureCount">>,
+    patch: Partial<Pick<StoredRun, "status" | "currentStepId" | "captureScope" | "variableScope" | "failureCount">>,
   ): Promise<void>;
 
   /** Insert a wait, return its id. */

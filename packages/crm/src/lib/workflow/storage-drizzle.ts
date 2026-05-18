@@ -76,12 +76,13 @@ export class DrizzleRuntimeStorage implements RuntimeStorage {
 
   async updateRun(
     runId: string,
-    patch: Partial<Pick<StoredRun, "status" | "currentStepId" | "captureScope" | "failureCount">>,
+    patch: Partial<Pick<StoredRun, "status" | "currentStepId" | "captureScope" | "variableScope" | "failureCount">>,
   ): Promise<void> {
     const set: Record<string, unknown> = { updatedAt: new Date() };
     if (patch.status !== undefined) set.status = patch.status;
     if (patch.currentStepId !== undefined) set.currentStepId = patch.currentStepId;
     if (patch.captureScope !== undefined) set.captureScope = patch.captureScope;
+    if (patch.variableScope !== undefined) set.variableScope = patch.variableScope;
     if (patch.failureCount !== undefined) set.failureCount = patch.failureCount;
     await this.db.update(workflowRuns).set(set).where(eq(workflowRuns.id, runId));
   }
