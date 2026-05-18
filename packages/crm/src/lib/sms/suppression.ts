@@ -107,3 +107,16 @@ export function isStopKeyword(body: string) {
   const normalized = body.trim().toLowerCase();
   return STOP_KEYWORDS.has(normalized);
 }
+
+// HELP-keyword detection for inbound webhook (Slice 4). Carriers expect
+// a deterministic, non-marketing response to HELP / INFO that names the
+// business and offers a support contact — parallel obligation to STOP.
+// We match the same case-insensitive whole-message shape as STOP so a
+// reply of "help me figure this out" still routes to the AI / inbox
+// rather than the boilerplate.
+const HELP_KEYWORDS = new Set(["help", "info"]);
+
+export function isHelpKeyword(body: string) {
+  const normalized = body.trim().toLowerCase();
+  return HELP_KEYWORDS.has(normalized);
+}

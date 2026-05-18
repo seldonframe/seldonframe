@@ -171,6 +171,11 @@ export function Sidebar(props: {
             { href: "/contacts", label: labels.contact.plural, icon: "Users" },
             { href: "/deals", label: labels.deal.plural, icon: "Building2" },
             { href: "/bookings", label: "Bookings", icon: "Calendar" },
+            // 2026-05-18 — messaging-layer slice 4. Two-way SMS inbox
+            // — every contact this workspace has had inbound SMS from,
+            // with an inline operator reply box. Placed adjacent to
+            // Bookings since both are inbound-customer surfaces.
+            { href: "/conversations", label: "Conversations", icon: "MessageCircle" },
             { href: "/emails", label: "Email", icon: "Mail" },
             { href: "/forms", label: labels.intakeForm.plural, icon: "FileText" },
             // 2026-05-17 — Pages (/landing) dropped from the nav. SF
@@ -227,6 +232,9 @@ export function Sidebar(props: {
             { href: "/contacts", label: labels.contact.plural, icon: "Users" },
             { href: "/deals", label: labels.deal.plural, icon: "Building2" },
             { href: "/bookings", label: "Bookings", icon: "Calendar" },
+            // 2026-05-18 — messaging-layer slice 4. See sibling comment
+            // in the isInsideClientWorkspace branch.
+            { href: "/conversations", label: "Conversations", icon: "MessageCircle" },
             { href: "/agents", label: "Agents", icon: "Bot" },
             // 2026-05-17 — Pages (/landing) dropped from nav. See
             // the matching comment in the isInsideClientWorkspace branch.
