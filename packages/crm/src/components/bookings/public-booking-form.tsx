@@ -120,6 +120,7 @@ export function PublicBookingForm({
   appointmentDescription,
   intakeFields = [],
   workspaceTimezone,
+  logoUrl = null,
 }: {
   orgSlug: string;
   bookingSlug: string;
@@ -138,6 +139,12 @@ export function PublicBookingForm({
    *  customer sees operator's actual hours, not their browser-local
    *  reinterpretation. Required — caller must thread this through. */
   workspaceTimezone: string;
+  /** 2026-05-18 — operator-supplied workspace logo (theme.logoUrl).
+   *  When set, renders in the header next to businessName. Null →
+   *  text-only header. The /settings/theme page already persists this
+   *  field; this prop just plumbs it through to the public surface.
+   *  Replaces the "uploaded a logo, why doesn't it show?" gap. */
+  logoUrl?: string | null;
 }) {
   // v1.40.1 — surface the operator-supplied service hint when the
   // visitor arrived via /book?service=<slug>. Used to pre-display the
@@ -317,9 +324,28 @@ export function PublicBookingForm({
       <div className="mx-auto w-full max-w-5xl space-y-6">
         {/* ───── Top header (business name + phone CTA) ───── */}
         <header className="flex items-center justify-between gap-4 rounded-2xl border bg-card px-5 py-4 md:px-6" style={{ borderColor: "var(--sf-border)" }}>
-          <h2 className="text-lg md:text-xl font-semibold tracking-tight truncate" style={{ color: "var(--sf-text)" }}>
-            {businessName}
-          </h2>
+          {/* 2026-05-18 — workspace logo render. If theme.logoUrl is
+              set, show it AT the front of the header next to (not
+              instead of) the business name. White-label expectation
+              was "I upload a logo, where does it show?" → here, on
+              the public booking page header. Fallback: text-only
+              header (the pre-2026-05-18 behavior). */}
+          <div className="flex items-center gap-3 min-w-0">
+            {logoUrl ? (
+              // Public surface — Next/Image not used because the logo
+              // URL is operator-supplied (could be any host). Plain
+              // <img> with a sized container keeps CLS controlled.
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={logoUrl}
+                alt={`${businessName} logo`}
+                className="h-9 w-auto object-contain shrink-0"
+              />
+            ) : null}
+            <h2 className="text-lg md:text-xl font-semibold tracking-tight truncate" style={{ color: "var(--sf-text)" }}>
+              {businessName}
+            </h2>
+          </div>
           {businessPhone ? (
             <a
               href={toTelLink(businessPhone)}
