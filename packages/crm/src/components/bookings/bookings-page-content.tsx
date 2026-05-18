@@ -89,6 +89,11 @@ type BookingsPageContentProps = {
   calendarConnected: boolean;
   googleCalendarConnectUrl: string;
   createAppointmentTypeAction: (formData: FormData) => Promise<void>;
+  /** 2026-05-18 — wraps updateBookingTypeAction for the inline Edit
+   *  sheet on /bookings. Operator reported the Edit button on each
+   *  appointment-type card did nothing; this prop is what makes the
+   *  sheet's form submit do something real. */
+  editAppointmentTypeAction: (formData: FormData) => Promise<void>;
   /** 2026-05-17 — personality-aware placeholders + duration options + quick-
    *  start templates for the Create Type drawer. Falls back to coaching-
    *  flavoured defaults if the workspace has no crmPersonality set. See
@@ -204,8 +209,14 @@ const bookingBorderPalette = [
   "border-l-positive",
 ];
 
-export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, suggestedServices, orgSlug, publicBaseUrl, workspaceTimezone, calendarConnected, googleCalendarConnectUrl, createAppointmentTypeAction, bookingDefaults }: BookingsPageContentProps) {
+export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, suggestedServices, orgSlug, publicBaseUrl, workspaceTimezone, calendarConnected, googleCalendarConnectUrl, createAppointmentTypeAction, editAppointmentTypeAction, bookingDefaults }: BookingsPageContentProps) {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
+  // 2026-05-18 — Edit sheet state. When set, the slide-out renders
+  // with this appointment-type's current title / slug / duration /
+  // description / price so the operator can update them in place.
+  // Pattern mirrors /forms/[id]/edit but kept inline since booking
+  // templates have a small editable surface (no field schema editor).
+  const [editingType, setEditingType] = useState<AppointmentTypeRow | null>(null);
   const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [weekOffset, setWeekOffset] = useState(0);
@@ -612,10 +623,14 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
 
                   {/* Edit / Delete as icon buttons — fade in on hover. Keeps
                       the card dense at rest. */}
+                  {/* 2026-05-18 — Edit now opens the inline edit sheet
+                      below. Delete is still a placeholder pending the
+                      deleteAppointmentTypeAction wire-up (next slice). */}
                   <div className="mt-3 flex items-center justify-end gap-1 opacity-0 transition-opacity group-hover/card:opacity-100 focus-within:opacity-100">
                     <button
                       type="button"
                       className="inline-flex h-7 items-center gap-1 rounded-md border border-border/60 bg-background/60 px-2 text-[11px] text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+                      onClick={() => setEditingType(row)}
                     >
                       <Pencil className="size-3" />
                       Edit
@@ -623,6 +638,7 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
                     <button
                       type="button"
                       className="inline-flex h-7 items-center gap-1 rounded-md border border-border/60 bg-background/60 px-2 text-[11px] text-muted-foreground transition-colors hover:border-negative/40 hover:bg-negative/10 hover:text-negative"
+                      title="Delete is wired in the next slice"
                     >
                       <Trash2 className="size-3" />
                       Delete
@@ -904,6 +920,104 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
                 </button>
               </div>
             </form>
+        </SheetContent>
+      </Sheet>
+
+      {/* 2026-05-18 — Edit appointment-type sheet. Operator reported
+          the Edit button did nothing; this sheet provides the inline
+          editor with name / public URL slug / duration / description /
+          price. Save calls editAppointmentTypeAction (server action
+          wrapper around the existing typed updateBookingTypeAction).
+          revalidatePath in the server action refreshes the listing. */}
+      <Sheet open={editingType !== null} onOpenChange={(open) => !open && setEditingType(null)}>
+        <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto p-6">
+          <SheetTitle className="text-xl font-medium">Edit appointment type</SheetTitle>
+          {editingType ? (
+            (() => {
+              const meta = (editingType.metadata as AppointmentTypeMeta | null) ?? {};
+              return (
+                <form
+                  className="mt-5 space-y-4"
+                  action={(formData) => {
+                    formData.set("bookingId", editingType.id);
+                    startTransition(async () => {
+                      await editAppointmentTypeAction(formData);
+                      setEditingType(null);
+                    });
+                  }}
+                >
+                  <div className="space-y-1">
+                    <label htmlFor="edit-type-name" className="text-label">Name</label>
+                    <input
+                      id="edit-type-name"
+                      name="name"
+                      defaultValue={editingType.title}
+                      required
+                      className="crm-input h-10 w-full px-3"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label htmlFor="edit-type-slug" className="text-label">Public URL slug</label>
+                    <input
+                      id="edit-type-slug"
+                      name="slug"
+                      defaultValue={editingType.bookingSlug}
+                      className="crm-input h-10 w-full px-3"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Used in /book/{orgSlug}/&lt;slug&gt;. Lowercase, hyphens only.
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <label htmlFor="edit-type-duration" className="text-label">Duration (minutes)</label>
+                    <input
+                      id="edit-type-duration"
+                      name="durationMinutes"
+                      type="number"
+                      min={5}
+                      max={480}
+                      defaultValue={meta.durationMinutes ?? 30}
+                      className="crm-input h-10 w-full px-3"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label htmlFor="edit-type-price" className="text-label">Price ($)</label>
+                    <input
+                      id="edit-type-price"
+                      name="price"
+                      type="number"
+                      min={0}
+                      step={1}
+                      defaultValue={meta.price ?? 0}
+                      className="crm-input h-10 w-full px-3"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label htmlFor="edit-type-description" className="text-label">Description</label>
+                    <textarea
+                      id="edit-type-description"
+                      name="description"
+                      defaultValue={meta.description ?? ""}
+                      rows={4}
+                      className="crm-input w-full p-3"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 pt-2">
+                    <button type="submit" className="crm-button-primary h-10 px-4" disabled={pending}>
+                      {pending ? "Saving..." : "Save changes"}
+                    </button>
+                    <button
+                      type="button"
+                      className="crm-button-ghost h-10 px-4"
+                      onClick={() => setEditingType(null)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              );
+            })()
+          ) : null}
         </SheetContent>
       </Sheet>
 
