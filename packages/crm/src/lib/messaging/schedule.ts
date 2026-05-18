@@ -260,7 +260,9 @@ export async function processScheduledSend(
     if (trigger.channel === "email") {
       const result = await sendEmailFromApi({
         orgId: row.orgId,
-        userId: "system",
+        // 2026-05-18 — null (system-initiated). The previous literal
+        // string "system" failed the emails.user_id uuid type cast.
+        userId: null,
         contactId: contactRow?.id ?? null,
         toEmail: toAddress,
         subject: composed.subject ?? "Reminder",

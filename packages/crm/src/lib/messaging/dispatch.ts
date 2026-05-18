@@ -321,7 +321,11 @@ export async function dispatchOutboundMessagesForEvent(
       if (trigger.channel === "email") {
         const result = await sendEmailFromApi({
           orgId: input.orgId,
-          userId: "system",
+          // 2026-05-18 — null for system-initiated dispatch. Was
+          // previously the literal string "system" which crashed
+          // the emails table insert (user_id is uuid NULL with FK
+          // to users, "system" is neither a valid UUID nor a user).
+          userId: null,
           contactId: contactRow?.id ?? null,
           toEmail: toAddress,
           subject: composed.subject ?? "Confirmation",
