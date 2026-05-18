@@ -127,6 +127,13 @@ export default async function PublicBookingPage({
           // formats them in this TZ for display so the customer sees
           // the operator's hours, not their browser-local reinterp.
           workspaceTimezone={bookingContext.workspaceTimezone}
+          // 2026-05-18 — workspace logo from theme.logoUrl. Renders
+          // in the booking page header next to the business name when
+          // set. The /settings/theme page already persists this; this
+          // is the first public surface to consume it. The same prop
+          // is plumbed through bookingTheme (for CSS vars) — passing
+          // it explicitly so the form can render the <img> directly.
+          logoUrl={theme.logoUrl ?? null}
         />
         {(showBadge || isTestMode) ? (
           <div className="flex flex-col items-center gap-2 py-3">
