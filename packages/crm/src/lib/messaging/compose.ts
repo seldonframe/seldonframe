@@ -54,13 +54,18 @@ export type ComposeFailure = { ok: false; reason: string };
 
 const MAX_EMAIL_BODY = 4000;
 // 2026-05-18 — Slice 3: SMS body cap leaves room for the auto-appended
-// STOP footer (~27 chars including the leading space). Two standard
-// SMS segments = 320 chars total; we cap composed body at 290 so the
-// final payload (body + footer) fits in 2 segments with room to spare.
-// Carriers charge per segment; a 290+27 = 317-char send is one
-// concatenated message billed as 2 segments. Going over starts to
-// chunk in unpredictable ways.
-const MAX_SMS_BODY = 290;
+// STOP footer (~27 chars including the leading space). Carriers charge
+// per segment; concatenated GSM-7 segments are 153 chars each after
+// the first.
+//
+// 2026-05-19 — bumped from 290 (2 segments) to 459 (3 segments) after
+// a booking confirmation came in 1 char over: it carried customer name
+// + date + time + reschedule URL + brand sig, an inherently longer
+// payload than 1-line nudges. Three segments = 459 chars total; with a
+// ~27-char STOP footer the final payload is ~486, which still bills as
+// 3 concatenated segments (limit ~3×153 = 459 before chunking shifts).
+// Other templates remain well within range; this only relaxes the cap.
+const MAX_SMS_BODY = 459;
 const FORBIDDEN_STRINGS = ["seldon", "seldonframe"];
 
 // 2026-05-18 (later) — strip URLs before the forbidden-string scan.

@@ -162,19 +162,42 @@ const TOOL_HANDLERS: Record<string, ToolHandler> = {
     // preserves the pre-RunContext safety net for cases where the
     // conversation step couldn't extract a preferred_start (engine
     // not wired yet on some archetypes).
+    //
+    // 2026-05-19 — interpret naive ISO ("2026-05-20T13:00:00", no TZ
+    // suffix) as wall-clock time in the workspace timezone. Without
+    // this, Vercel (UTC server) parses it as UTC and a "1pm CDT"
+    // booking lands at 8 AM CDT.
     const startsAtRaw = args.starts_at;
-    const parseAttempt =
-      startsAtRaw instanceof Date
-        ? startsAtRaw
-        : typeof startsAtRaw === "string" && !startsAtRaw.includes("{{")
-          ? new Date(startsAtRaw)
-          : typeof startsAtRaw === "number"
-            ? new Date(startsAtRaw)
-            : null;
     let startsAt: Date;
     let usedFallback = false;
-    if (parseAttempt && !Number.isNaN(parseAttempt.getTime())) {
-      startsAt = parseAttempt;
+    if (
+      typeof startsAtRaw === "string" &&
+      !startsAtRaw.includes("{{") &&
+      startsAtRaw.trim().length > 0
+    ) {
+      const tz = runContext?.workspace?.timezone ?? "UTC";
+      const { parseInWorkspaceTimezone } = await import(
+        "@/lib/workflow/parse-in-workspace-tz"
+      );
+      const parsed = parseInWorkspaceTimezone(startsAtRaw.trim(), tz);
+      if (Number.isNaN(parsed.getTime())) {
+        startsAt = nextBusinessHourSlot(new Date());
+        usedFallback = true;
+      } else {
+        startsAt = parsed;
+      }
+    } else if (startsAtRaw instanceof Date) {
+      startsAt = startsAtRaw;
+      if (Number.isNaN(startsAt.getTime())) {
+        startsAt = nextBusinessHourSlot(new Date());
+        usedFallback = true;
+      }
+    } else if (typeof startsAtRaw === "number") {
+      startsAt = new Date(startsAtRaw);
+      if (Number.isNaN(startsAt.getTime())) {
+        startsAt = nextBusinessHourSlot(new Date());
+        usedFallback = true;
+      }
     } else {
       startsAt = nextBusinessHourSlot(new Date());
       usedFallback = true;
