@@ -110,9 +110,13 @@ export async function scheduleOutboundMessage(
       : null;
 
   if (fireAt.getTime() <= now.getTime()) {
-    // Skip — fire time is already past. Record an audit row so the
-    // operator can see "we wanted to send a 24h reminder but the
-    // booking was made less than 24h before startsAt".
+    // 2026-05-19 — Skip cleanly. When delayMinutes (e.g. 1440 for a 24h
+    // reminder) puts the fire time before now(), this is NOT an error:
+    // it's a legitimate "the event is too close for the reminder window
+    // to make sense" case (customer booked 16h out, we can't fire a 24h
+    // reminder). Record as `error: null` + a structured skip_reason in
+    // metadata so the /runs UI shows it as a neutral gray pill rather
+    // than a red error.
     await db.insert(outboundMessageSends).values({
       orgId: input.orgId,
       triggerId: input.trigger.id,
@@ -123,11 +127,12 @@ export async function scheduleOutboundMessage(
       subject: null,
       body: "",
       status: "skipped",
-      error: "fire_at_in_past",
+      error: null,
       metadata: {
         skill: input.trigger.skillId,
         delayMinutes: input.trigger.delayMinutes,
         wouldFireAt: fireAt.toISOString(),
+        skip_reason: "delay_window_already_past",
       },
     });
     return;

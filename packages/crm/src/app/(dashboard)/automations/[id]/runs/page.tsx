@@ -302,6 +302,13 @@ export default async function RunsPage({
     const runStart = r.createdAt instanceof Date ? r.createdAt : new Date(r.createdAt);
     const lowerBound = runStart.getTime() - 60_000;
     const list: Msg[] = [];
+    // 2026-05-19 — outbound triggers like booking-confirmation-sms write
+    // BOTH an outbound_message_sends audit row AND a sms_messages canonical
+    // row, both stamped with the same Twilio SID. We dedup by
+    // external_message_id and prefer the outbound_message_sends row because
+    // it carries the skill name + trigger metadata which is more informative
+    // to the operator. Without this, the /runs UI shows the SMS twice.
+    const seenExternalIds = new Set<string>();
     for (const s of outboundSends) {
       if (s.contactId !== cid) continue;
       const ts = s.createdAt instanceof Date ? s.createdAt.getTime() : new Date(s.createdAt).getTime();
@@ -320,11 +327,15 @@ export default async function RunsPage({
         externalMessageId: s.externalMessageId,
         createdAt: s.createdAt instanceof Date ? s.createdAt.toISOString() : String(s.createdAt),
       });
+      if (s.externalMessageId) seenExternalIds.add(s.externalMessageId);
     }
     for (const m of conversationSms) {
       if (m.contactId !== cid) continue;
       const ts = m.createdAt instanceof Date ? m.createdAt.getTime() : new Date(m.createdAt).getTime();
       if (ts < lowerBound) continue;
+      // Skip if this SMS was already represented by an outbound_message_sends
+      // entry above (same Twilio SID).
+      if (m.externalMessageId && seenExternalIds.has(m.externalMessageId)) continue;
       list.push({
         kind: "sms",
         id: m.id,
