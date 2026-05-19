@@ -58,6 +58,11 @@ export const workflowRuns = pgTable(
     captureScope: jsonb("capture_scope").$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
     // Resolved spec.variables at run start. Read-only after set.
     variableScope: jsonb("variable_scope").$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
+    // RunContext snapshot (customer, workspace, clock, agency, source)
+    // stamped at startRun. NULL for legacy rows; the runtime lazily
+    // rebuilds + persists on first access. Strict typing to a
+    // RunContext type comes in a later task.
+    context: jsonb("context").$type<Record<string, unknown> | null>(),
     // Per-step retry budget. Incremented on step failures; when it
     // exceeds the configured ceiling (runtime constant, PR 2), the
     // run is marked failed.
