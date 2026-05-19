@@ -82,6 +82,13 @@ export type StoredRun = {
   currentStepId: string | null;
   captureScope: Record<string, unknown>;
   variableScope: Record<string, unknown>;
+  /**
+   * 2026-05-19 — RunContext snapshot stamped at startRun. NULL for
+   * legacy rows; loadRunContext() lazily rebuilds + persists on first
+   * access. Downstream dispatchers (Phase 2) read identity from this
+   * snapshot instead of re-querying DB tables.
+   */
+  context: Record<string, unknown> | null;
   failureCount: Record<string, number>;
   createdAt: Date;
   updatedAt: Date;
@@ -108,6 +115,12 @@ export type NewRunInput = {
   triggerPayload: Record<string, unknown>;
   currentStepId: string;
   variableScope: Record<string, unknown>;
+  /**
+   * 2026-05-19 — RunContext snapshot stamped at startRun. Optional for
+   * backward-compat with callers (test fixtures, legacy code) that
+   * don't supply one.
+   */
+  context?: Record<string, unknown> | null;
 };
 
 export type NewWaitInput = {

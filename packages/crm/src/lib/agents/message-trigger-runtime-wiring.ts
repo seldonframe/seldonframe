@@ -45,6 +45,7 @@ export type RuntimeStartRunFn = (
     spec: AgentSpec;
     triggerEventId: string | null;
     triggerPayload: Record<string, unknown>;
+    triggerEventType?: string;
   },
 ) => Promise<string>;
 
@@ -52,5 +53,12 @@ export function buildMessageTriggerStartRun(deps: {
   runtimeContext: RuntimeContext;
   runtimeStartRun: RuntimeStartRunFn;
 }): StartRunFn {
-  return async (input) => deps.runtimeStartRun(deps.runtimeContext, input);
+  // 2026-05-19 — message-triggered runs are inbound SMS replies per
+  // SLICE 7 design. Stamp triggerEventType so the persisted RunContext
+  // carries the correct source.type for downstream dispatchers.
+  return async (input) =>
+    deps.runtimeStartRun(deps.runtimeContext, {
+      ...input,
+      triggerEventType: "sms.replied",
+    });
 }

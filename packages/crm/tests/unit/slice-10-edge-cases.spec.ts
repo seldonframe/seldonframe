@@ -75,6 +75,7 @@ const baseRun = (over: Partial<StoredRun> = {}): StoredRun => ({
   currentStepId: "needs_review",
   captureScope: {},
   variableScope: {},
+  context: null,
   failureCount: {},
   createdAt: NOW,
   updatedAt: NOW,

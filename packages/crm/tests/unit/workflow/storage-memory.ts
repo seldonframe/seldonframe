@@ -52,6 +52,7 @@ export class InMemoryRuntimeStorage implements RuntimeStorage {
       currentStepId: input.currentStepId,
       captureScope: {},
       variableScope: input.variableScope,
+      context: input.context ?? null,
       failureCount: {},
       createdAt: now,
       updatedAt: now,

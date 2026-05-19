@@ -31,6 +31,7 @@ function makeRun(overrides: Partial<StoredRun> = {}): StoredRun {
     currentStepId: null,
     captureScope: {},
     variableScope: {},
+    context: null,
     failureCount: {},
     createdAt: new Date(),
     updatedAt: new Date(),

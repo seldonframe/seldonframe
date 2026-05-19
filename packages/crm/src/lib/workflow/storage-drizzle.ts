@@ -47,6 +47,7 @@ export class DrizzleRuntimeStorage implements RuntimeStorage {
         currentStepId: input.currentStepId,
         captureScope: {},
         variableScope: input.variableScope,
+        context: input.context ?? null,
         failureCount: {},
       })
       .returning({ id: workflowRuns.id });
@@ -68,6 +69,7 @@ export class DrizzleRuntimeStorage implements RuntimeStorage {
       currentStepId: row.currentStepId,
       captureScope: row.captureScope,
       variableScope: row.variableScope,
+      context: row.context as Record<string, unknown> | null,
       failureCount: row.failureCount,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,

@@ -145,6 +145,9 @@ export async function dispatchEventToDeployedAgents(
         spec: synthesis.spec as Parameters<typeof startRun>[1]["spec"],
         triggerEventId: input.triggerEventId,
         triggerPayload: input.triggerPayload,
+        // 2026-05-19 — pass event type through so RunContext.source
+        // is shaped correctly (form.submitted, booking.created, etc).
+        triggerEventType: input.triggerEventType,
       });
 
       result.started.push({ archetypeId: archetype.id, runId });

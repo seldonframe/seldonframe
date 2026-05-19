@@ -28,6 +28,7 @@
 //   - local dispatcher files
 //   - local types.ts + predicate-eval.ts
 
+import { randomUUID } from "node:crypto";
 import type {
   AgentSpec,
   AwaitEventStep,
@@ -174,6 +175,13 @@ export type StartRunInput = {
   spec: AgentSpec;
   triggerEventId: string | null;
   triggerPayload: Record<string, unknown>;
+  /**
+   * 2026-05-19 — Optional for backward-compat; defaults to "manual"
+   * inside startRun. Callers that know the event type (dispatchers
+   * for form.submitted / booking.created / sms.replied) should pass
+   * it through so the persisted RunContext.source is shaped correctly.
+   */
+  triggerEventType?: string;
 };
 
 export async function startRun(
@@ -185,6 +193,32 @@ export async function startRun(
     throw new RuntimeError("Cannot start run with empty spec.steps");
   }
   const variableScope = seedVariableScope(input.spec.variables, input.triggerPayload);
+
+  // 2026-05-19 — stamp RunContext at run-start. Customer + workspace
+  // + clock + agency + source all locked in here; downstream steps
+  // read from this snapshot instead of re-querying.
+  //
+  // Best-effort: if buildRunContext fails (no DB connection in tests,
+  // workspace row missing, etc.) we persist context=null and let
+  // loadRunContext() rebuild lazily on first access — same code path
+  // legacy pre-Phase-1 rows take.
+  const tempRunId = randomUUID();
+  let runContext: Record<string, unknown> | null = null;
+  try {
+    const { buildRunContext } = await import("./build-run-context");
+    const built = await buildRunContext({
+      runId: tempRunId,
+      orgId: input.orgId,
+      archetypeId: input.archetypeId,
+      triggerPayload: input.triggerPayload,
+      triggerEventId: input.triggerEventId,
+      triggerEventType: input.triggerEventType ?? "manual",
+    });
+    runContext = { ...built, runId: tempRunId } as unknown as Record<string, unknown>;
+  } catch {
+    // Swallow — loadRunContext rebuilds lazily on first dispatcher access.
+  }
+
   const runId = await context.storage.createRun({
     orgId: input.orgId,
     archetypeId: input.archetypeId,
@@ -193,7 +227,27 @@ export async function startRun(
     triggerPayload: input.triggerPayload,
     currentStepId: firstStep.id,
     variableScope,
+    context: runContext,
   });
+
+  // Storage assigned a different runId (DB-generated UUID) — patch
+  // the persisted context's runId field on a follow-up update so
+  // downstream consumers see the canonical id. Skipped when the
+  // RunContext build failed above (runContext is null).
+  if (runContext && runId !== tempRunId) {
+    try {
+      const { workflowRuns } = await import("@/db/schema");
+      const { db } = await import("@/db");
+      const { eq } = await import("drizzle-orm");
+      await db
+        .update(workflowRuns)
+        .set({ context: { ...runContext, runId } as unknown as Record<string, unknown> })
+        .where(eq(workflowRuns.id, runId));
+    } catch {
+      // Same swallow rationale as the build path.
+    }
+  }
+
   await advanceRun(context, runId);
   return runId;
 }
