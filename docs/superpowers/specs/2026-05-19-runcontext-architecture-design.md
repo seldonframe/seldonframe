@@ -2,7 +2,18 @@
 
 **Date:** 2026-05-19
 **Author:** dogfood-driven iteration on the speed-to-lead pipeline
-**Status:** Draft for review
+**Status:** APPROVED — ready for implementation plan
+
+## Locked decisions (operator-approved 2026-05-19)
+
+1. **Type split:** dual-module — `run-context-customer.ts` + `run-context-admin.ts`. Customer-facing tools physically cannot import the agency field.
+2. **Clock refresh:** eager — every dispatcher call re-stamps `clock` so long-paused conversations always see accurate "today" / "tomorrow".
+3. **Agency in RunContext:** yes, kept, enforced via types (only readable from `AdminRunContext`).
+4. **Per-workspace template render:** eager at workspace create — pay once at create time, no surprises later.
+
+Plus a fifth principle layered in at operator request:
+
+5. **Thin harness + fat SKILL.md + antifragile to LLM upgrades.** The runtime is plumbing; the prose lives in archetype `soul_copy` placeholders + `systemPromptOverride`. Operators edit prose at `/automations/[id]/configure`. When Claude N+1 ships, the same prose gets better results — no code changes.
 
 ## Goal
 
@@ -233,19 +244,26 @@ Then visually comparing rows in the DB after agent-created vs public-created boo
 - Modify: `packages/crm/src/lib/workflow/types.ts` (StoredRun.context)
 - Create: `packages/crm/tests/unit/workflow/build-run-context.spec.ts`
 
-### Phase 2 — Thread RunContext through step dispatchers (~1.5 days)
+### Phase 2 — Thread RunContext through step dispatchers + extract editable prose (~2 days)
 
-- [ ] **Task 2.1:** Add `runContext: CustomerRunContext` to every step dispatcher signature. Default `dispatchStep` resolves it from `loadRunContext(run)` once per call.
+- [ ] **Task 2.1:** Add `runContext: CustomerRunContext` to every step dispatcher signature. `dispatchStep` resolves it from `loadRunContext(run)` once per call. Clock is eager-refreshed in `loadRunContext` itself so every dispatcher call sees a fresh `today` / `tomorrow`.
 - [ ] **Task 2.2:** Update conversation dispatcher:
   - `buildRunTimeVars` becomes a pure function over `runContext.customer` + `runContext.workspace`. Drops the `db.select(contacts)` + `db.select(organizations)` calls inside dispatch.
   - `buildSystemPrompt` reads `runContext.clock.today`, `runContext.clock.tomorrow`, `runContext.workspace.timezone` directly (no parsing).
   - `matchPredicate` uses `runContext.customer.phone` (already done in `7e9b874c` — confirm via tests).
-- [ ] **Task 2.3:** Update mcp-tool-call dispatcher to pass runContext through to the invoker.
-- [ ] **Task 2.4:** Update branch / read-state / write-state / await-event / approval dispatchers to accept (but not yet use) runContext, for signature uniformity.
+- [ ] **Task 2.3:** **Skill extraction** (thin-harness work): move operator-editable prose out of `buildSystemPrompt` into archetype placeholders:
+  - Add `$forbiddenPhrases` placeholder (soul_copy) — example: `"we couldn't find your appointment, please call us, this is broken"`. Harness reads it, injects into system prompt as: `Never say: ${forbiddenPhrases}.`
+  - Add `$maxTurns` placeholder (user_input, default 6). Replaces hardcoded `MAX_TURNS` constant.
+  - Add `$toolErrorHints` placeholder group (soul_copy) — per-error-key hint strings. Tool invoker reads these instead of returning hardcoded hints.
+  - Keep STRUCTURAL pieces in code: exit-block JSON format spec, date context block, tool list. These never change per operator and breaking them breaks the harness.
+- [ ] **Task 2.4:** Update mcp-tool-call dispatcher to pass runContext through to the invoker.
+- [ ] **Task 2.5:** Update branch / read-state / write-state / await-event / approval dispatchers to accept (but not yet use) runContext, for signature uniformity.
 
 **Files:**
 - Modify: all `packages/crm/src/lib/workflow/step-dispatchers/*.ts`
-- Tests: extend existing dispatcher spec files
+- Modify: `packages/crm/src/lib/agents/archetypes/speed-to-lead.ts` (add new placeholders + remove the hardcoded mirror in conversation.ts)
+- Modify: `packages/crm/src/lib/agents/archetypes/types.ts` if needed for new placeholder kinds
+- Tests: extend existing dispatcher spec files; add `tests/unit/agents/speed-to-lead-prose-extraction.spec.ts`
 
 ### Phase 3 — Tool invoker rewrites (~1.5 days)
 
@@ -301,22 +319,29 @@ The fix has two parts:
 - Modify: workspace seeding code (TBD — need to find which file injects the default contacts)
 - One-shot SQL via Neon MCP for the cleanup
 
-### Phase 7 — Observability + verification (~0.5 day)
+### Phase 7 — Observability + verification + antifragility (~1 day)
 
-- [ ] **Task 7.1:** Add `runContext` snapshot to the `/automations/[id]/runs` expanded view — show the customer name, phone, email, timezone, and `today` at run-start so the operator can debug "what did the agent think the customer's name was?".
-- [ ] **Task 7.2:** Add an integration test that runs the full speed-to-lead pipeline against a mocked workspace+contact+form and asserts:
-  - One opener SMS sent with correct customer.firstName
+- [ ] **Task 7.1:** Add `runContext` snapshot to the `/automations/[id]/runs` expanded view — show the customer name, phone, email, timezone, and `today` at run-start so the operator can debug "what did the agent think the customer's name was?". This is the operator's debugging surface.
+- [ ] **Task 7.2:** Add a **live preview** to `/automations/[id]/configure`: render the resolved system prompt with sample RunContext values (operator's own first name + workspace name + today's date) substituted so the operator sees exactly what the LLM will read after their edits.
+- [ ] **Task 7.3:** Add **config-history rollback**: every save to `agentConfig` writes a row to `agentConfig.history[]` (or a sibling table). Operator can revert to a previous config with one click. Defends against "I broke the prompt and now nothing works".
+- [ ] **Task 7.4:** Integration test for the full speed-to-lead pipeline against a mocked workspace+contact+form. Asserts:
+  - One opener SMS sent with correct `customer.firstName`
   - Conversation resumes on phone match (different sibling contact rows shouldn't break it)
   - Date "tomorrow at 3pm" extracts to `<today+1>T15:00:00` in workspace TZ
   - Booking created with correct `contactId`, `startsAt`, `appointmentTypeId`
   - ONE confirmation email goes out (no duplicate)
   - `/contacts/<id>` row has updated firstName/phone matching the form submission
-- [ ] **Task 7.3:** Re-run the existing predicate-eval tests + new run-context tests in CI.
+  - Booking row is structurally identical to one created via the public booking page (validates the `createBookingForCustomer` shared helper)
+- [ ] **Task 7.5:** **Antifragility smoke test** — pin the speed-to-lead spec + a sample conversation transcript ("Hi", "Tomorrow at 3pm", "John Doe at 123 main") in a test fixture. Run it against `claude-sonnet-4` AND the latest available model (currently `claude-sonnet-4-5`). Assert the agent reaches the exit block + extracts `preferred_start` to the correct ISO + service field is populated. **This locks the contract: future model bumps must not break behavior.** When the LLM model env var changes, this test catches regressions.
+- [ ] **Task 7.6:** Re-run all unit tests (predicate-eval, run-context, dispatcher tests).
 
 **Files:**
 - Modify: `packages/crm/src/components/automations/runs-table.tsx` (add RunContext section)
 - Modify: `packages/crm/src/app/(dashboard)/automations/[id]/runs/page.tsx` (fetch context from run)
+- Modify: `packages/crm/src/components/automations/configure-agent-form.tsx` (live preview pane)
+- Modify: `packages/crm/src/lib/agents/configure-actions.ts` (write to history on save)
 - Create: `packages/crm/tests/integration/speed-to-lead-end-to-end.spec.ts`
+- Create: `packages/crm/tests/integration/antifragility-model-bump.spec.ts`
 
 ### Phase 8 — Rollout (~0.5 day)
 
@@ -356,16 +381,63 @@ If the goal is "ship by end of week": Phases 0-3 in 4 days, Phase 4 + 5 + 7 + 8 
 - **Standardize event payload shape across the bus.** Touched in Phase 4.2 but only for `sms.replied`. Other events stay as-is for now.
 - **Refactor the conversation engine's tool-use loop.** It's working — `b3a08968` graceful-error fix handles the worst case.
 
-## Open questions for review
+## Thin harness + fat SKILL.md + antifragility — the Karpathy frame
 
-1. **Type-level admin/customer split:** is the dual-module pattern (`run-context-customer.ts` + `run-context-admin.ts`) heavy-handed? Alternative: a single module with eslint rule preventing `runContext.agency` from being read in `lib/agents/tool-invoker.ts` + `lib/emails/api.ts`. Pick one.
+RunContext is the HARNESS. Code that handles plumbing — load workspace, resolve customer, stamp clock, route to step dispatcher, invoke tool. The harness must NOT carry behavior that depends on LLM cleverness; that lives in prose.
 
-2. **Clock refresh policy:** lazy (refresh on demand by step code) vs eager (every dispatcher call re-stamps clock)? Lazy avoids unnecessary work but requires step authors to know to call `refreshClock`. Eager is foolproof but cheap. Lean eager.
+**The PROSE that gets smarter as LLMs get smarter — and that operators edit at `/automations/[id]/configure`:**
 
-3. **Should `agency` be in RunContext at all?** Argument for removal: customer-facing code never needs it, admin code reads it directly from `organizations` joined with `partner_agencies`. Argument for inclusion: convenience + single source of truth for the admin layout's render. Lean keep but enforce via types.
+| Surface | Today's source | After this refactor |
+|---|---|---|
+| Conversation opener | `archetype.placeholders.$openingMessage.example` → `agentConfig.placeholders.$openingMessage` | Same, but resolves `{{customer.firstName}}` etc. from RunContext |
+| Qualification criteria | `archetype.placeholders.$qualificationCriteria.example` → `agentConfig.placeholders.$qualificationCriteria` | Same |
+| Tool error hints (the new "soft_error.hint" returned from check_availability) | Hardcoded strings in `tool-invoker.ts` | Move to `archetype.placeholders.$toolErrorHints.<errorKey>` so the agency operator can override per-workspace ("our practice handles this differently") |
+| System prompt "never say" rules | Hardcoded in `buildSystemPrompt` | Move to `archetype.placeholders.$forbiddenPhrases` (default list, operator can extend) |
+| Hard-limit turn count | Hardcoded `MAX_TURNS = 6` | Move to `archetype.placeholders.$maxTurns` (user_input, default 6) |
+| Exit-block JSON format | Hardcoded in `buildSystemPrompt` | **Stays in harness — structural, not prose-y. Operators don't touch this.** |
+| Date grounding (CURRENT DATE CONTEXT) | Code-built from `runContext.clock` | **Stays in harness — correctness-critical** |
+| Tool list (`check_availability` etc.) | Code-defined `AGENT_TOOLS` | **Stays in harness — bound to tool implementations** |
 
-4. **Per-workspace template re-render — eager (at workspace create) or lazy (at first use)?** Eager is simpler operationally; lazy avoids work for workspaces that never send. Lean eager — the cost is one render per workspace, paid once.
+**The boundary rule:**
+- **In the harness (code, immutable):** anything whose correctness depends on the runtime contract — RunContext resolution, predicate eval, tool signatures, exit-block parsing, persistence, idempotency.
+- **In SKILL.md prose (placeholders, operator-editable):** anything whose quality depends on LLM judgment — opener tone, qualification criteria, fallback phrasing, brand voice.
+
+**Antifragility test:** the harness must be self-sufficient enough that swapping the LLM model (`claude-sonnet-4` → `claude-sonnet-5` → some future model) requires ZERO code changes. The same SKILL.md prose produces better results because the LLM is better. We commit to this by:
+
+1. **Not over-prescribing the LLM's process in code.** The system prompt should describe goals + constraints, not step-by-step procedures. If we find ourselves adding "first do X, then Y, then Z" to `buildSystemPrompt`, that's a smell — should be in prose, or the LLM should figure it out from the goal.
+
+2. **Tool surfaces stay declarative.** `check_availability` returns slots; `create_booking` creates a booking. The LLM decides WHEN to call them. We don't hard-code call ordering.
+
+3. **Graceful tool errors return prose hints, not control flow.** `{ ok: false, hint: "..." }` lets the LLM decide what to say. We never branch in code based on which tool errored.
+
+4. **A model-upgrade smoke test** (Phase 7): pin the speed-to-lead spec + a sample conversation transcript. Run against `claude-sonnet-4` AND `claude-sonnet-4-5` (or future). Assert the agent reaches the exit block + extracts the correct vars in both. Lock this as a regression test — when we bump the default model, this test catches behavior breakage.
+
+## Operator editability surface
+
+The agent-configure page at `/automations/[id]/configure` is the operator's primary leverage point. After this refactor:
+
+**Editable per workspace (under `agentConfig.placeholders` JSONB):**
+- `$openingMessage` — soul_copy, prose textarea
+- `$qualificationCriteria` — soul_copy, prose textarea
+- `$forbiddenPhrases` — soul_copy, comma-list ("we couldn't find your appointment, please call us, this is broken")
+- `$toolErrorHints.appointmentTypeNotFound` — soul_copy, prose textarea
+- `$toolErrorHints.noSlotsInWindow` — soul_copy, prose textarea
+- `$maxTurns` — user_input, integer (default 6)
+- `$formId`, `$appointmentTypeId`, `$waitSeconds` — user_input (existing)
+- `systemPromptOverride` — power-user textarea that replaces the entire generated prompt (existing, but unfocused — most operators won't need this)
+
+**Live preview** (Phase 7 nice-to-have): render the resolved system prompt with `{{customer.firstName}}` etc. substituted with sample values, so the operator sees exactly what the LLM will read.
+
+**Rollback** (Phase 7): every save creates a `agentConfig.history[]` entry. Operator can revert to a previous version with one click. Defends against "I edited the prompt and now nothing works" panic.
+
+**Why this matters for antifragility:** when Claude N+1 ships and the operator notices "actually now the model is sharp enough to skip the qualification step entirely", they edit the `$qualificationCriteria` prose to be shorter. No code change. No PR. No deploy. The operator's intuition compounds.
+
+## Locked decisions (replaces the open-questions section)
+
+The 4 questions in the prior version are answered above in the header. No further design changes needed before implementation.
 
 ## Sign-off
 
-Once this plan is approved I'll create an implementation plan via `superpowers:writing-plans` and execute via `superpowers:subagent-driven-development` (one subagent per phase, two-stage review per task). Estimated 7 days end-to-end.
+Plan is locked. Next step: convert this spec into a step-by-step implementation plan via `superpowers:writing-plans` and execute via `superpowers:subagent-driven-development` (one subagent per phase, two-stage review per task — spec compliance + code quality).
+
+Estimated 7 days end-to-end. Phases 0-4 (core RunContext + customer-surface alignment + skill extraction) deliver the booking-parity + identity-drift fixes in 5 days. Phases 5-7 (template re-render + cross-workspace audit + observability + antifragility smoke test) in another 2 days.
