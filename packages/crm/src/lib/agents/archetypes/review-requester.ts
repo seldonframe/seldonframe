@@ -72,7 +72,7 @@ export const reviewRequesterArchetype: Archetype = {
         "SMS reminder body. Much shorter than the email — under 200 chars. Less formal, more immediate. Acknowledges this is a quick follow-up, includes the full $reviewLink URL. No email-style sign-offs. Must include the exact URL provided in $reviewLink.",
       soulFields: ["businessName", "tone"],
       example:
-        "Hey {{firstName}}, quick follow-up — if you have 30 seconds, we'd love a quick review: https://g.page/r/Ca-example-business/review  Thanks! — Bright Smile",
+        "Hey {{firstName}}, quick follow-up — if you have 30 seconds, we'd love a quick review: https://g.page/r/Ca-example-business/review  Thanks! — {{businessName}}",
     },
   },
   specTemplate: {

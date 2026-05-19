@@ -76,7 +76,7 @@ export const winBackArchetype: Archetype = {
       description:
         "Short human-readable name for the coupon on the Stripe dashboard (≤60 chars). Shown to the SMB in Stripe's admin UI — make it obvious this came from the Win-Back agent.",
       soulFields: ["businessName"],
-      example: "Bright Smile Dental — Win-Back 20% off",
+      example: "{{businessName}} — Win-Back 20% off",
     },
     $winBackEmailSubject: {
       kind: "soul_copy",
@@ -91,7 +91,7 @@ export const winBackArchetype: Archetype = {
         "Email body. Acknowledges their cancellation without guilt-tripping, restates the core offer briefly, presents the discount code, explains the expiry window, offers a 'reply if you have questions' out. Must reference {{coupon.code}} for the actual code string and the expiry. Keep under 200 words.",
       soulFields: ["businessName", "tone", "mission", "offer"],
       example:
-        "Hi {{firstName}},\\n\\nWe noticed you cancelled your subscription. No pressure — life happens — but I wanted to personally send you a 20% discount code if you ever want to come back:\\n\\n{{coupon.code}}\\n\\nGood for 14 days. Use it at checkout the next time you book.\\n\\nIf there was something specific that wasn't working, I'd genuinely like to know — hit reply and I read every one.\\n\\nWarmly,\\nThe Bright Smile team",
+        "Hi {{firstName}},\\n\\nWe noticed you cancelled your subscription. No pressure — life happens — but I wanted to personally send you a 20% discount code if you ever want to come back:\\n\\n{{coupon.code}}\\n\\nGood for 14 days. Use it at checkout the next time you book.\\n\\nIf there was something specific that wasn't working, I'd genuinely like to know — hit reply and I read every one.\\n\\nWarmly,\\nThe {{businessName}} team",
     },
     $winBackSmsBody: {
       kind: "soul_copy",
