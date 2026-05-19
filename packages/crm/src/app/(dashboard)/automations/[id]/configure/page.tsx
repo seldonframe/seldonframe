@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft, Building2 } from "lucide-react";
 import { getArchetype } from "@/lib/agents/archetypes";
-import { getAgentConfig } from "@/lib/agents/configure-actions";
+import { getAgentConfig, revertAgentConfigFormAction } from "@/lib/agents/configure-actions";
 import { getArchetypeSetupChecklist } from "@/lib/agents/setup-checklist";
 import { getOrgId } from "@/lib/auth/helpers";
 import { listForms } from "@/lib/forms/actions";
@@ -207,6 +207,47 @@ export default async function ConfigureAutomationPage({
           </p>
         )}
       </article>
+
+      {/* 2026-05-19 — Phase 7 Task 7.3. Edit history + one-click revert.
+          Every save snapshots the pre-edit state. Operator can "go back"
+          to any of the last 20 saves with one click. Defends against the
+          "I edited the prompt and now nothing works" panic. */}
+      {config?.history && config.history.length > 0 ? (
+        <article className="rounded-xl border bg-card p-4 sm:p-5 space-y-3">
+          <div>
+            <h2 className="text-card-title">Edit history</h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Recover from a bad edit. Each save is snapshotted; click revert to restore.
+            </p>
+          </div>
+          <ul className="divide-y">
+            {config.history.map((entry, i) => (
+              <li key={`${entry.savedAt}-${i}`} className="flex items-center justify-between gap-3 py-2.5">
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs text-foreground">
+                    {new Date(entry.savedAt).toLocaleString()}
+                  </p>
+                  <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                    {entry.systemPromptOverride
+                      ? `Custom prompt: ${entry.systemPromptOverride.slice(0, 80)}…`
+                      : `Placeholders: ${Object.keys(entry.placeholders).length} fields`}
+                  </p>
+                </div>
+                <form action={revertAgentConfigFormAction}>
+                  <input type="hidden" name="archetypeId" value={id} />
+                  <input type="hidden" name="historyIndex" value={i} />
+                  <button
+                    type="submit"
+                    className="rounded-md border bg-background px-3 py-1.5 text-[11px] text-foreground hover:bg-muted"
+                  >
+                    Revert to this
+                  </button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        </article>
+      ) : null}
     </section>
   );
 }
