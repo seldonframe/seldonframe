@@ -18,6 +18,11 @@ import { ConfigureAgentForm } from "@/components/automations/configure-agent-for
 // the sidebar workspace switcher uses) so behavior is consistent.
 import { listManagedOrganizations, setActiveOrgAction } from "@/lib/billing/orgs";
 import { WorkspaceAutoApplySelect } from "@/components/automations/workspace-auto-apply-select";
+// 2026-05-19 — Phase 7 Task 7.2. Live system-prompt preview. Renders
+// the fully-resolved conversation prompt + opening SMS on the server
+// so operators see byte-identical output to what dispatchConversation
+// will pass to the LLM on the next real form submission.
+import { previewConversationSystemPrompt } from "@/lib/agents/preview-system-prompt";
 
 /**
  * /automations/[id]/configure — agent configuration form + live
@@ -52,6 +57,17 @@ export default async function ConfigureAutomationPage({
       : Promise.resolve(null),
     listManagedOrganizations().catch(() => []),
   ]);
+
+  // 2026-05-19 — Phase 7 Task 7.2. Preview is computed AFTER config
+  // loads so synthesis sees the operator's most recent placeholder
+  // values. Surfaces synthesis failures inline as an amber notice so
+  // the operator knows which required field is still empty.
+  const preview = orgId
+    ? await previewConversationSystemPrompt(orgId, id, config).catch((err) => ({
+        ok: false as const,
+        error: `preview_threw:${err instanceof Error ? err.message : String(err)}`,
+      }))
+    : ({ ok: false, error: "no_active_workspace" } as const);
 
   // Surface the typed picker options so the form doesn't have to
   // round-trip back to the server for them.
@@ -145,6 +161,52 @@ export default async function ConfigureAutomationPage({
         appointmentOptions={appointmentOptions}
         specTemplate={archetype.specTemplate}
       />
+
+      {/* 2026-05-19 — Phase 7 Task 7.2. Live system-prompt preview.
+          Shows the FULLY-RESOLVED conversation system prompt + opening
+          SMS — all {{contact.firstName}}, {{businessName}}, {{clock.today}},
+          $forbiddenPhrases substituted with sample values. The operator
+          sees exactly what the LLM will read AFTER saving, without
+          having to trigger a real form submission. Pairs with the /runs
+          page snapshot (Phase 7.1) which shows what the LLM ACTUALLY
+          read on a past run. */}
+      <article className="rounded-xl border bg-card p-4 sm:p-5 space-y-3">
+        <div className="flex items-baseline justify-between gap-2">
+          <h2 className="text-card-title">Live preview</h2>
+          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            what the LLM will read
+          </span>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Resolved with sample values (Sample Customer / +1 555 555 5555). Once you save, real form
+          submissions get the live customer name, phone, and today&apos;s date.
+        </p>
+        {preview.ok ? (
+          <>
+            <div className="space-y-1.5">
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                Opening SMS (with sample placeholders filled)
+              </p>
+              <pre className="overflow-x-auto rounded-md border bg-background p-3 text-xs leading-relaxed whitespace-pre-wrap">
+                {preview.conversationStep.initial_message || "(empty — archetype has no initial_message)"}
+              </pre>
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                System prompt (resolved)
+              </p>
+              <pre className="overflow-x-auto rounded-md border bg-background p-3 font-mono text-[11px] leading-relaxed whitespace-pre-wrap max-h-96">
+                {preview.systemPrompt}
+              </pre>
+            </div>
+          </>
+        ) : (
+          <p className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-700 dark:text-amber-400">
+            Can&apos;t preview yet: <code className="font-mono">{preview.error}</code>. Fill the
+            required fields above and save, then come back to see the resolved prompt.
+          </p>
+        )}
+      </article>
     </section>
   );
 }

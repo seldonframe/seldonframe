@@ -203,7 +203,14 @@ function parseExitBlock(output: string): {
   return { exiting: true, extracted, replyText: "" };
 }
 
-function buildSystemPrompt(
+// 2026-05-19 — Phase 7 Task 7.2. Exported so /automations/[id]/configure
+// can render a server-side "Live preview" of the resolved system prompt
+// using sample customer data + the workspace's real timezone/soul. The
+// preview shares the EXACT same prose composition as the runtime
+// dispatcher — that's the whole point: what the operator sees in the
+// preview is byte-identical to what the LLM will read on the next real
+// form submission. Don't fork this.
+export function buildSystemPrompt(
   step: ConversationStep,
   runtimeVars: Record<string, string>,
   appointmentTypeId: string | null,
