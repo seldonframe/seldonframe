@@ -348,6 +348,44 @@ export function EmailPageContent({
                   <button type="submit" className="crm-button-secondary h-9 px-4 text-xs">Connect Twilio</button>
                 </form>
               )}
+
+              {/* 2026-05-18 (later) — Twilio inbound webhook setup hint.
+                  Without this, operators connect Twilio but inbound SMS
+                  (customer replies to speed-to-lead, missed-call-text-back,
+                  etc.) never reach the conversation engine — Twilio drops
+                  the message or routes it through whatever default
+                  handler is on the number. Confirmed by operator dogfood
+                  2026-05-18: replies to the conversation opener returned
+                  "We couldn't find your appointment. Please call us."
+                  from some external handler because Twilio's webhook URL
+                  wasn't pointed at our app.
+                  Shown to BOTH connected + not-connected operators —
+                  some connect via the form and forget the inbound side,
+                  others connect via MCP / API and don't see the form
+                  at all. Idempotent reading: hint is informational only. */}
+              <div className="mt-3 rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 space-y-2">
+                <p className="text-xs font-medium text-foreground">
+                  Inbound SMS setup (one-time, in Twilio Console)
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  After connecting your Twilio number above, point its inbound webhook at the URL below so customer replies reach your agents. Open the{" "}
+                  <a
+                    href="https://console.twilio.com/us1/develop/phone-numbers/manage/incoming"
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="text-primary underline underline-offset-4"
+                  >
+                    Twilio Console
+                  </a>
+                  , click your number, find <span className="font-medium text-foreground">Messaging Configuration → A message comes in</span>, choose <span className="font-medium text-foreground">Webhook</span>, and paste:
+                </p>
+                <code className="block break-all rounded bg-background px-2 py-1.5 text-[11px] text-foreground border border-border">
+                  https://app.seldonframe.com/api/webhooks/twilio/sms
+                </code>
+                <p className="text-[11px] text-muted-foreground">
+                  Method: <span className="font-medium text-foreground">HTTP POST</span>. Leave the failover URL blank. Signature verification uses your saved auth token — no extra setup. STOP / HELP replies are auto-handled per carrier rules.
+                </p>
+              </div>
             </div>
           </article>
 
