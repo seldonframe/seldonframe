@@ -58,24 +58,10 @@ export const speedToLeadArchetype: Archetype = {
     $qualificationCriteria: {
       kind: "soul_copy",
       description:
-        "What the conversation needs to establish before booking. Natural-language description; Claude reads this each turn to decide 'ready to book?' Use Soul's services + customer-fit signals.",
+        "What the conversation needs to establish before booking. Natural-language description; Claude reads this each turn to decide 'ready to book?' Keep this FOCUSED ON BOOKING — operator feedback 2026-05-19: 'speed-to-lead shouldn't ask about insurance... only job is to book the job'. The booking system + soul handles whatever else the operator needs (job type, address come from the intake form fields already).",
       soulFields: ["services", "customerFields", "customContext"],
       example:
-        "The prospect has shared a preferred appointment day/time AND confirmed their insurance status (yes / no / unsure).",
-    },
-    $confirmationSubject: {
-      kind: "soul_copy",
-      description: "Email subject line for the booking confirmation. Brand-forward, reassuring.",
-      soulFields: ["businessName", "tone"],
-      example: "You're booked with Bright Smile Dental",
-    },
-    $confirmationBody: {
-      kind: "soul_copy",
-      description:
-        "Email body for the booking confirmation. Confirms the time + location, restates what to expect, includes a 'reply to reschedule' out. Soul-tone matched.",
-      soulFields: ["businessName", "tone", "mission", "offer"],
-      example:
-        "Hi {{contact.firstName}},\n\nYou're confirmed for {{preferred_start}} — we can't wait to meet you. What to expect: a relaxed 45-minute visit, no pressure, plenty of time for your questions.\n\nNeed to reschedule? Just reply to this email or text us back.\n\n— The Bright Smile team",
+        "The prospect has shared a preferred appointment day/time (a specific day + a specific time, in their words — you'll convert to ISO using the current date context). That's it — no need to ask about insurance, payment, or other qualification fields. The intake form already captured service type and contact info; your only job is to land a time.",
     },
   },
   specTemplate: {
@@ -108,8 +94,8 @@ export const speedToLeadArchetype: Archetype = {
         exit_when: "$qualificationCriteria",
         on_exit: {
           extract: {
-            preferred_start: "ISO-8601 datetime for the preferred appointment start, snapped to the next available slot in the clinic's business hours (Mon–Fri 9am–5pm local time).",
-            insurance_status: "one of: yes | no | unsure | not_asked",
+            preferred_start:
+              "ISO-8601 datetime for the appointment start in the workspace timezone (see CURRENT DATE CONTEXT in your system prompt — use today's actual date, not a placeholder year). Format: YYYY-MM-DDTHH:MM:00. Snap to the customer's requested time exactly; the booking system handles availability validation.",
           },
           next: "book_consultation",
         },
@@ -122,7 +108,7 @@ export const speedToLeadArchetype: Archetype = {
           contact_id: "{{contactId}}",
           appointment_type_id: "$appointmentTypeId",
           starts_at: "{{preferred_start}}",
-          notes: "Booked by Speed-to-Lead agent. Insurance status: {{insurance_status}}.",
+          notes: "Booked by Speed-to-Lead agent from intake form submission.",
         },
         next: "log_booking_activity",
       },
@@ -134,26 +120,23 @@ export const speedToLeadArchetype: Archetype = {
           contact_id: "{{contactId}}",
           type: "agent_action",
           subject: "Speed-to-Lead agent booked consultation",
-          body: "Scheduled for {{preferred_start}}. Insurance: {{insurance_status}}.",
+          body: "Scheduled for {{preferred_start}}.",
           metadata: {
             agentId: "{{agent.id}}",
             source: "speed-to-lead",
           },
         },
-        next: "send_confirmation_email",
-      },
-      {
-        id: "send_confirmation_email",
-        type: "mcp_tool_call",
-        tool: "send_email",
-        args: {
-          to: "{{email}}",
-          subject: "$confirmationSubject",
-          body: "$confirmationBody",
-          contactId: "{{contactId}}",
-        },
         next: null,
       },
+      // 2026-05-19 — send_confirmation_email step REMOVED. The
+      // booking-confirmation outbound trigger (seeded by default on
+      // every workspace, fires on booking.created) already sends a
+      // branded confirmation email. Having the agent ALSO send one
+      // produced duplicate emails — the customer received two
+      // confirmations within 4 seconds of each other ("You're booked
+      // with Bright Smile Dental" from the trigger + "You're all set
+      // for Thursday January 9" from this step). One source of truth
+      // for booking confirmations: the booking.created trigger.
     ],
   },
 };

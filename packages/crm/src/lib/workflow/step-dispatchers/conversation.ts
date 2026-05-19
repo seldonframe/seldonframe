@@ -248,6 +248,49 @@ async function buildSystemPrompt(
   const extractFields = Object.entries(step.on_exit.extract)
     .map(([key, desc]) => `  - "${key}": ${desc}`)
     .join("\n");
+
+  // 2026-05-19 — date grounding. Without this, the LLM hallucinated
+  // dates: customer said "tomorrow at 3pm" and the conversation
+  // emitted preferred_start="2026-01-09T14:00:00Z" — January 9 instead
+  // of May 20 (the actual tomorrow). The LLM has no implicit clock; it
+  // picks a plausible default. Operator dogfood today: booking
+  // confirmation email said "You're all set for Thursday, January 9
+  // at 2:00 PM" while the customer had asked for "tomorrow at 3pm".
+  // Inject both the workspace TZ and the operator-LOCAL today/tomorrow
+  // so the LLM can convert relative phrases ("tomorrow", "next
+  // Tuesday", "in 2 weeks") to concrete ISO strings.
+  const tz = runtimeVars.timezone || "UTC";
+  const now = new Date();
+  const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  // Format YYYY-MM-DD in the workspace timezone via Intl.DateTimeFormat.
+  // Falls back to UTC if the TZ is invalid (defensive — soul.timezone
+  // is sometimes set to a string we can't parse).
+  let todayLocal = now.toISOString().slice(0, 10);
+  let tomorrowLocal = tomorrow.toISOString().slice(0, 10);
+  try {
+    const fmt = new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    todayLocal = fmt.format(now);
+    tomorrowLocal = fmt.format(tomorrow);
+  } catch {
+    // tz string was invalid; stick with UTC-derived dates
+  }
+  const todayWeekday = (() => {
+    try {
+      return new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "long" }).format(now);
+    } catch {
+      return new Intl.DateTimeFormat("en-US", { weekday: "long" }).format(now);
+    }
+  })();
+  const dateContext = `CURRENT DATE CONTEXT (use to resolve relative time phrases):
+- Today is ${todayWeekday}, ${todayLocal} (${tz})
+- Tomorrow is ${tomorrowLocal}
+- Workspace timezone: ${tz}
+- When the customer says "tomorrow", "next Monday", "in 2 hours", etc., convert to a concrete YYYY-MM-DDTHH:MM:00 in the workspace timezone above. Do NOT pick a default year — use the current year unless the customer explicitly mentions a different one.`;
   // 2026-05-18 (later) — tool-error hardening. When check_availability
   // returns { ok: false, soft_error, hint } (graceful failure modes
   // like missing config), the LLM was paraphrasing the error verbatim
@@ -269,6 +312,8 @@ TOOL ERROR HANDLING (critical):
   return `You are qualifying a customer lead over ${step.channel.toUpperCase()} for ${runtimeVars.businessName || "the business"}. Your goal:
 
 ${step.exit_when}
+
+${dateContext}
 
 When the qualification criteria are met, emit your final response as:
 <exit>{ ${Object.keys(step.on_exit.extract)

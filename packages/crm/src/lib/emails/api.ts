@@ -261,15 +261,25 @@ async function loadEmailBranding(orgId: string): Promise<EmailBrandingInput> {
       .filter(Boolean)
       .join(" · ") || null;
 
-    // Theme + agency overrides — agency wins when active. Theme is
-    // typed as OrgTheme so the index access goes via unknown to avoid
-    // the strict-conversion TS2352 from the typed jsonb.
+    // 2026-05-19 — customer-facing email chrome uses SMB identity ONLY.
+    // The agency override (effectiveBranding.is_white_label) was bleeding
+    // into booking confirmations sent to END CUSTOMERS, so a homeowner
+    // who booked with "Roofs by Shiloh" received an email signed by
+    // "Max agency · (253) 678-7111 · Auburn, WA" — confusing AND
+    // wrong. Agency chrome belongs in the OPERATOR's admin dashboard;
+    // customer-facing emails are about the SMB they did business with.
+    //
+    // Same fix pattern as the public-surface logo strip from
+    // 2026-05-18. `effective` is intentionally left unused here — the
+    // existing import stays so the function compiles cleanly and the
+    // delta is easy to read.
+    void effective;
     const theme = (orgRow?.theme ?? {}) as unknown as Record<string, unknown>;
     const themeLogo = typeof theme.logoUrl === "string" ? theme.logoUrl : null;
     const themePrimary = typeof theme.primaryColor === "string" ? theme.primaryColor : null;
-    const logoUrl = (effective?.is_white_label && effective.logo_url) || themeLogo;
-    const brandName = (effective?.is_white_label && effective.brand_name) || orgRow?.name || "";
-    const primaryColor = (effective?.is_white_label && effective.primary_color) || themePrimary;
+    const logoUrl = themeLogo;
+    const brandName = orgRow?.name || "";
+    const primaryColor = themePrimary;
 
     return {
       brandName,

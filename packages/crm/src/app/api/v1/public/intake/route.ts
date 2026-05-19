@@ -232,6 +232,44 @@ export async function POST(request: Request) {
       .limit(1);
     if (existingContact) {
       contactId = existingContact.id;
+      // 2026-05-19 — refresh contact's name + phone from this submission
+      // so downstream tools (send_email, create_activity, booking
+      // confirmation email) greet the person who JUST submitted, not
+      // whoever this contact was first seeded as. Operator dogfood:
+      // form submitted as "THIERRY" but confirmation email said
+      // "Hi Maxime" because the contact was created with that name in
+      // an earlier test and never refreshed.
+      //
+      // Defensive: only overwrite fields when the new submission has a
+      // non-empty value. Empty / null fields preserve the old record
+      // (e.g. customer didn't re-enter their phone this time).
+      const refresh: Partial<typeof contacts.$inferInsert> = {};
+      if (extracted.firstName && extracted.firstName.trim()) {
+        refresh.firstName = extracted.firstName.trim();
+      }
+      if (extracted.lastName && extracted.lastName.trim()) {
+        refresh.lastName = extracted.lastName.trim();
+      }
+      if (extracted.phone && extracted.phone.trim()) {
+        refresh.phone = extracted.phone.trim();
+      }
+      if (Object.keys(refresh).length > 0) {
+        refresh.updatedAt = new Date();
+        try {
+          await db.update(contacts).set(refresh).where(eq(contacts.id, contactId));
+        } catch (err) {
+          // Non-fatal — the rest of the submission flow still works
+          // with the stale contact row. Surface in logs for follow-up.
+          console.warn(
+            JSON.stringify({
+              event: "public_intake_contact_refresh_failed",
+              org_id: org.id,
+              contact_id: contactId,
+              error: err instanceof Error ? err.message : String(err),
+            }),
+          );
+        }
+      }
     } else {
       // April 30, 2026 — free-tier contact cap enforcement. Submissions
       // are still saved to `intake_submissions` so the operator
