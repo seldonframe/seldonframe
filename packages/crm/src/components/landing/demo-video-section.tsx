@@ -1,14 +1,9 @@
-import Image from "next/image";
-import { Play } from "lucide-react";
-
-// Cut C Phase 3 — Demo video section (week-5 placeholder).
+// Cut C Phase 3 — Demo video section.
 //
-// The marketing plan calls for a 60-second narrated demo as the
-// centerpiece, but the recording happens in week 6 (Phase 9) once
-// Cuts A + B are shipped to prod and the real product flow can be
-// captured. Week 5 ships this shell with a placeholder GIF so the
-// real video can swap in by replacing /marketing/demo-video.mp4 +
-// flipping a couple of lines here.
+// Shipped: live walkthrough recorded post-Cut B. The MP4 lives at
+// /marketing/walkthrough/spin-up-60-seconds.mp4; the GIF serves as
+// both the poster frame and as a no-video fallback for clients that
+// don't support <video>.
 export function LandingDemoVideoSection() {
   return (
     <section
@@ -35,31 +30,19 @@ export function LandingDemoVideoSection() {
       </div>
 
       <div className="mx-auto mt-10 w-full max-w-4xl overflow-hidden rounded-xl border border-zinc-800/50 bg-zinc-900">
-        {/* Week 5: placeholder frame with centered Play affordance so the empty
-            box reads as "video placeholder", not "broken image". Week 6 swaps
-            in the real demo asset and removes the Play icon overlay. */}
-        <div className="relative aspect-video w-full motion-reduce:hidden">
-          <Image
-            src="/marketing/demo-placeholder.gif"
-            alt=""
-            role="presentation"
-            fill
-            className="object-cover"
-            unoptimized
-          />
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3"
-          >
-            <Play size={64} className="text-[#14b8a6] opacity-40" />
-            <p className="text-sm text-zinc-500">Walkthrough recording in progress</p>
-          </div>
-        </div>
-        <div className="hidden h-[60px] items-center justify-center bg-zinc-900 px-6 text-sm text-zinc-500 motion-reduce:flex">
-          Animated preview hidden because you prefer reduced motion. Full narrated demo lands soon.
-        </div>
+        <video
+          src="/marketing/walkthrough/spin-up-60-seconds.mp4"
+          poster="/marketing/walkthrough/spin-up-60-seconds.gif"
+          controls
+          preload="metadata"
+          playsInline
+          className="aspect-video w-full rounded-2xl bg-zinc-100 object-cover shadow-(--shadow-card)"
+        >
+          Your browser doesn&apos;t support video.{" "}
+          <a href="/marketing/walkthrough/spin-up-60-seconds.gif">View GIF</a>
+        </video>
         <p className="border-t border-zinc-800/50 bg-zinc-950 px-6 py-3 text-center text-xs text-zinc-400">
-          Polished 60-second walkthrough lands in week 6.
+          Live walkthrough — paste a URL, get a workspace.
         </p>
       </div>
     </section>

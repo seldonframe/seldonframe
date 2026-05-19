@@ -30,7 +30,6 @@ import { LandingDemoVideoSection } from "@/components/landing/demo-video-section
 import { LandingAgenciesSection } from "@/components/landing/agencies-section";
 import { LandingMarketplaceSection } from "@/components/landing/marketplace-section";
 import { LandingMarketingPricingSection } from "@/components/landing/marketing-pricing-section";
-import { LandingOpenSourceSection } from "@/components/landing/open-source-section";
 import { LandingMarketingFaqSection } from "@/components/landing/marketing-faq-section";
 import { LandingWhyNowSection } from "@/components/landing/why-now-section";
 import { LandingFinalCta } from "@/components/landing/final-cta";
@@ -77,7 +76,6 @@ export default async function PublicHomePage() {
         <LandingAgenciesSection />
         <LandingMarketplaceSection />
         <LandingMarketingPricingSection />
-        <LandingOpenSourceSection />
         <LandingMarketingFaqSection />
         <LandingWhyNowSection />
         <LandingFinalCta />

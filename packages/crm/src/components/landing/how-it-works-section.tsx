@@ -4,8 +4,7 @@ import Image from "next/image";
 // Concrete proof of the hero's 60-second claim: signup → URL paste →
 // workspace ready. Each step pairs a numbered badge with a screenshot
 // taken from the actual Cut A / Cut B routes (/signup, /clients/new,
-// the freshly-created workspace dashboard). Screenshots are 1x1
-// placeholders in week 5 — real captures land in Phase 9.
+// the freshly-created workspace dashboard).
 
 type Step = {
   number: 1 | 2 | 3;
@@ -19,23 +18,23 @@ const STEPS: readonly Step[] = [
   {
     number: 1,
     title: "Sign up free",
-    body: "Google or email. 30 seconds. Free to start.",
+    body: "Magic link. 30 seconds. Free to start.",
     screenshot: "/marketing/how-it-works-step-1.png",
-    alt: "Screenshot of the SeldonFrame signup form showing a Continue with Google button above an email field.",
+    alt: "Screenshot of the SeldonFrame signup form showing an email field and Continue with email link button.",
   },
   {
     number: 2,
     title: "Paste your client's URL",
     body: "SeldonFrame reads their site — services, hours, reviews — using your Anthropic key.",
-    screenshot: "/marketing/how-it-works-step-2.png",
-    alt: "Screenshot of the /clients/new page mid-extraction, with progress checkmarks for Fetching site, Extracting business facts, and Generating personality.",
+    screenshot: "/marketing/how-it-works/step-2-spin-up.png",
+    alt: "Paste a client URL into the new-workspace form; the live build narrates each step.",
   },
   {
     number: 3,
     title: "Workspace ready in 60 seconds",
     body: "CRM, booking page, intake form, AI chatbot, demo portal. Pre-wired. White-label. Ready to hand over.",
-    screenshot: "/marketing/how-it-works-step-3.png",
-    alt: "Screenshot of a fresh SeldonFrame workspace dashboard with the CRM kanban, booking page link, and AI chatbot status all visible.",
+    screenshot: "/marketing/how-it-works/step-3-workspace-ready.png",
+    alt: "Workspace ready — operator dashboard + customer portal both live in 60 seconds.",
   },
 ];
 
@@ -70,16 +69,13 @@ export function LandingHowItWorksSection() {
             <div className="mt-5 overflow-hidden rounded-lg border border-zinc-800">
               <Image
                 src={step.screenshot}
-                alt=""
-                role="presentation"
+                alt={step.alt}
                 width={640}
                 height={400}
-                className="h-auto w-full"
+                className="aspect-video h-auto w-full object-cover"
                 unoptimized
+                loading="lazy"
               />
-              <p className="border-t border-zinc-800 bg-zinc-950 px-3 py-2 text-center text-[10px] uppercase tracking-widest text-zinc-400">
-                Real screenshot lands in week 6
-              </p>
             </div>
           </div>
         ))}
