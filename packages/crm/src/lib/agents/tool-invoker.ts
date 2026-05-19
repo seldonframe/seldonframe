@@ -8,6 +8,7 @@ import {
   orgMembers,
 } from "@/db/schema";
 import type { ToolInvoker } from "@/lib/workflow/types";
+import type { CustomerRunContext } from "@/lib/workflow/run-context-customer";
 import { sendEmailFromApi } from "@/lib/emails/api";
 import { sendSmsFromApi } from "@/lib/sms/api";
 import { emitSeldonEvent } from "@/lib/events/bus";
@@ -76,7 +77,8 @@ async function resolveAgentActorUserId(orgId: string): Promise<string> {
 
 export type ToolHandler = (
   orgId: string,
-  args: Record<string, unknown>
+  args: Record<string, unknown>,
+  runContext?: CustomerRunContext,
 ) => Promise<unknown>;
 
 const TOOL_HANDLERS: Record<string, ToolHandler> = {
@@ -528,14 +530,16 @@ function nextBusinessHourSlot(now: Date): Date {
  * surface can format the failure ("Tool not implemented: send_sms")
  * rather than showing a stack trace.
  */
-export function makeAgentToolInvoker(orgId: string): ToolInvoker {
-  return async (toolName, args) => {
+export function makeAgentToolInvoker(orgIdFromCtor: string): ToolInvoker {
+  return async (toolName, args, options) => {
+    const orgId = options?.orgId ?? orgIdFromCtor;
+    const runContext = options?.runContext;
     const handler = TOOL_HANDLERS[toolName];
     if (!handler) {
       throw new Error(
         `tool_not_implemented:${toolName} — agent runtime can't invoke this tool yet. Available: ${Object.keys(TOOL_HANDLERS).join(", ") || "(none)"}.`
       );
     }
-    return handler(orgId, args);
+    return handler(orgId, args, runContext);
   };
 }
