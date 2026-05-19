@@ -28,10 +28,10 @@
 
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { smsMessages, contacts, organizations, workflowRuns } from "@/db/schema";
+import { smsMessages, workflowRuns } from "@/db/schema";
 import { getAIClient } from "@/lib/ai/client";
-import { toE164 } from "@/lib/sms/providers/interface";
 import type { ConversationStep } from "../../agents/validator";
+import type { CustomerRunContext } from "../run-context-customer";
 import type { NextAction, RuntimeContext, StoredRun } from "../types";
 // 2026-05-18 — V1.1 tool-use: LLM can call check_availability +
 // create_booking inside the conversation so it can propose real
@@ -59,67 +59,41 @@ function interpolateRunTimeVars(
   });
 }
 
-async function buildRunTimeVars(
-  orgId: string,
-  contactId: string,
-  triggerPayload: Record<string, unknown> | null,
-): Promise<Record<string, string>> {
-  const [[contactRow], [orgRow]] = await Promise.all([
-    db
-      .select({
-        firstName: contacts.firstName,
-        lastName: contacts.lastName,
-        email: contacts.email,
-        phone: contacts.phone,
-      })
-      .from(contacts)
-      .where(and(eq(contacts.orgId, orgId), eq(contacts.id, contactId)))
-      .limit(1),
-    db
-      .select({
-        name: organizations.name,
-        soul: organizations.soul,
-        timezone: organizations.timezone,
-      })
-      .from(organizations)
-      .where(eq(organizations.id, orgId))
-      .limit(1),
-  ]);
-  const soul = (orgRow?.soul ?? {}) as Record<string, unknown>;
-  const businessPhone =
-    (typeof soul.phone === "string" && soul.phone) ||
-    (typeof (soul.business as Record<string, unknown>)?.phone === "string" &&
-      ((soul.business as Record<string, unknown>).phone as string)) ||
-    "";
-
-  // 2026-05-18 (later) — prefer the trigger payload's name over the
-  // contact-row name. Customer just submitted the form as "leonie"
-  // but the contact upserter matched by phone and kept the previously-
-  // stored firstName "maxime" → the SMS opener said "Hi maxime".
-  // Fixed by reading the form payload's fullName/firstName/name field
-  // first, falling back to the contact row only when absent.
-  const data = (triggerPayload?.data && typeof triggerPayload.data === "object"
-    ? (triggerPayload.data as Record<string, unknown>)
-    : (triggerPayload ?? {})) as Record<string, unknown>;
-  const payloadFullName =
-    (typeof data.fullName === "string" && data.fullName.trim()) ||
-    (typeof data.name === "string" && data.name.trim()) ||
-    "";
-  const payloadFirstName =
-    (typeof data.firstName === "string" && data.firstName.trim()) ||
-    (payloadFullName ? payloadFullName.split(/\s+/)[0] : "");
-
+// 2026-05-19 — Phase 2 Task 2.2. Read identity from runContext instead
+// of doing in-dispatch DB lookups. The snapshot stamped at startRun is
+// the single source of truth. The form payload's preferred firstName /
+// fullName handling already runs in buildRunContext, so this is a pure
+// projection — no DB calls, no triggerPayload re-parsing.
+function buildRunTimeVarsFromContext(
+  runContext: CustomerRunContext,
+): Record<string, string> {
   return {
-    "contact.firstName": payloadFirstName || contactRow?.firstName || "",
-    "contact.lastName": contactRow?.lastName ?? "",
-    "contact.email":
-      (typeof data.email === "string" && data.email) || contactRow?.email || "",
-    "contact.phone":
-      (typeof data.phone === "string" && data.phone) || contactRow?.phone || "",
-    businessName: orgRow?.name ?? "",
-    businessPhone,
-    timezone: orgRow?.timezone ?? "UTC",
+    "contact.firstName": runContext.customer.firstName,
+    "contact.lastName": runContext.customer.lastName ?? "",
+    "contact.email": runContext.customer.email ?? "",
+    "contact.phone": runContext.customer.phone,
+    businessName: runContext.workspace.name,
+    businessPhone: extractBusinessPhoneFromSoul(runContext.workspace.soul),
+    timezone: runContext.workspace.timezone,
   };
+}
+
+function extractBusinessPhoneFromSoul(soul: unknown): string {
+  if (!soul || typeof soul !== "object") return "";
+  const s = soul as Record<string, unknown>;
+  const business = (s.business && typeof s.business === "object" ? s.business : null) as Record<string, unknown> | null;
+  const contact = (s.contact && typeof s.contact === "object" ? s.contact : null) as Record<string, unknown> | null;
+  const candidates = [
+    s.phone,
+    business?.phone,
+    business?.phoneNumber,
+    contact?.phone,
+    contact?.phoneNumber,
+  ];
+  for (const c of candidates) {
+    if (typeof c === "string" && c.trim().length > 0) return c.trim();
+  }
+  return "";
 }
 
 type TranscriptTurn = {
@@ -169,47 +143,6 @@ function getState(run: StoredRun, stepId: string): ConversationState | null {
   return raw && Array.isArray(raw.transcript) ? raw : null;
 }
 
-function resolveContactInfo(
-  run: StoredRun,
-): { contactId: string | null; phone: string | null; email: string | null } {
-  const payload = run.triggerPayload ?? {};
-  const data = (payload.data && typeof payload.data === "object"
-    ? (payload.data as Record<string, unknown>)
-    : null) ?? null;
-  const contactId =
-    typeof payload.contactId === "string"
-      ? payload.contactId
-      : typeof data?.contactId === "string"
-        ? (data.contactId as string)
-        : null;
-  const phone =
-    typeof data?.phone === "string"
-      ? (data.phone as string)
-      : typeof payload.phone === "string"
-        ? payload.phone
-        : null;
-  const email =
-    typeof data?.email === "string"
-      ? (data.email as string)
-      : typeof payload.email === "string"
-        ? payload.email
-        : null;
-  return { contactId, phone, email };
-}
-
-async function lookupContact(orgId: string, contactId: string) {
-  const [row] = await db
-    .select({
-      firstName: contacts.firstName,
-      email: contacts.email,
-      phone: contacts.phone,
-    })
-    .from(contacts)
-    .where(and(eq(contacts.orgId, orgId), eq(contacts.id, contactId)))
-    .limit(1);
-  return row ?? null;
-}
-
 async function lookupInboundMessage(orgId: string, smsMessageId: string) {
   const [row] = await db
     .select({ body: smsMessages.body, contactId: smsMessages.contactId })
@@ -240,52 +173,26 @@ function parseExitBlock(output: string): {
   return { exiting: true, extracted, replyText: "" };
 }
 
-async function buildSystemPrompt(
+function buildSystemPrompt(
   step: ConversationStep,
   runtimeVars: Record<string, string>,
   appointmentTypeId: string | null,
-): Promise<string> {
+  runContext: CustomerRunContext,
+): string {
   const extractFields = Object.entries(step.on_exit.extract)
     .map(([key, desc]) => `  - "${key}": ${desc}`)
     .join("\n");
 
-  // 2026-05-19 — date grounding. Without this, the LLM hallucinated
-  // dates: customer said "tomorrow at 3pm" and the conversation
-  // emitted preferred_start="2026-01-09T14:00:00Z" — January 9 instead
-  // of May 20 (the actual tomorrow). The LLM has no implicit clock; it
-  // picks a plausible default. Operator dogfood today: booking
-  // confirmation email said "You're all set for Thursday, January 9
-  // at 2:00 PM" while the customer had asked for "tomorrow at 3pm".
-  // Inject both the workspace TZ and the operator-LOCAL today/tomorrow
-  // so the LLM can convert relative phrases ("tomorrow", "next
-  // Tuesday", "in 2 weeks") to concrete ISO strings.
-  const tz = runtimeVars.timezone || "UTC";
-  const now = new Date();
-  const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-  // Format YYYY-MM-DD in the workspace timezone via Intl.DateTimeFormat.
-  // Falls back to UTC if the TZ is invalid (defensive — soul.timezone
-  // is sometimes set to a string we can't parse).
-  let todayLocal = now.toISOString().slice(0, 10);
-  let tomorrowLocal = tomorrow.toISOString().slice(0, 10);
-  try {
-    const fmt = new Intl.DateTimeFormat("en-CA", {
-      timeZone: tz,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    });
-    todayLocal = fmt.format(now);
-    tomorrowLocal = fmt.format(tomorrow);
-  } catch {
-    // tz string was invalid; stick with UTC-derived dates
-  }
-  const todayWeekday = (() => {
-    try {
-      return new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "long" }).format(now);
-    } catch {
-      return new Intl.DateTimeFormat("en-US", { weekday: "long" }).format(now);
-    }
-  })();
+  // 2026-05-19 — date grounding via runContext. Phase 2 Task 2.2:
+  // runContext.clock is stamped at startRun and refreshed lazily on
+  // every dispatcher call (server wall clock, formatted in workspace
+  // tz). This removes duplicated Intl.DateTimeFormat logic and a
+  // subtle race where the dispatcher and other callers (booking,
+  // email) could disagree about "today" near midnight.
+  const tz = runContext.workspace.timezone;
+  const todayLocal = runContext.clock.today;
+  const tomorrowLocal = runContext.clock.tomorrow;
+  const todayWeekday = runContext.clock.todayWeekday;
   const dateContext = `CURRENT DATE CONTEXT (use to resolve relative time phrases):
 - Today is ${todayWeekday}, ${todayLocal} (${tz})
 - Tomorrow is ${tomorrowLocal}
@@ -491,28 +398,25 @@ export async function dispatchConversation(
   run: StoredRun,
   step: ConversationStep,
   _context: RuntimeContext,
+  runContext: CustomerRunContext,
 ): Promise<NextAction> {
-  // Resolve contact info from the trigger payload + contact row.
-  const triggerInfo = resolveContactInfo(run);
-  if (!triggerInfo.contactId) {
+  // 2026-05-19 — Phase 2 Task 2.2. Identity resolution moved to
+  // buildRunContext at startRun. The snapshot on runContext.customer is
+  // the single source of truth: contactId is already validated, phone
+  // is already E.164 normalized, firstName already prefers the form
+  // payload's value over the upserted contact row. No DB lookups here.
+  const contactId = runContext.customer.contactId;
+  if (!contactId) {
     return {
       kind: "fail",
-      reason: "conversation: trigger payload has no contactId — can't route SMS",
+      reason: "conversation: runContext.customer.contactId missing",
     };
   }
-  const contact = await lookupContact(run.orgId, triggerInfo.contactId);
-  if (!contact) {
-    return {
-      kind: "fail",
-      reason: `conversation: contact ${triggerInfo.contactId} not found`,
-    };
-  }
-  const phoneNumber =
-    triggerInfo.phone || contact.phone || null;
+  const phoneNumber = runContext.customer.phone;
   if (!phoneNumber) {
     return {
       kind: "fail",
-      reason: "conversation: no phone number on trigger payload or contact — can't send SMS",
+      reason: "conversation: runContext.customer.phone missing — can't send SMS",
     };
   }
 
@@ -525,10 +429,9 @@ export async function dispatchConversation(
   // replies fell through to the chatbot fallback, which then died
   // when intent classifier said "other" on the address. Phone is the
   // stable identity here — there's only one phone per inbound SMS.
-  // We also keep contactId in the predicate for runs that include
-  // both keys (defense-in-depth), but the phone match is what
-  // actually carries the wait through.
-  const e164Phone = toE164(phoneNumber) || phoneNumber;
+  // Phase 2 Task 2.2: phone is already E.164 normalized in
+  // buildRunContext, so no per-dispatch toE164 needed.
+  const e164Phone = phoneNumber;
 
   const state = getState(run, step.id);
   const stateKey = STATE_KEY_PREFIX + step.id;
@@ -537,11 +440,7 @@ export async function dispatchConversation(
   // / etc. interpolation. Happens for BOTH the initial message and any
   // subsequent LLM-generated replies (LLM might emit {{...}} if the
   // system prompt didn't fully scrub them).
-  const runtimeVars = await buildRunTimeVars(
-    run.orgId,
-    triggerInfo.contactId,
-    (run.triggerPayload ?? null) as Record<string, unknown> | null,
-  );
+  const runtimeVars = buildRunTimeVarsFromContext(runContext);
 
   // ─── Timeout dispatch (silence handling) ──────────────────────────
   // resumeWait sets __conversationTimeout=true in captureScope when
@@ -558,7 +457,7 @@ export async function dispatchConversation(
         runtimeVars.businessName ?? "",
       );
       try {
-        await sendSmsReply(run.orgId, triggerInfo.contactId, phoneNumber, nudge);
+        await sendSmsReply(run.orgId, contactId, phoneNumber, nudge);
       } catch (err) {
         // Send failed — don't keep retrying, advance to exit.
         console.warn(
@@ -606,7 +505,7 @@ export async function dispatchConversation(
       runtimeVars.businessName ?? "",
     );
     try {
-      await sendSmsReply(run.orgId, triggerInfo.contactId, phoneNumber, goodbye);
+      await sendSmsReply(run.orgId, contactId, phoneNumber, goodbye);
     } catch (err) {
       console.warn(
         JSON.stringify({
@@ -703,7 +602,7 @@ export async function dispatchConversation(
       };
     }
     try {
-      await sendSmsReply(run.orgId, triggerInfo.contactId, phoneNumber, resolvedInitial);
+      await sendSmsReply(run.orgId, contactId, phoneNumber, resolvedInitial);
     } catch (err) {
       return {
         kind: "fail",
@@ -777,7 +676,7 @@ export async function dispatchConversation(
     appointmentTypeId = null;
   }
 
-  const systemPrompt = await buildSystemPrompt(step, runtimeVars, appointmentTypeId);
+  const systemPrompt = buildSystemPrompt(step, runtimeVars, appointmentTypeId, runContext);
   const llmOutput = await callLLM(run.orgId, systemPrompt, updatedTranscript);
 
   // If LLM failed entirely, advance to next step with empty extract —
@@ -831,7 +730,7 @@ export async function dispatchConversation(
   // mirror placeholders from the transcript).
   const resolvedReply = interpolateRunTimeVars(parsed.replyText, runtimeVars);
   try {
-    await sendSmsReply(run.orgId, triggerInfo.contactId, phoneNumber, resolvedReply);
+    await sendSmsReply(run.orgId, contactId, phoneNumber, resolvedReply);
   } catch (err) {
     return {
       kind: "fail",
