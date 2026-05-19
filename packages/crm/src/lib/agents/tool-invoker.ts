@@ -3,7 +3,6 @@ import { db } from "@/db";
 import {
   activities,
   bookings,
-  contacts,
   organizations,
   orgMembers,
 } from "@/db/schema";
@@ -11,7 +10,6 @@ import type { ToolInvoker } from "@/lib/workflow/types";
 import type { CustomerRunContext } from "@/lib/workflow/run-context-customer";
 import { sendEmailFromApi } from "@/lib/emails/api";
 import { sendSmsFromApi } from "@/lib/sms/api";
-import { emitSeldonEvent } from "@/lib/events/bus";
 
 // 2026-05-18 — agent-initiated activities have no human actor, but
 // activities.user_id is NOT NULL with FK to users. We resolve a sane
@@ -126,28 +124,32 @@ const TOOL_HANDLERS: Record<string, ToolHandler> = {
   // create_booking" — visible in workflow_step_results.error_message.
   // Each handler now maps to an in-process function call.
 
-  create_booking: async (orgId, args) => {
-    const contactId =
-      typeof args.contact_id === "string" ? args.contact_id : null;
+  create_booking: async (orgId, args, runContext) => {
+    // 2026-05-19 (Phase 3 Task 3.3) — agent's create_booking now
+    // delegates to the shared `createBookingForCustomer` helper that
+    // the public booking action ALSO calls. This is the spec's parity
+    // guarantee: an agent-created booking is structurally identical
+    // to a customer-clicked booking (same insert, same downstream
+    // events, same contact sync). The contact identity comes from
+    // RunContext (Phase 1) — the prior args.contact_id lookup is no
+    // longer needed because RunContext was resolved at startRun.
+    if (!runContext) {
+      throw new Error("create_booking: runContext is required");
+    }
     const appointmentTypeId =
       typeof args.appointment_type_id === "string"
         ? args.appointment_type_id
         : null;
-    const startsAtRaw = args.starts_at;
-    const notes = typeof args.notes === "string" ? args.notes : null;
-
-    if (!contactId) throw new Error("create_booking: contact_id is required");
-    if (!appointmentTypeId)
+    if (!appointmentTypeId) {
       throw new Error("create_booking: appointment_type_id is required");
+    }
 
-    // 2026-05-18 — try to parse starts_at. If the value is missing,
-    // the literal placeholder string "{{preferred_start}}" (conversation
-    // engine didn't extract it), or any other unparseable shape, fall
-    // back to the next business-hours slot 24h+ from now. This
-    // accommodates the speed-to-lead pipeline's current limitation:
-    // the conversation step no-ops (engine not wired yet), so
-    // preferred_start is never captured. Booking the next reasonable
-    // slot is more useful than failing the run.
+    // Parse starts_at — if it's an unresolved {{placeholder}} or
+    // missing/unparseable, fall back to nextBusinessHourSlot. This
+    // preserves the pre-RunContext safety net for cases where the
+    // conversation step couldn't extract a preferred_start (engine
+    // not wired yet on some archetypes).
+    const startsAtRaw = args.starts_at;
     const parseAttempt =
       startsAtRaw instanceof Date
         ? startsAtRaw
@@ -165,96 +167,26 @@ const TOOL_HANDLERS: Record<string, ToolHandler> = {
       usedFallback = true;
     }
 
-    // Load the appointment-type template (status='template') to get
-    // duration + bookingSlug; we need both to compute endsAt and to
-    // link the new booking to the right slug for the public manage URL.
-    const [template] = await db
-      .select({
-        id: bookings.id,
-        bookingSlug: bookings.bookingSlug,
-        title: bookings.title,
-        metadata: bookings.metadata,
-      })
-      .from(bookings)
-      .where(
-        and(
-          eq(bookings.orgId, orgId),
-          eq(bookings.id, appointmentTypeId),
-          eq(bookings.status, "template"),
-        ),
-      )
-      .limit(1);
-    if (!template) {
-      throw new Error(
-        `create_booking: appointment type ${appointmentTypeId} not found`,
-      );
-    }
-    const meta = (template.metadata as Record<string, unknown> | null) ?? {};
-    const durationMinutes =
-      typeof meta.durationMinutes === "number" && meta.durationMinutes > 0
-        ? meta.durationMinutes
-        : 30;
-    const endsAt = new Date(startsAt.getTime() + durationMinutes * 60_000);
+    const notes = typeof args.notes === "string" ? args.notes : null;
 
-    // Pull the contact for fullName + email — needed on the bookings row.
-    const [contact] = await db
-      .select({
-        firstName: contacts.firstName,
-        lastName: contacts.lastName,
-        email: contacts.email,
-      })
-      .from(contacts)
-      .where(and(eq(contacts.orgId, orgId), eq(contacts.id, contactId)))
-      .limit(1);
-    const fullName = contact
-      ? [contact.firstName, contact.lastName].filter(Boolean).join(" ")
-      : null;
-
-    const [created] = await db
-      .insert(bookings)
-      .values({
-        orgId,
-        contactId,
-        title: template.title || "Booked consultation",
-        bookingSlug: template.bookingSlug,
-        fullName,
-        email: contact?.email ?? null,
-        notes,
-        provider: "manual",
-        status: "scheduled",
-        startsAt,
-        endsAt,
-        metadata: {
-          source: "agent",
-          appointmentType: template.title,
-          durationMinutes,
-        },
-      })
-      .returning({ id: bookings.id });
-
-    if (!created?.id) {
-      throw new Error("create_booking: insert returned no row");
-    }
-
-    // Fire booking.created so the outbound messaging dispatcher sends
-    // the confirmation email + SMS. Same event the public submit path
-    // emits — the messaging layer is event-driven, not caller-driven,
-    // so this is the right hook.
-    await emitSeldonEvent(
-      "booking.created",
-      {
-        appointmentId: created.id,
-        contactId,
-      },
-      { orgId },
+    const { createBookingForCustomer } = await import(
+      "@/lib/bookings/create-for-customer"
     );
+    const result = await createBookingForCustomer({
+      orgId,
+      customer: runContext.customer,
+      appointmentTypeId,
+      startsAt,
+      notes,
+      source: "agent",
+    });
 
     return {
       data: {
-        id: created.id,
-        contact_id: contactId,
-        starts_at: startsAt.toISOString(),
-        ends_at: endsAt.toISOString(),
+        id: result.bookingId,
+        contact_id: runContext.customer.contactId,
+        starts_at: result.startsAt.toISOString(),
+        ends_at: result.endsAt.toISOString(),
         used_fallback_slot: usedFallback,
       },
     };

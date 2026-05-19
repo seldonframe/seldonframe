@@ -9,6 +9,7 @@ import { ensureDefaultPipelineForOrg } from "@/lib/deals/pipeline-defaults";
 import { assertWritable } from "@/lib/demo/server";
 import { emitSeldonEvent } from "@/lib/events/bus";
 import { createBookingCheckoutSession } from "@/lib/payments/actions";
+import { createBookingForCustomer } from "./create-for-customer";
 import { recordBookingOutcomeLearning } from "@/lib/soul/learning";
 import {
   deleteGoogleCalendarBookingEvent,
@@ -105,6 +106,12 @@ type AvailabilitySchedule = Record<AvailabilityDayKey, AvailabilityDaySettings>;
 type PublicBookingContext = {
   orgId: string;
   bookingSlug: string;
+  /** 2026-05-19 — appointment-type template row id (status='template').
+   *  Needed by `createBookingForCustomer` so the helper can resolve
+   *  the template's metadata (durationMinutes etc.) without an extra
+   *  lookup. May be null when bookingSlug='default' and no template
+   *  row exists yet (the legacy fallback path). */
+  bookingTemplateId: string | null;
   appointmentName: string;
   appointmentDescription: string;
   durationMinutes: number;
@@ -377,6 +384,7 @@ async function resolvePublicBookingContext(orgSlug: string, bookingSlug: string)
 
   const [template] = await db
     .select({
+      id: bookings.id,
       title: bookings.title,
       metadata: bookings.metadata,
     })
@@ -426,6 +434,7 @@ async function resolvePublicBookingContext(orgSlug: string, bookingSlug: string)
   return {
     orgId: org.id,
     bookingSlug,
+    bookingTemplateId: template?.id ?? null,
     appointmentName: template?.title || "Consultation",
     appointmentDescription: metadata?.description || "Choose a time that works for you and we will confirm with meeting details.",
     durationMinutes,
@@ -1522,33 +1531,84 @@ export async function submitPublicBookingAction({
 
   const provider = await resolveBookingProvider(null);
 
-  const [createdBooking] = await db
-    .insert(bookings)
-    .values({
+  // 2026-05-19 (Phase 3 Task 3.3) — when we have a contactId (the
+  // normal case), delegate the booking insert + booking.created emit
+  // to the shared `createBookingForCustomer` helper that the agent's
+  // create_booking tool ALSO calls. This is the spec's parity
+  // guarantee: agent-created bookings are structurally identical to
+  // public-page bookings. We pass titleOverride="Booked consultation"
+  // and metadataExtra.price + metadata.source="public_page" to
+  // preserve the public path's historical behavior. The post-insert
+  // side effects (Stripe checkout, Google Calendar sync, deal create,
+  // brain note) stay inline below because they need the created row.
+  //
+  // Edge case: when contactId is null (contact upsert failed silently
+  // upstream), we fall back to the inline insert so the booking still
+  // lands as an orphan row. The helper requires a contactId for clean
+  // contact-refresh semantics; we don't want to weaken its contract
+  // for this rare path.
+  let createdBookingId: string | null = null;
+  // Tracks whether the helper already emitted booking.created so the
+  // downstream block below skips its own emit to avoid double-firing
+  // (which would send two confirmation emails).
+  let helperEmittedBookingCreated = false;
+  if (contactId && bookingContext.bookingTemplateId) {
+    const helperResult = await createBookingForCustomer({
       orgId: bookingContext.orgId,
-      contactId,
-      title: "Booked consultation",
-      bookingSlug,
-      fullName,
-      email,
-      notes: notes ?? null,
-      provider,
-      status: bookingContext.price > 0 ? "pending_payment" : "scheduled",
-      startsAt: bookingStart,
-      endsAt: deriveEndsAt(bookingStart, bookingContext.durationMinutes),
-      metadata: {
-        source: "public",
-        appointmentType: bookingContext.appointmentName,
-        durationMinutes: bookingContext.durationMinutes,
-        price: bookingContext.price,
-        // v1.40.1 — vertical-aware intake responses (address, issue,
-        // urgency, etc.) stored on the booking so operators see
-        // actionable lead context in their CRM the moment the lead
-        // lands. Empty object when no intake fields were defined.
-        intakeResponses: intakeResponses ?? {},
+      customer: {
+        contactId,
+        firstName,
+        lastName,
+        email,
+        phone: intakePhone ?? "",
       },
-    })
-    .returning({ id: bookings.id });
+      appointmentTypeId: bookingContext.bookingTemplateId,
+      startsAt: bookingStart,
+      durationMinutes: bookingContext.durationMinutes,
+      status: bookingContext.price > 0 ? "pending_payment" : "scheduled",
+      provider,
+      notes: notes ?? null,
+      intakeAnswers: intakeResponses ?? {},
+      source: "public_page",
+      // Public action upserts contacts upstream with a richer merge —
+      // ask the helper to skip the redundant contact write.
+      skipContactRefresh: true,
+      titleOverride: "Booked consultation",
+      metadataExtra: { price: bookingContext.price },
+    });
+    createdBookingId = helperResult.bookingId;
+    // Helper emits booking.created internally for non-pending_payment
+    // bookings. For paid bookings (status='pending_payment') the
+    // Stripe webhook will fire the event after checkout completes.
+    helperEmittedBookingCreated = bookingContext.price <= 0;
+  } else {
+    const [orphanBooking] = await db
+      .insert(bookings)
+      .values({
+        orgId: bookingContext.orgId,
+        contactId: null,
+        title: "Booked consultation",
+        bookingSlug,
+        fullName,
+        email,
+        notes: notes ?? null,
+        provider,
+        status: bookingContext.price > 0 ? "pending_payment" : "scheduled",
+        startsAt: bookingStart,
+        endsAt: deriveEndsAt(bookingStart, bookingContext.durationMinutes),
+        metadata: {
+          source: "public_page",
+          appointmentType: bookingContext.appointmentName,
+          durationMinutes: bookingContext.durationMinutes,
+          price: bookingContext.price,
+          intakeResponses: intakeResponses ?? {},
+        },
+      })
+      .returning({ id: bookings.id });
+    createdBookingId = orphanBooking?.id ?? null;
+  }
+
+  const createdBooking = createdBookingId ? { id: createdBookingId } : null;
 
   if (createdBooking?.id) {
     if (bookingContext.price > 0) {
@@ -1611,10 +1671,15 @@ export async function submitPublicBookingAction({
     }
 
     if (contactId) {
-      await emitSeldonEvent("booking.created", {
-        appointmentId: createdBooking.id,
-        contactId,
-      }, { orgId: bookingContext.orgId });
+      // 2026-05-19 (Phase 3 Task 3.3) — when the shared helper ran, it
+      // already emitted booking.created; only emit here in the orphan
+      // / legacy-template fallback paths to preserve semantics.
+      if (!helperEmittedBookingCreated) {
+        await emitSeldonEvent("booking.created", {
+          appointmentId: createdBooking.id,
+          contactId,
+        }, { orgId: bookingContext.orgId });
+      }
 
       // v1.28.4 — fire-and-forget the post-booking 24h reminder workflow.
       // bookingReminderWorkflow durably sleeps until startsAt-24h, then
