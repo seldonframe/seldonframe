@@ -48,9 +48,27 @@ const COMPLETE_CONFIG = (): AgentConfig =>
     },
   });
 
-test("synthesis fails with missing_required_placeholder when user_input is empty", () => {
+// 2026-05-19 — fixture for tests covering the "no sensible default"
+// path. The real speed-to-lead archetype now declares non-empty
+// `example` for every user_input slot, so synthesis falls back to the
+// example instead of throwing on missing input. To still cover the
+// failure path, these tests use an archetype clone with example
+// stripped — representing the case where an author explicitly leaves
+// example blank because the placeholder MUST be set per-workspace
+// (e.g. $formId must point at a real form id).
+const minimalArchetypeWithoutExamples = {
+  ...speedToLeadArchetype,
+  placeholders: {
+    $formId: { kind: "user_input" as const, description: "form id" },
+    $appointmentTypeId: { kind: "user_input" as const, description: "appt id" },
+    $waitSeconds: { kind: "user_input" as const, description: "wait" },
+    $maxTurns: { kind: "user_input" as const, description: "turns" },
+  },
+};
+
+test("synthesis fails with missing_required_placeholder when user_input is empty and example is absent", () => {
   const config = makeConfig({ placeholders: {} });
-  const result = synthesizeAgentSpec(speedToLeadArchetype, config);
+  const result = synthesizeAgentSpec(minimalArchetypeWithoutExamples, config);
   assert.equal(result.ok, false);
   if (result.ok) return; // narrow
   assert.equal(result.reason, "missing_required_placeholder");
@@ -58,14 +76,60 @@ test("synthesis fails with missing_required_placeholder when user_input is empty
   assert.ok(result.placeholderKey.startsWith("$"));
 });
 
-test("synthesis fails when only some required placeholders are filled", () => {
+test("synthesis fails when only some required placeholders are filled and remaining have no example", () => {
   const config = makeConfig({
     placeholders: { $formId: "f", $appointmentTypeId: "a" /* missing $waitSeconds */ },
   });
-  const result = synthesizeAgentSpec(speedToLeadArchetype, config);
+  const result = synthesizeAgentSpec(minimalArchetypeWithoutExamples, config);
   assert.equal(result.ok, false);
   if (result.ok) return;
   assert.equal(result.placeholderKey, "$waitSeconds");
+});
+
+test("synthesis falls back to placeholder.example when operator config is missing the key (backwards-compat for new placeholders)", () => {
+  // 2026-05-19 — Phase 2 Task 2.4 added $maxTurns + $forbiddenPhrases
+  // to speed-to-lead. Operators configured BEFORE that change have
+  // saved configs missing both keys. The synthesizer must fall back to
+  // the archetype's example value rather than throwing — otherwise
+  // every new placeholder addition breaks every existing agent's run
+  // dispatch (observed in prod 2026-05-19 21:59:27 UTC).
+  //
+  // Fixture: complete config EXCEPT $maxTurns is absent. The archetype
+  // declares example="6" for $maxTurns, so synthesis should succeed
+  // with that as the filled value.
+  const config = makeConfig({
+    placeholders: {
+      $formId: "form-123",
+      $appointmentTypeId: "appt-456",
+      $waitSeconds: "120",
+      // $maxTurns intentionally absent
+    },
+  });
+  const result = synthesizeAgentSpec(speedToLeadArchetype, config);
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.filled.$maxTurns, "6");
+  // The fallback should also appear in the spec's sidecar placeholders
+  // map (keyed without the leading $).
+  const placeholders = (result.spec.placeholders as Record<string, string>) ?? {};
+  assert.equal(placeholders.maxTurns, "6");
+});
+
+test("synthesis falls back to example even when operator supplies a whitespace-only string", () => {
+  // Whitespace-only / empty user input should be treated the same as
+  // missing — fall back to example when available.
+  const config = makeConfig({
+    placeholders: {
+      $formId: "form-123",
+      $appointmentTypeId: "appt-456",
+      $waitSeconds: "120",
+      $maxTurns: "   ",
+    },
+  });
+  const result = synthesizeAgentSpec(speedToLeadArchetype, config);
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.filled.$maxTurns, "6");
 });
 
 test("synthesis fills user_input placeholders verbatim", () => {

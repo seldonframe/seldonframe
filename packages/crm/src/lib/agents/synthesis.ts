@@ -69,7 +69,34 @@ export function synthesizeAgentSpec(
   for (const [key, meta] of Object.entries(archetype.placeholders)) {
     if (meta.kind !== "user_input") continue;
     const value = config.placeholders?.[key];
-    if (!value || !value.trim()) {
+    const usable = typeof value === "string" && value.trim().length > 0;
+    if (!usable) {
+      // 2026-05-19 — fall back to placeholder.example when the operator
+      // hasn't supplied a value. This makes new required placeholders
+      // backwards-compatible with existing agent configs: when we
+      // introduce a new user_input placeholder (e.g. Phase 2 Task 2.4
+      // added $maxTurns to speed-to-lead), agents that were configured
+      // BEFORE the addition continue to work using the archetype's
+      // example as the implicit default. The operator can override
+      // later via /automations/[id]/configure.
+      //
+      // Trade-off: placeholders that genuinely have no sensible default
+      // (e.g. $formId — must point at a specific form) should leave
+      // `example` empty so this fallback throws as before. Treat any
+      // non-empty `example` as "the archetype author has declared this
+      // a safe default".
+      if (meta.example && meta.example.trim().length > 0) {
+        console.warn(
+          JSON.stringify({
+            event: "synthesis.user_input_defaulted_to_example",
+            archetypeId: archetype.id,
+            placeholderKey: key,
+            example: meta.example,
+          })
+        );
+        filled[key] = meta.example.trim();
+        continue;
+      }
       return { ok: false, reason: "missing_required_placeholder", placeholderKey: key };
     }
     filled[key] = value.trim();
