@@ -80,14 +80,27 @@ export type ToolHandler = (
 ) => Promise<unknown>;
 
 const TOOL_HANDLERS: Record<string, ToolHandler> = {
-  create_activity: async (orgId, args) => {
-    const contactId = typeof args.contact_id === "string" ? args.contact_id : null;
+  create_activity: async (orgId, args, runContext) => {
+    // 2026-05-19 — RunContext is the canonical source for contactId.
+    // We still accept args.contact_id as a fallback so future archetypes
+    // can attribute the activity to a DIFFERENT contact than the run's
+    // primary customer (e.g. cross-contact activity logs). When neither
+    // is provided, throw a clear error.
+    const argsContactId = typeof args.contact_id === "string" ? args.contact_id : null;
+    const usableArgsContactId =
+      argsContactId && !argsContactId.includes("{{") && argsContactId.trim().length > 0
+        ? argsContactId.trim()
+        : null;
+    const contactId = usableArgsContactId || runContext?.customer.contactId || null;
+
     const type = typeof args.type === "string" ? args.type : "agent_action";
     const subject = typeof args.subject === "string" ? args.subject : null;
     const body = typeof args.body === "string" ? args.body : null;
 
     if (!contactId) {
-      throw new Error("create_activity: contact_id is required");
+      throw new Error(
+        "create_activity: no contactId (args.contact_id unresolved and runContext.customer.contactId missing)",
+      );
     }
 
     // 2026-05-18 — resolve a real user_id (org owner or fallback to
