@@ -1,7 +1,7 @@
 {
   "framework": "nextjs",
   "installCommand": "pnpm install --frozen-lockfile",
-  "buildCommand": "pnpm build",
+  "buildCommand": "pnpm db:migrate && pnpm build",
   "crons": [
     {
       "path": "/api/cron/automations",
