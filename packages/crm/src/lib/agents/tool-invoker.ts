@@ -317,6 +317,18 @@ const TOOL_HANDLERS: Record<string, ToolHandler> = {
   // can echo back in a {{preferred_start}} extract or pass directly
   // to create_booking.
   check_availability: async (orgId, args) => {
+    // 2026-05-18 (later) — KNOWN failure modes return a structured
+    // `{ ok: false, soft_error, hint }` payload instead of throwing.
+    // Why: when this tool throws, the conversation step's tool-use
+    // loop pushes the raw error into the LLM's tool_result content
+    // with is_error=true. The LLM then paraphrases — sometimes
+    // emitting "we couldn't find your appointment. please call us."
+    // straight to the customer. The system prompt now instructs the
+    // LLM to treat ok:false as "ask the customer for a preferred
+    // time and confirm internally" instead of paraphrasing the error.
+    // Unrecognized failures still throw (so a real bug surfaces in
+    // /automations/runs as a failed step instead of being silently
+    // swallowed into an LLM reply).
     const appointmentTypeId =
       typeof args.appointment_type_id === "string"
         ? args.appointment_type_id
@@ -328,7 +340,16 @@ const TOOL_HANDLERS: Record<string, ToolHandler> = {
         ? Math.min(20, Math.floor(args.max_results))
         : 10;
     if (!appointmentTypeId) {
-      throw new Error("check_availability: appointment_type_id is required");
+      return {
+        data: {
+          ok: false,
+          soft_error: "missing_appointment_type",
+          hint:
+            "I don't have a specific calendar to read from. Ask the customer for their preferred day/time and confirm you'll get back to them.",
+          by_day: [],
+          total_slots: 0,
+        },
+      };
     }
 
     // Load the appointment-type template + workspace slug — slot
@@ -346,9 +367,16 @@ const TOOL_HANDLERS: Record<string, ToolHandler> = {
       )
       .limit(1);
     if (!template) {
-      throw new Error(
-        `check_availability: appointment type ${appointmentTypeId} not found`,
-      );
+      return {
+        data: {
+          ok: false,
+          soft_error: "appointment_type_not_found",
+          hint:
+            "The calendar id I have doesn't match a real appointment type — ask the customer for their preferred day/time and confirm you'll book it manually.",
+          by_day: [],
+          total_slots: 0,
+        },
+      };
     }
     const [orgRow] = await db
       .select({ slug: organizations.slug })
@@ -356,6 +384,9 @@ const TOOL_HANDLERS: Record<string, ToolHandler> = {
       .where(eq(organizations.id, orgId))
       .limit(1);
     if (!orgRow?.slug) {
+      // Workspace slug unresolvable is a REAL bug (workspace exists
+      // but has no slug — should never happen). Throw so /runs
+      // surfaces it.
       throw new Error("check_availability: workspace slug not resolvable");
     }
 
@@ -387,8 +418,26 @@ const TOOL_HANDLERS: Record<string, ToolHandler> = {
       }
     }
     const meta = (template.metadata as Record<string, unknown> | null) ?? {};
+    // 2026-05-18 (later) — explicit ok flag + zero-slots guidance.
+    // When the 14-day window returns nothing (everything booked, or
+    // availability window not configured), give the LLM a phrase to
+    // use instead of leaving it to improvise.
+    if (total === 0) {
+      return {
+        data: {
+          ok: true,
+          appointment_type_id: appointmentTypeId,
+          duration_minutes: typeof meta.durationMinutes === "number" ? meta.durationMinutes : 30,
+          by_day: [],
+          total_slots: 0,
+          hint:
+            "No open slots in the next 14 days. Ask the customer if a date further out works, or offer to have someone call them back.",
+        },
+      };
+    }
     return {
       data: {
+        ok: true,
         appointment_type_id: appointmentTypeId,
         duration_minutes: typeof meta.durationMinutes === "number" ? meta.durationMinutes : 30,
         by_day: collected,

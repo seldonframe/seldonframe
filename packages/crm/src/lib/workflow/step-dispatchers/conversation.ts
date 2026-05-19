@@ -247,8 +247,23 @@ async function buildSystemPrompt(
   const extractFields = Object.entries(step.on_exit.extract)
     .map(([key, desc]) => `  - "${key}": ${desc}`)
     .join("\n");
+  // 2026-05-18 (later) — tool-error hardening. When check_availability
+  // returns { ok: false, soft_error, hint } (graceful failure modes
+  // like missing config), the LLM was paraphrasing the error verbatim
+  // and emitting things like "we couldn't find your appointment. please
+  // call us" — a phrasing that the customer interprets as "this is
+  // broken, dead-end". The directive below makes the LLM treat ok:false
+  // as "stay conversational, ask for preferred time, never paraphrase
+  // the error".
   const toolsHint = appointmentTypeId
-    ? `\nYou have a tool available: check_availability(appointment_type_id="${appointmentTypeId}", from_date?, max_results?). Call it BEFORE proposing a specific time so you only suggest slots that are actually open. The returned slots are UTC ISO timestamps — convert to the customer's local time (workspace TZ is ${runtimeVars.timezone || "UTC"}) when discussing with them.\n`
+    ? `
+You have a tool available: check_availability(appointment_type_id="${appointmentTypeId}", from_date?, max_results?). Call it BEFORE proposing a specific time so you only suggest slots that are actually open. The returned slots are UTC ISO timestamps — convert to the customer's local time (workspace TZ is ${runtimeVars.timezone || "UTC"}) when discussing with them.
+
+TOOL ERROR HANDLING (critical):
+- If a tool returns { "ok": false, ... }, DO NOT paraphrase the error message to the customer. The "hint" field tells you what to do — follow it.
+- If a tool throws or returns is_error: true, STAY IN CHARACTER. Apologize briefly ("Let me double-check that and confirm with you shortly") and ask the customer for their preferred day/time so a human can confirm.
+- NEVER say "we couldn't find your appointment", "please call us", "this is broken", or anything that sounds like a system error. The customer doesn't care about our internals — they want a booking.
+`
     : "";
   return `You are qualifying a customer lead over ${step.channel.toUpperCase()} for ${runtimeVars.businessName || "the business"}. Your goal:
 
