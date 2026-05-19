@@ -1,8 +1,19 @@
 // buildRunContext + helpers — stamps a RunContext at startRun and
 // rebuilds it lazily on access if the persisted column is null
 // (existing pre-Phase-1 runs).
+import { eq } from "drizzle-orm";
+import { db } from "@/db";
+import { organizations, partnerAgencies } from "@/db/schema";
 import { toE164 } from "@/lib/sms/providers/interface";
-import type { RunContextClock, RunContextCustomer } from "./run-context";
+import type { OrgSoul } from "@/lib/soul/types";
+import type {
+  RunContext,
+  RunContextAgency,
+  RunContextClock,
+  RunContextCustomer,
+  RunContextSource,
+  RunContextWorkspace,
+} from "./run-context";
 
 /**
  * Format a wall-clock instant as { nowIso, today, tomorrow,
@@ -78,4 +89,185 @@ export function resolveCustomerFromTriggerPayload(
   const phone = phoneRaw ? toE164(phoneRaw) || phoneRaw : "";
 
   return { contactId, firstName, lastName, email, phone };
+}
+
+/**
+ * Build a fresh RunContext at startRun. Reads workspace + soul + theme
+ * + (optional) active partner agency. Resolves customer from trigger
+ * payload via the pure helper.
+ *
+ * Persists the context on workflow_runs.context once the run row is
+ * created; the runtime threads it to dispatchers thereafter.
+ */
+export async function buildRunContext(input: {
+  runId: string;
+  orgId: string;
+  archetypeId: string;
+  triggerPayload: Record<string, unknown>;
+  triggerEventId: string | null;
+  triggerEventType: string;
+}): Promise<RunContext> {
+  const [orgRow] = await db
+    .select({
+      id: organizations.id,
+      name: organizations.name,
+      slug: organizations.slug,
+      timezone: organizations.timezone,
+      soul: organizations.soul,
+      theme: organizations.theme,
+      parentAgencyId: organizations.parentAgencyId,
+    })
+    .from(organizations)
+    .where(eq(organizations.id, input.orgId))
+    .limit(1);
+
+  if (!orgRow) {
+    throw new Error(`buildRunContext: workspace ${input.orgId} not found`);
+  }
+
+  const workspace: RunContextWorkspace = {
+    id: orgRow.id,
+    name: orgRow.name,
+    slug: orgRow.slug,
+    timezone: orgRow.timezone || "UTC",
+    soul: (orgRow.soul ?? {}) as OrgSoul,
+    theme: (orgRow.theme ?? {}) as unknown as Record<string, unknown>,
+  };
+
+  let agency: RunContextAgency | null = null;
+  if (orgRow.parentAgencyId) {
+    const [agencyRow] = await db
+      .select({
+        id: partnerAgencies.id,
+        name: partnerAgencies.name,
+        logoUrl: partnerAgencies.logoUrl,
+        status: partnerAgencies.status,
+      })
+      .from(partnerAgencies)
+      .where(eq(partnerAgencies.id, orgRow.parentAgencyId))
+      .limit(1);
+    if (agencyRow && agencyRow.status === "active") {
+      agency = { id: agencyRow.id, name: agencyRow.name, logoUrl: agencyRow.logoUrl };
+    }
+  }
+
+  const customer = resolveCustomerFromTriggerPayload(input.triggerPayload);
+  const clock = buildClock(new Date(), workspace.timezone);
+  const source = resolveSource(input.triggerEventType, input.triggerPayload, input.triggerEventId);
+
+  return {
+    runId: input.runId,
+    orgId: input.orgId,
+    archetypeId: input.archetypeId,
+    startedAt: clock.nowIso,
+    customer,
+    workspace,
+    agency,
+    clock,
+    source,
+  };
+}
+
+function resolveSource(
+  eventType: string,
+  payload: Record<string, unknown>,
+  triggerEventId: string | null,
+): RunContextSource {
+  const data = (payload.data && typeof payload.data === "object"
+    ? payload.data
+    : payload) as Record<string, unknown>;
+  if (eventType === "form.submitted") {
+    const formId =
+      (typeof payload.formId === "string" && payload.formId) ||
+      (typeof data.formId === "string" && data.formId) ||
+      "";
+    return { type: "form.submitted", formId, triggerEventId };
+  }
+  if (eventType === "booking.created") {
+    const bookingId =
+      (typeof payload.bookingId === "string" && payload.bookingId) ||
+      (typeof data.bookingId === "string" && data.bookingId) ||
+      (typeof data.appointmentId === "string" && data.appointmentId) ||
+      "";
+    return { type: "booking.created", bookingId, triggerEventId };
+  }
+  if (eventType === "sms.replied") {
+    const inboundSmsId =
+      (typeof payload.smsMessageId === "string" && payload.smsMessageId) ||
+      (typeof data.smsMessageId === "string" && data.smsMessageId) ||
+      "";
+    return { type: "sms.replied", inboundSmsId, triggerEventId };
+  }
+  if (eventType.startsWith("schedule")) {
+    return { type: "schedule", triggerEventId };
+  }
+  return { type: "manual", triggerEventId };
+}
+
+/**
+ * Load RunContext for an in-flight run. If the run was created before
+ * Phase 1 shipped (context=NULL), rebuild and persist on first access.
+ *
+ * Eager clock refresh: even when the persisted context exists, we
+ * always re-stamp the clock so long-paused conversations see today.
+ */
+export async function loadRunContext(run: {
+  id: string;
+  orgId: string;
+  archetypeId: string;
+  triggerPayload: Record<string, unknown>;
+  triggerEventId: string | null;
+  context: Record<string, unknown> | null;
+}): Promise<RunContext> {
+  let rc: RunContext;
+  if (run.context) {
+    rc = run.context as unknown as RunContext;
+  } else {
+    rc = await buildRunContext({
+      runId: run.id,
+      orgId: run.orgId,
+      archetypeId: run.archetypeId,
+      triggerPayload: run.triggerPayload,
+      triggerEventId: run.triggerEventId,
+      triggerEventType: inferEventTypeFromPayload(run.triggerPayload),
+    });
+    // Best-effort persist; failures non-fatal because next call will
+    // rebuild again.
+    try {
+      const { workflowRuns } = await import("@/db/schema");
+      await db
+        .update(workflowRuns)
+        .set({ context: rc as unknown as Record<string, unknown> })
+        .where(eq(workflowRuns.id, run.id));
+    } catch {
+      // swallow
+    }
+  }
+  // Eager refresh of the clock — every dispatcher call sees current
+  // today/tomorrow.
+  rc = { ...rc, clock: buildClock(new Date(), rc.workspace.timezone) };
+  return rc;
+}
+
+function inferEventTypeFromPayload(payload: Record<string, unknown>): string {
+  // Heuristic for legacy runs without a stored eventType. Look at the
+  // shape: form.submitted has formId, booking.created has bookingId,
+  // sms.replied has smsMessageId.
+  const data = (payload.data && typeof payload.data === "object"
+    ? payload.data
+    : payload) as Record<string, unknown>;
+  if (typeof payload.formId === "string" || typeof data.formId === "string") {
+    return "form.submitted";
+  }
+  if (
+    typeof payload.bookingId === "string" ||
+    typeof data.bookingId === "string" ||
+    typeof data.appointmentId === "string"
+  ) {
+    return "booking.created";
+  }
+  if (typeof payload.smsMessageId === "string" || typeof data.smsMessageId === "string") {
+    return "sms.replied";
+  }
+  return "manual";
 }
