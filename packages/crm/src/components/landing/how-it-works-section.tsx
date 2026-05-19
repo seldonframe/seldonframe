@@ -19,8 +19,8 @@ const STEPS: readonly Step[] = [
     number: 1,
     title: "Sign up free",
     body: "Magic link. 30 seconds. Free to start.",
-    screenshot: "/marketing/how-it-works-step-1.png",
-    alt: "Screenshot of the SeldonFrame signup form showing an email field and Continue with email link button.",
+    screenshot: "/marketing/sign-in.png",
+    alt: "Magic-link sign-in. No password, no Google OAuth — paste your email, click the link in your inbox, you're in.",
   },
   {
     number: 2,

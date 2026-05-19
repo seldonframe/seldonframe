@@ -4,8 +4,6 @@ import Link from "next/link";
 import { ArrowRight, Play } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 
-import { LandingHeroMockup } from "./landing-hero-mockup";
-
 // Cut C onboarding-pivot — Hero rewrite.
 //
 // Previous hero (Cut C Phase 1) positioned against GoHighLevel with a
@@ -113,12 +111,20 @@ export function LandingHero() {
 
         {/* Mockup column — lands AFTER copy + reassurance settle so the
             mockup reads as a reveal, not a competing element. Per
-            design-critique #7. */}
+            design-critique #7. Replaced the rendered LandingHeroMockup
+            with a real workspace screenshot (workspace-head.png) so the
+            hero shows the actual product, not a stylized render. */}
         <motion.div
           {...fadeUp(0.36)}
           className="lg:col-span-6"
         >
-          <LandingHeroMockup />
+          <img
+            src="/marketing/workspace-head.png"
+            alt="A live SeldonFrame workspace — operator dashboard with CRM, bookings, and conversation tabs already wired up."
+            className="w-full rounded-2xl border border-zinc-800 shadow-2xl shadow-black/40 ring-1 ring-white/[0.04]"
+            loading="eager"
+            fetchPriority="high"
+          />
         </motion.div>
       </div>
     </section>

@@ -1,3 +1,39 @@
+type Block = {
+  name: string;
+  desc: string;
+  image?: string;
+  alt?: string;
+};
+
+const BLOCKS: readonly Block[] = [
+  {
+    name: "CRM",
+    desc: "See every lead and client in one place",
+    image: "/marketing/crm-pipeline.png",
+    alt: "CRM + pipeline view — contacts, deals, activity timeline all in one place.",
+  },
+  {
+    name: "Booking",
+    desc: "Let people book you. Syncs with your calendar.",
+    image: "/marketing/booking-page.png",
+    alt: "Public booking page — customer picks a slot, lands on the operator's calendar.",
+  },
+  {
+    name: "Forms",
+    desc: "Intake forms, quizzes, applications",
+    image: "/marketing/form.png",
+    alt: "Intake form — operator-branded, fields auto-derived from the workspace's vertical.",
+  },
+  {
+    name: "Agents",
+    desc: "AI receptionist + automations that close the loop",
+    image: "/marketing/agents.png",
+    alt: "Operator dashboard — automations tab showing speed-to-lead and other agents in flight.",
+  },
+  { name: "Pages", desc: "Landing pages, sales pages, result pages" },
+  { name: "Email", desc: "Welcome emails, follow-ups, reminders" },
+];
+
 export function LandingBlocksSection() {
   return (
     <section className="mx-auto max-w-5xl px-6 py-24 md:py-32">
@@ -8,20 +44,25 @@ export function LandingBlocksSection() {
       </div>
 
       <div className="mt-16 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {[
-          { name: "CRM", desc: "See every lead and client in one place" },
-          { name: "Booking", desc: "Let people book you. Syncs with your calendar." },
-          { name: "Pages", desc: "Landing pages, sales pages, result pages" },
-          { name: "Forms", desc: "Intake forms, quizzes, applications" },
-          { name: "Email", desc: "Welcome emails, follow-ups, reminders" },
-          { name: "Automations", desc: "When something happens, do something else" },
-        ].map((block) => (
+        {BLOCKS.map((block) => (
           <div
             key={block.name}
-            className="rounded-xl border border-zinc-800 bg-zinc-900 p-6 transition-colors hover:border-zinc-700"
+            className="flex flex-col overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900 transition-colors hover:border-zinc-700"
           >
-            <h3 className="text-base font-semibold text-zinc-200">{block.name}</h3>
-            <p className="mt-2 text-sm text-zinc-500">{block.desc}</p>
+            {block.image ? (
+              <div className="overflow-hidden border-b border-zinc-800/60 bg-zinc-950/40">
+                <img
+                  src={block.image}
+                  alt={block.alt ?? block.name}
+                  className="aspect-[16/10] w-full object-cover"
+                  loading="lazy"
+                />
+              </div>
+            ) : null}
+            <div className="p-6">
+              <h3 className="text-base font-semibold text-zinc-200">{block.name}</h3>
+              <p className="mt-2 text-sm text-zinc-500">{block.desc}</p>
+            </div>
           </div>
         ))}
       </div>
