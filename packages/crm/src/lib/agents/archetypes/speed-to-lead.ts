@@ -63,6 +63,20 @@ export const speedToLeadArchetype: Archetype = {
       example:
         "The prospect has shared a preferred appointment day/time (a specific day + a specific time, in their words — you'll convert to ISO using the current date context). That's it — no need to ask about insurance, payment, or other qualification fields. The intake form already captured service type and contact info; your only job is to land a time.",
     },
+    $maxTurns: {
+      kind: "user_input",
+      description:
+        "Maximum number of back-and-forth turns the conversation can take before forcing an exit. Default 6 — most leads close in 2-3 turns. Lower if customers feel rushed; raise if your qualification is complex.",
+      example: "6",
+    },
+    $forbiddenPhrases: {
+      kind: "soul_copy",
+      description:
+        "Comma-separated phrases the agent must NEVER emit. Defends against the LLM paraphrasing tool errors into customer-facing system-error language. Add your own ('please call our office', 'I'll have someone get back to you') if the agent ever says something that sounds wrong for your brand.",
+      soulFields: ["tone"],
+      example:
+        "we couldn't find your appointment, please call us, this is broken, an error occurred, our system is down",
+    },
   },
   specTemplate: {
     name: "Speed-to-Lead",

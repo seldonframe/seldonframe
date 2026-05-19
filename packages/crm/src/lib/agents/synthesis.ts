@@ -105,6 +105,24 @@ export function synthesizeAgentSpec(
     unknown
   >;
 
+  // 2026-05-19 — Phase 2 Task 2.4. Sidecar `placeholders` map on the
+  // spec so the runtime can read operator-editable values that don't
+  // appear as $tokens inside the spec template (e.g. $maxTurns,
+  // $forbiddenPhrases — consumed by the conversation dispatcher to
+  // gate turn count + forbidden-phrase list per the thin-harness/
+  // fat-prose principle). Keyed by name WITHOUT the leading `$` so
+  // dispatchers don't have to special-case the prefix. The Zod
+  // schema strips this field on validation, but specSnapshot is
+  // stored as raw JSONB (no re-parse), so the sidecar survives the
+  // round trip to disk and back into dispatcher reads.
+  const placeholdersForSpec: Record<string, string> = {};
+  for (const [k, v] of allReplacements.entries()) {
+    placeholdersForSpec[k.replace(/^\$/, "")] = v;
+  }
+  if (Object.keys(placeholdersForSpec).length > 0) {
+    spec.placeholders = placeholdersForSpec;
+  }
+
   return {
     ok: true,
     spec,

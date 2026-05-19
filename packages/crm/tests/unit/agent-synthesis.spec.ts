@@ -33,15 +33,18 @@ function makeConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
   };
 }
 
-// Speed-to-Lead has three required user_input placeholders:
-// $formId, $appointmentTypeId, $waitSeconds. The fixture below
-// is the minimum config that passes the validator.
+// Speed-to-Lead has four required user_input placeholders:
+// $formId, $appointmentTypeId, $waitSeconds, $maxTurns. The fixture
+// below is the minimum config that passes the validator. ($maxTurns
+// added 2026-05-19 as part of Phase 2 Task 2.4 — operators can now
+// override the conversation turn limit per workspace.)
 const COMPLETE_CONFIG = (): AgentConfig =>
   makeConfig({
     placeholders: {
       $formId: "form-123",
       $appointmentTypeId: "appt-456",
       $waitSeconds: "120",
+      $maxTurns: "6",
     },
   });
 
@@ -109,6 +112,7 @@ test("synthesis substitutes longer placeholder names before shorter ones (no $fo
       $form: "short-id-value",
       $appointmentTypeId: "appt-xyz",
       $waitSeconds: "60",
+      $maxTurns: "6",
     },
   });
   const result = synthesizeAgentSpec(archetypeWithCollision, config);
@@ -199,7 +203,7 @@ test("synthesis does NOT coerce mixed-content tokens (sentences stay strings)", 
     },
   };
   const config = makeConfig({
-    placeholders: { $count: "5", $formId: "f", $appointmentTypeId: "a", $waitSeconds: "1" },
+    placeholders: { $count: "5", $formId: "f", $appointmentTypeId: "a", $waitSeconds: "1", $maxTurns: "6" },
   });
   const result = synthesizeAgentSpec(archetypeWithSentence, config);
   assert.equal(result.ok, true);

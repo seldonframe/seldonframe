@@ -116,7 +116,37 @@ type ConversationState = {
   phase?: ConversationPhase;
 };
 
-const MAX_TURNS = 6;
+// 2026-05-19 — Phase 2 Task 2.4. THIN HARNESS / FAT PROSE: both the
+// turn limit AND the forbidden-phrase list are operator-editable
+// placeholders on the archetype (see archetypes/speed-to-lead.ts).
+// We resolve them from the spec's `placeholders` sidecar at dispatch
+// time. Synthesizer keys are stored without the `$` prefix, but we
+// also probe `$key` defensively in case future archetypes or fixtures
+// preserve the prefix.
+function resolveMaxTurns(run: StoredRun): number {
+  const placeholders = (run.specSnapshot as unknown as { placeholders?: Record<string, string> }).placeholders;
+  const raw = placeholders?.maxTurns ?? placeholders?.["$maxTurns"];
+  if (typeof raw !== "string") return 6;
+  const parsed = parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed >= 1 && parsed <= 20 ? parsed : 6;
+}
+
+function resolveForbiddenPhrases(run: StoredRun): string[] {
+  const placeholders = (run.specSnapshot as unknown as { placeholders?: Record<string, string> }).placeholders;
+  const raw = placeholders?.forbiddenPhrases ?? placeholders?.["$forbiddenPhrases"];
+  if (typeof raw !== "string" || raw.trim().length === 0) {
+    // Defaults — these are the phrases dogfood revealed cause customer
+    // confusion. Operators can override via $forbiddenPhrases.
+    return [
+      "we couldn't find your appointment",
+      "please call us",
+      "this is broken",
+      "an error occurred",
+    ];
+  }
+  return raw.split(",").map((s) => s.trim()).filter(Boolean);
+}
+
 const STATE_KEY_PREFIX = "__conversation_";
 
 // 2026-05-18 — silence-handling tier durations.
@@ -178,6 +208,8 @@ function buildSystemPrompt(
   runtimeVars: Record<string, string>,
   appointmentTypeId: string | null,
   runContext: CustomerRunContext,
+  forbiddenPhrases: string[],
+  maxTurns: number,
 ): string {
   const extractFields = Object.entries(step.on_exit.extract)
     .map(([key, desc]) => `  - "${key}": ${desc}`)
@@ -213,8 +245,15 @@ You have a tool available: check_availability(appointment_type_id="${appointment
 TOOL ERROR HANDLING (critical):
 - If a tool returns { "ok": false, ... }, DO NOT paraphrase the error message to the customer. The "hint" field tells you what to do — follow it.
 - If a tool throws or returns is_error: true, STAY IN CHARACTER. Apologize briefly ("Let me double-check that and confirm with you shortly") and ask the customer for their preferred day/time so a human can confirm.
-- NEVER say "we couldn't find your appointment", "please call us", "this is broken", or anything that sounds like a system error. The customer doesn't care about our internals — they want a booking.
+- The customer doesn't care about our internals — they want a booking.
 `
+    : "";
+  // 2026-05-19 — Phase 2 Task 2.4. Forbidden phrases moved to the
+  // $forbiddenPhrases archetype placeholder so operators can append
+  // their own brand-specific never-say-this strings without editing
+  // dispatcher code. Empty list → omit the block entirely.
+  const forbiddenBlock = forbiddenPhrases.length > 0
+    ? `\nNEVER say any of these phrases (they make the customer think something is broken):\n${forbiddenPhrases.map((p) => `  - "${p}"`).join("\n")}\n`
     : "";
   return `You are qualifying a customer lead over ${step.channel.toUpperCase()} for ${runtimeVars.businessName || "the business"}. Your goal:
 
@@ -231,14 +270,14 @@ Required extracted fields (each MUST be in the <exit> JSON):
 ${extractFields}
 
 Until the criteria are met, respond CONVERSATIONALLY (one short ${step.channel.toUpperCase()}-friendly message, under 320 characters). Ask one specific follow-up question at a time. Do not emit the <exit> block until you have ALL required fields and the criteria are clearly met.
-${toolsHint}
+${toolsHint}${forbiddenBlock}
 Critical:
 - Never mention "Seldon" or "SeldonFrame".
 - Sound like a real person from the business — friendly, concise, no corporate-speak.
 - Use the customer's first name (${runtimeVars["contact.firstName"] || "the contact"}) when you know it. Refer to the business as "${runtimeVars.businessName || "us"}".
 - Never emit literal {{placeholder}} tokens in your reply — always say the actual name / business / phone.
 - If the customer goes off-topic, gently steer back.
-- Hard limit: 6 turns total. On turn 6, emit the <exit> block with whatever you have (use "unknown" or "not_asked" for missing values).`;
+- Hard limit: ${maxTurns} turns total. On turn ${maxTurns}, emit the <exit> block with whatever you have (use "unknown" or "not_asked" for missing values).`;
 }
 
 // 2026-05-18 — V1.1 tool-use enabled LLM call. The LLM can request
@@ -676,7 +715,16 @@ export async function dispatchConversation(
     appointmentTypeId = null;
   }
 
-  const systemPrompt = buildSystemPrompt(step, runtimeVars, appointmentTypeId, runContext);
+  const forbiddenPhrases = resolveForbiddenPhrases(run);
+  const maxTurns = resolveMaxTurns(run);
+  const systemPrompt = buildSystemPrompt(
+    step,
+    runtimeVars,
+    appointmentTypeId,
+    runContext,
+    forbiddenPhrases,
+    maxTurns,
+  );
   const llmOutput = await callLLM(run.orgId, systemPrompt, updatedTranscript);
 
   // If LLM failed entirely, advance to next step with empty extract —
@@ -696,7 +744,7 @@ export async function dispatchConversation(
 
   // Hard turn limit — force exit at turn 6 even if LLM is still chatty.
   const turnCount = state.turns + 1;
-  const forceExit = turnCount >= MAX_TURNS;
+  const forceExit = turnCount >= maxTurns;
 
   if (parsed.exiting || forceExit) {
     // Persist final transcript + extracted vars
