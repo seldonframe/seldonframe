@@ -16,6 +16,7 @@ import { InMemorySoulStore } from "../../../src/lib/workflow/state-access/soul-s
 import type { RuntimeContext, StoredRun } from "../../../src/lib/workflow/types";
 import { notImplementedToolInvoker } from "../../../src/lib/workflow/types";
 import { InMemoryRuntimeStorage } from "./storage-memory";
+import { customerRunContextStub } from "../../fixtures/run-context";
 
 function makeContext(soulStore: InMemorySoulStore): RuntimeContext {
   return {
@@ -170,6 +171,7 @@ describe("dispatchReadState — happy path", () => {
         next: "next_step",
       },
       context,
+      customerRunContextStub,
     );
 
     assert.equal(result.kind, "advance");
@@ -197,6 +199,7 @@ describe("dispatchReadState — happy path", () => {
         next: null,
       },
       context,
+      customerRunContextStub,
     );
 
     assert.equal(result.kind, "advance");
@@ -221,6 +224,7 @@ describe("dispatchReadState — happy path", () => {
         next: null,
       },
       context,
+      customerRunContextStub,
     );
     assert.equal(result.kind, "advance");
     if (result.kind !== "advance") return;
@@ -250,6 +254,7 @@ describe("dispatchReadState — interpolation in path", () => {
         next: null,
       },
       context,
+      customerRunContextStub,
     );
 
     assert.equal(result.kind, "advance");
@@ -279,6 +284,7 @@ describe("dispatchReadState — workspace.theme path", () => {
         next: null,
       },
       context,
+      customerRunContextStub,
     );
     assert.equal(result.kind, "advance");
     if (result.kind !== "advance") return;
@@ -307,6 +313,7 @@ describe("dispatchReadState — SoulStore throws", () => {
         next: null,
       },
       context,
+      customerRunContextStub,
     );
     assert.equal(result.kind, "fail");
     if (result.kind !== "fail") return;

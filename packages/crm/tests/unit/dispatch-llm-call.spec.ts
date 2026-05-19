@@ -25,6 +25,7 @@ import assert from "node:assert/strict";
 import { dispatchLlmCall, type LlmCallDispatchContext, type ClaudeInvoker } from "../../src/lib/workflow/step-dispatchers/llm-call";
 import type { LlmCallStep, AgentSpec } from "../../src/lib/agents/validator";
 import type { StoredRun } from "../../src/lib/workflow/types";
+import { customerRunContextStub } from "../fixtures/run-context";
 
 const RUN_ID = "00000000-0000-4000-8000-000000000bbb";
 const ORG = "00000000-0000-4000-8000-000000000aaa";
@@ -112,7 +113,7 @@ describe("dispatchLlmCall — happy path", () => {
       user_prompt: "Hi {{customerName}}, summarize.",
       system_prompt: "Brand voice: friendly.",
     });
-    const action = await dispatchLlmCall(baseRun(), step, ctx);
+    const action = await dispatchLlmCall(baseRun(), step, ctx, customerRunContextStub);
 
     assert.equal(action.kind, "advance");
     if (action.kind === "advance") {
@@ -137,7 +138,7 @@ describe("dispatchLlmCall — happy path", () => {
   test("capture binds response text into the run scope via NextAction", async () => {
     const ctx = makeContext();
     const step = baseStep({ capture: "summary" });
-    const action = await dispatchLlmCall(baseRun(), step, ctx);
+    const action = await dispatchLlmCall(baseRun(), step, ctx, customerRunContextStub);
     assert.equal(action.kind, "advance");
     if (action.kind === "advance") {
       assert.ok(action.capture);
@@ -148,7 +149,7 @@ describe("dispatchLlmCall — happy path", () => {
 
   test("no capture → action carries no capture binding", async () => {
     const ctx = makeContext();
-    const action = await dispatchLlmCall(baseRun(), baseStep(), ctx);
+    const action = await dispatchLlmCall(baseRun(), baseStep(), ctx, customerRunContextStub);
     assert.equal(action.kind, "advance");
     if (action.kind === "advance") {
       assert.equal(action.capture, undefined);
@@ -163,7 +164,7 @@ describe("dispatchLlmCall — happy path", () => {
         return { text: "ok", model: "claude-sonnet-4-6", usage: { inputTokens: 10, outputTokens: 5 } };
       },
     });
-    await dispatchLlmCall(baseRun(), baseStep(), ctx);
+    await dispatchLlmCall(baseRun(), baseStep(), ctx, customerRunContextStub);
     assert.equal(invokeArgs!.systemPrompt, undefined);
   });
 
@@ -177,7 +178,7 @@ describe("dispatchLlmCall — happy path", () => {
     });
     const step = baseStep();
     delete (step as Record<string, unknown>).max_tokens;
-    await dispatchLlmCall(baseRun(), step, ctx);
+    await dispatchLlmCall(baseRun(), step, ctx, customerRunContextStub);
     // Dispatcher uses step's max_tokens or its 4096 default.
     assert.equal(invokeArgs!.maxTokens, 4096);
   });
@@ -196,7 +197,7 @@ describe("dispatchLlmCall — happy path", () => {
     const run = baseRun({
       captureScope: { contact: { name: "Maria", org: "Desert Cool HVAC" } },
     });
-    await dispatchLlmCall(run, step, ctx);
+    await dispatchLlmCall(run, step, ctx, customerRunContextStub);
     assert.equal(invokeArgs!.userPrompt, "Customer is Maria at Desert Cool HVAC.");
   });
 });
@@ -217,7 +218,7 @@ describe("dispatchLlmCall — invoker failure", () => {
         recordedCount += 1;
       },
     });
-    const action = await dispatchLlmCall(baseRun(), baseStep(), ctx);
+    const action = await dispatchLlmCall(baseRun(), baseStep(), ctx, customerRunContextStub);
     assert.equal(action.kind, "fail");
     if (action.kind === "fail") {
       assert.match(action.reason, /Anthropic API timeout|llm_call/i);
@@ -239,7 +240,7 @@ describe("dispatchLlmCall — invoker failure", () => {
         recordedUsage = input;
       },
     });
-    const action = await dispatchLlmCall(baseRun(), baseStep(), ctx);
+    const action = await dispatchLlmCall(baseRun(), baseStep(), ctx, customerRunContextStub);
     assert.equal(action.kind, "advance");
     // Recorder was called; it's the recorder's job to swallow undefined
     // tokens (verified in ai-workflow-cost-recorder.spec.ts).
@@ -260,7 +261,7 @@ describe("dispatchLlmCall — invoker failure", () => {
           throw new Error("DB down");
         },
       });
-      const action = await dispatchLlmCall(baseRun(), baseStep(), ctx);
+      const action = await dispatchLlmCall(baseRun(), baseStep(), ctx, customerRunContextStub);
       assert.equal(action.kind, "advance");
       assert.ok(warned, "expected console.warn breadcrumb when recorder throws");
     } finally {
@@ -282,7 +283,7 @@ describe("dispatchLlmCall — empty + odd responses", () => {
         usage: { inputTokens: 5, outputTokens: 0 },
       }),
     });
-    const action = await dispatchLlmCall(baseRun(), baseStep({ capture: "summary" }), ctx);
+    const action = await dispatchLlmCall(baseRun(), baseStep({ capture: "summary" }), ctx, customerRunContextStub);
     assert.equal(action.kind, "advance");
     if (action.kind === "advance") {
       assert.equal(action.capture!.value, "");
@@ -302,7 +303,7 @@ describe("dispatchLlmCall — empty + odd responses", () => {
         recordedModel = input.model;
       },
     });
-    await dispatchLlmCall(baseRun(), baseStep({ model: "claude-sonnet-4-6" }), ctx);
+    await dispatchLlmCall(baseRun(), baseStep({ model: "claude-sonnet-4-6" }), ctx, customerRunContextStub);
     // Recorder uses the response model — that's what was actually
     // billed. Fallback pricing handles unknown date-stamped variants.
     assert.equal(recordedModel, "claude-sonnet-4-6-20251215");

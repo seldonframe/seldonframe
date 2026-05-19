@@ -17,6 +17,7 @@
 // literal values, not validate shapes.
 
 import type { McpToolCallStep } from "../../agents/validator";
+import type { CustomerRunContext } from "../run-context-customer";
 import type { NextAction, RuntimeContext, StoredRun } from "../types";
 import { resolveInterpolations } from "../interpolate";
 
@@ -33,10 +34,14 @@ export async function dispatchMcpToolCall(
   run: StoredRun,
   step: McpToolCallStep,
   context: RuntimeContext,
+  runContext: CustomerRunContext,
 ): Promise<NextAction> {
   try {
     const resolvedArgs = resolveInterpolations(step.args, run) as Record<string, unknown>;
-    const result = await context.invokeTool(step.tool, resolvedArgs);
+    const result = await context.invokeTool(step.tool, resolvedArgs, {
+      orgId: run.orgId,
+      runContext,
+    });
     const capture = step.capture
       ? { name: step.capture, value: unwrapCapture(result) }
       : undefined;

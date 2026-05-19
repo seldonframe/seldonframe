@@ -42,6 +42,7 @@ import type {
   AgentSpec,
 } from "../../src/lib/agents/validator";
 import type { StoredRun } from "../../src/lib/workflow/types";
+import { customerRunContextStub } from "../fixtures/run-context";
 import type {
   ApprovalDispatchContext,
   ApprovalResumeContext,
@@ -122,7 +123,7 @@ function makeDispatchContext(
 describe("dispatchRequestApproval — operator approver", () => {
   test("returns pause_approval and creates a pending workflow_approvals row", async () => {
     const ctx = makeDispatchContext();
-    const action = await dispatchRequestApproval(baseRun(), baseStep(), ctx);
+    const action = await dispatchRequestApproval(baseRun(), baseStep(), ctx, customerRunContextStub);
     assert.equal(action.kind, "pause_approval");
     if (action.kind !== "pause_approval") return;
     assert.equal(action.approverType, "operator");
@@ -150,6 +151,7 @@ describe("dispatchRequestApproval — operator approver", () => {
         },
       }),
       ctx,
+      customerRunContextStub,
     );
     if (action.kind !== "pause_approval") throw new Error(`expected pause_approval, got ${action.kind}`);
     assert.equal(action.contextTitle, "Approve send to Maria");
@@ -165,6 +167,7 @@ describe("dispatchRequestApproval — client_owner approver + magic-link", () =>
       baseRun(),
       baseStep({ approver: { type: "client_owner" } }),
       ctx,
+      customerRunContextStub,
     );
     if (action.kind !== "pause_approval") throw new Error(`expected pause_approval, got ${action.kind}`);
     assert.equal(action.approverType, "client_owner");
@@ -190,6 +193,7 @@ describe("dispatchRequestApproval — timeout action variants", () => {
       baseRun(),
       baseStep({ timeout: { action: "abort", seconds: 7200 } }),
       ctx,
+      customerRunContextStub,
     );
     if (action.kind !== "pause_approval") throw new Error("expected pause_approval");
     assert.equal(action.timeoutAction, "abort");
@@ -202,6 +206,7 @@ describe("dispatchRequestApproval — timeout action variants", () => {
       baseRun(),
       baseStep({ timeout: { action: "auto_approve", seconds: 86400 } }),
       ctx,
+      customerRunContextStub,
     );
     if (action.kind !== "pause_approval") throw new Error("expected pause_approval");
     assert.equal(action.timeoutAction, "auto_approve");
@@ -214,6 +219,7 @@ describe("dispatchRequestApproval — timeout action variants", () => {
       baseRun(),
       baseStep({ timeout: { action: "wait_indefinitely" } }),
       ctx,
+      customerRunContextStub,
     );
     if (action.kind !== "pause_approval") throw new Error("expected pause_approval");
     assert.equal(action.timeoutAction, "wait_indefinitely");
@@ -230,6 +236,7 @@ describe("dispatchRequestApproval — failure paths", () => {
       baseRun(),
       baseStep({ approver: { type: "client_owner" } }),
       ctx,
+      customerRunContextStub,
     );
     assert.equal(action.kind, "fail");
     if (action.kind === "fail") {
@@ -246,7 +253,7 @@ describe("resumeApproval — happy path routes to next_on_approve / next_on_reje
   test("approved → advances run.currentStepId to next_on_approve + status='running'", async () => {
     const storage = makeInMemoryApprovalStorage();
     const dispatchCtx = makeDispatchContext({ storage });
-    const action = await dispatchRequestApproval(baseRun(), baseStep(), dispatchCtx);
+    const action = await dispatchRequestApproval(baseRun(), baseStep(), dispatchCtx, customerRunContextStub);
     if (action.kind !== "pause_approval") throw new Error("expected pause_approval");
 
     // Apply the pause manually to a stub run (simulating the runtime).
@@ -291,7 +298,7 @@ describe("resumeApproval — happy path routes to next_on_approve / next_on_reje
   test("rejected → advances to next_on_reject", async () => {
     const storage = makeInMemoryApprovalStorage();
     const dispatchCtx = makeDispatchContext({ storage });
-    const action = await dispatchRequestApproval(baseRun(), baseStep(), dispatchCtx);
+    const action = await dispatchRequestApproval(baseRun(), baseStep(), dispatchCtx, customerRunContextStub);
     if (action.kind !== "pause_approval") throw new Error("expected pause_approval");
     const approvalId = await storage.createApproval({
       runId: RUN_ID,
@@ -492,7 +499,7 @@ describe("resumeApproval — race + idempotency", () => {
 async function primePending() {
   const storage = makeInMemoryApprovalStorage();
   const dispatchCtx = makeDispatchContext({ storage });
-  const action = await dispatchRequestApproval(baseRun(), baseStep(), dispatchCtx);
+  const action = await dispatchRequestApproval(baseRun(), baseStep(), dispatchCtx, customerRunContextStub);
   if (action.kind !== "pause_approval") throw new Error("expected pause_approval");
   const approvalId = await storage.createApproval({
     runId: RUN_ID,

@@ -17,6 +17,7 @@
 //   - On SoulStore throw → `{kind: "fail", reason}`.
 
 import type { ReadStateStep } from "../../agents/validator";
+import type { CustomerRunContext } from "../run-context-customer";
 import type { NextAction, RuntimeContext, StoredRun } from "../types";
 import { splitWorkspacePath } from "../state-access/soul-store";
 import { resolveInterpolationsInString } from "../interpolate";
@@ -25,6 +26,7 @@ export async function dispatchReadState(
   run: StoredRun,
   step: ReadStateStep,
   context: RuntimeContext,
+  _runContext: CustomerRunContext,
 ): Promise<NextAction> {
   if (!context.soulStore) {
     return {

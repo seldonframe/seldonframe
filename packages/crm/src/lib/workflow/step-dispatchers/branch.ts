@@ -20,6 +20,7 @@
 
 import type { BranchStep, Condition } from "../../agents/validator";
 import type { Predicate } from "../../agents/types";
+import type { CustomerRunContext } from "../run-context-customer";
 import type { NextAction, StoredRun } from "../types";
 import { resolveInterpolations } from "../interpolate";
 import {
@@ -50,6 +51,7 @@ export async function dispatchBranch(
   run: StoredRun,
   step: BranchStep,
   ctx: BranchDispatchContext,
+  _runContext: CustomerRunContext,
 ): Promise<NextAction> {
   if (step.condition.type === "predicate") {
     return dispatchPredicateBranch(run, step, step.condition.predicate, ctx);

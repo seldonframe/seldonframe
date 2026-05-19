@@ -20,6 +20,7 @@ import http from "node:http";
 import type { AddressInfo } from "node:net";
 
 import { dispatchBranch } from "../../src/lib/workflow/step-dispatchers/branch";
+import { customerRunContextStub } from "../fixtures/run-context";
 import { fetchWithTimeout } from "../../src/lib/workflow/http";
 import { evaluateExternalState } from "../../src/lib/workflow/external-state-evaluator";
 import {
@@ -202,7 +203,7 @@ describe("integration — branch with predicate condition", () => {
       on_no_match_next: "standard_path",
     };
     const run = mkRun({ captureScope: { tier: "VIP" } });
-    const action = await dispatchBranch(run, step, { resolveSecret: noAuthResolver });
+    const action = await dispatchBranch(run, step, { resolveSecret: noAuthResolver }, customerRunContextStub);
     assert.equal(action.kind, "advance");
     assert.equal((action as { next: string }).next, "vip_path");
   });
@@ -219,7 +220,7 @@ describe("integration — branch with external_state condition", () => {
       operator: "gte",
       expected: 60,
     });
-    const action = await dispatchBranch(mkRun(), step, { resolveSecret: noAuthResolver });
+    const action = await dispatchBranch(mkRun(), step, { resolveSecret: noAuthResolver }, customerRunContextStub);
     assert.equal((action as { next: string }).next, "MATCH");
   });
 
@@ -229,7 +230,7 @@ describe("integration — branch with external_state condition", () => {
       operator: "gte",
       expected: 60,
     });
-    const action = await dispatchBranch(mkRun(), step, { resolveSecret: noAuthResolver });
+    const action = await dispatchBranch(mkRun(), step, { resolveSecret: noAuthResolver }, customerRunContextStub);
     assert.equal((action as { next: string }).next, "NOMATCH");
   });
 });
@@ -244,7 +245,7 @@ describe("integration — timeout behavior", () => {
       timeout_ms: 100,
       timeout_behavior: "fail",
     });
-    const action = await dispatchBranch(mkRun(), step, { resolveSecret: noAuthResolver });
+    const action = await dispatchBranch(mkRun(), step, { resolveSecret: noAuthResolver }, customerRunContextStub);
     assert.equal(action.kind, "fail");
   });
 
@@ -253,7 +254,7 @@ describe("integration — timeout behavior", () => {
       timeout_ms: 100,
       timeout_behavior: "false_on_timeout",
     });
-    const action = await dispatchBranch(mkRun(), step, { resolveSecret: noAuthResolver });
+    const action = await dispatchBranch(mkRun(), step, { resolveSecret: noAuthResolver }, customerRunContextStub);
     assert.equal(action.kind, "advance");
     assert.equal((action as { next: string }).next, "NOMATCH");
   });
@@ -388,7 +389,7 @@ describe("integration — interpolation scope", () => {
       variableScope: { contactId: "c123" },
       captureScope: { booking: { id: "b456" } },
     });
-    const action = await dispatchBranch(run, step, { resolveSecret: noAuthResolver });
+    const action = await dispatchBranch(run, step, { resolveSecret: noAuthResolver }, customerRunContextStub);
     // /weather/clear returns chance=10, which is < 60 → no match.
     assert.equal((action as { next: string }).next, "NOMATCH");
   });
@@ -454,7 +455,7 @@ describe("integration — end-to-end with observability", () => {
     const action = await dispatchBranch(mkRun(), step, {
       resolveSecret: noAuthResolver,
       onEvaluated,
-    });
+    }, customerRunContextStub);
 
     // Branch matched (rainy >= threshold) → advance to MATCH
     assert.equal((action as { next: string }).next, "MATCH");
@@ -497,7 +498,7 @@ describe("integration — end-to-end with observability", () => {
     const action = await dispatchBranch(mkRun(), step, {
       resolveSecret: failingResolver,
       onEvaluated,
-    });
+    }, customerRunContextStub);
     assert.equal(action.kind, "fail");
 
     await new Promise((r) => setImmediate(r));

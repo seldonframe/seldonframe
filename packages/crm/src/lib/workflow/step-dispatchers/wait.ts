@@ -6,12 +6,14 @@
 // — one code path, one index scan.
 
 import type { WaitStep } from "../../agents/validator";
+import type { CustomerRunContext } from "../run-context-customer";
 import type { NextAction, RuntimeContext, StoredRun } from "../types";
 
 export function dispatchWait(
   _run: StoredRun,
   step: WaitStep,
   context: RuntimeContext,
+  _runContext: CustomerRunContext,
 ): NextAction {
   const timeoutAt = new Date(context.now().getTime() + step.seconds * 1000);
   return {

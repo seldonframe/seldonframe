@@ -16,6 +16,7 @@ import type { RuntimeContext, StoredRun } from "../../../src/lib/workflow/types"
 import { notImplementedToolInvoker } from "../../../src/lib/workflow/types";
 import type { AgentSpec } from "../../../src/lib/agents/validator";
 import { InMemoryRuntimeStorage } from "./storage-memory";
+import { customerRunContextStub } from "../../fixtures/run-context";
 
 type EventEmitter = (
   type: string,
@@ -232,6 +233,7 @@ describe("dispatchEmitEvent — happy path", () => {
         next: "next_step",
       },
       context,
+      customerRunContextStub,
     );
 
     assert.equal(result.kind, "advance");
@@ -261,6 +263,7 @@ describe("dispatchEmitEvent — missing emitter wiring", () => {
         next: null,
       },
       context,
+      customerRunContextStub,
     );
     assert.equal(result.kind, "fail");
     if (result.kind !== "fail") return;
@@ -284,6 +287,7 @@ describe("dispatchEmitEvent — emitter throws", () => {
         next: null,
       },
       context,
+      customerRunContextStub,
     );
     assert.equal(result.kind, "fail");
     if (result.kind !== "fail") return;

@@ -13,6 +13,7 @@
 //   - Emitter throws → fail NextAction.
 
 import type { EmitEventStep } from "../../agents/validator";
+import type { CustomerRunContext } from "../run-context-customer";
 import type { NextAction, RuntimeContext, StoredRun } from "../types";
 import { resolveInterpolations } from "../interpolate";
 
@@ -20,6 +21,7 @@ export async function dispatchEmitEvent(
   run: StoredRun,
   step: EmitEventStep,
   context: RuntimeContext,
+  _runContext: CustomerRunContext,
 ): Promise<NextAction> {
   if (!context.emitSeldonEvent) {
     return {

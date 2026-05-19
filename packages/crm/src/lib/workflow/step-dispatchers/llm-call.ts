@@ -37,6 +37,7 @@
 //     Downstream handles empty as the LLM's signal.
 
 import type { LlmCallStep } from "../../agents/validator";
+import type { CustomerRunContext } from "../run-context-customer";
 import type { NextAction, StoredRun } from "../types";
 
 // ---------------------------------------------------------------------
@@ -120,6 +121,7 @@ export async function dispatchLlmCall(
   run: StoredRun,
   step: LlmCallStep,
   ctx: LlmCallDispatchContext,
+  _runContext: CustomerRunContext,
 ): Promise<NextAction> {
   // Resolve interpolations.
   const userPrompt = resolveString(step.user_prompt, run);

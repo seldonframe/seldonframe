@@ -41,6 +41,7 @@ import type {
   RequestApprovalStep,
 } from "../../agents/validator";
 import type { ApprovalStorage, ResolveApprovalInput } from "../approvals/types";
+import type { CustomerRunContext } from "../run-context-customer";
 import type { StoredRun } from "../types";
 
 // ---------------------------------------------------------------------
@@ -133,6 +134,7 @@ export async function dispatchRequestApproval(
   run: StoredRun,
   step: RequestApprovalStep,
   ctx: ApprovalDispatchContext,
+  _runContext: CustomerRunContext,
 ): Promise<DispatchApprovalResult> {
   // Resolve approver to a user record (operator → org.ownerId,
   // client_owner → org.client_contact_user_id, user_id → direct lookup).

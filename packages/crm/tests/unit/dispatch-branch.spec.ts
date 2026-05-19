@@ -17,6 +17,7 @@ import { dispatchBranch } from "../../src/lib/workflow/step-dispatchers/branch";
 import type { BranchStep } from "../../src/lib/agents/validator";
 import type { StoredRun, NextAction } from "../../src/lib/workflow/types";
 import type { SecretResolver } from "../../src/lib/workflow/external-state-evaluator";
+import { customerRunContextStub } from "../fixtures/run-context";
 
 // ---------------------------------------------------------------------
 // Shared fixtures
@@ -111,7 +112,7 @@ describe("dispatchBranch — predicate condition", () => {
       on_no_match_next: "standard_path",
     };
     const run = makeRun({ captureScope: { tier: "VIP" } });
-    const action = (await dispatchBranch(run, step, { resolveSecret: noAuthResolver })) as NextAction;
+    const action = (await dispatchBranch(run, step, { resolveSecret: noAuthResolver }, customerRunContextStub)) as NextAction;
     assert.equal(action.kind, "advance");
     assert.equal((action as { next: string }).next, "vip_path");
   });
@@ -128,7 +129,7 @@ describe("dispatchBranch — predicate condition", () => {
       on_no_match_next: "standard_path",
     };
     const run = makeRun({ captureScope: { tier: "standard" } });
-    const action = await dispatchBranch(run, step, { resolveSecret: noAuthResolver });
+    const action = await dispatchBranch(run, step, { resolveSecret: noAuthResolver }, customerRunContextStub);
     assert.equal(action.kind, "advance");
     assert.equal((action as { next: string }).next, "standard_path");
   });
@@ -145,7 +146,7 @@ describe("dispatchBranch — predicate condition", () => {
       on_no_match_next: "missing",
     };
     const run = makeRun({ variableScope: { contactId: "c123" } });
-    const action = await dispatchBranch(run, step, { resolveSecret: noAuthResolver });
+    const action = await dispatchBranch(run, step, { resolveSecret: noAuthResolver }, customerRunContextStub);
     assert.equal((action as { next: string }).next, "has");
   });
 
@@ -161,7 +162,7 @@ describe("dispatchBranch — predicate condition", () => {
       on_no_match_next: "retry",
     };
     const run = makeRun({ captureScope: { x: "present" } });
-    const action = await dispatchBranch(run, step, { resolveSecret: noAuthResolver });
+    const action = await dispatchBranch(run, step, { resolveSecret: noAuthResolver }, customerRunContextStub);
     assert.equal((action as { next: string | null }).next, null);
   });
 });
@@ -201,7 +202,7 @@ describe("dispatchBranch — external_state success paths", () => {
   test("matched=true → advances to on_match_next", async () => {
     const action = await dispatchBranch(makeRun(), externalStep(), {
       resolveSecret: noAuthResolver,
-    });
+    }, customerRunContextStub);
     assert.equal((action as { next: string }).next, "MATCH");
   });
 
@@ -210,6 +211,7 @@ describe("dispatchBranch — external_state success paths", () => {
       makeRun(),
       externalStep({ expected: "not_active" }),
       { resolveSecret: noAuthResolver },
+      customerRunContextStub,
     );
     assert.equal((action as { next: string }).next, "NOMATCH");
   });
@@ -225,7 +227,7 @@ describe("dispatchBranch — error matrix (timeout_behavior=fail)", () => {
       http: { url: `${baseUrl}/sleep`, method: "GET", timeout_ms: 100 } as HttpConfigTest,
       timeout_behavior: "fail",
     } as Partial<ExternalStateConditionTest>);
-    const action = await dispatchBranch(makeRun(), step, { resolveSecret: noAuthResolver });
+    const action = await dispatchBranch(makeRun(), step, { resolveSecret: noAuthResolver }, customerRunContextStub);
     assert.equal(action.kind, "fail");
     assert.match((action as { reason: string }).reason, /timeout/i);
   });
@@ -234,7 +236,7 @@ describe("dispatchBranch — error matrix (timeout_behavior=fail)", () => {
     const step = externalStep({
       http: { url: "http://127.0.0.1:1", method: "GET", timeout_ms: 1000 } as HttpConfigTest,
     } as Partial<ExternalStateConditionTest>);
-    const action = await dispatchBranch(makeRun(), step, { resolveSecret: noAuthResolver });
+    const action = await dispatchBranch(makeRun(), step, { resolveSecret: noAuthResolver }, customerRunContextStub);
     assert.equal(action.kind, "fail");
   });
 
@@ -242,7 +244,7 @@ describe("dispatchBranch — error matrix (timeout_behavior=fail)", () => {
     const step = externalStep({
       http: { url: `${baseUrl}/404`, method: "GET", timeout_ms: 5000 } as HttpConfigTest,
     } as Partial<ExternalStateConditionTest>);
-    const action = await dispatchBranch(makeRun(), step, { resolveSecret: noAuthResolver });
+    const action = await dispatchBranch(makeRun(), step, { resolveSecret: noAuthResolver }, customerRunContextStub);
     assert.equal(action.kind, "fail");
     assert.match((action as { reason: string }).reason, /404|http/i);
   });
@@ -251,7 +253,7 @@ describe("dispatchBranch — error matrix (timeout_behavior=fail)", () => {
     const step = externalStep({
       http: { url: `${baseUrl}/500`, method: "GET", timeout_ms: 5000 } as HttpConfigTest,
     } as Partial<ExternalStateConditionTest>);
-    const action = await dispatchBranch(makeRun(), step, { resolveSecret: noAuthResolver });
+    const action = await dispatchBranch(makeRun(), step, { resolveSecret: noAuthResolver }, customerRunContextStub);
     assert.equal(action.kind, "fail");
   });
 
@@ -267,7 +269,7 @@ describe("dispatchBranch — error matrix (timeout_behavior=fail)", () => {
       operator: "equals",
       expected: "/echo",
     } as Partial<ExternalStateConditionTest>);
-    const action = await dispatchBranch(makeRun(), step, { resolveSecret: noAuthResolver });
+    const action = await dispatchBranch(makeRun(), step, { resolveSecret: noAuthResolver }, customerRunContextStub);
     assert.equal(action.kind, "advance");
     assert.equal((action as { next: string }).next, "MATCH");
   });
@@ -278,7 +280,7 @@ describe("dispatchBranch — error matrix (timeout_behavior=fail)", () => {
       operator: "equals",
       expected: "anything",
     } as Partial<ExternalStateConditionTest>);
-    const action = await dispatchBranch(makeRun(), step, { resolveSecret: noAuthResolver });
+    const action = await dispatchBranch(makeRun(), step, { resolveSecret: noAuthResolver }, customerRunContextStub);
     assert.equal(action.kind, "advance");
     assert.equal((action as { next: string }).next, "NOMATCH");
   });
@@ -291,7 +293,7 @@ describe("dispatchBranch — error matrix (timeout_behavior=fail)", () => {
     } as Partial<ExternalStateConditionTest>);
     // status="active" is a string; gt comparison with number returns
     // false without throwing — branch advances to NOMATCH.
-    const action = await dispatchBranch(makeRun(), step, { resolveSecret: noAuthResolver });
+    const action = await dispatchBranch(makeRun(), step, { resolveSecret: noAuthResolver }, customerRunContextStub);
     assert.equal(action.kind, "advance");
     assert.equal((action as { next: string }).next, "NOMATCH");
   });
@@ -303,7 +305,7 @@ describe("dispatchBranch — timeout_behavior=false_on_timeout matrix", () => {
       http: { url: `${baseUrl}/sleep`, method: "GET", timeout_ms: 100 } as HttpConfigTest,
       timeout_behavior: "false_on_timeout",
     } as Partial<ExternalStateConditionTest>);
-    const action = await dispatchBranch(makeRun(), step, { resolveSecret: noAuthResolver });
+    const action = await dispatchBranch(makeRun(), step, { resolveSecret: noAuthResolver }, customerRunContextStub);
     assert.equal(action.kind, "advance");
     assert.equal((action as { next: string }).next, "NOMATCH");
   });
@@ -313,7 +315,7 @@ describe("dispatchBranch — timeout_behavior=false_on_timeout matrix", () => {
       http: { url: `${baseUrl}/500`, method: "GET", timeout_ms: 5000 } as HttpConfigTest,
       timeout_behavior: "false_on_timeout",
     } as Partial<ExternalStateConditionTest>);
-    const action = await dispatchBranch(makeRun(), step, { resolveSecret: noAuthResolver });
+    const action = await dispatchBranch(makeRun(), step, { resolveSecret: noAuthResolver }, customerRunContextStub);
     assert.equal(action.kind, "fail");
   });
 
@@ -322,7 +324,7 @@ describe("dispatchBranch — timeout_behavior=false_on_timeout matrix", () => {
       http: { url: "http://127.0.0.1:1", method: "GET", timeout_ms: 1000 } as HttpConfigTest,
       timeout_behavior: "false_on_timeout",
     } as Partial<ExternalStateConditionTest>);
-    const action = await dispatchBranch(makeRun(), step, { resolveSecret: noAuthResolver });
+    const action = await dispatchBranch(makeRun(), step, { resolveSecret: noAuthResolver }, customerRunContextStub);
     assert.equal(action.kind, "fail");
   });
 });
@@ -344,7 +346,7 @@ describe("dispatchBranch — interpolation in external_state HTTP config", () =>
       expected: "id=c123",
     } as Partial<ExternalStateConditionTest>);
     const run = makeRun({ variableScope: { contactId: "c123" } });
-    const action = await dispatchBranch(run, step, { resolveSecret: noAuthResolver });
+    const action = await dispatchBranch(run, step, { resolveSecret: noAuthResolver }, customerRunContextStub);
     assert.equal(action.kind, "advance");
     assert.equal((action as { next: string }).next, "MATCH");
   });
@@ -368,7 +370,7 @@ describe("dispatchBranch — interpolation in external_state HTTP config", () =>
       expected: "req_abc",
     } as Partial<ExternalStateConditionTest>);
     const run = makeRun({ variableScope: { requestId: "req_abc" } });
-    const action = await dispatchBranch(run, step, { resolveSecret: noAuthResolver });
+    const action = await dispatchBranch(run, step, { resolveSecret: noAuthResolver }, customerRunContextStub);
     assert.equal(action.kind, "advance");
     assert.equal((action as { next: string }).next, "MATCH");
   });
@@ -384,7 +386,7 @@ describe("dispatchBranch — onEvaluated observability hook", () => {
     await dispatchBranch(makeRun(), externalStep(), {
       resolveSecret: noAuthResolver,
       onEvaluated: (entry) => calls.push(entry),
-    });
+    }, customerRunContextStub);
     assert.equal(calls.length, 1);
     const entry = calls[0] as {
       conditionType: string;
@@ -413,7 +415,7 @@ describe("dispatchBranch — onEvaluated observability hook", () => {
     await dispatchBranch(makeRun({ captureScope: { x: 1 } }), step, {
       resolveSecret: noAuthResolver,
       onEvaluated: (entry) => calls.push(entry),
-    });
+    }, customerRunContextStub);
     assert.equal(calls.length, 1);
     const entry = calls[0] as { conditionType: string; matched: boolean };
     assert.equal(entry.conditionType, "predicate");

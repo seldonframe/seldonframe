@@ -14,6 +14,7 @@
 // timestamp.
 
 import type { AwaitEventStep } from "../../agents/validator";
+import type { CustomerRunContext } from "../run-context-customer";
 import type { NextAction, RuntimeContext, StoredRun } from "../types";
 
 const DEFAULT_TIMEOUT_MS = 30 * 24 * 60 * 60 * 1000; // G-3 default: 30 days
@@ -87,6 +88,7 @@ export function dispatchAwaitEvent(
   run: StoredRun,
   step: AwaitEventStep,
   context: RuntimeContext,
+  _runContext: CustomerRunContext,
 ): NextAction {
   const timeoutMs = step.timeout ? durationToMs(step.timeout) : DEFAULT_TIMEOUT_MS;
   const timeoutAt = new Date(context.now().getTime() + timeoutMs);

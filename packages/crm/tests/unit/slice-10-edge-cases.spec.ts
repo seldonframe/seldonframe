@@ -31,6 +31,7 @@ import type {
   RequestApprovalStep,
 } from "../../src/lib/agents/validator";
 import type { StoredRun } from "../../src/lib/workflow/types";
+import { customerRunContextStub } from "../fixtures/run-context";
 
 const ORG = "00000000-0000-4000-8000-000000000aaa";
 const RUN_ID = "00000000-0000-4000-8000-000000000bbb";
@@ -354,6 +355,7 @@ describe("Cost-attribution edge — workflow paused for >24h", () => {
       baseRun(),
       baseStep({ timeout: { action: "wait_indefinitely" } }),
       ctx,
+      customerRunContextStub,
     );
     assert.equal(action.kind, "pause_approval");
     if (action.kind !== "pause_approval") return;

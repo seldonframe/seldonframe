@@ -25,6 +25,7 @@ import type {
   RequestApprovalStep,
 } from "../../src/lib/agents/validator";
 import type { StoredRun } from "../../src/lib/workflow/types";
+import { customerRunContextStub } from "../fixtures/run-context";
 
 const ORG = "00000000-0000-4000-8000-000000000aaa";
 const RUN_ID = "00000000-0000-4000-8000-000000000bbb";
@@ -107,7 +108,7 @@ describe("Example 1 — Heat Advisory + operator approval gate", () => {
     const storage = makeInMemoryApprovalStorage();
     const ctx = makeDispatchContext(storage);
     const step = heatAdvisoryWithApprovalSpec.steps[0] as unknown as RequestApprovalStep;
-    const action = await dispatchRequestApproval(baseRun(), step, ctx);
+    const action = await dispatchRequestApproval(baseRun(), step, ctx, customerRunContextStub);
     assert.equal(action.kind, "pause_approval");
     if (action.kind !== "pause_approval") return;
     const approvalId = await storage.createApproval({
@@ -151,7 +152,7 @@ describe("Example 1 — Heat Advisory + operator approval gate", () => {
     const storage = makeInMemoryApprovalStorage();
     const ctx = makeDispatchContext(storage);
     const step = heatAdvisoryWithApprovalSpec.steps[0] as unknown as RequestApprovalStep;
-    const action = await dispatchRequestApproval(baseRun(), step, ctx);
+    const action = await dispatchRequestApproval(baseRun(), step, ctx, customerRunContextStub);
     if (action.kind !== "pause_approval") throw new Error("expected pause_approval");
     const approvalId = await storage.createApproval({
       runId: RUN_ID,
@@ -230,7 +231,7 @@ describe("Example 2 — Post-service follow-up + client_owner magic-link", () =>
         currentStepId: "client_approves_review_ask",
       }),
     };
-    const action = await dispatchRequestApproval(run, step, ctx);
+    const action = await dispatchRequestApproval(run, step, ctx, customerRunContextStub);
     if (action.kind !== "pause_approval") throw new Error("expected pause_approval");
     // Magic-link should be generated for client_owner.
     assert.ok(action.magicLinkToken, "expected a magic-link token");
@@ -282,7 +283,7 @@ describe("Example 2 — Post-service follow-up + client_owner magic-link", () =>
       specSnapshot: postServiceWithApprovalSpec,
       currentStepId: "client_approves_review_ask",
     });
-    const action = await dispatchRequestApproval(run, step, ctx);
+    const action = await dispatchRequestApproval(run, step, ctx, customerRunContextStub);
     if (action.kind !== "pause_approval") throw new Error("expected pause_approval");
     await storage.createApproval({
       runId: run.id,
@@ -371,7 +372,7 @@ describe("Cost-attribution invariant — workflow_run cost continues across appr
     const storage = makeInMemoryApprovalStorage();
     const ctx = makeDispatchContext(storage);
     const step = heatAdvisoryWithApprovalSpec.steps[0] as unknown as RequestApprovalStep;
-    const action = await dispatchRequestApproval(baseRun(), step, ctx);
+    const action = await dispatchRequestApproval(baseRun(), step, ctx, customerRunContextStub);
     if (action.kind !== "pause_approval") throw new Error("expected pause_approval");
     // Verify the action shape carries NO cost field — the cost
     // observability columns on workflow_runs are not touched by the

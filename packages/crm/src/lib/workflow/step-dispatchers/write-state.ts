@@ -24,6 +24,7 @@
 // the {{template}} exactly.
 
 import type { WriteStateStep } from "../../agents/validator";
+import type { CustomerRunContext } from "../run-context-customer";
 import type { NextAction, RuntimeContext, StoredRun } from "../types";
 import { splitWorkspacePath } from "../state-access/soul-store";
 import { isAgentWritablePath } from "../state-access/allowlist";
@@ -33,6 +34,7 @@ export async function dispatchWriteState(
   run: StoredRun,
   step: WriteStateStep,
   context: RuntimeContext,
+  _runContext: CustomerRunContext,
 ): Promise<NextAction> {
   if (!context.soulStore) {
     return {

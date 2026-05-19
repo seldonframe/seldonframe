@@ -20,6 +20,7 @@ import assert from "node:assert/strict";
 import { dispatchBranch } from "../../src/lib/workflow/step-dispatchers/branch";
 import type { BranchStep } from "../../src/lib/agents/validator";
 import type { StoredRun } from "../../src/lib/workflow/types";
+import { customerRunContextStub } from "../fixtures/run-context";
 import { postServiceFollowupArchetype } from "../../src/lib/hvac/archetypes/post-service-followup";
 import { emergencyTriageArchetype } from "../../src/lib/hvac/archetypes/emergency-triage";
 import { heatAdvisoryArchetype } from "../../src/lib/hvac/archetypes/heat-advisory";
@@ -69,7 +70,7 @@ describe("post-service-followup — check_rating branch under realistic reply pa
 
   async function evaluate(replyBody: string): Promise<string | null> {
     const run = makeRun({ captures: { rating_reply: { body: replyBody } } });
-    const result = await dispatchBranch(run, branch, noopCtx);
+    const result = await dispatchBranch(run, branch, noopCtx, customerRunContextStub);
     if (result.kind !== "advance") throw new Error(`expected advance, got ${result.kind}`);
     return result.next ?? null;
   }
@@ -116,7 +117,7 @@ describe("post-service-followup — check_rating branch under realistic reply pa
 
   test("missing capture entirely → log_escalation (no rating_reply at all)", async () => {
     const run = makeRun({});
-    const result = await dispatchBranch(run, branch, noopCtx);
+    const result = await dispatchBranch(run, branch, noopCtx, customerRunContextStub);
     assert.equal(result.kind, "advance");
     if (result.kind === "advance") {
       assert.equal(result.next, "log_escalation");
@@ -135,7 +136,7 @@ describe("emergency-triage — branches under tier + on-call resolution shapes",
     const run = makeRun({
       captures: { customer: { tier } },
     });
-    const result = await dispatchBranch(run, tierBranch, noopCtx);
+    const result = await dispatchBranch(run, tierBranch, noopCtx, customerRunContextStub);
     if (result.kind !== "advance") throw new Error(`expected advance, got ${result.kind}`);
     return result.next ?? null;
   }
@@ -171,7 +172,7 @@ describe("heat-advisory — vulnerable-cohort branch + temperature gate", () => 
     const run = makeRun({
       captures: { vulnerable: { customers: cohort } },
     });
-    const result = await dispatchBranch(run, cohortBranch, noopCtx);
+    const result = await dispatchBranch(run, cohortBranch, noopCtx, customerRunContextStub);
     if (result.kind !== "advance") throw new Error(`expected advance, got ${result.kind}`);
     return result.next ?? null;
   }

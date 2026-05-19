@@ -22,6 +22,7 @@ import {
   isAgentWritablePath,
   _overrideAllowlistForTests,
 } from "../../../src/lib/workflow/state-access/allowlist";
+import { customerRunContextStub } from "../../fixtures/run-context";
 
 function makeContext(soulStore: InMemorySoulStore): RuntimeContext {
   return {
@@ -172,6 +173,7 @@ describe("dispatchWriteState — happy path", () => {
           next: "next_step",
         },
         context,
+        customerRunContextStub,
       );
 
       assert.equal(result.kind, "advance");
@@ -202,6 +204,7 @@ describe("dispatchWriteState — happy path", () => {
           next: null,
         },
         context,
+        customerRunContextStub,
       );
       assert.equal(result.kind, "advance");
       assert.equal(await soulStore.readPath("org-1", "couponCode"), "SAVE20");
@@ -227,6 +230,7 @@ describe("dispatchWriteState — happy path", () => {
           next: null,
         },
         context,
+        customerRunContextStub,
       );
       assert.equal(result.kind, "advance");
       assert.deepEqual(await soulStore.readPath("org-1", "preferences"), {
@@ -257,6 +261,7 @@ describe("dispatchWriteState — defense-in-depth (runtime allowlist check)", ()
           next: null,
         },
         context,
+        customerRunContextStub,
       );
       assert.equal(result.kind, "fail");
       if (result.kind !== "fail") return;
@@ -290,6 +295,7 @@ describe("dispatchWriteState — SoulStore throws", () => {
           next: null,
         },
         context,
+        customerRunContextStub,
       );
       assert.equal(result.kind, "fail");
       if (result.kind !== "fail") return;

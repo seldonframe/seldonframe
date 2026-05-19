@@ -221,7 +221,14 @@ export interface RuntimeStorage {
 
 import type { SoulStore } from "./state-access/soul-store";
 
-export type ToolInvoker = (toolName: string, args: Record<string, unknown>) => Promise<unknown>;
+export type ToolInvoker = (
+  toolName: string,
+  args: Record<string, unknown>,
+  options?: {
+    orgId?: string;
+    runContext?: import("./run-context-customer").CustomerRunContext;
+  },
+) => Promise<unknown>;
 
 export const notImplementedToolInvoker: ToolInvoker = async (toolName) => {
   throw new Error(`ToolInvoker not configured — tool "${toolName}" cannot be invoked. PR 2 ships the runtime; HTTP/local tool transport is a follow-up slice.`);
