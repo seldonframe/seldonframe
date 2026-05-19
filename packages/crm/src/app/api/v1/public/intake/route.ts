@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { contacts, intakeForms, intakeSubmissions, organizations } from "@/db/schema";
@@ -166,6 +166,52 @@ export async function POST(request: Request) {
 
   if (!form || !form.isActive) {
     return NextResponse.json({ error: "Form not found." }, { status: 404 });
+  }
+
+  // 2026-05-19 — server-side dedup against intake_submissions. The
+  // in-memory idempotency cache (above) only catches re-tries that
+  // happen to hit the same lambda instance; two parallel POSTs to
+  // different cold-start instances both pass it. This second guard
+  // queries the durable intake_submissions table for an identical
+  // payload from the last 30s. If found, return deduplicated without
+  // re-emitting form.submitted (which would spawn a second agent run).
+  //
+  // Why intake_submissions instead of a dedicated dedup table: we
+  // already write to it on every submit, so the cost is one extra
+  // SELECT — no schema migration needed. Content match uses
+  // jsonb_strip_nulls equality which ignores key ordering.
+  try {
+    const dupeRows = await db.execute(sql`
+      SELECT id FROM intake_submissions
+      WHERE org_id = ${org.id}
+        AND form_id = ${form.id}
+        AND jsonb_strip_nulls(data) = jsonb_strip_nulls(${JSON.stringify(answers)}::jsonb)
+        AND created_at > NOW() - INTERVAL '30 seconds'
+      LIMIT 1
+    `);
+    const rows = (dupeRows as unknown as { rows?: Array<{ id: string }> }).rows ?? (dupeRows as unknown as Array<{ id: string }>);
+    if (Array.isArray(rows) && rows.length > 0) {
+      console.log(
+        JSON.stringify({
+          event: "public_intake_deduplicated_by_content",
+          org_id: org.id,
+          form_id: form.id,
+          existing_submission_id: rows[0].id,
+        }),
+      );
+      return NextResponse.json({ ok: true, deduplicated: true });
+    }
+  } catch (err) {
+    // Defensive: if the content-dedup SQL fails for any reason,
+    // fall through to the normal insert path. Worst case is the
+    // legacy double-submit behavior — better than blocking ALL
+    // submissions on a broken dedup query.
+    console.warn(
+      JSON.stringify({
+        event: "public_intake_dedup_query_failed",
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    );
   }
 
   // Pull contact-shaped fields out of the answers blob using the form's

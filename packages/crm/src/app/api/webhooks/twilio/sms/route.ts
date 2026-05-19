@@ -318,31 +318,39 @@ export async function POST(request: Request) {
   // chatbot). Without this guard, "tomorrow at 10am" routes to
   // appointment-confirm-sms which then says "no upcoming appointment".
   //
+  // 2026-05-19 — match on PHONE not contactId. Three workspace
+  // contacts can share the same phone number (form upserts by email,
+  // creates a new row per email). findContactByPhone returns the
+  // first match which may be a DIFFERENT row than the one the
+  // conversation wait was registered against. Phone is the stable
+  // identity for inbound SMS, so we look up waits whose matchPredicate
+  // has phone = fromNumber. We keep the contactId path as a fallback
+  // for any legacy waits still using the old shape.
+  //
   // The conversation engine still resumes through the sms.replied
-  // event below — we just block the OTHER paths.
+  // event below — we just block the OTHER paths here.
   let conversationOwnsReply = false;
-  if (contactId) {
-    const activeConversationWait = await db
-      .select({ id: workflowWaits.id })
-      .from(workflowWaits)
-      .innerJoin(workflowRuns, eq(workflowWaits.runId, workflowRuns.id))
-      .where(
-        and(
-          eq(workflowRuns.orgId, orgId),
-          eq(workflowWaits.eventType, "sms.replied"),
-          isNull(workflowWaits.resumedAt),
-          sql`${workflowWaits.matchPredicate}->>'contactId' = ${contactId}`,
-        ),
-      )
-      .limit(1);
-    if (activeConversationWait.length > 0) {
-      conversationOwnsReply = true;
-      logEvent("twilio_webhook_skipped_for_conversation", {
-        org_id: orgId,
-        contact_id: contactId,
-        wait_id: activeConversationWait[0].id,
-      });
-    }
+  const activeConversationWait = await db
+    .select({ id: workflowWaits.id, matchPredicate: workflowWaits.matchPredicate })
+    .from(workflowWaits)
+    .innerJoin(workflowRuns, eq(workflowWaits.runId, workflowRuns.id))
+    .where(
+      and(
+        eq(workflowRuns.orgId, orgId),
+        eq(workflowWaits.eventType, "sms.replied"),
+        isNull(workflowWaits.resumedAt),
+        sql`(${workflowWaits.matchPredicate}->>'phone' = ${fromNumber}${contactId ? sql` OR ${workflowWaits.matchPredicate}->>'contactId' = ${contactId}` : sql``})`,
+      ),
+    )
+    .limit(1);
+  if (activeConversationWait.length > 0) {
+    conversationOwnsReply = true;
+    logEvent("twilio_webhook_skipped_for_conversation", {
+      org_id: orgId,
+      contact_id: contactId,
+      from_phone: fromNumber,
+      wait_id: activeConversationWait[0].id,
+    });
   }
 
   // SLICE 7 PR 1 C6: dispatch matching message-triggered agents.
@@ -370,9 +378,16 @@ export async function POST(request: Request) {
   // listener is the path that resumes a paused conversation step. The
   // chatbot path (handleIncomingTurn below) is gated separately by
   // conversationOwnsReply.
+  //
+  // 2026-05-19 — payload now includes `phone` (E.164 sender) so the
+  // bus's evaluatePredicate matches phone-based wait predicates. The
+  // contactId is whatever findContactByPhone returned, which may be a
+  // sibling contact row sharing the phone — kept for backward compat
+  // and for downstream consumers (analytics, /conversations inbox).
   await emitSeldonEvent("sms.replied", {
     smsMessageId: inbound.id,
     contactId,
+    phone: fromNumber,
     conversationId: null,
   }, { orgId: orgId });
 

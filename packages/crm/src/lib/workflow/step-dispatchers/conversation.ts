@@ -30,6 +30,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { smsMessages, contacts, organizations, workflowRuns } from "@/db/schema";
 import { getAIClient } from "@/lib/ai/client";
+import { toE164 } from "@/lib/sms/providers/interface";
 import type { ConversationStep } from "../../agents/validator";
 import type { NextAction, RuntimeContext, StoredRun } from "../types";
 // 2026-05-18 — V1.1 tool-use: LLM can call check_availability +
@@ -470,6 +471,20 @@ export async function dispatchConversation(
     };
   }
 
+  // 2026-05-19 — match waits on PHONE not contactId. Three contacts
+  // sharing the same +14505161803 caused conversations to silently
+  // never resume: form upserted by email → contact A, Twilio webhook
+  // findContactByPhone → contact B (different row, same phone).
+  // matchPredicate {contactId: A} mismatched payload {contactId: B}
+  // → predicate returned false → wait never resumed → customer's
+  // replies fell through to the chatbot fallback, which then died
+  // when intent classifier said "other" on the address. Phone is the
+  // stable identity here — there's only one phone per inbound SMS.
+  // We also keep contactId in the predicate for runs that include
+  // both keys (defense-in-depth), but the phone match is what
+  // actually carries the wait through.
+  const e164Phone = toE164(phoneNumber) || phoneNumber;
+
   const state = getState(run, step.id);
   const stateKey = STATE_KEY_PREFIX + step.id;
 
@@ -529,7 +544,7 @@ export async function dispatchConversation(
       return {
         kind: "pause_event",
         eventType: "sms.replied",
-        matchPredicate: { contactId: triggerInfo.contactId },
+        matchPredicate: { phone: e164Phone },
         timeoutAt: new Date(Date.now() + NUDGED_TIMEOUT_MINUTES * 60 * 1000),
         onResumeNext: step.id,
         onResumeCapture: "__lastInboundSmsId",
@@ -635,7 +650,7 @@ export async function dispatchConversation(
       return {
         kind: "pause_event",
         eventType: "sms.replied",
-        matchPredicate: { contactId: triggerInfo.contactId },
+        matchPredicate: { phone: e164Phone },
         timeoutAt: new Date(Date.now() + ACTIVE_TIMEOUT_MINUTES * 60 * 1000),
         onResumeNext: step.id,
         onResumeCapture: "__lastInboundSmsId",
@@ -653,7 +668,7 @@ export async function dispatchConversation(
     return {
       kind: "pause_event",
       eventType: "sms.replied",
-      matchPredicate: { contactId: triggerInfo.contactId },
+      matchPredicate: { phone: e164Phone },
       // 2026-05-18 — first wait is the short 6h tier. If the customer
       // doesn't reply, the cron sweeps the wait, resumeWait re-dispatches
       // with __conversationTimeout=true, and the silence-handling
@@ -800,7 +815,7 @@ export async function dispatchConversation(
   return {
     kind: "pause_event",
     eventType: "sms.replied",
-    matchPredicate: { contactId: triggerInfo.contactId },
+    matchPredicate: { phone: e164Phone },
     // Mid-conversation re-pause uses the same 6h active tier as the
     // first pause. Customer just sent something a moment ago, so 6h
     // of further silence is a real signal worth nudging on.
