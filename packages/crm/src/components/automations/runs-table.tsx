@@ -68,6 +68,31 @@ export type RunMessage = {
   createdAt: string;
 };
 
+// 2026-05-19 — Phase 7 Task 7.1. The persisted RunContext snapshot
+// from workflow_runs.context (populated at startRun since Phase 1).
+// Structural shape rather than importing the actual RunContext type
+// so this client component doesn't pull in the server-side context
+// builder chain. Mirrors what loadRunContext() produces.
+export type RunContextSnapshot = {
+  customer: {
+    firstName: string;
+    lastName: string | null;
+    email: string | null;
+    phone: string;
+    contactId: string;
+  };
+  workspace: { name: string; timezone: string };
+  agency: { name: string } | null;
+  clock: { today: string; tomorrow: string; todayWeekday: string };
+  source: {
+    type: string;
+    formId?: string;
+    bookingId?: string;
+    inboundSmsId?: string;
+  };
+  startedAt: string;
+};
+
 export type RunRow = {
   id: string;
   runStatus: string; // raw workflow_runs.status
@@ -75,6 +100,7 @@ export type RunRow = {
   currentStepId: string | null;
   triggerPayload: Record<string, unknown>;
   captureScope: Record<string, unknown>;
+  context: RunContextSnapshot | null;
   createdAt: string;
   updatedAt: string;
   totalTokensInput: number;
@@ -365,6 +391,96 @@ function RunRowItem({
               ))}
             </div>
           ) : null}
+
+          {/* 2026-05-19 — Phase 7 Task 7.1. Identity snapshot at run-
+              start. When a run misbehaves, the operator wants to see
+              IMMEDIATELY: did the agent think the customer was the
+              right person? Did it know today was a Tuesday? Was the
+              workspace TZ set right? Stamped at startRun by Phase 1
+              into workflow_runs.context — we just render it here. */}
+          {row.context ? (
+            <Section title="Run context (identity snapshot at run-start)">
+              <div className="space-y-3">
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Customer</p>
+                  <dl className="grid gap-2 text-xs sm:grid-cols-2">
+                    <Field
+                      label="Name"
+                      value={
+                        `${row.context.customer.firstName}${row.context.customer.lastName ? " " + row.context.customer.lastName : ""}`.trim() ||
+                        "—"
+                      }
+                    />
+                    <Field
+                      label="Phone"
+                      value={<code className="font-mono">{row.context.customer.phone || "—"}</code>}
+                    />
+                    <Field label="Email" value={row.context.customer.email ?? "—"} />
+                    <Field
+                      label="Contact ID"
+                      value={<code className="font-mono text-[10px]">{row.context.customer.contactId}</code>}
+                    />
+                  </dl>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Workspace</p>
+                  <dl className="grid gap-2 text-xs sm:grid-cols-2">
+                    <Field label="Name" value={row.context.workspace.name} />
+                    <Field
+                      label="Timezone"
+                      value={<code className="font-mono">{row.context.workspace.timezone}</code>}
+                    />
+                    {row.context.agency ? (
+                      <Field label="Agency" value={row.context.agency.name} />
+                    ) : null}
+                  </dl>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Clock at run start</p>
+                  <dl className="grid gap-2 text-xs sm:grid-cols-2">
+                    <Field
+                      label="Today"
+                      value={`${row.context.clock.todayWeekday}, ${row.context.clock.today}`}
+                    />
+                    <Field label="Tomorrow" value={row.context.clock.tomorrow} />
+                  </dl>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Source</p>
+                  <dl className="grid gap-2 text-xs sm:grid-cols-2">
+                    <Field
+                      label="Type"
+                      value={<code className="font-mono">{row.context.source.type}</code>}
+                    />
+                    {row.context.source.formId ? (
+                      <Field
+                        label="Form ID"
+                        value={<code className="font-mono text-[10px]">{row.context.source.formId}</code>}
+                      />
+                    ) : null}
+                    {row.context.source.bookingId ? (
+                      <Field
+                        label="Booking ID"
+                        value={<code className="font-mono text-[10px]">{row.context.source.bookingId}</code>}
+                      />
+                    ) : null}
+                    {row.context.source.inboundSmsId ? (
+                      <Field
+                        label="Inbound SMS ID"
+                        value={<code className="font-mono text-[10px]">{row.context.source.inboundSmsId}</code>}
+                      />
+                    ) : null}
+                  </dl>
+                </div>
+              </div>
+            </Section>
+          ) : (
+            <Section title="Run context">
+              <p className="text-xs text-muted-foreground">
+                No context snapshot (legacy run from before 2026-05-19, or context rebuild failed). Re-run the agent to populate.
+              </p>
+            </Section>
+          )}
 
           {/* 2026-05-18 — Messages sent. The top-level question for
               every run is "what did the customer actually receive?"
