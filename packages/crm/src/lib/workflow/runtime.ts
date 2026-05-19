@@ -291,8 +291,25 @@ export async function advanceRun(context: RuntimeContext, runId: string): Promis
       return;
     }
 
+    // Phase 2 Task 2.1 — load the RunContext snapshot once per
+    // dispatcher tick and thread it down. loadRunContext eager-
+    // refreshes the clock so long-paused runs see today's date; the
+    // asCustomerContext call strips the agency field so customer-
+    // facing dispatchers can't accidentally leak agency branding.
+    const { loadRunContext } = await import("./build-run-context");
+    const { asCustomerContext } = await import("./run-context-customer");
+    const fullContext = await loadRunContext({
+      id: run.id,
+      orgId: run.orgId,
+      archetypeId: run.archetypeId,
+      triggerPayload: run.triggerPayload,
+      triggerEventId: run.triggerEventId,
+      context: run.context,
+    });
+    const runContext = asCustomerContext(fullContext);
+
     const dispatchStart = Date.now();
-    const action = await dispatchStep(run, step, context);
+    const action = await dispatchStep(run, step, context, runContext);
     const durationMs = Date.now() - dispatchStart;
     // PR 3 M1: write step-result row for the admin drawer's trace
     // view. Outcome maps from the NextAction kind; errors surface
@@ -514,14 +531,15 @@ async function dispatchStep(
   run: StoredRun,
   step: Step,
   context: RuntimeContext,
+  runContext: import("./run-context-customer").CustomerRunContext,
 ): Promise<NextAction> {
-  if (isWaitStep(step)) return dispatchWait(run, step, context);
-  if (isMcpToolCallStep(step)) return dispatchMcpToolCall(run, step, context);
-  if (isConversationStep(step)) return dispatchConversation(run, step, context);
-  if (isAwaitEventStep(step)) return dispatchAwaitEvent(run, step, context);
-  if (isReadStateStep(step)) return dispatchReadState(run, step, context);
-  if (isWriteStateStep(step)) return dispatchWriteState(run, step, context);
-  if (isEmitEventStep(step)) return dispatchEmitEvent(run, step, context);
+  if (isWaitStep(step)) return dispatchWait(run, step, context, runContext);
+  if (isMcpToolCallStep(step)) return dispatchMcpToolCall(run, step, context, runContext);
+  if (isConversationStep(step)) return dispatchConversation(run, step, context, runContext);
+  if (isAwaitEventStep(step)) return dispatchAwaitEvent(run, step, context, runContext);
+  if (isReadStateStep(step)) return dispatchReadState(run, step, context, runContext);
+  if (isWriteStateStep(step)) return dispatchWriteState(run, step, context, runContext);
+  if (isEmitEventStep(step)) return dispatchEmitEvent(run, step, context, runContext);
   if (isBranchStep(step)) {
     // SLICE 6 PR 2 C3 — wire dispatchBranch into the runtime dispatch
     // switch. Construct BranchDispatchContext from RuntimeContext's
@@ -538,7 +556,7 @@ async function dispatchStep(
           );
         }),
       onEvaluated: context.onBranchEvaluated,
-    });
+    }, runContext);
   }
   if (isRequestApprovalStep(step)) {
     // SLICE 10 PR 1 C4 — request_approval dispatcher. Requires the
@@ -560,7 +578,7 @@ async function dispatchStep(
       resolveApprover: context.resolveApprover,
       getWorkspaceMagicLinkSecret: context.getWorkspaceMagicLinkSecret,
       now: context.now,
-    });
+    }, runContext);
   }
   if (isLlmCallStep(step)) {
     // SLICE 11 C2 — llm_call dispatcher. THE LAUNCH-BLOCKER FIX.
@@ -577,7 +595,7 @@ async function dispatchStep(
       // db). Tests inject their own via context.recordLlmUsage when
       // present; production binds the module helper.
       recordLlmUsage: context.recordLlmUsage ?? recordLlmUsage,
-    });
+    }, runContext);
   }
   return { kind: "fail", reason: `Unsupported step type "${step.type}" at runtime` };
 }
