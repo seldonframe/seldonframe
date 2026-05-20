@@ -33,9 +33,12 @@ export default async function ProposalEditPage({
 
   if (!proposal) notFound();
 
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://app.seldonframe.com";
+  const publicUrl = `${baseUrl}/p/${proposal.signedToken}`;
+
   return (
     <main className="mx-auto max-w-5xl px-6 py-8">
-      <ProposalEditor proposal={proposal} />
+      <ProposalEditor proposal={proposal} publicUrl={publicUrl} />
     </main>
   );
 }

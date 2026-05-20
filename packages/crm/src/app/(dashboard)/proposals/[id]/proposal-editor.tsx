@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import { ProposalStatusPill } from "@/components/proposals/proposal-status-pill";
 import { updateProposalAction, sendProposalAction } from "@/lib/proposals/actions";
 
-export function ProposalEditor({ proposal }: { proposal: Proposal }) {
+export function ProposalEditor({ proposal, publicUrl }: { proposal: Proposal; publicUrl: string }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [priceDollars, setPriceDollars] = useState(
@@ -55,7 +55,6 @@ export function ProposalEditor({ proposal }: { proposal: Proposal }) {
   }
 
   const isDraft = proposal.status === "draft";
-  const isSent = proposal.status !== "draft";
 
   return (
     <div className="space-y-6">
@@ -77,7 +76,7 @@ export function ProposalEditor({ proposal }: { proposal: Proposal }) {
             type="number"
             value={priceDollars}
             onChange={(e) => setPriceDollars(e.target.value)}
-            disabled={isSent}
+            disabled={!isDraft}
             className="max-w-[200px]"
           />
           <span className="text-muted-foreground">/ month</span>
@@ -87,7 +86,7 @@ export function ProposalEditor({ proposal }: { proposal: Proposal }) {
       <section className="rounded-2xl border bg-card/40 p-6 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold">What&apos;s included</h2>
-          {!isSent && (
+          {!!isDraft && (
             <Button variant="outline" size="sm" onClick={addScopeItem}>
               + Add item
             </Button>
@@ -105,9 +104,9 @@ export function ProposalEditor({ proposal }: { proposal: Proposal }) {
                 id={`scope-item-${idx}`}
                 value={item.label}
                 onChange={(e) => updateScopeLabel(idx, e.target.value)}
-                disabled={isSent}
+                disabled={!isDraft}
               />
-              {!isSent && (
+              {!!isDraft && (
                 <Button variant="ghost" size="sm" onClick={() => removeScopeItem(idx)}>
                   ×
                 </Button>
@@ -119,10 +118,11 @@ export function ProposalEditor({ proposal }: { proposal: Proposal }) {
 
       <section className="rounded-2xl border bg-card/40 p-6 space-y-4">
         <h2 className="text-xl font-semibold">Generated proposal preview</h2>
-        {/* FIXME(phase-4): sanitize generated_html before rendering on the
-            public /p/[token] route where the XSS surface actually matters.
-            Here on the operator-only /proposals/[id] page, the operator
-            views their own LLM-generated HTML so the risk is low. */}
+        {/* NOTE(phase-4 done): The public /p/[token] route sanitizes
+            generatedHtml with sanitize-html before rendering (XSS surface).
+            Here on the auth-gated /proposals/[id] page the operator views
+            their own LLM-generated HTML, so sanitization is deliberately
+            skipped — risk is low since only the agency that wrote it can see it. */}
         <div
           className="prose max-w-none rounded-xl border bg-background p-6"
           dangerouslySetInnerHTML={{ __html: proposal.generatedHtml }}
@@ -142,9 +142,9 @@ export function ProposalEditor({ proposal }: { proposal: Proposal }) {
             </Button>
           </>
         )}
-        {isSent && (
+        {!isDraft && (
           <a
-            href={`/p/${proposal.signedToken}`}
+            href={publicUrl}
             target="_blank"
             rel="noopener noreferrer"
             className={cn(buttonVariants({ variant: "outline" }))}

@@ -79,6 +79,7 @@ export async function updateProposalAction(input: {
     .where(eq(proposals.id, input.id));
 
   revalidatePath(`/proposals/${input.id}`);
+  revalidatePath("/proposals");
   return { ok: true };
 }
 
