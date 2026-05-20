@@ -110,7 +110,16 @@ const EMPTY_PROGRESS: Record<ProgressKey, boolean> = {
   demo_seeded: false,
 };
 
-export function ClientsNewForm() {
+type ClientsNewFormProps = {
+  // "proposal" → compact mode: suppresses agency onboarding chrome (hero,
+  // subtext, skip link) so the flow reads as workspace activation, not
+  // generic onboarding. All other values (including "default") render the
+  // full form.
+  source?: string;
+};
+
+export function ClientsNewForm({ source = "default" }: ClientsNewFormProps) {
+  const isProposalSource = source === "proposal";
   // Navigation: use window.location.assign on the "done" event instead of
   // useRouter() so the form renders cleanly in jsdom tests (App-router
   // Provider isn't mounted in unit tests). The dashboard URL is a same-origin
@@ -248,12 +257,27 @@ export function ClientsNewForm() {
       <section>
         {/* design-critique: two-tone hero pulls "in 60 seconds" into the
             headline so the speed promise is the first thing the eye lands on,
-            not buried in body copy. */}
-        <h1 className="text-4xl font-semibold tracking-tight">
-          {COPY.hero}{" "}
-          <span className="text-muted-foreground">{COPY.heroAccent}</span>
-        </h1>
-        <p className="mt-2 text-sm text-muted-foreground">{COPY.subtext}</p>
+            not buried in body copy.
+            Phase 8: suppress hero chrome when source==="proposal" — the
+            prospect has already accepted; this screen is workspace activation,
+            not onboarding. */}
+        {!isProposalSource && (
+          <>
+            <h1 className="text-4xl font-semibold tracking-tight">
+              {COPY.hero}{" "}
+              <span className="text-muted-foreground">{COPY.heroAccent}</span>
+            </h1>
+            <p className="mt-2 text-sm text-muted-foreground">{COPY.subtext}</p>
+          </>
+        )}
+        {isProposalSource && (
+          <>
+            <h1 className="text-2xl font-semibold tracking-tight">Activating your workspace</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Paste the client&apos;s website URL to build the workspace now.
+            </p>
+          </>
+        )}
 
         {!needsByok ? (
           <form
@@ -287,15 +311,19 @@ export function ClientsNewForm() {
                 affordance so it stays available without competing with the
                 primary path. inline-block + py-2 gives a 36px+ touch zone.
                 a11y: solid text-muted-foreground (no /80) so contrast stays
-                >=4.5:1 in both light and dark themes. */}
-            <p className="text-right">
-              <Link
-                href="/dashboard"
-                className="inline-block py-2 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
-              >
-                {COPY.secondary}
-              </Link>
-            </p>
+                >=4.5:1 in both light and dark themes.
+                Phase 8: suppress in proposal mode — skipping workspace
+                activation would orphan the accepted proposal. */}
+            {!isProposalSource && (
+              <p className="text-right">
+                <Link
+                  href="/dashboard"
+                  className="inline-block py-2 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                >
+                  {COPY.secondary}
+                </Link>
+              </p>
+            )}
           </form>
         ) : (
           // design-critique: animate-in fade so the BYOK swap doesn't feel
