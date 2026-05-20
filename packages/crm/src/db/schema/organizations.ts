@@ -95,6 +95,12 @@ export const organizations = pgTable("organizations", {
   // convention of `plan`, `timezone`, `soulCompletedAt`. Default false
   // so existing workspaces never accidentally route to sandbox.
   testMode: boolean("test_mode").notNull().default(false),
+  // 2026-05-19 — Proposal Builder. When true, this workspace was
+  // provisioned as part of a proposal pitch and is gated from billing
+  // + agent runs until the prospect accepts and the checkout webhook
+  // flips this back to false. Default false so all existing workspaces
+  // are unaffected. Set/unset via lib/proposals/activate-workspace.ts.
+  previewMode: boolean("preview_mode").notNull().default(false),
   // v1.17.0 — white-label hierarchy. When set, the workspace inherits
   // its chrome (logo, colors, sender, support links) from the parent
   // agency. NULL = default SeldonFrame branding (existing behavior).
