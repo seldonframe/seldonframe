@@ -8,15 +8,29 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 
+type SupportedCountry = "US" | "CA" | "GB" | "AU";
+
+const COUNTRY_LABELS: Record<SupportedCountry, string> = {
+  US: "🇺🇸 United States",
+  CA: "🇨🇦 Canada",
+  GB: "🇬🇧 United Kingdom",
+  AU: "🇦🇺 Australia",
+};
+
 export function StripeConnectEmptyState() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [country, setCountry] = useState<SupportedCountry>("US");
 
   async function handleConnect() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/v1/proposals/connect/start", { method: "POST" });
+      const res = await fetch("/api/v1/proposals/connect/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ country }),
+      });
       let data: { url?: string; error?: string; message?: string; help?: string };
       try {
         data = await res.json();
@@ -42,8 +56,26 @@ export function StripeConnectEmptyState() {
         Generate branded proposals with a live workspace included. Prospects pay you directly via
         Stripe — SeldonFrame takes 0%.
       </p>
+      <div className="flex flex-col items-center gap-1">
+        <label htmlFor="stripe-connect-country" className="text-sm font-medium text-foreground">
+          Country
+        </label>
+        <select
+          id="stripe-connect-country"
+          value={country}
+          onChange={(e) => setCountry(e.target.value as SupportedCountry)}
+          disabled={loading}
+          className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 min-w-48"
+        >
+          {(Object.entries(COUNTRY_LABELS) as [SupportedCountry, string][]).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </div>
       <Button onClick={handleConnect} disabled={loading} size="lg">
-        {loading ? "Opening Stripe..." : "Connect Stripe to start sending proposals"}
+        {loading ? "Opening Stripe..." : `Connect Stripe (${COUNTRY_LABELS[country].replace(/^\S+\s/, "")})`}
       </Button>
       {error && <p className="text-sm text-destructive">{error}</p>}
     </section>

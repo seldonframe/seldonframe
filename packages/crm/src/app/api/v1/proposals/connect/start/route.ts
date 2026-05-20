@@ -72,6 +72,12 @@ export async function POST(request: Request) {
   const baseUrl =
     process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://app.seldonframe.com";
 
+  // Parse country from POST body — whitelist guards arbitrary strings.
+  const body = await request.json().catch(() => ({} as Record<string, unknown>));
+  const SUPPORTED_COUNTRIES = new Set(["US", "CA", "GB", "AU"]);
+  const requestedCountry = typeof body.country === "string" ? body.country.toUpperCase() : "US";
+  const country = SUPPORTED_COUNTRIES.has(requestedCountry) ? requestedCountry : "US";
+
   // Check ?reset=1 — operator explicitly wants a fresh account.
   const { searchParams } = new URL(request.url);
   const forceReset = searchParams.get("reset") === "1";
@@ -121,9 +127,19 @@ export async function POST(request: Request) {
     }
 
     if (existing && !isTerminallyRejected(existing)) {
-      // Account exists and is not permanently rejected → reuse it.
-      accountId = existing.id;
-      reused = true;
+      // Country mismatch — existing account is for the wrong country.
+      // Fall through to create-new so the operator gets a fresh,
+      // country-correct account (e.g., old US acct, now wants CA).
+      if (existing.country && existing.country.toUpperCase() !== country) {
+        console.info(
+          "[proposals/connect/start] Country mismatch — creating fresh account",
+          { existingCountry: existing.country, requestedCountry: country, orgId: user.orgId },
+        );
+      } else {
+        // Account exists, not rejected, country matches → reuse it.
+        accountId = existing.id;
+        reused = true;
+      }
     }
     // else: fall through to create-new below.
   }
@@ -136,6 +152,7 @@ export async function POST(request: Request) {
         buildConnectAccountParams({
           agencyName: user.agencyProfile.name ?? user.name,
           agencyEmail: user.email,
+          country,
         }),
       );
     } catch (err) {
