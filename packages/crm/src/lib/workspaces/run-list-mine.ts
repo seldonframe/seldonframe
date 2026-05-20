@@ -87,6 +87,8 @@ export async function runListMineWorkspaces(args: {
       contactCount: org.contactCount,
       lastActivityAt: rollup?.lastActivityAt ?? null,
       newLeadsThisWeek: rollup?.newLeadsThisWeek ?? 0,
+      bookingsThisWeek: rollup?.bookingsThisWeek ?? 0,
+      originalSiteUrl: rollup?.originalSiteUrl ?? null,
       workspaceBaseDomain: deps.workspaceBaseDomain,
       now: deps.now,
     });

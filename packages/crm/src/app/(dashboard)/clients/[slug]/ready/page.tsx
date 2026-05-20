@@ -36,7 +36,7 @@ import { ArrowRight, ExternalLink, Sparkles } from "lucide-react";
 
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { agents, bookings, intakeForms, organizations, orgMembers } from "@/db/schema";
+import { agents, bookings, intakeForms, organizations, orgMembers, soulSources } from "@/db/schema";
 import { buildWorkspaceUrls } from "@/lib/billing/anonymous-workspace";
 // 2026-05-17 — Invite SMB owner card. Wraps the existing
 // /portal/<slug>/login magic-link flow so the agency operator can
@@ -158,6 +158,22 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
     .from(agents)
     .where(and(eq(agents.orgId, workspace.id), eq(agents.archetype, "website-chatbot")))
     .limit(1);
+
+  // 2026-05-19 — Original client URL lookup. Operators want the "Visit
+  // public site" CTA to open the ACTUAL brand website (the URL the
+  // operator pasted into /clients/new — e.g. https://roofsbyshiloh.com),
+  // not the auto-generated SeldonFrame subdomain. The subdomain is a
+  // useful dev preview but it's not the customer-facing brand. We pull
+  // the first `type='url'` soul_sources row (seeded by
+  // seedSoulWikiSourceUrl / seedSoulWikiFromOnboardingWebsite when the
+  // workspace was created) and fall back to the subdomain when no
+  // original URL is on file.
+  const [originalUrlRow] = await db
+    .select({ sourceUrl: soulSources.sourceUrl })
+    .from(soulSources)
+    .where(and(eq(soulSources.orgId, workspace.id), eq(soulSources.type, "url")))
+    .limit(1);
+  const originalSiteUrl = originalUrlRow?.sourceUrl ?? null;
 
   // Public deep links use the canonical /book/<org>/<slug> +
   // /forms/<org>/<slug> patterns on the app host (those routes exist in
@@ -343,12 +359,12 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
               <ArrowRight className="size-4" aria-hidden="true" />
             </Link>
             <a
-              href={urls.home}
+              href={originalSiteUrl ?? urls.home}
               target="_blank"
-              rel="noreferrer"
+              rel="noreferrer noopener"
               className="crm-pressable inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-border bg-card/60 px-5 text-sm font-medium text-foreground transition-[background-color,transform] duration-150 ease-out hover:bg-card"
             >
-              Visit public site
+              {originalSiteUrl ? "Visit public site" : "Visit preview site"}
               <ExternalLink className="size-4" aria-hidden="true" />
             </a>
           </div>
@@ -487,8 +503,8 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
                 detail: (
                   <>
                     Open{" "}
-                    <a href={urls.home} target="_blank" rel="noreferrer" className="font-medium text-primary underline underline-offset-2">
-                      the public site
+                    <a href={originalSiteUrl ?? urls.home} target="_blank" rel="noreferrer noopener" className="font-medium text-primary underline underline-offset-2">
+                      {originalSiteUrl ? "the public site" : "the preview site"}
                     </a>{" "}
                     and ask the chatbot a question like &ldquo;what are your hours?&rdquo;
                     or &ldquo;do you do emergency calls?&rdquo;

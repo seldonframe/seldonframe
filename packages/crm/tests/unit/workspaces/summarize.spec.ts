@@ -22,6 +22,8 @@ describe("summarizeWorkspace — base shape", () => {
       contactCount: 3,
       lastActivityAt: NOW,
       newLeadsThisWeek: 2,
+      bookingsThisWeek: 1,
+      originalSiteUrl: null,
       workspaceBaseDomain: "seldonframe.app",
       now: NOW,
     });
@@ -33,6 +35,25 @@ describe("summarizeWorkspace — base shape", () => {
     assert.equal(summary.dashboardUrl, "/dashboard?workspace=org-1");
     assert.equal(summary.contactCount, 3);
     assert.equal(summary.newLeadsThisWeek, 2);
+    assert.equal(summary.bookingsThisWeek, 1);
+    assert.equal(summary.originalSiteUrl, null);
+  });
+
+  test("publishes originalSiteUrl when present (operator pasted a URL)", () => {
+    const summary = summarizeWorkspace({
+      id: "org-1",
+      slug: "acme",
+      name: "Acme Co",
+      soulCompletedAt: NOW,
+      contactCount: 0,
+      lastActivityAt: NOW,
+      newLeadsThisWeek: 0,
+      bookingsThisWeek: 0,
+      originalSiteUrl: "https://roofsbyshiloh.com",
+      workspaceBaseDomain: "seldonframe.app",
+      now: NOW,
+    });
+    assert.equal(summary.originalSiteUrl, "https://roofsbyshiloh.com");
   });
 });
 
@@ -46,6 +67,8 @@ describe("summarizeWorkspace — status", () => {
       contactCount: 1,
       lastActivityAt: new Date("2026-05-10T00:00:00.000Z"),
       newLeadsThisWeek: 0,
+      bookingsThisWeek: 0,
+      originalSiteUrl: null,
       workspaceBaseDomain: "seldonframe.app",
       now: NOW,
     });
@@ -61,6 +84,8 @@ describe("summarizeWorkspace — status", () => {
       contactCount: 0,
       lastActivityAt: null,
       newLeadsThisWeek: 0,
+      bookingsThisWeek: 0,
+      originalSiteUrl: null,
       workspaceBaseDomain: "seldonframe.app",
       now: NOW,
     });
@@ -77,6 +102,8 @@ describe("summarizeWorkspace — status", () => {
       contactCount: 5,
       lastActivityAt: oldActivity,
       newLeadsThisWeek: 0,
+      bookingsThisWeek: 0,
+      originalSiteUrl: null,
       workspaceBaseDomain: "seldonframe.app",
       now: NOW,
     });
@@ -94,6 +121,8 @@ describe("summarizeWorkspace — lastActivityAt formatting", () => {
       contactCount: 0,
       lastActivityAt: NOW,
       newLeadsThisWeek: 0,
+      bookingsThisWeek: 0,
+      originalSiteUrl: null,
       workspaceBaseDomain: "seldonframe.app",
       now: NOW,
     });
@@ -109,6 +138,8 @@ describe("summarizeWorkspace — lastActivityAt formatting", () => {
       contactCount: 0,
       lastActivityAt: null,
       newLeadsThisWeek: 0,
+      bookingsThisWeek: 0,
+      originalSiteUrl: null,
       workspaceBaseDomain: "seldonframe.app",
       now: NOW,
     });

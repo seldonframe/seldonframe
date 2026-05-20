@@ -16,7 +16,7 @@
 
 export const CLIENTS_COPY = {
   pageHeading: "Client workspaces",
-  pageSubheading: "Every client you've built for, with live activity at a glance.",
+  pageSubheading: "Every client you've built for. Spin up a new one in 60 seconds.",
   usageBadge: {
     underLimit: (used: number, limit: number) => `${used} / ${limit} workspaces`,
     atLimit: "Limit reached",
@@ -24,16 +24,17 @@ export const CLIENTS_COPY = {
   },
   primaryCta: "New client workspace",
   emptyState: {
-    heading: "No client workspaces yet",
-    body: "Paste a client's website URL and SeldonFrame builds their CRM, booking page, and AI agents in minutes.",
+    heading: "Spin up your first client workspace",
+    body: "Paste a client's website URL and SeldonFrame builds their CRM, booking page, intake form, and AI chatbot in about 60 seconds.",
     cta: "Build your first client",
-    illustrationAlt: "Empty client folder icon",
+    illustrationAlt: "Empty client workspaces — sparkle icon",
   },
   cardStatus: {
     active: "Active",
     setup: "In setup",
     paused: "Paused",
   },
+  formatActiveCount: (n: number) => (n === 1 ? "1 active" : `${n} active`),
   formatContactCount: (n: number) =>
     n === 1 ? "1 contact" : `${n} contacts`,
   activity: {
@@ -41,11 +42,22 @@ export const CLIENTS_COPY = {
     yesterday: "Yesterday",
   },
   formatLeadsThisWeek: (n: number) => {
-    if (n === 0) return "0 leads this week";
-    if (n === 1) return "1 new lead this week";
-    return `${n} new leads this week`;
+    if (n === 0) return "0 new leads";
+    if (n === 1) return "1 new lead";
+    return `${n} new leads`;
+  },
+  formatBookingsThisWeek: (n: number) => {
+    if (n === 0) return "0 bookings";
+    if (n === 1) return "1 booking";
+    return `${n} bookings`;
   },
   cardCta: "Open dashboard",
+  cardStatLabels: {
+    contacts: "Contacts",
+    leads: "Leads this week",
+    bookings: "Bookings this week",
+    activity: "Last activity",
+  },
   // Pairs with the UpgradeModal trigger; spells out "client workspaces"
   // explicitly to avoid ambiguity with CRM contacts.
   atLimitTooltip: "Upgrade your plan to add more client workspaces",

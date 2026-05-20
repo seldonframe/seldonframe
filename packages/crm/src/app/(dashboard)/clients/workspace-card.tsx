@@ -1,24 +1,30 @@
 // packages/crm/src/app/(dashboard)/clients/workspace-card.tsx
 //
-// Renders a single workspace tile inside the /clients grid. Pure
-// presentational component over WorkspaceSummary — no business logic,
-// no fetches. Status-color + activity-time formatting are the only
-// derivations.
+// 2026-05-19 — Redesigned to match the visual language of
+// /clients/[slug]/ready. The previous incarnation used the generic
+// Card primitive with a tight 2-stat layout; the redesign promotes
+// each workspace tile to a richer "what you built" card that mirrors
+// the ready page's deliverable grid:
 //
-// Design-system audit (Task 14):
-//   Shell    → <Card> with hover/focus ring overlay
-//   Title    → <CardTitle>
-//   URL      → native <a target="_blank"> (no external-link primitive)
-//   Status   → <Badge variant=outline> w/ semantic-token className for
-//              active/setup; variant=secondary for paused
-//   Stats    → native <dl><dt><dd> with bg-card/70 tiles
-//   CTA      → <Button variant=outline size=sm> via render={<Link/>}
+//   • Workspace name + ORIGINAL brand URL prominently displayed under
+//     the name (this is the brand the operator built FOR — the
+//     auto-generated subdomain falls back to as "preview" when no
+//     original URL is on file).
+//   • Status pill using the same emerald/amber/secondary palette as
+//     the ready page's audience chips.
+//   • 2x2 mini-stat grid (contacts / leads this week / bookings this
+//     week / last activity) — same `rounded-xl border bg-card/70`
+//     tiles the ready page uses for its "what you built" cards.
+//   • "Open dashboard" as the primary action at the bottom, paired
+//     with an "Open public site" secondary link when there's an
+//     original URL on file.
+//   • rounded-2xl + border-border/80 + bg-card/80 + p-5 shell to
+//     match the ready page's container language.
 
 "use client";
 
 import Link from "next/link";
-import { buttonVariants } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ArrowRight, ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type { WorkspaceSummary, WorkspaceStatus } from "@/lib/workspaces/summarize";
 import { CLIENTS_COPY } from "./copy";
@@ -43,9 +49,9 @@ function formatRelativeTime(iso: string | null): string {
   }).format(new Date(iso));
 }
 
-// Audit flag: this className override is the workaround for the missing
-// `positive` + `caution` Badge variants. Promote to badge.tsx variants
-// if any future surface uses these tokens.
+// Status pill colors — emerald/amber match the ready page's audience
+// chips so the operator pattern-matches "active = green = good" across
+// surfaces. Paused stays neutral (uses Badge variant="secondary").
 function statusBadgeClassName(status: WorkspaceStatus): string | undefined {
   switch (status) {
     case "active":
@@ -61,107 +67,125 @@ function statusBadgeVariant(status: WorkspaceStatus): "outline" | "secondary" {
   return status === "paused" ? "secondary" : "outline";
 }
 
+/** Strip protocol from a URL so it renders compactly under the name. */
+function displayHost(url: string): string {
+  try {
+    return new URL(url).host.replace(/^www\./, "");
+  } catch {
+    return url.replace(/^https?:\/\//, "").replace(/^www\./, "");
+  }
+}
+
 type WorkspaceCardProps = {
   workspace: WorkspaceSummary;
 };
 
 export function WorkspaceCard({ workspace }: WorkspaceCardProps) {
   const statusLabel = CLIENTS_COPY.cardStatus[workspace.status];
-  const publicHost = workspace.publicUrl.replace(/^https?:\/\//, "");
+  // Prefer the brand URL (the URL the operator pasted into /clients/new)
+  // — that's what the operator built FOR. Fall back to the
+  // SeldonFrame subdomain when no brand URL is on file (workspaces
+  // created via Google paste, manual setup, etc.).
+  const brandHref = workspace.originalSiteUrl ?? workspace.publicUrl;
+  const brandLabel = displayHost(brandHref);
+  const brandIsOriginal = workspace.originalSiteUrl != null;
 
   return (
-    // a11y-review: wrap Card in <article> so screen-reader landmark
-    // navigation announces "article" framing for each workspace
-    // (Card primitive is hardcoded to <div>; outside wrapper is the
-    // simpler fix).
-    //
-    // design-critique: dropped hover ring — the card isn't a single
-    // clickable target (URL + CTA are independent links), so a
-    // card-level hover affordance is misleading. focus-within ring
-    // stays since it reflects a real focus state on a child element.
-    <article aria-labelledby={`workspace-${workspace.id}-title`}>
-      <Card
-        data-slot="workspace-card"
-        className="transition-shadow focus-within:ring-foreground/30"
-      >
-        <CardHeader>
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <CardTitle
-                id={`workspace-${workspace.id}-title`}
-                className="truncate"
-              >
-                {workspace.name}
-              </CardTitle>
-              {/* a11y-review: aria-label disambiguates the SR rotor
-                  label so users hear "{host} link, opens in new tab"
-                  instead of just "{host}". The visible text stays as
-                  the bare host so the design isn't cluttered. */}
-              <a
-                href={workspace.publicUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={`${publicHost} — opens in a new tab`}
-                className="mt-1 inline-block max-w-full truncate text-xs text-muted-foreground hover:text-foreground"
-              >
-                {publicHost}
-              </a>
-            </div>
-            <Badge
-              variant={statusBadgeVariant(workspace.status)}
-              className={statusBadgeClassName(workspace.status)}
-            >
-              {statusLabel}
-            </Badge>
-          </div>
-        </CardHeader>
-
-      <CardContent className="flex flex-1 flex-col gap-3">
-        <dl className="grid grid-cols-2 gap-3 text-sm">
-          <div className="rounded-xl border border-border/70 bg-card/70 p-3">
-            <dt className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
-              Contacts
-            </dt>
-            <dd className="mt-1 text-base font-semibold text-foreground">
-              {CLIENTS_COPY.formatContactCount(workspace.contactCount)}
-            </dd>
-          </div>
-          <div className="rounded-xl border border-border/70 bg-card/70 p-3">
-            <dt className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
-              Activity
-            </dt>
-            <dd className="mt-1 text-sm font-medium text-foreground">
-              {formatRelativeTime(workspace.lastActivityAt)}
-            </dd>
-          </div>
-        </dl>
-
-        {/* design-critique: promoted from orphaned body text to a
-            bullet-prefixed metadata strip. The dot anchors the row
-            visually so it doesn't get skipped between the stat tiles
-            and the CTA, but stays lighter than either neighbor. */}
-        <p className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span
-            aria-hidden="true"
-            className="inline-block size-1.5 shrink-0 rounded-full bg-muted-foreground/60"
-          />
-          {CLIENTS_COPY.formatLeadsThisWeek(workspace.newLeadsThisWeek)}
-        </p>
-
-        <div className="mt-auto pt-2">
-          {/* 2026-05-17 — replaced `<Button render={<Link/>} nativeButton={false}>`
-              with a plain styled <Link>. base-ui's render-prop pattern was
-              swallowing clicks on Next.js Link (renders fine, no navigation).
-              See create-client-cta.tsx for the same fix. */}
-          <Link
-            href={workspace.dashboardUrl}
-            className={buttonVariants({ variant: "outline", size: "sm" })}
+    // a11y-review: wrap in <article> so screen-reader landmark
+    // navigation announces "article" framing for each workspace tile.
+    <article
+      aria-labelledby={`workspace-${workspace.id}-title`}
+      data-slot="workspace-card"
+      className="group flex h-full flex-col gap-4 rounded-2xl border border-border/80 bg-card/80 p-5 shadow-(--shadow-sm) transition-shadow duration-200 ease-out hover:shadow-(--shadow-card-hover) focus-within:ring-2 focus-within:ring-foreground/20"
+    >
+      {/* ============== HEADER ============== */}
+      <header className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <h2
+            id={`workspace-${workspace.id}-title`}
+            className="truncate text-lg font-semibold leading-tight text-foreground"
           >
-            {CLIENTS_COPY.cardCta}
-          </Link>
+            {workspace.name}
+          </h2>
+          <a
+            href={brandHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={`${brandLabel} — opens in a new tab`}
+            className="inline-flex max-w-full items-center gap-1 truncate text-xs text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <span className="truncate">{brandLabel}</span>
+            <ExternalLink className="size-3 shrink-0" aria-hidden="true" />
+          </a>
         </div>
-      </CardContent>
-      </Card>
+        <Badge
+          variant={statusBadgeVariant(workspace.status)}
+          className={statusBadgeClassName(workspace.status)}
+        >
+          {statusLabel}
+        </Badge>
+      </header>
+
+      {/* ============== 2x2 STATS GRID ============== */}
+      {/* Mirrors the ready page's "what you built in 60 seconds" card
+          tiles — same border + bg + label-on-top layout so the two
+          pages feel like one design system. */}
+      <dl className="grid grid-cols-2 gap-2.5">
+        <div className="rounded-xl border border-border/70 bg-card/70 p-3">
+          <dt className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            {CLIENTS_COPY.cardStatLabels.contacts}
+          </dt>
+          <dd className="mt-1 text-base font-semibold text-foreground">
+            {workspace.contactCount}
+          </dd>
+        </div>
+        <div className="rounded-xl border border-border/70 bg-card/70 p-3">
+          <dt className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            {CLIENTS_COPY.cardStatLabels.leads}
+          </dt>
+          <dd className="mt-1 text-base font-semibold text-foreground">
+            {workspace.newLeadsThisWeek}
+          </dd>
+        </div>
+        <div className="rounded-xl border border-border/70 bg-card/70 p-3">
+          <dt className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            {CLIENTS_COPY.cardStatLabels.bookings}
+          </dt>
+          <dd className="mt-1 text-base font-semibold text-foreground">
+            {workspace.bookingsThisWeek}
+          </dd>
+        </div>
+        <div className="rounded-xl border border-border/70 bg-card/70 p-3">
+          <dt className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            {CLIENTS_COPY.cardStatLabels.activity}
+          </dt>
+          <dd className="mt-1 truncate text-sm font-medium text-foreground">
+            {formatRelativeTime(workspace.lastActivityAt)}
+          </dd>
+        </div>
+      </dl>
+
+      {/* ============== ACTIONS ============== */}
+      <div className="mt-auto flex flex-wrap items-center gap-2 pt-1">
+        <Link
+          href={workspace.dashboardUrl}
+          className="crm-pressable inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground shadow-(--shadow-sm) transition-[background-color,transform] duration-150 ease-out hover:bg-primary/90 sm:flex-none sm:px-4"
+        >
+          {CLIENTS_COPY.cardCta}
+          <ArrowRight className="size-3.5" aria-hidden="true" />
+        </Link>
+        {brandIsOriginal ? (
+          <a
+            href={brandHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="crm-pressable inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-border bg-background/40 px-3 text-xs font-medium text-muted-foreground transition-[background-color,color,transform] duration-150 ease-out hover:bg-background/80 hover:text-foreground"
+          >
+            Visit site
+            <ExternalLink className="size-3.5" aria-hidden="true" />
+          </a>
+        ) : null}
+      </div>
     </article>
   );
 }

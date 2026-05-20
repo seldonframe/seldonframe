@@ -31,6 +31,8 @@ function baseDeps(overrides: Partial<Deps> = {}): Deps {
       soulCompletedAt: null,
       lastActivityAt: null,
       newLeadsThisWeek: 0,
+      bookingsThisWeek: 0,
+      originalSiteUrl: null,
     }),
     workspaceBaseDomain: "seldonframe.app",
     now: new Date("2026-05-16T12:00:00.000Z"),
@@ -132,6 +134,8 @@ describe("runListMineWorkspaces — populated user", () => {
         soulCompletedAt: new Date("2026-04-01T00:00:00.000Z"),
         lastActivityAt: new Date("2026-05-15T00:00:00.000Z"),
         newLeadsThisWeek: 2,
+        bookingsThisWeek: 1,
+        originalSiteUrl: "https://acme.example",
       }),
     });
 
@@ -184,6 +188,8 @@ describe("runListMineWorkspaces — populated user", () => {
             soulCompletedAt: new Date("2026-04-01T00:00:00.000Z"),
             lastActivityAt: new Date("2026-05-10T00:00:00.000Z"),
             newLeadsThisWeek: 7,
+            bookingsThisWeek: 3,
+            originalSiteUrl: "https://alpha.example",
           };
         }
         // org-b: never finished onboarding → "setup"
@@ -192,6 +198,8 @@ describe("runListMineWorkspaces — populated user", () => {
           soulCompletedAt: null,
           lastActivityAt: null,
           newLeadsThisWeek: 0,
+          bookingsThisWeek: 0,
+          originalSiteUrl: null,
         };
       },
     });

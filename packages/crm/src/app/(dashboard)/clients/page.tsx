@@ -7,24 +7,30 @@
 // don't reach this page in the routing tree — the dashboard layout
 // gates them; this server component assumes a real user session.
 //
+// 2026-05-19 — redesign pass. The previous incarnation paired the
+// generic Card primitive with a tight 2-stat grid; the redesigned
+// version mirrors the visual language of /clients/[slug]/ready —
+// hero header with active-count chip + primary CTA, richer 2x2
+// stat tiles on each card, original brand URL surfaced under the
+// workspace name, and a styled empty-state hero. Sort order
+// flipped from createdAt-desc to lastActivityAt-desc so the
+// workspaces an operator is touching TODAY surface first.
+//
 /*
- * Design-system audit (design:design-system, 2026-05-16, Cut B Phase 3):
- *   Header heading + subheading  → native <h1>+<p> w/ dashboard welcome tokens
+ * Design-system audit (refreshed 2026-05-19):
+ *   Hero header                  → native <h1>+<p> tracking-tight + emerald active chip
  *   Usage badge                  → <Badge variant=secondary|destructive> + <Tooltip>
- *   Primary CTA                  → <Button variant=default> via render={<Link/>}
- *   Empty state                  → <Card> wrapping illustration + <h2> + <Button> CTA
+ *   Primary CTA                  → <Button variant=default> with Plus icon
+ *   Empty state                  → <section> rounded-2xl border-border/70 bg-card/40
+ *                                  with Sparkles in primary/10 + crm-pressable Link CTA
  *   Card grid                    → native grid, grid-cols-1 md:grid-cols-2 xl:grid-cols-3
- *   WorkspaceCard shell          → <Card> + hover:ring on top of built-in ring-1
- *   Card status badge            → <Badge variant=outline> w/ className override for
- *                                  active (positive) / setup (caution) tokens; paused
- *                                  uses variant=secondary directly
- *   Card stat tiles              → native <dl><dt><dd>; rounded-xl border bg-card/70
- *   Card "Open dashboard" CTA    → <Button variant=outline size=sm> via render={<Link/>}
+ *   WorkspaceCard shell          → <article> rounded-2xl border-border/80 bg-card/80
+ *                                  p-5 + hover:shadow-(--shadow-card-hover)
+ *   Card status pill             → <Badge variant=outline> w/ emerald/amber tokens —
+ *                                  matches the ready page audience chips
+ *   Card stat tiles              → native <dl><dt><dd> 2x2; rounded-xl border bg-card/70
+ *   Card primary CTA             → bg-primary crm-pressable Link with ArrowRight
  *   UpgradeModal (at-limit)      → Cut A primitive, do NOT redefine
- *
- * Flagged for future: add `positive` + `caution` Badge variants if status
- * badges spread to more surfaces. Skeleton primitive absent — fine for
- * server-rendered Phase 3 but worth adding before any optimistic UI.
  */
 
 import { redirect } from "next/navigation";
@@ -72,20 +78,33 @@ export default async function ClientsPage() {
   );
   const rollupById = new Map(rollups.map((r) => [r.orgId, r]));
 
-  const workspaces: WorkspaceSummary[] = orgs.map((org) => {
-    const rollup = rollupById.get(org.id);
-    return summarizeWorkspace({
-      id: org.id,
-      slug: org.slug,
-      name: org.name,
-      soulCompletedAt: rollup?.soulCompletedAt ?? null,
-      contactCount: org.contactCount,
-      lastActivityAt: rollup?.lastActivityAt ?? null,
-      newLeadsThisWeek: rollup?.newLeadsThisWeek ?? 0,
-      workspaceBaseDomain,
-      now,
+  const workspaces: WorkspaceSummary[] = orgs
+    .map((org) => {
+      const rollup = rollupById.get(org.id);
+      return summarizeWorkspace({
+        id: org.id,
+        slug: org.slug,
+        name: org.name,
+        soulCompletedAt: rollup?.soulCompletedAt ?? null,
+        contactCount: org.contactCount,
+        lastActivityAt: rollup?.lastActivityAt ?? null,
+        newLeadsThisWeek: rollup?.newLeadsThisWeek ?? 0,
+        bookingsThisWeek: rollup?.bookingsThisWeek ?? 0,
+        originalSiteUrl: rollup?.originalSiteUrl ?? null,
+        workspaceBaseDomain,
+        now,
+      });
+    })
+    // 2026-05-19 — sort by recent activity (most-active first) so an
+    // agency with many clients sees the ones they're working on TODAY
+    // at the top. Workspaces with no activity fall back to their slug
+    // for a stable order at the bottom.
+    .sort((a, b) => {
+      const aTime = a.lastActivityAt ? Date.parse(a.lastActivityAt) : 0;
+      const bTime = b.lastActivityAt ? Date.parse(b.lastActivityAt) : 0;
+      if (aTime !== bTime) return bTime - aTime;
+      return a.slug.localeCompare(b.slug);
     });
-  });
 
   const tier = asAgencyTier(limitStatus.tier);
   // Scale tier renders maxOrgs as 999 (display sentinel from

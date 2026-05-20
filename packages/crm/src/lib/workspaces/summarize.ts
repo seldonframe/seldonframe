@@ -19,11 +19,21 @@ export type WorkspaceSummary = {
   slug: string;
   name: string;
   publicUrl: string;
+  /**
+   * 2026-05-19 — Original brand URL (the URL the operator pasted into
+   * /clients/new). Null when the workspace was created without a URL
+   * (e.g. via createWorkspaceFromGooglePaste or a manual setup flow).
+   * Shown as the primary brand reference on the /clients card; falls
+   * back to the SeldonFrame subdomain (publicUrl) when null.
+   */
+  originalSiteUrl: string | null;
   dashboardUrl: string;
   status: WorkspaceStatus;
   contactCount: number;
   lastActivityAt: string | null;
   newLeadsThisWeek: number;
+  /** 2026-05-19 — upcoming bookings count for the next 7 days. */
+  bookingsThisWeek: number;
 };
 
 export type SummarizeInput = {
@@ -34,6 +44,8 @@ export type SummarizeInput = {
   contactCount: number;
   lastActivityAt: Date | null;
   newLeadsThisWeek: number;
+  bookingsThisWeek: number;
+  originalSiteUrl: string | null;
   workspaceBaseDomain: string;
   now: Date;
 };
@@ -69,6 +81,7 @@ export function summarizeWorkspace(input: SummarizeInput): WorkspaceSummary {
     slug: input.slug,
     name: input.name,
     publicUrl: `https://${input.slug}.${input.workspaceBaseDomain}`,
+    originalSiteUrl: input.originalSiteUrl,
     dashboardUrl: `/dashboard?workspace=${input.id}`,
     status: deriveStatus(input.soulCompletedAt, input.lastActivityAt, input.now),
     contactCount: input.contactCount,
@@ -76,5 +89,6 @@ export function summarizeWorkspace(input: SummarizeInput): WorkspaceSummary {
       ? input.lastActivityAt.toISOString()
       : null,
     newLeadsThisWeek: input.newLeadsThisWeek,
+    bookingsThisWeek: input.bookingsThisWeek,
   };
 }
