@@ -1,0 +1,140 @@
+// packages/crm/src/app/api/v1/proposals/route.ts
+// 2026-05-19 — Proposal Builder. POST creates a new proposal: extracts
+// the prospect's facts from the URL, provisions a preview workspace,
+// generates the HTML via Claude, and inserts the proposals row.
+// GET lists the authed user's agency proposals.
+// Spec: §"Proposal creation".
+
+import { NextResponse } from "next/server";
+import { desc, eq } from "drizzle-orm";
+import Anthropic from "@anthropic-ai/sdk";
+import { auth } from "@/auth";
+import { db } from "@/db";
+import { proposals, users } from "@/db/schema";
+import { createProposal } from "@/lib/proposals/create";
+import { extractBusinessFactsFromUrl } from "@/lib/web-onboarding/markdown-extractor";
+import { createFullWorkspace } from "@/lib/workspace/create-full";
+
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
+export async function GET(_request: Request) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  const [user] = await db
+    .select({ orgId: users.orgId })
+    .from(users)
+    .where(eq(users.id, session.user.id))
+    .limit(1);
+  if (!user) return NextResponse.json({ error: "not_found" }, { status: 404 });
+
+  const rows = await db
+    .select()
+    .from(proposals)
+    .where(eq(proposals.agencyOrgId, user.orgId))
+    .orderBy(desc(proposals.createdAt))
+    .limit(100);
+
+  return NextResponse.json({ proposals: rows });
+}
+
+export async function POST(request: Request) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  const body = await request.json().catch(() => null);
+  if (!body || typeof body !== "object") {
+    return NextResponse.json({ error: "invalid_body" }, { status: 400 });
+  }
+
+  const {
+    prospect_url,
+    prospect_email,
+    pricing_tier,
+    custom_cents,
+  } = body as {
+    prospect_url?: string;
+    prospect_email?: string;
+    pricing_tier?: string;
+    custom_cents?: number;
+  };
+
+  if (!prospect_url || !prospect_email || !pricing_tier) {
+    return NextResponse.json(
+      { error: "missing_required_fields" },
+      { status: 400 },
+    );
+  }
+
+  const [user] = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, session.user.id))
+    .limit(1);
+  if (!user) return NextResponse.json({ error: "user_not_found" }, { status: 404 });
+
+  const apiKey = process.env.ANTHROPIC_API_KEY ?? "";
+
+  // 1. Extract prospect business facts from URL.
+  const facts = await extractBusinessFactsFromUrl({ url: prospect_url, byokKey: apiKey });
+
+  // 2. Provision preview workspace.
+  const workspace = await createFullWorkspace({
+    business_name: facts.business_name,
+    city: facts.city,
+    state: facts.state,
+    phone: facts.phone,
+    services: facts.services,
+    business_description: facts.business_description,
+    email: prospect_email,
+    preview_mode: true,
+  });
+
+  if (workspace.status === "error" || !workspace.workspace_id) {
+    return NextResponse.json(
+      { error: "workspace_creation_failed", detail: workspace.error },
+      { status: 500 },
+    );
+  }
+
+  // 3. Create proposal row.
+  const agencyProfile = user.agencyProfile ?? {};
+  const proposal = await createProposal({
+    agencyOrgId: user.orgId,
+    createdByUserId: user.id,
+    prospectUrl: prospect_url,
+    prospectName: facts.business_name,
+    prospectEmail: prospect_email,
+    prospectFirstName: null,
+    prospectServices: facts.services,
+    agencyName: agencyProfile.name ?? user.name,
+    agencyBrandColor: agencyProfile.brand_color ?? undefined,
+    template: agencyProfile.proposalTemplate,
+    pricing:
+      pricing_tier === "custom"
+        ? { tier: "custom", customCents: custom_cents }
+        : { tier: pricing_tier as "starter" | "growth" | "pro" },
+    previewWorkspaceId: workspace.workspace_id,
+    generateHtml: async (prompt) => {
+      const client = new Anthropic({ apiKey });
+      const response = await client.messages.create({
+        model: "claude-sonnet-4-5",
+        max_tokens: 2000,
+        system: "You generate HTML sales proposal bodies. Output ONLY HTML.",
+        messages: [{ role: "user", content: prompt }],
+      });
+      const text = response.content
+        .filter((b) => b.type === "text")
+        .map((b) => (b as { text: string }).text)
+        .join("");
+      return text.trim();
+    },
+  });
+
+  return NextResponse.json({ proposal });
+}
