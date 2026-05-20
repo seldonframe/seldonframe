@@ -101,24 +101,24 @@ export function LandingAgenciesSection() {
 
       <div className="mt-12 grid gap-6 md:grid-cols-3">
         <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-6">
-          <h3 className="text-base font-semibold text-zinc-100">GHL is complex by design.</h3>
+          <h3 className="text-base font-semibold text-zinc-100">One workspace per client</h3>
           <p className="mt-3 text-sm leading-relaxed text-zinc-400">
-            Cluttered interface, steep learning curve, eight dashboards per client. SeldonFrame is one workspace per
-            client, opinionated defaults pulled straight from their URL, no Zapier patchwork.
+            Opinionated defaults pulled straight from their URL — no Zapier patchwork, no eight dashboards to babysit.
+            Their CRM, booking, forms, chatbot, and automations all read from one source of truth.
           </p>
         </div>
         <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-6">
-          <h3 className="text-base font-semibold text-zinc-100">GHL&apos;s pricing scales against you.</h3>
+          <h3 className="text-base font-semibold text-zinc-100">Flat pricing that scales with you</h3>
           <p className="mt-3 text-sm leading-relaxed text-zinc-400">
-            $497/mo flat sounds fine until you realize Agency Pro doesn&apos;t include AI usage, advanced automations,
-            or unlimited sub-accounts. SeldonFrame stays $29–$99 whether you run 3 clients or 30.
+            $29 to $99/mo whether you run three clients or thirty. AI usage, advanced automations, and unlimited
+            sub-accounts included. No per-seat surcharges, no overage anxiety.
           </p>
         </div>
         <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-6">
-          <h3 className="text-base font-semibold text-zinc-100">GHL is closed source.</h3>
+          <h3 className="text-base font-semibold text-zinc-100">Open source. Yours to brand.</h3>
           <p className="mt-3 text-sm leading-relaxed text-zinc-400">
-            When pricing changes or the roadmap shifts, you&apos;re stuck. SeldonFrame is AGPL-3.0 — fork it, self-host
-            it, never get held hostage to someone else&apos;s billing decisions.
+            AGPL-3.0 — fork it, self-host it, never get held hostage to someone else&apos;s billing decisions.
+            White-label out of the box: your logo, your domain, your customers&apos; trust in you.
           </p>
         </div>
       </div>
@@ -131,7 +131,9 @@ export function LandingAgenciesSection() {
           Start your agency free
         </Link>
         <Link
-          href="https://github.com/maximehoule/seldonframe"
+          href="https://github.com/seldonframe/seldonframe/"
+          target="_blank"
+          rel="noreferrer noopener"
           className="text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-300"
         >
           Read the architecture →
