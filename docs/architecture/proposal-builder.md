@@ -28,14 +28,20 @@ An agency operator sends a branded, AI-generated proposal to a prospect with a *
 
 ## Env vars
 
-Set all of these in Vercel project settings before the first production deploy:
+Most are already set if your platform was billing customers before Proposal Builder shipped:
 
-- `STRIPE_CONNECT_CLIENT_ID` — Connect Express client ID from Stripe Dashboard (Settings → Connect → Client ID)
-- `STRIPE_CONNECT_WEBHOOK_SECRET` — signing secret for the Connect webhook endpoint (distinct from the platform webhook secret)
-- `STRIPE_SECRET_KEY` — existing platform Stripe key (reused; already set)
-- `CRON_SECRET` — random secret Vercel Cron sends as `Authorization: Bearer <secret>`; generate with `openssl rand -hex 32`
-- `NEXT_PUBLIC_APP_URL` — base URL for Stripe return URLs, e.g. `https://app.seldonframe.com` (existing)
-- `WORKSPACE_BASE_DOMAIN` — workspace subdomain suffix, e.g. `seldonframe.app` (existing)
+| Var | Status | Notes |
+|---|---|---|
+| `STRIPE_SECRET_KEY` | Existing | Used for both platform billing and now Express account creation |
+| `STRIPE_CONNECT_WEBHOOK_SECRET` | Existing | Same secret the existing SMB-billing Connect webhook uses |
+| `CRON_SECRET` | Existing | 9 prior cron routes already depend on it |
+| `NEXT_PUBLIC_APP_URL` | Existing | Base URL for Stripe return URLs |
+| `WORKSPACE_BASE_DOMAIN` | Existing | Workspace subdomain suffix |
+| `ANTHROPIC_API_KEY` | Existing | Fallback when operator has no BYOK key |
+
+**Net new for Proposal Builder: nothing.** The only action required before the first proposal acceptance is making sure your Stripe Connect webhook endpoint listens to `checkout.session.completed` in addition to the existing events.
+
+> **Removed from this doc:** `STRIPE_CONNECT_CLIENT_ID` was over-specified in the initial plan. The code never reads it. Express accounts are created via direct API (`stripe.accounts.create({ type: "express" })`) using `STRIPE_SECRET_KEY`. Client IDs are only required for OAuth flows (Standard accounts), which Proposal Builder does not use.
 
 ## Health checks
 
