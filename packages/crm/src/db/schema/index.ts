@@ -113,3 +113,4 @@ export * from "./outbound-scheduled-sends";
 
 // 2026-05-19 — Proposal Builder.
 export * from "./proposals";
+export * from "./proposal-events";
