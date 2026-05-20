@@ -107,6 +107,12 @@ export interface CreateFullWorkspaceInput {
     company?: string | null;
     rating?: number | null;
   }> | null;
+
+  /** 2026-05-19 — Proposal Builder. When true, the workspace is created
+   *  with organizations.preview_mode=true so it's gated from billing,
+   *  agent runs, and quota enforcement until a proposal acceptance flips
+   *  it to false. Default false. Spec: 2026-05-19-proposal-builder-design.md. */
+  preview_mode?: boolean | null;
 }
 
 export interface CreateFullWorkspaceResult {
@@ -568,6 +574,25 @@ export async function createFullWorkspace(
     } catch (err) {
       console.warn(
         `[create-full] google_place_url stamp failed for ${createResult.orgId}:`,
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+  }
+
+  // v2026-05-19 — Step 12.9: APPLY preview_mode flag.
+  // When the workspace is being provisioned for a Proposal Builder preview,
+  // stamp organizations.preview_mode=true so billing/agent-run/quota gates
+  // skip this workspace until the prospect accepts and the webhook flips it
+  // back to false. Soft-fail: never block workspace creation on this.
+  if (input.preview_mode === true) {
+    try {
+      await db
+        .update(organizations)
+        .set({ previewMode: true, updatedAt: new Date() })
+        .where(eq(organizations.id, createResult.orgId));
+    } catch (err) {
+      console.warn(
+        `[create-full] preview_mode stamp failed for ${createResult.orgId}:`,
         err instanceof Error ? err.message : String(err),
       );
     }
