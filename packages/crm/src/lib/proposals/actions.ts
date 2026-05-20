@@ -21,7 +21,7 @@ import { assertTransition } from "./status";
 // list, and audit-row insertion used by the outbound messaging dispatcher
 // and MCP email tool. Passes userId:null (system-initiated, no human actor).
 import { sendEmailFromApi } from "@/lib/emails/api";
-import type { AgencyProposalTemplate } from "@/db/schema/agency-profile";
+import type { AgencyProposalTemplate, AgencyProfile } from "@/db/schema/agency-profile";
 
 // Derive User type from Drizzle schema inferSelect.
 type User = typeof users.$inferSelect;
@@ -136,5 +136,46 @@ export async function sendProposalAction(input: {
 
   revalidatePath(`/proposals/${input.id}`);
   revalidatePath("/proposals");
+  return { ok: true };
+}
+
+export async function saveProposalTemplateAction(
+  input: AgencyProposalTemplate,
+): Promise<ActionResult> {
+  if (!input.subject.trim()) {
+    return { ok: false, error: "subject_required" };
+  }
+  if (!input.introCopy.trim()) {
+    return { ok: false, error: "intro_required" };
+  }
+
+  const session = await auth();
+  if (!session?.user?.id) return { ok: false, error: "unauthorized" };
+
+  const [user] = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, session.user.id))
+    .limit(1);
+  if (!user) return { ok: false, error: "user_not_found" };
+
+  const existingProfile = (user.agencyProfile as AgencyProfile | null) ?? {};
+  const updatedProfile: AgencyProfile = {
+    ...existingProfile,
+    proposalTemplate: {
+      subject: input.subject,
+      introCopy: input.introCopy,
+      scopeCopy: input.scopeCopy,
+      timelineCopy: input.timelineCopy,
+      termsCopy: input.termsCopy,
+    },
+  };
+
+  await db
+    .update(users)
+    .set({ agencyProfile: updatedProfile })
+    .where(eq(users.id, session.user.id));
+
+  revalidatePath("/proposals/template");
   return { ok: true };
 }
