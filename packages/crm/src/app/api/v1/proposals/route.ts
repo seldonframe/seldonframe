@@ -14,6 +14,7 @@ import { proposals, users } from "@/db/schema";
 import { createProposal } from "@/lib/proposals/create";
 import { extractBusinessFactsFromUrl } from "@/lib/web-onboarding/markdown-extractor";
 import { createFullWorkspace } from "@/lib/workspace/create-full";
+import { getOperatorByokAnthropicKey } from "@/lib/web-onboarding/byok-resolver";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -78,63 +79,103 @@ export async function POST(request: Request) {
     .limit(1);
   if (!user) return NextResponse.json({ error: "user_not_found" }, { status: 404 });
 
-  const apiKey = process.env.ANTHROPIC_API_KEY ?? "";
+  // Resolve BYOK key: operator's own Anthropic key first, platform env-var fallback.
+  // This mirrors the pattern in /api/v1/web/workspaces/create-from-url/route.ts.
+  const byokResult = await getOperatorByokAnthropicKey({ orgId: user.orgId });
+  const resolvedApiKey =
+    (byokResult.source === "byok" && byokResult.key)
+      ? byokResult.key
+      : (process.env.ANTHROPIC_API_KEY ?? "");
 
-  // 1. Extract prospect business facts from URL.
-  const facts = await extractBusinessFactsFromUrl({ url: prospect_url, byokKey: apiKey });
+  // 1. Extract prospect business facts from URL — graceful fallback on failure.
+  let facts: Awaited<ReturnType<typeof extractBusinessFactsFromUrl>>;
+  try {
+    facts = await extractBusinessFactsFromUrl({ url: prospect_url, byokKey: resolvedApiKey });
+  } catch (e) {
+    console.warn("[proposal-builder] soul extraction failed", e);
+    const hostname = new URL(prospect_url).hostname.replace(/^www\./, "");
+    facts = {
+      business_name: hostname,
+      city: "",
+      state: "",
+      phone: "",
+      services: [],
+      business_description: `Proposal for ${hostname}`,
+    };
+  }
 
-  // 2. Provision preview workspace.
-  const workspace = await createFullWorkspace({
-    business_name: facts.business_name,
-    city: facts.city,
-    state: facts.state,
-    phone: facts.phone,
-    services: facts.services,
-    business_description: facts.business_description,
-    email: prospect_email,
-    preview_mode: true,
-  });
-
-  if (workspace.status === "error" || !workspace.workspace_id) {
-    return NextResponse.json(
-      { error: "workspace_creation_failed", detail: workspace.error },
-      { status: 500 },
-    );
+  // 2. Provision preview workspace — graceful fallback on failure.
+  let workspaceId: string | null = null;
+  try {
+    const workspace = await createFullWorkspace({
+      business_name: facts.business_name,
+      city: facts.city,
+      state: facts.state,
+      phone: facts.phone,
+      services: facts.services,
+      business_description: facts.business_description,
+      email: prospect_email,
+      preview_mode: true,
+    });
+    if (workspace.status === "error" || !workspace.workspace_id) {
+      console.warn("[proposal-builder] workspace provisioning failed", workspace.error);
+    } else {
+      workspaceId = workspace.workspace_id;
+    }
+  } catch (e) {
+    console.warn("[proposal-builder] workspace provisioning failed", e);
   }
 
   // 3. Create proposal row.
   const agencyProfile = user.agencyProfile ?? {};
-  const proposal = await createProposal({
-    agencyOrgId: user.orgId,
-    createdByUserId: user.id,
-    prospectUrl: prospect_url,
-    prospectName: facts.business_name,
-    prospectEmail: prospect_email,
-    prospectFirstName: null,
-    prospectServices: facts.services,
-    agencyName: agencyProfile.name ?? user.name,
-    agencyBrandColor: agencyProfile.brand_color ?? undefined,
-    template: agencyProfile.proposalTemplate,
-    pricing:
-      pricing_tier === "custom"
-        ? { tier: "custom", customCents: custom_cents }
-        : { tier: pricing_tier as "starter" | "growth" | "pro" },
-    previewWorkspaceId: workspace.workspace_id,
-    generateHtml: async (prompt) => {
-      const client = new Anthropic({ apiKey });
-      const response = await client.messages.create({
-        model: "claude-sonnet-4-5",
-        max_tokens: 2000,
-        system: "You generate HTML sales proposal bodies. Output ONLY HTML.",
-        messages: [{ role: "user", content: prompt }],
-      });
-      const text = response.content
-        .filter((b) => b.type === "text")
-        .map((b) => (b as { text: string }).text)
-        .join("");
-      return text.trim();
-    },
-  });
+
+  let proposal: Awaited<ReturnType<typeof createProposal>>;
+  try {
+    proposal = await createProposal({
+      agencyOrgId: user.orgId,
+      createdByUserId: user.id,
+      prospectUrl: prospect_url,
+      prospectName: facts.business_name,
+      prospectEmail: prospect_email,
+      prospectFirstName: null,
+      prospectServices: facts.services,
+      agencyName: agencyProfile.name ?? user.name,
+      agencyBrandColor: agencyProfile.brand_color ?? undefined,
+      template: agencyProfile.proposalTemplate,
+      pricing:
+        pricing_tier === "custom"
+          ? { tier: "custom", customCents: custom_cents }
+          : { tier: pricing_tier as "starter" | "growth" | "pro" },
+      previewWorkspaceId: workspaceId,
+      generateHtml: async (prompt) => {
+        if (!resolvedApiKey) {
+          throw new Error("html_generation_failed");
+        }
+        const client = new Anthropic({ apiKey: resolvedApiKey });
+        try {
+          const response = await client.messages.create({
+            model: "claude-sonnet-4-5",
+            max_tokens: 2000,
+            system: "You generate HTML sales proposal bodies. Output ONLY HTML.",
+            messages: [{ role: "user", content: prompt }],
+          });
+          const text = response.content
+            .filter((b) => b.type === "text")
+            .map((b) => (b as { text: string }).text)
+            .join("");
+          return text.trim();
+        } catch (e) {
+          console.error("[proposal-builder] Claude HTML generation failed", e);
+          throw new Error("html_generation_failed");
+        }
+      },
+    });
+  } catch (e) {
+    if (e instanceof Error && e.message === "html_generation_failed") {
+      return NextResponse.json({ error: "html_generation_failed" }, { status: 502 });
+    }
+    throw e;
+  }
 
   return NextResponse.json({ proposal });
 }
