@@ -30,6 +30,10 @@
     {
       "path": "/api/cron/outbound-scheduled-sends",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/expire-proposals",
+      "schedule": "0 3 * * *"
     }
   ]
 }
