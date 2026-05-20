@@ -20,7 +20,8 @@ export function ProposalsGrid({ proposals }: { proposals: Proposal[] }) {
       <section className="rounded-2xl border border-border/70 bg-card/40 p-12 text-center space-y-3">
         <h2 className="text-xl font-semibold">No proposals yet</h2>
         <p className="text-sm text-muted-foreground">
-          Click <span className="font-medium">New proposal</span> to pitch your first prospect.
+          No proposals yet — click{" "}
+          <span className="font-medium">+ New proposal</span> to pitch your first prospect.
         </p>
       </section>
     );

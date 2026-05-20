@@ -55,5 +55,5 @@ export async function GET(request: Request) {
 
   // Redirect back to the dashboard with status.
   const status = chargesEnabled ? "ready" : payoutsEnabled ? "pending" : "incomplete";
-  redirect(`/proposals/onboarding?status=${status}`);
+  redirect(`/proposals?status=${status}`);
 }
