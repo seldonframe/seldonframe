@@ -7,11 +7,15 @@ import {
   invoices,
   paymentEvents,
   paymentRecords,
+  proposals,
   stripeConnections,
   subscriptions,
 } from "@/db/schema";
 import { emitSeldonEvent } from "@/lib/events/bus";
 import { logEvent } from "@/lib/observability/log";
+import { activateProposalWorkspace } from "@/lib/proposals/activate-workspace";
+import { notifyAgencyOfAcceptance } from "@/lib/proposals/notify-agency";
+import { notifyProspectOfActivation } from "@/lib/proposals/notify-prospect";
 
 export const runtime = "nodejs";
 
@@ -428,6 +432,76 @@ export async function POST(request: Request) {
           trialEnd: stripeUnixToDate(subscription.trial_end)?.toISOString() ?? "",
         }, { orgId: orgId });
       }
+      break;
+    }
+
+    case "checkout.session.completed": {
+      const session = event.data.object as Stripe.Checkout.Session;
+      // proposal_id is set in subscription_data.metadata at checkout creation
+      // time. On the event object Stripe surfaces it via the expanded
+      // subscription's metadata. Also check the raw session object via a
+      // defensive cast (some Stripe API versions surface subscription_data
+      // on the event payload even though it's not in the TS types).
+      const sessionAny = session as unknown as {
+        subscription_data?: { metadata?: { proposal_id?: string } };
+      };
+      const proposalId =
+        sessionAny.subscription_data?.metadata?.proposal_id
+        ?? (typeof session.subscription === "object" && session.subscription !== null
+          ? (session.subscription as Stripe.Subscription).metadata?.proposal_id
+          : undefined);
+
+      // If no proposal_id in metadata, this is not a proposal acceptance —
+      // fall through to default (record the event, acknowledge to Stripe).
+      if (!proposalId) break;
+
+      const [proposal] = await db
+        .select()
+        .from(proposals)
+        .where(eq(proposals.id, proposalId))
+        .limit(1);
+      if (!proposal) break;
+
+      // Idempotency: if we already processed this session, skip.
+      if (proposal.stripeCheckoutSessionId === session.id && proposal.status === "accepted") {
+        break;
+      }
+
+      const subscriptionId =
+        typeof session.subscription === "string"
+          ? session.subscription
+          : (session.subscription as Stripe.Subscription | null)?.id ?? "";
+      const customerId =
+        typeof session.customer === "string"
+          ? session.customer
+          : (session.customer as Stripe.Customer | null)?.id ?? "";
+
+      await activateProposalWorkspace({
+        proposalId: proposal.id,
+        workspaceId: proposal.previewWorkspaceId,
+        stripeSubscriptionId: subscriptionId,
+        stripeCustomerId: customerId,
+        sessionId: session.id,
+      });
+
+      // Fire-and-forget notifications — failures must not crash the webhook.
+      notifyAgencyOfAcceptance({
+        ...proposal,
+        stripeSubscriptionId: subscriptionId,
+        stripeCustomerId: customerId,
+      }).catch((err: unknown) =>
+        logEvent("proposal_notify_agency_failed", {
+          proposalId: proposal.id,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      );
+      notifyProspectOfActivation(proposal).catch((err: unknown) =>
+        logEvent("proposal_notify_prospect_failed", {
+          proposalId: proposal.id,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      );
+
       break;
     }
 
