@@ -12,9 +12,16 @@ export function ConnectStartButton() {
     setError(null);
     try {
       const response = await fetch("/api/v1/proposals/connect/start", { method: "POST" });
-      const data = (await response.json()) as { url?: string; error?: string };
+      let data: { url?: string; error?: string; message?: string; help?: string };
+      try {
+        data = await response.json();
+      } catch {
+        data = { error: `non_json_response_${response.status}` };
+      }
       if (!response.ok || !data.url) {
-        throw new Error(data.error ?? `connect_start_failed_${response.status}`);
+        const parts = [data.message ?? data.error ?? `connect_start_failed_${response.status}`];
+        if (data.help) parts.push(data.help);
+        throw new Error(parts.join(" — "));
       }
       window.location.href = data.url;
     } catch (e) {

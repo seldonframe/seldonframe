@@ -5,6 +5,7 @@
 // redirects to. Spec: §"Stripe Connect Express onboarding".
 
 import { NextResponse } from "next/server";
+import type Stripe from "stripe";
 import { eq } from "drizzle-orm";
 import { auth } from "@/auth";
 import { db } from "@/db";
@@ -41,12 +42,34 @@ export async function POST(request: Request) {
     process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://app.seldonframe.com";
 
   // Create the Connect Express account on Stripe.
-  const account = await stripe.accounts.create(
-    buildConnectAccountParams({
-      agencyName: user.agencyProfile.name ?? user.name,
-      agencyEmail: user.email,
-    }),
-  );
+  let account: Stripe.Account;
+  try {
+    account = await stripe.accounts.create(
+      buildConnectAccountParams({
+        agencyName: user.agencyProfile.name ?? user.name,
+        agencyEmail: user.email,
+      }),
+    );
+  } catch (err) {
+    const stripeErr = err as Stripe.errors.StripeError;
+    console.error("[proposals/connect/start] stripe.accounts.create failed", {
+      type: stripeErr.type,
+      code: stripeErr.code,
+      message: stripeErr.message,
+      requestId: stripeErr.requestId,
+    });
+    return NextResponse.json(
+      {
+        error: "stripe_account_creation_failed",
+        message: stripeErr.message ?? "Stripe rejected the request",
+        type: stripeErr.type ?? "unknown",
+        help: stripeErr.message?.includes("platform-profile")
+          ? "Complete your Stripe Connect platform profile at https://dashboard.stripe.com/settings/connect/platform-profile before creating accounts."
+          : undefined,
+      },
+      { status: 400 },
+    );
+  }
 
   // Persist the connection. Reuse the existing stripe_connections table —
   // the agency's PRIMARY org row gets the connection. Set isActive=false
@@ -72,9 +95,27 @@ export async function POST(request: Request) {
   }
 
   // Build the onboarding link.
-  const link = await stripe.accountLinks.create(
-    buildAccountLinkParams({ stripeAccountId: account.id, baseUrl }),
-  );
+  let link: Stripe.AccountLink;
+  try {
+    link = await stripe.accountLinks.create(
+      buildAccountLinkParams({ stripeAccountId: account.id, baseUrl }),
+    );
+  } catch (err) {
+    const stripeErr = err as Stripe.errors.StripeError;
+    console.error("[proposals/connect/start] stripe.accountLinks.create failed", {
+      type: stripeErr.type,
+      code: stripeErr.code,
+      message: stripeErr.message,
+    });
+    return NextResponse.json(
+      {
+        error: "stripe_account_link_failed",
+        message: stripeErr.message ?? "Stripe rejected the onboarding link request",
+        type: stripeErr.type ?? "unknown",
+      },
+      { status: 400 },
+    );
+  }
 
   return NextResponse.json({ url: link.url, accountId: account.id });
 }
