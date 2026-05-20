@@ -19,6 +19,9 @@ export async function GET(request: Request) {
   if (!session?.user?.id) {
     redirect("/login?callbackUrl=/proposals/onboarding");
   }
+  if (!session?.user?.orgId) {
+    return NextResponse.json({ error: "no_org" }, { status: 400 });
+  }
 
   const { searchParams } = new URL(request.url);
   const accountId = searchParams.get("account_id");
@@ -46,7 +49,7 @@ export async function GET(request: Request) {
     .where(
       and(
         eq(stripeConnections.stripeAccountId, accountId),
-        eq(stripeConnections.orgId, session.user.orgId!),
+        eq(stripeConnections.orgId, session.user.orgId),
       ),
     );
 
