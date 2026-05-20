@@ -11,7 +11,7 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { proposals, stripeConnections, users } from "@/db/schema";
 import { cn } from "@/lib/utils";
-import { buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { ProposalsGrid } from "./proposals-grid";
 import { StripeConnectEmptyState } from "./stripe-connect-empty-state";
 import { StripePendingBanner } from "./stripe-pending-banner";
