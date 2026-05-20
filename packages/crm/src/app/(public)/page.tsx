@@ -12,7 +12,7 @@
 // dashboard; unauthenticated visitors see the marketing surface.
 //
 // Order of <main> children is curated for funnel flow:
-//   hero → how-it-works → soul → seldon-it → bento
+//   hero → how-it-works → soul → bento
 //   → demo → agencies → marketplace → why-now → final-cta
 
 import type { Metadata } from "next";
@@ -24,7 +24,6 @@ import { LandingHero } from "@/components/landing/hero";
 import { LandingHowItWorksSection } from "@/components/landing/how-it-works-section";
 import { LandingComparisonSection } from "@/components/landing/landing-comparison-section";
 import { LandingSoulSection } from "@/components/landing/soul-section";
-import { LandingSeldonItSection } from "@/components/landing/seldon-it-section";
 import { LandingBentoSection } from "@/components/landing/bento-section";
 import { LandingDemoVideoSection } from "@/components/landing/demo-video-section";
 import { LandingAgenciesSection } from "@/components/landing/agencies-section";
@@ -70,7 +69,6 @@ export default async function PublicHomePage() {
         <LandingHowItWorksSection />
         <LandingComparisonSection />
         <LandingSoulSection />
-        <LandingSeldonItSection />
         <LandingBentoSection />
         <LandingDemoVideoSection />
         <LandingAgenciesSection />

@@ -1,82 +1,52 @@
+// Bento grid — six product surfaces in a single visual scan.
+//
+// Four of the six tiles render real workspace screenshots from
+// /public/marketing (CRM + pipeline, booking, forms, automations).
+// The remaining two (Email, Pages) keep their CSS-painted previews
+// because we don't have screenshots for them yet; they sit alongside
+// the real ones without looking out of place.
+//
+// Layout note: the first two tiles use a fixed h-[280px] frame so
+// the top row stays even on md+. The image tiles fill that frame
+// with object-cover. Lower-row tiles size to their content.
+
 export function LandingBentoSection() {
   return (
     <section className="mx-auto max-w-5xl border-t border-zinc-800/30 px-6 py-16 md:py-20">
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         <div className="flex h-[280px] flex-col rounded-xl border border-zinc-800 bg-zinc-900 p-5 md:col-span-2">
           <p className="mb-4 text-[10px] font-bold uppercase tracking-widest text-zinc-500">CRM + Pipeline</p>
-          <div className="grid flex-1 grid-cols-3 gap-3 overflow-hidden">
-            {[
-              { status: "Lead", names: ["Sarah M.", "John K."] },
-              { status: "Qualified", names: ["Mike R.", "Amy L."] },
-              { status: "Client", names: ["Lisa T.", "David P."] },
-            ].map((column, i) => (
-              <div key={column.status} className="rounded-lg border border-zinc-800/50 bg-[#050505]/50 p-2">
-                <p className="mb-2 text-[10px] font-bold uppercase text-zinc-600">{column.status}</p>
-                <div className="space-y-2">
-                  {column.names.map((name, nameIndex) => (
-                    <div
-                      key={name}
-                      className={`rounded border border-zinc-700/50 bg-zinc-800 p-2 ${
-                        i === 0 && nameIndex === 0 ? "border-l-2 border-l-[#14b8a6]" : ""
-                      }`}
-                    >
-                      <p className="text-[11px] font-medium text-zinc-300">{name}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
+          <div className="flex-1 overflow-hidden rounded-md border border-zinc-800/60 bg-zinc-950/40">
+            <img
+              src="/marketing/crm-pipeline.png"
+              alt="CRM + pipeline — leads moving from Sarah M. and John K. through qualified and client columns."
+              className="h-full w-full object-cover"
+              loading="lazy"
+            />
           </div>
         </div>
 
         <div className="flex h-[280px] flex-col rounded-xl border border-zinc-800 bg-zinc-900 p-5 md:col-span-1">
           <p className="mb-4 text-[10px] font-bold uppercase tracking-widest text-zinc-500">Booking</p>
-          <div className="flex flex-1 flex-col">
-            <div className="mb-2 grid grid-cols-5 gap-1">
-              {["M", "T", "W", "T", "F"].map((day) => (
-                <span key={day} className="text-center text-[9px] font-bold text-zinc-600">
-                  {day}
-                </span>
-              ))}
-            </div>
-            <div className="space-y-1">
-              {[9, 10, 11].map((time) => (
-                <div key={time} className="flex items-center gap-2">
-                  <span className="w-8 text-[9px] text-zinc-700">{time}:00</span>
-                  <div className="grid flex-1 grid-cols-5 gap-1">
-                    {[1, 2, 3, 4, 5].map((d) => (
-                      <div
-                        key={d}
-                        className={`h-4 rounded-sm border border-zinc-800/50 ${
-                          time === 10 && d === 2
-                            ? "border-[#14b8a6]/20 bg-[#14b8a6]"
-                            : d % 2 === 0
-                              ? "bg-zinc-800/30"
-                              : "bg-[#050505]/50"
-                        }`}
-                      />
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="mt-auto rounded border border-zinc-800 bg-zinc-800/50 p-2">
-              <p className="text-[10px] font-bold text-[#14b8a6]">10:30 AM — Sarah M.</p>
-              <p className="text-[9px] text-zinc-500">Discovery Call</p>
-            </div>
+          <div className="flex-1 overflow-hidden rounded-md border border-zinc-800/60 bg-zinc-950/40">
+            <img
+              src="/marketing/booking-page.png"
+              alt="Public booking page — operator's calendar with open slots highlighted."
+              className="h-full w-full object-cover"
+              loading="lazy"
+            />
           </div>
         </div>
 
         <div className="flex flex-col rounded-xl border border-zinc-800 bg-zinc-900 p-5 md:col-span-1">
           <p className="mb-4 text-[10px] font-bold uppercase tracking-widest text-zinc-500">Forms</p>
-          <div className="space-y-3">
-            {["Name", "Email", "Budget"].map((label) => (
-              <div key={label} className="space-y-1">
-                <label className="text-[9px] font-bold uppercase text-zinc-600">{label}</label>
-                <div className="h-8 rounded border border-zinc-800 bg-[#050505]/50" />
-              </div>
-            ))}
-            <button className="mt-2 h-8 w-full rounded bg-[#14b8a6] text-[11px] font-bold text-white">Submit</button>
+          <div className="overflow-hidden rounded-md border border-zinc-800/60 bg-zinc-950/40">
+            <img
+              src="/marketing/form.png"
+              alt="Intake form — branded, fields auto-derived from the workspace's vertical."
+              className="aspect-[16/10] w-full object-cover"
+              loading="lazy"
+            />
           </div>
         </div>
 
@@ -115,32 +85,17 @@ export function LandingBentoSection() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6 md:col-span-3">
-          <p className="mb-8 text-[10px] font-bold uppercase tracking-widest text-zinc-500">Automation Engine</p>
-          <div className="relative mx-auto flex max-w-4xl flex-col items-center justify-between gap-4 md:flex-row">
-            <div className="absolute left-[5%] top-[12px] z-0 hidden h-px w-[90%] bg-zinc-800 md:block" />
-            {[
-              { label: "Form Filled", active: true },
-              { label: "Added to CRM", active: false },
-              { label: "Email Sent", active: false },
-              { label: "Call Booked", active: false },
-              { label: "On Calendar", active: false },
-            ].map((node, i) => (
-              <div key={node.label} className="group relative z-10 flex flex-col items-center gap-2">
-                <div
-                  className={`flex h-6 items-center justify-center rounded-full border px-3 transition-colors ${
-                    node.active
-                      ? "border-[#14b8a6] bg-[#14b8a6] text-white"
-                      : "border-zinc-700 bg-zinc-800 text-zinc-400"
-                  }`}
-                >
-                  <span className="whitespace-nowrap text-[10px] font-bold">{node.label}</span>
-                </div>
-                {i < 4 ? <div className="h-4 w-px bg-zinc-800 md:hidden" /> : null}
-              </div>
-            ))}
+        <div className="flex flex-col rounded-xl border border-zinc-800 bg-zinc-900 p-5 md:col-span-3">
+          <p className="mb-4 text-[10px] font-bold uppercase tracking-widest text-zinc-500">Automation Engine</p>
+          <div className="overflow-hidden rounded-md border border-zinc-800/60 bg-zinc-950/40">
+            <img
+              src="/marketing/agents.png"
+              alt="Automation engine — speed-to-lead and other agents firing in sequence on a form submission."
+              className="aspect-[16/6] w-full object-cover"
+              loading="lazy"
+            />
           </div>
-          <p className="mt-8 text-center text-xs text-zinc-500">Automatically. No Zapier. No manual steps.</p>
+          <p className="mt-4 text-center text-xs text-zinc-500">Automatically. No Zapier. No manual steps.</p>
         </div>
       </div>
     </section>
