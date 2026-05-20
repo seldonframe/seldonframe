@@ -4202,11 +4202,292 @@ Expected: PASS (2 new tests).
 
 If new failures appear, fix them inline before proceeding to Task 9.4.
 
-### Task 9.4: Manual smoke test on Vercel preview
+### Task 9.4: 30-day TTL — auto-archive unaccepted preview workspaces
+
+**Files:**
+- Create: `packages/crm/src/lib/proposals/expire-stale.ts`
+- Create: `packages/crm/src/app/api/cron/expire-proposals/route.ts`
+- Modify: `packages/crm/vercel.json` (add cron entry)
+- Test: `packages/crm/tests/unit/proposals/expire-stale.spec.ts`
+
+- [ ] **Step 1: Write the failing test**
+
+```typescript
+// packages/crm/tests/unit/proposals/expire-stale.spec.ts
+import { describe, it, expect } from "vitest";
+import { selectExpirationCutoff } from "@/lib/proposals/expire-stale";
+
+describe("selectExpirationCutoff", () => {
+  it("returns now - 30 days when no override", () => {
+    const now = new Date("2026-05-19T00:00:00Z");
+    const cutoff = selectExpirationCutoff({ now });
+    expect(cutoff.toISOString()).toBe("2026-04-19T00:00:00.000Z");
+  });
+
+  it("honors override days", () => {
+    const now = new Date("2026-05-19T00:00:00Z");
+    const cutoff = selectExpirationCutoff({ now, days: 7 });
+    expect(cutoff.toISOString()).toBe("2026-05-12T00:00:00.000Z");
+  });
+});
+```
+
+- [ ] **Step 2: Run the test to verify it fails**
+
+Run: `pnpm test:unit tests/unit/proposals/expire-stale.spec.ts`
+Expected: FAIL with "Cannot find module".
+
+- [ ] **Step 3: Write the implementation**
+
+```typescript
+// packages/crm/src/lib/proposals/expire-stale.ts
+// 2026-05-19 — Proposal Builder. Daily cleanup: any proposal in
+// sent/viewed status past expires_at gets flipped to 'expired', and
+// the associated preview workspace is archived (preview_mode stays
+// true but soft-delete via organizations.archivedAt if that column
+// exists; otherwise just leave preview_mode + log the event). Spec
+// open-question #2 (30-day TTL).
+
+import { and, eq, inArray, lt } from "drizzle-orm";
+import { db } from "@/db";
+import { proposalEvents, proposals } from "@/db/schema";
+
+export function selectExpirationCutoff(input: { now: Date; days?: number }): Date {
+  const days = input.days ?? 30;
+  return new Date(input.now.getTime() - days * 24 * 60 * 60 * 1000);
+}
+
+export async function expireStaleProposals(now: Date = new Date()): Promise<{
+  expired: number;
+}> {
+  const stale = await db
+    .select({ id: proposals.id })
+    .from(proposals)
+    .where(
+      and(
+        inArray(proposals.status, ["sent", "viewed"]),
+        lt(proposals.expiresAt, now),
+      ),
+    );
+
+  if (stale.length === 0) return { expired: 0 };
+
+  const ids = stale.map((r) => r.id);
+  await db
+    .update(proposals)
+    .set({ status: "expired", updatedAt: now })
+    .where(inArray(proposals.id, ids));
+
+  await db.insert(proposalEvents).values(
+    ids.map((id) => ({
+      proposalId: id,
+      eventType: "expired" as const,
+      metadata: { reason: "ttl_30d" },
+    })),
+  );
+
+  return { expired: stale.length };
+}
+```
+
+- [ ] **Step 4: Run the test to verify it passes**
+
+Run: `pnpm test:unit tests/unit/proposals/expire-stale.spec.ts`
+Expected: PASS (2 tests).
+
+- [ ] **Step 5: Write the cron route**
+
+```typescript
+// packages/crm/src/app/api/cron/expire-proposals/route.ts
+// 2026-05-19 — Daily cron via Vercel. Spec open-question #2.
+
+import { NextResponse } from "next/server";
+import { expireStaleProposals } from "@/lib/proposals/expire-stale";
+
+export const runtime = "nodejs";
+
+export async function GET(request: Request) {
+  // Vercel Cron sends a header we can verify
+  if (request.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+  const result = await expireStaleProposals();
+  return NextResponse.json(result);
+}
+```
+
+- [ ] **Step 6: Add cron schedule**
+
+Edit `packages/crm/vercel.json` and add to the `crons` array:
+
+```json
+{
+  "path": "/api/cron/expire-proposals",
+  "schedule": "0 3 * * *"
+}
+```
+
+(Runs daily at 03:00 UTC.)
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add packages/crm/src/lib/proposals/expire-stale.ts packages/crm/src/app/api/cron/expire-proposals/route.ts packages/crm/vercel.json packages/crm/tests/unit/proposals/expire-stale.spec.ts
+git commit -m "feat(proposals): daily TTL cron — auto-expire unaccepted proposals
+
+Proposals in sent/viewed status past expires_at get flipped to expired.
+30-day default TTL per spec open-question #2. Cron runs daily 03:00 UTC."
+```
+
+### Task 9.5: Tier gate — enforce Growth 10/mo cap
+
+**Files:**
+- Create: `packages/crm/src/lib/proposals/check-tier-quota.ts`
+- Modify: `packages/crm/src/app/api/v1/proposals/route.ts` (call the gate before creation)
+- Test: `packages/crm/tests/unit/proposals/check-tier-quota.spec.ts`
+
+- [ ] **Step 1: Write the failing test**
+
+```typescript
+// packages/crm/tests/unit/proposals/check-tier-quota.spec.ts
+import { describe, it, expect } from "vitest";
+import { evaluateProposalQuota } from "@/lib/proposals/check-tier-quota";
+
+describe("evaluateProposalQuota", () => {
+  it("allows scale tier unlimited", () => {
+    expect(evaluateProposalQuota({ tier: "scale", proposalsThisMonth: 50 })).toEqual({
+      allowed: true,
+    });
+  });
+
+  it("allows growth tier under the 10 cap", () => {
+    expect(evaluateProposalQuota({ tier: "growth", proposalsThisMonth: 9 })).toEqual({
+      allowed: true,
+      remaining: 1,
+    });
+  });
+
+  it("blocks growth tier at the 10 cap", () => {
+    expect(evaluateProposalQuota({ tier: "growth", proposalsThisMonth: 10 })).toEqual({
+      allowed: false,
+      reason: "monthly_quota_exceeded",
+      capacity: 10,
+    });
+  });
+
+  it("blocks free tier entirely", () => {
+    expect(evaluateProposalQuota({ tier: "free", proposalsThisMonth: 0 })).toEqual({
+      allowed: false,
+      reason: "tier_does_not_include_proposals",
+      capacity: 0,
+    });
+  });
+});
+```
+
+- [ ] **Step 2: Run the test to verify it fails**
+
+Run: `pnpm test:unit tests/unit/proposals/check-tier-quota.spec.ts`
+Expected: FAIL with "Cannot find module".
+
+- [ ] **Step 3: Write the implementation**
+
+```typescript
+// packages/crm/src/lib/proposals/check-tier-quota.ts
+// 2026-05-19 — Proposal Builder tier gate. Spec open-question #5.
+// Growth: 10/mo cap. Scale: unlimited. Free: blocked.
+
+const GROWTH_MONTHLY_CAP = 10;
+
+export type ProposalQuotaResult =
+  | { allowed: true; remaining?: number }
+  | { allowed: false; reason: string; capacity: number };
+
+export function evaluateProposalQuota(input: {
+  tier: string;
+  proposalsThisMonth: number;
+}): ProposalQuotaResult {
+  if (input.tier === "scale") return { allowed: true };
+  if (input.tier === "growth") {
+    if (input.proposalsThisMonth >= GROWTH_MONTHLY_CAP) {
+      return {
+        allowed: false,
+        reason: "monthly_quota_exceeded",
+        capacity: GROWTH_MONTHLY_CAP,
+      };
+    }
+    return { allowed: true, remaining: GROWTH_MONTHLY_CAP - input.proposalsThisMonth };
+  }
+  return { allowed: false, reason: "tier_does_not_include_proposals", capacity: 0 };
+}
+
+import { and, eq, gte } from "drizzle-orm";
+import { db } from "@/db";
+import { proposals } from "@/db/schema";
+
+export async function countProposalsThisMonth(agencyOrgId: string): Promise<number> {
+  const monthStart = new Date();
+  monthStart.setUTCDate(1);
+  monthStart.setUTCHours(0, 0, 0, 0);
+  const rows = await db
+    .select({ id: proposals.id })
+    .from(proposals)
+    .where(
+      and(
+        eq(proposals.agencyOrgId, agencyOrgId),
+        gte(proposals.createdAt, monthStart),
+      ),
+    );
+  return rows.length;
+}
+```
+
+- [ ] **Step 4: Run the test to verify it passes**
+
+Run: `pnpm test:unit tests/unit/proposals/check-tier-quota.spec.ts`
+Expected: PASS (4 tests).
+
+- [ ] **Step 5: Wire the gate into POST /api/v1/proposals**
+
+In `packages/crm/src/app/api/v1/proposals/route.ts`, before the soul-extraction step (immediately after loading `user`):
+
+```typescript
+import { countProposalsThisMonth, evaluateProposalQuota } from "@/lib/proposals/check-tier-quota";
+
+// ... inside POST, after loading user ...
+
+const tier = user.planId ?? "free";
+const usedThisMonth = await countProposalsThisMonth(user.orgId);
+const quota = evaluateProposalQuota({ tier, proposalsThisMonth: usedThisMonth });
+if (!quota.allowed) {
+  return NextResponse.json(
+    { error: quota.reason, capacity: quota.capacity },
+    { status: 402 },
+  );
+}
+```
+
+- [ ] **Step 6: Verify typecheck**
+
+Run: `pnpm typecheck`
+Expected: PASS.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add packages/crm/src/lib/proposals/check-tier-quota.ts packages/crm/src/app/api/v1/proposals/route.ts packages/crm/tests/unit/proposals/check-tier-quota.spec.ts
+git commit -m "feat(proposals): Growth tier 10/mo cap, Scale unlimited
+
+evaluateProposalQuota gates proposal creation by tier (open-question #5
+in the spec). Returns 402 with a clear reason code so the client can
+show 'upgrade' messaging."
+```
+
+### Task 9.6: Manual smoke test on Vercel preview
 
 **This task is surfaced to the user to run, not executed autonomously.**
 
-When the implementer reaches this task, pause and ask the user to:
+When the implementer reaches Task 9.6, pause and ask the user to:
 
 1. Open the Vercel preview deploy for the branch
 2. Sign in as the agency operator
