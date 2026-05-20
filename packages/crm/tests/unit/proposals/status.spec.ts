@@ -24,6 +24,14 @@ describe("canTransition", () => {
     assert.equal(canTransition("sent", "expired"), true);
   });
 
+  test("allows sent → accepted (skipping viewed)", () => {
+    assert.equal(canTransition("sent", "accepted"), true);
+  });
+
+  test("allows viewed → expired", () => {
+    assert.equal(canTransition("viewed", "expired"), true);
+  });
+
   test("forbids draft → accepted (must be sent first)", () => {
     assert.equal(canTransition("draft", "accepted"), false);
   });

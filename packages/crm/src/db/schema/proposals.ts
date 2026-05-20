@@ -52,7 +52,9 @@ export const proposals = pgTable(
     acceptedAt: timestamp("accepted_at", { withTimezone: true }),
     declinedAt: timestamp("declined_at", { withTimezone: true }),
     declinedReason: text("declined_reason"),
-    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true })
+      .notNull()
+      .default(sql`NOW() + INTERVAL '30 days'`),
     stripeCheckoutSessionId: text("stripe_checkout_session_id"),
     stripeSubscriptionId: text("stripe_subscription_id"),
     stripeCustomerId: text("stripe_customer_id"),

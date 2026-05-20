@@ -9,9 +9,9 @@ describe("generateProposalToken", () => {
     assert.match(token, /^[A-Za-z0-9_-]+$/);
   });
 
-  test("returns at least 32 characters of entropy", () => {
+  test("returns at least 43 characters", () => {
     const token = generateProposalToken();
-    assert.ok(token.length >= 32, `token length ${token.length} is less than 32`);
+    assert.ok(token.length >= 43);
   });
 
   test("returns a different token on each call", () => {

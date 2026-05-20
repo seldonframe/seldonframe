@@ -19,5 +19,9 @@ export type AgencyProfile = {
   logo_url?: string;
   brand_color?: string;
   website_url?: string;
+  // 2026-05-19 — proposalTemplate is intentionally camelCase. The legacy
+  // snake_case fields above (logo_url, brand_color, website_url) predate
+  // this convention and are retained for migration compatibility; all new
+  // fields use camelCase to match TypeScript idioms + downstream consumer code.
   proposalTemplate?: AgencyProposalTemplate;
 };
