@@ -15,6 +15,7 @@ import { createProposal } from "@/lib/proposals/create";
 import { extractBusinessFactsFromUrl } from "@/lib/web-onboarding/markdown-extractor";
 import { createFullWorkspace } from "@/lib/workspace/create-full";
 import { getOperatorByokAnthropicKey } from "@/lib/web-onboarding/byok-resolver";
+import { countProposalsThisMonth, evaluateProposalQuota } from "@/lib/proposals/check-tier-quota";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -78,6 +79,17 @@ export async function POST(request: Request) {
     .where(eq(users.id, session.user.id))
     .limit(1);
   if (!user) return NextResponse.json({ error: "user_not_found" }, { status: 404 });
+
+  // Tier gate — enforce per-plan proposal creation quotas (open-question #5).
+  const tier = user.planId ?? "free";
+  const usedThisMonth = await countProposalsThisMonth(user.orgId);
+  const quota = evaluateProposalQuota({ tier, proposalsThisMonth: usedThisMonth });
+  if (!quota.allowed) {
+    return NextResponse.json(
+      { error: quota.reason, capacity: quota.capacity },
+      { status: 402 },
+    );
+  }
 
   // Resolve BYOK key: operator's own Anthropic key first, platform env-var fallback.
   // This mirrors the pattern in /api/v1/web/workspaces/create-from-url/route.ts.
