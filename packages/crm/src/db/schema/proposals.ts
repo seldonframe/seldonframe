@@ -69,6 +69,9 @@ export const proposals = pgTable(
       table.createdAt,
     ),
     index("proposals_signed_token_idx").on(table.signedToken),
+    index("proposals_checkout_session_idx")
+      .on(table.stripeCheckoutSessionId)
+      .where(sql`${table.stripeCheckoutSessionId} IS NOT NULL`),
   ],
 );
 
