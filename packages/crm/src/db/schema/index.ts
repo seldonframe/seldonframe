@@ -110,3 +110,6 @@ export * from "./outbound-messages";
 // delayed messages (booking reminders, intake followups). See
 // db/schema/outbound-scheduled-sends.ts.
 export * from "./outbound-scheduled-sends";
+
+// 2026-05-19 — Proposal Builder.
+export * from "./proposals";
