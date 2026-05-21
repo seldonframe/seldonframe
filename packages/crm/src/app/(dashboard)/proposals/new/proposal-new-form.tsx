@@ -34,6 +34,7 @@ export function ProposalNewForm({ agencyContext }: { agencyContext: AgencyContex
   const router = useRouter();
   const [url, setUrl] = useState("");
   const [email, setEmail] = useState("");
+  const [prospectFirstName, setProspectFirstName] = useState("");
   const [tier, setTier] = useState<Tier>("growth");
   const [customCents, setCustomCents] = useState("");
   const [setupFeeDollars, setSetupFeeDollars] = useState("");
@@ -54,6 +55,7 @@ export function ProposalNewForm({ agencyContext }: { agencyContext: AgencyContex
         body: JSON.stringify({
           prospect_url: url,
           prospect_email: email,
+          prospect_first_name: prospectFirstName.trim() || undefined,
           pricing_tier: tier,
           custom_cents: tier === "custom" ? Number(customCents) * 100 : undefined,
           setup_fee_cents: setupFeeCents,
@@ -102,6 +104,21 @@ export function ProposalNewForm({ agencyContext }: { agencyContext: AgencyContex
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+            />
+          </div>
+
+          <div className="space-y-3">
+            <Label htmlFor="first-name">
+              Prospect first name{" "}
+              <span className="text-muted-foreground text-xs">(optional — for personalized greeting)</span>
+            </Label>
+            <Input
+              id="first-name"
+              type="text"
+              placeholder="John"
+              value={prospectFirstName}
+              onChange={(e) => setProspectFirstName(e.target.value)}
+              autoComplete="off"
             />
           </div>
 
@@ -164,7 +181,7 @@ export function ProposalNewForm({ agencyContext }: { agencyContext: AgencyContex
       {/* Right column — live preview (rendered by the parent grid) */}
       <ProposalPreviewPane
         agencyContext={agencyContext}
-        formState={{ url, email, tier, customCents, setupFeeDollars }}
+        formState={{ url, email, prospectFirstName, tier, customCents, setupFeeDollars }}
       />
     </>
   );

@@ -57,12 +57,14 @@ export async function POST(request: Request) {
   const {
     prospect_url,
     prospect_email,
+    prospect_first_name,
     pricing_tier,
     custom_cents,
     setup_fee_cents,
   } = body as {
     prospect_url?: string;
     prospect_email?: string;
+    prospect_first_name?: string;
     pricing_tier?: string;
     custom_cents?: number;
     setup_fee_cents?: number;
@@ -156,7 +158,10 @@ export async function POST(request: Request) {
       prospectUrl: prospect_url,
       prospectName: facts.business_name,
       prospectEmail: prospect_email,
-      prospectFirstName: null,
+      prospectFirstName:
+        typeof prospect_first_name === "string" && prospect_first_name.trim()
+          ? prospect_first_name.trim()
+          : null,
       prospectServices: facts.services,
       agencyName: agencyProfile.name ?? user.name,
       agencyBrandColor: agencyProfile.brand_color ?? undefined,

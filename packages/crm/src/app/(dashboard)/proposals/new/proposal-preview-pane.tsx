@@ -28,6 +28,7 @@ export function ProposalPreviewPane({
   formState: {
     url: string;
     email: string;
+    prospectFirstName: string;
     tier: Tier;
     customCents: string;
     setupFeeDollars: string;
@@ -51,6 +52,8 @@ export function ProposalPreviewPane({
     }
   }, [formState.url]);
 
+  const greetingName = formState.prospectFirstName.trim() || prospectName;
+
   const monthlyPriceCents =
     formState.tier === "custom"
       ? Math.max(5000, Math.round(Number(formState.customCents || "0") * 100))
@@ -70,7 +73,7 @@ export function ProposalPreviewPane({
   });
   const intro = substitute(agencyContext.template.introCopy, {
     prospectName,
-    prospectFirstName: prospectName,
+    prospectFirstName: greetingName,
     agencyName: agencyContext.name,
   });
   const scope = substitute(agencyContext.template.scopeCopy, {
@@ -119,7 +122,7 @@ export function ProposalPreviewPane({
               </span>
             )}
           </p>
-          <p className="text-muted-foreground">Hi {prospectName},</p>
+          <p className="text-muted-foreground">Hi {greetingName},</p>
           <p className="text-muted-foreground">
             {agencyContext.name} put together a proposal for you. View it here:
           </p>
