@@ -1,6 +1,7 @@
 "use client";
 
 // packages/crm/src/app/(dashboard)/proposals/[id]/proposal-editor.tsx
+// Header + status pill removed in Phase C — now rendered by page.tsx.
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Proposal, ProposalScopeItem } from "@/db/schema/proposals";
@@ -8,7 +9,6 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { ProposalStatusPill } from "@/components/proposals/proposal-status-pill";
 import { updateProposalAction, sendProposalAction } from "@/lib/proposals/actions";
 
 export function ProposalEditor({ proposal, publicUrl }: { proposal: Proposal; publicUrl: string }) {
@@ -63,16 +63,6 @@ export function ProposalEditor({ proposal, publicUrl }: { proposal: Proposal; pu
 
   return (
     <div className="space-y-6">
-      <header className="flex items-start justify-between gap-4">
-        <div className="space-y-1">
-          <h1 className="text-3xl font-semibold tracking-tight">
-            {proposal.prospectName}
-          </h1>
-          <p className="text-sm text-muted-foreground">{proposal.prospectEmail}</p>
-        </div>
-        <ProposalStatusPill status={proposal.status} />
-      </header>
-
       <section className="rounded-2xl border bg-card/40 p-6 space-y-4">
         <h2 className="text-xl font-semibold">Pricing</h2>
         <div className="flex items-center gap-3">
