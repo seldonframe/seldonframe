@@ -13,10 +13,10 @@
 // actions; the operator portal sets `readonly` to hide write
 // affordances until v1.24.1 ships dual-auth server actions.
 
-import { and, desc, eq, inArray } from "drizzle-orm";
-import { Filter, Search, Users, UserCheck, BellRing, CircleDot } from "lucide-react";
+import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
+import { DollarSign, Filter, Search, Users, UserCheck, BellRing, CircleDot } from "lucide-react";
 import { db } from "@/db";
-import { activities, deals } from "@/db/schema";
+import { activities, deals, proposals } from "@/db/schema";
 import { listContacts } from "@/lib/contacts/actions";
 import { getLabels } from "@/lib/soul/labels";
 import { getSoul } from "@/lib/soul/server";
@@ -97,7 +97,7 @@ export async function ContactsListPageView({
     createdAfter.setHours(0, 0, 0, 0);
   }
 
-  const [labels, rows, soul] = await Promise.all([
+  const [labels, rows, soul, mrrRow] = await Promise.all([
     getLabels(orgId),
     listContacts({
       orgId,
@@ -107,7 +107,28 @@ export async function ContactsListPageView({
       createdAfter,
     }),
     getSoul(orgId),
+    // L2 — MRR summary: count + total monthly_price_cents from accepted proposals
+    db
+      .select({
+        paying: count(proposals.id),
+        mrrCents: sql<number>`COALESCE(SUM(${proposals.monthlyPriceCents}), 0)::int`,
+      })
+      .from(proposals)
+      .where(
+        and(
+          eq(proposals.agencyOrgId, orgId),
+          eq(proposals.status, "accepted"),
+        ),
+      )
+      .then((rows) => rows[0] ?? { paying: 0, mrrCents: 0 }),
   ]);
+
+  const payingCount = mrrRow.paying;
+  const mrrCents = mrrRow.mrrCents ?? 0;
+  const mrrFormatted =
+    mrrCents >= 100
+      ? `$${(mrrCents / 100).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}/mo`
+      : "$0/mo";
 
   const contactIds = rows.map((r) => r.id);
   const nowMs = now.getTime();
@@ -309,6 +330,26 @@ export async function ContactsListPageView({
         </div>
       </div>
 
+      {/* L2 — MRR summary from accepted proposals */}
+      {payingCount > 0 ? (
+        <div className="bg-card text-card-foreground rounded-xl border">
+          <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-border">
+            <MrrCell
+              icon={<UserCheck className="size-4 sm:size-[18px]" />}
+              label="Paying customers"
+              value={String(payingCount)}
+              caption="Proposal accepted"
+            />
+            <MrrCell
+              icon={<DollarSign className="size-4 sm:size-[18px]" />}
+              label="Total MRR"
+              value={mrrFormatted}
+              caption="From accepted proposals"
+            />
+          </div>
+        </div>
+      ) : null}
+
       <form
         method="get"
         action={baseHref}
@@ -396,6 +437,31 @@ function StatCell({
       <div>
         <p className="text-xs text-muted-foreground">{label}</p>
         <p className="text-xl font-semibold tracking-tight">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+function MrrCell({
+  icon,
+  label,
+  value,
+  caption,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  caption: string;
+}) {
+  return (
+    <div className="px-4 py-3 sm:px-5 sm:py-4 flex items-center gap-3">
+      <div className="flex-shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
+        {icon}
+      </div>
+      <div>
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="text-xl font-semibold tracking-tight text-emerald-700 dark:text-emerald-300">{value}</p>
+        <p className="text-[10px] text-muted-foreground/70">{caption}</p>
       </div>
     </div>
   );
