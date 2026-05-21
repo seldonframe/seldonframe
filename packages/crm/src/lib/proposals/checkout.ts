@@ -50,6 +50,18 @@ export function buildCheckoutSessionParams(
     mode: "subscription",
     line_items: lineItems,
     customer_email: input.prospectEmail,
+    // 2026-05-21 — Session-level metadata. Stripe echoes this back on the
+    // checkout.session.completed webhook event as `session.metadata`. The
+    // subscription_data.metadata below ALSO gets set on the resulting
+    // Subscription object, but reading it from there requires either
+    // hydrating session.subscription (which is just a string on the event
+    // payload) or fetching the subscription via Stripe API. Setting it
+    // here gives the webhook a direct path to find the proposal_id.
+    metadata: {
+      proposal_id: input.proposalId,
+      preview_workspace_id: input.previewWorkspaceId ?? "",
+      signed_token: input.signedToken,
+    },
     subscription_data: {
       metadata: {
         proposal_id: input.proposalId,

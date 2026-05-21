@@ -438,30 +438,47 @@ export async function POST(request: Request) {
 
     case "checkout.session.completed": {
       const session = event.data.object as Stripe.Checkout.Session;
-      // proposal_id is set in subscription_data.metadata at checkout creation
-      // time. On the event object Stripe surfaces it via the expanded
-      // subscription's metadata. Also check the raw session object via a
-      // defensive cast (some Stripe API versions surface subscription_data
-      // on the event payload even though it's not in the TS types).
+      // 2026-05-21 — Resolve the proposal via three fallbacks, in order:
+      //  1) session.metadata.proposal_id  (set on the Session itself at
+      //     creation; Stripe echoes this back on the event payload reliably)
+      //  2) session.subscription_data.metadata.proposal_id  (defensive read
+      //     of the input field; some Stripe API versions echo it back)
+      //  3) session.subscription.metadata.proposal_id  (only available if
+      //     the subscription is hydrated to an object; usually it's a string)
+      //  4) stripe_checkout_session_id == session.id  (DB lookup — we
+      //     persist the session id on the proposal at accept time, so we
+      //     can always fall back even if metadata is missing entirely)
       const sessionAny = session as unknown as {
         subscription_data?: { metadata?: { proposal_id?: string } };
       };
-      const proposalId =
-        sessionAny.subscription_data?.metadata?.proposal_id
+      const proposalIdFromMetadata =
+        session.metadata?.proposal_id
+        ?? sessionAny.subscription_data?.metadata?.proposal_id
         ?? (typeof session.subscription === "object" && session.subscription !== null
           ? (session.subscription as Stripe.Subscription).metadata?.proposal_id
           : undefined);
 
-      // If no proposal_id in metadata, this is not a proposal acceptance —
-      // fall through to default (record the event, acknowledge to Stripe).
-      if (!proposalId) break;
-
-      const [proposal] = await db
-        .select()
-        .from(proposals)
-        .where(eq(proposals.id, proposalId))
-        .limit(1);
-      if (!proposal) break;
+      let proposal: typeof proposals.$inferSelect | undefined;
+      if (proposalIdFromMetadata) {
+        [proposal] = await db
+          .select()
+          .from(proposals)
+          .where(eq(proposals.id, proposalIdFromMetadata))
+          .limit(1);
+      }
+      if (!proposal && session.id) {
+        // Fallback: we stored the session id on the proposal at accept time.
+        [proposal] = await db
+          .select()
+          .from(proposals)
+          .where(eq(proposals.stripeCheckoutSessionId, session.id))
+          .limit(1);
+      }
+      if (!proposal) {
+        // Genuinely not a proposal acceptance — fall through to default
+        // (record the event, acknowledge to Stripe with 200).
+        break;
+      }
 
       // Idempotency: if we already processed this session, skip.
       if (proposal.stripeCheckoutSessionId === session.id && proposal.status === "accepted") {
