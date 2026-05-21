@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ProposalPreviewPane } from "./proposal-preview-pane";
-import { ProposalStepsHeader } from "./proposal-steps-header";
+import { ProposalStepsHeader } from "@/components/proposals/proposal-steps-header";
 import { BrandedSlider } from "./branded-slider";
 import type { AgencyProposalTemplate } from "@/db/schema/agency-profile";
 
@@ -123,7 +123,7 @@ export function ProposalNewForm({
   return (
     <>
       <form onSubmit={handleSubmit} className="space-y-6">
-        <ProposalStepsHeader brandColor={agencyContext.brandColor} />
+        <ProposalStepsHeader brandColor={agencyContext.brandColor} mode="scroll" />
 
         <header className="space-y-1">
           <h1 className="text-3xl font-semibold tracking-tight">New proposal</h1>
@@ -365,8 +365,8 @@ export function ProposalNewForm({
           </details>
         </section>
 
-        {/* Step 4: Save & review */}
-        <section id="step-save" className="space-y-3 pt-2">
+        {/* Save & review block (not a stepper step) */}
+        <section id="step-save-block" className="space-y-3 pt-2">
           <p className="text-sm text-muted-foreground">
             Saving creates a draft — you&apos;ll review the full proposal on the next screen and decide when to send.
           </p>
