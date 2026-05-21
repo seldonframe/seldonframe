@@ -1,8 +1,7 @@
 // packages/crm/src/app/(dashboard)/proposals/new/page.tsx
-// 2026-05-19 — Proposal Builder. Form: paste prospect URL, pick tier,
-// click Generate. Redirects to /proposals/onboarding if Stripe Connect
-// is not yet active. Spec: §"Proposal creation".
-// 2026-05-20 — Phase B: two-column layout with live preview pane.
+// 2026-05-21 — Phase E: fetch managed workspaces + pass to form.
+// Workspace picker replaces the URL input. No URL extraction, no workspace
+// provisioning. Spec: §"Proposal creation (Phase E)".
 
 import { redirect } from "next/navigation";
 import { and, eq } from "drizzle-orm";
@@ -11,6 +10,7 @@ import { db } from "@/db";
 import { stripeConnections, users } from "@/db/schema";
 import { ProposalNewForm } from "./proposal-new-form";
 import { DEFAULT_PROPOSAL_TEMPLATE } from "@/lib/proposals/generate-html";
+import { listManagedOrganizationsForUser } from "@/lib/billing/orgs";
 
 export const dynamic = "force-dynamic";
 
@@ -36,10 +36,18 @@ export default async function ProposalNewPage() {
     template: user.agencyProfile.proposalTemplate ?? DEFAULT_PROPOSAL_TEMPLATE,
   };
 
+  const allWorkspaces = await listManagedOrganizationsForUser(session.user.id);
+  // Surface only { id, name, slug } to the form — keep the payload small
+  const workspaces = allWorkspaces.map((ws) => ({
+    id: ws.id,
+    name: ws.name,
+    slug: ws.slug,
+  }));
+
   return (
     <main className="flex-1 overflow-auto w-full p-3 sm:p-4 md:p-6">
       <div className="mx-auto max-w-7xl grid grid-cols-1 lg:grid-cols-[400px_1fr] gap-6">
-        <ProposalNewForm agencyContext={agencyContext} />
+        <ProposalNewForm agencyContext={agencyContext} workspaces={workspaces} />
       </div>
     </main>
   );
