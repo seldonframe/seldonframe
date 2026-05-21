@@ -5,15 +5,16 @@ import Stripe from "stripe";
 import { db } from "@/db";
 import {
   invoices,
+  organizations,
   paymentEvents,
   paymentRecords,
   proposals,
+  proposalEvents,
   stripeConnections,
   subscriptions,
 } from "@/db/schema";
 import { emitSeldonEvent } from "@/lib/events/bus";
 import { logEvent } from "@/lib/observability/log";
-import { activateProposalWorkspace } from "@/lib/proposals/activate-workspace";
 import { notifyAgencyOfAcceptance } from "@/lib/proposals/notify-agency";
 import { notifyProspectOfActivation } from "@/lib/proposals/notify-prospect";
 
@@ -476,13 +477,44 @@ export async function POST(request: Request) {
           ? session.customer
           : (session.customer as Stripe.Customer | null)?.id ?? "";
 
-      await activateProposalWorkspace({
-        proposalId: proposal.id,
-        workspaceId: proposal.previewWorkspaceId,
+      // Update proposal status + persist Stripe IDs
+      await db.update(proposals).set({
+        status: "accepted",
+        acceptedAt: new Date(),
         stripeSubscriptionId: subscriptionId,
         stripeCustomerId: customerId,
-        sessionId: session.id,
+        stripeCheckoutSessionId: session.id,
+        updatedAt: new Date(),
+      }).where(eq(proposals.id, proposal.id));
+
+      await db.insert(proposalEvents).values({
+        proposalId: proposal.id,
+        eventType: "checkout_success",
+        metadata: { sessionId: session.id },
       });
+
+      // Only flip preview_mode on workspaces that have it set (legacy proposals).
+      // New-style Phase E proposals point at real workspaces that are already active.
+      if (proposal.previewWorkspaceId) {
+        const [workspace] = await db
+          .select({ previewMode: organizations.previewMode })
+          .from(organizations)
+          .where(eq(organizations.id, proposal.previewWorkspaceId))
+          .limit(1);
+
+        if (workspace?.previewMode === true) {
+          await db
+            .update(organizations)
+            .set({ previewMode: false, updatedAt: new Date() })
+            .where(eq(organizations.id, proposal.previewWorkspaceId));
+
+          await db.insert(proposalEvents).values({
+            proposalId: proposal.id,
+            eventType: "workspace_activated",
+            metadata: { workspaceId: proposal.previewWorkspaceId },
+          });
+        }
+      }
 
       // Fire-and-forget notifications — failures must not crash the webhook.
       notifyAgencyOfAcceptance({
