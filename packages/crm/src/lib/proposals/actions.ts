@@ -13,6 +13,7 @@ import {
   users,
   type Proposal,
   type ProposalScopeItem,
+  type ProposalInternalNote,
 } from "@/db/schema";
 import { assertTransition } from "./status";
 // Plan called for sendEmail from "@/lib/messaging/send-email" which does not
@@ -135,6 +136,107 @@ export async function sendProposalAction(input: {
     proposalId: input.id,
     eventType: "sent",
     metadata: { to: proposal.prospectEmail },
+  });
+
+  revalidatePath(`/proposals/${input.id}`);
+  revalidatePath("/proposals");
+  return { ok: true };
+}
+
+export async function addProposalNoteAction(input: {
+  id: string;
+  body: string;
+}): Promise<ActionResult> {
+  const loaded = await loadAuthorizedProposal(input.id);
+  if ("error" in loaded) return { ok: false, error: loaded.error };
+
+  const body = input.body.trim();
+  if (!body) return { ok: false, error: "empty_note" };
+  if (body.length > 5000) return { ok: false, error: "note_too_long" };
+
+  const newNote: ProposalInternalNote = {
+    body,
+    createdAt: new Date().toISOString(),
+    createdByUserId: loaded.user.id,
+  };
+
+  const existing =
+    (loaded.proposal as Proposal & { internalNotes?: ProposalInternalNote[] })
+      .internalNotes ?? [];
+  const next = [...existing, newNote];
+
+  await db
+    .update(proposals)
+    .set({ internalNotes: next, updatedAt: new Date() })
+    .where(eq(proposals.id, input.id));
+
+  revalidatePath(`/proposals/${input.id}`);
+  return { ok: true };
+}
+
+export async function resendProposalAction(input: {
+  id: string;
+}): Promise<ActionResult> {
+  const loaded = await loadAuthorizedProposal(input.id);
+  if ("error" in loaded) return { ok: false, error: loaded.error };
+  const { proposal, user } = loaded;
+
+  if (proposal.status !== "sent" && proposal.status !== "viewed") {
+    return { ok: false, error: "cannot_resend_in_current_status" };
+  }
+
+  const baseUrl =
+    process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://app.seldonframe.com";
+  const publicUrl = `${baseUrl}/p/${proposal.signedToken}`;
+  const template = (user.agencyProfile as { proposalTemplate?: AgencyProposalTemplate })
+    ?.proposalTemplate;
+  const subject =
+    "Re: " +
+    (template?.subject ?? "A proposal for {{prospectName}}").replace(
+      /\{\{prospectName\}\}/g,
+      proposal.prospectName,
+    );
+
+  await sendEmailFromApi({
+    orgId: user.orgId,
+    userId: null,
+    contactId: null,
+    toEmail: proposal.prospectEmail,
+    subject,
+    body: `<p>Hi ${proposal.prospectFirstName ?? proposal.prospectName},</p>
+<p>Just following up — here's the proposal link again:</p>
+<p><a href="${publicUrl}">${publicUrl}</a></p>`,
+  });
+
+  await db.insert(proposalEvents).values({
+    proposalId: input.id,
+    eventType: "sent",
+    metadata: { resent: true, to: proposal.prospectEmail },
+  });
+
+  revalidatePath(`/proposals/${input.id}`);
+  return { ok: true };
+}
+
+export async function markProposalInactiveAction(input: {
+  id: string;
+}): Promise<ActionResult> {
+  const loaded = await loadAuthorizedProposal(input.id);
+  if ("error" in loaded) return { ok: false, error: loaded.error };
+
+  if (["accepted", "declined", "expired"].includes(loaded.proposal.status)) {
+    return { ok: false, error: "already_terminal" };
+  }
+
+  await db
+    .update(proposals)
+    .set({ status: "expired", updatedAt: new Date() })
+    .where(eq(proposals.id, input.id));
+
+  await db.insert(proposalEvents).values({
+    proposalId: input.id,
+    eventType: "expired",
+    metadata: { reason: "manual_close" },
   });
 
   revalidatePath(`/proposals/${input.id}`);
