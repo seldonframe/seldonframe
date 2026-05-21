@@ -10,6 +10,7 @@ import { db } from "@/db";
 import { users } from "@/db/schema";
 import { sendEmailFromApi } from "@/lib/emails/api";
 import type { Proposal } from "@/db/schema/proposals";
+import type { AgencyProfile } from "@/db/schema/agency-profile";
 
 export async function notifyAgencyOfAcceptance(proposal: Proposal): Promise<void> {
   if (!proposal.createdByUserId) return;
@@ -23,6 +24,14 @@ export async function notifyAgencyOfAcceptance(proposal: Proposal): Promise<void
   const dollars = (proposal.monthlyPriceCents / 100).toLocaleString("en-US");
   const subject = `${proposal.prospectName} just signed up — $${dollars}/mo`;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.seldonframe.com";
+  const profile = agency.agencyProfile as AgencyProfile;
+  const agencyName = profile.name ?? agency.name;
+
+  const body = `${proposal.prospectName} accepted your proposal.
+
+Monthly: $${dollars}
+Stripe subscription: ${proposal.stripeSubscriptionId ?? "(pending)"}
+Their workspace is live now.`;
 
   await sendEmailFromApi({
     orgId: proposal.agencyOrgId,
@@ -30,9 +39,13 @@ export async function notifyAgencyOfAcceptance(proposal: Proposal): Promise<void
     contactId: null,
     toEmail: agency.email,
     subject,
-    body: `<p>${proposal.prospectName} accepted your proposal.</p>
-<p>Monthly: $${dollars}<br/>
-Stripe subscription: ${proposal.stripeSubscriptionId ?? "(pending)"}</p>
-<p>Their workspace is live now. <a href="${appUrl}/proposals/${proposal.id}">View proposal</a></p>`,
+    body,
+    ctaLabel: "View proposal",
+    ctaHref: `${appUrl}/proposals/${proposal.id}`,
+    brandingOverride: {
+      brandName: agencyName,
+      logoUrl: profile.logo_url ?? undefined,
+      primaryColor: profile.brand_color ?? undefined,
+    },
   });
 }
