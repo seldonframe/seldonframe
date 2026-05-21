@@ -554,6 +554,27 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
           </ol>
         </section>
 
+        {/* ============== SEND PROPOSAL CTA ==============
+            2026-05-21 — Phase L. After building a workspace for a
+            prospect, the natural next commercial step is sending them
+            a proposal so they can sign up and pay. This section makes
+            that next step obvious without hunting for /proposals. */}
+        <section className="rounded-2xl border border-border/70 bg-card/40 p-6 space-y-3">
+          <div className="space-y-1">
+            <p className="text-xs uppercase tracking-widest text-muted-foreground font-medium">Next step</p>
+            <h2 className="text-xl font-semibold tracking-tight">Send a proposal for this workspace</h2>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Now that the workspace is built, send a branded proposal to your prospect. They&apos;ll see a live preview of what you&apos;ve built — and can sign up directly via Stripe.
+          </p>
+          <Link
+            href={`/proposals/new?workspace=${encodeURIComponent(workspace.id)}`}
+            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 transition-opacity"
+          >
+            Send proposal →
+          </Link>
+        </section>
+
         <div className="flex justify-center pt-2">
           <Link
             href="/dashboard"

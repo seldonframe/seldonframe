@@ -186,6 +186,16 @@ export function WorkspaceCard({ workspace }: WorkspaceCardProps) {
           </a>
         ) : null}
       </div>
+      {/* 2026-05-21 — Phase L: quick "Send proposal" action beneath the
+          primary button. Keeps the card scannable — operators who want
+          to monetise this workspace can jump straight to /proposals/new
+          with the workspace pre-selected via the ?workspace= query param. */}
+      <Link
+        href={`/proposals/new?workspace=${encodeURIComponent(workspace.id)}`}
+        className="text-xs text-muted-foreground hover:text-foreground hover:underline"
+      >
+        Send proposal →
+      </Link>
     </article>
   );
 }

@@ -30,6 +30,7 @@ const STEP_ID_BY_NUM = {
 export function ProposalNewForm({
   agencyContext,
   workspaces,
+  initialWorkspaceId,
 }: {
   agencyContext: {
     name: string;
@@ -38,12 +39,17 @@ export function ProposalNewForm({
     template: AgencyProposalTemplate;
   };
   workspaces: Workspace[];
+  /** L6 — pre-selected workspace from ?workspace= query param, validated
+   *  server-side so only IDs that belong to this operator are accepted. */
+  initialWorkspaceId?: string;
 }) {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState<StepNum>(1);
 
   // All form fields — lifted so Back navigation preserves values
-  const [workspaceId, setWorkspaceId] = useState<string>(workspaces[0]?.id ?? "");
+  const [workspaceId, setWorkspaceId] = useState<string>(
+    initialWorkspaceId ?? workspaces[0]?.id ?? "",
+  );
   const [prospectName, setProspectName] = useState("");
   const [prospectFirstName, setProspectFirstName] = useState("");
   const [prospectEmail, setProspectEmail] = useState("");

@@ -14,7 +14,11 @@ import { listManagedOrganizationsForUser } from "@/lib/billing/orgs";
 
 export const dynamic = "force-dynamic";
 
-export default async function ProposalNewPage() {
+export default async function ProposalNewPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ workspace?: string }>;
+}) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login?callbackUrl=/proposals/new");
 
@@ -44,10 +48,23 @@ export default async function ProposalNewPage() {
     slug: ws.slug,
   }));
 
+  // L6 — ?workspace=<id> pre-selects the workspace dropdown so the
+  // operator goes straight to the correct workspace when clicking
+  // "Send proposal →" from /clients or /clients/[slug]/ready.
+  const { workspace: workspaceParam } = await searchParams;
+  const initialWorkspaceId =
+    (workspaceParam && workspaces.find((w) => w.id === workspaceParam)?.id) ||
+    workspaces[0]?.id ||
+    "";
+
   return (
     <main className="flex-1 overflow-auto w-full p-3 sm:p-4 md:p-6 bg-gradient-to-b from-background to-background/95">
       <div className="mx-auto max-w-5xl">
-        <ProposalNewForm agencyContext={agencyContext} workspaces={workspaces} />
+        <ProposalNewForm
+          agencyContext={agencyContext}
+          workspaces={workspaces}
+          initialWorkspaceId={initialWorkspaceId}
+        />
       </div>
     </main>
   );
