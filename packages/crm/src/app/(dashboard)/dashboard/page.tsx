@@ -1,8 +1,9 @@
-import { and, asc, desc, eq, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, or, sql } from "drizzle-orm";
 import Link from "next/link";
 import { DollarSign, Users, CalendarDays, Activity, Plus, ChartLine, MoreHorizontal, BarChart2, ClipboardList, Search, Filter, FileInput, Sparkles, AlertTriangle, AlertCircle, Info, Terminal } from "lucide-react";
 import { db } from "@/db";
-import { activities, bookings as bookingsTable, contacts as contactsTable, metricsSnapshots, organizations, orgMembers, paymentRecords, pipelines as pipelinesTable, proposals as proposalsTable, stripeConnections, type OrganizationIntegrations, type PipelineStage } from "@/db/schema";
+import { activities, bookings as bookingsTable, contacts as contactsTable, metricsSnapshots, organizations, orgMembers, paymentRecords, pipelines as pipelinesTable, proposalEvents as proposalEventsTable, proposals as proposalsTable, stripeConnections, type OrganizationIntegrations, type PipelineStage } from "@/db/schema";
+import type { ProposalEventType } from "@/db/schema/proposal-events";
 import { getCurrentUser, getOrgId } from "@/lib/auth/helpers";
 import { isOperatorPortalUserId } from "@/lib/auth/operator-portal-context";
 import { OperatorTodaySnapshot } from "@/components/dashboard/operator-today-snapshot";
@@ -568,6 +569,105 @@ export default async function DashboardPage({
   const totalWorkspaceContacts = workspaceStats.reduce((sum, row) => sum + row.contactCount, 0);
   const totalWorkspaceRevenue = workspaceStats.reduce((sum, row) => sum + row.monthlyRevenue, 0);
 
+  // ── Agency KPI rollup (all-workspaces view only) ──────────────────────
+  // Phase N: queries scoped to user.orgId (the agency's own org).
+  const agencyOrgId = user?.orgId ?? orgId;
+
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+  const [
+    agencyMrrRow,
+    agencyOpenRow,
+    agencyFunnelRow,
+    agencyThisWeekRow,
+    agencyRecentEvents,
+  ] = await Promise.all([
+    // totalMrr + payingCount
+    db
+      .select({
+        mrrCents: sql<number>`COALESCE(SUM(${proposalsTable.monthlyPriceCents}), 0)::int`,
+        payingCount: sql<number>`COUNT(*)::int`,
+      })
+      .from(proposalsTable)
+      .where(
+        and(
+          eq(proposalsTable.agencyOrgId, agencyOrgId),
+          eq(proposalsTable.status, "accepted"),
+        ),
+      )
+      .then((rows) => rows[0] ?? { mrrCents: 0, payingCount: 0 }),
+
+    // pipelineValue + openProposalsCount
+    db
+      .select({
+        pipelineCents: sql<number>`COALESCE(SUM(${proposalsTable.monthlyPriceCents} * 12 + ${proposalsTable.setupFeeCents}), 0)::int`,
+        openCount: sql<number>`COUNT(*)::int`,
+      })
+      .from(proposalsTable)
+      .where(
+        and(
+          eq(proposalsTable.agencyOrgId, agencyOrgId),
+          inArray(proposalsTable.status, ["draft", "sent", "viewed"]),
+        ),
+      )
+      .then((rows) => rows[0] ?? { pipelineCents: 0, openCount: 0 }),
+
+    // funnel: sent / viewed / accepted
+    db
+      .select({
+        sentCount: sql<number>`COUNT(*) FILTER (WHERE ${proposalsTable.sentAt} IS NOT NULL)::int`,
+        viewedCount: sql<number>`COUNT(*) FILTER (WHERE ${proposalsTable.firstViewedAt} IS NOT NULL)::int`,
+        acceptedCount: sql<number>`COUNT(*) FILTER (WHERE ${proposalsTable.status} = 'accepted')::int`,
+      })
+      .from(proposalsTable)
+      .where(eq(proposalsTable.agencyOrgId, agencyOrgId))
+      .then((rows) => rows[0] ?? { sentCount: 0, viewedCount: 0, acceptedCount: 0 }),
+
+    // proposalsThisWeek
+    db
+      .select({ count: sql<number>`COUNT(*)::int` })
+      .from(proposalsTable)
+      .where(
+        and(
+          eq(proposalsTable.agencyOrgId, agencyOrgId),
+          gte(proposalsTable.sentAt, sevenDaysAgo),
+        ),
+      )
+      .then((rows) => rows[0]?.count ?? 0),
+
+    // recent activity feed: last 10 events across this agency's proposals
+    db
+      .select({
+        id: proposalEventsTable.id,
+        eventType: proposalEventsTable.eventType,
+        createdAt: proposalEventsTable.createdAt,
+        prospectName: proposalsTable.prospectName,
+      })
+      .from(proposalEventsTable)
+      .innerJoin(proposalsTable, eq(proposalEventsTable.proposalId, proposalsTable.id))
+      .where(eq(proposalsTable.agencyOrgId, agencyOrgId))
+      .orderBy(desc(proposalEventsTable.createdAt))
+      .limit(10),
+  ]);
+
+  const totalMrr = Number(agencyMrrRow.mrrCents) / 100;
+  const payingCount = Number(agencyMrrRow.payingCount);
+  const pipelineValue = Number(agencyOpenRow.pipelineCents) / 100;
+  const openProposalsCount = Number(agencyOpenRow.openCount);
+  const proposalsThisWeek = Number(agencyThisWeekRow);
+  const funnelSent = Number(agencyFunnelRow.sentCount);
+  const funnelViewed = Number(agencyFunnelRow.viewedCount);
+  const funnelAccepted = Number(agencyFunnelRow.acceptedCount);
+
+  // Top 3 workspaces by proposalMrr
+  const topWorkspaces = [...workspaceRows]
+    .map((ws) => {
+      const stat = workspaceStatMap.get(ws.id);
+      return { id: ws.id, name: ws.name, slug: ws.slug, mrr: stat?.proposalMrr ?? 0 };
+    })
+    .sort((a, b) => b.mrr - a.mrr)
+    .slice(0, 3);
+
   // 2026-05-17 — when the operator has switched INTO a specific client
   // workspace (active orgId !== user's primary orgId), default to the
   // single-workspace view. Previously this defaulted to "all" — operators
@@ -930,9 +1030,10 @@ export default async function DashboardPage({
       {/* v1.25.3 — Claude Code/MCP hint is for SF technical users.
           Hidden for operator sessions (HVAC owner / dentist /etc.) who
           have no relationship with our developer tooling.
-          Phase K — wrapped in a card frame with a Terminal icon so it
-          reads as an intentional feature call-out rather than bare text. */}
-      {!isOperatorSession ? (
+          Phase K — wrapped in a card frame with a Terminal icon.
+          Phase N — suppressed for the all-workspaces view, which now has
+          its own MCP one-liner inline in the agency KPI rollup header. */}
+      {!isOperatorSession && activeDashboardView !== "all" ? (
         <div className="flex items-start gap-3 rounded-2xl border border-border/70 bg-card/40 px-4 py-3.5">
           <Terminal className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
           <div className="min-w-0 flex-1">
@@ -951,132 +1052,134 @@ export default async function DashboardPage({
         </div>
       ) : null}
 
-      {showWorkspaceTabs ? (
-        <div className="rounded-lg bg-muted p-1 inline-flex gap-1">
-          <Link
-            href="/dashboard?view=workspace"
-            className={`inline-flex h-8 items-center rounded-md px-3 text-xs font-medium transition-colors sm:text-sm ${
-              activeDashboardView === "workspace" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Active Workspace
-          </Link>
-          <Link
-            href="/dashboard?view=all"
-            className={`inline-flex h-8 items-center rounded-md px-3 text-xs font-medium transition-colors sm:text-sm ${
-              activeDashboardView === "all" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            All Workspaces
-          </Link>
-        </div>
-      ) : null}
+      {/* Phase N — tab toggle removed. /dashboard = agency KPI rollup.
+          /clients = per-workspace grid. No toggle needed. */}
 
       {activeDashboardView === "all" ? (
         <section className="space-y-8">
-          {/* Hero header */}
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          {/* ── Page header ─────────────────────────────────────────────── */}
+          <header className="flex items-end justify-between gap-4">
             <div className="space-y-1">
-              <h1 className="text-3xl font-semibold tracking-tight text-foreground">Your Client Workspaces</h1>
-              <p className="text-base text-muted-foreground">A calm overview of every client workspace.</p>
+              <h1 className="text-3xl font-semibold tracking-tight">Agency dashboard</h1>
+              <p className="text-muted-foreground">
+                How your agency is performing across all client workspaces.
+              </p>
             </div>
-            <div className="flex shrink-0 flex-wrap gap-2">
-              {/* 2026-05-17 — /orgs/new was deleted in Cut B; was leading
-                  to a 404. /clients/new is the canonical create-workspace
-                  entry. */}
-              <Link href="/clients/new" className="crm-button-primary h-9 px-4 text-xs sm:text-sm">
-                Create new workspace
+            <div className="flex gap-2">
+              <Link href="/proposals/new" className="crm-button-primary h-10 px-4 text-sm">
+                Send proposal
+              </Link>
+              <Link href="/clients/new" className="crm-button-secondary h-10 px-4 text-sm">
+                + Build workspace
               </Link>
             </div>
-          </div>
+          </header>
 
-          {workspaceRows.length === 0 ? (
-            /* Empty state */
-            <div className="flex flex-col items-center gap-6 rounded-2xl border border-border/80 bg-card/40 px-6 py-16 text-center">
-              <div className="space-y-2">
-                <h2 className="text-xl font-semibold text-foreground">Spin up your first client workspace</h2>
-                <p className="text-sm text-muted-foreground">Paste a URL and we&apos;ll build a CRM, booking page, intake form, and chatbot in one pass.</p>
+          {/* ── MCP one-liner ────────────────────────────────────────────── */}
+          <p className="text-xs text-muted-foreground">
+            <Terminal className="inline size-3 mr-1" />
+            For the best experience, use Seldon directly from Claude Code with our MCP + Skill.{" "}
+            <Link href="https://docs.seldonframe.com/mcp" className="underline" target="_blank">
+              Learn more
+            </Link>
+          </p>
+
+          {/* ── Hero KPI tiles ────────────────────────────────────────────── */}
+          <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <KpiTile label="Total MRR" value={formatCurrency(totalMrr)} suffix="/mo" />
+            <KpiTile label="Paying customers" value={payingCount.toLocaleString()} />
+            <KpiTile
+              label="Pipeline value"
+              value={formatCurrency(pipelineValue)}
+              sub={`${openProposalsCount} open proposal${openProposalsCount === 1 ? "" : "s"}`}
+            />
+            <KpiTile
+              label="This week"
+              value={proposalsThisWeek.toLocaleString()}
+              sub="proposals sent"
+            />
+          </section>
+
+          {/* ── Top 3 workspaces by MRR ─────────────────────────────────── */}
+          <section className="space-y-3">
+            <div className="flex items-end justify-between">
+              <h2 className="text-lg font-semibold tracking-tight">Top workspaces by MRR</h2>
+              <Link href="/clients" className="text-sm text-muted-foreground hover:text-foreground hover:underline">
+                See all {workspaceRows.length} workspace{workspaceRows.length === 1 ? "" : "s"} →
+              </Link>
+            </div>
+            {topWorkspaces.length === 0 || topWorkspaces.every((ws) => ws.mrr === 0) ? (
+              <div className="rounded-2xl border border-border/70 bg-card/40 p-8 text-center space-y-3">
+                <p className="text-sm text-muted-foreground">No paying customers yet.</p>
+                <Link href="/proposals/new" className="text-sm text-primary underline underline-offset-4">
+                  Send your first proposal →
+                </Link>
               </div>
-              <Link href="/clients/new" className="crm-button-primary h-10 px-5 text-sm">
-                Add your first client →
-              </Link>
-            </div>
-          ) : (
-            <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-              {workspaceRows.map((workspace) => {
-                const stat = workspaceStatMap.get(workspace.id);
-                const isActiveWorkspace = workspace.id === orgId;
-                const statusLabel = getWorkspaceStatus(isActiveWorkspace, stat?.contactCount ?? 0);
-                // Phase K — tone-coded status pills: emerald = live, amber = ready, primary = active (current workspace)
-                const pillClass = isActiveWorkspace
-                  ? "border-primary/30 bg-primary/10 text-primary"
-                  : stat?.contactCount
-                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                    : "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400";
-
-                return (
-                  <article key={workspace.id} className="rounded-2xl border border-border/80 bg-card/80 p-5 shadow-(--shadow-xs) transition-shadow hover:shadow-lg">
-                    {/* Card header: name + status pill */}
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl border border-border/70 bg-card text-sm font-semibold text-foreground">
-                          {getWorkspaceInitials(workspace.name)}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-foreground">{workspace.name}</p>
-                          <p className="truncate text-xs text-muted-foreground">/{workspace.slug}</p>
-                        </div>
-                      </div>
-                      <span className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-1 text-[11px] font-medium ${pillClass}`}>
-                        {statusLabel}
-                      </span>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {topWorkspaces.map((ws) => (
+                  <article key={ws.id} className="rounded-2xl border border-border/70 bg-card/40 p-5 space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-semibold truncate">{ws.name}</p>
+                      <span className="text-xs text-muted-foreground shrink-0">/{ws.slug}</span>
                     </div>
-
-                    {/* Domain / framework line */}
-                    <p className="mt-2 truncate text-xs text-muted-foreground">{formatFrameworkLabel(workspace.soulId)} OS</p>
-
-                    {/* 2x2 stat grid — Clients + Revenue (bookings/leads not in workspaceStats; fall back gracefully) */}
-                    <dl className="mt-4 grid grid-cols-2 gap-3">
-                      <div className="rounded-xl border border-border/70 bg-card/70 p-3">
-                        <dt className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">Clients</dt>
-                        <dd className="mt-1 text-lg font-semibold text-foreground">{(stat?.contactCount ?? 0).toLocaleString()}</dd>
-                      </div>
-                      <div className="rounded-xl border border-border/70 bg-card/70 p-3">
-                        <dt className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">MRR</dt>
-                        <dd className="mt-1 text-lg font-semibold text-foreground">
-                          {stat?.monthlyRevenue
-                            ? <>
-                                {formatCurrency(stat.monthlyRevenue)}
-                                <span className="text-xs text-muted-foreground font-normal"> /mo</span>
-                              </>
-                            : "—"}
-                        </dd>
-                      </div>
-                    </dl>
-
-                    {/* Actions */}
-                    <div className="mt-4 flex flex-wrap items-center gap-2">
-                      {/* 2026-05-17 — flip workspace + land on Ready hub */}
-                      <form action={setActiveOrgAction}>
-                        <input type="hidden" name="orgId" value={workspace.id} />
-                        <input type="hidden" name="redirectTo" value={`/clients/${workspace.slug}/ready`} />
-                        <button type="submit" className="crm-button-secondary h-9 px-4 text-xs sm:text-sm">
-                          Open workspace →
-                        </button>
-                      </form>
-                    </div>
+                    <p className="text-2xl font-semibold">
+                      {formatCurrency(ws.mrr)}
+                      <span className="text-sm text-muted-foreground font-normal"> /mo</span>
+                    </p>
+                    <Link href={`/clients/${ws.slug}/ready`} className="text-sm text-muted-foreground hover:text-foreground hover:underline">
+                      Open dashboard →
+                    </Link>
                   </article>
-                );
-              })}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
+          </section>
 
-          {workspaceRows.length > 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Totals: <span className="text-foreground font-medium">{workspaceRows.length} workspaces</span> ·{" "}
-              <span className="text-foreground font-medium">{totalWorkspaceContacts.toLocaleString()} clients</span> ·{" "}
-              <span className="text-foreground font-medium">{formatCurrency(totalWorkspaceRevenue)}/mo revenue</span>
-            </p>
+          {/* ── Recent activity feed ─────────────────────────────────────── */}
+          <section className="rounded-2xl border border-border/70 bg-card/40 p-5 space-y-3">
+            <h2 className="text-lg font-semibold tracking-tight">Recent activity</h2>
+            {agencyRecentEvents.length === 0 ? (
+              <p className="text-sm text-muted-foreground italic">No recent activity. Send a proposal to see it here.</p>
+            ) : (
+              <ul className="space-y-2">
+                {agencyRecentEvents.map((event) => (
+                  <li key={event.id} className="flex items-start gap-3 text-sm">
+                    <span className="text-xs text-muted-foreground shrink-0 w-20">{agencyFormatRelative(event.createdAt)}</span>
+                    <span className="flex-1">{agencyDescribeEvent(event.eventType, event.prospectName)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          {/* ── Mini funnel ──────────────────────────────────────────────── */}
+          {funnelSent > 0 ? (
+            <section className="rounded-2xl border border-border/70 bg-card/40 p-5 space-y-4">
+              <h2 className="text-lg font-semibold tracking-tight">Proposal funnel</h2>
+              <div className="flex items-center gap-2 sm:gap-4">
+                <div className="rounded-xl border border-border/70 bg-card/60 p-4 text-center min-w-[80px]">
+                  <p className="text-2xl font-semibold">{funnelSent}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Sent</p>
+                </div>
+                <span className="text-muted-foreground text-sm">→</span>
+                <div className="rounded-xl border border-border/70 bg-card/60 p-4 text-center min-w-[80px]">
+                  <p className="text-2xl font-semibold">{funnelViewed}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Viewed</p>
+                </div>
+                <span className="text-muted-foreground text-sm">→</span>
+                <div className="rounded-xl border border-border/70 bg-card/60 p-4 text-center min-w-[80px]">
+                  <p className="text-2xl font-semibold">{funnelAccepted}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Accepted</p>
+                </div>
+                <div className="ml-auto text-right">
+                  <p className="text-2xl font-semibold text-primary">
+                    {funnelSent > 0 ? Math.round((funnelAccepted / funnelSent) * 100) : 0}%
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">conversion</p>
+                </div>
+              </div>
+            </section>
           ) : null}
         </section>
       ) : (
@@ -1686,4 +1789,59 @@ export default async function DashboardPage({
 
     </main>
   );
+}
+
+// ── Agency KPI rollup helpers ─────────────────────────────────────────────
+
+function KpiTile({
+  label,
+  value,
+  suffix,
+  sub,
+}: {
+  label: string;
+  value: string;
+  suffix?: string;
+  sub?: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-border/70 bg-card/40 p-5 space-y-1">
+      <p className="text-xs uppercase tracking-widest text-muted-foreground font-medium">{label}</p>
+      <p className="text-3xl font-semibold tracking-tight">
+        {value}
+        {suffix && <span className="text-base text-muted-foreground font-normal">{suffix}</span>}
+      </p>
+      {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
+    </div>
+  );
+}
+
+function agencyFormatRelative(date: Date | string): string {
+  const d = typeof date === "string" ? new Date(date) : date;
+  const diffMs = Date.now() - d.getTime();
+  const diffMin = Math.floor(diffMs / 60_000);
+  const diffHr = Math.floor(diffMs / 3_600_000);
+  const diffDay = Math.floor(diffMs / 86_400_000);
+
+  if (diffMin < 1) return "just now";
+  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffHr < 24) return `${diffHr}h ago`;
+  if (diffDay === 1) return "Yesterday";
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(d);
+}
+
+function agencyDescribeEvent(eventType: string, prospectName: string): string {
+  switch (eventType as ProposalEventType) {
+    case "created": return `New proposal drafted for ${prospectName}`;
+    case "sent": return `Proposal sent to ${prospectName}`;
+    case "viewed": return `${prospectName} viewed the proposal`;
+    case "accepted": return `${prospectName} accepted the proposal 🎉`;
+    case "declined": return `${prospectName} declined the proposal`;
+    case "checkout_started": return `${prospectName} started checkout`;
+    case "checkout_success": return `Payment received from ${prospectName}`;
+    case "checkout_canceled": return `${prospectName} canceled checkout`;
+    case "workspace_activated": return `Workspace activated for ${prospectName}`;
+    case "expired": return `Proposal expired for ${prospectName}`;
+    default: return `${eventType} — ${prospectName}`;
+  }
 }
