@@ -1,8 +1,8 @@
 // packages/crm/src/lib/proposals/create.ts
-// 2026-05-19 — Proposal Builder orchestrator. Resolves pricing, calls
-// soul extraction (existing), provisions the preview workspace (existing
-// createFullWorkspace with preview_mode=true), generates HTML via
-// Anthropic, and inserts the proposals row. Spec: §"Proposal creation".
+// 2026-05-21 — Phase E: createProposal no longer accepts a generateHtml
+// callback. The caller passes pre-composed HTML directly (via composeProposalHtml).
+// Pricing is passed as explicit cents rather than via the tier enum.
+// The original resolvePricing helper is retained for backward compat.
 
 import { db } from "@/db";
 import {
@@ -15,7 +15,6 @@ import {
 import { generateProposalToken } from "./signed-token";
 import {
   DEFAULT_PROPOSAL_TEMPLATE,
-  buildProposalPrompt,
 } from "./generate-html";
 import type { AgencyProposalTemplate } from "@/db/schema/agency-profile";
 
@@ -48,62 +47,65 @@ export function resolvePricing(input: ResolvePricingInput): {
 export type CreateProposalInput = {
   agencyOrgId: string;
   createdByUserId: string;
-  prospectUrl: string;
   prospectName: string;
   prospectEmail: string;
   prospectFirstName?: string | null;
   prospectPhone?: string | null;
-  prospectServices: string[];
+  scopeItems: ProposalScopeItem[];
   agencyName: string;
   agencyBrandColor?: string;
   template?: AgencyProposalTemplate;
-  pricing: ResolvePricingInput;
+  monthlyPriceCents: number;
   setupFeeCents?: number;
   previewWorkspaceId: string | null;
-  generateHtml: (prompt: string) => Promise<string>;
+  emailSubject?: string | null;
+  emailBody?: string | null;
+  introText?: string | null;
+  timelineText?: string | null;
+  termsText?: string | null;
+  generatedHtml: string;
 };
 
 export async function createProposal(
   input: CreateProposalInput,
 ): Promise<Proposal> {
-  const pricing = resolvePricing(input.pricing);
+  if (input.monthlyPriceCents < 5000) {
+    throw new Error("custom_price_below_minimum");
+  }
   const setupFeeCents = Math.max(0, Math.floor(input.setupFeeCents ?? 0));
-  const template = input.template ?? DEFAULT_PROPOSAL_TEMPLATE;
 
-  const prompt = buildProposalPrompt({
-    agencyName: input.agencyName,
-    agencyBrandColor: input.agencyBrandColor,
-    prospectName: input.prospectName,
-    prospectFirstName: input.prospectFirstName,
-    prospectServices: input.prospectServices,
-    monthlyPriceCents: pricing.monthlyPriceCents,
-    template,
-  });
-
-  const html = await input.generateHtml(prompt);
   const token = generateProposalToken();
 
-  const scopeItems: ProposalScopeItem[] = template.scopeCopy
-    .split(",")
-    .map((item) => ({ label: item.trim() }))
-    .filter((item) => item.label.length > 0);
+  // Determine pricing tier from the cents value for backward compat
+  let pricingTier: ProposalPricingTier = "custom";
+  for (const [tier, price] of Object.entries(PROPOSAL_TIER_PRICES) as [Exclude<ProposalPricingTier, "custom">, number][]) {
+    if (price === input.monthlyPriceCents) {
+      pricingTier = tier;
+      break;
+    }
+  }
 
   const [created] = await db
     .insert(proposals)
     .values({
       agencyOrgId: input.agencyOrgId,
       createdByUserId: input.createdByUserId,
-      prospectUrl: input.prospectUrl,
+      prospectUrl: "",  // no longer URL-driven; kept non-null for schema compat
       prospectName: input.prospectName,
       prospectEmail: input.prospectEmail,
       prospectFirstName: input.prospectFirstName ?? null,
       prospectPhone: input.prospectPhone ?? null,
       previewWorkspaceId: input.previewWorkspaceId,
-      pricingTier: pricing.tier,
-      monthlyPriceCents: pricing.monthlyPriceCents,
+      pricingTier,
+      monthlyPriceCents: input.monthlyPriceCents,
       setupFeeCents,
-      generatedHtml: html,
-      scopeItems,
+      generatedHtml: input.generatedHtml,
+      scopeItems: input.scopeItems,
+      ...(input.emailSubject !== undefined && { emailSubject: input.emailSubject }),
+      ...(input.emailBody !== undefined && { emailBody: input.emailBody }),
+      ...(input.introText !== undefined && { introText: input.introText }),
+      ...(input.timelineText !== undefined && { timelineText: input.timelineText }),
+      ...(input.termsText !== undefined && { termsText: input.termsText }),
       signedToken: token,
       status: "draft",
       expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
@@ -113,7 +115,7 @@ export async function createProposal(
   await db.insert(proposalEvents).values({
     proposalId: created.id,
     eventType: "created",
-    metadata: { pricingTier: pricing.tier, monthlyPriceCents: pricing.monthlyPriceCents },
+    metadata: { monthlyPriceCents: input.monthlyPriceCents },
   });
 
   return created;

@@ -1,24 +1,23 @@
 // packages/crm/src/app/api/v1/proposals/route.ts
-// 2026-05-19 — Proposal Builder. POST creates a new proposal: extracts
-// the prospect's facts from the URL, provisions a preview workspace,
-// generates the HTML via Claude, and inserts the proposals row.
-// GET lists the authed user's agency proposals.
-// Spec: §"Proposal creation".
+// 2026-05-21 — Phase E: POST no longer extracts the prospect's soul from a
+// URL, provisions a preview workspace, or calls Claude. The operator passes
+// all fields directly. workspace_id is OPTIONAL — null means "no workspace
+// bundled" (external billing). HTML is composed deterministically via
+// composeProposalHtml. GET is unchanged.
+// Spec: §"Proposal creation" (Phase E).
 
 import { NextResponse } from "next/server";
 import { desc, eq } from "drizzle-orm";
-import Anthropic from "@anthropic-ai/sdk";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { proposals, users } from "@/db/schema";
 import { createProposal } from "@/lib/proposals/create";
-import { extractBusinessFactsFromUrl } from "@/lib/web-onboarding/markdown-extractor";
-import { createFullWorkspace } from "@/lib/workspace/create-full";
-import { getOperatorByokAnthropicKey } from "@/lib/web-onboarding/byok-resolver";
+import { composeProposalHtml } from "@/lib/proposals/compose-html";
 import { countProposalsThisMonth, evaluateProposalQuota } from "@/lib/proposals/check-tier-quota";
+import { DEFAULT_PROPOSAL_TEMPLATE } from "@/lib/proposals/generate-html";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 30;
 
 export async function GET(_request: Request) {
   const session = await auth();
@@ -55,32 +54,53 @@ export async function POST(request: Request) {
   }
 
   const {
-    prospect_url,
+    workspace_id,
+    prospect_name,
     prospect_email,
     prospect_first_name,
-    pricing_tier,
-    custom_cents,
+    prospect_phone,
+    monthly_price_cents,
     setup_fee_cents,
+    email_subject,
+    email_body,
+    intro_text,
+    timeline_text,
+    terms_text,
+    scope_items,
   } = body as {
-    prospect_url?: string;
+    workspace_id?: string | null;
+    prospect_name?: string;
     prospect_email?: string;
     prospect_first_name?: string;
-    pricing_tier?: string;
-    custom_cents?: number;
+    prospect_phone?: string;
+    monthly_price_cents?: number;
     setup_fee_cents?: number;
+    email_subject?: string;
+    email_body?: string;
+    intro_text?: string;
+    timeline_text?: string;
+    terms_text?: string;
+    scope_items?: { label: string; description?: string }[];
   };
+
+  // Validate required fields
+  if (!prospect_name || typeof prospect_name !== "string" || !prospect_name.trim()) {
+    return NextResponse.json({ error: "prospect_name_required" }, { status: 400 });
+  }
+  if (!prospect_email || typeof prospect_email !== "string" || !prospect_email.trim()) {
+    return NextResponse.json({ error: "prospect_email_required" }, { status: 400 });
+  }
+  if (typeof monthly_price_cents !== "number" || monthly_price_cents < 5000) {
+    return NextResponse.json(
+      { error: "monthly_price_cents_required_min_5000" },
+      { status: 400 },
+    );
+  }
 
   const setupFeeCents =
     typeof setup_fee_cents === "number"
       ? Math.max(0, Math.min(1_000_000, Math.floor(setup_fee_cents)))
       : 0;
-
-  if (!prospect_url || !prospect_email || !pricing_tier) {
-    return NextResponse.json(
-      { error: "missing_required_fields" },
-      { status: 400 },
-    );
-  }
 
   const [user] = await db
     .select()
@@ -89,7 +109,7 @@ export async function POST(request: Request) {
     .limit(1);
   if (!user) return NextResponse.json({ error: "user_not_found" }, { status: 404 });
 
-  // Tier gate — enforce per-plan proposal creation quotas (open-question #5).
+  // Tier gate
   const tier = user.planId ?? "free";
   const usedThisMonth = await countProposalsThisMonth(user.orgId);
   const quota = evaluateProposalQuota({ tier, proposalsThisMonth: usedThisMonth });
@@ -100,107 +120,73 @@ export async function POST(request: Request) {
     );
   }
 
-  // Resolve BYOK key: operator's own Anthropic key first, platform env-var fallback.
-  // This mirrors the pattern in /api/v1/web/workspaces/create-from-url/route.ts.
-  const byokResult = await getOperatorByokAnthropicKey({ orgId: user.orgId });
-  const resolvedApiKey =
-    (byokResult.source === "byok" && byokResult.key)
-      ? byokResult.key
-      : (process.env.ANTHROPIC_API_KEY ?? "");
-
-  // 1. Extract prospect business facts from URL — graceful fallback on failure.
-  let facts: Awaited<ReturnType<typeof extractBusinessFactsFromUrl>>;
-  try {
-    facts = await extractBusinessFactsFromUrl({ url: prospect_url, byokKey: resolvedApiKey });
-  } catch (e) {
-    console.warn("[proposal-builder] soul extraction failed", e);
-    const hostname = new URL(prospect_url).hostname.replace(/^www\./, "");
-    facts = {
-      business_name: hostname,
-      city: "",
-      state: "",
-      phone: "",
-      services: [],
-      business_description: `Proposal for ${hostname}`,
-    };
-  }
-
-  // 2. Provision preview workspace — graceful fallback on failure.
-  let workspaceId: string | null = null;
-  try {
-    const workspace = await createFullWorkspace({
-      business_name: facts.business_name,
-      city: facts.city,
-      state: facts.state,
-      phone: facts.phone,
-      services: facts.services,
-      business_description: facts.business_description,
-      email: prospect_email,
-      preview_mode: true,
-    });
-    if (workspace.status === "error" || !workspace.workspace_id) {
-      console.warn("[proposal-builder] workspace provisioning failed", workspace.error);
-    } else {
-      workspaceId = workspace.workspace_id;
+  // Validate workspace_id if provided — must belong to this user's org
+  let resolvedWorkspaceId: string | null = null;
+  if (workspace_id && typeof workspace_id === "string" && workspace_id.trim()) {
+    const { listManagedOrganizationsForUser } = await import("@/lib/billing/orgs");
+    const managed = await listManagedOrganizationsForUser(user.id);
+    const found = managed.find((ws) => ws.id === workspace_id);
+    if (!found) {
+      return NextResponse.json(
+        { error: "workspace_not_found_or_unauthorized" },
+        { status: 403 },
+      );
     }
-  } catch (e) {
-    console.warn("[proposal-builder] workspace provisioning failed", e);
+    resolvedWorkspaceId = workspace_id;
   }
 
-  // 3. Create proposal row.
+  // Resolve agency template
   const agencyProfile = user.agencyProfile ?? {};
+  const agencyName = (agencyProfile as { name?: string }).name ?? user.name;
+  const agencyBrandColor = (agencyProfile as { brand_color?: string }).brand_color ?? "#0ea5e9";
+  const agencyTemplate =
+    (agencyProfile as { proposalTemplate?: typeof DEFAULT_PROPOSAL_TEMPLATE }).proposalTemplate ??
+    DEFAULT_PROPOSAL_TEMPLATE;
 
-  let proposal: Awaited<ReturnType<typeof createProposal>>;
-  try {
-    proposal = await createProposal({
-      agencyOrgId: user.orgId,
-      createdByUserId: user.id,
-      prospectUrl: prospect_url,
-      prospectName: facts.business_name,
-      prospectEmail: prospect_email,
-      prospectFirstName:
-        typeof prospect_first_name === "string" && prospect_first_name.trim()
-          ? prospect_first_name.trim()
-          : null,
-      prospectServices: facts.services,
-      agencyName: agencyProfile.name ?? user.name,
-      agencyBrandColor: agencyProfile.brand_color ?? undefined,
-      template: agencyProfile.proposalTemplate,
-      pricing:
-        pricing_tier === "custom"
-          ? { tier: "custom", customCents: custom_cents }
-          : { tier: pricing_tier as "starter" | "growth" | "pro" },
-      setupFeeCents,
-      previewWorkspaceId: workspaceId,
-      generateHtml: async (prompt) => {
-        if (!resolvedApiKey) {
-          throw new Error("html_generation_failed");
-        }
-        const client = new Anthropic({ apiKey: resolvedApiKey });
-        try {
-          const response = await client.messages.create({
-            model: "claude-sonnet-4-5",
-            max_tokens: 2000,
-            system: "You generate HTML sales proposal bodies. Output ONLY HTML.",
-            messages: [{ role: "user", content: prompt }],
-          });
-          const text = response.content
-            .filter((b) => b.type === "text")
-            .map((b) => (b as { text: string }).text)
-            .join("");
-          return text.trim();
-        } catch (e) {
-          console.error("[proposal-builder] Claude HTML generation failed", e);
-          throw new Error("html_generation_failed");
-        }
-      },
-    });
-  } catch (e) {
-    if (e instanceof Error && e.message === "html_generation_failed") {
-      return NextResponse.json({ error: "html_generation_failed" }, { status: 502 });
-    }
-    throw e;
-  }
+  // Resolve scope items — use provided array or derive from template
+  const resolvedScopeItems: { label: string; description?: string }[] =
+    Array.isArray(scope_items) && scope_items.length > 0
+      ? scope_items
+      : agencyTemplate.scopeCopy
+          .split(",")
+          .map((item) => ({ label: item.trim() }))
+          .filter((item) => item.label.length > 0);
+
+  // Compose HTML deterministically — no LLM call
+  const generatedHtml = composeProposalHtml({
+    prospectName: prospect_name.trim(),
+    prospectFirstName: prospect_first_name?.trim() || null,
+    monthlyPriceCents: monthly_price_cents,
+    setupFeeCents,
+    scopeItems: resolvedScopeItems,
+    agencyTemplate,
+    introOverride: intro_text?.trim() || null,
+    timelineOverride: timeline_text?.trim() || null,
+    termsOverride: terms_text?.trim() || null,
+    brandColor: agencyBrandColor,
+  });
+
+  const proposal = await createProposal({
+    agencyOrgId: user.orgId,
+    createdByUserId: user.id,
+    prospectName: prospect_name.trim(),
+    prospectEmail: prospect_email.trim(),
+    prospectFirstName: prospect_first_name?.trim() || null,
+    prospectPhone: prospect_phone?.trim() || null,
+    scopeItems: resolvedScopeItems,
+    agencyName,
+    agencyBrandColor,
+    template: agencyTemplate,
+    monthlyPriceCents: monthly_price_cents,
+    setupFeeCents,
+    previewWorkspaceId: resolvedWorkspaceId,
+    emailSubject: email_subject?.trim() || null,
+    emailBody: email_body?.trim() || null,
+    introText: intro_text?.trim() || null,
+    timelineText: timeline_text?.trim() || null,
+    termsText: terms_text?.trim() || null,
+    generatedHtml,
+  });
 
   return NextResponse.json({ proposal });
 }
