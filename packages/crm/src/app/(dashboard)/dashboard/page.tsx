@@ -1127,9 +1127,21 @@ export default async function DashboardPage({
                       {formatCurrency(ws.mrr)}
                       <span className="text-sm text-muted-foreground font-normal"> /mo</span>
                     </p>
-                    <Link href={`/clients/${ws.slug}/ready`} className="text-sm text-muted-foreground hover:text-foreground hover:underline">
-                      Open dashboard →
-                    </Link>
+                    {/* 2026-05-21 — Click flips active workspace context (same
+                        pattern as the /clients cards) so the dashboard
+                        subsequently renders THIS workspace's operational view
+                        instead of the agency rollup. Returning to the agency
+                        view = use the sidebar 'Switch workspace' dropdown. */}
+                    <form action={setActiveOrgAction}>
+                      <input type="hidden" name="orgId" value={ws.id} />
+                      <input type="hidden" name="redirectTo" value={`/clients/${ws.slug}/ready`} />
+                      <button
+                        type="submit"
+                        className="text-sm text-muted-foreground hover:text-foreground hover:underline"
+                      >
+                        Open dashboard →
+                      </button>
+                    </form>
                   </article>
                 ))}
               </div>
