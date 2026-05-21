@@ -55,4 +55,26 @@ describe("buildCheckoutSessionParams", () => {
       `Expected success_url to include session_id placeholder, got: ${params.success_url}`,
     );
   });
+
+  test("adds a non-recurring setup fee line item when setupFeeCents > 0", () => {
+    const params = buildCheckoutSessionParams({ ...input, setupFeeCents: 75000 });
+    assert.equal(params.line_items?.length, 2);
+    const setupLine = params.line_items?.[0];
+    assert.equal(setupLine?.price_data?.unit_amount, 75000);
+    assert.equal(setupLine?.price_data?.recurring, undefined);
+    assert.ok(setupLine?.price_data?.product_data?.name?.includes("setup fee"));
+  });
+
+  test("omits the setup fee line item when setupFeeCents is 0 or unset", () => {
+    const without = buildCheckoutSessionParams(input);
+    assert.equal(without.line_items?.length, 1);
+    const withZero = buildCheckoutSessionParams({ ...input, setupFeeCents: 0 });
+    assert.equal(withZero.line_items?.length, 1);
+  });
+
+  test("setup fee line item precedes the monthly line item", () => {
+    const params = buildCheckoutSessionParams({ ...input, setupFeeCents: 50000 });
+    assert.equal(params.line_items?.[0]?.price_data?.recurring, undefined);
+    assert.equal(params.line_items?.[1]?.price_data?.recurring?.interval, "month");
+  });
 });
