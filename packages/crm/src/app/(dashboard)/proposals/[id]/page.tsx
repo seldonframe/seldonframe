@@ -48,16 +48,15 @@ export default async function ProposalEditPage({
     process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://app.seldonframe.com";
   const publicUrl = `${baseUrl}/p/${proposal.signedToken}`;
 
-  // 2-step lifecycle: step 1 (create) is always visited once we're on /[id];
-  // step 2 (review & send) stays as the active step throughout the /[id]
-  // lifecycle, but flips to visited (✓) once the proposal moves out of
-  // draft. Post-send status (sent/viewed/accepted/declined/expired) is
-  // communicated by the status pill in the header — not by additional steps.
+  // 4-step wizard: /proposals/new owns steps 1-3 (Client, Pricing, Customize).
+  // Once the operator lands on /[id] all first three steps are visited; step 4
+  // (Review & send) is the active step and flips to visited once the proposal
+  // moves out of draft. Post-send status is communicated via the status pill.
   const activeStep: ProposalStepId = "step-review";
   const visitedSteps: ProposalStepId[] =
     proposal.status === "draft"
-      ? ["step-create"]
-      : ["step-create", "step-review"];
+      ? ["step-client", "step-pricing", "step-customize"]
+      : ["step-client", "step-pricing", "step-customize", "step-review"];
 
   const brandColor =
     (user.agencyProfile as { brand_color?: string } | null)?.brand_color ??
