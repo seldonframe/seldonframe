@@ -58,6 +58,7 @@ export type CreateProposalInput = {
   agencyBrandColor?: string;
   template?: AgencyProposalTemplate;
   pricing: ResolvePricingInput;
+  setupFeeCents?: number;
   previewWorkspaceId: string | null;
   generateHtml: (prompt: string) => Promise<string>;
 };
@@ -66,6 +67,7 @@ export async function createProposal(
   input: CreateProposalInput,
 ): Promise<Proposal> {
   const pricing = resolvePricing(input.pricing);
+  const setupFeeCents = Math.max(0, Math.floor(input.setupFeeCents ?? 0));
   const template = input.template ?? DEFAULT_PROPOSAL_TEMPLATE;
 
   const prompt = buildProposalPrompt({
@@ -99,6 +101,7 @@ export async function createProposal(
       previewWorkspaceId: input.previewWorkspaceId,
       pricingTier: pricing.tier,
       monthlyPriceCents: pricing.monthlyPriceCents,
+      setupFeeCents,
       generatedHtml: html,
       scopeItems,
       signedToken: token,

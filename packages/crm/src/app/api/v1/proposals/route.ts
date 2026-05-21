@@ -59,12 +59,19 @@ export async function POST(request: Request) {
     prospect_email,
     pricing_tier,
     custom_cents,
+    setup_fee_cents,
   } = body as {
     prospect_url?: string;
     prospect_email?: string;
     pricing_tier?: string;
     custom_cents?: number;
+    setup_fee_cents?: number;
   };
+
+  const setupFeeCents =
+    typeof setup_fee_cents === "number"
+      ? Math.max(0, Math.min(1_000_000, Math.floor(setup_fee_cents)))
+      : 0;
 
   if (!prospect_url || !prospect_email || !pricing_tier) {
     return NextResponse.json(
@@ -158,6 +165,7 @@ export async function POST(request: Request) {
         pricing_tier === "custom"
           ? { tier: "custom", customCents: custom_cents }
           : { tier: pricing_tier as "starter" | "growth" | "pro" },
+      setupFeeCents,
       previewWorkspaceId: workspaceId,
       generateHtml: async (prompt) => {
         if (!resolvedApiKey) {

@@ -40,6 +40,7 @@ export const proposals = pgTable(
     ),
     pricingTier: text("pricing_tier").$type<ProposalPricingTier>().notNull(),
     monthlyPriceCents: integer("monthly_price_cents").notNull(),
+    setupFeeCents: integer("setup_fee_cents").notNull().default(0),
     generatedHtml: text("generated_html").notNull(),
     scopeItems: jsonb("scope_items")
       .$type<ProposalScopeItem[]>()
