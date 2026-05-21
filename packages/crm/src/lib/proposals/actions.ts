@@ -5,6 +5,7 @@
 
 import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
+import sanitizeHtml from "sanitize-html";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import {
@@ -61,6 +62,10 @@ export async function updateProposalAction(input: {
   monthlyPriceCents: number;
   setupFeeCents?: number;
   scopeItems: ProposalScopeItem[];
+  prospectFirstName?: string | null;
+  emailSubject?: string | null;
+  emailBody?: string | null;
+  generatedHtml?: string;
 }): Promise<ActionResult> {
   const loaded = await loadAuthorizedProposal(input.id);
   if ("error" in loaded) return { ok: false, error: loaded.error };
@@ -72,12 +77,37 @@ export async function updateProposalAction(input: {
   }
   const setupFeeCents = Math.max(0, Math.min(1_000_000, Math.floor(input.setupFeeCents ?? 0)));
 
+  // Sanitize generated_html only when the caller actually sends it. Keeps the
+  // existing value untouched when the field is absent (price-only saves etc.).
+  const sanitizedHtml =
+    typeof input.generatedHtml === "string"
+      ? sanitizeHtml(input.generatedHtml, {
+          allowedTags: [
+            "section", "div", "p", "h1", "h2", "h3", "h4", "ul", "ol", "li",
+            "strong", "em", "br", "span", "a",
+          ],
+          allowedAttributes: {
+            a: ["href", "rel", "target"],
+            span: ["style"],
+            h1: ["style"],
+            h2: ["style"],
+            h3: ["style"],
+            div: ["style"],
+          },
+          allowedSchemes: ["https"],
+        })
+      : undefined;
+
   await db
     .update(proposals)
     .set({
       monthlyPriceCents: input.monthlyPriceCents,
       setupFeeCents,
       scopeItems: input.scopeItems,
+      ...(input.prospectFirstName !== undefined && { prospectFirstName: input.prospectFirstName }),
+      ...(input.emailSubject !== undefined && { emailSubject: input.emailSubject }),
+      ...(input.emailBody !== undefined && { emailBody: input.emailBody }),
+      ...(sanitizedHtml !== undefined && { generatedHtml: sanitizedHtml }),
       updatedAt: new Date(),
     })
     .where(eq(proposals.id, input.id));
@@ -105,25 +135,34 @@ export async function sendProposalAction(input: {
   const publicUrl = `${baseUrl}/p/${proposal.signedToken}`;
   const template = (user.agencyProfile as { proposalTemplate?: AgencyProposalTemplate })
     ?.proposalTemplate;
-  const subject = (template?.subject ?? "A proposal for {{prospectName}}").replace(
-    /\{\{prospectName\}\}/g,
-    proposal.prospectName,
-  );
+  const agencyName =
+    (user.agencyProfile as { name?: string } | null)?.name ?? user.name;
+  const greetingName = proposal.prospectFirstName?.trim() || proposal.prospectName;
+
+  // Subject: proposal override → template substitute → hardcoded fallback.
+  const subjectRaw =
+    proposal.emailSubject?.trim() ||
+    template?.subject ||
+    "A proposal for {{prospectName}}";
+  const subject = subjectRaw.replace(/\{\{prospectName\}\}/g, proposal.prospectName);
+
+  // Body: proposal override → hardcoded default.
+  const bodyText =
+    proposal.emailBody?.trim() ||
+    `${agencyName} put together a proposal for you. View it here:`;
 
   // sendEmailFromApi is the canonical Resend wrapper used throughout this
   // codebase (outbound messaging dispatcher, MCP email tool). Accepts
   // { orgId, userId, contactId, toEmail, subject, body } — resolves the
   // operator's Resend key, checks suppression list, inserts emails audit row.
-  const agencyName =
-    (user.agencyProfile as { name?: string } | null)?.name ?? user.name;
   await sendEmailFromApi({
     orgId: user.orgId,
     userId: null,
     contactId: null,
     toEmail: proposal.prospectEmail,
     subject,
-    body: `<p>Hi ${proposal.prospectFirstName ?? proposal.prospectName},</p>
-<p>${agencyName} put together a proposal for you. View it here:</p>
+    body: `<p>Hi ${greetingName},</p>
+<p>${bodyText.replace(/\n/g, "<br/>")}</p>
 <p><a href="${publicUrl}">${publicUrl}</a></p>`,
   });
 
@@ -190,12 +229,15 @@ export async function resendProposalAction(input: {
   const publicUrl = `${baseUrl}/p/${proposal.signedToken}`;
   const template = (user.agencyProfile as { proposalTemplate?: AgencyProposalTemplate })
     ?.proposalTemplate;
+  const greetingName = proposal.prospectFirstName?.trim() || proposal.prospectName;
+
+  // Subject: "Re: " + (proposal override → template substitute → hardcoded fallback).
+  const subjectRaw =
+    proposal.emailSubject?.trim() ||
+    template?.subject ||
+    "A proposal for {{prospectName}}";
   const subject =
-    "Re: " +
-    (template?.subject ?? "A proposal for {{prospectName}}").replace(
-      /\{\{prospectName\}\}/g,
-      proposal.prospectName,
-    );
+    "Re: " + subjectRaw.replace(/\{\{prospectName\}\}/g, proposal.prospectName);
 
   await sendEmailFromApi({
     orgId: user.orgId,
@@ -203,7 +245,7 @@ export async function resendProposalAction(input: {
     contactId: null,
     toEmail: proposal.prospectEmail,
     subject,
-    body: `<p>Hi ${proposal.prospectFirstName ?? proposal.prospectName},</p>
+    body: `<p>Hi ${greetingName},</p>
 <p>Just following up — here's the proposal link again:</p>
 <p><a href="${publicUrl}">${publicUrl}</a></p>`,
   });
