@@ -3,12 +3,16 @@
 // 2026-05-19 — Proposal Builder client form. Paste prospect URL, pick
 // pricing tier, click Generate. POSTs to /api/v1/proposals and redirects
 // to /proposals/[id] on success. Spec: §"Proposal creation".
+// 2026-05-20 — Phase B: accepts agencyContext prop; renders ProposalPreviewPane
+// as a sibling so the parent grid handles the two-column layout.
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import type { AgencyProposalTemplate } from "@/db/schema/agency-profile";
+import { ProposalPreviewPane } from "./proposal-preview-pane";
 
 type Tier = "starter" | "growth" | "pro" | "custom";
 
@@ -19,7 +23,14 @@ const TIERS: Array<{ id: Tier; label: string; price: string }> = [
   { id: "custom", label: "Custom", price: "—" },
 ];
 
-export function ProposalNewForm() {
+type AgencyContext = {
+  name: string;
+  brandColor: string;
+  logoUrl: string | null;
+  template: AgencyProposalTemplate;
+};
+
+export function ProposalNewForm({ agencyContext }: { agencyContext: AgencyContext }) {
   const router = useRouter();
   const [url, setUrl] = useState("");
   const [email, setEmail] = useState("");
@@ -58,92 +69,103 @@ export function ProposalNewForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <header className="space-y-2">
-        <h1 className="text-3xl font-semibold tracking-tight">New proposal</h1>
-        <p className="text-muted-foreground">
-          Paste the prospect&apos;s website. We&apos;ll build a working workspace and generate the
-          proposal.
-        </p>
-      </header>
+    <>
+      {/* Left column — form */}
+      <div className="space-y-6">
+        <header className="space-y-2">
+          <h1 className="text-3xl font-semibold tracking-tight">New proposal</h1>
+          <p className="text-muted-foreground">
+            Paste the prospect&apos;s website. We&apos;ll build a working workspace and generate
+            the proposal.
+          </p>
+        </header>
 
-      <div className="space-y-3">
-        <Label htmlFor="url">Prospect website URL</Label>
-        <Input
-          id="url"
-          type="url"
-          placeholder="https://example.com"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          required
-        />
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-3">
+            <Label htmlFor="url">Prospect website URL</Label>
+            <Input
+              id="url"
+              type="url"
+              placeholder="https://example.com"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              required
+            />
+          </div>
+
+          <div className="space-y-3">
+            <Label htmlFor="email">Prospect email</Label>
+            <Input
+              id="email"
+              type="email"
+              placeholder="owner@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </div>
+
+          <div className="space-y-3">
+            <Label>Monthly price</Label>
+            <div className="grid grid-cols-4 gap-3">
+              {TIERS.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setTier(t.id)}
+                  className={`rounded-xl border p-3 text-left ${
+                    tier === t.id ? "border-primary bg-primary/5" : "border-border bg-card"
+                  }`}
+                >
+                  <div className="text-sm font-medium">{t.label}</div>
+                  <div className="text-xs text-muted-foreground">{t.price}</div>
+                </button>
+              ))}
+            </div>
+            {tier === "custom" && (
+              <Input
+                type="number"
+                placeholder="Custom monthly price (USD)"
+                value={customCents}
+                onChange={(e) => setCustomCents(e.target.value)}
+                min={50}
+              />
+            )}
+          </div>
+
+          <div className="space-y-3">
+            <Label htmlFor="setup-fee">
+              Setup fee <span className="text-muted-foreground text-xs">(optional, one-time)</span>
+            </Label>
+            <div className="flex items-center gap-3">
+              <span className="text-muted-foreground">$</span>
+              <Input
+                id="setup-fee"
+                type="number"
+                placeholder="0"
+                value={setupFeeDollars}
+                onChange={(e) => setSetupFeeDollars(e.target.value)}
+                min={0}
+                max={10000}
+                step={50}
+              />
+              <span className="text-muted-foreground text-sm">one-time</span>
+            </div>
+          </div>
+
+          {error && <p className="text-sm text-destructive">{error}</p>}
+
+          <Button type="submit" disabled={submitting} className="w-full">
+            {submitting ? "Building workspace + generating proposal…" : "Generate proposal"}
+          </Button>
+        </form>
       </div>
 
-      <div className="space-y-3">
-        <Label htmlFor="email">Prospect email</Label>
-        <Input
-          id="email"
-          type="email"
-          placeholder="owner@example.com"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-        />
-      </div>
-
-      <div className="space-y-3">
-        <Label>Monthly price</Label>
-        <div className="grid grid-cols-4 gap-3">
-          {TIERS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setTier(t.id)}
-              className={`rounded-xl border p-3 text-left ${
-                tier === t.id ? "border-primary bg-primary/5" : "border-border bg-card"
-              }`}
-            >
-              <div className="text-sm font-medium">{t.label}</div>
-              <div className="text-xs text-muted-foreground">{t.price}</div>
-            </button>
-          ))}
-        </div>
-        {tier === "custom" && (
-          <Input
-            type="number"
-            placeholder="Custom monthly price (USD)"
-            value={customCents}
-            onChange={(e) => setCustomCents(e.target.value)}
-            min={50}
-          />
-        )}
-      </div>
-
-      <div className="space-y-3">
-        <Label htmlFor="setup-fee">
-          Setup fee <span className="text-muted-foreground text-xs">(optional, one-time)</span>
-        </Label>
-        <div className="flex items-center gap-3">
-          <span className="text-muted-foreground">$</span>
-          <Input
-            id="setup-fee"
-            type="number"
-            placeholder="0"
-            value={setupFeeDollars}
-            onChange={(e) => setSetupFeeDollars(e.target.value)}
-            min={0}
-            max={10000}
-            step={50}
-          />
-          <span className="text-muted-foreground text-sm">one-time</span>
-        </div>
-      </div>
-
-      {error && <p className="text-sm text-destructive">{error}</p>}
-
-      <Button type="submit" disabled={submitting} className="w-full">
-        {submitting ? "Building workspace + generating proposal…" : "Generate proposal"}
-      </Button>
-    </form>
+      {/* Right column — live preview (rendered by the parent grid) */}
+      <ProposalPreviewPane
+        agencyContext={agencyContext}
+        formState={{ url, email, tier, customCents, setupFeeDollars }}
+      />
+    </>
   );
 }
