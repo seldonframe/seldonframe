@@ -1,16 +1,15 @@
 "use client";
 // packages/crm/src/components/proposals/proposal-steps-header.tsx
 //
-// 2026-05-21 — Two-step lifecycle stepper. The previous 5-step variant
-// (Setup/Pricing/Customize/Review/Send) over-fragmented a single page.
-// Operators experience the flow as two REAL pages: build the proposal on
-// /proposals/new, then review + send on /proposals/[id]. Two steps maps
-// exactly to that mental model; status pill on /[id] communicates the
-// post-send lifecycle (sent/viewed/accepted/etc).
+// 2026-05-21 — Four-step wizard stepper. /proposals/new is a focused wizard
+// (Client → Pricing → Customize → Review & send). /proposals/[id] renders
+// with activeStep="step-review" so the stepper shows the full flow.
 
 export const PROPOSAL_STEPS = [
-  { id: "step-create", label: "Create", num: 1 },
-  { id: "step-review", label: "Review & send", num: 2 },
+  { id: "step-client", label: "Client", num: 1 },
+  { id: "step-pricing", label: "Pricing", num: 2 },
+  { id: "step-customize", label: "Customize", num: 3 },
+  { id: "step-review", label: "Review & send", num: 4 },
 ] as const;
 
 export type ProposalStepId = (typeof PROPOSAL_STEPS)[number]["id"];
