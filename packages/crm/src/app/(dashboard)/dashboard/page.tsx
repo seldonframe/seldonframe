@@ -2,7 +2,7 @@ import { and, asc, desc, eq, or, sql } from "drizzle-orm";
 import Link from "next/link";
 import { DollarSign, Users, CalendarDays, Activity, Plus, ChartLine, MoreHorizontal, BarChart2, ClipboardList, Search, Filter, FileInput, Sparkles, AlertTriangle, AlertCircle, Info, Terminal } from "lucide-react";
 import { db } from "@/db";
-import { activities, bookings as bookingsTable, contacts as contactsTable, metricsSnapshots, organizations, orgMembers, paymentRecords, pipelines as pipelinesTable, stripeConnections, type OrganizationIntegrations, type PipelineStage } from "@/db/schema";
+import { activities, bookings as bookingsTable, contacts as contactsTable, metricsSnapshots, organizations, orgMembers, paymentRecords, pipelines as pipelinesTable, proposals as proposalsTable, stripeConnections, type OrganizationIntegrations, type PipelineStage } from "@/db/schema";
 import { getCurrentUser, getOrgId } from "@/lib/auth/helpers";
 import { isOperatorPortalUserId } from "@/lib/auth/operator-portal-context";
 import { OperatorTodaySnapshot } from "@/components/dashboard/operator-today-snapshot";
@@ -532,12 +532,34 @@ export default async function DashboardPage({
         .from(paymentRecords)
         .where(eq(paymentRecords.orgId, workspace.id));
 
-      const monthlyRevenue = monthlyRevenueRows.reduce((sum, row) => sum + Number(row.amount), 0);
+      const paymentMrr = monthlyRevenueRows.reduce((sum, row) => sum + Number(row.amount), 0);
+
+      // 2026-05-21 — Proposal MRR: sum of monthly_price_cents from accepted
+      // proposals that point at this workspace. This is the AGENCY's recurring
+      // revenue from managing the workspace, distinct from the workspace's own
+      // customer-billing revenue (paymentRecords). Both are surfaced as the
+      // workspace's MRR — the operator cares about both signals.
+      const [proposalMrrRow] = await db
+        .select({
+          mrrCents: sql<number>`COALESCE(SUM(${proposalsTable.monthlyPriceCents}), 0)::int`,
+        })
+        .from(proposalsTable)
+        .where(
+          and(
+            eq(proposalsTable.previewWorkspaceId, workspace.id),
+            eq(proposalsTable.status, "accepted"),
+          ),
+        );
+      const proposalMrr = Number(proposalMrrRow?.mrrCents ?? 0) / 100;
+
+      const monthlyRevenue = paymentMrr + proposalMrr;
 
       return {
         orgId: workspace.id,
         contactCount: Number(contactCount?.count ?? 0),
         monthlyRevenue,
+        paymentMrr,
+        proposalMrr,
       };
     })
   );
@@ -1020,8 +1042,15 @@ export default async function DashboardPage({
                         <dd className="mt-1 text-lg font-semibold text-foreground">{(stat?.contactCount ?? 0).toLocaleString()}</dd>
                       </div>
                       <div className="rounded-xl border border-border/70 bg-card/70 p-3">
-                        <dt className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">Revenue</dt>
-                        <dd className="mt-1 text-lg font-semibold text-foreground">{stat?.monthlyRevenue ? formatCurrency(stat.monthlyRevenue) : "—"}</dd>
+                        <dt className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">MRR</dt>
+                        <dd className="mt-1 text-lg font-semibold text-foreground">
+                          {stat?.monthlyRevenue
+                            ? <>
+                                {formatCurrency(stat.monthlyRevenue)}
+                                <span className="text-xs text-muted-foreground font-normal"> /mo</span>
+                              </>
+                            : "—"}
+                        </dd>
                       </div>
                     </dl>
 
