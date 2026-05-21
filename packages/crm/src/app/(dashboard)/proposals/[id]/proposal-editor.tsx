@@ -17,6 +17,9 @@ export function ProposalEditor({ proposal, publicUrl }: { proposal: Proposal; pu
   const [priceDollars, setPriceDollars] = useState(
     String(proposal.monthlyPriceCents / 100),
   );
+  const [setupFeeDollars, setSetupFeeDollars] = useState(
+    String(proposal.setupFeeCents / 100),
+  );
   const [scopeItems, setScopeItems] = useState<ProposalScopeItem[]>(proposal.scopeItems);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,9 +38,11 @@ export function ProposalEditor({ proposal, publicUrl }: { proposal: Proposal; pu
   function handleSave() {
     setError(null);
     startTransition(async () => {
+      const setupFeeCents = Math.max(0, Math.round(Number(setupFeeDollars) * 100));
       const result = await updateProposalAction({
         id: proposal.id,
         monthlyPriceCents: Math.round(Number(priceDollars) * 100),
+        setupFeeCents,
         scopeItems,
       });
       if (!result.ok) setError(result.error);
@@ -80,6 +85,19 @@ export function ProposalEditor({ proposal, publicUrl }: { proposal: Proposal; pu
             className="max-w-[200px]"
           />
           <span className="text-muted-foreground">/ month</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-muted-foreground">$</span>
+          <Input
+            type="number"
+            value={setupFeeDollars}
+            onChange={(e) => setSetupFeeDollars(e.target.value)}
+            disabled={!isDraft}
+            className="max-w-[200px]"
+            min={0}
+            step={50}
+          />
+          <span className="text-muted-foreground">setup fee (one-time)</span>
         </div>
       </section>
 

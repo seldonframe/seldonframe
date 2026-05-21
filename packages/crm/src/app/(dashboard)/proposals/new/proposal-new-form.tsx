@@ -25,6 +25,7 @@ export function ProposalNewForm() {
   const [email, setEmail] = useState("");
   const [tier, setTier] = useState<Tier>("growth");
   const [customCents, setCustomCents] = useState("");
+  const [setupFeeDollars, setSetupFeeDollars] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,6 +34,9 @@ export function ProposalNewForm() {
     setSubmitting(true);
     setError(null);
     try {
+      const setupFeeCents = setupFeeDollars
+        ? Math.max(0, Math.min(1_000_000, Math.round(Number(setupFeeDollars) * 100)))
+        : 0;
       const res = await fetch("/api/v1/proposals", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -41,6 +45,7 @@ export function ProposalNewForm() {
           prospect_email: email,
           pricing_tier: tier,
           custom_cents: tier === "custom" ? Number(customCents) * 100 : undefined,
+          setup_fee_cents: setupFeeCents,
         }),
       });
       const data = await res.json();
@@ -112,6 +117,26 @@ export function ProposalNewForm() {
             min={50}
           />
         )}
+      </div>
+
+      <div className="space-y-3">
+        <Label htmlFor="setup-fee">
+          Setup fee <span className="text-muted-foreground text-xs">(optional, one-time)</span>
+        </Label>
+        <div className="flex items-center gap-3">
+          <span className="text-muted-foreground">$</span>
+          <Input
+            id="setup-fee"
+            type="number"
+            placeholder="0"
+            value={setupFeeDollars}
+            onChange={(e) => setSetupFeeDollars(e.target.value)}
+            min={0}
+            max={10000}
+            step={50}
+          />
+          <span className="text-muted-foreground text-sm">one-time</span>
+        </div>
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
