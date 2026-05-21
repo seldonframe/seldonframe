@@ -74,6 +74,15 @@ export async function sendEmailFromApi(params: {
   subject: string;
   body: string;
   provider?: string | null;
+  // 2026-05-21 — optional CTA button rendered below the body prose.
+  // Used by proposal sends so the email has a branded "View proposal →"
+  // button rather than a raw URL in the body.
+  ctaLabel?: string;
+  ctaHref?: string;
+  // 2026-05-21 — when set, merged on top of the default loadEmailBranding
+  // lookup so callers can inject agency-profile fields (logo_url,
+  // brand_color) that don't live on the organizations table.
+  brandingOverride?: Partial<EmailBrandingInput>;
 }): Promise<ApiSendEmailResult> {
   const toEmail = normalizeEmail(params.toEmail);
 
@@ -109,10 +118,20 @@ export async function sendEmailFromApi(params: {
   // logo + brand color + footer with business name + phone + address.
   // Soft-fails: if any of these queries hit an error the email still
   // sends with neutral defaults rather than crashing the send.
-  const branding = await loadEmailBranding(params.orgId);
+  //
+  // 2026-05-21 — brandingOverride is merged on top so callers that
+  // have agency-profile fields (logo_url, brand_color) can inject them
+  // without those fields being overwritten by the org-level lookup.
+  const baseBranding = await loadEmailBranding(params.orgId);
+  const branding: EmailBrandingInput = {
+    ...baseBranding,
+    ...(params.brandingOverride ?? {}),
+  };
   const rendered = renderPlainEmailTemplate({
     heading: params.subject,
     body: params.body,
+    ctaLabel: params.ctaLabel,
+    ctaHref: params.ctaHref,
     branding,
   });
 
