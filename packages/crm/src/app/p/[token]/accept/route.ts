@@ -59,6 +59,7 @@ export async function POST(
     prospectEmail: proposal.prospectEmail,
     prospectName: proposal.prospectName,
     monthlyPriceCents: proposal.monthlyPriceCents,
+    setupFeeCents: proposal.setupFeeCents,
     signedToken: proposal.signedToken,
     baseUrl,
   });

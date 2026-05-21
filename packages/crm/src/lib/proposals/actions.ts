@@ -58,6 +58,7 @@ async function loadAuthorizedProposal(id: string): Promise<LoadResult> {
 export async function updateProposalAction(input: {
   id: string;
   monthlyPriceCents: number;
+  setupFeeCents?: number;
   scopeItems: ProposalScopeItem[];
 }): Promise<ActionResult> {
   const loaded = await loadAuthorizedProposal(input.id);
@@ -68,11 +69,13 @@ export async function updateProposalAction(input: {
   if (input.monthlyPriceCents < 5000) {
     return { ok: false, error: "price_below_minimum" };
   }
+  const setupFeeCents = Math.max(0, Math.min(1_000_000, Math.floor(input.setupFeeCents ?? 0)));
 
   await db
     .update(proposals)
     .set({
       monthlyPriceCents: input.monthlyPriceCents,
+      setupFeeCents,
       scopeItems: input.scopeItems,
       updatedAt: new Date(),
     })
