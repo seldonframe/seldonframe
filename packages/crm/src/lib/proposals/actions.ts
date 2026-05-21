@@ -139,37 +139,59 @@ export async function sendProposalAction(input: {
   const baseUrl =
     process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://app.seldonframe.com";
   const publicUrl = `${baseUrl}/p/${proposal.signedToken}`;
-  const template = (user.agencyProfile as { proposalTemplate?: AgencyProposalTemplate })
-    ?.proposalTemplate;
-  const agencyName =
-    (user.agencyProfile as { name?: string } | null)?.name ?? user.name;
+  const agencyName = user.agencyProfile.name ?? user.name;
+  const agencyTemplate = user.agencyProfile.proposalTemplate;
   const greetingName = proposal.prospectFirstName?.trim() || proposal.prospectName;
 
-  // Subject: proposal override → template substitute → hardcoded fallback.
+  // Subject: operator override → template default → hardcoded fallback.
+  // Also substitute {{agencyName}} which the previous code omitted.
   const subjectRaw =
     proposal.emailSubject?.trim() ||
-    template?.subject ||
-    "A proposal for {{prospectName}}";
-  const subject = subjectRaw.replace(/\{\{prospectName\}\}/g, proposal.prospectName);
+    agencyTemplate?.subject ||
+    "Your proposal — {{prospectName}}";
+  const subject = subjectRaw
+    .replace(/\{\{prospectName\}\}/g, proposal.prospectName)
+    .replace(/\{\{agencyName\}\}/g, agencyName);
 
-  // Body: proposal override → hardcoded default.
-  const bodyText =
-    proposal.emailBody?.trim() ||
-    `${agencyName} put together a proposal for you. View it here:`;
+  // Validity date for the body prose.
+  const validityDate = new Date(proposal.expiresAt).toLocaleDateString("en-US", {
+    month: "long", day: "numeric", year: "numeric",
+  });
+
+  // Body: operator override takes precedence. Default is tight plain-text
+  // prose — renderPlainEmailTemplate will linkify URLs + HTML-escape.
+  const operatorBody = proposal.emailBody?.trim();
+  const defaultBody = `Hi ${greetingName},
+
+Thanks for the conversation. Here's the proposal we put together for ${proposal.prospectName}.
+
+Tap below to review the details and sign when you're ready. Valid through ${validityDate}.
+
+— ${agencyName}`;
+
+  const body = operatorBody ?? defaultBody;
+
+  // Branding: inject agency-profile fields (logo, brand color) that live
+  // on users.agency_profile rather than on the organizations table.
+  const brandingOverride = {
+    brandName: agencyName,
+    logoUrl: user.agencyProfile.logo_url ?? undefined,
+    primaryColor: user.agencyProfile.brand_color ?? undefined,
+  };
 
   // sendEmailFromApi is the canonical Resend wrapper used throughout this
-  // codebase (outbound messaging dispatcher, MCP email tool). Accepts
-  // { orgId, userId, contactId, toEmail, subject, body } — resolves the
-  // operator's Resend key, checks suppression list, inserts emails audit row.
+  // codebase (outbound messaging dispatcher, MCP email tool). Body is plain
+  // text — renderPlainEmailTemplate will linkify URLs + escape HTML.
   await sendEmailFromApi({
     orgId: user.orgId,
     userId: null,
     contactId: null,
     toEmail: proposal.prospectEmail,
     subject,
-    body: `<p>Hi ${greetingName},</p>
-<p>${bodyText.replace(/\n/g, "<br/>")}</p>
-<p><a href="${publicUrl}">${publicUrl}</a></p>`,
+    body,
+    ctaLabel: "View proposal →",
+    ctaHref: publicUrl,
+    brandingOverride,
   });
 
   await db
@@ -233,17 +255,37 @@ export async function resendProposalAction(input: {
   const baseUrl =
     process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://app.seldonframe.com";
   const publicUrl = `${baseUrl}/p/${proposal.signedToken}`;
-  const template = (user.agencyProfile as { proposalTemplate?: AgencyProposalTemplate })
-    ?.proposalTemplate;
+  const agencyName = user.agencyProfile.name ?? user.name;
+  const agencyTemplate = user.agencyProfile.proposalTemplate;
   const greetingName = proposal.prospectFirstName?.trim() || proposal.prospectName;
 
-  // Subject: "Re: " + (proposal override → template substitute → hardcoded fallback).
+  // Subject: "Re: " + (operator override → template default → fallback).
   const subjectRaw =
     proposal.emailSubject?.trim() ||
-    template?.subject ||
-    "A proposal for {{prospectName}}";
-  const subject =
-    "Re: " + subjectRaw.replace(/\{\{prospectName\}\}/g, proposal.prospectName);
+    agencyTemplate?.subject ||
+    "Your proposal — {{prospectName}}";
+  const resolvedSubject = subjectRaw
+    .replace(/\{\{prospectName\}\}/g, proposal.prospectName)
+    .replace(/\{\{agencyName\}\}/g, agencyName);
+  const subject = resolvedSubject.startsWith("Re: ")
+    ? resolvedSubject
+    : `Re: ${resolvedSubject}`;
+
+  const validityDate = new Date(proposal.expiresAt).toLocaleDateString("en-US", {
+    month: "long", day: "numeric", year: "numeric",
+  });
+
+  const body = `Hi ${greetingName},
+
+Just following up — here's the proposal again in case it got buried. Valid through ${validityDate}.
+
+— ${agencyName}`;
+
+  const brandingOverride = {
+    brandName: agencyName,
+    logoUrl: user.agencyProfile.logo_url ?? undefined,
+    primaryColor: user.agencyProfile.brand_color ?? undefined,
+  };
 
   await sendEmailFromApi({
     orgId: user.orgId,
@@ -251,9 +293,10 @@ export async function resendProposalAction(input: {
     contactId: null,
     toEmail: proposal.prospectEmail,
     subject,
-    body: `<p>Hi ${greetingName},</p>
-<p>Just following up — here's the proposal link again:</p>
-<p><a href="${publicUrl}">${publicUrl}</a></p>`,
+    body,
+    ctaLabel: "View proposal →",
+    ctaHref: publicUrl,
+    brandingOverride,
   });
 
   await db.insert(proposalEvents).values({
