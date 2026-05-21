@@ -48,24 +48,16 @@ export default async function ProposalEditPage({
     process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://app.seldonframe.com";
   const publicUrl = `${baseUrl}/p/${proposal.signedToken}`;
 
-  // Derive stepper state from proposal status.
-  function getActiveStep(status: typeof proposal.status): ProposalStepId {
-    if (status === "draft") return "step-review";
-    return "step-send"; // sent / viewed / accepted / declined / expired
-  }
-
-  const activeStep = getActiveStep(proposal.status);
-
-  // Steps 1-3 are always visited once the proposal exists (created on /new).
-  // Step 4 (review) is visited once they've moved beyond draft.
-  const visitedSteps: ProposalStepId[] = [
-    "step-setup",
-    "step-pricing",
-    "step-customize",
-  ];
-  if (proposal.status !== "draft") {
-    visitedSteps.push("step-review");
-  }
+  // 2-step lifecycle: step 1 (create) is always visited once we're on /[id];
+  // step 2 (review & send) stays as the active step throughout the /[id]
+  // lifecycle, but flips to visited (✓) once the proposal moves out of
+  // draft. Post-send status (sent/viewed/accepted/declined/expired) is
+  // communicated by the status pill in the header — not by additional steps.
+  const activeStep: ProposalStepId = "step-review";
+  const visitedSteps: ProposalStepId[] =
+    proposal.status === "draft"
+      ? ["step-create"]
+      : ["step-create", "step-review"];
 
   const brandColor =
     (user.agencyProfile as { brand_color?: string } | null)?.brand_color ??
@@ -75,8 +67,7 @@ export default async function ProposalEditPage({
     <main className="mx-auto max-w-5xl px-6 py-8 space-y-6">
       <ProposalStepsHeader
         brandColor={brandColor}
-        mode="fixed"
-        fixedActiveStep={activeStep}
+        activeStep={activeStep}
         visitedSteps={visitedSteps}
       />
 

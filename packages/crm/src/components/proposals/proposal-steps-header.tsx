@@ -1,65 +1,33 @@
 "use client";
 // packages/crm/src/components/proposals/proposal-steps-header.tsx
-
-import { useEffect, useState } from "react";
+//
+// 2026-05-21 — Two-step lifecycle stepper. The previous 5-step variant
+// (Setup/Pricing/Customize/Review/Send) over-fragmented a single page.
+// Operators experience the flow as two REAL pages: build the proposal on
+// /proposals/new, then review + send on /proposals/[id]. Two steps maps
+// exactly to that mental model; status pill on /[id] communicates the
+// post-send lifecycle (sent/viewed/accepted/etc).
 
 export const PROPOSAL_STEPS = [
-  { id: "step-setup", label: "Setup", num: 1 },
-  { id: "step-pricing", label: "Pricing", num: 2 },
-  { id: "step-customize", label: "Customize", num: 3 },
-  { id: "step-review", label: "Review", num: 4 },
-  { id: "step-send", label: "Send & track", num: 5 },
+  { id: "step-create", label: "Create", num: 1 },
+  { id: "step-review", label: "Review & send", num: 2 },
 ] as const;
 
 export type ProposalStepId = (typeof PROPOSAL_STEPS)[number]["id"];
 
 export function ProposalStepsHeader({
   brandColor,
-  mode,
-  fixedActiveStep,
+  activeStep,
   visitedSteps,
 }: {
   brandColor: string;
-  /** "scroll" = active step derived from scroll position (used on /proposals/new
-   *  where steps 1-3 are scrollable sections). "fixed" = active step provided
-   *  by parent (used on /proposals/[id] where the active step depends on
-   *  proposal.status, not scroll position). */
-  mode: "scroll" | "fixed";
-  /** Required when mode="fixed". The step id that should render as active. */
-  fixedActiveStep?: ProposalStepId;
-  /** Step ids that are considered visited (rendered with checkmark). When
-   *  omitted, only steps with lower num than active are visited. */
+  /** The step the user is currently on. */
+  activeStep: ProposalStepId;
+  /** Steps the user has completed (rendered with checkmark). When omitted,
+   *  steps with lower num than active are auto-marked as visited. */
   visitedSteps?: ProposalStepId[];
 }) {
-  const [scrollActive, setScrollActive] = useState<ProposalStepId>("step-setup");
-
-  useEffect(() => {
-    if (mode !== "scroll") return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-        if (visible) setScrollActive(visible.target.id as ProposalStepId);
-      },
-      { rootMargin: "-30% 0px -50% 0px", threshold: [0, 0.5, 1] },
-    );
-    PROPOSAL_STEPS.slice(0, 3).forEach((s) => {
-      const el = document.getElementById(s.id);
-      if (el) observer.observe(el);
-    });
-    return () => observer.disconnect();
-  }, [mode]);
-
-  const activeStep =
-    mode === "fixed" ? fixedActiveStep ?? "step-setup" : scrollActive;
   const activeIdx = PROPOSAL_STEPS.findIndex((s) => s.id === activeStep);
-
-  function handleClick(id: ProposalStepId) {
-    if (mode !== "scroll") return; // page-state mode: not clickable
-    const el = document.getElementById(id);
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
 
   function isVisited(idx: number, id: ProposalStepId) {
     if (visitedSteps && visitedSteps.length > 0) {
@@ -70,19 +38,13 @@ export function ProposalStepsHeader({
 
   return (
     <div className="sticky top-0 z-10 py-4 bg-background/95 backdrop-blur-sm border-b border-border/50">
-      <ol className="flex items-center justify-between gap-2 sm:gap-4 px-2 sm:px-4 max-w-3xl mx-auto">
+      <ol className="flex items-center justify-center gap-3 sm:gap-6 px-2 sm:px-4 max-w-xl mx-auto">
         {PROPOSAL_STEPS.map((step, idx) => {
           const active = step.id === activeStep;
           const visited = isVisited(idx, step.id);
-          const clickable = mode === "scroll" && idx <= 2;
           return (
-            <li key={step.id} className="flex items-center gap-2 min-w-0 shrink-0">
-              <button
-                type="button"
-                onClick={() => handleClick(step.id)}
-                disabled={!clickable}
-                className="flex items-center gap-2 group focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md px-1 disabled:cursor-default"
-              >
+            <li key={step.id} className="flex items-center gap-3 shrink-0">
+              <div className="flex items-center gap-2">
                 <span
                   className="flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold border-2 transition-all"
                   style={{
@@ -98,7 +60,7 @@ export function ProposalStepsHeader({
                   {visited ? "✓" : step.num}
                 </span>
                 <span
-                  className="text-sm font-medium hidden sm:inline transition-colors"
+                  className="text-sm font-medium transition-colors"
                   style={{
                     color: active
                       ? "var(--foreground)"
@@ -109,12 +71,12 @@ export function ProposalStepsHeader({
                 >
                   {step.label}
                 </span>
-              </button>
+              </div>
               {idx < PROPOSAL_STEPS.length - 1 && (
                 <span
-                  className="flex-1 h-px min-w-4 sm:min-w-8 max-w-16 transition-colors"
+                  className="h-px w-12 sm:w-20 transition-colors"
                   style={{
-                    backgroundColor: visited || (active && idx < activeIdx) ? brandColor : "var(--border)",
+                    backgroundColor: visited ? brandColor : "var(--border)",
                   }}
                 />
               )}
