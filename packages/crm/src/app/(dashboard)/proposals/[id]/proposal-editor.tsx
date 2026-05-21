@@ -21,6 +21,11 @@ export function ProposalEditor({ proposal, publicUrl }: { proposal: Proposal; pu
     String(proposal.setupFeeCents / 100),
   );
   const [scopeItems, setScopeItems] = useState<ProposalScopeItem[]>(proposal.scopeItems);
+  const [prospectFirstName, setProspectFirstName] = useState(proposal.prospectFirstName ?? "");
+  const [emailSubject, setEmailSubject] = useState(proposal.emailSubject ?? "");
+  const [emailBody, setEmailBody] = useState(proposal.emailBody ?? "");
+  const [generatedHtml, setGeneratedHtml] = useState(proposal.generatedHtml);
+  const [showHtmlEditor, setShowHtmlEditor] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   function updateScopeLabel(idx: number, label: string) {
@@ -44,6 +49,10 @@ export function ProposalEditor({ proposal, publicUrl }: { proposal: Proposal; pu
         monthlyPriceCents: Math.round(Number(priceDollars) * 100),
         setupFeeCents,
         scopeItems,
+        prospectFirstName: prospectFirstName.trim() || null,
+        emailSubject: emailSubject.trim() || null,
+        emailBody: emailBody.trim() || null,
+        generatedHtml,
       });
       if (!result.ok) setError(result.error);
       else router.refresh();
@@ -60,6 +69,7 @@ export function ProposalEditor({ proposal, publicUrl }: { proposal: Proposal; pu
   }
 
   const isDraft = proposal.status === "draft";
+  const isSent = !isDraft;
 
   return (
     <div className="space-y-6">
@@ -125,16 +135,88 @@ export function ProposalEditor({ proposal, publicUrl }: { proposal: Proposal; pu
       </section>
 
       <section className="rounded-2xl border bg-card/40 p-6 space-y-4">
-        <h2 className="text-xl font-semibold">Generated proposal preview</h2>
-        {/* NOTE(phase-4 done): The public /p/[token] route sanitizes
-            generatedHtml with sanitize-html before rendering (XSS surface).
-            Here on the auth-gated /proposals/[id] page the operator views
-            their own LLM-generated HTML, so sanitization is deliberately
-            skipped — risk is low since only the agency that wrote it can see it. */}
-        <div
-          className="prose max-w-none rounded-xl border bg-background p-6"
-          dangerouslySetInnerHTML={{ __html: proposal.generatedHtml }}
-        />
+        <h2 className="text-xl font-semibold">Email + greeting</h2>
+        <div className="space-y-3">
+          <Label htmlFor="ed-first-name">
+            Prospect first name{" "}
+            <span className="text-muted-foreground text-xs">(used in greeting)</span>
+          </Label>
+          <Input
+            id="ed-first-name"
+            type="text"
+            placeholder="John"
+            value={prospectFirstName}
+            onChange={(e) => setProspectFirstName(e.target.value)}
+            disabled={isSent}
+          />
+        </div>
+        <div className="space-y-3">
+          <Label htmlFor="ed-subject">
+            Email subject{" "}
+            <span className="text-muted-foreground text-xs">(leave blank for template default)</span>
+          </Label>
+          <Input
+            id="ed-subject"
+            type="text"
+            placeholder="A proposal for {prospect_name}"
+            value={emailSubject}
+            onChange={(e) => setEmailSubject(e.target.value)}
+            disabled={isSent}
+          />
+        </div>
+        <div className="space-y-3">
+          <Label htmlFor="ed-body">
+            Email body{" "}
+            <span className="text-muted-foreground text-xs">
+              (message above the proposal link; blank = default)
+            </span>
+          </Label>
+          <textarea
+            id="ed-body"
+            value={emailBody}
+            onChange={(e) => setEmailBody(e.target.value)}
+            disabled={isSent}
+            rows={4}
+            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-y disabled:opacity-50 disabled:cursor-not-allowed"
+            placeholder="Hi {first_name} — wanted to share what we put together for you. View the proposal below."
+          />
+        </div>
+      </section>
+
+      <section className="rounded-2xl border bg-card/40 p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold">Generated proposal HTML</h2>
+          <button
+            type="button"
+            onClick={() => setShowHtmlEditor((v) => !v)}
+            disabled={isSent}
+            className="text-sm text-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {showHtmlEditor ? "Show preview" : "Edit HTML"}
+          </button>
+        </div>
+        {showHtmlEditor && !isSent ? (
+          <>
+            <p className="text-xs text-muted-foreground">
+              Direct HTML edits. Will be sanitized on save (script tags and non-https links are stripped).
+            </p>
+            <textarea
+              value={generatedHtml}
+              onChange={(e) => setGeneratedHtml(e.target.value)}
+              rows={20}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono leading-relaxed placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-y"
+            />
+          </>
+        ) : (
+          <>
+            {/* FIXME(phase-4): operator preview skips sanitization (auth-gated to the agency).
+                Phase 4 sanitizes generated_html only on the PUBLIC /p/[token] route. */}
+            <div
+              className="prose max-w-none rounded-xl border bg-background p-6"
+              dangerouslySetInnerHTML={{ __html: generatedHtml }}
+            />
+          </>
+        )}
       </section>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
