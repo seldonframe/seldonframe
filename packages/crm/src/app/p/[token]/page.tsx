@@ -149,6 +149,15 @@ export default async function ProposalPublicPage({
           <ScreenshotGrid />
         </section>
 
+        <section className="rounded-2xl border border-border/70 bg-card/40 p-6 space-y-3">
+          <h2 className="text-lg font-semibold">What happens after you accept</h2>
+          <ol className="space-y-2 text-sm text-muted-foreground list-decimal list-inside">
+            <li>You click Accept and enter payment on Stripe&apos;s secure checkout.</li>
+            <li>Your workspace activates within 60 seconds.</li>
+            <li>We email you the admin link + onboarding details.</li>
+          </ol>
+        </section>
+
         <section
           className="rounded-2xl border-2 p-8 text-center space-y-4"
           style={{ borderColor: brandColor }}
@@ -182,6 +191,14 @@ export default async function ProposalPublicPage({
           <AcceptButton token={proposal.signedToken} brandColor={brandColor} />
           <p className="text-xs text-muted-foreground">
             Month-to-month. Cancel anytime. Payments handled by Stripe.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Proposal valid through{" "}
+            {new Date(proposal.expiresAt).toLocaleDateString("en-US", {
+              month: "long",
+              day: "numeric",
+              year: "numeric",
+            })}
           </p>
         </section>
       </div>

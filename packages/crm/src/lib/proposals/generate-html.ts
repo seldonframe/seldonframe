@@ -73,13 +73,13 @@ export function buildProposalPrompt(input: BuildProposalPromptInput): string {
 }
 
 export const DEFAULT_PROPOSAL_TEMPLATE: AgencyProposalTemplate = {
-  subject: "A booking system for {{prospectName}}",
+  subject: "Your proposal — {{prospectName}}",
   introCopy:
-    "Hi {{prospectFirstName}} — we put together a working booking and CRM system for {{prospectName}}, ready to go live the moment you click Accept.",
+    "Hi {{prospectFirstName}} — thanks for the conversation. We put together a working booking page, CRM, and AI chatbot for {{prospectName}}. Everything you see in this proposal is real and ready to go live the moment you click Accept.",
   scopeCopy:
-    "Branded booking page, intake form, AI chatbot, CRM with pipeline, automated SMS + email follow-ups. Hosted, monitored, and maintained.",
+    "Branded booking page on your domain, intake form, AI chatbot trained on your services, CRM with deal pipeline, speed-to-lead SMS + email automations. Hosted, monitored, and maintained.",
   timelineCopy:
-    "Click Accept → your workspace activates within 60 seconds → we email you the admin link.",
+    "Sign → your workspace goes live within 60 seconds → we email you the admin link → you launch.",
   termsCopy:
     "Month-to-month. Cancel anytime from your Stripe receipt. We don't lock you in.",
 };
