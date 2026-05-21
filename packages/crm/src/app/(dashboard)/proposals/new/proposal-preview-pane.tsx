@@ -65,55 +65,57 @@ export function ProposalPreviewPane({
       </p>
 
       {/* Email preview */}
-      <div className="rounded-2xl border bg-card p-4 space-y-3">
-        <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
-          Email
-        </p>
-        <div
-          className="border-l-2 pl-3 space-y-2 text-sm"
-          style={{ borderColor: agencyContext.brandColor }}
-        >
-          <p className="text-xs text-muted-foreground">
-            From: <span className="text-foreground">{agencyContext.name}</span>
-            <br />
-            To:{" "}
-            <span className="text-foreground">
-              {formState.email || "[prospect@example.com]"}
-            </span>
-          </p>
-          <p className="font-semibold">
-            {subject}
-            {formState.setupCents > 0 && (
-              <span
-                className="ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium text-white"
-                style={{ backgroundColor: agencyContext.brandColor }}
-              >
-                Setup fee active
-              </span>
-            )}
-          </p>
-          <p className="text-muted-foreground">Hi {greetingName},</p>
-          <p className="text-muted-foreground">
-            {formState.bodyOverride.trim() ||
-              `${agencyContext.name} put together a proposal for you. View it here:`}
-          </p>
-          <button
-            type="button"
-            disabled
-            style={{ backgroundColor: agencyContext.brandColor }}
-            className="px-4 py-1.5 rounded text-white text-xs font-medium opacity-70 cursor-not-allowed"
+      <div className="rounded-2xl border bg-card overflow-hidden">
+        <div className="px-5 py-3 border-b border-border/40 bg-muted/20">
+          <p className="text-xs uppercase tracking-widest text-muted-foreground font-medium">Email</p>
+        </div>
+        <div className="p-6 space-y-3">
+          <div
+            className="border-l-2 pl-3 space-y-2 text-sm"
+            style={{ borderColor: agencyContext.brandColor }}
           >
-            View proposal →
-          </button>
+            <p className="text-xs text-muted-foreground">
+              From: <span className="text-foreground">{agencyContext.name}</span>
+              <br />
+              To:{" "}
+              <span className="text-foreground">
+                {formState.email || "[prospect@example.com]"}
+              </span>
+            </p>
+            <p className="font-semibold">
+              {subject}
+              {formState.setupCents > 0 && (
+                <span
+                  className="ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium text-white"
+                  style={{ backgroundColor: agencyContext.brandColor }}
+                >
+                  Setup fee active
+                </span>
+              )}
+            </p>
+            <p className="text-muted-foreground">Hi {greetingName},</p>
+            <p className="text-muted-foreground">
+              {formState.bodyOverride.trim() ||
+                `${agencyContext.name} put together a proposal for you. View it here:`}
+            </p>
+            <button
+              type="button"
+              disabled
+              style={{ backgroundColor: agencyContext.brandColor }}
+              className="px-4 py-1.5 rounded text-white text-xs font-medium opacity-70 cursor-not-allowed"
+            >
+              View proposal →
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Proposal page preview */}
       <div className="rounded-2xl border bg-card overflow-hidden">
-        <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium px-4 pt-4">
-          Proposal page
-        </p>
-        <div className="px-6 pb-6 space-y-4 pt-3">
+        <div className="px-5 py-3 border-b border-border/40 bg-muted/20">
+          <p className="text-xs uppercase tracking-widest text-muted-foreground font-medium">Proposal page</p>
+        </div>
+        <div className="p-6 space-y-4">
           {agencyContext.logoUrl && (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={agencyContext.logoUrl} alt={agencyContext.name} className="h-8" />
