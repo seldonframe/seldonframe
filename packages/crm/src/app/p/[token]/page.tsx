@@ -153,11 +153,32 @@ export default async function ProposalPublicPage({
           className="rounded-2xl border-2 p-8 text-center space-y-4"
           style={{ borderColor: brandColor }}
         >
-          <p className="text-sm text-muted-foreground">Investment</p>
-          <p className="text-5xl font-semibold" style={{ color: brandColor }}>
-            ${(proposal.monthlyPriceCents / 100).toLocaleString("en-US")}
-            <span className="text-lg text-muted-foreground"> / month</span>
-          </p>
+          {proposal.setupFeeCents > 0 ? (
+            <>
+              <p className="text-sm text-muted-foreground">Investment</p>
+              <div className="space-y-2">
+                <p className="text-3xl font-semibold" style={{ color: brandColor }}>
+                  ${(proposal.setupFeeCents / 100).toLocaleString("en-US")}
+                  <span className="text-base text-muted-foreground"> one-time setup</span>
+                </p>
+                <p className="text-4xl font-semibold" style={{ color: brandColor }}>
+                  ${(proposal.monthlyPriceCents / 100).toLocaleString("en-US")}
+                  <span className="text-base text-muted-foreground"> / month</span>
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Total today: ${((proposal.setupFeeCents + proposal.monthlyPriceCents) / 100).toLocaleString("en-US")} · Then ${(proposal.monthlyPriceCents / 100).toLocaleString("en-US")}/month
+                </p>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground">Investment</p>
+              <p className="text-5xl font-semibold" style={{ color: brandColor }}>
+                ${(proposal.monthlyPriceCents / 100).toLocaleString("en-US")}
+                <span className="text-lg text-muted-foreground"> / month</span>
+              </p>
+            </>
+          )}
           <AcceptButton token={proposal.signedToken} brandColor={brandColor} />
           <p className="text-xs text-muted-foreground">
             Month-to-month. Cancel anytime. Payments handled by Stripe.
