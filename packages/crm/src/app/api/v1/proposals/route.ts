@@ -90,9 +90,12 @@ export async function POST(request: Request) {
   if (!prospect_email || typeof prospect_email !== "string" || !prospect_email.trim()) {
     return NextResponse.json({ error: "prospect_email_required" }, { status: 400 });
   }
-  if (typeof monthly_price_cents !== "number" || monthly_price_cents < 5000) {
+  // 2026-05-21 — Removed $50/mo minimum. Agencies may send setup-fee-only
+  // proposals ($0/mo recurring) or free-tier promos. Stripe enforces its own
+  // ~$0.50 floor at checkout creation; we surface that as a typed error there.
+  if (typeof monthly_price_cents !== "number" || monthly_price_cents < 0) {
     return NextResponse.json(
-      { error: "monthly_price_cents_required_min_5000" },
+      { error: "monthly_price_cents_required_non_negative" },
       { status: 400 },
     );
   }

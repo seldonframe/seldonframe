@@ -75,7 +75,11 @@ export async function updateProposalAction(input: {
   if (loaded.proposal.status !== "draft") {
     return { ok: false, error: "proposal_not_editable" };
   }
-  if (input.monthlyPriceCents < 5000) {
+  // 2026-05-21 — Removed $50/mo minimum. Operators can set any price (including
+  // $0/mo for setup-fee-only deals or free-tier promos). Stripe enforces its
+  // own minimum (~$0.50 USD) at checkout creation, surfaced as a clean 400 via
+  // the buildCheckoutSessionParams error path.
+  if (input.monthlyPriceCents < 0) {
     return { ok: false, error: "price_below_minimum" };
   }
   const setupFeeCents = Math.max(0, Math.min(1_000_000, Math.floor(input.setupFeeCents ?? 0)));

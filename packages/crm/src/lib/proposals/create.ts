@@ -36,7 +36,9 @@ export function resolvePricing(input: ResolvePricingInput): {
     if (typeof input.customCents !== "number") {
       throw new Error("custom_pricing_requires_amount");
     }
-    if (input.customCents < 5000) {
+    // 2026-05-21 — Removed $50/mo minimum. Any non-negative amount is allowed;
+    // Stripe enforces its own ~$0.50 minimum at checkout creation.
+    if (input.customCents < 0) {
       throw new Error("custom_price_below_minimum");
     }
     return { tier: "custom", monthlyPriceCents: input.customCents };
@@ -69,7 +71,8 @@ export type CreateProposalInput = {
 export async function createProposal(
   input: CreateProposalInput,
 ): Promise<Proposal> {
-  if (input.monthlyPriceCents < 5000) {
+  // 2026-05-21 — Removed $50/mo minimum. Stripe enforces its ~$0.50 floor.
+  if (input.monthlyPriceCents < 0) {
     throw new Error("custom_price_below_minimum");
   }
   const setupFeeCents = Math.max(0, Math.floor(input.setupFeeCents ?? 0));
