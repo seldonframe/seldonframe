@@ -251,6 +251,11 @@ export function Sidebar(props: {
           items: filterHidden([
             { href: "/contacts", label: labels.contact.plural, icon: "Users" },
             { href: "/deals", label: labels.deal.plural, icon: "Building2" },
+            // 2026-05-21 — Proposals sidebar item (Phase L). Operators
+            // previously had to type /proposals directly or click through
+            // /clients. Placed between Deals and Bookings since proposals
+            // are the upstream of Won deals.
+            { href: "/proposals", label: "Proposals", icon: "FileText" },
             { href: "/bookings", label: "Bookings", icon: "Calendar" },
             // 2026-05-18 — messaging-layer slice 4. See sibling comment
             // in the isInsideClientWorkspace branch.
