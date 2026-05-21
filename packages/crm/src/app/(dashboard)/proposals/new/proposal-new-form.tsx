@@ -90,30 +90,20 @@ export function ProposalNewForm({
   if (workspaces.length === 0) {
     return (
       <>
-        <section className="space-y-4">
-          <header>
-            <h1 className="text-3xl font-semibold tracking-tight">New proposal</h1>
-            <p className="text-muted-foreground">
-              Pick an existing client workspace, set pricing, and send a branded proposal.
-            </p>
-          </header>
-          <div className="rounded-2xl border border-border/70 bg-card/40 p-8 text-center space-y-3">
-            <h2 className="text-xl font-semibold">Build a workspace first</h2>
-            <p className="text-sm text-muted-foreground">
-              You need at least one client workspace to attach to a proposal.
-              Create one at{" "}
-              <Link href="/clients/new" className="text-primary underline">
-                /clients/new
-              </Link>
-              , then come back here.
-            </p>
-            <Link
-              href="/clients/new"
-              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:opacity-90"
-            >
-              + Create workspace
-            </Link>
+        <section className="rounded-2xl border border-border/70 bg-card/40 p-12 text-center space-y-4 max-w-xl mx-auto">
+          <div className="space-y-2">
+            <p className="text-xs uppercase tracking-widest text-muted-foreground font-medium">Get started</p>
+            <h2 className="text-2xl font-semibold tracking-tight">Build a workspace first</h2>
           </div>
+          <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+            You need at least one client workspace to attach to a proposal. Create one at /clients/new, then come back here.
+          </p>
+          <Link
+            href="/clients/new"
+            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90"
+          >
+            + Create workspace
+          </Link>
         </section>
       </>
     );
@@ -121,105 +111,114 @@ export function ProposalNewForm({
 
   return (
     <>
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-8">
 
-        <header className="space-y-1">
+        {/* Page header */}
+        <header className="space-y-1.5">
           <h1 className="text-3xl font-semibold tracking-tight">New proposal</h1>
           <p className="text-muted-foreground">
             Save first to review your proposal. You&apos;ll send it from the next screen.
           </p>
         </header>
 
-        {/* Step 1: Setup — workspace picker + prospect details */}
-        <section id="step-setup" className="space-y-4">
-          {/* Workspace picker */}
-          <div className="space-y-2">
-            <Label htmlFor="workspace">Client workspace</Label>
-            <select
-              id="workspace"
-              value={workspaceId}
-              onChange={(e) => handleWorkspaceChange(e.target.value)}
-              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-            >
-              <option value="">— None (external billing, no workspace iframe) —</option>
-              {workspaces.map((ws) => (
-                <option key={ws.id} value={ws.id}>
-                  {ws.name}
-                </option>
-              ))}
-            </select>
-            <p className="text-xs text-muted-foreground">
-              Want a new workspace?{" "}
-              <Link href="/clients/new" className="text-primary underline">
-                Build one at /clients/new
-              </Link>
-              .
-            </p>
+        {/* Section 1: Who's this for */}
+        <section id="step-setup" className="rounded-2xl border border-border/70 bg-card/40 p-6 space-y-5">
+          <div className="space-y-1">
+            <p className="text-xs uppercase tracking-widest text-muted-foreground font-medium">Who&apos;s this for</p>
+            <h2 className="text-lg font-semibold tracking-tight">Prospect &amp; workspace</h2>
           </div>
 
-          {/* Prospect */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="prospect-name">Business name</Label>
+              <Label htmlFor="workspace">Client workspace</Label>
+              <select
+                id="workspace"
+                value={workspaceId}
+                onChange={(e) => handleWorkspaceChange(e.target.value)}
+                className="h-11 w-full rounded-md border border-input bg-background px-4 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="">— None (external billing, no workspace iframe) —</option>
+                {workspaces.map((ws) => (
+                  <option key={ws.id} value={ws.id}>{ws.name}</option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Want a new workspace?{" "}
+                <Link href="/clients/new" className="underline">
+                  Build one at /clients/new
+                </Link>
+                .
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="prospect-name">Business name</Label>
+                <Input
+                  id="prospect-name"
+                  type="text"
+                  value={prospectName}
+                  className="h-11"
+                  onChange={(e) => setProspectName(e.target.value)}
+                  required
+                  placeholder="Roofs by Shiloh"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="first-name">
+                  Owner first name{" "}
+                  <span className="text-xs text-muted-foreground font-normal">(optional)</span>
+                </Label>
+                <Input
+                  id="first-name"
+                  type="text"
+                  value={prospectFirstName}
+                  className="h-11"
+                  onChange={(e) => setProspectFirstName(e.target.value)}
+                  placeholder="John"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="email">Prospect email</Label>
               <Input
-                id="prospect-name"
-                type="text"
-                value={prospectName}
-                onChange={(e) => setProspectName(e.target.value)}
+                id="email"
+                type="email"
+                value={prospectEmail}
+                className="h-11"
+                onChange={(e) => setProspectEmail(e.target.value)}
                 required
-                placeholder="Roofs by Shiloh"
+                placeholder="owner@example.com"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="first-name">
-                Owner first name{" "}
-                <span className="text-xs text-muted-foreground">(optional)</span>
-              </Label>
-              <Input
-                id="first-name"
-                type="text"
-                value={prospectFirstName}
-                onChange={(e) => setProspectFirstName(e.target.value)}
-                placeholder="John"
-              />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="email">Prospect email</Label>
-            <Input
-              id="email"
-              type="email"
-              value={prospectEmail}
-              onChange={(e) => setProspectEmail(e.target.value)}
-              required
-              placeholder="owner@example.com"
-            />
           </div>
         </section>
 
-        {/* Step 2: Pricing — monthly + setup sliders */}
-        <section id="step-pricing" className="space-y-4">
-          {/* Monthly price — slider + numeric input */}
-          <div className="space-y-2">
+        {/* Section 2: Pricing */}
+        <section id="step-pricing" className="rounded-2xl border border-border/70 bg-card/40 p-6 space-y-5">
+          <div className="space-y-1">
+            <p className="text-xs uppercase tracking-widest text-muted-foreground font-medium">Pricing</p>
+            <h2 className="text-lg font-semibold tracking-tight">What you&apos;re charging</h2>
+          </div>
+
+          {/* Monthly slider */}
+          <div className="space-y-3">
             <div className="flex items-center justify-between">
               <Label htmlFor="monthly">Monthly recurring</Label>
-              <span className="text-xs text-muted-foreground">
-                starts one month after acceptance
-              </span>
+              <span className="text-xs text-muted-foreground">starts one month after acceptance</span>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="flex-1">
-                <BrandedSlider
-                  min={0}
-                  max={200000}
-                  step={500}
-                  value={monthlyCents}
-                  onChange={setMonthlyCents}
-                  brandColor={agencyContext.brandColor}
-                  ariaLabel="Monthly recurring price"
-                />
-              </div>
-              <div className="flex items-center gap-1">
+            <div className="flex items-center gap-4">
+              <BrandedSlider
+                min={0}
+                max={200000}
+                step={500}
+                value={monthlyCents}
+                onChange={setMonthlyCents}
+                brandColor={agencyContext.brandColor}
+                ariaLabel="Monthly recurring price"
+              />
+              <div className="flex items-center gap-1.5 shrink-0">
                 <span className="text-muted-foreground">$</span>
                 <input
                   type="number"
@@ -228,18 +227,18 @@ export function ProposalNewForm({
                   onChange={(e) =>
                     setMonthlyCents(Math.max(0, Math.round(Number(e.target.value) * 100)))
                   }
-                  className="h-9 w-24 rounded-md border border-input bg-background px-2 text-sm"
+                  className="h-11 w-24 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 />
                 <span className="text-muted-foreground text-sm">/mo</span>
               </div>
             </div>
-            <div className="flex flex-wrap gap-1">
+            <div className="flex flex-wrap gap-1.5">
               {PRICE_QUICK_PICKS.map((cents) => (
                 <button
                   key={cents}
                   type="button"
                   onClick={() => setMonthlyCents(cents)}
-                  className="px-2 py-0.5 rounded text-xs border border-border hover:bg-muted"
+                  className="px-3 py-1 rounded-md text-xs border border-border bg-card hover:bg-muted hover:border-foreground/20 transition-colors"
                 >
                   ${(cents / 100).toLocaleString("en-US")}
                 </button>
@@ -247,27 +246,25 @@ export function ProposalNewForm({
             </div>
           </div>
 
-          {/* Setup fee — slider + numeric input */}
-          <div className="space-y-2">
+          {/* Setup fee slider */}
+          <div className="space-y-3 pt-4 border-t border-border/40">
             <div className="flex items-center justify-between">
               <Label htmlFor="setup">
                 Up-front fee{" "}
-                <span className="text-xs text-muted-foreground">(optional, one-time)</span>
+                <span className="text-xs text-muted-foreground font-normal">(optional, one-time)</span>
               </Label>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="flex-1">
-                <BrandedSlider
-                  min={0}
-                  max={500000}
-                  step={500}
-                  value={setupCents}
-                  onChange={setSetupCents}
-                  brandColor={agencyContext.brandColor}
-                  ariaLabel="Up-front setup fee"
-                />
-              </div>
-              <div className="flex items-center gap-1">
+            <div className="flex items-center gap-4">
+              <BrandedSlider
+                min={0}
+                max={500000}
+                step={500}
+                value={setupCents}
+                onChange={setSetupCents}
+                brandColor={agencyContext.brandColor}
+                ariaLabel="Up-front setup fee"
+              />
+              <div className="flex items-center gap-1.5 shrink-0">
                 <span className="text-muted-foreground">$</span>
                 <input
                   type="number"
@@ -276,18 +273,18 @@ export function ProposalNewForm({
                   onChange={(e) =>
                     setSetupCents(Math.max(0, Math.round(Number(e.target.value) * 100)))
                   }
-                  className="h-9 w-24 rounded-md border border-input bg-background px-2 text-sm"
+                  className="h-11 w-24 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 />
                 <span className="text-muted-foreground text-sm">one-time</span>
               </div>
             </div>
-            <div className="flex flex-wrap gap-1">
+            <div className="flex flex-wrap gap-1.5">
               {SETUP_QUICK_PICKS.map((cents) => (
                 <button
                   key={cents}
                   type="button"
                   onClick={() => setSetupCents(cents)}
-                  className="px-2 py-0.5 rounded text-xs border border-border hover:bg-muted"
+                  className="px-3 py-1 rounded-md text-xs border border-border bg-card hover:bg-muted hover:border-foreground/20 transition-colors"
                 >
                   ${(cents / 100).toLocaleString("en-US")}
                 </button>
@@ -296,56 +293,57 @@ export function ProposalNewForm({
           </div>
         </section>
 
-        {/* Step 3: Customize — editable copy, collapsed by default */}
-        <section id="step-customize">
-          <details className="rounded-xl border border-border/70 p-4 space-y-3">
-            <summary className="text-sm font-medium cursor-pointer select-none">
-              Customize email + proposal copy
-            </summary>
-            <div className="space-y-3 pt-3">
-              <div className="space-y-2">
-                <Label htmlFor="subj">
-                  Email subject{" "}
-                  <span className="text-xs text-muted-foreground">(blank = agency template)</span>
-                </Label>
-                <Input
-                  id="subj"
-                  value={emailSubject}
-                  onChange={(e) => setEmailSubject(e.target.value)}
-                  placeholder={agencyContext.template.subject}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="ebody">Email body</Label>
-                <textarea
-                  id="ebody"
-                  value={emailBody}
-                  onChange={(e) => setEmailBody(e.target.value)}
-                  rows={3}
-                  placeholder="Wanted to follow up on what we talked about. Built a working system for you — link below."
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-y"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="intro">Proposal intro</Label>
-                <textarea
-                  id="intro"
-                  value={introText}
-                  onChange={(e) => setIntroText(e.target.value)}
-                  rows={3}
-                  placeholder={agencyContext.template.introCopy}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-y"
-                />
-              </div>
+        {/* Section 3: Customize (was collapsible, now inline) */}
+        <section id="step-customize" className="rounded-2xl border border-border/70 bg-card/40 p-6 space-y-5">
+          <div className="space-y-1">
+            <p className="text-xs uppercase tracking-widest text-muted-foreground font-medium">Customize</p>
+            <h2 className="text-lg font-semibold tracking-tight">Email &amp; proposal copy</h2>
+            <p className="text-sm text-muted-foreground">Leave blank to use your agency template defaults.</p>
+          </div>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="subj">Email subject</Label>
+              <Input
+                id="subj"
+                value={emailSubject}
+                className="h-11"
+                onChange={(e) => setEmailSubject(e.target.value)}
+                placeholder={agencyContext.template.subject}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="ebody">Email body</Label>
+              <textarea
+                id="ebody"
+                value={emailBody}
+                onChange={(e) => setEmailBody(e.target.value)}
+                rows={4}
+                placeholder="Wanted to follow up on what we talked about. Built a working system for you — link below."
+                className="w-full rounded-md border border-input bg-background px-4 py-3 text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-ring resize-y"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="intro">Proposal intro</Label>
+              <textarea
+                id="intro"
+                value={introText}
+                onChange={(e) => setIntroText(e.target.value)}
+                rows={4}
+                placeholder={agencyContext.template.introCopy}
+                className="w-full rounded-md border border-input bg-background px-4 py-3 text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-ring resize-y"
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="tl">Timeline</Label>
                 <textarea
                   id="tl"
                   value={timelineText}
                   onChange={(e) => setTimelineText(e.target.value)}
-                  rows={2}
+                  rows={3}
                   placeholder={agencyContext.template.timelineCopy}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-y"
+                  className="w-full rounded-md border border-input bg-background px-4 py-3 text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-ring resize-y"
                 />
               </div>
               <div className="space-y-2">
@@ -354,22 +352,26 @@ export function ProposalNewForm({
                   id="terms"
                   value={termsText}
                   onChange={(e) => setTermsText(e.target.value)}
-                  rows={2}
+                  rows={3}
                   placeholder={agencyContext.template.termsCopy}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-y"
+                  className="w-full rounded-md border border-input bg-background px-4 py-3 text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-ring resize-y"
                 />
               </div>
             </div>
-          </details>
+          </div>
         </section>
 
-        {/* Save & review block (not a stepper step) */}
-        <section id="step-save-block" className="space-y-3 pt-2">
-          <p className="text-sm text-muted-foreground">
-            Saving creates a draft — you&apos;ll review the full proposal on the next screen and decide when to send.
-          </p>
-          {error && <p className="text-sm text-destructive">{error}</p>}
-          <Button type="submit" disabled={submitting} className="w-full" size="lg">
+        {/* Save section */}
+        <section id="step-save-block" className="space-y-4">
+          <div className="rounded-xl border border-border/40 bg-muted/30 p-4 text-center text-sm text-muted-foreground">
+            Saving creates a draft. You&apos;ll review the full proposal on the next screen and decide when to send.
+          </div>
+          {error && (
+            <p className="text-sm text-destructive rounded-md border border-destructive/30 bg-destructive/5 p-3">
+              {error}
+            </p>
+          )}
+          <Button type="submit" disabled={submitting} className="w-full h-12 text-base" size="lg">
             {submitting ? "Saving…" : "Save & go to review →"}
           </Button>
         </section>

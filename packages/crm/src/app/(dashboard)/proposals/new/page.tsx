@@ -46,7 +46,7 @@ export default async function ProposalNewPage() {
   }));
 
   return (
-    <main className="flex-1 overflow-auto w-full p-3 sm:p-4 md:p-6">
+    <main className="flex-1 overflow-auto w-full p-3 sm:p-4 md:p-6 bg-gradient-to-b from-background to-background/95">
       <div className="mx-auto max-w-7xl space-y-6">
         {/* Stepper spans the full width above the split-screen layout */}
         <ProposalStepsHeader brandColor={agencyContext.brandColor} activeStep="step-create" />
