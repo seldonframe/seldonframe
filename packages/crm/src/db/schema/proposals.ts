@@ -57,6 +57,8 @@ export const proposals = pgTable(
       .notNull()
       .default(sql`'[]'::jsonb`),
     status: text("status").$type<ProposalStatus>().notNull().default("draft"),
+    emailSubject: text("email_subject"),
+    emailBody: text("email_body"),
     signedToken: text("signed_token").notNull().unique(),
     sentAt: timestamp("sent_at", { withTimezone: true }),
     firstViewedAt: timestamp("first_viewed_at", { withTimezone: true }),
