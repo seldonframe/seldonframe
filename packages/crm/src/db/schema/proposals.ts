@@ -22,6 +22,12 @@ export type ProposalScopeItem = {
   description?: string;
 };
 
+export type ProposalInternalNote = {
+  body: string;
+  createdAt: string; // ISO
+  createdByUserId: string;
+};
+
 export const proposals = pgTable(
   "proposals",
   {
@@ -44,6 +50,10 @@ export const proposals = pgTable(
     generatedHtml: text("generated_html").notNull(),
     scopeItems: jsonb("scope_items")
       .$type<ProposalScopeItem[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    internalNotes: jsonb("internal_notes")
+      .$type<ProposalInternalNote[]>()
       .notNull()
       .default(sql`'[]'::jsonb`),
     status: text("status").$type<ProposalStatus>().notNull().default("draft"),
