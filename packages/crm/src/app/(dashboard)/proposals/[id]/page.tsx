@@ -11,6 +11,10 @@ import { ActivityTimeline } from "@/components/proposals/activity-timeline";
 import { InternalNotes } from "@/components/proposals/internal-notes";
 import { QuickActions } from "@/components/proposals/quick-actions";
 import { ProposalStatusPill } from "@/components/proposals/proposal-status-pill";
+import {
+  ProposalStepsHeader,
+  type ProposalStepId,
+} from "@/components/proposals/proposal-steps-header";
 import { ProposalEditor } from "./proposal-editor";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +28,7 @@ export default async function ProposalEditPage({
   if (!session?.user?.id) redirect("/login");
 
   const [user] = await db
-    .select({ orgId: users.orgId })
+    .select({ orgId: users.orgId, agencyProfile: users.agencyProfile })
     .from(users)
     .where(eq(users.id, session.user.id))
     .limit(1);
@@ -44,8 +48,38 @@ export default async function ProposalEditPage({
     process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://app.seldonframe.com";
   const publicUrl = `${baseUrl}/p/${proposal.signedToken}`;
 
+  // Derive stepper state from proposal status.
+  function getActiveStep(status: typeof proposal.status): ProposalStepId {
+    if (status === "draft") return "step-review";
+    return "step-send"; // sent / viewed / accepted / declined / expired
+  }
+
+  const activeStep = getActiveStep(proposal.status);
+
+  // Steps 1-3 are always visited once the proposal exists (created on /new).
+  // Step 4 (review) is visited once they've moved beyond draft.
+  const visitedSteps: ProposalStepId[] = [
+    "step-setup",
+    "step-pricing",
+    "step-customize",
+  ];
+  if (proposal.status !== "draft") {
+    visitedSteps.push("step-review");
+  }
+
+  const brandColor =
+    (user.agencyProfile as { brand_color?: string } | null)?.brand_color ??
+    "#0ea5e9";
+
   return (
     <main className="mx-auto max-w-5xl px-6 py-8 space-y-6">
+      <ProposalStepsHeader
+        brandColor={brandColor}
+        mode="fixed"
+        fixedActiveStep={activeStep}
+        visitedSteps={visitedSteps}
+      />
+
       {/* Header with status + key timestamps */}
       <header className="flex items-start justify-between gap-4">
         <div className="space-y-1">
