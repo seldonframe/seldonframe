@@ -17,6 +17,7 @@ import { emitSeldonEvent } from "@/lib/events/bus";
 import { logEvent } from "@/lib/observability/log";
 import { notifyAgencyOfAcceptance } from "@/lib/proposals/notify-agency";
 import { notifyProspectOfActivation } from "@/lib/proposals/notify-prospect";
+import { createDealOnAcceptance } from "@/lib/proposals/create-deal-on-acceptance";
 
 export const runtime = "nodejs";
 
@@ -550,6 +551,22 @@ export async function POST(request: Request) {
           error: err instanceof Error ? err.message : String(err),
         })
       );
+
+      // L1 — Auto-create contact + Won-stage deal in the agency's CRM.
+      // Wrapped in try/catch so a CRM failure never fails the webhook
+      // response (Stripe would retry; the proposal is already accepted).
+      try {
+        await createDealOnAcceptance({
+          ...proposal,
+          stripeSubscriptionId: subscriptionId || proposal.stripeSubscriptionId,
+          stripeCustomerId: customerId || proposal.stripeCustomerId,
+        });
+      } catch (err: unknown) {
+        logEvent("proposal_acceptance_crm_failed", {
+          proposalId: proposal.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
 
       break;
     }
