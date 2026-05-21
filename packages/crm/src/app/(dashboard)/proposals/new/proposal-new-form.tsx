@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ProposalPreviewPane } from "./proposal-preview-pane";
-import { ProposalStepsHeader } from "@/components/proposals/proposal-steps-header";
 import { BrandedSlider } from "./branded-slider";
 import type { AgencyProposalTemplate } from "@/db/schema/agency-profile";
 
@@ -123,7 +122,6 @@ export function ProposalNewForm({
   return (
     <>
       <form onSubmit={handleSubmit} className="space-y-6">
-        <ProposalStepsHeader brandColor={agencyContext.brandColor} mode="scroll" />
 
         <header className="space-y-1">
           <h1 className="text-3xl font-semibold tracking-tight">New proposal</h1>

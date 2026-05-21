@@ -69,8 +69,8 @@ export function ProposalStepsHeader({
   }
 
   return (
-    <div className="sticky top-0 z-10 -mx-3 sm:-mx-4 md:-mx-6 px-3 sm:px-4 md:px-6 py-3 bg-background/95 backdrop-blur-sm border-b border-border/50">
-      <ol className="flex items-center gap-2 overflow-x-auto">
+    <div className="sticky top-0 z-10 py-4 bg-background/95 backdrop-blur-sm border-b border-border/50">
+      <ol className="flex items-center justify-between gap-2 sm:gap-4 px-2 sm:px-4 max-w-3xl mx-auto">
         {PROPOSAL_STEPS.map((step, idx) => {
           const active = step.id === activeStep;
           const visited = isVisited(idx, step.id);
@@ -112,7 +112,7 @@ export function ProposalStepsHeader({
               </button>
               {idx < PROPOSAL_STEPS.length - 1 && (
                 <span
-                  className="h-px w-4 sm:w-8 shrink-0 transition-colors"
+                  className="flex-1 h-px min-w-4 sm:min-w-8 max-w-16 transition-colors"
                   style={{
                     backgroundColor: visited || (active && idx < activeIdx) ? brandColor : "var(--border)",
                   }}

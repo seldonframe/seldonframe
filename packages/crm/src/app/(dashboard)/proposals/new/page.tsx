@@ -11,6 +11,7 @@ import { stripeConnections, users } from "@/db/schema";
 import { ProposalNewForm } from "./proposal-new-form";
 import { DEFAULT_PROPOSAL_TEMPLATE } from "@/lib/proposals/generate-html";
 import { listManagedOrganizationsForUser } from "@/lib/billing/orgs";
+import { ProposalStepsHeader } from "@/components/proposals/proposal-steps-header";
 
 export const dynamic = "force-dynamic";
 
@@ -46,8 +47,13 @@ export default async function ProposalNewPage() {
 
   return (
     <main className="flex-1 overflow-auto w-full p-3 sm:p-4 md:p-6">
-      <div className="mx-auto max-w-7xl grid grid-cols-1 lg:grid-cols-[400px_1fr] gap-6">
-        <ProposalNewForm agencyContext={agencyContext} workspaces={workspaces} />
+      <div className="mx-auto max-w-7xl space-y-6">
+        {/* Stepper spans the full width above the split-screen layout */}
+        <ProposalStepsHeader brandColor={agencyContext.brandColor} mode="scroll" />
+
+        <div className="grid grid-cols-1 lg:grid-cols-[400px_1fr] gap-6">
+          <ProposalNewForm agencyContext={agencyContext} workspaces={workspaces} />
+        </div>
       </div>
     </main>
   );
