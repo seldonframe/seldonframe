@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, or, sql } from "drizzle-orm";
 import Link from "next/link";
-import { DollarSign, Users, CalendarDays, Activity, Plus, ChartLine, MoreHorizontal, BarChart2, ClipboardList, Search, Filter, FileInput, Sparkles, AlertTriangle, AlertCircle, Info } from "lucide-react";
+import { DollarSign, Users, CalendarDays, Activity, Plus, ChartLine, MoreHorizontal, BarChart2, ClipboardList, Search, Filter, FileInput, Sparkles, AlertTriangle, AlertCircle, Info, Terminal } from "lucide-react";
 import { db } from "@/db";
 import { activities, bookings as bookingsTable, contacts as contactsTable, metricsSnapshots, organizations, orgMembers, paymentRecords, pipelines as pipelinesTable, stripeConnections, type OrganizationIntegrations, type PipelineStage } from "@/db/schema";
 import { getCurrentUser, getOrgId } from "@/lib/auth/helpers";
@@ -904,22 +904,37 @@ export default async function DashboardPage({
   });
 
   return (
-    <main className="animate-page-enter flex-1 overflow-auto w-full space-y-5 p-3 sm:space-y-6 sm:p-4 md:p-6">
+    <main className="animate-page-enter flex-1 overflow-auto w-full space-y-8 p-3 sm:p-4 md:p-6">
       {/* v1.25.3 — Claude Code/MCP hint is for SF technical users.
           Hidden for operator sessions (HVAC owner / dentist /etc.) who
-          have no relationship with our developer tooling. */}
+          have no relationship with our developer tooling.
+          Phase K — wrapped in a card frame with a Terminal icon so it
+          reads as an intentional feature call-out rather than bare text. */}
       {!isOperatorSession ? (
-        <div className="rounded-2xl border border-border/80 bg-background/30 px-4 py-3 text-sm text-muted-foreground">
-          For the best experience, use Seldon directly from Claude Code with our MCP + Skill.
+        <div className="flex items-start gap-3 rounded-2xl border border-border/70 bg-card/40 px-4 py-3.5">
+          <Terminal className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm text-muted-foreground">
+              For the best experience, use Seldon directly from Claude Code with our MCP + Skill.
+            </p>
+          </div>
+          <a
+            href="https://docs.seldonframe.com/mcp"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="shrink-0 text-xs font-medium text-primary hover:underline"
+          >
+            Learn more
+          </a>
         </div>
       ) : null}
 
       {showWorkspaceTabs ? (
-        <div className="inline-flex items-center rounded-xl border border-border/80 bg-card/75 p-1 shadow-(--shadow-xs)">
+        <div className="rounded-lg bg-muted p-1 inline-flex gap-1">
           <Link
             href="/dashboard?view=workspace"
             className={`inline-flex h-8 items-center rounded-md px-3 text-xs font-medium transition-colors sm:text-sm ${
-              activeDashboardView === "workspace" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent"
+              activeDashboardView === "workspace" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
             }`}
           >
             Active Workspace
@@ -927,7 +942,7 @@ export default async function DashboardPage({
           <Link
             href="/dashboard?view=all"
             className={`inline-flex h-8 items-center rounded-md px-3 text-xs font-medium transition-colors sm:text-sm ${
-              activeDashboardView === "all" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent"
+              activeDashboardView === "all" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
             }`}
           >
             All Workspaces
@@ -936,85 +951,107 @@ export default async function DashboardPage({
       ) : null}
 
       {activeDashboardView === "all" ? (
-        <section className="crm-card space-y-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <h2 className="text-base sm:text-lg font-semibold">Your Client Workspaces</h2>
-              <p className="text-sm text-muted-foreground">A calm overview of every client workspace.</p>
+        <section className="space-y-8">
+          {/* Hero header */}
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div className="space-y-1">
+              <h1 className="text-3xl font-semibold tracking-tight text-foreground">Your Client Workspaces</h1>
+              <p className="text-base text-muted-foreground">A calm overview of every client workspace.</p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex shrink-0 flex-wrap gap-2">
               {/* 2026-05-17 — /orgs/new was deleted in Cut B; was leading
                   to a 404. /clients/new is the canonical create-workspace
                   entry. */}
-              <Link href="/clients/new" className="crm-button-secondary h-9 px-4 text-xs sm:text-sm">
-                Create New Client OS
+              <Link href="/clients/new" className="crm-button-primary h-9 px-4 text-xs sm:text-sm">
+                Create new workspace
               </Link>
             </div>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {workspaceRows.map((workspace) => {
-              const stat = workspaceStatMap.get(workspace.id);
-              const isActiveWorkspace = workspace.id === orgId;
+          {workspaceRows.length === 0 ? (
+            /* Empty state */
+            <div className="flex flex-col items-center gap-6 rounded-2xl border border-border/80 bg-card/40 px-6 py-16 text-center">
+              <div className="space-y-2">
+                <h2 className="text-xl font-semibold text-foreground">Spin up your first client workspace</h2>
+                <p className="text-sm text-muted-foreground">Paste a URL and we&apos;ll build a CRM, booking page, intake form, and chatbot in one pass.</p>
+              </div>
+              <Link href="/clients/new" className="crm-button-primary h-10 px-5 text-sm">
+                Add your first client →
+              </Link>
+            </div>
+          ) : (
+            <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+              {workspaceRows.map((workspace) => {
+                const stat = workspaceStatMap.get(workspace.id);
+                const isActiveWorkspace = workspace.id === orgId;
+                const statusLabel = getWorkspaceStatus(isActiveWorkspace, stat?.contactCount ?? 0);
+                // Phase K — tone-coded status pills: emerald = live, amber = ready, primary = active (current workspace)
+                const pillClass = isActiveWorkspace
+                  ? "border-primary/30 bg-primary/10 text-primary"
+                  : stat?.contactCount
+                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                    : "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400";
 
-              return (
-                <article key={workspace.id} className="rounded-2xl border border-border/80 bg-background/35 p-5 shadow-(--shadow-xs)">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl border border-border/70 bg-card text-sm font-semibold text-foreground">
-                        {getWorkspaceInitials(workspace.name)}
+                return (
+                  <article key={workspace.id} className="rounded-2xl border border-border/80 bg-card/80 p-5 shadow-(--shadow-xs) transition-shadow hover:shadow-lg">
+                    {/* Card header: name + status pill */}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl border border-border/70 bg-card text-sm font-semibold text-foreground">
+                          {getWorkspaceInitials(workspace.name)}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-foreground">{workspace.name}</p>
+                          <p className="truncate text-xs text-muted-foreground">/{workspace.slug}</p>
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-foreground">{workspace.name}</p>
-                        <p className="truncate text-xs text-muted-foreground">{formatFrameworkLabel(workspace.soulId)} OS · /{workspace.slug}</p>
+                      <span className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-1 text-[11px] font-medium ${pillClass}`}>
+                        {statusLabel}
+                      </span>
+                    </div>
+
+                    {/* Domain / framework line */}
+                    <p className="mt-2 truncate text-xs text-muted-foreground">{formatFrameworkLabel(workspace.soulId)} OS</p>
+
+                    {/* 2x2 stat grid — Clients + Revenue (bookings/leads not in workspaceStats; fall back gracefully) */}
+                    <dl className="mt-4 grid grid-cols-2 gap-3">
+                      <div className="rounded-xl border border-border/70 bg-card/70 p-3">
+                        <dt className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">Clients</dt>
+                        <dd className="mt-1 text-lg font-semibold text-foreground">{(stat?.contactCount ?? 0).toLocaleString()}</dd>
                       </div>
-                    </div>
-                    <span className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-1 text-[11px] font-medium ${isActiveWorkspace ? "border-primary/30 bg-primary/10 text-primary" : "border-border bg-muted/40 text-muted-foreground"}`}>
-                      {getWorkspaceStatus(isActiveWorkspace, stat?.contactCount ?? 0)}
-                    </span>
-                  </div>
+                      <div className="rounded-xl border border-border/70 bg-card/70 p-3">
+                        <dt className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">Revenue</dt>
+                        <dd className="mt-1 text-lg font-semibold text-foreground">{stat?.monthlyRevenue ? formatCurrency(stat.monthlyRevenue) : "—"}</dd>
+                      </div>
+                    </dl>
 
-                  <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                    <div className="rounded-xl border border-border/70 bg-card/70 p-3">
-                      <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">Clients</p>
-                      <p className="mt-1 text-base font-semibold text-foreground">{(stat?.contactCount ?? 0).toLocaleString()}</p>
+                    {/* Actions */}
+                    <div className="mt-4 flex flex-wrap items-center gap-2">
+                      {/* 2026-05-17 — flip workspace + land on Ready hub */}
+                      <form action={setActiveOrgAction}>
+                        <input type="hidden" name="orgId" value={workspace.id} />
+                        <input type="hidden" name="redirectTo" value={`/clients/${workspace.slug}/ready`} />
+                        <button type="submit" className="crm-button-secondary h-9 px-4 text-xs sm:text-sm">
+                          Open workspace →
+                        </button>
+                      </form>
                     </div>
-                    <div className="rounded-xl border border-border/70 bg-card/70 p-3">
-                      <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">Revenue</p>
-                      <p className="mt-1 text-base font-semibold text-foreground">{formatCurrency(stat?.monthlyRevenue ?? 0)}</p>
-                    </div>
-                  </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
 
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {/* 2026-05-17 — flip workspace + land on Ready hub
-                        (matches sidebar + topbar switchers). The Ready hub
-                        is the operator's "home" for the workspace: it has
-                        deep links into the SMB's own admin dashboard, the
-                        customer portal, booking, intake, chatbot test, etc.
-                        Bypassing it (the old `/dashboard?view=workspace`
-                        target) dropped operators into a blank dashboard
-                        with no signposting back to the deliverables. */}
-                    <form action={setActiveOrgAction}>
-                      <input type="hidden" name="orgId" value={workspace.id} />
-                      <input type="hidden" name="redirectTo" value={`/clients/${workspace.slug}/ready`} />
-                      <button type="submit" className="crm-button-secondary h-9 px-4 text-xs sm:text-sm">
-                        Open workspace hub
-                      </button>
-                    </form>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-
-          <p className="text-sm text-muted-foreground">
-            Totals: <span className="text-foreground font-medium">{workspaceRows.length} workspaces</span> · {" "}
-            <span className="text-foreground font-medium">{totalWorkspaceContacts.toLocaleString()} clients</span> · {" "}
-            <span className="text-foreground font-medium">{formatCurrency(totalWorkspaceRevenue)}/mo revenue</span>
-          </p>
+          {workspaceRows.length > 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Totals: <span className="text-foreground font-medium">{workspaceRows.length} workspaces</span> ·{" "}
+              <span className="text-foreground font-medium">{totalWorkspaceContacts.toLocaleString()} clients</span> ·{" "}
+              <span className="text-foreground font-medium">{formatCurrency(totalWorkspaceRevenue)}/mo revenue</span>
+            </p>
+          ) : null}
         </section>
       ) : (
-        <>
+        <div className="space-y-8">
       {typeof trialDaysRemaining === "number" ? (
         <div className="rounded-2xl border border-primary/25 bg-primary/8 px-4 py-3.5 text-sm text-primary shadow-(--shadow-xs)">
           Trial: {trialDaysRemaining} day{trialDaysRemaining === 1 ? "" : "s"} remaining. Your plan activates on {formatLongDate(trialEndsAt!)}.
@@ -1610,7 +1647,7 @@ export default async function DashboardPage({
           </ul>
         </article>
       ) : null}
-        </>
+        </div>
       )}
 
       {/* 2026-05-18 — "Ask Seldon" floating CTA removed. Power users
