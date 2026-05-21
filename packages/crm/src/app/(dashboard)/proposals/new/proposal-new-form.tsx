@@ -1,7 +1,6 @@
 "use client";
 // packages/crm/src/app/(dashboard)/proposals/new/proposal-new-form.tsx
-// 2026-05-21 — Phase E: workspace picker + sliders + inline copy editing.
-// Replaces URL input + tier buttons. Save is near-instant (no LLM).
+// 2026-05-21 — Phase G: step progression header + branded sliders.
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -10,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ProposalPreviewPane } from "./proposal-preview-pane";
+import { ProposalStepsHeader } from "./proposal-steps-header";
+import { BrandedSlider } from "./branded-slider";
 import type { AgencyProposalTemplate } from "@/db/schema/agency-profile";
 
 type Workspace = { id: string; name: string; slug: string };
@@ -122,241 +123,258 @@ export function ProposalNewForm({
   return (
     <>
       <form onSubmit={handleSubmit} className="space-y-6">
+        <ProposalStepsHeader brandColor={agencyContext.brandColor} />
+
         <header className="space-y-1">
           <h1 className="text-3xl font-semibold tracking-tight">New proposal</h1>
           <p className="text-muted-foreground">
-            Pick the client workspace, set pricing, customize the copy, then send.
+            Save first to review your proposal. You&apos;ll send it from the next screen.
           </p>
         </header>
 
-        {/* Workspace picker */}
-        <div className="space-y-2">
-          <Label htmlFor="workspace">Client workspace</Label>
-          <select
-            id="workspace"
-            value={workspaceId}
-            onChange={(e) => handleWorkspaceChange(e.target.value)}
-            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-          >
-            <option value="">— None (external billing, no workspace iframe) —</option>
-            {workspaces.map((ws) => (
-              <option key={ws.id} value={ws.id}>
-                {ws.name}
-              </option>
-            ))}
-          </select>
-          <p className="text-xs text-muted-foreground">
-            Want a new workspace?{" "}
-            <Link href="/clients/new" className="text-primary underline">
-              Build one at /clients/new
-            </Link>
-            .
-          </p>
-        </div>
-
-        {/* Prospect */}
-        <div className="grid grid-cols-2 gap-3">
+        {/* Step 1: Setup — workspace picker + prospect details */}
+        <section id="step-setup" className="space-y-4">
+          {/* Workspace picker */}
           <div className="space-y-2">
-            <Label htmlFor="prospect-name">Business name</Label>
-            <Input
-              id="prospect-name"
-              type="text"
-              value={prospectName}
-              onChange={(e) => setProspectName(e.target.value)}
-              required
-              placeholder="Roofs by Shiloh"
-            />
+            <Label htmlFor="workspace">Client workspace</Label>
+            <select
+              id="workspace"
+              value={workspaceId}
+              onChange={(e) => handleWorkspaceChange(e.target.value)}
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            >
+              <option value="">— None (external billing, no workspace iframe) —</option>
+              {workspaces.map((ws) => (
+                <option key={ws.id} value={ws.id}>
+                  {ws.name}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              Want a new workspace?{" "}
+              <Link href="/clients/new" className="text-primary underline">
+                Build one at /clients/new
+              </Link>
+              .
+            </p>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="first-name">
-              Owner first name{" "}
-              <span className="text-xs text-muted-foreground">(optional)</span>
-            </Label>
-            <Input
-              id="first-name"
-              type="text"
-              value={prospectFirstName}
-              onChange={(e) => setProspectFirstName(e.target.value)}
-              placeholder="John"
-            />
-          </div>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="email">Prospect email</Label>
-          <Input
-            id="email"
-            type="email"
-            value={prospectEmail}
-            onChange={(e) => setProspectEmail(e.target.value)}
-            required
-            placeholder="owner@example.com"
-          />
-        </div>
 
-        {/* Monthly price — slider + numeric input */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="monthly">Monthly recurring</Label>
-            <span className="text-xs text-muted-foreground">
-              starts one month after acceptance
-            </span>
-          </div>
-          <div className="flex items-center gap-3">
-            <input
-              id="monthly"
-              type="range"
-              min={0}
-              max={200000}
-              step={500}
-              value={monthlyCents}
-              onChange={(e) => setMonthlyCents(Number(e.target.value))}
-              className="flex-1"
-            />
-            <div className="flex items-center gap-1">
-              <span className="text-muted-foreground">$</span>
-              <input
-                type="number"
-                min={0}
-                value={Math.round(monthlyCents / 100)}
-                onChange={(e) =>
-                  setMonthlyCents(Math.max(0, Math.round(Number(e.target.value) * 100)))
-                }
-                className="h-9 w-24 rounded-md border border-input bg-background px-2 text-sm"
-              />
-              <span className="text-muted-foreground text-sm">/mo</span>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-1">
-            {PRICE_QUICK_PICKS.map((cents) => (
-              <button
-                key={cents}
-                type="button"
-                onClick={() => setMonthlyCents(cents)}
-                className="px-2 py-0.5 rounded text-xs border border-border hover:bg-muted"
-              >
-                ${(cents / 100).toLocaleString("en-US")}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Setup fee — slider + numeric input */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="setup">
-              Up-front fee{" "}
-              <span className="text-xs text-muted-foreground">(optional, one-time)</span>
-            </Label>
-          </div>
-          <div className="flex items-center gap-3">
-            <input
-              id="setup"
-              type="range"
-              min={0}
-              max={500000}
-              step={500}
-              value={setupCents}
-              onChange={(e) => setSetupCents(Number(e.target.value))}
-              className="flex-1"
-            />
-            <div className="flex items-center gap-1">
-              <span className="text-muted-foreground">$</span>
-              <input
-                type="number"
-                min={0}
-                value={Math.round(setupCents / 100)}
-                onChange={(e) =>
-                  setSetupCents(Math.max(0, Math.round(Number(e.target.value) * 100)))
-                }
-                className="h-9 w-24 rounded-md border border-input bg-background px-2 text-sm"
-              />
-              <span className="text-muted-foreground text-sm">one-time</span>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-1">
-            {SETUP_QUICK_PICKS.map((cents) => (
-              <button
-                key={cents}
-                type="button"
-                onClick={() => setSetupCents(cents)}
-                className="px-2 py-0.5 rounded text-xs border border-border hover:bg-muted"
-              >
-                ${(cents / 100).toLocaleString("en-US")}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Editable copy — collapsible */}
-        <details className="rounded-xl border border-border/70 p-4 space-y-3" open>
-          <summary className="text-sm font-medium cursor-pointer select-none">
-            Customize email + proposal copy
-          </summary>
-          <div className="space-y-3 pt-3">
+          {/* Prospect */}
+          <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label htmlFor="subj">
-                Email subject{" "}
-                <span className="text-xs text-muted-foreground">(blank = agency template)</span>
+              <Label htmlFor="prospect-name">Business name</Label>
+              <Input
+                id="prospect-name"
+                type="text"
+                value={prospectName}
+                onChange={(e) => setProspectName(e.target.value)}
+                required
+                placeholder="Roofs by Shiloh"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="first-name">
+                Owner first name{" "}
+                <span className="text-xs text-muted-foreground">(optional)</span>
               </Label>
               <Input
-                id="subj"
-                value={emailSubject}
-                onChange={(e) => setEmailSubject(e.target.value)}
-                placeholder={agencyContext.template.subject}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="ebody">Email body</Label>
-              <textarea
-                id="ebody"
-                value={emailBody}
-                onChange={(e) => setEmailBody(e.target.value)}
-                rows={3}
-                placeholder="Wanted to follow up on what we talked about. Built a working system for you — link below."
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-y"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="intro">Proposal intro</Label>
-              <textarea
-                id="intro"
-                value={introText}
-                onChange={(e) => setIntroText(e.target.value)}
-                rows={3}
-                placeholder={agencyContext.template.introCopy}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-y"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="tl">Timeline</Label>
-              <textarea
-                id="tl"
-                value={timelineText}
-                onChange={(e) => setTimelineText(e.target.value)}
-                rows={2}
-                placeholder={agencyContext.template.timelineCopy}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-y"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="terms">Terms / fine print</Label>
-              <textarea
-                id="terms"
-                value={termsText}
-                onChange={(e) => setTermsText(e.target.value)}
-                rows={2}
-                placeholder={agencyContext.template.termsCopy}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-y"
+                id="first-name"
+                type="text"
+                value={prospectFirstName}
+                onChange={(e) => setProspectFirstName(e.target.value)}
+                placeholder="John"
               />
             </div>
           </div>
-        </details>
+          <div className="space-y-2">
+            <Label htmlFor="email">Prospect email</Label>
+            <Input
+              id="email"
+              type="email"
+              value={prospectEmail}
+              onChange={(e) => setProspectEmail(e.target.value)}
+              required
+              placeholder="owner@example.com"
+            />
+          </div>
+        </section>
 
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        {/* Step 2: Pricing — monthly + setup sliders */}
+        <section id="step-pricing" className="space-y-4">
+          {/* Monthly price — slider + numeric input */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="monthly">Monthly recurring</Label>
+              <span className="text-xs text-muted-foreground">
+                starts one month after acceptance
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex-1">
+                <BrandedSlider
+                  min={0}
+                  max={200000}
+                  step={500}
+                  value={monthlyCents}
+                  onChange={setMonthlyCents}
+                  brandColor={agencyContext.brandColor}
+                  ariaLabel="Monthly recurring price"
+                />
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-muted-foreground">$</span>
+                <input
+                  type="number"
+                  min={0}
+                  value={Math.round(monthlyCents / 100)}
+                  onChange={(e) =>
+                    setMonthlyCents(Math.max(0, Math.round(Number(e.target.value) * 100)))
+                  }
+                  className="h-9 w-24 rounded-md border border-input bg-background px-2 text-sm"
+                />
+                <span className="text-muted-foreground text-sm">/mo</span>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {PRICE_QUICK_PICKS.map((cents) => (
+                <button
+                  key={cents}
+                  type="button"
+                  onClick={() => setMonthlyCents(cents)}
+                  className="px-2 py-0.5 rounded text-xs border border-border hover:bg-muted"
+                >
+                  ${(cents / 100).toLocaleString("en-US")}
+                </button>
+              ))}
+            </div>
+          </div>
 
-        <Button type="submit" disabled={submitting} className="w-full">
-          {submitting ? "Saving proposal..." : "Save proposal"}
-        </Button>
+          {/* Setup fee — slider + numeric input */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="setup">
+                Up-front fee{" "}
+                <span className="text-xs text-muted-foreground">(optional, one-time)</span>
+              </Label>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex-1">
+                <BrandedSlider
+                  min={0}
+                  max={500000}
+                  step={500}
+                  value={setupCents}
+                  onChange={setSetupCents}
+                  brandColor={agencyContext.brandColor}
+                  ariaLabel="Up-front setup fee"
+                />
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-muted-foreground">$</span>
+                <input
+                  type="number"
+                  min={0}
+                  value={Math.round(setupCents / 100)}
+                  onChange={(e) =>
+                    setSetupCents(Math.max(0, Math.round(Number(e.target.value) * 100)))
+                  }
+                  className="h-9 w-24 rounded-md border border-input bg-background px-2 text-sm"
+                />
+                <span className="text-muted-foreground text-sm">one-time</span>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {SETUP_QUICK_PICKS.map((cents) => (
+                <button
+                  key={cents}
+                  type="button"
+                  onClick={() => setSetupCents(cents)}
+                  className="px-2 py-0.5 rounded text-xs border border-border hover:bg-muted"
+                >
+                  ${(cents / 100).toLocaleString("en-US")}
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Step 3: Customize — editable copy, collapsed by default */}
+        <section id="step-customize">
+          <details className="rounded-xl border border-border/70 p-4 space-y-3">
+            <summary className="text-sm font-medium cursor-pointer select-none">
+              Customize email + proposal copy
+            </summary>
+            <div className="space-y-3 pt-3">
+              <div className="space-y-2">
+                <Label htmlFor="subj">
+                  Email subject{" "}
+                  <span className="text-xs text-muted-foreground">(blank = agency template)</span>
+                </Label>
+                <Input
+                  id="subj"
+                  value={emailSubject}
+                  onChange={(e) => setEmailSubject(e.target.value)}
+                  placeholder={agencyContext.template.subject}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="ebody">Email body</Label>
+                <textarea
+                  id="ebody"
+                  value={emailBody}
+                  onChange={(e) => setEmailBody(e.target.value)}
+                  rows={3}
+                  placeholder="Wanted to follow up on what we talked about. Built a working system for you — link below."
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-y"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="intro">Proposal intro</Label>
+                <textarea
+                  id="intro"
+                  value={introText}
+                  onChange={(e) => setIntroText(e.target.value)}
+                  rows={3}
+                  placeholder={agencyContext.template.introCopy}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-y"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="tl">Timeline</Label>
+                <textarea
+                  id="tl"
+                  value={timelineText}
+                  onChange={(e) => setTimelineText(e.target.value)}
+                  rows={2}
+                  placeholder={agencyContext.template.timelineCopy}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-y"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="terms">Terms / fine print</Label>
+                <textarea
+                  id="terms"
+                  value={termsText}
+                  onChange={(e) => setTermsText(e.target.value)}
+                  rows={2}
+                  placeholder={agencyContext.template.termsCopy}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-y"
+                />
+              </div>
+            </div>
+          </details>
+        </section>
+
+        {/* Step 4: Save & review */}
+        <section id="step-save" className="space-y-3 pt-2">
+          <p className="text-sm text-muted-foreground">
+            Saving creates a draft — you&apos;ll review the full proposal on the next screen and decide when to send.
+          </p>
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          <Button type="submit" disabled={submitting} className="w-full" size="lg">
+            {submitting ? "Saving…" : "Save & go to review →"}
+          </Button>
+        </section>
       </form>
 
       <ProposalPreviewPane
