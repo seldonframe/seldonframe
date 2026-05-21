@@ -65,6 +65,9 @@ export async function updateProposalAction(input: {
   prospectFirstName?: string | null;
   emailSubject?: string | null;
   emailBody?: string | null;
+  introText?: string | null;
+  timelineText?: string | null;
+  termsText?: string | null;
   generatedHtml?: string;
 }): Promise<ActionResult> {
   const loaded = await loadAuthorizedProposal(input.id);
@@ -107,6 +110,9 @@ export async function updateProposalAction(input: {
       ...(input.prospectFirstName !== undefined && { prospectFirstName: input.prospectFirstName }),
       ...(input.emailSubject !== undefined && { emailSubject: input.emailSubject }),
       ...(input.emailBody !== undefined && { emailBody: input.emailBody }),
+      ...(input.introText !== undefined && { introText: input.introText }),
+      ...(input.timelineText !== undefined && { timelineText: input.timelineText }),
+      ...(input.termsText !== undefined && { termsText: input.termsText }),
       ...(sanitizedHtml !== undefined && { generatedHtml: sanitizedHtml }),
       updatedAt: new Date(),
     })

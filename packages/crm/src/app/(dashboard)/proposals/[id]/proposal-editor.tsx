@@ -1,7 +1,9 @@
 "use client";
 
 // packages/crm/src/app/(dashboard)/proposals/[id]/proposal-editor.tsx
-// Header + status pill removed in Phase C — now rendered by page.tsx.
+// 2026-05-21 — Phase E: adds intro/timeline/terms textareas. Header + status
+// pill rendered by page.tsx. Phase D brought email subject/body + HTML editor.
+
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Proposal, ProposalScopeItem } from "@/db/schema/proposals";
@@ -24,6 +26,9 @@ export function ProposalEditor({ proposal, publicUrl }: { proposal: Proposal; pu
   const [prospectFirstName, setProspectFirstName] = useState(proposal.prospectFirstName ?? "");
   const [emailSubject, setEmailSubject] = useState(proposal.emailSubject ?? "");
   const [emailBody, setEmailBody] = useState(proposal.emailBody ?? "");
+  const [introText, setIntroText] = useState(proposal.introText ?? "");
+  const [timelineText, setTimelineText] = useState(proposal.timelineText ?? "");
+  const [termsText, setTermsText] = useState(proposal.termsText ?? "");
   const [generatedHtml, setGeneratedHtml] = useState(proposal.generatedHtml);
   const [showHtmlEditor, setShowHtmlEditor] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,6 +57,9 @@ export function ProposalEditor({ proposal, publicUrl }: { proposal: Proposal; pu
         prospectFirstName: prospectFirstName.trim() || null,
         emailSubject: emailSubject.trim() || null,
         emailBody: emailBody.trim() || null,
+        introText: introText.trim() || null,
+        timelineText: timelineText.trim() || null,
+        termsText: termsText.trim() || null,
         generatedHtml,
       });
       if (!result.ok) setError(result.error);
@@ -113,8 +121,6 @@ export function ProposalEditor({ proposal, publicUrl }: { proposal: Proposal; pu
         <ul className="space-y-2">
           {scopeItems.map((item, idx) => (
             <li key={idx} className="flex items-center gap-2">
-              {/* Label is rendered as a visually-hidden sr-only to keep
-                  the list items accessible without cluttering the UI */}
               <Label htmlFor={`scope-item-${idx}`} className="sr-only">
                 Scope item {idx + 1}
               </Label>
@@ -184,6 +190,46 @@ export function ProposalEditor({ proposal, publicUrl }: { proposal: Proposal; pu
       </section>
 
       <section className="rounded-2xl border bg-card/40 p-6 space-y-4">
+        <h2 className="text-xl font-semibold">Proposal copy</h2>
+        <div className="space-y-3">
+          <Label htmlFor="ed-intro">
+            Intro{" "}
+            <span className="text-muted-foreground text-xs">(blank = template default)</span>
+          </Label>
+          <textarea
+            id="ed-intro"
+            value={introText}
+            onChange={(e) => setIntroText(e.target.value)}
+            disabled={isSent}
+            rows={4}
+            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-y disabled:opacity-50 disabled:cursor-not-allowed"
+          />
+        </div>
+        <div className="space-y-3">
+          <Label htmlFor="ed-tl">Timeline</Label>
+          <textarea
+            id="ed-tl"
+            value={timelineText}
+            onChange={(e) => setTimelineText(e.target.value)}
+            disabled={isSent}
+            rows={2}
+            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-y disabled:opacity-50 disabled:cursor-not-allowed"
+          />
+        </div>
+        <div className="space-y-3">
+          <Label htmlFor="ed-terms">Terms</Label>
+          <textarea
+            id="ed-terms"
+            value={termsText}
+            onChange={(e) => setTermsText(e.target.value)}
+            disabled={isSent}
+            rows={2}
+            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-y disabled:opacity-50 disabled:cursor-not-allowed"
+          />
+        </div>
+      </section>
+
+      <section className="rounded-2xl border bg-card/40 p-6 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold">Generated proposal HTML</h2>
           <button
@@ -209,8 +255,6 @@ export function ProposalEditor({ proposal, publicUrl }: { proposal: Proposal; pu
           </>
         ) : (
           <>
-            {/* FIXME(phase-4): operator preview skips sanitization (auth-gated to the agency).
-                Phase 4 sanitizes generated_html only on the PUBLIC /p/[token] route. */}
             <div
               className="prose max-w-none rounded-xl border bg-background p-6"
               dangerouslySetInnerHTML={{ __html: generatedHtml }}
