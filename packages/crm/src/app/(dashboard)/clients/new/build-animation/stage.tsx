@@ -44,6 +44,8 @@ type StageProps = {
   background: string;
   active: boolean;
   loop?: boolean;
+  /** Seconds to freeze at for prefers-reduced-motion users. Defaults to 30. */
+  reducedMotionFreezeAt?: number;
   children: ReactNode;
 };
 
@@ -54,6 +56,7 @@ export function Stage({
   background,
   active,
   loop = true,
+  reducedMotionFreezeAt = 30,
   children,
 }: StageProps) {
   const [time, setTime] = useState(0);
@@ -87,8 +90,8 @@ export function Stage({
         rafRef.current = null;
       }
       lastTsRef.current = null;
-      // Freeze at representative mid-build frame for reduced-motion users
-      if (reducedMotion) setTime(30);
+      // Freeze at representative frame for reduced-motion users
+      if (reducedMotion) setTime(reducedMotionFreezeAt);
       return;
     }
 
