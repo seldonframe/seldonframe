@@ -13,7 +13,6 @@
 "use client";
 
 import type { ReactNode } from "react";
-import Image from "next/image";
 import { Phone, Calendar, ArrowRight, Zap } from "lucide-react";
 import { ARCHETYPES, archetypeStyle, type AestheticArchetypeId } from "../archetypes";
 import { telHref } from "../_shared/phone";
@@ -141,13 +140,16 @@ function HeroSplit(props: HeroProps) {
       {heroImage && (
         <Reveal delay={0.08} className="hero-photo-wrap">
           <div className="hero-photo">
-            <Image
+            {/* Raw <img> instead of next/image: hero photos come from arbitrary
+                external domains after Phase U extraction enrichment, so
+                next/image's remotePatterns enforcement would block unknown
+                hosts. Trade-off: no Next.js optimisation for landing photos.
+                LCP is handled via fetchPriority="high". */}
+            <img
               src={heroImage.src}
               alt={heroImage.alt}
-              fill
-              priority
-              sizes="(max-width: 1023px) 100vw, 50vw"
-              style={{ objectFit: "cover" }}
+              fetchPriority="high"
+              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
             />
             <div className="photo-badge-live">
               <span className="dot" aria-hidden />
@@ -239,13 +241,11 @@ function HeroLeftAsymmetric(props: HeroProps) {
         {heroImage && arch.id !== "brutalist" && (
           <Reveal delay={0.10} className="hero-left-photo-wrap">
             <div className="hero-left-photo">
-              <Image
+              <img
                 src={heroImage.src}
                 alt={heroImage.alt}
-                fill
-                priority
-                sizes="(max-width: 1023px) 100vw, 45vw"
-                style={{ objectFit: "cover" }}
+                fetchPriority="high"
+                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
               />
               {heroOverlay && (
                 <div className="hero-left-caption">
@@ -286,13 +286,11 @@ function HeroCinematic(props: HeroProps) {
           muted loop preload="metadata" — see README "Cinematic background". */}
       {heroImage && (
         <div className="hero-cinematic-bg" aria-hidden>
-          <Image
+          <img
             src={heroImage.src}
             alt=""
-            fill
-            priority
-            sizes="100vw"
-            style={{ objectFit: "cover" }}
+            fetchPriority="high"
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
           />
           <div className="hero-cinematic-veil" />
         </div>

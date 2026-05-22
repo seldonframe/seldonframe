@@ -31,9 +31,13 @@ export default async function ClientsNewPage({
     // available content area (right of sidebar, below the dashboard
     // breadcrumb). The Stage scales the 720×960 canvas to fit both
     // dimensions of this container.
+    //
+    // Both `height` AND `minHeight` are set: `height` lets `h-full` on the
+    // inner wrappers resolve to the viewport-fill value; `minHeight` ensures
+    // the canvas never collapses on very short viewports.
     <main
       className="w-full"
-      style={{ minHeight: "calc(100vh - 9rem)" }}
+      style={{ height: "calc(100vh - 9rem)", minHeight: "calc(100vh - 9rem)" }}
     >
       <ClientsNewForm source={source ?? "default"} />
     </main>
