@@ -9,6 +9,8 @@ import type { ServicesGridProps } from "../sections/services-grid";
 import type { TestimonialsProps } from "../sections/testimonials";
 import type { FaqProps } from "../sections/faq";
 import type { FooterProps } from "../sections/footer";
+import type { EmergencyStripProps } from "../chrome/emergency-strip";
+import type { StickyMobileBarProps } from "../chrome/sticky-mobile-bar";
 
 const PHONE = "(209) 555-0144";
 
@@ -187,4 +189,18 @@ export const stocktonFixture = {
       { kind: "yelp", href: "https://yelp.com/biz/stocktonheating" },
     ],
   } satisfies FooterProps,
+
+  emergency: {
+    archetype: "bold-urgency",
+    message: "24/7 emergency HVAC — we come out tonight",
+    phone: PHONE,
+    show: true,
+  } satisfies EmergencyStripProps,
+
+  sticky: {
+    archetype: "bold-urgency",
+    phone: PHONE,
+    smsHref: "sms:+12095550144",
+    bookHref: "/book",
+  } satisfies StickyMobileBarProps,
 };

@@ -9,6 +9,7 @@ import type { ServicesGridProps } from "../sections/services-grid";
 import type { TestimonialsProps } from "../sections/testimonials";
 import type { FaqProps } from "../sections/faq";
 import type { FooterProps } from "../sections/footer";
+import type { StickyMobileBarProps } from "../chrome/sticky-mobile-bar";
 
 const PHONE = "(212) 555-0177";
 
@@ -129,4 +130,9 @@ export const fieldStudioFixture = {
       { kind: "instagram", href: "https://instagram.com/fieldstudio" },
     ],
   } satisfies FooterProps,
+
+  sticky: {
+    archetype: "brutalist",
+    phone: PHONE,
+  } satisfies StickyMobileBarProps,
 };

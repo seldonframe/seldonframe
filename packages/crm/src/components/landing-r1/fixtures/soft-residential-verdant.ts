@@ -9,6 +9,8 @@ import type { ServicesGridProps } from "../sections/services-grid";
 import type { TestimonialsProps } from "../sections/testimonials";
 import type { FaqProps } from "../sections/faq";
 import type { FooterProps } from "../sections/footer";
+import type { EmergencyStripProps } from "../chrome/emergency-strip";
+import type { StickyMobileBarProps } from "../chrome/sticky-mobile-bar";
 
 const PHONE = "(919) 555-0148";
 
@@ -142,4 +144,18 @@ export const verdantFixture = {
       { kind: "google", href: "https://g.page/verdantlawncare" },
     ],
   } satisfies FooterProps,
+
+  emergency: {
+    archetype: "soft-residential",
+    message: "Same-day service available — book by 10am",
+    phone: PHONE,
+    show: false,
+  } satisfies EmergencyStripProps,
+
+  sticky: {
+    archetype: "soft-residential",
+    phone: PHONE,
+    smsHref: "sms:+19195550148",
+    bookHref: "/book",
+  } satisfies StickyMobileBarProps,
 };
