@@ -7,6 +7,13 @@
 // Both scenes live on the same 720x960 dark canvas so the transition is one
 // continuous shot.
 //
+// Phase Q: Added paste-mode tab (no website → paste business info). The
+// IdleScene now has an internal tab switcher; this form provides two
+// independent submit callbacks and two input pairs. The paste path opens
+// an EventSource against /api/v1/web/workspaces/create-from-paste?text=...
+// and shares the same done/error listener logic and BYOK error path as the
+// URL mode.
+//
 // The per-step SSE checklist listeners have been dropped (the build animation
 // runs on its own clock). The "done" and "error" listeners are preserved.
 "use client";
@@ -62,6 +69,7 @@ export function ClientsNewForm({ source = "default" }: ClientsNewFormProps) {
   void source;
 
   const [url, setUrl] = useState("");
+  const [bizInfo, setBizInfo] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [keepBuildMounted, setKeepBuildMounted] = useState(false);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
@@ -70,6 +78,8 @@ export function ClientsNewForm({ source = "default" }: ClientsNewFormProps) {
   const [byokSaving, setByokSaving] = useState(false);
   const [upgradeInfo, setUpgradeInfo] = useState<LimitInfo | null>(null);
   const esRef = useRef<EventSource | null>(null);
+  // Tracks which mode was last submitted so BYOK retry re-submits the right stream.
+  const lastModeRef = useRef<"url" | "biz">("url");
 
   // a11y: stable ids
   const errorBannerId = useId();
@@ -88,6 +98,7 @@ export function ClientsNewForm({ source = "default" }: ClientsNewFormProps) {
 
   function startStream(targetUrl: string) {
     esRef.current?.close();
+    lastModeRef.current = "url";
 
     setSubmitted(true);
     setErrorBanner(null);
@@ -96,6 +107,67 @@ export function ClientsNewForm({ source = "default" }: ClientsNewFormProps) {
 
     const qs = new URLSearchParams({ url: targetUrl });
     const es = new EventSource(`/api/v1/web/workspaces/create-from-url?${qs.toString()}`);
+    esRef.current = es;
+
+    es.addEventListener("done", (raw) => {
+      const data = JSON.parse((raw as MessageEvent).data) as { dashboardUrl: string };
+      es.close();
+      if (typeof window !== "undefined" && data.dashboardUrl) {
+        window.location.assign(data.dashboardUrl);
+      }
+    });
+
+    es.addEventListener("error", (raw) => {
+      const payload = (raw as MessageEvent).data;
+      let data: { code?: number; reason?: string } & Partial<LimitInfo> = {};
+      try {
+        if (typeof payload === "string" && payload.length > 0) {
+          data = JSON.parse(payload);
+        }
+      } catch {
+        // Fall through to generic error banner.
+      }
+      es.close();
+      setSubmitted(false);
+
+      if (data.code === 412) {
+        setNeedsByok(true);
+        return;
+      }
+      if (data.code === 402 && data.reason === "workspace_limit_reached") {
+        setUpgradeInfo({
+          tier: (data.tier as "free" | "growth") ?? "free",
+          used: data.used ?? 0,
+          limit: data.limit ?? 1,
+          upgradeUrl: data.upgradeUrl ?? "/settings/billing",
+        });
+        return;
+      }
+      if (data.code === 400) {
+        setErrorBanner(COPY.errors.invalid_url);
+        return;
+      }
+      if (data.code === 422) {
+        setErrorBanner(COPY.errors.extraction_failed);
+        return;
+      }
+      setErrorBanner(COPY.errors.internal_error);
+    });
+  }
+
+  // Same SSE listener logic for the paste path — opens EventSource against
+  // the create-from-paste route with "text" as the query param.
+  function startBizInfoStream(text: string) {
+    esRef.current?.close();
+    lastModeRef.current = "biz";
+
+    setSubmitted(true);
+    setErrorBanner(null);
+    setNeedsByok(false);
+    setUpgradeInfo(null);
+
+    const qs = new URLSearchParams({ text });
+    const es = new EventSource(`/api/v1/web/workspaces/create-from-paste?${qs.toString()}`);
     esRef.current = es;
 
     es.addEventListener("done", (raw) => {
@@ -158,7 +230,11 @@ export function ClientsNewForm({ source = "default" }: ClientsNewFormProps) {
       });
       if (res.ok) {
         setByokKey("");
-        startStream(url);
+        if (lastModeRef.current === "biz") {
+          startBizInfoStream(bizInfo);
+        } else {
+          startStream(url);
+        }
       } else {
         setErrorBanner(COPY.errors.internal_error);
         setNeedsByok(false);
@@ -261,8 +337,12 @@ export function ClientsNewForm({ source = "default" }: ClientsNewFormProps) {
           <IdleScene
             url={url}
             onUrlChange={setUrl}
-            onSubmit={() => startStream(url)}
-            disabled={!url.trim() || submitted}
+            onUrlSubmit={() => startStream(url)}
+            urlDisabled={!url.trim() || submitted}
+            bizInfo={bizInfo}
+            onBizInfoChange={setBizInfo}
+            onBizInfoSubmit={() => startBizInfoStream(bizInfo)}
+            bizInfoDisabled={bizInfo.trim().length < 20 || submitted}
             errorOverlay={errorOverlayNode}
           />
         </div>

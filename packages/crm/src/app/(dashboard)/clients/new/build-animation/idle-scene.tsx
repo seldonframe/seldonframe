@@ -5,21 +5,37 @@
 // RegisterMarks, UrlInput, Kbd, BuildCta, PhaseAside, IdleFooter, HeroColumn)
 // are internal — same pattern as index.tsx.
 //
-// External API:
+// Phase Q update (Claude Design v3):
+//   - Added SegmentedTabs component (pill switcher: "Paste website URL" / "No website? Paste business info")
+//   - Added BizInfoTextarea component (breathing focus glow + label strip + char counter)
+//   - HeroColumn now accepts tab + tab handlers and conditionally renders UrlInput vs BizInfoTextarea
+//   - Subtext swaps based on active tab
+//   - Updated IdleScene external API to expose two submit callbacks (onUrlSubmit + onBizInfoSubmit)
+//     and two input pairs (url/onUrlChange, bizInfo/onBizInfoChange); tab state is INTERNAL
+//   - Build CTA wires to the active tab's submit handler
+//
+// Original external API (Phase P):
 //   <IdleScene url={...} onUrlChange={...} onSubmit={...} disabled={...} errorOverlay={...} />
+//
+// Phase Q external API:
+//   <IdleScene
+//     url={...} onUrlChange={...} onUrlSubmit={...} urlDisabled={...}
+//     bizInfo={...} onBizInfoChange={...} onBizInfoSubmit={...} bizInfoDisabled={...}
+//     errorOverlay={...}
+//   />
 //
 // Ported from Claude Design export (C:\Users\maxim\AppData\Local\Temp\phases-early.jsx)
 // with the following changes from the brief:
 //   - IdleHeader + IdleWordmark dropped (dashboard chrome already has them)
-//   - url lifted to props; focused/warm stay internal
+//   - url lifted to props; focused/warm/tab stay internal
 //   - Input: type="url", id="client-url", required, accessible label
-//   - BuildCta: <button type="submit">; wrapped in <form> for native semantics
+//   - BuildCta: <button type="button"> wired to active submit handler
 //   - Skip link: <Link href="/dashboard"> via next/link
 //   - Geist font variables prepended to every fontFamily
 //   - Stage reducedMotionFreezeAt={3} for the 6s loop
 //   - Top padding adjusted to 60px (no header row)
 
-import { useState, useEffect, type ReactNode } from "react";
+import { useState, useEffect, useCallback, type ReactNode } from "react";
 import Link from "next/link";
 import { Stage, useTime } from "./stage";
 import { clamp } from "./easing";
@@ -333,11 +349,217 @@ function UrlInput({ value, onChange, focused, onFocus, onBlur }: UrlInputProps) 
   );
 }
 
+// ── SegmentedTabs ────────────────────────────────────────────────────────────
+// Two equal-weight tabs. Active gets a subtle elevated surface; inactive sits
+// flat in the muted track.
+// Ported from Claude Design v3 (idle-state-v2.jsx V2SegmentedTabs).
+// Colors adapted from CSS-var design to dark-canvas palette used by the rest
+// of this file.
+
+type TabItem = {
+  id: string;
+  label: string;
+  icon?: React.ReactNode;
+};
+
+type SegmentedTabsProps = {
+  tabs: TabItem[];
+  value: string;
+  onChange: (id: string) => void;
+};
+
+function SegmentedTabs({ tabs, value, onChange }: SegmentedTabsProps) {
+  return (
+    <div
+      role="tablist"
+      style={{
+        display: "grid",
+        gridTemplateColumns: `repeat(${tabs.length}, 1fr)`,
+        gap: 3,
+        padding: 3,
+        background: "rgba(246,244,239,0.06)",
+        border: "1px solid rgba(246,244,239,0.10)",
+        borderRadius: 10,
+      }}
+    >
+      {tabs.map((t) => {
+        const active = t.id === value;
+        return (
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(t.id)}
+            style={{
+              position: "relative",
+              height: 34,
+              padding: "0 10px",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 7,
+              background: active ? "rgba(246,244,239,0.09)" : "transparent",
+              border: active ? "1px solid rgba(246,244,239,0.12)" : "1px solid transparent",
+              borderRadius: 7,
+              boxShadow: active ? "0 1px 2px rgba(0,0,0,0.22)" : "none",
+              color: active ? "#f6f4ef" : "rgba(246,244,239,0.50)",
+              fontFamily: "var(--font-geist-sans), Inter, system-ui, sans-serif",
+              fontSize: 12,
+              fontWeight: active ? 550 : 500,
+              letterSpacing: "-0.005em",
+              cursor: "pointer",
+              transition: "color 160ms ease, background-color 180ms ease, box-shadow 180ms ease",
+              whiteSpace: "nowrap",
+              textOverflow: "ellipsis",
+              overflow: "hidden",
+            }}
+          >
+            {t.icon}
+            <span>{t.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── BizInfoTextarea ───────────────────────────────────────────────────────────
+// Operator pastes Google Maps text, Business Profile dump, free-form notes.
+// Breathing focus glow mirrors UrlInput. Label strip + char counter at top.
+// Ported from Claude Design v3 (idle-state-v2.jsx V2BizInfoTextarea).
+
+type BizInfoTextareaProps = {
+  value: string;
+  onChange: (next: string) => void;
+  focused: boolean;
+  onFocus: () => void;
+  onBlur: () => void;
+};
+
+function BizInfoTextarea({ value, onChange, focused, onFocus, onBlur }: BizInfoTextareaProps) {
+  const time = useTime();
+  const breath = 0.5 + 0.5 * Math.sin((time / INPUT_PERIOD) * Math.PI * 2);
+  const baseGlow = focused ? 0.55 : 0.22;
+  const glowOpacity = baseGlow + (focused ? 0.15 : 0.08) * breath;
+  const borderColor = focused
+    ? `rgba(16,185,129,${0.55 + 0.20 * breath})`
+    : `rgba(246,244,239,${0.10 + 0.04 * breath})`;
+  const haloPx = focused ? 28 + 6 * breath : 14 + 3 * breath;
+
+  return (
+    <div style={{ position: "relative" }}>
+      {/* Accessible label — visually hidden */}
+      <label htmlFor="client-bizinfo" className="sr-only">
+        Business information
+      </label>
+
+      {/* Outer glow halo */}
+      <div style={{
+        position: "absolute",
+        inset: -2,
+        borderRadius: 10,
+        boxShadow: `0 0 ${haloPx}px rgba(16,185,129,${glowOpacity * 0.5}), inset 0 0 ${haloPx * 0.4}px rgba(16,185,129,${glowOpacity * 0.18})`,
+        pointerEvents: "none",
+        transition: "box-shadow 280ms ease-out",
+      }} />
+
+      {/* Textarea shell */}
+      <div style={{
+        position: "relative",
+        background: "rgba(6,16,13,0.65)",
+        backdropFilter: "blur(2px)",
+        border: `1px solid ${borderColor}`,
+        borderRadius: 10,
+        transition: "border-color 220ms ease-out",
+        overflow: "hidden",
+      }}>
+        {/* Top label strip — mirrors the URL input's icon row */}
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "8px 14px 6px",
+          borderBottom: `1px solid rgba(246,244,239,${focused ? 0.10 : 0.07})`,
+          transition: "border-color 220ms ease-out",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {/* Lines icon */}
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+              <path
+                d="M2.5 3.5h11M2.5 7.5h11M2.5 11.5h7"
+                stroke={focused ? "#10b981" : "rgba(246,244,239,0.45)"}
+                strokeWidth="1.4"
+                strokeLinecap="round"
+                style={{ transition: "stroke 220ms" }}
+              />
+            </svg>
+            <span style={{
+              fontFamily: "var(--font-geist-sans), Inter, system-ui, sans-serif",
+              fontSize: 12,
+              fontWeight: 500,
+              color: focused ? "rgba(246,244,239,0.80)" : "rgba(246,244,239,0.45)",
+              letterSpacing: "-0.005em",
+              transition: "color 220ms",
+            }}>
+              Business details
+            </span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <span style={{
+              fontFamily: "var(--font-geist-mono), JetBrains Mono, ui-monospace, monospace",
+              fontSize: 11,
+              color: "rgba(246,244,239,0.35)",
+              fontVariantNumeric: "tabular-nums",
+            }}>
+              {value.length.toLocaleString()}
+            </span>
+            <span style={{
+              fontFamily: "var(--font-geist-sans), Inter, system-ui, sans-serif",
+              fontSize: 11,
+              color: "rgba(246,244,239,0.35)",
+            }}>
+              chars
+            </span>
+          </div>
+        </div>
+
+        <textarea
+          id="client-bizinfo"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onFocus={onFocus}
+          onBlur={onBlur}
+          rows={5}
+          spellCheck={false}
+          placeholder="Paste everything you&apos;ve got — name, address, hours, services, reviews. Add a note at the end if you want me to lean a certain way."
+          style={{
+            display: "block",
+            width: "100%",
+            border: "none",
+            outline: "none",
+            resize: "none",
+            background: "transparent",
+            color: "#f6f4ef",
+            fontFamily: "var(--font-geist-sans), Inter, system-ui, sans-serif",
+            fontSize: 13,
+            lineHeight: 1.55,
+            padding: "10px 14px 12px",
+            caretColor: "#10b981",
+            boxSizing: "border-box",
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
 // ── BuildCta ─────────────────────────────────────────────────────────────────
 // Emerald CTA with pulse ring + halo + specular sweep + arrow.
-// Must be type="submit" so the wrapping <form> owns submission.
+// Now type="button" — the caller (HeroColumn) provides the onClick handler
+// so each tab's submit goes to the correct parent callback.
 
-function BuildCta({ disabled }: { disabled?: boolean }) {
+function BuildCta({ disabled, onClick }: { disabled?: boolean; onClick?: () => void }) {
   const time = useTime();
   const breath = 0.5 + 0.5 * Math.sin((time / HALO_PERIOD) * Math.PI * 2);
   const ringT = (time % HALO_PERIOD) / HALO_PERIOD;
@@ -371,8 +593,9 @@ function BuildCta({ disabled }: { disabled?: boolean }) {
       }} />
       {/* Button surface */}
       <button
-        type="submit"
+        type="button"
         disabled={disabled}
+        onClick={onClick}
         style={{
           position: "relative",
           width: "100%",
@@ -613,28 +836,82 @@ function IdleFooter() {
 }
 
 // ── HeroColumn ───────────────────────────────────────────────────────────────
-// Kicker + h1 + subtext + form (UrlInput + BuildCta) + skip link.
-// The <form> wraps input + button so Enter in the input triggers submit naturally.
+// Phase Q update: renders a tab switcher above the input slot.
+// Kicker + h1 + subtext (swaps per tab) + SegmentedTabs + input + BuildCta + skip link.
+// Tab state is managed in IdleScene and passed down — HeroColumn is pure/presentational.
+
+const HERO_TABS: TabItem[] = [
+  {
+    id: "url",
+    label: "Paste website URL",
+    icon: (
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+        <circle cx="8" cy="8" r="5.5" stroke="currentColor" strokeWidth="1.3" />
+        <path d="M2.5 8 H13.5" stroke="currentColor" strokeWidth="1.3" />
+        <path d="M8 2.5 C 10 5, 10 11, 8 13.5 C 6 11, 6 5, 8 2.5 Z" stroke="currentColor" strokeWidth="1.3" fill="none" />
+      </svg>
+    ),
+  },
+  {
+    id: "biz",
+    label: "No website? Paste business info",
+    icon: (
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+        <path d="M3 3.5h10v9H3z" stroke="currentColor" strokeWidth="1.3" />
+        <path d="M5.5 6.5h5M5.5 9.5h3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+];
 
 type HeroColumnProps = {
+  // Tab state
+  tab: "url" | "biz";
+  onTabChange: (t: "url" | "biz") => void;
+  // URL mode
   url: string;
   onUrlChange: (next: string) => void;
-  onSubmit: () => void;
-  disabled?: boolean;
+  onUrlSubmit: () => void;
+  urlDisabled?: boolean;
+  // Biz-info mode
+  bizInfo: string;
+  onBizInfoChange: (next: string) => void;
+  onBizInfoSubmit: () => void;
+  bizInfoDisabled?: boolean;
+  // Shared input focus state
   focused: boolean;
   onFocus: () => void;
   onBlur: () => void;
 };
 
 function HeroColumn({
+  tab,
+  onTabChange,
   url,
   onUrlChange,
-  onSubmit,
-  disabled = false,
+  onUrlSubmit,
+  urlDisabled = false,
+  bizInfo,
+  onBizInfoChange,
+  onBizInfoSubmit,
+  bizInfoDisabled = false,
   focused,
   onFocus,
   onBlur,
 }: HeroColumnProps) {
+  // Subtext swaps based on active tab
+  const subtext =
+    tab === "url"
+      ? "Paste your client’s website. We’ll build their CRM, booking page, intake form, and AI chatbot in one pass."
+      : "Tell us about the business. We’ll build their CRM, booking page, intake form, and AI chatbot in one pass.";
+
+  // Active submit handler + disabled state for the CTA
+  const activeSubmit = tab === "url" ? onUrlSubmit : onBizInfoSubmit;
+  const activeDisabled =
+    tab === "url"
+      ? urlDisabled || !url.trim()
+      : bizInfoDisabled || bizInfo.trim().length < 20;
+
   return (
     <div style={{
       display: "flex", flexDirection: "column",
@@ -677,7 +954,7 @@ function HeroColumn({
         </span>
       </h1>
 
-      {/* Subtext */}
+      {/* Subtext — swaps based on active tab */}
       <p style={{
         margin: "20px 0 0",
         maxWidth: 380,
@@ -686,32 +963,46 @@ function HeroColumn({
         color: "rgba(246,244,239,0.55)",
         letterSpacing: "-0.005em",
         lineHeight: 1.55,
+        minHeight: "2.8em", // prevent layout shift on tab switch
       }}>
-        Paste your client&apos;s website. We&apos;ll build their CRM, booking page,
-        intake form, and AI chatbot in one pass.
+        {subtext}
       </p>
 
-      {/* Form: input + CTA. Native form submit handles Enter key. */}
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!url.trim()) return;
-          onSubmit();
-        }}
-        style={{ marginTop: 36 }}
-      >
-        <UrlInput
-          value={url}
-          onChange={onUrlChange}
-          focused={focused}
-          onFocus={onFocus}
-          onBlur={onBlur}
+      {/* Tab switcher + input slot */}
+      <div style={{ marginTop: 28 }}>
+        <SegmentedTabs
+          tabs={HERO_TABS}
+          value={tab}
+          onChange={(id) => onTabChange(id as "url" | "biz")}
         />
 
-        <div style={{ marginTop: 14 }}>
-          <BuildCta disabled={disabled || !url.trim()} />
+        <div style={{ marginTop: 12 }}>
+          {tab === "url" ? (
+            <UrlInput
+              value={url}
+              onChange={onUrlChange}
+              focused={focused}
+              onFocus={onFocus}
+              onBlur={onBlur}
+            />
+          ) : (
+            <BizInfoTextarea
+              value={bizInfo}
+              onChange={onBizInfoChange}
+              focused={focused}
+              onFocus={onFocus}
+              onBlur={onBlur}
+            />
+          )}
         </div>
-      </form>
+
+        <div style={{ marginTop: 14 }}>
+          <BuildCta
+            disabled={activeDisabled}
+            onClick={activeSubmit}
+          />
+        </div>
+      </div>
 
       {/* Skip link */}
       <div style={{
@@ -750,10 +1041,20 @@ function HeroColumn({
 // ── Scene — rendered inside Stage (has access to TimelineContext) ─────────────
 
 type SceneProps = {
+  // Tab state
+  tab: "url" | "biz";
+  onTabChange: (t: "url" | "biz") => void;
+  // URL mode
   url: string;
   onUrlChange: (next: string) => void;
-  onSubmit: () => void;
-  disabled?: boolean;
+  onUrlSubmit: () => void;
+  urlDisabled?: boolean;
+  // Biz-info mode
+  bizInfo: string;
+  onBizInfoChange: (next: string) => void;
+  onBizInfoSubmit: () => void;
+  bizInfoDisabled?: boolean;
+  // Shared
   warm: number;
   focused: boolean;
   onFocus: () => void;
@@ -762,10 +1063,16 @@ type SceneProps = {
 };
 
 function Scene({
+  tab,
+  onTabChange,
   url,
   onUrlChange,
-  onSubmit,
-  disabled,
+  onUrlSubmit,
+  urlDisabled,
+  bizInfo,
+  onBizInfoChange,
+  onBizInfoSubmit,
+  bizInfoDisabled,
   warm,
   focused,
   onFocus,
@@ -796,10 +1103,16 @@ function Scene({
           </div>
 
           <HeroColumn
+            tab={tab}
+            onTabChange={onTabChange}
             url={url}
             onUrlChange={onUrlChange}
-            onSubmit={onSubmit}
-            disabled={disabled}
+            onUrlSubmit={onUrlSubmit}
+            urlDisabled={urlDisabled}
+            bizInfo={bizInfo}
+            onBizInfoChange={onBizInfoChange}
+            onBizInfoSubmit={onBizInfoSubmit}
+            bizInfoDisabled={bizInfoDisabled}
             focused={focused}
             onFocus={onFocus}
             onBlur={onBlur}
@@ -843,23 +1156,45 @@ function Scene({
 }
 
 // ── IdleScene — public export ─────────────────────────────────────────────────
+//
+// Phase Q: tab state is INTERNAL. The parent provides two independent submit
+// callbacks (onUrlSubmit, onBizInfoSubmit) and manages the input values for
+// each mode. The Build CTA wires to whichever callback matches the active tab.
 
 export type IdleSceneProps = {
+  // URL mode
   url: string;
   onUrlChange: (next: string) => void;
-  onSubmit: () => void;
-  disabled?: boolean;
+  onUrlSubmit: () => void;
+  urlDisabled?: boolean;
+  // Biz-info mode (paste path)
+  bizInfo: string;
+  onBizInfoChange: (next: string) => void;
+  onBizInfoSubmit: () => void;
+  bizInfoDisabled?: boolean;
+  // Shared
   errorOverlay?: ReactNode;
 };
 
 export function IdleScene({
   url,
   onUrlChange,
-  onSubmit,
-  disabled = false,
+  onUrlSubmit,
+  urlDisabled = false,
+  bizInfo,
+  onBizInfoChange,
+  onBizInfoSubmit,
+  bizInfoDisabled = false,
   errorOverlay,
 }: IdleSceneProps) {
   const [focused, setFocused] = useState(false);
+  // Tab state: internal to IdleScene. Parent only supplies per-mode callbacks.
+  const [tab, setTabRaw] = useState<"url" | "biz">("url");
+  // Reset focus when switching tabs so the new input starts at rest
+  const onTabChange = useCallback((t: "url" | "biz") => {
+    setFocused(false);
+    setTabRaw(t);
+  }, []);
   // Smoothed warmth value (0..1) driven by focus state via RAF
   const [warm, setWarm] = useState(0);
 
@@ -893,10 +1228,16 @@ export function IdleScene({
         reducedMotionFreezeAt={3}
       >
         <Scene
+          tab={tab}
+          onTabChange={onTabChange}
           url={url}
           onUrlChange={onUrlChange}
-          onSubmit={onSubmit}
-          disabled={disabled}
+          onUrlSubmit={onUrlSubmit}
+          urlDisabled={urlDisabled}
+          bizInfo={bizInfo}
+          onBizInfoChange={onBizInfoChange}
+          onBizInfoSubmit={onBizInfoSubmit}
+          bizInfoDisabled={bizInfoDisabled}
           warm={warm}
           focused={focused}
           onFocus={() => setFocused(true)}
