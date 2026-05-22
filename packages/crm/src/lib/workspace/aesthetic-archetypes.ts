@@ -591,3 +591,122 @@ export function classifyArchetype(input: ArchetypeClassifierInput): AestheticArc
 export function getArchetype(id: AestheticArchetypeId): AestheticArchetype {
   return ARCHETYPES[id];
 }
+
+// ─── Embed style-token helper ──────────────────────────────────────────────
+//
+// Returns a flat, embed-ready token bundle (palette + fonts) for a given
+// archetype id. Used by the public chatbot widget (embed.js route) so that
+// the floating bubble + panel inherit the workspace's brand colors and
+// typography rather than the SeldonFrame default teal-on-Inter.
+//
+// Boundary: this helper does NOT mutate the archetype shape — it just
+// picks the fields the embed CSS needs. Adding a new archetype field
+// (or renaming one in `palette`) requires updating this projection too.
+//
+// SELDONFRAME_DEFAULT_TOKENS is the legacy/fallback brand used when:
+//   - The workspace's theme.aestheticArchetype is null/missing.
+//   - An unknown archetype id arrives (e.g., old serialized data).
+// Values match the pre-archetype hardcoded fallbacks in embed.js/route.ts
+// so existing workspaces don't visually shift on rollout.
+
+export interface ArchetypeStyleTokens {
+  /** Brand accent — used for bubble, header, user-message bubble, focus rings. */
+  primary: string;
+  /** Supporting accent — used for panel border + accent surfaces. */
+  secondary: string;
+  /** Surface tone for the message scroll area. */
+  background: string;
+  /** Body text color for assistant messages. */
+  text: string;
+  /** Divider / form-input border. */
+  border: string;
+  /** Headline font family (used only if it's safe to load — see
+   *  buildGoogleFontUrl below for the allowlist). */
+  headlineFont: string;
+  /** Body font family (panel + input + buttons). */
+  bodyFont: string;
+}
+
+export const SELDONFRAME_DEFAULT_TOKENS: ArchetypeStyleTokens = {
+  // #111111 was the pre-archetype hardcoded fallback in embed.js/route.ts
+  // at line 96. Keep it so legacy/un-classified workspaces don't shift.
+  primary: "#111111",
+  secondary: "#e5e5e1",
+  background: "#f7f7f5",
+  text: "#111111",
+  border: "#e5e5e1",
+  headlineFont: "Geist",
+  bodyFont: "Geist",
+};
+
+/**
+ * Project an archetype id onto the embed-ready style tokens.
+ *
+ * Conservative: any non-string / unknown / null input returns the
+ * SeldonFrame default tokens. This is the function the embed.js route
+ * consumes — it must never throw, since the embed script is served
+ * even when DB lookups partially fail.
+ */
+export function getArchetypeStyleTokens(
+  archetypeSlug: string | null | undefined,
+): ArchetypeStyleTokens {
+  if (!archetypeSlug || typeof archetypeSlug !== "string") {
+    return SELDONFRAME_DEFAULT_TOKENS;
+  }
+  const archetype = ARCHETYPES[archetypeSlug as AestheticArchetypeId];
+  if (!archetype) {
+    return SELDONFRAME_DEFAULT_TOKENS;
+  }
+  return {
+    primary: archetype.palette.primary,
+    secondary: archetype.palette.secondary,
+    background: archetype.palette.background,
+    text: archetype.palette.text,
+    border: archetype.palette.border,
+    headlineFont: archetype.fonts.headline,
+    bodyFont: archetype.fonts.body,
+  };
+}
+
+// Google Fonts that are safe to inject as a <link rel="stylesheet"> into
+// the host page. Fontshare-licensed fonts (Cabinet Grotesk, Satoshi) are
+// deliberately omitted — they require a separate Fontshare snippet that
+// is licensed per-domain, so for the public chatbot embed we fall back
+// to the system stack when the workspace's archetype font isn't on this
+// allowlist. The PublicThemeProvider (which DOES load Fontshare for the
+// workspace landing) is a different surface that opts into that license.
+const EMBED_GOOGLE_FONT_ALLOWLIST = new Set<string>([
+  "Geist",
+  "Inter",
+  "Outfit",
+  "DM Sans",
+  "Playfair Display",
+  "Space Grotesk",
+  "Lora",
+  "Anton",
+  "Bricolage Grotesque",
+  "IBM Plex Mono",
+  "Inter Mono",
+]);
+
+/**
+ * Build a Google Fonts CSS2 URL that fetches the embed's headline + body
+ * fonts in a single request. Returns null when neither font is on the
+ * Google allowlist (in which case the embed shouldn't inject any link).
+ *
+ * Weights are 400/500/600/700 — covers body weights + the headline weights
+ * the embed actually uses (logo letter, brand name, send button).
+ */
+export function buildEmbedGoogleFontUrl(
+  headlineFont: string,
+  bodyFont: string,
+): string | null {
+  const families = new Set<string>();
+  if (EMBED_GOOGLE_FONT_ALLOWLIST.has(headlineFont)) families.add(headlineFont);
+  if (EMBED_GOOGLE_FONT_ALLOWLIST.has(bodyFont)) families.add(bodyFont);
+  if (families.size === 0) return null;
+  const params = Array.from(families)
+    .map((name) => `family=${name.replace(/ /g, "+")}:wght@400;500;600;700`)
+    .join("&");
+  return `https://fonts.googleapis.com/css2?${params}&display=swap`;
+}
