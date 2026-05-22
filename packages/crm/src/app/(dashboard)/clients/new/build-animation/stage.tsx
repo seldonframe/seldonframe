@@ -119,23 +119,39 @@ export function Stage({
     };
   }, [active, reducedMotion, duration, loop]);
 
-  // Responsive scaling — resize the 720×960 canvas to fit parent width.
-  // Maintains aspect ratio 3:4. Min scale ~0.4 for legibility.
+  // Responsive scaling — resize the 720×960 canvas to fit parent area.
+  // Phase P2: measure BOTH parent dimensions and scale to the smaller of
+  // the two ratios so the canvas fills the available space while
+  // preserving the 3:4 aspect ratio. Cap at 2.0× to keep typography
+  // sensible on 4K monitors; floor at 0.4× for legibility.
   useEffect(() => {
     const el = wrapperRef.current;
     if (!el) return;
 
     const measure = () => {
-      const parentW = el.parentElement?.clientWidth ?? el.clientWidth;
-      const s = Math.max(0.4, Math.min(1, parentW / width));
+      const parent = el.parentElement;
+      if (!parent) return;
+      const parentW = parent.clientWidth;
+      const parentH = parent.clientHeight;
+      if (parentW <= 0) return;
+      const widthScale = parentW / width;
+      const heightScale = parentH > 0 ? parentH / height : Infinity;
+      const fit = Math.min(widthScale, heightScale);
+      const s = Math.max(0.4, Math.min(2.0, fit));
       setScale(s);
     };
 
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el.parentElement ?? el);
-    return () => ro.disconnect();
-  }, [width]);
+    // window resize alone doesn't always trigger the parent's ResizeObserver
+    // if its size is constrained by viewport math (e.g. calc(100vh - ...)).
+    window.addEventListener("resize", measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [width, height]);
 
   const ctxValue = useMemo<TimelineCtx>(
     () => ({ time, duration, playing: active && !reducedMotion }),
@@ -145,28 +161,30 @@ export function Stage({
   const scaledHeight = height * scale;
 
   return (
-    // Outer wrapper sets the collapsed height so the parent layout knows
-    // the visual footprint even though the canvas is scaled inside.
+    // Outer wrapper fills the parent in both dimensions so the canvas can
+    // center inside the full available area. minHeight falls back to the
+    // scaled canvas height in case the parent has no defined height.
     <div
       ref={wrapperRef}
       style={{
         width: "100%",
-        height: scaledHeight,
+        height: "100%",
+        minHeight: scaledHeight,
         position: "relative",
         overflow: "hidden",
       }}
     >
-      {/* Canvas — fixed 720×960, scaled from top-center */}
+      {/* Canvas — fixed 720×960, centered horizontally + vertically, scaled */}
       <div
         style={{
           width,
           height,
           background,
           position: "absolute",
-          top: 0,
+          top: "50%",
           left: "50%",
-          transform: `translateX(-50%) scale(${scale})`,
-          transformOrigin: "top center",
+          transform: `translate(-50%, -50%) scale(${scale})`,
+          transformOrigin: "center center",
           overflow: "hidden",
         }}
       >
