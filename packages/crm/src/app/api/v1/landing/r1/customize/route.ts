@@ -13,20 +13,18 @@
 // workspace bearer auth so it goes through the same resolution.
 
 import { NextResponse } from "next/server";
-import { guardApiRequest } from "@/lib/api/guard";
 import { getAIClient } from "@/lib/ai/client";
 import { customizeLandingR1 } from "@/lib/landing/r1-customize";
-import { db } from "@/db";
-import { users } from "@/db/schema";
-import { and, eq } from "drizzle-orm";
+import { resolveR1Auth } from "@/lib/landing/r1-auth";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
-  const guard = await guardApiRequest(request);
-  if ("error" in guard) return guard.error;
+  // Dual-path auth: session (in-app editor) OR workspace bearer (MCP).
+  const authResult = await resolveR1Auth(request);
+  if (!authResult.ok) return authResult.response;
 
-  const orgId = guard.orgId;
+  const { orgId, userId } = authResult;
 
   const body = (await request.json()) as {
     instruction?: unknown;
@@ -51,16 +49,6 @@ export async function POST(request: Request) {
       { status: 503 },
     );
   }
-
-  // Resolve a userId for audit. Use the org owner as a fallback when the
-  // bearer doesn't carry a user ID (API-key mode).
-  let userId: string;
-  const [ownerRow] = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(and(eq(users.orgId, orgId), eq(users.role, "owner")))
-    .limit(1);
-  userId = ownerRow?.id ?? orgId; // last-resort: use orgId as a placeholder
 
   // getAIClient returns a typed Anthropic instance — extract the raw key from
   // the client options to pass to the handler. The handler needs the key string

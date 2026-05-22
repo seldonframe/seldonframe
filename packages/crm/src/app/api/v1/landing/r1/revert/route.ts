@@ -8,19 +8,17 @@
 // Creates a new immutable versions row (never deletes history).
 
 import { NextResponse } from "next/server";
-import { guardApiRequest } from "@/lib/api/guard";
 import { revertLandingR1 } from "@/lib/landing/r1-customize";
-import { db } from "@/db";
-import { users } from "@/db/schema";
-import { and, eq } from "drizzle-orm";
+import { resolveR1Auth } from "@/lib/landing/r1-auth";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
-  const guard = await guardApiRequest(request);
-  if ("error" in guard) return guard.error;
+  // Dual-path auth: session (in-app editor) OR workspace bearer (MCP).
+  const authResult = await resolveR1Auth(request);
+  if (!authResult.ok) return authResult.response;
 
-  const orgId = guard.orgId;
+  const { orgId, userId } = authResult;
 
   const body = (await request.json()) as {
     version_id?: unknown;
@@ -32,14 +30,6 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-
-  // Resolve userId for audit.
-  const [ownerRow] = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(and(eq(users.orgId, orgId), eq(users.role, "owner")))
-    .limit(1);
-  const userId = ownerRow?.id ?? orgId;
 
   const result = await revertLandingR1({
     workspaceId: orgId,
