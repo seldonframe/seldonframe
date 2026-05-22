@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { UpgradeModal } from "@/components/billing/upgrade-modal";
+import type { DetectVerticalInput } from "@/lib/workspace/detect-vertical";
 import { BuildAnimation } from "./build-animation";
 import { IdleScene } from "./build-animation/idle-scene";
 
@@ -92,6 +93,16 @@ export function ClientsNewForm({
   const [byokSaving, setByokSaving] = useState(false);
   const [upgradeInfo, setUpgradeInfo] = useState<LimitInfo | null>(null);
   const esRef = useRef<EventSource | null>(null);
+  // 2026-05-22 — v2 build animation reads the live EventSource to
+  // crossfade the inferred biz name to the real one on `soul_built`.
+  // Mirrored as state (not just a ref) so the BuildAnimation re-renders
+  // when the stream opens/closes.
+  const [liveEventSource, setLiveEventSource] = useState<EventSource | null>(null);
+  // Snapshot of the input that triggered the build — fed to the v2
+  // animation so detectVertical() can render archetype-aware mock copy
+  // from the very first frame. Captured at submit time so the textbox
+  // value can change underneath us without re-detecting.
+  const [buildInput, setBuildInput] = useState<DetectVerticalInput | null>(null);
   // Tracks which mode was last submitted so BYOK retry re-submits the right stream.
   const lastModeRef = useRef<"url" | "biz">(prefillBiz && !prefillUrl ? "biz" : "url");
   // Guard so the autoSubmit effect only fires once per mount even if
@@ -118,6 +129,7 @@ export function ClientsNewForm({
     lastModeRef.current = "url";
 
     setSubmitted(true);
+    setBuildInput({ kind: "url", value: targetUrl });
     setErrorBanner(null);
     setNeedsByok(false);
     setUpgradeInfo(null);
@@ -125,10 +137,12 @@ export function ClientsNewForm({
     const qs = new URLSearchParams({ url: targetUrl });
     const es = new EventSource(`/api/v1/web/workspaces/create-from-url?${qs.toString()}`);
     esRef.current = es;
+    setLiveEventSource(es);
 
     es.addEventListener("done", (raw) => {
       const data = JSON.parse((raw as MessageEvent).data) as { dashboardUrl: string };
       es.close();
+      setLiveEventSource(null);
       if (typeof window !== "undefined" && data.dashboardUrl) {
         window.location.assign(data.dashboardUrl);
       }
@@ -145,6 +159,7 @@ export function ClientsNewForm({
         // Fall through to generic error banner.
       }
       es.close();
+      setLiveEventSource(null);
       setSubmitted(false);
 
       if (data.code === 412) {
@@ -179,6 +194,7 @@ export function ClientsNewForm({
     lastModeRef.current = "biz";
 
     setSubmitted(true);
+    setBuildInput({ kind: "biz", value: text });
     setErrorBanner(null);
     setNeedsByok(false);
     setUpgradeInfo(null);
@@ -186,10 +202,12 @@ export function ClientsNewForm({
     const qs = new URLSearchParams({ text });
     const es = new EventSource(`/api/v1/web/workspaces/create-from-paste?${qs.toString()}`);
     esRef.current = es;
+    setLiveEventSource(es);
 
     es.addEventListener("done", (raw) => {
       const data = JSON.parse((raw as MessageEvent).data) as { dashboardUrl: string };
       es.close();
+      setLiveEventSource(null);
       if (typeof window !== "undefined" && data.dashboardUrl) {
         window.location.assign(data.dashboardUrl);
       }
@@ -206,6 +224,7 @@ export function ClientsNewForm({
         // Fall through to generic error banner.
       }
       es.close();
+      setLiveEventSource(null);
       setSubmitted(false);
 
       if (data.code === 412) {
@@ -395,7 +414,11 @@ export function ClientsNewForm({
           />
         </div>
 
-        {/* BuildAnimation — visible after submit, mounted on first activation */}
+        {/* BuildAnimation — visible after submit, mounted on first activation.
+            v2 reads `input` (frozen snapshot of what the user typed at submit
+            time) for synchronous archetype detection, and the live SSE
+            EventSource for the Stage A → Stage B crossfade when
+            `soul_built` arrives. */}
         {(submitted || keepBuildMounted) && (
           <div
             className={`absolute inset-0 transition-opacity duration-[600ms] ease-out ${
@@ -405,7 +428,11 @@ export function ClientsNewForm({
             }`}
             aria-hidden={!submitted}
           >
-            <BuildAnimation active={submitted} />
+            <BuildAnimation
+              active={submitted}
+              input={buildInput}
+              eventSource={liveEventSource}
+            />
           </div>
         )}
       </div>
