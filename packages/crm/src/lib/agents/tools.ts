@@ -44,29 +44,83 @@ const lookUpAvailabilityInput = z.object({
   bookingSlug: z.string().optional(),
 });
 
-// 2026-05-22 (Polish #3) — chatbot UX cap. Surfacing 6+ slots in a chat
-// bubble overwhelms visitors and tanks pick-rate (Hick's law: more
-// options = slower / no decision). Three is the sweet spot for chat —
-// enough to feel like a real offer, few enough to read in one glance.
+// 2026-05-22 — chatbot UX cap. Surfacing 6+ slots in a chat bubble
+// overwhelms visitors and tanks pick-rate (Hick's law: more options =
+// slower / no decision). Three is the sweet spot for chat — enough to
+// feel like a real offer, few enough to read in one glance.
 //
 // This is the CHATBOT cap only. The /book/[slug] public booking page
 // still shows every slot (different surface, different UX). The
 // `check_availability` tool in tool-invoker.ts (automations path)
 // has its own caller-controlled limit and is NOT affected.
 //
-// If a given day has fewer than 3 slots, we just offer 1 or 2 — no
-// silent walk to the next day. Cross-day slot composition is a
-// separate, future enhancement.
+// 2026-05-22 (later same day) — "if today only has 1 slot, the
+// chatbot only offers 1 slot, which feels broken" — so the tool now
+// WALKS forward day-by-day, accumulating up to 3 slots total, capped
+// at a 14-day horizon (same as check_availability). This way the
+// chatbot can always say "the next 3 available slots are…" — even
+// when the requested day is mostly booked.
 export const CHATBOT_SLOT_CAP = 3;
 
+// Same 14-day window as listPublicBookingSlotsAction itself enforces
+// (see actions.ts ~line 600 — requests outside today..today+14 return
+// empty). Keeping our walk horizon equal to the booking action's own
+// window means we never burn an iteration on a date the action will
+// trivially reject.
+export const CHATBOT_WALK_HORIZON_DAYS = 14;
+
 /**
- * Pure helper — clamps a list of slot strings to the chatbot's 3-slot
- * cap. Returns a NEW array (never mutates the input). Exported so the
- * unit tests can exercise the cap without spinning up the public
- * booking action + DB.
+ * Pure helper — walks forward day-by-day starting from `startDate`,
+ * accumulating slots from each day's `fetchSlotsForDay()` until either
+ * `maxSlots` are collected or `maxDaysToWalk` days have been queried.
+ *
+ * Why pure + injected fetcher: lets the unit tests exercise the walk
+ * math (sparse days, hitting the horizon, partial fills, ordering)
+ * without spinning up DB / Next runtime / Anthropic client. The
+ * runtime tool wraps `listPublicBookingSlotsAction` in a closure that
+ * matches the fetcher shape.
+ *
+ * Date stepping is in UTC by 24-hour increments. The downstream
+ * `listPublicBookingSlotsAction` resolves the date string back to the
+ * workspace's local day, so DST shifts only ever slip the boundary
+ * within the same calendar day (the action handles its own
+ * workspace-TZ math).
  */
-export function capSlotsForChat(slots: readonly string[]): string[] {
-  return slots.slice(0, CHATBOT_SLOT_CAP);
+export async function findNextAvailableSlots(opts: {
+  startDate: Date;
+  maxSlots: number;
+  maxDaysToWalk: number;
+  fetchSlotsForDay: (date: Date) => Promise<readonly string[]>;
+}): Promise<string[]> {
+  const collected: string[] = [];
+  const dayMs = 24 * 60 * 60 * 1000;
+
+  for (let i = 0; i < opts.maxDaysToWalk; i += 1) {
+    if (collected.length >= opts.maxSlots) {
+      break;
+    }
+    const date = new Date(opts.startDate.getTime() + i * dayMs);
+    const daySlots = await opts.fetchSlotsForDay(date);
+    const remaining = opts.maxSlots - collected.length;
+    // Take only what fits — never push past maxSlots even if the day
+    // returned more than we need.
+    for (let j = 0; j < daySlots.length && j < remaining; j += 1) {
+      collected.push(daySlots[j]!);
+    }
+  }
+
+  return collected;
+}
+
+/**
+ * Format a Date as `YYYY-MM-DD` in UTC. Matches the input shape
+ * `listPublicBookingSlotsAction` expects. Pure helper.
+ */
+function formatDateYYYYMMDD(date: Date): string {
+  const yyyy = date.getUTCFullYear();
+  const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(date.getUTCDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 export const lookUpAvailability: AgentTool<
@@ -75,14 +129,14 @@ export const lookUpAvailability: AgentTool<
 > = {
   name: "look_up_availability",
   description:
-    "Get available appointment slots for a specific date. Returns slot times in ISO local format.",
+    "Get the next available appointment slots starting from a given date. Walks forward day-by-day, accumulating up to 3 slots total across at most 14 days. Returns slot times as UTC ISO strings — the LLM formats the date for the visitor (e.g. 'today at 4pm', 'tomorrow at 9am').",
   inputSchema: lookUpAvailabilityInput,
   jsonSchema: {
     type: "object",
     properties: {
       date: {
         type: "string",
-        description: "Date to check, YYYY-MM-DD",
+        description: "Date to START searching from, YYYY-MM-DD. The tool walks forward from this date until it collects 3 slots or hits the 14-day horizon.",
         pattern: "^\\d{4}-\\d{2}-\\d{2}$",
       },
       bookingSlug: {
@@ -93,16 +147,43 @@ export const lookUpAvailability: AgentTool<
     required: ["date"],
   },
   execute: async (input, ctx) => {
-    const result = await listPublicBookingSlotsAction({
-      orgSlug: ctx.orgSlug,
-      bookingSlug: input.bookingSlug ?? "default",
-      date: input.date,
+    const bookingSlug = input.bookingSlug ?? "default";
+    // Parse the requested start date as a UTC noon moment so the walk
+    // is stable across DST (it just increments by 24h in pure UTC).
+    const startDate = new Date(`${input.date}T12:00:00Z`);
+
+    // Track durationMinutes from the first non-empty day we hit. If
+    // every queried day is empty (unconfigured availability, fully
+    // booked horizon), fall back to 30 — matches the
+    // listPublicBookingSlotsAction default.
+    let durationMinutes = 30;
+    let durationSeen = false;
+
+    const slots = await findNextAvailableSlots({
+      startDate,
+      maxSlots: CHATBOT_SLOT_CAP,
+      maxDaysToWalk: CHATBOT_WALK_HORIZON_DAYS,
+      fetchSlotsForDay: async (date) => {
+        const result = await listPublicBookingSlotsAction({
+          orgSlug: ctx.orgSlug,
+          bookingSlug,
+          date: formatDateYYYYMMDD(date),
+        });
+        if (!durationSeen && typeof result.durationMinutes === "number") {
+          durationMinutes = result.durationMinutes;
+          durationSeen = true;
+        }
+        return result.slots;
+      },
     });
+
     return {
-      // 2026-05-22 (Polish #3) — cap at 3 before handing back to the LLM.
-      // See CHATBOT_SLOT_CAP doc above for rationale.
-      slots: capSlotsForChat(result.slots),
-      durationMinutes: result.durationMinutes,
+      slots,
+      durationMinutes,
+      // `date` echoes back the START date the LLM requested. The slot
+      // ISOs themselves carry the real calendar dates (which may span
+      // multiple days now that the walk is enabled), so the LLM should
+      // parse those rather than rely on this field.
       date: input.date,
     };
   },
