@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import { PoweredByBadge } from "@seldonframe/core/virality";
 import { PageRenderer } from "@/components/landing/page-renderer";
 import { ChatbotEmbedScript } from "@/components/landing/chatbot-script";
@@ -11,13 +12,117 @@ import { getPublicChatbotEmbed } from "@/lib/agents/public-embed";
 import { trackEvent } from "@/lib/analytics/track";
 import type { LandingSection } from "@/lib/landing/types";
 
-export default async function PublicSPage({
-  params,
-}: {
+// Phase R: R-framework components + payload loader.
+// When the workspace has an R-framework payload AND the home page is
+// requested, we return early with the R components — no old-landing
+// PageRenderer, no theme override, no chatbot embed (R has its own
+// sticky CTA). The fall-through keeps the OLD system intact for
+// workspaces that have no _r1 row (all existing production workspaces).
+import { loadLandingPayload } from "@/lib/landing/r1-save";
+import { Hero } from "@/components/landing-r1/sections/hero";
+import { ServicesGrid } from "@/components/landing-r1/sections/services-grid";
+import { Testimonials } from "@/components/landing-r1/sections/testimonials";
+import { Faq } from "@/components/landing-r1/sections/faq";
+import { Footer } from "@/components/landing-r1/sections/footer";
+import { EmergencyStrip } from "@/components/landing-r1/chrome/emergency-strip";
+import { StickyMobileBar } from "@/components/landing-r1/chrome/sticky-mobile-bar";
+
+type PageProps = {
   params: Promise<{ orgSlug: string; slug: string[] }>;
-}) {
+};
+
+/** True when the request targets the workspace home page. */
+function isHomePage(pageSlug: string): boolean {
+  return pageSlug === "home" || pageSlug === "" || pageSlug === "/";
+}
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { orgSlug, slug } = await params;
   const pageSlug = slug.join("/");
+
+  // Phase R: serve R-framework SEO metadata for home pages with a payload.
+  if (isHomePage(pageSlug)) {
+    const r1Data = await loadLandingPayload(orgSlug);
+    if (r1Data) {
+      const { seo, payload } = r1Data;
+      return {
+        title: seo.title,
+        description: seo.description,
+        openGraph: {
+          title: seo.title,
+          description: seo.description,
+          ...(seo.ogImage ? { images: [{ url: seo.ogImage }] } : {}),
+          type: "website",
+        },
+        robots: { index: true, follow: true },
+        // Canonical points to /w/[slug] — that is the authoritative URL
+        // for the R-framework page; /s/[slug]/home is the proxy rewrite.
+        alternates: { canonical: `/w/${orgSlug}` },
+        other: {
+          "application/ld+json": JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "LocalBusiness",
+            name: payload.footer.businessName,
+            telephone: payload.footer.phone,
+            ...(payload.footer.address
+              ? {
+                  address: {
+                    "@type": "PostalAddress",
+                    streetAddress: payload.footer.address.line1,
+                    addressLocality: payload.footer.address.city,
+                    addressRegion: payload.footer.address.state,
+                    postalCode: payload.footer.address.zip,
+                  },
+                }
+              : {}),
+            ...(payload.hero.reviewRating != null && payload.hero.reviewCount != null
+              ? {
+                  aggregateRating: {
+                    "@type": "AggregateRating",
+                    ratingValue: String(payload.hero.reviewRating),
+                    reviewCount: String(payload.hero.reviewCount),
+                  },
+                }
+              : {}),
+          }),
+        },
+      };
+    }
+  }
+
+  // Fallback: no extra metadata for old-landing sub-pages.
+  return {};
+}
+
+export default async function PublicSPage({ params }: PageProps) {
+  const { orgSlug, slug } = await params;
+  const pageSlug = slug.join("/");
+
+  // Phase R: when the home page is requested AND the workspace has an R
+  // framework payload, render the R framework components and return early.
+  // Sub-pages (/s/{orgSlug}/about, /s/{orgSlug}/services, etc.) have no R
+  // variant and fall through to the old PageRenderer below.
+  if (isHomePage(pageSlug)) {
+    const r1Data = await loadLandingPayload(orgSlug);
+    if (r1Data) {
+      const { payload } = r1Data;
+      return (
+        <>
+          {payload.emergency && <EmergencyStrip {...payload.emergency} />}
+          <Hero {...payload.hero} />
+          <ServicesGrid {...payload.services} />
+          <Testimonials {...payload.testimonials} />
+          <Faq {...payload.faq} />
+          <Footer {...payload.footer} />
+          {payload.sticky && <StickyMobileBar {...payload.sticky} />}
+        </>
+      );
+    }
+  }
+
+  // Fall through: existing old-landing rendering.
+  // Preserves analytics tracking, chatbot embed, powered-by badge,
+  // theme provider, and forced-light mode for all non-R workspaces.
   const payload = await getPublicLandingPage(orgSlug, pageSlug);
 
   if (!payload) {

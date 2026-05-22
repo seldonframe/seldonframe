@@ -45,6 +45,8 @@ import { buildWorkspaceUrls } from "@/lib/billing/anonymous-workspace";
 import { InviteSmbOwner } from "./invite-smb-owner";
 // 2026-05-22 — Copy-to-clipboard button for the R1 landing URL card.
 import { LandingUrlCopyButton } from "./landing-url-copy-button";
+// 2026-05-22 — Fallback generate button when R1 generation failed silently.
+import { GenerateWebsiteButton } from "./generate-website-button";
 
 export const dynamic = "force-dynamic";
 
@@ -366,7 +368,8 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
   };
 
   return (
-    <main className="animate-page-enter mx-auto flex-1 overflow-auto w-full max-w-5xl p-4 sm:p-6 md:p-8">
+    <main className="animate-page-enter w-full flex-1 overflow-auto" style={{ minHeight: "calc(100vh - 9rem)" }}>
+      <div className="mx-auto max-w-5xl p-4 sm:p-6 md:p-8">
       <div className="space-y-10">
         {/* ============== HERO ============== */}
         <header className="space-y-5">
@@ -374,7 +377,7 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
             <Sparkles className="size-3.5" aria-hidden="true" />
             Workspace ready — 60 seconds
           </div>
-          <h1 className="text-3xl font-semibold leading-[1.05] tracking-tight sm:text-4xl lg:text-[2.75rem]">
+          <h1 className="text-4xl font-semibold leading-[1.05] tracking-tight sm:text-5xl lg:text-[3.5rem]">
             <span className="text-foreground">{workspace.name}</span>{" "}
             <span className="text-muted-foreground">is live.</span>
           </h1>
@@ -409,8 +412,11 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
         {/* ============== R1 LANDING URL CARD ==============
             2026-05-22 — surfaces the auto-generated public landing
             page URL with copy-to-clipboard + open-in-new-tab.
-            Only renders when the R1 generation succeeded. */}
-        {r1LandingUrl && (
+            When R1 generation succeeded (r1LandingUrl is non-null):
+              → show the URL card with a prominent Customize button.
+            When R1 generation failed silently (hasR1Landing is false):
+              → show a dashed amber fallback card with GenerateWebsiteButton. */}
+        {r1LandingUrl ? (
           <section className="rounded-2xl border border-primary/20 bg-primary/5 p-5 space-y-3">
             <div className="flex items-center gap-2">
               <span aria-hidden="true" className="text-xl leading-none">🌐</span>
@@ -440,15 +446,35 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
                 Open
                 <ExternalLink className="size-3.5" aria-hidden="true" />
               </a>
-              {/* 2026-05-22 — Phase T: natural-language editor link. */}
+              {/* 2026-05-22 — Phase T: natural-language editor link.
+                  Bumped to primary visual weight (filled bg, heavier border)
+                  so the operator's entry point for editing is unmistakable. */}
               <Link
                 href={`/clients/${workspace.slug}/landing/edit`}
-                className="crm-pressable inline-flex h-9 items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-3 text-xs font-medium text-primary transition-[background-color,color,transform] duration-150 ease-out hover:bg-primary/20"
+                className="crm-pressable inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-4 text-xs font-semibold text-primary-foreground shadow-(--shadow-sm) transition-[background-color,transform] duration-150 ease-out hover:bg-primary/90"
               >
-                Customize
                 <Pencil className="size-3.5" aria-hidden="true" />
+                Customize website
               </Link>
             </div>
+          </section>
+        ) : (
+          <section className="rounded-2xl border border-dashed border-amber-500/40 bg-amber-500/5 p-6 space-y-3">
+            <div className="flex items-center gap-2">
+              <span aria-hidden="true" className="text-xl leading-none">⚠️</span>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-700 dark:text-amber-400">
+                Website generation pending
+              </p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
+                We didn&apos;t auto-generate the public website for this workspace.
+              </p>
+              <p className="text-sm text-muted-foreground">
+                This happens occasionally on first try. Click below to generate it now — takes ~10 seconds.
+              </p>
+            </div>
+            <GenerateWebsiteButton workspaceSlug={workspace.slug} />
           </section>
         )}
 
@@ -665,6 +691,7 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
             ← Back to my agency dashboard
           </Link>
         </div>
+      </div>
       </div>
     </main>
   );
