@@ -21,13 +21,8 @@ import { Faq } from "@/components/landing-r1/sections/faq";
 import { Footer } from "@/components/landing-r1/sections/footer";
 import { EmergencyStrip } from "@/components/landing-r1/chrome/emergency-strip";
 import { StickyMobileBar } from "@/components/landing-r1/chrome/sticky-mobile-bar";
-import { Navbar } from "@/components/landing-r1/chrome/navbar";
-import { ChatbotEmbedScript } from "@/components/landing/chatbot-script";
 
 import { loadLandingPayload } from "@/lib/landing/r1-save";
-import { rewriteR1Hrefs } from "@/lib/landing/r1-rewrite-hrefs";
-import { buildWorkspaceUrls } from "@/lib/billing/anonymous-workspace";
-import { getPublicChatbotEmbed } from "@/lib/agents/public-embed";
 
 type PageProps = {
   params: Promise<{ slug: string }>;
@@ -102,35 +97,10 @@ export default async function WorkspaceLandingPage({ params }: PageProps) {
     notFound();
   }
 
-  const { orgId } = data;
-
-  // 1. Rewrite generic hrefs (/book, /intake) to workspace-scoped URLs.
-  // buildWorkspaceUrls needs slug + baseDomain + orgId. The baseDomain
-  // env var defaults to "app.seldonframe.com" when unset (matches the
-  // legacy pattern that also serves /book under the workspace subdomain).
-  const workspaceUrls = buildWorkspaceUrls(
-    slug,
-    process.env.WORKSPACE_BASE_DOMAIN ?? "app.seldonframe.com",
-    orgId,
-  );
-  const payload = rewriteR1Hrefs(data.payload, {
-    book: workspaceUrls.book,
-    intake: workspaceUrls.intake,
-    home: workspaceUrls.home,
-  });
-
-  // 2. Load the workspace's chatbot embed (if configured).
-  const chatbotEmbed = await getPublicChatbotEmbed(orgId);
+  const { payload } = data;
 
   return (
     <>
-      {/* 3. Navbar renders above EmergencyStrip — both sticky, stacked. */}
-      <Navbar
-        archetype={payload.hero.archetype}
-        businessName={payload.hero.businessName}
-        phone={payload.footer.phone}
-        serviceAreas={payload.footer.serviceAreas}
-      />
       {payload.emergency && <EmergencyStrip {...payload.emergency} />}
       <Hero {...payload.hero} />
       <ServicesGrid {...payload.services} />
@@ -138,7 +108,6 @@ export default async function WorkspaceLandingPage({ params }: PageProps) {
       <Faq {...payload.faq} />
       <Footer {...payload.footer} />
       {payload.sticky && <StickyMobileBar {...payload.sticky} />}
-      {chatbotEmbed && <ChatbotEmbedScript embedUrl={chatbotEmbed.embedUrl} />}
     </>
   );
 }
