@@ -255,10 +255,11 @@ export function ClientsNewForm({
       autoSubmittedRef.current = true;
       startBizInfoStream(prefillBiz);
     }
-    // Intentionally bare deps — we want this to run once at mount.
-    // startStream + startBizInfoStream are stable closures defined
-    // above.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Intentionally fires only when the autoSubmit signal flips on or
+    // the prefill payload changes. startStream + startBizInfoStream are
+    // stable closures defined above; including them in deps would be
+    // noise. The autoSubmittedRef guard ensures we only fire once even
+    // if a re-render makes this effect re-run.
   }, [autoSubmit, prefillUrl, prefillBiz]);
 
   async function saveByokAndRetry() {
