@@ -1174,6 +1174,10 @@ export type IdleSceneProps = {
   bizInfoDisabled?: boolean;
   // Shared
   errorOverlay?: ReactNode;
+  // 2026-05-22 — Optional initial tab so the marketing-prompt forwarder
+  // can land the visitor on the right input when they passed ?biz= (no
+  // URL). Defaults to "url" — the more common path.
+  initialTab?: "url" | "biz";
 };
 
 export function IdleScene({
@@ -1186,10 +1190,11 @@ export function IdleScene({
   onBizInfoSubmit,
   bizInfoDisabled = false,
   errorOverlay,
+  initialTab = "url",
 }: IdleSceneProps) {
   const [focused, setFocused] = useState(false);
   // Tab state: internal to IdleScene. Parent only supplies per-mode callbacks.
-  const [tab, setTabRaw] = useState<"url" | "biz">("url");
+  const [tab, setTabRaw] = useState<"url" | "biz">(initialTab);
   // Reset focus when switching tabs so the new input starts at rest
   const onTabChange = useCallback((t: "url" | "biz") => {
     setFocused(false);

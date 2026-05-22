@@ -34,18 +34,48 @@ function isRedirectControlFlowError(error: unknown) {
   return typeof digest === "string" && digest.startsWith("NEXT_REDIRECT");
 }
 
+/**
+ * Sanitize the redirectTo field the signup form submits. The form embeds
+ * /signup/billing?next=/clients/new?url=... when the visitor arrived from
+ * the marketing prompt; the bare default is /clients/new. Both shapes are
+ * allowed; anything else falls through to /clients/new.
+ *
+ * 2026-05-22 — Expanded to allow the new /signup/billing target. Without
+ * this, the signup form's redirectTo gets rewritten to /clients/new by
+ * the old check (which only validated the leading slash), bypassing the
+ * card-collection step entirely.
+ */
 function sanitizeRedirectTo(value: unknown) {
   const raw = typeof value === "string" ? value.trim() : "";
   if (!raw.startsWith("/") || raw.startsWith("//")) {
     return "/clients/new";
   }
 
-  return raw;
+  // Allow /signup/billing (with arbitrary query) for the two-step card
+  // flow, /clients/new (with arbitrary query) for the direct landing,
+  // /dashboard as a safety fallback, and /claim/... for the existing
+  // workspace-claim flow.
+  const pathOnly = raw.split("?")[0]!;
+  const allowed =
+    pathOnly === "/signup/billing" ||
+    pathOnly === "/clients/new" ||
+    pathOnly === "/dashboard" ||
+    pathOnly === "/claim" ||
+    pathOnly.startsWith("/clients/new/") ||
+    pathOnly.startsWith("/dashboard/") ||
+    pathOnly.startsWith("/claim/");
+
+  return allowed ? raw : "/clients/new";
 }
 
 export async function signInWithGoogleAction() {
   assertWritable();
 
+  // Google OAuth currently always lands on /clients/new — extending the
+  // marketing-prompt passthrough to Google is a future-improvement task
+  // (the OAuth round trip on Google's side would need to preserve our
+  // redirectTo, which works but requires testing across the consent
+  // screens). Email magic-link is the primary path for the new flow.
   await signIn("google", { redirectTo: "/clients/new" });
 }
 

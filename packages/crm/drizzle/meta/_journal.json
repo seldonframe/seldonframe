@@ -134,6 +134,13 @@
       "when": 1779463531873,
       "tag": "0018_short_spiral",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1779479758262,
+      "tag": "0019_silky_viper",
+      "breakpoints": true
     }
   ]
 }

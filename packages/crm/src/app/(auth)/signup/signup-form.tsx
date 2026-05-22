@@ -6,10 +6,14 @@ import { sendMagicLinkAction } from "./actions";
 import { DEMO_BLOCK_MESSAGE } from "@/lib/demo/constants";
 import { useDemoToast } from "@/components/shared/demo-toast-provider";
 
-export function SignupForm({ token = "" }: { token?: string }) {
+export function SignupForm({ redirectTo }: { redirectTo: string }) {
   const { showDemoToast } = useDemoToast();
   const [state, action, pending] = useActionState(sendMagicLinkAction, {});
-  const callbackUrl = token ? `/claim?token=${encodeURIComponent(token)}` : "/clients/new";
+  // 2026-05-22 — redirectTo is computed server-side in page.tsx from the
+  // ?url= / ?biz= / ?intent= query params (or /claim?token=... for
+  // claim flows). The default path lands the visitor on /signup/billing
+  // for the card-collection step, then on to /clients/new with prefill.
+  const callbackUrl = redirectTo;
 
   useEffect(() => {
     if (state.error === DEMO_BLOCK_MESSAGE) {
