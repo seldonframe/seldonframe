@@ -1,5 +1,5 @@
 import { desc, sql } from "drizzle-orm";
-import { index, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { index, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
 
 export const landingPages = pgTable(
@@ -34,6 +34,10 @@ export const landingPages = pgTable(
   },
   (table) => [
     index("landing_pages_org_created_idx").on(table.orgId, desc(table.createdAt)),
-    index("landing_pages_org_slug_idx").on(table.orgId, table.slug),
+    // 2026-05-22: upgraded from plain index to unique index so the R1
+    // auto-generator can upsert by (orgId, slug) without racing. The old
+    // plain index "landing_pages_org_slug_idx" is replaced by the unique
+    // one below — Drizzle generates a DROP + CREATE in the migration.
+    uniqueIndex("landing_pages_org_slug_uniq").on(table.orgId, table.slug),
   ]
 );

@@ -38,6 +38,7 @@ import { validateCreateFromUrlInput } from "./url-validator";
 import type { CreateFullWorkspaceInput, CreateFullWorkspaceResult } from "@/lib/workspace/create-full";
 import type { LimitDecision } from "@/lib/billing/limits";
 import type { ExtractedBusinessFacts } from "./extraction-prompt";
+import { runR1LandingStep } from "@/lib/landing/r1-landing-step";
 
 export type RunDeps = {
   enforceWorkspaceLimit: (args: { primaryOrgId: string | null; ownedWorkspaceCount: number }) => Promise<LimitDecision>;
@@ -313,6 +314,22 @@ export async function runCreateFromUrl(input: RunInput): Promise<RunResult> {
               }),
             );
           }
+        }
+
+        // 7d. Generate the R1 landing payload + persist.
+        //     Public at /w/<slug> immediately — no approval gate.
+        //     Non-fatal: workspace creation still succeeds without a
+        //     landing if the LLM step errors. The SSE event fires only
+        //     on success; the UI doesn't depend on it (build animation
+        //     runs its own clock). Operator can retry via a future
+        //     manual button.
+        const r1Result = await runR1LandingStep({
+          workspaceId: result.workspace_id,
+          facts,
+          byokKey: byok.key,
+        });
+        if (r1Result.ok) {
+          sse.emit("landing_built", { workspaceId: result.workspace_id });
         }
       }
 
