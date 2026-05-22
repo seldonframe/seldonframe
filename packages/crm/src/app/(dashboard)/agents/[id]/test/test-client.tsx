@@ -56,6 +56,14 @@ export function TestSandboxClient(props: {
         headers: {
           "Content-Type": "application/json",
           Accept: "text/event-stream",
+          // 2026-05-22 — opt INTO test mode so the runtime short-circuits
+          // booking + escalation tools (tools.ts:120, 291) instead of
+          // writing real bookings/contacts/deals out of the operator's
+          // sandbox chats. The route only honors this header for
+          // authenticated SF operators; anonymous traffic from real
+          // customers on /w/[slug] ignores it. See
+          // lib/agents/public-turn-status.ts for the decision logic.
+          "x-test-mode": "1",
         },
         body: JSON.stringify({
           conversation_id: conversationId,

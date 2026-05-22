@@ -42,6 +42,12 @@ import { createAgent } from "@/lib/agents/store";
 // never appears on /w/[slug] even though the agent exists. Same
 // pattern v2/complete uses (see /api/v1/workspace/v2/complete/route.ts).
 import { setPublicChatbotEmbed } from "@/lib/agents/public-embed";
+// 2026-05-22 — shared helper used by ALL THREE auto-creator routes
+// (v2/complete, create-from-url, create-from-paste). Pins status="live"
+// on the auto-created chatbot so the public turn route doesn't
+// short-circuit booking tools for real customers. See the helper file
+// header for the full bug description.
+import { autoCreateWebsiteChatbot } from "@/lib/agents/auto-create-website-chatbot";
 // 2026-05-17 — Seed a contact row in the AGENCY's own CRM representing
 // the newly-created client SMB. SeldonFrame becomes the agency's
 // business OS too — every client they create lands as a contact in
@@ -111,36 +117,25 @@ async function dispatchCreateFromUrl(url: unknown): Promise<Response> {
       markOperatorOnboarded,
       linkWorkspaceToOperator,
       createWebsiteChatbot: async ({ workspaceId, workspaceSlug }) => {
-        // Same shape v2/complete uses — status:'test' so the chatbot
-        // responds on the test page immediately, name derived from slug.
-        const result = await createAgent({
-          orgId: workspaceId,
-          archetype: "website-chatbot",
-          channel: "web_chat",
-          name: `${workspaceSlug} Chatbot`,
-          faq: [],
-          status: "test",
+        // 2026-05-22 — delegated to the shared autoCreateWebsiteChatbot
+        // helper so all three auto-creator routes stay in lockstep on
+        // the status="live" decision and embed-publishing behavior.
+        // Helper pins status="live" so the public turn route doesn't
+        // short-circuit booking + escalation tools for real customers.
+        // See lib/agents/auto-create-website-chatbot.ts for the bug
+        // story.
+        const result = await autoCreateWebsiteChatbot({
+          workspaceId,
+          workspaceSlug,
+          deps: { createAgent, setPublicChatbotEmbed },
         });
-        // 2026-05-22 — auto-publish the embed URL so the chatbot widget
-        // appears on the public R landing without operator intervention.
-        // Non-fatal: if this fails, the agent still exists; the bubble
-        // just doesn't show until embed_chatbot_on_workspace_landing is
-        // run manually.
-        if (result.ok && result.embedUrl) {
-          try {
-            await setPublicChatbotEmbed(workspaceId, {
-              embedUrl: result.embedUrl,
-              agentId: result.agent.id,
-            });
-          } catch (err) {
-            console.warn(
-              JSON.stringify({
-                event: "auto_chatbot_embed_publish_failed",
-                workspace_id: workspaceId,
-                detail: err instanceof Error ? err.message : String(err),
-              }),
-            );
-          }
+        if (result.ok && result.embedPublishFailed) {
+          console.warn(
+            JSON.stringify({
+              event: "auto_chatbot_embed_publish_failed",
+              workspace_id: workspaceId,
+            }),
+          );
         }
         return result;
       },

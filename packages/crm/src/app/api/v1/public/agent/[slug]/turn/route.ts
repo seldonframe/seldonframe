@@ -29,6 +29,8 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { agentConversations, agents, organizations } from "@/db/schema";
 import { executeTurn } from "@/lib/agents/runtime";
+import { decidePublicConversationStatus } from "@/lib/agents/public-turn-status";
+import { getCurrentUser } from "@/lib/auth/helpers";
 
 type Body = {
   conversation_id?: string;
@@ -144,6 +146,35 @@ export async function POST(
     );
   }
 
+  // 2026-05-22 — conversation status decision is now centralized in
+  // decidePublicConversationStatus(). Pre-fix this endpoint copied
+  // `agent.status === "test"` straight onto the conversation, which
+  // caused the runtime testMode plumbing (tools.ts:120, 291) to short-
+  // circuit booking + escalation tools for public visitors talking to
+  // auto-deployed chatbots. Now anonymous callers always get "active";
+  // only authenticated operators sending `x-test-mode: 1` get "test".
+  // The /agents/[id]/test sandbox sends that header explicitly.
+  const requestedTestMode =
+    request.headers.get("x-test-mode")?.trim() === "1" ||
+    request.nextUrl.searchParams.get("dryRun") === "1";
+  let isAuthenticatedOperator = false;
+  if (requestedTestMode) {
+    // Only resolve the session when the caller is asking for test mode —
+    // avoids paying the auth round-trip on every public turn.
+    try {
+      const user = await getCurrentUser();
+      isAuthenticatedOperator = Boolean(user?.id);
+    } catch {
+      // Auth resolution failure → treat as anonymous (safe default).
+      isAuthenticatedOperator = false;
+    }
+  }
+  const conversationStatus = decidePublicConversationStatus({
+    agentStatus: agentRow.status,
+    requestedTestMode,
+    isAuthenticatedOperator,
+  });
+
   // Get-or-create conversation
   let conversationId = body.conversation_id;
   if (!conversationId) {
@@ -160,7 +191,7 @@ export async function POST(
         orgId: agentRow.orgId,
         anonymousSessionId: body.anonymous_session_id ?? null,
         channelMeta: body.channel_meta ?? {},
-        status: agentRow.status === "test" ? "test" : "active",
+        status: conversationStatus,
       })
       .returning({ id: agentConversations.id });
     if (!created) {
