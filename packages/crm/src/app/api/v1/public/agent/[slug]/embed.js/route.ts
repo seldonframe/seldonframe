@@ -31,6 +31,11 @@ import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { agents, organizations } from "@/db/schema";
+import {
+  buildEmbedGoogleFontUrl,
+  getArchetypeStyleTokens,
+  type ArchetypeStyleTokens,
+} from "@/lib/workspace/aesthetic-archetypes";
 
 export async function GET(
   request: Request,
@@ -89,11 +94,46 @@ export async function GET(
     /[\\`$]/g,
     "\\$&",
   );
+  // 2026-05-22 — Brand-aware embed.
+  //
+  // Previously, only theme.primaryColor + theme.logoUrl were threaded
+  // through. Every workspace got the same Inter-on-teal bubble regardless
+  // of vertical. Now we also read theme.aestheticArchetype (set at
+  // workspace creation in v1.54.0) + theme.fontFamily, and project the
+  // archetype onto a palette + font pair via getArchetypeStyleTokens.
+  // A bold-urgency plumber gets a red bubble + Outfit headline; a
+  // clinical-trust dental office gets a calm navy bubble + Cabinet
+  // Grotesk; a brutalist creative studio gets near-black + sharp accents.
+  // Workspaces without an archetype (pre-1.54, or partial-creation state)
+  // get the SeldonFrame default tokens — visually identical to the old
+  // #111111 fallback.
   const themeRaw = (agentRow.theme ?? null) as {
     primaryColor?: string;
     logoUrl?: string;
+    aestheticArchetype?: string;
+    fontFamily?: string;
   } | null;
-  const primaryColor = themeRaw?.primaryColor ?? "#111111";
+  const archetypeTokens = getArchetypeStyleTokens(themeRaw?.aestheticArchetype ?? null);
+  // Stored theme.primaryColor wins (operator can customize it explicitly
+  // via update_theme); else fall back to the archetype primary. The
+  // archetype IS the source of truth for secondary/background/text/border
+  // because those tokens aren't stored on the theme row today.
+  const primaryColor = themeRaw?.primaryColor ?? archetypeTokens.primary;
+  // Stored fontFamily wins for the body font (mirrors PublicThemeProvider).
+  // Headline always comes from the archetype since it's not stored.
+  const bodyFont =
+    typeof themeRaw?.fontFamily === "string" && themeRaw.fontFamily.length > 0
+      ? themeRaw.fontFamily
+      : archetypeTokens.bodyFont;
+  const effectiveTokens: ArchetypeStyleTokens = {
+    ...archetypeTokens,
+    primary: primaryColor,
+    bodyFont,
+  };
+  const googleFontUrl = buildEmbedGoogleFontUrl(
+    effectiveTokens.headlineFont,
+    effectiveTokens.bodyFont,
+  );
   const logoUrl =
     typeof themeRaw?.logoUrl === "string" && /^https?:\/\//.test(themeRaw.logoUrl)
       ? themeRaw.logoUrl
@@ -103,7 +143,8 @@ export async function GET(
   const script = renderEmbedScript({
     turnUrl,
     greeting,
-    primaryColor,
+    tokens: effectiveTokens,
+    googleFontUrl,
     orgName,
     logoUrl,
   });
@@ -121,14 +162,30 @@ export async function GET(
 function renderEmbedScript(input: {
   turnUrl: string;
   greeting: string;
-  primaryColor: string;
+  tokens: ArchetypeStyleTokens;
+  googleFontUrl: string | null;
   orgName: string;
   logoUrl: string | null;
 }): string {
+  // bodyFontStack is the CSS font-family value the panel uses. The
+  // workspace's body font (from the archetype OR stored theme.fontFamily)
+  // wins; system fallbacks catch the case where the font failed to load
+  // (offline operator, Fontshare font not injected, etc.) so text is
+  // always legible. Single quotes around the family name handle multi-word
+  // names like "Cabinet Grotesk" or "Playfair Display".
+  const bodyFontStack = `'${input.tokens.bodyFont}',system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif`;
+  const headlineFontStack = `'${input.tokens.headlineFont}',${bodyFontStack}`;
   const config = {
     turnUrl: input.turnUrl,
     greeting: input.greeting,
-    primaryColor: input.primaryColor,
+    primaryColor: input.tokens.primary,
+    secondaryColor: input.tokens.secondary,
+    backgroundColor: input.tokens.background,
+    textColor: input.tokens.text,
+    borderColor: input.tokens.border,
+    bodyFontStack,
+    headlineFontStack,
+    googleFontUrl: input.googleFontUrl,
     orgName: input.orgName,
     logoUrl: input.logoUrl,
   };
@@ -152,24 +209,46 @@ function renderEmbedScript(input: {
   })();
   var conversationId = null;
 
+  // 2026-05-22 — inject Google Fonts link into host page BEFORE the
+  // panel CSS mounts, so the @font-face declarations are parsed by the
+  // time the bubble renders. Skipped when CFG.googleFontUrl is null
+  // (workspace uses Fontshare-only fonts; the embed falls through to
+  // the system stack instead of trying to load a Fontshare license).
+  // De-duped via a unique data-attr so loading multiple embeds on the
+  // same page doesn't insert N identical link tags.
+  if (CFG.googleFontUrl && !document.querySelector('link[data-sf-agent-fonts="1"]')) {
+    var fontLink = document.createElement("link");
+    fontLink.rel = "stylesheet";
+    fontLink.href = CFG.googleFontUrl;
+    fontLink.setAttribute("data-sf-agent-fonts", "1");
+    document.head.appendChild(fontLink);
+  }
+
   var style = document.createElement("style");
   style.textContent = [
     // v1.28.2 — bubble: subtle rest pulse → wakes attention without nagging
-    ".sf-agent-bubble{position:fixed;bottom:20px;right:20px;width:56px;height:56px;border-radius:50%;background:" + CFG.primaryColor + ";color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,0.15),0 1px 4px rgba(0,0,0,0.08);z-index:2147483646;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;border:none;transition:transform .2s cubic-bezier(.34,1.56,.64,1),box-shadow .2s ease}",
+    ".sf-agent-bubble{position:fixed;bottom:20px;right:20px;width:56px;height:56px;border-radius:50%;background:" + CFG.primaryColor + ";color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,0.15),0 1px 4px rgba(0,0,0,0.08);z-index:2147483646;font-family:" + CFG.bodyFontStack + ";border:none;transition:transform .2s cubic-bezier(.34,1.56,.64,1),box-shadow .2s ease}",
     ".sf-agent-bubble:hover{transform:scale(1.08)}",
     ".sf-agent-bubble:active{transform:scale(.95)}",
     ".sf-agent-bubble:focus-visible{outline:2px solid " + CFG.primaryColor + ";outline-offset:3px}",
     // Panel: spring slide-up reveal. Hidden = opacity 0 + translateY(8px) + scale(.98)
-    ".sf-agent-panel{position:fixed;bottom:88px;right:20px;width:380px;max-width:calc(100vw - 40px);height:560px;max-height:calc(100vh - 120px);background:#fff;border-radius:16px;box-shadow:0 16px 48px rgba(0,0,0,0.18),0 4px 12px rgba(0,0,0,0.08);z-index:2147483647;display:flex;flex-direction:column;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;opacity:0;transform:translateY(8px) scale(.98);pointer-events:none;transition:opacity .22s ease,transform .28s cubic-bezier(.34,1.56,.64,1)}",
+    // 2026-05-22 — font-family flipped from hardcoded -apple-system stack
+    // to CFG.bodyFontStack so the workspace's archetype/stored font wins
+    // (with the same -apple-system stack as fallback when the font
+    // doesn't load).
+    ".sf-agent-panel{position:fixed;bottom:88px;right:20px;width:380px;max-width:calc(100vw - 40px);height:560px;max-height:calc(100vh - 120px);background:#fff;border-radius:16px;box-shadow:0 16px 48px rgba(0,0,0,0.18),0 4px 12px rgba(0,0,0,0.08);z-index:2147483647;display:flex;flex-direction:column;overflow:hidden;font-family:" + CFG.bodyFontStack + ";opacity:0;transform:translateY(8px) scale(.98);pointer-events:none;transition:opacity .22s ease,transform .28s cubic-bezier(.34,1.56,.64,1)}",
     ".sf-agent-panel.open{opacity:1;transform:translateY(0) scale(1);pointer-events:auto}",
     // Mobile: full-screen below sm. Bigger touch targets, no rounded corners.
     "@media (max-width:640px){.sf-agent-panel{bottom:0;right:0;left:0;top:0;width:100%;max-width:100%;height:100%;max-height:100%;border-radius:0}.sf-agent-bubble{bottom:16px;right:16px}}",
     "@media (prefers-reduced-motion:reduce){.sf-agent-panel,.sf-agent-bubble{transition:none}}",
     ".sf-agent-header{padding:14px 16px;background:" + CFG.primaryColor + ";color:#fff;display:flex;justify-content:space-between;align-items:center;gap:8px}",
     ".sf-agent-header-left{display:flex;align-items:center;gap:10px;min-width:0}",
-    ".sf-agent-logo{width:28px;height:28px;border-radius:8px;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;flex-shrink:0;overflow:hidden}",
+    ".sf-agent-logo{width:28px;height:28px;border-radius:8px;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;flex-shrink:0;overflow:hidden;font-family:" + CFG.headlineFontStack + "}",
     ".sf-agent-logo img{width:100%;height:100%;object-fit:cover}",
-    ".sf-agent-header strong{font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+    // 2026-05-22 — brand name in header uses the archetype's headline
+    // font so a clinical-trust dental gets Cabinet-Grotesk-styled name
+    // while a bold-urgency plumber gets Outfit.
+    ".sf-agent-header strong{font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:" + CFG.headlineFontStack + "}",
     ".sf-agent-close{background:transparent;border:none;color:#fff;cursor:pointer;font-size:24px;padding:4px 8px;opacity:.85;border-radius:6px;line-height:1}",
     ".sf-agent-close:hover{opacity:1;background:rgba(255,255,255,.12)}",
     ".sf-agent-close:focus-visible{outline:2px solid #fff;outline-offset:1px}",
@@ -178,7 +257,11 @@ function renderEmbedScript(input: {
     // ID) can't push the panel into horizontal scroll on mobile. min-width:0
     // overrides the flex-default min-width:auto which would otherwise
     // refuse to shrink below content size.
-    ".sf-agent-messages{flex:1;overflow-y:auto;overflow-x:hidden;min-width:0;padding:16px;display:flex;flex-direction:column;gap:10px;background:#f7f7f5;scroll-behavior:smooth}",
+    // 2026-05-22 — message scroll background pulls from the archetype
+    // (warm cream for editorial-warm, clean white for bold-urgency,
+    // warm cream for cinematic-aspirational, etc.) so the panel surface
+    // matches the workspace's brand tone instead of always being #f7f7f5.
+    ".sf-agent-messages{flex:1;overflow-y:auto;overflow-x:hidden;min-width:0;padding:16px;display:flex;flex-direction:column;gap:10px;background:" + CFG.backgroundColor + ";scroll-behavior:smooth}",
     // v1.40.11 — overflow-wrap:anywhere + min-width:0 so long URLs,
     // long emails, long tokens wrap inside the bubble instead of
     // overflowing the panel width on mobile.
@@ -186,7 +269,10 @@ function renderEmbedScript(input: {
     "@keyframes sf-agent-msg-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}",
     "@media (prefers-reduced-motion:reduce){.sf-agent-msg{animation:none}}",
     ".sf-agent-msg.user{align-self:flex-end;background:" + CFG.primaryColor + ";color:#fff;border-bottom-right-radius:6px}",
-    ".sf-agent-msg.assistant{align-self:flex-start;background:#fff;color:#111;border-bottom-left-radius:6px;border:1px solid #e5e5e1}",
+    // 2026-05-22 — assistant bubble text + border pulled from archetype
+    // text/border tokens; near-black still common but archetype-specific
+    // (e.g., editorial-warm uses #1f1c19, brutalist uses #0a0a0a).
+    ".sf-agent-msg.assistant{align-self:flex-start;background:#fff;color:" + CFG.textColor + ";border-bottom-left-radius:6px;border:1px solid " + CFG.borderColor + "}",
     ".sf-agent-msg.system{align-self:center;color:#888;font-size:12px;font-style:italic;background:transparent;border:none;padding:4px 10px}",
     // Markdown styles inside assistant messages
     ".sf-agent-msg.assistant strong{font-weight:600;color:inherit}",
@@ -200,7 +286,11 @@ function renderEmbedScript(input: {
     ".sf-agent-typing span:nth-child(2){animation-delay:.15s}",
     ".sf-agent-typing span:nth-child(3){animation-delay:.3s}",
     "@keyframes sf-agent-typing-bounce{0%,60%,100%{opacity:.3;transform:translateY(0)}30%{opacity:1;transform:translateY(-4px)}}",
-    ".sf-agent-form{display:flex;gap:8px;padding:12px;border-top:1px solid #e5e5e1;background:#fff;align-items:flex-end}",
+    // 2026-05-22 — form divider uses archetype border token so the
+    // panel's transition from messages to input reads consistent with
+    // the brand (warm border for editorial-warm, hard near-black for
+    // brutalist, soft cream for cinematic-aspirational, etc.).
+    ".sf-agent-form{display:flex;gap:8px;padding:12px;border-top:1px solid " + CFG.borderColor + ";background:#fff;align-items:flex-end}",
     // v1.40.8 — explicit color + background on .sf-agent-input. Pre-1.40.8
     // the input had no color rule and inherited from the host page's
     // color: var(--sf-text). On workspaces whose stored theme is dark
@@ -208,10 +298,17 @@ function renderEmbedScript(input: {
     // color globally, typed characters rendered white-on-white and were
     // invisible. Hardcoding both color and background isolates the chat
     // widget from host-page CSS — the input is always readable.
-    ".sf-agent-input{flex:1;padding:10px 14px;border:1px solid #e5e5e1;border-radius:12px;font-size:14px;outline:none;font-family:inherit;resize:none;max-height:120px;line-height:1.4;transition:border-color .15s;color:#111;background:#fff;-webkit-text-fill-color:#111}",
+    // 2026-05-22 — input border + text color now archetype-driven; the
+    // input still has an explicit color/background to defend against
+    // host-page color cascades (the v1.40.8 fix), it's just no longer
+    // hardcoded to #111.
+    ".sf-agent-input{flex:1;padding:10px 14px;border:1px solid " + CFG.borderColor + ";border-radius:12px;font-size:14px;outline:none;font-family:inherit;resize:none;max-height:120px;line-height:1.4;transition:border-color .15s;color:" + CFG.textColor + ";background:#fff;-webkit-text-fill-color:" + CFG.textColor + "}",
     ".sf-agent-input::placeholder{color:#999;opacity:1}",
     ".sf-agent-input:focus{border-color:" + CFG.primaryColor + "}",
-    ".sf-agent-send{padding:10px 16px;background:" + CFG.primaryColor + ";color:#fff;border:none;border-radius:12px;cursor:pointer;font-size:14px;font-weight:600;height:42px;flex-shrink:0;transition:transform .12s ease,opacity .15s ease}",
+    // 2026-05-22 — send button uses headline font for brand consistency
+    // (the headline font is the archetype's "voice" — Outfit for trades,
+    // Cabinet Grotesk for clinical, etc.).
+    ".sf-agent-send{padding:10px 16px;background:" + CFG.primaryColor + ";color:#fff;border:none;border-radius:12px;cursor:pointer;font-size:14px;font-weight:600;height:42px;flex-shrink:0;transition:transform .12s ease,opacity .15s ease;font-family:" + CFG.headlineFontStack + "}",
     ".sf-agent-send:hover:not(:disabled){transform:translateY(-1px)}",
     ".sf-agent-send:active:not(:disabled){transform:translateY(0) scale(.97)}",
     ".sf-agent-send:focus-visible{outline:2px solid " + CFG.primaryColor + ";outline-offset:2px}",
