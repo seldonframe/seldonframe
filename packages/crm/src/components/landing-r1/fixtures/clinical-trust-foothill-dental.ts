@@ -9,6 +9,7 @@ import type { ServicesGridProps } from "../sections/services-grid";
 import type { TestimonialsProps } from "../sections/testimonials";
 import type { FaqProps } from "../sections/faq";
 import type { FooterProps } from "../sections/footer";
+import type { StickyMobileBarProps } from "../chrome/sticky-mobile-bar";
 
 const PHONE = "(530) 555-0188";
 
@@ -143,4 +144,10 @@ export const foothillDentalFixture = {
       { kind: "facebook", href: "https://facebook.com/foothilldental" },
     ],
   } satisfies FooterProps,
+
+  sticky: {
+    archetype: "clinical-trust",
+    phone: PHONE,
+    bookHref: "/book",
+  } satisfies StickyMobileBarProps,
 };

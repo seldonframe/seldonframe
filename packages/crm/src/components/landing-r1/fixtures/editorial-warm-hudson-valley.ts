@@ -9,6 +9,7 @@ import type { ServicesGridProps } from "../sections/services-grid";
 import type { TestimonialsProps } from "../sections/testimonials";
 import type { FaqProps } from "../sections/faq";
 import type { FooterProps } from "../sections/footer";
+import type { StickyMobileBarProps } from "../chrome/sticky-mobile-bar";
 
 const PHONE = "(845) 555-0163";
 
@@ -142,4 +143,10 @@ export const hudsonValleyFixture = {
       { kind: "google", href: "https://g.page/hvrestoration" },
     ],
   } satisfies FooterProps,
+
+  sticky: {
+    archetype: "editorial-warm",
+    phone: PHONE,
+    bookHref: "/consult",
+  } satisfies StickyMobileBarProps,
 };

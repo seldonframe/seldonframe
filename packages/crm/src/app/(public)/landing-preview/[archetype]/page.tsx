@@ -1,10 +1,11 @@
 // app/(public)/landing-preview/[archetype]/page.tsx
 //
-// Phase R.1.2 preview surface. Loads the fixture for the requested
-// archetype and renders all 5 sections as the auto-generated landing
-// would render in production. Public route — no auth required.
+// Phase R.2 preview surface. Loads the fixture for the requested
+// archetype and renders all 5 sections plus the 2 page-chrome surfaces
+// as the auto-generated landing would render in production.
+// Public route — no auth required.
 //
-// Available archetypes (Phase R.1.2):
+// Available archetypes (Phase R.2):
 //   - bold-urgency              Stockton Heating & Cooling (HVAC)
 //   - editorial-warm            Hudson Valley Restoration (heritage roofer)
 //   - clinical-trust            Foothill Family Dental
@@ -13,6 +14,8 @@
 //   - soft-residential          Verdant Lawn Care (residential lawn care)
 //   - brutalist                 Field/Studio (design studio)
 import { notFound } from "next/navigation";
+import { EmergencyStrip, type EmergencyStripProps } from "@/components/landing-r1/chrome/emergency-strip";
+import { StickyMobileBar, type StickyMobileBarProps } from "@/components/landing-r1/chrome/sticky-mobile-bar";
 import { Hero } from "@/components/landing-r1/sections/hero";
 import { ServicesGrid } from "@/components/landing-r1/sections/services-grid";
 import { Testimonials } from "@/components/landing-r1/sections/testimonials";
@@ -38,21 +41,29 @@ const FIXTURES = {
 
 type Archetype = keyof typeof FIXTURES;
 
+/** Chrome props are optional — not all archetypes include them. */
+type FixtureWithChrome = (typeof FIXTURES)[Archetype] & {
+  emergency?: EmergencyStripProps;
+  sticky?: StickyMobileBarProps;
+};
+
 export default async function LandingPreviewPage({
   params,
 }: {
   params: Promise<{ archetype: string }>;
 }) {
   const { archetype } = await params;
-  const fixture = FIXTURES[archetype as Archetype];
+  const fixture = FIXTURES[archetype as Archetype] as FixtureWithChrome | undefined;
   if (!fixture) notFound();
   return (
     <>
+      {fixture.emergency && <EmergencyStrip {...fixture.emergency} />}
       <Hero {...fixture.hero} />
       <ServicesGrid {...fixture.services} />
       <Testimonials {...fixture.testimonials} />
       <Faq {...fixture.faq} />
       <Footer {...fixture.footer} />
+      {fixture.sticky && <StickyMobileBar {...fixture.sticky} />}
     </>
   );
 }
