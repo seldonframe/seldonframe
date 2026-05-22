@@ -54,13 +54,12 @@ export default async function SignupBillingPage({
 
   // Provision the SetupIntent server-side so the client mounts with
   // clientSecret in hand — no extra round trip on first paint.
-  const setup = await provisionSetupIntent(session.user.id);
-
+  //
   // Two reasons we'd fall through to skip-card:
   //   - not_configured: env keys missing (local dev without Stripe).
   //   - stripe_error: transient failure provisioning. We surface a
   //     skip button so the user isn't stuck.
-  const showSkipFallback = !setup.ok;
+  const setup = await provisionSetupIntent(session.user.id);
 
   return (
     <div className="space-y-6">
