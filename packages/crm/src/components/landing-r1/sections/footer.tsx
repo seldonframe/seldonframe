@@ -8,6 +8,8 @@
 // Service-area links are wired but go to # for now; the LLM payload supplies
 // the list and the operator's CRM later wires them to per-city landing pages.
 
+"use client";
+
 import { Phone, Star } from "lucide-react";
 import { ARCHETYPES, archetypeStyle, type AestheticArchetypeId } from "../archetypes";
 import { telHref } from "../_shared/phone";

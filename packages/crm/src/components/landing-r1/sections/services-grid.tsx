@@ -9,6 +9,8 @@
 // animations.jsx). Photos there add weight without conversion lift per the
 // brief's Q4 default. The card-bg variant injects an optional logo glyph.
 
+"use client";
+
 import { ArrowRight, Phone } from "lucide-react";
 import { ARCHETYPES, archetypeStyle, type AestheticArchetypeId } from "../archetypes";
 import { telHref } from "../_shared/phone";

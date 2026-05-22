@@ -10,6 +10,8 @@
 // Theming is 100% via CSS vars emitted by archetypeStyle(). This file does
 // not hard-code hex anywhere.
 
+"use client";
+
 import Image from "next/image";
 import { Phone, Calendar, ArrowRight, Zap } from "lucide-react";
 import { ARCHETYPES, archetypeStyle, type AestheticArchetypeId } from "../archetypes";
