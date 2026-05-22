@@ -12,6 +12,17 @@ import { useState, useCallback, useTransition, useRef } from "react";
 import Link from "next/link";
 import { ArrowLeft, Monitor, Smartphone, Tablet } from "lucide-react";
 
+import {
+  LANDING_LOADING_WORDS,
+  useCyclingLabel,
+} from "@/lib/hooks/use-cycling-label";
+
+// How long each LLM-style word stays on screen before cycling to the
+// next ("thinking…" → "searching…" → …). 800ms is the sweet spot:
+// fast enough that a 2-3s customize feels animated, slow enough that
+// the user can actually read each word.
+const LOADING_WORD_INTERVAL_MS = 800;
+
 type VersionRow = {
   id: string;
   instruction: string | null;
@@ -55,6 +66,24 @@ export function EditShell({
   const [, startTransition] = useTransition();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // While the customize_landing call is in flight, cycle the in-flight
+  // label through LLM-style words ("thinking…" → "searching…" → …) so
+  // the user feels the system working instead of staring at a frozen
+  // "Applying...". When status flips off "submitting", the hook clears
+  // its interval and resets to index 0 — no leaks.
+  //
+  // Cycling is gated on `statusMsg === ""`. handleApply clears the
+  // message before flipping status; handleUndo sets it to "Reverting…".
+  // That way the apply path cycles ("thinking…" → "searching…" → …)
+  // while undo keeps its single-step "Reverting…" copy untouched.
+  const isSubmitting = status === "submitting";
+  const isCyclingApply = isSubmitting && statusMsg === "";
+  const loadingWord = useCyclingLabel(
+    isCyclingApply,
+    LANDING_LOADING_WORDS,
+    LOADING_WORD_INTERVAL_MS,
+  );
+
   const refreshIframe = useCallback(() => {
     setIframeKey(Date.now());
   }, []);
@@ -64,7 +93,10 @@ export function EditShell({
     if (!trimmed) return;
 
     setStatus("submitting");
-    setStatusMsg("Applying...");
+    // Clear any leftover message so the in-flight banner shows the
+    // cycling LLM-style word (thinking…/searching…/…) instead of a
+    // stale "Applied: …" or "Failed: …" from a previous round.
+    setStatusMsg("");
 
     try {
       const res = await fetch("/api/v1/landing/r1/customize", {
@@ -191,8 +223,6 @@ export function EditShell({
     },
     [handleApply, status],
   );
-
-  const isSubmitting = status === "submitting";
 
   return (
     <div className="flex h-[calc(100vh-3.5rem)] flex-col overflow-hidden">
@@ -324,15 +354,23 @@ export function EditShell({
                 disabled={isSubmitting || !instruction.trim()}
                 className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-[background-color,opacity] hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {isSubmitting ? "Applying..." : "Apply changes"}
+                {isCyclingApply ? loadingWord : "Apply changes"}
               </button>
               <p className="text-[10px] text-muted-foreground">
                 Ctrl+Enter to apply &middot; Changes go live immediately
               </p>
             </div>
 
-            {/* Status line */}
-            {statusMsg && (
+            {/* Status line.
+             *
+             * While submitting, the banner shows the cycling LLM-style
+             * word (thinking…/searching…/editing…/applying…) so the
+             * user feels the system working instead of staring at a
+             * frozen "Applying...". After success/error, we fall back
+             * to the persisted statusMsg ("Applied: …" or "Failed: …").
+             * handleUndo still uses statusMsg directly with "Reverting…" —
+             * its single-step copy is unchanged. */}
+            {(isCyclingApply || statusMsg) && (
               <p
                 className={`rounded-md px-3 py-2 text-xs ${
                   status === "error"
@@ -342,7 +380,7 @@ export function EditShell({
                       : "border border-border bg-muted/20 text-muted-foreground"
                 }`}
               >
-                {statusMsg}
+                {isCyclingApply ? loadingWord : statusMsg}
               </p>
             )}
 
