@@ -222,7 +222,7 @@ export function MarketingHero() {
     <section
       id="top"
       aria-label="SeldonFrame hero"
-      className="sf-hero relative isolate flex min-h-[100svh] flex-col items-center justify-center overflow-hidden px-5 pb-20 pt-[120px] text-center md:px-8 md:pb-24 md:pt-[140px] lg:px-12 lg:pb-32 lg:pt-40"
+      className="sf-hero relative isolate flex min-h-[100svh] flex-col items-center justify-start overflow-hidden px-5 pb-20 pt-[60px] text-center md:px-8 md:pb-24 md:pt-[70px] lg:px-12 lg:pb-32 lg:pt-20"
     >
       {/* Aurora background */}
       <div className="sf-aurora" aria-hidden>
