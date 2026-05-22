@@ -27,7 +27,14 @@ export default async function ClientsNewPage({
   const { source } = await searchParams;
 
   return (
-    <main className="mx-auto max-w-5xl px-6 py-12">
+    // Phase P2: full-bleed main so the IdleScene canvas can fill the entire
+    // available content area (right of sidebar, below the dashboard
+    // breadcrumb). The Stage scales the 720×960 canvas to fit both
+    // dimensions of this container.
+    <main
+      className="w-full"
+      style={{ minHeight: "calc(100vh - 9rem)" }}
+    >
       <ClientsNewForm source={source ?? "default"} />
     </main>
   );

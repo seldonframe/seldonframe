@@ -242,12 +242,16 @@ export function ClientsNewForm({ source = "default" }: ClientsNewFormProps) {
   }
 
   // ── IdleScene + BuildAnimation crossfade ──────────────────────────────────
+  // Phase P2: `h-full` (with `min-h-[inherit]`) lets the wrapper inherit the
+  // viewport-fill min-height set on <main>, so the Stage's ResizeObserver
+  // sees a real parent height and can scale the canvas to fit both
+  // dimensions.
   return (
     <>
-      <div className="relative">
+      <div className="relative h-full min-h-[inherit]">
         {/* IdleScene — visible until submit */}
         <div
-          className={`transition-opacity duration-[600ms] ease-out ${
+          className={`h-full transition-opacity duration-[600ms] ease-out ${
             submitted
               ? "pointer-events-none opacity-0 absolute inset-0"
               : "opacity-100"
