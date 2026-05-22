@@ -14,8 +14,12 @@ import { cn } from "@/lib/utils";
 export type TrustBadgeProps = {
   /** Display text — e.g. "Licensed C-20 #897432", "BBB A+". */
   label: string;
-  /** Optional inline SVG (string) or React node — when present, replaces the default check icon. */
-  logoSvg?: string | ReactNode;
+  /**
+   * Optional logo slot. Accepts any ReactNode — inline <svg>, <Image> from
+   * next/image, a Lucide icon component, or null. When omitted the default
+   * check icon renders. Same pattern as shadcn icon props elsewhere.
+   */
+  logoSvg?: ReactNode;
   /** "rating" variant uses the inverted (dark) chip used for the review summary. */
   variant?: "default" | "rating" | "subtle";
   /** Extra className for layout overrides. */
@@ -30,13 +34,8 @@ export function TrustBadge({
   className,
   children,
 }: TrustBadgeProps) {
-  const icon = logoSvg
-    ? typeof logoSvg === "string"
-      // dangerouslySetInnerHTML is acceptable here because the logoSvg comes
-      // from the workspace's own data, not user input — but DO NOT expose this
-      // path to LLM-generated strings without sanitisation.
-      ? <span className="badge-logo" aria-hidden dangerouslySetInnerHTML={{ __html: logoSvg }} />
-      : <span className="badge-logo" aria-hidden>{logoSvg}</span>
+  const icon = logoSvg !== undefined
+    ? <span className="badge-logo" aria-hidden>{logoSvg}</span>
     : <Check className="badge-check" size={14} aria-hidden strokeWidth={2.4} />;
 
   return (

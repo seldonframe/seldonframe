@@ -10,6 +10,7 @@
 
 "use client";
 
+import type { ReactNode } from "react";
 import { Phone, Star } from "lucide-react";
 import { ARCHETYPES, archetypeStyle, type AestheticArchetypeId } from "../archetypes";
 import { telHref } from "../_shared/phone";
@@ -26,19 +27,19 @@ export type FooterProps = {
   /** Each entry: ["Mon–Fri · 7am–7pm", ...]. Use one entry for 24/7. */
   weeklyHours?: { line: string; emergency?: boolean }[];
   license?: string;
-  trustBadges?: { label: string; logoSvg?: string }[];
+  trustBadges?: { label: string; logoSvg?: ReactNode }[];
   /** Nav columns the operator can override; defaults to Services / Service area / Hours. */
   serviceLinks?: { label: string; href: string }[];
   socials?: { kind: "facebook" | "google" | "yelp" | "instagram"; href: string }[];
-  /** Optional inline SVG for the brand mark; defaults to a generic icon. */
-  brandMarkSvg?: string;
+  /** Optional brand mark — accepts any ReactNode. Defaults to a generic icon. */
+  brandMark?: ReactNode;
 };
 
 export function Footer(props: FooterProps) {
   const arch = ARCHETYPES[props.archetype];
   const {
     businessName, tagline, phone, address, serviceAreas, weeklyHours,
-    license, trustBadges, serviceLinks, socials, brandMarkSvg,
+    license, trustBadges, serviceLinks, socials, brandMark,
   } = props;
   const year = new Date().getFullYear();
 
@@ -55,11 +56,7 @@ export function Footer(props: FooterProps) {
           <div className="brand-block">
             <a href="#top" className="brand">
               <span className="mark" aria-hidden>
-                {brandMarkSvg ? (
-                  <span dangerouslySetInnerHTML={{ __html: brandMarkSvg }} />
-                ) : (
-                  <DefaultMark />
-                )}
+                {brandMark ?? <DefaultMark />}
               </span>
               <span className="name">
                 {businessName}
@@ -166,7 +163,7 @@ export function Footer(props: FooterProps) {
 }
 
 function DefaultMark() {
-  // A neutral square mark — the operator should override via brandMarkSvg.
+  // A neutral square mark — the operator should override via the brandMark prop.
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
       strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
