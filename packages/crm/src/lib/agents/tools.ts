@@ -44,6 +44,31 @@ const lookUpAvailabilityInput = z.object({
   bookingSlug: z.string().optional(),
 });
 
+// 2026-05-22 (Polish #3) — chatbot UX cap. Surfacing 6+ slots in a chat
+// bubble overwhelms visitors and tanks pick-rate (Hick's law: more
+// options = slower / no decision). Three is the sweet spot for chat —
+// enough to feel like a real offer, few enough to read in one glance.
+//
+// This is the CHATBOT cap only. The /book/[slug] public booking page
+// still shows every slot (different surface, different UX). The
+// `check_availability` tool in tool-invoker.ts (automations path)
+// has its own caller-controlled limit and is NOT affected.
+//
+// If a given day has fewer than 3 slots, we just offer 1 or 2 — no
+// silent walk to the next day. Cross-day slot composition is a
+// separate, future enhancement.
+export const CHATBOT_SLOT_CAP = 3;
+
+/**
+ * Pure helper — clamps a list of slot strings to the chatbot's 3-slot
+ * cap. Returns a NEW array (never mutates the input). Exported so the
+ * unit tests can exercise the cap without spinning up the public
+ * booking action + DB.
+ */
+export function capSlotsForChat(slots: readonly string[]): string[] {
+  return slots.slice(0, CHATBOT_SLOT_CAP);
+}
+
 export const lookUpAvailability: AgentTool<
   z.infer<typeof lookUpAvailabilityInput>,
   { slots: string[]; durationMinutes: number; date: string }
@@ -74,7 +99,9 @@ export const lookUpAvailability: AgentTool<
       date: input.date,
     });
     return {
-      slots: result.slots,
+      // 2026-05-22 (Polish #3) — cap at 3 before handing back to the LLM.
+      // See CHATBOT_SLOT_CAP doc above for rationale.
+      slots: capSlotsForChat(result.slots),
       durationMinutes: result.durationMinutes,
       date: input.date,
     };
