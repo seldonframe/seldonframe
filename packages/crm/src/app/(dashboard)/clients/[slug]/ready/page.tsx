@@ -32,7 +32,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { and, eq } from "drizzle-orm";
-import { ArrowRight, ExternalLink, Sparkles } from "lucide-react";
+import { ArrowRight, ExternalLink, Pencil, Sparkles } from "lucide-react";
 
 import { auth } from "@/auth";
 import { db } from "@/db";
@@ -440,6 +440,14 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
                 Open
                 <ExternalLink className="size-3.5" aria-hidden="true" />
               </a>
+              {/* 2026-05-22 — Phase T: natural-language editor link. */}
+              <Link
+                href={`/clients/${workspace.slug}/landing/edit`}
+                className="crm-pressable inline-flex h-9 items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-3 text-xs font-medium text-primary transition-[background-color,color,transform] duration-150 ease-out hover:bg-primary/20"
+              >
+                Customize
+                <Pencil className="size-3.5" aria-hidden="true" />
+              </Link>
             </div>
           </section>
         )}

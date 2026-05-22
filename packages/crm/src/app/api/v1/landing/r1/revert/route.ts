@@ -1,0 +1,68 @@
+// POST /api/v1/landing/r1/revert
+//
+// Revert the R1 landing payload to a prior version's snapshot.
+// Auth: same as /customize (workspace bearer OR x-org-id + x-api-key).
+//
+// Body: { workspace_id?: string, version_id: string }
+//
+// Creates a new immutable versions row (never deletes history).
+
+import { NextResponse } from "next/server";
+import { guardApiRequest } from "@/lib/api/guard";
+import { revertLandingR1 } from "@/lib/landing/r1-customize";
+import { db } from "@/db";
+import { users } from "@/db/schema";
+import { and, eq } from "drizzle-orm";
+
+export const runtime = "nodejs";
+
+export async function POST(request: Request) {
+  const guard = await guardApiRequest(request);
+  if ("error" in guard) return guard.error;
+
+  const orgId = guard.orgId;
+
+  const body = (await request.json()) as {
+    version_id?: unknown;
+  };
+
+  if (typeof body.version_id !== "string" || !body.version_id.trim()) {
+    return NextResponse.json(
+      { error: "version_id is required and must be a non-empty string" },
+      { status: 400 },
+    );
+  }
+
+  // Resolve userId for audit.
+  const [ownerRow] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(and(eq(users.orgId, orgId), eq(users.role, "owner")))
+    .limit(1);
+  const userId = ownerRow?.id ?? orgId;
+
+  const result = await revertLandingR1({
+    workspaceId: orgId,
+    versionId: body.version_id,
+    userId,
+  });
+
+  if (!result.ok) {
+    const status =
+      result.reason === "version_not_found"
+        ? 404
+        : result.reason === "no_landing_exists"
+          ? 404
+          : 422;
+    return NextResponse.json(
+      { error: result.reason, detail: result.detail },
+      { status },
+    );
+  }
+
+  return NextResponse.json({
+    ok: true,
+    summary: result.summary,
+    version_id: result.versionId,
+  });
+}

@@ -127,6 +127,13 @@
       "when": 1748217600000,
       "tag": "0054_landing_r1_unique_slug",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1779463531873,
+      "tag": "0018_short_spiral",
+      "breakpoints": true
     }
   ]
 }
