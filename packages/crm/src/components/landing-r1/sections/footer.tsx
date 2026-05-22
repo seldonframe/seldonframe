@@ -179,7 +179,10 @@ function slugify(s: string) {
 
 function FooterStyles() {
   return (
-    <style jsx>{`
+    // global: see faq.tsx for the rationale — styled-jsx scope is per-function,
+    // so styles in this dedicated *Styles helper would otherwise apply to
+    // nothing.
+    <style jsx global>{`
       .sf-footer {
         background: var(--secondary);
         color: rgba(255,255,255,0.78);
