@@ -36,13 +36,15 @@ import { ArrowRight, ExternalLink, Sparkles } from "lucide-react";
 
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { agents, bookings, intakeForms, organizations, orgMembers, soulSources } from "@/db/schema";
+import { agents, bookings, intakeForms, landingPages, organizations, orgMembers, soulSources } from "@/db/schema";
 import { buildWorkspaceUrls } from "@/lib/billing/anonymous-workspace";
 // 2026-05-17 — Invite SMB owner card. Wraps the existing
 // /portal/<slug>/login magic-link flow so the agency operator can
 // hand off the workspace to its actual SMB owner without copy-pasting
 // URLs.
 import { InviteSmbOwner } from "./invite-smb-owner";
+// 2026-05-22 — Copy-to-clipboard button for the R1 landing URL card.
+import { LandingUrlCopyButton } from "./landing-url-copy-button";
 
 export const dynamic = "force-dynamic";
 
@@ -175,6 +177,22 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
     .limit(1);
   const originalSiteUrl = originalUrlRow?.sourceUrl ?? null;
 
+  // 2026-05-22 — R1 landing page lookup. Check whether the auto-generated
+  // landing page exists for this workspace. We store the existence flag
+  // here; the actual URL is built after APP_BASE is defined below.
+  const [r1LandingRow] = await db
+    .select({ id: landingPages.id })
+    .from(landingPages)
+    .where(
+      and(
+        eq(landingPages.orgId, workspace.id),
+        eq(landingPages.slug, "r1"),
+        eq(landingPages.status, "published"),
+      ),
+    )
+    .limit(1);
+  const hasR1Landing = Boolean(r1LandingRow);
+
   // Public deep links use the canonical /book/<org>/<slug> +
   // /forms/<org>/<slug> patterns on the app host (those routes exist in
   // app/book/[orgSlug]/[bookingSlug] + app/forms/[id]/[formSlug]).
@@ -182,6 +200,10 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
   // /book/* and /forms/* paths is a pass-through — both rely on the
   // orgSlug being in the path, not in the host.
   const APP_BASE = `https://${WORKSPACE_BASE_DOMAIN}`;
+
+  // R1 landing URL — public page at /w/[slug].
+  const r1LandingUrl = hasR1Landing ? `${APP_BASE}/w/${workspace.slug}` : null;
+
   const publicBookingUrl = bookingTemplateRow
     ? `${APP_BASE}/book/${workspace.slug}/${bookingTemplateRow.slug}`
     : null;
@@ -302,11 +324,25 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
       adminHref: sw("/emails"),
       adminLabel: "Set up channels",
     },
-    // 2026-05-17 — Landing page deliverable removed. SeldonFrame
-    // isn't a landing-page builder; the chatbot + booking + intake
-    // are the deliverables agencies actually share. Public landing
-    // pages created via the legacy /landing route still render but
-    // we no longer prompt operators to make new ones.
+    // 2026-05-22 — R1 landing page card. Auto-generated at workspace
+    // creation by the R-framework pipeline. Public at /w/[slug].
+    // Only shown when the generation succeeded (r1LandingUrl is non-null).
+    ...(r1LandingUrl
+      ? [
+          {
+            icon: "🌐",
+            audience: "deliverable" as const,
+            label: "Public landing page",
+            title: "Polished public website",
+            description:
+              "Auto-generated from their business data — hero, services, testimonials, FAQ, and footer. Share the link with your client immediately or open it to review the copy.",
+            publicHref: r1LandingUrl,
+            publicLabel: "View public site →",
+            adminHref: r1LandingUrl,
+            adminLabel: "Open in new tab",
+          },
+        ]
+      : []),
   ];
 
   // Audience chip styling. The two foundational cards (operator dashboard
@@ -369,6 +405,44 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
             </a>
           </div>
         </header>
+
+        {/* ============== R1 LANDING URL CARD ==============
+            2026-05-22 — surfaces the auto-generated public landing
+            page URL with copy-to-clipboard + open-in-new-tab.
+            Only renders when the R1 generation succeeded. */}
+        {r1LandingUrl && (
+          <section className="rounded-2xl border border-primary/20 bg-primary/5 p-5 space-y-3">
+            <div className="flex items-center gap-2">
+              <span aria-hidden="true" className="text-xl leading-none">🌐</span>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
+                Client&apos;s website is live
+              </p>
+            </div>
+            <div className="flex flex-col gap-1">
+              <p className="text-sm font-medium text-foreground">
+                {workspace.name}&apos;s public landing page
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Auto-generated from their business data. Share this link with your client immediately.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <code className="flex-1 min-w-0 truncate rounded-lg border border-border bg-background/60 px-3 py-2 text-xs font-mono text-foreground">
+                {r1LandingUrl}
+              </code>
+              <LandingUrlCopyButton url={r1LandingUrl} />
+              <a
+                href={r1LandingUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="crm-pressable inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-background/60 px-3 text-xs font-medium text-muted-foreground transition-[background-color,color,transform] duration-150 ease-out hover:bg-background hover:text-foreground"
+              >
+                Open
+                <ExternalLink className="size-3.5" aria-hidden="true" />
+              </a>
+            </div>
+          </section>
+        )}
 
         {/* ============== AUDIENCE-SCOPED CARDS ==============
             Two-row layout: foundational surfaces (operator dashboard +

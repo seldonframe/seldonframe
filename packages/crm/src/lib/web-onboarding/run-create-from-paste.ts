@@ -14,6 +14,7 @@ import { createSseStream, SSE_RESPONSE_HEADERS } from "./sse";
 import type { CreateFullWorkspaceInput, CreateFullWorkspaceResult } from "@/lib/workspace/create-full";
 import type { LimitDecision } from "@/lib/billing/limits";
 import type { ExtractedBusinessFacts } from "./extraction-prompt";
+import { runR1LandingStep } from "@/lib/landing/r1-landing-step";
 
 export type RunPasteDeps = {
   enforceWorkspaceLimit: (args: { primaryOrgId: string | null; ownedWorkspaceCount: number }) => Promise<LimitDecision>;
@@ -200,6 +201,17 @@ export async function runCreateFromPaste(input: RunPasteInput): Promise<RunPaste
               }),
             );
           }
+        }
+
+        // 7e. Generate the R1 landing payload + persist.
+        //     Same step as the URL path — non-fatal, public immediately.
+        const r1Result = await runR1LandingStep({
+          workspaceId: result.workspace_id,
+          facts,
+          byokKey: byok.key,
+        });
+        if (r1Result.ok) {
+          sse.emit("landing_built", { workspaceId: result.workspace_id });
         }
       }
 
