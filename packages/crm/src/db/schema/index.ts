@@ -114,3 +114,6 @@ export * from "./outbound-scheduled-sends";
 // 2026-05-19 — Proposal Builder.
 export * from "./proposals";
 export * from "./proposal-events";
+
+// 2026-05-22 — Phase T: natural-language landing editor + undo history.
+export * from "./landing-payload-versions";
