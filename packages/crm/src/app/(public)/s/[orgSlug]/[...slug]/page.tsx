@@ -19,6 +19,8 @@ import type { LandingSection } from "@/lib/landing/types";
 // sticky CTA). The fall-through keeps the OLD system intact for
 // workspaces that have no _r1 row (all existing production workspaces).
 import { loadLandingPayload } from "@/lib/landing/r1-save";
+import { rewriteR1Hrefs } from "@/lib/landing/r1-rewrite-hrefs";
+import { buildWorkspaceUrls } from "@/lib/billing/anonymous-workspace";
 import { Hero } from "@/components/landing-r1/sections/hero";
 import { ServicesGrid } from "@/components/landing-r1/sections/services-grid";
 import { Testimonials } from "@/components/landing-r1/sections/testimonials";
@@ -106,10 +108,20 @@ export default async function PublicSPage({ params }: PageProps) {
   if (isHomePage(pageSlug)) {
     const r1Data = await loadLandingPayload(orgSlug);
     if (r1Data) {
-      const { payload } = r1Data;
+      // bisect 3/4: rewrite generic CTA hrefs to workspace-scoped URLs.
+      const workspaceUrls = buildWorkspaceUrls(
+        orgSlug,
+        process.env.WORKSPACE_BASE_DOMAIN ?? "app.seldonframe.com",
+        r1Data.orgId,
+      );
+      const payload = rewriteR1Hrefs(r1Data.payload, {
+        book: workspaceUrls.book,
+        intake: workspaceUrls.intake,
+        home: workspaceUrls.home,
+      });
       return (
         <>
-          {/* bisect 2/4: Navbar wired to JSX. Other changes deferred. */}
+          {/* bisect 3/4: Navbar + rewriteR1Hrefs wired. Chatbot embed deferred to step 4. */}
           <Navbar
             archetype={payload.hero.archetype}
             businessName={payload.hero.businessName}

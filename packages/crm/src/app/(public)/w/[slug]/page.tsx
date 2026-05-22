@@ -24,6 +24,8 @@ import { StickyMobileBar } from "@/components/landing-r1/chrome/sticky-mobile-ba
 import { Navbar } from "@/components/landing-r1/chrome/navbar";
 
 import { loadLandingPayload } from "@/lib/landing/r1-save";
+import { rewriteR1Hrefs } from "@/lib/landing/r1-rewrite-hrefs";
+import { buildWorkspaceUrls } from "@/lib/billing/anonymous-workspace";
 
 type PageProps = {
   params: Promise<{ slug: string }>;
@@ -98,12 +100,23 @@ export default async function WorkspaceLandingPage({ params }: PageProps) {
     notFound();
   }
 
-  const { payload } = data;
+  const { orgId } = data;
+
+  // bisect 3/4: rewrite generic CTA hrefs to workspace-scoped URLs.
+  const workspaceUrls = buildWorkspaceUrls(
+    slug,
+    process.env.WORKSPACE_BASE_DOMAIN ?? "app.seldonframe.com",
+    orgId,
+  );
+  const payload = rewriteR1Hrefs(data.payload, {
+    book: workspaceUrls.book,
+    intake: workspaceUrls.intake,
+    home: workspaceUrls.home,
+  });
 
   return (
     <>
-      {/* bisect 2/4: Navbar wired to JSX. Other changes (rewriteR1Hrefs,
-          chatbot embed) deliberately deferred to later bisect steps. */}
+      {/* bisect 3/4: Navbar + rewriteR1Hrefs wired. Chatbot embed deferred to step 4. */}
       <Navbar
         archetype={payload.hero.archetype}
         businessName={payload.hero.businessName}
