@@ -100,6 +100,7 @@ export async function saveLandingPayload(
 export async function loadLandingPayload(workspaceSlug: string): Promise<{
   payload: R1LandingPayload;
   archetype: AestheticArchetypeId;
+  orgId: string;
   seo: { title: string; description: string; ogImage: string | null };
 } | null> {
   // Join landing_pages → organizations to resolve workspace slug → orgId.
@@ -144,6 +145,7 @@ export async function loadLandingPayload(workspaceSlug: string): Promise<{
   return {
     payload,
     archetype,
+    orgId: orgRow.id,
     seo: {
       title: (seoRaw["title"] as string | undefined) ?? payload.footer.businessName,
       description:
