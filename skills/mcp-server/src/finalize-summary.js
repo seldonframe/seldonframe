@@ -47,7 +47,7 @@ export function buildFinalizeSummary({ snapshot, durationSec, aestheticArchetype
     lines.push(chatbot.embed_snippet);
     lines.push("");
     lines.push(`🤖 Demo for your client: ${chatbot.preview_url ?? snapshot.public_urls?.home ?? ""}`);
-    lines.push(`   (Chatbot live in TEST mode — share so your client can try it before pasting)`);
+    lines.push(`   (Chatbot is live and answering on your landing — share so your client can try it before pasting)`);
   } else {
     lines.push(`🤖 AI chatbot — scaffold pending. Retry:`);
     lines.push(`   create_agent({ archetype: "website-chatbot", channel: "web_chat" })`);
