@@ -5,6 +5,8 @@
 // display rules; Phase R.1 ships text-only badges. The `logoSvg` slot is
 // reserved for Phase R.2 (or operator manual override).
 
+"use client";
+
 import type { ReactNode } from "react";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";

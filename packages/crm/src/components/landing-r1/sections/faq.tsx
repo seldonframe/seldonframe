@@ -13,6 +13,8 @@
 // via the CSS-var contract; the underlying Base UI accordion handles the height
 // animation, keyboard nav, and ARIA wiring.
 
+"use client";
+
 import { Phone, ChevronDown } from "lucide-react";
 import {
   Accordion,
