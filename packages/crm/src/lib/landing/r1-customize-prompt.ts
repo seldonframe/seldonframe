@@ -26,7 +26,18 @@ ABSOLUTE RULES:
 7. If the instruction is ambiguous, make a conservative choice that preserves the existing payload as much as possible.
 8. The "summary" field is a 1-sentence, past-tense description of what you changed (e.g. "Replaced the hero photo and shortened the subhead.").
 9. The JSON must be valid — no trailing commas, no comments, proper string escaping.
-10. If you cannot apply the instruction without violating these rules, apply the closest safe version and note it in the summary.`;
+10. If you cannot apply the instruction without violating these rules, apply the closest safe version and note it in the summary.
+
+PRESERVATION RULES:
+- The current payload may contain photos extracted from the operator's
+  actual website. NEVER replace heroImage.src or service tile images
+  with a generic Unsplash URL unless the operator explicitly asks
+  ("change the photo to a stock plumber image", "use a different
+  picture", etc.).
+- FAQ answers extracted from the real site (heuristic: longer than
+  60 chars, mentions specific business facts) should be left alone
+  unless the operator targets them by question. Synthesized FAQ
+  answers can be freely rewritten.`;
 
 /**
  * Builds Anthropic message params (system + user message) for the customize

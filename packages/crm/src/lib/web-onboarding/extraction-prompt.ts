@@ -135,6 +135,19 @@ OPTIONAL (include the field if confidently extracted, omit otherwise):
 - weekly_hours: object (see format below)
 - testimonials: array (see format below)
 
+- photos: array of { src: <absolute URL>, alt: <string>, section: "hero"|"services"|"gallery"|"testimonial"|"about"|"other" }
+  Extract every image URL you find in the markdown. The markdown uses ![alt](url) syntax — every match is a candidate. For each:
+    * src: the URL (must start with http or https)
+    * alt: the alt text from the markdown (may be empty string)
+    * section: your best guess of which page section the image appeared in based on its context in the markdown. Use "other" if unsure.
+  Include up to 12 photos. Skip favicons, logos under 200x200 (if dimensions known), and tracking pixels. If no photos found, omit the field entirely.
+
+- faq: array of { question: <string>, answer: <string> }
+  Extract every visible FAQ / question-answer pair from the markdown. Common signals: the words "Frequently Asked Questions" or "FAQ" near a list of bold/heading-style questions followed by paragraph answers. Up to 8 items. If no FAQ section exists on the site, omit the field entirely (don't synthesize).
+
+- services_detailed: array of { name: <string>, description: <string> }
+  For each service you list in 'services', also try to extract a 1-2 sentence description from the markdown if the site provides one. Names should match the 'services' array exactly. If no descriptions are available on the site, omit the field entirely.
+
 For weekly_hours, use this EXACT shape only if hours are clearly visible:
 {
   "monday": { "enabled": true, "start": "09:00", "end": "17:00" },
@@ -199,5 +212,31 @@ export type ExtractedBusinessFacts = {
     role?: string | null;
     company?: string | null;
     rating?: number | null;
+  }> | null;
+
+  // 2026-05-22 — extraction enrichment (Phase U). All OPTIONAL — present
+  // only when the URL extraction found them on the original site. The
+  // paste path always emits null/undefined for these. The R1 payload
+  // generator prefers these over synthesis when present.
+  photos?: Array<{
+    /** Absolute URL. */
+    src: string;
+    /** Alt text from the original site (if any). */
+    alt?: string | null;
+    /** Original section context. LLM's best guess. */
+    section?: "hero" | "services" | "gallery" | "testimonial" | "about" | "other" | null;
+  }> | null;
+
+  faq?: Array<{
+    question: string;
+    answer: string;
+  }> | null;
+
+  // Richer services — name + optional description harvested from the site.
+  // The existing `services: string[]` field STAYS for backward compatibility;
+  // this new field is a richer view that the R generator prefers when present.
+  services_detailed?: Array<{
+    name: string;
+    description?: string | null;
   }> | null;
 };

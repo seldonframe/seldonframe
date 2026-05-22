@@ -111,6 +111,44 @@ export const REQUIRED_FIELDS_SCHEMA = {
     address: { type: ["string", "null"] },
     weekly_hours: { type: ["object", "null"] },
     testimonials: { type: ["array", "null"] },
+    // 2026-05-22 — Phase U enrichment fields (all optional)
+    photos: {
+      type: ["array", "null"],
+      items: {
+        type: "object",
+        required: ["src"],
+        properties: {
+          src: { type: "string", minLength: 1 },
+          alt: { type: ["string", "null"] },
+          section: {
+            type: ["string", "null"],
+            enum: ["hero", "services", "gallery", "testimonial", "about", "other", null],
+          },
+        },
+      },
+    },
+    faq: {
+      type: ["array", "null"],
+      items: {
+        type: "object",
+        required: ["question", "answer"],
+        properties: {
+          question: { type: "string", minLength: 1 },
+          answer: { type: "string", minLength: 1 },
+        },
+      },
+    },
+    services_detailed: {
+      type: ["array", "null"],
+      items: {
+        type: "object",
+        required: ["name"],
+        properties: {
+          name: { type: "string", minLength: 1 },
+          description: { type: ["string", "null"] },
+        },
+      },
+    },
   },
 } as const;
 
