@@ -119,9 +119,10 @@ export default async function PublicSPage({ params }: PageProps) {
         intake: workspaceUrls.intake,
         home: workspaceUrls.home,
       });
+      // Subdomain R-branch chatbot embed (mirrors /w/[slug] route).
+      const r1ChatbotEmbed = await getPublicChatbotEmbed(r1Data.orgId);
       return (
         <>
-          {/* bisect 3/4: Navbar + rewriteR1Hrefs wired. Chatbot embed deferred to step 4. */}
           <Navbar
             archetype={payload.hero.archetype}
             businessName={payload.hero.businessName}
@@ -135,6 +136,7 @@ export default async function PublicSPage({ params }: PageProps) {
           <Faq {...payload.faq} />
           <Footer {...payload.footer} />
           {payload.sticky && <StickyMobileBar {...payload.sticky} />}
+          {r1ChatbotEmbed && <ChatbotEmbedScript embedUrl={r1ChatbotEmbed.embedUrl} />}
         </>
       );
     }

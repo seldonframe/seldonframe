@@ -85,8 +85,21 @@ export default async function LandingEditPage({ params }: EditPageProps) {
   );
 
   // Load recent version history (newest first, max 20).
-  const versions = hasLanding
-    ? await db
+  // 2026-05-22 — defensive try/catch: migration 0018_short_spiral creates
+  // the landing_payload_versions table but migrate-tolerant.mjs soft-fails
+  // when migrations don't apply cleanly in production. If the table is
+  // missing, render empty history rather than 500'ing the entire editor.
+  // Customize still works; just no undo/history list until the migration
+  // is applied via Neon MCP.
+  let versions: Array<{
+    id: string;
+    instruction: string | null;
+    summary: string | null;
+    createdAt: Date;
+  }> = [];
+  if (hasLanding) {
+    try {
+      versions = await db
         .select({
           id: landingPayloadVersions.id,
           instruction: landingPayloadVersions.instruction,
@@ -96,8 +109,18 @@ export default async function LandingEditPage({ params }: EditPageProps) {
         .from(landingPayloadVersions)
         .where(eq(landingPayloadVersions.workspaceId, workspace.id))
         .orderBy(landingPayloadVersions.createdAt)
-        .limit(20)
-    : [];
+        .limit(20);
+    } catch (err) {
+      console.warn(
+        JSON.stringify({
+          event: "landing_payload_versions_query_failed",
+          workspace_id: workspace.id,
+          detail: err instanceof Error ? err.message.slice(0, 500) : String(err),
+        }),
+      );
+      // Fall through with empty versions array.
+    }
+  }
 
   // Newest first for display.
   const versionList = [...versions].reverse().map((v) => ({

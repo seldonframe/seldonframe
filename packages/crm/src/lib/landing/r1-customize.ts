@@ -64,7 +64,10 @@ function pickText(content: Array<{ type: string; text?: string }>): string {
 // ── Result types ──────────────────────────────────────────────────────────────
 
 export type CustomizeLandingResult =
-  | { ok: true; summary: string; versionId: string }
+  // versionId is optional — set only when the landing_payload_versions
+  // insert succeeded. Missing means the audit table doesn't exist in
+  // this environment (migration 0018_short_spiral not yet applied).
+  | { ok: true; summary: string; versionId?: string }
   | {
       ok: false;
       reason:
@@ -235,25 +238,34 @@ export async function customizeLandingR1(args: {
   }
 
   // Step 5: Insert snapshot of the OLD payload into landing_payload_versions.
-  const [versionRow] = await db
-    .insert(landingPayloadVersions)
-    .values({
-      workspaceId,
-      payload: row.payload as unknown as Record<string, unknown>,
-      instruction,
-      summary,
-      createdBy: userId,
-    })
-    .returning({ id: landingPayloadVersions.id });
-
-  const versionId = versionRow?.id;
-  if (!versionId) {
-    // This is very unlikely but guard it.
-    return {
-      ok: false,
-      reason: "llm_failed",
-      detail: "Version row insert did not return an ID.",
-    };
+  // 2026-05-22 — defensive: if migration 0018_short_spiral hasn't applied
+  // in production (migrate-tolerant.mjs soft-fails), the table won't exist.
+  // We DON'T want to block the operator's edit on a missing audit table —
+  // apply the edit, skip versioning, log the snag server-side. Once the
+  // migration applies (manually via Neon MCP or via next clean deploy),
+  // versioning resumes automatically.
+  let versionId: string | undefined;
+  try {
+    const [versionRow] = await db
+      .insert(landingPayloadVersions)
+      .values({
+        workspaceId,
+        payload: row.payload as unknown as Record<string, unknown>,
+        instruction,
+        summary,
+        createdBy: userId,
+      })
+      .returning({ id: landingPayloadVersions.id });
+    versionId = versionRow?.id;
+  } catch (err) {
+    console.warn(
+      JSON.stringify({
+        event: "landing_payload_version_insert_failed",
+        workspace_id: workspaceId,
+        detail: err instanceof Error ? err.message.slice(0, 500) : String(err),
+      }),
+    );
+    // Fall through — edit still applies.
   }
 
   // Step 6: Update landing_pages.blueprintJson with the new payload.
