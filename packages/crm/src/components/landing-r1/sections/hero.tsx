@@ -12,6 +12,7 @@
 
 "use client";
 
+import type { ReactNode } from "react";
 import Image from "next/image";
 import { Phone, Calendar, ArrowRight, Zap } from "lucide-react";
 import { ARCHETYPES, archetypeStyle, type AestheticArchetypeId } from "../archetypes";
@@ -29,7 +30,7 @@ export type HeroProps = {
   subhead: string;
   primaryCTA: CTA;
   secondaryCTA?: CTA;
-  trustBadges: { label: string; logoSvg?: string }[];
+  trustBadges: { label: string; logoSvg?: ReactNode }[];
   reviewRating?: number;
   reviewCount?: number;
   emergencyService?: boolean;
@@ -170,32 +171,182 @@ function HeroSplit(props: HeroProps) {
   );
 }
 
-// ── left-aligned-asymmetric  (4 archetypes — Phase R.1.2 polish) ──────────
+// ── left-aligned-asymmetric  (editorial-warm / clinical-trust / soft-residential / brutalist) ──
 function HeroLeftAsymmetric(props: HeroProps) {
-  // Scaffold — same content surface as split, but a single-column asymmetric
-  // layout with the photo offset 60% of the way down on the right edge. Phase
-  // R.1.2 will iterate this against editorial-warm / clinical-trust / soft-
-  // residential / brutalist references.
+  const { businessName, tagline, subhead, primaryCTA, secondaryCTA, trustBadges,
+          reviewRating, reviewCount, heroImage, heroOverlay } = props;
+  const arch = ARCHETYPES[props.archetype];
+
   return (
     <div className="hero-left container">
-      <h1 className="hero-headline" data-stub>{props.tagline}</h1>
-      <p className="hero-lede" data-stub>{props.subhead}</p>
-      <div className="cta-row">
-        <a className="btn btn-primary btn-xl" href={props.primaryCTA.href}>{props.primaryCTA.label}</a>
-        {props.secondaryCTA && <a className="btn btn-secondary btn-xl" href={props.secondaryCTA.href}>{props.secondaryCTA.label}</a>}
+      <div className="hero-left-grid">
+        {/* Text column — anchored top-left, asymmetric (NOT centered). */}
+        <div className="hero-left-text">
+          <Reveal>
+            <p className="kicker">
+              <span className="kicker-line" aria-hidden />
+              {businessName}
+            </p>
+          </Reveal>
+          <Reveal delay={0.06}>
+            <h1 className="hero-headline">{tagline}</h1>
+          </Reveal>
+          <Reveal delay={0.14}>
+            <p className="hero-lede">{subhead}</p>
+          </Reveal>
+
+          <Reveal delay={0.22}>
+            <div className="cta-row">
+              <a className="btn btn-primary btn-xl" href={primaryCTA.href}>
+                {primaryCTA.label}
+                <ArrowRight size={18} aria-hidden strokeWidth={2.4} />
+              </a>
+              {secondaryCTA && (
+                <a className="btn btn-outline btn-xl" href={secondaryCTA.href}>
+                  {secondaryCTA.label}
+                </a>
+              )}
+            </div>
+          </Reveal>
+
+          <div className="trust-strip">
+            {reviewRating != null && reviewCount != null && (
+              <Reveal delay={0.28}>
+                <TrustBadge label={`${reviewRating}`} variant="subtle">
+                  <Stars value={reviewRating} size={12} />
+                  <b style={{ fontWeight: 700 }}>
+                    <CountUp value={reviewRating} decimals={1} />
+                  </b>
+                  <small style={{
+                    color: "color-mix(in oklab, var(--text) 55%, transparent)",
+                    fontWeight: 500, fontSize: 11.5,
+                  }}>
+                    <CountUp value={reviewCount} /> reviews
+                  </small>
+                </TrustBadge>
+              </Reveal>
+            )}
+            {trustBadges.map((b, i) => (
+              <Reveal key={b.label} delay={0.32 + i * 0.04}>
+                <TrustBadge label={b.label} logoSvg={b.logoSvg} variant="subtle" />
+              </Reveal>
+            ))}
+          </div>
+        </div>
+
+        {/* Asymmetric photo block — offset 60px down on desktop, hugs the right
+            edge, intentional vertical mismatch with the text column. */}
+        {heroImage && arch.id !== "brutalist" && (
+          <Reveal delay={0.10} className="hero-left-photo-wrap">
+            <div className="hero-left-photo">
+              <Image
+                src={heroImage.src}
+                alt={heroImage.alt}
+                fill
+                priority
+                sizes="(max-width: 1023px) 100vw, 45vw"
+                style={{ objectFit: "cover" }}
+              />
+              {heroOverlay && (
+                <div className="hero-left-caption">
+                  <b>{heroOverlay.techName}</b>
+                  <small>{heroOverlay.techMeta}</small>
+                </div>
+              )}
+            </div>
+          </Reveal>
+        )}
+
+        {/* Brutalist gets a stark color block in place of the photo — keeps the
+            asymmetric counterweight without violating the "no soft pastels /
+            drop shadows / gradients" bans. */}
+        {arch.id === "brutalist" && (
+          <Reveal delay={0.10} className="hero-left-photo-wrap">
+            <div className="hero-left-block">
+              <span className="hero-left-block-label">Selected work · {new Date().getFullYear()}</span>
+              <span className="hero-left-block-num">01</span>
+            </div>
+          </Reveal>
+        )}
       </div>
-      <p data-todo>TODO Phase R.1.2 — refine for editorial-warm / clinical-trust / soft-residential / brutalist.</p>
     </div>
   );
 }
 
-// ── cinematic-aura  (2 archetypes — Phase R.1.2) ──────────────────────────
+// ── cinematic-aura  (cinematic-aspirational / technical-restrained) ───────
 function HeroCinematic(props: HeroProps) {
+  const { businessName, tagline, subhead, primaryCTA, secondaryCTA, trustBadges,
+          reviewRating, reviewCount, heroImage } = props;
+  const arch = ARCHETYPES[props.archetype];
+
   return (
-    <div className="hero-cinematic container">
-      <h1 className="hero-headline" data-stub>{props.tagline}</h1>
-      <p className="hero-lede" data-stub>{props.subhead}</p>
-      <p data-todo>TODO Phase R.1.2 — refine for cinematic-aspirational / technical-restrained.</p>
+    <div className="hero-cinematic">
+      {/* Full-bleed background — image for cinematic-aspirational, calm wash
+          for technical-restrained. Production swap: <video> with playsInline
+          muted loop preload="metadata" — see README "Cinematic background". */}
+      {heroImage && (
+        <div className="hero-cinematic-bg" aria-hidden>
+          <Image
+            src={heroImage.src}
+            alt=""
+            fill
+            priority
+            sizes="100vw"
+            style={{ objectFit: "cover" }}
+          />
+          <div className="hero-cinematic-veil" />
+        </div>
+      )}
+
+      <div className="container hero-cinematic-inner">
+        <Reveal>
+          <p className="kicker kicker-light">
+            <span className="kicker-line" aria-hidden />
+            {businessName}
+          </p>
+        </Reveal>
+        <Reveal delay={0.06}>
+          <h1 className={`hero-headline hero-headline-light ${arch.id === "cinematic-aspirational" ? "is-cinematic" : ""}`}>
+            {tagline}
+          </h1>
+        </Reveal>
+        <Reveal delay={0.14}>
+          <p className="hero-lede hero-lede-light">{subhead}</p>
+        </Reveal>
+
+        <Reveal delay={0.22}>
+          <div className="cta-row">
+            <a className="btn btn-glass btn-xl" href={primaryCTA.href}>
+              {primaryCTA.label}
+              <ArrowRight size={18} aria-hidden strokeWidth={2.4} />
+            </a>
+            {secondaryCTA && (
+              <a className="btn btn-glass-outline btn-xl" href={secondaryCTA.href}>
+                {secondaryCTA.label}
+              </a>
+            )}
+          </div>
+        </Reveal>
+
+        {(trustBadges.length > 0 || reviewRating != null) && (
+          <div className="trust-strip trust-strip-light">
+            {reviewRating != null && reviewCount != null && (
+              <Reveal delay={0.28}>
+                <span className="cinematic-pill">
+                  <Stars value={reviewRating} size={12} />
+                  <b><CountUp value={reviewRating} decimals={1} /></b>
+                  <small>· <CountUp value={reviewCount} /> reviews</small>
+                </span>
+              </Reveal>
+            )}
+            {trustBadges.slice(0, 3).map((b, i) => (
+              <Reveal key={b.label} delay={0.32 + i * 0.04}>
+                <span className="cinematic-pill">{b.label}</span>
+              </Reveal>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -382,6 +533,196 @@ function HeroStyles() {
         :global(.btn-pulse::after) { display: none; }
         .photo-badge-live :global(.dot),
         .badge-emergency :global(.dot) { animation: none; }
+      }
+
+      /* ───────── left-aligned-asymmetric ───────── */
+      .hero-left {
+        padding-top: 56px; padding-bottom: 72px;
+      }
+      @media (min-width: 1024px) { .hero-left { padding-top: 96px; padding-bottom: 120px; } }
+
+      .hero-left-grid {
+        display: grid; grid-template-columns: 1fr; gap: 36px;
+      }
+      @media (min-width: 1024px) {
+        .hero-left-grid {
+          grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+          gap: 80px;
+          align-items: start;
+        }
+      }
+
+      .hero-left-text { max-width: 720px; }
+
+      .kicker {
+        display: inline-flex; align-items: center; gap: 12px;
+        margin: 0;
+        font-family: var(--font-body);
+        font-weight: 600;
+        font-size: 12.5px;
+        letter-spacing: 0.10em;
+        text-transform: uppercase;
+        color: var(--primary);
+      }
+      .kicker .kicker-line {
+        width: 32px; height: 1px;
+        background: currentColor;
+        opacity: 0.55;
+      }
+      .kicker-light { color: rgba(255,255,255,0.78); }
+
+      .hero-left .hero-headline {
+        font-size: clamp(38px, 6.4vw, 68px);
+        margin: 16px 0 0;
+      }
+      .hero-left .hero-lede { margin-top: 20px; }
+
+      /* Asymmetric photo block — offset down on desktop */
+      .hero-left-photo-wrap { position: relative; }
+      @media (min-width: 1024px) {
+        .hero-left-photo-wrap { margin-top: 64px; }
+      }
+      .hero-left-photo {
+        position: relative;
+        border-radius: var(--radius-lg, 14px);
+        overflow: hidden;
+        background: var(--surface-deep);
+        aspect-ratio: 4 / 5;
+        box-shadow: 0 24px 60px color-mix(in oklab, var(--text) 12%, transparent);
+      }
+      @media (max-width: 1023px) { .hero-left-photo { aspect-ratio: 16 / 10; } }
+      .hero-left-caption {
+        position: absolute; left: 16px; bottom: 16px; right: 16px;
+        padding: 12px 14px;
+        background: rgba(26, 26, 26, 0.85);
+        backdrop-filter: blur(6px);
+        border-radius: var(--radius, 10px);
+        border: 1px solid rgba(255,255,255,0.08);
+        color: #fff;
+        font-size: 13px;
+      }
+      .hero-left-caption b { display: block; font-weight: 700; }
+      .hero-left-caption small { color: rgba(255,255,255,0.6); font-size: 11px; }
+
+      /* Brutalist counterweight block — no shadow, no gradient, hard edges */
+      .hero-left-block {
+        position: relative;
+        aspect-ratio: 4 / 5;
+        background: var(--primary);
+        color: var(--bg);
+        border: 2px solid var(--primary);
+        border-radius: 0;
+        display: flex; flex-direction: column;
+        justify-content: space-between;
+        padding: 24px;
+      }
+      @media (max-width: 1023px) { .hero-left-block { aspect-ratio: 16 / 10; } }
+      .hero-left-block-label {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .hero-left-block-num {
+        font-family: var(--font-headline);
+        font-weight: 800;
+        font-size: clamp(80px, 14vw, 220px);
+        line-height: 0.85;
+        letter-spacing: -0.04em;
+        text-align: right;
+      }
+
+      /* ───────── cinematic-aura ───────── */
+      .hero-cinematic {
+        position: relative;
+        isolation: isolate;
+        min-height: 640px;
+        display: flex; align-items: center;
+        padding-top: 72px; padding-bottom: 72px;
+        color: #fff;
+        overflow: hidden;
+      }
+      @media (min-width: 1024px) {
+        .hero-cinematic { min-height: 760px; padding-top: 120px; padding-bottom: 120px; }
+      }
+      .hero-cinematic-bg {
+        position: absolute; inset: 0; z-index: -1;
+      }
+      .hero-cinematic-bg :global(img) { filter: saturate(0.7) brightness(0.7); }
+      .hero-cinematic-veil {
+        position: absolute; inset: 0;
+        background:
+          linear-gradient(180deg,
+            color-mix(in oklab, var(--secondary) 60%, transparent) 0%,
+            color-mix(in oklab, var(--secondary) 80%, transparent) 60%,
+            color-mix(in oklab, var(--secondary) 95%, transparent) 100%);
+      }
+
+      .hero-cinematic-inner { position: relative; max-width: 880px; }
+      .hero-cinematic .hero-headline,
+      .hero-cinematic .hero-headline-light {
+        font-size: clamp(38px, 7.2vw, 76px);
+        color: #fff;
+        margin: 18px 0 0;
+        text-wrap: balance;
+      }
+      .hero-cinematic .hero-headline.is-cinematic {
+        font-style: italic;
+        font-weight: 700;
+        letter-spacing: -0.025em;
+        line-height: 1.05;
+      }
+      .hero-cinematic .hero-lede-light {
+        color: rgba(255,255,255,0.78);
+        margin-top: 22px;
+        font-size: clamp(16px, 1.8vw, 19px);
+        max-width: 620px;
+      }
+
+      .trust-strip-light { margin-top: 32px; }
+      .cinematic-pill {
+        display: inline-flex; align-items: center; gap: 7px;
+        padding: 7px 13px;
+        background: rgba(255,255,255,0.08);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255,255,255,0.16);
+        border-radius: 999px;
+        color: #fff;
+        font-size: 12.5px;
+        font-weight: 500;
+      }
+      .cinematic-pill small { color: rgba(255,255,255,0.6); font-size: 11.5px; font-family: var(--font-mono); }
+      .cinematic-pill b { font-weight: 700; }
+
+      /* Glass buttons for cinematic-aura */
+      :global(.btn-glass) {
+        background: rgba(255,255,255,0.92);
+        color: var(--text);
+        border-color: rgba(255,255,255,0.92);
+        backdrop-filter: blur(10px);
+      }
+      :global(.btn-glass:hover) {
+        background: #fff; border-color: #fff;
+      }
+      :global(.btn-glass-outline) {
+        background: rgba(255,255,255,0.06);
+        color: #fff;
+        border-color: rgba(255,255,255,0.30);
+        backdrop-filter: blur(10px);
+      }
+      :global(.btn-glass-outline:hover) {
+        background: rgba(255,255,255,0.14);
+        border-color: rgba(255,255,255,0.60);
+      }
+
+      :global(.btn-outline) {
+        background: transparent;
+        color: var(--text);
+        border-color: var(--border);
+      }
+      :global(.btn-outline:hover) {
+        background: var(--surface);
+        border-color: var(--text);
       }
 
       /* stubs */

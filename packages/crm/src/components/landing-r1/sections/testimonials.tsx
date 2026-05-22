@@ -39,11 +39,16 @@ export type TestimonialsProps = {
     /** Comma-separated sources — "Google · Yelp · BBB". */
     sources?: string;
   };
-  /** How long each card stays visible. Default 6000ms (locked by brief). */
+  /**
+   * How long each card stays visible. When omitted, defaults to 6000ms
+   * (or 8000ms for archetypes with motionPreset "editorial" — derived
+   * automatically from the registry).
+   */
   intervalMs?: number;
 };
 
 const DEFAULT_INTERVAL = 6000;
+const EDITORIAL_INTERVAL = 8000; // editorial-warm / cinematic-aspirational lean slow
 
 export function Testimonials({
   archetype,
@@ -51,10 +56,14 @@ export function Testimonials({
   heading,
   testimonials,
   reviewSummary,
-  intervalMs = DEFAULT_INTERVAL,
+  intervalMs,
 }: TestimonialsProps) {
   const arch = ARCHETYPES[archetype];
   const reduce = useReducedMotion();
+  // If the caller didn't provide an explicit interval, derive it from the
+  // archetype's motionPreset. "editorial" = slower (8s); everything else 6s.
+  const resolvedInterval = intervalMs ??
+    (arch.motionPreset === "editorial" ? EDITORIAL_INTERVAL : DEFAULT_INTERVAL);
   const [current, setCurrent] = useState(0);
   const [paused, setPaused] = useState(false);
   const tref = useRef<number | null>(null);
@@ -65,11 +74,11 @@ export function Testimonials({
 
   useEffect(() => {
     if (reduce || paused || testimonials.length < 2) return;
-    tref.current = window.setInterval(advance, intervalMs);
+    tref.current = window.setInterval(advance, resolvedInterval);
     return () => {
       if (tref.current != null) window.clearInterval(tref.current);
     };
-  }, [advance, intervalMs, reduce, paused, testimonials.length]);
+  }, [advance, resolvedInterval, reduce, paused, testimonials.length]);
 
   return (
     <section

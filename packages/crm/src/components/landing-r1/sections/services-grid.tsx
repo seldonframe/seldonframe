@@ -22,8 +22,8 @@ export type Service = {
   id?: string;
   name: string;
   description: string;
-  /** Optional inline SVG (string) for the corner icon tile. */
-  iconSvg?: string;
+  /** Optional icon for the corner tile — accepts any ReactNode (inline JSX, Lucide icon, etc.). */
+  icon?: ReactNode;
   /** Optional photo override. When omitted, the striped placeholder is used. */
   photo?: { src: string; alt: string };
 };
@@ -50,10 +50,14 @@ export type ServicesGridProps = {
 export function ServicesGrid(props: ServicesGridProps) {
   const { archetype, eyebrow = "What we fix", heading, intro, services, cta } = props;
   const arch = ARCHETYPES[archetype];
+  // Calm 2×2 grid for archetypes that want more whitespace (visualDensity ≤ 4).
+  // Dense asymmetric grid (1 large + 1 wide + 2 standard) otherwise.
+  const layout: "calm" | "dense" = arch.dials.visualDensity <= 4 ? "calm" : "dense";
 
   return (
     <section
       data-archetype={arch.id}
+      data-layout={layout}
       style={archetypeStyle(arch.id)}
       className="sf-services"
       id="services"
@@ -75,7 +79,10 @@ export function ServicesGrid(props: ServicesGridProps) {
 
         <StaggerGroup className="grid">
           {services.map((s, i) => (
-            <StaggerItem key={s.id ?? s.name} className={cardClassForIndex(i, services.length)}>
+            <StaggerItem
+              key={s.id ?? s.name}
+              className={layout === "dense" ? cardClassForIndex(i, services.length) : undefined}
+            >
               <ServiceCard service={s} />
             </StaggerItem>
           ))}
@@ -110,17 +117,9 @@ function ServiceCard({ service }: { service: Service }) {
   return (
     <article className="card">
       <div className="placeholder">
-        {service.iconSvg ? (
-          <span
-            className="icon-tile"
-            aria-hidden
-            dangerouslySetInnerHTML={{ __html: service.iconSvg }}
-          />
-        ) : (
-          <span className="icon-tile" aria-hidden>
-            <DefaultGlyph />
-          </span>
-        )}
+        <span className="icon-tile" aria-hidden>
+          {service.icon ?? <DefaultGlyph />}
+        </span>
         <span className="ph-label">photo · {service.name.toLowerCase()}</span>
       </div>
       <div className="body">
@@ -216,14 +215,24 @@ function ServicesStyles() {
       }
       @media (min-width: 640px) { .grid { grid-template-columns: repeat(2, 1fr); gap: 18px; } }
       @media (min-width: 1024px) {
-        .grid {
+        [data-layout="dense"] .grid {
           grid-template-columns: 1.4fr 1fr 1fr;
           grid-template-rows: auto auto;
           gap: 20px;
         }
-        .grid > :global(.is-large) { grid-row: span 2; }
-        .grid > :global(.is-wide)  { grid-column: 2 / 4; }
+        [data-layout="dense"] .grid > :global(.is-large) { grid-row: span 2; }
+        [data-layout="dense"] .grid > :global(.is-wide)  { grid-column: 2 / 4; }
+
+        /* Calm 2×2 — for archetypes with visualDensity ≤ 4 (editorial-warm,
+           cinematic-aspirational, soft-residential). Even card sizes; more
+           whitespace via wider container gaps and roomier card padding. */
+        [data-layout="calm"] .grid {
+          grid-template-columns: repeat(2, 1fr);
+          gap: 28px;
+        }
       }
+      [data-layout="calm"] :global(.card) { padding: 28px; gap: 18px; }
+      [data-layout="calm"] :global(.placeholder) { aspect-ratio: 16 / 10; }
 
       :global(.card) {
         position: relative;
