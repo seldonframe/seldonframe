@@ -30,6 +30,15 @@ const R1_SOURCE = "r1-generator";
 /**
  * Upsert the R1 payload into the landing_pages table.
  * One row per workspace, slug='r1'. Idempotent — safe to re-run.
+ *
+ * 2026-05-22 HOTFIX — was previously `.onConflictDoUpdate(...)` which
+ * requires a UNIQUE constraint on (org_id, slug). Migration
+ * 0054_landing_r1_unique_slug.sql adds it, but Vercel's migrate-tolerant
+ * wrapper soft-fails on migration errors so the constraint may be
+ * missing in production (we saw a raw SQL error surface on the UI).
+ * Refactored to manual SELECT-then-UPDATE/INSERT so we work regardless
+ * of constraint state. Race window is acceptable — workspace creation
+ * is single-threaded per workspace, regenerate is user-rate-limited.
  */
 export async function saveLandingPayload(
   workspaceId: string,
@@ -38,49 +47,48 @@ export async function saveLandingPayload(
 ): Promise<void> {
   const businessName = payload.footer.businessName;
   const tagline = payload.hero.tagline;
+  const blueprintJson = {
+    _r1: true,
+    archetype: archetypeId,
+    tagline,
+    payload,
+  } as unknown as Record<string, unknown>;
+  const seo = {
+    title: `${businessName} — ${tagline}`,
+    description: payload.hero.subhead,
+    ogImage: payload.hero.heroImage?.src ?? null,
+  } as Record<string, unknown>;
 
-  await db
-    .insert(landingPages)
-    .values({
-      orgId: workspaceId,
-      title: businessName,
-      slug: R1_SLUG,
-      status: R1_STATUS,
-      pageType: "r1-landing",
-      source: R1_SOURCE,
-      // Store the full payload in blueprintJson so the existing
-      // landing infrastructure doesn't conflict (it reads puckData
-      // or contentHtml; we use blueprintJson as our jsonb store).
-      blueprintJson: {
-        _r1: true,
-        archetype: archetypeId,
-        tagline,
-        payload,
-      } as unknown as Record<string, unknown>,
-      seo: {
-        title: `${businessName} — ${tagline}`,
-        description: payload.hero.subhead,
-        ogImage: payload.hero.heroImage?.src ?? null,
-      } as Record<string, unknown>,
-    })
-    .onConflictDoUpdate({
-      target: [landingPages.orgId, landingPages.slug],
-      set: {
-        blueprintJson: {
-          _r1: true,
-          archetype: archetypeId,
-          tagline,
-          payload,
-        } as unknown as Record<string, unknown>,
-        seo: {
-          title: `${businessName} — ${tagline}`,
-          description: payload.hero.subhead,
-          ogImage: payload.hero.heroImage?.src ?? null,
-        } as Record<string, unknown>,
+  const [existing] = await db
+    .select({ id: landingPages.id })
+    .from(landingPages)
+    .where(and(eq(landingPages.orgId, workspaceId), eq(landingPages.slug, R1_SLUG)))
+    .limit(1);
+
+  if (existing) {
+    await db
+      .update(landingPages)
+      .set({
+        title: businessName,
+        blueprintJson,
+        seo,
         status: R1_STATUS,
         updatedAt: new Date(),
-      },
-    });
+      })
+      .where(eq(landingPages.id, existing.id));
+    return;
+  }
+
+  await db.insert(landingPages).values({
+    orgId: workspaceId,
+    title: businessName,
+    slug: R1_SLUG,
+    status: R1_STATUS,
+    pageType: "r1-landing",
+    source: R1_SOURCE,
+    blueprintJson,
+    seo,
+  });
 }
 
 /**

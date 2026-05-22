@@ -63,15 +63,23 @@ export async function runR1LandingStep(args: {
 
     return { ok: true, archetype };
   } catch (err: unknown) {
-    const reason = err instanceof Error ? err.message : String(err);
+    // Log the FULL error server-side for debugging — this never leaves
+    // the server. The user-facing reason is intentionally short.
+    const fullDetail = err instanceof Error ? err.message : String(err);
     console.warn(
       JSON.stringify({
         event: "landing_payload_generation_failed",
         workspace_id: workspaceId,
         business_name: facts.business_name,
-        detail: reason.slice(0, 500),
+        detail: fullDetail.slice(0, 2000),
+        stack: err instanceof Error ? err.stack?.slice(0, 1500) : undefined,
       }),
     );
-    return { ok: false, reason };
+    // Return a SHORT, user-safe reason — never leak SQL queries / stack
+    // traces to the API response (and from there to the UI).
+    return {
+      ok: false,
+      reason: "Couldn't generate the website right now.",
+    };
   }
 }
