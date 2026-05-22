@@ -19,6 +19,10 @@ import { getOperatorByokAnthropicKey } from "@/lib/web-onboarding/byok-resolver"
 import { markOperatorOnboarded } from "@/lib/web-onboarding/mark-operator-onboarded";
 import { linkWorkspaceToOperator } from "@/lib/workspace/link-workspace-to-operator";
 import { createAgent } from "@/lib/agents/store";
+// 2026-05-22 — auto-publish chatbot embed URL to organizations.settings.chatbot
+// so the public R landing renders the chatbot bubble without operator
+// intervention. Same pattern as v2/complete + create-from-url.
+import { setPublicChatbotEmbed } from "@/lib/agents/public-embed";
 import { seedClientContactInAgencyCrm } from "@/lib/workspace/seed-client-contact-in-agency";
 import { seedDefaultOutboundTriggers } from "@/lib/messaging/seed-default-triggers";
 import { extractBusinessFactsFromPaste } from "@/lib/web-onboarding/paste-extractor";
@@ -64,7 +68,7 @@ async function dispatchCreateFromPaste(text: unknown): Promise<Response> {
       markOperatorOnboarded,
       linkWorkspaceToOperator,
       createWebsiteChatbot: async ({ workspaceId, workspaceSlug }) => {
-        return createAgent({
+        const result = await createAgent({
           orgId: workspaceId,
           archetype: "website-chatbot",
           channel: "web_chat",
@@ -72,6 +76,26 @@ async function dispatchCreateFromPaste(text: unknown): Promise<Response> {
           faq: [],
           status: "test",
         });
+        // Auto-publish the embed so the chatbot widget appears on
+        // /w/[slug] without the operator needing to run
+        // embed_chatbot_on_workspace_landing manually. Non-fatal.
+        if (result.ok && result.embedUrl) {
+          try {
+            await setPublicChatbotEmbed(workspaceId, {
+              embedUrl: result.embedUrl,
+              agentId: result.agent.id,
+            });
+          } catch (err) {
+            console.warn(
+              JSON.stringify({
+                event: "auto_chatbot_embed_publish_failed",
+                workspace_id: workspaceId,
+                detail: err instanceof Error ? err.message : String(err),
+              }),
+            );
+          }
+        }
+        return result;
       },
       seedClientContactInAgencyCrm,
       seedDefaultOutboundTriggers,

@@ -36,6 +36,12 @@ import { linkWorkspaceToOperator } from "@/lib/workspace/link-workspace-to-opera
 // workspace creation so the Ready hub's "Test chatbot →" link points
 // at a real /agents/<id>/test page. Replicates the v2/complete pattern.
 import { createAgent } from "@/lib/agents/store";
+// 2026-05-22 — register the auto-created chatbot's embed URL on the
+// workspace's settings.chatbot blob so the public R landing route
+// renders the chatbot widget automatically. Without this the bubble
+// never appears on /w/[slug] even though the agent exists. Same
+// pattern v2/complete uses (see /api/v1/workspace/v2/complete/route.ts).
+import { setPublicChatbotEmbed } from "@/lib/agents/public-embed";
 // 2026-05-17 — Seed a contact row in the AGENCY's own CRM representing
 // the newly-created client SMB. SeldonFrame becomes the agency's
 // business OS too — every client they create lands as a contact in
@@ -107,7 +113,7 @@ async function dispatchCreateFromUrl(url: unknown): Promise<Response> {
       createWebsiteChatbot: async ({ workspaceId, workspaceSlug }) => {
         // Same shape v2/complete uses — status:'test' so the chatbot
         // responds on the test page immediately, name derived from slug.
-        return createAgent({
+        const result = await createAgent({
           orgId: workspaceId,
           archetype: "website-chatbot",
           channel: "web_chat",
@@ -115,6 +121,28 @@ async function dispatchCreateFromUrl(url: unknown): Promise<Response> {
           faq: [],
           status: "test",
         });
+        // 2026-05-22 — auto-publish the embed URL so the chatbot widget
+        // appears on the public R landing without operator intervention.
+        // Non-fatal: if this fails, the agent still exists; the bubble
+        // just doesn't show until embed_chatbot_on_workspace_landing is
+        // run manually.
+        if (result.ok && result.embedUrl) {
+          try {
+            await setPublicChatbotEmbed(workspaceId, {
+              embedUrl: result.embedUrl,
+              agentId: result.agent.id,
+            });
+          } catch (err) {
+            console.warn(
+              JSON.stringify({
+                event: "auto_chatbot_embed_publish_failed",
+                workspace_id: workspaceId,
+                detail: err instanceof Error ? err.message : String(err),
+              }),
+            );
+          }
+        }
+        return result;
       },
       seedClientContactInAgencyCrm,
       seedSoulWikiSourceUrl,
