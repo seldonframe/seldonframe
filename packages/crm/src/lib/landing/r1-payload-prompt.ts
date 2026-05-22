@@ -167,8 +167,17 @@ export function buildR1PayloadPrompt(
 
   // Pick the first fallback image query from the archetype registry.
   // This produces a deterministic high-quality Unsplash search URL.
+  // Only used when facts.photos is absent or empty.
   const imageQuery = archetype.fallbackImageQueries[0] ?? "professional worker";
   const unsplashSrc = `https://images.unsplash.com/photo-1581094794329-c8112a89af12?w=1200&q=70&auto=format&fit=crop&q=${encodeURIComponent(imageQuery)}`;
+
+  // Phase U enrichment: build optional context blocks for the prompt.
+  const hasPhotos =
+    Array.isArray(facts.photos) && facts.photos.length > 0;
+  const hasFaq =
+    Array.isArray(facts.faq) && facts.faq.length > 0;
+  const hasServicesDetailed =
+    Array.isArray(facts.services_detailed) && facts.services_detailed.length > 0;
 
   // Phone-first archetypes get a sticky bar.
   const PHONE_FIRST_ARCHETYPES: AestheticArchetypeId[] = [
@@ -227,7 +236,7 @@ hero:
   reviewRating: from facts.review_rating (number) or null if absent.
   reviewCount: from facts.review_count (number) or null if absent.
   emergencyService: from facts.emergency_service (boolean) or false.
-  heroImage: { src: "${unsplashSrc}", alt: "{businessName} professional at work" }
+  heroImage: ${hasPhotos ? `Use the hero photo from ENRICHMENT_PHOTOS below (section==="hero"). If none has section==="hero", use the first photo in the array. Set alt to "{businessName} professional at work" unless the extracted alt is more descriptive. NEVER use an Unsplash URL when ENRICHMENT_PHOTOS is provided.` : `{ src: "${unsplashSrc}", alt: "{businessName} professional at work" }`}
   heroOverlay (optional, include for trade verticals): { techName: "Lead tech name or role", techMeta: "X yrs · certification if known", callout: "price or guarantee" }
 
 services:
@@ -235,7 +244,7 @@ services:
   eyebrow: short (1-3 words). Bold-urgency: "What we fix". Soft-residential: "What we do". Clinical-trust: "Our services". Editorial-warm: "Our craft".
   heading: 6-10 words reflecting archetype voice.
   intro: 1-2 sentences in the archetype's voice about WHY they're good at this, not WHAT they do (save that for cards).
-  services: expand each entry in facts.services into { id: "s{n}", name, description }. Description = 1-2 sentences in the archetype's voice, emphasizing a specific benefit or differentiator. Use at least 3, max 8.
+  services: expand each entry in facts.services into { id: "s{n}", name, description }. ${hasServicesDetailed ? `ENRICHMENT_SERVICES_DETAILED is provided below — use each matching entry's description verbatim (paraphrasing lightly for archetype voice is fine, but preserve the factual content). For any service not in ENRICHMENT_SERVICES_DETAILED, synthesize a 1-2 sentence description in the archetype's voice.` : `Description = 1-2 sentences in the archetype's voice, emphasizing a specific benefit or differentiator.`} Use at least 3, max 8.
   cta: { label: "Call {phone}", href: "${telHref}", text: { title: short urgency hook, sub: 1 sentence reinforcer } } — always include.
 
 testimonials:
@@ -250,12 +259,12 @@ faq:
   eyebrow: "Quick answers" or equivalent.
   heading: "Frequently asked questions"
   intro (optional): 1 short sentence in the archetype's voice.
-  items: Generate 4-6 FAQ items { id: "f{n}", question, answer } based on the business type. Mandatory questions if applicable:
+  items: ${hasFaq ? `ENRICHMENT_FAQ is provided below — use the operator's actual FAQ verbatim in faq.items. Reword questions for clarity if needed, but preserve the answer content faithfully. Only synthesize new questions if the source has fewer than 4 FAQ items — add 1-2 conversion-focused ones to fill (pricing, response time, areas served). Assign sequential ids starting from f1.` : `Generate 4-6 FAQ items { id: "f{n}", question, answer } based on the business type. Mandatory questions if applicable:
     - If emergency_service is true: "How fast can you be here for an emergency?"
     - If certifications exist: "Are you licensed and insured?"
     - If same_day is true: "Do you offer same-day service?"
     - Always include: a question about hours, a question about service area or cities served, a question about pricing/quotes.
-    Answers must reflect the extracted facts (hours from weekly_hours, cities from service_area, etc.). Do NOT invent facts that aren't in the extracted data.
+    Answers must reflect the extracted facts (hours from weekly_hours, cities from service_area, etc.). Do NOT invent facts that aren't in the extracted data.`}
   cta (optional, include for urgency archetypes): { title: "Still have questions?", sub: "We pick up {X}/7.", label: "Call {phone}", href: "${telHref}" }
 
 footer:
@@ -284,6 +293,21 @@ ${includeSticky ? `sticky:
   smsHref: "sms:${phoneDigits.length === 10 ? `+1${phoneDigits}` : `+${phoneDigits}`}"
   bookHref: "/book"` : ""}
 
+${hasPhotos ? `ENRICHMENT_PHOTOS (real images scraped from the operator's site — prefer these over Unsplash):
+${JSON.stringify(facts.photos, null, 2)}
+
+Photo usage rules:
+- hero.heroImage: prefer the entry with section==="hero". If none, use the first entry.
+- services tiles: if services has 4+ items, assign photos with section==="services" to service tiles (one per tile, in order). Skip if fewer than 4 photos have section==="services".
+- testimonials: use photos with section==="testimonial" for testimonial avatars if needed.
+- NEVER invent an image URL. Only use URLs from ENRICHMENT_PHOTOS or the Unsplash fallback when no ENRICHMENT_PHOTOS are provided.
+` : ""}
+${hasServicesDetailed ? `ENRICHMENT_SERVICES_DETAILED (real service descriptions scraped from the operator's site):
+${JSON.stringify(facts.services_detailed, null, 2)}
+` : ""}
+${hasFaq ? `ENRICHMENT_FAQ (real FAQ items from the operator's site — use verbatim, preserve answer content):
+${JSON.stringify(facts.faq, null, 2)}
+` : ""}
 HARD RULES:
 1. Output EXACTLY ONE JSON object. Nothing before the opening {, nothing after the closing }.
 2. No markdown code fences. No triple-backticks. Raw JSON only.
