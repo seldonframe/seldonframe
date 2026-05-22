@@ -23,6 +23,10 @@ import { createAgent } from "@/lib/agents/store";
 // so the public R landing renders the chatbot bubble without operator
 // intervention. Same pattern as v2/complete + create-from-url.
 import { setPublicChatbotEmbed } from "@/lib/agents/public-embed";
+// 2026-05-22 — shared helper used by all three auto-creator routes;
+// pins status="live" on the auto-created chatbot. See the helper file
+// header for the bug story.
+import { autoCreateWebsiteChatbot } from "@/lib/agents/auto-create-website-chatbot";
 import { seedClientContactInAgencyCrm } from "@/lib/workspace/seed-client-contact-in-agency";
 import { seedDefaultOutboundTriggers } from "@/lib/messaging/seed-default-triggers";
 import { extractBusinessFactsFromPaste } from "@/lib/web-onboarding/paste-extractor";
@@ -68,32 +72,23 @@ async function dispatchCreateFromPaste(text: unknown): Promise<Response> {
       markOperatorOnboarded,
       linkWorkspaceToOperator,
       createWebsiteChatbot: async ({ workspaceId, workspaceSlug }) => {
-        const result = await createAgent({
-          orgId: workspaceId,
-          archetype: "website-chatbot",
-          channel: "web_chat",
-          name: `${workspaceSlug} Chatbot`,
-          faq: [],
-          status: "test",
+        // 2026-05-22 — delegated to the shared autoCreateWebsiteChatbot
+        // helper. Pins status="live" so the public turn route doesn't
+        // short-circuit booking + escalation tools for real customers.
+        // See lib/agents/auto-create-website-chatbot.ts for the bug
+        // story.
+        const result = await autoCreateWebsiteChatbot({
+          workspaceId,
+          workspaceSlug,
+          deps: { createAgent, setPublicChatbotEmbed },
         });
-        // Auto-publish the embed so the chatbot widget appears on
-        // /w/[slug] without the operator needing to run
-        // embed_chatbot_on_workspace_landing manually. Non-fatal.
-        if (result.ok && result.embedUrl) {
-          try {
-            await setPublicChatbotEmbed(workspaceId, {
-              embedUrl: result.embedUrl,
-              agentId: result.agent.id,
-            });
-          } catch (err) {
-            console.warn(
-              JSON.stringify({
-                event: "auto_chatbot_embed_publish_failed",
-                workspace_id: workspaceId,
-                detail: err instanceof Error ? err.message : String(err),
-              }),
-            );
-          }
+        if (result.ok && result.embedPublishFailed) {
+          console.warn(
+            JSON.stringify({
+              event: "auto_chatbot_embed_publish_failed",
+              workspace_id: workspaceId,
+            }),
+          );
         }
         return result;
       },

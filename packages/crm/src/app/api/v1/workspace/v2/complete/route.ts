@@ -122,13 +122,20 @@ export async function POST(request: Request) {
         archetype: "website-chatbot",
         channel: "web_chat",
         name: `${org?.slug ?? "Website"} Chatbot`,
-        // Empty FAQ scaffold — operator refines via update_website_chatbot
-        // before calling publish_agent.
+        // Empty FAQ scaffold — operator refines via update_website_chatbot.
         faq: [],
-        // v1.55.0 — TEST status so the chatbot responds on the preview page
-        // immediately. Operator promotes to LIVE via publish_agent when the
-        // client is ready to paste the embed on their real site.
-        status: "test",
+        // 2026-05-22 BUG FIX: was "test" — caused the public turn route
+        // to write `agent_conversations.status = "test"` for real public
+        // visitors, which short-circuited the booking + escalation tools
+        // (testMode plumbing in lib/agents/tools.ts:120 + 291) so no
+        // bookings/contacts/deals ever persisted. "live" makes the
+        // runtime treat real conversations as real. Operator-sandbox
+        // testMode is now gated on an explicit `x-test-mode: 1` header
+        // — see lib/agents/public-turn-status.ts.
+        // createAgent does NOT run the eval gate (only publishAgent
+        // does; see store.ts:285-303), so empty-FAQ + status="live"
+        // is a clean path.
+        status: "live",
       });
       if (agentResult.ok) {
         chatbotAgentId = agentResult.agent.id;
@@ -263,14 +270,19 @@ export async function POST(request: Request) {
       missing,
     },
 
-    // v1.55.0 — chatbot promoted to first-class object
+    // v1.55.0 — chatbot promoted to first-class object.
+    // 2026-05-22 — status now reflects the auto-created chatbot's
+    // actual DB status ("live" per the createAgent call above), not
+    // the stale "test" literal. Required for downstream MCP clients
+    // that branch on `chatbot.status` (e.g. finalize_workspace's
+    // "promote to live" CTA must not appear for an already-live agent).
     chatbot: chatbotAgentId
       ? {
           agent_id: chatbotAgentId,
           embed_url: chatbotEmbedUrl,
           embed_snippet: chatbotEmbedSnippet,
           preview_url: publicUrl,
-          status: "test" as const,
+          status: "live" as const,
         }
       : null,
 
