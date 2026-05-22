@@ -46,12 +46,14 @@ export function BuildPhase5Activation() {
     { name: "Brentwood HOA",     phone: "555·6612", status: "paying" },
   ];
 
+  // These are the ACTUAL outputs of createFullWorkspace + runR1LandingStep —
+  // no third-party integrations are wired during workspace creation.
   const integrations = [
-    { name: "Stripe",     sub: "payments",   c: "#635BFF" },
-    { name: "Gmail",      sub: "email",      c: "#EA4335" },
-    { name: "Twilio",     sub: "sms",        c: "#F22F46" },
-    { name: "Google Cal", sub: "calendar",   c: "#4285F4" },
-    { name: "QuickBooks", sub: "accounting", c: "#2CA01C" },
+    { name: "CRM",          sub: "demo data",  c: "#059669" },
+    { name: "Booking page", sub: "scheduler",  c: "#10b981" },
+    { name: "Intake form",  sub: "questions",  c: "#34d399" },
+    { name: "AI chatbot",   sub: "training",   c: "#6ee7b7" },
+    { name: "Landing page", sub: "publishing", c: "#a7f3d0" },
   ];
 
   return (
@@ -159,7 +161,7 @@ export function BuildPhase5Activation() {
         </div>
       </div>
 
-      {/* Right pane — integrations */}
+      {/* Right pane — workspace modules */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
         <div style={{
           fontFamily: "var(--font-geist-mono), JetBrains Mono, ui-monospace, monospace",
@@ -168,7 +170,7 @@ export function BuildPhase5Activation() {
           letterSpacing: "0.18em",
           marginBottom: 4,
         }}>
-          INTEGRATIONS
+          WORKSPACE MODULES
         </div>
         {integrations.map((it, i) => {
           const appear = 1.0 + i * 0.55;

@@ -122,7 +122,7 @@ export function Stage({
   // Responsive scaling — resize the 720×960 canvas to fit parent area.
   // Phase P2: measure BOTH parent dimensions and scale to the smaller of
   // the two ratios so the canvas fills the available space while
-  // preserving the 3:4 aspect ratio. Cap at 2.0× to keep typography
+  // preserving the 3:4 aspect ratio. Cap at 3.0× to keep typography
   // sensible on 4K monitors; floor at 0.4× for legibility.
   useEffect(() => {
     const el = wrapperRef.current;
@@ -132,12 +132,18 @@ export function Stage({
       const parent = el.parentElement;
       if (!parent) return;
       const parentW = parent.clientWidth;
-      const parentH = parent.clientHeight;
+      // Fall back to the full viewport height (minus the dashboard chrome) when
+      // the parent has no intrinsic height. This happens when <main> only sets
+      // minHeight (not height), so clientHeight returns 0 or the natural content
+      // height rather than the viewport-fill value.
+      const parentH = parent.clientHeight > 100
+        ? parent.clientHeight
+        : Math.max(0, window.innerHeight - 144);
       if (parentW <= 0) return;
       const widthScale = parentW / width;
       const heightScale = parentH > 0 ? parentH / height : Infinity;
       const fit = Math.min(widthScale, heightScale);
-      const s = Math.max(0.4, Math.min(2.0, fit));
+      const s = Math.max(0.4, Math.min(3.0, fit));
       setScale(s);
     };
 
