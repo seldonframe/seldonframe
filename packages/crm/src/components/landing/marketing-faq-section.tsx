@@ -43,7 +43,7 @@ const FAQS: readonly FaqItem[] = [
   {
     question: "How many client workspaces can I run?",
     answer:
-      "One on Free, three on Growth, unlimited on Scale. The workspace cap is the only thing tiers gate on count — features like custom domains, white-label, and AI agents stack on top per tier.",
+      "One on Free, three on Growth, unlimited on Scale. The workspace cap is the only thing tiers gate on count — features like custom domains and white-label stack on top per tier.",
   },
   {
     question: "Can I white-label this for my clients?",

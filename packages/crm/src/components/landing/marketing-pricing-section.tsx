@@ -70,7 +70,7 @@ const TIERS: readonly Tier[] = [
     name: "Scale",
     price: "$99",
     period: "/month",
-    tagline: "Unlimited clients. AI agents working leads while you sleep.",
+    tagline: "Unlimited clients. Full white-label on every workspace.",
     ctaLabel: "Upgrade to Scale",
     ctaHref: "/signup?plan=scale",
   },
@@ -96,11 +96,6 @@ const FEATURES: readonly FeatureRow[] = [
   },
   // Cut B flag: client_portal
   { label: "Branded client portal", values: { free: false, growth: true, scale: true } },
-  // Cut B flag: ai_agents
-  {
-    label: "AI agents: Speed-to-Lead, Win-Back, Reviews",
-    values: { free: false, growth: false, scale: true },
-  },
   // Cut B flag: white_label_portal
   {
     label: "Full white-label (your logo, your domain)",

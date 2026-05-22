@@ -56,7 +56,7 @@ export function LandingBentoSection() {
           <div className="flex-1 overflow-hidden rounded-md border border-zinc-800/60 bg-zinc-950/40">
             <img
               src="/marketing/agents.png"
-              alt="Automation engine — speed-to-lead and other agents firing in sequence on a form submission."
+              alt="Automation engine — agents firing in sequence on a form submission."
               className="h-full w-full object-cover"
               loading="lazy"
             />
