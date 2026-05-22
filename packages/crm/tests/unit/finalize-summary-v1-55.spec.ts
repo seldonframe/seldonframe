@@ -28,7 +28,7 @@ const baseSnapshot = {
     agent_id: "ag_abc123",
     embed_url: "https://app.seldonframe.com/api/v1/public/agent/ignitify-cooling-and-heating--default/embed.js",
     embed_snippet: '<script src="https://app.seldonframe.com/api/v1/public/agent/ignitify-cooling-and-heating--default/embed.js" async></script>',
-    status: "test",
+    status: "live",
     preview_url: "https://ignitify-cooling-and-heating.app.seldonframe.com",
   },
   ops_stack: {
