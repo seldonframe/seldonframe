@@ -65,9 +65,18 @@ export function MarketingNav() {
           aria-label="SeldonFrame — home"
           className="inline-flex items-center gap-2.5 text-base font-semibold leading-none tracking-tight text-zinc-100"
         >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
-            <rect x="3" y="3" width="18" height="18" rx="3" stroke="#14b8a6" strokeWidth="1.6" />
-            <path d="M8 12L11 15L16 9" stroke="#14b8a6" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+          {/* Real Seldon frame mark — square frame with 3 filled corners + 1 open corner.
+              Matches /public/brand/seldonframe-icon.svg (color tweaked from #1FAE85
+              to the marketing-site teal #14b8a6 for accent consistency). */}
+          <svg width="22" height="22" viewBox="0 0 100 100" fill="none" aria-hidden>
+            <line x1="22" y1="22" x2="58" y2="22" stroke="#14b8a6" strokeWidth="2.5" strokeLinecap="round" />
+            <line x1="78" y1="42" x2="78" y2="78" stroke="#14b8a6" strokeWidth="2.5" strokeLinecap="round" />
+            <line x1="78" y1="78" x2="22" y2="78" stroke="#14b8a6" strokeWidth="2.5" strokeLinecap="round" />
+            <line x1="22" y1="78" x2="22" y2="22" stroke="#14b8a6" strokeWidth="2.5" strokeLinecap="round" />
+            <circle cx="22" cy="22" r="6" fill="#14b8a6" />
+            <circle cx="78" cy="22" r="6" fill="none" stroke="#14b8a6" strokeWidth="2.5" />
+            <circle cx="78" cy="78" r="6" fill="#14b8a6" />
+            <circle cx="22" cy="78" r="6" fill="#14b8a6" />
           </svg>
           <span>
             Seldon<span className="font-medium text-zinc-500">Frame</span>
