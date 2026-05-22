@@ -21,6 +21,7 @@ import { Faq } from "@/components/landing-r1/sections/faq";
 import { Footer } from "@/components/landing-r1/sections/footer";
 import { EmergencyStrip } from "@/components/landing-r1/chrome/emergency-strip";
 import { StickyMobileBar } from "@/components/landing-r1/chrome/sticky-mobile-bar";
+import { Navbar } from "@/components/landing-r1/chrome/navbar";
 
 import { loadLandingPayload } from "@/lib/landing/r1-save";
 
@@ -101,6 +102,14 @@ export default async function WorkspaceLandingPage({ params }: PageProps) {
 
   return (
     <>
+      {/* bisect 2/4: Navbar wired to JSX. Other changes (rewriteR1Hrefs,
+          chatbot embed) deliberately deferred to later bisect steps. */}
+      <Navbar
+        archetype={payload.hero.archetype}
+        businessName={payload.hero.businessName}
+        phone={payload.footer.phone}
+        serviceAreas={payload.footer.serviceAreas}
+      />
       {payload.emergency && <EmergencyStrip {...payload.emergency} />}
       <Hero {...payload.hero} />
       <ServicesGrid {...payload.services} />

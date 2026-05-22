@@ -26,6 +26,7 @@ import { Faq } from "@/components/landing-r1/sections/faq";
 import { Footer } from "@/components/landing-r1/sections/footer";
 import { EmergencyStrip } from "@/components/landing-r1/chrome/emergency-strip";
 import { StickyMobileBar } from "@/components/landing-r1/chrome/sticky-mobile-bar";
+import { Navbar } from "@/components/landing-r1/chrome/navbar";
 
 type PageProps = {
   params: Promise<{ orgSlug: string; slug: string[] }>;
@@ -108,6 +109,13 @@ export default async function PublicSPage({ params }: PageProps) {
       const { payload } = r1Data;
       return (
         <>
+          {/* bisect 2/4: Navbar wired to JSX. Other changes deferred. */}
+          <Navbar
+            archetype={payload.hero.archetype}
+            businessName={payload.hero.businessName}
+            phone={payload.footer.phone}
+            serviceAreas={payload.footer.serviceAreas}
+          />
           {payload.emergency && <EmergencyStrip {...payload.emergency} />}
           <Hero {...payload.hero} />
           <ServicesGrid {...payload.services} />
