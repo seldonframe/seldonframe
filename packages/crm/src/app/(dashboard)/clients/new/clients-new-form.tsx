@@ -31,6 +31,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { UpgradeModal } from "@/components/billing/upgrade-modal";
+import { BuildAnimation } from "./build-animation";
 
 // Output of design:ux-copy (Task 8.2). Future Cuts can re-read this block
 // to stay consistent — do not edit ad-hoc.
@@ -402,104 +403,115 @@ export function ClientsNewForm({ source = "default" }: ClientsNewFormProps) {
         ) : null}
       </section>
 
-      {/* design-critique: dropped bg-card (page bg already card-tinted in
+      {/* Right column: animated build panel during submission; static
+          "What we'll build" preview when idle.
+          design-critique: dropped bg-card (page bg already card-tinted in
           light theme → invisible edge), added pt-8 to push the column below
           the hero so the eye reads left first. */}
-      <aside
-        aria-live="polite"
-        aria-label="Workspace build progress"
-        className="rounded-lg border p-4 md:mt-8"
-      >
-        {/* design-critique: heading + subhead so the at-rest state reads as
-            a deliberate status surface, not six greyed-out empty rows. */}
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          {COPY.asideHeading}
-        </p>
-        {/* a11y: solid text-muted-foreground (no /80) so the subhead stays
-            >=4.5:1 in light theme at this small size. */}
-        <p className="mt-1 text-xs text-muted-foreground">{COPY.asideSubhead}</p>
-        {/* The CURRENTLY-IN-FLIGHT step (first pending key while the SSE
-            stream is open + no error has fired). This makes the LIVE BUILD
-            checklist feel alive — without it, the user sees a static list
-            of checkmarks and faded rows during the 10-30 seconds of
-            workspace generation and thinks the page is dead. */}
-        <ol className="mt-4 space-y-3 text-sm">
-          {PROGRESS_KEYS.map((key) => {
-            const isDone = done[key];
-            const isActive =
-              submitted &&
-              !errorBanner &&
-              !needsByok &&
-              !upgradeInfo &&
-              !isDone &&
-              // The "first pending" key — earlier keys are all done, this
-              // is the one Anthropic is currently working on.
-              PROGRESS_KEYS.find((k) => !done[k]) === key;
-            return (
-              <li
-                key={key}
-                data-testid={`progress-${key}`}
-                data-state={isDone ? "done" : isActive ? "active" : "pending"}
-                className={
-                  isDone
-                    ? "flex items-center gap-2 text-foreground transition-colors"
-                    : isActive
-                      ? // Active step: foreground color + medium weight + a
-                        // subtle pulse on the ENTIRE row (not just the dot).
-                        // User feedback: dot alone is too subtle to read as
-                        // "this is alive" — text needs to breathe too.
-                        // Tailwind animate-pulse cycles opacity 1.0→0.5→1.0
-                        // at 2s. motion-reduce: drop the pulse (animate-none).
-                        "flex items-center gap-2 text-foreground font-medium transition-colors animate-pulse motion-reduce:animate-none"
-                      : "flex items-center gap-2 text-muted-foreground transition-colors"
-                }
-              >
-                {/* design-critique: fixed 20x20 slot prevents reflow when
-                    pending dot is swapped for the Check icon.
-                    a11y: state is exposed on the slot via aria-label so SR
-                    users get "Step done" / "Step active" / "Step pending"
-                    as a clean rotor entry. */}
-                <span
-                  className="flex h-5 w-5 shrink-0 items-center justify-center"
-                  role="img"
-                  aria-label={
-                    isDone
-                      ? "Step done"
-                      : isActive
-                        ? "Step in progress"
-                        : "Step pending"
-                  }
-                >
-                  {isDone ? (
-                    <Check className="size-4 text-primary" aria-hidden="true" />
-                  ) : isActive ? (
-                    // Pulsing primary dot — the layered ping ring is the
-                    // visible "this is alive" signal. motion-reduce: drop
-                    // the ring + just show the solid dot at full opacity.
-                    <span className="relative flex size-2.5">
-                      <span
-                        className="absolute inline-flex size-full animate-ping rounded-full bg-primary/60 motion-reduce:hidden"
-                        aria-hidden="true"
-                      />
-                      <span
-                        className="relative inline-flex size-2.5 rounded-full bg-primary"
-                        aria-hidden="true"
-                      />
-                    </span>
-                  ) : (
-                    // design-critique + a11y: bumped opacity from /40 to /60
-                    // to satisfy WCAG 2.1 non-text contrast.
+      <aside className="md:mt-8">
+        {submitted ? (
+          // Money-shot animation — 6 phases, ~10s each.
+          // BuildAnimation manages its own role="status" + aria-live.
+          <BuildAnimation active={submitted} />
+        ) : (
+          // Idle / pre-submit state: static checklist surface.
+          <div
+            aria-live="polite"
+            aria-label="Workspace build preview"
+            className="rounded-lg border p-4"
+          >
+            {/* design-critique: heading + subhead so the at-rest state reads
+                as a deliberate status surface, not six greyed-out empty rows. */}
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              {COPY.asideHeading}
+            </p>
+            {/* a11y: solid text-muted-foreground (no /80) so the subhead stays
+                >=4.5:1 in light theme at this small size. */}
+            <p className="mt-1 text-xs text-muted-foreground">{COPY.asideSubhead}</p>
+            {/* The CURRENTLY-IN-FLIGHT step (first pending key while the SSE
+                stream is open + no error has fired). This makes the LIVE BUILD
+                checklist feel alive — without it, the user sees a static list
+                of checkmarks and faded rows during the 10-30 seconds of
+                workspace generation and thinks the page is dead. */}
+            <ol className="mt-4 space-y-3 text-sm">
+              {PROGRESS_KEYS.map((key) => {
+                const isDone = done[key];
+                const isActive =
+                  submitted &&
+                  !errorBanner &&
+                  !needsByok &&
+                  !upgradeInfo &&
+                  !isDone &&
+                  // The "first pending" key — earlier keys are all done, this
+                  // is the one Anthropic is currently working on.
+                  PROGRESS_KEYS.find((k) => !done[k]) === key;
+                return (
+                  <li
+                    key={key}
+                    data-testid={`progress-${key}`}
+                    data-state={isDone ? "done" : isActive ? "active" : "pending"}
+                    className={
+                      isDone
+                        ? "flex items-center gap-2 text-foreground transition-colors"
+                        : isActive
+                          ? // Active step: foreground color + medium weight + a
+                            // subtle pulse on the ENTIRE row (not just the dot).
+                            // User feedback: dot alone is too subtle to read as
+                            // "this is alive" — text needs to breathe too.
+                            // Tailwind animate-pulse cycles opacity 1.0→0.5→1.0
+                            // at 2s. motion-reduce: drop the pulse (animate-none).
+                            "flex items-center gap-2 text-foreground font-medium transition-colors animate-pulse motion-reduce:animate-none"
+                          : "flex items-center gap-2 text-muted-foreground transition-colors"
+                    }
+                  >
+                    {/* design-critique: fixed 20x20 slot prevents reflow when
+                        pending dot is swapped for the Check icon.
+                        a11y: state is exposed on the slot via aria-label so SR
+                        users get "Step done" / "Step active" / "Step pending"
+                        as a clean rotor entry. */}
                     <span
-                      className="size-1.5 rounded-full bg-muted-foreground/60"
-                      aria-hidden="true"
-                    />
-                  )}
-                </span>
-                <span>{COPY.progress[key]}</span>
-              </li>
-            );
-          })}
-        </ol>
+                      className="flex h-5 w-5 shrink-0 items-center justify-center"
+                      role="img"
+                      aria-label={
+                        isDone
+                          ? "Step done"
+                          : isActive
+                            ? "Step in progress"
+                            : "Step pending"
+                      }
+                    >
+                      {isDone ? (
+                        <Check className="size-4 text-primary" aria-hidden="true" />
+                      ) : isActive ? (
+                        // Pulsing primary dot — the layered ping ring is the
+                        // visible "this is alive" signal. motion-reduce: drop
+                        // the ring + just show the solid dot at full opacity.
+                        <span className="relative flex size-2.5">
+                          <span
+                            className="absolute inline-flex size-full animate-ping rounded-full bg-primary/60 motion-reduce:hidden"
+                            aria-hidden="true"
+                          />
+                          <span
+                            className="relative inline-flex size-2.5 rounded-full bg-primary"
+                            aria-hidden="true"
+                          />
+                        </span>
+                      ) : (
+                        // design-critique + a11y: bumped opacity from /40 to /60
+                        // to satisfy WCAG 2.1 non-text contrast.
+                        <span
+                          className="size-1.5 rounded-full bg-muted-foreground/60"
+                          aria-hidden="true"
+                        />
+                      )}
+                    </span>
+                    <span>{COPY.progress[key]}</span>
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
+        )}
       </aside>
 
       {upgradeInfo ? (
