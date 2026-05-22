@@ -15,12 +15,10 @@ import type { LandingSection } from "@/lib/landing/types";
 // Phase R: R-framework components + payload loader.
 // When the workspace has an R-framework payload AND the home page is
 // requested, we return early with the R components — no old-landing
-// PageRenderer, no theme override, but WITH navbar + chatbot embed.
-// The fall-through keeps the OLD system intact for workspaces that have
-// no _r1 row (all existing production workspaces).
+// PageRenderer, no theme override, no chatbot embed (R has its own
+// sticky CTA). The fall-through keeps the OLD system intact for
+// workspaces that have no _r1 row (all existing production workspaces).
 import { loadLandingPayload } from "@/lib/landing/r1-save";
-import { rewriteR1Hrefs } from "@/lib/landing/r1-rewrite-hrefs";
-import { buildWorkspaceUrls } from "@/lib/billing/anonymous-workspace";
 import { Hero } from "@/components/landing-r1/sections/hero";
 import { ServicesGrid } from "@/components/landing-r1/sections/services-grid";
 import { Testimonials } from "@/components/landing-r1/sections/testimonials";
@@ -28,7 +26,6 @@ import { Faq } from "@/components/landing-r1/sections/faq";
 import { Footer } from "@/components/landing-r1/sections/footer";
 import { EmergencyStrip } from "@/components/landing-r1/chrome/emergency-strip";
 import { StickyMobileBar } from "@/components/landing-r1/chrome/sticky-mobile-bar";
-import { Navbar } from "@/components/landing-r1/chrome/navbar";
 
 type PageProps = {
   params: Promise<{ orgSlug: string; slug: string[] }>;
@@ -108,32 +105,9 @@ export default async function PublicSPage({ params }: PageProps) {
   if (isHomePage(pageSlug)) {
     const r1Data = await loadLandingPayload(orgSlug);
     if (r1Data) {
-      const { orgId } = r1Data;
-
-      // 1. Rewrite generic hrefs (/book, /intake) to workspace-scoped URLs.
-      const workspaceUrls = buildWorkspaceUrls(
-        orgSlug,
-        process.env.WORKSPACE_BASE_DOMAIN ?? "app.seldonframe.com",
-        orgId,
-      );
-      const payload = rewriteR1Hrefs(r1Data.payload, {
-        book: workspaceUrls.book,
-        intake: workspaceUrls.intake,
-        home: workspaceUrls.home,
-      });
-
-      // 2. Load chatbot embed for R pages (same pattern as the old-landing path).
-      const r1ChatbotEmbed = await getPublicChatbotEmbed(orgId);
-
+      const { payload } = r1Data;
       return (
         <>
-          {/* 3. Navbar + sections + chatbot embed. */}
-          <Navbar
-            archetype={payload.hero.archetype}
-            businessName={payload.hero.businessName}
-            phone={payload.footer.phone}
-            serviceAreas={payload.footer.serviceAreas}
-          />
           {payload.emergency && <EmergencyStrip {...payload.emergency} />}
           <Hero {...payload.hero} />
           <ServicesGrid {...payload.services} />
@@ -141,7 +115,6 @@ export default async function PublicSPage({ params }: PageProps) {
           <Faq {...payload.faq} />
           <Footer {...payload.footer} />
           {payload.sticky && <StickyMobileBar {...payload.sticky} />}
-          {r1ChatbotEmbed && <ChatbotEmbedScript embedUrl={r1ChatbotEmbed.embedUrl} />}
         </>
       );
     }
