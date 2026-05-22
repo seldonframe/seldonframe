@@ -172,7 +172,10 @@ function initials(name: string): string {
 
 function TestimonialsStyles() {
   return (
-    <style jsx>{`
+    // global: see faq.tsx for the rationale — styled-jsx scope is per-function,
+    // so styles in this dedicated *Styles helper would otherwise apply to
+    // nothing.
+    <style jsx global>{`
       .sf-testimonials {
         background: var(--surface);
         color: var(--text);

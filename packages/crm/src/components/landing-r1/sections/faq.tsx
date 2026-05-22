@@ -128,7 +128,11 @@ export function Faq({
 
 function FaqStyles() {
   return (
-    <style jsx>{`
+    // global: styled-jsx scopes by function. Styles in this dedicated
+    // *Styles helper would otherwise apply to nothing (the function only
+    // renders a <style> tag). Global applies them to the section markup
+    // rendered by Faq() above.
+    <style jsx global>{`
       .sf-faq {
         background: var(--bg);
         color: var(--text);

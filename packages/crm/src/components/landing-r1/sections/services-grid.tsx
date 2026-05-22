@@ -161,7 +161,10 @@ function cardClassForIndex(i: number, total: number): string | undefined {
 // ── Styles ─────────────────────────────────────────────────────────────────
 function ServicesStyles() {
   return (
-    <style jsx>{`
+    // global: see faq.tsx for the rationale — styled-jsx scope is per-function,
+    // so styles in this dedicated *Styles helper would otherwise apply to
+    // nothing.
+    <style jsx global>{`
       .sf-services {
         background: var(--bg);
         color: var(--text);

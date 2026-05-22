@@ -360,10 +360,15 @@ function splitTagline(tagline: string): { head: string; tail?: string } {
   return { head: match[1], tail: match[2] };
 }
 
-// ── Styles (scoped via styled-jsx) ─────────────────────────────────────────
+// ── Styles (GLOBAL styled-jsx — see comment below) ─────────────────────────
 function HeroStyles() {
   return (
-    <style jsx>{`
+    // global: styled-jsx scope is per-function. The styles below target
+    // elements rendered by HeroSplit / HeroLeftAsymmetric / HeroCinematic
+    // (sibling functions), so non-global styles silently apply to nothing.
+    // Class names are sf-/hero-/cinematic-/photo- prefixed to avoid
+    // collisions with other components.
+    <style jsx global>{`
       .sf-hero { background: var(--bg); border-bottom: 1px solid var(--border); color: var(--text); font-family: var(--font-body); }
 
       .container {
