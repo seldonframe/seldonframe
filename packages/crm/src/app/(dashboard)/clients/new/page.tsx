@@ -7,6 +7,13 @@
 //
 // 2026-05-19 — Phase 8: accept ?source=proposal so the proposal acceptance
 // flow can link here in compact mode (suppresses agency onboarding chrome).
+//
+// 2026-05-22 — Accept ?url=, ?biz=, ?intent= so the marketing prompt
+// signal survives the signup → magic-link → /signup/billing → here
+// round trip. ?intent=build (in combination with ?url= or ?biz=) triggers
+// auto-submit on mount so the build animation kicks off without a
+// second click — preserving the marketing-site mental model "type URL,
+// build starts immediately".
 
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
@@ -17,14 +24,37 @@ export const dynamic = "force-dynamic";
 export default async function ClientsNewPage({
   searchParams,
 }: {
-  searchParams: Promise<{ source?: string }>;
+  searchParams: Promise<{
+    source?: string;
+    url?: string;
+    biz?: string;
+    intent?: string;
+  }>;
 }) {
   const session = await auth();
   if (!session?.user?.id) {
     redirect("/login?callbackUrl=/clients/new");
   }
 
-  const { source } = await searchParams;
+  const { source, url, biz, intent } = await searchParams;
+
+  // Trim + sanitize the inbound prefill values. We don't validate the
+  // URL shape here — IdleScene's <UrlInput type="url"> handles client-
+  // side validation, and the SSE create-from-url endpoint validates
+  // again server-side. Length cap mirrors buildSignupNextPath() so a
+  // hostile redirect can't fingerprint /clients/new with megabyte
+  // query strings.
+  const prefillUrl =
+    typeof url === "string" && url.trim().length > 0
+      ? url.trim().slice(0, 1024)
+      : null;
+  const prefillBiz =
+    typeof biz === "string" && biz.trim().length > 0
+      ? biz.trim().slice(0, 1024)
+      : null;
+  // Only auto-submit when ?intent=build is set AND a prefill payload
+  // exists. Bare ?intent=build with no url/biz would auto-submit nothing.
+  const autoSubmit = intent === "build" && (prefillUrl !== null || prefillBiz !== null);
 
   return (
     // Phase P2: full-bleed main so the IdleScene canvas can fill the entire
@@ -39,7 +69,12 @@ export default async function ClientsNewPage({
       className="w-full"
       style={{ height: "calc(100vh - 9rem)", minHeight: "calc(100vh - 9rem)" }}
     >
-      <ClientsNewForm source={source ?? "default"} />
+      <ClientsNewForm
+        source={source ?? "default"}
+        prefillUrl={prefillUrl}
+        prefillBiz={prefillBiz}
+        autoSubmit={autoSubmit}
+      />
     </main>
   );
 }

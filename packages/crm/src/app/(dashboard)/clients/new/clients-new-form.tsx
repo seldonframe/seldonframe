@@ -62,14 +62,28 @@ type ClientsNewFormProps = {
   // client workspace in 60 seconds." — acceptable for proposal activations too.
   // No special treatment for proposal source in Phase P; noted in report.
   source?: string;
+  // 2026-05-22 — Prompt forwarding from the marketing hero. The signup
+  // flow embeds these into /signup → /signup/billing → /clients/new so
+  // the visitor's original URL or business description survives the
+  // round trip. autoSubmit fires the SSE build on mount when intent=build.
+  prefillUrl?: string | null;
+  prefillBiz?: string | null;
+  autoSubmit?: boolean;
 };
 
-export function ClientsNewForm({ source = "default" }: ClientsNewFormProps) {
+export function ClientsNewForm({
+  source = "default",
+  prefillUrl = null,
+  prefillBiz = null,
+  autoSubmit = false,
+}: ClientsNewFormProps) {
   // source is currently unused post-P but kept for future skip-link suppression
   void source;
 
-  const [url, setUrl] = useState("");
-  const [bizInfo, setBizInfo] = useState("");
+  // Seed the inputs with the marketing-prompt prefill values. The
+  // controlled-input contract is preserved by defaulting to "".
+  const [url, setUrl] = useState(prefillUrl ?? "");
+  const [bizInfo, setBizInfo] = useState(prefillBiz ?? "");
   const [submitted, setSubmitted] = useState(false);
   const [keepBuildMounted, setKeepBuildMounted] = useState(false);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
@@ -79,7 +93,10 @@ export function ClientsNewForm({ source = "default" }: ClientsNewFormProps) {
   const [upgradeInfo, setUpgradeInfo] = useState<LimitInfo | null>(null);
   const esRef = useRef<EventSource | null>(null);
   // Tracks which mode was last submitted so BYOK retry re-submits the right stream.
-  const lastModeRef = useRef<"url" | "biz">("url");
+  const lastModeRef = useRef<"url" | "biz">(prefillBiz && !prefillUrl ? "biz" : "url");
+  // Guard so the autoSubmit effect only fires once per mount even if
+  // strict-mode double-invokes the effect.
+  const autoSubmittedRef = useRef(false);
 
   // a11y: stable ids
   const errorBannerId = useId();
@@ -218,6 +235,32 @@ export function ClientsNewForm({ source = "default" }: ClientsNewFormProps) {
 
   useEffect(() => () => esRef.current?.close(), []);
 
+  // 2026-05-22 — Auto-submit on mount when the visitor arrived from the
+  // marketing prompt (?intent=build with ?url= or ?biz=). The mental
+  // model is "type URL on marketing site → build starts" — making the
+  // visitor click a second time on /clients/new would break that
+  // promise. We gate on prefill values being non-empty so a bare
+  // /clients/new?intent=build never auto-fires.
+  //
+  // The ref guard is necessary for React Strict Mode's double-effect
+  // invocation: without it the SSE stream would open twice, the second
+  // one would lose the race, and we'd see a console warning + a
+  // dangling EventSource.
+  useEffect(() => {
+    if (!autoSubmit || autoSubmittedRef.current) return;
+    if (prefillUrl) {
+      autoSubmittedRef.current = true;
+      startStream(prefillUrl);
+    } else if (prefillBiz) {
+      autoSubmittedRef.current = true;
+      startBizInfoStream(prefillBiz);
+    }
+    // Intentionally bare deps — we want this to run once at mount.
+    // startStream + startBizInfoStream are stable closures defined
+    // above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSubmit, prefillUrl, prefillBiz]);
+
   async function saveByokAndRetry() {
     const key = byokKey.trim();
     if (!key) return;
@@ -344,6 +387,10 @@ export function ClientsNewForm({ source = "default" }: ClientsNewFormProps) {
             onBizInfoSubmit={() => startBizInfoStream(bizInfo)}
             bizInfoDisabled={bizInfo.trim().length < 20 || submitted}
             errorOverlay={errorOverlayNode}
+            // 2026-05-22 — Default to the biz tab when the marketing-prompt
+            // forwarder passed ?biz= but no ?url=, so the visitor's
+            // textarea is what they see first.
+            initialTab={prefillBiz && !prefillUrl ? "biz" : "url"}
           />
         </div>
 

@@ -32,6 +32,13 @@
 //     fall back to the existing 1-click Free Server Action (no card
 //     capture) — see pricing-picker.tsx.
 
+// 2026-05-22 — Reused by /signup/billing (step 2 of the new two-step
+// card-at-signup flow). The provisionSetupIntent helper is identical
+// for both surfaces; attachPaymentMethodToUser is a new helper that
+// lets the post-confirm Server Action record `users.stripe_payment_method_id`
+// so future subscription kickoff doesn't need to re-list customer
+// payment methods.
+
 import { eq } from "drizzle-orm";
 import { getStripeClient } from "@seldonframe/payments";
 
@@ -187,4 +194,104 @@ export async function provisionSetupIntent(userId: string): Promise<SetupIntentR
       customerId: customer.id,
     },
   };
+}
+
+/**
+ * Repository seam for attachPaymentMethodToUser. Tests inject a fake;
+ * production passes the default implementation (defined below) which
+ * uses the real `db` + `users` Drizzle bindings.
+ *
+ * Kept narrow on purpose — only the two operations the helper actually
+ * needs. A broader `db` seam would force every test to model the full
+ * Drizzle fluent API just to cover one helper.
+ */
+export type UsersRepo = {
+  getUserById(userId: string): Promise<{ id: string; stripeCustomerId: string | null } | null>;
+  setStripePaymentMethodId(userId: string, paymentMethodId: string): Promise<void>;
+};
+
+const defaultUsersRepo: UsersRepo = {
+  async getUserById(userId: string) {
+    const [row] = await db
+      .select({ id: users.id, stripeCustomerId: users.stripeCustomerId })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    return row ?? null;
+  },
+  async setStripePaymentMethodId(userId: string, paymentMethodId: string) {
+    await db
+      .update(users)
+      .set({ stripePaymentMethodId: paymentMethodId, updatedAt: new Date() })
+      .where(eq(users.id, userId));
+  },
+};
+
+export type AttachResult =
+  | { ok: true }
+  | { ok: false; reason: "not_configured" | "no_user" | "stripe_error"; detail?: string };
+
+/**
+ * Attach a PaymentMethod to the user record. Called by /signup/billing
+ * after stripe.confirmSetup() succeeds: we know the PaymentMethod id
+ * from the SetupIntent's `payment_method` field, and we want to persist
+ * it so future subscription kickoffs (first-workspace-create OR explicit
+ * tier upgrade) can use it without re-listing customer payment methods.
+ *
+ * Also sets the PaymentMethod as the customer's
+ * `invoice_settings.default_payment_method` in Stripe so any
+ * `subscription.create` we run later picks it up automatically.
+ *
+ * Idempotent: calling it twice with the same id is a no-op at the DB
+ * layer (UPDATE) and Stripe-side (setting the same default twice).
+ */
+/**
+ * Narrow Stripe seam — exactly the surface attachPaymentMethodToUser
+ * touches. Defined here so tests can pass a minimal stub without
+ * implementing the full `Stripe.CustomersResource` interface.
+ */
+export type AttachPaymentMethodStripe = {
+  customers: {
+    update(
+      id: string,
+      params: { invoice_settings: { default_payment_method: string } },
+    ): Promise<unknown>;
+  };
+};
+
+export async function attachPaymentMethodToUser(args: {
+  userId: string;
+  paymentMethodId: string;
+  /** Optional Stripe client override — tests inject a fake. Production
+   *  passes nothing and the helper resolves the singleton via
+   *  getStripeClient(). */
+  stripe?: AttachPaymentMethodStripe;
+  /** Optional repository override — tests inject a fake. */
+  repo?: UsersRepo;
+}): Promise<AttachResult> {
+  const repo = args.repo ?? defaultUsersRepo;
+  const stripe = args.stripe ?? getStripeClient();
+  if (!stripe) return { ok: false, reason: "not_configured" };
+
+  const dbUser = await repo.getUserById(args.userId);
+  if (!dbUser) return { ok: false, reason: "no_user" };
+  if (!dbUser.stripeCustomerId) {
+    return { ok: false, reason: "stripe_error", detail: "user has no stripe_customer_id" };
+  }
+
+  try {
+    await stripe.customers.update(dbUser.stripeCustomerId, {
+      invoice_settings: { default_payment_method: args.paymentMethodId },
+    });
+  } catch (err) {
+    return {
+      ok: false,
+      reason: "stripe_error",
+      detail: err instanceof Error ? err.message : "Failed to set default payment method",
+    };
+  }
+
+  await repo.setStripePaymentMethodId(args.userId, args.paymentMethodId);
+
+  return { ok: true };
 }
