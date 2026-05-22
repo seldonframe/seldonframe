@@ -22,10 +22,12 @@ import { Footer } from "@/components/landing-r1/sections/footer";
 import { EmergencyStrip } from "@/components/landing-r1/chrome/emergency-strip";
 import { StickyMobileBar } from "@/components/landing-r1/chrome/sticky-mobile-bar";
 import { Navbar } from "@/components/landing-r1/chrome/navbar";
+import { ChatbotEmbedScript } from "@/components/landing/chatbot-script";
 
 import { loadLandingPayload } from "@/lib/landing/r1-save";
 import { rewriteR1Hrefs } from "@/lib/landing/r1-rewrite-hrefs";
 import { buildWorkspaceUrls } from "@/lib/billing/anonymous-workspace";
+import { getPublicChatbotEmbed } from "@/lib/agents/public-embed";
 
 type PageProps = {
   params: Promise<{ slug: string }>;
@@ -114,9 +116,12 @@ export default async function WorkspaceLandingPage({ params }: PageProps) {
     home: workspaceUrls.home,
   });
 
+  // bisect 4/4: chatbot embed.
+  const chatbotEmbed = await getPublicChatbotEmbed(orgId);
+
   return (
     <>
-      {/* bisect 3/4: Navbar + rewriteR1Hrefs wired. Chatbot embed deferred to step 4. */}
+      {/* bisect 4/4: all three pieces wired. */}
       <Navbar
         archetype={payload.hero.archetype}
         businessName={payload.hero.businessName}
@@ -130,6 +135,7 @@ export default async function WorkspaceLandingPage({ params }: PageProps) {
       <Faq {...payload.faq} />
       <Footer {...payload.footer} />
       {payload.sticky && <StickyMobileBar {...payload.sticky} />}
+      {chatbotEmbed && <ChatbotEmbedScript embedUrl={chatbotEmbed.embedUrl} />}
     </>
   );
 }
