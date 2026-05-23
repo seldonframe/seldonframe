@@ -340,7 +340,19 @@ export async function runCreateFromUrl(input: RunInput): Promise<RunResult> {
       //    confirmation that every part of the workspace is ready, instead
       //    of the previous behaviour where the UI pulsed on "Shaping the
       //    personality" forever while we silently completed the build.
-      sse.emit("soul_built", { workspaceId: result.workspace_id });
+      // 2026-05-22 — soul_built now carries the real business name +
+      // archetype so the build-animation v2 client-side crossfade can
+      // swap from Stage-A inferred values (URL → guessed name + vertical)
+      // to Stage-B real values (extracted name + classified archetype)
+      // with a 180ms name fade + 1600ms confirmation flash. Without
+      // these fields the animation only fires the flash but leaves the
+      // inferred name on screen. See build-animation/build-stage-v2.tsx
+      // (parseSoulPayload + applySoulBuilt) for the consumer contract.
+      sse.emit("soul_built", {
+        workspaceId: result.workspace_id,
+        name: facts.business_name,
+        archetype: result.configured?.theme.aestheticArchetype ?? null,
+      });
       sse.emit("chatbot_built", { workspaceId: result.workspace_id });
       sse.emit("demo_seeded", { workspaceId: result.workspace_id });
 
