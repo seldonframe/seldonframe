@@ -215,8 +215,16 @@ export async function runCreateFromPaste(input: RunPasteInput): Promise<RunPaste
         }
       }
 
-      // 8. Emit granular progress events (fast succession — createFullWorkspace is atomic)
-      sse.emit("soul_built", { workspaceId: result.workspace_id });
+      // 8. Emit granular progress events (fast succession — createFullWorkspace is atomic).
+      //    2026-05-22 — soul_built carries the real business name + archetype so the
+      //    build-animation v2 can crossfade Stage-A inferred values → Stage-B real
+      //    values. Same contract as run-create-from-url.ts; see that file's header
+      //    for the consumer-side detail.
+      sse.emit("soul_built", {
+        workspaceId: result.workspace_id,
+        name: facts.business_name,
+        archetype: result.configured?.theme.aestheticArchetype ?? null,
+      });
       sse.emit("chatbot_built", { workspaceId: result.workspace_id });
       sse.emit("demo_seeded", { workspaceId: result.workspace_id });
 
