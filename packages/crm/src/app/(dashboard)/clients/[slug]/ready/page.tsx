@@ -345,6 +345,27 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
           },
         ]
       : []),
+    // 2026-05-23 — Production-setup quick link. After dogfooding, operators
+    // consistently asked "how do I swap the SeldonFrame subdomain for the
+    // client's own domain?" — the answer (Settings → Domain) was buried.
+    // Surfacing it here as a deliverable-grid tile keeps the Ready page as
+    // the single source of truth for everything an operator does after the
+    // workspace is built. Operator-level setting (lives at /settings/domain,
+    // not /switch-workspace) — that's why the public href is null and the
+    // admin button links straight into agency settings rather than going
+    // through sw().
+    {
+      icon: "🔗",
+      audience: "deliverable" as const,
+      label: "Custom domain",
+      title: "Connect a custom domain",
+      description:
+        "Replace the SeldonFrame subdomain with your client's own domain (e.g. app.theirbrand.com). DNS-verified in one screen; the public surfaces above re-publish automatically.",
+      publicHref: null,
+      publicLabel: "",
+      adminHref: "/settings/domain",
+      adminLabel: "Connect a custom domain →",
+    },
   ];
 
   // Audience chip styling. The two foundational cards (operator dashboard

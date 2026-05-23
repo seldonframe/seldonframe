@@ -21,6 +21,14 @@ import { listBlockNames } from "@/lib/page-blocks/registry";
 import { setPublicChatbotEmbed } from "@/lib/agents/public-embed";
 import { seedChatbotPreviewLandingForOrg } from "@/lib/workspace/seed-chatbot-preview-landing";
 import { seedDemoPortalContentForOrg } from "@/lib/workspace/seed-demo-portal";
+// 2026-05-23 — Apply archetype-driven theme tokens before the chatbot
+// agent activates, so the public chatbot embed (embed.js) reads the
+// right palette/font on its very first request. Without this, every
+// v2-flow workspace inherited the legacy DB-default teal + Inter
+// (drizzle/0010_organization_theme_jsonb.sql) because v1.55.0 removed
+// enhanceLandingForWorkspace from the default creation path and nothing
+// took over the theme write. See lib/workspace/apply-archetype-theme.ts.
+import { applyArchetypeThemeToOrg } from "@/lib/workspace/apply-archetype-theme";
 
 type Body = {
   workspace_id?: unknown;
@@ -79,6 +87,27 @@ export async function POST(request: Request) {
     },
     { request, orgId: workspaceId, status: 200 },
   );
+
+  // 2026-05-23 — Apply archetype-driven theme tokens FIRST (before the
+  // chatbot embed activates). v1.55.0 removed enhance-blocks from the
+  // default creation path, so `organizations.theme.aestheticArchetype`
+  // was left null and `primaryColor` defaulted to the legacy teal
+  // (#14b8a6) — making every public chatbot bubble render in
+  // SeldonFrame teal regardless of the workspace's vertical. This call
+  // classifies the archetype from soul + writes the right palette so
+  // the embed.js route reads correct tokens on its first request.
+  //
+  // Soft-fail: applyArchetypeThemeToOrg never throws. Worst case the
+  // theme stays at the legacy default and the chatbot bubble shows
+  // teal — same as before this fix, so no regression.
+  const archetypeResult = await applyArchetypeThemeToOrg(workspaceId);
+  if (!archetypeResult.ok) {
+    logEvent(
+      "v2_archetype_theme_apply_failed",
+      { reason: archetypeResult.reason ?? "unknown" },
+      { request, orgId: workspaceId, severity: "warn" },
+    );
+  }
 
   // 2026-05-15 — Auto-create a website-chatbot scaffold so finalize_workspace's
   // operator summary can give the agency the embed snippet immediately.

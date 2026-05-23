@@ -593,19 +593,29 @@ function IdleStyles() {
         opacity: 0.6;
       }
 
-      /* HERO column */
+      /* HERO column.
+         2026-05-23 — Bug fix: when the hero content is taller than the
+         viewport-minus-chrome (e.g. shorter laptop screens, browsers with
+         the dev tools docked), justify-content:center combined with the
+         .sf-idle wrapper's overflow:hidden clipped the top of the
+         "Spin up a client workspace…" headline against the dashboard
+         chrome's bottom edge. Switched to justify-content:flex-start and
+         bumped the top padding so the headline always clears the chrome
+         with ~24-32px of breathing room. The content still feels
+         centered on tall viewports because the bottom of the column has
+         the typewriter chips + skip link absorbing any remaining space. */
       .sf-idle-hero {
         position: relative;
         z-index: 1;
-        padding: 56px 32px;
+        padding: 96px 32px 56px;
         display: flex;
         flex-direction: column;
         gap: 32px;
-        justify-content: center;
+        justify-content: flex-start;
         min-height: 0;
       }
-      @media (min-width: 768px) { .sf-idle-hero { padding: 80px 56px; gap: 36px; } }
-      @media (min-width: 1280px) { .sf-idle-hero { padding: 96px 88px; gap: 40px; } }
+      @media (min-width: 768px) { .sf-idle-hero { padding: 112px 56px 80px; gap: 36px; } }
+      @media (min-width: 1280px) { .sf-idle-hero { padding: 120px 88px 96px; gap: 40px; } }
 
       .sf-idle-kicker {
         display: inline-flex;
@@ -879,11 +889,13 @@ function IdleStyles() {
         padding-bottom: 1px;
       }
 
-      /* RIGHT aside — LIVE BUILD */
+      /* RIGHT aside — LIVE BUILD.
+         Top padding mirrors .sf-idle-hero so the "Live build" tag aligns
+         with the hero kicker visually. */
       .sf-idle-aside {
         position: relative;
         z-index: 1;
-        padding: 56px 32px;
+        padding: 96px 32px 56px;
         display: flex;
         flex-direction: column;
         gap: 24px;
@@ -900,7 +912,7 @@ function IdleStyles() {
         }
       }
       @media (min-width: 1080px) {
-        .sf-idle-aside { padding: 96px 44px; }
+        .sf-idle-aside { padding: 120px 44px 96px; }
       }
 
       .sf-aside-head {
