@@ -13,6 +13,11 @@
 //
 // This page:
 //   - Auth-gates. No session → bounce to /signup.
+//   - If the signed-in user already has a card on file
+//     (`users.stripe_payment_method_id` set), skips this step entirely
+//     and redirects to `next` — this is "card already on file, skip
+//     step 2/2 of signup". Added 2026-05-23 to fix the dogfood case
+//     where an existing test user was forced through billing again.
 //   - Provisions a Stripe SetupIntent (creates customer if needed,
 //     writes back users.stripe_customer_id).
 //   - Renders <SignupCardForm> with the Stripe Elements PaymentElement.
@@ -27,8 +32,11 @@
 
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { eq } from "drizzle-orm";
 
 import { auth } from "@/auth";
+import { db } from "@/db";
+import { users } from "@/db/schema";
 import { provisionSetupIntent } from "@/lib/billing/setup-intent";
 import { sanitizeNextPath } from "@/lib/auth/signup-redirect";
 
@@ -51,6 +59,25 @@ export default async function SignupBillingPage({
 
   const params = await searchParams;
   const next = sanitizeNextPath(params.next);
+
+  // 2026-05-23 — Card-already-on-file skip. An existing user logging
+  // back in via magic link shouldn't have to enter their card a
+  // second time. This is the user's `stripe_payment_method_id` from
+  // the prior signup; if it's set, we already have a default
+  // PaymentMethod on the Stripe customer and can skip step 2/2 of
+  // signup entirely.
+  //
+  // Done server-side BEFORE provisionSetupIntent to save the Stripe
+  // round trip on the skip path and to avoid creating an unused
+  // SetupIntent on every existing-user login.
+  const [existingUser] = await db
+    .select({ stripePaymentMethodId: users.stripePaymentMethodId })
+    .from(users)
+    .where(eq(users.id, session.user.id))
+    .limit(1);
+  if (existingUser?.stripePaymentMethodId) {
+    redirect(next);
+  }
 
   // Provision the SetupIntent server-side so the client mounts with
   // clientSecret in hand — no extra round trip on first paint.

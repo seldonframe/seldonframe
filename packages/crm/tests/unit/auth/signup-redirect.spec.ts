@@ -5,6 +5,14 @@
 // lands on after the magic link + card collection complete, so a
 // regression here would silently drop the user's ?url= / ?biz= /
 // ?intent= signal — the exact bug this change set is meant to fix.
+//
+// 2026-05-23 — Updated for the localStorage carrier switch. `biz` no
+// longer travels through the URL chain (it lives in
+// localStorage('sf-workspace-seed') instead), so the previous "biz +
+// intent" assertions are dropped and replaced with assertions that
+// `biz` is silently ignored AND that `intent=build` survives even
+// without a `url` in the URL (the marketing hero in BIZ mode forwards
+// `?intent=build` with no biz query param).
 
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
@@ -27,24 +35,30 @@ describe("buildSignupNextPath", () => {
     );
   });
 
-  test("with biz + intent=build produces /clients/new?biz=...&intent=build", () => {
+  test("biz is silently dropped from the URL (carried via localStorage instead)", () => {
+    // Long paste payloads explode the URL chain through Stripe's
+    // 2048-char return_url cap. The marketing hero now writes biz
+    // to localStorage; this helper must not put it in the URL.
     const out = buildSignupNextPath({
       biz: "A boutique law firm in Austin",
       intent: "build",
     });
-    assert.equal(
-      out,
-      "/clients/new?biz=A+boutique+law+firm+in+Austin&intent=build",
-    );
+    assert.doesNotMatch(out, /biz=/);
+    // intent=build still survives — /clients/new auto-submits from
+    // the localStorage seed once it hydrates on mount.
+    assert.match(out, /intent=build/);
   });
 
-  test("intent=build is dropped when no url/biz is present", () => {
-    // Bare intent without a payload would auto-submit nothing — drop it.
+  test("intent=build survives with no payload (localStorage will provide it)", () => {
+    // Previously this dropped intent. After the bug fix, intent=build
+    // must propagate through so /clients/new can auto-submit from the
+    // localStorage seed. If localStorage is empty, the form's mount
+    // effect no-ops.
     const out = buildSignupNextPath({ intent: "build" });
-    assert.equal(out, "/clients/new");
+    assert.equal(out, "/clients/new?intent=build");
   });
 
-  test("prefers url over biz when both are passed", () => {
+  test("prefers url when both url + biz passed (biz is dropped anyway)", () => {
     const out = buildSignupNextPath({
       url: "https://example.com",
       biz: "redundant",
@@ -58,6 +72,16 @@ describe("buildSignupNextPath", () => {
     assert.equal(
       buildSignupNextPath({ url: "", biz: "", intent: "" }),
       "/clients/new",
+    );
+  });
+
+  test("non-build intent values are dropped", () => {
+    // Only intent=build is a known signal; anything else should be
+    // discarded so a hostile ?intent= can't trigger arbitrary client
+    // behaviour.
+    assert.equal(
+      buildSignupNextPath({ url: "https://example.com", intent: "drop-tables" }),
+      "/clients/new?url=https%3A%2F%2Fexample.com",
     );
   });
 
@@ -75,6 +99,17 @@ describe("buildSignupNextPath", () => {
     // The URL is encoded so we can't strict-compare; just ensure the
     // output is bounded.
     assert.ok(out.length < 1300, `expected bounded length, got ${out.length}`);
+  });
+
+  test("URL chain stays well under Stripe's 2048-char return_url cap even with huge biz", () => {
+    // The whole point of the localStorage switch: a 4KB paste must
+    // not produce a redirect that breaks Stripe.confirmSetupIntent.
+    const huge = "x".repeat(4000);
+    const out = buildSignupNextPath({ biz: huge, intent: "build" });
+    assert.ok(
+      out.length < 100,
+      `huge biz must not bloat the URL — got ${out.length} chars`,
+    );
   });
 });
 
@@ -95,6 +130,31 @@ describe("buildSignupBillingRedirect", () => {
   test("bare call with no inputs still produces a valid relative URL", () => {
     const out = buildSignupBillingRedirect({});
     assert.equal(out, "/signup/billing?next=%2Fclients%2Fnew");
+  });
+
+  test("biz input produces a redirect with no biz in the URL but intent preserved", () => {
+    const out = buildSignupBillingRedirect({
+      biz: "Long paste of business info — Google Maps + reviews here",
+      intent: "build",
+    });
+    const next = decodeURIComponent(out.split("next=")[1]!);
+    // intent=build survives so /clients/new auto-submits from
+    // localStorage, but the biz payload itself is nowhere in the URL.
+    assert.equal(next, "/clients/new?intent=build");
+    assert.doesNotMatch(out, /Long\+paste/);
+    assert.doesNotMatch(out, /biz=/);
+  });
+
+  test("full chain stays well under 2048 chars even with huge biz payload", () => {
+    // Stripe's confirmSetupIntent rejects return URLs > 2048 chars.
+    // The /signup/billing route uses sanitizeNextPath(?next=) as the
+    // return URL. We verify the whole chain stays small.
+    const huge = "y".repeat(4000);
+    const out = buildSignupBillingRedirect({ biz: huge, intent: "build" });
+    assert.ok(
+      out.length < 200,
+      `huge biz must not bloat the redirect — got ${out.length} chars`,
+    );
   });
 });
 

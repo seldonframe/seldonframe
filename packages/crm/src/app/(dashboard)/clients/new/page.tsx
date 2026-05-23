@@ -14,6 +14,12 @@
 // auto-submit on mount so the build animation kicks off without a
 // second click — preserving the marketing-site mental model "type URL,
 // build starts immediately".
+//
+// 2026-05-23 — Bug #1: the client form ALSO reads localStorage on
+// mount and hydrates the form. Long paste payloads (`biz`) never
+// travel through the URL chain anymore — they live in
+// localStorage('sf-workspace-seed'). Short URLs still pass via ?url=
+// as a fallback for users with localStorage disabled.
 
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
@@ -52,9 +58,13 @@ export default async function ClientsNewPage({
     typeof biz === "string" && biz.trim().length > 0
       ? biz.trim().slice(0, 1024)
       : null;
-  // Only auto-submit when ?intent=build is set AND a prefill payload
-  // exists. Bare ?intent=build with no url/biz would auto-submit nothing.
-  const autoSubmit = intent === "build" && (prefillUrl !== null || prefillBiz !== null);
+  // 2026-05-23 — Auto-submit when ?intent=build is set. The form's
+  // mount effect resolves the actual payload from URL query first,
+  // then falls back to localStorage('sf-workspace-seed') for long
+  // paste payloads that no longer travel through the URL chain. If
+  // neither source has a payload, the auto-submit gracefully no-ops
+  // (the user is left at the IdleScene with empty inputs).
+  const autoSubmit = intent === "build";
 
   return (
     // Phase P2: full-bleed main so the IdleScene canvas can fill the entire
