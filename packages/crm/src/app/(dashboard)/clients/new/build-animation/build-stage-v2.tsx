@@ -26,11 +26,24 @@
 // 6-phase timeline. The v1 build animation ran on a 60s clock; the v2
 // uses the clock as a fallback when SSE isn't connected (demo mode) and
 // snaps to real progress when SSE events arrive.
+//
+// 2026-05-22 — Foreign-embed fix. The previous v2 declared its own theme
+// tokens (--sb-bg, --sb-surface, --sb-border, --sb-ink, etc.) keyed off
+// a `data-theme` attribute resolved via useTheme(). That worked for
+// inheriting dark/light but it also drew the stage as its OWN background
+// fill on top of the dashboard, with the .sb-mock-frame card on top of
+// that — card-on-card. The fix is to drop the theme token block entirely
+// and have .sb-* selectors read host CSS vars (--background, --card,
+// --border, --foreground, --muted-foreground) directly, then make
+// .sb-stage transparent so the page background shows through. The
+// archetype tokens (--sb-accent, --sb-accent-2, --sb-accent-ink) are
+// scoped per-render and unchanged — they're brand tokens, not theme
+// tokens. Inner mock surfaces (id-card, struct-card, module, etc.) stay
+// rendered as sub-cards because they represent workspace modules.
 
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useTheme } from "next-themes";
 
 import type { AestheticArchetypeId } from "@/lib/workspace/aesthetic-archetypes";
 import {
@@ -181,13 +194,11 @@ function parseSoulPayload(raw: unknown): SoulBuiltPayload | null {
 // ─── Component ───────────────────────────────────────────────────────────
 
 export function BuildStageV2({ active, input, eventSource }: BuildStageV2Props) {
-  // Resolve the current operator theme. The dashboard chrome already owns
-  // the theme; we just read it. `resolvedTheme` covers the "system" case.
-  // During SSR / first paint `resolvedTheme` is undefined — fall back to
-  // the dashboard default ("dark" per components/shared/theme-provider.tsx)
-  // so the stage doesn't flash light-mode on hydration.
-  const { resolvedTheme } = useTheme();
-  const theme: "light" | "dark" = resolvedTheme === "light" ? "light" : "dark";
+  // Theme is read straight off the host via CSS vars (--background,
+  // --foreground, --card, --border, --muted-foreground, etc.). The
+  // dashboard chrome already owns theme switching — we just inherit. No
+  // useTheme(), no data-theme attribute, no internal theme state. See
+  // file header comment for why this changed in 2026-05-22.
 
   // Stage A — synchronous, derived from `input` at mount. Pure detection.
   const stageA: DetectVerticalResult | null = useMemo(
@@ -377,25 +388,18 @@ export function BuildStageV2({ active, input, eventSource }: BuildStageV2Props) 
   return (
     <div
       className="sb-stage"
-      data-theme={theme}
       data-archetype={activeArchetype}
       data-reduced={reduced ? "yes" : "no"}
     >
-      {/* Atmospheric backdrop */}
+      {/* Atmospheric backdrop — radial wash + grid mask under everything. */}
       <div className="sb-atmos" aria-hidden />
 
-      {/* Breadcrumb chrome — operator teal, not archetype */}
-      <div className="sb-crumb">
-        <div className="sb-crumb-trail">
-          <span>Clients</span>
-          <span className="sep">/</span>
-          <span className="here">New · building</span>
-        </div>
-        <div className="sb-crumb-meta">
-          <span className="dot" />
-          <span>{phaseIndex === 5 ? "Workspace ready" : "Building workspace"}</span>
-        </div>
-      </div>
+      {/* 2026-05-22 — Removed the .sb-crumb "Clients / New · building"
+          breadcrumb. The dashboard chrome already renders the page
+          heading + workspace switcher above the content area; the
+          internal breadcrumb was a foreign-embed signal duplicating the
+          host. The "Building workspace" status now lives in the side
+          panel (sb-biz-row + sb-tick states). */}
 
       <div className="sb-canvas">
         {/* LEFT — phase mock */}
@@ -909,43 +913,38 @@ function Stat({
 function StageStyles() {
   return (
     <style jsx global>{`
-      /* THEME TOKENS — light first, dark override */
-      .sb-stage[data-theme="light"] {
-        --sb-bg: oklch(0.985 0.003 80);
-        --sb-surface: oklch(1 0 0);
-        --sb-surface-2: oklch(0.965 0.003 80);
-        --sb-surface-deep: oklch(0.945 0.003 80);
-        --sb-border: oklch(0.91 0.004 80);
-        --sb-border-soft: oklch(0.935 0.004 80);
-        --sb-ink: oklch(0.18 0 0);
-        --sb-ink-2: oklch(0.4 0.005 80);
-        --sb-ink-3: oklch(0.58 0.004 80);
-        --sb-ink-4: oklch(0.72 0.003 80);
-        --sb-glow: color-mix(in oklab, var(--sb-accent) 9%, transparent);
+      /* 2026-05-22 — Theme tokens are READ FROM THE HOST via existing
+         CSS vars on :root and .dark (declared in globals.css +
+         design-tokens.css). No internal theme state; no [data-theme=...]
+         attribute. The .sb-stage maps its internal token names onto host
+         vars so deeply-nested .sb-* rules keep working without touching
+         every selector. The grain / shadow values are theme-aware via
+         the .dark cascade override below. */
+      .sb-stage {
+        --sb-bg: var(--background);
+        --sb-surface: var(--card);
+        --sb-surface-2: var(--muted);
+        --sb-surface-deep: color-mix(in oklab, var(--muted) 70%, var(--background));
+        --sb-border: var(--border);
+        --sb-border-soft: color-mix(in oklab, var(--border) 60%, transparent);
+        --sb-ink: var(--foreground);
+        --sb-ink-2: color-mix(in oklab, var(--foreground) 78%, transparent);
+        --sb-ink-3: var(--muted-foreground);
+        --sb-ink-4: color-mix(in oklab, var(--muted-foreground) 60%, transparent);
+        --sb-glow: color-mix(in oklab, var(--sb-accent, var(--primary)) 9%, transparent);
         --sb-grain: rgba(0, 0, 0, 0.025);
-        --sb-shadow-card: 0 18px 48px rgba(15, 23, 42, 0.08),
-          0 1px 0 rgba(255, 255, 255, 0.85);
+        --sb-shadow-card: var(--shadow-card, 0 18px 48px rgba(15, 23, 42, 0.08), 0 1px 0 rgba(255, 255, 255, 0.85));
         --sb-shadow-mock: 0 2px 12px rgba(15, 23, 42, 0.06);
       }
-      .sb-stage[data-theme="dark"] {
-        --sb-bg: oklch(0.13 0 0);
-        --sb-surface: oklch(0.18 0 0);
-        --sb-surface-2: oklch(0.205 0 0);
-        --sb-surface-deep: oklch(0.105 0 0);
-        --sb-border: oklch(1 0 0 / 0.09);
-        --sb-border-soft: oklch(1 0 0 / 0.05);
-        --sb-ink: oklch(0.975 0 0);
-        --sb-ink-2: oklch(0.74 0 0);
-        --sb-ink-3: oklch(0.58 0 0);
-        --sb-ink-4: oklch(0.42 0 0);
-        --sb-glow: color-mix(in oklab, var(--sb-accent) 14%, transparent);
+      :is(.dark) .sb-stage {
         --sb-grain: rgba(255, 255, 255, 0.035);
-        --sb-shadow-card: 0 24px 72px rgba(0, 0, 0, 0.4),
-          0 1px 0 rgba(255, 255, 255, 0.04);
+        --sb-glow: color-mix(in oklab, var(--sb-accent, var(--primary)) 14%, transparent);
+        --sb-shadow-card: var(--shadow-card, 0 24px 72px rgba(0, 0, 0, 0.4), 0 1px 0 rgba(255, 255, 255, 0.04));
         --sb-shadow-mock: 0 8px 28px rgba(0, 0, 0, 0.3);
       }
 
-      /* ARCHETYPE TOKENS */
+      /* ARCHETYPE TOKENS — brand colors per detected vertical. Independent
+         from theme tokens; never re-declared off a data-theme attribute. */
       .sb-stage[data-archetype="bold-urgency"] {
         --sb-accent: #cc2d2d;
         --sb-accent-2: #1a1a1a;
@@ -982,74 +981,45 @@ function StageStyles() {
         --sb-accent-ink: #ffffff;
       }
 
-      /* Theme-specific archetype overrides for contrast */
-      .sb-stage[data-theme="light"][data-archetype="technical-restrained"] {
+      /* Theme-specific archetype overrides for contrast. The data-theme
+         attribute is gone — we drive these off the host's .dark cascade
+         instead. Light is the default; .dark overrides. */
+      .sb-stage[data-archetype="technical-restrained"] {
         --sb-accent: #3f3f46;
       }
-      .sb-stage[data-theme="light"][data-archetype="brutalist"] {
+      .sb-stage[data-archetype="brutalist"] {
         --sb-accent: #0a0a0a;
       }
-      .sb-stage[data-theme="dark"][data-archetype="brutalist"] {
+      :is(.dark) .sb-stage[data-archetype="brutalist"] {
         --sb-accent: #f4f4f5;
       }
-      .sb-stage[data-theme="dark"][data-archetype="technical-restrained"] {
+      :is(.dark) .sb-stage[data-archetype="technical-restrained"] {
         --sb-accent: #d4d4d8;
       }
 
-      /* STAGE shell */
+      /* STAGE shell — flow component. No outer card surface; the page
+         background shows through. The atmosphere block (.sb-atmos) gives
+         the canvas warmth without drawing a card boundary. Flex sizing
+         lets the parent (clients-new-form.tsx wrapper) control height. */
       .sb-stage {
         position: relative;
         display: flex;
         flex-direction: column;
-        min-height: 100%;
+        flex: 1;
+        min-height: 0;
         height: 100%;
         isolation: isolate;
-        background: var(--sb-bg);
+        background: transparent;
         color: var(--sb-ink);
-        font-family: 'Geist', system-ui, sans-serif;
+        font-family: var(--font-geist-sans), 'Geist', system-ui, sans-serif;
         -webkit-font-smoothing: antialiased;
         text-rendering: optimizeLegibility;
         overflow: hidden;
       }
 
-      .sb-crumb {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 16px 28px;
-        border-bottom: 1px solid var(--sb-border);
-        background: var(--sb-bg);
-        font-size: 13px;
-      }
-      .sb-crumb-trail {
-        color: var(--sb-ink-3);
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-      }
-      .sb-crumb-trail .here {
-        color: var(--sb-ink);
-        font-weight: 500;
-      }
-      .sb-crumb-trail .sep { color: var(--sb-ink-4); }
-      .sb-crumb-meta {
-        margin-left: auto;
-        display: inline-flex;
-        align-items: center;
-        gap: 14px;
-        font-family: 'Geist Mono', ui-monospace, monospace;
-        font-size: 11.5px;
-        color: var(--sb-ink-3);
-        letter-spacing: 0.005em;
-      }
-      .sb-crumb-meta .dot {
-        width: 6px;
-        height: 6px;
-        border-radius: 3px;
-        background: oklch(0.65 0.13 172);
-        box-shadow: 0 0 0 3px color-mix(in oklab, oklch(0.65 0.13 172) 22%, transparent);
-        animation: sb-blink 1.4s ease-in-out infinite;
-      }
+      /* .sb-crumb removed 2026-05-22 — internal breadcrumb dropped in
+         favor of the dashboard chrome's existing page header. The .dot
+         pulse animation is preserved on the side panel's biz row. */
 
       .sb-canvas {
         flex: 1;
@@ -1080,7 +1050,7 @@ function StageStyles() {
           radial-gradient(50% 40% at 20% 30%, color-mix(in oklab, var(--sb-accent) 9%, transparent), transparent 70%),
           radial-gradient(40% 35% at 80% 75%, color-mix(in oklab, var(--sb-accent-2) 6%, transparent), transparent 70%);
       }
-      .sb-stage[data-theme="dark"] .sb-atmos::before {
+      :is(.dark) .sb-atmos::before {
         background:
           radial-gradient(55% 45% at 22% 30%, color-mix(in oklab, var(--sb-accent) 14%, transparent), transparent 70%),
           radial-gradient(45% 40% at 80% 75%, color-mix(in oklab, var(--sb-accent-2) 10%, transparent), transparent 70%);
@@ -1108,14 +1078,20 @@ function StageStyles() {
       @media (min-width: 768px) { .sb-mock { padding: 56px 40px; } }
       @media (min-width: 1100px) { .sb-mock { padding: 64px 56px; min-height: 720px; } }
 
+      /* 2026-05-22 — Mock frame stripped of its outer surface (card
+         background + border + shadow) so it doesn't draw a card-on-card
+         boundary against the dashboard chrome. The phase mock surfaces
+         inside (.sb-id-card, .sb-struct-card, .sb-module, .sb-act-pane,
+         etc.) remain rendered as sub-cards because they represent
+         workspace modules — that's the intentional product metaphor. */
       .sb-mock-frame {
         position: relative;
         flex: 1;
         display: flex;
-        background: var(--sb-surface);
-        border: 1px solid var(--sb-border);
-        border-radius: 16px;
-        box-shadow: var(--sb-shadow-card);
+        background: transparent;
+        border: none;
+        border-radius: 0;
+        box-shadow: none;
         overflow: hidden;
       }
 
@@ -2045,7 +2021,7 @@ function StageStyles() {
       @media (prefers-reduced-motion: reduce) {
         .sb-phase { transition: none; }
         .sb-struct-card, .sb-lead { animation: none; opacity: 1; transform: none; }
-        .sb-act-head .dot, .sb-crumb-meta .dot, .sb-reveal-tag::before { animation: none; }
+        .sb-act-head .dot, .sb-reveal-tag::before { animation: none; }
         .sb-scan .caret { animation: none; }
       }
       /* Reduced motion (JS-controlled layer) */
@@ -2057,7 +2033,6 @@ function StageStyles() {
         transform: none;
       }
       .sb-stage[data-reduced="yes"] .sb-act-head .dot,
-      .sb-stage[data-reduced="yes"] .sb-crumb-meta .dot,
       .sb-stage[data-reduced="yes"] .sb-reveal-tag::before {
         animation: none;
       }

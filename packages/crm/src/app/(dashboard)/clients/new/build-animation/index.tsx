@@ -8,9 +8,11 @@
 // when the v2 design lands.
 //
 // The v2 stage is full-bleed (fills the parent's calc(100vh-9rem) box
-// set on <main> in page.tsx) and theme-aware (reads next-themes). The
-// v1 fixed-canvas Stage (720x960 scaled) is gone — see git history for
-// the prior implementation if needed.
+// set on <main> in page.tsx) and theme-aware by inheritance — it reads
+// host CSS vars (--background, --card, --border, --foreground, etc.)
+// directly off :root / .dark via the cascade. No next-themes coupling.
+// The v1 fixed-canvas Stage (720x960 scaled) is gone — see git history
+// for the prior implementation if needed.
 
 import type { DetectVerticalInput } from "@/lib/workspace/detect-vertical";
 import { BuildStageV2 } from "./build-stage-v2";
