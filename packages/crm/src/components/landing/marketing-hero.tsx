@@ -3,14 +3,25 @@
 // 2026-05-22 — Port of the Claude Design HTML mockup hero
 // (handoff `seldonframe-home.html` §Hero). The dominant input lives
 // here: tabs (URL vs business info), typewriter placeholders,
-// example chips, ⌘/Ctrl+Enter shortcut, sessionStorage seed +
-// /signup forward.
+// example chips, localStorage seed + /signup forward.
+//
+// 2026-05-23 — Switched the seed carrier from sessionStorage to
+// localStorage. The magic-link click in the signup flow opens a NEW
+// TAB, and sessionStorage is per-tab — so the seed was vanishing on
+// landing. localStorage is per-origin and survives the cross-tab hop.
+// We also stopped forwarding `biz` as a URL query param: long paste
+// payloads (3KB Google Maps + reviews was the prod incident) blow past
+// Stripe's 2048-char return_url cap. Short URLs still pass through as
+// `?url=…` since they're harmless and that's the dominant test traffic.
 //
 // Behaviour contracts (from handoff README §1–§3):
-//   - On submit, persist sessionStorage['sf-workspace-seed'] as
+//   - On submit, persist localStorage['sf-workspace-seed'] as
 //     { kind: 'url' | 'biz', value, at }
-//   - Forward to /signup?url=… or /signup?biz=… (the /signup route
-//     was wired in commit 4769ec8e to read these query params)
+//   - For URL mode, also forward to /signup?url=…&intent=build so the
+//     short-URL passthrough still works without localStorage (graceful
+//     degradation in private-mode browsers that disable localStorage).
+//   - For BIZ mode, forward to /signup?intent=build (no biz in URL).
+//     /clients/new hydrates the biz textarea from localStorage on mount.
 //   - Typewriter cycles through real examples while idle; pauses on
 //     focus or when user has typed; prefers-reduced-motion gets
 //     only the first example
@@ -182,16 +193,32 @@ export function MarketingHero() {
     const value = (tab === "url" ? urlValue : bizValue).trim();
     if (value.length < 3) return;
     try {
-      sessionStorage.setItem(
+      // localStorage (not sessionStorage) — the magic-link click in
+      // the signup flow opens a NEW TAB, and sessionStorage is
+      // per-tab. localStorage is per-origin so the seed survives the
+      // /signup → email → magic-link → new-tab landing.
+      localStorage.setItem(
         "sf-workspace-seed",
         JSON.stringify({ kind: tab, value, at: Date.now() }),
       );
     } catch {
-      // sessionStorage can fail in some incognito modes — non-fatal,
-      // the /signup route also reads the query param.
+      // localStorage can fail in some incognito modes or if the
+      // user has site-storage blocked — non-fatal for URL mode
+      // (the ?url= query param is still passed). For BIZ mode the
+      // visitor will land on /clients/new with an empty textarea
+      // and need to re-paste; acceptable degradation.
     }
     setSubmitting(true);
-    const params = new URLSearchParams({ [tab]: value });
+    // Always pass intent=build so /clients/new auto-submits on mount.
+    // For URL mode, also pass ?url=… so short URLs work even if
+    // localStorage was blocked. For BIZ mode, only pass ?intent=build —
+    // the biz payload lives in localStorage to keep the URL chain
+    // short (Stripe's return_url cap is 2048 chars and a 3KB paste
+    // blows past it through the double-URL-encoded redirect hops).
+    const params = new URLSearchParams({ intent: "build" });
+    if (tab === "url") {
+      params.set("url", value);
+    }
     // small delay so the overlay registers visually
     setTimeout(() => {
       router.push(`/signup?${params.toString()}`);

@@ -67,10 +67,75 @@ type ClientsNewFormProps = {
   // flow embeds these into /signup → /signup/billing → /clients/new so
   // the visitor's original URL or business description survives the
   // round trip. autoSubmit fires the SSE build on mount when intent=build.
+  //
+  // 2026-05-23 — These come from the URL query string only. For long
+  // paste payloads (`biz`), the marketing hero writes to
+  // localStorage('sf-workspace-seed') instead — the form reads that
+  // on mount and hydrates either tab from it as a fallback.
   prefillUrl?: string | null;
   prefillBiz?: string | null;
   autoSubmit?: boolean;
 };
+
+/**
+ * Shape of the localStorage seed the marketing hero writes on submit.
+ * Documented here so consumers (analytics, debug tooling) have a single
+ * source of truth.
+ *
+ *   localStorage.setItem('sf-workspace-seed', JSON.stringify({
+ *     kind: 'url' | 'biz',
+ *     value: string,        // the URL or paste text the visitor typed
+ *     at: number,           // Date.now() at submit time
+ *   }))
+ *
+ * Read once on /clients/new mount, then removed to avoid replay on the
+ * next visit to /clients/new (e.g. operator clicking "New workspace"
+ * from the sidebar after building one).
+ */
+const STORAGE_KEY = "sf-workspace-seed";
+const STORAGE_MAX_AGE_MS = 30 * 60 * 1000; // 30 minutes — covers magic-link delay
+
+type StoredSeed = { kind: "url" | "biz"; value: string; at: number };
+
+function readStoredSeed(): StoredSeed | null {
+  if (typeof window === "undefined") return null;
+  let raw: string | null;
+  try {
+    raw = window.localStorage.getItem(STORAGE_KEY);
+  } catch {
+    return null;
+  }
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<StoredSeed>;
+    if (
+      (parsed.kind === "url" || parsed.kind === "biz") &&
+      typeof parsed.value === "string" &&
+      parsed.value.trim().length >= 3 &&
+      typeof parsed.at === "number"
+    ) {
+      // Drop stale seeds — if the visitor abandoned the magic-link
+      // and revisited /clients/new days later, we don't want to
+      // auto-submit a long-stale prompt.
+      if (Date.now() - parsed.at > STORAGE_MAX_AGE_MS) {
+        return null;
+      }
+      return { kind: parsed.kind, value: parsed.value, at: parsed.at };
+    }
+  } catch {
+    // Malformed JSON — ignore.
+  }
+  return null;
+}
+
+function clearStoredSeed(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Quota or permission errors — non-fatal.
+  }
+}
 
 export function ClientsNewForm({
   source = "default",
@@ -83,8 +148,19 @@ export function ClientsNewForm({
 
   // Seed the inputs with the marketing-prompt prefill values. The
   // controlled-input contract is preserved by defaulting to "".
+  //
+  // 2026-05-23 — The actual localStorage read happens in the mount
+  // effect below (can't access `window` during SSR). We initialize
+  // from the URL query prefill here and hydrate from localStorage on
+  // mount as a fallback.
   const [url, setUrl] = useState(prefillUrl ?? "");
   const [bizInfo, setBizInfo] = useState(prefillBiz ?? "");
+  // Tracks which mode was initially populated — used to set the
+  // IdleScene's `initialTab`. Updated by the localStorage hydration
+  // effect when the seed contains `kind: 'biz'`.
+  const [initialTab, setInitialTab] = useState<"url" | "biz">(
+    prefillBiz && !prefillUrl ? "biz" : "url",
+  );
   const [submitted, setSubmitted] = useState(false);
   const [keepBuildMounted, setKeepBuildMounted] = useState(false);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
@@ -261,18 +337,58 @@ export function ClientsNewForm({
   // promise. We gate on prefill values being non-empty so a bare
   // /clients/new?intent=build never auto-fires.
   //
+  // 2026-05-23 — Bug #1: long paste payloads (`biz`) no longer travel
+  // through the URL chain — they live in localStorage('sf-workspace-seed').
+  // On mount we read that seed and hydrate either tab from it.
+  // Resolution order:
+  //   1. Query-string prefillUrl wins (short URL passthrough still works).
+  //   2. Query-string prefillBiz wins (backward compat — should be
+  //      empty going forward, but keeps old marketing links working).
+  //   3. localStorage seed populates whichever tab matches its `kind`.
+  // After hydrating from localStorage we clear the key so the seed
+  // doesn't replay on the next visit to /clients/new.
+  //
   // The ref guard is necessary for React Strict Mode's double-effect
   // invocation: without it the SSE stream would open twice, the second
   // one would lose the race, and we'd see a console warning + a
   // dangling EventSource.
   useEffect(() => {
-    if (!autoSubmit || autoSubmittedRef.current) return;
-    if (prefillUrl) {
+    if (autoSubmittedRef.current) return;
+
+    // Resolve the effective payload — query-string wins, then
+    // localStorage seed as a fallback.
+    let effectiveUrl = prefillUrl ?? "";
+    let effectiveBiz = prefillBiz ?? "";
+
+    if (!effectiveUrl && !effectiveBiz) {
+      const seed = readStoredSeed();
+      if (seed) {
+        if (seed.kind === "url") {
+          effectiveUrl = seed.value;
+          setUrl(seed.value);
+          setInitialTab("url");
+        } else {
+          effectiveBiz = seed.value;
+          setBizInfo(seed.value);
+          setInitialTab("biz");
+        }
+        // Clear the seed so a return visit to /clients/new (e.g. via
+        // "New workspace" sidebar link after build finishes) doesn't
+        // hydrate from a stale prompt.
+        clearStoredSeed();
+      }
+    }
+
+    // Auto-submit when the intent flag is on AND we have a payload
+    // (from either URL or localStorage). Bare /clients/new with no
+    // payload still never auto-fires.
+    if (!autoSubmit) return;
+    if (effectiveUrl) {
       autoSubmittedRef.current = true;
-      startStream(prefillUrl);
-    } else if (prefillBiz) {
+      startStream(effectiveUrl);
+    } else if (effectiveBiz) {
       autoSubmittedRef.current = true;
-      startBizInfoStream(prefillBiz);
+      startBizInfoStream(effectiveBiz);
     }
     // Intentionally fires only when the autoSubmit signal flips on or
     // the prefill payload changes. startStream + startBizInfoStream are
@@ -410,7 +526,11 @@ export function ClientsNewForm({
             // 2026-05-22 — Default to the biz tab when the marketing-prompt
             // forwarder passed ?biz= but no ?url=, so the visitor's
             // textarea is what they see first.
-            initialTab={prefillBiz && !prefillUrl ? "biz" : "url"}
+            //
+            // 2026-05-23 — `initialTab` is now state, set by either
+            // the query-string defaults OR the localStorage seed
+            // hydration in the mount effect above.
+            initialTab={initialTab}
           />
         </div>
 
