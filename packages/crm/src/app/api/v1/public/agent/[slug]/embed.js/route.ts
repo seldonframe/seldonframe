@@ -36,6 +36,15 @@ import {
   getArchetypeStyleTokens,
   type ArchetypeStyleTokens,
 } from "@/lib/workspace/aesthetic-archetypes";
+// 2026-05-23 — Defensive backfill for pre-fix workspaces whose theme
+// row is at the legacy DB-default (teal + Inter). v1.55.0 dropped
+// enhance-blocks from the default workspace-creation path so the
+// archetype was never written, leaving every public chatbot bubble
+// teal regardless of vertical. We now call applyArchetypeThemeToOrg
+// here so existing workspaces self-heal on next embed request. New
+// workspaces hit the same logic in v2/complete BEFORE the chatbot
+// activates — this is the safety net for the existing ones.
+import { applyArchetypeThemeToOrg } from "@/lib/workspace/apply-archetype-theme";
 
 export async function GET(
   request: Request,
@@ -53,6 +62,7 @@ export async function GET(
       slug: agents.slug,
       status: agents.status,
       blueprint: agents.blueprint,
+      orgId: organizations.id,
       orgSlug: organizations.slug,
       orgName: organizations.name,
       theme: organizations.theme,
@@ -94,6 +104,26 @@ export async function GET(
     /[\\`$]/g,
     "\\$&",
   );
+
+  // 2026-05-23 — Lazy archetype backfill for pre-fix workspaces.
+  // If theme.aestheticArchetype is missing, classify from soul and patch
+  // theme so the embed renders the archetype palette/font on THIS
+  // request (not just the next one). We then refetch the theme so the
+  // tokens reflect the patched values. Idempotent — no-op when the
+  // archetype is already set, which is the steady-state hot path.
+  let resolvedTheme = agentRow.theme;
+  if (!resolvedTheme?.aestheticArchetype) {
+    const backfill = await applyArchetypeThemeToOrg(agentRow.orgId);
+    if (backfill.wrote) {
+      const [reread] = await db
+        .select({ theme: organizations.theme })
+        .from(organizations)
+        .where(eq(organizations.id, agentRow.orgId))
+        .limit(1);
+      if (reread) resolvedTheme = reread.theme;
+    }
+  }
+
   // 2026-05-22 — Brand-aware embed.
   //
   // Previously, only theme.primaryColor + theme.logoUrl were threaded
@@ -107,7 +137,7 @@ export async function GET(
   // Workspaces without an archetype (pre-1.54, or partial-creation state)
   // get the SeldonFrame default tokens — visually identical to the old
   // #111111 fallback.
-  const themeRaw = (agentRow.theme ?? null) as {
+  const themeRaw = (resolvedTheme ?? null) as {
     primaryColor?: string;
     logoUrl?: string;
     aestheticArchetype?: string;
