@@ -28,10 +28,21 @@ export type BuildAnimationProps = {
    *  runs on its own timeline if SSE isn't attached yet (e.g., during
    *  fade-out after success). */
   eventSource?: EventSource | null;
+  /** URLs surfaced on the REVEAL phase's CTAs after the orchestrator's
+   *  `done` event fires. Open = the freshly-built workspace dashboard.
+   *  Share = the public landing the operator can hand to the client.
+   *  Null until `done` arrives — the buttons render in a disabled-looking
+   *  state until then so the visual moment still lands. */
+  revealLinks?: { open: string; share?: string | null } | null;
 };
 
-export function BuildAnimation({ active, input, eventSource }: BuildAnimationProps) {
+export function BuildAnimation({ active, input, eventSource, revealLinks }: BuildAnimationProps) {
   return (
-    <BuildStageV2 active={active} input={input} eventSource={eventSource ?? null} />
+    <BuildStageV2
+      active={active}
+      input={input}
+      eventSource={eventSource ?? null}
+      revealLinks={revealLinks ?? null}
+    />
   );
 }

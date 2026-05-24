@@ -179,6 +179,14 @@ export function ClientsNewForm({
   // from the very first frame. Captured at submit time so the textbox
   // value can change underneath us without re-detecting.
   const [buildInput, setBuildInput] = useState<DetectVerticalInput | null>(null);
+  // 2026-05-24 — URLs surfaced on the REVEAL phase's CTAs after `done`
+  // fires. We populate this BEFORE the auto-redirect so the user has a
+  // brief window to click into the workspace or share link manually.
+  // The auto-redirect timer is then ~3.5s so the celebratory moment
+  // actually lands instead of vanishing in 50ms.
+  const [revealLinks, setRevealLinks] = useState<
+    { open: string; share?: string | null } | null
+  >(null);
   // Tracks which mode was last submitted so BYOK retry re-submits the right stream.
   const lastModeRef = useRef<"url" | "biz">(prefillBiz && !prefillUrl ? "biz" : "url");
   // Guard so the autoSubmit effect only fires once per mount even if
@@ -216,11 +224,21 @@ export function ClientsNewForm({
     setLiveEventSource(es);
 
     es.addEventListener("done", (raw) => {
-      const data = JSON.parse((raw as MessageEvent).data) as { dashboardUrl: string };
+      const data = JSON.parse((raw as MessageEvent).data) as {
+        dashboardUrl: string;
+        publicHomeUrl?: string | null;
+      };
       es.close();
       setLiveEventSource(null);
       if (typeof window !== "undefined" && data.dashboardUrl) {
-        window.location.assign(data.dashboardUrl);
+        // 2026-05-24 — Surface URLs on the REVEAL CTAs and give the user
+        // ~3.5s to click "Open workspace" / "Share with client" before
+        // auto-redirecting. The previous instant window.location.assign
+        // made the celebratory REVEAL moment vanish in 50ms.
+        setRevealLinks({ open: data.dashboardUrl, share: data.publicHomeUrl ?? null });
+        window.setTimeout(() => {
+          window.location.assign(data.dashboardUrl);
+        }, 3500);
       }
     });
 
@@ -281,11 +299,21 @@ export function ClientsNewForm({
     setLiveEventSource(es);
 
     es.addEventListener("done", (raw) => {
-      const data = JSON.parse((raw as MessageEvent).data) as { dashboardUrl: string };
+      const data = JSON.parse((raw as MessageEvent).data) as {
+        dashboardUrl: string;
+        publicHomeUrl?: string | null;
+      };
       es.close();
       setLiveEventSource(null);
       if (typeof window !== "undefined" && data.dashboardUrl) {
-        window.location.assign(data.dashboardUrl);
+        // 2026-05-24 — Surface URLs on the REVEAL CTAs and give the user
+        // ~3.5s to click "Open workspace" / "Share with client" before
+        // auto-redirecting. The previous instant window.location.assign
+        // made the celebratory REVEAL moment vanish in 50ms.
+        setRevealLinks({ open: data.dashboardUrl, share: data.publicHomeUrl ?? null });
+        window.setTimeout(() => {
+          window.location.assign(data.dashboardUrl);
+        }, 3500);
       }
     });
 
@@ -552,6 +580,7 @@ export function ClientsNewForm({
               active={submitted}
               input={buildInput}
               eventSource={liveEventSource}
+              revealLinks={revealLinks}
             />
           </div>
         )}
