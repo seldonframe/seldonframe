@@ -539,24 +539,36 @@ function IdleStyles() {
     <style jsx global>{`
       .sf-idle {
         position: relative;
-        /* flex: 1 + min-height: 0 lets the section fill a flex-column
-           parent; height: 100% covers the block-parent case (current
-           clients-new-form wrapper is h-full block). Both apply
-           harmlessly together — only one wins per parent type. */
+        /* 2026-05-23 — Mobile-first stacking fix.
+           Original implementation used `display: grid + grid-template-columns: 1fr`
+           with `height: 100%; overflow: hidden`. On a phone viewport
+           the constrained container couldn't fit both children, and
+           the browser ended up rendering the hero + aside on top of
+           each other instead of stacking vertically. Switched mobile
+           to `display: flex; flex-direction: column` with natural
+           document scroll, and only flip to grid 2-col at the
+           desktop breakpoint where it actually makes sense.
+
+           flex: 1 + min-height: 0 still lets the section fill a
+           flex-column parent on desktop. */
         flex: 1;
-        min-height: 0;
-        height: 100%;
-        display: grid;
-        grid-template-columns: minmax(0, 1fr);
+        min-height: 100%;
+        display: flex;
+        flex-direction: column;
         isolation: isolate;
-        overflow: hidden;
         background: var(--background);
         color: var(--foreground);
         font-family: var(--font-geist-sans), system-ui, sans-serif;
       }
       @media (min-width: 1080px) {
         .sf-idle {
+          /* Desktop: side-by-side grid, container constrained to
+             viewport, hidden overflow so the atmosphere stays inside. */
+          display: grid;
           grid-template-columns: minmax(0, 1.7fr) minmax(320px, 1fr);
+          height: 100%;
+          min-height: 0;
+          overflow: hidden;
         }
       }
 
