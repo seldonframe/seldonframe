@@ -607,13 +607,18 @@ function IdleStyles() {
       .sf-idle-hero {
         position: relative;
         z-index: 1;
-        padding: 96px 32px 56px;
+        /* 2026-05-23 — mobile polish: tighter padding + gap so the hero
+           breathes properly on a phone viewport. 96px top + 32px gap
+           was pushing the form below the fold on iPhone-12-sized
+           viewports and giving a cluttered feel. */
+        padding: 40px 18px 32px;
         display: flex;
         flex-direction: column;
-        gap: 32px;
+        gap: 18px;
         justify-content: flex-start;
         min-height: 0;
       }
+      @media (min-width: 640px) { .sf-idle-hero { padding: 72px 28px 56px; gap: 24px; } }
       @media (min-width: 768px) { .sf-idle-hero { padding: 112px 56px 80px; gap: 36px; } }
       @media (min-width: 1280px) { .sf-idle-hero { padding: 120px 88px 96px; gap: 40px; } }
 
@@ -639,9 +644,13 @@ function IdleStyles() {
         margin: 0;
         font-family: var(--font-geist-sans), system-ui, sans-serif;
         font-weight: 600;
-        font-size: clamp(40px, 6vw, 76px);
-        letter-spacing: -0.034em;
-        line-height: 1.0;
+        /* 2026-05-23 — mobile polish: bottom of the clamp dropped from 40px
+           to 30px so the headline doesn't wrap to 5+ lines on iPhone-SE
+           viewports. The viewport-based middle term (6vw) still scales up
+           smoothly on tablet/desktop. */
+        font-size: clamp(30px, 6vw, 76px);
+        letter-spacing: -0.030em;
+        line-height: 1.04;
         color: var(--foreground);
         text-wrap: balance;
         max-width: 920px;
@@ -908,8 +917,20 @@ function IdleStyles() {
         .sf-idle-aside {
           border-left: none;
           border-top: 1px solid var(--border);
-          padding: 40px 32px;
+          /* 2026-05-23 — mobile polish: tighter aside padding so it
+             doesn't add another 80px of dead space below the form on a
+             phone viewport. */
+          padding: 28px 18px 36px;
+          gap: 16px;
         }
+      }
+      @media (max-width: 639px) {
+        /* On very small viewports, drop the per-phase descriptions —
+           the 6-row phase list with name + desc + READY chip stacks
+           into way too much vertical real estate before the user has
+           even submitted. Just the labels + status chips. */
+        .sf-idle-aside .sf-phase-desc { display: none; }
+        .sf-idle-aside .sf-phase { padding: 10px 0; }
       }
       @media (min-width: 1080px) {
         .sf-idle-aside { padding: 120px 44px 96px; }
