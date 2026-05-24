@@ -563,12 +563,18 @@ function IdleStyles() {
       @media (min-width: 1080px) {
         .sf-idle {
           /* Desktop: side-by-side grid, container constrained to
-             viewport, hidden overflow so the atmosphere stays inside. */
+             viewport. 2026-05-24 — overflow:hidden was hiding the
+             bottom of the content on shorter laptop viewports (1366x768,
+             dev tools docked, browser zoom > 100%). Switched to
+             overflow-y:auto so the section scrolls when content
+             exceeds the viewport, while still clipping the ambient
+             atmosphere layers horizontally. */
           display: grid;
           grid-template-columns: minmax(0, 1.7fr) minmax(320px, 1fr);
           height: 100%;
           min-height: 0;
-          overflow: hidden;
+          overflow-x: hidden;
+          overflow-y: auto;
         }
       }
 

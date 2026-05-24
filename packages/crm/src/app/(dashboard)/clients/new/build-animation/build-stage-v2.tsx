@@ -71,6 +71,13 @@ export type BuildStageV2Props = {
    *  Stage A → Stage B crossfade. May be null if the parent hasn't
    *  opened the stream yet (we fall back to a demo timeline). */
   eventSource?: EventSource | null;
+  /** Optional URLs surfaced after the `done` event fires. When present,
+   *  the REVEAL phase's CTAs become clickable anchors that take the
+   *  operator to the freshly-built workspace (open) or the public
+   *  landing (share). The parent owns the lifecycle of these — it
+   *  sets them on `done`, then can optionally auto-redirect on a
+   *  timer so the operator sees the celebratory moment first. */
+  revealLinks?: { open: string; share?: string | null } | null;
 };
 
 // ─── Phase timeline ──────────────────────────────────────────────────────
@@ -193,7 +200,7 @@ function parseSoulPayload(raw: unknown): SoulBuiltPayload | null {
 
 // ─── Component ───────────────────────────────────────────────────────────
 
-export function BuildStageV2({ active, input, eventSource }: BuildStageV2Props) {
+export function BuildStageV2({ active, input, eventSource, revealLinks }: BuildStageV2Props) {
   // Theme is read straight off the host via CSS vars (--background,
   // --foreground, --card, --border, --muted-foreground, etc.). The
   // dashboard chrome already owns theme switching — we just inherit. No
@@ -630,14 +637,46 @@ export function BuildStageV2({ active, input, eventSource }: BuildStageV2Props) 
                       <Stat k="Archetype" v={archetypeLabel} small="" smallValue />
                     </div>
                     <div className="sb-reveal-ctas">
-                      <span className="sb-btn sb-btn-primary">
-                        Open workspace
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
-                          <line x1={5} y1={12} x2={19} y2={12} />
-                          <polyline points="12 5 19 12 12 19" />
-                        </svg>
-                      </span>
-                      <span className="sb-btn sb-btn-ghost">Share with client</span>
+                      {/* 2026-05-24 — Wired to real URLs from the orchestrator
+                          `done` payload (dashboardUrl + publicHomeUrl). When
+                          revealLinks is absent (animation still running, or
+                          the parent hasn't received `done` yet) the CTAs
+                          render as disabled-looking spans so the visual moment
+                          still lands. */}
+                      {revealLinks?.open ? (
+                        <a
+                          href={revealLinks.open}
+                          className="sb-btn sb-btn-primary"
+                        >
+                          Open workspace
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
+                            <line x1={5} y1={12} x2={19} y2={12} />
+                            <polyline points="12 5 19 12 12 19" />
+                          </svg>
+                        </a>
+                      ) : (
+                        <span className="sb-btn sb-btn-primary" aria-busy="true">
+                          Open workspace
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
+                            <line x1={5} y1={12} x2={19} y2={12} />
+                            <polyline points="12 5 19 12 12 19" />
+                          </svg>
+                        </span>
+                      )}
+                      {revealLinks?.share ? (
+                        <a
+                          href={revealLinks.share}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="sb-btn sb-btn-ghost"
+                        >
+                          Share with client
+                        </a>
+                      ) : (
+                        <span className="sb-btn sb-btn-ghost" aria-busy="true">
+                          Share with client
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
