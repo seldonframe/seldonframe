@@ -540,16 +540,16 @@ function IdleStyles() {
       .sf-idle {
         position: relative;
         /* 2026-05-23 — Mobile-first stacking fix.
-           Original implementation used `display: grid + grid-template-columns: 1fr`
-           with `height: 100%; overflow: hidden`. On a phone viewport
+           Original implementation used display:grid + grid-template-columns:1fr
+           with height:100% + overflow:hidden. On a phone viewport
            the constrained container couldn't fit both children, and
            the browser ended up rendering the hero + aside on top of
            each other instead of stacking vertically. Switched mobile
-           to `display: flex; flex-direction: column` with natural
+           to display:flex + flex-direction:column with natural
            document scroll, and only flip to grid 2-col at the
            desktop breakpoint where it actually makes sense.
 
-           flex: 1 + min-height: 0 still lets the section fill a
+           flex:1 + min-height:0 still lets the section fill a
            flex-column parent on desktop. */
         flex: 1;
         min-height: 100%;
