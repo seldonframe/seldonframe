@@ -4,6 +4,7 @@ import Resend from "next-auth/providers/resend";
 import { db } from "@/db";
 import { accounts, organizations, users } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
+import { sendNewSignupAlert } from "@/lib/notifications/ops-notifications";
 
 const BILLING_STATUSES = ["trialing", "active", "past_due", "canceled", "unpaid"] as const;
 const BILLING_PERIODS = ["monthly", "yearly"] as const;
@@ -371,6 +372,44 @@ export const authConfig = {
       }
 
       return session;
+    },
+  },
+  events: {
+    // 2026-05-26 — ops notification on every new signup. NextAuth fires
+    // events.createUser exactly once after the adapter's createUser
+    // returns (post-INSERT into the users table), so this can't double-
+    // fire on a sign-in by an existing user. The signup helper is
+    // wrapped in its own try/catch and never throws, but we add a
+    // belt-and-suspenders try here too — auth must not break if the
+    // helper somehow regresses.
+    //
+    // The `source` field is best-effort. NextAuth's events.createUser
+    // signature exposes only the created user object, not request
+    // context (cookies, redirectTo). Plumbing those would require
+    // jumping through the signIn callback to stash them on the JWT
+    // and reading back here, which adds surface area we don't need
+    // for v1. The recipient still sees the email — that's enough.
+    createUser: async ({ user }) => {
+      try {
+        const email = typeof user.email === "string" ? user.email : "";
+        const userId = typeof user.id === "string" ? user.id : "";
+        if (!email || !userId) {
+          // Defensive — the adapter always produces both, but if a
+          // future provider doesn't we'd rather skip the alert than
+          // send a half-formed one.
+          return;
+        }
+        await sendNewSignupAlert({
+          email,
+          userId,
+          createdAt: new Date(),
+          source: null,
+        });
+      } catch (err) {
+        console.warn(
+          `[auth][events.createUser] sendNewSignupAlert threw (swallowed): ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
     },
   },
 } satisfies NextAuthConfig;

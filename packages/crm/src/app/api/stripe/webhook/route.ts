@@ -16,6 +16,8 @@ import type { TierId } from "@/lib/billing/plans";
 import { getOrgSubscription, updateOrgSubscription } from "@/lib/billing/subscription";
 import { applyBrandingForTier, reRenderAllSurfacesForOrg } from "@/lib/blueprint/rerender-org";
 import { trackEvent } from "@/lib/analytics/track";
+import { getPlan } from "@/lib/billing/plans";
+import { sendPaidConversionAlert } from "@/lib/notifications/ops-notifications";
 
 function getStripeClient() {
   const secretKey = process.env.STRIPE_SECRET_KEY;
@@ -321,6 +323,105 @@ export async function POST(req: NextRequest) {
       void reRenderAllSurfacesForOrg(targetOrgId).catch((err) =>
         console.warn(`[stripe-webhook] rerender after checkout failed for ${targetOrgId}:`, err)
       );
+
+      break;
+    }
+
+    case "customer.subscription.created": {
+      // 2026-05-26 — paid-conversion ops alert. customer.subscription.created
+      // is the right "user just upgraded" signal in our SetupIntent flow:
+      // the card is collected at signup (no charge), and the subscription
+      // is created later when the user actually hits a paid trigger. This
+      // event fires once per subscription creation.
+      //
+      // We DELIBERATELY do not duplicate the org-state-update logic from
+      // checkout.session.completed / customer.subscription.updated here.
+      // Those events still fire in their normal flow and apply the tier
+      // change. This case ONLY sends the ops alert, then breaks. Stripe
+      // sends ALL applicable events for one checkout (created + updated +
+      // checkout.session.completed), so if we also wrote subscription
+      // state here we'd race against the other handlers.
+      //
+      // Send is wrapped in try/catch and ops-notifications.ts itself never
+      // throws — a Resend outage MUST NOT make this case return a non-2xx,
+      // because that would trigger Stripe's automatic retry (3 attempts
+      // over 3 days) and cause duplicate alerts once Resend recovers.
+      try {
+        const subscription = event.data.object as Stripe.Subscription;
+        const customerId = typeof subscription.customer === "string" ? subscription.customer : subscription.customer?.id ?? null;
+        const tierId = resolveTierFromSubscription(subscription);
+        if (tierId === "free" || !customerId) {
+          // Free-tier "subscriptions" (none expected in our setup, but
+          // possible via stripe.subscriptions.create with only metered
+          // items) shouldn't trigger a revenue alert. Bail without
+          // logging — this is normal for non-revenue events.
+          break;
+        }
+
+        const plan = getPlan(tierId);
+        const tierName = plan?.name ?? tierId;
+        // Sum every recurring line item's amount × quantity. Some
+        // subscriptions ship a base flat price + metered overage lines
+        // with unit_amount=0; treating them as 0-contribution gives the
+        // right "expected MRR" for the alert.
+        const mrrCents = subscription.items.data.reduce((sum, item) => {
+          const unitAmount = item.price?.unit_amount ?? 0;
+          const quantity = item.quantity ?? 0;
+          return sum + unitAmount * quantity;
+        }, 0);
+        const firstItem = subscription.items.data[0];
+        const currency = (firstItem?.price?.currency ?? "usd").toLowerCase();
+
+        // Look up the user by Stripe customer id so we can include the
+        // email in the alert. users.stripeCustomerId is populated by
+        // the SetupIntent flow at signup time.
+        const [userRow] = await db
+          .select({
+            id: users.id,
+            email: users.email,
+            createdAt: users.createdAt,
+          })
+          .from(users)
+          .where(eq(users.stripeCustomerId, customerId))
+          .limit(1);
+
+        if (!userRow) {
+          // No mapping → skip the alert. Don't fall back to a Stripe
+          // API call for customer.email because the alert is best-
+          // effort and we don't want to add a network round-trip on
+          // the webhook hot path.
+          console.warn("[stripe-webhook] customer.subscription.created — no user mapped to customer", {
+            customerId,
+            subscriptionId: subscription.id,
+          });
+          break;
+        }
+
+        // signupToPaidDays — quick calc from the existing createdAt
+        // column. Floor() because partial days read as noise in the
+        // alert; the founder cares about same-day-paid vs week-1
+        // vs month-2 conversions.
+        const signupToPaidDays = Math.floor(
+          (Date.now() - userRow.createdAt.getTime()) / 86_400_000,
+        );
+
+        await sendPaidConversionAlert({
+          email: userRow.email,
+          userId: userRow.id,
+          tier: tierName,
+          mrrCents,
+          currency,
+          subscriptionId: subscription.id,
+          signupToPaidDays,
+        });
+      } catch (err) {
+        // ops-notifications.ts already swallows its own errors, but we
+        // wrap here as belt-and-suspenders against an unexpected db or
+        // tier-resolve regression. Webhook MUST always return 2xx.
+        console.warn(
+          `[stripe-webhook] customer.subscription.created ops-alert path threw (swallowed): ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
 
       break;
     }
