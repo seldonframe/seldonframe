@@ -81,9 +81,9 @@ export default async function SignupConnectAiPage({
         </p>
         <h1 className="text-section-title text-foreground">Connect your AI provider</h1>
         <p className="text-label text-[hsl(var(--color-text-secondary))]">
-          SeldonFrame uses your AI key directly — never billed by us. You stay
-          in control of cost, model, and rate limits. Estimated cost per
-          workspace: ~$0.50–$1 in tokens.
+          This unlocks workspace creation. You stay in control of cost, model,
+          and rate limits. Estimated cost per workspace: ~$0.50–$1 in Claude
+          tokens.
         </p>
       </div>
 

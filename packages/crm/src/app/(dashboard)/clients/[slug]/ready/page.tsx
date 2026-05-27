@@ -348,24 +348,15 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
     // 2026-05-23 — Production-setup quick link. After dogfooding, operators
     // consistently asked "how do I swap the SeldonFrame subdomain for the
     // client's own domain?" — the answer (Settings → Domain) was buried.
-    // Surfacing it here as a deliverable-grid tile keeps the Ready page as
-    // the single source of truth for everything an operator does after the
-    // workspace is built. Operator-level setting (lives at /settings/domain,
-    // not /switch-workspace) — that's why the public href is null and the
-    // admin button links straight into agency settings rather than going
-    // through sw().
-    {
-      icon: "🔗",
-      audience: "deliverable" as const,
-      label: "Custom domain",
-      title: "Connect a custom domain",
-      description:
-        "Replace the SeldonFrame subdomain with your client's own domain (e.g. app.theirbrand.com). DNS-verified in one screen; the public surfaces above re-publish automatically.",
-      publicHref: null,
-      publicLabel: "",
-      adminHref: "/settings/domain",
-      adminLabel: "Connect a custom domain →",
-    },
+    //
+    // 2026-05-27 — PROMOTED out of the deliverable grid into its own
+    // prominent "Make it yours" section above the grid. The Ready page
+    // is the terminal screen of the BYOK-first onboarding arc; step 3
+    // is "connect a custom domain", which is also the new upgrade
+    // trigger (see /settings/domain). Surfacing it as a sibling tile
+    // among 5 other deliverables buried the nudge. The dedicated
+    // section is rendered inline in the JSX below — no array entry
+    // needed here anymore.
   ];
 
   // Audience chip styling. The two foundational cards (operator dashboard
@@ -570,6 +561,48 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
                   </article>
                 );
               })}
+          </div>
+        </section>
+
+        {/* ============== MAKE IT YOURS (CUSTOM DOMAIN NUDGE) ==============
+            2026-05-27 — Step 3 of the BYOK-first onboarding arc. The
+            workspace is built (step 2 = clients/new); the natural next
+            move is making it feel premium with a custom domain. This
+            section is intentionally promoted out of the deliverable
+            grid into its own row so the arc reads:
+              hero → audience cards → "make it yours" → deliverables → next steps
+            instead of "connect domain" being one of 6 equal tiles.
+            /settings/domain itself enforces the tier gate (free + no
+            card → upsell card; paid OR free + card → real form). */}
+        <section className="rounded-2xl border border-primary/30 bg-primary/5 p-5 sm:p-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span aria-hidden="true" className="text-xl leading-none">🔗</span>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
+                  Step 3 — Make it yours
+                </p>
+              </div>
+              <h2 className="text-xl font-semibold tracking-tight text-foreground">
+                Make it yours
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Point your client&apos;s existing domain at this site so it
+                lives at <span className="font-medium text-foreground">roofs-by-shiloh.com</span>{" "}
+                instead of{" "}
+                <code className="rounded bg-muted/50 px-1.5 py-0.5 text-xs font-mono text-foreground">
+                  {workspace.slug}.{WORKSPACE_BASE_DOMAIN}
+                </code>
+                .
+              </p>
+            </div>
+            <Link
+              href="/settings/domain"
+              className="crm-pressable inline-flex h-10 shrink-0 items-center gap-1.5 self-start rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-(--shadow-sm) transition-[background-color,transform] duration-150 ease-out hover:bg-primary/90"
+            >
+              Connect custom domain
+              <ArrowRight className="size-4" aria-hidden="true" />
+            </Link>
           </div>
         </section>
 

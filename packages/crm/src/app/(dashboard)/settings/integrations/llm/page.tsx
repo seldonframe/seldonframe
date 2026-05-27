@@ -8,8 +8,19 @@
 //
 // The /agents/[id]/test pre-flight banner deep-links here when a key
 // is missing.
+//
+// 2026-05-27 — Shares the <AnthropicKeyField> + <EncryptionNotice>
+// primitives with the /signup/connect-ai onboarding gate so the field
+// shape, helper line, and encryption notice can't drift between the
+// settings and signup surfaces. OpenAI continues to render its own
+// inline field because it's a settings-only slot (the user-facing
+// build path is Anthropic-only).
 
 import Link from "next/link";
+import {
+  AnthropicKeyField,
+  EncryptionNotice,
+} from "@/components/integrations/anthropic-key-field";
 import {
   getLlmIntegrationSettings,
   removeLlmKeyAction,
@@ -86,68 +97,49 @@ export default async function LlmIntegrationPage({
         </p>
       )}
 
-      <ProviderCard
-        title="Anthropic"
+      <AnthropicProviderCard
         subtitle="Claude — recommended for v1.26.x agents (best tool-use support)."
-        keyPlaceholder="sk-ant-..."
-        keyPattern="sk-ant-"
-        consoleUrl="https://console.anthropic.com/settings/keys"
-        billingUrl="https://console.anthropic.com/settings/billing"
         status={settings.anthropic}
       />
 
-      <ProviderCard
-        title="OpenAI"
+      <OpenAiProviderCard
         subtitle="GPT-4 family — limited tool-use support in v1.26.x; full support queued for v1.28."
-        keyPlaceholder="sk-..."
-        keyPattern="sk-"
-        consoleUrl="https://platform.openai.com/api-keys"
-        billingUrl="https://platform.openai.com/account/billing/overview"
         status={settings.openai}
       />
 
-      <div className="rounded-md border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-        Keys are encrypted with AES-256-GCM before storage. SF cannot read
-        your raw keys — they're only decrypted in memory at agent-turn time.
-        You can also configure these from Claude Code via the{" "}
-        <code className="font-mono">configure_llm_provider</code> MCP tool.
-      </div>
+      <EncryptionNotice
+        trailing={
+          <>
+            You can also configure these from Claude Code via the{" "}
+            <code className="font-mono">configure_llm_provider</code> MCP tool.
+          </>
+        }
+      />
     </section>
   );
 }
 
-function ProviderCard(props: {
-  title: string;
+/** Settings-side Anthropic card. Wraps the shared <AnthropicKeyField>
+ *  with the settings-specific framing (Configured / Not configured badge,
+ *  current-key hint, Replace / Remove affordances). */
+function AnthropicProviderCard({
+  subtitle,
+  status,
+}: {
   subtitle: string;
-  keyPlaceholder: string;
-  keyPattern: string;
-  consoleUrl: string;
-  billingUrl: string;
   status: LlmProviderStatus;
 }) {
-  const { status } = props;
+  const placeholder = status.configured
+    ? "Paste a new key to replace the current one"
+    : "sk-ant-...";
   return (
     <article className="rounded-xl border bg-card p-5 space-y-4">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-card-title">{props.title}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{props.subtitle}</p>
+          <h2 className="text-card-title">Anthropic</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
         </div>
-        <span
-          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs ${
-            status.configured
-              ? "border-positive/20 bg-positive/10 text-positive"
-              : "border-caution/20 bg-caution/10 text-caution"
-          }`}
-        >
-          <span
-            className={`size-1.5 rounded-full ${
-              status.configured ? "bg-positive" : "bg-caution"
-            }`}
-            aria-hidden="true"
-          />
-          {status.configured ? "Configured" : "Not configured"}
-        </span>
+        <StatusBadge configured={status.configured} />
       </header>
 
       {status.configured && (
@@ -164,41 +156,95 @@ function ProviderCard(props: {
       )}
 
       <form action={saveLlmKeyAction} className="space-y-3">
-        <input type="hidden" name="provider" value={props.status.provider} />
-        <div className="space-y-1">
-          <label
-            htmlFor={`apiKey-${props.status.provider}`}
-            className="text-label"
+        <input type="hidden" name="provider" value="anthropic" />
+        <AnthropicKeyField inputId="apiKey-anthropic" placeholder={placeholder} />
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="submit" className="crm-button-primary h-10 px-5 text-sm">
+            {status.configured ? "Replace key" : "Save key"}
+          </button>
+        </div>
+      </form>
+
+      {status.configured && (
+        <form action={removeLlmKeyAction}>
+          <input type="hidden" name="provider" value="anthropic" />
+          <button
+            type="submit"
+            className="text-xs text-rose-600 hover:underline"
           >
-            {props.title} API key
+            Remove key
+          </button>
+        </form>
+      )}
+    </article>
+  );
+}
+
+/** OpenAI card — same wrapper shape but the field is bespoke (no shared
+ *  primitive yet because the build path doesn't consume OpenAI; once it
+ *  does, extract <OpenAiKeyField> along the same line). */
+function OpenAiProviderCard({
+  subtitle,
+  status,
+}: {
+  subtitle: string;
+  status: LlmProviderStatus;
+}) {
+  const placeholder = status.configured
+    ? "Paste a new key to replace the current one"
+    : "sk-...";
+  return (
+    <article className="rounded-xl border bg-card p-5 space-y-4">
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-card-title">OpenAI</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
+        </div>
+        <StatusBadge configured={status.configured} />
+      </header>
+
+      {status.configured && (
+        <div className="rounded-md border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground space-y-1">
+          {status.hint && (
+            <p>
+              Current key: <code className="font-mono">{status.hint}</code>
+            </p>
+          )}
+          {status.savedAt && (
+            <p>Saved {new Date(status.savedAt).toLocaleString()}</p>
+          )}
+        </div>
+      )}
+
+      <form action={saveLlmKeyAction} className="space-y-3">
+        <input type="hidden" name="provider" value="openai" />
+        <div className="space-y-1">
+          <label htmlFor="apiKey-openai" className="text-label">
+            OpenAI API key
           </label>
           <input
-            id={`apiKey-${props.status.provider}`}
+            id="apiKey-openai"
             name="apiKey"
             type="password"
             autoComplete="off"
             spellCheck={false}
             className="crm-input h-10 w-full px-3 font-mono text-sm"
-            placeholder={
-              status.configured
-                ? "Paste a new key to replace the current one"
-                : props.keyPlaceholder
-            }
+            placeholder={placeholder}
             required
           />
           <p className="text-xs text-muted-foreground">
             Get a key from{" "}
             <a
-              href={props.consoleUrl}
+              href="https://platform.openai.com/api-keys"
               target="_blank"
               rel="noopener noreferrer"
               className="text-primary underline-offset-2 hover:underline"
             >
-              {new URL(props.consoleUrl).hostname}
+              platform.openai.com
             </a>
             . Add credits at{" "}
             <a
-              href={props.billingUrl}
+              href="https://platform.openai.com/account/billing/overview"
               target="_blank"
               rel="noopener noreferrer"
               className="text-primary underline-offset-2 hover:underline"
@@ -217,7 +263,7 @@ function ProviderCard(props: {
 
       {status.configured && (
         <form action={removeLlmKeyAction}>
-          <input type="hidden" name="provider" value={props.status.provider} />
+          <input type="hidden" name="provider" value="openai" />
           <button
             type="submit"
             className="text-xs text-rose-600 hover:underline"
@@ -227,5 +273,25 @@ function ProviderCard(props: {
         </form>
       )}
     </article>
+  );
+}
+
+function StatusBadge({ configured }: { configured: boolean }) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs ${
+        configured
+          ? "border-positive/20 bg-positive/10 text-positive"
+          : "border-caution/20 bg-caution/10 text-caution"
+      }`}
+    >
+      <span
+        className={`size-1.5 rounded-full ${
+          configured ? "bg-positive" : "bg-caution"
+        }`}
+        aria-hidden="true"
+      />
+      {configured ? "Configured" : "Not configured"}
+    </span>
   );
 }
