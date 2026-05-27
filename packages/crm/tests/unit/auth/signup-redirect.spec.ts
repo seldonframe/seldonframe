@@ -238,6 +238,16 @@ describe("sanitizeNextPath", () => {
     assert.equal(sanitizeNextPath("/dashboard/billing"), "/dashboard/billing");
   });
 
+  test("passes through /settings/domain (BYOK-arc step 3 upsell target)", () => {
+    // /settings/domain was added to the allowlist on 2026-05-27 so the
+    // upsell card in that page can route through /signup/billing?next=
+    // /settings/domain and bounce back here once the card is saved.
+    // Without this entry the next= collapses to /clients/new and the
+    // user is stranded one click from the surface they just paid to
+    // unlock.
+    assert.equal(sanitizeNextPath("/settings/domain"), "/settings/domain");
+  });
+
   test("rejects protocol-relative // (open-redirect attempt)", () => {
     assert.equal(sanitizeNextPath("//evil.com/path"), "/clients/new");
   });
