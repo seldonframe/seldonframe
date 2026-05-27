@@ -42,7 +42,14 @@
 // the short ?url= in the URL keeps that path stateless and testable;
 // the long ?biz= payload lives in localStorage where it belongs.
 
-const VALID_NEXT_PREFIXES = ["/clients/new", "/dashboard"] as const;
+// 2026-05-27 — Added /settings/domain so the BYOK-first onboarding arc
+// can route free-tier upsell clicks through /signup/billing?next=/settings/domain
+// and have /signup/billing bounce them back to the domain page after the
+// card is saved (step 3 of the 3-step onboarding arc:
+// connect-ai → clients/new → settings/domain). Without /settings/domain
+// here, the next= would collapse to /clients/new and the operator would
+// be stranded one click away from the surface they just upgraded for.
+const VALID_NEXT_PREFIXES = ["/clients/new", "/dashboard", "/settings/domain"] as const;
 
 /**
  * Build the `next` query value the /signup form embeds into its
