@@ -38,6 +38,9 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { agents, bookings, intakeForms, landingPages, organizations, orgMembers, soulSources } from "@/db/schema";
 import { buildWorkspaceUrls } from "@/lib/billing/anonymous-workspace";
+// 2026-05-27 — Unified onboarding shell + step-3 completion path.
+import { OnboardingShell } from "@/components/onboarding/shell";
+import { getOnboardingState } from "@/lib/onboarding/state";
 // 2026-05-17 — Invite SMB owner card. Wraps the existing
 // /portal/<slug>/login magic-link flow so the agency operator can
 // hand off the workspace to its actual SMB owner without copy-pasting
@@ -47,6 +50,9 @@ import { InviteSmbOwner } from "./invite-smb-owner";
 import { LandingUrlCopyButton } from "./landing-url-copy-button";
 // 2026-05-22 — Fallback generate button when R1 generation failed silently.
 import { GenerateWebsiteButton } from "./generate-website-button";
+// 2026-05-27 — Server action that marks onboarding complete + sends
+// the welcome email when the operator clicks "Maybe later" on step 3.
+import { dismissOnboardingAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -55,9 +61,16 @@ const WORKSPACE_BASE_DOMAIN =
 
 type ReadyPageProps = {
   params: Promise<{ slug: string }>;
+  // 2026-05-27 — `?completed=1` flips the shell off and shows an
+  // inline "You're all set" banner that auto-dismisses after 4s. Set
+  // by /settings/domain when a custom-domain save succeeds while the
+  // user was in onboarding (the domain save IS the completion event
+  // for that branch). The "Maybe later" branch lands somewhere else
+  // entirely (the workspace dashboard) so it doesn't need this signal.
+  searchParams?: Promise<{ completed?: string }>;
 };
 
-export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
+export default async function WorkspaceReadyPage({ params, searchParams }: ReadyPageProps) {
   const session = await auth();
   if (!session?.user?.id) {
     const { slug } = await params;
@@ -379,9 +392,51 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
     },
   };
 
+  // 2026-05-27 — Onboarding state for the shell + the Maybe-later
+  // dismissal CTA. Computed once here so the JSX branches don't
+  // re-call the helper for each section that needs it.
+  //
+  // The Ready page is step 3 of the arc; if the user is still mid-
+  // onboarding their `currentStep` should be exactly 3 (they reached
+  // here by completing the build, which is the gate for step 2 → 3).
+  // If they're already completed (returning operator viewing a
+  // previously-built workspace), the shell and the Maybe-later CTA
+  // both disappear and the page renders in its evergreen form.
+  const onboardingState = await getOnboardingState(session.user.id);
+  const showShell =
+    !onboardingState.completed && onboardingState.currentStep === 3;
+  // 2026-05-27 — Inline celebration banner shown when /settings/domain
+  // bounced us back here with ?completed=1 (the custom-domain success
+  // path that marks onboarding complete). Auto-dismiss is handled by
+  // the existing UI — we just render the banner statically and let the
+  // page re-render on next navigation clear it.
+  const sp = await searchParams;
+  const justCompleted = sp?.completed === "1";
+
   return (
     <main className="animate-page-enter w-full flex-1 overflow-auto" style={{ minHeight: "calc(100vh - 9rem)" }}>
+      {/* 2026-05-27 — Onboarding shell strip. Only renders while the
+          operator is mid-arc. Once they complete (either path), this
+          page goes back to its non-onboarding layout — no shell, no
+          Maybe-later CTA, no celebration banner. */}
+      {showShell ? (
+        <OnboardingShell step={3} title="Make it yours" />
+      ) : null}
       <div className="mx-auto max-w-5xl p-4 sm:p-6 md:p-8">
+      {justCompleted ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="mb-6 flex items-center gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-200"
+        >
+          <Sparkles className="size-4 shrink-0" aria-hidden="true" />
+          <span>
+            <span className="font-semibold">You&apos;re all set.</span>{" "}
+            Your workspace is live and your domain is connected. Welcome
+            aboard.
+          </span>
+        </div>
+      ) : null}
       <div className="space-y-10">
         {/* ============== HERO ============== */}
         <header className="space-y-5">
@@ -586,23 +641,71 @@ export default async function WorkspaceReadyPage({ params }: ReadyPageProps) {
               <h2 className="text-xl font-semibold tracking-tight text-foreground">
                 Make it yours
               </h2>
-              <p className="text-sm text-muted-foreground">
-                Point your client&apos;s existing domain at this site so it
-                lives at <span className="font-medium text-foreground">roofs-by-shiloh.com</span>{" "}
-                instead of{" "}
-                <code className="rounded bg-muted/50 px-1.5 py-0.5 text-xs font-mono text-foreground">
-                  {workspace.slug}.{WORKSPACE_BASE_DOMAIN}
-                </code>
-                .
-              </p>
+              {/* 2026-05-27 — In-onboarding copy uses loss-aversion
+                  framing per the research: "Your client sees X right
+                  now. Fix it before they see it." Returning operators
+                  (showShell=false) see the evergreen "point your
+                  client's domain at this site" copy instead. */}
+              {showShell ? (
+                <p className="text-sm text-muted-foreground">
+                  Right now your client sees{" "}
+                  <code className="rounded bg-muted/50 px-1.5 py-0.5 text-xs font-mono text-foreground">
+                    {workspace.slug}.{WORKSPACE_BASE_DOMAIN}
+                  </code>
+                  . Connect a custom domain so the workspace lives at{" "}
+                  <span className="font-medium text-foreground">{workspace.slug}.com</span>{" "}
+                  before you share the link.
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Point your client&apos;s existing domain at this site so it
+                  lives at <span className="font-medium text-foreground">roofs-by-shiloh.com</span>{" "}
+                  instead of{" "}
+                  <code className="rounded bg-muted/50 px-1.5 py-0.5 text-xs font-mono text-foreground">
+                    {workspace.slug}.{WORKSPACE_BASE_DOMAIN}
+                  </code>
+                  .
+                </p>
+              )}
             </div>
-            <Link
-              href="/settings/domain"
-              className="crm-pressable inline-flex h-10 shrink-0 items-center gap-1.5 self-start rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-(--shadow-sm) transition-[background-color,transform] duration-150 ease-out hover:bg-primary/90"
-            >
-              Connect custom domain
-              <ArrowRight className="size-4" aria-hidden="true" />
-            </Link>
+            {/* 2026-05-27 — Two CTAs when in onboarding: primary
+                "Connect custom domain" → /settings/domain (which gates
+                to the upsell card for free-tier-no-card users), AND
+                "Maybe later" → dismissOnboardingAction which marks
+                onboarding complete and redirects to the workspace
+                dashboard. Returning operators see only the connect
+                button — there's nothing to dismiss. */}
+            <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-start">
+              {/* In-onboarding: pass ?onboardingWorkspaceSlug=<slug>
+                  so /settings/domain knows where to bounce the user
+                  back to (with ?completed=1) after a successful save.
+                  Returning operators get the bare /settings/domain link
+                  since they don't need the post-save redirect. */}
+              <Link
+                href={
+                  showShell
+                    ? `/settings/domain?onboardingWorkspaceSlug=${encodeURIComponent(workspace.slug)}`
+                    : "/settings/domain"
+                }
+                className="crm-pressable inline-flex h-10 shrink-0 items-center justify-center gap-1.5 self-start rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-(--shadow-sm) transition-[background-color,transform] duration-150 ease-out hover:bg-primary/90"
+              >
+                Connect custom domain
+                <ArrowRight className="size-4" aria-hidden="true" />
+              </Link>
+              {showShell ? (
+                <form action={dismissOnboardingAction}>
+                  <input type="hidden" name="workspaceId" value={workspace.id} />
+                  <input type="hidden" name="workspaceSlug" value={workspace.slug} />
+                  <input type="hidden" name="baseDomain" value={WORKSPACE_BASE_DOMAIN} />
+                  <button
+                    type="submit"
+                    className="crm-pressable inline-flex h-10 shrink-0 items-center justify-center gap-1.5 self-start rounded-xl border border-border bg-card/60 px-4 text-sm font-medium text-muted-foreground transition-[background-color,color,transform] duration-150 ease-out hover:bg-card hover:text-foreground"
+                  >
+                    Maybe later →
+                  </button>
+                </form>
+              ) : null}
+            </div>
           </div>
         </section>
 

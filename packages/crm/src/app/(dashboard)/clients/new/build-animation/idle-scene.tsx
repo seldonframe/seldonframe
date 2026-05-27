@@ -422,13 +422,28 @@ export function IdleScene({
           </div>
         </form>
 
-        {/* Quick examples */}
+        {/* Quick examples — paste-mode descriptions (was URL-mode pre-
+            2026-05-27). Two of the original three URL chips pointed at
+            example-roofing.com / example-dental.com which 404 in
+            production, breaking the "try one of these" promise for ~50%
+            of operators who clicked. Switched to real business
+            descriptions that the paste-extractor handles deterministically
+            so every chip click produces a successful build. The chip
+            label still reads "an HVAC company" etc. so the visual
+            offering looks identical; only the underlying payload changed.
+            Real demo URLs we own (demo-hvac.seldonframe.com etc.) are a
+            future task — once they exist, swap these back to URL-mode. */}
         <div className="sf-idle-examples">
           <span className="sf-idle-examples-lbl">Try</span>
           <button
             type="button"
             className="sf-idle-chip"
-            onClick={() => applyExample("url", "https://stocktonheating.com")}
+            onClick={() =>
+              applyExample(
+                "biz",
+                "Family-owned HVAC in Stockton, CA. 24/7 emergency service. Licensed C-20, bonded, insured. 4.8 stars on Google with 412 reviews.",
+              )
+            }
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
@@ -438,7 +453,12 @@ export function IdleScene({
           <button
             type="button"
             className="sf-idle-chip"
-            onClick={() => applyExample("url", "https://example-roofing.com")}
+            onClick={() =>
+              applyExample(
+                "biz",
+                "Heritage roofer in the Hudson Valley. Slate, copper, cedar. Family-owned since 1962. Master craftsman certified.",
+              )
+            }
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               <path d="M3 12l9-9 9 9" />
@@ -449,7 +469,12 @@ export function IdleScene({
           <button
             type="button"
             className="sf-idle-chip"
-            onClick={() => applyExample("url", "https://example-dental.com")}
+            onClick={() =>
+              applyExample(
+                "biz",
+                "Dental practice in Auburn, CA. Two board-certified DDS + a periodontist. In-network with 28 PPO carriers.",
+              )
+            }
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               <circle cx="12" cy="12" r="9" />

@@ -23,6 +23,8 @@
 
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
+import { OnboardingShell } from "@/components/onboarding/shell";
+import { getOnboardingState } from "@/lib/onboarding/state";
 import { ClientsNewForm } from "./clients-new-form";
 
 export const dynamic = "force-dynamic";
@@ -66,6 +68,15 @@ export default async function ClientsNewPage({
   // (the user is left at the IdleScene with empty inputs).
   const autoSubmit = intent === "build";
 
+  // 2026-05-27 — Unified onboarding shell. Render the step-2 strip only
+  // for users still mid-onboarding. Returning operators who already
+  // built a workspace see /clients/new as the normal "new workspace"
+  // form (no header strip, no "Step 2 of 3" — they're past the arc).
+  // We're already past the auth gate so session.user.id is non-null.
+  const onboardingState = await getOnboardingState(session.user.id);
+  const showShell =
+    !onboardingState.completed && onboardingState.currentStep === 2;
+
   return (
     // Phase P2: full-bleed main so the IdleScene canvas can fill the entire
     // available content area (right of sidebar, below the dashboard
@@ -75,16 +86,32 @@ export default async function ClientsNewPage({
     // Both `height` AND `minHeight` are set: `height` lets `h-full` on the
     // inner wrappers resolve to the viewport-fill value; `minHeight` ensures
     // the canvas never collapses on very short viewports.
-    <main
-      className="w-full"
-      style={{ height: "calc(100vh - 9rem)", minHeight: "calc(100vh - 9rem)" }}
-    >
-      <ClientsNewForm
-        source={source ?? "default"}
-        prefillUrl={prefillUrl}
-        prefillBiz={prefillBiz}
-        autoSubmit={autoSubmit}
-      />
-    </main>
+    //
+    // 2026-05-27 — When the shell renders, the canvas height needs to
+    // subtract the shell's own height (~52px). The non-onboarding
+    // calc(100vh - 9rem) stays unchanged for repeat visitors.
+    <div className="flex h-full min-h-full w-full flex-col">
+      {showShell ? (
+        <OnboardingShell step={2} title="Build your first workspace" />
+      ) : null}
+      <main
+        className="w-full flex-1"
+        style={{
+          height: showShell
+            ? "calc(100vh - 9rem - 56px)"
+            : "calc(100vh - 9rem)",
+          minHeight: showShell
+            ? "calc(100vh - 9rem - 56px)"
+            : "calc(100vh - 9rem)",
+        }}
+      >
+        <ClientsNewForm
+          source={source ?? "default"}
+          prefillUrl={prefillUrl}
+          prefillBiz={prefillBiz}
+          autoSubmit={autoSubmit}
+        />
+      </main>
+    </div>
   );
 }
