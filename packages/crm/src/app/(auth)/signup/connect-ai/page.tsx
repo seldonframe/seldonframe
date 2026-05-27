@@ -38,6 +38,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { sanitizeNextPath } from "@/lib/auth/signup-redirect";
 import { operatorHasByokAnthropicKey } from "@/lib/web-onboarding/byok-resolver";
+import { OnboardingShell } from "@/components/onboarding/shell";
 
 import { ConnectAiForm } from "./connect-ai-form";
 
@@ -73,12 +74,22 @@ export default async function SignupConnectAiPage({
     redirect(next);
   }
 
+  // 2026-05-27 — Unified onboarding shell. This is step 1/3 of the arc:
+  //   Step 1 — Connect AI  (← here)
+  //   Step 2 — Build       (/clients/new)
+  //   Step 3 — Make it yours (/clients/[slug]/ready → /settings/domain)
+  //
+  // The shell renders the header strip with logo + progress bar +
+  // "Step 1 of 3" counter at the top. The bar fills to 33% here
+  // (endowed-progress effect — they get credit for signing up). We
+  // pass showLogo={false} because the (auth) layout already renders
+  // the SeldonFrame wordmark above this card; two marks side-by-side
+  // would look noisy.
   return (
     <div className="space-y-6">
+      <OnboardingShell step={1} title="Connect AI" showLogo={false} />
+
       <div className="space-y-2 text-center">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[hsl(var(--color-text-secondary))]">
-          Step 2 of 2
-        </p>
         <h1 className="text-section-title text-foreground">Connect your AI provider</h1>
         <p className="text-label text-[hsl(var(--color-text-secondary))]">
           This unlocks workspace creation. You stay in control of cost, model,
@@ -88,6 +99,19 @@ export default async function SignupConnectAiPage({
       </div>
 
       <ConnectAiForm next={next} />
+
+      {/* 2026-05-27 — Reassurance line beneath the form (above the
+          encryption footer in ConnectAiForm), pulled into the page
+          because the form is the shared primitive — the page owns the
+          framing copy. Mirrors the BYOK-direct-billing point the
+          marketing site makes so the visitor isn't surprised by token
+          charges on their Anthropic statement later. */}
+      <p className="text-center text-xs text-[hsl(var(--color-text-secondary))]">
+        <span className="font-medium text-foreground">Why this first?</span>{" "}
+        SeldonFrame doesn&apos;t proxy your AI usage — you pay Anthropic
+        directly for tokens (~$0.50/workspace). This step unlocks workspace
+        creation.
+      </p>
 
       <footer className="border-t border-border pt-4 text-xs text-[hsl(var(--color-text-secondary))]">
         <div className="flex flex-wrap items-center gap-3">

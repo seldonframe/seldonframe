@@ -3,11 +3,24 @@
 import { desc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { auth } from "@/auth";
 import { db } from "@/db";
 import { bookings, intakeForms, landingPages, organizations } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
 import { assertWritable } from "@/lib/demo/server";
 import { addDomain, checkDomainStatus, hasVercelDomainEnv, removeDomain } from "@/lib/domains/vercel-domains";
+// 2026-05-27 — Unified onboarding shell — step 3 completion. A
+// successful domain save marks the operator's onboarding complete
+// and (when the form carries an onboarding-context payload) bounces
+// them back to the Ready page with ?completed=1 so the celebration
+// banner fires. Both wiring pieces are no-ops for users not in
+// onboarding, so we can call them unconditionally here without
+// hurting the non-onboarding domain-save path.
+import { markOnboardingComplete } from "@/lib/onboarding/state";
+import { sendOnboardingCompletionWelcomeEmail } from "@/lib/onboarding/welcome-email";
+
+const WORKSPACE_BASE_DOMAIN =
+  process.env.WORKSPACE_BASE_DOMAIN?.trim() || "app.seldonframe.com";
 
 type DomainSettings = {
   customDomain?: string;
@@ -284,5 +297,47 @@ export async function saveCustomDomainAction(formData: FormData) {
 
   revalidatePath("/settings");
   revalidatePath("/settings/domain");
+
+  // 2026-05-27 — Onboarding completion + celebration bounce. The
+  // domain save is one of the two completion events for the unified
+  // onboarding arc (the other is "Maybe later" on the Ready page).
+  // Mark the user complete + fire the welcome email + redirect back
+  // to the Ready page with ?completed=1 so the celebration banner
+  // fires. All three are no-ops for users not in onboarding.
+  const session = await auth();
+  const userId = session?.user?.id;
+  const onboardingWorkspaceSlug = String(
+    formData.get("onboardingWorkspaceSlug") ?? "",
+  ).trim();
+
+  if (userId) {
+    await markOnboardingComplete(userId);
+
+    if (onboardingWorkspaceSlug) {
+      // Best-effort welcome email — wrapped in try/catch since a Resend
+      // outage must not block the redirect. The wrapper itself swallows
+      // its own errors but the import-time check might still throw if
+      // schema loads fail; belt-and-braces.
+      try {
+        await sendOnboardingCompletionWelcomeEmail({
+          email: session?.user?.email ?? null,
+          name: session?.user?.name ?? null,
+          workspaceName: onboardingWorkspaceSlug,
+          workspaceSlug: onboardingWorkspaceSlug,
+          baseDomain: WORKSPACE_BASE_DOMAIN,
+        });
+      } catch (err) {
+        console.error(
+          JSON.stringify({
+            event: "onboarding_welcome_email_threw",
+            user_id: userId,
+            error: err instanceof Error ? err.message : String(err),
+          }),
+        );
+      }
+      redirect(`/clients/${onboardingWorkspaceSlug}/ready?completed=1`);
+    }
+  }
+
   redirect(`/settings/domain?saved=1&domainAction=added&verified=${verified ? "1" : "0"}`);
 }

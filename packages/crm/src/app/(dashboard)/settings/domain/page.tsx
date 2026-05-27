@@ -36,7 +36,21 @@ import { resolveDomainGate } from "@/lib/billing/domain-gate";
 export default async function DomainSettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ saved?: string; domainAction?: string; verified?: string; error?: string }>;
+  // 2026-05-27 — `onboardingWorkspaceSlug` is added by the Ready
+  // page's "Connect custom domain" CTA when the operator is mid-
+  // onboarding. The slug is sanitized to lowercase alphanumerics +
+  // hyphens below (matches the org-slug shape) and re-emitted as a
+  // hidden form input so the save action can mark onboarding
+  // complete and bounce the user back to that workspace's Ready
+  // page with ?completed=1. Returning operators won't have this
+  // param so the existing post-save UX is unchanged.
+  searchParams: Promise<{
+    saved?: string;
+    domainAction?: string;
+    verified?: string;
+    error?: string;
+    onboardingWorkspaceSlug?: string;
+  }>;
 }) {
   const params = await searchParams;
   const session = await auth();
@@ -49,6 +63,17 @@ export default async function DomainSettingsPage({
   }
 
   const gate = await resolveDomainGate({ userId, orgId });
+
+  // Sanitize the workspace slug from query — only allow the org-slug
+  // shape (lowercase alphanumerics + hyphens, max 60 chars) so a
+  // hostile redirect can't smuggle in a path. The save action ALSO
+  // re-validates by querying the org row before redirecting, so this
+  // is a defense-in-depth check rather than the sole gate.
+  const rawSlug = params.onboardingWorkspaceSlug ?? "";
+  const onboardingWorkspaceSlug =
+    typeof rawSlug === "string" && /^[a-z0-9-]{1,60}$/.test(rawSlug)
+      ? rawSlug
+      : "";
 
   const successMessage =
     params.saved === "1"
@@ -108,11 +133,26 @@ export default async function DomainSettingsPage({
       </article>
 
       {gate?.kind === "render-upsell" ? (
-        <UpsellCard />
+        <UpsellCard onboardingWorkspaceSlug={onboardingWorkspaceSlug} />
       ) : (
         <article className="rounded-xl border bg-card p-5 space-y-5">
           <form action={saveCustomDomainAction} className="space-y-3">
             <input type="hidden" name="intent" value="add" />
+            {/* 2026-05-27 — Onboarding context passthrough. When this
+                page was reached from the Ready page's step-3 CTA, the
+                slug is in the URL; we round-trip it through the form
+                so the save action knows to mark onboarding complete +
+                bounce back to that workspace's Ready page with
+                ?completed=1 once the domain save succeeds. Empty
+                value for non-onboarding visits — the action treats
+                empty as "no bounce, normal post-save redirect". */}
+            {onboardingWorkspaceSlug ? (
+              <input
+                type="hidden"
+                name="onboardingWorkspaceSlug"
+                value={onboardingWorkspaceSlug}
+              />
+            ) : null}
             <div className="space-y-1">
               <label htmlFor="custom-domain" className="text-label">
                 Custom domain
@@ -177,8 +217,24 @@ export default async function DomainSettingsPage({
 /** Free-tier-no-card upsell. Full-page card (not a modal) because step
  *  3 of the onboarding arc IS this surface — there's nothing else to
  *  interrupt. CTA hits /signup/billing?next=/settings/domain so the
- *  user lands back here once the card is saved. */
-function UpsellCard() {
+ *  user lands back here once the card is saved.
+ *
+ *  2026-05-27 — When reached from the Ready page's step-3 CTA, the
+ *  workspace slug is threaded through so /signup/billing → /settings/
+ *  domain hop preserves it (the next-param round-trip terminates at
+ *  the form's hidden input on the second visit, then the save action
+ *  bounces back to the Ready page with ?completed=1). */
+function UpsellCard({
+  onboardingWorkspaceSlug,
+}: {
+  onboardingWorkspaceSlug: string;
+}) {
+  // Encode the slug into the next-path so /signup/billing knows where
+  // to bounce back to AFTER the card save, and so /settings/domain
+  // sees the slug on its second visit and embeds it in the form.
+  const next = onboardingWorkspaceSlug
+    ? `/settings/domain?onboardingWorkspaceSlug=${encodeURIComponent(onboardingWorkspaceSlug)}`
+    : "/settings/domain";
   return (
     <article className="rounded-xl border border-primary/30 bg-primary/5 p-6 space-y-4">
       <div className="space-y-2">
@@ -195,7 +251,7 @@ function UpsellCard() {
 
       <div className="flex flex-wrap items-center gap-3 pt-1">
         <Link
-          href="/signup/billing?next=/settings/domain"
+          href={`/signup/billing?next=${encodeURIComponent(next)}`}
           className="crm-button-primary inline-flex h-10 items-center gap-1.5 px-4 text-sm font-semibold"
         >
           Add a card to unlock

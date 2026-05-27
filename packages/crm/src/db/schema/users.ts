@@ -29,6 +29,16 @@ export const users = pgTable(
     billingPeriod: text("billing_period").notNull().default("monthly"),
     subscriptionStatus: text("subscription_status").notNull().default("trialing"),
     trialEndsAt: timestamp("trial_ends_at", { withTimezone: true }),
+    // 2026-05-27 — Unified onboarding shell (migration 0055). NULL means
+    // the user is mid-onboarding and the <OnboardingShell> renders the
+    // step header strip on /signup/connect-ai, /clients/new, and the
+    // workspace Ready page. Non-NULL stops the shell from ever rendering
+    // again for that user. Set by markOnboardingComplete() when the
+    // operator either connects a custom domain OR clicks "Maybe later"
+    // on the Ready page's step-3 surface. Backfilled in the migration
+    // for any user who already has a saved card or a workspace so
+    // existing operators don't get re-onboarded.
+    onboardingCompletedAt: timestamp("onboarding_completed_at", { withTimezone: true }),
     agencyProfile: jsonb("agency_profile")
       .$type<AgencyProfile>()
       .notNull()
