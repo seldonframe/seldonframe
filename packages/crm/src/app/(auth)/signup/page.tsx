@@ -5,19 +5,25 @@
 // signup flow:
 //
 //   /signup?url=https://acme.com&intent=build
-//     → magic-link → /signup/billing?next=/clients/new?url=...&intent=build
-//     → card confirm → /clients/new?url=...&intent=build (auto-submits)
+//     → magic-link → /signup/connect-ai?next=/clients/new?url=...&intent=build
+//     → key save → /clients/new?url=...&intent=build (auto-submits)
 //
 // The form's hidden `redirectTo` field carries the eventual destination
-// so the magic-link callback lands the visitor on /signup/billing
-// without dropping the original prompt. The card-collection step is
-// what closes the credibility gap between the marketing FAQ promise
-// ("we ask for a card at sign-up so future upgrades are one click")
-// and the previous email-only signup.
+// so the magic-link callback lands the visitor on /signup/connect-ai
+// without dropping the original prompt.
+//
+// 2026-05-27 — Step 2/2 moved from /signup/billing (card capture) to
+// /signup/connect-ai (Anthropic BYOK). Card capture was a 100% drop-off
+// wall in early telemetry (0/12 real signups in 3.5d). The new step is
+// far more achievable AND directly unblocks the next action (/clients/new
+// extraction requires the operator's key), so the gate stops being
+// "optional friction the user can't see value in" and becomes "the thing
+// they need to do their first build". Card capture still lives at
+// /signup/billing and is reached via the over-limit upgrade prompt.
 
 import { SignupForm } from "./signup-form";
 import Link from "next/link";
-import { buildSignupBillingRedirect } from "@/lib/auth/signup-redirect";
+import { buildSignupConnectAiRedirect } from "@/lib/auth/signup-redirect";
 
 export default async function SignupPage({
   searchParams,
@@ -35,18 +41,21 @@ export default async function SignupPage({
   // Build the post-magic-link redirectTo. Three cases:
   //   1. Token-claim flow (visitor came via a claim invite) — preserve
   //      the existing /claim?token=... destination unchanged. Bypasses
-  //      the card-collection step because claim flows have their own
-  //      pricing UX on the post-claim screen.
+  //      the BYOK step because claim flows attach the new user to an
+  //      existing agency org which inherits the agency operator's key.
   //   2. Prompt-driven signup (?url= or ?biz= present) — route through
-  //      /signup/billing so the card collection step runs, then land on
+  //      /signup/connect-ai so the BYOK step runs, then land on
   //      /clients/new with the prefill + auto-submit signal.
-  //   3. Bare /signup — also route through /signup/billing so the FAQ
-  //      claim "card at signup" stays accurate for every signup path.
+  //   3. Bare /signup — also route through /signup/connect-ai. /clients/new
+  //      requires the operator's Anthropic key to extract a workspace, so
+  //      gating signup on the key is the cheapest way to avoid the
+  //      mid-build "needs_byok" prompt that strands visitors who don't
+  //      know what to do next.
   let redirectTo: string;
   if (token) {
     redirectTo = `/claim?token=${encodeURIComponent(token)}`;
   } else {
-    redirectTo = buildSignupBillingRedirect({
+    redirectTo = buildSignupConnectAiRedirect({
       url: typeof params.url === "string" ? params.url : null,
       biz: typeof params.biz === "string" ? params.biz : null,
       intent: typeof params.intent === "string" ? params.intent : null,

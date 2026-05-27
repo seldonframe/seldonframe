@@ -20,6 +20,7 @@ import assert from "node:assert/strict";
 import {
   buildSignupNextPath,
   buildSignupBillingRedirect,
+  buildSignupConnectAiRedirect,
   sanitizeNextPath,
 } from "../../../src/lib/auth/signup-redirect";
 
@@ -155,6 +156,72 @@ describe("buildSignupBillingRedirect", () => {
       out.length < 200,
       `huge biz must not bloat the redirect — got ${out.length} chars`,
     );
+  });
+});
+
+describe("buildSignupConnectAiRedirect", () => {
+  // 2026-05-27 — Coverage for the helper that replaces buildSignupBillingRedirect
+  // as the default post-magic-link redirect. The mandatory step 2/2 of signup
+  // moved from card capture to Anthropic BYOK collection (live data showed
+  // 0/12 conversions through /signup/billing); this helper builds the redirect
+  // URL that lands the magic-link verifier on /signup/connect-ai with the
+  // visitor's eventual /clients/new destination embedded as ?next=.
+  test("embeds next= into /signup/connect-ai", () => {
+    const out = buildSignupConnectAiRedirect({
+      url: "https://example.com",
+      intent: "build",
+    });
+    assert.match(out, /^\/signup\/connect-ai\?next=/);
+    const next = decodeURIComponent(out.split("next=")[1]!);
+    assert.equal(next, "/clients/new?url=https%3A%2F%2Fexample.com&intent=build");
+  });
+
+  test("?next= survives the round trip (decodes back to a sanitizable path)", () => {
+    const out = buildSignupConnectAiRedirect({
+      url: "https://acme.com",
+      intent: "build",
+    });
+    const encoded = out.split("next=")[1]!;
+    const next = decodeURIComponent(encoded);
+    // The same shape sanitizeNextPath accepts — proves the round trip
+    // is closed and ?next= is recoverable on the /signup/connect-ai page.
+    assert.equal(sanitizeNextPath(next), next);
+  });
+
+  test("intent=build survives even without a url (localStorage carries biz)", () => {
+    // The marketing hero in BIZ mode forwards ?intent=build with no biz
+    // in the URL chain (the biz payload is in localStorage). The redirect
+    // must still carry intent so /clients/new auto-submits on mount.
+    const out = buildSignupConnectAiRedirect({ intent: "build" });
+    const next = decodeURIComponent(out.split("next=")[1]!);
+    assert.equal(next, "/clients/new?intent=build");
+  });
+
+  test("bare call with no inputs still produces a valid relative URL", () => {
+    const out = buildSignupConnectAiRedirect({});
+    assert.equal(out, "/signup/connect-ai?next=%2Fclients%2Fnew");
+  });
+
+  test("huge biz payload doesn't bloat the redirect URL", () => {
+    // Same constraint as buildSignupBillingRedirect — the URL chain
+    // stays small because biz is carried via localStorage, not the URL.
+    const huge = "z".repeat(4000);
+    const out = buildSignupConnectAiRedirect({ biz: huge, intent: "build" });
+    assert.ok(
+      out.length < 200,
+      `huge biz must not bloat the connect-ai redirect — got ${out.length} chars`,
+    );
+  });
+
+  test("non-build intent values are dropped (matches buildSignupNextPath)", () => {
+    const out = buildSignupConnectAiRedirect({
+      url: "https://example.com",
+      intent: "drop-tables",
+    });
+    const next = decodeURIComponent(out.split("next=")[1]!);
+    // Only url survives; intent is dropped because only "build" is a
+    // recognised signal — guards against hostile ?intent=foo manipulation.
+    assert.equal(next, "/clients/new?url=https%3A%2F%2Fexample.com");
   });
 });
 

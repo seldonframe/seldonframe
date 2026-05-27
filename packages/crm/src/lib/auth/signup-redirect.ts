@@ -119,6 +119,15 @@ export function buildSignupNextPath(input: {
  * Returned path is always relative (no host) — NextAuth's redirectTo
  * validation refuses cross-origin redirects, so keeping this relative
  * matches the project's existing sanitizeRedirectTo policy.
+ *
+ * 2026-05-27 — RETAINED but no longer the primary post-magic-link target.
+ * The mandatory step 2/2 is now /signup/connect-ai (Anthropic BYOK), which
+ * is far more achievable for self-serve operators than card capture (live
+ * data: 0/12 signups in 3.5d completed /signup/billing). /signup/billing
+ * stays accessible from /settings/billing and the over-limit upgrade
+ * prompt — this helper is preserved so callers that already point at the
+ * card-collection step don't break, and so future A/B tests can re-route
+ * a subset of traffic if needed.
  */
 export function buildSignupBillingRedirect(input: {
   url?: string | null;
@@ -127,6 +136,28 @@ export function buildSignupBillingRedirect(input: {
 }): string {
   const next = buildSignupNextPath(input);
   return `/signup/billing?next=${encodeURIComponent(next)}`;
+}
+
+/**
+ * 2026-05-27 — The new mandatory step 2/2 of signup, replacing the
+ * card-collection step that was a 100% drop-off wall in early signup
+ * telemetry. /signup/connect-ai asks for the operator's Anthropic API
+ * key (BYOK) so /clients/new can extract the first workspace directly
+ * after — without it, the SSE build fails with `needs_byok` and routes
+ * back here as the safety net.
+ *
+ * Same ?next= passthrough contract as buildSignupBillingRedirect: the
+ * eventual /clients/new destination is embedded as a single URL-encoded
+ * query parameter so the original ?url= + ?intent=build survive the
+ * round trip through magic-link verification.
+ */
+export function buildSignupConnectAiRedirect(input: {
+  url?: string | null;
+  biz?: string | null;
+  intent?: string | null;
+}): string {
+  const next = buildSignupNextPath(input);
+  return `/signup/connect-ai?next=${encodeURIComponent(next)}`;
 }
 
 /**
