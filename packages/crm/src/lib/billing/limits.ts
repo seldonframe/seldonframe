@@ -106,6 +106,17 @@ export async function enforceAgentRunLimit(orgId: string): Promise<LimitDecision
  * Workspace creation cap. Free = 1 workspace, Growth = 3, Scale =
  * unlimited. The user's tier is read from the user's "primary" org's
  * subscription (the org pointed to by users.orgId).
+ *
+ * 2026-05-27 — Copy revised for the deferred-card signup flow. Card
+ * capture moved out of the mandatory signup chain (was a 100% drop-off);
+ * the over-limit prompt is now the first place we ever ask the operator
+ * to save a card. The copy reflects that change: instead of "Upgrade to
+ * Growth" (jargony, implies a multi-tier choice the user hasn't seen
+ * yet), free-tier users hit "add a card to unlock more workspaces" and
+ * the upgradeUrl points at /signup/billing?next=/clients/new — the
+ * existing SetupIntent page, now reached as an opt-in step. Paid-tier
+ * upgrade copy (Growth → Scale) is unchanged because those users have
+ * already seen the pricing matrix.
  */
 export async function enforceWorkspaceLimit(params: {
   userId: string;
@@ -122,17 +133,31 @@ export async function enforceWorkspaceLimit(params: {
   if (cap === -1) return { allowed: true, tier };
   if (params.ownedWorkspaceCount < cap) return { allowed: true, tier };
 
-  const upgradeTarget = tier === "free" ? "Growth" : "Scale";
-  const upgradeBenefit =
-    tier === "free"
-      ? "up to 3 workspaces"
-      : "unlimited workspaces";
+  // Free-tier users — first ever ask to save a card. Route to the
+  // existing /signup/billing SetupIntent page (now opt-in) instead of
+  // /settings/billing so the visitor lands in a single-purpose surface
+  // with the Stripe Elements card form already mounted. ?next=/clients/new
+  // brings them straight back here after they save the card.
+  if (tier === "free") {
+    return {
+      allowed: false,
+      tier,
+      reason: "workspace_limit_reached",
+      message: `You've used ${params.ownedWorkspaceCount}/${cap} free workspace${cap === 1 ? "" : "s"} — add a card to unlock more.`,
+      upgradeUrl: "/signup/billing?next=/clients/new",
+      used: params.ownedWorkspaceCount,
+      limit: cap,
+    };
+  }
 
+  // Paid-tier upgrade prompt (Growth → Scale) keeps the old shape —
+  // these users have already seen the pricing matrix and the
+  // /settings/billing manager is the right surface for tier swaps.
   return {
     allowed: false,
     tier,
     reason: "workspace_limit_reached",
-    message: `Workspace limit reached on the ${plan.name} plan (${cap} workspace${cap === 1 ? "" : "s"}). Upgrade to ${upgradeTarget} for ${upgradeBenefit}.`,
+    message: `Workspace limit reached on the ${plan.name} plan (${cap} workspace${cap === 1 ? "" : "s"}). Upgrade to Scale for unlimited workspaces.`,
     upgradeUrl: "/settings/billing",
     used: params.ownedWorkspaceCount,
     limit: cap,

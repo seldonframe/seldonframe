@@ -38,8 +38,24 @@ import {
 } from "@/lib/billing/price-ids";
 
 // User-facing strings — output of design:ux-copy (Task 7.2).
+//
+// 2026-05-27 — Added the `free` branch's `freeTitle` / `freeSubtitleTemplate`
+// / `freeCta`. With card capture removed from the mandatory signup chain,
+// this modal is the FIRST time free-tier operators are ever asked to save
+// a card. The copy is intentionally less jargony than the paid-tier
+// "Upgrade to Growth/Scale" wording: "Add a card to unlock more
+// workspaces" matches the way the limits.ts message frames the ask and
+// avoids implying the user already knows what Growth/Scale are.
 const COPY = {
   title: "Add another client workspace",
+  // Free-tier visitor sees a different headline. The limit is always 1
+  // on free, but the template is parameterised in case the free
+  // allowance ever changes.
+  freeTitle: "Add a card to unlock more workspaces",
+  freeSubtitleTemplate: (used: number, limit: number) =>
+    `You've used ${used}/${limit} free workspace${limit === 1 ? "" : "s"}. Save a card to keep building — we won't charge it until you upgrade.`,
+  freeCta: "Save a card and continue",
+  freeDestination: "/signup/billing?next=/clients/new",
   subtitleTemplate: (used: number, limit: number) =>
     `You're on Free with ${used} of ${limit} workspaces used`,
   growth: {
@@ -88,7 +104,7 @@ export type UpgradeModalProps = {
   limit: number;
 };
 
-export function UpgradeModal({ open, onOpenChange, used, limit }: UpgradeModalProps) {
+export function UpgradeModal({ open, onOpenChange, tier, used, limit }: UpgradeModalProps) {
   const [pending, setPending] = useState<"growth" | "scale" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -105,6 +121,50 @@ export function UpgradeModal({ open, onOpenChange, used, limit }: UpgradeModalPr
       setError(err instanceof Error ? err.message : "Checkout could not start. Try again.");
       setPending(null);
     }
+  }
+
+  // 2026-05-27 — Free-tier branch. With card capture moved out of the
+  // signup chain, this is the first card-ask the user ever sees. We
+  // route them to the existing /signup/billing SetupIntent page (now
+  // opt-in) with ?next=/clients/new so they bounce back here once the
+  // card is saved. Deliberately skips the two-tier Growth/Scale
+  // comparison — that decision is downstream of "do they have a card
+  // on file at all".
+  if (tier === "free") {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{COPY.freeTitle}</DialogTitle>
+            <DialogDescription>{COPY.freeSubtitleTemplate(used, limit)}</DialogDescription>
+          </DialogHeader>
+
+          <div className="mt-4 space-y-3">
+            <Button
+              onClick={() => {
+                // Hard navigation — /signup/billing is a server-rendered
+                // SetupIntent page; we don't want a client-side router
+                // round trip muddling the Stripe Elements mount.
+                window.location.href = COPY.freeDestination;
+              }}
+              className="w-full"
+            >
+              {COPY.freeCta}
+            </Button>
+
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => onOpenChange(false)}
+              aria-label="Maybe later — close upgrade dialog"
+              className="w-full text-sm text-muted-foreground hover:text-foreground"
+            >
+              {COPY.cancel}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
   }
 
   return (
