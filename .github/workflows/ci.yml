@@ -33,6 +33,13 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      - name: Migration journal check
+        # Fails the PR if a drizzle/*.sql file isn't registered in
+        # meta/_journal.json (and isn't a known out-of-band migration).
+        # An un-journaled file silently never runs via drizzle-kit migrate —
+        # the exact cause of the 0019 / 0055 production outages. No DB needed.
+        run: pnpm db:check-journaled
+
       - name: Unit tests
         run: pnpm test:unit
 
