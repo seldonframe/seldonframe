@@ -26,6 +26,12 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      - name: Migration journal check
+        # Gate the deploy on every drizzle/*.sql being registered in
+        # meta/_journal.json (or a known out-of-band migration). Catches the
+        # 0019 / 0055 outage shape before it ships. No DB needed.
+        run: pnpm db:check-journaled
+
       - name: Unit tests
         run: pnpm test:unit
 

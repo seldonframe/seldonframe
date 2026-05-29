@@ -19,6 +19,7 @@
     "emit:event-registry:check": "node scripts/emit-event-registry.js --check",
     "scaffold:block": "node scripts/scaffold-block.js",
     "db:generate": "pnpm --filter @seldonframe/crm db:generate",
+    "db:check-journaled": "pnpm --filter @seldonframe/crm db:check-journaled",
     "db:migrate": "pnpm --filter @seldonframe/crm db:migrate",
     "db:push": "pnpm --filter @seldonframe/crm db:push",
     "db:studio": "pnpm --filter @seldonframe/crm db:studio",
