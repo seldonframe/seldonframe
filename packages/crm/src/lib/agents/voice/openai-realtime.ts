@@ -72,7 +72,7 @@ export const MAX_ASSISTANT_TURNS = 12;
 export const MAX_CALL_MS = 4 * 60 * 1000;
 
 export type AcceptCallResult =
-  | { ok: true }
+  | { ok: true; status: number; body: string }
   | { ok: false; status: number; body: string };
 
 /**
@@ -110,11 +110,16 @@ export async function acceptCall(params: {
       body: JSON.stringify(acceptBody),
     });
 
+    const body = await res.text().catch(() => "");
     if (!res.ok) {
-      const body = await res.text().catch(() => "");
       return { ok: false, status: res.status, body };
     }
-    return { ok: true };
+    // Capture the SUCCESS body too. The WS 404s with "No session found for the
+    // provided call_id" even though accept returns 200 — so accept is accepting
+    // the SIP leg but no realtime session is materializing. The accept response
+    // body is what reveals why (a session id we should use instead of the
+    // webhook call_id? a status:"establishing"? a model warning despite 200?).
+    return { ok: true, status: res.status, body };
   } catch (err) {
     return {
       ok: false,
