@@ -150,10 +150,12 @@ export async function POST(request: Request): Promise<Response> {
       logEvent("voice_call_accepted", {
         call_id: callId,
         accept_status: accepted.status,
-        // The accept body is the key diagnostic for the WS "No session found"
-        // 404: it shows what OpenAI actually created from /accept (session id /
-        // status / any warning that came back despite the 200).
+        // The accept body + headers are the key diagnostics for the WS "No
+        // session found" 404: the body shows what /accept created (session id /
+        // status / a warning despite 200); the headers show the project / org /
+        // request-id it ran under (to rule the project-mismatch theory in/out).
         accept_body: accepted.body ? accepted.body.slice(0, 800) : null,
+        accept_headers: accepted.headers,
       });
       // WS open happens immediately inside runVoiceCall — adjacent to accept.
       await runVoiceCall({ callId, apiKey });
