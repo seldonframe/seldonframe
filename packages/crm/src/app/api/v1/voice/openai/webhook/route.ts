@@ -147,7 +147,14 @@ export async function POST(request: Request): Promise<Response> {
         );
         return;
       }
-      logEvent("voice_call_accepted", { call_id: callId });
+      logEvent("voice_call_accepted", {
+        call_id: callId,
+        accept_status: accepted.status,
+        // The accept body is the key diagnostic for the WS "No session found"
+        // 404: it shows what OpenAI actually created from /accept (session id /
+        // status / any warning that came back despite the 200).
+        accept_body: accepted.body ? accepted.body.slice(0, 800) : null,
+      });
       // WS open happens immediately inside runVoiceCall — adjacent to accept.
       await runVoiceCall({ callId, apiKey });
     } catch (err) {
