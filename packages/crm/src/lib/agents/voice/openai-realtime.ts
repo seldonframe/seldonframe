@@ -383,19 +383,66 @@ export async function runVoiceCall(params: {
     // so the next failure is diagnosable from the log export alone. `.on` is
     // the `ws`-package emitter API; guarded for mocks that omit it.
     ws.on?.("unexpected-response", (...args: unknown[]) => {
-      const res = args[1] as { statusCode?: number; statusMessage?: string } | undefined;
-      logEvent(
-        "voice_call_ws_upgrade_rejected",
-        {
-          call_id: params.callId,
-          http_status: res?.statusCode ?? null,
-          http_status_text: res?.statusMessage ?? null,
-        },
-        { severity: "error" }
-      );
-      // An unexpected-response is terminal — the socket will never open. Close
-      // out so the held promise resolves instead of waiting for the timeout.
-      finish("open_failed");
+      // `res` is a Node http.IncomingMessage (a readable stream). We read its
+      // BODY + key headers so the log shows OpenAI's actual error text — not
+      // just the bare status. That distinguishes the three things a 404 here
+      // could mean: a lifecycle error ("no active call with call_id …"), a
+      // param error ("model is required"), or an HTML 404 from an intermediary
+      // proxy (which the `server` / `cf-ray` headers would reveal). The
+      // call_id WS URL + Authorization header match the OpenAI SIP guide
+      // verbatim, so the next failure's body is what finally pinpoints it.
+      const res = args[1] as
+        | {
+            statusCode?: number;
+            statusMessage?: string;
+            headers?: Record<string, string | string[] | undefined>;
+            on?: (event: string, cb: (...a: unknown[]) => void) => void;
+          }
+        | undefined;
+      const headers = res?.headers ?? {};
+      const h = (k: string): string | null => {
+        const v = headers[k];
+        return Array.isArray(v) ? v.join(",") : (v ?? null);
+      };
+      let logged = false;
+      let body = "";
+      const done = () => {
+        if (logged) return;
+        logged = true;
+        logEvent(
+          "voice_call_ws_upgrade_rejected",
+          {
+            call_id: params.callId,
+            http_status: res?.statusCode ?? null,
+            http_status_text: res?.statusMessage ?? null,
+            server: h("server"),
+            openai_request_id: h("x-request-id") ?? h("openai-request-id"),
+            cf_ray: h("cf-ray"),
+            content_type: h("content-type"),
+            body: body.slice(0, 600) || null,
+          },
+          { severity: "error" }
+        );
+        // Terminal — the socket will never open. Resolve the held promise
+        // instead of waiting for the wall-clock timeout.
+        finish("open_failed");
+      };
+      if (res && typeof res.on === "function") {
+        res.on("data", (c: unknown) => {
+          body +=
+            typeof c === "string"
+              ? c
+              : Buffer.isBuffer(c)
+                ? c.toString("utf8")
+                : String(c);
+        });
+        res.on("end", done);
+        res.on("error", done);
+        // Safety: if the body stream stalls, log what we have after 1.5s.
+        setTimeout(done, 1500);
+      } else {
+        done();
+      }
     });
 
     ws.addEventListener("error", (ev: unknown) => {
