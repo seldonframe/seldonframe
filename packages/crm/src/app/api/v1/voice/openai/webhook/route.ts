@@ -35,6 +35,7 @@ import {
   verifyOpenAiWebhook,
 } from "@/lib/agents/voice/openai-webhook-verify";
 import { acceptCall, runVoiceCall } from "@/lib/agents/voice/openai-realtime";
+import { resolvePhase1VoiceContext } from "@/lib/agents/voice/voice-workspace";
 
 // Node runtime (not edge) — we use node:crypto for HMAC and the Node global
 // WebSocket/undici options bag for the realtime control socket.
@@ -157,8 +158,50 @@ export async function POST(request: Request): Promise<Response> {
         accept_body: accepted.body ? accepted.body.slice(0, 800) : null,
         accept_headers: accepted.headers,
       });
+
+      // PHASE 1 — resolve the single configured test workspace
+      // (VOICE_PHASE1_TEST_ORG_SLUG) into a tool-execution context so the agent
+      // can check real availability and land a REAL booking in that workspace's
+      // /bookings (testMode:false). Best-effort: if the slug is unset or the org
+      // isn't found we log it and run a tool-less greeting (the caller still
+      // hears the agent — graceful degradation, not a dropped call). Per-
+      // workspace resolution from the dialed number is Phase 2.
+      const resolved = await resolvePhase1VoiceContext().catch((err) => {
+        logEvent(
+          "voice_call_workspace_resolve_error",
+          { call_id: callId, error: err instanceof Error ? err.message : String(err) },
+          { severity: "error" }
+        );
+        return null;
+      });
+      if (resolved?.ok) {
+        logEvent("voice_call_workspace_resolved", {
+          call_id: callId,
+          org_id: resolved.ctx.orgId,
+          org_slug: resolved.ctx.orgSlug,
+          agent_id: resolved.ctx.agentId,
+          conversation_id: resolved.ctx.conversationId,
+        });
+      } else {
+        logEvent(
+          "voice_call_workspace_unresolved",
+          {
+            call_id: callId,
+            reason: resolved ? resolved.reason : "resolve_threw",
+            slug: resolved ? resolved.slug : null,
+          },
+          { severity: "warn" }
+        );
+      }
+
       // WS open happens immediately inside runVoiceCall — adjacent to accept.
-      await runVoiceCall({ callId, apiKey });
+      // Tools are passed only when the workspace resolved; otherwise the call
+      // falls back to the Phase 0 greeting persona.
+      await runVoiceCall({
+        callId,
+        apiKey,
+        toolContext: resolved?.ok ? resolved.ctx : undefined,
+      });
     } catch (err) {
       // Belt-and-suspenders: a background throw must never bubble (nothing is
       // listening once the response has flushed).
