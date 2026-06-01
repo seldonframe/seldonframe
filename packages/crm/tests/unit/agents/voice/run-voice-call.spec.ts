@@ -132,11 +132,20 @@ describe("runVoiceCall — control WS authentication (regression for dropped hea
     assert.equal(reason, "ws_closed");
   });
 
-  test("also sends the OpenAI-Beta: realtime=v1 header", async () => {
+  test("does NOT send OpenAI-Beta: realtime=v1 (that header routes the WS to the legacy API → call_id_not_found)", async () => {
+    // 2026-06-01 — REGRESSION GUARD. Sending `OpenAI-Beta: realtime=v1` on the
+    // SIP `?call_id=` control WS routes to the legacy realtime endpoint, which
+    // has no knowledge of the session `/accept` created on the current API, so
+    // the upgrade 404s with "No session found for the provided call_id". The
+    // OpenAI Agents SDK + community SIP references send Authorization only.
     const { ctor, captures } = makeFakeSocketCtor();
     const promise = runVoiceCall({ callId: CALL_ID, apiKey: API_KEY, WebSocketImpl: ctor, maxCallMs: 50 });
     const cap = captures[0]!;
-    assert.equal(cap.options!.headers!["OpenAI-Beta"], "realtime=v1");
+    assert.equal(
+      cap.options!.headers!["OpenAI-Beta"],
+      undefined,
+      "OpenAI-Beta must NOT be sent on the SIP call_id WS — it hits the legacy API",
+    );
     cap.emit("close");
     await promise;
   });

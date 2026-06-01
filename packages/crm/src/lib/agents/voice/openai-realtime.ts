@@ -201,10 +201,17 @@ export async function runVoiceCall(params: {
   // see the OpenAI Realtime SIP guide, whose example uses this exact shape.
   //
   // `Authorization` is the load-bearing header (its absence caused the original
-  // non-101 upgrade rejection). `OpenAI-Beta: realtime=v1` is NOT required for
-  // the `?call_id=` SIP variant (the guide omits it; the session is already
-  // configured by the accept call), but we send it anyway — it is the standard
-  // Realtime beta opt-in and is harmlessly ignored here.
+  // non-101 upgrade rejection). We send ONLY Authorization — do NOT add
+  // `OpenAI-Beta: realtime=v1`.
+  //
+  // 2026-06-01 — that header was the ACTUAL cause of the 404 `call_id_not_found`.
+  // `OpenAI-Beta: realtime=v1` routes the WS to the LEGACY realtime endpoint,
+  // which has no knowledge of the SIP session that `/accept` created on the
+  // CURRENT API → "No session found for the provided call_id" (after a ~5s
+  // legacy-side lookup that can never succeed). The OpenAI Agents SDK + the
+  // community SIP references all send Authorization only; one explicitly warns
+  // the beta header "connects to the old API". An earlier revision here added it
+  // as "harmless belt-and-suspenders" — it was not harmless. Removed.
   //
   // 2026-06-01 — force IPv4 (family: 4). The diagnostic proved the WS was
   // taking a consistent ~5.4s to connect, after which OpenAI returned 404
@@ -221,7 +228,6 @@ export async function runVoiceCall(params: {
   const ws = new WS(wsUrl, {
     headers: {
       Authorization: `Bearer ${params.apiKey}`,
-      "OpenAI-Beta": "realtime=v1",
     },
     family: 4,
   });
