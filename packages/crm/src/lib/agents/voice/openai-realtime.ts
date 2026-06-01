@@ -72,7 +72,7 @@ export const MAX_ASSISTANT_TURNS = 12;
 export const MAX_CALL_MS = 4 * 60 * 1000;
 
 export type AcceptCallResult =
-  | { ok: true; status: number; body: string }
+  | { ok: true; status: number; body: string; headers: Record<string, string | null> }
   | { ok: false; status: number; body: string };
 
 /**
@@ -93,10 +93,16 @@ export async function acceptCall(params: {
   // Accept-call body — shape confirmed from the OpenAI Realtime SIP guide.
   // `type: "realtime"` selects the realtime session kind; model/voice/
   // instructions configure it. NO `tools` key (Phase 0).
+  // 2026-06-01 — match the OpenAI Agents SDK twilio_sip reference EXACTLY:
+  // {type, model, instructions} only. We previously also sent `voice:"alloy"`,
+  // which NEITHER working reference sends at accept. In the current Realtime
+  // schema `voice` lives under `audio.output` (set via session.update over the
+  // WS), so a stray top-level `voice` may make OpenAI reject session creation
+  // while still 200-ing the HTTP accept — leaving no session for the WS to
+  // attach to ("call_id_not_found"). Voice is set post-connect, not here.
   const acceptBody = {
     type: "realtime" as const,
     model: VOICE_MODEL,
-    voice: VOICE_NAME,
     instructions: PHASE0_GREETING_INSTRUCTIONS,
   };
 
@@ -114,12 +120,22 @@ export async function acceptCall(params: {
     if (!res.ok) {
       return { ok: false, status: res.status, body };
     }
-    // Capture the SUCCESS body too. The WS 404s with "No session found for the
-    // provided call_id" even though accept returns 200 — so accept is accepting
-    // the SIP leg but no realtime session is materializing. The accept response
-    // body is what reveals why (a session id we should use instead of the
-    // webhook call_id? a status:"establishing"? a model warning despite 200?).
-    return { ok: true, status: res.status, body };
+    // Capture the SUCCESS body + key headers. The WS 404s "No session found for
+    // the provided call_id" despite accept 200 — surfacing the project / org /
+    // request-id the accept ran under confirms whether a project mismatch (vs
+    // the SIP-endpoint's project) is the cause, and gives a request id to
+    // correlate with OpenAI support if it's none of the obvious things.
+    const pick = (k: string) => res.headers.get(k);
+    return {
+      ok: true,
+      status: res.status,
+      body,
+      headers: {
+        "openai-project": pick("openai-project"),
+        "openai-organization": pick("openai-organization"),
+        "x-request-id": pick("x-request-id"),
+      },
+    };
   } catch (err) {
     return {
       ok: false,
