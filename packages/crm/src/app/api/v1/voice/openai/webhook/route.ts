@@ -118,29 +118,41 @@ export async function POST(request: Request): Promise<Response> {
     return NextResponse.json({ error: "missing_api_key" }, { status: 500 });
   }
 
-  // 4. Accept the call (synchronously — must succeed before we open the WS).
-  const accepted = await acceptCall({ callId, apiKey });
-  if (!accepted.ok) {
-    logEvent(
-      "voice_call_accept_failed",
-      { call_id: callId, accept_status: accepted.status, accept_body: accepted.body.slice(0, 500) },
-      { request, status: 502, severity: "error" }
-    );
-    return NextResponse.json({ error: "accept_failed" }, { status: 502 });
-  }
-
-  logEvent("voice_call_accepted", { call_id: callId }, { request });
-
-  // 5. Hold the realtime control WS in the background. `after()` runs the
-  //    callback once the response below is flushed; Fluid Compute keeps the
-  //    instance alive for it up to maxDuration. runVoiceCall awaits on WS I/O
-  //    (no active-CPU burn) and logs `voice_call_ws_closed` with the end reason.
+  // 4. ACK the webhook fast, then accept + drive the call in ONE background
+  //    task. CRITICAL ordering fix (2026-06-01): accept and the control-WS open
+  //    MUST be adjacent. The previous revision accepted synchronously here in
+  //    the request, then opened the WS in after() — leaving a ~5s gap (after()
+  //    start latency) during which OpenAI tore the un-controlled SIP call down,
+  //    so the WS upgrade 404'd "call not found" (call_id gone stale). Doing
+  //    accept → runVoiceCall in the SAME after() callback keeps them sub-second
+  //    apart, so the call_id is still live when the control WS attaches.
+  //
+  //    The webhook's 200 ACK below is independent of accept — OpenAI's delivery
+  //    only needs the prompt 2xx; the SIP leg keeps ringing until accept fires a
+  //    beat later. `voice_call_background_start` makes the after() start latency
+  //    visible in the logs so we can see exactly how long the gap was.
   after(async () => {
+    logEvent("voice_call_background_start", { call_id: callId });
     try {
+      const accepted = await acceptCall({ callId, apiKey });
+      if (!accepted.ok) {
+        logEvent(
+          "voice_call_accept_failed",
+          {
+            call_id: callId,
+            accept_status: accepted.status,
+            accept_body: accepted.body.slice(0, 500),
+          },
+          { severity: "error" }
+        );
+        return;
+      }
+      logEvent("voice_call_accepted", { call_id: callId });
+      // WS open happens immediately inside runVoiceCall — adjacent to accept.
       await runVoiceCall({ callId, apiKey });
     } catch (err) {
-      // runVoiceCall is designed never to throw, but belt-and-suspenders: a
-      // background throw must never bubble (nothing is listening).
+      // Belt-and-suspenders: a background throw must never bubble (nothing is
+      // listening once the response has flushed).
       logEvent(
         "voice_call_background_error",
         { call_id: callId, error: err instanceof Error ? err.message : String(err) },
@@ -149,6 +161,8 @@ export async function POST(request: Request): Promise<Response> {
     }
   });
 
-  // 6. ACK the webhook immediately so OpenAI considers delivery successful.
+  // 5. ACK the webhook immediately so OpenAI considers delivery successful.
+  //    (This also means the dashboard "Send test event" now gets a 200 instead
+  //    of the old 400 — accept runs in the background, decoupled from the ACK.)
   return NextResponse.json({ received: true, call_id: callId });
 }
