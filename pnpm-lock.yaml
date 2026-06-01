@@ -171,6 +171,9 @@ importers:
       workflow:
         specifier: ^4.2.4
         version: 4.2.4(@nestjs/common@11.1.19(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.19(@nestjs/common@11.1.19(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2))(@swc/cli@0.8.1(@swc/core@1.15.3)(chokidar@5.0.0))(@swc/core@1.15.3)(next@16.2.1(@babel/core@7.29.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(typescript@5.9.3)
+      ws:
+        specifier: 8.20.0
+        version: 8.20.0
       xlsx:
         specifier: ^0.18.5
         version: 0.18.5
@@ -205,6 +208,9 @@ importers:
       '@types/sanitize-html':
         specifier: ^2.13.0
         version: 2.16.1
+      '@types/ws':
+        specifier: 8.18.1
+        version: 8.18.1
       ajv:
         specifier: ^8.20.0
         version: 8.20.0

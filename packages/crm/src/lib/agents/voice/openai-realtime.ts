@@ -14,9 +14,21 @@
 // tool bridge (see realtime-tools.ts), Phase 2 adds persistence + per-workspace
 // persona resolution.
 //
-// Transport choice: Node 24's built-in global `WebSocket` and `fetch` — zero
-// new dependencies (the `openai` and `ws` packages are intentionally NOT pulled
-// in). Vercel's Node runtime is 24+, so both globals are present in production.
+// Transport choice: the `ws` npm package for the control WebSocket (its
+// constructor supports an options bag with `headers`, which is how OpenAI's
+// realtime WS authenticates), and the Node global `fetch` for the accept call.
+//
+// WHY `ws` and not the global `WebSocket`: the WHATWG/undici global
+// `WebSocket` constructor is `new WebSocket(url, protocols)` — it has NO 3rd
+// `options` argument and silently DROPS anything passed there. An earlier
+// Phase 0 revision assumed the global accepted `{ headers }` as a 3rd arg, so
+// the `Authorization: Bearer <key>` header was never transmitted and OpenAI
+// rejected the upgrade with a non-101 status (the call torn down at 0s). The
+// `ws` package's `new WebSocket(address, options)` form actually sends the
+// header. `ws` is already an (indirect) dependency in the tree; we make it a
+// direct dependency so this import is legitimate.
+
+import WsWebSocket from "ws";
 
 import { logEvent } from "@/lib/observability/log";
 
@@ -120,7 +132,33 @@ export type CallEndReason =
   | "timeout" // hit the wall-clock cap
   | "ws_closed" // OpenAI closed the socket (call ended SIP-side)
   | "ws_error" // socket errored
-  | "open_failed"; // WS never opened
+  | "open_failed"; // WS never opened (upgrade rejected / connect error)
+
+/**
+ * The slice of the `ws` package's WebSocket surface this driver actually uses.
+ * `runVoiceCall` accepts an injectable ctor for tests (a mock that records the
+ * url + options and lets the test drive events); the default is the real `ws`
+ * `WebSocket`. Kept structural (not `typeof WsWebSocket`) so a lightweight test
+ * double satisfies it without re-implementing the entire `ws` class.
+ */
+export interface ControlSocket {
+  readonly readyState: number;
+  readonly OPEN: number;
+  readonly CONNECTING: number;
+  binaryType: string;
+  send(data: string): void;
+  close(code?: number, reason?: string): void;
+  addEventListener(type: string, listener: (event: unknown) => void): void;
+  // Node-style emitter API (the `ws` package exposes both `addEventListener`
+  // and `.on`). Optional so a minimal mock can omit it; used only for the
+  // `unexpected-response` upgrade-failure diagnostic.
+  on?(event: string, listener: (...args: unknown[]) => void): void;
+}
+
+export type ControlSocketCtor = new (
+  url: string,
+  options?: { headers?: Record<string, string> },
+) => ControlSocket;
 
 /**
  * Open the realtime control WebSocket for an already-accepted call, send the
@@ -140,26 +178,45 @@ export type CallEndReason =
 export async function runVoiceCall(params: {
   callId: string;
   apiKey: string;
-  // Injectable WebSocket ctor + clock for tests; default to the Node 24 global.
-  WebSocketImpl?: typeof WebSocket;
+  // Injectable WebSocket ctor for tests; defaults to the `ws` package's
+  // WebSocket (the global undici WebSocket can't send the Authorization header).
+  WebSocketImpl?: ControlSocketCtor;
   maxCallMs?: number;
   maxTurns?: number;
 }): Promise<CallEndReason> {
-  const WS = params.WebSocketImpl ?? WebSocket;
+  const WS: ControlSocketCtor =
+    params.WebSocketImpl ?? (WsWebSocket as unknown as ControlSocketCtor);
   const maxCallMs = params.maxCallMs ?? MAX_CALL_MS;
   const maxTurns = params.maxTurns ?? MAX_ASSISTANT_TURNS;
   const wsUrl = `${OPENAI_REALTIME_WS_BASE}?call_id=${encodeURIComponent(params.callId)}`;
 
-  // The Node global WebSocket accepts a second `protocols` arg but not custom
-  // headers in the standard ctor. OpenAI's realtime WS authenticates via the
-  // `Authorization` header; Node's undici WebSocket supports a non-standard
-  // 3rd-arg options bag with `headers`. We pass it through a cast so we stay on
-  // the zero-dependency global rather than pulling in `ws`.
-  const ws = new (WS as unknown as {
-    new (url: string, protocols?: string | string[], options?: { headers?: Record<string, string> }): WebSocket;
-  })(wsUrl, undefined, {
-    headers: { Authorization: `Bearer ${params.apiKey}` },
+  // Open the control WS with the `ws` package's `new WebSocket(url, options)`
+  // form. The `headers` option is the ONLY way OpenAI's realtime WS gets the
+  // bearer token (it has no query-param / subprotocol auth for this variant) —
+  // see the OpenAI Realtime SIP guide, whose example uses this exact shape.
+  //
+  // `Authorization` is the load-bearing header (its absence caused the original
+  // non-101 upgrade rejection). `OpenAI-Beta: realtime=v1` is NOT required for
+  // the `?call_id=` SIP variant (the guide omits it; the session is already
+  // configured by the accept call), but we send it anyway — it is the standard
+  // Realtime beta opt-in and is harmlessly ignored here.
+  const ws = new WS(wsUrl, {
+    headers: {
+      Authorization: `Bearer ${params.apiKey}`,
+      "OpenAI-Beta": "realtime=v1",
+    },
   });
+
+  // Default `ws` binaryType is "nodebuffer" → binary frames arrive as a single
+  // Buffer. Force "arraybuffer" so a stray binary control frame is a plain
+  // ArrayBuffer we coerce uniformly below (the realtime control channel is JSON
+  // text in practice, but we never want a Buffer-vs-string surprise to break
+  // JSON.parse). Guarded: a minimal mock may not allow assigning it.
+  try {
+    ws.binaryType = "arraybuffer";
+  } catch {
+    // ignore — mock or impl without a settable binaryType
+  }
 
   return await new Promise<CallEndReason>((resolve) => {
     let assistantTurns = 0;
@@ -198,6 +255,40 @@ export async function runVoiceCall(params: {
       }
     };
 
+    // Coerce a `ws`-package message payload to text. With `addEventListener`
+    // the event's `data` is the WHATWG-shaped `{ data }`, but the `ws` package
+    // may hand back a Buffer, an ArrayBuffer, or an array of Buffer fragments
+    // (depending on binaryType / frame type) rather than a string. The global
+    // undici WebSocket always gave a string here; `ws` does not, so we
+    // normalise every shape to UTF-8 text before JSON.parse. Returns null for
+    // shapes we can't decode (caller ignores the frame).
+    const frameToText = (data: unknown): string | null => {
+      if (typeof data === "string") return data;
+      if (typeof Buffer !== "undefined" && Buffer.isBuffer(data)) {
+        return (data as Buffer).toString("utf8");
+      }
+      if (data instanceof ArrayBuffer) {
+        return Buffer.from(new Uint8Array(data)).toString("utf8");
+      }
+      if (ArrayBuffer.isView(data)) {
+        const view = data as ArrayBufferView;
+        return Buffer.from(
+          view.buffer as ArrayBuffer,
+          view.byteOffset,
+          view.byteLength,
+        ).toString("utf8");
+      }
+      if (Array.isArray(data)) {
+        // binaryType "fragments" → array of Buffers; concat then decode.
+        try {
+          return Buffer.concat(data as Buffer[]).toString("utf8");
+        } catch {
+          return null;
+        }
+      }
+      return null;
+    };
+
     ws.addEventListener("open", () => {
       logEvent("voice_call_ws_opened", { call_id: params.callId });
 
@@ -227,11 +318,13 @@ export async function runVoiceCall(params: {
       logEvent("voice_call_first_response_requested", { call_id: params.callId });
     });
 
-    ws.addEventListener("message", (ev: MessageEvent) => {
+    ws.addEventListener("message", (ev: unknown) => {
+      const text = frameToText((ev as { data?: unknown })?.data);
+      if (text === null) return; // undecodable / non-text frame
+
       let msg: { type?: string } & Record<string, unknown>;
       try {
-        const data = typeof ev.data === "string" ? ev.data : String(ev.data);
-        msg = JSON.parse(data);
+        msg = JSON.parse(text);
       } catch {
         return; // ignore non-JSON frames
       }
@@ -282,12 +375,35 @@ export async function runVoiceCall(params: {
       }
     });
 
-    ws.addEventListener("error", (ev: Event) => {
+    // Upgrade-failure diagnostic. The `ws` package emits BOTH an `error` event
+    // AND, when the HTTP upgrade is rejected (non-101), an `unexpected-response`
+    // event carrying the actual HTTP response. The original bug surfaced only
+    // as "non-101 status code" with no status — wiring this logs the concrete
+    // code (401 = bad/missing key, 403 = key lacks realtime, 404 = call_id gone)
+    // so the next failure is diagnosable from the log export alone. `.on` is
+    // the `ws`-package emitter API; guarded for mocks that omit it.
+    ws.on?.("unexpected-response", (...args: unknown[]) => {
+      const res = args[1] as { statusCode?: number; statusMessage?: string } | undefined;
+      logEvent(
+        "voice_call_ws_upgrade_rejected",
+        {
+          call_id: params.callId,
+          http_status: res?.statusCode ?? null,
+          http_status_text: res?.statusMessage ?? null,
+        },
+        { severity: "error" }
+      );
+      // An unexpected-response is terminal — the socket will never open. Close
+      // out so the held promise resolves instead of waiting for the timeout.
+      finish("open_failed");
+    });
+
+    ws.addEventListener("error", (ev: unknown) => {
       logEvent(
         "voice_call_ws_error",
         {
           call_id: params.callId,
-          detail: (ev as unknown as { message?: string })?.message ?? "unknown",
+          detail: (ev as { message?: string })?.message ?? "unknown",
         },
         { severity: "error" }
       );
