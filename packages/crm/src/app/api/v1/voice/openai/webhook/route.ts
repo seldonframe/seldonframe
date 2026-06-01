@@ -1,0 +1,154 @@
+// OpenAI Realtime SIP webhook — PHASE 0 voice hello-world.
+//
+// This is the public entry point for the inbound-call pipe:
+//
+//   Caller dials Twilio number
+//     → Twilio Elastic SIP Trunk routes the leg to
+//       sip:<project-id>@sip.api.openai.com;transport=tls
+//     → OpenAI fires `realtime.call.incoming` to THIS webhook (signed)
+//     → we verify the signature, POST /v1/realtime/calls/{id}/accept
+//       (model gpt-realtime-2 + voice + hard-coded greeting persona)
+//     → we respond 200 fast, then hold the realtime control WS in the
+//       background (Next's `after()` → Fluid Compute keeps the instance
+//       alive up to maxDuration) and let gpt-realtime-2 run the call.
+//
+// WHY accept-then-after (not hold-the-WS-inside-the-request): OpenAI expects a
+// prompt 2xx on the webhook delivery; holding the socket inside the request and
+// never responding would trip webhook delivery timeouts/retries. Fluid Compute
+// explicitly supports post-response background work, so we ACK the webhook and
+// move the long-lived WS into `after()`. The function instance survives for the
+// call (sub-5-min for Phase 0) under the configured maxDuration.
+//
+// FLUID COMPUTE / DURATION:
+//   maxDuration is set to 800 (Vercel Pro/Enterprise ceiling). On Hobby the
+//   platform clamps this to 300 (5 min) — still fine for Phase 0's sub-5-min
+//   calls. The in-code MAX_CALL_MS (4 min) closes the WS ourselves before the
+//   platform would, so calls end with a clean log line, not a 504.
+//
+// HARD BOUNDARIES (Phase 0): no tools, no DB writes, no per-workspace agent
+// resolution, no outbound calling, no audio relay. Just prove the pipe.
+
+import { after, NextResponse } from "next/server";
+import { logEvent } from "@/lib/observability/log";
+import {
+  extractWebhookHeaders,
+  verifyOpenAiWebhook,
+} from "@/lib/agents/voice/openai-webhook-verify";
+import { acceptCall, runVoiceCall } from "@/lib/agents/voice/openai-realtime";
+
+// Node runtime (not edge) — we use node:crypto for HMAC and the Node global
+// WebSocket/undici options bag for the realtime control socket.
+export const runtime = "nodejs";
+
+// Vercel Pro/Enterprise ceiling. Clamped to 300 on Hobby automatically. This is
+// the wall-clock budget for the whole invocation INCLUDING the after() WS hold.
+export const maxDuration = 800;
+
+// Webhooks must not be statically optimized / cached.
+export const dynamic = "force-dynamic";
+
+/**
+ * Shape of the `realtime.call.incoming` event we care about. We only read
+ * `type` and `data.call_id`; everything else (sip_headers, etc.) is ignored in
+ * Phase 0.
+ */
+type RealtimeIncomingEvent = {
+  type?: string;
+  data?: { call_id?: string };
+};
+
+export async function POST(request: Request): Promise<Response> {
+  // 1. Read the RAW body FIRST — the signature is computed over these exact
+  //    bytes. Parsing to JSON and re-serializing would change them and break
+  //    verification.
+  const rawBody = await request.text();
+
+  logEvent("voice_call_incoming", {}, { request });
+
+  // 2. Verify the Standard Webhooks signature against OPENAI_WEBHOOK_SECRET.
+  const verification = verifyOpenAiWebhook({
+    payload: rawBody,
+    headers: extractWebhookHeaders(request.headers),
+    secret: process.env.OPENAI_WEBHOOK_SECRET,
+  });
+
+  if (!verification.ok) {
+    logEvent(
+      "voice_call_signature_rejected",
+      { reason: verification.reason },
+      { request, status: 401, severity: "warn" }
+    );
+    // 401 for auth failures; 400 when the server simply isn't configured yet
+    // (missing secret) so a misconfig is distinguishable in the logs.
+    const status = verification.reason === "missing_secret" ? 400 : 401;
+    return NextResponse.json({ error: verification.reason }, { status });
+  }
+
+  logEvent("voice_call_signature_verified", {}, { request });
+
+  // 3. Parse the (now-trusted) body.
+  let event: RealtimeIncomingEvent;
+  try {
+    event = JSON.parse(rawBody) as RealtimeIncomingEvent;
+  } catch {
+    logEvent("voice_call_bad_json", {}, { request, status: 400, severity: "warn" });
+    return NextResponse.json({ error: "invalid_json" }, { status: 400 });
+  }
+
+  // Only `realtime.call.incoming` drives the accept flow. ACK anything else
+  // 200 so OpenAI doesn't retry events we don't handle in Phase 0.
+  if (event.type !== "realtime.call.incoming") {
+    logEvent("voice_call_ignored_event", { event_type: event.type ?? null }, { request });
+    return NextResponse.json({ received: true });
+  }
+
+  const callId = event.data?.call_id?.trim();
+  if (!callId) {
+    logEvent("voice_call_missing_call_id", {}, { request, status: 400, severity: "warn" });
+    return NextResponse.json({ error: "missing_call_id" }, { status: 400 });
+  }
+
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    logEvent(
+      "voice_call_missing_api_key",
+      { call_id: callId },
+      { request, status: 500, severity: "error" }
+    );
+    return NextResponse.json({ error: "missing_api_key" }, { status: 500 });
+  }
+
+  // 4. Accept the call (synchronously — must succeed before we open the WS).
+  const accepted = await acceptCall({ callId, apiKey });
+  if (!accepted.ok) {
+    logEvent(
+      "voice_call_accept_failed",
+      { call_id: callId, accept_status: accepted.status, accept_body: accepted.body.slice(0, 500) },
+      { request, status: 502, severity: "error" }
+    );
+    return NextResponse.json({ error: "accept_failed" }, { status: 502 });
+  }
+
+  logEvent("voice_call_accepted", { call_id: callId }, { request });
+
+  // 5. Hold the realtime control WS in the background. `after()` runs the
+  //    callback once the response below is flushed; Fluid Compute keeps the
+  //    instance alive for it up to maxDuration. runVoiceCall awaits on WS I/O
+  //    (no active-CPU burn) and logs `voice_call_ws_closed` with the end reason.
+  after(async () => {
+    try {
+      await runVoiceCall({ callId, apiKey });
+    } catch (err) {
+      // runVoiceCall is designed never to throw, but belt-and-suspenders: a
+      // background throw must never bubble (nothing is listening).
+      logEvent(
+        "voice_call_background_error",
+        { call_id: callId, error: err instanceof Error ? err.message : String(err) },
+        { severity: "error" }
+      );
+    }
+  });
+
+  // 6. ACK the webhook immediately so OpenAI considers delivery successful.
+  return NextResponse.json({ received: true, call_id: callId });
+}
