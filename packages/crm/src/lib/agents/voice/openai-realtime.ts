@@ -31,9 +31,73 @@
 import WsWebSocket from "ws";
 
 import { logEvent } from "@/lib/observability/log";
+import {
+  ALL_TOOLS,
+  type AgentTool,
+  type ToolExecuteContext,
+} from "../tools";
+import {
+  executeVoiceToolCall as defaultExecuteVoiceToolCall,
+  toRealtimeFunctionTools,
+} from "./realtime-tools";
+import {
+  buildFunctionCallOutputItem,
+  parseFunctionCalls,
+} from "./realtime-function-calls";
 
 const OPENAI_API_BASE = "https://api.openai.com";
 const OPENAI_REALTIME_WS_BASE = "wss://api.openai.com/v1/realtime";
+
+/**
+ * The voice-exposed tool subset. SIX of the seven `ALL_TOOLS` — we EXCLUDE
+ * `provide_faq_answer`: it's a v1.26 placeholder whose execute() always returns
+ * an empty match list (the text runtime injects the operator's FAQ into the
+ * system prompt instead of calling it). Exposing it as a callable function over
+ * voice is dead weight — it would burn a model turn to get `{ matches: [] }`.
+ * If FAQ behavior is wanted on voice, append the workspace's FAQ to the
+ * `instructions` text (Phase 2), don't make it a tool.
+ */
+export const VOICE_TOOLS: AgentTool[] = ALL_TOOLS.filter(
+  (tool) => tool.name !== "provide_faq_answer",
+);
+
+/**
+ * Phase 1 SDR persona for the voice agent. A concise, voice-tuned distillation
+ * of the website-chatbot SDR playbook (lib/agents/skills/website-chatbot/sdr.ts)
+ * — kept short for Phase 1 (a long prompt is read aloud slowly by TTS and isn't
+ * needed to prove the tool loop). Phase 2 swaps this for per-workspace persona
+ * resolution off the dialed number.
+ *
+ * The booking-tool CALL ORDER is spelled out because it's load-bearing: the
+ * model must call look_up_availability FIRST and pass a returned slot string
+ * VERBATIM into book_appointment (the slots are full UTC ISO timestamps; a
+ * hand-edited one books the wrong time across timezones — see tools.ts).
+ */
+export const VOICE_SDR_INSTRUCTIONS =
+  "You are a warm, efficient phone receptionist for the business. Speak in " +
+  "short, natural sentences — this is a live phone call. Your job is to help " +
+  "the caller book an appointment or answer a quick question, then close the " +
+  "loop. " +
+  "You can check real availability and book real appointments with your tools. " +
+  "To book: FIRST call look_up_availability with the date the caller wants " +
+  "(format YYYY-MM-DD) to get real open slots, then read back one or two slots, " +
+  "and once the caller picks one, collect their full name and email and call " +
+  "book_appointment — pass the chosen slot string EXACTLY as look_up_availability " +
+  "returned it (never invent or reformat a time). Confirm the date and time back " +
+  "to the caller before booking. " +
+  "If the caller wants to change or cancel an existing appointment, use " +
+  "find_my_existing_appointment with their email first, then " +
+  "reschedule_appointment or cancel_appointment. " +
+  "If you can't help or the caller asks for a person, use escalate_to_human. " +
+  "Never read tool names or JSON aloud. If the caller says goodbye, thank them " +
+  "and end the call.";
+
+/**
+ * Voice for the realtime session. Set via `session.update` under
+ * `audio.output.voice` (NOT in the /accept body — a top-level `voice` at accept
+ * breaks session creation; see acceptCall). `alloy` is a safe GA voice.
+ */
+export const VOICE_AUDIO_OUTPUT_VOICE = "alloy";
 
 /**
  * The exact model id used for the call. Confirmed from the OpenAI Realtime SIP
@@ -204,12 +268,32 @@ export async function runVoiceCall(params: {
   WebSocketImpl?: ControlSocketCtor;
   maxCallMs?: number;
   maxTurns?: number;
+  // PHASE 1 — workspace-scoped tool-execution context. When present, the tools
+  // (VOICE_TOOLS) are declared on the session and the function-call loop runs
+  // calls against this ctx (orgId/orgSlug → real availability + booking). When
+  // ABSENT, the call falls back to a tool-less greeting (Phase 0 behavior) so a
+  // misconfigured test workspace still answers gracefully.
+  toolContext?: ToolExecuteContext;
+  // Persona for the session. Defaults to the Phase 1 SDR instructions when a
+  // toolContext is given, else the Phase 0 greeting persona.
+  instructions?: string;
+  // Injectable tool executor for tests (defaults to the real bridge).
+  executeToolCall?: typeof defaultExecuteVoiceToolCall;
 }): Promise<CallEndReason> {
   const WS: ControlSocketCtor =
     params.WebSocketImpl ?? (WsWebSocket as unknown as ControlSocketCtor);
   const maxCallMs = params.maxCallMs ?? MAX_CALL_MS;
   const maxTurns = params.maxTurns ?? MAX_ASSISTANT_TURNS;
   const wsUrl = `${OPENAI_REALTIME_WS_BASE}?call_id=${encodeURIComponent(params.callId)}`;
+
+  // PHASE 1 wiring. Tools are additive: present only when a workspace ctx was
+  // resolved. The persona defaults to the SDR script when tools are live.
+  const toolContext = params.toolContext;
+  const toolsEnabled = Boolean(toolContext);
+  const executeToolCall = params.executeToolCall ?? defaultExecuteVoiceToolCall;
+  const instructions =
+    params.instructions ??
+    (toolsEnabled ? VOICE_SDR_INSTRUCTIONS : PHASE0_GREETING_INSTRUCTIONS);
 
   // Open the control WS with the `ws` package's `new WebSocket(url, options)`
   // form. The `headers` option is the ONLY way OpenAI's realtime WS gets the
@@ -263,6 +347,11 @@ export async function runVoiceCall(params: {
     let assistantTurns = 0;
     let sawGoodbye = false;
     let settled = false;
+    // PHASE 1 — call_ids we've already dispatched a tool call for. A single tool
+    // call can surface on BOTH `response.function_call_arguments.done` AND the
+    // terminal `response.done` output[]; tracking the id here means we execute
+    // it exactly once (no double-booking). See realtime-function-calls.ts.
+    const seenCallIds = new Set<string>();
 
     // Single resolution path — closes the socket (if still open) and resolves
     // the promise exactly once, logging the final reason.
@@ -330,30 +419,127 @@ export async function runVoiceCall(params: {
       return null;
     };
 
+    // PHASE 1 — run the function calls carried by one realtime event, feed each
+    // result back as a `function_call_output` conversation item, then ask the
+    // model to continue (ONE `response.create` after all outputs in the batch)
+    // so it speaks the result. Records each call_id in `seenCallIds` BEFORE
+    // executing so the same call arriving again (streaming-done + terminal
+    // response.done) is never run twice.
+    //
+    // Why a single response.create per batch (not one per call): the Realtime
+    // API rejects a `response.create` while a response is already in progress
+    // ("conversation_already_has_active_response"). When a response.done carries
+    // several function_call items, we submit ALL their outputs first, then ask
+    // for one continuation. (The common case is one call per turn anyway.)
+    //
+    // Each call is timed + logged: `voice_call_tool_invoked` (name, ok, ms) on
+    // completion, `voice_call_tool_failed` (name, error) when the bridge returns
+    // a failure — same structured-logging style as the other voice events, so a
+    // booking can be traced from the Vercel log export alone. Never throws (the
+    // bridge already resolves a discriminated result); a stray error is logged
+    // and the call continues — a phone call must not crash on a tool error.
+    const dispatchFunctionCalls = async (
+      msg: { type?: string } & Record<string, unknown>,
+      // Optional pre-parsed calls (the response.done path already parsed them to
+      // decide it was a tool-call turn — avoid re-parsing the same event).
+      preParsed?: ReturnType<typeof parseFunctionCalls>,
+    ): Promise<void> => {
+      if (!toolsEnabled || !toolContext) return;
+      const calls = preParsed ?? parseFunctionCalls(msg, seenCallIds);
+      if (calls.length === 0) return;
+
+      for (const call of calls) {
+        // Mark seen up-front so a re-delivery of the same call_id is ignored
+        // even if execution is still in flight.
+        seenCallIds.add(call.callId);
+        const startedAt = Date.now();
+        try {
+          const result = await executeToolCall({
+            name: call.name,
+            argumentsJson: call.argumentsJson,
+            ctx: toolContext,
+          });
+          const ms = Date.now() - startedAt;
+          // On success feed the tool's serialized output; on failure feed a
+          // compact error string the model can apologize/recover from.
+          const output = result.ok
+            ? result.output
+            : JSON.stringify({ error: result.error });
+          send(buildFunctionCallOutputItem(call.callId, output));
+          logEvent("voice_call_tool_invoked", {
+            call_id: params.callId,
+            tool: call.name,
+            ok: result.ok,
+            ms,
+          });
+          if (!result.ok) {
+            logEvent(
+              "voice_call_tool_failed",
+              { call_id: params.callId, tool: call.name, error: result.error },
+              { severity: "warn" },
+            );
+          }
+        } catch (err) {
+          // Defensive — executeVoiceToolCall is total, but never let a throw
+          // escape into the WS callback. Feed the error back so the model isn't
+          // left waiting on an output it will never get.
+          const message = err instanceof Error ? err.message : String(err);
+          send(
+            buildFunctionCallOutputItem(
+              call.callId,
+              JSON.stringify({ error: message }),
+            ),
+          );
+          logEvent(
+            "voice_call_tool_failed",
+            { call_id: params.callId, tool: call.name, error: message },
+            { severity: "error" },
+          );
+        }
+      }
+
+      // All outputs for this batch submitted → ask the model to continue once.
+      send({ type: "response.create" });
+    };
+
     ws.addEventListener("open", () => {
       logEvent("voice_call_ws_opened", { call_id: params.callId });
 
-      // Push the persona onto the live session. (The accept call already set
-      // it, but re-asserting over the WS is the documented control-channel
-      // pattern and makes the persona explicit on the socket we drive.)
-      send({
-        type: "session.update",
-        session: {
-          type: "realtime",
-          instructions: PHASE0_GREETING_INSTRUCTIONS,
-          // No `tools` — Phase 0.
-        },
+      // Push the persona onto the live session. (The accept call already set the
+      // Phase 0 instructions, but re-asserting over the WS is the documented
+      // control-channel pattern and is where we attach the PHASE 1 additions:
+      // the tools + tool_choice + the voice. `session.update.session.type` is
+      // "realtime" (GA), tools is the function-tool wire array, and the voice
+      // lives at audio.output.voice (NEVER in the /accept body).
+      const session: Record<string, unknown> = {
+        type: "realtime",
+        instructions,
+        // Voice via the GA audio config path. Defensive: if OpenAI ever rejects
+        // this field it emits an `error` event (logged via
+        // voice_call_realtime_error) but the call still runs.
+        audio: { output: { voice: VOICE_AUDIO_OUTPUT_VOICE } },
+      };
+      if (toolsEnabled) {
+        // 6 tools (provide_faq_answer excluded). tool_choice "auto" lets the
+        // model decide when to call them.
+        session.tools = toRealtimeFunctionTools(VOICE_TOOLS);
+        session.tool_choice = "auto";
+      }
+      send({ type: "session.update", session });
+      logEvent("voice_call_session_updated", {
+        call_id: params.callId,
+        tools_enabled: toolsEnabled,
+        tool_count: toolsEnabled ? VOICE_TOOLS.length : 0,
       });
-      logEvent("voice_call_session_updated", { call_id: params.callId });
 
       // Make the agent speak first — the warm greeting. Without this the agent
-      // waits for the caller to speak, which feels broken on an outbound-style
-      // "it answered and greeted me" validation.
+      // waits for the caller to speak, which feels broken on an "it answered
+      // and greeted me" validation.
       send({
         type: "response.create",
         response: {
           instructions:
-            "Greet the caller warmly as the test-business receptionist and ask how you can help. Keep it to one or two short sentences.",
+            "Greet the caller warmly as the receptionist and ask how you can help. Keep it to one or two short sentences.",
         },
       });
       logEvent("voice_call_first_response_requested", { call_id: params.callId });
@@ -371,13 +557,50 @@ export async function runVoiceCall(params: {
       }
 
       switch (msg.type) {
+        // PHASE 1 — streaming function-call completion. The model finished
+        // streaming this call's arguments; run it immediately (don't wait for
+        // response.done). Logged so we can confirm from the live call which
+        // variant the API actually emits.
+        case "response.function_call_arguments.done": {
+          logEvent("voice_call_realtime_event", {
+            call_id: params.callId,
+            event_type: msg.type,
+          });
+          void dispatchFunctionCalls(msg);
+          break;
+        }
+
         case "response.done": {
+          // PHASE 1 — a response can finish as a TOOL-CALL turn (its output[]
+          // holds function_call items) rather than a spoken reply. Extract +
+          // dispatch any terminal calls first; `seenCallIds` makes this a no-op
+          // for calls already run via the streaming-done path above.
+          const terminalCalls = toolsEnabled
+            ? parseFunctionCalls(msg, seenCallIds)
+            : [];
+          const isToolCallTurn = terminalCalls.length > 0;
+          if (isToolCallTurn) {
+            logEvent("voice_call_realtime_event", {
+              call_id: params.callId,
+              event_type: "response.done.function_call",
+              tool_calls: terminalCalls.length,
+            });
+            void dispatchFunctionCalls(msg, terminalCalls);
+          }
+
           assistantTurns += 1;
           logEvent("voice_call_response_done", {
             call_id: params.callId,
             assistant_turns: assistantTurns,
             saw_goodbye: sawGoodbye,
+            tool_call_turn: isToolCallTurn,
           });
+          // A tool-call turn isn't the end of the conversation — the model will
+          // speak again after we feed the result + response.create. Only apply
+          // the goodbye / turn-cap finish to a genuine spoken response.
+          if (isToolCallTurn) {
+            break;
+          }
           // If the caller already said goodbye, the model's closing line just
           // finished → end the call. Otherwise enforce the turn cap.
           if (sawGoodbye) {

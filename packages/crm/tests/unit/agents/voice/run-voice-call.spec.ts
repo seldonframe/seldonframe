@@ -21,9 +21,23 @@ import assert from "node:assert/strict";
 import {
   runVoiceCall,
   PHASE0_GREETING_INSTRUCTIONS,
+  VOICE_SDR_INSTRUCTIONS,
+  VOICE_TOOLS,
+  VOICE_AUDIO_OUTPUT_VOICE,
   type ControlSocket,
   type ControlSocketCtor,
 } from "../../../../src/lib/agents/voice/openai-realtime";
+import type { ToolExecuteContext } from "../../../../src/lib/agents/tools";
+
+// A workspace ctx for the Phase 1 tool tests. testMode here is irrelevant — the
+// tests inject a fake executeToolCall, so the real tools/DB are never hit.
+const TOOL_CTX: ToolExecuteContext = {
+  orgId: "org-1",
+  orgSlug: "spark-heating-cooling",
+  agentId: "agent-1",
+  conversationId: "conv-1",
+  testMode: false,
+};
 
 // ─── Fake control socket ─────────────────────────────────────────────────────
 // Records the ctor (url + options), captures addEventListener / .on handlers so
@@ -322,5 +336,270 @@ describe("runVoiceCall — wall-clock timeout", () => {
     cap.emit("open"); // open, but the caller never speaks and OpenAI never closes
     const reason = await promise;
     assert.equal(reason, "timeout");
+  });
+});
+
+// ─── PHASE 1: tools on session.update ────────────────────────────────────────
+
+describe("runVoiceCall — Phase 1 session.update with tools + voice", () => {
+  test("with a toolContext: declares the 6 tools, tool_choice:auto, SDR persona, voice via audio.output.voice", async () => {
+    const { ctor, captures } = makeFakeSocketCtor();
+    const promise = runVoiceCall({
+      callId: CALL_ID,
+      apiKey: API_KEY,
+      WebSocketImpl: ctor,
+      maxCallMs: 50,
+      toolContext: TOOL_CTX,
+    });
+    const cap = captures[0]!;
+    cap.emit("open");
+
+    const sessionUpdate = JSON.parse(cap.sent[0]!);
+    assert.equal(sessionUpdate.type, "session.update");
+    assert.equal(sessionUpdate.session.type, "realtime");
+    assert.equal(sessionUpdate.session.instructions, VOICE_SDR_INSTRUCTIONS);
+    // 6 tools (provide_faq_answer excluded), each in the GA function wire shape.
+    assert.ok(Array.isArray(sessionUpdate.session.tools));
+    assert.equal(sessionUpdate.session.tools.length, VOICE_TOOLS.length);
+    assert.equal(sessionUpdate.session.tools.length, 6);
+    assert.equal(sessionUpdate.session.tool_choice, "auto");
+    for (const t of sessionUpdate.session.tools) {
+      assert.equal(t.type, "function");
+      assert.ok(typeof t.name === "string");
+      assert.notEqual(t.name, "provide_faq_answer", "provide_faq_answer must NOT be exposed");
+    }
+    // Voice goes via audio.output.voice (NOT a top-level voice, NOT in accept).
+    assert.equal(sessionUpdate.session.audio.output.voice, VOICE_AUDIO_OUTPUT_VOICE);
+
+    cap.emit("close");
+    await promise;
+  });
+
+  test("without a toolContext: Phase 0 behavior preserved (no tools, Phase 0 persona)", async () => {
+    const { ctor, captures } = makeFakeSocketCtor();
+    const promise = runVoiceCall({ callId: CALL_ID, apiKey: API_KEY, WebSocketImpl: ctor, maxCallMs: 50 });
+    const cap = captures[0]!;
+    cap.emit("open");
+
+    const sessionUpdate = JSON.parse(cap.sent[0]!);
+    assert.equal(sessionUpdate.session.instructions, PHASE0_GREETING_INSTRUCTIONS);
+    assert.ok(!("tools" in sessionUpdate.session), "no tools without a toolContext");
+    assert.ok(!("tool_choice" in sessionUpdate.session));
+
+    cap.emit("close");
+    await promise;
+  });
+});
+
+// ─── PHASE 1: the function-call event loop ───────────────────────────────────
+
+describe("runVoiceCall — function-call loop (streaming-done variant)", () => {
+  test("runs the tool, sends function_call_output + response.create, does NOT end the call", async () => {
+    const calls: Array<{ name: string; argumentsJson: string; ctx: ToolExecuteContext }> = [];
+    const { ctor, captures } = makeFakeSocketCtor();
+    const promise = runVoiceCall({
+      callId: CALL_ID,
+      apiKey: API_KEY,
+      WebSocketImpl: ctor,
+      maxCallMs: 80,
+      toolContext: TOOL_CTX,
+      executeToolCall: async (opts) => {
+        calls.push({ name: opts.name, argumentsJson: opts.argumentsJson, ctx: opts.ctx });
+        return { ok: true, result: { slots: ["2026-06-02T16:00:00Z"] }, output: '{"slots":["2026-06-02T16:00:00Z"]}' };
+      },
+    });
+    const cap = captures[0]!;
+    cap.emit("open");
+    const sentAfterOpen = cap.sent.length; // session.update + response.create
+
+    // Model streams a completed function call.
+    cap.emit("message", {
+      data: Buffer.from(
+        JSON.stringify({
+          type: "response.function_call_arguments.done",
+          call_id: "call_la",
+          name: "look_up_availability",
+          arguments: '{"date":"2026-06-02"}',
+        }),
+        "utf8",
+      ),
+    });
+
+    // Let the async dispatch microtasks flush.
+    await new Promise((r) => setTimeout(r, 0));
+
+    // The tool ran with the parsed args + our ctx.
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0]!.name, "look_up_availability");
+    assert.equal(calls[0]!.argumentsJson, '{"date":"2026-06-02"}');
+    assert.equal(calls[0]!.ctx.orgSlug, "spark-heating-cooling");
+
+    // Two new control messages: function_call_output then response.create.
+    const newMsgs = cap.sent.slice(sentAfterOpen).map((s) => JSON.parse(s));
+    assert.equal(newMsgs.length, 2);
+    assert.equal(newMsgs[0].type, "conversation.item.create");
+    assert.equal(newMsgs[0].item.type, "function_call_output");
+    assert.equal(newMsgs[0].item.call_id, "call_la");
+    assert.equal(newMsgs[0].item.output, '{"slots":["2026-06-02T16:00:00Z"]}');
+    assert.equal(newMsgs[1].type, "response.create");
+
+    // The call is still open — a tool call is not a hang-up. End it ourselves.
+    cap.emit("close");
+    const reason = await promise;
+    assert.equal(reason, "ws_closed");
+  });
+
+  test("a failed tool call feeds an error payload back (call still continues)", async () => {
+    const { ctor, captures } = makeFakeSocketCtor();
+    const promise = runVoiceCall({
+      callId: CALL_ID,
+      apiKey: API_KEY,
+      WebSocketImpl: ctor,
+      maxCallMs: 80,
+      toolContext: TOOL_CTX,
+      executeToolCall: async () => ({ ok: false, error: "input_validation_failed: bad" }),
+    });
+    const cap = captures[0]!;
+    cap.emit("open");
+    const sentAfterOpen = cap.sent.length;
+
+    cap.emit("message", {
+      data: Buffer.from(
+        JSON.stringify({
+          type: "response.function_call_arguments.done",
+          call_id: "call_err",
+          name: "book_appointment",
+          arguments: "{}",
+        }),
+        "utf8",
+      ),
+    });
+    await new Promise((r) => setTimeout(r, 0));
+
+    const newMsgs = cap.sent.slice(sentAfterOpen).map((s) => JSON.parse(s));
+    assert.equal(newMsgs[0].item.type, "function_call_output");
+    const output = JSON.parse(newMsgs[0].item.output);
+    assert.equal(output.error, "input_validation_failed: bad");
+    assert.equal(newMsgs[1].type, "response.create");
+
+    cap.emit("close");
+    await promise;
+  });
+});
+
+describe("runVoiceCall — function-call loop (terminal response.done variant + dedupe)", () => {
+  test("response.done with a function_call output runs the tool and does NOT end the call", async () => {
+    let runCount = 0;
+    const { ctor, captures } = makeFakeSocketCtor();
+    const promise = runVoiceCall({
+      callId: CALL_ID,
+      apiKey: API_KEY,
+      WebSocketImpl: ctor,
+      maxCallMs: 80,
+      maxTurns: 2,
+      toolContext: TOOL_CTX,
+      executeToolCall: async () => {
+        runCount += 1;
+        return { ok: true, result: {}, output: "{}" };
+      },
+    });
+    const cap = captures[0]!;
+    cap.emit("open");
+
+    // response.done carrying a function_call item (terminal variant).
+    cap.emit("message", {
+      data: Buffer.from(
+        JSON.stringify({
+          type: "response.done",
+          response: {
+            output: [
+              { type: "function_call", call_id: "call_t1", name: "look_up_availability", arguments: "{}" },
+            ],
+          },
+        }),
+        "utf8",
+      ),
+    });
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal(runCount, 1, "tool ran once from the terminal response.done");
+
+    // A tool-call turn must NOT count toward the goodbye/turn cap, so even with
+    // maxTurns:2 the call hasn't ended. Confirm by timing out only via close.
+    cap.emit("close");
+    const reason = await promise;
+    assert.equal(reason, "ws_closed");
+  });
+
+  test("same call_id on BOTH streaming-done AND terminal response.done runs ONCE (no double-book)", async () => {
+    let runCount = 0;
+    const { ctor, captures } = makeFakeSocketCtor();
+    const promise = runVoiceCall({
+      callId: CALL_ID,
+      apiKey: API_KEY,
+      WebSocketImpl: ctor,
+      maxCallMs: 80,
+      toolContext: TOOL_CTX,
+      executeToolCall: async () => {
+        runCount += 1;
+        return { ok: true, result: {}, output: "{}" };
+      },
+    });
+    const cap = captures[0]!;
+    cap.emit("open");
+
+    const fnCall = { call_id: "call_dup", name: "book_appointment", arguments: '{"x":1}' };
+    cap.emit("message", {
+      data: Buffer.from(
+        JSON.stringify({ type: "response.function_call_arguments.done", ...fnCall }),
+        "utf8",
+      ),
+    });
+    await new Promise((r) => setTimeout(r, 0));
+    // Then the SAME call_id shows up in the terminal response.done.
+    cap.emit("message", {
+      data: Buffer.from(
+        JSON.stringify({ type: "response.done", response: { output: [{ type: "function_call", ...fnCall }] } }),
+        "utf8",
+      ),
+    });
+    await new Promise((r) => setTimeout(r, 0));
+
+    assert.equal(runCount, 1, "the same call_id must execute exactly once across both variants");
+
+    cap.emit("close");
+    await promise;
+  });
+
+  test("tools are NOT dispatched when no toolContext is set (Phase 0 calls ignore function_call events)", async () => {
+    let runCount = 0;
+    const { ctor, captures } = makeFakeSocketCtor();
+    const promise = runVoiceCall({
+      callId: CALL_ID,
+      apiKey: API_KEY,
+      WebSocketImpl: ctor,
+      maxCallMs: 60,
+      // no toolContext
+      executeToolCall: async () => {
+        runCount += 1;
+        return { ok: true, result: {}, output: "{}" };
+      },
+    });
+    const cap = captures[0]!;
+    cap.emit("open");
+    cap.emit("message", {
+      data: Buffer.from(
+        JSON.stringify({
+          type: "response.function_call_arguments.done",
+          call_id: "c",
+          name: "look_up_availability",
+          arguments: "{}",
+        }),
+        "utf8",
+      ),
+    });
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal(runCount, 0, "no tool dispatch without a toolContext");
+    cap.emit("close");
+    await promise;
   });
 });
