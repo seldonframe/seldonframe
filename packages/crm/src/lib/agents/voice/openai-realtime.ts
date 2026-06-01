@@ -157,7 +157,7 @@ export interface ControlSocket {
 
 export type ControlSocketCtor = new (
   url: string,
-  options?: { headers?: Record<string, string> },
+  options?: { headers?: Record<string, string>; family?: number },
 ) => ControlSocket;
 
 /**
@@ -200,11 +200,25 @@ export async function runVoiceCall(params: {
   // the `?call_id=` SIP variant (the guide omits it; the session is already
   // configured by the accept call), but we send it anyway — it is the standard
   // Realtime beta opt-in and is harmlessly ignored here.
+  //
+  // 2026-06-01 — force IPv4 (family: 4). The diagnostic proved the WS was
+  // taking a consistent ~5.4s to connect, after which OpenAI returned 404
+  // `call_id_not_found` ("No session found for the provided call_id") — i.e.
+  // accept succeeded and the session existed, but by the time the upgrade
+  // completed OpenAI had torn the un-attached session down. A FIXED ~5s connect
+  // delay is the textbook signature of an IPv6 (AAAA) connect attempt hanging
+  // before falling back to IPv4. Pinning family: 4 skips the dead IPv6 path so
+  // the WS attaches in <500ms — while the session is still alive. `ws` forwards
+  // the option to the underlying https handshake request, which honors `family`.
+  // `voice_call_ws_connecting` timestamps the handshake start so the log proves
+  // the connect time dropped from ~5s to sub-second.
+  logEvent("voice_call_ws_connecting", { call_id: params.callId, ws_url: wsUrl });
   const ws = new WS(wsUrl, {
     headers: {
       Authorization: `Bearer ${params.apiKey}`,
       "OpenAI-Beta": "realtime=v1",
     },
+    family: 4,
   });
 
   // Default `ws` binaryType is "nodebuffer" → binary frames arrive as a single
