@@ -558,7 +558,29 @@ export async function runVoiceCall(params: {
         // Defensive: if OpenAI rejects any field it emits an `error` event
         // (logged via voice_call_realtime_error) but the call still runs.
         audio: {
-          input: { transcription: { model: "whisper-1" } },
+          input: {
+            transcription: { model: "whisper-1" },
+            // CALLER TRANSCRIPT FIX (2026-06-02, OpenAI GA docs): input
+            // transcription only runs when the caller's audio buffer is
+            // COMMITTED, and server VAD is what commits each turn. Without an
+            // explicit turn_detection here, `input_audio_transcription.completed`
+            // never fires (no error — the config is otherwise valid), so the
+            // transcript was one-sided (assistant only). Making server VAD
+            // explicit links transcription to each committed caller turn.
+            // create_response/interrupt_response match the SIP session's existing
+            // auto-respond + barge-in behavior (the call already turn-takes), so
+            // this ADDS caller transcripts without changing the response flow.
+            // Audio FORMAT intentionally left to SIP negotiation (the live call
+            // already understands callers — don't risk the working audio path).
+            turn_detection: {
+              type: "server_vad",
+              threshold: 0.5,
+              prefix_padding_ms: 300,
+              silence_duration_ms: 500,
+              create_response: true,
+              interrupt_response: true,
+            },
+          },
           output: { voice: params.audioVoice ?? VOICE_AUDIO_OUTPUT_VOICE },
         },
       };
