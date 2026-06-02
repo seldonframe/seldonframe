@@ -291,6 +291,10 @@ export async function runVoiceCall(params: {
   onUserTurn?: (text: string) => void;
   onAssistantTurn?: (text: string) => void;
   onCallEnd?: () => void;
+  // PHASE 2 (Stage B) — fired when book_appointment succeeds, so the caller can
+  // record a brain "win" (booking landed) against the consumed patterns.
+  // Best-effort, fire-and-forget.
+  onBookingCompleted?: () => void;
 }): Promise<CallEndReason> {
   const WS: ControlSocketCtor =
     params.WebSocketImpl ?? (WsWebSocket as unknown as ControlSocketCtor);
@@ -498,6 +502,14 @@ export async function runVoiceCall(params: {
               { call_id: params.callId, tool: call.name, error: result.error },
               { severity: "warn" },
             );
+          }
+          // PHASE 2 (Stage B) — a landed booking is the brain "win" signal.
+          if (result.ok && call.name === "book_appointment") {
+            try {
+              params.onBookingCompleted?.();
+            } catch {
+              // best-effort — never let the brain hook affect the call
+            }
           }
         } catch (err) {
           // Defensive — executeVoiceToolCall is total, but never let a throw

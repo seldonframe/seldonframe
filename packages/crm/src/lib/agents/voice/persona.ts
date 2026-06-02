@@ -16,6 +16,10 @@ export function composeVoicePersona(args: {
   blueprint: AgentBlueprint;
   timezone: string;
   now: Date;
+  // Stage B — learned patterns from past calls (loadAgentBrainContext). Injected
+  // as a trailing section so the model treats them as soft guidance, not hard
+  // rules. Optional: absent/empty → no brain section.
+  brainNotes?: string[];
 }): string {
   const { soul, blueprint, timezone, now } = args;
 
@@ -148,6 +152,15 @@ export function composeVoicePersona(args: {
       .map((entry) => `Q: ${entry.q}\nA: ${entry.a}`)
       .join("\n\n");
     sections.push(`## FAQ\n\n${faqLines}`);
+  }
+
+  // Brain — patterns this workspace (and the global pool) have learned from
+  // past calls. Soft guidance, emitted last so it's recent context but doesn't
+  // override the hard rules already in the skill body.
+  if (args.brainNotes && args.brainNotes.length > 0) {
+    sections.push(
+      `## Patterns we've learned from past calls\n\n${args.brainNotes.join("\n")}`,
+    );
   }
 
   return sections.join("\n\n");

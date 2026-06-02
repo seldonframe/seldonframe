@@ -42,6 +42,10 @@ import {
 import { extractDialedNumber } from "@/lib/agents/voice/sip-headers";
 import { composeVoicePersona } from "@/lib/agents/voice/persona";
 import {
+  loadAgentBrainContext,
+  recordAgentBrainOutcome,
+} from "@/lib/agents/brain-context";
+import {
   startVoiceConversation,
   appendVoiceTurn,
   endVoiceConversation,
@@ -202,6 +206,10 @@ export async function POST(request: Request): Promise<Response> {
       let audioVoice: string | undefined;
       let conversationId: string | null = null;
       let turnIndex = 0;
+      // Stage B — brain patterns consumed this call (fed back on a booking win)
+      // + the vertical for the outcome row.
+      let brainNoteIds: string[] = [];
+      let vertical: string | null = null;
 
       if (resolved?.ok) {
         logEvent("voice_call_workspace_resolved", {
@@ -222,11 +230,19 @@ export async function POST(request: Request): Promise<Response> {
             resolved.ctx.orgId,
             resolved.ctx.agentId,
           );
+          // Stage B READ — load learned patterns (readBrainNote ticks `uses`),
+          // inject them into the persona, and remember the consumed ids so a
+          // booking win can bump exactly those notes' confidence.
+          const brain = await loadAgentBrainContext({ orgId: resolved.ctx.orgId });
+          brainNoteIds = brain.consumedNoteIds;
+          const soulRec = personaInputs.soul as Record<string, unknown> | null;
+          vertical = typeof soulRec?.industry === "string" ? soulRec.industry : null;
           instructions = composeVoicePersona({
             soul: personaInputs.soul,
             blueprint: personaInputs.blueprint,
             timezone: personaInputs.timezone,
             now: new Date(),
+            brainNotes: brain.notes,
           });
           audioVoice = personaInputs.blueprint.voice;
         } catch (err) {
@@ -274,6 +290,23 @@ export async function POST(request: Request): Promise<Response> {
           }
         : {};
 
+      // Stage B WRITE — on a landed booking, record a brain "win" against the
+      // patterns this call consumed. `winOrgId` is a const so it stays narrowed
+      // to `string` inside the closure (no non-null assertion).
+      const winOrgId = resolved?.ok ? resolved.ctx.orgId : null;
+      const onBookingCompleted = winOrgId
+        ? () => {
+            void recordAgentBrainOutcome({
+              orgId: winOrgId,
+              vertical,
+              eventType: "voice_booking",
+              outcome: "win",
+              noteIds: brainNoteIds,
+              context: { dialed_number: dialedNumber, call_id: callId },
+            });
+          }
+        : undefined;
+
       // WS open happens immediately inside runVoiceCall — adjacent to accept.
       // Tools + per-workspace persona + per-agent voice are passed only when the
       // workspace resolved; otherwise the call falls back to the greeting persona.
@@ -283,6 +316,7 @@ export async function POST(request: Request): Promise<Response> {
         toolContext: resolved?.ok ? resolved.ctx : undefined,
         instructions,
         audioVoice,
+        onBookingCompleted,
         ...transcriptCallbacks,
       });
     } catch (err) {
