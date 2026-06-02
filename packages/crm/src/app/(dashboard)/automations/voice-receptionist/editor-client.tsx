@@ -13,8 +13,8 @@ import {
   saveVoiceBlueprintAction,
   setVoiceStatusAction,
   assignVoiceNumberAction,
-  VOICE_OPTIONS,
 } from "./actions";
+import { VOICE_OPTIONS } from "@/lib/agents/voice/card-status";
 
 type FaqRow = { q: string; a: string };
 

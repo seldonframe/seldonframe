@@ -26,22 +26,8 @@ import { db } from "@/db";
 import { organizations, type AgentBlueprint, type OrganizationIntegrations } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
 import { assertWritable } from "@/lib/demo/server";
-import { normalizeVoiceNumber } from "@/lib/agents/voice/card-status";
+import { normalizeVoiceNumber, VOICE_OPTIONS } from "@/lib/agents/voice/card-status";
 import { publishAgent, updateAgentBlueprint, type PublishAgentResult } from "@/lib/agents/store";
-
-// The OpenAI Realtime TTS voices the editor offers. Kept in sync with the
-// editor's <select>. Anything outside this set is rejected so a typo can't
-// silently break audio output on the next call.
-export const VOICE_OPTIONS = [
-  "alloy",
-  "echo",
-  "shimmer",
-  "ash",
-  "ballad",
-  "coral",
-  "sage",
-  "verse",
-] as const;
 
 const FaqRow = z.object({
   q: z.string().min(1),

@@ -17,6 +17,23 @@
 
 import { toE164 } from "@/lib/sms/providers";
 
+// The OpenAI Realtime TTS voices the editor offers. Lives here (a plain module),
+// NOT in actions.ts — a "use server" file may only export async functions, so a
+// const array there fails the next build (check-use-server.sh). Both the server
+// action's zod enum and the editor's <select> import it from here.
+export const VOICE_OPTIONS = [
+  "alloy",
+  "echo",
+  "shimmer",
+  "ash",
+  "ballad",
+  "coral",
+  "sage",
+  "verse",
+] as const;
+
+export type VoiceOption = (typeof VOICE_OPTIONS)[number];
+
 export type VoiceCardStatus =
   | "not_configured"
   | "no_number"
