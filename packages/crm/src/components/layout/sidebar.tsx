@@ -198,13 +198,20 @@ export function Sidebar(props: {
             // editor for both channels. "Email" was misleading.
             { href: "/emails", label: "Messaging", icon: "Mail" },
             { href: "/forms", label: labels.intakeForm.plural, icon: "FileText" },
+            // 2026-06-02 — Automations is now shown INSIDE the client
+            // workspace. The Voice Receptionist editor (greeting/voice/number,
+            // call transcripts, learned patterns) lives at
+            // /automations/voice-receptionist, which is a PER-CLIENT-WORKSPACE
+            // surface — so the client view needs a path to it. (It was hidden
+            // before because the only automations were agency-level; the
+            // per-workspace voice agent changed that.)
+            { href: "/automations", label: "Automations", icon: "Zap" },
             // 2026-05-17 — Pages (/landing) dropped from the nav. SF
             // isn't a landing-page builder; existing rows still render
             // via the public /l/<slug>/<page> route for backward compat
             // but operators no longer create new ones from the dashboard.
-            // Agents, Automations, Templates intentionally hidden —
-            // operator manages chatbots via the Ready hub's "Test
-            // chatbot" deep link.
+            // Agents, Templates intentionally hidden — operator manages
+            // chatbots via the Ready hub's "Test chatbot" deep link.
           ]),
         },
         {
