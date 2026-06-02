@@ -196,20 +196,21 @@ Makes calls per-workspace, grounded, recorded, and brain-aware (read side). Zero
 - A2. **Routing:** `extractDialedNumber` (pure) + shared `resolveWorkspaceByPhoneNumber` (refactored
   from the Twilio route) + fallback chain; get-or-create the voice agent.
 - A3. **Persona:** `voice-receptionist-sdr` skill; compose per-workspace instructions from soul +
-  registry with workspace-timezone temporal vars + **brain-note READ** (inject patterns, remember
-  consumed IDs); per-agent TTS voice via `session.update`.
+  registry with workspace-timezone temporal vars; per-agent TTS voice via `session.update`. (Brain-note
+  READ is layered on in Stage B so every brain touchpoint lives in one place.)
 - A4. **Transcripts:** conversation + turn persistence over the call lifecycle (best-effort).
 
 ### Stage B — Agent brain feedback loop (read + write, all agents)
 Closes the learning loop. Reuses the existing dream-cycle + promotion crons.
-- B1. **Shared brain helper:** `loadAgentBrainContext(orgId, archetype)` (read + consumed-IDs) and
-  `recordAgentBrainOutcome({ orgId, eventType, outcome, valueCents, noteIds, context })` (emit
-  `brain_outcomes` + `markBrainOutcome`), wrapping the existing store/analytics functions.
-- B2. **Wire voice:** emit `voice_booking` win (with booking value) on a landed call;
-  loss on abandoned/escalated. Feedback consumed notes.
-- B3. **Wire chatbot:** populate the chatbot turn's `brainNotes` from the shared loader (if not
-  already), and emit `chat_booking` win on a chatbot-landed booking — so the existing text agent
-  joins the loop too.
+- B1. **Shared brain helper:** `loadAgentBrainContext(orgId, archetype)` (read patterns + return the
+  consumed note IDs, ticking `uses`) and `recordAgentBrainOutcome({ orgId, eventType, outcome,
+  valueCents, noteIds, context })` (emit `brain_outcomes` + `markBrainOutcome`), wrapping the existing
+  store/analytics functions. Best-effort + injectable for tests.
+- B2. **Wire voice:** load brain context into the voice persona (READ — inject patterns, stash the
+  consumed IDs on the conversation); emit a `voice_booking` win (with booking value) on a landed call,
+  loss on abandoned/escalated, and feed back the consumed notes.
+- B3. **Wire chatbot:** populate the chatbot turn's `brainNotes` from the shared loader (READ), and
+  emit a `chat_booking` win on a chatbot-landed booking — so the existing text agent joins the loop too.
 
 ### Stage C — `/automations` voice editor
 - C1. Voice Receptionist **card** in the catalog with agent-row-derived status.
