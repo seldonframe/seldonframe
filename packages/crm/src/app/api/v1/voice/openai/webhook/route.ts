@@ -55,7 +55,10 @@ export const dynamic = "force-dynamic";
  */
 type RealtimeIncomingEvent = {
   type?: string;
-  data?: { call_id?: string };
+  data?: {
+    call_id?: string;
+    sip_headers?: Array<{ name?: string; value?: string }>;
+  };
 };
 
 export async function POST(request: Request): Promise<Response> {
@@ -118,6 +121,16 @@ export async function POST(request: Request): Promise<Response> {
     );
     return NextResponse.json({ error: "missing_api_key" }, { status: 500 });
   }
+
+  // PHASE 2 A1 diagnostic — surface the SIP headers so we can confirm which
+  // one carries the dialed (To) number before wiring number→workspace routing.
+  logEvent("voice_call_sip_headers", {
+    call_id: callId,
+    sip_headers: (event.data?.sip_headers ?? []).map((h) => ({
+      name: h.name ?? null,
+      value: typeof h.value === "string" ? h.value.slice(0, 200) : null,
+    })),
+  });
 
   // 4. ACK the webhook fast, then accept + drive the call in ONE background
   //    task. CRITICAL ordering fix (2026-06-01): accept and the control-WS open
