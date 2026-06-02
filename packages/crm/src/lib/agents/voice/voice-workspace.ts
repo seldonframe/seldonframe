@@ -28,6 +28,8 @@ import { randomUUID } from "node:crypto";
 import { db } from "@/db";
 import { agents, organizations } from "@/db/schema";
 import type { ToolExecuteContext } from "../tools";
+import { resolveWorkspaceByPhoneNumber } from "./resolve-workspace-by-number";
+import { getOrCreateVoiceAgent } from "./voice-agent";
 
 /** Env var naming the workspace Phase 1 voice calls book into. */
 export const VOICE_PHASE1_TEST_ORG_SLUG_ENV = "VOICE_PHASE1_TEST_ORG_SLUG";
@@ -99,6 +101,96 @@ const DEFAULT_DEPS: VoiceWorkspaceDeps = {
  * route can log `voice_call_workspace_unresolved` and still run the call with a
  * tool-less persona (graceful: the caller hears a greeting, just no booking).
  */
+// ─── A6: resolveVoiceContextByNumber ────────────────────────────────────────
+
+/** All injectable deps for resolveVoiceContextByNumber. */
+export type ResolveByNumberDeps = {
+  /** Map a dialed E.164 number to an orgId, or null if unrecognised. */
+  resolveOrgIdByNumber: (n: string) => Promise<string | null>;
+  /** Look up an org's slug by its id. Returns null if not found. */
+  lookupOrgSlug: (orgId: string) => Promise<string | null>;
+  /** Get (or create) the voice receptionist agent id for an org. */
+  getVoiceAgentId: (orgId: string) => Promise<string>;
+  /** Phase-1 env-based fallback. Defaults to resolvePhase1VoiceContext. */
+  envFallback: () => Promise<ResolveVoiceContextResult>;
+  /** Defaults to crypto.randomUUID. */
+  generateConversationId: () => string;
+};
+
+// Lazy defaults — only touch DB / resolve-workspace-by-number at call time so
+// tests that inject all deps never trigger the imports.
+function buildDefaultByNumberDeps(): ResolveByNumberDeps {
+  return {
+    resolveOrgIdByNumber: resolveWorkspaceByPhoneNumber,
+    lookupOrgSlug: async (orgId: string) => {
+      const [row] = await db
+        .select({ slug: organizations.slug })
+        .from(organizations)
+        .where(eq(organizations.id, orgId))
+        .limit(1);
+      return row?.slug ?? null;
+    },
+    getVoiceAgentId: async (orgId: string) => {
+      const { id } = await getOrCreateVoiceAgent({ orgId });
+      return id;
+    },
+    envFallback: () => resolvePhase1VoiceContext(),
+    generateConversationId: randomUUID,
+  };
+}
+
+/**
+ * Phase 2 voice context resolution: try to resolve from the dialed number
+ * first, then fall back to the Phase 1 env-var mechanism.
+ *
+ * Never throws. Returns a discriminated union augmented with `resolvedBy`:
+ *   - "number"       — number matched an org in the DB
+ *   - "env_fallback" — fell back to Phase 1 env-var AND it succeeded
+ *   - "none"         — both paths failed
+ */
+export async function resolveVoiceContextByNumber(args: {
+  dialedNumber: string | null;
+  deps?: Partial<ResolveByNumberDeps>;
+}): Promise<ResolveVoiceContextResult & { resolvedBy: "number" | "env_fallback" | "none" }> {
+  const defaults = buildDefaultByNumberDeps();
+  const resolveOrgIdByNumber = args.deps?.resolveOrgIdByNumber ?? defaults.resolveOrgIdByNumber;
+  const lookupOrgSlug = args.deps?.lookupOrgSlug ?? defaults.lookupOrgSlug;
+  const getVoiceAgentId = args.deps?.getVoiceAgentId ?? defaults.getVoiceAgentId;
+  const envFallback = args.deps?.envFallback ?? defaults.envFallback;
+  const generateConversationId = args.deps?.generateConversationId ?? defaults.generateConversationId;
+
+  // Step 1 — try number-based lookup when a dialed number was supplied.
+  if (args.dialedNumber !== null) {
+    const orgId = await resolveOrgIdByNumber(args.dialedNumber);
+    if (orgId !== null) {
+      const orgSlug = await lookupOrgSlug(orgId);
+      if (orgSlug !== null) {
+        const agentId = await getVoiceAgentId(orgId);
+        return {
+          ok: true,
+          ctx: {
+            orgId,
+            orgSlug,
+            agentId,
+            conversationId: generateConversationId(),
+            testMode: false,
+          },
+          resolvedBy: "number",
+        };
+      }
+    }
+  }
+
+  // Step 2 — fall back to the Phase 1 env-var mechanism.
+  const fallbackResult = await envFallback();
+  if (fallbackResult.ok) {
+    return { ...fallbackResult, resolvedBy: "env_fallback" };
+  }
+  return { ...fallbackResult, resolvedBy: "none" };
+}
+
+// ─── resolvePhase1VoiceContext ───────────────────────────────────────────────
+
 export async function resolvePhase1VoiceContext(
   deps?: Partial<VoiceWorkspaceDeps>,
 ): Promise<ResolveVoiceContextResult> {
