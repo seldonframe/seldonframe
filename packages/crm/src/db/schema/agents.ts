@@ -65,6 +65,9 @@ export type AgentBlueprint = {
    *  can't blow up the system prompt budget. Empty/undefined → no
    *  override, runtime composes the prompt as it did before. */
   customSkillMd?: string;
+  /** OpenAI Realtime TTS voice id for voice-channel agents (e.g. "alloy",
+   *  "echo"). Ignored by non-voice archetypes. Defaults to "alloy" at use. */
+  voice?: string;
 };
 
 export const agents = pgTable(
