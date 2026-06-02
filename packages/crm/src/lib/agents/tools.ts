@@ -123,13 +123,66 @@ function formatDateYYYYMMDD(date: Date): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+/**
+ * A bookable slot as the agent sees it: a human-readable `label` to SPEAK
+ * / show, and the machine `iso` to pass back to book_appointment verbatim.
+ */
+export type LabeledSlot = { iso: string; label: string };
+
+/**
+ * Format a UTC ISO slot string into a spoken label in the workspace's IANA
+ * timezone — e.g. `formatSlotLabel("2026-06-01T17:00:00Z", "America/Los_Angeles")`
+ * → "Monday, June 1 at 10:00 AM PDT".
+ *
+ * WHY this exists: look_up_availability returns slots as UTC ISO strings.
+ * Before this helper the agent read the raw "T17:00:00Z" and spoke the UTC
+ * hour ("5pm") even when the workspace is in Pacific — where 17:00Z is
+ * 10:00 AM. LLMs do timezone arithmetic unreliably (the chatbot's own
+ * temporal-reasoning skill explicitly warns against computing slot times),
+ * so we format the spoken label SERVER-SIDE and hand the agent a ready
+ * string. The machine `iso` still travels to book_appointment unchanged, so
+ * the booking is unambiguous regardless of the caller's timezone.
+ *
+ * Pure (Intl.DateTimeFormat). Defensive:
+ *   - a malformed `iso` echoes back unchanged (a bad slot never crashes a call)
+ *   - an unknown `timeZone` falls back to UTC (still emits a usable label)
+ */
+export function formatSlotLabel(iso: string, timeZone: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  const opts: Intl.DateTimeFormatOptions = {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZoneName: "short",
+  };
+  try {
+    return new Intl.DateTimeFormat("en-US", { ...opts, timeZone }).format(date);
+  } catch {
+    // Invalid/unknown IANA zone — never throw mid-call; label in UTC.
+    return new Intl.DateTimeFormat("en-US", { ...opts, timeZone: "UTC" }).format(date);
+  }
+}
+
+/**
+ * Map raw UTC ISO slot strings to {iso, label} pairs, labelling each in the
+ * workspace timezone. The agent reads `label`; book_appointment receives
+ * `iso` verbatim.
+ */
+export function labelSlots(slots: readonly string[], timeZone: string): LabeledSlot[] {
+  return slots.map((iso) => ({ iso, label: formatSlotLabel(iso, timeZone) }));
+}
+
 export const lookUpAvailability: AgentTool<
   z.infer<typeof lookUpAvailabilityInput>,
-  { slots: string[]; durationMinutes: number; date: string }
+  { slots: LabeledSlot[]; durationMinutes: number; date: string; timezone: string }
 > = {
   name: "look_up_availability",
   description:
-    "Get the next available appointment slots starting from a given date. Walks forward day-by-day, accumulating up to 3 slots total across at most 14 days. Returns slot times as UTC ISO strings — the LLM formats the date for the visitor (e.g. 'today at 4pm', 'tomorrow at 9am').",
+    "Get the next available appointment slots starting from a given date. Walks forward day-by-day, accumulating up to 3 slots total across at most 14 days. Returns `slots` as {iso, label} pairs PLUS the workspace `timezone`. `label` is the time already converted to the BUSINESS'S local timezone and ready to read aloud / show (e.g. 'Monday, June 1 at 10:00 AM PDT') — ALWAYS quote the `label`, never the raw `iso`, and never convert times yourself. `iso` is the machine timestamp — pass it VERBATIM to book_appointment as slotIso.",
   inputSchema: lookUpAvailabilityInput,
   jsonSchema: {
     type: "object",
@@ -158,6 +211,12 @@ export const lookUpAvailability: AgentTool<
     // listPublicBookingSlotsAction default.
     let durationMinutes = 30;
     let durationSeen = false;
+    // Track the workspace timezone so we can label slots in the BUSINESS'S
+    // local time (not UTC). listPublicBookingSlotsAction surfaces it as
+    // `workspaceTimezone`, but omits it on its empty/early-return paths —
+    // so default to UTC and latch the first real value we see.
+    let timezone = "UTC";
+    let timezoneSeen = false;
 
     const slots = await findNextAvailableSlots({
       startDate,
@@ -173,18 +232,31 @@ export const lookUpAvailability: AgentTool<
           durationMinutes = result.durationMinutes;
           durationSeen = true;
         }
+        // `workspaceTimezone` is absent on the action's early-return paths,
+        // so read it defensively (the result type is a union without it).
+        const tz = (result as { workspaceTimezone?: string }).workspaceTimezone;
+        if (!timezoneSeen && typeof tz === "string" && tz) {
+          timezone = tz;
+          timezoneSeen = true;
+        }
         return result.slots;
       },
     });
 
     return {
-      slots,
+      // Each slot carries the raw `iso` (passed VERBATIM to book_appointment)
+      // and a `label` already converted to the workspace timezone for the
+      // agent to read aloud — so it can't quote the UTC hour by mistake.
+      slots: labelSlots(slots, timezone),
       durationMinutes,
       // `date` echoes back the START date the LLM requested. The slot
       // ISOs themselves carry the real calendar dates (which may span
       // multiple days now that the walk is enabled), so the LLM should
       // parse those rather than rely on this field.
       date: input.date,
+      // The IANA timezone the labels are in — lets the agent name the zone
+      // if the caller is plainly somewhere else.
+      timezone,
     };
   },
 };
@@ -206,7 +278,7 @@ export const bookAppointment: AgentTool<
 > = {
   name: "book_appointment",
   description:
-    "Create a confirmed booking. CALL ORDER: (1) look_up_availability({date}) FIRST to get real slot strings, (2) book_appointment with one of those slots passed VERBATIM as slotIso. Never invent or hand-edit a slot string — the slots returned by look_up_availability are full UTC ISO timestamps ('2026-05-13T16:00:00Z') that include timezone info; if you trim or reformat them, the server will misinterpret the time across timezones.",
+    "Create a confirmed booking. CALL ORDER: (1) look_up_availability({date}) FIRST to get real slots, (2) book_appointment with the chosen slot's `iso` field passed VERBATIM as slotIso. Never invent or hand-edit a slot — each slot's `iso` is a full UTC ISO timestamp ('2026-05-13T16:00:00Z') that carries timezone info; if you trim, reformat, or substitute the spoken `label` for it, the server will book the wrong time across timezones.",
   inputSchema: bookAppointmentInput,
   jsonSchema: {
     type: "object",
@@ -217,7 +289,7 @@ export const bookAppointment: AgentTool<
       slotIso: {
         type: "string",
         description:
-          "MUST be one of the slot strings returned by look_up_availability, copied VERBATIM. Format is full UTC ISO with Z suffix (e.g. '2026-05-13T16:00:00Z'). Do NOT pass naive local times like '2026-05-13T09:00' — those get misinterpreted as UTC and book the wrong time.",
+          "MUST be the `iso` field of one of the slots returned by look_up_availability, copied VERBATIM. Format is full UTC ISO with Z suffix (e.g. '2026-05-13T16:00:00Z'). Do NOT pass the human `label` (e.g. '10:00 AM PDT') or a naive local time like '2026-05-13T09:00' — those get misinterpreted and book the wrong time.",
       },
       notes: { type: "string" },
       bookingSlug: { type: "string" },

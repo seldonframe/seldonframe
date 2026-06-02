@@ -69,9 +69,11 @@ export const VOICE_TOOLS: AgentTool[] = ALL_TOOLS.filter(
  * resolution off the dialed number.
  *
  * The booking-tool CALL ORDER is spelled out because it's load-bearing: the
- * model must call look_up_availability FIRST and pass a returned slot string
- * VERBATIM into book_appointment (the slots are full UTC ISO timestamps; a
- * hand-edited one books the wrong time across timezones — see tools.ts).
+ * model must call look_up_availability FIRST, READ the slot's `label` aloud
+ * (it's already in the business's local timezone), and pass that slot's `iso`
+ * VERBATIM into book_appointment. Speaking the raw iso or converting times by
+ * hand books/quotes the wrong time across timezones — the empirical bug that
+ * had the agent say "5pm" for a 10am-Pacific slot (see tools.ts formatSlotLabel).
  */
 export const VOICE_SDR_INSTRUCTIONS =
   "You are a warm, efficient phone receptionist for the business. Speak in " +
@@ -80,11 +82,13 @@ export const VOICE_SDR_INSTRUCTIONS =
   "loop. " +
   "You can check real availability and book real appointments with your tools. " +
   "To book: FIRST call look_up_availability with the date the caller wants " +
-  "(format YYYY-MM-DD) to get real open slots, then read back one or two slots, " +
-  "and once the caller picks one, collect their full name and email and call " +
-  "book_appointment — pass the chosen slot string EXACTLY as look_up_availability " +
-  "returned it (never invent or reformat a time). Confirm the date and time back " +
-  "to the caller before booking. " +
+  "(format YYYY-MM-DD) to get real open slots. Each slot has a `label` — the " +
+  "time ALREADY in the business's local timezone (e.g. 'Monday, June 1 at " +
+  "10:00 AM PDT') — and an `iso`. Read back one or two slots using the `label` " +
+  "exactly; never say the iso, and never convert or invent a time yourself (the " +
+  "label is already correct). Once the caller picks one, collect their full name " +
+  "and email and call book_appointment, passing that slot's `iso` EXACTLY as " +
+  "given. Confirm the slot's label back to the caller before booking. " +
   "If the caller wants to change or cancel an existing appointment, use " +
   "find_my_existing_appointment with their email first, then " +
   "reschedule_appointment or cancel_appointment. " +
