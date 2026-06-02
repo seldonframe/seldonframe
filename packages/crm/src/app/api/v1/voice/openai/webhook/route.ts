@@ -204,6 +204,7 @@ export async function POST(request: Request): Promise<Response> {
 
       let instructions: string | undefined;
       let audioVoice: string | undefined;
+      let greeting: string | undefined;
       let conversationId: string | null = null;
       let turnIndex = 0;
       // Stage B — brain patterns consumed this call (fed back on a booking win)
@@ -245,6 +246,7 @@ export async function POST(request: Request): Promise<Response> {
             brainNotes: brain.notes,
           });
           audioVoice = personaInputs.blueprint.voice;
+          greeting = personaInputs.blueprint.greeting;
         } catch (err) {
           logEvent(
             "voice_call_persona_compose_error",
@@ -316,6 +318,7 @@ export async function POST(request: Request): Promise<Response> {
         toolContext: resolved?.ok ? resolved.ctx : undefined,
         instructions,
         audioVoice,
+        greeting,
         onBookingCompleted,
         ...transcriptCallbacks,
       });

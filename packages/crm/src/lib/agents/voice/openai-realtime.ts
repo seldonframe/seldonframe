@@ -285,6 +285,11 @@ export async function runVoiceCall(params: {
   executeToolCall?: typeof defaultExecuteVoiceToolCall;
   // PHASE 2 — per-agent TTS voice (blueprint.voice). Defaults to the GA fallback.
   audioVoice?: string;
+  // PHASE 2 — per-workspace opening line (blueprint.greeting). When set, the
+  // agent's FIRST response delivers this greeting; otherwise it falls back to a
+  // generic warm greeting. (Without this the editor's Greeting field saved but
+  // never reached the call.)
+  greeting?: string;
   // PHASE 2 — transcript capture callbacks (best-effort, fire-and-forget). The
   // caller wires these to persist agentTurns. A throw here must never affect the
   // call, so they're invoked inside try/catch at the call sites.
@@ -572,12 +577,16 @@ export async function runVoiceCall(params: {
 
       // Make the agent speak first — the warm greeting. Without this the agent
       // waits for the caller to speak, which feels broken on an "it answered
-      // and greeted me" validation.
+      // and greeted me" validation. PHASE 2: when the workspace set a custom
+      // greeting (blueprint.greeting via the editor), the agent opens with it;
+      // otherwise a generic warm greeting.
+      const greeting = params.greeting?.trim();
       send({
         type: "response.create",
         response: {
-          instructions:
-            "Greet the caller warmly as the receptionist and ask how you can help. Keep it to one or two short sentences.",
+          instructions: greeting
+            ? `Open the call by delivering this greeting in your own natural, warm voice: "${greeting}". Then briefly ask how you can help. Keep it to one or two short sentences.`
+            : "Greet the caller warmly as the receptionist and ask how you can help. Keep it to one or two short sentences.",
         },
       });
       logEvent("voice_call_first_response_requested", { call_id: params.callId });
