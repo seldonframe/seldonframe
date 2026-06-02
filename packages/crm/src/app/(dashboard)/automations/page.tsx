@@ -6,6 +6,7 @@ import {
   CalendarCheck,
   CloudRain,
   MessageCircle,
+  Phone,
   RefreshCw,
   Sparkles,
   Star,
@@ -13,9 +14,10 @@ import {
   Zap,
 } from "lucide-react";
 import { db } from "@/db";
-import { workflowRuns } from "@/db/schema";
+import { agents, workflowRuns, type OrganizationIntegrations } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
 import { getArchetype, listArchetypes } from "@/lib/agents/archetypes";
+import { resolveVoiceCardStatus, type VoiceCardStatus } from "@/lib/agents/voice/card-status";
 import type { AgentConfig } from "@/lib/agents/configure-actions";
 import { SoulAutomationsOverview } from "@/components/automations/soul-automations-overview";
 import { getSoul } from "@/lib/soul/server";
@@ -185,6 +187,26 @@ export default async function AutomationsPage() {
 
   const archetypes = listArchetypes();
 
+  // Voice Receptionist card status. The voice agent is an `agents` row
+  // (archetype 'voice-receptionist'), NOT a settings.agentConfigs automation,
+  // so its status comes from the row's `status` + whether a Twilio number is
+  // assigned (no number = calls can't route to it). We do NOT get-or-create
+  // here — the catalog is read-only; the row is lazily created when the
+  // operator opens the editor (or on the first inbound call).
+  const [voiceAgentRow] = orgId
+    ? await db
+        .select({ status: agents.status })
+        .from(agents)
+        .where(and(eq(agents.orgId, orgId), eq(agents.archetype, "voice-receptionist")))
+        .limit(1)
+    : [];
+  const voiceIntegrations = (org?.integrations ?? {}) as OrganizationIntegrations;
+  const voiceHasNumber = Boolean(voiceIntegrations.twilio?.fromNumber?.trim());
+  const voiceCardStatus = resolveVoiceCardStatus({
+    agentStatus: voiceAgentRow?.status ?? null,
+    hasNumber: voiceHasNumber,
+  });
+
   // Soul suggestions (legacy panel, kept compact below the catalog).
   const frameworks = {
     coaching: coachingFramework,
@@ -246,6 +268,45 @@ export default async function AutomationsPage() {
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {/* Voice Receptionist — a per-workspace `agents` row (channel
+              'voice'), NOT a settings.agentConfigs automation, so it links to
+              its OWN editor route (not /automations/[id]/configure) and derives
+              status from the agent row + assigned number. Same card chrome as
+              the archetype cards above. */}
+          <Link
+            href="/automations/voice-receptionist"
+            className="group flex flex-col gap-3 rounded-xl border bg-card p-5 text-card-foreground transition-all hover:border-primary/40 hover:shadow-(--shadow-card)"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <span
+                className="inline-flex size-9 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-500 dark:text-indigo-400"
+                aria-hidden
+              >
+                <Phone className="size-4" />
+              </span>
+              <VoiceStatusBadge status={voiceCardStatus} />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-sm font-semibold tracking-tight text-foreground">
+                Voice Receptionist
+              </h3>
+              <p className="line-clamp-3 text-xs text-muted-foreground">
+                An AI receptionist that answers calls to your voice number —
+                books appointments, answers FAQ, and hands off to a person when
+                needed.
+              </p>
+            </div>
+            <div className="mt-auto flex items-center justify-between border-t border-border/60 pt-3 text-[11px] text-muted-foreground">
+              <span>
+                {voiceHasNumber ? "Number assigned" : "No number yet"}
+              </span>
+              <span className="inline-flex items-center gap-1 text-foreground transition-transform group-hover:translate-x-0.5">
+                Configure
+                <ArrowRight className="size-3" />
+              </span>
+            </div>
+          </Link>
+
           {archetypes.map((archetype) => {
             const visuals = ARCHETYPE_VISUALS[archetype.id] ?? FALLBACK_VISUAL;
             const Icon = visuals.icon;
@@ -393,6 +454,54 @@ function resolveCatalogStatus(
   if (config.deployedAt && !config.pausedAt) return "live";
   if (config.pausedAt) return "paused";
   return "ready";
+}
+
+/**
+ * Voice Receptionist card badge. Distinct from StatusBadge because the voice
+ * agent has its own status vocabulary (resolveVoiceCardStatus): it can be
+ * "no_number" (agent exists but no Twilio number assigned → calls can't route)
+ * which the run-based archetype lifecycle has no equivalent for. Visual chrome
+ * matches StatusBadge so the card reads consistently in the grid.
+ */
+function VoiceStatusBadge({ status }: { status: VoiceCardStatus }) {
+  if (status === "live") {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-400 ring-1 ring-inset ring-emerald-500/20">
+        <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+        Live
+      </span>
+    );
+  }
+  if (status === "paused") {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-zinc-500/10 px-2 py-0.5 text-[10px] font-medium text-zinc-600 dark:text-zinc-400 ring-1 ring-inset ring-zinc-500/20">
+        <span className="size-1.5 rounded-full bg-zinc-500" />
+        Paused
+      </span>
+    );
+  }
+  if (status === "no_number") {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400 ring-1 ring-inset ring-amber-500/20">
+        <span className="size-1.5 rounded-full bg-amber-500" />
+        Needs a number
+      </span>
+    );
+  }
+  if (status === "draft") {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400 ring-1 ring-inset ring-amber-500/20">
+        <span className="size-1.5 rounded-full bg-amber-500/60" />
+        Draft
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-inset ring-border">
+      <span className="size-1.5 rounded-full bg-muted-foreground/60" />
+      Not configured
+    </span>
+  );
 }
 
 function StatusBadge({
