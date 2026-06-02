@@ -38,7 +38,7 @@ function buildDefaultDeps(): VoiceAgentDeps {
       const { agents } = await import("@/db/schema");
       const [created] = await db
         .insert(agents)
-        .values(values as Parameters<typeof db.insert>[0] extends infer T ? T : never)
+        .values(values as unknown as typeof agents.$inferInsert)
         .returning();
       if (!created) throw new Error("voice-agent insert returned no row");
       return created;

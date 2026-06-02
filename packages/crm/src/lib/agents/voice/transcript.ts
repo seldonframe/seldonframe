@@ -38,7 +38,7 @@ function buildDefaultStartDeps(): StartConversationDeps {
       const { agentConversations } = await import("@/db/schema/agents");
       const [row] = await db
         .insert(agentConversations)
-        .values(values as Parameters<typeof db.insert>[0] extends infer T ? T : never)
+        .values(values as unknown as typeof agentConversations.$inferInsert)
         .returning({ id: agentConversations.id });
       if (!row) throw new Error("agentConversations insert returned no row");
       return row.id;
@@ -53,7 +53,7 @@ function buildDefaultAppendDeps(): AppendTurnDeps {
       const { agentTurns } = await import("@/db/schema/agents");
       await db
         .insert(agentTurns)
-        .values(values as Parameters<typeof db.insert>[0] extends infer T ? T : never);
+        .values(values as unknown as typeof agentTurns.$inferInsert);
     },
   };
 }
@@ -66,7 +66,7 @@ function buildDefaultEndDeps(): EndConversationDeps {
       const { eq } = await import("drizzle-orm");
       await db
         .update(agentConversations)
-        .set(patch as Parameters<typeof db.update>[0] extends infer T ? T : never)
+        .set(patch as unknown as Partial<typeof agentConversations.$inferInsert>)
         .where(eq(agentConversations.id, conversationId));
     },
   };

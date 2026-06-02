@@ -17,7 +17,8 @@ const ORG_ID = "org-222";
 
 describe("startVoiceConversation", () => {
   test("(a) calls insert with the right shape and returns the injected id", async () => {
-    let capturedValues: Record<string, unknown> | null = null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test capture, mutated inside an injected closure
+    let capturedValues: any = null;
 
     const result = await startVoiceConversation({
       agentId: AGENT_ID,
@@ -66,7 +67,8 @@ describe("startVoiceConversation", () => {
 
 describe("appendVoiceTurn", () => {
   test("(b) inserts a turn with the given turnIndex, role, content", async () => {
-    let capturedValues: Record<string, unknown> | null = null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test capture, mutated inside an injected closure
+    let capturedValues: any = null;
 
     await appendVoiceTurn({
       conversationId: CONV_ID,
@@ -107,7 +109,8 @@ describe("appendVoiceTurn", () => {
 describe("endVoiceConversation", () => {
   test("(c) updates with status:completed, endedAt set, and turnCount", async () => {
     let capturedConvId: string | null = null;
-    let capturedPatch: Record<string, unknown> | null = null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test capture, mutated inside an injected closure
+    let capturedPatch: any = null;
 
     await endVoiceConversation({
       conversationId: CONV_ID,
@@ -128,7 +131,8 @@ describe("endVoiceConversation", () => {
   });
 
   test("(c-custom-status) respects a custom status (e.g. 'abandoned')", async () => {
-    let capturedPatch: Record<string, unknown> | null = null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test capture, mutated inside an injected closure
+    let capturedPatch: any = null;
 
     await endVoiceConversation({
       conversationId: CONV_ID,
