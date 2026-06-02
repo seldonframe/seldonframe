@@ -56,6 +56,7 @@ import { logEvent } from "@/lib/observability/log";
 import { findContactByPhone } from "@/lib/sms/api";
 import { toE164 } from "@/lib/sms/providers";
 import { verifyTwilioSignature } from "@/lib/sms/webhook-verify";
+import { resolveWorkspaceByPhoneNumber } from "@/lib/agents/voice/resolve-workspace-by-number";
 
 export const runtime = "nodejs";
 
@@ -69,30 +70,6 @@ type MissedCallStatus = "no-answer" | "busy" | "failed";
 
 function isMissedStatus(value: string): value is MissedCallStatus {
   return MISSED_CALL_STATUSES.has(value as MissedCallStatus);
-}
-
-// Resolves the workspace that owns the dialed number. Mirrors the
-// pattern in the Twilio SMS webhook. Voice webhooks send To=<our
-// number> for inbound calls (the number Twilio answered), so we
-// match against the workspace's stored Twilio fromNumber.
-async function resolveOrgByTwilioNumber(twilioNumber: string) {
-  const rows = await db
-    .select({
-      id: organizations.id,
-      integrations: organizations.integrations,
-    })
-    .from(organizations);
-
-  for (const row of rows) {
-    const integrations = (row.integrations ?? {}) as Record<string, unknown>;
-    const twilio = (integrations.twilio ?? {}) as { fromNumber?: string };
-    const stored = twilio.fromNumber?.trim() ?? "";
-    if (stored && toE164(stored) === twilioNumber) {
-      return row.id;
-    }
-  }
-
-  return null;
 }
 
 // Same auth-token-loading pattern as the SMS webhook. v1.* prefix
@@ -181,7 +158,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing To number" }, { status: 400 });
   }
 
-  const orgId = await resolveOrgByTwilioNumber(toNumber);
+  const orgId = await resolveWorkspaceByPhoneNumber(toNumber);
   if (!orgId) {
     logEvent("twilio_voice_webhook_no_org_match", {
       call_sid: callSid,
