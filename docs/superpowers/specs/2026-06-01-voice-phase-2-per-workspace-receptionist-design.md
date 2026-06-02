@@ -1,4 +1,4 @@
-# Voice Phase 2 — Per-Workspace Voice Receptionist + `/automations` Editor
+# Voice Phase 2 — Per-Workspace Voice Receptionist + Agent Brain Loop + `/automations` Editor
 
 **Date:** 2026-06-01
 **Status:** Design (approved — ready for implementation plan)
@@ -10,8 +10,9 @@
 
 A call to a workspace's phone number reaches **that workspace's** voice agent — its
 soul/persona, its booking calendar, its FAQ — speaks the correct workspace-local time,
-logs a full transcript into the same Conversations surface as the chatbot, and is
-editable from `/automations`.
+logs a full transcript into the same Conversations surface as the chatbot, is editable from
+`/automations`, and **both reads from and writes to the shared "brain"** so all agents (voice and
+chatbot) get measurably better over time.
 
 This replaces the Phase 1 hack where every call booked into a single env-var workspace
 (`VOICE_PHASE1_TEST_ORG_SLUG`) with a static, business-agnostic persona and no transcript.
@@ -151,27 +152,73 @@ Voice calls log into the existing `agentConversations` + `agentTurns` tables so 
   expandable to its `agentTurns`). Saving patches `agents.blueprint`/`status` and writes an
   `agentVersions` row (same audit/rollback pattern as `update_website_chatbot`).
 
+### 6. Brain — the learning loop (read + write), for ALL agents
+
+SeldonFrame already has a complete "Karpathy brain": `brain_notes` (markdown notes with a `path`,
+`scope` = `workspace`|`global`, and `uses`/`wins`/`confidence` scoring), a store API
+(`listBrainDir`, `readBrainNote` — which ticks `uses` on read — `markBrainOutcome`,
+`findPromotionCandidates`), a nightly **dream-cycle compiler** (`runDreamCycle` in `lib/brain-compiler.ts`,
+scheduled via `vercel.json` `brain-compile`), and a **weekly promotion cron** (`brain-promote`) that
+lifts proven workspace notes into anonymized `global` patterns and prunes weak ones. The agent prompt
+builder (`lib/agents/prompt.ts`) already has the injection slot (`brainNotes` →
+"## Patterns we've learned from past conversations"), and an outcome **emitter exists**
+(`lib/analytics/brain.ts` inserts `brain_outcomes`; the forms path already emits `landing_to_intake`).
+
+**The gap:** the conversational agents — chatbot AND voice — neither read those patterns at runtime
+nor write outcomes back. This phase closes the loop for both (the compiler + promotion engines are
+**reused, not rebuilt**):
+
+- **READ.** When composing an agent's prompt (voice in this phase; the chatbot's live turn wired the
+  same way), load this workspace's relevant `brain_notes` + the `global` patterns via the store
+  (`listBrainDir`/`readBrainNote`, which ticks `uses`), inject them through the existing `brainNotes`
+  slot, and remember the consumed note IDs on the conversation (`channelMeta.brainNoteIds`).
+- **WRITE — raw outcome.** On a decisive result (booking landed = **win**; abandoned/escalated = **loss**),
+  emit a `brain_outcomes` row through the existing `lib/analytics/brain.ts` helper — `eventType`
+  (e.g. `voice_booking` / `chat_booking`), `outcome`, `outcomeValueCents` (booking value), `context`
+  (vertical + what worked). This is what `runDreamCycle` compiles into new notes.
+- **WRITE — note feedback.** If the winning interaction consumed brain notes, call
+  `markBrainOutcome(consumedNoteIds, "win")` to bump their `wins`/`confidence`, so patterns that
+  actually close calls rise and weak ones get pruned/never promoted.
+- **Shared helper.** The read-load and outcome-emit are a single small module both the voice runtime
+  and the chatbot turn route call — so "all agents get better over time" is one implementation, not two.
+- All brain I/O is **best-effort + non-blocking** (try/catch + log); the brain never blocks a live call
+  or chat turn.
+
 ---
 
-## Decomposition — two independently-shippable stages
+## Decomposition — three independently-shippable stages
 
 Each stage produces working, testable software on its own.
 
-### Stage A — Backend (the substance)
-Makes calls per-workspace, grounded, and recorded. Delivers value with zero new UI.
+### Stage A — Per-workspace voice backend (the substance)
+Makes calls per-workspace, grounded, recorded, and brain-aware (read side). Zero new UI.
 - A1. **Diagnostic:** log raw `sip_headers` on inbound calls; confirm the dialed-number field.
 - A2. **Routing:** `extractDialedNumber` (pure) + shared `resolveWorkspaceByPhoneNumber` (refactored
   from the Twilio route) + fallback chain; get-or-create the voice agent.
 - A3. **Persona:** `voice-receptionist-sdr` skill; compose per-workspace instructions from soul +
-  registry with workspace-timezone temporal vars; per-agent TTS voice via `session.update`.
+  registry with workspace-timezone temporal vars + **brain-note READ** (inject patterns, remember
+  consumed IDs); per-agent TTS voice via `session.update`.
 - A4. **Transcripts:** conversation + turn persistence over the call lifecycle (best-effort).
 
-### Stage B — `/automations` editor
-- B1. Voice Receptionist **card** in the catalog with agent-row-derived status.
-- B2. **Editor page + server actions** (get-or-create, save blueprint/status, assign number,
-  version row) and the **transcript viewer**.
+### Stage B — Agent brain feedback loop (read + write, all agents)
+Closes the learning loop. Reuses the existing dream-cycle + promotion crons.
+- B1. **Shared brain helper:** `loadAgentBrainContext(orgId, archetype)` (read + consumed-IDs) and
+  `recordAgentBrainOutcome({ orgId, eventType, outcome, valueCents, noteIds, context })` (emit
+  `brain_outcomes` + `markBrainOutcome`), wrapping the existing store/analytics functions.
+- B2. **Wire voice:** emit `voice_booking` win (with booking value) on a landed call;
+  loss on abandoned/escalated. Feedback consumed notes.
+- B3. **Wire chatbot:** populate the chatbot turn's `brainNotes` from the shared loader (if not
+  already), and emit `chat_booking` win on a chatbot-landed booking — so the existing text agent
+  joins the loop too.
 
-Surface to the user between stages for a real-call smoke test of Stage A before building Stage B.
+### Stage C — `/automations` voice editor
+- C1. Voice Receptionist **card** in the catalog with agent-row-derived status.
+- C2. **Editor page + server actions** (get-or-create, save blueprint/status, assign number,
+  version row), the **transcript viewer**, and a small "patterns this agent has learned" panel
+  (top workspace `brain_notes` by confidence) so the learning loop is visible to the operator.
+
+Surface to the user for a real-call smoke test after Stage A (per-workspace call works) and again
+after Stage B (a winning call writes a `brain_outcomes` row) before building Stage C.
 
 ## Error handling / graceful degradation
 
@@ -190,9 +237,12 @@ Surface to the user between stages for a real-call smoke test of Stage A before 
   `voice-receptionist-sdr` skill prose checks.
 - **Transcript persistence:** DI over the DB writers (the repo's pattern in `voice-workspace.ts` /
   `realtime-tools.spec.ts`) — assert conversation-created + turn-rows for a scripted event stream.
+- **Brain loop:** DI over the store/analytics functions — `loadAgentBrainContext` returns notes +
+  consumed IDs (and ticks `uses`); `recordAgentBrainOutcome` emits the right `brain_outcomes` row and
+  calls `markBrainOutcome` only on a win with consumed IDs; both swallow + log errors (best-effort).
 - **Manual integration:** real phone call on the Vercel preview — confirm correct workspace, business
-  identity, workspace-local times, and a transcript in Conversations. **Surfaced to the operator;
-  not run autonomously.**
+  identity, workspace-local times, a transcript in Conversations, and (after Stage B) a
+  `brain_outcomes` row written on a booked call. **Surfaced to the operator; not run autonomously.**
 
 ## Out of scope (YAGNI)
 
@@ -200,6 +250,11 @@ Surface to the user between stages for a real-call smoke test of Stage A before 
 - Outbound Speed-to-Lead calling (Phase 3).
 - Multi-number-per-workspace, IVR menus, voicemail, call recording audio storage.
 - Voice evals / validator gating (the chatbot's eval infra can extend later).
+- **Rebuilding the brain engine.** The dream-cycle compiler (`runDreamCycle`) and the promotion/prune
+  cron already exist and are scheduled — this phase only feeds them (agent reads + writes). No changes
+  to the compiler, promotion thresholds, or the existing non-agent emitters (e.g. `landing_to_intake`).
+- A broad outcome **taxonomy** beyond the booking win/loss signal (e.g. fine-grained per-objection
+  outcomes) — start with the one decisive signal that maps to revenue; expand later.
 
 ## Open risks
 
