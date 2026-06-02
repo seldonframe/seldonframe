@@ -27,9 +27,44 @@ import { randomUUID } from "node:crypto";
 
 import { db } from "@/db";
 import { agents, organizations } from "@/db/schema";
+import type { AgentBlueprint } from "@/db/schema/agents";
 import type { ToolExecuteContext } from "../tools";
 import { resolveWorkspaceByPhoneNumber } from "./resolve-workspace-by-number";
 import { getOrCreateVoiceAgent } from "./voice-agent";
+
+/** Inputs composeVoicePersona needs, loaded for a resolved workspace. */
+export type VoicePersonaInputs = {
+  soul: unknown;
+  timezone: string;
+  blueprint: AgentBlueprint;
+};
+
+/**
+ * Load the soul + workspace timezone + voice-agent blueprint for persona
+ * composition. Best-effort: on any miss it returns safe defaults (null soul,
+ * UTC, empty blueprint) so the call still runs with a generic persona rather
+ * than crashing. Used by the voice webhook AFTER the workspace is resolved.
+ */
+export async function loadVoicePersonaInputs(
+  orgId: string,
+  agentId: string,
+): Promise<VoicePersonaInputs> {
+  const [org] = await db
+    .select({ soul: organizations.soul, timezone: organizations.timezone })
+    .from(organizations)
+    .where(eq(organizations.id, orgId))
+    .limit(1);
+  const [agent] = await db
+    .select({ blueprint: agents.blueprint })
+    .from(agents)
+    .where(eq(agents.id, agentId))
+    .limit(1);
+  return {
+    soul: org?.soul ?? null,
+    timezone: org?.timezone || "UTC",
+    blueprint: (agent?.blueprint ?? {}) as AgentBlueprint,
+  };
+}
 
 /** Env var naming the workspace Phase 1 voice calls book into. */
 export const VOICE_PHASE1_TEST_ORG_SLUG_ENV = "VOICE_PHASE1_TEST_ORG_SLUG";

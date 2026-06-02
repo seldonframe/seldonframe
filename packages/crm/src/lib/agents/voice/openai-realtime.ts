@@ -283,6 +283,14 @@ export async function runVoiceCall(params: {
   instructions?: string;
   // Injectable tool executor for tests (defaults to the real bridge).
   executeToolCall?: typeof defaultExecuteVoiceToolCall;
+  // PHASE 2 — per-agent TTS voice (blueprint.voice). Defaults to the GA fallback.
+  audioVoice?: string;
+  // PHASE 2 — transcript capture callbacks (best-effort, fire-and-forget). The
+  // caller wires these to persist agentTurns. A throw here must never affect the
+  // call, so they're invoked inside try/catch at the call sites.
+  onUserTurn?: (text: string) => void;
+  onAssistantTurn?: (text: string) => void;
+  onCallEnd?: () => void;
 }): Promise<CallEndReason> {
   const WS: ControlSocketCtor =
     params.WebSocketImpl ?? (WsWebSocket as unknown as ControlSocketCtor);
@@ -370,6 +378,14 @@ export async function runVoiceCall(params: {
         }
       } catch {
         // ignore — best-effort close
+      }
+      // PHASE 2 — let the caller close out the transcript (mark conversation
+      // completed + turnCount). Best-effort: a throw here must not stop the
+      // promise from resolving. Fires exactly once (guarded by `settled`).
+      try {
+        params.onCallEnd?.();
+      } catch {
+        // ignore — best-effort transcript close-out
       }
       logEvent("voice_call_ws_closed", { call_id: params.callId, reason });
       resolve(reason);
@@ -518,10 +534,16 @@ export async function runVoiceCall(params: {
       const session: Record<string, unknown> = {
         type: "realtime",
         instructions,
-        // Voice via the GA audio config path. Defensive: if OpenAI ever rejects
-        // this field it emits an `error` event (logged via
-        // voice_call_realtime_error) but the call still runs.
-        audio: { output: { voice: VOICE_AUDIO_OUTPUT_VOICE } },
+        // Voice via the GA audio config path (per-agent in Phase 2; falls back to
+        // the GA default). `input.transcription` ENABLES caller-speech transcripts
+        // — without it `conversation.item.input_audio_transcription.completed`
+        // never fires (so goodbye-detection + transcript capture stay dark).
+        // Defensive: if OpenAI rejects any field it emits an `error` event
+        // (logged via voice_call_realtime_error) but the call still runs.
+        audio: {
+          input: { transcription: { model: "whisper-1" } },
+          output: { voice: params.audioVoice ?? VOICE_AUDIO_OUTPUT_VOICE },
+        },
       };
       if (toolsEnabled) {
         // 6 tools (provide_faq_answer excluded). tool_choice "auto" lets the
@@ -620,9 +642,38 @@ export async function runVoiceCall(params: {
         // (Phase 0 has no other use for transcripts.)
         case "conversation.item.input_audio_transcription.completed": {
           const transcript = typeof msg.transcript === "string" ? msg.transcript : "";
+          if (transcript) {
+            try {
+              params.onUserTurn?.(transcript);
+            } catch {
+              // best-effort transcript capture — never affect the call
+            }
+          }
           if (/\b(good ?bye|bye|that'?s all|thank you,? bye|hang up)\b/i.test(transcript)) {
             sawGoodbye = true;
             logEvent("voice_call_goodbye_detected", { call_id: params.callId });
+          }
+          break;
+        }
+
+        // PHASE 2 — assistant spoken-reply transcript. The GA realtime API emits
+        // `response.output_audio_transcript.done`; older builds used
+        // `response.audio_transcript.done`. Handle both so transcript capture
+        // works regardless, and log the event type once so we can confirm which
+        // the API actually sends (the logs to date only show function-call events).
+        case "response.output_audio_transcript.done":
+        case "response.audio_transcript.done": {
+          const transcript = typeof msg.transcript === "string" ? msg.transcript : "";
+          logEvent("voice_call_realtime_event", {
+            call_id: params.callId,
+            event_type: msg.type,
+          });
+          if (transcript) {
+            try {
+              params.onAssistantTurn?.(transcript);
+            } catch {
+              // best-effort
+            }
           }
           break;
         }

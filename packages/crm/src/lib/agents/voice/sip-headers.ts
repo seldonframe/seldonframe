@@ -1,11 +1,22 @@
 // Extract the dialed (called) PSTN number from OpenAI realtime.call.incoming
-// sip_headers. Pure. Returns E.164 (e.g. "+18335551234") or null.
+// sip_headers. Pure. Returns E.164 (e.g. "+13254132487") or null.
 //
-// The dialed number is the user part of the SIP/tel URI in the header naming
-// the called party. Twilio's Elastic SIP Trunk forwards it as the To header.
-// We also accept request-URI / Diversion as fallbacks so an upstream header
-// rename degrades gracefully (caller falls back to env), not a crash.
-const DIALED_HEADER_NAMES = ["to", "diversion", "request-uri", "x-original-to"];
+// CONFIRMED EMPIRICALLY (2026-06-02, real Twilio→OpenAI SIP call): with the
+// OpenAI Realtime SIP setup, the `To` header is the OpenAI PROJECT URI
+// (`<sip:proj_xxx@sip.api.openai.com;transport=tls>`) — NOT the dialed number.
+// Twilio's Elastic SIP Trunk forwards the originally-dialed DID in the
+// `Diversion` header (`<sip:+13254132487@twilio.com>;reason=unconditional`).
+// The caller's own number is in From / P-Asserted-Identity / Contact, which we
+// deliberately do NOT read (we want the called number, not the caller).
+//
+// So we prefer `Diversion`, then fall back to `To` / request-URI / X-Original-To
+// for other SIP topologies — skipping any value that points at the OpenAI
+// endpoint (it can never be the dialed PSTN number).
+const DIALED_HEADER_NAMES = ["diversion", "to", "request-uri", "x-original-to"];
+
+// A header value pointing at the OpenAI realtime endpoint is the session
+// target, never the dialed number — never extract a number from it.
+const OPENAI_SIP_HOST = "sip.api.openai.com";
 
 export function extractDialedNumber(
   sipHeaders: ReadonlyArray<{ name?: string; value?: string }> | undefined | null,
@@ -13,7 +24,9 @@ export function extractDialedNumber(
   if (!sipHeaders) return null;
   for (const wanted of DIALED_HEADER_NAMES) {
     const header = sipHeaders.find((h) => (h.name ?? "").trim().toLowerCase() === wanted);
-    const num = header ? parseUserPart(header.value) : null;
+    if (!header?.value) continue;
+    if (header.value.includes(OPENAI_SIP_HOST)) continue;
+    const num = parseUserPart(header.value);
     if (num) return num;
   }
   return null;

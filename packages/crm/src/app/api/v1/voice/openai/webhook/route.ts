@@ -35,7 +35,17 @@ import {
   verifyOpenAiWebhook,
 } from "@/lib/agents/voice/openai-webhook-verify";
 import { acceptCall, runVoiceCall } from "@/lib/agents/voice/openai-realtime";
-import { resolvePhase1VoiceContext } from "@/lib/agents/voice/voice-workspace";
+import {
+  resolveVoiceContextByNumber,
+  loadVoicePersonaInputs,
+} from "@/lib/agents/voice/voice-workspace";
+import { extractDialedNumber } from "@/lib/agents/voice/sip-headers";
+import { composeVoicePersona } from "@/lib/agents/voice/persona";
+import {
+  startVoiceConversation,
+  appendVoiceTurn,
+  endVoiceConversation,
+} from "@/lib/agents/voice/transcript";
 
 // Node runtime (not edge) — we use node:crypto for HMAC and the Node global
 // WebSocket/undici options bag for the realtime control socket.
@@ -172,14 +182,14 @@ export async function POST(request: Request): Promise<Response> {
         accept_headers: accepted.headers,
       });
 
-      // PHASE 1 — resolve the single configured test workspace
-      // (VOICE_PHASE1_TEST_ORG_SLUG) into a tool-execution context so the agent
-      // can check real availability and land a REAL booking in that workspace's
-      // /bookings (testMode:false). Best-effort: if the slug is unset or the org
-      // isn't found we log it and run a tool-less greeting (the caller still
-      // hears the agent — graceful degradation, not a dropped call). Per-
-      // workspace resolution from the dialed number is Phase 2.
-      const resolved = await resolvePhase1VoiceContext().catch((err) => {
+      // PHASE 2 — resolve the workspace FROM THE DIALED NUMBER (the Diversion
+      // header carries the called Twilio DID; the To header is the OpenAI project
+      // URI). Falls back to the env slug, then to a tool-less greeting. Then
+      // compose a per-workspace persona from that workspace's soul and open a
+      // transcript. All best-effort: a miss degrades to a working greeting, never
+      // a dropped call.
+      const dialedNumber = extractDialedNumber(event.data?.sip_headers);
+      const resolved = await resolveVoiceContextByNumber({ dialedNumber }).catch((err) => {
         logEvent(
           "voice_call_workspace_resolve_error",
           { call_id: callId, error: err instanceof Error ? err.message : String(err) },
@@ -187,33 +197,93 @@ export async function POST(request: Request): Promise<Response> {
         );
         return null;
       });
+
+      let instructions: string | undefined;
+      let audioVoice: string | undefined;
+      let conversationId: string | null = null;
+      let turnIndex = 0;
+
       if (resolved?.ok) {
         logEvent("voice_call_workspace_resolved", {
           call_id: callId,
+          resolved_by: resolved.resolvedBy,
+          dialed_number: dialedNumber,
           org_id: resolved.ctx.orgId,
           org_slug: resolved.ctx.orgSlug,
           agent_id: resolved.ctx.agentId,
           conversation_id: resolved.ctx.conversationId,
+        });
+
+        // Per-workspace persona (soul + skill registry + workspace timezone) and
+        // per-agent TTS voice. Best-effort: a failure falls back to the built-in
+        // SDR persona/voice inside runVoiceCall.
+        try {
+          const personaInputs = await loadVoicePersonaInputs(
+            resolved.ctx.orgId,
+            resolved.ctx.agentId,
+          );
+          instructions = composeVoicePersona({
+            soul: personaInputs.soul,
+            blueprint: personaInputs.blueprint,
+            timezone: personaInputs.timezone,
+            now: new Date(),
+          });
+          audioVoice = personaInputs.blueprint.voice;
+        } catch (err) {
+          logEvent(
+            "voice_call_persona_compose_error",
+            { call_id: callId, error: err instanceof Error ? err.message : String(err) },
+            { severity: "warn" }
+          );
+        }
+
+        // Open the transcript conversation (best-effort — null on failure).
+        conversationId = await startVoiceConversation({
+          agentId: resolved.ctx.agentId,
+          orgId: resolved.ctx.orgId,
+          callId,
+          toNumber: dialedNumber ?? undefined,
         });
       } else {
         logEvent(
           "voice_call_workspace_unresolved",
           {
             call_id: callId,
-            reason: resolved ? resolved.reason : "resolve_threw",
-            slug: resolved ? resolved.slug : null,
+            resolved_by: resolved ? resolved.resolvedBy : "resolve_threw",
+            dialed_number: dialedNumber,
           },
           { severity: "warn" }
         );
       }
 
+      // Transcript callbacks persist each turn when a conversation row was
+      // created. `cid` is a const so it stays narrowed to `string` inside the
+      // closures (no non-null assertion needed).
+      const cid = conversationId;
+      const transcriptCallbacks = cid
+        ? {
+            onUserTurn: (text: string) => {
+              void appendVoiceTurn({ conversationId: cid, turnIndex: turnIndex++, role: "user", content: text });
+            },
+            onAssistantTurn: (text: string) => {
+              void appendVoiceTurn({ conversationId: cid, turnIndex: turnIndex++, role: "assistant", content: text });
+            },
+            onCallEnd: () => {
+              void endVoiceConversation({ conversationId: cid, turnCount: turnIndex });
+            },
+          }
+        : {};
+
       // WS open happens immediately inside runVoiceCall — adjacent to accept.
-      // Tools are passed only when the workspace resolved; otherwise the call
-      // falls back to the Phase 0 greeting persona.
+      // Tools + per-workspace persona + per-agent voice are passed only when the
+      // workspace resolved; otherwise the call falls back to the greeting persona.
       await runVoiceCall({
         callId,
         apiKey,
         toolContext: resolved?.ok ? resolved.ctx : undefined,
+        instructions,
+        audioVoice,
+        ...transcriptCallbacks,
       });
     } catch (err) {
       // Belt-and-suspenders: a background throw must never bubble (nothing is
