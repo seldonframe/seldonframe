@@ -391,6 +391,14 @@ export function BuildStageV2({ active, input, eventSource, revealLinks }: BuildS
   const publishDomain = inferPublishSubdomain(input ?? { kind: "url", value: "" });
   const elapsedFmt = formatTime(elapsedS);
   const totalFmt = `${TOTAL_S}s`;
+  // 2026-06-03 — The rAF narrative clock can reach the REVEAL phase before
+  // the orchestrator's `done` event fires (real builds occasionally run
+  // past the 60s clock). `isReady` is the single source of truth for "the
+  // workspace is actually built and its dashboard URL is live" — it gates
+  // the REVEAL copy and flips the CTAs from a finalizing state to real
+  // clickable anchors. Without it the operator saw a finished-looking
+  // screen with a dead look-alike button and no cue it was still wiring up.
+  const isReady = Boolean(revealLinks?.open);
 
   return (
     <div
@@ -625,10 +633,18 @@ export function BuildStageV2({ active, input, eventSource, revealLinks }: BuildS
               <PhasePanel index={5} active={phaseIndex === 5}>
                 <PhaseHead phase={5} stageMark={stageMark} />
                 <div className="sb-phase-body">
-                  <div className="sb-reveal">
-                    <div className="sb-reveal-banner">
-                      <span className="sb-reveal-tag">Live · {Math.round(elapsedS)}s build</span>
-                      <h3 className="sb-reveal-name">{displayName} is ready to hand over.</h3>
+                  <div className="sb-reveal" data-ready={isReady ? "yes" : "no"}>
+                    <div className={`sb-reveal-banner${isReady ? "" : " is-pending"}`}>
+                      <span className="sb-reveal-tag">
+                        {isReady
+                          ? `Live · ${Math.round(elapsedS)}s build`
+                          : `Finalizing · ${Math.round(elapsedS)}s`}
+                      </span>
+                      <h3 className="sb-reveal-name">
+                        {isReady
+                          ? `${displayName} is ready to hand over.`
+                          : `Putting the finishing touches on ${displayName}…`}
+                      </h3>
                     </div>
                     <div className="sb-reveal-stats">
                       <Stat k="Modules" v="4" small="/ 4 live" />
@@ -637,15 +653,16 @@ export function BuildStageV2({ active, input, eventSource, revealLinks }: BuildS
                       <Stat k="Archetype" v={archetypeLabel} small="" smallValue />
                     </div>
                     <div className="sb-reveal-ctas">
-                      {/* 2026-05-24 — Wired to real URLs from the orchestrator
-                          `done` payload (dashboardUrl + publicHomeUrl). When
-                          revealLinks is absent (animation still running, or
-                          the parent hasn't received `done` yet) the CTAs
-                          render as disabled-looking spans so the visual moment
-                          still lands. */}
-                      {revealLinks?.open ? (
+                      {/* 2026-06-03 — The rAF clock can reach REVEAL before the
+                          orchestrator's `done` event arrives. Until it does
+                          (isReady === false) the primary CTA renders as an
+                          explicit finalizing state — spinner + shimmer — so the
+                          operator reads it as still-working, not broken. The
+                          instant `done` lands and revealLinks is set, it flips
+                          to a real, clickable anchor. */}
+                      {isReady ? (
                         <a
-                          href={revealLinks.open}
+                          href={revealLinks!.open}
                           className="sb-btn sb-btn-primary"
                         >
                           Open workspace
@@ -655,15 +672,17 @@ export function BuildStageV2({ active, input, eventSource, revealLinks }: BuildS
                           </svg>
                         </a>
                       ) : (
-                        <span className="sb-btn sb-btn-primary" aria-busy="true">
-                          Open workspace
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
-                            <line x1={5} y1={12} x2={19} y2={12} />
-                            <polyline points="12 5 19 12 12 19" />
-                          </svg>
+                        <span
+                          className="sb-btn sb-btn-primary is-pending"
+                          role="status"
+                          aria-live="polite"
+                          aria-busy="true"
+                        >
+                          <span className="sb-btn-spinner" aria-hidden="true" />
+                          Finalizing workspace…
                         </span>
                       )}
-                      {revealLinks?.share ? (
+                      {isReady && revealLinks?.share ? (
                         <a
                           href={revealLinks.share}
                           target="_blank"
@@ -673,11 +692,20 @@ export function BuildStageV2({ active, input, eventSource, revealLinks }: BuildS
                           Share with client
                         </a>
                       ) : (
-                        <span className="sb-btn sb-btn-ghost" aria-busy="true">
+                        <span
+                          className={`sb-btn sb-btn-ghost${isReady ? " is-disabled" : " is-pending"}`}
+                          aria-busy={!isReady}
+                          aria-disabled="true"
+                        >
                           Share with client
                         </span>
                       )}
                     </div>
+                    {!isReady && (
+                      <p className="sb-reveal-hint" role="status" aria-live="polite">
+                        Wiring the last modules together — this goes live the moment your workspace is ready.
+                      </p>
+                    )}
                   </div>
                 </div>
               </PhasePanel>
@@ -1863,6 +1891,63 @@ function StageStyles() {
         border: 1px solid var(--sb-border);
       }
 
+      /* 2026-06-03 — Pending CTA state. The build clock can reach REVEAL
+         before the orchestrator's `done` fires; rather than a dead
+         look-alike button, the primary CTA shows an explicit finalizing
+         state (spinner + shimmer sweep) and flips to a real <a> the moment
+         revealLinks arrives. */
+      .sb-btn.is-pending { cursor: progress; pointer-events: none; }
+      .sb-btn-ghost.is-pending { opacity: 0.55; }
+      .sb-btn-ghost.is-disabled { opacity: 0.4; cursor: default; pointer-events: none; }
+      .sb-btn-primary.is-pending {
+        position: relative;
+        overflow: hidden;
+        background: color-mix(in oklab, var(--sb-accent) 60%, var(--sb-surface));
+        border-color: color-mix(in oklab, var(--sb-accent) 38%, var(--sb-border));
+        color: color-mix(in oklab, var(--sb-accent-ink) 88%, transparent);
+        box-shadow: none;
+      }
+      .sb-btn-primary.is-pending::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--sb-accent-ink) 24%, transparent), transparent);
+        transform: translateX(-100%);
+        animation: sb-btn-shimmer 1.5s ease-in-out infinite;
+      }
+      .sb-btn-spinner {
+        width: 14px;
+        height: 14px;
+        flex-shrink: 0;
+        border-radius: 50%;
+        border: 2px solid color-mix(in oklab, var(--sb-accent-ink) 32%, transparent);
+        border-top-color: var(--sb-accent-ink);
+        animation: sb-spin 0.7s linear infinite;
+      }
+      @keyframes sb-spin { to { transform: rotate(360deg); } }
+      @keyframes sb-btn-shimmer {
+        0% { transform: translateX(-100%); }
+        55%, 100% { transform: translateX(100%); }
+      }
+      .sb-reveal-hint {
+        margin: 2px 0 0;
+        font-family: 'Geist Mono', ui-monospace, monospace;
+        font-size: 11px;
+        letter-spacing: 0.01em;
+        color: var(--sb-ink-3);
+      }
+      /* Pending banner pulses an amber dot instead of the live green. */
+      .sb-reveal-banner.is-pending {
+        border-color: color-mix(in oklab, oklch(0.74 0.16 75) 30%, var(--sb-border));
+      }
+      .sb-reveal-banner.is-pending .sb-reveal-tag { color: oklch(0.62 0.13 75); }
+      .sb-reveal-banner.is-pending .sb-reveal-tag::before {
+        background: oklch(0.74 0.16 75);
+        box-shadow: 0 0 0 3px color-mix(in oklab, oklch(0.74 0.16 75) 22%, transparent);
+        animation: sb-pulse-dot 1.2s ease-in-out infinite;
+      }
+      @keyframes sb-pulse-dot { 50% { opacity: 0.4; } }
+
       /* RIGHT — phase narration panel */
       .sb-side {
         position: relative;
@@ -2062,6 +2147,9 @@ function StageStyles() {
         .sb-struct-card, .sb-lead { animation: none; opacity: 1; transform: none; }
         .sb-act-head .dot, .sb-reveal-tag::before { animation: none; }
         .sb-scan .caret { animation: none; }
+        .sb-btn-spinner,
+        .sb-btn-primary.is-pending::after,
+        .sb-reveal-banner.is-pending .sb-reveal-tag::before { animation: none; }
       }
       /* Reduced motion (JS-controlled layer) */
       .sb-stage[data-reduced="yes"] .sb-phase { transition: none; }
@@ -2076,6 +2164,11 @@ function StageStyles() {
         animation: none;
       }
       .sb-stage[data-reduced="yes"] .sb-scan .caret { animation: none; }
+      .sb-stage[data-reduced="yes"] .sb-btn-spinner,
+      .sb-stage[data-reduced="yes"] .sb-btn-primary.is-pending::after,
+      .sb-stage[data-reduced="yes"] .sb-reveal-banner.is-pending .sb-reveal-tag::before {
+        animation: none;
+      }
       .sb-stage[data-reduced="yes"] .sb-tick.is-active { opacity: 1; }
       .sb-stage[data-reduced="yes"] .sb-tick.is-active .bar .fill {
         transition: none;
