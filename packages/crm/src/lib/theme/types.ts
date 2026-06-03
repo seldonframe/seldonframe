@@ -53,6 +53,13 @@ export interface OrgTheme {
    *  archetype-curated Unsplash fallback. Optional for backward compat:
    *  workspaces created pre-1.54 lazy-reclassify on first hero persist. */
   aestheticArchetype?: AestheticArchetypeId;
+  /** Health-vertical templates pilot — id of the premium full-page landing
+   *  template to render at /w/[slug] (see components/landing-templates/
+   *  registry.ts). When set + registered, the /w route renders that template
+   *  instead of the landing-r1 sections. Stored as a plain string (decoupled
+   *  from the registry's union); validated at read time via isLandingTemplateId.
+   *  Absent on every existing workspace → unchanged landing-r1 behavior. */
+  landingTemplate?: string;
 }
 
 // v1.38.5 — flipped default mode from "dark" to "light".
