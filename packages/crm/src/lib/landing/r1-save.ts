@@ -101,6 +101,10 @@ export async function loadLandingPayload(workspaceSlug: string): Promise<{
   payload: R1LandingPayload;
   archetype: AestheticArchetypeId;
   orgId: string;
+  /** Health-templates pilot: id persisted at organizations.theme.landingTemplate
+   *  (undefined for every workspace that hasn't opted into a premium template).
+   *  Additive — existing callers ignore it and the landing-r1 path is unchanged. */
+  landingTemplate: string | undefined;
   seo: { title: string; description: string; ogImage: string | null };
 } | null> {
   // Join landing_pages → organizations to resolve workspace slug → orgId.
@@ -109,12 +113,18 @@ export async function loadLandingPayload(workspaceSlug: string): Promise<{
   const { organizations } = await import("@/db/schema");
 
   const [orgRow] = await db
-    .select({ id: organizations.id })
+    .select({ id: organizations.id, theme: organizations.theme })
     .from(organizations)
     .where(eq(organizations.slug, workspaceSlug))
     .limit(1);
 
   if (!orgRow) return null;
+
+  // theme is jsonb typed as OrgTheme; landingTemplate is an optional string.
+  const landingTemplate =
+    typeof orgRow.theme?.landingTemplate === "string"
+      ? orgRow.theme.landingTemplate
+      : undefined;
 
   const [row] = await db
     .select({
@@ -146,6 +156,7 @@ export async function loadLandingPayload(workspaceSlug: string): Promise<{
     payload,
     archetype,
     orgId: orgRow.id,
+    landingTemplate,
     seo: {
       title: (seoRaw["title"] as string | undefined) ?? payload.footer.businessName,
       description:

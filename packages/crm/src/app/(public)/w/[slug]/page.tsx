@@ -28,6 +28,15 @@ import { loadLandingPayload } from "@/lib/landing/r1-save";
 import { rewriteR1Hrefs } from "@/lib/landing/r1-rewrite-hrefs";
 import { buildWorkspaceUrls } from "@/lib/billing/anonymous-workspace";
 import { getPublicChatbotEmbed } from "@/lib/agents/public-embed";
+import {
+  LANDING_TEMPLATES,
+  isLandingTemplateId,
+} from "@/components/landing-templates/registry";
+import { r1PayloadToTemplateData } from "@/lib/landing/r1-payload-to-template";
+import {
+  archetypeToSfTheme,
+  buildTemplateCtas,
+} from "@/lib/landing/template-adapters";
 
 type PageProps = {
   params: Promise<{ slug: string }>;
@@ -102,7 +111,29 @@ export default async function WorkspaceLandingPage({ params }: PageProps) {
     notFound();
   }
 
-  const { orgId } = data;
+  const { orgId, landingTemplate } = data;
+
+  // bisect 4/4: chatbot embed — shared by both render paths.
+  const chatbotEmbed = await getPublicChatbotEmbed(orgId);
+
+  // Health-templates pilot: when the workspace has opted into a premium
+  // full-page template (persisted at organizations.theme.landingTemplate),
+  // render it as an alternative renderer of the same r1 content. The template
+  // builds its own workspace-scoped CTAs (book/intake/tel:), so it does NOT
+  // need the r1 href-rewrite. Workspaces without a registered template fall
+  // through to the existing landing-r1 path below, unchanged.
+  if (isLandingTemplateId(landingTemplate)) {
+    const Tpl = LANDING_TEMPLATES[landingTemplate];
+    const templateData = r1PayloadToTemplateData(data.payload);
+    const ctas = buildTemplateCtas(slug, orgId, templateData.phone);
+    const theme = archetypeToSfTheme(data.payload.hero.archetype ?? data.archetype);
+    return (
+      <>
+        <Tpl data={templateData} ctas={ctas} theme={theme} />
+        {chatbotEmbed && <ChatbotEmbedScript embedUrl={chatbotEmbed.embedUrl} />}
+      </>
+    );
+  }
 
   // bisect 3/4: rewrite generic CTA hrefs to workspace-scoped URLs.
   const workspaceUrls = buildWorkspaceUrls(
@@ -115,9 +146,6 @@ export default async function WorkspaceLandingPage({ params }: PageProps) {
     intake: workspaceUrls.intake,
     home: workspaceUrls.home,
   });
-
-  // bisect 4/4: chatbot embed.
-  const chatbotEmbed = await getPublicChatbotEmbed(orgId);
 
   return (
     <>
