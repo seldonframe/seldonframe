@@ -199,3 +199,182 @@ export function r1PayloadToTemplateData(payload: R1LandingPayload): Soul {
 
   return soul;
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// Flat submitted-soul → template Soul
+// ────────────────────────────────────────────────────────────────────────────
+//
+// Some workspaces have a raw `organizations.soul` jsonb (a FLAT business
+// profile captured at submission time) but no r1 landing payload yet. The
+// /w/[slug] route falls back to this mapper so those workspaces still render a
+// registered template. The flat soul is untyped JSON, so every access is
+// defensive and the function NEVER throws.
+//
+// Shape we expect (all keys optional except the produced business_name):
+//   business_name, tagline, soul_description, phone, email, address (strings),
+//   offerings (array of STRINGS or { name, ... } objects),
+//   faqs ({ q, a }[]), testimonials ({ name, text }[]).
+// Richer fields (review_rating/count, service_area, trust_signals,
+// certifications, emergency_service/same_day, photos) are passed through ONLY
+// when present and well-typed — otherwise omitted so the template renders its
+// themed placeholders.
+
+/** Narrow an unknown to a plain (non-array, non-null) object. */
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/** Keep only the finite-number entries of an unknown; undefined otherwise. */
+function strArray(v: unknown): string[] | undefined {
+  if (!Array.isArray(v)) return undefined;
+  const out = v.map(clean).filter((s): s is string => Boolean(s));
+  return out.length ? out : undefined;
+}
+
+/**
+ * Map one flat-soul offering entry → template offering.
+ *   • string            → { name: <string> }
+ *   • { name: string }  → passthrough (description/price/currency/duration
+ *                          read defensively, never required)
+ *   • anything else     → dropped (null)
+ */
+function flatOffering(item: unknown): Offering | null {
+  if (typeof item === "string") {
+    const name = clean(item);
+    return name ? { name } : null;
+  }
+  if (!isRecord(item)) return null;
+  const name = clean(item.name);
+  if (!name) return null;
+  const offering: Offering = { name };
+  const description = clean(item.description);
+  if (description) offering.description = description;
+  const price = num(item.price);
+  if (price != null) offering.price = price;
+  const currency = clean(item.currency);
+  if (currency) offering.currency = currency;
+  const duration = num(item.duration_minutes);
+  if (duration != null) offering.duration_minutes = duration;
+  return offering;
+}
+
+/** Map a flat-soul faq entry → { q, a }; null unless both are non-empty. */
+function flatFaq(item: unknown): { q: string; a: string } | null {
+  if (!isRecord(item)) return null;
+  const q = clean(item.q);
+  const a = clean(item.a);
+  if (!q || !a) return null;
+  return { q, a };
+}
+
+/**
+ * Map a flat-soul testimonial entry → { name, text }. `text` is required;
+ * `name` falls back to "Anonymous" so a well-formed quote without an attributed
+ * author still renders (the contract types `name` as required).
+ */
+function flatTestimonial(item: unknown): { name: string; text: string } | null {
+  if (!isRecord(item)) return null;
+  const text = clean(item.text);
+  if (!text) return null;
+  const name = clean(item.name) ?? "Anonymous";
+  return { name, text };
+}
+
+/** Map a flat-soul photo entry → template photo; null unless `url` is present. */
+function flatPhoto(item: unknown): Photo | null {
+  if (!isRecord(item)) return null;
+  const url = clean(item.url);
+  if (!url) return null;
+  const photo: Photo = { url };
+  const alt = clean(item.alt);
+  if (alt) photo.alt = alt;
+  const role = item.role;
+  if (
+    role === "hero" ||
+    role === "service" ||
+    role === "about" ||
+    role === "gallery"
+  ) {
+    photo.role = role;
+  }
+  return photo;
+}
+
+/**
+ * Convert a raw, FLAT `organizations.soul` jsonb into the shared template
+ * `Soul`. Used by /w/[slug] when a workspace has a soul but no r1 landing
+ * payload. Defensive by design: any field may be missing or the wrong type;
+ * such fields are omitted. The only invariant is `business_name` (falls back to
+ * "Our Practice"). Never throws.
+ */
+export function submittedSoulToTemplateData(raw: unknown): Soul {
+  const src: Record<string, unknown> = isRecord(raw) ? raw : {};
+
+  // ── identity ────────────────────────────────────────────────────────────
+  const business_name = clean(src.business_name) ?? "Our Practice";
+  const soul: Soul = { business_name };
+
+  const tagline = clean(src.tagline);
+  if (tagline) soul.tagline = tagline;
+  const soul_description = clean(src.soul_description);
+  if (soul_description) soul.soul_description = soul_description;
+
+  // ── contact / location ──────────────────────────────────────────────────
+  const phone = clean(src.phone);
+  if (phone) soul.phone = phone;
+  const email = clean(src.email);
+  if (email) soul.email = email;
+  const address = clean(src.address);
+  if (address) soul.address = address;
+
+  const service_area = strArray(src.service_area);
+  if (service_area) soul.service_area = service_area;
+
+  // ── reviews / trust ───────────────────────────────────────────────────────
+  const review_rating = num(src.review_rating);
+  if (review_rating != null) soul.review_rating = review_rating;
+  const review_count = num(src.review_count);
+  if (review_count != null) soul.review_count = review_count;
+
+  const trust_signals = strArray(src.trust_signals);
+  if (trust_signals) soul.trust_signals = trust_signals;
+  const certifications = strArray(src.certifications);
+  if (certifications) soul.certifications = certifications;
+
+  if (src.emergency_service === true) soul.emergency_service = true;
+  if (src.same_day === true) soul.same_day = true;
+
+  // ── offerings (array of strings or { name, … } objects) ───────────────────
+  if (Array.isArray(src.offerings)) {
+    const offerings = src.offerings
+      .map(flatOffering)
+      .filter((o): o is Offering => o != null);
+    if (offerings.length) soul.offerings = offerings;
+  }
+
+  // ── faqs ──────────────────────────────────────────────────────────────────
+  if (Array.isArray(src.faqs)) {
+    const faqs = src.faqs
+      .map(flatFaq)
+      .filter((f): f is { q: string; a: string } => f != null);
+    if (faqs.length) soul.faqs = faqs;
+  }
+
+  // ── testimonials ──────────────────────────────────────────────────────────
+  if (Array.isArray(src.testimonials)) {
+    const testimonials = src.testimonials
+      .map(flatTestimonial)
+      .filter((t): t is { name: string; text: string } => t != null);
+    if (testimonials.length) soul.testimonials = testimonials;
+  }
+
+  // ── photos (only when present + well-typed) ───────────────────────────────
+  if (Array.isArray(src.photos)) {
+    const photos = src.photos
+      .map(flatPhoto)
+      .filter((p): p is Photo => p != null);
+    if (photos.length) soul.photos = photos;
+  }
+
+  return soul;
+}

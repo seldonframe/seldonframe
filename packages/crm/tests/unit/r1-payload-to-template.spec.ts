@@ -14,7 +14,10 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import { r1PayloadToTemplateData } from "../../src/lib/landing/r1-payload-to-template";
+import {
+  r1PayloadToTemplateData,
+  submittedSoulToTemplateData,
+} from "../../src/lib/landing/r1-payload-to-template";
 import type { R1LandingPayload } from "../../src/lib/landing/r1-payload-prompt";
 
 // ── Representative fixture (mirrors a real generated r1 payload) ──────────────
@@ -207,5 +210,108 @@ describe("r1PayloadToTemplateData — minimal payload", () => {
   test("tagline still maps when present", () => {
     const soul = r1PayloadToTemplateData(minimal);
     assert.equal(soul.tagline, "Feel better, naturally");
+  });
+});
+
+// ── submittedSoulToTemplateData — flat organizations.soul jsonb ───────────────
+// The soul-only fallback path used by /w/[slug] when a workspace has a raw soul
+// but no r1 landing payload. The flat soul carries string offerings, plus
+// faqs/testimonials in the template's own shape.
+describe("submittedSoulToTemplateData — flat soul with string offerings", () => {
+  const flat = {
+    business_name: "Riverside Physiotherapy",
+    tagline: "Move better, live stronger",
+    soul_description:
+      "A modern physio clinic focused on hands-on manual therapy and active rehab.",
+    phone: "(604) 555-0144",
+    email: "hello@riversidephysio.ca",
+    address: "120 Riverside Dr, Vancouver, BC",
+    offerings: [
+      "Manual Therapy",
+      "Sports Rehabilitation",
+      "  ", // whitespace-only → dropped
+      { name: "Dry Needling", description: "IMS for chronic tension." },
+      { description: "no name → dropped" },
+      42, // non-string / non-object → dropped
+    ],
+    faqs: [
+      { q: "Do you direct bill?", a: "Yes, to most major insurers." },
+      { q: "", a: "missing question → dropped" },
+    ],
+    testimonials: [
+      { name: "Sarah L.", text: "Back to running pain-free in six weeks." },
+      { text: "Great clinic." }, // no name → kept with fallback
+      { name: "No Text" }, // no text → dropped
+    ],
+  };
+
+  const soul = submittedSoulToTemplateData(flat);
+
+  test("maps identity + contact fields (trimmed, present only)", () => {
+    assert.equal(soul.business_name, "Riverside Physiotherapy");
+    assert.equal(soul.tagline, "Move better, live stronger");
+    assert.ok(soul.soul_description?.startsWith("A modern physio clinic"));
+    assert.equal(soul.phone, "(604) 555-0144");
+    assert.equal(soul.email, "hello@riversidephysio.ca");
+    assert.equal(soul.address, "120 Riverside Dr, Vancouver, BC");
+  });
+
+  test("string offerings become { name }, objects pass through, junk dropped", () => {
+    assert.ok(Array.isArray(soul.offerings));
+    assert.deepEqual(
+      soul.offerings!.map((o) => o.name),
+      ["Manual Therapy", "Sports Rehabilitation", "Dry Needling"],
+    );
+    // first two are name-only; the object offering keeps its description.
+    assert.equal(soul.offerings![0].description, undefined);
+    assert.equal(soul.offerings![2].description, "IMS for chronic tension.");
+  });
+
+  test("faqs keep only items with both q and a", () => {
+    assert.equal(soul.faqs!.length, 1);
+    assert.deepEqual(soul.faqs![0], {
+      q: "Do you direct bill?",
+      a: "Yes, to most major insurers.",
+    });
+  });
+
+  test("testimonials keep items with text; name falls back when absent", () => {
+    assert.equal(soul.testimonials!.length, 2);
+    assert.deepEqual(soul.testimonials![0], {
+      name: "Sarah L.",
+      text: "Back to running pain-free in six weeks.",
+    });
+    assert.equal(soul.testimonials![1].text, "Great clinic.");
+    assert.equal(soul.testimonials![1].name, "Anonymous");
+  });
+
+  test("omits rich fields the flat soul never provides", () => {
+    assert.equal(soul.photos, undefined);
+    assert.equal(soul.review_rating, undefined);
+    assert.equal(soul.review_count, undefined);
+    assert.equal(soul.hours, undefined);
+    assert.equal(soul.service_area, undefined);
+  });
+});
+
+describe("submittedSoulToTemplateData — empty / garbage input", () => {
+  test("returns { business_name: 'Our Practice' } without throwing", () => {
+    for (const garbage of [undefined, null, {}, [], 7, "nope", true]) {
+      assert.doesNotThrow(() => submittedSoulToTemplateData(garbage));
+      const soul = submittedSoulToTemplateData(garbage);
+      assert.deepEqual(soul, { business_name: "Our Practice" });
+    }
+  });
+
+  test("tolerates malformed sub-arrays without throwing or emitting them", () => {
+    const soul = submittedSoulToTemplateData({
+      offerings: "not-an-array",
+      faqs: [null, 3, "x"],
+      testimonials: [{}, { name: 5 }],
+    });
+    assert.equal(soul.business_name, "Our Practice");
+    assert.equal(soul.offerings, undefined);
+    assert.equal(soul.faqs, undefined);
+    assert.equal(soul.testimonials, undefined);
   });
 });
