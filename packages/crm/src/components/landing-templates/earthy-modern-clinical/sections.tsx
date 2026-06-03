@@ -3,11 +3,11 @@ import { Icon } from "./icons";
 import { SmartImage } from "./ui";
 import { sfDur, sfMoney, sfPhoto } from "./theme";
 
-// â”€â”€ Hero (split / asymmetric â€” never centered) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Hero (split / asymmetric — never centered) ─────────────────────────────
 export function Hero({ data, ctas }: { data: Soul; ctas: CTAs }) {
   const hero = sfPhoto(data, "hero");
   const eyebrow = data.service_area && data.service_area.length
-    ? "Now welcoming patients Â· " + data.service_area[0]
+    ? "Now welcoming patients · " + data.service_area[0]
     : data.certifications && data.certifications[0];
   return (
     <section className="sf5-hero">
@@ -29,7 +29,7 @@ export function Hero({ data, ctas }: { data: Soul; ctas: CTAs }) {
           <ul className="sf5-hero-chips">
             {data.review_rating != null && (
               <li><span className="sf5-stars"><Icon.star /></span><b>{data.review_rating.toFixed(1)}</b>
-                {data.review_count != null && <span className="sf5-muted">Â· {data.review_count} reviews</span>}</li>
+                {data.review_count != null && <span className="sf5-muted">· {data.review_count} reviews</span>}</li>
             )}
             {data.certifications && data.certifications[0] && (
               <li><Icon.check className="sf5-chip-ic" /><span>{data.certifications[0]}</span></li>
@@ -42,11 +42,11 @@ export function Hero({ data, ctas }: { data: Soul; ctas: CTAs }) {
   );
 }
 
-// â”€â”€ Trust strip â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Trust strip ────────────────────────────────────────────────────────────
 export function TrustStrip({ data }: { data: Soul }) {
   const items: { lead: string | null; sub: string }[] = [];
   if (data.review_rating != null)
-    items.push({ lead: data.review_rating.toFixed(1) + "â˜…", sub: data.review_count ? data.review_count + " patient reviews" : "Patient rating" });
+    items.push({ lead: data.review_rating.toFixed(1) + "★", sub: data.review_count ? data.review_count + " patient reviews" : "Patient rating" });
   (data.trust_signals || []).forEach((s) => items.push({ lead: null, sub: s }));
   if (!items.length) return null;
   return (
@@ -63,7 +63,7 @@ export function TrustStrip({ data }: { data: Soul }) {
   );
 }
 
-// â”€â”€ Services (varied card sizes â€” first card spans full width) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Services (varied card sizes — first card spans full width) ─────────────
 export function Services({ data, ctas }: { data: Soul; ctas: CTAs }) {
   const list = data.offerings || [];
   if (!list.length) return null;
@@ -113,7 +113,7 @@ export function Services({ data, ctas }: { data: Soul; ctas: CTAs }) {
   );
 }
 
-// â”€â”€ About (color panel + portrait) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── About (color panel + portrait) ─────────────────────────────────────────
 export function About({ data, ctas }: { data: Soul; ctas: CTAs }) {
   if (!data.soul_description && !(data.certifications || []).length) return null;
   const portrait = sfPhoto(data, "about");
@@ -140,7 +140,7 @@ export function About({ data, ctas }: { data: Soul; ctas: CTAs }) {
   );
 }
 
-// â”€â”€ Stats (optional proof) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Stats (optional proof) ─────────────────────────────────────────────────
 export function Stats({ data }: { data: Soul }) {
   const stats: [string, string][] = [];
   if (data.review_count != null) stats.push([data.review_count.toLocaleString() + "+", "Patients cared for"]);
@@ -158,7 +158,7 @@ export function Stats({ data }: { data: Soul }) {
   );
 }
 
-// â”€â”€ Testimonials â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Testimonials ───────────────────────────────────────────────────────────
 export function Testimonials({ data }: { data: Soul }) {
   const t = data.testimonials || [];
   if (!t.length) return null;
@@ -180,7 +180,7 @@ export function Testimonials({ data }: { data: Soul }) {
   );
 }
 
-// â”€â”€ CTA band (over warm texture) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── CTA band (over warm texture) ───────────────────────────────────────────
 export function CtaBand({ data, ctas }: { data: Soul; ctas: CTAs }) {
   return (
     <section className="sf5-cta" id="contact">
@@ -198,7 +198,7 @@ export function CtaBand({ data, ctas }: { data: Soul; ctas: CTAs }) {
   );
 }
 
-// â”€â”€ Footer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Footer ─────────────────────────────────────────────────────────────────
 export function Footer({ data, ctas }: { data: Soul; ctas: CTAs }) {
   const cols: [string, string[], "text" | "link"][] = [];
   const contact: string[] = [];
@@ -229,13 +229,13 @@ export function Footer({ data, ctas }: { data: Soul; ctas: CTAs }) {
       </div>
       <div className="sf5-wrap sf5-foot-legal">
         <span>{"\u00A9 " + new Date().getFullYear() + " " + data.business_name + ". All rights reserved."}</span>
-        <span>Privacy Â· Accessibility Â· Terms</span>
+        <span>Privacy · Accessibility · Terms</span>
       </div>
     </footer>
   );
 }
 
-// â”€â”€ Sticky mobile action bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Sticky mobile action bar ───────────────────────────────────────────────
 export function MobileBar({ data, ctas }: { data: Soul; ctas: CTAs }) {
   return (
     <div className="sf5-mbar" aria-label="Quick actions">

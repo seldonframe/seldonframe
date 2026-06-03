@@ -5,17 +5,14 @@ import { Nav, Faq } from "./interactive";
 import { Hero, TrustStrip, Services, About, Stats, Testimonials, CtaBand, Footer, MobileBar } from "./sections";
 
 /**
- * Template 5 — "Earthy Modern Clinical"
- * Entry component. Shared signature across all five templates:
- *   ({ data, ctas, theme }) => JSX
- *
- * - Server component (no "use client"); only Nav + Faq opt into the client.
- * - Theme is applied as --sf-* CSS variables on the root; nothing is hardcoded.
- * - Bottom-right is left clear for the platform's injected AI chat bubble.
+ * Template 2 — "Warm Wellness"
+ * Shared entry signature: ({ data, ctas, theme }) => JSX
+ * Server component; only Nav + Faq opt into the client. Theme via --sf-* vars.
+ * Bottom-right left clear for the platform's injected AI chat bubble.
  */
-export function EarthyModernClinical({ data, ctas, theme }: TemplateProps) {
+export function WarmWellness({ data, ctas, theme }: TemplateProps) {
   return (
-    <div className="sf5-root" style={sfThemeVars(theme)}>
+    <div className="sf2-root" style={sfThemeVars(theme)}>
       <Styles />
       <Nav data={data} ctas={ctas} />
       <main>

@@ -1,4 +1,4 @@
-// SeldonFrame Â· shared data contract (matches EXAMPLE_SOULS.ts Â§3).
+// SeldonFrame · shared data contract (matches EXAMPLE_SOULS.ts §3).
 // Treat every field except `business_name` as possibly missing.
 
 export type Soul = {
@@ -34,7 +34,7 @@ export type CTAs = {
   intakeUrl?: string;
 };
 
-// The archetype theme â€” injected per business. Every template reads exactly
+// The archetype theme — injected per business. Every template reads exactly
 // these tokens; the values are surfaced to CSS as --sf-* custom properties.
 export type SfTheme = {
   primary?: string;

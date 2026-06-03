@@ -1,6 +1,6 @@
 import type { SVGProps } from "react";
 
-// Inline SVG only — no external icon libraries (SeldonFrame house rule).
+// Inline SVG only — no external icon libraries.
 type P = SVGProps<SVGSVGElement>;
 const base = (p: P) => ({ width: "1em" as const, height: "1em" as const, viewBox: "0 0 24 24", "aria-hidden": true, ...p });
 
@@ -13,5 +13,5 @@ export const Icon = {
   close: (p: P) => (<svg {...base(p)}><path fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" d="M6 6l12 12M18 6L6 18" /></svg>),
   check: (p: P) => (<svg {...base(p)}><path fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>),
   clock: (p: P) => (<svg {...base(p)}><circle cx={12} cy={12} r={9} fill="none" stroke="currentColor" strokeWidth={2} /><path fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" d="M12 7v5l3 2" /></svg>),
-  mark: (p: P) => (<svg {...base(p)}><path fill="currentColor" d="M3 12c5 0 9-4 9-9 0 5 4 9 9 9-5 0-9 4-9 9 0-5-4-9-9-9z" /></svg>),
+  heart: (p: P) => (<svg {...base(p)}><path fill="currentColor" d="M12 21s-7-4.5-9.5-9C1 9 2.5 5.5 6 5.5c2 0 3.2 1.2 4 2.4.8-1.2 2-2.4 4-2.4 3.5 0 5 3.5 3.5 6.5C19 16.5 12 21 12 21z" /></svg>),
 };

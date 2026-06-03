@@ -32,7 +32,7 @@ clinic, not a spa or a SaaS page.
 import EarthyModernClinical from "./EarthyModernClinical";
 import { austinFamilyChiropractic, exampleCTAs } from "./fixture";
 
-export default function Page() {
+export function Page() {
   return <EarthyModernClinical data={austinFamilyChiropractic} ctas={exampleCTAs} />;
   // theme is optional — omit for the tasteful default, or pass per-business --sf-* values.
 }

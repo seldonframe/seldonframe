@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { CSSProperties } from "react";
 import type { Photo } from "./theme";
 
-// Themed color-field placeholder â€” the real fallback whenever a photo is
+// Themed color-field placeholder — the real fallback whenever a photo is
 // missing OR fails to load. Driven entirely by --sf-* vars, so it always
 // looks intentional (never a broken <img>). Decorative backgrounds hide the tag.
 export function ThemedPlaceholder({

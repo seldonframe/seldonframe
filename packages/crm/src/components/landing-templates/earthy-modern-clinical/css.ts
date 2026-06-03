@@ -1,10 +1,10 @@
-/* SF5 global stylesheet â€” single source of truth, shared by <Styles/>.
+/* SF5 global stylesheet — single source of truth, shared by <Styles/>.
    Mobile-first; container queries on .sf5-root so the layout reflows by
    available width (works for desktop, tablet, and embedded/preview contexts).
-   Every value resolves from --sf-* theme variables â€” no hardcoded brand color. */
+   Every value resolves from --sf-* theme variables — no hardcoded brand color. */
 export const SF5_CSS = `
 .sf5-root{
-  /* tints derived from theme vars â€” never hardcoded */
+  /* tints derived from theme vars — never hardcoded */
   --sf-primary-d: color-mix(in oklab, var(--sf-primary) 82%, #000);
   --sf-primary-12: color-mix(in oklab, var(--sf-primary) 12%, var(--sf-bg));
   --sf-card: color-mix(in oklab, var(--sf-secondary) 6%, var(--sf-bg));
@@ -217,7 +217,7 @@ export const SF5_CSS = `
 
 @media (prefers-reduced-motion: reduce){ .sf5-root *{ transition:none !important; } }
 
-/* ===================== container queries (tablet â‰¥ 720) =================== */
+/* ===================== container queries (tablet ≥ 720) =================== */
 @container sf5 (min-width:720px){
   .sf5-wrap{ padding-inline:32px; }
   .sf5-nav-links{ display:flex; }

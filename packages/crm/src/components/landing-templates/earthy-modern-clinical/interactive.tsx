@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { CTAs, Soul } from "../_contract/types";
 import { Icon } from "./icons";
 
-// â”€â”€ Sticky nav with mobile sheet â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Sticky nav with mobile sheet ───────────────────────────────────────────
 export function Nav({ data, ctas }: { data: Soul; ctas: CTAs }) {
   const [open, setOpen] = useState(false);
   const links: [string, string][] = [
@@ -50,7 +50,7 @@ export function Nav({ data, ctas }: { data: Soul; ctas: CTAs }) {
   );
 }
 
-// â”€â”€ FAQ accordion â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── FAQ accordion ──────────────────────────────────────────────────────────
 export function Faq({ data }: { data: Soul }) {
   const faqs = data.faqs || [];
   const [open, setOpen] = useState(0);
