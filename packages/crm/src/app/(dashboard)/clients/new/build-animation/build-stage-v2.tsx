@@ -1892,10 +1892,10 @@ function StageStyles() {
       }
 
       /* 2026-06-03 — Pending CTA state. The build clock can reach REVEAL
-         before the orchestrator's `done` fires; rather than a dead
+         before the orchestrator done event fires; rather than a dead
          look-alike button, the primary CTA shows an explicit finalizing
-         state (spinner + shimmer sweep) and flips to a real <a> the moment
-         revealLinks arrives. */
+         state (spinner + shimmer sweep) and flips to a real anchor the
+         moment revealLinks arrives. */
       .sb-btn.is-pending { cursor: progress; pointer-events: none; }
       .sb-btn-ghost.is-pending { opacity: 0.55; }
       .sb-btn-ghost.is-disabled { opacity: 0.4; cursor: default; pointer-events: none; }
