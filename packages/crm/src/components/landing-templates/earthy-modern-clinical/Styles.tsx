@@ -1,3 +1,5 @@
+"use client";
+
 import { SF5_CSS } from "./css";
 
 // Global styles. styled-jsx MUST be `<style jsx global>` (scoped styled-jsx
