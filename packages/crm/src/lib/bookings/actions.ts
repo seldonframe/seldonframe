@@ -31,6 +31,7 @@ import {
 } from "@/lib/workspace/aesthetic-archetypes";
 import { getBookingIntakeFieldsForArchetype } from "@/lib/workspace/booking-intake-fields";
 import { classifyHealthTemplate } from "@/lib/landing/template-selection";
+import { PUBLIC_BOOKING_WINDOW_DAYS } from "./booking-window";
 
 function deriveEndsAt(startsAt: Date, durationMinutes: number) {
   return new Date(startsAt.getTime() + durationMinutes * 60_000);
@@ -609,11 +610,13 @@ export async function listPublicBookingSlotsAction({
   }
 
   const today = new Date();
-  // Window guards work fine in any TZ — a 14-day window has slop on
-  // both ends so DST shifts can't make a valid request fall outside.
+  // Window guards work fine in any TZ — the window has slop on both ends so
+  // DST shifts can't make a valid request fall outside. PUBLIC_BOOKING_WINDOW_DAYS
+  // is shared with the date picker so the selectable range and the
+  // available-slots range never drift apart.
   const requestedNoon = utcMomentForLocalTime(year, month, day, 12, 0, tz);
-  const fourteenDaysFromNow = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000);
-  if (requestedNoon < today || requestedNoon > fourteenDaysFromNow) {
+  const windowEnd = new Date(today.getTime() + PUBLIC_BOOKING_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  if (requestedNoon < today || requestedNoon > windowEnd) {
     return { slots: [] as string[], durationMinutes: context.durationMinutes };
   }
 

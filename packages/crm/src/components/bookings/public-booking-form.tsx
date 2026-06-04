@@ -50,6 +50,7 @@ import { useSearchParams } from "next/navigation";
 import { DayPicker } from "react-day-picker";
 import "react-day-picker/style.css";
 import { Clock, MapPin, Globe2, Phone, Check } from "lucide-react";
+import { PUBLIC_BOOKING_WINDOW_DAYS } from "@/lib/bookings/booking-window";
 
 import {
   listPublicBookingSlotsAction,
@@ -176,7 +177,7 @@ export function PublicBookingForm({
   }, []);
   const horizon = useMemo(() => {
     const d = new Date(today);
-    d.setDate(d.getDate() + 60);
+    d.setDate(d.getDate() + PUBLIC_BOOKING_WINDOW_DAYS);
     return d;
   }, [today]);
 
