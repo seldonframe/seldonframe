@@ -15,8 +15,6 @@ import type { ExtractedBusinessFacts } from "@/lib/web-onboarding/extraction-pro
 import { generateR1Payload } from "./r1-payload-generator";
 import { saveLandingPayload } from "./r1-save";
 import { inferVertical } from "./r1-payload-prompt";
-import { enrichR1TemplateImages } from "./enrich-r1-images";
-import { classifyHealthTemplate } from "./template-selection";
 
 export type R1LandingStepResult =
   | { ok: true; archetype: AestheticArchetypeId }
@@ -58,34 +56,11 @@ export async function runR1LandingStep(args: {
     });
 
     // Step 2: Generate payload.
+    // (Health-template imagery is no longer fetched here. The /w renderer fills
+    // any empty photo slots from each template's curated fixture defaults via
+    // withTemplateDefaults — reliable, on-brand, and identical to the designed
+    // template, instead of a blind per-build stock search.)
     const payload = await generateR1Payload({ facts, archetype, byokKey });
-
-    // Step 2b: Health/wellness templates render service + About + gallery
-    // photography. Enrich the payload with curated Unsplash so those slots are
-    // real, not placeholders. Scoped to health workspaces (non-health landing-r1
-    // keeps its existing behavior). Non-fatal: a failure just leaves placeholders.
-    if (
-      classifyHealthTemplate({
-        businessName: facts.business_name,
-        businessDescription: facts.business_description,
-        services: facts.services,
-      })
-    ) {
-      try {
-        await enrichR1TemplateImages(payload, {
-          archetype,
-          businessName: facts.business_name,
-        });
-      } catch (err) {
-        console.warn(
-          JSON.stringify({
-            event: "r1_service_image_enrich_failed",
-            workspace_id: workspaceId,
-            detail: err instanceof Error ? err.message : String(err),
-          }),
-        );
-      }
-    }
 
     // Step 3: Persist.
     await saveLandingPayload(workspaceId, payload, archetype);
