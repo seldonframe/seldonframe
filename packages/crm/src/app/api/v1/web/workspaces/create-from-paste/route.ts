@@ -39,7 +39,7 @@ export const dynamic = "force-dynamic";
 // GET: EventSource-compatible (browser EventSource only supports GET).
 //      Reads "text" as a query param.
 // POST: Programmatic callers — reads body.text as JSON.
-async function dispatchCreateFromPaste(text: unknown): Promise<Response> {
+async function dispatchCreateFromPaste(text: unknown, landingTemplate?: unknown): Promise<Response> {
   const session = await auth();
 
   const sessionUser = session?.user?.id
@@ -96,7 +96,7 @@ async function dispatchCreateFromPaste(text: unknown): Promise<Response> {
       seedDefaultOutboundTriggers,
       workspaceBaseDomain: process.env.WORKSPACE_BASE_DOMAIN ?? "app.seldonframe.com",
     },
-    body: { text },
+    body: { text, landingTemplate: typeof landingTemplate === "string" ? landingTemplate : undefined },
     sessionUser,
   });
 
@@ -108,11 +108,12 @@ export async function GET(request: NextRequest): Promise<Response> {
   // browser. The pasted text travels as a query param because EventSource
   // cannot POST a body.
   const text = request.nextUrl.searchParams.get("text");
-  return dispatchCreateFromPaste(text);
+  const template = request.nextUrl.searchParams.get("template");
+  return dispatchCreateFromPaste(text, template);
 }
 
 export async function POST(request: Request): Promise<Response> {
   // Programmatic JSON-body entry point.
-  const body = (await request.json().catch(() => ({}))) as { text?: unknown };
-  return dispatchCreateFromPaste(body.text);
+  const body = (await request.json().catch(() => ({}))) as { text?: unknown; template?: unknown };
+  return dispatchCreateFromPaste(body.text, body.template);
 }

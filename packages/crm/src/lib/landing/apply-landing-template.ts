@@ -19,6 +19,7 @@ import { db } from "@/db";
 import { organizations } from "@/db/schema";
 import { DEFAULT_ORG_THEME, type OrgTheme } from "@/lib/theme/types";
 import { classifyHealthTemplate } from "@/lib/landing/template-selection";
+import { isLandingTemplateId } from "@/components/landing-templates/registry";
 
 export async function applyLandingTemplateForWorkspace(
   orgId: string,
@@ -27,8 +28,16 @@ export async function applyLandingTemplateForWorkspace(
     businessDescription?: string | null;
     services?: readonly string[] | null;
   },
+  /** Operator's explicit pre-build pick from the /clients/new design chip.
+   *  undefined / "auto" → classify from facts; a registered template id →
+   *  use it verbatim and record it as a hand-pick (choice = the id). */
+  templateOverride?: string | null,
 ): Promise<{ applied: boolean; template: string | null }> {
-  const template = classifyHealthTemplate(facts);
+  const override =
+    templateOverride && templateOverride !== "auto" && isLandingTemplateId(templateOverride)
+      ? templateOverride
+      : null;
+  const template = override ?? classifyHealthTemplate(facts);
   if (!template) return { applied: false, template: null };
 
   const [org] = await db
@@ -39,15 +48,20 @@ export async function applyLandingTemplateForWorkspace(
   if (!org) return { applied: false, template: null };
 
   const prev: OrgTheme = org.theme ?? DEFAULT_ORG_THEME;
-  // Respect an explicit, non-auto operator choice — only fill the unset/auto case.
-  if (prev.landingTemplateChoice && prev.landingTemplateChoice !== "auto") {
+  // Respect an existing explicit, non-auto operator choice — unless THIS call
+  // carries its own override (a fresh hand-pick always wins).
+  if (!override && prev.landingTemplateChoice && prev.landingTemplateChoice !== "auto") {
     return { applied: false, template: prev.landingTemplate ?? null };
   }
 
   await db
     .update(organizations)
     .set({
-      theme: { ...prev, landingTemplate: template, landingTemplateChoice: "auto" },
+      theme: {
+        ...prev,
+        landingTemplate: template,
+        landingTemplateChoice: override ?? "auto",
+      },
       updatedAt: new Date(),
     })
     .where(eq(organizations.id, orgId));

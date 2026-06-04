@@ -27,6 +27,7 @@ import { UpgradeModal } from "@/components/billing/upgrade-modal";
 import type { DetectVerticalInput } from "@/lib/workspace/detect-vertical";
 import { BuildAnimation } from "./build-animation";
 import { IdleScene } from "./build-animation/idle-scene";
+import type { DesignId } from "@/components/clients/design-picker/types";
 
 // ── BYOK copy ─────────────────────────────────────────────────────────────────
 const COPY = {
@@ -187,6 +188,10 @@ export function ClientsNewForm({
   const [revealLinks, setRevealLinks] = useState<
     { open: string; share?: string | null } | null
   >(null);
+  // 2026-06-04 — Operator's pre-build landing-design pick (the Design chip in
+  // the idle scene). "auto" → the pipeline auto-picks by vertical; a concrete
+  // template id is threaded to the create SSE as ?template= and overrides it.
+  const [landingTemplate, setLandingTemplate] = useState<DesignId>("auto");
   // Tracks which mode was last submitted so BYOK retry re-submits the right stream.
   const lastModeRef = useRef<"url" | "biz">(prefillBiz && !prefillUrl ? "biz" : "url");
   // Guard so the autoSubmit effect only fires once per mount even if
@@ -219,6 +224,7 @@ export function ClientsNewForm({
     setUpgradeInfo(null);
 
     const qs = new URLSearchParams({ url: targetUrl });
+    if (landingTemplate && landingTemplate !== "auto") qs.set("template", landingTemplate);
     const es = new EventSource(`/api/v1/web/workspaces/create-from-url?${qs.toString()}`);
     esRef.current = es;
     setLiveEventSource(es);
@@ -294,6 +300,7 @@ export function ClientsNewForm({
     setUpgradeInfo(null);
 
     const qs = new URLSearchParams({ text });
+    if (landingTemplate && landingTemplate !== "auto") qs.set("template", landingTemplate);
     const es = new EventSource(`/api/v1/web/workspaces/create-from-paste?${qs.toString()}`);
     esRef.current = es;
     setLiveEventSource(es);
@@ -559,6 +566,8 @@ export function ClientsNewForm({
             // the query-string defaults OR the localStorage seed
             // hydration in the mount effect above.
             initialTab={initialTab}
+            landingTemplate={landingTemplate}
+            onLandingTemplateChange={setLandingTemplate}
           />
         </div>
 

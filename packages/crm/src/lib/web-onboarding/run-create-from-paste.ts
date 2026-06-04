@@ -41,7 +41,7 @@ export type RunPasteDeps = {
 
 export type RunPasteInput = {
   deps: RunPasteDeps;
-  body: { text: unknown };
+  body: { text: unknown; landingTemplate?: string };
   sessionUser: { id: string; primaryOrgId: string | null } | null;
 };
 
@@ -209,11 +209,15 @@ export async function runCreateFromPaste(input: RunPasteInput): Promise<RunPaste
         //      landing-r1. Non-health businesses are left on landing-r1.
         try {
           const tplFacts = facts as CreateFullWorkspaceInput;
-          await applyLandingTemplateForWorkspace(result.workspace_id, {
-            businessName: tplFacts.business_name,
-            businessDescription: tplFacts.business_description,
-            services: tplFacts.services,
-          });
+          await applyLandingTemplateForWorkspace(
+            result.workspace_id,
+            {
+              businessName: tplFacts.business_name,
+              businessDescription: tplFacts.business_description,
+              services: tplFacts.services,
+            },
+            input.body.landingTemplate,
+          );
         } catch (err) {
           console.warn(
             JSON.stringify({
