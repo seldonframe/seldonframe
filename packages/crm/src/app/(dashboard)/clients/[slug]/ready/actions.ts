@@ -24,11 +24,18 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
+import { and, eq } from "drizzle-orm";
 
 import { auth } from "@/auth";
+import { db } from "@/db";
+import { organizations, orgMembers } from "@/db/schema";
 import { assertWritable } from "@/lib/demo/server";
 import { markOnboardingComplete } from "@/lib/onboarding/state";
 import { sendOnboardingCompletionWelcomeEmail } from "@/lib/onboarding/welcome-email";
+import { isLandingTemplateId } from "@/components/landing-templates/registry";
+import { resolveHealthTemplate } from "@/lib/landing/template-selection";
+import { DEFAULT_ORG_THEME, type OrgTheme } from "@/lib/theme/types";
 
 /**
  * "Maybe later" — the soft-skip path from the step-3 surface. Marks
@@ -112,4 +119,77 @@ export async function dismissOnboardingAction(formData: FormData): Promise<never
     );
   }
   redirect("/dashboard");
+}
+
+/**
+ * Set (or clear-to-Auto) the public landing design for a workspace from the
+ * ready-page picker. `choice` is "auto" or one of the registered template ids.
+ *
+ * Persistence model (organizations.theme jsonb):
+ *   - landingTemplate       → the concrete template id /w/[slug] renders.
+ *   - landingTemplateChoice → the operator's intent ("auto" | id), so the
+ *                             ready module can show "Auto-picked for X" vs
+ *                             "Chosen by you" on return visits.
+ *
+ * "auto" resolves to the best-fit health template for the workspace's vertical
+ * (resolveHealthTemplate). Re-validates the public page so the swap is live.
+ * Gated on auth + workspace ownership — server actions are public endpoints.
+ */
+export async function setLandingTemplateAction(
+  slug: string,
+  choice: string,
+): Promise<void> {
+  assertWritable();
+
+  const session = await auth();
+  if (!session?.user?.id) return;
+
+  const [ws] = await db
+    .select({
+      id: organizations.id,
+      ownerId: organizations.ownerId,
+      parentUserId: organizations.parentUserId,
+      soul: organizations.soul,
+      theme: organizations.theme,
+    })
+    .from(organizations)
+    .where(eq(organizations.slug, slug))
+    .limit(1);
+  if (!ws) return;
+
+  // Ownership gate — same shape as the ready page's read gate.
+  const isOwner = ws.ownerId === session.user.id;
+  const isParent = ws.parentUserId === session.user.id;
+  if (!isOwner && !isParent) {
+    const [member] = await db
+      .select({ userId: orgMembers.userId })
+      .from(orgMembers)
+      .where(and(eq(orgMembers.orgId, ws.id), eq(orgMembers.userId, session.user.id)))
+      .limit(1);
+    if (!member) return;
+  }
+
+  const vertical = ((ws.soul as unknown as { industry?: string } | null)?.industry ?? "").toString();
+
+  let landingTemplate: string;
+  let landingTemplateChoice: string;
+  if (choice === "auto") {
+    landingTemplate = resolveHealthTemplate(vertical);
+    landingTemplateChoice = "auto";
+  } else if (isLandingTemplateId(choice)) {
+    landingTemplate = choice;
+    landingTemplateChoice = choice;
+  } else {
+    return; // unknown id — ignore rather than corrupt the theme
+  }
+
+  const prevTheme: OrgTheme = ws.theme ?? DEFAULT_ORG_THEME;
+  await db
+    .update(organizations)
+    .set({ theme: { ...prevTheme, landingTemplate, landingTemplateChoice } })
+    .where(eq(organizations.id, ws.id));
+
+  // The public landing renders /w/[slug] dynamically, but revalidate anyway in
+  // case ISR is added later, and to bust any RSC cache.
+  revalidatePath(`/w/${slug}`);
 }

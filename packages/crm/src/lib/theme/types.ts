@@ -60,6 +60,12 @@ export interface OrgTheme {
    *  from the registry's union); validated at read time via isLandingTemplateId.
    *  Absent on every existing workspace → unchanged landing-r1 behavior. */
   landingTemplate?: string;
+  /** Health-vertical templates pilot — the operator's *intent* for the
+   *  landing design: "auto" (system picks per vertical) or a specific
+   *  template id. Drives the ready-page picker's "Auto-picked for X" vs
+   *  "Chosen by you" display. `landingTemplate` holds the resolved id; this
+   *  remembers whether it was auto or hand-picked. */
+  landingTemplateChoice?: string;
 }
 
 // v1.38.5 — flipped default mode from "dark" to "light".
