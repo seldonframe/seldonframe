@@ -33,6 +33,7 @@ import {
   LANDING_TEMPLATES,
   isLandingTemplateId,
 } from "@/components/landing-templates/registry";
+import { withTemplateDefaults } from "@/components/landing-templates/default-photos";
 import {
   r1PayloadToTemplateData,
   submittedSoulToTemplateData,
@@ -159,9 +160,13 @@ export default async function WorkspaceLandingPage({ params }: PageProps) {
   // requires an r1 payload.
   if (isLandingTemplateId(landingTemplate)) {
     const Tpl = LANDING_TEMPLATES[landingTemplate];
-    const templateData = r1
-      ? r1PayloadToTemplateData(r1.payload)
-      : submittedSoulToTemplateData(ctx.soul);
+    // Fill any empty photo slots with the template's curated fixture imagery
+    // (Claude Design's hand-picked photos) so the page looks like the designed
+    // template even when extraction captured few/no photos. Real photos win.
+    const templateData = withTemplateDefaults(
+      r1 ? r1PayloadToTemplateData(r1.payload) : submittedSoulToTemplateData(ctx.soul),
+      landingTemplate,
+    );
     // Re-skin via the archetype palette ONLY when one is explicitly set (on
     // the r1 payload or the org theme). Otherwise pass undefined so the
     // template renders in its own signature default palette — the designed look.
