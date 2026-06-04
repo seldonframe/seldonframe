@@ -244,6 +244,13 @@ export async function seedOnboardingForm(
     type: q.type,
     required: q.required ?? false,
     ...(q.options ? { options: q.options } : {}),
+    ...(q.type === "file" && q.file
+      ? {
+          accept: q.file.accept,
+          maxSizeMb: q.file.maxSizeMb,
+          multiple: q.file.multiple,
+        }
+      : {}),
   }));
 
   const [created] = await db

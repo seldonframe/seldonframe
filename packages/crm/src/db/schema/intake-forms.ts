@@ -9,6 +9,10 @@ export type IntakeFormField = {
   type: string;
   required: boolean;
   options?: string[];
+  // File-question config — only present when type === "file".
+  accept?: string[];
+  maxSizeMb?: number;
+  multiple?: boolean;
 };
 
 export const intakeForms = pgTable(

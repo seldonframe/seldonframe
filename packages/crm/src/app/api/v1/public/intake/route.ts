@@ -248,8 +248,8 @@ export async function POST(request: Request) {
       // Config defaults: if field is not found or has no file config,
       // reject everything (safe default — unknown extensions blocked).
       const cfg = {
-        accept: (field as { accept?: string[] } | undefined)?.accept ?? [],
-        maxSizeMb: (field as { maxSizeMb?: number } | undefined)?.maxSizeMb ?? 0,
+        accept: field?.accept ?? [],
+        maxSizeMb: field?.maxSizeMb ?? 0,
       };
 
       const urls: string[] = [];
