@@ -53,6 +53,11 @@ import { GenerateWebsiteButton } from "./generate-website-button";
 // 2026-05-27 — Server action that marks onboarding complete + sends
 // the welcome email when the operator clicks "Maybe later" on step 3.
 import { dismissOnboardingAction } from "./actions";
+// 2026-06-03 — Health/wellness landing-design picker (ready-page swap).
+import { ReadyDesignPicker } from "./ready-design-picker";
+import { isLandingTemplateId } from "@/components/landing-templates/registry";
+import { isHealthVertical, resolveHealthTemplate } from "@/lib/landing/template-selection";
+import type { DesignId } from "@/components/clients/design-picker/types";
 
 export const dynamic = "force-dynamic";
 
@@ -95,6 +100,10 @@ export default async function WorkspaceReadyPage({ params, searchParams }: Ready
       // ownerId-only gate would reject the operator on any workspace
       // they created via the v2 flow before the link step ran.
       parentUserId: organizations.parentUserId,
+      // 2026-06-03 — theme (current landing template + choice) + soul
+      // (vertical) drive the health/wellness design picker below.
+      theme: organizations.theme,
+      soul: organizations.soul,
     })
     .from(organizations)
     .where(eq(organizations.slug, slug))
@@ -218,6 +227,25 @@ export default async function WorkspaceReadyPage({ params, searchParams }: Ready
 
   // R1 landing URL — public page at /w/[slug].
   const r1LandingUrl = hasR1Landing ? `${APP_BASE}/w/${workspace.slug}` : null;
+
+  // 2026-06-03 — Health/wellness landing-design picker. Only shown for
+  // workspaces in the health track (a premium template already applied, OR a
+  // recognized health vertical) — non-health workspaces keep the landing-r1
+  // render and see nothing here. `value` is the operator's intent ("auto" or a
+  // design id); `autoResolvedId` is what Auto maps to for this vertical.
+  const wsTheme =
+    (workspace.theme as unknown as { landingTemplate?: string; landingTemplateChoice?: string } | null) ?? null;
+  const wsVertical = ((workspace.soul as unknown as { industry?: string } | null)?.industry ?? "").toString();
+  const currentTemplateId = wsTheme?.landingTemplate;
+  const showDesignPicker =
+    isLandingTemplateId(currentTemplateId) || isHealthVertical(wsVertical);
+  const designChoice = (wsTheme?.landingTemplateChoice as DesignId | undefined) ?? "auto";
+  const designAutoResolved = isLandingTemplateId(currentTemplateId)
+    ? currentTemplateId
+    : resolveHealthTemplate(wsVertical);
+  const designAutoReason = wsVertical
+    ? `Auto-picked for ${wsVertical}`
+    : "Auto-picked for this business";
 
   const publicBookingUrl = bookingTemplateRow
     ? `${APP_BASE}/book/${workspace.slug}/${bookingTemplateRow.slug}`
@@ -544,6 +572,22 @@ export default async function WorkspaceReadyPage({ params, searchParams }: Ready
             <GenerateWebsiteButton workspaceSlug={workspace.slug} />
           </section>
         )}
+
+        {/* ============== LANDING DESIGN PICKER ==============
+            2026-06-03 — Health/wellness workspaces can swap the public
+            landing design here. Shows the Auto-picked design + rationale;
+            "Change design" reopens the picker and re-renders /w/[slug].
+            Hidden entirely for non-health workspaces. */}
+        {showDesignPicker ? (
+          <section className="rounded-2xl border border-border/70 bg-card/40 p-5">
+            <ReadyDesignPicker
+              slug={workspace.slug}
+              initialValue={designChoice}
+              autoResolvedId={designAutoResolved}
+              autoReason={designAutoReason}
+            />
+          </section>
+        ) : null}
 
         {/* ============== AUDIENCE-SCOPED CARDS ==============
             Two-row layout: foundational surfaces (operator dashboard +
