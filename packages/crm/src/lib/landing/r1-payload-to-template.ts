@@ -212,6 +212,20 @@ export function r1PayloadToTemplateData(payload: R1LandingPayload): Soul {
     if (alt) photo.alt = alt;
     photos.push(photo);
   }
+  // About portrait + gallery imagery — written onto the persisted payload by
+  // enrichR1TemplateImages (ambient + face-free). All templates use the About
+  // slot; the cinematic template adds a gallery + CTA texture. Absent → the
+  // template renders its themed placeholder.
+  const enriched = payload as {
+    aboutImage?: { src?: unknown } | null;
+    galleryImages?: ReadonlyArray<{ src?: unknown }> | null;
+  };
+  const aboutUrl = clean(enriched.aboutImage?.src);
+  if (aboutUrl) photos.push({ url: aboutUrl, role: "about" });
+  for (const g of enriched.galleryImages ?? []) {
+    const url = clean(g?.src);
+    if (url) photos.push({ url, role: "gallery" });
+  }
   if (photos.length) soul.photos = photos;
 
   return soul;
