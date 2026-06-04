@@ -80,8 +80,11 @@ export async function connectCustomDomain(workspaceId: string, domain: string) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
+      // Body must be { name } ONLY. The project id is already in the URL path
+      // (getVercelDomainsUrl → /v10/projects/<id>/domains); including it in the
+      // body too makes Vercel reject the request with "should NOT have
+      // additional property `projectId`".
       name: normalizedDomain,
-      projectId: VERCEL_PROJECT_ID,
     }),
     cache: "no-store",
   });

@@ -96,6 +96,13 @@ export default async function DomainSettingsPage({
   const errorMessage = typeof params.error === "string" ? decodeURIComponent(params.error) : "";
   const domainParts = settings.customDomain ? settings.customDomain.split(".") : [];
   const dnsName = domainParts.length > 2 ? domainParts.slice(0, -2).join(".") : "@";
+  // Apex/root domains (e.g. seldonstudio.com) can't use a CNAME — DNS forbids a
+  // CNAME at the zone apex — so they need an A record pointed at Vercel's
+  // anycast IP. Only subdomains (book.seldonstudio.com) use the CNAME.
+  // (2-label === apex for common TLDs; multi-part TLDs are the rare exception.)
+  const isApexDomain = dnsName === "@";
+  const dnsRecordType = isApexDomain ? "A" : "CNAME";
+  const dnsRecordValue = isApexDomain ? "76.76.21.21" : "cname.vercel-dns.com";
 
   return (
     <section className="animate-page-enter space-y-4 sm:space-y-6">
@@ -185,16 +192,18 @@ export default async function DomainSettingsPage({
 
           <div className="rounded-lg border border-border bg-muted/40 p-4 space-y-2">
             <p className="text-sm font-medium text-foreground">DNS Configuration Required</p>
-            <p className="text-sm text-muted-foreground">Add this CNAME record at your domain registrar:</p>
+            <p className="text-sm text-muted-foreground">
+              Add this {dnsRecordType} record at your domain registrar:
+            </p>
             <div className="rounded-md border border-border bg-background/70 p-3 text-sm font-mono">
               <p>
-                <span className="text-muted-foreground">Type:</span> CNAME
+                <span className="text-muted-foreground">Type:</span> {dnsRecordType}
               </p>
               <p>
                 <span className="text-muted-foreground">Name:</span> {dnsName}
               </p>
               <p>
-                <span className="text-muted-foreground">Value:</span> cname.vercel-dns.com
+                <span className="text-muted-foreground">Value:</span> {dnsRecordValue}
               </p>
             </div>
             <p className="text-xs text-muted-foreground">DNS changes can take up to 48 hours to propagate.</p>
