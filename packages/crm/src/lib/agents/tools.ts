@@ -12,6 +12,7 @@
 // workspace's data to read/write.
 
 import { and, eq, gte, ilike, or } from "drizzle-orm";
+import { PUBLIC_BOOKING_WINDOW_DAYS } from "@/lib/bookings/booking-window";
 import { z } from "zod";
 import { db } from "@/db";
 import { bookings, contacts } from "@/db/schema";
@@ -62,12 +63,14 @@ const lookUpAvailabilityInput = z.object({
 // when the requested day is mostly booked.
 export const CHATBOT_SLOT_CAP = 3;
 
-// Same 14-day window as listPublicBookingSlotsAction itself enforces
-// (see actions.ts ~line 600 — requests outside today..today+14 return
-// empty). Keeping our walk horizon equal to the booking action's own
-// window means we never burn an iteration on a date the action will
-// trivially reject.
-export const CHATBOT_WALK_HORIZON_DAYS = 14;
+// Mirrors the public booking window (PUBLIC_BOOKING_WINDOW_DAYS) that
+// listPublicBookingSlotsAction enforces — requests outside today..today+N
+// return empty. Keeping the walk horizon equal to that window means the
+// chatbot surfaces the same far-out slots the booking page offers (e.g. a
+// workspace whose first availability is 3 weeks out) and never burns an
+// iteration on a date the action would trivially reject. The walk still
+// stops early once CHATBOT_SLOT_CAP slots are found.
+export const CHATBOT_WALK_HORIZON_DAYS = PUBLIC_BOOKING_WINDOW_DAYS;
 
 /**
  * Pure helper — walks forward day-by-day starting from `startDate`,
