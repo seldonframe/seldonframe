@@ -177,7 +177,7 @@ export default async function OnboardTokenPage({
   const orgSlug = org?.slug ?? "";
 
   const blueprint = buildOnboardingBlueprint(workspaceName, orgSlug);
-  const { html, css } = renderFormbricksStackV1(blueprint);
+  const { html, css } = renderFormbricksStackV1(blueprint, { formSlug: "onboarding" });
 
   return (
     <>
