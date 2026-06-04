@@ -5,6 +5,7 @@ import Stripe from "stripe";
 import { db } from "@/db";
 import {
   invoices,
+  onboardingLinks,
   organizations,
   paymentEvents,
   paymentRecords,
@@ -15,8 +16,11 @@ import {
 } from "@/db/schema";
 import { emitSeldonEvent } from "@/lib/events/bus";
 import { logEvent } from "@/lib/observability/log";
+import { seedOnboardingForm } from "@/lib/onboarding/onboarding-form-definition";
+import { createOnboardingLink } from "@/lib/onboarding/links";
 import { notifyAgencyOfAcceptance } from "@/lib/proposals/notify-agency";
 import { notifyProspectOfActivation } from "@/lib/proposals/notify-prospect";
+import { sendEmailFromApi } from "@/lib/emails/api";
 import { createDealOnAcceptance } from "@/lib/proposals/create-deal-on-acceptance";
 
 export const runtime = "nodejs";
@@ -563,6 +567,62 @@ export async function POST(request: Request) {
         });
       } catch (err: unknown) {
         logEvent("proposal_acceptance_crm_failed", {
+          proposalId: proposal.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+
+      // L2 — Seed onboarding intake + email the tokenized link to the client.
+      // Must NEVER throw out of the webhook — activation already succeeded.
+      // Idempotency: skip entirely if an onboarding_links row already exists
+      // for this org (handles webhook retries / duplicate events).
+      try {
+        const activationOrgId = proposal.previewWorkspaceId ?? orgId;
+
+        const [existingLink] = await db
+          .select({ id: onboardingLinks.id })
+          .from(onboardingLinks)
+          .where(eq(onboardingLinks.orgId, activationOrgId))
+          .limit(1);
+
+        if (!existingLink) {
+          await seedOnboardingForm(activationOrgId);
+          const { token } = await createOnboardingLink(activationOrgId);
+
+          const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.seldonframe.com";
+          const onboardUrl = `${appUrl}/onboard/${token}`;
+
+          const greetingName = proposal.prospectFirstName?.trim() || proposal.prospectName;
+          const subject = `Your new workspace is ready — tell us about your business`;
+          const body = `Hi ${greetingName},
+
+Your workspace is live. Before we customize it to fit your business, we need a few details from you — it takes about 10 minutes.
+
+Set up your workspace here: ${onboardUrl}
+
+We'll use your answers to configure your booking page, website, and front office. The link is personal to you, no account needed.
+
+Talk soon,
+The team`;
+
+          await sendEmailFromApi({
+            orgId: activationOrgId,
+            userId: null,
+            contactId: null,
+            toEmail: proposal.prospectEmail,
+            subject,
+            body,
+            ctaLabel: "Set up my workspace →",
+            ctaHref: onboardUrl,
+          });
+
+          logEvent("onboarding_link_sent", {
+            proposalId: proposal.id,
+            orgId: activationOrgId,
+          });
+        }
+      } catch (err: unknown) {
+        logEvent("onboarding_seed_email_failed", {
           proposalId: proposal.id,
           error: err instanceof Error ? err.message : String(err),
         });
