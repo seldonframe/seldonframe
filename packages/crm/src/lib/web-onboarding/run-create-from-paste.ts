@@ -15,6 +15,7 @@ import type { CreateFullWorkspaceInput, CreateFullWorkspaceResult } from "@/lib/
 import type { LimitDecision } from "@/lib/billing/limits";
 import type { ExtractedBusinessFacts } from "./extraction-prompt";
 import { runR1LandingStep } from "@/lib/landing/r1-landing-step";
+import { applyLandingTemplateForWorkspace } from "@/lib/landing/apply-landing-template";
 
 export type RunPasteDeps = {
   enforceWorkspaceLimit: (args: { primaryOrgId: string | null; ownedWorkspaceCount: number }) => Promise<LimitDecision>;
@@ -201,6 +202,26 @@ export async function runCreateFromPaste(input: RunPasteInput): Promise<RunPaste
               }),
             );
           }
+        }
+
+        // 7d2. Auto-pick a premium health/wellness landing template (best-
+        //      effort, health-only) so /w/<slug> renders it instead of
+        //      landing-r1. Non-health businesses are left on landing-r1.
+        try {
+          const tplFacts = facts as CreateFullWorkspaceInput;
+          await applyLandingTemplateForWorkspace(result.workspace_id, {
+            businessName: tplFacts.business_name,
+            businessDescription: tplFacts.business_description,
+            services: tplFacts.services,
+          });
+        } catch (err) {
+          console.warn(
+            JSON.stringify({
+              event: "landing_template_autopick_failed",
+              workspace_id: result.workspace_id,
+              detail: err instanceof Error ? err.message : String(err),
+            }),
+          );
         }
 
         // 7e. Generate the R1 landing payload + persist.
