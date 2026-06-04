@@ -36,15 +36,18 @@ type EnrichedPayload = R1LandingPayload & {
   galleryImages?: Array<{ src: string }>;
 };
 
-// Ambient (face-free) seed queries for the About portrait + cinematic gallery /
-// CTA texture. resolveGalleryImages broadens these and falls back to the
-// archetype's curated queries on zero-results, so results always match mood.
+// Ambient (face-free) seed queries for the hero (fallback only), the About
+// portrait, and the cinematic gallery / CTA texture. resolveGalleryImages
+// broadens these and falls back to the archetype's curated queries on
+// zero-results, so results always match the workspace's mood. Index 0 is the
+// strongest, hero-worthy shot — used only when extraction captured no hero.
 const AMBIENT_QUERIES = [
-  "serene wellness interior",
-  "calm spa space",
+  "luxury spa interior",
+  "serene wellness space",
   "soft natural light detail",
   "natural stone texture",
   "tranquil treatment room",
+  "calm botanical detail",
 ];
 
 export async function enrichR1TemplateImages(
@@ -64,15 +67,31 @@ export async function enrichR1TemplateImages(
     }
   }
 
-  // 2. Ambient About portrait + gallery/CTA imagery. All templates render an
-  //    About slot; the cinematic template adds a 4-tile gallery + CTA texture.
-  //    One batched call: [0] → about, [1..] → gallery.
+  // 2. Hero (fallback) + ambient About portrait + gallery/CTA imagery. The hero
+  //    normally comes from extraction; paste-mode / imageless sites have none,
+  //    leaving the most important above-the-fold slot empty. All templates
+  //    render an About slot; the cinematic template adds a gallery + CTA texture.
+  //    One batched call, allocated in order: [hero?] → about → gallery.
   const ambient = await resolveGalleryImages(AMBIENT_QUERIES, ctx);
   if (ambient.length > 0) {
     const p = payload as EnrichedPayload;
-    p.aboutImage = { src: ambient[0].url };
-    if (ambient.length > 1) {
-      p.galleryImages = ambient.slice(1).map((a) => ({ src: a.url }));
+    let i = 0;
+
+    // Hero — ONLY when extraction didn't capture one (never overwrite a real
+    // brand photo). hero.heroImage is the field the mapper reads → role "hero".
+    const heroSec = p.hero as { heroImage?: { src?: string; alt?: string } } | undefined;
+    const hasHero =
+      typeof heroSec?.heroImage?.src === "string" && heroSec.heroImage.src.trim().length > 0;
+    if (!hasHero && heroSec && ambient[i]) {
+      heroSec.heroImage = { src: ambient[i].url };
+      i++;
     }
+
+    if (ambient[i]) {
+      p.aboutImage = { src: ambient[i].url };
+      i++;
+    }
+    const gallery = ambient.slice(i).map((a) => ({ src: a.url }));
+    if (gallery.length) p.galleryImages = gallery;
   }
 }
