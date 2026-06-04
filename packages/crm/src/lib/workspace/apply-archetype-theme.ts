@@ -196,6 +196,14 @@ export async function applyArchetypeThemeToOrg(
           logoUrl: currentTheme.logoUrl,
           motionPreset: currentTheme.motionPreset ?? archetype.motionPreset,
           aestheticArchetype: archetypeId,
+          // Preserve the health-template selection. This branch rebuilds a
+          // fresh theme from the legacy default, so without these two lines it
+          // silently drops a landingTemplate that applyLandingTemplateForWorkspace
+          // set moments earlier in the same creation flow — which is exactly
+          // how Lapis Spa / Miami Massage lost their premium template (archetype
+          // got written → template wiped). Carry both forward.
+          landingTemplate: currentTheme.landingTemplate,
+          landingTemplateChoice: currentTheme.landingTemplateChoice,
         }
       : {
           ...currentTheme,
