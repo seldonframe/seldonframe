@@ -40,6 +40,23 @@ function num(v: unknown): number | undefined {
 }
 
 /**
+ * The templates render the tagline as a LARGE hero headline (the cinematic
+ * ones especially). Long, multi-sentence taglines overflow above the fold and
+ * bury the subhead + CTAs, so keep the headline punchy: take the first
+ * sentence; hard-cap a very long single sentence at a word boundary. The full
+ * description still renders in the subhead (soul_description). Returns
+ * undefined for empty/missing input.
+ */
+function heroHeadline(tagline: string | undefined): string | undefined {
+  if (!tagline) return undefined;
+  const firstSentence = tagline.split(/(?<=[.!?])\s+/)[0]?.trim() || tagline;
+  if (firstSentence.length <= 72) return firstSentence;
+  const capped = firstSentence.slice(0, 64);
+  const lastSpace = capped.lastIndexOf(" ");
+  return `${(lastSpace > 40 ? capped.slice(0, lastSpace) : capped).trimEnd()}…`;
+}
+
+/**
  * Join an r1 footer address ({ line1, city, state, zip }) into the single
  * string the template expects. Omits blank parts; returns undefined when
  * nothing usable is present. Format: "line1, city, state zip".
@@ -118,7 +135,7 @@ export function r1PayloadToTemplateData(payload: R1LandingPayload): Soul {
 
   const soul: Soul = { business_name };
 
-  const tagline = clean(hero.tagline) ?? clean(footer.tagline);
+  const tagline = heroHeadline(clean(hero.tagline) ?? clean(footer.tagline));
   if (tagline) soul.tagline = tagline;
 
   const soul_description = clean(hero.subhead);
@@ -314,7 +331,7 @@ export function submittedSoulToTemplateData(raw: unknown): Soul {
   const business_name = clean(src.business_name) ?? "Our Practice";
   const soul: Soul = { business_name };
 
-  const tagline = clean(src.tagline);
+  const tagline = heroHeadline(clean(src.tagline));
   if (tagline) soul.tagline = tagline;
   const soul_description = clean(src.soul_description);
   if (soul_description) soul.soul_description = soul_description;
