@@ -3,7 +3,7 @@ import { getSeldonEventBus } from "@seldonframe/core/events";
 import { getCoreRuntimeConfig } from "@seldonframe/core/config";
 import { configureTelemetry, trackTelemetryEvent } from "@seldonframe/core/telemetry";
 import { db } from "@/db";
-import { bookings, intakeForms } from "@/db/schema";
+import { bookings, changePlans, intakeForms, intakeSubmissions, onboardingLinks } from "@/db/schema";
 import { dispatchEventToDeployedAgents } from "@/lib/agents/dispatcher";
 import { sendTriggeredEmailsForContactEvent, sendWelcomeEmailForContact } from "@/lib/emails/actions";
 import { syncContactToNewsletter } from "@/lib/integrations/newsletter-sync";
@@ -12,6 +12,9 @@ import { dispatchOutboundMessagesForEvent } from "@/lib/messaging/dispatch";
 // 2026-05-18 — Slice 6: cancel pending scheduled sends (e.g. 24h
 // reminders) when their target booking is cancelled.
 import { cancelScheduledSendsForBooking } from "@/lib/messaging/schedule";
+// 2026-06-04 — Onboarding T12: persist change plan on onboarding submission.
+import { buildChangePlan } from "@/lib/onboarding/change-plan";
+import { sendNewSignupAlert } from "@/lib/notifications/ops-notifications";
 
 /**
  * The SeldonEvent typed schema doesn't include orgId on form.submitted /
@@ -143,6 +146,118 @@ export function registerCrmEventListeners() {
         console.warn(
           `[listeners] dispatchOutboundMessagesForEvent form.submitted failed:`,
           err,
+        );
+      }
+
+      // 2026-06-04 — Onboarding T12: if this is the workspace's
+      // onboarding intake form (slug === "onboarding"), build a
+      // ChangePlan from the answers and persist it for agency review.
+      // Also flip onboardingLinks.status → "submitted" and notify ops.
+      // Non-fatal — a failure here must never break other listeners or
+      // the submission response.
+      try {
+        // Resolve the form slug to decide whether to act.
+        const [formRow] = await db
+          .select({ slug: intakeForms.slug })
+          .from(intakeForms)
+          .where(eq(intakeForms.id, formId))
+          .limit(1);
+
+        if (formRow?.slug === "onboarding") {
+          const eventData = event.data as Record<string, unknown>;
+
+          // Load submission answers. Prefer the payload's `data` field
+          // if present (avoids an extra query); otherwise fetch from the
+          // intake_submissions table via submissionId.
+          let answers: Record<string, unknown> | null = null;
+
+          if (
+            eventData.data !== undefined &&
+            eventData.data !== null &&
+            typeof eventData.data === "object" &&
+            !Array.isArray(eventData.data)
+          ) {
+            answers = eventData.data as Record<string, unknown>;
+          } else if (typeof eventData.submissionId === "string" && eventData.submissionId) {
+            const [subRow] = await db
+              .select({ data: intakeSubmissions.data })
+              .from(intakeSubmissions)
+              .where(eq(intakeSubmissions.id, eventData.submissionId))
+              .limit(1);
+            answers = subRow?.data ?? null;
+          } else {
+            // Fall back: query the most recent submission for this form
+            // in this org (best-effort when submissionId isn't on payload).
+            const [latestRow] = await db
+              .select({ data: intakeSubmissions.data })
+              .from(intakeSubmissions)
+              .where(eq(intakeSubmissions.formId, formId))
+              .limit(1);
+            answers = latestRow?.data ?? null;
+          }
+
+          if (answers) {
+            // Build the structured change plan.
+            const plan = buildChangePlan(answers);
+
+            const submissionId =
+              typeof eventData.submissionId === "string" ? eventData.submissionId : null;
+
+            // Persist the change plan row.
+            await db.insert(changePlans).values({
+              orgId: formOrgId,
+              ...(submissionId ? { submissionId } : {}),
+              plan: plan as unknown as Record<string, unknown>,
+              status: "pending_review",
+            });
+
+            // Flip the matching onboardingLinks row to "submitted".
+            await db
+              .update(onboardingLinks)
+              .set({ status: "submitted", submittedAt: new Date() })
+              .where(eq(onboardingLinks.orgId, formOrgId));
+
+            // Notify ops — reuse the new-signup alert channel (same
+            // Resend pipeline, same recipient resolution). We signal
+            // an onboarding submission via the source field.
+            const businessName =
+              typeof answers["business_name"] === "string"
+                ? answers["business_name"]
+                : formOrgId;
+            await sendNewSignupAlert({
+              email: typeof answers["email"] === "string" ? answers["email"] : "(no email in answers)",
+              userId: formOrgId,
+              createdAt: new Date(),
+              source: `onboarding_intake:${businessName} — ${plan.summaries.length} change(s): ${plan.summaries.slice(0, 2).join("; ")}`,
+            });
+
+            console.log(
+              JSON.stringify({
+                action: "onboarding.change_plan_persisted",
+                orgId: formOrgId,
+                submissionId,
+                planSummaries: plan.summaries,
+              }),
+            );
+          } else {
+            console.warn(
+              JSON.stringify({
+                action: "onboarding.change_plan_skipped",
+                reason: "no_answers_resolved",
+                orgId: formOrgId,
+                formId,
+              }),
+            );
+          }
+        }
+      } catch (err) {
+        console.warn(
+          JSON.stringify({
+            action: "onboarding.change_plan_failed",
+            orgId: formOrgId,
+            formId,
+            error: err instanceof Error ? err.message : String(err),
+          }),
         );
       }
     }

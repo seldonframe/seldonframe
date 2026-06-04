@@ -298,12 +298,17 @@ export interface Booking {
 
 export interface IntakeQuestion {
   id: string;
-  type: "text" | "textarea" | "email" | "phone" | "number" | "select" | "multi-select" | "rating" | "date";
+  type: "text" | "textarea" | "email" | "phone" | "number" | "select" | "multi-select" | "rating" | "date" | "file";
   label: string;
   helper?: string;
   required?: boolean;
   options?: string[];
   ratingScale?: "number-1-5" | "number-1-10" | "stars-1-5";
+  file?: {
+    accept: string[];
+    maxSizeMb: number;
+    multiple: boolean;
+  };
   validation?: {
     minLength?: number;
     maxLength?: number;

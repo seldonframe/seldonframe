@@ -322,6 +322,16 @@ function renderQuestionInput(q: IntakeQuestion): string {
       return `<input class="sf-intake__input" type="tel" inputmode="tel" autocomplete="tel" data-field-id="${escapeAttr(q.id)}" ${placeholder} />
       <p class="sf-intake__hint">Press <kbd>Enter</kbd> to continue</p>`;
 
+    case "file": {
+      const acceptAttr = q.file && q.file.accept && q.file.accept.length > 0
+        ? ` accept="${escapeAttr(q.file.accept.join(","))}"`
+        : "";
+      const multipleAttr = q.file && q.file.multiple ? " multiple" : "";
+      const requiredAttr = q.required ? " required" : "";
+      return `<input class="sf-intake__input sf-intake__file-input" type="file" data-field-id="${escapeAttr(q.id)}"${acceptAttr}${multipleAttr}${requiredAttr} />
+      <p class="sf-intake__hint">Click to choose a file, then click <strong>Continue</strong>.</p>`;
+    }
+
     case "text":
     default:
       return `<input class="sf-intake__input" type="text" data-field-id="${escapeAttr(q.id)}" ${placeholder} />
@@ -512,6 +522,12 @@ const INTAKE_INTERACTIVITY_SCRIPT = `<script data-sf-intake="formbricks-stack-v1
 
   // ─── Validation ──────────────────────────────────────────────────
   function validate(q, value){
+    if (q.type === 'file') {
+      if (q.required && (!value || (value && value.length === 0))) {
+        return 'Please select a file.';
+      }
+      return null;
+    }
     if (q.required && (value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0))) {
       return 'This question is required.';
     }
@@ -586,6 +602,10 @@ const INTAKE_INTERACTIVITY_SCRIPT = `<script data-sf-intake="formbricks-stack-v1
     }
     var input = inputs[0];
     if (!input) return '';
+    if (q.type === 'file') {
+      var fileInput = /** @type {HTMLInputElement} */ (input);
+      return fileInput.files && fileInput.files.length > 0 ? fileInput.files : null;
+    }
     return input.value;
   }
 
@@ -761,21 +781,60 @@ const INTAKE_INTERACTIVITY_SCRIPT = `<script data-sf-intake="formbricks-stack-v1
         orgSlug = labels[0];
       }
     }
-    var payload = {
-      orgSlug: orgSlug,
-      formSlug: formSlug,
-      answers: state.answers,
-      workspace: data.workspaceName,
-      idempotencyKey: state.idempotencyKey,
-    };
-    fetch('/api/v1/public/intake', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Idempotency-Key': state.idempotencyKey,
-      },
-      body: JSON.stringify(payload),
-    }).then(function(res){
+    // Determine if any visible question is a file question with actual files.
+    var visible = visibleQuestions();
+    var hasFiles = visible.some(function(q) {
+      return q.type === 'file' && state.answers[q.id] && state.answers[q.id].length > 0;
+    });
+
+    var fetchInit;
+    if (hasFiles) {
+      // multipart/form-data — include file File objects alongside JSON-encoded answers.
+      var fd = new FormData();
+      fd.append('orgSlug', orgSlug);
+      fd.append('formSlug', formSlug);
+      fd.append('workspace', data.workspaceName);
+      fd.append('idempotencyKey', state.idempotencyKey);
+      // Serialize non-file answers as a JSON blob so the server can parse them uniformly.
+      var textAnswers = {};
+      for (var aKey in state.answers) {
+        if (Object.prototype.hasOwnProperty.call(state.answers, aKey)) {
+          var aVal = state.answers[aKey];
+          if (aVal && typeof aVal === 'object' && typeof aVal.length === 'number' && aVal[0] instanceof File) {
+            // File question — append each File under the question's field key.
+            for (var fi = 0; fi < aVal.length; fi++) {
+              fd.append('file:' + aKey, aVal[fi]);
+            }
+          } else {
+            textAnswers[aKey] = aVal;
+          }
+        }
+      }
+      fd.append('answers', JSON.stringify(textAnswers));
+      fetchInit = {
+        method: 'POST',
+        headers: { 'Idempotency-Key': state.idempotencyKey },
+        body: fd,
+      };
+    } else {
+      var payload = {
+        orgSlug: orgSlug,
+        formSlug: formSlug,
+        answers: state.answers,
+        workspace: data.workspaceName,
+        idempotencyKey: state.idempotencyKey,
+      };
+      fetchInit = {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': state.idempotencyKey,
+        },
+        body: JSON.stringify(payload),
+      };
+    }
+
+    fetch('/api/v1/public/intake', fetchInit).then(function(res){
       // Show completion regardless of response — submission failures are
       // logged server-side but the operator-facing message stays positive.
       // For local-file previews (file://) this falls through to the catch

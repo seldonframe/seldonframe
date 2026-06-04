@@ -1,3 +1,5 @@
+import { put } from "@vercel/blob";
+import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
@@ -5,6 +7,7 @@ import { contacts, intakeForms, intakeSubmissions, organizations } from "@/db/sc
 import type { IntakeFormField } from "@/db/schema/intake-forms";
 import { enforceContactLimit } from "@/lib/billing/limits";
 import { emitSeldonEvent } from "@/lib/events/bus";
+import { validateUploadField } from "@/lib/uploads/file-validation";
 import {
   resolveWorkspaceSlugFromRequest,
   resolveWorkspaceSlugFromRequestWithCustomDomains,
@@ -75,11 +78,72 @@ function dedupSeen(key: string): boolean {
 }
 
 export async function POST(request: Request) {
+  // ------------------------------------------------------------------
+  // Parse the request body — supports both application/json (original)
+  // and multipart/form-data (when the form has file questions).
+  // Both paths produce the same common shape before any submission logic.
+  // ------------------------------------------------------------------
+  const contentType = request.headers.get("content-type") ?? "";
+  const isMultipart = contentType.includes("multipart/form-data");
+
   let body: SubmitBody;
-  try {
-    body = (await request.json()) as SubmitBody;
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  // pendingFileUploads is populated during multipart parsing and
+  // resolved (blob put) after the form row is loaded.
+  let pendingFileUploads: Array<{
+    questionId: string;
+    files: File[];
+    multi: boolean;
+  }> | null = null;
+
+  if (isMultipart) {
+    let fd: FormData;
+    try {
+      fd = await request.formData();
+    } catch {
+      return NextResponse.json({ error: "Invalid multipart body." }, { status: 400 });
+    }
+    const rawAnswers = fd.get("answers");
+    let parsedAnswers: Record<string, unknown> | null = null;
+    if (typeof rawAnswers === "string") {
+      try {
+        const parsed = JSON.parse(rawAnswers);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          parsedAnswers = parsed as Record<string, unknown>;
+        }
+      } catch {
+        // fall through — parsedAnswers stays null
+      }
+    }
+    body = {
+      orgSlug: fd.get("orgSlug") ?? undefined,
+      formSlug: fd.get("formSlug") ?? undefined,
+      answers: parsedAnswers ?? undefined,
+      workspace: fd.get("workspace") ?? undefined,
+      idempotencyKey: fd.get("idempotencyKey") ?? undefined,
+    };
+    // Collect file parts — we can't resolve which are "file" questions
+    // until we load the form below, so we store all "file:*" parts now.
+    const fileMap = new Map<string, File[]>();
+    for (const [key, value] of fd.entries()) {
+      if (key.startsWith("file:") && value instanceof File) {
+        const qid = key.slice(5); // strip "file:" prefix
+        if (!fileMap.has(qid)) fileMap.set(qid, []);
+        fileMap.get(qid)!.push(value);
+      }
+    }
+    if (fileMap.size > 0) {
+      pendingFileUploads = Array.from(fileMap.entries()).map(([questionId, files]) => ({
+        questionId,
+        files,
+        multi: files.length > 1,
+      }));
+    }
+  } else {
+    try {
+      body = (await request.json()) as SubmitBody;
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+    }
   }
 
   // 2026-05-18 (later) — idempotency check. Header takes precedence
@@ -166,6 +230,81 @@ export async function POST(request: Request) {
 
   if (!form || !form.isActive) {
     return NextResponse.json({ error: "Form not found." }, { status: 404 });
+  }
+
+  // ------------------------------------------------------------------
+  // Multipart file uploads: validate + push to Vercel Blob.
+  // We enrich `answers` in-place so the rest of the submission path
+  // (dedup, contact creation, event emits) sees the blob URLs as if
+  // they were regular string answers.
+  // ------------------------------------------------------------------
+  if (pendingFileUploads && pendingFileUploads.length > 0) {
+    const formFields = (Array.isArray(form.fields) ? form.fields : []) as IntakeFormField[];
+    // Build a map of questionId → field config for O(1) lookup.
+    const fieldMap = new Map<string, IntakeFormField>(formFields.map((f) => [f.key, f]));
+
+    for (const { questionId, files, multi } of pendingFileUploads) {
+      const field = fieldMap.get(questionId);
+      // Config defaults: if field is not found or has no file config,
+      // reject everything (safe default — unknown extensions blocked).
+      const cfg = {
+        accept: field?.accept ?? [],
+        maxSizeMb: field?.maxSizeMb ?? 0,
+      };
+
+      const urls: string[] = [];
+      for (const file of files) {
+        // Validate extension + size.
+        const validation = validateUploadField(
+          { name: file.name, sizeBytes: file.size },
+          cfg,
+        );
+        if (!validation.ok) {
+          return NextResponse.json(
+            {
+              error:
+                validation.reason === "type"
+                  ? `File type not allowed for question "${questionId}".`
+                  : `File exceeds the ${cfg.maxSizeMb}MB size limit for question "${questionId}".`,
+              questionId,
+              reason: validation.reason,
+            },
+            { status: 400 },
+          );
+        }
+
+        // Upload to Vercel Blob. Key shape mirrors user-image route:
+        // `intake/{orgSlug}/{questionId}/{uuid}-{filename}`.
+        const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, "-").slice(0, 128);
+        const blobKey = `intake/${orgSlug}/${questionId}/${randomUUID()}-${safeName}`;
+        try {
+          const blob = await put(blobKey, file, {
+            access: "public",
+            contentType: file.type || "application/octet-stream",
+            addRandomSuffix: false,
+            token: process.env.BLOB_READ_WRITE_TOKEN,
+          });
+          urls.push(blob.url);
+        } catch (err) {
+          console.error(
+            JSON.stringify({
+              event: "public_intake_blob_upload_failed",
+              org_slug: orgSlug,
+              question_id: questionId,
+              error: err instanceof Error ? err.message : String(err),
+            }),
+          );
+          return NextResponse.json(
+            { error: "File upload failed. Please try again." },
+            { status: 500 },
+          );
+        }
+      }
+
+      // Store single URL string or array, consistent with how text
+      // answers look downstream.
+      answers[questionId] = multi || urls.length > 1 ? urls : (urls[0] ?? null);
+    }
   }
 
   // 2026-05-19 — server-side dedup against intake_submissions. The
