@@ -30,6 +30,7 @@ import {
   type AestheticArchetypeId,
 } from "@/lib/workspace/aesthetic-archetypes";
 import { getBookingIntakeFieldsForArchetype } from "@/lib/workspace/booking-intake-fields";
+import { classifyHealthTemplate } from "@/lib/landing/template-selection";
 
 function deriveEndsAt(startsAt: Date, durationMinutes: number) {
   return new Date(startsAt.getTime() + durationMinutes * 60_000);
@@ -470,24 +471,11 @@ function resolveIntakeFieldsFromSoul(
   workspaceName: string | null,
   appointmentTitle: string | null,
 ): BookingIntakeField[] {
-  // 1. Try the explicit archetype on the theme.
-  const theme = (rawTheme && typeof rawTheme === "object" ? (rawTheme as Record<string, unknown>) : null);
-  const explicitArchetype = typeof theme?.aestheticArchetype === "string" ? theme.aestheticArchetype as AestheticArchetypeId : null;
-
-  if (explicitArchetype) {
-    try {
-      return getBookingIntakeFieldsForArchetype(explicitArchetype);
-    } catch {
-      // Unknown archetype id — fall through to classify-from-soul.
-    }
-  }
-
-  // 2. Classify from soul + workspace-name + appointment-title hints.
-  // Why blend three fields into one classification: the classifier
-  // greps for keywords like "roof", "hvac", "dental", "medspa" — those
-  // often live in the workspace name ("Roofs by Shiloh", "Dr. Smith
-  // Dental") or in the appointment title ("Free Roof Inspection")
-  // even when soul.industry was never set by the operator.
+  // Blend soul + workspace-name + appointment-title into ONE string the
+  // classifiers can pattern-match against. Keywords like "physio", "dental",
+  // "roof", "hvac" often live in the workspace name ("Roofs by Shiloh", "Dr.
+  // Smith Dental") or the appointment title ("Free Roof Inspection") even when
+  // soul.industry was never set by the operator.
   const soul = (rawSoul && typeof rawSoul === "object" ? (rawSoul as Record<string, unknown>) : null) ?? null;
   const business = (soul?.business && typeof soul.business === "object" ? (soul.business as Record<string, unknown>) : null) ?? null;
   const soulVertical = typeof soul?.industry === "string"
@@ -502,11 +490,6 @@ function resolveIntakeFieldsFromSoul(
     : typeof soul?.summary === "string"
       ? soul.summary
       : "";
-
-  // Blend everything into ONE string the classifier can pattern-match
-  // against. We pass it as both `vertical` (for the .test(v + " " +
-  // desc) checks) and `businessDescription` (for the desc-only checks)
-  // so a hit on either branch fires.
   const blendedHints = [
     soulVertical,
     workspaceName ?? "",
@@ -517,6 +500,38 @@ function resolveIntakeFieldsFromSoul(
     .join(" ")
     .trim();
 
+  // 0. Health/wellness businesses ALWAYS get the clinical intake — regardless
+  //    of the *visual* archetype. The aesthetic look (editorial-warm,
+  //    cinematic-aspirational, soft-residential…) is a design choice; it must
+  //    never stamp contractor-style "project address / materials / budget"
+  //    questions onto a physio/clinic/spa. This deliberately precedes the
+  //    theme.aestheticArchetype lookup, which was the source of the mismatch
+  //    (a physio on the editorial-warm *look* got the high-end-contractor set).
+  if (
+    classifyHealthTemplate({
+      businessName: workspaceName ?? "",
+      businessDescription: blendedHints,
+      services: [],
+    })
+  ) {
+    return getBookingIntakeFieldsForArchetype("clinical-trust");
+  }
+
+  // 1. Try the explicit archetype on the theme.
+  const theme = (rawTheme && typeof rawTheme === "object" ? (rawTheme as Record<string, unknown>) : null);
+  const explicitArchetype = typeof theme?.aestheticArchetype === "string" ? theme.aestheticArchetype as AestheticArchetypeId : null;
+
+  if (explicitArchetype) {
+    try {
+      return getBookingIntakeFieldsForArchetype(explicitArchetype);
+    } catch {
+      // Unknown archetype id — fall through to classify-from-soul.
+    }
+  }
+
+  // 2. Classify from the blended hints. We pass them as both `vertical` (for
+  //    the .test(v + " " + desc) checks) and `businessDescription` (for the
+  //    desc-only checks) so a hit on either branch fires.
   try {
     const archetypeId = classifyArchetype({
       vertical: blendedHints,
@@ -524,9 +539,9 @@ function resolveIntakeFieldsFromSoul(
     });
     return getBookingIntakeFieldsForArchetype(archetypeId);
   } catch {
-    // Last-resort fallback — pick editorial-warm directly. The
-    // classifier itself uses this as its catch-all, so we get the
-    // same shape but bypass any unforeseen throw inside it.
+    // Last-resort fallback — pick editorial-warm directly. The classifier
+    // itself uses this as its catch-all, so we get the same shape but bypass
+    // any unforeseen throw inside it.
     return getBookingIntakeFieldsForArchetype("editorial-warm");
   }
 }
