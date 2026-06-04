@@ -40,6 +40,10 @@
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 
+import { DesignChip } from "@/components/clients/design-picker/DesignChip";
+import { PickerStyles } from "@/components/clients/design-picker/Styles";
+import type { DesignId } from "@/components/clients/design-picker/types";
+
 // ── Typewriter placeholder examples (cycles while the input is idle) ─────────
 
 const URL_PLACEHOLDERS = [
@@ -95,6 +99,10 @@ export type IdleSceneProps = {
   // visitor on the right input when they passed ?biz= (no URL). Defaults
   // to "url" — the more common path.
   initialTab?: "url" | "biz";
+  // 2026-06-04 — pre-build landing-design pick. The Design chip lives in the
+  // input-box toolbar; "auto" is the default (pipeline picks by vertical).
+  landingTemplate: DesignId;
+  onLandingTemplateChange: (v: DesignId) => void;
 };
 
 type TabId = "url" | "biz";
@@ -178,6 +186,8 @@ export function IdleScene({
   bizInfoDisabled = false,
   errorOverlay,
   initialTab = "url",
+  landingTemplate,
+  onLandingTemplateChange,
 }: IdleSceneProps) {
   const [tab, setTab] = useState<TabId>(initialTab);
   const [urlFocused, setUrlFocused] = useState(false);
@@ -402,11 +412,17 @@ export function IdleScene({
               </div>
             )}
             <div className="sf-idle-form-foot">
-              <span className="sf-idle-hint">
-                <span className="sf-kbd">⌘</span>
-                <span className="sf-kbd">↵</span>
-                <small>to launch</small>
-              </span>
+              <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", minWidth: 0 }}>
+                {/* 2026-06-04 — pre-build landing-design picker. Default "auto"
+                    (pipeline picks by vertical); operators can choose a premium
+                    health/wellness template before building. */}
+                <DesignChip value={landingTemplate} onChange={onLandingTemplateChange} />
+                <span className="sf-idle-hint">
+                  <span className="sf-kbd">⌘</span>
+                  <span className="sf-kbd">↵</span>
+                  <small>to launch</small>
+                </span>
+              </div>
               <button
                 type="submit"
                 className="sf-idle-submit"
@@ -541,6 +557,7 @@ export function IdleScene({
       </aside>
 
       <IdleStyles />
+      <PickerStyles />
     </section>
   );
 }

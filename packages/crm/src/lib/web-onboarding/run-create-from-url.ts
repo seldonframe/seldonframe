@@ -109,7 +109,7 @@ export type RunDeps = {
 
 export type RunInput = {
   deps: RunDeps;
-  body: { url: unknown };
+  body: { url: unknown; landingTemplate?: string };
   sessionUser: { id: string; primaryOrgId: string | null } | null;
 };
 
@@ -324,11 +324,15 @@ export async function runCreateFromUrl(input: RunInput): Promise<RunResult> {
         //      R1 step so theme.landingTemplate is set when /w first renders.
         try {
           const tplFacts = facts as CreateFullWorkspaceInput;
-          await applyLandingTemplateForWorkspace(result.workspace_id, {
-            businessName: tplFacts.business_name,
-            businessDescription: tplFacts.business_description,
-            services: tplFacts.services,
-          });
+          await applyLandingTemplateForWorkspace(
+            result.workspace_id,
+            {
+              businessName: tplFacts.business_name,
+              businessDescription: tplFacts.business_description,
+              services: tplFacts.services,
+            },
+            input.body.landingTemplate,
+          );
         } catch (err) {
           console.warn(
             JSON.stringify({

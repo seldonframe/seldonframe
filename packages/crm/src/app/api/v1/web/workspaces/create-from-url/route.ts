@@ -79,7 +79,7 @@ export const dynamic = "force-dynamic";
 // future programmatic callers (curl, future SDKs) that prefer JSON body
 // posting; both call the same runCreateFromUrl orchestrator with the same
 // RunDeps.
-async function dispatchCreateFromUrl(url: unknown): Promise<Response> {
+async function dispatchCreateFromUrl(url: unknown, landingTemplate?: unknown): Promise<Response> {
   const session = await auth();
 
   // The session callback in lib/auth/config.ts exposes `orgId` (NOT
@@ -144,7 +144,7 @@ async function dispatchCreateFromUrl(url: unknown): Promise<Response> {
       seedDefaultOutboundTriggers,
       workspaceBaseDomain: process.env.WORKSPACE_BASE_DOMAIN ?? "app.seldonframe.com",
     },
-    body: { url },
+    body: { url, landingTemplate: typeof landingTemplate === "string" ? landingTemplate : undefined },
     sessionUser,
   });
 
@@ -156,12 +156,15 @@ export async function GET(request: NextRequest): Promise<Response> {
   // browser. The URL travels as a query param because EventSource cannot
   // POST a body.
   const url = request.nextUrl.searchParams.get("url");
-  return dispatchCreateFromUrl(url);
+  // Operator's pre-build design pick from the /clients/new chip (omitted /
+  // "auto" → the pipeline auto-picks by vertical).
+  const template = request.nextUrl.searchParams.get("template");
+  return dispatchCreateFromUrl(url, template);
 }
 
 export async function POST(request: Request): Promise<Response> {
   // Programmatic JSON-body entry point — for future SDKs, server-side
   // callers, or non-browser clients that prefer POST + JSON.
-  const body = (await request.json().catch(() => ({}))) as { url?: unknown };
-  return dispatchCreateFromUrl(body.url);
+  const body = (await request.json().catch(() => ({}))) as { url?: unknown; template?: unknown };
+  return dispatchCreateFromUrl(body.url, body.template);
 }
