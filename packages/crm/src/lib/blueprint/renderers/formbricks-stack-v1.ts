@@ -54,6 +54,8 @@ export interface RenderedIntake {
  */
 export interface RenderFormbricksStackV1Options {
   removePoweredBy?: boolean;
+  /** Override the formSlug embedded in the data island (default: 'intake'). */
+  formSlug?: string;
 }
 
 export function renderFormbricksStackV1(
@@ -62,6 +64,7 @@ export function renderFormbricksStackV1(
 ): RenderedIntake {
   const themeCss = buildThemeTokens(blueprint.workspace.theme, { surface: "intake" });
   const removePoweredBy = Boolean(options.removePoweredBy);
+  const formSlug = options.formSlug ?? 'intake';
 
   const navbar = renderNavbar(blueprint);
   const intro = renderIntroPanel(blueprint);
@@ -76,7 +79,7 @@ export function renderFormbricksStackV1(
   // round-trip per question. The island is escape-hardened the same way
   // the booking renderer's is — every `<` becomes `<` so attacker-
   // supplied label / option text can't break out of the script tag.
-  const dataJson = JSON.stringify(buildIntakeDataIsland(blueprint));
+  const dataJson = JSON.stringify(buildIntakeDataIsland(blueprint, formSlug));
 
   const html = `<div class="sf-frame sf-frame--intake">
 <main class="sf-landing sf-intake">
@@ -465,12 +468,18 @@ function renderFooter(
 
 interface IntakeDataIsland {
   workspaceName: string;
+  /** Authoritative org slug — avoids parsing the URL path at submit time. */
+  orgSlug: string;
+  /** Authoritative form slug — callers set 'onboarding' for /onboard/<token>. */
+  formSlug: string;
   intake: Intake;
 }
 
-function buildIntakeDataIsland(blueprint: Blueprint): IntakeDataIsland {
+function buildIntakeDataIsland(blueprint: Blueprint, formSlug: string): IntakeDataIsland {
   return {
     workspaceName: blueprint.workspace.name,
+    orgSlug: blueprint.workspace.slug ?? '',
+    formSlug,
     intake: blueprint.intake,
   };
 }
@@ -763,17 +772,15 @@ const INTAKE_INTERACTIVITY_SCRIPT = `<script data-sf-intake="formbricks-stack-v1
         Math.random().toString(36).slice(2, 10) + '-' +
         Math.random().toString(36).slice(2, 10);
     }
-    // v1.3.5 — orgSlug resolution is path-FIRST, subdomain-FALLBACK.
-    // Path shape: /forms/<orgSlug>/<formSlug> on canonical URLs. On a
-    // workspace subdomain (<slug>.app.seldonframe.com/intake) the proxy
-    // rewrites /intake to /forms/<slug>/intake server-side; the browser
-    // URL stays /intake so window.location.pathname yields ["intake"]
-    // with no slug at index 1. Subdomain fallback covers it on the
-    // client; server-side host derivation in route.ts is the canonical
-    // safety net.
+    // v1.3.6 — orgSlug/formSlug resolution: embedded data island is
+    // PREFERRED (set at render time from blueprint.workspace.slug and the
+    // caller-supplied formSlug option). This is authoritative for
+    // /onboard/<token> where the path carries a link token, not an org
+    // slug. The path/subdomain fallbacks are kept for any edge-case HTML
+    // already rendered without the embedded fields.
     var pathParts = window.location.pathname.split('/').filter(Boolean);
-    var orgSlug = pathParts[1] || '';
-    var formSlug = pathParts[2] || 'intake';
+    var orgSlug = data.orgSlug || pathParts[1] || '';
+    var formSlug = data.formSlug || pathParts[2] || 'intake';
     if (!orgSlug) {
       var host = window.location.hostname || '';
       var labels = host.split('.');
