@@ -187,7 +187,16 @@ export function ConfigureAgentForm({
   );
   const [model, setModel] = useState(initial.model || "claude-sonnet-4");
   const [temperature, setTemperature] = useState(initial.temperature ?? 0.7);
-  const [approvalRequired, setApprovalRequired] = useState(initial.approvalRequired ?? true);
+  // 2026-06-09 — real-time archetypes (speed-to-lead, missed-call-text-back,
+  // appointment-confirm-sms) need approvalRequired = false: their entire value
+  // prop depends on sending immediately. For a first-time config (savedConfig
+  // null) we default to false for these archetypes; the saved config value
+  // takes over on subsequent loads so an operator who explicitly enabled
+  // approval via API is not overridden on page reload.
+  const [approvalRequired, setApprovalRequired] = useState(() => {
+    if (savedConfig !== null) return savedConfig.approvalRequired ?? true;
+    return !REAL_TIME_ARCHETYPES.has(archetypeId);
+  });
   const [maxRunsPerDay, setMaxRunsPerDay] = useState(initial.maxRunsPerDay ?? 50);
   const [systemPrompt, setSystemPrompt] = useState(initial.systemPromptOverride ?? "");
 

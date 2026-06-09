@@ -118,12 +118,38 @@ export async function saveAgentConfigAction(input: {
   const archetype = getArchetype(input.archetypeId);
   if (!archetype) return { ok: false, error: "Unknown archetype." };
 
-  // Validate every required placeholder has a value (optional ones
-  // can be empty and synthesis will fill from soul / defaults).
+  // Validate every required placeholder has a value. When the operator
+  // hasn't typed a value but the archetype declares a non-empty example,
+  // accept the example as the implicit default — this mirrors the
+  // fallback-to-example logic in synthesizeAgentSpec and prevents the
+  // config from failing to persist when the operator relies on the hint
+  // text in the input's placeholder attribute (the visual hint is the
+  // example; without this fallback the input's empty value blocks saving
+  // even though a sensible default is available).
+  //
+  // Callers that genuinely require a specific value (no sensible default)
+  // should leave the archetype's `example` field empty — then this
+  // fallback doesn't apply and the error is surfaced as before.
+  //
+  // 2026-06-09 — fix: missed-call-text-back config failed to persist
+  // because $delaySeconds and $followupDelaySeconds have numeric examples
+  // ("30", "14400") but no picker — operators saw the example as a hint
+  // and clicked Save without typing, triggering this guard. speed-to-lead
+  // and review-requester were unaffected because their primary
+  // user_input placeholders use valuesFromTool pickers (operators must
+  // explicitly select a value from the dropdown, so the field is never
+  // submitted empty). This fix aligns save-time behavior with
+  // synthesis-time behavior.
+  const resolvedPlaceholders = { ...input.placeholders };
   for (const [key, meta] of Object.entries(archetype.placeholders)) {
     if (meta.kind !== "user_input") continue;
-    const value = input.placeholders[key];
+    const value = resolvedPlaceholders[key];
     if (!value || !value.trim()) {
+      if (meta.example && meta.example.trim()) {
+        // Apply the same fallback-to-example that synthesizeAgentSpec uses.
+        resolvedPlaceholders[key] = meta.example.trim();
+        continue;
+      }
       return { ok: false, error: `${key.replace(/^\$/, "")} is required.` };
     }
   }
@@ -168,7 +194,7 @@ export async function saveAgentConfigAction(input: {
   const next: AgentConfig = {
     ...DEFAULT_CONFIG,
     ...previous,
-    placeholders: input.placeholders,
+    placeholders: resolvedPlaceholders,
     temperature,
     model: input.model,
     approvalRequired: input.approvalRequired,
