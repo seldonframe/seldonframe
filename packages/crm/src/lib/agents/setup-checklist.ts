@@ -232,8 +232,14 @@ function weatherApiItem(): ChecklistItem {
  * Per-archetype required item set. Mirrors the actual code paths
  * each archetype's specTemplate calls — keep this in sync when an
  * archetype's required tools change.
+ *
+ * Exported so unit tests can assert each archetype has the correct
+ * requirement set without needing a DB connection. The fallback in
+ * getArchetypeSetupChecklist (return [crmCheckItem()] when no entry
+ * exists) silently omits real requirements — every new archetype
+ * MUST appear here.
  */
-const ARCHETYPE_REQUIREMENTS: Record<string, (probe: ResourceProbe) => ChecklistItem[]> = {
+export const ARCHETYPE_REQUIREMENTS: Record<string, (probe: ResourceProbe) => ChecklistItem[]> = {
   "speed-to-lead": (p) => [
     crmCheckItem(),
     intakeFormItem(p),
@@ -256,6 +262,12 @@ const ARCHETYPE_REQUIREMENTS: Record<string, (probe: ResourceProbe) => Checklist
     emailItem(p),
   ],
   "appointment-confirm-sms": (p) => [crmCheckItem(), smsItem(p), bookingItem(p)],
+  // 2026-06-09 — missed-call-text-back was absent from this map, causing the
+  // setup checklist to fall back to [crmCheckItem()] — always met, regardless
+  // of whether Twilio is connected. The SMS requirement was therefore never
+  // surfaced to the operator, and the "Save & deploy" button was enabled even
+  // without Twilio. requiresInstalled: ["crm", "sms"].
+  "missed-call-text-back": (p) => [crmCheckItem(), smsItem(p)],
 };
 
 /**
