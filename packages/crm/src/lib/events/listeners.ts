@@ -15,6 +15,8 @@ import { cancelScheduledSendsForBooking } from "@/lib/messaging/schedule";
 // 2026-06-04 — Onboarding T12: persist change plan on onboarding submission.
 import { buildChangePlan } from "@/lib/onboarding/change-plan";
 import { sendNewSignupAlert } from "@/lib/notifications/ops-notifications";
+// 2026-06-09 — call.missed orgId resolution via Twilio number lookup.
+import { resolveWorkspaceByPhoneNumber } from "@/lib/agents/voice/resolve-workspace-by-number";
 
 /**
  * The SeldonEvent typed schema doesn't include orgId on form.submitted /
@@ -352,6 +354,35 @@ export function registerCrmEventListeners() {
     void syncContactToNewsletter({ contactId: event.data.contactId }).catch(() => {
       return;
     });
+
+    // 2026-06-09 — fan out to deployed agents listening for booking.completed
+    // (review-requester archetype trigger). No resource matcher: unlike
+    // booking.created (filtered by $appointmentTypeId), the review-requester
+    // fires on any completed booking for the org — the operator configures one
+    // review agent per workspace, not per appointment type.
+    // orgId resolved from appointmentId via the bookings table, same pattern
+    // as booking.cancelled above.
+    const data = event.data as Record<string, unknown>;
+    const appointmentId =
+      typeof data.appointmentId === "string" ? data.appointmentId : "";
+    const completedOrgId = await resolveOrgIdForBookingId(appointmentId).catch(() => null);
+    if (completedOrgId) {
+      try {
+        await dispatchEventToDeployedAgents({
+          orgId: completedOrgId,
+          triggerEventType: "booking.completed",
+          triggerEventId: null,
+          triggerPayload: data,
+          matcherPlaceholder: null,
+          matcherValue: null,
+        });
+      } catch (err) {
+        console.warn(
+          `[listeners] dispatchEventToDeployedAgents booking.completed failed:`,
+          err,
+        );
+      }
+    }
   });
 
   bus.on("booking.cancelled", async (event) => {
@@ -410,6 +441,46 @@ export function registerCrmEventListeners() {
             err,
           );
         }
+      }
+    }
+  });
+
+  // 2026-06-09 — Missed-Call-Text-Back archetype trigger.
+  //
+  // The Twilio voice webhook emits call.missed with
+  //   { callSid, contactId, fromNumber, toNumber, status, durationSeconds }
+  // orgId is NOT on the typed event data payload (bus design — the
+  // SeldonEventBus only carries the typed payload, not the emit options.orgId
+  // context used for durable logging). We resolve orgId from toNumber, which
+  // is the agency's Twilio number — the same resolution path used by the voice
+  // webhook itself (resolveWorkspaceByPhoneNumber). This is an indexed DB
+  // query (all org integrations) — acceptable given how infrequently calls
+  // arrive vs. the value of firing the text-back.
+  //
+  // No resource matcher: the missed-call-text-back archetype fires on any
+  // missed call for the org. Operators configure one agent per workspace, not
+  // per phone number (V1 design; per-number routing is a V1.1 concern).
+  bus.on("call.missed", async (event) => {
+    console.log(JSON.stringify({ action: "event.call.missed", ...event }));
+
+    const data = event.data as Record<string, unknown>;
+    const toNumber = typeof data.toNumber === "string" ? data.toNumber : "";
+    const callOrgId = await resolveWorkspaceByPhoneNumber(toNumber).catch(() => null);
+    if (callOrgId) {
+      try {
+        await dispatchEventToDeployedAgents({
+          orgId: callOrgId,
+          triggerEventType: "call.missed",
+          triggerEventId: null,
+          triggerPayload: data,
+          matcherPlaceholder: null,
+          matcherValue: null,
+        });
+      } catch (err) {
+        console.warn(
+          `[listeners] dispatchEventToDeployedAgents call.missed failed:`,
+          err,
+        );
       }
     }
   });
