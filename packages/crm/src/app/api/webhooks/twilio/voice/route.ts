@@ -57,6 +57,11 @@ import { findContactByPhone } from "@/lib/sms/api";
 import { toE164 } from "@/lib/sms/providers";
 import { verifyTwilioSignature } from "@/lib/sms/webhook-verify";
 import { resolveWorkspaceByPhoneNumber } from "@/lib/agents/voice/resolve-workspace-by-number";
+import {
+  buildGreetingTwiml,
+  buildVoiceGreeting,
+  shouldGreetOnInbound,
+} from "@/lib/agents/voice/greeting";
 
 export const runtime = "nodejs";
 
@@ -93,6 +98,40 @@ async function loadTwilioAuthTokenForOrg(orgId: string) {
     }
   }
   return raw;
+}
+
+// 2026-06-10 — Load what the inbound-greeting decision needs: whether the
+// missed-call-text-back agent is deployed for this workspace, plus the
+// business name for the spoken greeting.
+async function loadGreetingContext(orgId: string): Promise<{
+  deployedAt: string | null;
+  pausedAt: string | null;
+  businessName: string | null;
+}> {
+  const [row] = await db
+    .select({ settings: organizations.settings, soul: organizations.soul })
+    .from(organizations)
+    .where(eq(organizations.id, orgId))
+    .limit(1);
+
+  const settings = (row?.settings ?? {}) as Record<string, unknown>;
+  const agentConfigs = (settings.agentConfigs ?? {}) as Record<
+    string,
+    { deployedAt?: string | null; pausedAt?: string | null }
+  >;
+  const cfg = agentConfigs["missed-call-text-back"] ?? {};
+
+  const soul = (row?.soul ?? {}) as Record<string, unknown>;
+  const businessName =
+    (typeof soul.business_name === "string" && soul.business_name.trim()) ||
+    (typeof soul.businessName === "string" && soul.businessName.trim()) ||
+    null;
+
+  return {
+    deployedAt: cfg.deployedAt ?? null,
+    pausedAt: cfg.pausedAt ?? null,
+    businessName,
+  };
 }
 
 function fullRequestUrl(request: Request) {
@@ -196,10 +235,46 @@ export async function POST(request: Request) {
     }
   }
 
-  // Initial voice-URL hit (no terminal status). Return empty TwiML
-  // so Twilio hangs up; the status callback fires next with the
-  // terminal state.
+  // 2026-06-10 — Inbound greeting decision, shared by the voice-URL hit and
+  // the status callback. When the missed-call agent is deployed we answer +
+  // emit on the inbound hit, so the status callback must not double-emit.
+  const greetCtx = await loadGreetingContext(orgId);
+  const greetMode = shouldGreetOnInbound(greetCtx.deployedAt, greetCtx.pausedAt);
+
+  // Initial voice-URL hit (no terminal status).
   if (!callStatus || callStatus === "ringing" || callStatus === "in-progress") {
+    if (greetMode) {
+      // Deterministic path: answer with a branded greeting and fire the
+      // text-back NOW — don't wait for Twilio to classify a "missed" status.
+      const contactId = fromNumber
+        ? await findContactByPhone(orgId, fromNumber)
+        : null;
+      await emitSeldonEvent(
+        "call.missed",
+        {
+          callSid,
+          contactId,
+          fromNumber,
+          toNumber,
+          status: "no-answer",
+          durationSeconds: 0,
+        },
+        { orgId },
+      );
+      logEvent("twilio_voice_webhook_greeted_and_emitted", {
+        org_id: orgId,
+        call_sid: callSid,
+        from: fromNumber,
+        to: toNumber,
+        contact_id: contactId,
+      });
+      return twimlResponse(
+        buildGreetingTwiml(buildVoiceGreeting(greetCtx.businessName)),
+      );
+    }
+
+    // Legacy path: empty TwiML; rely on the status callback to detect a
+    // missed call (when no missed-call agent is deployed).
     logEvent("twilio_voice_webhook_voice_url_hit", {
       org_id: orgId,
       call_sid: callSid,
@@ -211,6 +286,19 @@ export async function POST(request: Request) {
 
   // Status callback path — terminal state reached.
   if (isMissedStatus(callStatus)) {
+    // When greet-mode is on, the inbound voice-URL hit already emitted
+    // call.missed and answered the call. Skip here so a caller who hangs up
+    // mid-greeting (which can surface a no-answer callback) doesn't trigger
+    // a SECOND text-back.
+    if (greetMode) {
+      logEvent("twilio_voice_webhook_missed_skipped_greeted", {
+        org_id: orgId,
+        call_sid: callSid,
+        status: callStatus,
+      });
+      return NextResponse.json({ ok: true, skipped: "greeted_on_inbound" });
+    }
+
     const contactId = fromNumber ? await findContactByPhone(orgId, fromNumber) : null;
 
     await emitSeldonEvent(
