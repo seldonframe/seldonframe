@@ -16,12 +16,15 @@ import type { AgentConfig } from "./configure-actions";
  *     depth (a deploy that bypassed the UI would still fail safely).
  *
  *   - `kind: "soul_copy"` — meant to be filled by Claude at synthesis
- *     time using Soul as context. For V1, we substitute the
+ *     time using Soul as context. For V1, operator-supplied copy in
+ *     `config.placeholders` wins; otherwise we substitute the
  *     placeholder's `example` value if available, otherwise leave
  *     the raw token in place. That means:
- *       - SMS / email copy uses the archetype-author's example text
- *         out of the box (operator-edible via "Advanced — system
- *         prompt override" or by re-saving the archetype later).
+ *       - Operators (and agencies configuring client workspaces) can
+ *         set per-business SMS / email copy by saving the placeholder
+ *         in the agent config (2026-06-10).
+ *       - With no override, SMS / email copy uses the archetype-
+ *         author's example text out of the box.
  *       - Tokens that don't have an example fall through to the
  *         runtime as literal `$xxx` strings — visible in the run
  *         logs so the operator can see what wasn't filled and edit
@@ -102,9 +105,24 @@ export function synthesizeAgentSpec(
     filled[key] = value.trim();
   }
 
-  // Substitute soul_copy with example text where available.
+  // Substitute soul_copy: operator-supplied config copy wins, the
+  // archetype author's example is the fallback.
+  //
+  // 2026-06-10 — soul_copy previously ignored config.placeholders
+  // entirely, so every workspace shipped the archetype's example text
+  // (HVAC-flavored copy on a med-spa workspace). Agencies customizing
+  // per-client SMS/email copy need the override; the example remains
+  // the zero-config default. Overrides land in `filled` (operator-
+  // supplied audit map) — NOT in soulCopyDefaults — because
+  // soulCopyDefaults is applied to the replacement map after `filled`
+  // and would shadow the override on key collision.
   for (const [key, meta] of Object.entries(archetype.placeholders)) {
     if (meta.kind !== "soul_copy") continue;
+    const override = config.placeholders?.[key];
+    if (typeof override === "string" && override.trim().length > 0) {
+      filled[key] = override.trim();
+      continue;
+    }
     if (meta.example && meta.example.trim().length > 0) {
       soulCopyDefaults[key] = meta.example;
     } else {

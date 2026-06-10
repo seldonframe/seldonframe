@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { speedToLeadArchetype } from "@/lib/agents/archetypes/speed-to-lead";
+import { missedCallTextBackArchetype } from "@/lib/agents/archetypes/missed-call-text-back";
 import {
   getConfigPlaceholderValue,
   getTriggerEventType,
@@ -275,6 +276,71 @@ test("synthesis does NOT coerce mixed-content tokens (sentences stay strings)", 
   const variables = result.spec.variables as Record<string, unknown>;
   assert.equal(variables.sentence, "We waited 5 minutes");
   assert.equal(variables.bare, 5); // coerced to number
+});
+
+// 2026-06-10 — soul_copy operator override. Before this change the
+// soul_copy loop ignored config.placeholders entirely: every workspace
+// got the archetype author's example copy (HVAC-flavored text on a
+// med-spa workspace). Operator-supplied copy must win; the example
+// stays the fallback. Reference archetype: missed-call-text-back,
+// whose $textBackBody is the SMS body of the send_text_back step.
+
+/** Extract the send_text_back SMS body from a synthesized missed-call spec. */
+function sentTextBackBody(spec: Record<string, unknown>): unknown {
+  const steps = spec.steps as Array<Record<string, unknown>>;
+  const step = steps.find((s) => s.id === "send_text_back");
+  assert.ok(step, "send_text_back step should be present in synthesized spec");
+  const args = (step!.args ?? {}) as Record<string, unknown>;
+  return args.body;
+}
+
+const MISSED_CALL_USER_INPUTS = {
+  $delaySeconds: "30",
+  $followupDelaySeconds: "14400",
+};
+
+test("soul_copy honors operator config override (config wins over example)", () => {
+  const custom =
+    "Thanks for calling Seldon Studio! Want this for your business? Book a free 15-min call.";
+  const config = makeConfig({
+    placeholders: { ...MISSED_CALL_USER_INPUTS, $textBackBody: custom },
+  });
+  const result = synthesizeAgentSpec(missedCallTextBackArchetype, config);
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(sentTextBackBody(result.spec), custom);
+  // Operator-supplied copy is audited as a filled value, NOT as an
+  // example default — soulCopyDefaults must not shadow the override
+  // (it is applied to the replacement map AFTER filled).
+  assert.equal(result.filled.$textBackBody, custom);
+  assert.equal(result.soulCopyDefaults.$textBackBody, undefined);
+  assert.deepEqual(result.unfilledSoulCopy, []);
+  // Sidecar placeholders map carries the override for dispatcher reads.
+  const placeholders = (result.spec.placeholders as Record<string, string>) ?? {};
+  assert.equal(placeholders.textBackBody, custom);
+});
+
+test("soul_copy falls back to the archetype example when config has no value", () => {
+  const config = makeConfig({ placeholders: { ...MISSED_CALL_USER_INPUTS } });
+  const result = synthesizeAgentSpec(missedCallTextBackArchetype, config);
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  const example = missedCallTextBackArchetype.placeholders.$textBackBody.example;
+  assert.ok(example && example.length > 0, "fixture archetype must declare an example");
+  assert.equal(sentTextBackBody(result.spec), example);
+  assert.equal(result.soulCopyDefaults.$textBackBody, example);
+});
+
+test("whitespace-only soul_copy override falls back to the example", () => {
+  const config = makeConfig({
+    placeholders: { ...MISSED_CALL_USER_INPUTS, $textBackBody: "   " },
+  });
+  const result = synthesizeAgentSpec(missedCallTextBackArchetype, config);
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  const example = missedCallTextBackArchetype.placeholders.$textBackBody.example;
+  assert.equal(sentTextBackBody(result.spec), example);
+  assert.equal(result.soulCopyDefaults.$textBackBody, example);
 });
 
 test("getConfigPlaceholderValue returns the trimmed value or null", () => {
