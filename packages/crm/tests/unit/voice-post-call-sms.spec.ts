@@ -8,16 +8,27 @@ import { extractCallerNumber } from "@/lib/agents/voice/sip-headers";
 // booking link plus a light SeldonFrame pitch. Both helpers are pure so the
 // post-call SMS behavior is unit-testable without a live call or Twilio.
 
-test("buildPostCallSmsBody includes the business name, booking link, and demo pitch", () => {
+test("buildPostCallSmsBody — meta variant pitches a demo and links to the booking URL", () => {
   const body = buildPostCallSmsBody({
     businessName: "Seldon Studio",
-    bookUrl: "https://seldon-studio.app.seldonframe.com/book",
+    bookUrl: "https://seldonstudio.com/book",
+    includeMetaPitch: true,
   });
   assert.ok(body.includes("Seldon Studio"), body);
-  assert.ok(body.includes("https://seldon-studio.app.seldonframe.com/book"), body);
-  // The SeldonFrame meta pitch (our own funnel) must be present.
-  assert.ok(body.includes("DEMO"), body);
-  assert.ok(body.includes("seldonframe.com"), body);
+  assert.ok(body.includes("https://seldonstudio.com/book"), body);
+  assert.ok(/\bDEMO\b/.test(body), body);
+});
+
+test("buildPostCallSmsBody — clean variant is a plain booking nudge, no SeldonFrame ad", () => {
+  const body = buildPostCallSmsBody({
+    businessName: "Bayside Massage",
+    bookUrl: "https://bayside-massage.app.seldonframe.com/book",
+  });
+  assert.ok(body.includes("Bayside Massage"), body);
+  assert.ok(body.includes("https://bayside-massage.app.seldonframe.com/book"), body);
+  // A client's customer must never get a SeldonFrame pitch.
+  assert.ok(!/\bdemo\b/i.test(body), body);
+  assert.ok(!/reply\s+demo/i.test(body), body);
 });
 
 test("buildPostCallSmsBody never leaks an undefined when the name is generic", () => {

@@ -65,6 +65,13 @@ export type AgentBlueprint = {
    *  can't blow up the system prompt budget. Empty/undefined → no
    *  override, runtime composes the prompt as it did before. */
   customSkillMd?: string;
+  /** 2026-06-10 — when true, the post-call follow-up SMS uses the SeldonFrame
+   *  "META loop" pitch (the text is itself the demo) and links to the demo
+   *  qualifier form. Default false: client workspaces send a clean booking
+   *  nudge with no SeldonFrame mention — a client's customer must never get our
+   *  ad. Set true ONLY on the agency's own lead-gen workspace (e.g. Seldon
+   *  Studio). */
+  postCallMetaPitch?: boolean;
   /** OpenAI Realtime TTS voice id for voice-channel agents (e.g. "alloy",
    *  "echo"). Ignored by non-voice archetypes. Defaults to "alloy" at use. */
   voice?: string;
