@@ -8,7 +8,7 @@ export default function PrivacyPage() {
   return (
     <main className="mx-auto max-w-3xl px-6 py-16">
       <h1 className="mb-2 text-3xl font-bold">Privacy Policy — SeldonFrame</h1>
-      <p className="text-sm text-muted-foreground">Last updated: April 2026</p>
+      <p className="text-sm text-muted-foreground">Last updated: June 2026</p>
 
       <section>
         <h2 className="mb-4 mt-10 text-xl font-semibold">1. Introduction</h2>
@@ -96,7 +96,42 @@ export default function PrivacyPage() {
       </section>
 
       <section>
-        <h2 className="mb-4 mt-10 text-xl font-semibold">8. Open Source</h2>
+        <h2 className="mb-4 mt-10 text-xl font-semibold">8. SMS &amp; Mobile Information</h2>
+        <p className="text-base leading-relaxed text-muted-foreground">
+          When you provide a mobile phone number to a business operating on SeldonFrame — by booking,
+          submitting a form, placing a call, or replying to a text — we collect that number and your
+          messaging consent so the business can send you SMS such as booking confirmations, appointment
+          reminders, missed-call follow-ups, and review requests. You can opt out at any time by replying
+          STOP.
+        </p>
+        <ul className="mt-3 list-disc space-y-3 pl-6 text-base leading-relaxed text-muted-foreground">
+          <li>
+            <strong>
+              No mobile information — including your phone number and SMS opt-in or consent — is ever
+              sold, rented, or shared with third parties or affiliates for their own marketing or
+              promotional purposes.
+            </strong>
+          </li>
+          <li>
+            We share your number only with the messaging carrier and our SMS provider (Twilio), strictly
+            to deliver the messages you asked to receive.
+          </li>
+          <li>
+            SMS opt-in and consent data are never shared with any third party for any purpose other than
+            delivering your messages.
+          </li>
+        </ul>
+        <p className="mt-3 text-base leading-relaxed text-muted-foreground">
+          See our{" "}
+          <Link href="/terms" className="underline-offset-4 hover:underline">
+            Terms of Service
+          </Link>{" "}
+          for the full SMS program disclosures (opt-out, HELP, message frequency, and rates).
+        </p>
+      </section>
+
+      <section>
+        <h2 className="mb-4 mt-10 text-xl font-semibold">9. Open Source</h2>
         <p className="text-base leading-relaxed text-muted-foreground">
           SeldonFrame is open source. The source code is available at github.com/seldonframe/crm. Self-hosted users
           control their own data entirely — no data is sent to SeldonFrame servers.
@@ -104,7 +139,7 @@ export default function PrivacyPage() {
       </section>
 
       <section>
-        <h2 className="mb-4 mt-10 text-xl font-semibold">9. Contact</h2>
+        <h2 className="mb-4 mt-10 text-xl font-semibold">10. Contact</h2>
         <p className="text-base leading-relaxed text-muted-foreground">
           For privacy questions: privacy@seldonframe.com
           <br />
@@ -113,7 +148,7 @@ export default function PrivacyPage() {
       </section>
 
       <section>
-        <h2 className="mb-4 mt-10 text-xl font-semibold">10. Changes</h2>
+        <h2 className="mb-4 mt-10 text-xl font-semibold">11. Changes</h2>
         <p className="text-base leading-relaxed text-muted-foreground">
           We may update this policy. Changes will be posted on this page with an updated date.
         </p>
