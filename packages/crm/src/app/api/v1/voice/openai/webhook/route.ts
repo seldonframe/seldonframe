@@ -34,12 +34,20 @@ import {
   extractWebhookHeaders,
   verifyOpenAiWebhook,
 } from "@/lib/agents/voice/openai-webhook-verify";
-import { acceptCall, runVoiceCall } from "@/lib/agents/voice/openai-realtime";
+import {
+  acceptCall,
+  runVoiceCall,
+  buildPostCallSmsBody,
+} from "@/lib/agents/voice/openai-realtime";
 import {
   resolveVoiceContextByNumber,
   loadVoicePersonaInputs,
 } from "@/lib/agents/voice/voice-workspace";
-import { extractDialedNumber } from "@/lib/agents/voice/sip-headers";
+import {
+  extractDialedNumber,
+  extractCallerNumber,
+} from "@/lib/agents/voice/sip-headers";
+import { sendSmsFromApi } from "@/lib/sms/api";
 import { composeVoicePersona } from "@/lib/agents/voice/persona";
 import {
   loadAgentBrainContext,
@@ -193,6 +201,9 @@ export async function POST(request: Request): Promise<Response> {
       // transcript. All best-effort: a miss degrades to a working greeting, never
       // a dropped call.
       const dialedNumber = extractDialedNumber(event.data?.sip_headers);
+      // META loop — extract the caller's own number for the post-call follow-up SMS.
+      // From / P-Asserted-Identity SIP headers carry it. Null for anonymous callers.
+      const callerNumber = extractCallerNumber(event.data?.sip_headers);
       const resolved = await resolveVoiceContextByNumber({ dialedNumber }).catch((err) => {
         logEvent(
           "voice_call_workspace_resolve_error",
@@ -211,6 +222,8 @@ export async function POST(request: Request): Promise<Response> {
       // + the vertical for the outcome row.
       let brainNoteIds: string[] = [];
       let vertical: string | null = null;
+      // META loop — business name for the post-call SMS (loaded with persona inputs).
+      let smsBusinessName: string | null = null;
 
       if (resolved?.ok) {
         logEvent("voice_call_workspace_resolved", {
@@ -238,6 +251,11 @@ export async function POST(request: Request): Promise<Response> {
           brainNoteIds = brain.consumedNoteIds;
           const soulRec = personaInputs.soul as Record<string, unknown> | null;
           vertical = typeof soulRec?.industry === "string" ? soulRec.industry : null;
+          // META loop — capture business name for the post-call SMS body.
+          smsBusinessName =
+            (typeof soulRec?.businessName === "string" && soulRec.businessName.trim()) ||
+            (typeof soulRec?.business_name === "string" && soulRec.business_name.trim()) ||
+            null;
           instructions = composeVoicePersona({
             soul: personaInputs.soul,
             blueprint: personaInputs.blueprint,
@@ -309,6 +327,58 @@ export async function POST(request: Request): Promise<Response> {
           }
         : undefined;
 
+      // META loop — post-call follow-up SMS. Fires when the call ends (any
+      // reason). Requires: a resolved workspace (orgId), a valid caller number
+      // (not anonymous), and the workspace's Twilio credentials (sendSmsFromApi
+      // throws if fromNumber is not configured — caught below).
+      // Best-effort: wrapped in try/catch, never blocks call teardown.
+      const smsOrgId = resolved?.ok ? resolved.ctx.orgId : null;
+      const smsOrgSlug = resolved?.ok ? resolved.ctx.orgSlug : null;
+      const onPostCallSms =
+        smsOrgId && smsOrgSlug && callerNumber
+          ? () => {
+              const baseDomain =
+                process.env.WORKSPACE_BASE_DOMAIN?.trim() || "app.seldonframe.com";
+              const bookUrl = `https://${smsOrgSlug}.${baseDomain}/book`;
+              const businessName = smsBusinessName || "us";
+              const body = buildPostCallSmsBody({ businessName, bookUrl });
+              void (async () => {
+                try {
+                  await sendSmsFromApi({
+                    orgId: smsOrgId,
+                    userId: null,
+                    contactId: null,
+                    toNumber: callerNumber,
+                    body,
+                  });
+                  logEvent("voice_call_post_call_sms_sent", {
+                    call_id: callId,
+                    org_id: smsOrgId,
+                    to: callerNumber,
+                  });
+                } catch (err) {
+                  logEvent(
+                    "voice_call_post_call_sms_failed",
+                    {
+                      call_id: callId,
+                      org_id: smsOrgId,
+                      to: callerNumber,
+                      error: err instanceof Error ? err.message : String(err),
+                    },
+                    { severity: "warn" },
+                  );
+                }
+              })();
+            }
+          : undefined;
+
+      if (callerNumber && !smsOrgId) {
+        logEvent("voice_call_post_call_sms_skipped", {
+          call_id: callId,
+          reason: "no_resolved_workspace",
+        });
+      }
+
       // WS open happens immediately inside runVoiceCall — adjacent to accept.
       // Tools + per-workspace persona + per-agent voice are passed only when the
       // workspace resolved; otherwise the call falls back to the greeting persona.
@@ -320,6 +390,7 @@ export async function POST(request: Request): Promise<Response> {
         audioVoice,
         greeting,
         onBookingCompleted,
+        onPostCallSms,
         ...transcriptCallbacks,
       });
     } catch (err) {

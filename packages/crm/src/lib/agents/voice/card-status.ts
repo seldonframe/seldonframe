@@ -21,13 +21,16 @@ import { toE164 } from "@/lib/sms/providers";
 // NOT in actions.ts — a "use server" file may only export async functions, so a
 // const array there fails the next build (check-use-server.sh). Both the server
 // action's zod enum and the editor's <select> import it from here.
+// cedar/marin are the newest gpt-realtime voices; if OpenAI rejects cedar for this model, "sage" is the safe fallback.
 export const VOICE_OPTIONS = [
   "alloy",
   "echo",
   "shimmer",
   "ash",
   "ballad",
+  "cedar",
   "coral",
+  "marin",
   "sage",
   "verse",
 ] as const;

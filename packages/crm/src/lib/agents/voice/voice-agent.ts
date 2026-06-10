@@ -66,7 +66,7 @@ export async function getOrCreateVoiceAgent({
     };
   }
 
-  const blueprint: AgentBlueprint = { voice: "alloy" };
+  const blueprint: AgentBlueprint = { voice: "cedar" };
   const values: Record<string, unknown> = {
     orgId,
     channel: "voice",
