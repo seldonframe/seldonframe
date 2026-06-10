@@ -99,9 +99,10 @@ export const VOICE_SDR_INSTRUCTIONS =
 /**
  * Voice for the realtime session. Set via `session.update` under
  * `audio.output.voice` (NOT in the /accept body — a top-level `voice` at accept
- * breaks session creation; see acceptCall). `alloy` is a safe GA voice.
+ * breaks session creation; see acceptCall).
+ * cedar/marin are the newest gpt-realtime voices; if OpenAI rejects cedar for this model, "sage" is the safe fallback.
  */
-export const VOICE_AUDIO_OUTPUT_VOICE = "alloy";
+export const VOICE_AUDIO_OUTPUT_VOICE = "cedar";
 
 /**
  * The exact model id used for the call. Confirmed from the OpenAI Realtime SIP
@@ -110,17 +111,23 @@ export const VOICE_AUDIO_OUTPUT_VOICE = "alloy";
  */
 export const VOICE_MODEL = "gpt-realtime-2";
 
-/** Voice for the greeting. `alloy` is a safe, widely-available default. */
-export const VOICE_NAME = "alloy";
+/** Voice for the greeting. cedar/marin are the newest gpt-realtime voices; if OpenAI rejects cedar for this model, "sage" is the safe fallback. */
+export const VOICE_NAME = "cedar";
 
 /**
- * The hard-coded Phase 0 persona. Single greeting, no per-workspace anything.
- * Phase 2 replaces this with per-workspace agent resolution.
+ * The hard-coded Phase 0 / fallback persona — used when no per-workspace persona
+ * can be composed (unresolved workspace or persona-compose error). Warm, concise,
+ * receptionist-style; greets by business context, offers concrete help, and ends
+ * politely. Phase 2 replaces this with per-workspace agent resolution.
  */
 export const PHASE0_GREETING_INSTRUCTIONS =
-  "You are a friendly receptionist for a test business. Greet the caller " +
-  "warmly, ask how you can help, and keep your replies short. If the caller " +
-  "says goodbye, thank them and end the call.";
+  "You are a warm, helpful phone receptionist. Greet the caller by saying " +
+  "'Thanks for calling — how can I help you today?' Keep every reply short " +
+  "and natural (one or two sentences). You can answer questions about the " +
+  "business, help the caller book an appointment, or connect them to the right " +
+  "person. If the caller asks to book, offer to take their name and preferred " +
+  "time and let them know someone will confirm shortly. Always be friendly and " +
+  "unhurried. If the caller says goodbye, thank them warmly and end the call.";
 
 /**
  * Safety cap on assistant turns. gpt-realtime-2 normally ends the call itself
@@ -130,6 +137,26 @@ export const PHASE0_GREETING_INSTRUCTIONS =
  * the pipe.
  */
 export const MAX_ASSISTANT_TURNS = 12;
+
+/**
+ * Build the body of the post-call follow-up SMS sent to the caller after a
+ * voice call ends. Pure function — no I/O, no side effects. Unit-tested.
+ *
+ * Includes a warm thank-you, the workspace booking link, and a light meta pitch
+ * for SeldonFrame. `bookUrl` should be the full `https://` URL.
+ */
+export function buildPostCallSmsBody(params: {
+  businessName: string;
+  bookUrl: string;
+}): string {
+  const { businessName, bookUrl } = params;
+  return (
+    `Thanks for calling ${businessName}! 🙏 ` +
+    `Book or reschedule anytime at ${bookUrl} — ` +
+    `we look forward to seeing you. ` +
+    `P.S. Want your own AI receptionist like this? Reply DEMO or visit https://app.seldonframe.com`
+  );
+}
 
 /**
  * Hard wall-clock cap (ms) for a single call's WS hold. Kept under the Vercel
@@ -300,6 +327,11 @@ export async function runVoiceCall(params: {
   // record a brain "win" (booking landed) against the consumed patterns.
   // Best-effort, fire-and-forget.
   onBookingCompleted?: () => void;
+  // META loop — fired once the call ends (all reasons). When set, the caller
+  // should send a post-call follow-up SMS to the caller's number. Best-effort:
+  // a throw here must never affect call teardown. The SMS itself is sent by the
+  // webhook (not here) so this is a plain signal callback with no arguments.
+  onPostCallSms?: () => void;
 }): Promise<CallEndReason> {
   const WS: ControlSocketCtor =
     params.WebSocketImpl ?? (WsWebSocket as unknown as ControlSocketCtor);
@@ -395,6 +427,13 @@ export async function runVoiceCall(params: {
         params.onCallEnd?.();
       } catch {
         // ignore — best-effort transcript close-out
+      }
+      // META loop — signal the webhook to send a post-call follow-up SMS.
+      // Best-effort: a throw here must never affect teardown.
+      try {
+        params.onPostCallSms?.();
+      } catch {
+        // ignore — best-effort post-call SMS signal
       }
       logEvent("voice_call_ws_closed", { call_id: params.callId, reason });
       resolve(reason);
