@@ -8,7 +8,7 @@ export default function TermsPage() {
   return (
     <main className="mx-auto max-w-3xl px-6 py-16">
       <h1 className="mb-2 text-3xl font-bold">Terms of Service — SeldonFrame</h1>
-      <p className="text-sm text-muted-foreground">Last updated: April 2026</p>
+      <p className="text-sm text-muted-foreground">Last updated: June 2026</p>
 
       <section>
         <h2 className="mb-4 mt-10 text-xl font-semibold">1. What is SeldonFrame</h2>
@@ -120,7 +120,49 @@ export default function TermsPage() {
       </section>
 
       <section>
-        <h2 className="mb-4 mt-10 text-xl font-semibold">12. Contact</h2>
+        <h2 className="mb-4 mt-10 text-xl font-semibold">12. SMS &amp; Text Messaging Terms</h2>
+        <p className="text-base leading-relaxed text-muted-foreground">
+          SeldonFrame and the businesses that operate on it use SMS to communicate with people who
+          provide a mobile number. By giving your phone number — when you book an appointment, submit a
+          form, place a call, or reply to a text — you consent to receive text messages related to that
+          business at the number you provided. Consent to receive messages is not a condition of any
+          purchase.
+        </p>
+        <ul className="mt-3 list-disc space-y-3 pl-6 text-base leading-relaxed text-muted-foreground">
+          <li>
+            <strong>Program description:</strong> messages may include booking confirmations, appointment
+            reminders, missed-call follow-ups, review requests, account and service notifications, and
+            replies to messages you send.
+          </li>
+          <li>
+            <strong>Opt-out:</strong> reply <strong>STOP</strong> at any time to cancel. After you send
+            STOP, we send one confirmation message and then stop sending texts to that number.
+          </li>
+          <li>
+            <strong>Help:</strong> reply <strong>HELP</strong> for assistance, or email
+            support@seldonframe.com.
+          </li>
+          <li>
+            <strong>Message frequency varies</strong> based on your interactions with the business.
+          </li>
+          <li>
+            <strong>Message and data rates may apply.</strong> Your mobile carrier&apos;s standard rates
+            apply to every message you send or receive.
+          </li>
+          <li>Carriers are not liable for delayed or undelivered messages.</li>
+        </ul>
+        <p className="mt-3 text-base leading-relaxed text-muted-foreground">
+          For details on how we handle the mobile information you provide, see our{" "}
+          <Link href="/privacy" className="underline-offset-4 hover:underline">
+            Privacy Policy
+          </Link>
+          . No mobile information or SMS opt-in data is sold or shared with third parties for marketing
+          purposes.
+        </p>
+      </section>
+
+      <section>
+        <h2 className="mb-4 mt-10 text-xl font-semibold">13. Contact</h2>
         <p className="text-base leading-relaxed text-muted-foreground">
           For questions: support@seldonframe.com
           <br />
