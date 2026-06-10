@@ -224,6 +224,9 @@ export async function POST(request: Request): Promise<Response> {
       let vertical: string | null = null;
       // META loop — business name for the post-call SMS (loaded with persona inputs).
       let smsBusinessName: string | null = null;
+      // META loop — true only on the agency's own workspace (blueprint flag):
+      // pitch SeldonFrame + link to the demo qualifier. Clients → clean nudge.
+      let smsMetaPitch = false;
 
       if (resolved?.ok) {
         logEvent("voice_call_workspace_resolved", {
@@ -256,6 +259,8 @@ export async function POST(request: Request): Promise<Response> {
             (typeof soulRec?.businessName === "string" && soulRec.businessName.trim()) ||
             (typeof soulRec?.business_name === "string" && soulRec.business_name.trim()) ||
             null;
+          // META loop — the agency's own workspace flips this on (blueprint flag).
+          smsMetaPitch = personaInputs.blueprint?.postCallMetaPitch === true;
           instructions = composeVoicePersona({
             soul: personaInputs.soul,
             blueprint: personaInputs.blueprint,
@@ -339,9 +344,17 @@ export async function POST(request: Request): Promise<Response> {
           ? () => {
               const baseDomain =
                 process.env.WORKSPACE_BASE_DOMAIN?.trim() || "app.seldonframe.com";
-              const bookUrl = `https://${smsOrgSlug}.${baseDomain}/book`;
+              // META loop (agency's own workspace) → the demo qualifier form,
+              // which captures the lead-fit questions. Clients → booking calendar.
+              const bookUrl = smsMetaPitch
+                ? `https://${baseDomain}/forms/${smsOrgSlug}/intake`
+                : `https://${smsOrgSlug}.${baseDomain}/book`;
               const businessName = smsBusinessName || "us";
-              const body = buildPostCallSmsBody({ businessName, bookUrl });
+              const body = buildPostCallSmsBody({
+                businessName,
+                bookUrl,
+                includeMetaPitch: smsMetaPitch,
+              });
               void (async () => {
                 try {
                   await sendSmsFromApi({

@@ -142,19 +142,32 @@ export const MAX_ASSISTANT_TURNS = 12;
  * Build the body of the post-call follow-up SMS sent to the caller after a
  * voice call ends. Pure function — no I/O, no side effects. Unit-tested.
  *
- * Includes a warm thank-you, the workspace booking link, and a light meta pitch
- * for SeldonFrame. `bookUrl` should be the full `https://` URL.
+ * Two variants, gated per-workspace by `includeMetaPitch`
+ * (blueprint.postCallMetaPitch):
+ *   - false (default — CLIENT workspaces): a clean, on-brand booking nudge with
+ *     NO mention of SeldonFrame. A client's customer must never receive our ad.
+ *   - true (the agency's OWN lead-gen workspace, e.g. Seldon Studio): the META
+ *     loop — the text itself is the demo, pitching the prospect on getting it.
+ * `bookUrl` should be the full `https://` URL.
  */
 export function buildPostCallSmsBody(params: {
   businessName: string;
   bookUrl: string;
+  includeMetaPitch?: boolean;
 }): string {
-  const { businessName, bookUrl } = params;
+  const { businessName, bookUrl, includeMetaPitch = false } = params;
+  if (includeMetaPitch) {
+    // The agency's own funnel: the message IS the product demo.
+    return (
+      `Thanks for calling ${businessName}! 🙏 The text you're reading is the demo — ` +
+      `it's exactly what your own customers get the moment they call you. ` +
+      `Grab your free 15-minute build session here: ${bookUrl}`
+    );
+  }
+  // Client workspaces: a clean booking nudge, no SeldonFrame mention.
   return (
     `Thanks for calling ${businessName}! 🙏 ` +
-    `Book or reschedule anytime at ${bookUrl} — ` +
-    `we look forward to seeing you. ` +
-    `P.S. Want your own AI receptionist like this? Reply DEMO or visit https://app.seldonframe.com`
+    `Book or reschedule anytime here: ${bookUrl} — we look forward to seeing you!`
   );
 }
 
