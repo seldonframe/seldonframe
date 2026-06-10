@@ -344,10 +344,11 @@ export async function POST(request: Request): Promise<Response> {
           ? () => {
               const baseDomain =
                 process.env.WORKSPACE_BASE_DOMAIN?.trim() || "app.seldonframe.com";
-              // META loop (agency's own workspace) → the demo qualifier form,
-              // which captures the lead-fit questions. Clients → booking calendar.
+              // META loop (agency's own workspace) → the brand booking URL.
+              // seldonstudio.com/book is a redirect (on the marketing site) to
+              // this workspace's /book. Clients → their own subdomain calendar.
               const bookUrl = smsMetaPitch
-                ? `https://${baseDomain}/forms/${smsOrgSlug}/intake`
+                ? "https://seldonstudio.com/book"
                 : `https://${smsOrgSlug}.${baseDomain}/book`;
               const businessName = smsBusinessName || "us";
               const body = buildPostCallSmsBody({

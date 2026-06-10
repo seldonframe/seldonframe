@@ -157,11 +157,10 @@ export function buildPostCallSmsBody(params: {
 }): string {
   const { businessName, bookUrl, includeMetaPitch = false } = params;
   if (includeMetaPitch) {
-    // The agency's own funnel: the message IS the product demo.
+    // The agency's own funnel: the text itself demonstrates the product.
     return (
-      `Thanks for calling ${businessName}! 🙏 The text you're reading is the demo — ` +
-      `it's exactly what your own customers get the moment they call you. ` +
-      `Grab your free 15-minute build session here: ${bookUrl}`
+      `Thanks for calling ${businessName}! 🙏 Want your own AI receptionist that texts back ` +
+      `your missed calls like this? Reply DEMO or book a demo at ${bookUrl}`
     );
   }
   // Client workspaces: a clean booking nudge, no SeldonFrame mention.

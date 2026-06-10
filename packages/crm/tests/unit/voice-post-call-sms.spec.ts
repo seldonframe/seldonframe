@@ -8,15 +8,15 @@ import { extractCallerNumber } from "@/lib/agents/voice/sip-headers";
 // booking link plus a light SeldonFrame pitch. Both helpers are pure so the
 // post-call SMS behavior is unit-testable without a live call or Twilio.
 
-test("buildPostCallSmsBody — meta variant frames the text itself as the demo", () => {
+test("buildPostCallSmsBody — meta variant pitches a demo and links to the booking URL", () => {
   const body = buildPostCallSmsBody({
     businessName: "Seldon Studio",
-    bookUrl: "https://app.seldonframe.com/forms/seldon-studio/intake",
+    bookUrl: "https://seldonstudio.com/book",
     includeMetaPitch: true,
   });
   assert.ok(body.includes("Seldon Studio"), body);
-  assert.ok(body.includes("https://app.seldonframe.com/forms/seldon-studio/intake"), body);
-  assert.ok(/demo/i.test(body), body);
+  assert.ok(body.includes("https://seldonstudio.com/book"), body);
+  assert.ok(/\bDEMO\b/.test(body), body);
 });
 
 test("buildPostCallSmsBody — clean variant is a plain booking nudge, no SeldonFrame ad", () => {
