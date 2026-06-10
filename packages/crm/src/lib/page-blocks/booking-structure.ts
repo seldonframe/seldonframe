@@ -73,12 +73,17 @@ export function applyAddBookingField(
   if (fields.some((f) => f.id === newField.id)) {
     errors.push(`duplicate field id "${newField.id}" already exists in the form`);
   }
-  // Position bounds: [STANDARD_SLOT_COUNT, fields.length].
-  // Inserting at 0 or 1 would visually displace the standards — refuse.
-  const pos = position ?? fields.length;
-  if (!Number.isInteger(pos) || pos < STANDARD_SLOT_COUNT || pos > fields.length) {
+  // Position bounds: [STANDARD_SLOT_COUNT, effectiveLen]. Inserting at 0 or 1
+  // would visually displace the standards — refuse. A freshly-seeded booking
+  // can have an EMPTY formFields array (the standards are virtual — the
+  // renderer + persistAndRender re-prepend them on persist), so the effective
+  // length is at least STANDARD_SLOT_COUNT. Without this, the very first custom
+  // field could never be added: the range would compute to an empty [2, 0].
+  const effectiveLen = Math.max(fields.length, STANDARD_SLOT_COUNT);
+  const pos = position ?? effectiveLen;
+  if (!Number.isInteger(pos) || pos < STANDARD_SLOT_COUNT || pos > effectiveLen) {
     errors.push(
-      `position ${pos} out of range [${STANDARD_SLOT_COUNT}, ${fields.length}]. Indices 0/1 are reserved for the standard fullName + email fields.`,
+      `position ${pos} out of range [${STANDARD_SLOT_COUNT}, ${effectiveLen}]. Indices 0/1 are reserved for the standard fullName + email fields.`,
     );
   }
   if (errors.length > 0) return { ok: false, errors };
