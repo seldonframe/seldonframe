@@ -106,6 +106,25 @@ test("applyAddBookingField rejects duplicate non-standard id", () => {
   assert.equal(result.ok, false);
 });
 
+test("applyAddBookingField adds the FIRST custom field to an empty (freshly-seeded) form", () => {
+  // 2026-06-10 regression — a freshly-seeded booking has an empty formFields
+  // array (the standards are virtual until the first persist re-prepends
+  // them). The range was [STANDARD_SLOT_COUNT, fields.length] = [2, 0] — an
+  // empty range — so the very first add_booking_field always 422'd. The fix
+  // uses effectiveLen = max(fields.length, STANDARD_SLOT_COUNT).
+  const result = applyAddBookingField([], EQUIPMENT, 2);
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.deepEqual(result.fields.map((f) => f.id), ["equipment"]);
+});
+
+test("applyAddBookingField appends the first custom field on an empty form when position is omitted", () => {
+  const result = applyAddBookingField([], EQUIPMENT);
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.deepEqual(result.fields.map((f) => f.id), ["equipment"]);
+});
+
 // ─── applyMoveBookingField ─────────────────────────────────────────────────
 
 test("applyMoveBookingField moves an extra forward + backward", () => {
