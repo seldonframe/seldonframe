@@ -26,13 +26,14 @@
 // re-prepend the standards (defense in depth — even if a primitive
 // somehow let a mutation through, the merge ensures standards stay).
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { bookings, landingPages, organizations } from "@/db/schema";
 import { loadBlueprintOrFallback } from "@/lib/blueprint/persist";
 import { renderCalcomMonthV1 } from "@/lib/blueprint/renderers/calcom-month-v1";
 import type { Blueprint, BookingFormField } from "@/lib/blueprint/types";
 import { mergeBookingFormFields } from "./persist";
+import type { BookingIntakeField } from "@/lib/bookings/actions";
 
 // ─── standard-field contract ───────────────────────────────────────────────
 
@@ -451,6 +452,36 @@ async function loadBookingForMutation(
   };
 }
 
+// 2026-06-10 — map operator-edited booking formFields (blueprint) to the
+// BookingIntakeField shape the public /book React form actually reads (via
+// getPublicBookingContext → bookings.metadata.intakeFields). The two field
+// systems were never reconciled after the v1.36.1 React-form swap, so field
+// edits landed in the blueprint + contentHtml but never surfaced on the live
+// booking page (it fell back to the archetype's default fields). Standards
+// (fullName/email) are rendered by the form itself, so we drop them here.
+function bookingFormFieldsToIntakeFields(
+  fields: BookingFormField[],
+): BookingIntakeField[] {
+  const mapType = (t: string): BookingIntakeField["type"] => {
+    if (t === "phone") return "tel";
+    if (t === "select") return "select";
+    if (t === "textarea") return "textarea";
+    return "text"; // text / email / anything else → single-line text input
+  };
+  return fields
+    .filter((f) => !STANDARD_BOOKING_FIELD_IDS.has(f.id))
+    .map((f) => ({
+      id: f.id,
+      label: f.label,
+      type: mapType(f.type),
+      required: Boolean(f.required),
+      ...(f.placeholder ? { placeholder: f.placeholder } : {}),
+      ...(Array.isArray(f.options) && f.options.length > 0
+        ? { options: f.options }
+        : {}),
+    }));
+}
+
 async function persistAndRender(
   loaded: LoadedBooking,
   nextFields: BookingFormField[],
@@ -499,12 +530,18 @@ async function persistAndRender(
     .from(bookings)
     .where(and(eq(bookings.orgId, loaded.workspaceId), eq(bookings.status, "template")));
 
+  // Also sync the appointment-type's metadata.intakeFields — the source the
+  // public /book React form reads (getPublicBookingContext prefers it, else
+  // falls back to the archetype default). Without this, operator field edits
+  // never reach the live booking page.
+  const intakeFieldsJson = JSON.stringify(bookingFormFieldsToIntakeFields(merged));
   for (const row of templateRows) {
     await db
       .update(bookings)
       .set({
         contentHtml: html,
         contentCss: css,
+        metadata: sql`jsonb_set(coalesce(${bookings.metadata}, '{}'::jsonb), '{intakeFields}', ${intakeFieldsJson}::jsonb, true)`,
         updatedAt: new Date(),
       })
       .where(eq(bookings.id, row.id));
