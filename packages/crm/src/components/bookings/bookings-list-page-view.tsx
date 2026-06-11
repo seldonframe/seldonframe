@@ -94,6 +94,7 @@ export async function BookingsListPageView({
           id: row.id,
           title: row.title,
           startsAt: row.startsAt,
+          endsAt: row.endsAt,
           status: row.status,
           contactId: row.contactId,
         }))}

@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
-import { Calendar as CalendarIcon, Check, ChevronLeft, ChevronRight, Copy, Link as LinkIcon, Pencil, Search, Settings, SlidersHorizontal, Trash2 } from "lucide-react";
+import { Check, Copy, Link as LinkIcon, Pencil, Trash2 } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { WeekCalendar, bookingBorderPalette } from "@/components/bookings/week-calendar";
 
 /*
   Square UI class reference (source of truth):
@@ -54,6 +55,7 @@ type BookingRow = {
   id: string;
   title: string;
   startsAt: Date | string;
+  endsAt: Date | string;
   status: string;
   contactId: string | null;
 };
@@ -115,99 +117,11 @@ function statusClass(status: string) {
   return "bg-muted/50 text-muted-foreground";
 }
 
-// v1.40.13 — week-view layout constants. The time column on the left
-// shows 12 hours (8:00 → 19:00); each hour is HOUR_HEIGHT_PX tall.
-// Booking cards in the day columns are absolutely positioned against
-// these same coordinates so a 1pm appointment lands at the 13:00 mark,
-// not floating at the top of the column.
-const WEEK_VIEW_START_HOUR = 8;
-const WEEK_VIEW_END_HOUR = 20; // exclusive — last hour label is 19:00
-const HOUR_HEIGHT_PX = 80; // matches the time column's h-20 rows
-const WEEK_VIEW_TOTAL_HEIGHT_PX =
-  (WEEK_VIEW_END_HOUR - WEEK_VIEW_START_HOUR) * HOUR_HEIGHT_PX;
-const DEFAULT_BOOKING_DURATION_MIN = 60;
-
-// Extract { hours, minutes } from a Date in a specific IANA timezone.
-// Browser-local getHours() drifts when viewer TZ ≠ workspace TZ;
-// Intl round-trip is the only reliable way.
-function timeInZone(date: Date, tz: string): { hours: number; minutes: number } {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: tz,
-    hour12: false,
-    hour: "numeric",
-    minute: "numeric",
-  }).formatToParts(date);
-  const hourPart = parts.find((p) => p.type === "hour")?.value ?? "0";
-  const minutePart = parts.find((p) => p.type === "minute")?.value ?? "0";
-  // Intl hour12:false uses "24" for midnight on some engines — normalize.
-  const hours = parseInt(hourPart, 10) % 24;
-  const minutes = parseInt(minutePart, 10);
-  return { hours, minutes };
-}
-
-// Position a booking card vertically within the week-view day column.
-// Returns the top offset in px relative to the start of the visible grid
-// (WEEK_VIEW_START_HOUR). Clamps so off-hours bookings still render at
-// the top/bottom edge with their real time visible inside the card.
-function bookingTopPx(startsAt: Date, tz: string): number {
-  const { hours, minutes } = timeInZone(startsAt, tz);
-  const offsetHours = hours + minutes / 60 - WEEK_VIEW_START_HOUR;
-  const maxOffset = WEEK_VIEW_END_HOUR - WEEK_VIEW_START_HOUR;
-  const clamped = Math.max(0, Math.min(offsetHours, maxOffset - 0.5));
-  return clamped * HOUR_HEIGHT_PX;
-}
-
 // v1.40.9 — every formatter takes an explicit IANA timezone so
 // renders are stable regardless of viewer's browser locale.
 function formatDateGroupLabel(value: Date, tz: string) {
   return new Intl.DateTimeFormat("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: tz }).format(value);
 }
-
-function addDaysLocal(date: Date, days: number) {
-  const next = new Date(date);
-  next.setDate(next.getDate() + days);
-  return next;
-}
-
-function startOfWeekMonday(date: Date) {
-  const next = new Date(date);
-  const weekday = next.getDay();
-  const diff = weekday === 0 ? -6 : 1 - weekday;
-  next.setDate(next.getDate() + diff);
-  next.setHours(0, 0, 0, 0);
-  return next;
-}
-
-function keyYmd(date: Date, tz: string) {
-  // YYYY-MM-DD in the given timezone. en-CA is the locale that emits
-  // ISO-style YYYY-MM-DD when called with timeZone.
-  return new Intl.DateTimeFormat("en-CA", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    timeZone: tz,
-  }).format(date);
-}
-
-function labelRangeStart(date: Date, tz: string) {
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "2-digit", timeZone: tz }).format(date);
-}
-
-function labelRangeEnd(date: Date, tz: string) {
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "2-digit", year: "numeric", timeZone: tz }).format(date);
-}
-
-function dayHeaderLabel(date: Date, tz: string) {
-  return new Intl.DateTimeFormat("en-US", { day: "2-digit", weekday: "short", timeZone: tz }).format(date).toUpperCase();
-}
-
-const bookingBorderPalette = [
-  "border-l-primary",
-  "border-l-[hsl(270_60%_55%)]",
-  "border-l-[hsl(220_70%_55%)]",
-  "border-l-caution",
-  "border-l-positive",
-];
 
 export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, suggestedServices, orgSlug, publicBaseUrl, workspaceTimezone, calendarConnected, googleCalendarConnectUrl, createAppointmentTypeAction, editAppointmentTypeAction, bookingDefaults }: BookingsPageContentProps) {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
@@ -219,10 +133,6 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
   const [editingType, setEditingType] = useState<AppointmentTypeRow | null>(null);
   const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const [weekOffset, setWeekOffset] = useState(0);
-  const [showFilterMenu, setShowFilterMenu] = useState(false);
-  const [showFilterNotice, setShowFilterNotice] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
   const [draftName, setDraftName] = useState("");
   const [draftDuration, setDraftDuration] = useState("30");
   const [draftPrice, setDraftPrice] = useState("0");
@@ -230,6 +140,9 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
   const [draftSlug, setDraftSlug] = useState("");
 
   const contactsById = useMemo(() => new Map(contacts.map((contact) => [contact.id, contact])), [contacts]);
+
+  // Used by the Upcoming section to colour-code each booking row with
+  // the same left-border palette as the calendar grid cards.
   const bookingTypeBorderByTitle = useMemo(() => {
     const map = new Map<string, string>();
     bookingTypes.forEach((type, index) => {
@@ -237,43 +150,6 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
     });
     return map;
   }, [bookingTypes]);
-
-  const weekStart = useMemo(() => {
-    const base = addDaysLocal(new Date(), weekOffset * 7);
-    return startOfWeekMonday(base);
-  }, [weekOffset]);
-
-  const weekDays = useMemo(() => Array.from({ length: 7 }, (_, index) => addDaysLocal(weekStart, index)), [weekStart]);
-
-  const weekEventsByDay = useMemo(() => {
-    const byDay = new Map<string, BookingRow[]>();
-    for (const day of weekDays) {
-      byDay.set(keyYmd(day, workspaceTimezone), []);
-    }
-
-    for (const row of bookings) {
-      const startsAt = new Date(row.startsAt);
-      const key = keyYmd(startsAt, workspaceTimezone);
-      if (!byDay.has(key)) {
-        continue;
-      }
-
-      if (searchQuery.trim().length > 0 && !row.title.toLowerCase().includes(searchQuery.trim().toLowerCase())) {
-        continue;
-      }
-
-      byDay.get(key)?.push(row);
-    }
-
-    for (const [key, rows] of byDay.entries()) {
-      byDay.set(
-        key,
-        rows.sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
-      );
-    }
-
-    return byDay;
-  }, [bookings, weekDays, searchQuery]);
 
   const upcomingGrouped = useMemo(() => {
     const now = new Date();
@@ -338,200 +214,12 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
           create/copy/edit link actions need to be easily accessible,
           not buried below the calendar grid). */}
 
-      <section className="space-y-4 order-2">
-        <div className="px-3 md:px-6 py-4 border-b border-border">
-          <div className="flex items-center gap-2 md:gap-3 flex-wrap">
-            <div className="relative flex-1 min-w-[200px] max-w-[280px] shrink-0">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-              <input
-                placeholder="Search in calendar..."
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                className="crm-input pl-9 pr-9 h-8 bg-background"
-              />
-              <button type="button" className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex size-6 items-center justify-center rounded hover:bg-accent">
-                <Settings className="size-3.5" />
-              </button>
-            </div>
-
-            <button type="button" className="crm-pressable inline-flex h-8 items-center rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-[background-color,color,transform] duration-150 ease-out hover:bg-accent hover:text-accent-foreground" onClick={() => setWeekOffset(0)}>
-              Today
-            </button>
-
-            <button type="button" className="crm-pressable inline-flex h-8 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-[background-color,color,transform] duration-150 ease-out hover:bg-accent hover:text-accent-foreground">
-              <CalendarIcon className="size-4 text-muted-foreground" />
-              <span className="text-xs text-foreground">
-                {labelRangeStart(weekDays[0], workspaceTimezone)} - {labelRangeEnd(weekDays[6], workspaceTimezone)}
-              </span>
-            </button>
-
-            <div className="ml-auto" />
-
-            <div className="relative">
-              <button
-                type="button"
-                className="crm-pressable inline-flex h-8 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-[background-color,color,transform] duration-150 ease-out hover:bg-accent hover:text-accent-foreground"
-                onClick={() => setShowFilterMenu((current) => !current)}
-              >
-                <SlidersHorizontal className="size-4" />
-                <span className="hidden sm:inline text-xs">Filter</span>
-              </button>
-              {showFilterMenu ? (
-                <div className="absolute right-0 top-10 z-20 min-w-[170px] rounded-md border border-border bg-card shadow-sm">
-                  <button
-                    type="button"
-                    className="block w-full px-3 py-2 text-left text-sm text-foreground hover:bg-accent"
-                    onClick={() => {
-                      setShowFilterMenu(false);
-                      setShowFilterNotice(true);
-                      window.setTimeout(() => setShowFilterNotice(false), 2200);
-                    }}
-                  >
-                    Scheduled only
-                  </button>
-                  <button
-                    type="button"
-                    className="block w-full px-3 py-2 text-left text-sm text-foreground hover:bg-accent"
-                    onClick={() => {
-                      setShowFilterMenu(false);
-                      setShowFilterNotice(true);
-                      window.setTimeout(() => setShowFilterNotice(false), 2200);
-                    }}
-                  >
-                    Completed only
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          </div>
-        </div>
-
-        <div className="flex flex-col h-full overflow-x-auto w-full rounded-xl border bg-card">
-          <div className="flex border-b border-border sticky top-0 z-30 bg-background w-max min-w-full">
-            <div className="w-[80px] md:w-[104px] flex items-center gap-1 md:gap-2 p-1.5 md:p-2 border-r border-border shrink-0">
-              <button type="button" className="crm-pressable inline-flex size-7 md:size-8 items-center justify-center rounded transition-[background-color,transform] duration-150 ease-out hover:bg-accent" onClick={() => setWeekOffset((current) => current - 1)}>
-                <ChevronLeft className="size-4 md:size-5" />
-              </button>
-              <button type="button" className="crm-pressable inline-flex size-7 md:size-8 items-center justify-center rounded transition-[background-color,transform] duration-150 ease-out hover:bg-accent" onClick={() => setWeekOffset((current) => current + 1)}>
-                <ChevronRight className="size-4 md:size-5" />
-              </button>
-            </div>
-            {weekDays.map((day) => (
-              <div key={day.toISOString()} className="flex-1 border-r border-border last:border-r-0 p-1.5 md:p-2 min-w-44 flex items-center">
-                <div className="text-xs md:text-sm font-medium text-foreground">{dayHeaderLabel(day, workspaceTimezone)}</div>
-              </div>
-            ))}
-          </div>
-
-          <div className="flex min-w-full w-max">
-            {/* v1.40.13 — time column. Each hour is exactly HOUR_HEIGHT_PX tall.
-                Day columns position their booking cards against this grid. */}
-            <div
-              className="w-[80px] md:w-[104px] border-r border-border shrink-0 bg-background"
-              style={{ height: `${WEEK_VIEW_TOTAL_HEIGHT_PX}px` }}
-            >
-              {Array.from(
-                { length: WEEK_VIEW_END_HOUR - WEEK_VIEW_START_HOUR },
-                (_, index) => `${index + WEEK_VIEW_START_HOUR}:00`,
-              ).map((hour) => (
-                <div
-                  key={hour}
-                  className="border-b border-border/60 text-[10px] text-muted-foreground px-2 pt-1"
-                  style={{ height: `${HOUR_HEIGHT_PX}px` }}
-                >
-                  {hour}
-                </div>
-              ))}
-            </div>
-
-            {weekDays.map((day) => {
-              const key = keyYmd(day, workspaceTimezone);
-              const events = weekEventsByDay.get(key) ?? [];
-              return (
-                <div
-                  key={key}
-                  className="flex-1 min-w-44 border-r border-border last:border-r-0 relative"
-                  style={{ height: `${WEEK_VIEW_TOTAL_HEIGHT_PX}px` }}
-                >
-                  {/* Hour grid lines — match the time column's row borders */}
-                  {Array.from(
-                    { length: WEEK_VIEW_END_HOUR - WEEK_VIEW_START_HOUR },
-                    (_, index) => (
-                      <div
-                        key={index}
-                        className="border-b border-border/60"
-                        style={{ height: `${HOUR_HEIGHT_PX}px` }}
-                      />
-                    ),
-                  )}
-                  {/* v1.40.13 — booking cards absolutely positioned by start
-                      time in workspace TZ. A 1pm appointment lands at the
-                      13:00 row regardless of viewer browser TZ. */}
-                  {events.map((row) => {
-                    const startsAt = new Date(row.startsAt);
-                    const linkedContact = row.contactId
-                      ? contactsById.get(row.contactId)
-                      : null;
-                    const person = linkedContact
-                      ? `${linkedContact.firstName} ${linkedContact.lastName ?? ""}`.trim()
-                      : labels.contact.singular;
-                    const borderClass =
-                      bookingTypeBorderByTitle.get(row.title.trim().toLowerCase()) ??
-                      "border-l-primary";
-                    const top = bookingTopPx(startsAt, workspaceTimezone);
-                    const height =
-                      (DEFAULT_BOOKING_DURATION_MIN / 60) * HOUR_HEIGHT_PX - 4;
-                    // 2026-05-18 — clicking an event in the calendar now
-                    // jumps to the linked contact's record (where the
-                    // operator sees name + email + phone + address +
-                    // booking history + the SOUL-aware intake answers).
-                    // Falls back to a non-clickable <article> when the
-                    // booking has no contactId (rare — every public
-                    // submit attaches one; manual creates may not).
-                    const cardClass = `absolute left-2 right-2 rounded-lg border border-border border-l-4 ${borderClass} bg-card p-2 hover:bg-muted transition-colors overflow-hidden`;
-                    const cardStyle = { top: `${top}px`, height: `${height}px` };
-                    const cardInner = (
-                      <>
-                        <p className="text-xs font-medium text-foreground truncate">
-                          {row.title}
-                        </p>
-                        <p className="mt-0.5 text-[10px] text-muted-foreground truncate">
-                          {person}
-                        </p>
-                        <p className="mt-1 text-[10px] text-primary">
-                          {startsAt.toLocaleTimeString("en-US", {
-                            hour: "numeric",
-                            minute: "2-digit",
-                            timeZone: workspaceTimezone,
-                          })}
-                        </p>
-                      </>
-                    );
-                    return row.contactId ? (
-                      <Link
-                        key={row.id}
-                        href={`/contacts/${row.contactId}`}
-                        className={`${cardClass} block`}
-                        style={cardStyle}
-                      >
-                        {cardInner}
-                      </Link>
-                    ) : (
-                      <article
-                        key={row.id}
-                        className={cardClass}
-                        style={cardStyle}
-                      >
-                        {cardInner}
-                      </article>
-                    );
-                  })}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
+      <WeekCalendar
+        bookings={bookings}
+        contacts={contacts}
+        workspaceTimezone={workspaceTimezone}
+        labels={labels}
+      />
 
       <section className="space-y-3 order-1">
         <div className="flex flex-wrap items-center gap-3 border-b border-border/70 px-3 py-3 md:px-6">
@@ -1059,9 +747,6 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
         </SheetContent>
       </Sheet>
 
-      {showFilterNotice ? (
-        <div className="fixed bottom-4 right-4 z-70 rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground shadow-sm">Coming soon</div>
-      ) : null}
     </div>
   );
 }
