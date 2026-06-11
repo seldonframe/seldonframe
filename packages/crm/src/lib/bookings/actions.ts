@@ -11,6 +11,8 @@ import { emitSeldonEvent } from "@/lib/events/bus";
 import { createBookingCheckoutSession } from "@/lib/payments/actions";
 import { createBookingForCustomer } from "./create-for-customer";
 import { recordBookingOutcomeLearning } from "@/lib/soul/learning";
+import { computeRescheduledEnd, intervalsOverlap, shouldSendRescheduleEmail as shouldSendRescheduleEmailPure } from "./calendar-math";
+import { sendBookingRescheduleEmail } from "@/lib/messaging/skills/booking-reschedule";
 import {
   deleteGoogleCalendarBookingEvent,
   reconcileGoogleCalendarBookings,
@@ -1876,4 +1878,108 @@ export async function submitPublicBookingAction({
   }
 
   return { success: true, confirmationMessage: bookingContext.confirmationMessage, checkoutUrl: null as string | null };
+}
+
+// ─── TASK A: reschedule gate helper (re-exported from calendar-math so the
+//     pure function is testable without loading server-only dependencies) ───────
+
+export { shouldSendRescheduleEmailPure as shouldSendRescheduleEmail };
+
+// ─── TASK A: reschedule booking action ────────────────────────────────────────
+
+export async function rescheduleBookingAction(input: {
+  bookingId: string;
+  newStartsAtISO: string;
+  notify: boolean;
+}): Promise<{ ok: true } | { ok: false; error: "not_found" | "conflict" }> {
+  const orgId = await getOrgId();
+  if (!orgId) return { ok: false, error: "not_found" };
+
+  const [current] = await db
+    .select()
+    .from(bookings)
+    .where(
+      and(
+        eq(bookings.orgId, orgId),
+        eq(bookings.id, input.bookingId),
+        ne(bookings.status, "template"),
+      ),
+    )
+    .limit(1);
+  if (!current) return { ok: false, error: "not_found" };
+
+  const newStart = new Date(input.newStartsAtISO);
+  // Ensure startsAt/endsAt are Date objects (Drizzle may return strings).
+  const oldStart = current.startsAt instanceof Date ? current.startsAt : new Date(current.startsAt);
+  const oldEnd = current.endsAt instanceof Date ? current.endsAt : new Date(current.endsAt);
+  const newEnd = computeRescheduledEnd(oldStart, oldEnd, newStart);
+
+  const others = await db
+    .select({ id: bookings.id, startsAt: bookings.startsAt, endsAt: bookings.endsAt })
+    .from(bookings)
+    .where(
+      and(
+        eq(bookings.orgId, orgId),
+        ne(bookings.id, current.id),
+        inArray(bookings.status, ["scheduled", "completed", "pending_payment", "blocked"]),
+      ),
+    );
+
+  const conflict = others.some((r) => {
+    const rStart = r.startsAt instanceof Date ? r.startsAt : new Date(r.startsAt);
+    const rEnd = r.endsAt instanceof Date ? r.endsAt : new Date(r.endsAt);
+    return intervalsOverlap(newStart, newEnd, rStart, rEnd);
+  });
+  if (conflict) return { ok: false, error: "conflict" };
+
+  await db
+    .update(bookings)
+    .set({ startsAt: newStart, endsAt: newEnd, updatedAt: new Date() })
+    .where(and(eq(bookings.orgId, orgId), eq(bookings.id, current.id)));
+
+  if (
+    shouldSendRescheduleEmailPure({
+      notify: input.notify,
+      contactId: current.contactId,
+      status: current.status,
+    })
+  ) {
+    await sendBookingRescheduleEmail({
+      orgId,
+      bookingId: current.id,
+      oldStartsAt: oldStart,
+      newStartsAt: newStart,
+    }).catch(() => {});
+  }
+
+  revalidatePath("/bookings");
+  return { ok: true };
+}
+
+// ─── TASK B: create blocked-time action ───────────────────────────────────────
+
+export async function createBlockedTimeAction(input: {
+  label: string;
+  startsAtISO: string;
+  durationMinutes: number;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const orgId = await getOrgId();
+  if (!orgId) return { ok: false, error: "not_found" };
+
+  const startsAt = new Date(input.startsAtISO);
+  const endsAt = new Date(startsAt.getTime() + input.durationMinutes * 60_000);
+
+  await db.insert(bookings).values({
+    orgId,
+    title: input.label.trim() || "Blocked",
+    status: "blocked",
+    contactId: null,
+    provider: "manual",
+    bookingSlug: "blocked",
+    startsAt,
+    endsAt,
+  });
+
+  revalidatePath("/bookings");
+  return { ok: true };
 }

@@ -30,3 +30,14 @@ export function computeRescheduledEnd(oldStart: Date, oldEnd: Date, newStart: Da
 export function intervalsOverlap(aStart: Date, aEnd: Date, bStart: Date, bEnd: Date): boolean {
   return aStart.getTime() < bEnd.getTime() && bStart.getTime() < aEnd.getTime();
 }
+
+/** Pure gate: should we send a reschedule email for this booking?
+ *  True only when the operator opted in (notify), the booking has a linked
+ *  contact (contactId), and the booking is not a blocked-time slot. */
+export function shouldSendRescheduleEmail(input: {
+  notify: boolean;
+  contactId: string | null;
+  status: string;
+}): boolean {
+  return input.notify && Boolean(input.contactId) && input.status !== "blocked";
+}
