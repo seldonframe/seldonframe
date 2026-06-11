@@ -1,6 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { PointerEvent as ReactPointerEvent } from "react";
+import { useRouter } from "next/navigation";
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Search, Settings, SlidersHorizontal } from "lucide-react";
 import {
   WEEK_VIEW_START_HOUR,
@@ -11,6 +13,7 @@ import {
 } from "@/lib/bookings/calendar-math";
 import { BookingCard } from "@/components/bookings/booking-card";
 import { CreatePopover } from "@/components/bookings/create-popover";
+import { RescheduleConfirm } from "@/components/bookings/reschedule-confirm";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -53,6 +56,14 @@ type WeekCalendarProps = {
     startsAtISO: string;
     durationMinutes: number;
   }) => Promise<{ ok: true } | { ok: false; error: string }>;
+  /** Task 8 — drag-to-reschedule. Prospect drops confirm + email; blocked
+   *  drops move silently. Returns a discriminated union so the caller can
+   *  revert the optimistic position on conflict. */
+  rescheduleBookingAction: (input: {
+    bookingId: string;
+    newStartsAtISO: string;
+    notify: boolean;
+  }) => Promise<{ ok: true } | { ok: false; error: "not_found" | "conflict" }>;
 };
 
 // ---------------------------------------------------------------------------
@@ -187,6 +198,31 @@ function buildStartUtc(
   return new Date(naive.getTime() + (intendedMs - actualMs));
 }
 
+/** Derive [year, month, day] for a column's day in the workspace timezone.
+ *  Shared by the empty-slot click handler and the drag-drop handler so both
+ *  compute the dropped date identically. */
+function ymdInZone(day: Date, tz: string): [number, number, number] {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  })
+    .format(day)
+    .split("-")
+    .map(Number) as [number, number, number];
+}
+
+/** Build the UTC start for a dropped block: snap the y-offset within a column
+ *  to a clock time, then resolve it to a UTC moment on the column's day in the
+ *  workspace timezone. Pure — all snap math comes from calendar-math.ts. */
+function dropToStartUtc(day: Date, offsetY: number, tz: string): Date {
+  const snappedMinutes = yToSnappedMinutes(offsetY);
+  const { hours, minutes } = minutesToClock(snappedMinutes);
+  const [year, month, dayNum] = ymdInZone(day, tz);
+  return buildStartUtc(year, month, dayNum, hours, minutes, tz);
+}
+
 function addDaysLocal(date: Date, days: number) {
   const next = new Date(date);
   next.setDate(next.getDate() + days);
@@ -216,6 +252,61 @@ type PopoverState = {
   anchorY: number;
 };
 
+// Snapshot captured on pointer-down for a booking card. Persists for the
+// whole gesture so pointer-up can decide click-vs-drag and compute the move.
+type DragState = {
+  bookingId: string;
+  originStart: Date;
+  originEnd: Date;
+  status: string;
+  contactId: string | null;
+  title: string;
+  contactName: string;
+  pointerStartX: number;
+  pointerStartY: number;
+  /** Becomes true once the pointer crosses DRAG_THRESHOLD_PX — only then do
+   *  we render the ghost and treat pointer-up as a drop (not a click). */
+  isDragging: boolean;
+  /** Live ghost target while dragging: which day column + snapped top px. */
+  ghost: { dayKey: string; topPx: number; timeLabel: string } | null;
+};
+
+// Pending reschedule confirmation for a PROSPECT drop. Held until the
+// operator confirms (fire action) or cancels (discard).
+type PendingConfirm = {
+  bookingId: string;
+  title: string;
+  contactName: string;
+  newStart: Date;
+  newTimeLabel: string;
+  status: string;
+  anchorX: number;
+  anchorY: number;
+  /** Optimistic position to keep the card pinned at while confirming. */
+  optimistic: { dayKey: string; topPx: number };
+};
+
+// Optimistic override applied to a booking whose reschedule is in flight (or
+// awaiting confirm). Render the card here until the action resolves; on
+// conflict we clear it so the card snaps back to its server position.
+type OptimisticOverride = { dayKey: string; topPx: number };
+
+const DRAG_THRESHOLD_PX = 5;
+
+/** Format a dropped UTC moment as a short "Tue, Jun 16, 2:30 PM" label in the
+ *  workspace timezone for the ghost + confirm card. */
+function formatDropLabel(date: Date, tz: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).format(date);
+}
+
 export function WeekCalendar({
   bookings,
   contacts,
@@ -224,17 +315,55 @@ export function WeekCalendar({
   bookingTypes,
   createBookingAction,
   createBlockedTimeAction,
+  rescheduleBookingAction,
 }: WeekCalendarProps) {
+  const router = useRouter();
   const [weekOffset, setWeekOffset] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [showFilterNotice, setShowFilterNotice] = useState(false);
   const [popover, setPopover] = useState<PopoverState | null>(null);
 
+  // ── Task 8 — drag-to-reschedule state ──────────────────────────────────
+  // Refs to the 7 day-column elements, keyed by their YYYY-MM-DD day key, so
+  // pointer-move/up can hit-test clientX against each getBoundingClientRect().
+  const columnRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  // The live gesture. `drag` drives rendering (ghost, drag-lift); a ref mirror
+  // (below) lets the move/up handlers + the Escape listener read the latest
+  // value without being re-created on every gesture tick.
+  const [drag, setDrag] = useState<DragState | null>(null);
+  // Mirror `drag` into a ref so the move/up handlers + the global Escape
+  // listener always read the latest gesture. Synced via an effect (assigning
+  // during render trips the react-hooks/refs rule).
+  const dragRef = useRef<DragState | null>(null);
+  useEffect(() => {
+    dragRef.current = drag;
+  }, [drag]);
+  // Set true the instant a drag drops, so the synthetic `click` the browser
+  // fires right after `pointerup` (on whatever column is under the pointer)
+  // is swallowed instead of opening the create-popover. Cleared by that same
+  // click handler. A ref (not state) because it must survive within the same
+  // event-loop turn without a re-render.
+  const justDraggedRef = useRef(false);
+  // Pending prospect confirmation (held open until confirm/cancel).
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
+  // Optimistic position overrides keyed by bookingId, applied while a
+  // reschedule is in flight / awaiting confirm.
+  const [optimistic, setOptimistic] = useState<Map<string, OptimisticOverride>>(
+    new Map()
+  );
+  // Transient toast (e.g. conflict revert).
+  const [toast, setToast] = useState<string | null>(null);
+
   const contactsById = useMemo(
     () => new Map(contacts.map((c) => [c.id, c])),
     [contacts]
   );
+
+  const showToast = useCallback((message: string) => {
+    setToast(message);
+    window.setTimeout(() => setToast(null), 2400);
+  }, []);
 
   const weekStart = useMemo(() => {
     const base = addDaysLocal(new Date(), weekOffset * 7);
@@ -295,6 +424,229 @@ export function WeekCalendar({
     }
     return map;
   }, [bookings]);
+
+  // ── Task 8 — pointer handlers (native pointer events, no library) ───────
+  // Hit-test a viewport X against the 7 day-column rects; return the matching
+  // day + the snapped top px for the given viewport Y. Falls back to the
+  // drag-origin column when the pointer is left/right of the grid so a drop
+  // always lands somewhere sensible.
+  const resolveDropTarget = useCallback(
+    (
+      clientX: number,
+      clientY: number,
+      fallbackDayKey: string,
+    ): { day: Date; dayKey: string; offsetY: number } | null => {
+      let target: { day: Date; dayKey: string; rect: DOMRect } | null = null;
+      let fallback: { day: Date; dayKey: string; rect: DOMRect } | null = null;
+      for (const day of weekDays) {
+        const dayKey = keyYmd(day, workspaceTimezone);
+        const el = columnRefs.current.get(dayKey);
+        if (!el) continue;
+        const rect = el.getBoundingClientRect();
+        if (dayKey === fallbackDayKey) fallback = { day, dayKey, rect };
+        if (clientX >= rect.left && clientX < rect.right) {
+          target = { day, dayKey, rect };
+        }
+      }
+      const hit = target ?? fallback;
+      if (!hit) return null;
+      return { day: hit.day, dayKey: hit.dayKey, offsetY: clientY - hit.rect.top };
+    },
+    [weekDays, workspaceTimezone],
+  );
+
+  const handleCardPointerDown = useCallback(
+    (
+      e: ReactPointerEvent<HTMLElement>,
+      row: BookingRow,
+      contactName: string,
+    ) => {
+      // Left button / touch / pen only. Capture so subsequent move+up route
+      // here even when the pointer leaves the card. Do NOT navigate yet —
+      // pointer-up decides click-vs-drag.
+      if (e.button !== 0) return;
+      e.currentTarget.setPointerCapture(e.pointerId);
+      setDrag({
+        bookingId: row.id,
+        originStart: new Date(row.startsAt),
+        originEnd: new Date(row.endsAt),
+        status: row.status,
+        contactId: row.contactId,
+        title: row.title,
+        contactName,
+        pointerStartX: e.clientX,
+        pointerStartY: e.clientY,
+        isDragging: false,
+        ghost: null,
+      });
+    },
+    [],
+  );
+
+  const handleCardPointerMove = useCallback(
+    (e: ReactPointerEvent<HTMLElement>) => {
+      const current = dragRef.current;
+      if (!current) return;
+      const dx = e.clientX - current.pointerStartX;
+      const dy = e.clientY - current.pointerStartY;
+      const movedEnough =
+        current.isDragging ||
+        Math.abs(dx) > DRAG_THRESHOLD_PX ||
+        Math.abs(dy) > DRAG_THRESHOLD_PX;
+      if (!movedEnough) return;
+
+      const hit = resolveDropTarget(
+        e.clientX,
+        e.clientY,
+        keyYmd(current.originStart, workspaceTimezone),
+      );
+      if (!hit) return;
+      const snappedMinutes = yToSnappedMinutes(hit.offsetY);
+      const topPx = (snappedMinutes / 60) * HOUR_HEIGHT_PX;
+      const previewStart = dropToStartUtc(hit.day, hit.offsetY, workspaceTimezone);
+      setDrag({
+        ...current,
+        isDragging: true,
+        ghost: {
+          dayKey: hit.dayKey,
+          topPx,
+          timeLabel: formatDropLabel(previewStart, workspaceTimezone),
+        },
+      });
+    },
+    [resolveDropTarget, workspaceTimezone],
+  );
+
+  // Apply an optimistic override + fire the action, reverting on conflict.
+  const commitReschedule = useCallback(
+    async (
+      bookingId: string,
+      newStart: Date,
+      optimisticPos: OptimisticOverride,
+      notify: boolean,
+    ) => {
+      setOptimistic((prev) => {
+        const next = new Map(prev);
+        next.set(bookingId, optimisticPos);
+        return next;
+      });
+      const result = await rescheduleBookingAction({
+        bookingId,
+        newStartsAtISO: newStart.toISOString(),
+        notify,
+      });
+      const clearOverride = () =>
+        setOptimistic((prev) => {
+          if (!prev.has(bookingId)) return prev;
+          const next = new Map(prev);
+          next.delete(bookingId);
+          return next;
+        });
+
+      if (!result.ok) {
+        // Conflict / not_found → snap back by clearing the override.
+        clearOverride();
+        showToast(
+          result.error === "conflict"
+            ? "That slot's taken."
+            : "Couldn't move that booking.",
+        );
+        return;
+      }
+      // ok → the server action's revalidatePath('/bookings') already
+      // refreshed the RSC payload; router.refresh() refetches it into this
+      // tree. That update is async + not awaitable for completion, so we
+      // retire the override on a short grace delay. Crucially the override
+      // position equals the post-refresh server position for a successful
+      // move, so clearing it is visually seamless whenever the new data lands.
+      router.refresh();
+      window.setTimeout(clearOverride, 600);
+    },
+    [rescheduleBookingAction, router, showToast],
+  );
+
+  const handleCardPointerUp = useCallback(
+    (e: ReactPointerEvent<HTMLElement>) => {
+      const current = dragRef.current;
+      if (!current) return;
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      } catch {
+        // capture may already be released — harmless.
+      }
+
+      // Sub-threshold → treat as a click: navigate to the contact if any.
+      if (!current.isDragging) {
+        setDrag(null);
+        if (current.contactId) {
+          router.push(`/contacts/${current.contactId}`);
+        }
+        return;
+      }
+
+      // From here we're handling a real drop. Mark it so the synthetic click
+      // that follows pointerup doesn't open the create-popover.
+      justDraggedRef.current = true;
+
+      // Drag drop → compute the new UTC start on the dropped column.
+      const hit = resolveDropTarget(
+        e.clientX,
+        e.clientY,
+        keyYmd(current.originStart, workspaceTimezone),
+      );
+      if (!hit) {
+        setDrag(null);
+        return;
+      }
+      const newStart = dropToStartUtc(hit.day, hit.offsetY, workspaceTimezone);
+      const snappedMinutes = yToSnappedMinutes(hit.offsetY);
+      const topPx = (snappedMinutes / 60) * HOUR_HEIGHT_PX;
+      const optimisticPos: OptimisticOverride = { dayKey: hit.dayKey, topPx };
+
+      const isProspect =
+        Boolean(current.contactId) && current.status !== "blocked";
+
+      if (isProspect) {
+        // Prospect → confirm + email. Pin the card optimistically while the
+        // confirm card is open so the operator sees where it'll land.
+        setOptimistic((prev) => {
+          const next = new Map(prev);
+          next.set(current.bookingId, optimisticPos);
+          return next;
+        });
+        setPendingConfirm({
+          bookingId: current.bookingId,
+          title: current.title,
+          contactName: current.contactName,
+          newStart,
+          newTimeLabel: formatDropLabel(newStart, workspaceTimezone),
+          status: current.status,
+          anchorX: e.clientX,
+          anchorY: e.clientY,
+          optimistic: optimisticPos,
+        });
+        setDrag(null);
+        return;
+      }
+
+      // Blocked → move silently (no email, no confirm).
+      setDrag(null);
+      void commitReschedule(current.bookingId, newStart, optimisticPos, false);
+    },
+    [resolveDropTarget, workspaceTimezone, router, commitReschedule],
+  );
+
+  // Escape cancels an in-progress drag (before drop). Pending confirm has its
+  // own Escape handler inside RescheduleConfirm.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape" && dragRef.current) {
+        setDrag(null);
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
 
   return (
     <section className="space-y-4 order-2">
@@ -433,29 +785,29 @@ export function WeekCalendar({
           {weekDays.map((day) => {
             const key = keyYmd(day, workspaceTimezone);
             const events = weekEventsByDay.get(key) ?? [];
+            const ghostHere =
+              drag?.isDragging && drag.ghost?.dayKey === key ? drag.ghost : null;
             return (
               <div
                 key={key}
+                ref={(el) => {
+                  if (el) columnRefs.current.set(key, el);
+                  else columnRefs.current.delete(key);
+                }}
                 className="flex-1 min-w-44 border-r border-border last:border-r-0 relative cursor-pointer"
                 style={{ height: `${WEEK_VIEW_TOTAL_HEIGHT_PX}px` }}
                 onClick={(e) => {
-                  // offsetY relative to this column element.
+                  // Suppress the create-popover for the synthetic click that
+                  // immediately follows a drag-drop's pointerup. Also bail if a
+                  // gesture is somehow still live.
+                  if (justDraggedRef.current) {
+                    justDraggedRef.current = false;
+                    return;
+                  }
+                  if (dragRef.current) return;
+                  // offsetY relative to this column element → snapped UTC start.
                   const rect = e.currentTarget.getBoundingClientRect();
-                  const offsetY = e.clientY - rect.top;
-                  const snappedMinutes = yToSnappedMinutes(offsetY);
-                  const { hours, minutes } = minutesToClock(snappedMinutes);
-
-                  // Derive Y-M-D in the workspace timezone from the column day.
-                  const dayParts = new Intl.DateTimeFormat("en-CA", {
-                    timeZone: workspaceTimezone,
-                    year: "numeric",
-                    month: "2-digit",
-                    day: "2-digit",
-                  }).format(day).split("-").map(Number) as [number, number, number];
-                  const [year, month, dayNum] = dayParts;
-
-                  const startUtc = buildStartUtc(year, month, dayNum, hours, minutes, workspaceTimezone);
-
+                  const startUtc = dropToStartUtc(day, e.clientY - rect.top, workspaceTimezone);
                   setPopover({
                     startsAt: startUtc,
                     anchorX: e.clientX,
@@ -474,9 +826,28 @@ export function WeekCalendar({
                     />
                   )
                 )}
+
+                {/* Drag ghost — follows the pointer to the snapped slot while
+                    dragging, showing the booking title + live target time. */}
+                {ghostHere ? (
+                  <div
+                    className="pointer-events-none absolute left-2 right-2 z-30 rounded-lg border-2 border-dashed border-primary/70 bg-primary/10 p-2"
+                    style={{ top: `${ghostHere.topPx}px`, height: `${HOUR_HEIGHT_PX - 4}px` }}
+                  >
+                    <p className="truncate text-xs font-medium text-foreground">
+                      {drag?.title}
+                    </p>
+                    <p className="mt-1 truncate text-[10px] text-primary">
+                      {ghostHere.timeLabel}
+                    </p>
+                  </div>
+                ) : null}
+
                 {/* v1.40.13 — booking cards absolutely positioned by start
-                    time in workspace TZ. Stop propagation so clicking a card
-                    navigates to contact rather than opening the create popover. */}
+                    time in workspace TZ. Pointer handlers (Task 8) own
+                    click-vs-drag: a click navigates to the contact, a drag
+                    reschedules. stopPropagation on click keeps the column's
+                    create-popover from also firing. */}
                 {events.map((row) => {
                   const startsAt = new Date(row.startsAt);
                   const linkedContact = row.contactId
@@ -490,6 +861,19 @@ export function WeekCalendar({
                     "border-l-primary";
                   const top = bookingTopPx(startsAt, workspaceTimezone);
 
+                  // Optimistic override: while a reschedule for this booking is
+                  // in flight (or awaiting confirm), render it at the new
+                  // top. If the override targets ANOTHER column, hide it here
+                  // (it renders in that column's events instead — see below).
+                  const override = optimistic.get(row.id);
+                  const overrideStyle = override
+                    ? override.dayKey === key
+                      ? { top: `${override.topPx}px` }
+                      : { display: "none" }
+                    : undefined;
+                  const isActivelyDragging =
+                    drag?.isDragging === true && drag.bookingId === row.id;
+
                   return (
                     <div key={row.id} onClick={(e) => e.stopPropagation()}>
                       <BookingCard
@@ -498,6 +882,47 @@ export function WeekCalendar({
                         workspaceTimezone={workspaceTimezone}
                         top={top}
                         borderClass={borderClass}
+                        styleOverride={overrideStyle}
+                        isDragging={isActivelyDragging}
+                        onPointerDown={(e) => handleCardPointerDown(e, row, contactName)}
+                        onPointerMove={handleCardPointerMove}
+                        onPointerUp={handleCardPointerUp}
+                      />
+                    </div>
+                  );
+                })}
+
+                {/* Optimistic cross-column render: a booking whose optimistic
+                    override moved it INTO this column (from a different day)
+                    is drawn here so the move is visible immediately. */}
+                {bookings.map((row) => {
+                  const override = optimistic.get(row.id);
+                  if (!override || override.dayKey !== key) return null;
+                  // Skip if the booking natively belongs to this column — it's
+                  // already rendered in the events loop above.
+                  if (keyYmd(new Date(row.startsAt), workspaceTimezone) === key) {
+                    return null;
+                  }
+                  const linkedContact = row.contactId
+                    ? contactsById.get(row.contactId)
+                    : null;
+                  const contactName = linkedContact
+                    ? `${linkedContact.firstName} ${linkedContact.lastName ?? ""}`.trim()
+                    : labels.contact.singular;
+                  const borderClass =
+                    borderByTitle.get(row.title.trim().toLowerCase()) ??
+                    "border-l-primary";
+                  return (
+                    <div key={`opt-${row.id}`} onClick={(e) => e.stopPropagation()}>
+                      <BookingCard
+                        row={row}
+                        contactName={contactName}
+                        workspaceTimezone={workspaceTimezone}
+                        top={override.topPx}
+                        borderClass={borderClass}
+                        onPointerDown={(e) => handleCardPointerDown(e, row, contactName)}
+                        onPointerMove={handleCardPointerMove}
+                        onPointerUp={handleCardPointerUp}
                       />
                     </div>
                   );
@@ -526,6 +951,45 @@ export function WeekCalendar({
           createBlockedTimeAction={createBlockedTimeAction}
           onClose={() => setPopover(null)}
         />
+      ) : null}
+
+      {/* Task 8 — prospect reschedule confirmation. Confirm fires the action
+          (notify:true → email the contact); Cancel discards and snaps the
+          card back by clearing its optimistic override. */}
+      {pendingConfirm ? (
+        <RescheduleConfirm
+          title={pendingConfirm.title}
+          newTimeLabel={pendingConfirm.newTimeLabel}
+          contactName={pendingConfirm.contactName}
+          anchorX={pendingConfirm.anchorX}
+          anchorY={pendingConfirm.anchorY}
+          onConfirm={() => {
+            const confirmed = pendingConfirm;
+            setPendingConfirm(null);
+            void commitReschedule(
+              confirmed.bookingId,
+              confirmed.newStart,
+              confirmed.optimistic,
+              true,
+            );
+          }}
+          onCancel={() => {
+            const cancelled = pendingConfirm;
+            setPendingConfirm(null);
+            setOptimistic((prev) => {
+              const next = new Map(prev);
+              next.delete(cancelled.bookingId);
+              return next;
+            });
+          }}
+        />
+      ) : null}
+
+      {/* Task 8 — conflict / error toast (e.g. "That slot's taken."). */}
+      {toast ? (
+        <div className="fixed bottom-4 right-4 z-70 rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground shadow-sm">
+          {toast}
+        </div>
       ) : null}
     </section>
   );

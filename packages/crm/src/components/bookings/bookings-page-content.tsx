@@ -108,6 +108,12 @@ type BookingsPageContentProps = {
     startsAtISO: string;
     durationMinutes: number;
   }) => Promise<{ ok: true } | { ok: false; error: string }>;
+  /** Task 8 — drag-to-reschedule from the week calendar. */
+  rescheduleBookingAction: (input: {
+    bookingId: string;
+    newStartsAtISO: string;
+    notify: boolean;
+  }) => Promise<{ ok: true } | { ok: false; error: "not_found" | "conflict" }>;
 };
 
 function statusClass(status: string) {
@@ -130,7 +136,7 @@ function formatDateGroupLabel(value: Date, tz: string) {
   return new Intl.DateTimeFormat("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: tz }).format(value);
 }
 
-export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, suggestedServices, orgSlug, publicBaseUrl, workspaceTimezone, calendarConnected, googleCalendarConnectUrl, createAppointmentTypeAction, editAppointmentTypeAction, bookingDefaults, createBookingAction, createBlockedTimeAction }: BookingsPageContentProps) {
+export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, suggestedServices, orgSlug, publicBaseUrl, workspaceTimezone, calendarConnected, googleCalendarConnectUrl, createAppointmentTypeAction, editAppointmentTypeAction, bookingDefaults, createBookingAction, createBlockedTimeAction, rescheduleBookingAction }: BookingsPageContentProps) {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   // 2026-05-18 — Edit sheet state. When set, the slide-out renders
   // with this appointment-type's current title / slug / duration /
@@ -229,6 +235,7 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
         bookingTypes={bookingTypes}
         createBookingAction={createBookingAction}
         createBlockedTimeAction={createBlockedTimeAction}
+        rescheduleBookingAction={rescheduleBookingAction}
       />
 
       <section className="space-y-3 order-1">

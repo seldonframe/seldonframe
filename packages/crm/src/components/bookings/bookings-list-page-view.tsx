@@ -15,6 +15,8 @@ import {
   // Task 7 — click-to-create booking or blocked time from the week calendar.
   createBookingAction,
   createBlockedTimeAction,
+  // Task 8 — drag-to-reschedule from the week calendar.
+  rescheduleBookingAction,
 } from "@/lib/bookings/actions";
 import { db } from "@/db";
 import { organizations } from "@/db/schema";
@@ -117,6 +119,7 @@ export async function BookingsListPageView({
         bookingDefaults={bookingDefaults}
         createBookingAction={createBookingAction}
         createBlockedTimeAction={createBlockedTimeAction}
+        rescheduleBookingAction={rescheduleBookingAction}
       />
     </section>
   );

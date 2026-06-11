@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { HOUR_HEIGHT_PX } from "@/lib/bookings/calendar-math";
 
 type BookingCardRow = {
@@ -21,6 +21,18 @@ type BookingCardProps = {
   top: number;
   /** Tailwind border-l-* colour class for the left accent strip. */
   borderClass: string;
+  /** Native pointer handlers from the parent (drag-to-reschedule + click).
+   *  The parent owns drag detection, navigation, and pointer capture. */
+  onPointerDown?: (e: ReactPointerEvent<HTMLElement>) => void;
+  onPointerMove?: (e: ReactPointerEvent<HTMLElement>) => void;
+  onPointerUp?: (e: ReactPointerEvent<HTMLElement>) => void;
+  /** Optimistic position override applied while a reschedule is in flight
+   *  (or for the live-dragged card). Merged over the base top/height style.
+   *  When present, the card renders at this position instead of `top`. */
+  styleOverride?: CSSProperties;
+  /** True while THIS card is the one actively being dragged — switches the
+   *  cursor to grabbing and lifts it visually above its neighbours. */
+  isDragging?: boolean;
 };
 
 export function BookingCard({
@@ -29,6 +41,11 @@ export function BookingCard({
   workspaceTimezone,
   top,
   borderClass,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  styleOverride,
+  isDragging = false,
 }: BookingCardProps) {
   const startsAt = new Date(row.startsAt);
   const endsAt = new Date(row.endsAt);
@@ -43,15 +60,36 @@ export function BookingCard({
 
   const isBlocked = row.status === "blocked";
 
-  // Blocked slots: grey, no left-border accent, no link.
+  // cursor-grab at rest, cursor-grabbing while dragging. Blocked cards stay
+  // draggable too. A dragged card lifts above its neighbours (z-20) and gets
+  // a subtle ring so the operator can see what's moving.
+  const cursorClass = isDragging ? "cursor-grabbing" : "cursor-grab";
+  const dragLift = isDragging
+    ? "z-20 opacity-90 shadow-lg ring-2 ring-primary/40"
+    : "";
+
+  // Blocked slots: grey, no left-border accent. Prospect cards keep the
+  // coloured left accent + hover treatment.
   const cardClass = isBlocked
-    ? "absolute left-2 right-2 rounded-lg border border-border bg-muted p-2 overflow-hidden"
-    : `absolute left-2 right-2 rounded-lg border border-border border-l-4 ${borderClass} bg-card p-2 hover:bg-muted transition-colors overflow-hidden`;
+    ? `absolute left-2 right-2 rounded-lg border border-border bg-muted p-2 overflow-hidden touch-none select-none ${cursorClass} ${dragLift}`
+    : `absolute left-2 right-2 rounded-lg border border-border border-l-4 ${borderClass} bg-card p-2 hover:bg-muted transition-colors overflow-hidden touch-none select-none ${cursorClass} ${dragLift}`;
 
-  const cardStyle = { top: `${top}px`, height: `${height}px` };
+  // styleOverride (optimistic / live-drag position) wins over the base top.
+  const cardStyle: CSSProperties = {
+    top: `${top}px`,
+    height: `${height}px`,
+    ...styleOverride,
+  };
 
-  const cardInner = (
-    <>
+  return (
+    <article
+      key={row.id}
+      className={cardClass}
+      style={cardStyle}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+    >
       <p className="text-xs font-medium text-foreground truncate">
         {isBlocked ? (row.title || "Blocked") : row.title}
       </p>
@@ -67,26 +105,6 @@ export function BookingCard({
           timeZone: workspaceTimezone,
         })}
       </p>
-    </>
-  );
-
-  // Blocked slots never link to a contact, even if contactId is somehow set.
-  if (!isBlocked && row.contactId) {
-    return (
-      <Link
-        key={row.id}
-        href={`/contacts/${row.contactId}`}
-        className={`${cardClass} block`}
-        style={cardStyle}
-      >
-        {cardInner}
-      </Link>
-    );
-  }
-
-  return (
-    <article key={row.id} className={cardClass} style={cardStyle}>
-      {cardInner}
     </article>
   );
 }
