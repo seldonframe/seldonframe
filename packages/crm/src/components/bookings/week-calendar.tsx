@@ -6,8 +6,11 @@ import {
   WEEK_VIEW_START_HOUR,
   WEEK_VIEW_END_HOUR,
   HOUR_HEIGHT_PX,
+  yToSnappedMinutes,
+  minutesToClock,
 } from "@/lib/bookings/calendar-math";
 import { BookingCard } from "@/components/bookings/booking-card";
+import { CreatePopover } from "@/components/bookings/create-popover";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -28,6 +31,13 @@ type ContactRow = {
   lastName: string | null;
 };
 
+type BookingTypeRow = {
+  id: string;
+  title: string;
+  bookingSlug: string;
+  metadata: unknown;
+};
+
 type WeekCalendarProps = {
   bookings: BookingRow[];
   contacts: ContactRow[];
@@ -36,6 +46,13 @@ type WeekCalendarProps = {
     contact: { singular: string; plural: string };
     activity: { singular: string; plural: string };
   };
+  bookingTypes: BookingTypeRow[];
+  createBookingAction: (formData: FormData) => Promise<unknown>;
+  createBlockedTimeAction: (input: {
+    label: string;
+    startsAtISO: string;
+    durationMinutes: number;
+  }) => Promise<{ ok: true } | { ok: false; error: string }>;
 };
 
 // ---------------------------------------------------------------------------
@@ -131,6 +148,45 @@ function dayHeaderLabel(date: Date, tz: string) {
     .toUpperCase();
 }
 
+/** Build a UTC Date that represents "year-month-day H:M" in the given IANA
+ *  timezone, using the same iterative-offset approach as the server-side
+ *  `utcMomentForLocalTime` in actions.ts. Handles DST transitions correctly. */
+function buildStartUtc(
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute: number,
+  tz: string,
+): Date {
+  // Step 1: naive UTC moment (pretend it's UTC, ignoring TZ offset).
+  const naive = new Date(Date.UTC(year, month - 1, day, hour, minute));
+  if (tz === "UTC") return naive;
+
+  // Step 2: ask Intl what this moment LOOKS like in the target TZ.
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const parts = Object.fromEntries(fmt.formatToParts(naive).map((p) => [p.type, p.value]));
+  const rawHour = parseInt(parts.hour ?? "0", 10);
+  const actualH = rawHour === 24 ? 0 : rawHour;
+  const actualY = parseInt(parts.year ?? "0", 10);
+  const actualMo = parseInt(parts.month ?? "0", 10);
+  const actualD = parseInt(parts.day ?? "0", 10);
+  const actualMin = parseInt(parts.minute ?? "0", 10);
+
+  // Step 3: compute the offset and shift.
+  const intendedMs = Date.UTC(year, month - 1, day, hour, minute);
+  const actualMs = Date.UTC(actualY, actualMo - 1, actualD, actualH, actualMin);
+  return new Date(naive.getTime() + (intendedMs - actualMs));
+}
+
 function addDaysLocal(date: Date, days: number) {
   const next = new Date(date);
   next.setDate(next.getDate() + days);
@@ -150,16 +206,30 @@ function startOfWeekMonday(date: Date) {
 // Component
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Popover state type
+// ---------------------------------------------------------------------------
+
+type PopoverState = {
+  startsAt: Date;
+  anchorX: number;
+  anchorY: number;
+};
+
 export function WeekCalendar({
   bookings,
   contacts,
   workspaceTimezone,
   labels,
+  bookingTypes,
+  createBookingAction,
+  createBlockedTimeAction,
 }: WeekCalendarProps) {
   const [weekOffset, setWeekOffset] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [showFilterNotice, setShowFilterNotice] = useState(false);
+  const [popover, setPopover] = useState<PopoverState | null>(null);
 
   const contactsById = useMemo(
     () => new Map(contacts.map((c) => [c.id, c])),
@@ -366,8 +436,32 @@ export function WeekCalendar({
             return (
               <div
                 key={key}
-                className="flex-1 min-w-44 border-r border-border last:border-r-0 relative"
+                className="flex-1 min-w-44 border-r border-border last:border-r-0 relative cursor-pointer"
                 style={{ height: `${WEEK_VIEW_TOTAL_HEIGHT_PX}px` }}
+                onClick={(e) => {
+                  // offsetY relative to this column element.
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const offsetY = e.clientY - rect.top;
+                  const snappedMinutes = yToSnappedMinutes(offsetY);
+                  const { hours, minutes } = minutesToClock(snappedMinutes);
+
+                  // Derive Y-M-D in the workspace timezone from the column day.
+                  const dayParts = new Intl.DateTimeFormat("en-CA", {
+                    timeZone: workspaceTimezone,
+                    year: "numeric",
+                    month: "2-digit",
+                    day: "2-digit",
+                  }).format(day).split("-").map(Number) as [number, number, number];
+                  const [year, month, dayNum] = dayParts;
+
+                  const startUtc = buildStartUtc(year, month, dayNum, hours, minutes, workspaceTimezone);
+
+                  setPopover({
+                    startsAt: startUtc,
+                    anchorX: e.clientX,
+                    anchorY: e.clientY,
+                  });
+                }}
               >
                 {/* Hour grid lines — match the time column's row borders */}
                 {Array.from(
@@ -381,7 +475,8 @@ export function WeekCalendar({
                   )
                 )}
                 {/* v1.40.13 — booking cards absolutely positioned by start
-                    time in workspace TZ. */}
+                    time in workspace TZ. Stop propagation so clicking a card
+                    navigates to contact rather than opening the create popover. */}
                 {events.map((row) => {
                   const startsAt = new Date(row.startsAt);
                   const linkedContact = row.contactId
@@ -396,14 +491,15 @@ export function WeekCalendar({
                   const top = bookingTopPx(startsAt, workspaceTimezone);
 
                   return (
-                    <BookingCard
-                      key={row.id}
-                      row={row}
-                      contactName={contactName}
-                      workspaceTimezone={workspaceTimezone}
-                      top={top}
-                      borderClass={borderClass}
-                    />
+                    <div key={row.id} onClick={(e) => e.stopPropagation()}>
+                      <BookingCard
+                        row={row}
+                        contactName={contactName}
+                        workspaceTimezone={workspaceTimezone}
+                        top={top}
+                        borderClass={borderClass}
+                      />
+                    </div>
                   );
                 })}
               </div>
@@ -416,6 +512,20 @@ export function WeekCalendar({
         <div className="fixed bottom-4 right-4 z-70 rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground shadow-sm">
           Coming soon
         </div>
+      ) : null}
+
+      {popover ? (
+        <CreatePopover
+          startsAt={popover.startsAt}
+          workspaceTimezone={workspaceTimezone}
+          contacts={contacts}
+          bookingTypes={bookingTypes}
+          anchorX={popover.anchorX}
+          anchorY={popover.anchorY}
+          createBookingAction={createBookingAction}
+          createBlockedTimeAction={createBlockedTimeAction}
+          onClose={() => setPopover(null)}
+        />
       ) : null}
     </section>
   );

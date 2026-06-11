@@ -101,6 +101,13 @@ type BookingsPageContentProps = {
    *  flavoured defaults if the workspace has no crmPersonality set. See
    *  lib/crm/template-suggestions.ts. */
   bookingDefaults: import("@/lib/crm/template-suggestions").BookingDefaults;
+  /** Task 7 — server actions threaded to WeekCalendar for click-to-create. */
+  createBookingAction: (formData: FormData) => Promise<unknown>;
+  createBlockedTimeAction: (input: {
+    label: string;
+    startsAtISO: string;
+    durationMinutes: number;
+  }) => Promise<{ ok: true } | { ok: false; error: string }>;
 };
 
 function statusClass(status: string) {
@@ -123,7 +130,7 @@ function formatDateGroupLabel(value: Date, tz: string) {
   return new Intl.DateTimeFormat("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: tz }).format(value);
 }
 
-export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, suggestedServices, orgSlug, publicBaseUrl, workspaceTimezone, calendarConnected, googleCalendarConnectUrl, createAppointmentTypeAction, editAppointmentTypeAction, bookingDefaults }: BookingsPageContentProps) {
+export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, suggestedServices, orgSlug, publicBaseUrl, workspaceTimezone, calendarConnected, googleCalendarConnectUrl, createAppointmentTypeAction, editAppointmentTypeAction, bookingDefaults, createBookingAction, createBlockedTimeAction }: BookingsPageContentProps) {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   // 2026-05-18 — Edit sheet state. When set, the slide-out renders
   // with this appointment-type's current title / slug / duration /
@@ -219,6 +226,9 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
         contacts={contacts}
         workspaceTimezone={workspaceTimezone}
         labels={labels}
+        bookingTypes={bookingTypes}
+        createBookingAction={createBookingAction}
+        createBlockedTimeAction={createBlockedTimeAction}
       />
 
       <section className="space-y-3 order-1">

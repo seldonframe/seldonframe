@@ -12,6 +12,9 @@ import {
   editAppointmentTypeAction,
   listAppointmentTypes,
   listBookings,
+  // Task 7 — click-to-create booking or blocked time from the week calendar.
+  createBookingAction,
+  createBlockedTimeAction,
 } from "@/lib/bookings/actions";
 import { db } from "@/db";
 import { organizations } from "@/db/schema";
@@ -112,6 +115,8 @@ export async function BookingsListPageView({
         createAppointmentTypeAction={createAppointmentTypeAction}
         editAppointmentTypeAction={editAppointmentTypeAction}
         bookingDefaults={bookingDefaults}
+        createBookingAction={createBookingAction}
+        createBlockedTimeAction={createBlockedTimeAction}
       />
     </section>
   );

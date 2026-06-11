@@ -1,0 +1,387 @@
+"use client";
+
+import { useEffect, useRef, useState, useTransition } from "react";
+import { X } from "lucide-react";
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+type ContactRow = {
+  id: string;
+  firstName: string;
+  lastName: string | null;
+};
+
+type BookingTypeRow = {
+  id: string;
+  title: string;
+  bookingSlug: string;
+  metadata: unknown;
+};
+
+type BookingTypeMeta = {
+  durationMinutes?: number;
+};
+
+export type CreatePopoverProps = {
+  /** Clicked start time as a UTC Date. */
+  startsAt: Date;
+  /** IANA timezone of the workspace — used for display only. */
+  workspaceTimezone: string;
+  contacts: ContactRow[];
+  bookingTypes: BookingTypeRow[];
+  /** Pixel position of the popover anchor (relative to the viewport). */
+  anchorX: number;
+  anchorY: number;
+  createBookingAction: (formData: FormData) => Promise<unknown>;
+  createBlockedTimeAction: (input: {
+    label: string;
+    startsAtISO: string;
+    durationMinutes: number;
+  }) => Promise<{ ok: true } | { ok: false; error: string }>;
+  onClose: () => void;
+};
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function formatLocalTime(date: Date, tz: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).format(date);
+}
+
+function contactDisplayName(c: ContactRow) {
+  return `${c.firstName} ${c.lastName ?? ""}`.trim();
+}
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+
+export function CreatePopover({
+  startsAt,
+  workspaceTimezone,
+  contacts,
+  bookingTypes,
+  anchorX,
+  anchorY,
+  createBookingAction,
+  createBlockedTimeAction,
+  onClose,
+}: CreatePopoverProps) {
+  const [tab, setTab] = useState<"book" | "block">("book");
+  const [query, setQuery] = useState("");
+  const [selectedContact, setSelectedContact] = useState<ContactRow | null>(null);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [selectedTypeId, setSelectedTypeId] = useState(bookingTypes[0]?.id ?? "");
+  const [blockLabel, setBlockLabel] = useState("");
+  const [blockDuration, setBlockDuration] = useState(60);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Close on outside-click or Escape.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    function onMouseDown(e: MouseEvent) {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onMouseDown);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onMouseDown);
+    };
+  }, [onClose]);
+
+  // Filtered contact suggestions.
+  const filtered =
+    query.trim().length === 0
+      ? []
+      : contacts.filter((c) =>
+          contactDisplayName(c).toLowerCase().includes(query.trim().toLowerCase())
+        );
+
+  // Position: keep inside viewport.
+  const popoverW = 320;
+  const popoverH = 360;
+  const left = Math.min(anchorX, window.innerWidth - popoverW - 8);
+  const top = Math.min(anchorY, window.innerHeight - popoverH - 8);
+
+  // Duration of selected booking type.
+  const selectedType = bookingTypes.find((t) => t.id === selectedTypeId);
+  const selectedTypeDuration = (selectedType?.metadata as BookingTypeMeta | null)?.durationMinutes ?? 30;
+
+  function handleBookSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    const fd = new FormData();
+    fd.set("startsAt", startsAt.toISOString());
+    fd.set("durationMinutes", String(selectedTypeDuration));
+    fd.set("title", selectedType?.title ?? "Consultation");
+    fd.set("bookingSlug", selectedType?.bookingSlug ?? "default");
+    if (selectedContact) {
+      fd.set("contactId", selectedContact.id);
+      fd.set("fullName", contactDisplayName(selectedContact));
+    }
+    startTransition(async () => {
+      try {
+        await createBookingAction(fd);
+        onClose();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not create booking.");
+      }
+    });
+  }
+
+  function handleBlockSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    startTransition(async () => {
+      const result = await createBlockedTimeAction({
+        label: blockLabel.trim() || "Blocked",
+        startsAtISO: startsAt.toISOString(),
+        durationMinutes: blockDuration,
+      });
+      if ("ok" in result && !result.ok) {
+        setError((result as { ok: false; error: string }).error);
+        return;
+      }
+      onClose();
+    });
+  }
+
+  return (
+    <div
+      ref={popoverRef}
+      className="fixed z-50 rounded-xl border border-border bg-card shadow-lg"
+      style={{ left, top, width: popoverW }}
+      // Stop propagation so the calendar column's click handler doesn't
+      // re-fire and immediately close the just-opened popover.
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <div className="flex gap-1">
+          <button
+            type="button"
+            onClick={() => { setTab("book"); setError(null); }}
+            className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+              tab === "book"
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-accent hover:text-foreground"
+            }`}
+          >
+            Book prospect
+          </button>
+          <button
+            type="button"
+            onClick={() => { setTab("block"); setError(null); }}
+            className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+              tab === "block"
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-accent hover:text-foreground"
+            }`}
+          >
+            Block time
+          </button>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="inline-flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+          aria-label="Close"
+        >
+          <X className="size-3.5" />
+        </button>
+      </div>
+
+      {/* Start time display */}
+      <div className="px-4 pt-3">
+        <p className="text-xs text-muted-foreground">
+          {formatLocalTime(startsAt, workspaceTimezone)}
+        </p>
+      </div>
+
+      {/* Body */}
+      <div className="px-4 pb-4 pt-3">
+        {tab === "book" ? (
+          <form onSubmit={handleBookSubmit} className="space-y-3">
+            {/* Contact picker */}
+            <div className="relative">
+              <label className="mb-1 block text-xs text-muted-foreground">
+                Contact
+              </label>
+              {selectedContact ? (
+                <div className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-sm">
+                  <span className="flex-1 truncate text-foreground">
+                    {contactDisplayName(selectedContact)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedContact(null); setQuery(""); }}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="size-3" />
+                  </button>
+                </div>
+              ) : (
+                <input
+                  ref={inputRef}
+                  type="text"
+                  className="crm-input h-8 w-full px-3 text-sm"
+                  placeholder="Search contacts…"
+                  value={query}
+                  onChange={(e) => { setQuery(e.target.value); setShowDropdown(true); }}
+                  onFocus={() => setShowDropdown(true)}
+                  autoComplete="off"
+                />
+              )}
+              {/* Dropdown */}
+              {showDropdown && !selectedContact && (query.trim().length > 0) ? (
+                <div className="absolute left-0 right-0 top-full z-10 mt-1 max-h-40 overflow-y-auto rounded-md border border-border bg-card shadow-sm">
+                  {filtered.length === 0 ? (
+                    <div className="px-3 py-2 text-xs text-muted-foreground">
+                      No contacts match "{query}"
+                    </div>
+                  ) : (
+                    filtered.slice(0, 8).map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        className="block w-full px-3 py-2 text-left text-sm text-foreground hover:bg-accent"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setSelectedContact(c);
+                          setQuery(contactDisplayName(c));
+                          setShowDropdown(false);
+                        }}
+                      >
+                        {contactDisplayName(c)}
+                      </button>
+                    ))
+                  )}
+                </div>
+              ) : null}
+            </div>
+
+            {/* Appointment type */}
+            {bookingTypes.length > 0 ? (
+              <div>
+                <label className="mb-1 block text-xs text-muted-foreground">
+                  Appointment type
+                </label>
+                <select
+                  className="crm-input h-8 w-full px-3 text-sm"
+                  value={selectedTypeId}
+                  onChange={(e) => setSelectedTypeId(e.target.value)}
+                >
+                  {bookingTypes.map((t) => {
+                    const dur = (t.metadata as BookingTypeMeta | null)?.durationMinutes ?? 30;
+                    return (
+                      <option key={t.id} value={t.id}>
+                        {t.title} ({dur} min)
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                No appointment types yet — create one first.
+              </p>
+            )}
+
+            {error ? (
+              <p className="text-xs text-negative">{error}</p>
+            ) : null}
+
+            <div className="flex gap-2 pt-1">
+              <button
+                type="submit"
+                className="crm-button-primary h-8 flex-1 text-xs"
+                disabled={pending || bookingTypes.length === 0}
+              >
+                {pending ? "Saving…" : "Book"}
+              </button>
+              <button
+                type="button"
+                className="crm-button-secondary h-8 px-3 text-xs"
+                onClick={onClose}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        ) : (
+          <form onSubmit={handleBlockSubmit} className="space-y-3">
+            <div>
+              <label className="mb-1 block text-xs text-muted-foreground">
+                Label
+              </label>
+              <input
+                type="text"
+                className="crm-input h-8 w-full px-3 text-sm"
+                placeholder="Lunch, Travel, Focus time…"
+                value={blockLabel}
+                onChange={(e) => setBlockLabel(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs text-muted-foreground">
+                Duration
+              </label>
+              <select
+                className="crm-input h-8 w-full px-3 text-sm"
+                value={blockDuration}
+                onChange={(e) => setBlockDuration(Number(e.target.value))}
+              >
+                <option value={15}>15 min</option>
+                <option value={30}>30 min</option>
+                <option value={60}>1 hour</option>
+                <option value={90}>1.5 hours</option>
+                <option value={120}>2 hours</option>
+              </select>
+            </div>
+
+            {error ? (
+              <p className="text-xs text-negative">{error}</p>
+            ) : null}
+
+            <div className="flex gap-2 pt-1">
+              <button
+                type="submit"
+                className="crm-button-primary h-8 flex-1 text-xs"
+                disabled={pending}
+              >
+                {pending ? "Saving…" : "Block"}
+              </button>
+              <button
+                type="button"
+                className="crm-button-secondary h-8 px-3 text-xs"
+                onClick={onClose}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
