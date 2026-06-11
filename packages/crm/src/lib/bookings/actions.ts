@@ -649,7 +649,7 @@ export async function listPublicBookingSlotsAction({
         eq(bookings.orgId, context.orgId),
         eq(bookings.bookingSlug, context.bookingSlug),
         ne(bookings.status, "template"),
-        inArray(bookings.status, ["scheduled", "completed", "no_show"]),
+        inArray(bookings.status, ["scheduled", "completed", "no_show", "blocked"]),
         gte(bookings.startsAt, dayStartUtc),
         lt(bookings.startsAt, dayEndUtc),
       ),
@@ -1528,7 +1528,7 @@ export async function submitPublicBookingAction({
       and(
         eq(bookings.orgId, bookingContext.orgId),
         ne(bookings.status, "template"),
-        inArray(bookings.status, ["scheduled", "completed", "pending_payment"]),
+        inArray(bookings.status, ["scheduled", "completed", "pending_payment", "blocked"]),
         gte(bookings.startsAt, dayStartUtc),
         lt(bookings.startsAt, dayEndUtc),
       ),
