@@ -85,9 +85,10 @@ export function CreatePopover({
   const [query, setQuery] = useState("");
   const [selectedContact, setSelectedContact] = useState<ContactRow | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
-  // Inline "create new contact" path. When the operator opens it, the contact
-  // search collapses into a small form (first name prefilled from the query).
-  const [creatingContact, setCreatingContact] = useState(false);
+  // New-customer fields. These are ALWAYS visible whenever no existing contact
+  // is linked — the operator can just type a name/phone/address and book. When
+  // they instead pick an existing contact from the optional search, the contact
+  // is linked (chip) and these fields are hidden. Only first name is required.
   const [newFirstName, setNewFirstName] = useState("");
   const [newLastName, setNewLastName] = useState("");
   const [newEmail, setNewEmail] = useState("");
@@ -137,21 +138,6 @@ export function CreatePopover({
   const selectedType = bookingTypes.find((t) => t.id === selectedTypeId);
   const selectedTypeDuration = (selectedType?.metadata as BookingTypeMeta | null)?.durationMinutes ?? 30;
 
-  // Open the inline create-contact form, prefilling first name from the typed
-  // query (split on the first space so "Jane Doe" seeds first + last).
-  function openCreateContact() {
-    const trimmed = query.trim();
-    const [first, ...rest] = trimmed.split(/\s+/);
-    setNewFirstName(first ?? "");
-    setNewLastName(rest.join(" "));
-    setNewEmail("");
-    setNewPhone("");
-    setNewAddress("");
-    setCreatingContact(true);
-    setShowDropdown(false);
-    setError(null);
-  }
-
   function handleBookSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -161,9 +147,16 @@ export function CreatePopover({
     fd.set("title", selectedType?.title ?? "Consultation");
     fd.set("bookingSlug", selectedType?.bookingSlug ?? "default");
     if (selectedContact) {
+      // An existing contact is linked — send its id so the booking attaches to
+      // the known contact (no new contact created).
       fd.set("contactId", selectedContact.id);
       fd.set("fullName", contactDisplayName(selectedContact));
-    } else if (creatingContact) {
+    } else {
+      // No existing contact linked — create one from the always-visible
+      // new-customer fields. Only first name is required; the rest are
+      // optional. Field names below MUST match exactly what createBookingAction
+      // reads (newContactFirstName / newContactLastName / newContactEmail /
+      // newContactPhone / newContactAddress).
       const first = newFirstName.trim();
       if (!first) {
         setError("First name is required to create a contact.");
@@ -264,10 +257,13 @@ export function CreatePopover({
       <div className="px-4 pb-4 pt-3">
         {tab === "book" ? (
           <form onSubmit={handleBookSubmit} className="space-y-3">
-            {/* Contact picker */}
+            {/* Optional: link an existing customer. Typing filters the org's
+                contacts; clicking a match links it (chip) and hides the
+                new-customer fields. Leaving this empty is the common case —
+                the operator just fills in the new-customer fields below. */}
             <div className="relative">
               <label className="mb-1 block text-xs text-muted-foreground">
-                Contact
+                Search existing customer
               </label>
               {selectedContact ? (
                 <div className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-sm">
@@ -278,125 +274,123 @@ export function CreatePopover({
                     type="button"
                     onClick={() => { setSelectedContact(null); setQuery(""); }}
                     className="text-muted-foreground hover:text-foreground"
+                    aria-label="Remove linked customer"
                   >
                     <X className="size-3" />
                   </button>
-                </div>
-              ) : creatingContact ? (
-                // Inline new-contact form. Only first name is required.
-                <div className="space-y-2 rounded-md border border-border bg-background p-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-foreground">New contact</span>
-                    <button
-                      type="button"
-                      onClick={() => { setCreatingContact(false); setQuery(""); }}
-                      className="text-muted-foreground hover:text-foreground"
-                      aria-label="Cancel new contact"
-                    >
-                      <X className="size-3" />
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <input
-                      type="text"
-                      className="crm-input h-8 w-full px-2 text-sm"
-                      placeholder="First name *"
-                      value={newFirstName}
-                      onChange={(e) => setNewFirstName(e.target.value)}
-                      autoComplete="off"
-                    />
-                    <input
-                      type="text"
-                      className="crm-input h-8 w-full px-2 text-sm"
-                      placeholder="Last name"
-                      value={newLastName}
-                      onChange={(e) => setNewLastName(e.target.value)}
-                      autoComplete="off"
-                    />
-                  </div>
-                  <input
-                    type="email"
-                    className="crm-input h-8 w-full px-2 text-sm"
-                    placeholder="Email"
-                    value={newEmail}
-                    onChange={(e) => setNewEmail(e.target.value)}
-                    autoComplete="off"
-                  />
-                  <input
-                    type="tel"
-                    className="crm-input h-8 w-full px-2 text-sm"
-                    placeholder="Phone"
-                    value={newPhone}
-                    onChange={(e) => setNewPhone(e.target.value)}
-                    autoComplete="off"
-                  />
-                  <input
-                    type="text"
-                    className="crm-input h-8 w-full px-2 text-sm"
-                    placeholder="Address"
-                    value={newAddress}
-                    onChange={(e) => setNewAddress(e.target.value)}
-                    autoComplete="off"
-                  />
                 </div>
               ) : (
                 <input
                   ref={inputRef}
                   type="text"
                   className="crm-input h-8 w-full px-3 text-sm"
-                  placeholder="Search contacts…"
+                  placeholder="Search existing customer…"
                   value={query}
                   onChange={(e) => { setQuery(e.target.value); setShowDropdown(true); }}
                   onFocus={() => setShowDropdown(true)}
                   autoComplete="off"
                 />
               )}
-              {/* Dropdown */}
-              {showDropdown && !selectedContact && !creatingContact && (query.trim().length > 0) ? (
+              {/* Match dropdown — only existing contacts, no "+ create" entry.
+                  Uses onClick + stopPropagation (not onMouseDown) so the link
+                  fires cleanly without the popover's outside-click swallowing
+                  it. */}
+              {showDropdown && !selectedContact && query.trim().length > 0 && filtered.length > 0 ? (
                 <div className="absolute left-0 right-0 top-full z-10 mt-1 max-h-40 overflow-y-auto rounded-md border border-border bg-card shadow-sm">
-                  {filtered.length === 0 ? (
+                  {filtered.slice(0, 8).map((c) => (
                     <button
+                      key={c.id}
                       type="button"
-                      className="block w-full px-3 py-2 text-left text-sm text-primary hover:bg-accent"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        openCreateContact();
+                      className="block w-full px-3 py-2 text-left text-sm text-foreground hover:bg-accent"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedContact(c);
+                        setQuery(contactDisplayName(c));
+                        setShowDropdown(false);
                       }}
                     >
-                      + Create new contact "{query.trim()}"
+                      {contactDisplayName(c)}
                     </button>
-                  ) : (
-                    <>
-                      {filtered.slice(0, 8).map((c) => (
-                        <button
-                          key={c.id}
-                          type="button"
-                          className="block w-full px-3 py-2 text-left text-sm text-foreground hover:bg-accent"
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            setSelectedContact(c);
-                            setQuery(contactDisplayName(c));
-                            setShowDropdown(false);
-                          }}
-                        >
-                          {contactDisplayName(c)}
-                        </button>
-                      ))}
-                      <button
-                        type="button"
-                        className="block w-full border-t border-border px-3 py-2 text-left text-sm text-primary hover:bg-accent"
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          openCreateContact();
-                        }}
-                      >
-                        + Create new contact
-                      </button>
-                    </>
-                  )}
+                  ))}
                 </div>
               ) : null}
             </div>
+
+            {/* New-customer fields — ALWAYS visible whenever no existing
+                contact is linked. Only first name is required; phone, email
+                and address are optional. Address is folded into the booking
+                notes server-side as an "Address: …" line. */}
+            {!selectedContact ? (
+              <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="mb-1 block text-xs text-muted-foreground">
+                      First name *
+                    </label>
+                    <input
+                      type="text"
+                      className="crm-input h-8 w-full px-3 text-sm"
+                      placeholder="Jane"
+                      value={newFirstName}
+                      onChange={(e) => setNewFirstName(e.target.value)}
+                      autoComplete="off"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-muted-foreground">
+                      Last name
+                    </label>
+                    <input
+                      type="text"
+                      className="crm-input h-8 w-full px-3 text-sm"
+                      placeholder="Doe"
+                      value={newLastName}
+                      onChange={(e) => setNewLastName(e.target.value)}
+                      autoComplete="off"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-muted-foreground">
+                    Phone
+                  </label>
+                  <input
+                    type="tel"
+                    className="crm-input h-8 w-full px-3 text-sm"
+                    placeholder="(555) 123-4567"
+                    value={newPhone}
+                    onChange={(e) => setNewPhone(e.target.value)}
+                    autoComplete="off"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-muted-foreground">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    className="crm-input h-8 w-full px-3 text-sm"
+                    placeholder="jane@example.com"
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    autoComplete="off"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-muted-foreground">
+                    Address
+                  </label>
+                  <input
+                    type="text"
+                    className="crm-input h-8 w-full px-3 text-sm"
+                    placeholder="123 Main St"
+                    value={newAddress}
+                    onChange={(e) => setNewAddress(e.target.value)}
+                    autoComplete="off"
+                  />
+                </div>
+              </div>
+            ) : null}
 
             {/* Appointment type */}
             {bookingTypes.length > 0 ? (
