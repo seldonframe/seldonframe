@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Hanken_Grotesk, Newsreader } from "next/font/google";
 import { DemoToastProvider } from "@/components/shared/demo-toast-provider";
 import { ThemeProvider } from "@/components/shared/theme-provider";
 import {
@@ -21,6 +21,22 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+});
+
+// Seldon Studio rebrand (2026-06-12): Hanken Grotesk is the UI sans
+// for the operator dashboard (see --font-sans in globals.css). Newsreader
+// (italic) provides serif/display accents via the .font-display utility.
+const hankenGrotesk = Hanken_Grotesk({
+  variable: "--font-hanken",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
+
+const newsreader = Newsreader({
+  variable: "--font-newsreader",
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  style: ["italic", "normal"],
 });
 
 // SLICE 9 PR 2 C1: brand asset application. References go through
@@ -83,7 +99,7 @@ export default async function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${hankenGrotesk.variable} ${newsreader.variable} antialiased`}
       >
         {renderGA && measurementId ? (
           <GoogleAnalytics measurementId={measurementId} />
