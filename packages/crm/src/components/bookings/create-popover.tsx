@@ -72,8 +72,6 @@ export function CreatePopover({
   workspaceTimezone,
   contacts,
   bookingTypes,
-  anchorX,
-  anchorY,
   createBookingAction,
   createBlockedTimeAction,
   onClose,
@@ -115,12 +113,6 @@ export function CreatePopover({
       : contacts.filter((c) =>
           contactDisplayName(c).toLowerCase().includes(query.trim().toLowerCase())
         );
-
-  // Position: keep inside viewport.
-  const popoverW = 320;
-  const popoverH = 360;
-  const left = Math.min(anchorX, window.innerWidth - popoverW - 8);
-  const top = Math.min(anchorY, window.innerHeight - popoverH - 8);
 
   // Duration of selected booking type.
   const selectedType = bookingTypes.find((t) => t.id === selectedTypeId);
@@ -168,10 +160,10 @@ export function CreatePopover({
   return (
     <div
       ref={popoverRef}
-      className="fixed z-50 rounded-xl border border-border bg-card shadow-lg"
-      style={{ left, top, width: popoverW }}
-      // Stop propagation so the calendar column's click handler doesn't
-      // re-fire and immediately close the just-opened popover.
+      className="fixed left-1/2 top-1/2 z-50 w-full max-w-[360px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-card shadow-lg"
+      // Centered modal-style so a click on the right-side columns never pushes
+      // the popover off-screen. Stop propagation so the calendar column's click
+      // handler doesn't re-fire and immediately close the just-opened popover.
       onClick={(e) => e.stopPropagation()}
     >
       {/* Header */}
