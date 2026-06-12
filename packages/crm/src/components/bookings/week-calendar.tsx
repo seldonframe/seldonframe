@@ -14,6 +14,8 @@ import {
 import { BookingCard } from "@/components/bookings/booking-card";
 import { CreatePopover } from "@/components/bookings/create-popover";
 import { RescheduleConfirm } from "@/components/bookings/reschedule-confirm";
+import { BookingActions } from "@/components/bookings/booking-actions";
+import { cancelBookingAction } from "@/lib/bookings/actions";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -252,6 +254,17 @@ type PopoverState = {
   anchorY: number;
 };
 
+// A click (not a drag) on an existing booking card opens this centered
+// actions modal: cancel the booking, open the contact, or read the
+// drag-to-reschedule tip.
+type BookingActionsState = {
+  bookingId: string;
+  title: string;
+  contactId: string | null;
+  contactName: string | null;
+  startsAt: Date;
+};
+
 // Snapshot captured on pointer-down for a booking card. Persists for the
 // whole gesture so pointer-up can decide click-vs-drag and compute the move.
 type DragState = {
@@ -323,6 +336,8 @@ export function WeekCalendar({
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [showFilterNotice, setShowFilterNotice] = useState(false);
   const [popover, setPopover] = useState<PopoverState | null>(null);
+  // Booking-actions modal opened by a plain click on an existing card.
+  const [bookingActions, setBookingActions] = useState<BookingActionsState | null>(null);
 
   // ── Task 8 — drag-to-reschedule state ──────────────────────────────────
   // Refs to the 7 day-column elements, keyed by their YYYY-MM-DD day key, so
@@ -575,12 +590,21 @@ export function WeekCalendar({
         // capture may already be released — harmless.
       }
 
-      // Sub-threshold → treat as a click: navigate to the contact if any.
+      // Sub-threshold → treat as a click: open the booking-actions modal
+      // (cancel / open contact / reschedule tip) instead of navigating
+      // straight to the contact. Works for bookings with no contact too.
       if (!current.isDragging) {
         setDrag(null);
-        if (current.contactId) {
-          router.push(`/contacts/${current.contactId}`);
-        }
+        setBookingActions({
+          bookingId: current.bookingId,
+          title: current.title,
+          contactId: current.contactId,
+          // contactName in DragState falls back to the generic label when
+          // there's no linked contact; pass null so the modal shows
+          // "No contact" in that case.
+          contactName: current.contactId ? current.contactName : null,
+          startsAt: current.originStart,
+        });
         return;
       }
 
@@ -950,6 +974,24 @@ export function WeekCalendar({
           createBookingAction={createBookingAction}
           createBlockedTimeAction={createBlockedTimeAction}
           onClose={() => setPopover(null)}
+        />
+      ) : null}
+
+      {/* Booking-actions modal — opened by a plain click on a booking card.
+          cancelBookingAction revalidates /bookings server-side; router.refresh()
+          pulls the updated RSC payload into this tree so the cancelled card
+          drops off the calendar. */}
+      {bookingActions ? (
+        <BookingActions
+          bookingId={bookingActions.bookingId}
+          title={bookingActions.title}
+          contactName={bookingActions.contactName}
+          contactId={bookingActions.contactId}
+          startsAt={bookingActions.startsAt}
+          workspaceTimezone={workspaceTimezone}
+          cancelBookingAction={cancelBookingAction}
+          onCancelled={() => router.refresh()}
+          onClose={() => setBookingActions(null)}
         />
       ) : null}
 

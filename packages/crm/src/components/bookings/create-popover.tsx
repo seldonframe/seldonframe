@@ -80,6 +80,13 @@ export function CreatePopover({
   const [query, setQuery] = useState("");
   const [selectedContact, setSelectedContact] = useState<ContactRow | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
+  // Inline "create new contact" path. When the operator opens it, the contact
+  // search collapses into a small form (first name prefilled from the query).
+  const [creatingContact, setCreatingContact] = useState(false);
+  const [newFirstName, setNewFirstName] = useState("");
+  const [newLastName, setNewLastName] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [newPhone, setNewPhone] = useState("");
   const [selectedTypeId, setSelectedTypeId] = useState(bookingTypes[0]?.id ?? "");
   const [blockLabel, setBlockLabel] = useState("");
   const [blockDuration, setBlockDuration] = useState(60);
@@ -118,6 +125,20 @@ export function CreatePopover({
   const selectedType = bookingTypes.find((t) => t.id === selectedTypeId);
   const selectedTypeDuration = (selectedType?.metadata as BookingTypeMeta | null)?.durationMinutes ?? 30;
 
+  // Open the inline create-contact form, prefilling first name from the typed
+  // query (split on the first space so "Jane Doe" seeds first + last).
+  function openCreateContact() {
+    const trimmed = query.trim();
+    const [first, ...rest] = trimmed.split(/\s+/);
+    setNewFirstName(first ?? "");
+    setNewLastName(rest.join(" "));
+    setNewEmail("");
+    setNewPhone("");
+    setCreatingContact(true);
+    setShowDropdown(false);
+    setError(null);
+  }
+
   function handleBookSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -129,6 +150,18 @@ export function CreatePopover({
     if (selectedContact) {
       fd.set("contactId", selectedContact.id);
       fd.set("fullName", contactDisplayName(selectedContact));
+    } else if (creatingContact) {
+      const first = newFirstName.trim();
+      if (!first) {
+        setError("First name is required to create a contact.");
+        return;
+      }
+      const last = newLastName.trim();
+      fd.set("newContactFirstName", first);
+      if (last) fd.set("newContactLastName", last);
+      if (newEmail.trim()) fd.set("newContactEmail", newEmail.trim());
+      if (newPhone.trim()) fd.set("newContactPhone", newPhone.trim());
+      fd.set("fullName", `${first} ${last}`.trim());
     }
     startTransition(async () => {
       try {
@@ -231,6 +264,55 @@ export function CreatePopover({
                     <X className="size-3" />
                   </button>
                 </div>
+              ) : creatingContact ? (
+                // Inline new-contact form. Only first name is required.
+                <div className="space-y-2 rounded-md border border-border bg-background p-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-foreground">New contact</span>
+                    <button
+                      type="button"
+                      onClick={() => { setCreatingContact(false); setQuery(""); }}
+                      className="text-muted-foreground hover:text-foreground"
+                      aria-label="Cancel new contact"
+                    >
+                      <X className="size-3" />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      className="crm-input h-8 w-full px-2 text-sm"
+                      placeholder="First name *"
+                      value={newFirstName}
+                      onChange={(e) => setNewFirstName(e.target.value)}
+                      autoComplete="off"
+                    />
+                    <input
+                      type="text"
+                      className="crm-input h-8 w-full px-2 text-sm"
+                      placeholder="Last name"
+                      value={newLastName}
+                      onChange={(e) => setNewLastName(e.target.value)}
+                      autoComplete="off"
+                    />
+                  </div>
+                  <input
+                    type="email"
+                    className="crm-input h-8 w-full px-2 text-sm"
+                    placeholder="Email"
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    autoComplete="off"
+                  />
+                  <input
+                    type="tel"
+                    className="crm-input h-8 w-full px-2 text-sm"
+                    placeholder="Phone"
+                    value={newPhone}
+                    onChange={(e) => setNewPhone(e.target.value)}
+                    autoComplete="off"
+                  />
+                </div>
               ) : (
                 <input
                   ref={inputRef}
@@ -244,28 +326,47 @@ export function CreatePopover({
                 />
               )}
               {/* Dropdown */}
-              {showDropdown && !selectedContact && (query.trim().length > 0) ? (
+              {showDropdown && !selectedContact && !creatingContact && (query.trim().length > 0) ? (
                 <div className="absolute left-0 right-0 top-full z-10 mt-1 max-h-40 overflow-y-auto rounded-md border border-border bg-card shadow-sm">
                   {filtered.length === 0 ? (
-                    <div className="px-3 py-2 text-xs text-muted-foreground">
-                      No contacts match "{query}"
-                    </div>
+                    <button
+                      type="button"
+                      className="block w-full px-3 py-2 text-left text-sm text-primary hover:bg-accent"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        openCreateContact();
+                      }}
+                    >
+                      + Create new contact "{query.trim()}"
+                    </button>
                   ) : (
-                    filtered.slice(0, 8).map((c) => (
+                    <>
+                      {filtered.slice(0, 8).map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          className="block w-full px-3 py-2 text-left text-sm text-foreground hover:bg-accent"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            setSelectedContact(c);
+                            setQuery(contactDisplayName(c));
+                            setShowDropdown(false);
+                          }}
+                        >
+                          {contactDisplayName(c)}
+                        </button>
+                      ))}
                       <button
-                        key={c.id}
                         type="button"
-                        className="block w-full px-3 py-2 text-left text-sm text-foreground hover:bg-accent"
+                        className="block w-full border-t border-border px-3 py-2 text-left text-sm text-primary hover:bg-accent"
                         onMouseDown={(e) => {
                           e.preventDefault();
-                          setSelectedContact(c);
-                          setQuery(contactDisplayName(c));
-                          setShowDropdown(false);
+                          openCreateContact();
                         }}
                       >
-                        {contactDisplayName(c)}
+                        + Create new contact
                       </button>
-                    ))
+                    </>
                   )}
                 </div>
               ) : null}
