@@ -1880,10 +1880,9 @@ export async function submitPublicBookingAction({
   return { success: true, confirmationMessage: bookingContext.confirmationMessage, checkoutUrl: null as string | null };
 }
 
-// ─── TASK A: reschedule gate helper (re-exported from calendar-math so the
-//     pure function is testable without loading server-only dependencies) ───────
-
-export { shouldSendRescheduleEmailPure as shouldSendRescheduleEmail };
+// ─── TASK A: the reschedule gate `shouldSendRescheduleEmail` lives in
+//     ./calendar-math (imported above as shouldSendRescheduleEmailPure). It is
+//     NOT re-exported here — a "use server" file may only export async functions.
 
 // ─── TASK A: reschedule booking action ────────────────────────────────────────
 
