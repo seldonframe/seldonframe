@@ -1009,6 +1009,13 @@ export async function createBookingAction(formData: FormData) {
 
   let contactId = String(formData.get("contactId") ?? "").trim() || null;
 
+  // Job details captured for the booking regardless of new-vs-existing
+  // contact. The `contacts` table has no address column, so when the
+  // operator provides an address we fold it into the booking notes as an
+  // "Address: …" line (see the notes assembly below).
+  const notesInput = String(formData.get("notes") ?? "").trim();
+  const addressInput = String(formData.get("newContactAddress") ?? "").trim();
+
   if (contactId) {
     const [contact] = await db
       .select({ id: contacts.id })
@@ -1050,6 +1057,15 @@ export async function createBookingAction(formData: FormData) {
     }
   }
 
+  // Assemble the booking notes: when an address was supplied (new-contact
+  // path) prepend it as an "Address: …" line so the job site is captured on
+  // the booking even though contacts have no address column.
+  const bookingNotes =
+    [addressInput ? `Address: ${addressInput}` : "", notesInput]
+      .filter(Boolean)
+      .join("\n")
+      .trim() || null;
+
   const startsAt = new Date(String(formData.get("startsAt") ?? ""));
 
   if (Number.isNaN(startsAt.getTime())) {
@@ -1069,7 +1085,7 @@ export async function createBookingAction(formData: FormData) {
       bookingSlug: String(formData.get("bookingSlug") ?? "default"),
       fullName: String(formData.get("fullName") ?? "") || null,
       email: String(formData.get("email") ?? "") || null,
-      notes: String(formData.get("notes") ?? "") || null,
+      notes: bookingNotes,
       provider,
       status: "scheduled",
       startsAt,
@@ -1118,6 +1134,10 @@ export async function createBookingAction(formData: FormData) {
       contactId: created.contactId,
     }, { orgId: orgId });
   }
+
+  // Refresh the bookings calendar/list so a newly-created booking appears
+  // immediately instead of requiring a hard refresh.
+  revalidatePath("/bookings");
 
   return { id: created.id };
 }
@@ -1206,6 +1226,39 @@ export async function cancelBookingAction(bookingId: string) {
   // Refresh the bookings calendar/list so a cancelled card drops off
   // immediately when the operator cancels from the booking-actions modal.
   revalidatePath("/bookings");
+}
+
+// Inline notes editing from the booking-actions modal on /bookings. The
+// operator can jot job details ("gate code 1234", "park on the street",
+// service-specific notes) straight onto a booking without opening the
+// contact. Scoped to the caller's org. Returns the saved value so the
+// client can reconcile its optimistic state.
+export async function updateBookingNotesAction(bookingId: string, notes: string) {
+  assertWritable();
+
+  const orgId = await getOrgId();
+
+  if (!orgId) {
+    throw new Error("Unauthorized");
+  }
+
+  const trimmed = notes.trim();
+
+  const [row] = await db
+    .update(bookings)
+    .set({ notes: trimmed || null, updatedAt: new Date() })
+    .where(and(eq(bookings.orgId, orgId), eq(bookings.id, bookingId)))
+    .returning({ id: bookings.id, notes: bookings.notes });
+
+  if (!row) {
+    throw new Error("Booking not found");
+  }
+
+  // Refresh the bookings calendar/list so the saved notes surface on the
+  // next render of the card modal.
+  revalidatePath("/bookings");
+
+  return { id: row.id, notes: row.notes };
 }
 
 // 2026-05-18 — public customer-managed cancel. The booking confirmation
