@@ -1,6 +1,6 @@
 "use server";
 
-import { and, asc, eq, gte, inArray, lt, ne } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lt, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import { activities, bookings, contacts, deals, organizations, users } from "@/db/schema";
@@ -1037,23 +1037,48 @@ export async function createBookingAction(formData: FormData) {
       const newLastName = String(formData.get("newContactLastName") ?? "").trim();
       const newEmail = String(formData.get("newContactEmail") ?? "").trim();
       const newPhone = String(formData.get("newContactPhone") ?? "").trim();
-      const [createdContact] = await db
-        .insert(contacts)
-        .values({
-          orgId,
-          firstName: newFirstName,
-          lastName: newLastName || null,
-          email: newEmail || null,
-          phone: newPhone || null,
-          status: "lead",
-          source: "dashboard-booking",
-        })
-        .returning({ id: contacts.id });
 
-      if (!createdContact) {
-        throw new Error("Could not create contact");
+      // Find-or-create by email. The contacts table has a unique
+      // (orgId, lower(email)) index, so a repeat customer — or a reused email
+      // during testing — would make a blind insert throw
+      // (contacts_org_lower_email_uniq). When the email already belongs to a
+      // contact in this org, LINK that existing contact instead of inserting.
+      // A blank/NULL email never conflicts (Postgres treats NULLs as distinct).
+      if (newEmail) {
+        const [existing] = await db
+          .select({ id: contacts.id })
+          .from(contacts)
+          .where(
+            and(
+              eq(contacts.orgId, orgId),
+              sql`lower(${contacts.email}) = ${newEmail.toLowerCase()}`,
+            ),
+          )
+          .limit(1);
+        if (existing) {
+          contactId = existing.id;
+        }
       }
-      contactId = createdContact.id;
+
+      if (!contactId) {
+        const [createdContact] = await db
+          .insert(contacts)
+          .values({
+            orgId,
+            firstName: newFirstName,
+            lastName: newLastName || null,
+            email: newEmail || null,
+            phone: newPhone || null,
+            status: "lead",
+            source: "dashboard-booking",
+          })
+          .returning({ id: contacts.id });
+
+        if (!createdContact) {
+          throw new Error("Could not create contact");
+        }
+        contactId = createdContact.id;
+      }
     }
   }
 
