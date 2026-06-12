@@ -1007,7 +1007,7 @@ export async function createBookingAction(formData: FormData) {
     throw new Error("Unauthorized");
   }
 
-  const contactId = String(formData.get("contactId") ?? "").trim() || null;
+  let contactId = String(formData.get("contactId") ?? "").trim() || null;
 
   if (contactId) {
     const [contact] = await db
@@ -1018,6 +1018,35 @@ export async function createBookingAction(formData: FormData) {
 
     if (!contact) {
       throw new Error("Contact not found");
+    }
+  } else {
+    // Inline "create new contact" path from the booking-create popover. When
+    // the operator typed a name that matched no existing contact, the form
+    // carries the new contact's details instead of a contactId. Create the
+    // contacts row first, then link it so the booking emits booking.created
+    // exactly like the link-existing path below.
+    const newFirstName = String(formData.get("newContactFirstName") ?? "").trim();
+    if (newFirstName) {
+      const newLastName = String(formData.get("newContactLastName") ?? "").trim();
+      const newEmail = String(formData.get("newContactEmail") ?? "").trim();
+      const newPhone = String(formData.get("newContactPhone") ?? "").trim();
+      const [createdContact] = await db
+        .insert(contacts)
+        .values({
+          orgId,
+          firstName: newFirstName,
+          lastName: newLastName || null,
+          email: newEmail || null,
+          phone: newPhone || null,
+          status: "lead",
+          source: "dashboard-booking",
+        })
+        .returning({ id: contacts.id });
+
+      if (!createdContact) {
+        throw new Error("Could not create contact");
+      }
+      contactId = createdContact.id;
     }
   }
 
@@ -1173,6 +1202,10 @@ export async function cancelBookingAction(bookingId: string) {
       contactId: row.contactId,
     }, { orgId: orgId });
   }
+
+  // Refresh the bookings calendar/list so a cancelled card drops off
+  // immediately when the operator cancels from the booking-actions modal.
+  revalidatePath("/bookings");
 }
 
 // 2026-05-18 — public customer-managed cancel. The booking confirmation
