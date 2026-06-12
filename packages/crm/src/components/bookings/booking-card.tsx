@@ -3,6 +3,13 @@
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { HOUR_HEIGHT_PX } from "@/lib/bookings/calendar-math";
 
+// Minimum rendered card height in px. A 15-min job at HOUR_HEIGHT_PX would be
+// ~20px tall — too short to read its title + time. Clamp every card to at
+// least this so short jobs stay legible (Google Calendar / Cal.com do the
+// same). Cards still anchor to the hour grid via their `top`; only the
+// height floor changes.
+const MIN_CARD_PX = 44;
+
 type BookingCardRow = {
   id: string;
   title: string;
@@ -56,7 +63,10 @@ export function BookingCard({
     15,
     (endsAt.getTime() - startsAt.getTime()) / 60000
   );
-  const height = (durationMinutes / 60) * HOUR_HEIGHT_PX - 4;
+  // Floor the rendered height at MIN_CARD_PX so a short job still shows its
+  // title + time, even when its real duration would render only ~20px tall.
+  const realDurationHeight = (durationMinutes / 60) * HOUR_HEIGHT_PX - 4;
+  const height = Math.max(realDurationHeight, MIN_CARD_PX);
 
   const isBlocked = row.status === "blocked";
 
@@ -98,7 +108,7 @@ export function BookingCard({
           {contactName}
         </p>
       )}
-      <p className={`mt-1 text-[10px] ${isBlocked ? "text-muted-foreground" : "text-primary"}`}>
+      <p className={`mt-1 text-[10px] truncate ${isBlocked ? "text-muted-foreground" : "text-primary"}`}>
         {startsAt.toLocaleTimeString("en-US", {
           hour: "numeric",
           minute: "2-digit",

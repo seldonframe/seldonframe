@@ -3,7 +3,11 @@
 // renderer agree on the same coordinate system.
 export const WEEK_VIEW_START_HOUR = 8;
 export const WEEK_VIEW_END_HOUR = 20; // exclusive
-export const HOUR_HEIGHT_PX = 80;
+// Hour-row height in px. Bumped 80 → 96 so short (15-min) jobs have enough
+// vertical room to show a title + time line legibly (mirrors Google
+// Calendar / Cal.com breathing room). All callers import this constant so
+// the grid lines, card positions, and snap math stay aligned.
+export const HOUR_HEIGHT_PX = 96;
 export const SNAP_MINUTES = 15;
 
 /** y-offset (px from the top of the grid) → minutes-from-grid-start, snapped to

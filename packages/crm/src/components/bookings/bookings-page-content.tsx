@@ -58,12 +58,15 @@ type BookingRow = {
   endsAt: Date | string;
   status: string;
   contactId: string | null;
+  notes: string | null;
 };
 
 type ContactRow = {
   id: string;
   firstName: string;
   lastName: string | null;
+  phone: string | null;
+  email: string | null;
 };
 
 type BookingsPageContentProps = {

@@ -40,6 +40,10 @@ export type CreatePopoverProps = {
     startsAtISO: string;
     durationMinutes: number;
   }) => Promise<{ ok: true } | { ok: false; error: string }>;
+  /** Called after a successful create/block so the parent can refresh the
+   *  calendar (router.refresh()) — new bookings/blocks then show without a
+   *  manual page refresh. */
+  onCreated?: () => void;
   onClose: () => void;
 };
 
@@ -74,6 +78,7 @@ export function CreatePopover({
   bookingTypes,
   createBookingAction,
   createBlockedTimeAction,
+  onCreated,
   onClose,
 }: CreatePopoverProps) {
   const [tab, setTab] = useState<"book" | "block">("book");
@@ -87,6 +92,13 @@ export function CreatePopover({
   const [newLastName, setNewLastName] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [newPhone, setNewPhone] = useState("");
+  // Address of the new contact's job site. The contacts table has no address
+  // column, so on submit it's folded into the booking notes server-side as an
+  // "Address: …" line. Only collected on the new-contact path.
+  const [newAddress, setNewAddress] = useState("");
+  // Notes / job details for the booking — applies regardless of new-vs-existing
+  // contact (local-service operators capture gate codes, scope of work, etc.).
+  const [notes, setNotes] = useState("");
   const [selectedTypeId, setSelectedTypeId] = useState(bookingTypes[0]?.id ?? "");
   const [blockLabel, setBlockLabel] = useState("");
   const [blockDuration, setBlockDuration] = useState(60);
@@ -134,6 +146,7 @@ export function CreatePopover({
     setNewLastName(rest.join(" "));
     setNewEmail("");
     setNewPhone("");
+    setNewAddress("");
     setCreatingContact(true);
     setShowDropdown(false);
     setError(null);
@@ -161,11 +174,15 @@ export function CreatePopover({
       if (last) fd.set("newContactLastName", last);
       if (newEmail.trim()) fd.set("newContactEmail", newEmail.trim());
       if (newPhone.trim()) fd.set("newContactPhone", newPhone.trim());
+      if (newAddress.trim()) fd.set("newContactAddress", newAddress.trim());
       fd.set("fullName", `${first} ${last}`.trim());
     }
+    // Notes / job details apply regardless of new-vs-existing contact.
+    if (notes.trim()) fd.set("notes", notes.trim());
     startTransition(async () => {
       try {
         await createBookingAction(fd);
+        onCreated?.();
         onClose();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Could not create booking.");
@@ -186,6 +203,7 @@ export function CreatePopover({
         setError((result as { ok: false; error: string }).error);
         return;
       }
+      onCreated?.();
       onClose();
     });
   }
@@ -312,6 +330,14 @@ export function CreatePopover({
                     onChange={(e) => setNewPhone(e.target.value)}
                     autoComplete="off"
                   />
+                  <input
+                    type="text"
+                    className="crm-input h-8 w-full px-2 text-sm"
+                    placeholder="Address"
+                    value={newAddress}
+                    onChange={(e) => setNewAddress(e.target.value)}
+                    autoComplete="off"
+                  />
                 </div>
               ) : (
                 <input
@@ -398,6 +424,21 @@ export function CreatePopover({
                 No appointment types yet — create one first.
               </p>
             )}
+
+            {/* Notes / job details — applies to the booking regardless of
+                new-vs-existing contact (gate codes, scope of work, etc.). */}
+            <div>
+              <label className="mb-1 block text-xs text-muted-foreground">
+                Notes / job details
+              </label>
+              <textarea
+                className="crm-input w-full px-3 py-2 text-sm"
+                rows={3}
+                placeholder="Scope of work, gate code, parking, anything the tech needs…"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+              />
+            </div>
 
             {error ? (
               <p className="text-xs text-negative">{error}</p>

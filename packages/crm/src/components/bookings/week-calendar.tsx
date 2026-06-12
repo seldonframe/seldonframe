@@ -15,7 +15,7 @@ import { BookingCard } from "@/components/bookings/booking-card";
 import { CreatePopover } from "@/components/bookings/create-popover";
 import { RescheduleConfirm } from "@/components/bookings/reschedule-confirm";
 import { BookingActions } from "@/components/bookings/booking-actions";
-import { cancelBookingAction } from "@/lib/bookings/actions";
+import { cancelBookingAction, updateBookingNotesAction } from "@/lib/bookings/actions";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -28,12 +28,17 @@ type BookingRow = {
   endsAt: Date | string;
   status: string;
   contactId: string | null;
+  /** Job details / notes — surfaced + editable in the booking-actions modal. */
+  notes: string | null;
 };
 
 type ContactRow = {
   id: string;
   firstName: string;
   lastName: string | null;
+  /** Surfaced in the booking-actions modal when this contact is linked. */
+  phone: string | null;
+  email: string | null;
 };
 
 type BookingTypeRow = {
@@ -262,6 +267,9 @@ type BookingActionsState = {
   title: string;
   contactId: string | null;
   contactName: string | null;
+  contactPhone: string | null;
+  contactEmail: string | null;
+  notes: string | null;
   startsAt: Date;
 };
 
@@ -275,6 +283,11 @@ type DragState = {
   contactId: string | null;
   title: string;
   contactName: string;
+  // Carried so a click (not a drag) can populate the booking-actions modal
+  // without re-deriving from the bookings array.
+  contactPhone: string | null;
+  contactEmail: string | null;
+  notes: string | null;
   pointerStartX: number;
   pointerStartY: number;
   /** Becomes true once the pointer crosses DRAG_THRESHOLD_PX — only then do
@@ -331,7 +344,13 @@ export function WeekCalendar({
   rescheduleBookingAction,
 }: WeekCalendarProps) {
   const router = useRouter();
-  const [weekOffset, setWeekOffset] = useState(0);
+  // Day-granular offset from today. Week mode steps it by 7, Day mode by 1.
+  // "Today" resets it to 0. Replaces the old week-count offset so a single
+  // piece of state drives both views.
+  const [offsetDays, setOffsetDays] = useState(0);
+  // Segmented Day / Week toggle. Week (default) = 7-column layout; Day = a
+  // single full-width column. Best-practice calendar UX.
+  const [viewMode, setViewMode] = useState<"day" | "week">("week");
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [showFilterNotice, setShowFilterNotice] = useState(false);
@@ -380,19 +399,22 @@ export function WeekCalendar({
     window.setTimeout(() => setToast(null), 2400);
   }, []);
 
-  const weekStart = useMemo(() => {
-    const base = addDaysLocal(new Date(), weekOffset * 7);
-    return startOfWeekMonday(base);
-  }, [weekOffset]);
+  // Visible day columns: 7 (Monday-anchored week) in Week mode, 1 (the
+  // offset day at midnight) in Day mode. Both the header row and the grid
+  // map over this so a single render path serves both views.
+  const visibleDays = useMemo(() => {
+    if (viewMode === "day") {
+      const base = addDaysLocal(new Date(), offsetDays);
+      base.setHours(0, 0, 0, 0);
+      return [base];
+    }
+    const weekStart = startOfWeekMonday(addDaysLocal(new Date(), offsetDays));
+    return Array.from({ length: 7 }, (_, i) => addDaysLocal(weekStart, i));
+  }, [viewMode, offsetDays]);
 
-  const weekDays = useMemo(
-    () => Array.from({ length: 7 }, (_, i) => addDaysLocal(weekStart, i)),
-    [weekStart]
-  );
-
-  const weekEventsByDay = useMemo(() => {
+  const eventsByDay = useMemo(() => {
     const byDay = new Map<string, BookingRow[]>();
-    for (const day of weekDays) {
+    for (const day of visibleDays) {
       byDay.set(keyYmd(day, workspaceTimezone), []);
     }
 
@@ -422,7 +444,7 @@ export function WeekCalendar({
     }
 
     return byDay;
-  }, [bookings, weekDays, searchQuery, workspaceTimezone]);
+  }, [bookings, visibleDays, searchQuery, workspaceTimezone]);
 
   // Build a colour map from booking title → border class.
   // WeekCalendar doesn't receive bookingTypes directly, so we derive
@@ -453,7 +475,7 @@ export function WeekCalendar({
     ): { day: Date; dayKey: string; offsetY: number } | null => {
       let target: { day: Date; dayKey: string; rect: DOMRect } | null = null;
       let fallback: { day: Date; dayKey: string; rect: DOMRect } | null = null;
-      for (const day of weekDays) {
+      for (const day of visibleDays) {
         const dayKey = keyYmd(day, workspaceTimezone);
         const el = columnRefs.current.get(dayKey);
         if (!el) continue;
@@ -467,7 +489,7 @@ export function WeekCalendar({
       if (!hit) return null;
       return { day: hit.day, dayKey: hit.dayKey, offsetY: clientY - hit.rect.top };
     },
-    [weekDays, workspaceTimezone],
+    [visibleDays, workspaceTimezone],
   );
 
   const handleCardPointerDown = useCallback(
@@ -475,6 +497,7 @@ export function WeekCalendar({
       e: ReactPointerEvent<HTMLElement>,
       row: BookingRow,
       contactName: string,
+      contact: ContactRow | null,
     ) => {
       // Left button / touch / pen only. Capture so subsequent move+up route
       // here even when the pointer leaves the card. Do NOT navigate yet —
@@ -489,6 +512,9 @@ export function WeekCalendar({
         contactId: row.contactId,
         title: row.title,
         contactName,
+        contactPhone: contact?.phone ?? null,
+        contactEmail: contact?.email ?? null,
+        notes: row.notes,
         pointerStartX: e.clientX,
         pointerStartY: e.clientY,
         isDragging: false,
@@ -603,6 +629,9 @@ export function WeekCalendar({
           // there's no linked contact; pass null so the modal shows
           // "No contact" in that case.
           contactName: current.contactId ? current.contactName : null,
+          contactPhone: current.contactId ? current.contactPhone : null,
+          contactEmail: current.contactId ? current.contactEmail : null,
+          notes: current.notes,
           startsAt: current.originStart,
         });
         return;
@@ -696,10 +725,30 @@ export function WeekCalendar({
           <button
             type="button"
             className="crm-pressable inline-flex h-8 items-center rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-[background-color,color,transform] duration-150 ease-out hover:bg-accent hover:text-accent-foreground"
-            onClick={() => setWeekOffset(0)}
+            onClick={() => setOffsetDays(0)}
           >
             Today
           </button>
+
+          {/* Day / Week segmented toggle. Switching doesn't reset the offset,
+              so "next week" then "Day" lands on a day in that week. */}
+          <div className="inline-flex h-8 items-center rounded-md border border-input bg-background p-0.5 shadow-xs">
+            {(["day", "week"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                aria-pressed={viewMode === mode}
+                onClick={() => setViewMode(mode)}
+                className={`inline-flex h-7 items-center rounded px-3 text-xs font-medium capitalize transition-colors ${
+                  viewMode === mode
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                }`}
+              >
+                {mode}
+              </button>
+            ))}
+          </div>
 
           <button
             type="button"
@@ -707,8 +756,9 @@ export function WeekCalendar({
           >
             <CalendarIcon className="size-4 text-muted-foreground" />
             <span className="text-xs text-foreground">
-              {labelRangeStart(weekDays[0], workspaceTimezone)} -{" "}
-              {labelRangeEnd(weekDays[6], workspaceTimezone)}
+              {viewMode === "day"
+                ? labelRangeEnd(visibleDays[0], workspaceTimezone)
+                : `${labelRangeStart(visibleDays[0], workspaceTimezone)} - ${labelRangeEnd(visibleDays[visibleDays.length - 1], workspaceTimezone)}`}
             </span>
           </button>
 
@@ -761,19 +811,19 @@ export function WeekCalendar({
             <button
               type="button"
               className="crm-pressable inline-flex size-7 md:size-8 items-center justify-center rounded transition-[background-color,transform] duration-150 ease-out hover:bg-accent"
-              onClick={() => setWeekOffset((cur) => cur - 1)}
+              onClick={() => setOffsetDays((cur) => cur - (viewMode === "day" ? 1 : 7))}
             >
               <ChevronLeft className="size-4 md:size-5" />
             </button>
             <button
               type="button"
               className="crm-pressable inline-flex size-7 md:size-8 items-center justify-center rounded transition-[background-color,transform] duration-150 ease-out hover:bg-accent"
-              onClick={() => setWeekOffset((cur) => cur + 1)}
+              onClick={() => setOffsetDays((cur) => cur + (viewMode === "day" ? 1 : 7))}
             >
               <ChevronRight className="size-4 md:size-5" />
             </button>
           </div>
-          {weekDays.map((day) => (
+          {visibleDays.map((day) => (
             <div
               key={day.toISOString()}
               className="flex-1 border-r border-border last:border-r-0 p-1.5 md:p-2 min-w-44 flex items-center"
@@ -806,9 +856,9 @@ export function WeekCalendar({
             ))}
           </div>
 
-          {weekDays.map((day) => {
+          {visibleDays.map((day) => {
             const key = keyYmd(day, workspaceTimezone);
-            const events = weekEventsByDay.get(key) ?? [];
+            const events = eventsByDay.get(key) ?? [];
             const ghostHere =
               drag?.isDragging && drag.ghost?.dayKey === key ? drag.ghost : null;
             return (
@@ -908,7 +958,7 @@ export function WeekCalendar({
                         borderClass={borderClass}
                         styleOverride={overrideStyle}
                         isDragging={isActivelyDragging}
-                        onPointerDown={(e) => handleCardPointerDown(e, row, contactName)}
+                        onPointerDown={(e) => handleCardPointerDown(e, row, contactName, linkedContact ?? null)}
                         onPointerMove={handleCardPointerMove}
                         onPointerUp={handleCardPointerUp}
                       />
@@ -944,7 +994,7 @@ export function WeekCalendar({
                         workspaceTimezone={workspaceTimezone}
                         top={override.topPx}
                         borderClass={borderClass}
-                        onPointerDown={(e) => handleCardPointerDown(e, row, contactName)}
+                        onPointerDown={(e) => handleCardPointerDown(e, row, contactName, linkedContact ?? null)}
                         onPointerMove={handleCardPointerMove}
                         onPointerUp={handleCardPointerUp}
                       />
@@ -973,6 +1023,7 @@ export function WeekCalendar({
           anchorY={popover.anchorY}
           createBookingAction={createBookingAction}
           createBlockedTimeAction={createBlockedTimeAction}
+          onCreated={() => router.refresh()}
           onClose={() => setPopover(null)}
         />
       ) : null}
@@ -987,9 +1038,13 @@ export function WeekCalendar({
           title={bookingActions.title}
           contactName={bookingActions.contactName}
           contactId={bookingActions.contactId}
+          contactPhone={bookingActions.contactPhone}
+          contactEmail={bookingActions.contactEmail}
+          notes={bookingActions.notes}
           startsAt={bookingActions.startsAt}
           workspaceTimezone={workspaceTimezone}
           cancelBookingAction={cancelBookingAction}
+          updateBookingNotesAction={updateBookingNotesAction}
           onCancelled={() => router.refresh()}
           onClose={() => setBookingActions(null)}
         />

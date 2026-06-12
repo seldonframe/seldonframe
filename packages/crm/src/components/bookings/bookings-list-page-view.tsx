@@ -102,11 +102,14 @@ export async function BookingsListPageView({
           endsAt: row.endsAt,
           status: row.status,
           contactId: row.contactId,
+          notes: row.notes,
         }))}
         contacts={contacts.map((row) => ({
           id: row.id,
           firstName: row.firstName,
           lastName: row.lastName,
+          phone: row.phone,
+          email: row.email,
         }))}
         suggestedServices={soul?.services ?? []}
         orgSlug={orgSlug}
