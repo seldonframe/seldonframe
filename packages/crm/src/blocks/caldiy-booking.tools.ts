@@ -34,7 +34,8 @@ const workspaceIdArg = z
   .optional()
   .describe("Optional. Falls back to the active workspace.");
 
-const bookingStatus = z.enum(["scheduled", "completed", "cancelled", "no_show"]);
+// 'blocked' = operator's busy time; no contact; excluded from public availability.
+const bookingStatus = z.enum(["scheduled", "completed", "cancelled", "no_show", "blocked"]);
 
 // Return shapes — narrow to the fields downstream {{interpolation}}
 // is most likely to reach for. Templates stored in bookings table
