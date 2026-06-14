@@ -143,6 +143,27 @@ export type R1StickySection = {
   bookHref?: string;
 };
 
+/**
+ * Speed-to-Lead bottom section. Optional + top-level. When `enabled`,
+ * the two public R1 pages render <LeadFormSection> after <Faq>. All copy
+ * fields are optional — the component supplies sensible defaults. Enabled
+ * per workspace by setting blueprint_json.payload.leadForm in the DB; it
+ * round-trips through loadLandingPayload's raw passthrough (no loader change).
+ */
+export type R1LeadFormSection = {
+  enabled: boolean;
+  /** Section heading. Default: "Get a fast callback". */
+  heading?: string;
+  /** Sub-line under the heading. Default: "Tell us what you need — we'll text you a time in minutes." */
+  subheading?: string;
+  /** Label for the third field. Default: "What do you need?". */
+  needLabel?: string;
+  /** When non-empty, the need field renders as a <select> of these options; otherwise a short text input. */
+  needOptions?: string[];
+  /** TCPA / consent line shown under the submit button. Default supplied by the component. */
+  consentText?: string;
+};
+
 /** Full R1 landing payload — union of all section prop shapes. */
 export type R1LandingPayload = {
   hero: R1HeroSection;
@@ -152,6 +173,8 @@ export type R1LandingPayload = {
   footer: R1FooterSection;
   emergency?: R1EmergencySection;
   sticky?: R1StickySection;
+  /** Speed-to-Lead bottom section (optional). */
+  leadForm?: R1LeadFormSection;
 };
 
 // ── Prompt builder ────────────────────────────────────────────────────────────
