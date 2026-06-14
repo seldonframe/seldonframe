@@ -64,6 +64,19 @@ export type PaidConversionAlertParams = {
   signupToPaidDays?: number;
 };
 
+export type NewLeadAlertParams = {
+  /** The SMB the lead reached out to (workspace name). */
+  businessName: string;
+  /** Lead's name as typed in the form. */
+  name: string;
+  /** Lead's phone (E.164 preferred, but rendered verbatim). */
+  phone: string;
+  /** What they need — the third form field. */
+  need: string;
+  /** Workspace slug, for a quick "which workspace" reference line. */
+  orgSlug: string;
+};
+
 type OpsNotificationDeps = {
   /** Injectable for unit tests. Defaults to globalThis.fetch in prod. */
   fetcher?: typeof fetch;
@@ -142,7 +155,7 @@ function resolveApiKey(
  * itself stays observable from Vercel function logs.
  */
 async function dispatch(params: {
-  event: "new_signup" | "paid_conversion";
+  event: "new_signup" | "paid_conversion" | "new_lead";
   to: string;
   from: string;
   subject: string;
@@ -367,6 +380,80 @@ ${signupLine}`;
 
   await dispatch({
     event: "paid_conversion",
+    to,
+    from,
+    subject,
+    text,
+    html,
+    apiKey,
+    fetcher,
+  });
+}
+
+/**
+ * Send the "new lead" alert to the operator. Fires from the public
+ * lead-form action on every submission (create or upsert).
+ *
+ * Mirrors sendNewSignupAlert: platform-level send (one global recipient,
+ * no per-workspace Resend lookup, no suppression, no DB write) so it has
+ * NO Twilio/workspace dependency and works even on demos with no email
+ * integration configured. Never throws — a Resend outage logs to stdout
+ * but the lead-form submission still succeeds.
+ */
+export async function sendNewLeadAlert(
+  params: NewLeadAlertParams,
+  deps: OpsNotificationDeps = {},
+): Promise<void> {
+  const env = deps.env ?? process.env;
+  const fetcher = deps.fetcher ?? globalThis.fetch;
+  const apiKey = resolveApiKey(deps.apiKey, env);
+  const to = resolveOpsNotificationRecipient(env);
+  const from = resolveFromAddress(env);
+
+  const subject = `New lead — ${params.name} · ${params.phone}`;
+
+  const text = `New lead captured from the ${params.businessName} landing page.
+
+Name: ${params.name}
+Phone: ${params.phone}
+Need: ${params.need}
+Workspace: ${params.orgSlug}
+
+Follow up fast — speed-to-lead wins the job.`;
+
+  const safeBusiness = escapeHtml(params.businessName);
+  const safeName = escapeHtml(params.name);
+  const safePhone = escapeHtml(params.phone);
+  const safeNeed = escapeHtml(params.need);
+  const safeSlug = escapeHtml(params.orgSlug);
+
+  const html = `<!doctype html>
+<html lang="en">
+<body style="margin:0;padding:0;background:#f5f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#111;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f7;padding:24px 12px;">
+    <tr><td align="center">
+      <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
+        <tr><td style="background:#0b0b10;padding:20px 24px;color:#ffffff;">
+          <div style="font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#9aa0a6;margin-bottom:6px;">${safeBusiness} · New lead</div>
+          <div style="font-size:20px;font-weight:600;line-height:1.25;">${safeName} just reached out.</div>
+        </td></tr>
+        <tr><td style="padding:20px 24px;font-size:14px;line-height:1.6;color:#1a1a1f;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+            <tr><td style="padding:4px 0;color:#6b7280;width:120px;">Name</td><td style="padding:4px 0;font-weight:500;">${safeName}</td></tr>
+            <tr><td style="padding:4px 0;color:#6b7280;">Phone</td><td style="padding:4px 0;font-weight:500;">${safePhone}</td></tr>
+            <tr><td style="padding:4px 0;color:#6b7280;">Need</td><td style="padding:4px 0;">${safeNeed}</td></tr>
+            <tr><td style="padding:4px 0;color:#6b7280;">Workspace</td><td style="padding:4px 0;font-family:monospace;font-size:13px;">${safeSlug}</td></tr>
+          </table>
+          <p style="margin:16px 0 0 0;font-size:13px;color:#6b7280;">Follow up fast — speed-to-lead wins the job.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  await dispatch({
+    event: "new_lead",
     to,
     from,
     subject,
