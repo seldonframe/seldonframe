@@ -25,6 +25,7 @@ import { Hero } from "@/components/landing-r1/sections/hero";
 import { ServicesGrid } from "@/components/landing-r1/sections/services-grid";
 import { Testimonials } from "@/components/landing-r1/sections/testimonials";
 import { Faq } from "@/components/landing-r1/sections/faq";
+import { LeadFormSection } from "@/components/landing-r1/sections/lead-form";
 import { Footer } from "@/components/landing-r1/sections/footer";
 import { EmergencyStrip } from "@/components/landing-r1/chrome/emergency-strip";
 import { StickyMobileBar } from "@/components/landing-r1/chrome/sticky-mobile-bar";
@@ -134,6 +135,14 @@ export default async function PublicSPage({ params }: PageProps) {
           <ServicesGrid {...payload.services} />
           <Testimonials {...payload.testimonials} />
           <Faq {...payload.faq} />
+          {payload.leadForm?.enabled && (
+            <LeadFormSection
+              orgSlug={orgSlug}
+              businessName={payload.hero.businessName}
+              archetype={payload.hero.archetype}
+              leadForm={payload.leadForm}
+            />
+          )}
           <Footer {...payload.footer} />
           {payload.sticky && <StickyMobileBar {...payload.sticky} />}
           {r1ChatbotEmbed && <ChatbotEmbedScript embedUrl={r1ChatbotEmbed.embedUrl} />}
