@@ -17,7 +17,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useReducedMotion } from "framer-motion";
 import { ARCHETYPES, archetypeStyle, type AestheticArchetypeId } from "../archetypes";
-import { telHref, smsHref as toSmsHref } from "../_shared/phone";
+import { telHref } from "../_shared/phone";
 
 const ARCHETYPES_WITHOUT_STICKY: AestheticArchetypeId[] = [
   "cinematic-aspirational",
@@ -69,10 +69,10 @@ export function StickyMobileBar({
 
   if (ARCHETYPES_WITHOUT_STICKY.includes(archetype)) return null;
 
-  // Compute the actual SMS href: prefer the explicit prop, fall back to
-  // deriving from the phone string.
-  const resolvedSms = smsHref ?? (smsHref === undefined ? null : toSmsHref(phone));
-  const showText = !!smsHref;
+  // Text button is shown ONLY when a non-empty sms: href is supplied.
+  // No phone-derived fallback: an empty/absent smsHref means "no Text button"
+  // (the Speed-to-Lead contract — the demo backfill sets it to the 839 line).
+  const showText = typeof smsHref === "string" && smsHref.length > 0;
   const showBook = !!bookHref;
   // Total columns visible — drives the grid template.
   const cols = 1 + (showText ? 1 : 0) + (showBook ? 1 : 0);
@@ -93,7 +93,7 @@ export function StickyMobileBar({
       </a>
 
       {showText && (
-        <a className="sf-sticky-btn sf-sticky-text" href={resolvedSms ?? toSmsHref(phone)} aria-label="Text us">
+        <a className="sf-sticky-btn sf-sticky-text" href={smsHref} aria-label="Text us">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
           </svg>
