@@ -117,10 +117,20 @@ function ServiceCard({ service }: { service: Service }) {
   return (
     <article className="card">
       <div className="placeholder">
+        {service.photo ? (
+          <img
+            className="ph-img"
+            src={service.photo.src}
+            alt={service.photo.alt}
+            loading="lazy"
+          />
+        ) : null}
         <span className="icon-tile" aria-hidden>
           {service.icon ?? <DefaultGlyph />}
         </span>
-        <span className="ph-label">photo · {service.name.toLowerCase()}</span>
+        {!service.photo && (
+          <span className="ph-label">photo · {service.name.toLowerCase()}</span>
+        )}
       </div>
       <div className="body">
         <h3>{service.name}</h3>
@@ -277,7 +287,16 @@ function ServicesStyles() {
         display: flex; align-items: flex-end; justify-content: flex-start;
         padding: 14px;
         position: relative;
+        overflow: hidden;
         border: 1px solid var(--border);
+      }
+
+      /* Real per-service photo — fills the placeholder box, clipped to its radius. */
+      :global(.ph-img) {
+        position: absolute; inset: 0;
+        width: 100%; height: 100%;
+        object-fit: cover;
+        display: block;
       }
       .grid > :global(.is-large .placeholder) { aspect-ratio: 5 / 4; }
       .grid > :global(.is-wide .placeholder) { aspect-ratio: auto; height: 100%; min-height: 180px; }

@@ -46,6 +46,8 @@ export type R1Service = {
   id: string;
   name: string;
   description: string;
+  /** Optional per-service photo. When set, the services grid renders it instead of the striped placeholder. */
+  photo?: { src: string; alt: string };
 };
 
 export type R1ServicesSection = {
