@@ -96,30 +96,30 @@ export default function PrivacyPage() {
       </section>
 
       <section>
-        <h2 className="mb-4 mt-10 text-xl font-semibold">8. SMS &amp; Mobile Information</h2>
+        <h2 className="mb-4 mt-10 text-xl font-semibold">8. SMS / Text Messaging &amp; Mobile Information</h2>
         <p className="text-base leading-relaxed text-muted-foreground">
-          When you provide a mobile phone number to a business operating on SeldonFrame — by booking,
-          submitting a form, placing a call, or replying to a text — we collect that number and your
-          messaging consent so the business can send you SMS such as booking confirmations, appointment
-          reminders, missed-call follow-ups, and review requests. You can opt out at any time by replying
-          STOP.
+          When you opt in to text messaging — by submitting a form, checking a consent box, or texting us
+          — you agree to receive recurring automated messages at the mobile number you provide. We collect
+          your mobile phone number and messaging consent so we (or the business operating on SeldonFrame)
+          can send you SMS such as booking confirmations, appointment reminders, missed-call follow-ups,
+          and review requests.
         </p>
         <ul className="mt-3 list-disc space-y-3 pl-6 text-base leading-relaxed text-muted-foreground">
           <li>
             <strong>
-              No mobile information — including your phone number and SMS opt-in or consent — is ever
-              sold, rented, or shared with third parties or affiliates for their own marketing or
-              promotional purposes.
+              We do not sell or share your mobile information, phone number, or SMS opt-in/consent data
+              with third parties or affiliates for their own marketing or promotional purposes.
             </strong>
           </li>
           <li>
-            We share your number only with the messaging carrier and our SMS provider (Twilio), strictly
-            to deliver the messages you asked to receive.
+            We may share this information only with service providers who help us operate the messaging
+            program (such as our SMS carrier, Twilio), and strictly to deliver the service.
           </li>
           <li>
-            SMS opt-in and consent data are never shared with any third party for any purpose other than
-            delivering your messages.
+            You can opt out at any time by replying <strong>STOP</strong>, or reply{" "}
+            <strong>HELP</strong> for assistance.
           </li>
+          <li>Message and data rates may apply; message frequency varies.</li>
         </ul>
         <p className="mt-3 text-base leading-relaxed text-muted-foreground">
           See our{" "}

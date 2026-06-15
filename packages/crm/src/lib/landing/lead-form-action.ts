@@ -198,7 +198,7 @@ export async function submitLeadFormWithDeps(
       orgId,
       contactId,
       toNumber: normalizedPhone,
-      body: `Hi ${firstName || name}, thanks for reaching out to ${businessName}! Grab a time here: ${bookUrl} — or reply and we'll get you booked.`,
+      body: `Hi ${firstName || name}, thanks for reaching out to ${businessName}! Grab a time here: ${bookUrl} — or reply and we'll get you booked. Reply STOP to opt out.`,
     });
     smsSent = !res.suppressed;
   } catch {

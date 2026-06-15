@@ -10,6 +10,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { ARCHETYPES, archetypeStyle, type AestheticArchetypeId } from "../archetypes";
 import { submitLeadFormAction } from "@/lib/landing/lead-form-action";
 import type { R1LeadFormSection } from "@/lib/landing/r1-payload-prompt";
@@ -19,7 +20,7 @@ const DEFAULTS = {
   subheading: "Tell us what you need — we'll text you a time in minutes.",
   needLabel: "What do you need?",
   consentText:
-    "By submitting, you agree to receive texts about your request. Msg & data rates may apply. Reply STOP to opt out.",
+    "By submitting, you agree to receive automated marketing and informational text messages (appointment scheduling, reminders, and follow-ups) from us at the number provided. Consent is not a condition of purchase. Msg & data rates may apply. Msg frequency varies. Reply STOP to opt out, HELP for help.",
 };
 
 /** First token of a full name, safe for empty input. */
@@ -72,7 +73,7 @@ export function LeadFormSection({ orgSlug, businessName, archetype, leadForm }: 
   const heading = leadForm.heading || DEFAULTS.heading;
   const subheading = leadForm.subheading || DEFAULTS.subheading;
   const needLabel = leadForm.needLabel || DEFAULTS.needLabel;
-  const consentText = leadForm.consentText || DEFAULTS.consentText;
+  const customConsentText = leadForm.consentText || null;
   const options = leadForm.needOptions ?? [];
 
   function handleSubmit(e: React.FormEvent) {
@@ -167,7 +168,24 @@ export function LeadFormSection({ orgSlug, businessName, archetype, leadForm }: 
                 {pending ? "Sending…" : "Get my callback"}
               </button>
               <p className="sf-leadform-trust">★★★★★ Trusted by your neighbors</p>
-              <p className="sf-leadform-consent">{consentText}</p>
+              {customConsentText ? (
+                <p className="sf-leadform-consent">{customConsentText}</p>
+              ) : (
+                <p className="sf-leadform-consent">
+                  By submitting, you agree to receive automated marketing and informational text messages
+                  (appointment scheduling, reminders, and follow-ups) from {businessName} at the number
+                  provided. Consent is not a condition of purchase. Msg &amp; data rates may apply. Msg
+                  frequency varies. Reply STOP to opt out, HELP for help.{" "}
+                  <Link href="/privacy" className="sf-leadform-consent-link">
+                    Privacy Policy
+                  </Link>{" "}
+                  &amp;{" "}
+                  <Link href="/terms" className="sf-leadform-consent-link">
+                    Terms
+                  </Link>
+                  .
+                </p>
+              )}
             </form>
           </>
         )}
@@ -273,6 +291,11 @@ export function LeadFormSection({ orgSlug, businessName, archetype, leadForm }: 
           font-size: 11px;
           line-height: 1.45;
           color: color-mix(in oklab, var(--text) 50%, transparent);
+        }
+        .sf-leadform-consent-link {
+          text-decoration: underline;
+          text-underline-offset: 2px;
+          color: inherit;
         }
         .sf-leadform-error {
           margin: 0;
