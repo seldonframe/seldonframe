@@ -1,26 +1,18 @@
-// v1.25.0 — operator portal layout collapsed to a session-gate
-// pass-through.
+// v1 PWA — operator portal layout.
 //
-// Pre-1.25.0 this rendered a bespoke Twenty-CRM-light shell with
-// sidebar + agency-branded header. v1.25.0 pivots: operator session
-// unlocks the SAME admin dashboard the SF agency operator uses, so
-// this layout's only job is to verify the operator session and let
-// child pages (which redirect to /dashboard /contacts /deals
-// /bookings) handle the routing.
-//
-// If the user lacks an operator session, requireOperatorSessionForOrg
-// redirects to /portal/<slug>/login where they enter email and get a
-// magic link. That magic link's verifier sets the cookie and lands
-// them at /dashboard (the admin shell).
-//
-// v1 PWA: generateMetadata links the per-slug manifest.webmanifest +
-// apple-touch-icon + apple-mobile-web-app meta so the layout emits
-// the correct PWA hints in the <head>. The layout body remains a
-// session-gate pass-through; the mobile shell chrome is added in
-// Task 5.
+// Verifies the operator session (redirects to /portal/<slug>/login if
+// missing), resolves agency branding + workspace name, and wraps every
+// (operator) screen in the branded mobile shell (header + bottom-tab
+// nav + service worker + install button). The leaf screens render only
+// their content; the shell owns the chrome.
 
 import type { Metadata } from "next";
+import { eq } from "drizzle-orm";
+import { db } from "@/db";
+import { organizations } from "@/db/schema";
 import { requireOperatorSessionForOrg } from "@/lib/operator-portal/auth";
+import { getEffectiveBrandingForWorkspace } from "@/lib/partner-agencies/branding";
+import { OperatorMobileShell } from "@/components/operator-portal/mobile/operator-mobile-shell";
 
 export async function generateMetadata({
   params,
@@ -35,9 +27,7 @@ export async function generateMetadata({
       statusBarStyle: "black-translucent",
       title: "Today",
     },
-    icons: {
-      apple: "/apple-touch-icon.png",
-    },
+    icons: { apple: "/apple-touch-icon.png" },
   };
 }
 
@@ -49,6 +39,23 @@ export default async function OperatorPortalLayout({
   params: Promise<{ orgSlug: string }>;
 }) {
   const { orgSlug } = await params;
-  await requireOperatorSessionForOrg(orgSlug);
-  return <>{children}</>;
+  const session = await requireOperatorSessionForOrg(orgSlug);
+
+  const [org] = await db
+    .select({ name: organizations.name })
+    .from(organizations)
+    .where(eq(organizations.id, session.orgId))
+    .limit(1);
+
+  const branding = await getEffectiveBrandingForWorkspace(session.orgId);
+
+  return (
+    <OperatorMobileShell
+      orgSlug={orgSlug}
+      orgName={org?.name ?? orgSlug}
+      branding={branding}
+    >
+      {children}
+    </OperatorMobileShell>
+  );
 }
