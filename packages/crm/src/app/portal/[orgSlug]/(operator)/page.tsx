@@ -96,11 +96,17 @@ export default async function OperatorTodayPage({
   const accentColor =
     (branding?.is_white_label && branding.primary_color) || "#5b21b6";
 
-  // Best-effort: extract google_place_url from soul.business.maps_url
+  // Best-effort: extract review URL from soul.
+  // Precedence: soul.google_place_url (from onboarding intake) → soul.business.maps_url
+  // (from workspace creation via Google Maps paste) → empty string.
   const soulRecord = (orgSoulRow[0]?.soul as Record<string, unknown> | null) ?? {};
   const soulBusiness = (soulRecord.business as Record<string, unknown> | undefined) ?? {};
   const defaultReviewLink =
-    typeof soulBusiness.maps_url === "string" ? soulBusiness.maps_url : "";
+    typeof soulRecord.google_place_url === "string"
+      ? soulRecord.google_place_url
+      : typeof soulBusiness.maps_url === "string"
+        ? soulBusiness.maps_url
+        : "";
 
   const recentContacts: RecentContact[] = recentContactsRaw.map((c) => ({
     id: c.id,

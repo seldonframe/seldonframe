@@ -28,7 +28,7 @@ export function OperatorMobileShell({
   branding: EffectiveBranding | null;
   children: ReactNode;
 }) {
-  const brandName = branding?.is_white_label ? branding.brand_name : "SeldonFrame";
+  const brandName = branding?.brand_name || "SeldonFrame";
   const logoUrl = branding?.logo_url ?? null;
   const activeColor =
     (branding?.is_white_label && branding.primary_color) || "#5b21b6";

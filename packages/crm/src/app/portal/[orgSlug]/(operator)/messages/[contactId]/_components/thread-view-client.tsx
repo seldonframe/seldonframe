@@ -176,7 +176,7 @@ export function ThreadViewClient({
       <div className="flex flex-col gap-2 px-4 py-4">
         {timeline.length === 0 ? (
           <p className="py-10 text-center text-[13px]" style={{ color: "#999" }}>
-            No messages in this thread yet.
+            No messages yet with this contact.
           </p>
         ) : (
           timeline.map((item) => {
@@ -218,9 +218,9 @@ export function ThreadViewClient({
             return (
               <motion.div
                 key={`msg-${item.id}`}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.2 }}
+                initial={{ opacity: 0, x: outbound ? 16 : -16 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
                 className="flex flex-col"
                 style={{ alignItems: outbound ? "flex-end" : "flex-start" }}
               >
@@ -242,6 +242,12 @@ export function ThreadViewClient({
               </motion.div>
             );
           })
+        )}
+        {/* Notes empty state — shown contextually when the note tab is active */}
+        {composerTab === "note" && notes.length === 0 && (
+          <p className="px-4 py-2 text-center text-[12px]" style={{ color: "#C4A35A" }}>
+            No private notes yet. Add one below.
+          </p>
         )}
         <div ref={bottomRef} />
       </div>

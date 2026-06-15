@@ -780,7 +780,7 @@ export function TodayQuickActions({
             {formatted}
           </p>
         ) : (
-          <p style={{ fontSize: 15, color: "#BBB" }}>No open deals yet</p>
+          <p style={{ fontSize: 15, color: "#BBB" }}>No open deals — add your first deal from the Leads tab</p>
         )}
         {rollup.byStage.length > 0 && (
           <p style={{ fontSize: 12, color: "#999", marginTop: 6 }}>

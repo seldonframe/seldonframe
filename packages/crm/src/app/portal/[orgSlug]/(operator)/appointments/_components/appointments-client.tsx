@@ -738,25 +738,41 @@ export function AppointmentsClient({
 
       {/* Calendar area */}
       <div style={{ backgroundColor: "#fff", padding: "8px 16px 16px", borderBottom: "1px solid #F0F0EE" }}>
-        {view === "month" ? (
-          <>
-            <p style={{ fontSize: 13, fontWeight: 600, color: "#555", marginBottom: 8 }}>{monthName}</p>
-            <MonthCalendar
-              grid={monthGrid}
-              selectedDay={selectedDayKey}
-              onSelectDay={setSelectedDayKey}
-              accentColor={accentColor}
-            />
-          </>
-        ) : (
-          <WeekCalendar
-            strip={weekStrip}
-            selectedDay={selectedDayKey}
-            onSelectDay={setSelectedDayKey}
-            accentColor={accentColor}
-            tz={tz}
-          />
-        )}
+        <AnimatePresence mode="wait">
+          {view === "month" ? (
+            <motion.div
+              key="month"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.18 }}
+            >
+              <p style={{ fontSize: 13, fontWeight: 600, color: "#555", marginBottom: 8 }}>{monthName}</p>
+              <MonthCalendar
+                grid={monthGrid}
+                selectedDay={selectedDayKey}
+                onSelectDay={setSelectedDayKey}
+                accentColor={accentColor}
+              />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="week"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.18 }}
+            >
+              <WeekCalendar
+                strip={weekStrip}
+                selectedDay={selectedDayKey}
+                onSelectDay={setSelectedDayKey}
+                accentColor={accentColor}
+                tz={tz}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Day detail list */}
