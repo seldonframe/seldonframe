@@ -1,0 +1,32 @@
+/* ─────────────────────────────────────────────────────────────
+   SeldonFrame Mobile DS — Elevation (SCOPED to .sf-portal)
+   ───────────────────────────────────────────────────────────── */
+
+.sf-portal {
+  --hairline: 1px solid var(--border-hairline);
+
+  --shadow-xs:
+    0 1px 2px rgba(15, 20, 28, 0.06);
+  --shadow-sm:
+    0 1px 2px rgba(15, 20, 28, 0.05),
+    0 4px 10px rgba(15, 20, 28, 0.05);
+  --shadow-card:
+    0 1px 2px rgba(15, 20, 28, 0.04),
+    0 8px 24px rgba(15, 20, 28, 0.07);
+  --shadow-card-hover:
+    0 2px 4px rgba(15, 20, 28, 0.06),
+    0 14px 36px rgba(15, 20, 28, 0.11);
+  --shadow-popover:
+    0 4px 8px rgba(15, 20, 28, 0.06),
+    0 18px 44px rgba(15, 20, 28, 0.16);
+  --shadow-sheet:
+    0 -2px 8px rgba(15, 20, 28, 0.05),
+    0 -24px 64px rgba(15, 20, 28, 0.22);
+
+  --shadow-accent:
+    0 6px 18px color-mix(in srgb, var(--accent) 30%, transparent);
+  --shadow-accent-press:
+    0 2px 8px color-mix(in srgb, var(--accent) 26%, transparent);
+
+  --focus-ring: 0 0 0 3px var(--accent-ring);
+}

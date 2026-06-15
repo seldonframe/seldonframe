@@ -1,0 +1,58 @@
+/* ─────────────────────────────────────────────────────────────
+   SeldonFrame Mobile DS — Color tokens (SCOPED to .sf-portal)
+   ───────────────────────────────────────────────────────────── */
+
+.sf-portal {
+  /* ── Neutral ramp (cool slate) ─────────────────────────────── */
+  --gray-0:   #ffffff;
+  --gray-25:  #fcfcfd;
+  --gray-50:  #f7f8fa;
+  --gray-100: #eef1f5;
+  --gray-200: #e3e8ef;
+  --gray-300: #cdd5e0;
+  --gray-400: #9aa6b8;
+  --gray-500: #677488;
+  --gray-600: #4a5567;
+  --gray-700: #353f4f;
+  --gray-800: #1f2733;
+  --gray-900: #0f141c;
+
+  /* ── Agency accent (white-label) ───────────────────────────────
+     Set --accent + --accent-strong inline on .sf-portal wrapper.
+     Default agency = "Violet" (#7c3aed). Soft tints are derived
+     with color-mix so any accent stays premium. */
+  --accent:          #7c3aed;
+  --accent-strong:   #6d28d9;
+  --accent-contrast: #ffffff;
+  --accent-soft:     color-mix(in srgb, var(--accent) 10%, var(--gray-0));
+  --accent-soft-2:   color-mix(in srgb, var(--accent) 16%, var(--gray-0));
+  --accent-ring:     color-mix(in srgb, var(--accent) 38%, transparent);
+  --accent-tint-fg:  color-mix(in srgb, var(--accent) 82%, var(--gray-900));
+
+  /* ── Semantic (fixed, not white-labeled) ───────────────────── */
+  --positive:      #15935b;
+  --positive-soft: color-mix(in srgb, var(--positive) 12%, var(--gray-0));
+  --caution:       #c77800;
+  --caution-soft:  color-mix(in srgb, var(--caution) 14%, var(--gray-0));
+  --negative:      #dc2626;
+  --negative-soft: color-mix(in srgb, var(--negative) 12%, var(--gray-0));
+  --info:          #2563eb;
+  --info-soft:     color-mix(in srgb, var(--info) 12%, var(--gray-0));
+
+  /* ── Semantic surface / text aliases ───────────────────────── */
+  --surface-app:     var(--gray-50);
+  --surface-card:    var(--gray-0);
+  --surface-sunken:  var(--gray-100);
+  --surface-overlay: var(--gray-0);
+  --scrim:           color-mix(in srgb, var(--gray-900) 45%, transparent);
+
+  --text-primary:   var(--gray-900);
+  --text-secondary: var(--gray-600);
+  --text-muted:     var(--gray-500);
+  --text-faint:     var(--gray-400);
+  --text-on-accent: var(--accent-contrast);
+
+  --border-hairline: var(--gray-200);
+  --border-strong:   var(--gray-300);
+  --border-field:    var(--gray-300);
+}

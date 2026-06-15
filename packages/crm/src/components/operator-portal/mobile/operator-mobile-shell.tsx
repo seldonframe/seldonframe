@@ -30,25 +30,40 @@ export function OperatorMobileShell({
 }) {
   const brandName = branding?.brand_name || "SeldonFrame";
   const logoUrl = branding?.logo_url ?? null;
-  const activeColor =
-    (branding?.is_white_label && branding.primary_color) || "#5b21b6";
+  const accentColor =
+    (branding?.is_white_label && branding.primary_color) || "#7c3aed";
+  // accent-strong: ~15% darker via color-mix (CSS) — set as inline var so any
+  // child can use var(--accent-strong) without knowing the raw color.
+  const accentStrong = `color-mix(in srgb, ${accentColor} 85%, black)`;
   const scope = `/portal/${orgSlug}/`;
+
+  // Keep a stable alias for the existing nav (activeColor) until we restyle it
+  const activeColor = accentColor;
 
   return (
     <div
+      // .sf-portal is the DS scope root — all token vars are declared here.
+      // Inline CSS vars wire the agency accent so the whole subtree re-skins.
+      className="sf-portal mx-auto flex min-h-[100dvh] max-w-[640px] flex-col"
       data-operator-mobile-shell=""
       data-white-label={branding?.is_white_label ? "true" : "false"}
-      className="mx-auto flex min-h-[100dvh] max-w-[640px] flex-col"
-      style={{
-        backgroundColor: "#F7F7F5",
-        color: "#111",
-        fontFamily:
-          "var(--sf-font, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif)",
-      }}
+      style={
+        {
+          "--accent": accentColor,
+          "--accent-strong": accentStrong,
+          backgroundColor: "var(--surface-app)",
+          color: "var(--text-primary)",
+          fontFamily: "var(--font-sans)",
+        } as React.CSSProperties
+      }
     >
       <header
         className="sticky top-0 z-10 flex items-center justify-between gap-3 px-4 py-3"
-        style={{ backgroundColor: "#FFFFFF", borderBottom: "1px solid #E5E5E1" }}
+        style={{
+          backgroundColor: "var(--surface-card)",
+          borderBottom: "1px solid var(--border-hairline)",
+          height: "var(--header-h)",
+        }}
       >
         <div className="flex min-w-0 items-center gap-2.5">
           {logoUrl ? (
@@ -56,15 +71,45 @@ export function OperatorMobileShell({
             <img
               src={logoUrl}
               alt={brandName}
-              className="h-7 w-7 shrink-0 rounded-md object-cover"
+              style={{ width: 30, height: 30, borderRadius: 8, objectFit: "cover", flexShrink: 0 }}
             />
-          ) : null}
+          ) : (
+            /* Accent monogram if no logo */
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 30,
+                height: 30,
+                borderRadius: 8,
+                background: "var(--accent)",
+                color: "var(--text-on-accent)",
+                fontSize: 15,
+                fontWeight: "var(--weight-heavy)",
+                flexShrink: 0,
+              }}
+            >
+              {orgName.charAt(0).toUpperCase()}
+            </span>
+          )}
           <div className="flex min-w-0 flex-col leading-tight">
-            <span className="truncate text-[14px] font-semibold tracking-tight" style={{ color: "#111" }}>
+            <span
+              className="truncate"
+              style={{
+                fontSize: "var(--type-heading)",
+                fontWeight: "var(--weight-bold)",
+                letterSpacing: "var(--track-tight)",
+                color: "var(--text-primary)",
+              }}
+            >
               {orgName}
             </span>
             {branding?.is_white_label ? (
-              <span className="truncate text-[11px]" style={{ color: "#999" }}>
+              <span
+                className="truncate"
+                style={{ fontSize: "var(--type-micro)", color: "var(--text-muted)" }}
+              >
                 on {brandName}
               </span>
             ) : null}
@@ -76,10 +121,10 @@ export function OperatorMobileShell({
         </div>
       </header>
 
-      {/* Content. Bottom padding clears the fixed nav (56px) + safe area. */}
+      {/* Content. Bottom padding clears the fixed nav + safe area. */}
       <main
         className="flex flex-1 flex-col"
-        style={{ paddingBottom: "calc(56px + env(safe-area-inset-bottom, 0px))" }}
+        style={{ paddingBottom: "calc(var(--tabbar-h) + var(--safe-bottom))" }}
       >
         {children}
       </main>

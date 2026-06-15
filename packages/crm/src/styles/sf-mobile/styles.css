@@ -1,0 +1,13 @@
+/* ═══════════════════════════════════════════════════════════════
+   SeldonFrame Mobile Design System — portal-scoped entry point
+   All tokens are declared on .sf-portal (NOT :root) so they
+   cannot leak into admin dashboard or landing pages.
+   Import this file in the operator portal layout only.
+   ═══════════════════════════════════════════════════════════════ */
+
+@import "./tokens/colors.css";
+@import "./tokens/typography.css";
+@import "./tokens/spacing.css";
+@import "./tokens/elevation.css";
+@import "./tokens/motion.css";
+@import "./tokens/base.css";

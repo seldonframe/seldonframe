@@ -1,0 +1,36 @@
+/* ─────────────────────────────────────────────────────────────
+   SeldonFrame Mobile DS — Typography (SCOPED to .sf-portal)
+   ───────────────────────────────────────────────────────────── */
+
+.sf-portal {
+  --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Weights */
+  --weight-regular: 400;
+  --weight-book:    450;
+  --weight-medium:  500;
+  --weight-semi:    550;
+  --weight-bold:    600;
+  --weight-heavy:   700;
+
+  /* Type scale */
+  --type-display:   28px;
+  --type-title:     22px;
+  --type-heading:   18px;
+  --type-body:      16px;
+  --type-subhead:   15px;
+  --type-label:     14px;
+  --type-caption:   13px;
+  --type-micro:     11px;
+
+  --lh-tight:  1.12;
+  --lh-snug:   1.28;
+  --lh-normal: 1.45;
+
+  --track-display: -0.022em;
+  --track-title:   -0.018em;
+  --track-tight:   -0.012em;
+  --track-normal:  0em;
+  --track-eyebrow:  0.06em;
+}

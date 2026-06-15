@@ -6,6 +6,10 @@
 // nav + service worker + install button). The leaf screens render only
 // their content; the shell owns the chrome.
 
+// SeldonFrame Mobile Design System tokens — scoped to .sf-portal only.
+// Tokens live on .sf-portal (not :root) so they cannot leak to admin/landings.
+import "@/styles/sf-mobile/styles.css";
+
 import type { Metadata } from "next";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";

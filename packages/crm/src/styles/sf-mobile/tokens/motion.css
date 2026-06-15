@@ -1,0 +1,26 @@
+/* ─────────────────────────────────────────────────────────────
+   SeldonFrame Mobile DS — Motion (SCOPED to .sf-portal)
+   ───────────────────────────────────────────────────────────── */
+
+.sf-portal {
+  --ease-out:    cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.5, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+
+  --dur-fast:    120ms;
+  --dur-normal:  200ms;
+  --dur-slow:    300ms;
+  --dur-stagger:  40ms;
+
+  --press-scale: 0.97;
+  --card-press-scale: 0.985;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sf-portal {
+    --dur-fast: 1ms;
+    --dur-normal: 1ms;
+    --dur-slow: 1ms;
+    --dur-stagger: 0ms;
+  }
+}
