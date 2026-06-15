@@ -1,17 +1,22 @@
-// v1 PWA — Today screen (operator mobile home).
+// v2 PWA — Today screen (operator mobile home).
 //
-// Glance cards: New leads (status='lead' last 7d) · Today's
-// appointments · Unread texts (unread inbound SMS) · Missed calls
-// (coming soon — no call data surfaced yet) + a short "up next" list.
-// All data scoped to the operator's workspace via the session orgId.
+// Glance cards: New leads · Today's appts · Unread texts · Missed calls
+// Pipeline $ card (tappable → breakdown sheet)
+// Quick Actions row: Add Contact · New Booking · Request Review
+// Up next list (today's bookings)
 
 import Link from "next/link";
-import { and, asc, eq, gte, lt, ne } from "drizzle-orm";
+import { and, asc, desc, eq, gte, lt, ne, not, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { bookings } from "@/db/schema";
+import { bookings, contacts, organizations } from "@/db/schema";
 import { getOperatorSessionForOrg } from "@/lib/operator-portal/auth";
 import { countNewLeads, countUnreadInboundSms } from "@/lib/operator-portal/counts";
 import { contactDisplayName } from "@/lib/operator-portal/mobile-format";
+import { getPipelineRollup } from "@/lib/operator-portal/today";
+import { getOutboundSmsEnabled } from "@/lib/operator-portal/outbound-sms-flag";
+import { getEffectiveBrandingForWorkspace } from "@/lib/partner-agencies/branding";
+import { TodayQuickActions, type RecentContact } from "./_components/today-quick-actions";
+import { DEMO_CONTACT_TAG } from "@/lib/workspace/seed-demo-portal";
 
 export default async function OperatorTodayPage({
   params,
@@ -30,7 +35,15 @@ export default async function OperatorTodayPage({
   const endOfToday = new Date(startOfToday);
   endOfToday.setDate(endOfToday.getDate() + 1);
 
-  const [newLeads, unreadTexts, todaysBookings] = await Promise.all([
+  const [
+    newLeads,
+    unreadTexts,
+    todaysBookings,
+    pipelineRollup,
+    branding,
+    recentContactsRaw,
+    orgSoulRow,
+  ] = await Promise.all([
     countNewLeads(orgId),
     countUnreadInboundSms(orgId),
     db
@@ -52,7 +65,50 @@ export default async function OperatorTodayPage({
       )
       .orderBy(asc(bookings.startsAt))
       .limit(5),
+    getPipelineRollup(orgId),
+    getEffectiveBrandingForWorkspace(orgId),
+    // Recent contacts for the Request Review picker (exclude demo)
+    db
+      .select({
+        id: contacts.id,
+        firstName: contacts.firstName,
+        lastName: contacts.lastName,
+        email: contacts.email,
+        phone: contacts.phone,
+      })
+      .from(contacts)
+      .where(
+        and(
+          eq(contacts.orgId, orgId),
+          not(sql`${DEMO_CONTACT_TAG} = ANY(${contacts.tags})`),
+        ),
+      )
+      .orderBy(desc(contacts.createdAt))
+      .limit(50),
+    // Soul for google_place_url (best-effort pre-fill for review link)
+    db
+      .select({ soul: organizations.soul })
+      .from(organizations)
+      .where(eq(organizations.id, orgId))
+      .limit(1),
   ]);
+
+  const accentColor =
+    (branding?.is_white_label && branding.primary_color) || "#5b21b6";
+
+  // Best-effort: extract google_place_url from soul.business.maps_url
+  const soulRecord = (orgSoulRow[0]?.soul as Record<string, unknown> | null) ?? {};
+  const soulBusiness = (soulRecord.business as Record<string, unknown> | undefined) ?? {};
+  const defaultReviewLink =
+    typeof soulBusiness.maps_url === "string" ? soulBusiness.maps_url : "";
+
+  const recentContacts: RecentContact[] = recentContactsRaw.map((c) => ({
+    id: c.id,
+    firstName: c.firstName,
+    lastName: c.lastName,
+    email: c.email,
+    phone: c.phone,
+  }));
 
   const base = `/portal/${orgSlug}`;
 
@@ -69,13 +125,51 @@ export default async function OperatorTodayPage({
         </p>
       </header>
 
+      {/* Glance cards */}
       <div className="grid grid-cols-2 gap-3">
-        <GlanceCard label="New leads" sub="last 7 days" value={newLeads} href={`${base}/leads`} highlight={newLeads > 0} />
-        <GlanceCard label="Today's appts" sub="scheduled" value={todaysBookings.length} href={`${base}/appointments`} />
-        <GlanceCard label="Unread texts" sub="need a reply" value={unreadTexts} href={`${base}/messages`} highlight={unreadTexts > 0} />
-        <GlanceCard label="Missed calls" sub="coming soon" value="—" href={`${base}`} muted />
+        <GlanceCard
+          label="New leads"
+          sub="last 7 days"
+          value={newLeads}
+          href={`${base}/leads`}
+          highlight={newLeads > 0}
+          accentColor={accentColor}
+        />
+        <GlanceCard
+          label="Today's appts"
+          sub="scheduled"
+          value={todaysBookings.length}
+          href={`${base}/appointments`}
+          accentColor={accentColor}
+        />
+        <GlanceCard
+          label="Unread texts"
+          sub="need a reply"
+          value={unreadTexts}
+          href={`${base}/messages`}
+          highlight={unreadTexts > 0}
+          accentColor={accentColor}
+        />
+        <GlanceCard
+          label="Missed calls"
+          sub="coming soon"
+          value="—"
+          href={`${base}`}
+          muted
+          accentColor={accentColor}
+        />
       </div>
 
+      {/* Pipeline $ card + Quick Actions (client-interactive) */}
+      <TodayQuickActions
+        orgSlug={orgSlug}
+        accentColor={accentColor}
+        rollup={pipelineRollup}
+        defaultReviewLink={defaultReviewLink}
+        recentContacts={recentContacts}
+      />
+
+      {/* Up next */}
       {todaysBookings.length > 0 ? (
         <div className="rounded-2xl bg-white p-4" style={{ border: "1px solid #E5E5E1" }}>
           <p className="mb-2 text-[11px] font-medium uppercase tracking-wide" style={{ color: "#999" }}>
@@ -110,6 +204,7 @@ function GlanceCard({
   href,
   highlight,
   muted,
+  accentColor,
 }: {
   label: string;
   sub: string;
@@ -117,6 +212,7 @@ function GlanceCard({
   href: string;
   highlight?: boolean;
   muted?: boolean;
+  accentColor: string;
 }) {
   return (
     <Link
@@ -126,7 +222,7 @@ function GlanceCard({
     >
       <span
         className="text-[26px] font-semibold leading-none"
-        style={{ color: muted ? "#BBB" : highlight ? "#5b21b6" : "#111" }}
+        style={{ color: muted ? "#BBB" : highlight ? accentColor : "#111" }}
       >
         {value}
       </span>
