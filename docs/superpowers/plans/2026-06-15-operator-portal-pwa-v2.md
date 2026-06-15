@@ -978,8 +978,8 @@ git commit -m "feat(operator-portal): sendReviewRequest with gated SMS path"
 - Sections: (1) 4 glance cards row (same as v1); (2) Pipeline $ card — full-width, shows total open value formatted as `$X,XXX`, tappable → opens a bottom sheet with per-stage breakdown; (3) Quick Actions row — 3 large tappable tiles: "Add Contact", "New Booking", "Request Review"; (4) existing "Up next" list
 - States: loading = skeleton cards; pipeline $ = 0 → shows "No open deals yet"; empty quick actions row = never empty (always show all 3)
 - "Add Contact" opens a `<dialog>` or bottom sheet with fields: First Name (required), Last Name, Phone, Email, Status (default "lead"). On submit calls `createContactForOrg` via a `"use server"` action. Show inline success ("Contact added!") or error.
-- "New Booking" is a plain `<Link href={`/book/${orgSlug}`}>` — links to the existing public booking page.
-- "Request Review" opens a bottom sheet: contact picker (search among recent leads via `listContacts({orgId, sort:"recent", orgId})`), review link input (pre-fills from `organizations.soul.reviewLink` if set), Send button. On submit calls `sendReviewRequest`.
+- "New Booking" is a plain `<Link href={`/book/${orgSlug}/default`}>` — the canonical public booking URL (`resolvePublicBookingContext` handles the `default` slug even with no named template; bare `/book/${orgSlug}` has no page and 404s).
+- "Request Review" opens a bottom sheet: contact picker (search among recent leads via `listContacts({orgId, sort:"recent"})`), review link input (best-effort pre-fill from the onboarding-collected Google reviews URL `google_reviews_url` — locate its stored path on the org/soul via the onboarding change-plan; if absent, leave blank — the field is ALWAYS editable so a missing source never blocks), Send button. On submit calls `sendReviewRequest` with the chosen contact's email/phone/name + the link.
 - Claude-Design note: use `framer-motion` `AnimatePresence` for sheet open/close; tap targets minimum 48px; agency `primary_color` for active accents via `branding.primary_color`.
 
 - [ ] **Step 1: Update the Today page**
@@ -2198,7 +2198,7 @@ Expected: FAIL — module not found.
 ```typescript
 // src/lib/operator-portal/search.ts
 // NOT "use server" — the action wrapper is search-actions.ts.
-import { ilike, or, eq, and } from "drizzle-orm";
+import { ilike, or, eq, and, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { contacts, deals, bookings } from "@/db/schema";
 
@@ -2266,10 +2266,6 @@ function defaultDeps(orgSlug: string): SearchQueryDeps {
         .where(and(eq(bookings.orgId, orgId), ne(bookings.status, "template"), or(ilike(bookings.title, pat(q)), ilike(bookings.fullName, pat(q)))))
         .limit(10),
   };
-
-  // Note: `ne` is referenced here but not imported above — add to drizzle-orm import.
-  function ne<T>(col: T, val: unknown) { return (col as unknown as { ne: (v: unknown) => unknown }).ne(val); }
-  void ne; // satisfy TS unused warning — actual import handles this
 }
 
 export async function universalSearch(
@@ -2319,7 +2315,7 @@ export async function universalSearch(
 }
 ```
 
-> **Fix:** the inline `ne` function above is a placeholder — the actual file should import `ne` from `drizzle-orm` at the top of the file alongside the other imports, and remove the local `ne` function. Write the final file with `import { ilike, or, eq, and, ne } from "drizzle-orm";` at the top.
+> Note: `ne` is imported from `drizzle-orm` at the top of the file (used to exclude `template` bookings from search results).
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -2603,12 +2599,12 @@ Checked against the spec (`2026-06-15-operator-portal-pwa-v2-design.md`):
 
 6. **`search.ts` default deps `ne` import:** The implementation note flags that `ne` must be imported from `drizzle-orm` at the top of the file. The inline local `ne` function in the spec above is a placeholder artifact from the writing process — the actual file starts with `import { ilike, or, eq, and, ne } from "drizzle-orm";`.
 
-## Under-specified Items in the Spec
+## Under-specified Items — Resolved in Plan Review
 
-1. **Review link source:** The spec says the Request Review sheet has a "review link input". The implementation pre-fills it from `organizations.soul.reviewLink` if set. If soul doesn't have this field, the operator types it manually. This field path (`soul.reviewLink`) should be confirmed against the actual soul schema.
+1. **Review link source — RESOLVED:** Pre-fill the Request Review link (best-effort) from the onboarding-collected Google reviews URL (`google_reviews_url`, applied via the onboarding change-plan — the implementer locates its stored path on the org/soul). The input is ALWAYS editable, so a missing source never blocks sending. (Replaces the earlier `soul.reviewLink` guess.)
 
-2. **Calendar week start day:** The spec says "Month + Week" but does not specify week start (Sunday vs Monday). This plan uses Monday (ISO week) for the week strip, consistent with international norms. If the workspace is US-based and Sunday start is preferred, the offset calculation in `buildWeekStrip` needs `weekdayOffset = anchorParts.weekdayIndex` (Sunday=0 start) instead of `(weekdayIndex - 1 + 7) % 7`.
+2. **Calendar week start — DECISION: Monday (ISO).** Kept Monday for v2.0 — internally consistent and fully tested. Switching to Sunday-start (a reasonable US-ICP default) is a 1-line change: `weekdayOffset = anchorParts.weekdayIndex` in both `buildMonthGrid` and `buildWeekStrip`, plus the two `buildWeekStrip` day-span assertions. Deferred as a trivial post-build tweak.
 
-3. **Search minimum query length:** The spec says "debounced" but doesn't specify minimum chars. This plan uses 2 characters to avoid massive result sets on single-keystroke. Confirmed in Task 4.1 tests.
+3. **Search minimum query length — RESOLVED:** 2 characters. Confirmed in Task 4.1 tests.
 
-4. **"New Booking" link in Quick Actions:** The spec says "links to the existing booking flow." The implementation links to `/book/{orgSlug}` — the public booking page. If the operator should go to a dashboard-internal create-booking form instead, update Task 1.3.
+4. **"New Booking" link — RESOLVED:** Links to `/book/{orgSlug}/default` (the canonical booking URL used by the messaging system; `resolvePublicBookingContext` handles the `default` slug). Bare `/book/{orgSlug}` has no page and would 404.
