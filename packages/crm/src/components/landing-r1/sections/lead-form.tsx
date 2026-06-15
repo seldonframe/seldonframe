@@ -191,7 +191,11 @@ export function LeadFormSection({ orgSlug, businessName, archetype, leadForm }: 
         )}
       </div>
 
-      <style jsx>{`
+      {/* Global styled-jsx — class names are sf-leadform-* prefixed to avoid
+          collisions. Scoped jsx breaks with reactCompiler:true (see chrome/navbar.tsx
+          comment for the full explanation). Global mode matches the pattern
+          used by hero.tsx, faq.tsx, etc. */}
+      <style jsx global>{`
         .sf-leadform {
           background: var(--surface, #f5f5f5);
           color: var(--text, #111);

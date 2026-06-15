@@ -113,7 +113,11 @@ export function StickyMobileBar({
         </a>
       )}
 
-      <style jsx>{`
+      {/* Global styled-jsx — class names are sf-sticky-* prefixed to avoid
+          collisions. Scoped jsx breaks with reactCompiler:true (see navbar.tsx
+          comment for the full explanation). Global mode matches the pattern
+          used by all section components. */}
+      <style jsx global>{`
         .sf-sticky-mobile-bar {
           position: fixed;
           left: 0;

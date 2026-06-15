@@ -109,9 +109,17 @@ export function Navbar({
         </a>
       </div>
 
-      {/* Local-scope styled-jsx — same pattern as EmergencyStrip. Class names
-          are sf-navbar-* prefixed. Archetype tokens via CSS vars only. */}
-      <style jsx>{`
+      {/* Global styled-jsx — class names are sf-navbar-* prefixed to avoid
+          collisions. Scoped jsx breaks with reactCompiler:true because the
+          React Compiler extracts JSX expressions (e.g. sections.map callbacks)
+          into memoized sub-functions, so the styled-jsx SWC scope-hash is
+          injected into the <style> block but NOT re-injected into the elements
+          in the extracted sub-function — causing a selector mismatch and
+          zero style application. Global mode is the correct pattern for any
+          component whose JSX spans multiple functions/callbacks; this matches
+          what hero.tsx, faq.tsx, footer.tsx, services-grid.tsx, and
+          testimonials.tsx already do for the same reason. */}
+      <style jsx global>{`
         .sf-navbar {
           position: sticky;
           top: 0;

@@ -50,7 +50,10 @@ export function TrustBadge({
       {variant === "rating" ? null : icon}
       {children ?? <span>{label}</span>}
 
-      <style jsx>{`
+      {/* Global styled-jsx — class names are trust-badge-* prefixed.
+          Scoped jsx breaks with reactCompiler:true (see chrome/navbar.tsx
+          comment for the full explanation). */}
+      <style jsx global>{`
         .trust-badge {
           display: inline-flex;
           align-items: center;

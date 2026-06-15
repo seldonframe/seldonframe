@@ -66,10 +66,11 @@ export function EmergencyStrip({ archetype, message, phone, show }: EmergencyStr
         </a>
       </div>
 
-      {/* Local styled-jsx — kept in the same component function so the scope
-          class attaches correctly. Class names are prefixed `.sf-emergency-*`
-          so they survive `global` upgrades if we ever flip them. */}
-      <style jsx>{`
+      {/* Global styled-jsx — class names are sf-emergency-* prefixed to avoid
+          collisions. Scoped jsx breaks with reactCompiler:true (see navbar.tsx
+          comment for the full explanation). Global mode matches the pattern
+          used by all section components. */}
+      <style jsx global>{`
         .sf-emergency-strip {
           background: var(--secondary);
           color: #fff;
