@@ -121,3 +121,7 @@ export * from "./landing-payload-versions";
 // 2026-06-04 — Client-onboarding intake (Task 1): tokenized intake links +
 // wiring-agent change plans.
 export * from "./onboarding";
+
+// 2026-06-15 — Operator Portal PWA v2: conversation notes (internal notes
+// on SMS threads visible only to the operator team).
+export * from "./conversation-notes";
