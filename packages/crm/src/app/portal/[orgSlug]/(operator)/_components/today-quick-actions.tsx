@@ -1,180 +1,65 @@
 "use client";
 
-import { useState, useTransition, useRef, useEffect } from "react";
+// today-quick-actions.tsx — DS-styled Today screen.
+//
+// All data wiring + server actions PRESERVED:
+//  - createOperatorContactAction (Add Contact sheet)
+//  - requestReviewAction (Request Review sheet)
+//  - /book/${orgSlug}/default (New Booking link)
+//  - pipelineRollup (Pipeline card → stage breakdown sheet)
+//  - Missed calls stub (0 / "None today")
+//  - Scan card → disabled "Soon" tile
+//
+// Only the presentation layer changes to use SeldonFrame Mobile DS components.
+
+import { useState, useTransition } from "react";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
+import {
+  UserPlus,
+  CalendarPlus,
+  Star,
+  ScanLine,
+  MessageSquare,
+  PhoneMissed,
+  CalendarCheck,
+  ChevronRight,
+  X,
+} from "lucide-react";
+import {
+  KpiCard,
+  QuickAction,
+  SectionHeader,
+  ListRow,
+  Card,
+  Avatar,
+  Badge,
+  DSSheet,
+  DSInput,
+  Button,
+  Skeleton,
+} from "@/components/operator-portal/ds";
 import {
   createOperatorContactAction,
   requestReviewAction,
 } from "@/lib/operator-portal/today-actions";
 import type { PipelineRollup } from "@/lib/operator-portal/today";
+import { contactDisplayName } from "@/lib/operator-portal/mobile-format";
 
-// ─── Sheet backdrop / panel ───────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-function Sheet({
-  open,
-  onClose,
-  title,
-  children,
-  accentColor,
-}: {
-  open: boolean;
-  onClose: () => void;
+export type RecentContact = {
+  id: string;
+  firstName: string;
+  lastName: string | null;
+  email: string | null;
+  phone: string | null;
+};
+
+type TodayBooking = {
+  id: string;
   title: string;
-  children: React.ReactNode;
-  accentColor: string;
-}) {
-  // Close on backdrop click
-  const backdropRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [open, onClose]);
-
-  return (
-    <AnimatePresence>
-      {open && (
-        <>
-          {/* Backdrop */}
-          <motion.div
-            ref={backdropRef}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            onClick={onClose}
-            style={{
-              position: "fixed",
-              inset: 0,
-              backgroundColor: "rgba(0,0,0,0.45)",
-              zIndex: 50,
-            }}
-          />
-          {/* Panel */}
-          <motion.div
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={{ type: "spring", damping: 28, stiffness: 300 }}
-            style={{
-              position: "fixed",
-              bottom: 0,
-              left: "50%",
-              x: "-50%",
-              width: "min(100vw, 640px)",
-              backgroundColor: "#FFFFFF",
-              borderRadius: "20px 20px 0 0",
-              zIndex: 51,
-              paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)",
-              boxShadow: "0 -4px 32px rgba(0,0,0,0.12)",
-            }}
-          >
-            {/* Drag handle */}
-            <div
-              style={{
-                width: 36,
-                height: 4,
-                borderRadius: 2,
-                backgroundColor: "#DDD",
-                margin: "12px auto 0",
-              }}
-            />
-            {/* Header */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: "16px 20px 12px",
-                borderBottom: "1px solid #F0F0EE",
-              }}
-            >
-              <span
-                style={{
-                  fontSize: 17,
-                  fontWeight: 600,
-                  color: "#111",
-                  letterSpacing: "-0.3px",
-                }}
-              >
-                {title}
-              </span>
-              <button
-                onClick={onClose}
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: "50%",
-                  border: "none",
-                  backgroundColor: "#F0F0EE",
-                  color: "#666",
-                  fontSize: 18,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  cursor: "pointer",
-                  flexShrink: 0,
-                }}
-                aria-label="Close"
-              >
-                ×
-              </button>
-            </div>
-            {/* Body */}
-            <div style={{ padding: "20px 20px 0" }}>{children}</div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
-  );
-}
-
-// ─── Field helpers ────────────────────────────────────────────────────────────
-
-function Field({
-  label,
-  required,
-  children,
-}: {
-  label: string;
-  required?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <div style={{ marginBottom: 16 }}>
-      <label
-        style={{
-          display: "block",
-          fontSize: 13,
-          fontWeight: 500,
-          color: "#555",
-          marginBottom: 6,
-        }}
-      >
-        {label}
-        {required && <span style={{ color: "#E53E3E", marginLeft: 3 }}>*</span>}
-      </label>
-      {children}
-    </div>
-  );
-}
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  height: 48,
-  borderRadius: 12,
-  border: "1.5px solid #E0E0DE",
-  padding: "0 14px",
-  fontSize: 15,
-  color: "#111",
-  backgroundColor: "#F9F9F7",
-  outline: "none",
-  boxSizing: "border-box",
+  startsAt: Date;
+  fullName: string | null;
 };
 
 // ─── Add Contact Sheet ────────────────────────────────────────────────────────
@@ -183,12 +68,10 @@ function AddContactSheet({
   open,
   onClose,
   orgSlug,
-  accentColor,
 }: {
   open: boolean;
   onClose: () => void;
   orgSlug: string;
-  accentColor: string;
 }) {
   const [isPending, startTransition] = useTransition();
   const [result, setResult] = useState<
@@ -228,9 +111,7 @@ function AddContactSheet({
       });
       if (res.ok) {
         setResult({ ok: true, message: "Contact added!" });
-        setTimeout(() => {
-          handleClose();
-        }, 1200);
+        setTimeout(() => { handleClose(); }, 1200);
       } else {
         setResult({ ok: false, error: res.error });
       }
@@ -238,119 +119,116 @@ function AddContactSheet({
   };
 
   return (
-    <Sheet open={open} onClose={handleClose} title="Add Contact" accentColor={accentColor}>
-      <form onSubmit={handleSubmit}>
-        <Field label="First Name" required>
-          <input
-            style={inputStyle}
-            value={firstName}
-            onChange={(e) => setFirstName(e.target.value)}
-            placeholder="Jane"
-            required
-            autoFocus
-          />
-        </Field>
-        <Field label="Last Name">
-          <input
-            style={inputStyle}
-            value={lastName}
-            onChange={(e) => setLastName(e.target.value)}
-            placeholder="Doe"
-          />
-        </Field>
-        <Field label="Phone">
-          <input
-            style={inputStyle}
-            type="tel"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="+1 555 000 1234"
-          />
-        </Field>
-        <Field label="Email">
-          <input
-            style={inputStyle}
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="jane@example.com"
-          />
-        </Field>
-        <Field label="Status">
+    <DSSheet open={open} onClose={handleClose} title="Add contact">
+      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <DSInput
+          label="First name"
+          required
+          value={firstName}
+          onChange={(e) => setFirstName(e.target.value)}
+          placeholder="Jane"
+          autoFocus
+        />
+        <DSInput
+          label="Last name"
+          value={lastName}
+          onChange={(e) => setLastName(e.target.value)}
+          placeholder="Doe"
+        />
+        <DSInput
+          label="Phone"
+          type="tel"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          placeholder="+1 555 000 1234"
+        />
+        <DSInput
+          label="Email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="jane@example.com"
+        />
+
+        {/* Status select — uses same field styling as DS Input */}
+        <div>
+          <span
+            style={{
+              display: "block",
+              marginBottom: 7,
+              fontSize: "var(--type-label)",
+              fontWeight: "var(--weight-semi)" as React.CSSProperties["fontWeight"],
+              color: "var(--text-secondary)",
+            }}
+          >
+            Status
+          </span>
           <select
-            style={{ ...inputStyle, appearance: "none", paddingRight: 36 }}
             value={status}
             onChange={(e) => setStatus(e.target.value)}
+            style={{
+              width: "100%",
+              height: "var(--control-h)",
+              borderRadius: "var(--radius-md)",
+              border: "1px solid var(--border-field)",
+              padding: "0 14px",
+              fontSize: "var(--type-body)",
+              color: "var(--text-primary)",
+              backgroundColor: "var(--surface-card)",
+              outline: "none",
+              boxSizing: "border-box",
+              fontFamily: "inherit",
+            }}
           >
             <option value="lead">Lead</option>
             <option value="active">Active</option>
             <option value="prospect">Prospect</option>
             <option value="customer">Customer</option>
           </select>
-        </Field>
+        </div>
 
         {result && (
           <div
             style={{
-              borderRadius: 10,
+              borderRadius: "var(--radius-md)",
               padding: "10px 14px",
-              fontSize: 14,
-              marginBottom: 16,
-              backgroundColor: result.ok ? "#F0FFF4" : "#FFF5F5",
-              color: result.ok ? "#276749" : "#C53030",
-              border: `1px solid ${result.ok ? "#C6F6D5" : "#FED7D7"}`,
+              fontSize: "var(--type-label)",
+              backgroundColor: result.ok ? "var(--positive-soft)" : "var(--negative-soft)",
+              color: result.ok ? "var(--positive)" : "var(--negative)",
+              border: `1px solid ${result.ok ? "var(--positive)" : "var(--negative)"}`,
+              opacity: 0.8,
             }}
           >
             {result.ok ? result.message : result.error}
           </div>
         )}
 
-        <button
+        <Button
           type="submit"
-          disabled={isPending || !firstName.trim()}
-          style={{
-            width: "100%",
-            height: 52,
-            borderRadius: 14,
-            border: "none",
-            backgroundColor: isPending || !firstName.trim() ? "#C7B8E8" : accentColor,
-            color: "#FFFFFF",
-            fontSize: 16,
-            fontWeight: 600,
-            cursor: isPending || !firstName.trim() ? "not-allowed" : "pointer",
-            marginBottom: 8,
-            transition: "opacity 0.15s",
-          }}
+          variant="primary"
+          fullWidth
+          loading={isPending}
+          disabled={!firstName.trim()}
         >
-          {isPending ? "Adding…" : "Add Contact"}
-        </button>
+          Add contact
+        </Button>
       </form>
-    </Sheet>
+    </DSSheet>
   );
 }
 
 // ─── Request Review Sheet ─────────────────────────────────────────────────────
 
-export type RecentContact = {
-  id: string;
-  firstName: string;
-  lastName: string | null;
-  email: string | null;
-  phone: string | null;
-};
-
 function RequestReviewSheet({
   open,
   onClose,
   orgSlug,
-  accentColor,
   defaultReviewLink,
   recentContacts,
 }: {
   open: boolean;
   onClose: () => void;
   orgSlug: string;
-  accentColor: string;
   defaultReviewLink: string;
   recentContacts: RecentContact[];
 }) {
@@ -406,24 +284,36 @@ function RequestReviewSheet({
   };
 
   return (
-    <Sheet open={open} onClose={handleClose} title="Request Review" accentColor={accentColor}>
-      <form onSubmit={handleSubmit}>
+    <DSSheet open={open} onClose={handleClose} title="Request review">
+      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         {/* Contact picker */}
-        <Field label="Select Contact" required>
+        <div>
+          <span
+            style={{
+              display: "block",
+              marginBottom: 7,
+              fontSize: "var(--type-label)",
+              fontWeight: "var(--weight-semi)" as React.CSSProperties["fontWeight"],
+              color: "var(--text-secondary)",
+            }}
+          >
+            Contact <span style={{ color: "var(--negative)" }}>*</span>
+          </span>
           {selected ? (
             <div
               style={{
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
-                height: 48,
-                borderRadius: 12,
-                border: `1.5px solid ${accentColor}`,
+                height: "var(--control-h)",
+                borderRadius: "var(--radius-md)",
+                border: "1px solid var(--accent)",
                 padding: "0 14px",
-                backgroundColor: "#F9F9F7",
+                backgroundColor: "var(--accent-soft)",
+                boxShadow: "var(--focus-ring)",
               }}
             >
-              <span style={{ fontSize: 15, color: "#111" }}>
+              <span style={{ fontSize: "var(--type-body)", color: "var(--text-primary)" }}>
                 {selected.firstName} {selected.lastName ?? ""}
               </span>
               <button
@@ -432,20 +322,20 @@ function RequestReviewSheet({
                 style={{
                   border: "none",
                   background: "none",
-                  color: "#999",
-                  fontSize: 18,
+                  color: "var(--text-muted)",
                   cursor: "pointer",
-                  padding: "0 4px",
+                  padding: "4px",
+                  display: "flex",
+                  alignItems: "center",
                 }}
               >
-                ×
+                <X size={16} />
               </button>
             </div>
           ) : (
             <>
-              <input
-                style={inputStyle}
-                placeholder="Search by name or email…"
+              <DSInput
+                placeholder="Search by name or email..."
                 value={contactSearch}
                 onChange={(e) => setContactSearch(e.target.value)}
               />
@@ -453,12 +343,13 @@ function RequestReviewSheet({
                 <div
                   style={{
                     marginTop: 4,
-                    borderRadius: 12,
-                    border: "1px solid #E5E5E1",
-                    backgroundColor: "#FFF",
+                    borderRadius: "var(--radius-md)",
+                    border: "1px solid var(--border-hairline)",
+                    backgroundColor: "var(--surface-card)",
                     overflow: "hidden",
-                    maxHeight: 200,
+                    maxHeight: 220,
                     overflowY: "auto",
+                    boxShadow: "var(--shadow-popover)",
                   }}
                 >
                   {filteredContacts.map((c) => (
@@ -471,19 +362,20 @@ function RequestReviewSheet({
                         padding: "12px 14px",
                         textAlign: "left",
                         border: "none",
-                        borderBottom: "1px solid #F0F0EE",
+                        borderBottom: "1px solid var(--border-hairline)",
                         backgroundColor: "transparent",
                         cursor: "pointer",
-                        fontSize: 14,
-                        color: "#222",
-                        minHeight: 48,
+                        fontSize: "var(--type-label)",
+                        color: "var(--text-primary)",
+                        minHeight: "var(--tap-min)",
+                        fontFamily: "inherit",
                       }}
                     >
-                      <span style={{ fontWeight: 500 }}>
+                      <span style={{ fontWeight: "var(--weight-semi)" as React.CSSProperties["fontWeight"] }}>
                         {c.firstName} {c.lastName ?? ""}
                       </span>
                       {c.email && (
-                        <span style={{ color: "#888", marginLeft: 8, fontSize: 12 }}>
+                        <span style={{ color: "var(--text-muted)", marginLeft: 8, fontSize: "var(--type-caption)" }}>
                           {c.email}
                         </span>
                       )}
@@ -492,39 +384,34 @@ function RequestReviewSheet({
                 </div>
               )}
               {filteredContacts.length === 0 && contactSearch.trim() && (
-                <p style={{ fontSize: 13, color: "#999", marginTop: 6 }}>
+                <p style={{ fontSize: "var(--type-caption)", color: "var(--text-muted)", marginTop: 6 }}>
                   No contacts found.
                 </p>
               )}
             </>
           )}
-        </Field>
+        </div>
 
-        {/* Review link */}
-        <Field label="Review Link" required>
-          <input
-            style={inputStyle}
-            type="url"
-            value={reviewLink}
-            onChange={(e) => setReviewLink(e.target.value)}
-            placeholder="https://g.page/r/your-listing"
-            required
-          />
-          <p style={{ fontSize: 12, color: "#AAA", marginTop: 4 }}>
-            Google, Yelp, or any review platform URL
-          </p>
-        </Field>
+        <DSInput
+          label="Review link"
+          required
+          type="url"
+          value={reviewLink}
+          onChange={(e) => setReviewLink(e.target.value)}
+          placeholder="https://g.page/r/your-listing"
+          hint="Google, Yelp, or any review platform URL"
+        />
 
         {result && (
           <div
             style={{
-              borderRadius: 10,
+              borderRadius: "var(--radius-md)",
               padding: "10px 14px",
-              fontSize: 14,
-              marginBottom: 16,
-              backgroundColor: result.ok ? "#F0FFF4" : "#FFF5F5",
-              color: result.ok ? "#276749" : "#C53030",
-              border: `1px solid ${result.ok ? "#C6F6D5" : "#FED7D7"}`,
+              fontSize: "var(--type-label)",
+              backgroundColor: result.ok ? "var(--positive-soft)" : "var(--negative-soft)",
+              color: result.ok ? "var(--positive)" : "var(--negative)",
+              border: `1px solid ${result.ok ? "var(--positive)" : "var(--negative)"}`,
+              opacity: 0.8,
             }}
           >
             {result.ok
@@ -533,53 +420,38 @@ function RequestReviewSheet({
           </div>
         )}
 
-        <button
+        <Button
           type="submit"
-          disabled={isPending || !selected || !reviewLink.trim()}
-          style={{
-            width: "100%",
-            height: 52,
-            borderRadius: 14,
-            border: "none",
-            backgroundColor:
-              isPending || !selected || !reviewLink.trim()
-                ? "#C7B8E8"
-                : accentColor,
-            color: "#FFFFFF",
-            fontSize: 16,
-            fontWeight: 600,
-            cursor:
-              isPending || !selected || !reviewLink.trim()
-                ? "not-allowed"
-                : "pointer",
-            marginBottom: 8,
-            transition: "opacity 0.15s",
-          }}
+          variant="primary"
+          fullWidth
+          loading={isPending}
+          disabled={!selected || !reviewLink.trim()}
         >
-          {isPending ? "Sending…" : "Send Review Request"}
-        </button>
+          Send review request
+        </Button>
       </form>
-    </Sheet>
+    </DSSheet>
   );
 }
 
-// ─── Pipeline $ Sheet ─────────────────────────────────────────────────────────
+// ─── Pipeline Sheet ───────────────────────────────────────────────────────────
 
 function PipelineSheet({
   open,
   onClose,
   rollup,
-  accentColor,
 }: {
   open: boolean;
   onClose: () => void;
   rollup: PipelineRollup;
-  accentColor: string;
 }) {
+  const fmt = (n: number) =>
+    "$" + n.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
   return (
-    <Sheet open={open} onClose={onClose} title="Pipeline Breakdown" accentColor={accentColor}>
+    <DSSheet open={open} onClose={onClose} title="Pipeline breakdown">
       {rollup.byStage.length === 0 ? (
-        <p style={{ color: "#999", fontSize: 14, paddingBottom: 24 }}>
+        <p style={{ color: "var(--text-muted)", fontSize: "var(--type-label)", paddingBottom: 24 }}>
           No open deals in the pipeline yet.
         </p>
       ) : (
@@ -592,25 +464,35 @@ function PipelineSheet({
                 justifyContent: "space-between",
                 alignItems: "center",
                 padding: "12px 0",
-                borderBottom: "1px solid #F0F0EE",
+                borderBottom: "1px solid var(--border-hairline)",
               }}
             >
               <div>
-                <p style={{ fontSize: 15, fontWeight: 500, color: "#111" }}>
+                <p
+                  style={{
+                    fontSize: "var(--type-subhead)",
+                    fontWeight: "var(--weight-semi)" as React.CSSProperties["fontWeight"],
+                    color: "var(--text-primary)",
+                    margin: 0,
+                  }}
+                >
                   {stage.name}
                 </p>
-                <p style={{ fontSize: 12, color: "#999" }}>
+                <p style={{ fontSize: "var(--type-caption)", color: "var(--text-muted)", margin: 0, marginTop: 2 }}>
                   {stage.count} deal{stage.count !== 1 ? "s" : ""}
                 </p>
               </div>
               <p
                 style={{
-                  fontSize: 18,
-                  fontWeight: 600,
-                  color: accentColor,
+                  fontSize: "var(--type-heading)",
+                  fontWeight: "var(--weight-bold)" as React.CSSProperties["fontWeight"],
+                  color: "var(--accent)",
+                  fontFamily: "var(--font-mono)",
+                  fontVariantNumeric: "tabular-nums",
+                  margin: 0,
                 }}
               >
-                ${stage.totalValue.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                {fmt(stage.totalValue)}
               </p>
             </div>
           ))}
@@ -622,121 +504,32 @@ function PipelineSheet({
               paddingTop: 16,
             }}
           >
-            <p style={{ fontSize: 15, fontWeight: 600, color: "#111" }}>Total</p>
-            <p style={{ fontSize: 22, fontWeight: 700, color: accentColor }}>
-              ${rollup.totalOpenValue.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+            <p
+              style={{
+                fontSize: "var(--type-subhead)",
+                fontWeight: "var(--weight-bold)" as React.CSSProperties["fontWeight"],
+                color: "var(--text-primary)",
+                margin: 0,
+              }}
+            >
+              Total
+            </p>
+            <p
+              style={{
+                fontSize: "var(--type-title)",
+                fontWeight: "var(--weight-heavy)" as React.CSSProperties["fontWeight"],
+                color: "var(--accent)",
+                fontFamily: "var(--font-mono)",
+                fontVariantNumeric: "tabular-nums",
+                margin: 0,
+              }}
+            >
+              {fmt(rollup.totalOpenValue)}
             </p>
           </div>
         </div>
       )}
-    </Sheet>
-  );
-}
-
-// ─── Quick Action icons (inline SVG, strokeWidth=2, 20×20) ───────────────────
-
-const IconUserPlus = (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
-    <circle cx="8.5" cy="7" r="4" />
-    <line x1="20" y1="8" x2="20" y2="14" />
-    <line x1="23" y1="11" x2="17" y2="11" />
-  </svg>
-);
-
-const IconCalendarPlus = (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="4" width="18" height="18" rx="2" />
-    <path d="M16 2v4M8 2v4M3 10h18" />
-    <line x1="12" y1="15" x2="12" y2="19" />
-    <line x1="10" y1="17" x2="14" y2="17" />
-  </svg>
-);
-
-const IconStar = (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-  </svg>
-);
-
-// ─── Quick Action Tile ────────────────────────────────────────────────────────
-
-function QuickActionTile({
-  label,
-  icon,
-  onClick,
-  href,
-  accentColor,
-}: {
-  label: string;
-  icon: React.ReactNode;
-  onClick?: () => void;
-  href?: string;
-  accentColor: string;
-}) {
-  const style: React.CSSProperties = {
-    flex: 1,
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    minHeight: 80,
-    borderRadius: 16,
-    backgroundColor: "#FFFFFF",
-    border: "1px solid #E5E5E1",
-    cursor: "pointer",
-    padding: "12px 8px",
-    textDecoration: "none",
-    WebkitTapHighlightColor: "transparent",
-  };
-
-  const inner = (
-    <>
-      <span
-        style={{
-          width: 36,
-          height: 36,
-          borderRadius: 10,
-          backgroundColor: `${accentColor}18`,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: accentColor,
-        }}
-      >
-        {icon}
-      </span>
-      <span
-        style={{
-          fontSize: 12,
-          fontWeight: 500,
-          color: "#333",
-          textAlign: "center",
-          lineHeight: 1.3,
-        }}
-      >
-        {label}
-      </span>
-    </>
-  );
-
-  if (href) {
-    return (
-      <a href={href} style={style}>
-        {inner}
-      </a>
-    );
-  }
-
-  return (
-    <motion.button
-      whileTap={{ scale: 0.96 }}
-      onClick={onClick}
-      style={{ ...style, border: "none" }}
-    >
-      {inner}
-    </motion.button>
+    </DSSheet>
   );
 }
 
@@ -744,111 +537,262 @@ function QuickActionTile({
 
 export function TodayQuickActions({
   orgSlug,
-  accentColor,
+  accentColor: _accentColor,  // kept in props for compat but accent comes from CSS var
   rollup,
   defaultReviewLink,
   recentContacts,
+  newLeads,
+  unreadTexts,
+  todaysApptsCount,
+  todaysBookings,
 }: {
   orgSlug: string;
   accentColor: string;
   rollup: PipelineRollup;
   defaultReviewLink: string;
   recentContacts: RecentContact[];
+  newLeads: number;
+  unreadTexts: number;
+  todaysApptsCount: number;
+  todaysBookings: TodayBooking[];
 }) {
   const [addContactOpen, setAddContactOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [pipelineOpen, setPipelineOpen] = useState(false);
 
-  const formatted =
+  const formattedPipeline =
     rollup.totalOpenValue === 0
       ? null
-      : `$${rollup.totalOpenValue.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+      : "$" + rollup.totalOpenValue.toLocaleString("en-US", {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0,
+        });
+
+  const totalDeals = rollup.byStage.reduce((s, x) => s + x.count, 0);
 
   return (
     <>
-      {/* Pipeline $ Card */}
-      <motion.button
-        whileTap={{ scale: 0.98 }}
-        onClick={() => setPipelineOpen(true)}
-        style={{
-          width: "100%",
-          borderRadius: 18,
-          backgroundColor: "#FFFFFF",
-          border: "1px solid #E5E5E1",
-          padding: "18px 20px",
-          textAlign: "left",
-          cursor: "pointer",
-          display: "block",
-        }}
-      >
-        <p
-          style={{
-            fontSize: 11,
-            fontWeight: 600,
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
-            color: "#AAA",
-            marginBottom: 6,
-          }}
-        >
-          Open Pipeline
-        </p>
-        {formatted ? (
-          <p
-            style={{
-              fontSize: 36,
-              fontWeight: 700,
-              color: accentColor,
-              letterSpacing: "-1px",
-              lineHeight: 1,
-            }}
-          >
-            {formatted}
-          </p>
-        ) : (
-          <p style={{ fontSize: 15, color: "#BBB" }}>No open deals — add your first deal from the Leads tab</p>
-        )}
-        {rollup.byStage.length > 0 && (
-          <p style={{ fontSize: 12, color: "#999", marginTop: 6 }}>
-            {rollup.byStage.length} stage{rollup.byStage.length !== 1 ? "s" : ""} · tap to see breakdown
-          </p>
-        )}
-      </motion.button>
-
-      {/* Quick Actions Row */}
-      <div style={{ display: "flex", gap: 10 }}>
-        <QuickActionTile
-          label="Add Contact"
-          icon={IconUserPlus}
-          onClick={() => setAddContactOpen(true)}
-          accentColor={accentColor}
+      {/* ── KPI Glance Row ─────────────────────────────────────────── */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <KpiCard
+          Icon={UserPlus}
+          label="New leads"
+          value={newLeads}
+          tone="accent"
+          note={newLeads > 0 ? "Tap Leads to work" : "All clear"}
         />
-        <QuickActionTile
-          label="New Booking"
-          icon={IconCalendarPlus}
-          href={`/book/${orgSlug}/default`}
-          accentColor={accentColor}
+        <KpiCard
+          Icon={CalendarCheck}
+          label="Today's appts"
+          value={todaysApptsCount}
+          tone="neutral"
+          note={todaysApptsCount > 0 ? `${todaysApptsCount} scheduled` : "Nothing booked"}
         />
-        <QuickActionTile
-          label="Request Review"
-          icon={IconStar}
-          onClick={() => setReviewOpen(true)}
-          accentColor={accentColor}
+        <KpiCard
+          Icon={MessageSquare}
+          label="Unread"
+          value={unreadTexts}
+          tone={unreadTexts > 0 ? "caution" : "neutral"}
+          note={unreadTexts > 0 ? "Needs a reply" : "All read"}
+        />
+        {/* Missed calls — stub (OCR/calling deferred) */}
+        <KpiCard
+          Icon={PhoneMissed}
+          label="Missed calls"
+          value={0}
+          tone="positive"
+          note="None today"
         />
       </div>
 
-      {/* Sheets */}
+      {/* ── Pipeline Card ───────────────────────────────────────────── */}
+      <Card pressable onClick={() => setPipelineOpen(true)} padding={16}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="t-eyebrow">Open pipeline</div>
+            {formattedPipeline ? (
+              <div
+                style={{
+                  fontSize: 30,
+                  fontWeight: "var(--weight-heavy)" as React.CSSProperties["fontWeight"],
+                  letterSpacing: "var(--track-display)",
+                  color: "var(--text-primary)",
+                  fontVariantNumeric: "tabular-nums",
+                  fontFamily: "var(--font-mono)",
+                  marginTop: 6,
+                  lineHeight: 1.1,
+                }}
+              >
+                {formattedPipeline}
+              </div>
+            ) : (
+              <div style={{ fontSize: "var(--type-subhead)", color: "var(--text-muted)", marginTop: 6 }}>
+                No open deals — add your first deal from the Leads tab
+              </div>
+            )}
+            {totalDeals > 0 && (
+              <div style={{ fontSize: "var(--type-caption)", color: "var(--text-muted)", marginTop: 4 }}>
+                {totalDeals} deal{totalDeals !== 1 ? "s" : ""} across {rollup.byStage.length} stage{rollup.byStage.length !== 1 ? "s" : ""}
+              </div>
+            )}
+          </div>
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 2,
+              fontSize: "var(--type-caption)",
+              fontWeight: "var(--weight-semi)" as React.CSSProperties["fontWeight"],
+              color: "var(--accent)",
+              flexShrink: 0,
+              paddingTop: 2,
+            }}
+          >
+            By stage <ChevronRight size={15} />
+          </span>
+        </div>
+
+        {/* Stage progress bar */}
+        {rollup.byStage.length > 0 && (
+          <>
+            <div
+              style={{
+                display: "flex",
+                gap: 3,
+                marginTop: 16,
+                height: 6,
+                borderRadius: 999,
+                overflow: "hidden",
+              }}
+            >
+              {rollup.byStage.map((s) => (
+                <span
+                  key={s.name}
+                  style={{
+                    flex: s.totalValue || 1,
+                    background: "var(--accent)",
+                    opacity: 0.3 + (0.7 * (rollup.byStage.indexOf(s) + 1)) / rollup.byStage.length,
+                    borderRadius: 999,
+                  }}
+                />
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 12, marginTop: 10, flexWrap: "wrap" }}>
+              {rollup.byStage.map((s) => (
+                <span
+                  key={s.name}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 5,
+                    fontSize: "var(--type-caption)",
+                    color: "var(--text-secondary)",
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 7,
+                      height: 7,
+                      borderRadius: 2,
+                      background: "var(--accent)",
+                    }}
+                  />
+                  {s.name}
+                </span>
+              ))}
+            </div>
+          </>
+        )}
+      </Card>
+
+      {/* ── Quick Actions Row ────────────────────────────────────────── */}
+      <div>
+        <div className="t-eyebrow" style={{ marginBottom: 10, padding: "0 2px" }}>
+          Quick actions
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10 }}>
+          <QuickAction
+            Icon={UserPlus}
+            label="Add contact"
+            onClick={() => setAddContactOpen(true)}
+          />
+          {/* New Booking → external link, no sheet needed */}
+          <QuickActionLink
+            Icon={CalendarPlus}
+            label="New booking"
+            href={`/book/${orgSlug}/default`}
+          />
+          <QuickAction
+            Icon={Star}
+            label="Request review"
+            onClick={() => setReviewOpen(true)}
+          />
+          {/* Scan card — OCR deferred, disabled stub */}
+          <QuickAction
+            Icon={ScanLine}
+            label="Scan card"
+            disabled
+          />
+        </div>
+      </div>
+
+      {/* ── Up Next ─────────────────────────────────────────────────── */}
+      {todaysBookings.length > 0 ? (
+        <div>
+          <SectionHeader title="Up next" style={{ marginBottom: 8 }} />
+          <Card padding={6}>
+            {todaysBookings.map((b, i) => {
+              const time = new Date(b.startsAt).toLocaleTimeString("en-US", {
+                hour: "numeric",
+                minute: "2-digit",
+              });
+              const name = contactDisplayName({
+                firstName: b.fullName,
+                lastName: null,
+              });
+              return (
+                <div key={b.id}>
+                  <ListRow
+                    leading={<Avatar name={name} size={36} />}
+                    title={b.title}
+                    subtitle={name}
+                    meta={time}
+                    trailing={<Badge tone="neutral" dot>Confirmed</Badge>}
+                    chevron
+                  />
+                  {i < todaysBookings.length - 1 && (
+                    <div
+                      style={{
+                        height: 1,
+                        background: "var(--border-hairline)",
+                        margin: "0 12px",
+                      }}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </Card>
+        </div>
+      ) : (
+        <Card padding={16}>
+          <div className="t-eyebrow" style={{ marginBottom: 8 }}>Up next</div>
+          <p style={{ fontSize: "var(--type-label)", color: "var(--text-muted)", margin: 0 }}>
+            Nothing on the schedule yet today.
+          </p>
+        </Card>
+      )}
+
+      {/* ── Sheets ──────────────────────────────────────────────────── */}
       <AddContactSheet
         open={addContactOpen}
         onClose={() => setAddContactOpen(false)}
         orgSlug={orgSlug}
-        accentColor={accentColor}
       />
       <RequestReviewSheet
         open={reviewOpen}
         onClose={() => setReviewOpen(false)}
         orgSlug={orgSlug}
-        accentColor={accentColor}
         defaultReviewLink={defaultReviewLink}
         recentContacts={recentContacts}
       />
@@ -856,8 +800,73 @@ export function TodayQuickActions({
         open={pipelineOpen}
         onClose={() => setPipelineOpen(false)}
         rollup={rollup}
-        accentColor={accentColor}
       />
     </>
+  );
+}
+
+// ─── QuickActionLink — DS-styled link tile (wraps Next Link) ─────────────────
+
+function QuickActionLink({
+  Icon,
+  label,
+  href,
+}: {
+  Icon: React.ComponentType<{ size?: number }>;
+  label: string;
+  href: string;
+}) {
+  const [pressed, setPressed] = useState(false);
+
+  return (
+    <Link
+      href={href}
+      onPointerDown={() => setPressed(true)}
+      onPointerUp={() => setPressed(false)}
+      onPointerLeave={() => setPressed(false)}
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: "8px",
+        padding: "12px 6px",
+        background: "var(--surface-card)",
+        border: "1px solid var(--border-hairline)",
+        borderRadius: "var(--radius-md)",
+        boxShadow: "var(--shadow-xs)",
+        cursor: "pointer",
+        transform: pressed ? "scale(var(--press-scale))" : "scale(1)",
+        transition: "transform var(--dur-fast) var(--ease-out)",
+        WebkitTapHighlightColor: "transparent",
+        minHeight: "var(--tap-min)",
+        textDecoration: "none",
+      }}
+    >
+      <span
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: "38px",
+          height: "38px",
+          borderRadius: "var(--radius-sm)",
+          background: "var(--accent-soft)",
+          color: "var(--accent)",
+        }}
+      >
+        <Icon size={19} />
+      </span>
+      <span
+        style={{
+          fontSize: "var(--type-caption)",
+          fontWeight: "var(--weight-semi)" as React.CSSProperties["fontWeight"],
+          color: "var(--text-secondary)",
+          textAlign: "center",
+          lineHeight: 1.2,
+        }}
+      >
+        {label}
+      </span>
+    </Link>
   );
 }
