@@ -47,10 +47,14 @@ import { eq } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
-import { organizations } from "@/db/schema";
+import { organizations, partnerAgencies, users } from "@/db/schema";
 import { assertWritable } from "@/lib/demo/server";
 import { emitSeldonEvent } from "@/lib/events/bus";
 import { trackEvent } from "@/lib/analytics/track";
+import {
+  isEmailAuthorizedForWorkspace,
+  parseAdminAllowlist,
+} from "./authorization";
 import {
   OPERATOR_SESSION_COOKIE,
   signOperatorToken,
@@ -88,6 +92,57 @@ async function getOrgBySlug(orgSlug: string) {
     .where(eq(organizations.slug, orgSlug))
     .limit(1);
   return org ?? null;
+}
+
+async function getUserEmailById(userId: string | null): Promise<string | null> {
+  if (!userId) return null;
+  const [row] = await db
+    .select({ email: users.email })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  return row?.email ?? null;
+}
+
+/**
+ * Resolve the two human owner emails that gate operator magic-link
+ * issuance for a workspace: the workspace owner and the parent-agency
+ * owner. (The platform-admin allowlist is resolved separately from env.)
+ *
+ * Agency ownership is polymorphic (see partner-agencies schema): an agency
+ * is anchored to a user (ownerUserId) or, for anonymous workspaces, to a
+ * workspace (ownerWorkspaceId). We resolve a human email from whichever is
+ * set — ownerUserId first, then the owning workspace's owner.
+ */
+async function resolveWorkspaceOwnerEmails(org: {
+  ownerId: string | null;
+  parentAgencyId: string | null;
+}): Promise<{ ownerEmail: string | null; agencyOwnerEmail: string | null }> {
+  const ownerEmail = await getUserEmailById(org.ownerId);
+
+  let agencyOwnerEmail: string | null = null;
+  if (org.parentAgencyId) {
+    const [agency] = await db
+      .select({
+        ownerUserId: partnerAgencies.ownerUserId,
+        ownerWorkspaceId: partnerAgencies.ownerWorkspaceId,
+      })
+      .from(partnerAgencies)
+      .where(eq(partnerAgencies.id, org.parentAgencyId))
+      .limit(1);
+    if (agency?.ownerUserId) {
+      agencyOwnerEmail = await getUserEmailById(agency.ownerUserId);
+    } else if (agency?.ownerWorkspaceId) {
+      const [ownerWs] = await db
+        .select({ ownerId: organizations.ownerId })
+        .from(organizations)
+        .where(eq(organizations.id, agency.ownerWorkspaceId))
+        .limit(1);
+      agencyOwnerEmail = await getUserEmailById(ownerWs?.ownerId ?? null);
+    }
+  }
+
+  return { ownerEmail, agencyOwnerEmail };
 }
 
 async function setOperatorSessionCookie(token: string): Promise<void> {
@@ -137,6 +192,27 @@ export async function requestOperatorMagicLinkAction(input: {
   if (!org) {
     console.warn(
       `[operator-magic-link] silent_no_op: org_not_found org_slug=${orgSlug} email_domain=${emailDomain}`,
+    );
+    return { ok: true, expiresAt: "", sentTo: email };
+  }
+
+  // ── Authorization gate (security hotfix) ───────────────────────────────
+  // Only the workspace owner, the parent-agency owner, or an SF
+  // platform-admin (SF_SUPERADMIN_EMAILS) may receive an operator magic
+  // link. Anyone else gets the SAME generic success shape as the
+  // org-not-found path above — we never reveal whether an email is
+  // authorized or a workspace exists (anti-enumeration) — but no token is
+  // signed or sent. Pure decision logic + tests live in ./authorization.ts.
+  const { ownerEmail, agencyOwnerEmail } = await resolveWorkspaceOwnerEmails(org);
+  const adminEmails = parseAdminAllowlist(process.env.SF_SUPERADMIN_EMAILS);
+  const authorized = isEmailAuthorizedForWorkspace(email, {
+    ownerEmail,
+    agencyOwnerEmail,
+    adminEmails,
+  });
+  if (!authorized) {
+    console.warn(
+      `[operator-magic-link] silent_no_op: email_not_authorized org_id=${org.id} email_domain=${emailDomain}`,
     );
     return { ok: true, expiresAt: "", sentTo: email };
   }

@@ -22,16 +22,12 @@
 
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
+import { parseAdminAllowlist } from "@/lib/operator-portal/authorization";
 
 function parseAllowlist(): Set<string> {
-  const raw = process.env.SF_SUPERADMIN_EMAILS?.trim();
-  if (!raw) return new Set();
-  return new Set(
-    raw
-      .split(",")
-      .map((email) => email.trim().toLowerCase())
-      .filter(Boolean)
-  );
+  // Single source of truth for the SF_SUPERADMIN_EMAILS format lives in
+  // lib/operator-portal/authorization.ts (a pure, unit-tested module).
+  return new Set(parseAdminAllowlist(process.env.SF_SUPERADMIN_EMAILS));
 }
 
 export async function isSuperAdminUser(email: string | null | undefined): Promise<boolean> {
