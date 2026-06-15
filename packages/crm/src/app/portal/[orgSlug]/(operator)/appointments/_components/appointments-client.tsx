@@ -19,6 +19,9 @@ type BookingItem = {
   fullName: string | null;
   contactId: string | null;
   status: string;
+  email: string | null;
+  notes: string | null;
+  metadata: Record<string, unknown>;
 };
 
 type View = "week" | "month";
@@ -187,6 +190,65 @@ function formatDateTime(isoStr: string, tz: string): string {
   }
 }
 
+// ─── Helper: turn snake_case / camelCase keys into Title Case ────────────────
+
+function prettifyKey(key: string): string {
+  return key
+    .replace(/_/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+// ─── Helper: build the ordered list of detail rows from a booking ─────────────
+
+type DetailRow = { label: string; value: string };
+
+function buildDetailRows(booking: BookingItem): DetailRow[] {
+  const rows: DetailRow[] = [];
+
+  // 1. Customer name
+  if (booking.fullName) {
+    rows.push({ label: "Customer", value: booking.fullName });
+  }
+
+  // 2. Service (appointment type from metadata, fallback to title)
+  const apptType = typeof booking.metadata.appointmentType === "string"
+    ? booking.metadata.appointmentType
+    : null;
+  rows.push({ label: "Service", value: apptType || booking.title });
+
+  // 3. Email
+  if (booking.email) {
+    rows.push({ label: "Email", value: booking.email });
+  }
+
+  // 4. Custom intake responses (address, phone, urgency, issue_type, etc.)
+  const intakeResponses = booking.metadata.intakeResponses;
+  if (intakeResponses && typeof intakeResponses === "object" && !Array.isArray(intakeResponses)) {
+    const responses = intakeResponses as Record<string, unknown>;
+    // Put phone first, then address, then the rest alphabetically
+    const order = ["phone", "address"];
+    const allKeys = Object.keys(responses);
+    const sorted = [
+      ...order.filter((k) => allKeys.includes(k)),
+      ...allKeys.filter((k) => !order.includes(k)).sort(),
+    ];
+    for (const key of sorted) {
+      const val = responses[key];
+      if (val !== null && val !== undefined && String(val).trim() !== "") {
+        rows.push({ label: prettifyKey(key), value: String(val) });
+      }
+    }
+  }
+
+  // 5. Notes (top-level column)
+  if (booking.notes && booking.notes.trim()) {
+    rows.push({ label: "Notes", value: booking.notes.trim() });
+  }
+
+  return rows;
+}
+
 // ─── Booking Detail Sheet ─────────────────────────────────────────────────────
 
 function BookingDetailSheet({
@@ -252,32 +314,30 @@ function BookingDetailSheet({
     });
   }
 
+  const detailRows = booking ? buildDetailRows(booking) : [];
+
   return (
     <Sheet open={!!booking} onClose={onClose} title="Appointment">
       {booking && (
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {/* Customer */}
-          <div>
-            <p style={{ fontSize: 12, color: "#999", marginBottom: 2 }}>Customer</p>
-            <p style={{ fontSize: 16, fontWeight: 600, color: "#111" }}>
-              {booking.fullName || "Unknown"}
+          {/* Time block */}
+          <div
+            style={{
+              borderRadius: 12,
+              backgroundColor: "#F7F7F5",
+              padding: "12px 14px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 4,
+            }}
+          >
+            <p style={{ fontSize: 12, color: "#999", margin: 0 }}>Time</p>
+            <p style={{ fontSize: 15, fontWeight: 600, color: "#111", margin: 0 }}>
+              {formatDateTime(booking.startsAt, tz)}
             </p>
-          </div>
-
-          {/* Service */}
-          <div>
-            <p style={{ fontSize: 12, color: "#999", marginBottom: 2 }}>Service</p>
-            <p style={{ fontSize: 15, color: "#333" }}>{booking.title}</p>
-          </div>
-
-          {/* Time */}
-          <div>
-            <p style={{ fontSize: 12, color: "#999", marginBottom: 2 }}>Start</p>
-            <p style={{ fontSize: 15, color: "#333" }}>{formatDateTime(booking.startsAt, tz)}</p>
-          </div>
-          <div>
-            <p style={{ fontSize: 12, color: "#999", marginBottom: 2 }}>End</p>
-            <p style={{ fontSize: 15, color: "#333" }}>{formatDateTime(booking.endsAt, tz)}</p>
+            <p style={{ fontSize: 13, color: "#888", margin: 0 }}>
+              — {formatDateTime(booking.endsAt, tz)}
+            </p>
           </div>
 
           {/* Status */}
@@ -285,6 +345,46 @@ function BookingDetailSheet({
             <p style={{ fontSize: 12, color: "#999", marginBottom: 4 }}>Status</p>
             <StatusBadge status={booking.status} />
           </div>
+
+          {/* Lead detail rows */}
+          {detailRows.length > 0 && (
+            <div
+              style={{
+                borderRadius: 12,
+                border: "1px solid #E5E5E1",
+                overflow: "hidden",
+              }}
+            >
+              {detailRows.map((row, i) => (
+                <div
+                  key={row.label}
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 2,
+                    padding: "10px 14px",
+                    borderBottom: i < detailRows.length - 1 ? "1px solid #F0F0EE" : "none",
+                    backgroundColor: "#FFFFFF",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: accentColor,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.05em",
+                    }}
+                  >
+                    {row.label}
+                  </span>
+                  <span style={{ fontSize: 14, color: "#222", wordBreak: "break-word" }}>
+                    {row.value}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
 
           {error && (
             <p style={{ fontSize: 13, color: "#B91C1C", padding: "8px 12px", backgroundColor: "#FEF2F2", borderRadius: 8 }}>

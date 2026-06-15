@@ -44,6 +44,9 @@ export default async function OperatorAppointmentsPage({
       fullName: b.fullName ?? null,
       contactId: b.contactId ?? null,
       status: b.status,
+      email: b.email ?? null,
+      notes: b.notes ?? null,
+      metadata: (b.metadata ?? {}) as Record<string, unknown>,
     }));
 
   const now = new Date();
@@ -59,6 +62,9 @@ export default async function OperatorAppointmentsPage({
     fullName: b.fullName,
     contactId: b.contactId,
     status: b.status,
+    email: b.email,
+    notes: b.notes,
+    metadata: b.metadata,
   }));
 
   const accentColor =
