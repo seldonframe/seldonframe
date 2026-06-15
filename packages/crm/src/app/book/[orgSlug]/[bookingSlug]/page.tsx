@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { PoweredByBadge } from "@seldonframe/core/virality";
 import { db } from "@/db";
@@ -9,7 +9,7 @@ import { PublicThemeProvider } from "@/components/theme/public-theme-provider";
 import { shouldShowPoweredByBadgeForOrg } from "@/lib/billing/public";
 import { getPublicBookingContext } from "@/lib/bookings/actions";
 import { getPublicOrgThemeBySlug } from "@/lib/theme/actions";
-import type { SectionTestimonials, Testimonial } from "@/lib/blueprint/types";
+import type { R1TestimonialsSection } from "@/lib/landing/r1-payload-prompt";
 // 2026-05-18 (later) — agency-wide white-label REMOVED from public
 // booking page. The end customer (the homeowner clicking the booking
 // link) should see the SMB's identity ("Roofs by Shiloh"), not the
@@ -17,35 +17,55 @@ import type { SectionTestimonials, Testimonial } from "@/lib/blueprint/types";
 // in the OPERATOR's admin dashboard sidebar only — never on
 // customer-facing surfaces. See operator dogfood feedback 2026-05-18.
 
-// Fix C — extract testimonials from the workspace landing page's blueprint JSON.
-// We look for the first landing page (slug="home" preferred, else earliest) that
-// has a blueprintJson with a "testimonials" section. Testimonials are surfaced on
-// the public booking page so prospective customers see social proof inline.
-async function fetchBookingTestimonials(orgId: string): Promise<Testimonial[]> {
+// Fix C (r1) — extract testimonials from the workspace's r1 landing row.
+// The r1 generator writes blueprint_json.payload.testimonials (an R1TestimonialsSection)
+// to the landing_pages row with slug='r1' (source='r1-generator'). This is the
+// data the live /w/<slug> website renders — we read the same source so the booking
+// page always shows the same social proof the customer just saw on the landing page.
+// Returns the testimonials array plus the section's eyebrow, heading, and reviewSummary
+// so the booking page can render a "250 reviews · 4.9★" header.
+export type BookingTestimonialsData = {
+  testimonials: R1TestimonialsSection["testimonials"];
+  eyebrow?: string;
+  heading?: string;
+  reviewSummary?: R1TestimonialsSection["reviewSummary"];
+};
+
+async function fetchBookingTestimonials(orgId: string): Promise<BookingTestimonialsData> {
+  const empty: BookingTestimonialsData = { testimonials: [] };
   try {
-    // Prefer the "home" slug; fall back to the most recently created page.
-    const rows = await db
+    // Query the r1 landing row: prefer slug='r1', also accept source='r1-generator'
+    // (both conditions should match the same row; OR covers any naming variation).
+    const [row] = await db
       .select({ blueprintJson: landingPages.blueprintJson })
       .from(landingPages)
-      .where(eq(landingPages.orgId, orgId))
-      .orderBy(landingPages.createdAt)
-      .limit(5);
+      .where(
+        and(
+          eq(landingPages.orgId, orgId),
+          or(eq(landingPages.slug, "r1"), eq(landingPages.source, "r1-generator")),
+        ),
+      )
+      .limit(1);
 
-    for (const row of rows) {
-      const bp = row.blueprintJson as { landing?: { sections?: unknown[] } } | null;
-      const sections = bp?.landing?.sections ?? [];
-      const testimonialsSection = sections.find(
-        (s): s is SectionTestimonials =>
-          typeof s === "object" && s !== null && (s as { type?: string }).type === "testimonials",
-      );
-      if (testimonialsSection?.items?.length) {
-        return testimonialsSection.items;
-      }
+    if (!row) return empty;
+
+    const payload = (row.blueprintJson as { payload?: { testimonials?: R1TestimonialsSection } } | null)
+      ?.payload?.testimonials;
+
+    if (!payload || !Array.isArray(payload.testimonials) || payload.testimonials.length === 0) {
+      return empty;
     }
+
+    return {
+      testimonials: payload.testimonials,
+      eyebrow: payload.eyebrow,
+      heading: payload.heading,
+      reviewSummary: payload.reviewSummary,
+    };
   } catch {
     // Best-effort; never block the booking page for missing testimonials.
   }
-  return [];
+  return empty;
 }
 
 // v1.36.1 — extract a business phone from the soul JSONB (best-effort).
@@ -84,7 +104,7 @@ export default async function PublicBookingPage({
     notFound();
   }
 
-  const [showBadge, theme, testimonials] = await Promise.all([
+  const [showBadge, theme, testimonialsData] = await Promise.all([
     shouldShowPoweredByBadgeForOrg(bookingContext.orgId),
     getPublicOrgThemeBySlug(orgSlug),
     fetchBookingTestimonials(bookingContext.orgId),
@@ -174,10 +194,13 @@ export default async function PublicBookingPage({
           // 2026-05-18 (later) — SMB's own theme.logoUrl only.
           // null → text-only header showing the SMB business name.
           logoUrl={headerLogoUrl}
-          // Fix C — surface landing-page testimonials below the booking
-          // calendar so customers see social proof without leaving the page.
-          // Empty array → no testimonials block rendered.
-          testimonials={testimonials}
+          // Fix C (r1) — surface r1 landing-page testimonials below the
+          // booking calendar so customers see the same social proof that
+          // the live website shows. Empty array → no testimonials block rendered.
+          testimonials={testimonialsData.testimonials}
+          testimonialsEyebrow={testimonialsData.eyebrow}
+          testimonialsHeading={testimonialsData.heading}
+          testimonialsReviewSummary={testimonialsData.reviewSummary}
         />
         {(showBadge || isTestMode) ? (
           <div className="flex flex-col items-center gap-2 py-3">

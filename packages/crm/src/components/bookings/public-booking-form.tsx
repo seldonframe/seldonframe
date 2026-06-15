@@ -51,7 +51,7 @@ import { DayPicker } from "react-day-picker";
 import "react-day-picker/style.css";
 import { Phone, Check, Star } from "lucide-react";
 import { PUBLIC_BOOKING_WINDOW_DAYS } from "@/lib/bookings/booking-window";
-import type { Testimonial } from "@/lib/blueprint/types";
+import type { R1Testimonial, R1TestimonialsSection } from "@/lib/landing/r1-payload-prompt";
 
 import {
   listPublicBookingSlotsAction,
@@ -124,6 +124,9 @@ export function PublicBookingForm({
   workspaceTimezone,
   logoUrl = null,
   testimonials = [],
+  testimonialsEyebrow,
+  testimonialsHeading,
+  testimonialsReviewSummary,
 }: {
   orgSlug: string;
   bookingSlug: string;
@@ -148,9 +151,16 @@ export function PublicBookingForm({
    *  field; this prop just plumbs it through to the public surface.
    *  Replaces the "uploaded a logo, why doesn't it show?" gap. */
   logoUrl?: string | null;
-  /** Fix C — testimonials from the workspace landing page blueprint.
+  /** Fix C (r1) — testimonials from the workspace r1 landing row.
+   *  Sourced from blueprint_json.payload.testimonials.testimonials.
    *  Empty array → no testimonials block rendered below the calendar. */
-  testimonials?: Testimonial[];
+  testimonials?: R1Testimonial[];
+  /** Section eyebrow label (e.g. "What neighbors say"). */
+  testimonialsEyebrow?: string;
+  /** Section heading (e.g. "250 reviews. 4.9 stars."). */
+  testimonialsHeading?: string;
+  /** Aggregate review summary from the r1 payload. */
+  testimonialsReviewSummary?: R1TestimonialsSection["reviewSummary"];
 }) {
   // v1.40.1 — surface the operator-supplied service hint when the
   // visitor arrived via /book?service=<slug>. Used to pre-display the
@@ -611,54 +621,74 @@ export function PublicBookingForm({
             </section>
         </div>
 
-        {/* ───── Testimonials (Fix C) ───── */}
-        {/* Sourced from landing_pages.blueprint_json.landing.sections[type="testimonials"]
-            for this org. Renders nothing when the workspace has no testimonials. */}
+        {/* ───── Testimonials (Fix C — r1 source) ───── */}
+        {/* Sourced from landing_pages.blueprint_json.payload.testimonials.testimonials
+            (the r1 landing row) so the booking page shows the same social proof
+            as the live website. Renders nothing when the workspace has no r1 row
+            or the testimonials array is empty. */}
         {testimonials.length > 0 ? (
           <div className="space-y-4 pb-4">
-            <h3 className="text-center text-sm font-semibold uppercase tracking-widest" style={{ color: "var(--sf-muted)" }}>
-              What customers say
-            </h3>
+            {/* Section header: eyebrow label + optional review summary */}
+            <div className="text-center space-y-1">
+              <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--sf-muted)" }}>
+                {testimonialsEyebrow ?? "What customers say"}
+              </p>
+              {testimonialsHeading ? (
+                <p className="text-base font-semibold" style={{ color: "var(--sf-text)" }}>
+                  {testimonialsHeading}
+                </p>
+              ) : null}
+              {testimonialsReviewSummary ? (
+                <p className="text-xs" style={{ color: "var(--sf-muted)" }}>
+                  {testimonialsReviewSummary.rating}★ · {testimonialsReviewSummary.count} reviews
+                  {testimonialsReviewSummary.sources ? ` · ${testimonialsReviewSummary.sources}` : ""}
+                </p>
+              ) : null}
+            </div>
             <div className="grid gap-4 sm:grid-cols-2">
-              {testimonials.map((t, i) => (
-                <div
-                  key={i}
-                  className="rounded-2xl border p-5 space-y-3"
-                  style={{
-                    borderColor: "var(--sf-border)",
-                    backgroundColor: "var(--sf-card, transparent)",
-                    borderRadius: "var(--sf-radius, 1rem)",
-                  }}
-                >
-                  {t.rating ? (
-                    <div className="flex items-center gap-0.5">
-                      {Array.from({ length: 5 }, (_, idx) => (
-                        <Star
-                          key={idx}
-                          className="size-3.5"
-                          style={{
-                            color: idx < t.rating! ? "var(--sf-primary, #21a38b)" : "color-mix(in srgb, var(--sf-text, #0a0a0a) 20%, transparent)",
-                            fill: idx < t.rating! ? "var(--sf-primary, #21a38b)" : "none",
-                          }}
-                        />
-                      ))}
-                    </div>
-                  ) : null}
-                  <p className="text-sm leading-relaxed" style={{ color: "var(--sf-text)" }}>
-                    &ldquo;{t.quote}&rdquo;
-                  </p>
-                  <div>
-                    <p className="text-sm font-semibold" style={{ color: "var(--sf-text)" }}>
-                      {t.authorName}
-                    </p>
-                    {t.authorRole ? (
-                      <p className="text-xs" style={{ color: "var(--sf-muted)" }}>
-                        {t.authorRole}
-                      </p>
+              {testimonials.map((t) => {
+                const subtitle = [t.city, t.service].filter(Boolean).join(" · ");
+                const rating = typeof t.rating === "number" ? t.rating : 0;
+                return (
+                  <div
+                    key={t.id}
+                    className="rounded-2xl border p-5 space-y-3"
+                    style={{
+                      borderColor: "var(--sf-border)",
+                      backgroundColor: "var(--sf-card, transparent)",
+                      borderRadius: "var(--sf-radius, 1rem)",
+                    }}
+                  >
+                    {rating > 0 ? (
+                      <div className="flex items-center gap-0.5">
+                        {Array.from({ length: 5 }, (_, idx) => (
+                          <Star
+                            key={idx}
+                            className="size-3.5"
+                            style={{
+                              color: idx < rating ? "var(--sf-primary, #21a38b)" : "color-mix(in srgb, var(--sf-text, #0a0a0a) 20%, transparent)",
+                              fill: idx < rating ? "var(--sf-primary, #21a38b)" : "none",
+                            }}
+                          />
+                        ))}
+                      </div>
                     ) : null}
+                    <p className="text-sm leading-relaxed" style={{ color: "var(--sf-text)" }}>
+                      &ldquo;{t.quote}&rdquo;
+                    </p>
+                    <div>
+                      <p className="text-sm font-semibold" style={{ color: "var(--sf-text)" }}>
+                        {t.name}
+                      </p>
+                      {subtitle ? (
+                        <p className="text-xs" style={{ color: "var(--sf-muted)" }}>
+                          {subtitle}
+                        </p>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         ) : null}
@@ -836,32 +866,6 @@ function DynamicIntakeField({
         className="crm-input h-11 w-full"
       />
     </FieldShell>
-  );
-}
-
-function MetaRow({
-  icon,
-  label,
-  eyebrow,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  eyebrow?: string;
-}) {
-  return (
-    <li className="flex items-start gap-3 text-sm">
-      <span className="mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: "color-mix(in srgb, var(--sf-primary, #21a38b) 12%, transparent)", color: "var(--sf-primary, #21a38b)" }}>
-        {icon}
-      </span>
-      <span className="min-w-0">
-        {eyebrow ? (
-          <span className="block text-[10px] uppercase tracking-[0.1em] font-semibold mb-0.5" style={{ color: "var(--sf-muted)" }}>
-            {eyebrow}
-          </span>
-        ) : null}
-        <span className="block font-medium" style={{ color: "var(--sf-text)" }}>{label}</span>
-      </span>
-    </li>
   );
 }
 
