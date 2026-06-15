@@ -49,6 +49,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { organizations, partnerAgencies, users } from "@/db/schema";
 import { assertWritable } from "@/lib/demo/server";
+import { resolveInboxUrl } from "@/lib/utils/email-inbox";
 import { emitSeldonEvent } from "@/lib/events/bus";
 import { trackEvent } from "@/lib/analytics/track";
 import {
@@ -159,7 +160,7 @@ async function setOperatorSessionCookie(token: string): Promise<void> {
 // ─── server actions ────────────────────────────────────────────────────────
 
 export type RequestOperatorMagicLinkResult =
-  | { ok: true; expiresAt: string; sentTo: string }
+  | { ok: true; expiresAt: string; sentTo: string; inboxUrl: string | null }
   | { ok: false; reason: string };
 
 /**
@@ -193,7 +194,7 @@ export async function requestOperatorMagicLinkAction(input: {
     console.warn(
       `[operator-magic-link] silent_no_op: org_not_found org_slug=${orgSlug} email_domain=${emailDomain}`,
     );
-    return { ok: true, expiresAt: "", sentTo: email };
+    return { ok: true, expiresAt: "", sentTo: email, inboxUrl: resolveInboxUrl(email) };
   }
 
   // ── Authorization gate (security hotfix) ───────────────────────────────
@@ -214,7 +215,7 @@ export async function requestOperatorMagicLinkAction(input: {
     console.warn(
       `[operator-magic-link] silent_no_op: email_not_authorized org_id=${org.id} email_domain=${emailDomain}`,
     );
-    return { ok: true, expiresAt: "", sentTo: email };
+    return { ok: true, expiresAt: "", sentTo: email, inboxUrl: resolveInboxUrl(email) };
   }
 
   // Build the magic-link token + URL.
@@ -241,7 +242,7 @@ export async function requestOperatorMagicLinkAction(input: {
     console.warn(
       `[operator-magic-link] silent_no_op: resend_not_configured org_id=${org.id} email_domain=${emailDomain}`,
     );
-    return { ok: true, expiresAt: new Date(expiresAtMs).toISOString(), sentTo: email };
+    return { ok: true, expiresAt: new Date(expiresAtMs).toISOString(), sentTo: email, inboxUrl: resolveInboxUrl(email) };
   }
 
   const fromAddress = pickFromAddress(process.env);
@@ -283,6 +284,7 @@ export async function requestOperatorMagicLinkAction(input: {
     ok: true,
     expiresAt: new Date(expiresAtMs).toISOString(),
     sentTo: email,
+    inboxUrl: resolveInboxUrl(email),
   };
 }
 

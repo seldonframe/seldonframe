@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { signIn } from "@/auth";
 import { assertWritable } from "@/lib/demo/server";
+import { resolveInboxUrl } from "@/lib/utils/email-inbox";
 
 export type MagicLinkActionState = {
   error?: string;
@@ -15,19 +16,6 @@ const emailSchema = z.object({
   email: z.string().email(),
 });
 
-function resolveInboxUrl(email: string) {
-  const domain = email.split("@")[1]?.toLowerCase() ?? "";
-
-  if (domain === "gmail.com" || domain === "googlemail.com") {
-    return "https://mail.google.com/mail/u/0/#search/from:noreply@seldonframe.com";
-  }
-
-  if (["outlook.com", "hotmail.com", "live.com", "msn.com"].includes(domain)) {
-    return "https://outlook.live.com/mail/";
-  }
-
-  return null;
-}
 
 function isRedirectControlFlowError(error: unknown) {
   const digest = (error as { digest?: string } | null)?.digest;
