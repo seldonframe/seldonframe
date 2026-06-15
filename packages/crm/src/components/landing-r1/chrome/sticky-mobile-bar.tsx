@@ -173,16 +173,23 @@ export function StickyMobileBar({
         }
         .sf-sticky-call:hover { background: color-mix(in oklab, var(--primary) 88%, #000); }
 
-        /* Text and Book stay tonally lighter than Call — secondary accents. */
+        /* Text: solid secondary so it reads as a live, tappable action. */
         .sf-sticky-text {
-          background: color-mix(in oklab, var(--accent, #f5b400) 20%, transparent);
-          border-color: color-mix(in oklab, var(--accent, #f5b400) 38%, transparent);
-          color: color-mix(in oklab, var(--accent, #f5b400) 70%, #fff);
+          background: color-mix(in oklab, var(--secondary, #6b7280) 60%, transparent);
+          border-color: color-mix(in oklab, var(--secondary, #6b7280) 80%, transparent);
+          color: #fff;
         }
+        .sf-sticky-text:hover {
+          background: color-mix(in oklab, var(--secondary, #6b7280) 75%, transparent);
+        }
+        /* Book: accent-tinted so it reads as secondary CTA. */
         .sf-sticky-book {
-          background: color-mix(in oklab, var(--positive, #34d399) 18%, transparent);
-          border-color: color-mix(in oklab, var(--positive, #34d399) 36%, transparent);
-          color: color-mix(in oklab, var(--positive, #34d399) 70%, #fff);
+          background: color-mix(in oklab, var(--positive, #34d399) 28%, transparent);
+          border-color: color-mix(in oklab, var(--positive, #34d399) 50%, transparent);
+          color: #fff;
+        }
+        .sf-sticky-book:hover {
+          background: color-mix(in oklab, var(--positive, #34d399) 38%, transparent);
         }
 
         @media (prefers-reduced-motion: reduce) {
