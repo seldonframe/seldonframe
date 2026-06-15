@@ -225,10 +225,10 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
       {/* May 1, 2026 — Connect Google Calendar banner removed. The
           Cal.diy booking page IS the operator's calendar; external sync
           was redundant and the OAuth prefetch caused CORS errors.
-          2026-05-17 — Flex column + per-section `order-*` so Appointment
-          Types renders ABOVE the calendar (per user feedback: the
-          create/copy/edit link actions need to be easily accessible,
-          not buried below the calendar grid). */}
+          2026-06-15 — order-* swapped so the CALENDAR renders at the TOP
+          (order-1) and Appointment Types moves BELOW (order-2). WeekCalendar
+          owns its own order-1 class; the Appointment Types section below
+          is updated to order-2. */}
 
       <WeekCalendar
         bookings={bookings}
@@ -241,7 +241,7 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
         rescheduleBookingAction={rescheduleBookingAction}
       />
 
-      <section className="space-y-3 order-1">
+      <section className="space-y-3 order-2">
         <div className="flex flex-wrap items-center gap-3 border-b border-border/70 px-3 py-3 md:px-6">
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-foreground">Appointment Types</p>

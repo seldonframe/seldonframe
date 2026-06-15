@@ -236,12 +236,37 @@ function addDaysLocal(date: Date, days: number) {
   return next;
 }
 
+/** Return a UTC Date whose year/month/day in the given IANA timezone
+ *  matches today's date in that timezone, at 00:00 UTC.
+ *  Using `new Date()` + setHours(0,0,0,0) anchors "today" in the
+ *  browser's local timezone — when the workspace TZ differs, that
+ *  browser-midnight can fall on a different calendar day in the
+ *  workspace TZ, causing the week to start on Sunday instead of Monday.
+ *  This helper derives the correct date by formatting with Intl. */
+function todayInZone(tz: string): Date {
+  const now = new Date();
+  const ymdStr = new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone: tz,
+  }).format(now);
+  // en-CA emits "YYYY-MM-DD"; parse as UTC midnight so the Date object's
+  // getDay() call in startOfWeekMonday runs in UTC, which matches the
+  // year/month/day we just derived from the workspace TZ.
+  return new Date(`${ymdStr}T00:00:00Z`);
+}
+
+/** Monday-anchored week start. Operates on a UTC-midnight Date produced
+ *  by todayInZone() so getDay() reflects the correct workspace-TZ weekday
+ *  rather than the browser's local-timezone weekday. */
 function startOfWeekMonday(date: Date) {
   const next = new Date(date);
-  const weekday = next.getDay();
+  // getUTCDay() instead of getDay() — date is already at UTC midnight,
+  // so UTC weekday == the workspace-TZ weekday we derived in todayInZone.
+  const weekday = next.getUTCDay();
   const diff = weekday === 0 ? -6 : 1 - weekday;
-  next.setDate(next.getDate() + diff);
-  next.setHours(0, 0, 0, 0);
+  next.setUTCDate(next.getUTCDate() + diff);
   return next;
 }
 
@@ -403,14 +428,19 @@ export function WeekCalendar({
   // offset day at midnight) in Day mode. Both the header row and the grid
   // map over this so a single render path serves both views.
   const visibleDays = useMemo(() => {
+    // Base "today" in the workspace timezone so the week anchors on the
+    // correct calendar day regardless of the viewer's browser locale.
+    // Pre-fix, new Date() + setHours(0,0,0,0) could mismatch when the
+    // workspace TZ is behind the browser TZ — e.g. showing Sun Jun 14
+    // as the week start when today is actually Mon Jun 15 (workspace TZ).
+    const todayBase = todayInZone(workspaceTimezone);
     if (viewMode === "day") {
-      const base = addDaysLocal(new Date(), offsetDays);
-      base.setHours(0, 0, 0, 0);
+      const base = addDaysLocal(todayBase, offsetDays);
       return [base];
     }
-    const weekStart = startOfWeekMonday(addDaysLocal(new Date(), offsetDays));
+    const weekStart = startOfWeekMonday(addDaysLocal(todayBase, offsetDays));
     return Array.from({ length: 7 }, (_, i) => addDaysLocal(weekStart, i));
-  }, [viewMode, offsetDays]);
+  }, [viewMode, offsetDays, workspaceTimezone]);
 
   const eventsByDay = useMemo(() => {
     const byDay = new Map<string, BookingRow[]>();
@@ -702,7 +732,7 @@ export function WeekCalendar({
   }, []);
 
   return (
-    <section className="space-y-4 order-2">
+    <section className="space-y-4 order-1">
       {/* Control row */}
       <div className="px-3 md:px-6 py-4 border-b border-border">
         <div className="flex items-center gap-2 md:gap-3 flex-wrap">
