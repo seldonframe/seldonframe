@@ -1,17 +1,22 @@
-// v1 PWA — SMS thread view (read-focused).
+// v2 PWA — SMS thread view.
 //
-// Full conversation with one contact (ascending), scoped to the
-// operator workspace. Header shows the contact name + Call/Text
-// actions (tap-to-text opens the native composer). In-app reply is a
-// fast-follow; v1 reads the thread + bounces to the device SMS app.
+// Opens with mark-read (server-side, before first render).
+// Shows messages ascending + private notes inline (amber treatment).
+// Composer: when outboundSmsEnabled=true → send via sendReplyAction (optimistic).
+//           when false → "Texting turns on the moment your A2P is approved." notice.
+// "+ Add Note" tab always visible and functional (internal only, never sent).
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { contacts, smsMessages } from "@/db/schema";
-import { getOperatorSessionForOrg } from "@/lib/operator-portal/auth";
+import { requireOperatorSessionForOrg } from "@/lib/operator-portal/auth";
+import { listThreadNotes, markThreadRead } from "@/lib/operator-portal/messages";
+import { getOutboundSmsEnabled } from "@/lib/operator-portal/outbound-sms-flag";
+import { getEffectiveBrandingForWorkspace } from "@/lib/partner-agencies/branding";
 import { contactDisplayName, smsHref, telHref } from "@/lib/operator-portal/mobile-format";
+import { ThreadViewClient } from "./_components/thread-view-client";
 
 export default async function OperatorThreadPage({
   params,
@@ -19,8 +24,7 @@ export default async function OperatorThreadPage({
   params: Promise<{ orgSlug: string; contactId: string }>;
 }) {
   const { orgSlug, contactId } = await params;
-  const session = await getOperatorSessionForOrg(orgSlug);
-  if (!session) return null;
+  const session = await requireOperatorSessionForOrg(orgSlug);
   const orgId = session.orgId;
 
   const [contact] = await db
@@ -29,6 +33,7 @@ export default async function OperatorThreadPage({
       firstName: contacts.firstName,
       lastName: contacts.lastName,
       phone: contacts.phone,
+      email: contacts.email,
     })
     .from(contacts)
     .where(and(eq(contacts.orgId, orgId), eq(contacts.id, contactId)))
@@ -36,73 +41,95 @@ export default async function OperatorThreadPage({
 
   if (!contact) notFound();
 
-  const messages = await db
-    .select({
-      id: smsMessages.id,
-      direction: smsMessages.direction,
-      body: smsMessages.body,
-      createdAt: smsMessages.createdAt,
-    })
-    .from(smsMessages)
-    .where(and(eq(smsMessages.orgId, orgId), eq(smsMessages.contactId, contactId)))
-    .orderBy(asc(smsMessages.createdAt));
+  // Mark all unread inbound as read before rendering (server-side)
+  await markThreadRead({ orgId, contactId });
+
+  const [rawMessages, notes, outboundEnabled, branding] = await Promise.all([
+    db
+      .select({
+        id: smsMessages.id,
+        direction: smsMessages.direction,
+        body: smsMessages.body,
+        createdAt: smsMessages.createdAt,
+      })
+      .from(smsMessages)
+      .where(and(eq(smsMessages.orgId, orgId), eq(smsMessages.contactId, contactId)))
+      .orderBy(asc(smsMessages.createdAt)),
+    listThreadNotes({ orgId, contactId }),
+    getOutboundSmsEnabled(orgId),
+    getEffectiveBrandingForWorkspace(orgId),
+  ]);
 
   const name = contactDisplayName({
     firstName: contact.firstName,
     lastName: contact.lastName,
     phone: contact.phone,
   });
+
+  const accentColor =
+    (branding?.is_white_label && branding.primary_color) || "#5b21b6";
   const base = `/portal/${orgSlug}`;
 
+  const messages = rawMessages.map((m) => ({
+    id: m.id,
+    direction: m.direction as "inbound" | "outbound",
+    body: m.body,
+    createdAt: m.createdAt.toISOString(),
+  }));
+
+  const threadNotes = notes.map((n) => ({
+    id: n.id,
+    authorEmail: n.authorEmail,
+    body: n.body,
+    createdAt: n.createdAt.toISOString(),
+  }));
+
   return (
-    <section className="flex flex-col">
+    <>
+      {/* Sticky thread header (server-rendered for fast paint) */}
       <header
         className="sticky top-[57px] z-10 flex items-center gap-3 px-4 py-2.5"
         style={{ backgroundColor: "#FFFFFF", borderBottom: "1px solid #E5E5E1" }}
       >
-        <Link href={`${base}/messages`} className="text-[13px]" style={{ color: "#5b21b6" }}>
+        <Link
+          href={`${base}/messages`}
+          className="shrink-0 text-[13px] font-medium"
+          style={{ color: accentColor }}
+        >
           ‹ Back
         </Link>
         <p className="min-w-0 flex-1 truncate text-[14px] font-semibold" style={{ color: "#111" }}>
           {name}
         </p>
         {contact.phone ? (
-          <div className="flex items-center gap-2">
-            <a href={telHref(contact.phone)} className="text-[12px] font-semibold" style={{ color: "#5b21b6" }}>
+          <div className="flex shrink-0 items-center gap-3">
+            <a
+              href={telHref(contact.phone)}
+              className="text-[12px] font-semibold"
+              style={{ color: accentColor }}
+            >
               Call
             </a>
-            <a href={smsHref(contact.phone)} className="text-[12px] font-semibold" style={{ color: "#5b21b6" }}>
-              Text
+            <a
+              href={smsHref(contact.phone)}
+              className="text-[12px] font-semibold"
+              style={{ color: accentColor }}
+            >
+              SMS app
             </a>
           </div>
         ) : null}
       </header>
 
-      <div className="flex flex-col gap-2 px-4 py-4">
-        {messages.length === 0 ? (
-          <p className="py-10 text-center text-[13px]" style={{ color: "#999" }}>
-            No messages in this thread yet.
-          </p>
-        ) : (
-          messages.map((m) => {
-            const outbound = m.direction === "outbound";
-            return (
-              <div
-                key={m.id}
-                className="max-w-[80%] rounded-2xl px-3 py-2 text-[13px]"
-                style={{
-                  alignSelf: outbound ? "flex-end" : "flex-start",
-                  backgroundColor: outbound ? "#5b21b6" : "#FFFFFF",
-                  color: outbound ? "#FFFFFF" : "#111",
-                  border: outbound ? "none" : "1px solid #E5E5E1",
-                }}
-              >
-                {m.body}
-              </div>
-            );
-          })
-        )}
-      </div>
-    </section>
+      <ThreadViewClient
+        orgSlug={orgSlug}
+        contactId={contactId}
+        contactPhone={contact.phone}
+        initialMessages={messages}
+        initialNotes={threadNotes}
+        outboundSmsEnabled={outboundEnabled}
+        accentColor={accentColor}
+      />
+    </>
   );
 }
