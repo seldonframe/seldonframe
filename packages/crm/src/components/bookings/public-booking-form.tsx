@@ -49,8 +49,9 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { useSearchParams } from "next/navigation";
 import { DayPicker } from "react-day-picker";
 import "react-day-picker/style.css";
-import { Clock, MapPin, Globe2, Phone, Check } from "lucide-react";
+import { Phone, Check, Star } from "lucide-react";
 import { PUBLIC_BOOKING_WINDOW_DAYS } from "@/lib/bookings/booking-window";
+import type { Testimonial } from "@/lib/blueprint/types";
 
 import {
   listPublicBookingSlotsAction,
@@ -122,6 +123,7 @@ export function PublicBookingForm({
   intakeFields = [],
   workspaceTimezone,
   logoUrl = null,
+  testimonials = [],
 }: {
   orgSlug: string;
   bookingSlug: string;
@@ -146,6 +148,9 @@ export function PublicBookingForm({
    *  field; this prop just plumbs it through to the public surface.
    *  Replaces the "uploaded a logo, why doesn't it show?" gap. */
   logoUrl?: string | null;
+  /** Fix C — testimonials from the workspace landing page blueprint.
+   *  Empty array → no testimonials block rendered below the calendar. */
+  testimonials?: Testimonial[];
 }) {
   // v1.40.1 — surface the operator-supplied service hint when the
   // visitor arrived via /book?service=<slug>. Used to pre-display the
@@ -322,25 +327,16 @@ export function PublicBookingForm({
 
   return (
     <main className="min-h-screen px-4 py-6 md:px-8 md:py-10" style={{ backgroundColor: "var(--sf-bg, #fafaf9)" }}>
-      <div className="mx-auto w-full max-w-5xl space-y-6">
-        {/* ───── Top header (business name + phone CTA) ───── */}
-        {/* 2026-05-18 — radius now consumes --sf-radius (operator's
-            /settings/theme borderRadius choice: sharp=0 / rounded=8 /
-            pill=9999). Tailwind's rounded-2xl override is removed so
-            the inline style wins. Fallback 1rem matches the prior
-            visual when no theme is set. */}
+      <div className="mx-auto w-full max-w-2xl space-y-6">
+        {/* ───── Minimal header: logo + business name + service title ───── */}
+        {/* Fix C: the verbose left info column ("Schedule a service" blurb,
+            60 min / On-site / Timezone meta list, "Booking with" eyebrow)
+            has been removed. Only essential identity (who you're booking with
+            + what appointment) is kept. Calendar is the primary UI.
+            Phone CTA is kept for lead-gen value. */}
         <header className="flex items-center justify-between gap-4 border bg-card px-5 py-4 md:px-6" style={{ borderColor: "var(--sf-border)", borderRadius: "var(--sf-radius, 1rem)" }}>
-          {/* 2026-05-18 — workspace logo render. If theme.logoUrl is
-              set, show it AT the front of the header next to (not
-              instead of) the business name. White-label expectation
-              was "I upload a logo, where does it show?" → here, on
-              the public booking page header. Fallback: text-only
-              header (the pre-2026-05-18 behavior). */}
           <div className="flex items-center gap-3 min-w-0">
             {logoUrl ? (
-              // Public surface — Next/Image not used because the logo
-              // URL is operator-supplied (could be any host). Plain
-              // <img> with a sized container keeps CLS controlled.
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={logoUrl}
@@ -348,14 +344,19 @@ export function PublicBookingForm({
                 className="h-9 w-auto object-contain shrink-0"
               />
             ) : null}
-            <h2 className="text-lg md:text-xl font-semibold tracking-tight truncate" style={{ color: "var(--sf-text)" }}>
-              {businessName}
-            </h2>
+            <div className="min-w-0">
+              <h2 className="text-base font-semibold tracking-tight truncate" style={{ color: "var(--sf-text)" }}>
+                {businessName}
+              </h2>
+              <p className="text-sm truncate" style={{ color: "var(--sf-muted)" }}>
+                {appointmentName}
+              </p>
+            </div>
           </div>
           {businessPhone ? (
             <a
               href={toTelLink(businessPhone)}
-              className="inline-flex items-center gap-2 rounded-full bg-foreground text-background px-4 py-2 text-sm font-semibold hover:opacity-90 transition-opacity whitespace-nowrap"
+              className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold hover:opacity-90 transition-opacity whitespace-nowrap"
               style={{
                 backgroundColor: "var(--sf-text, #0a0a0a)",
                 color: "var(--sf-bg, #ffffff)",
@@ -367,44 +368,12 @@ export function PublicBookingForm({
           ) : null}
         </header>
 
-        {/* ───── Body: two-column card ───── */}
+        {/* ───── Body: full-width booking card ───── */}
+        {/* Fix C: single-column full-width layout. Calendar is the primary
+            element — no side column pushing it right. On mobile this means
+            the calendar is immediately visible without scrolling past info. */}
         <div className="border bg-card overflow-hidden" style={{ borderColor: "var(--sf-border)", borderRadius: "var(--sf-radius, 1rem)" }}>
-          <div className="grid md:grid-cols-[38%_62%]">
-            {/* LEFT — meeting / appointment summary */}
-            <aside className="border-b md:border-b-0 md:border-r p-6 md:p-8 space-y-6" style={{ borderColor: "var(--sf-border)" }}>
-              <div>
-                <p className="text-[10px] uppercase tracking-[0.12em] font-semibold mb-2.5" style={{ color: "var(--sf-primary, #21a38b)" }}>
-                  Schedule a service
-                </p>
-                <h1 className="text-3xl md:text-[2.25rem] font-semibold tracking-tight leading-[1.1]" style={{ color: "var(--sf-text)" }}>
-                  {appointmentName}
-                </h1>
-                {appointmentDescription ? (
-                  <p className="mt-4 text-sm leading-relaxed" style={{ color: "var(--sf-muted)" }}>
-                    {appointmentDescription}
-                  </p>
-                ) : null}
-              </div>
-
-              <ul className="space-y-3 pt-2 border-t" style={{ borderColor: "var(--sf-border)" }}>
-                <MetaRow icon={<Clock className="size-4" />} label={`${durationMinutes} minutes`} />
-                <MetaRow icon={<MapPin className="size-4" />} label="On-site at your location" />
-                <MetaRow
-                  icon={<Globe2 className="size-4" />}
-                  eyebrow="Timezone"
-                  label={timezone}
-                />
-              </ul>
-
-              <div className="pt-4 border-t" style={{ borderColor: "var(--sf-border)" }}>
-                <p className="text-[10px] uppercase tracking-[0.12em] font-semibold mb-1" style={{ color: "var(--sf-muted)" }}>
-                  Booking with
-                </p>
-                <p className="text-sm font-medium" style={{ color: "var(--sf-text)" }}>{businessName}</p>
-              </div>
-            </aside>
-
-            {/* RIGHT — pick-date / pick-time / enter-details */}
+            {/* Booking steps — full width */}
             <section className="p-6 md:p-8 space-y-6 min-w-0">
               <StepIndicator
                 steps={[
@@ -640,8 +609,59 @@ export function PublicBookingForm({
                 </div>
               ) : null}
             </section>
-          </div>
         </div>
+
+        {/* ───── Testimonials (Fix C) ───── */}
+        {/* Sourced from landing_pages.blueprint_json.landing.sections[type="testimonials"]
+            for this org. Renders nothing when the workspace has no testimonials. */}
+        {testimonials.length > 0 ? (
+          <div className="space-y-4 pb-4">
+            <h3 className="text-center text-sm font-semibold uppercase tracking-widest" style={{ color: "var(--sf-muted)" }}>
+              What customers say
+            </h3>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {testimonials.map((t, i) => (
+                <div
+                  key={i}
+                  className="rounded-2xl border p-5 space-y-3"
+                  style={{
+                    borderColor: "var(--sf-border)",
+                    backgroundColor: "var(--sf-card, transparent)",
+                    borderRadius: "var(--sf-radius, 1rem)",
+                  }}
+                >
+                  {t.rating ? (
+                    <div className="flex items-center gap-0.5">
+                      {Array.from({ length: 5 }, (_, idx) => (
+                        <Star
+                          key={idx}
+                          className="size-3.5"
+                          style={{
+                            color: idx < t.rating! ? "var(--sf-primary, #21a38b)" : "color-mix(in srgb, var(--sf-text, #0a0a0a) 20%, transparent)",
+                            fill: idx < t.rating! ? "var(--sf-primary, #21a38b)" : "none",
+                          }}
+                        />
+                      ))}
+                    </div>
+                  ) : null}
+                  <p className="text-sm leading-relaxed" style={{ color: "var(--sf-text)" }}>
+                    &ldquo;{t.quote}&rdquo;
+                  </p>
+                  <div>
+                    <p className="text-sm font-semibold" style={{ color: "var(--sf-text)" }}>
+                      {t.authorName}
+                    </p>
+                    {t.authorRole ? (
+                      <p className="text-xs" style={{ color: "var(--sf-muted)" }}>
+                        {t.authorRole}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {/* DayPicker styling overrides — match the brand and tighten layout.

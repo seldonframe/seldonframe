@@ -2,19 +2,51 @@ import { eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { PoweredByBadge } from "@seldonframe/core/virality";
 import { db } from "@/db";
-import { bookings, organizations } from "@/db/schema";
+import { bookings, landingPages, organizations } from "@/db/schema";
 import { PublicBookingForm } from "@/components/bookings/public-booking-form";
 import { TestModePublicBadge } from "@/components/layout/test-mode-public-badge";
 import { PublicThemeProvider } from "@/components/theme/public-theme-provider";
 import { shouldShowPoweredByBadgeForOrg } from "@/lib/billing/public";
 import { getPublicBookingContext } from "@/lib/bookings/actions";
 import { getPublicOrgThemeBySlug } from "@/lib/theme/actions";
+import type { SectionTestimonials, Testimonial } from "@/lib/blueprint/types";
 // 2026-05-18 (later) — agency-wide white-label REMOVED from public
 // booking page. The end customer (the homeowner clicking the booking
 // link) should see the SMB's identity ("Roofs by Shiloh"), not the
 // agency that built the system ("Max agency"). Agency chrome lives
 // in the OPERATOR's admin dashboard sidebar only — never on
 // customer-facing surfaces. See operator dogfood feedback 2026-05-18.
+
+// Fix C — extract testimonials from the workspace landing page's blueprint JSON.
+// We look for the first landing page (slug="home" preferred, else earliest) that
+// has a blueprintJson with a "testimonials" section. Testimonials are surfaced on
+// the public booking page so prospective customers see social proof inline.
+async function fetchBookingTestimonials(orgId: string): Promise<Testimonial[]> {
+  try {
+    // Prefer the "home" slug; fall back to the most recently created page.
+    const rows = await db
+      .select({ blueprintJson: landingPages.blueprintJson })
+      .from(landingPages)
+      .where(eq(landingPages.orgId, orgId))
+      .orderBy(landingPages.createdAt)
+      .limit(5);
+
+    for (const row of rows) {
+      const bp = row.blueprintJson as { landing?: { sections?: unknown[] } } | null;
+      const sections = bp?.landing?.sections ?? [];
+      const testimonialsSection = sections.find(
+        (s): s is SectionTestimonials =>
+          typeof s === "object" && s !== null && (s as { type?: string }).type === "testimonials",
+      );
+      if (testimonialsSection?.items?.length) {
+        return testimonialsSection.items;
+      }
+    }
+  } catch {
+    // Best-effort; never block the booking page for missing testimonials.
+  }
+  return [];
+}
 
 // v1.36.1 — extract a business phone from the soul JSONB (best-effort).
 // SeldonFrame doesn't have a dedicated `organizations.phone` column;
@@ -52,8 +84,11 @@ export default async function PublicBookingPage({
     notFound();
   }
 
-  const showBadge = await shouldShowPoweredByBadgeForOrg(bookingContext.orgId);
-  const theme = await getPublicOrgThemeBySlug(orgSlug);
+  const [showBadge, theme, testimonials] = await Promise.all([
+    shouldShowPoweredByBadgeForOrg(bookingContext.orgId),
+    getPublicOrgThemeBySlug(orgSlug),
+    fetchBookingTestimonials(bookingContext.orgId),
+  ]);
   // 2026-05-18 (later) — SMB identity only on public booking page.
   // No agency override (see import comment above).
   const headerLogoUrl = theme.logoUrl || null;
@@ -139,6 +174,10 @@ export default async function PublicBookingPage({
           // 2026-05-18 (later) — SMB's own theme.logoUrl only.
           // null → text-only header showing the SMB business name.
           logoUrl={headerLogoUrl}
+          // Fix C — surface landing-page testimonials below the booking
+          // calendar so customers see social proof without leaving the page.
+          // Empty array → no testimonials block rendered.
+          testimonials={testimonials}
         />
         {(showBadge || isTestMode) ? (
           <div className="flex flex-col items-center gap-2 py-3">
