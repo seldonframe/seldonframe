@@ -30,12 +30,11 @@ export async function GET(
     );
   }
 
-  // v1.25.0 — operator session unlocks the admin dashboard. Land at
-  // /dashboard so the operator gets the same UX as the SF agency
-  // operator (one source of truth at the route level). The operator's
-  // workspace is set via the sf_operator_session cookie, which
-  // getOrgId() picks up for all admin-page server components.
+  // v1 PWA — land on the mobile shell (Today), not the dense desktop
+  // CRM. The installed contractor app's start_url is /portal/<slug>/,
+  // so after sign-in the operator continues straight into the app they
+  // launched. An explicit ?redirect= (relative) still wins.
   const target =
-    redirectTo && redirectTo.startsWith("/") ? redirectTo : `/dashboard`;
+    redirectTo && redirectTo.startsWith("/") ? redirectTo : `/portal/${orgSlug}`;
   return NextResponse.redirect(new URL(target, request.url));
 }
