@@ -17,9 +17,7 @@ export async function getOutboundSmsEnabled(orgId: string): Promise<boolean> {
 
   if (!org) return false;
 
-  const integrations = (org.integrations ?? {}) as Record<string, unknown>;
-  const twilio = (integrations.twilio ?? {}) as Record<string, unknown>;
-  return twilio.outboundSmsEnabled === true;
+  return org.integrations?.twilio?.outboundSmsEnabled === true;
 }
 
 /**
@@ -35,15 +33,17 @@ export async function setOutboundSmsEnabled(orgId: string, enabled: boolean): Pr
 
   if (!org) return;
 
-  const integrations = ((org.integrations ?? {}) as Record<string, unknown>);
-  const twilio = ((integrations.twilio ?? {}) as Record<string, unknown>);
+  const integrations = org.integrations ?? {};
+  const twilio = integrations.twilio;
 
   await db
     .update(organizations)
     .set({
       integrations: {
         ...integrations,
-        twilio: { ...twilio, outboundSmsEnabled: enabled },
+        ...(twilio
+          ? { twilio: { ...twilio, outboundSmsEnabled: enabled } }
+          : {}),
       },
     })
     .where(eq(organizations.id, orgId));

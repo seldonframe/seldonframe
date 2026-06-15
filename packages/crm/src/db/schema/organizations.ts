@@ -13,6 +13,8 @@ export type OrganizationIntegrations = {
     connected: boolean;
     /** SLICE 8 G-8-3: per-provider test credentials for sandbox routing. */
     test?: TwilioTestConfig;
+    /** Operator Portal PWA v2: A2P campaign approved; outbound SMS enabled. */
+    outboundSmsEnabled?: boolean;
   };
   resend?: {
     apiKey: string;
