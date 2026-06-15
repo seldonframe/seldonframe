@@ -633,6 +633,32 @@ function PipelineSheet({
   );
 }
 
+// ─── Quick Action icons (inline SVG, strokeWidth=2, 20×20) ───────────────────
+
+const IconUserPlus = (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+    <circle cx="8.5" cy="7" r="4" />
+    <line x1="20" y1="8" x2="20" y2="14" />
+    <line x1="23" y1="11" x2="17" y2="11" />
+  </svg>
+);
+
+const IconCalendarPlus = (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="4" width="18" height="18" rx="2" />
+    <path d="M16 2v4M8 2v4M3 10h18" />
+    <line x1="12" y1="15" x2="12" y2="19" />
+    <line x1="10" y1="17" x2="14" y2="17" />
+  </svg>
+);
+
+const IconStar = (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+  </svg>
+);
+
 // ─── Quick Action Tile ────────────────────────────────────────────────────────
 
 function QuickActionTile({
@@ -643,7 +669,7 @@ function QuickActionTile({
   accentColor,
 }: {
   label: string;
-  icon: string;
+  icon: React.ReactNode;
   onClick?: () => void;
   href?: string;
   accentColor: string;
@@ -676,7 +702,7 @@ function QuickActionTile({
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          fontSize: 18,
+          color: accentColor,
         }}
       >
         {icon}
@@ -793,19 +819,19 @@ export function TodayQuickActions({
       <div style={{ display: "flex", gap: 10 }}>
         <QuickActionTile
           label="Add Contact"
-          icon="＋"
+          icon={IconUserPlus}
           onClick={() => setAddContactOpen(true)}
           accentColor={accentColor}
         />
         <QuickActionTile
           label="New Booking"
-          icon="📅"
+          icon={IconCalendarPlus}
           href={`/book/${orgSlug}/default`}
           accentColor={accentColor}
         />
         <QuickActionTile
           label="Request Review"
-          icon="⭐"
+          icon={IconStar}
           onClick={() => setReviewOpen(true)}
           accentColor={accentColor}
         />
