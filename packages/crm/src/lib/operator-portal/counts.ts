@@ -1,6 +1,6 @@
 "use server";
 
-import { and, desc, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { contacts, smsMessages } from "@/db/schema";
 
@@ -59,20 +59,17 @@ export async function countNewLeads(orgId: string, days = 7): Promise<number> {
   return count;
 }
 
-/** Unread inbound SMS across the workspace. Loads recent sms_messages
- *  desc-by-createdAt (same shape as the conversations inbox) and
- *  reduces via the pure unreadInboundCountFromRows. */
+/** Unread inbound SMS = inbound rows where readAt IS NULL. */
 export async function countUnreadInboundSms(orgId: string): Promise<number> {
   const rows = await db
-    .select({ contactId: smsMessages.contactId, direction: smsMessages.direction })
+    .select({ id: smsMessages.id })
     .from(smsMessages)
-    .where(eq(smsMessages.orgId, orgId))
-    .orderBy(desc(smsMessages.createdAt))
-    .limit(500);
-  return unreadInboundCountFromRows(
-    rows.map((r) => ({
-      contactId: r.contactId,
-      direction: r.direction as "inbound" | "outbound",
-    })),
-  );
+    .where(
+      and(
+        eq(smsMessages.orgId, orgId),
+        eq(smsMessages.direction, "inbound"),
+        isNull(smsMessages.readAt)
+      )
+    );
+  return rows.length;
 }
