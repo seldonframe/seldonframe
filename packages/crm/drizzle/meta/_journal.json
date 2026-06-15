@@ -162,6 +162,13 @@
       "when": 1781525968778,
       "tag": "0022_melted_whirlwind",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1781526008406,
+      "tag": "0023_lively_sugar_man",
+      "breakpoints": true
     }
   ]
 }

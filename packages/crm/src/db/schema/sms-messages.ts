@@ -31,11 +31,13 @@ export const smsMessages = pgTable(
     metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    readAt: timestamp("read_at", { withTimezone: true }),
   },
   (table) => [
     index("sms_messages_org_created_idx").on(table.orgId, desc(table.createdAt)),
     index("sms_messages_org_contact_idx").on(table.orgId, table.contactId),
     index("sms_messages_org_status_idx").on(table.orgId, table.status),
     index("sms_messages_org_direction_idx").on(table.orgId, table.direction),
+    index("sms_messages_org_contact_read_idx").on(table.orgId, table.contactId, table.readAt),
   ]
 );
