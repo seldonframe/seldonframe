@@ -13,6 +13,7 @@ import type { ReactNode } from "react";
 
 import type { EffectiveBranding } from "@/lib/partner-agencies/branding";
 import { OperatorMobileNav } from "./operator-mobile-nav";
+import { OperatorSearch } from "./operator-search";
 import { ServiceWorkerRegister } from "@/components/operator-portal/pwa/sw-register";
 import { InstallButton } from "@/components/operator-portal/pwa/install-button";
 
@@ -69,7 +70,10 @@ export function OperatorMobileShell({
             ) : null}
           </div>
         </div>
-        <InstallButton brandColor={activeColor} />
+        <div className="flex items-center gap-1">
+          <OperatorSearch orgSlug={orgSlug} activeColor={activeColor} />
+          <InstallButton brandColor={activeColor} />
+        </div>
       </header>
 
       {/* Content. Bottom padding clears the fixed nav (56px) + safe area. */}
