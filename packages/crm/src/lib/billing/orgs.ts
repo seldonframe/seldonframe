@@ -2,13 +2,13 @@
 
 import { randomUUID } from "node:crypto";
 import bcrypt from "bcryptjs";
-import { and, eq, or, sql } from "drizzle-orm";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { contacts, orgMembers, organizations, users } from "@/db/schema";
+import { contacts, orgMembers, organizations, partnerAgencies, users } from "@/db/schema";
 import { getOrgFeatures, normalizeTierId } from "@/lib/billing/features";
 import { enforceWorkspaceLimit } from "@/lib/billing/limits";
 import { assertWritable } from "@/lib/demo/server";
@@ -276,6 +276,49 @@ function buildMembershipOrgCondition(membershipOrgIds: string[]) {
   return or(...membershipOrgIds.map((orgId) => eq(organizations.id, orgId))) ?? sql`false`;
 }
 
+/**
+ * 2026-06-16 — agency-attached workspace discovery.
+ *
+ * `attachWorkspaceToAgency` (lib/partner-agencies/store.ts) sets
+ * `organizations.parent_agency_id` on client workspaces but does NOT
+ * backfill `org_members` or `organizations.owner_id`. This means that
+ * if the agency workspaces were created anonymously (no real userId on
+ * the bearer token) and then attached to the agency, the standard
+ * `listManagedOrganizations` query misses them entirely:
+ *   - `ownerId` → null (anonymous creation)
+ *   - `parentUserId` → null (anonymous creation)
+ *   - `org_members` → no row for this user
+ *   - `user.orgId` → the user's PRIMARY org, not the client workspace
+ *
+ * Fix: also include any workspace whose `parentAgencyId` is an agency
+ * owned by this user (via `partner_agencies.owner_user_id = userId`).
+ * This is the canonical "I own the agency → I can see its clients" path.
+ *
+ * Returns the list of workspace IDs to union into the main query via
+ * an `inArray` condition. Empty array when the user owns no agencies.
+ */
+async function fetchAgencyAttachedWorkspaceIds(userId: string): Promise<string[]> {
+  if (!isUuidShape(userId)) return [];
+
+  // Find partner_agencies this user owns.
+  const ownedAgencies = await db
+    .select({ id: partnerAgencies.id })
+    .from(partnerAgencies)
+    .where(eq(partnerAgencies.ownerUserId, userId));
+
+  if (ownedAgencies.length === 0) return [];
+
+  const agencyIds = ownedAgencies.map((a) => a.id);
+
+  // Find organizations attached to any of those agencies.
+  const attached = await db
+    .select({ id: organizations.id })
+    .from(organizations)
+    .where(inArray(organizations.parentAgencyId, agencyIds));
+
+  return attached.map((ws) => ws.id);
+}
+
 async function logOrgListDiag(tag: string, membershipIds: unknown, extra: Record<string, unknown>) {
   let requestPath = "unknown";
   let host = "unknown";
@@ -367,16 +410,25 @@ export async function listManagedOrganizations(userId?: string) {
     return [];
   }
 
-  const membershipRows = await db
-    .select({ orgId: orgMembers.orgId })
-    .from(orgMembers)
-    .where(eq(orgMembers.userId, user.id));
+  const [membershipRows, agencyAttachedIds] = await Promise.all([
+    db
+      .select({ orgId: orgMembers.orgId })
+      .from(orgMembers)
+      .where(eq(orgMembers.userId, user.id)),
+    // 2026-06-16 — include workspaces attached to partner agencies owned
+    // by this user. `attachWorkspaceToAgency` sets parent_agency_id but
+    // does NOT create org_members rows, so agency-attached client
+    // workspaces are otherwise invisible to the listing query when the
+    // workspace was created anonymously (ownerId = null, parentUserId = null).
+    fetchAgencyAttachedWorkspaceIds(user.id),
+  ]);
 
   const membershipOrgIds = membershipRows.map((row) => row.orgId);
 
   await logOrgListDiag("listManagedOrganizations", membershipOrgIds, {
     userId: user.id,
     userOrgId: user.orgId,
+    agencyAttachedCount: agencyAttachedIds.length,
   });
 
   // v1.7.3 — user.orgId is now nullable (synthesized empty record path
@@ -390,6 +442,12 @@ export async function listManagedOrganizations(userId?: string) {
   ];
   if (user.orgId) {
     orgListOrConditions.push(eq(organizations.id, user.orgId));
+  }
+  // 2026-06-16 — union in agency-attached workspaces. inArray handles
+  // deduplication via the set semantics of OR; SQL deduplicates the
+  // result rows at the query level.
+  if (agencyAttachedIds.length > 0) {
+    orgListOrConditions.push(inArray(organizations.id, agencyAttachedIds));
   }
   const rows = await db
     .select({
@@ -440,10 +498,14 @@ export async function listManagedOrganizationsForUser(userId: string) {
     return [];
   }
 
-  const membershipRows = await db
-    .select({ orgId: orgMembers.orgId })
-    .from(orgMembers)
-    .where(eq(orgMembers.userId, user.id));
+  const [membershipRows, agencyAttachedIds] = await Promise.all([
+    db
+      .select({ orgId: orgMembers.orgId })
+      .from(orgMembers)
+      .where(eq(orgMembers.userId, user.id)),
+    // 2026-06-16 — see listManagedOrganizations for rationale.
+    fetchAgencyAttachedWorkspaceIds(user.id),
+  ]);
 
   const membershipOrgIds = membershipRows.map((row) => row.orgId);
 
@@ -451,6 +513,7 @@ export async function listManagedOrganizationsForUser(userId: string) {
     userId: user.id,
     userOrgId: user.orgId,
     inputUserId: userId,
+    agencyAttachedCount: agencyAttachedIds.length,
   });
 
   // v1.7.3 — user.orgId is now nullable (synthesized empty record path
@@ -464,6 +527,10 @@ export async function listManagedOrganizationsForUser(userId: string) {
   ];
   if (user.orgId) {
     orgListOrConditions.push(eq(organizations.id, user.orgId));
+  }
+  // 2026-06-16 — union in agency-attached workspaces.
+  if (agencyAttachedIds.length > 0) {
+    orgListOrConditions.push(inArray(organizations.id, agencyAttachedIds));
   }
   const rows = await db
     .select({

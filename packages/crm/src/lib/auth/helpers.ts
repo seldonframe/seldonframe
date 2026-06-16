@@ -4,7 +4,7 @@ import { and, eq, or } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
-import { orgMembers, organizations, users } from "@/db/schema";
+import { orgMembers, organizations, partnerAgencies, users } from "@/db/schema";
 import {
   isAdminTokenUserId,
   resolveAdminTokenContext,
@@ -92,12 +92,43 @@ export async function getOrgId() {
   }
 
   const [managedOrg] = await db
-    .select({ id: organizations.id })
+    .select({ id: organizations.id, parentAgencyId: organizations.parentAgencyId })
     .from(organizations)
     .where(and(eq(organizations.id, activeOrgId), or(eq(organizations.ownerId, user.id), eq(organizations.parentUserId, user.id))))
     .limit(1);
 
-  return managedOrg?.id ?? user.orgId ?? null;
+  if (managedOrg?.id) {
+    return managedOrg.id;
+  }
+
+  // 2026-06-16 — agency-attached workspaces. When a workspace was
+  // created anonymously and later attached to a partner agency via
+  // attachWorkspaceToAgency, ownerId and parentUserId remain null.
+  // The agency owner should still be able to switch into these
+  // workspaces. Check whether the active org's parentAgencyId points
+  // to a partner agency owned by this user.
+  const [agencyWs] = await db
+    .select({ id: organizations.id, parentAgencyId: organizations.parentAgencyId })
+    .from(organizations)
+    .where(eq(organizations.id, activeOrgId))
+    .limit(1);
+  if (agencyWs?.parentAgencyId) {
+    const [agency] = await db
+      .select({ id: partnerAgencies.id })
+      .from(partnerAgencies)
+      .where(
+        and(
+          eq(partnerAgencies.id, agencyWs.parentAgencyId),
+          eq(partnerAgencies.ownerUserId, user.id),
+        ),
+      )
+      .limit(1);
+    if (agency?.id) {
+      return activeOrgId;
+    }
+  }
+
+  return user.orgId ?? null;
 }
 
 export async function requireAuth() {

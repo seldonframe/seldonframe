@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { and, eq, or } from "drizzle-orm";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { orgMembers, organizations, users } from "@/db/schema";
+import { orgMembers, organizations, partnerAgencies, users } from "@/db/schema";
 
 // Server-side org switcher driven by `?to=<orgId>&next=<path>`.
 //
@@ -108,6 +108,31 @@ async function checkWorkspaceAccess(
     )
     .limit(1);
   if (member?.orgId) return { allowed: true };
+
+  // 2026-06-16 — agency-attached workspaces. When a workspace was
+  // created anonymously and then attached to a partner agency via
+  // attachWorkspaceToAgency, neither ownerId/parentUserId nor
+  // org_members are set for the agency owner. Check whether the
+  // target workspace's parentAgencyId belongs to an agency owned by
+  // this user — if so, the switch is authorized.
+  const [targetWs] = await db
+    .select({ parentAgencyId: organizations.parentAgencyId })
+    .from(organizations)
+    .where(eq(organizations.id, targetOrgId))
+    .limit(1);
+  if (targetWs?.parentAgencyId) {
+    const [agency] = await db
+      .select({ id: partnerAgencies.id })
+      .from(partnerAgencies)
+      .where(
+        and(
+          eq(partnerAgencies.id, targetWs.parentAgencyId),
+          eq(partnerAgencies.ownerUserId, userId),
+        ),
+      )
+      .limit(1);
+    if (agency?.id) return { allowed: true };
+  }
 
   return { allowed: false };
 }
