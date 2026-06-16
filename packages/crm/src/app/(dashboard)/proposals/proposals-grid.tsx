@@ -4,6 +4,8 @@
 import Link from "next/link";
 import type { Proposal } from "@/db/schema/proposals";
 import { ProposalStatusPill } from "@/components/proposals/proposal-status-pill";
+import { cn } from "@/lib/utils";
+import { buttonVariants } from "@/components/ui/button-variants";
 
 function formatPrice(cents: number) {
   return `$${(cents / 100).toLocaleString("en-US", { maximumFractionDigits: 0 })}/mo`;
@@ -17,12 +19,19 @@ function formatDate(value: Date | string | null) {
 export function ProposalsGrid({ proposals }: { proposals: Proposal[] }) {
   if (proposals.length === 0) {
     return (
-      <section className="rounded-2xl border border-border/70 bg-card/40 p-12 text-center space-y-3">
+      <section className="rounded-2xl border border-border/70 bg-card/40 p-12 text-center space-y-4">
         <h2 className="text-xl font-semibold">No proposals yet</h2>
         <p className="text-sm text-muted-foreground">
-          No proposals yet — click{" "}
-          <span className="font-medium">+ New proposal</span> to pitch your first prospect.
+          Send an async email proposal, or close a client right now with a live-sell checkout.
         </p>
+        <div className="flex items-center justify-center gap-3 pt-1">
+          <Link href="/start" className={cn(buttonVariants({ variant: "outline" }))}>
+            Sell live
+          </Link>
+          <Link href="/proposals/new" className={cn(buttonVariants())}>
+            + New proposal
+          </Link>
+        </div>
       </section>
     );
   }

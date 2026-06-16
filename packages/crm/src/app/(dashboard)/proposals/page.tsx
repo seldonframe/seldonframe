@@ -91,9 +91,17 @@ export default async function ProposalsPage({
           </p>
         </div>
         {stripeStatus !== "not_connected" && (
-          <Link href="/proposals/new" className={cn(buttonVariants())}>
-            + New proposal
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/start"
+              className={cn(buttonVariants({ variant: "outline" }))}
+            >
+              Sell live
+            </Link>
+            <Link href="/proposals/new" className={cn(buttonVariants())}>
+              + New proposal
+            </Link>
+          </div>
         )}
       </header>
 
