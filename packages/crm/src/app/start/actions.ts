@@ -23,7 +23,7 @@ import { logEvent } from "@/lib/observability/log";
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
-const MONTHLY_PRICE_CENTS = 39700; // $397/mo
+import { LIVE_SELL_MONTHLY_PRICE_CENTS } from "./constants";
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -37,6 +37,12 @@ export type LiveSellCheckoutInput = {
   prospectEmail: string;
   prospectPhone?: string;
   previewWorkspaceId: string;  // selected client workspace
+  /** Monthly price in cents (operator-configured). Defaults to $397 if absent. */
+  monthlyPriceCents?: number;
+  /** One-time setup fee in cents (0 = no setup fee). */
+  setupFeeCents?: number;
+  /** Which services are included. Defaults to all 7 if absent. */
+  scopeItems?: { label: string }[];
 };
 
 export type LiveSellCheckoutResult = {
@@ -100,6 +106,32 @@ export async function createLiveSellCheckoutAction(
   const baseUrl =
     process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://app.seldonframe.com";
 
+  // Validate + normalise pricing inputs.
+  const monthlyPriceCents =
+    typeof input.monthlyPriceCents === "number" && input.monthlyPriceCents > 0
+      ? Math.round(input.monthlyPriceCents)
+      : LIVE_SELL_MONTHLY_PRICE_CENTS;
+
+  const setupFeeCents =
+    typeof input.setupFeeCents === "number" && input.setupFeeCents >= 0
+      ? Math.round(input.setupFeeCents)
+      : 0;
+
+  const defaultScopeItems = [
+    { label: "Website" },
+    { label: "Booking page" },
+    { label: "24/7 missed-call text-back" },
+    { label: "AI chatbot" },
+    { label: "Google review requester" },
+    { label: "Intake form" },
+    { label: "CRM + deal pipeline" },
+  ];
+
+  const scopeItems =
+    Array.isArray(input.scopeItems) && input.scopeItems.length > 0
+      ? input.scopeItems
+      : defaultScopeItems;
+
   // Create the proposal record (carries metadata for the webhook + activation).
   const agencyName = user.agencyProfile?.name ?? user.name;
   const agencyBrandColor = user.agencyProfile?.brand_color ?? undefined;
@@ -113,20 +145,13 @@ export async function createLiveSellCheckoutAction(
     prospectPhone: input.prospectPhone || null,
     agencyName,
     agencyBrandColor,
-    monthlyPriceCents: MONTHLY_PRICE_CENTS,
+    monthlyPriceCents,
+    setupFeeCents,
     previewWorkspaceId: input.previewWorkspaceId,
-    // scopeItems: the live-sell checkout uses a fixed scope; proposal HTML
-    // is minimal (live-sell closes in the meeting, no async review step).
-    scopeItems: [
-      { label: "Website" },
-      { label: "Booking page" },
-      { label: "24/7 missed-call text-back" },
-      { label: "AI chatbot" },
-      { label: "Google review requester" },
-      { label: "Intake form" },
-      { label: "CRM + deal pipeline" },
-    ],
-    generatedHtml: `<p>Live-sell checkout for ${input.prospectName}. $${MONTHLY_PRICE_CENTS / 100}/mo.</p>`,
+    // scopeItems: operator-configured for live-sell; proposal HTML is minimal
+    // (live-sell closes in the meeting, no async review step).
+    scopeItems,
+    generatedHtml: `<p>Live-sell checkout for ${input.prospectName}. $${(monthlyPriceCents / 100).toFixed(0)}/mo.</p>`,
   });
 
   // Build standard checkout params, then adapt for Embedded Checkout
@@ -136,7 +161,8 @@ export async function createLiveSellCheckoutAction(
     previewWorkspaceId: input.previewWorkspaceId,
     prospectEmail: input.prospectEmail,
     prospectName: input.prospectName,
-    monthlyPriceCents: MONTHLY_PRICE_CENTS,
+    monthlyPriceCents,
+    setupFeeCents,
     signedToken: proposal.signedToken,
     baseUrl,
   });

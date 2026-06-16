@@ -1,15 +1,17 @@
 "use client";
 // packages/crm/src/app/start/_components/start-checkout-wizard.tsx
 // Orchestrates the two-step live-sell checkout flow.
-// Step 1: client details form (Step1Form)
+// Step 1: client details form + scope/pricing config (Step1Form)
 // Step 2: Stripe Embedded Checkout (Step2Checkout)
-// The left panel (ValuePanel) is fixed across both steps.
+// The left panel (ValuePanel) is fixed across both steps and reflects
+// the live scope + pricing config entered in Step 1.
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { ValuePanel } from "./value-panel";
 import { Step1Form } from "./step1-form";
 import { Step2Checkout } from "./step2-checkout";
 import type { LiveSellCheckoutResult } from "../actions";
+import { LIVE_SELL_MONTHLY_PRICE_CENTS, DEFAULT_SERVICES, type ServiceItem } from "../constants";
 
 type Workspace = { id: string; name: string; slug: string };
 
@@ -21,6 +23,12 @@ type StartCheckoutWizardProps = {
 
 type WizardStep = "step1" | "step2";
 
+type PricingConfig = {
+  selectedServices: ServiceItem[];
+  monthlyPriceCents: number;
+  setupFeeCents: number;
+};
+
 export function StartCheckoutWizard({
   workspaces,
   agencyName,
@@ -29,6 +37,13 @@ export function StartCheckoutWizard({
   const [step, setStep] = useState<WizardStep>("step1");
   const [checkout, setCheckout] = useState<LiveSellCheckoutResult | null>(null);
 
+  // Lift the config state so the ValuePanel can react to Step1Form changes.
+  const [pricingConfig, setPricingConfig] = useState<PricingConfig>({
+    selectedServices: DEFAULT_SERVICES,
+    monthlyPriceCents: LIVE_SELL_MONTHLY_PRICE_CENTS,
+    setupFeeCents: 0,
+  });
+
   const accent = primaryColor ?? "#B26B49";
 
   function handleCheckoutReady(result: LiveSellCheckoutResult) {
@@ -36,11 +51,21 @@ export function StartCheckoutWizard({
     setStep("step2");
   }
 
+  const handleConfigChange = useCallback((config: PricingConfig) => {
+    setPricingConfig(config);
+  }, []);
+
   return (
     <div className="flex min-h-screen flex-col lg:flex-row">
-      {/* Left: fixed value panel */}
+      {/* Left: fixed value panel — reacts to live config */}
       <div className="w-full lg:w-96 xl:w-[420px] flex-shrink-0">
-        <ValuePanel agencyName={agencyName} primaryColor={primaryColor} />
+        <ValuePanel
+          agencyName={agencyName}
+          primaryColor={primaryColor}
+          selectedServices={pricingConfig.selectedServices}
+          monthlyPriceCents={pricingConfig.monthlyPriceCents}
+          setupFeeCents={pricingConfig.setupFeeCents}
+        />
       </div>
 
       {/* Right: form side */}
@@ -58,6 +83,7 @@ export function StartCheckoutWizard({
               workspaces={workspaces}
               onCheckoutReady={handleCheckoutReady}
               accentColor={accent}
+              onConfigChange={handleConfigChange}
             />
           )}
           {step === "step2" && checkout && (

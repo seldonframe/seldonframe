@@ -1,26 +1,47 @@
 // packages/crm/src/app/start/_components/value-panel.tsx
 // Fixed left panel shown on both Step 1 and Step 2 of the /start checkout.
-// Shows what the prospect is getting for $397/mo.
+// Shows what the prospect is getting and the current pricing config.
 // Colors: dark-green bg (#1F2B24), parchment text (#F6F2EA), clay accent (#B26B49).
 // Uses agency primary color when provided (agency-branded, not hardcoded).
+
+import type { ServiceItem } from "../constants";
 
 type ValuePanelProps = {
   agencyName: string;
   primaryColor?: string | null;
+  /** Checked services to display. Defaults to all 7 when not provided. */
+  selectedServices?: ServiceItem[];
+  /** Monthly price in cents for display. Defaults to 39700 ($397) when not provided. */
+  monthlyPriceCents?: number;
+  /** One-time setup fee in cents (0 = not shown). */
+  setupFeeCents?: number;
 };
 
-const DELIVERABLES = [
-  { label: "Website", detail: "Branded landing page on your domain" },
-  { label: "Booking page", detail: "Online appointments, any device" },
-  { label: "24/7 missed-call text-back", detail: "Never lose a lead again" },
-  { label: "AI chatbot", detail: "Trained on your services & FAQs" },
-  { label: "Google review requester", detail: "Auto-request after every job" },
-  { label: "Intake form", detail: "Capture lead details automatically" },
-  { label: "CRM + deal pipeline", detail: "Contacts, deals & follow-ups" },
+const DEFAULT_DELIVERABLES = [
+  { id: "website",  label: "Website",                    detail: "Branded landing page on your domain"  },
+  { id: "booking",  label: "Booking page",               detail: "Online appointments, any device"       },
+  { id: "textback", label: "24/7 missed-call text-back", detail: "Never lose a lead again"               },
+  { id: "chatbot",  label: "AI chatbot",                 detail: "Trained on your services & FAQs"       },
+  { id: "reviews",  label: "Google review requester",    detail: "Auto-request after every job"          },
+  { id: "intake",   label: "Intake form",                detail: "Capture lead details automatically"    },
+  { id: "crm",      label: "CRM + deal pipeline",        detail: "Contacts, deals & follow-ups"         },
 ];
 
-export function ValuePanel({ agencyName, primaryColor }: ValuePanelProps) {
+export function ValuePanel({
+  agencyName,
+  primaryColor,
+  selectedServices,
+  monthlyPriceCents = 39700,
+  setupFeeCents = 0,
+}: ValuePanelProps) {
   const accent = primaryColor ?? "#B26B49";
+
+  const deliverables =
+    selectedServices && selectedServices.length > 0
+      ? selectedServices
+      : DEFAULT_DELIVERABLES;
+
+  const monthlyDollars = (monthlyPriceCents / 100).toFixed(0);
 
   return (
     <div
@@ -39,8 +60,8 @@ export function ValuePanel({ agencyName, primaryColor }: ValuePanelProps) {
         </p>
 
         <ul className="space-y-4">
-          {DELIVERABLES.map((item) => (
-            <li key={item.label} className="flex items-start gap-3">
+          {deliverables.map((item) => (
+            <li key={item.id ?? item.label} className="flex items-start gap-3">
               <span
                 className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-white text-xs font-bold"
                 style={{ backgroundColor: accent }}
@@ -56,12 +77,20 @@ export function ValuePanel({ agencyName, primaryColor }: ValuePanelProps) {
         </ul>
       </div>
 
-      <div className="mt-10 border-t border-white/10 pt-6">
+      <div className="mt-10 border-t border-white/10 pt-6 space-y-1">
+        {setupFeeCents > 0 && (
+          <p className="text-sm opacity-60">
+            Setup fee:{" "}
+            <span className="font-semibold text-[#F6F2EA]">
+              ${(setupFeeCents / 100).toFixed(0)} one-time
+            </span>
+          </p>
+        )}
         <p className="text-4xl font-extrabold">
-          <span style={{ color: accent }}>$397</span>
+          <span style={{ color: accent }}>${monthlyDollars}</span>
           <span className="text-lg font-medium opacity-70">/mo</span>
         </p>
-        <p className="text-sm opacity-50 mt-1">No contract · cancel anytime</p>
+        <p className="text-sm opacity-50">No contract · cancel anytime</p>
       </div>
     </div>
   );
