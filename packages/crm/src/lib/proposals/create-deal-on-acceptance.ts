@@ -7,15 +7,43 @@
 //   2. Finds the agency's default pipeline and its "Won" stage.
 //   3. Creates a Won-stage deal linking back to the proposal.
 //   4. Appends a deal_created proposal_event for audit trail.
+//   5. (2026-06-17) Updates existing contact status/fields; inserts a
+//      payment_records row so Lifetime Revenue shows correctly.
 //
 // Called in a try/catch inside the webhook route — if it throws, the
 // webhook still returns 200 (Stripe doesn't care about CRM bookkeeping).
 
 import { and, asc, eq, ilike } from "drizzle-orm";
 import { db } from "@/db";
-import { contacts, deals, pipelines, proposalEvents } from "@/db/schema";
+import { contacts, deals, paymentRecords, pipelines, proposalEvents } from "@/db/schema";
 import type { Proposal } from "@/db/schema/proposals";
 import { logEvent } from "@/lib/observability/log";
+
+/**
+ * Pick the best "win" stage from an ordered stages array.
+ *
+ * Priority:
+ *  1. First stage whose name matches a win-synonym regex
+ *     (won, signed, closed-won, live, active, customer — case-insensitive).
+ *  2. If no name matches, the highest-probability stage with probability > 0.
+ *  3. Never falls back to the last stage (which is typically "Did Not Convert").
+ */
+function pickWinStage(
+  stages: Array<{ name: string; color: string; probability: number }>,
+): { name: string; color: string; probability: number } | undefined {
+  const winRe = /\b(won|signed|closed[\s-]?won|live|active|customer)\b/i;
+  const byName = stages.find((s) => winRe.test(s.name));
+  if (byName) return byName;
+
+  // Fall back to highest-probability stage with probability > 0
+  let best: (typeof stages)[number] | undefined;
+  for (const s of stages) {
+    if (s.probability > 0 && (!best || s.probability > best.probability)) {
+      best = s;
+    }
+  }
+  return best;
+}
 
 /** Format cents to a USD string like "$497/mo". */
 function formatPriceUSD(cents: number): string {
@@ -38,7 +66,7 @@ export async function createDealOnAcceptance(proposal: Proposal): Promise<void> 
 
   if (prospectEmail) {
     const [existing] = await db
-      .select({ id: contacts.id })
+      .select({ id: contacts.id, status: contacts.status, company: contacts.company, phone: contacts.phone })
       .from(contacts)
       .where(
         and(
@@ -50,9 +78,27 @@ export async function createDealOnAcceptance(proposal: Proposal): Promise<void> 
 
     if (existing) {
       contactId = existing.id;
-      logEvent("proposal_acceptance_contact_found", {
+
+      // Promote the contact to 'customer' and backfill company/phone if missing.
+      const patch: Partial<typeof contacts.$inferInsert> = {
+        status: "customer",
+        updatedAt: new Date(),
+      };
+      if (!existing.company && proposal.prospectName) {
+        patch.company = proposal.prospectName;
+      }
+      if (!existing.phone && proposal.prospectPhone) {
+        patch.phone = proposal.prospectPhone;
+      }
+      await db
+        .update(contacts)
+        .set(patch)
+        .where(eq(contacts.id, contactId));
+
+      logEvent("proposal_acceptance_contact_updated", {
         proposalId: proposal.id,
         contactId,
+        previousStatus: existing.status,
       });
     } else {
       // INSERT new contact
@@ -136,15 +182,15 @@ export async function createDealOnAcceptance(proposal: Proposal): Promise<void> 
   const stages: Array<{ name: string; color: string; probability: number }> =
     Array.isArray(pipeline.stages) ? pipeline.stages : [];
 
-  // Case-insensitive match for "Won". Fallback: last stage in the pipeline.
-  const wonStage = stages.find((s) => s.name.toLowerCase() === "won");
-  const stageName = wonStage?.name ?? stages[stages.length - 1]?.name ?? "Won";
+  // Smart win-stage selection — never falls back to last stage (usually "Did Not Convert").
+  const winStage = pickWinStage(stages);
+  const stageName = winStage?.name ?? "Won";
+  const stageProbability = winStage?.probability ?? 100;
 
-  if (!wonStage) {
-    logEvent("proposal_acceptance_no_won_stage_fallback", {
+  if (!winStage) {
+    logEvent("proposal_acceptance_no_win_stage_fallback", {
       proposalId: proposal.id,
       pipelineId: pipeline.id,
-      fallbackStage: stageName,
       stagesFound: stages.map((s) => s.name),
     });
   }
@@ -167,7 +213,7 @@ export async function createDealOnAcceptance(proposal: Proposal): Promise<void> 
       value: dealValueDollars,
       currency: "USD",
       stage: stageName,
-      probability: 100,
+      probability: stageProbability,
       closedAt: new Date(),
       customFields: {
         proposal_id: proposal.id,
@@ -196,4 +242,62 @@ export async function createDealOnAcceptance(proposal: Proposal): Promise<void> 
     eventType: "accepted",
     metadata: { dealId: deal.id, contactId },
   });
+
+  // ── 5. Record the payment so Lifetime Revenue shows correctly ──────────
+  // payment_records is what getContactRevenue() sums; acceptance never
+  // wrote one before, so the contact always showed $0 lifetime.
+  // Amount = monthlyPriceCents + setupFeeCents (initial payment),
+  // converted to dollars (the column is numeric(12,2) in USD).
+  // Idempotent: we key off stripeCheckoutSessionId as sourceId — if the
+  // webhook fires twice, the second insert is a no-op via the DB's unique
+  // handling (both rows would be identical; we do an ignoreDuplicates-style
+  // approach by only inserting when no row already exists for this sourceId).
+  const initialPaymentDollars = (
+    (proposal.monthlyPriceCents + proposal.setupFeeCents) / 100
+  ).toFixed(2);
+
+  const existingPayment = proposal.stripeCheckoutSessionId
+    ? await db
+        .select({ id: paymentRecords.id })
+        .from(paymentRecords)
+        .where(
+          and(
+            eq(paymentRecords.orgId, agencyOrgId),
+            eq(paymentRecords.sourceId, proposal.stripeCheckoutSessionId),
+          ),
+        )
+        .limit(1)
+    : [];
+
+  if (existingPayment.length === 0) {
+    await db.insert(paymentRecords).values({
+      orgId: agencyOrgId,
+      contactId,
+      stripePaymentIntentId: null,
+      stripeAccountId: null,
+      stripeChargeId: null,
+      amount: initialPaymentDollars,
+      currency: "USD",
+      status: "completed",
+      sourceBlock: "proposal",
+      sourceId: proposal.stripeCheckoutSessionId ?? proposal.id,
+      metadata: {
+        proposalId: proposal.id,
+        dealId: deal.id,
+        monthlyPriceCents: proposal.monthlyPriceCents,
+        setupFeeCents: proposal.setupFeeCents,
+      },
+    });
+
+    logEvent("proposal_acceptance_payment_recorded", {
+      proposalId: proposal.id,
+      contactId,
+      amountDollars: initialPaymentDollars,
+    });
+  } else {
+    logEvent("proposal_acceptance_payment_already_recorded", {
+      proposalId: proposal.id,
+      contactId,
+    });
+  }
 }
