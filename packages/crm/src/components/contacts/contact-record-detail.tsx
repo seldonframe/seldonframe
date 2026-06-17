@@ -6,10 +6,12 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   Building2,
   Calendar,
-  CheckCircle2,
-  ChevronRight,
   ClipboardList,
+  CreditCard,
+  DollarSign,
+  ExternalLink,
   FileText,
+  Globe,
   Mail,
   MessageSquare,
   Pencil,
@@ -17,6 +19,7 @@ import {
   StickyNote,
   Tag,
   TrendingUp,
+  Zap,
 } from "lucide-react";
 import { updateContactFieldAction } from "@/lib/contacts/actions";
 import { PortalAccessCard } from "./portal-access-card";
@@ -105,6 +108,23 @@ export type BookingRow = {
   meetingUrl: string | null;
   createdAt: string;
 };
+
+/**
+ * Display label overrides for contact status values.
+ * The stored value (e.g. "customer") never changes — only the
+ * label shown in the badge and editable field is remapped.
+ * "customer", "won", and "active" all display as "Client".
+ */
+const STAGE_DISPLAY_LABEL: Record<string, string> = {
+  customer: "Client",
+  won: "Client",
+  active: "Client",
+};
+
+function stageDisplayLabel(status: string): string {
+  const key = status.trim().toLowerCase();
+  return STAGE_DISPLAY_LABEL[key] ?? status;
+}
 
 const STAGE_PALETTE: Record<string, { bg: string; text: string; ring: string; dot: string }> = {
   lead: {
@@ -254,6 +274,7 @@ export function ContactRecordDetail({
   initialTab,
   orgId,
   orgSlug,
+  clientWorkspaceSlug,
   portalGate,
   appOrigin,
 }: {
@@ -272,6 +293,12 @@ export function ContactRecordDetail({
   /** May 1, 2026 — needed by the Portal Access card in the aside. */
   orgId?: string;
   orgSlug?: string | null;
+  /**
+   * The slug of the client's own SeldonFrame workspace, resolved from
+   * customFields.workspaceId by the page server component. Null when
+   * the contact has no linked workspace.
+   */
+  clientWorkspaceSlug?: string | null;
   portalGate?: PortalGateInfo;
   appOrigin?: string | null;
 }) {
@@ -348,7 +375,7 @@ export function ContactRecordDetail({
                 }
               >
                 <span className={`size-1.5 rounded-full ${stage.dot}`} />
-                {contact.status}
+                {stageDisplayLabel(contact.status)}
               </span>
               {contact.company ? (
                 <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
@@ -465,6 +492,7 @@ export function ContactRecordDetail({
           industryFields={industryFields}
           orgId={orgId}
           orgSlug={orgSlug ?? null}
+          clientWorkspaceSlug={clientWorkspaceSlug ?? null}
           portalGate={portalGate}
           appOrigin={appOrigin ?? null}
         />
@@ -504,10 +532,11 @@ function OverviewTab({
   dealsTotalValue,
   dealLabelPlural,
   upcomingBooking,
-  lastActivity,
+  lastActivity: _lastActivity,
   industryFields,
   orgId,
   orgSlug,
+  clientWorkspaceSlug,
   portalGate,
   appOrigin,
 }: {
@@ -521,348 +550,481 @@ function OverviewTab({
   industryFields: PersonalityField[];
   orgId?: string;
   orgSlug: string | null;
+  clientWorkspaceSlug: string | null;
   portalGate?: PortalGateInfo;
   appOrigin: string | null;
 }) {
+  const cf = (contact.customFields ?? {}) as Record<string, unknown>;
+
+  // ── Metric strip values ──────────────────────────────────────────
+  const plan = cf.plan as
+    | { monthlyPriceCents?: number; setupFeeCents?: number; pricingTier?: string; services?: string[] }
+    | null
+    | undefined;
+
+  const mrr: number = plan?.monthlyPriceCents
+    ? plan.monthlyPriceCents / 100
+    : // Fallback: sum monthly value of all non-lost deals.
+      deals
+        .filter((d) => d.stage !== "lost")
+        .reduce((sum, d) => sum + Number(d.value || 0), 0);
+
+  const openDealsCount = deals.filter((d) => d.stage !== "lost").length;
+
+  // ── Billing / workspace customFields ────────────────────────────
+  const billing = cf.billing as
+    | {
+        card?: { brand?: string; last4?: string; expMonth?: number; expYear?: number } | null;
+        address?: {
+          line1?: string;
+          line2?: string;
+          city?: string;
+          state?: string;
+          postalCode?: string;
+          country?: string;
+        } | null;
+      }
+    | null
+    | undefined;
+
+  const googleBusinessUrl =
+    typeof cf.googleBusinessUrl === "string" ? cf.googleBusinessUrl : null;
+
+  // ── Inline intake keys (shown in Client & Business section) ──────
+  const INTAKE_ORDER = [
+    "address",
+    "service",
+    "description",
+    "damage_type",
+    "property_type",
+    "issue_type",
+    "scope",
+    "urgency",
+    "timeline",
+    "budget_range",
+    "frequency",
+    "concern",
+    "primary_goal",
+    "company",
+    "role",
+    "team_size",
+  ];
+
+  // Keys that are handled by named sections; excluded from "Booking page answers"
+  const NAMED_KEYS = new Set([
+    ...INTAKE_ORDER,
+    "phone",
+    "plan",
+    "workspaceId",
+    "billing",
+    "googleBusinessUrl",
+  ]);
+  const industryKeySet = new Set(industryFields.map((f) => f.key));
+
+  const residualIntakeKeys = Object.keys(contact.customFields ?? {}).filter(
+    (k) => !industryKeySet.has(k) && !NAMED_KEYS.has(k) && (cf[k] ?? "") !== "",
+  );
+
+  // ── Workspace URL ────────────────────────────────────────────────
+  const appOriginClean = appOrigin?.replace(/\/$/, "") ?? "";
+  const workspaceUrl = clientWorkspaceSlug
+    ? `${appOriginClean || "https://app.seldonframe.com"}/${clientWorkspaceSlug}`
+    : null;
+
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-      {/* Left: editable form */}
-      <section className="rounded-xl border bg-card p-5 sm:p-6">
-        <header className="flex items-center justify-between gap-2 pb-4 border-b">
-          <h2 className="text-sm font-semibold tracking-tight text-foreground">
-            Contact details
-          </h2>
-          <span className="text-[11px] text-muted-foreground">
-            Click any field to edit · Enter to save · Esc to cancel
-          </span>
-        </header>
-        <dl className="mt-4 grid gap-4 sm:grid-cols-2">
-          <EditableField
-            label="First name"
-            field="firstName"
-            value={contact.firstName}
-            contactId={contact.id}
-            type="text"
-            required
-            onSaved={(v) => onContactChange({ ...contact, firstName: v })}
-          />
-          <EditableField
-            label="Last name"
-            field="lastName"
-            value={contact.lastName ?? ""}
-            contactId={contact.id}
-            type="text"
-            onSaved={(v) => onContactChange({ ...contact, lastName: v || null })}
-          />
-          <EditableField
-            label="Email"
-            field="email"
-            value={contact.email ?? ""}
-            contactId={contact.id}
-            type="email"
-            onSaved={(v) => onContactChange({ ...contact, email: v || null })}
-          />
-          <EditableField
-            label="Phone"
-            field="phone"
-            value={contact.phone ?? ""}
-            contactId={contact.id}
-            type="tel"
-            onSaved={(v) => onContactChange({ ...contact, phone: v || null })}
-          />
-          <EditableField
-            label="Stage"
-            field="status"
-            value={contact.status}
-            contactId={contact.id}
-            type="select"
-            options={["lead", "prospect", "customer", "active", "won", "inactive", "lost"]}
-            onSaved={(v) => onContactChange({ ...contact, status: v })}
-          />
-          <ReadonlyField label="Created" value={formatDate(contact.createdAt)} />
-          {/* 2026-05-18 — surface high-signal intake-form / booking-form
-              answers (address, service, urgency, description, damage_type,
-              property_type, scope, timeline, budget) DIRECTLY in the
-              Contact details grid so the operator sees the lead context
-              the moment they open the record — not buried in a separate
-              "Booking page answers" panel below. These keys come from
-              lib/workspace/booking-intake-fields.ts archetypes; we render
-              whichever subset the customer actually filled in. */}
-          {(() => {
-            const cf = (contact.customFields ?? {}) as Record<string, unknown>;
-            const order = [
-              "address",
-              "service",
-              "description",
-              "damage_type",
-              "property_type",
-              "issue_type",
-              "scope",
-              "urgency",
-              "timeline",
-              "budget_range",
-              "frequency",
-              "concern",
-              "primary_goal",
-              "company",
-              "role",
-              "team_size",
-            ];
-            return order
-              .filter((key) => {
+    <div className="space-y-5">
+      {/* ── Metric strip ─────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <MetricCard
+          label="Lifetime revenue"
+          value={`$${contact.revenue.toLocaleString()}`}
+          icon={DollarSign}
+        />
+        <MetricCard
+          label="Monthly / MRR"
+          value={mrr > 0 ? `$${mrr.toLocaleString()}/mo` : "—"}
+          icon={TrendingUp}
+        />
+        <MetricCard
+          label="Open deals"
+          value={openDealsCount > 0 ? String(openDealsCount) : "—"}
+          icon={Zap}
+        />
+        <MetricCard
+          label="Next booking"
+          value={upcomingBooking ? formatDateTime(upcomingBooking.startsAt) : "—"}
+          icon={Calendar}
+        />
+      </div>
+
+      {/* ── Main two-column grid: center (wide) + right rail (slim) ── */}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,1.4fr)]">
+
+        {/* ── CENTER column ─────────────────────────────────────── */}
+        <div className="space-y-4">
+
+          {/* 1. Client & business — inline-editable contact form */}
+          <section className="rounded-xl border bg-card p-5 sm:p-6">
+            <header className="flex items-center justify-between gap-2 pb-4 border-b">
+              <h2 className="text-sm font-semibold tracking-tight text-foreground">
+                Client &amp; business
+              </h2>
+              <span className="text-[11px] text-muted-foreground">
+                Click any field to edit · Enter to save · Esc to cancel
+              </span>
+            </header>
+            <dl className="mt-4 grid gap-4 sm:grid-cols-2">
+              <EditableField
+                label="First name"
+                field="firstName"
+                value={contact.firstName}
+                contactId={contact.id}
+                type="text"
+                required
+                onSaved={(v) => onContactChange({ ...contact, firstName: v })}
+              />
+              <EditableField
+                label="Last name"
+                field="lastName"
+                value={contact.lastName ?? ""}
+                contactId={contact.id}
+                type="text"
+                onSaved={(v) => onContactChange({ ...contact, lastName: v || null })}
+              />
+              <EditableField
+                label="Email"
+                field="email"
+                value={contact.email ?? ""}
+                contactId={contact.id}
+                type="email"
+                onSaved={(v) => onContactChange({ ...contact, email: v || null })}
+              />
+              <EditableField
+                label="Phone"
+                field="phone"
+                value={contact.phone ?? ""}
+                contactId={contact.id}
+                type="tel"
+                onSaved={(v) => onContactChange({ ...contact, phone: v || null })}
+              />
+              <EditableField
+                label="Stage"
+                field="status"
+                value={contact.status}
+                contactId={contact.id}
+                type="select"
+                options={["lead", "prospect", "customer", "active", "won", "inactive", "lost"]}
+                onSaved={(v) => onContactChange({ ...contact, status: v })}
+              />
+              <ReadonlyField label="Created" value={formatDate(contact.createdAt)} />
+              {INTAKE_ORDER.filter((key) => {
                 const v = cf[key];
                 return typeof v === "string" && v.trim().length > 0;
-              })
-              .map((key) => {
+              }).map((key) => {
                 const label = key
                   .replace(/_/g, " ")
                   .replace(/\b\w/g, (c) => c.toUpperCase());
                 return (
-                  <ReadonlyField
-                    key={key}
-                    label={label}
-                    value={String(cf[key])}
-                  />
-                );
-              });
-          })()}
-        </dl>
-      </section>
-
-      {/* Right: summary cards */}
-      <aside className="space-y-4">
-        <div className="rounded-xl border bg-card p-5">
-          <div className="flex items-center justify-between gap-2 pb-3 border-b">
-            <h3 className="text-sm font-semibold text-foreground">{dealLabelPlural}</h3>
-            <span className="text-xs text-muted-foreground">
-              {deals.length} · ${dealsTotalValue.toLocaleString()}
-            </span>
-          </div>
-          {deals.length === 0 ? (
-            <p className="mt-3 text-xs text-muted-foreground">No deals linked yet.</p>
-          ) : (
-            <ul className="mt-3 space-y-2">
-              {deals.slice(0, 3).map((d) => {
-                const ds = stageStyle(d.stage);
-                return (
-                  <li key={d.id}>
-                    <Link
-                      href={`/deals/${d.id}`}
-                      className="flex items-start justify-between gap-2 rounded-md p-2 hover:bg-muted/40"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-foreground">
-                          {d.title}
-                        </p>
-                        <span
-                          className={
-                            "mt-0.5 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] " +
-                            `${ds.bg} ${ds.text}`
-                          }
-                        >
-                          <span className={`size-1 rounded-full ${ds.dot}`} />
-                          {d.stage}
-                        </span>
-                      </div>
-                      <span className="text-xs font-semibold tabular-nums text-foreground">
-                        ${Number(d.value || 0).toLocaleString()}
-                      </span>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
-
-        <div className="rounded-xl border bg-card p-5">
-          <h3 className="text-sm font-semibold text-foreground pb-3 border-b">
-            Next booking
-          </h3>
-          {upcomingBooking ? (
-            <div className="mt-3 space-y-1">
-              <p className="text-sm font-medium text-foreground">{upcomingBooking.title}</p>
-              <p className="text-xs text-muted-foreground">
-                {formatDateTime(upcomingBooking.startsAt)}
-              </p>
-              {upcomingBooking.meetingUrl ? (
-                <a
-                  href={upcomingBooking.meetingUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-block text-xs text-primary underline-offset-4 hover:underline"
-                >
-                  Join meeting →
-                </a>
-              ) : null}
-            </div>
-          ) : (
-            <p className="mt-3 text-xs text-muted-foreground">
-              No upcoming bookings.
-            </p>
-          )}
-        </div>
-
-        <div className="rounded-xl border bg-card p-5">
-          <h3 className="text-sm font-semibold text-foreground pb-3 border-b">
-            Last activity
-          </h3>
-          {lastActivity ? (
-            <div className="mt-3 space-y-1">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                {activityTypeLabel(lastActivity.type)}
-              </p>
-              <p className="text-sm text-foreground">
-                {lastActivity.subject || activityTypeLabel(lastActivity.type)}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {relativeFromNow(lastActivity.createdAt)}
-              </p>
-            </div>
-          ) : (
-            <p className="mt-3 text-xs text-muted-foreground">No activity yet.</p>
-          )}
-        </div>
-
-        <div className="rounded-xl border bg-card p-5">
-          <h3 className="text-sm font-semibold text-foreground pb-3 border-b">Lifetime</h3>
-          <dl className="mt-3 space-y-2 text-sm">
-            <div className="flex items-center justify-between">
-              <dt className="text-xs text-muted-foreground">Revenue</dt>
-              <dd className="font-semibold tabular-nums text-foreground">
-                ${contact.revenue.toLocaleString()}
-              </dd>
-            </div>
-            <div className="flex items-center justify-between">
-              <dt className="text-xs text-muted-foreground">Score</dt>
-              <dd className="font-semibold tabular-nums text-foreground">
-                {contact.score}
-              </dd>
-            </div>
-            <div className="flex items-center justify-between">
-              <dt className="text-xs text-muted-foreground">Updated</dt>
-              <dd className="text-xs text-muted-foreground">
-                {relativeFromNow(contact.updatedAt)}
-              </dd>
-            </div>
-          </dl>
-        </div>
-
-        {industryFields.length > 0 ? (
-          <div className="rounded-xl border bg-card p-5">
-            <h3 className="text-sm font-semibold text-foreground pb-3 border-b">
-              Industry details
-            </h3>
-            <dl className="mt-3 space-y-2 text-sm">
-              {industryFields.map((field) => {
-                const raw = contact.customFields?.[field.key];
-                const value = formatIndustryFieldValue(raw, field);
-                return (
-                  <div key={field.key} className="flex items-start justify-between gap-3">
-                    <dt className="text-xs text-muted-foreground">{field.label}</dt>
-                    <dd
-                      className={`text-right text-xs ${
-                        value === "—" ? "text-muted-foreground" : "text-foreground"
-                      }`}
-                    >
-                      {value}
-                    </dd>
-                  </div>
+                  <ReadonlyField key={key} label={label} value={String(cf[key])} />
                 );
               })}
             </dl>
-          </div>
-        ) : null}
+          </section>
 
-        {/* 2026-05-18 — Booking-page intake answers panel. Surfaces
-            SOUL-aware fields the customer answered on the public booking
-            form (address, phone, scope, timeline, budget, urgency, ...).
-            These keys come from lib/workspace/booking-intake-fields.ts
-            and are NOT registered as industry-level custom fields on
-            the workspace, so they'd otherwise be invisible. We only
-            render keys NOT already covered by industryFields above so
-            this panel doesn't duplicate them. */}
-        {(() => {
-          const allKeys = Object.keys(contact.customFields ?? {});
-          const industryKeySet = new Set(industryFields.map((f) => f.key));
-          // 2026-05-18 — these keys are now shown inline in the
-          // Contact details panel above, so skip them here to avoid
-          // duplication. Anything else (operator-defined customs,
-          // less-common archetype keys) still shows up.
-          const inlineSurfaced = new Set([
-            "address",
-            "service",
-            "description",
-            "damage_type",
-            "property_type",
-            "issue_type",
-            "scope",
-            "urgency",
-            "timeline",
-            "budget_range",
-            "frequency",
-            "concern",
-            "primary_goal",
-            "company",
-            "role",
-            "team_size",
-            "phone",
-          ]);
-          const intakeKeys = allKeys.filter(
-            (k) =>
-              !industryKeySet.has(k) &&
-              !inlineSurfaced.has(k) &&
-              (contact.customFields?.[k] ?? "") !== "",
-          );
-          if (intakeKeys.length === 0) return null;
-          return (
-            <div className="rounded-xl border bg-card p-5">
-              <h3 className="text-sm font-semibold text-foreground pb-3 border-b">
-                Booking page answers
-              </h3>
-              <dl className="mt-3 space-y-2 text-sm">
-                {intakeKeys.map((key) => {
-                  const raw = contact.customFields?.[key];
-                  const label = key
-                    .replace(/[_-]+/g, " ")
-                    .replace(/\b\w/g, (c) => c.toUpperCase());
-                  const value =
-                    typeof raw === "string"
-                      ? raw
-                      : typeof raw === "number" || typeof raw === "boolean"
-                        ? String(raw)
-                        : raw === null || raw === undefined
-                          ? "—"
-                          : JSON.stringify(raw);
+          {/* 2. Plan & services */}
+          {plan ? (
+            <section className="rounded-xl border bg-card p-5">
+              <h2 className="text-sm font-semibold tracking-tight text-foreground pb-4 border-b">
+                Plan &amp; services
+              </h2>
+              <div className="mt-4 space-y-3">
+                <div className="flex flex-wrap items-center gap-3 text-sm">
+                  {plan.monthlyPriceCents != null ? (
+                    <span className="font-semibold text-foreground tabular-nums">
+                      ${(plan.monthlyPriceCents / 100).toLocaleString()}/mo
+                    </span>
+                  ) : null}
+                  {plan.setupFeeCents != null && plan.setupFeeCents > 0 ? (
+                    <span className="text-muted-foreground text-xs">
+                      · ${(plan.setupFeeCents / 100).toLocaleString()} setup
+                    </span>
+                  ) : null}
+                  {plan.pricingTier ? (
+                    <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
+                      {plan.pricingTier}
+                    </span>
+                  ) : null}
+                </div>
+                {plan.services && plan.services.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {plan.services.map((svc) => (
+                      <span
+                        key={svc}
+                        className="rounded-md bg-muted px-2.5 py-1 text-xs text-foreground"
+                      >
+                        {svc}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            </section>
+          ) : null}
+
+          {/* 3. Workspace */}
+          <section className="rounded-xl border bg-card p-5">
+            <h2 className="text-sm font-semibold tracking-tight text-foreground pb-4 border-b">
+              Workspace
+            </h2>
+            {workspaceUrl ? (
+              <div className="mt-4 space-y-2">
+                <p className="text-xs text-muted-foreground break-all">{workspaceUrl}</p>
+                <a
+                  href={workspaceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-primary underline-offset-4 hover:underline"
+                >
+                  Open workspace
+                  <ExternalLink className="size-3" />
+                </a>
+              </div>
+            ) : (
+              <p className="mt-4 text-xs text-muted-foreground">—</p>
+            )}
+          </section>
+
+          {/* 4. Billing */}
+          <section className="rounded-xl border bg-card p-5">
+            <h2 className="text-sm font-semibold tracking-tight text-foreground pb-4 border-b flex items-center gap-2">
+              <CreditCard className="size-3.5 text-muted-foreground" />
+              Billing
+            </h2>
+            {billing?.card || billing?.address ? (
+              <div className="mt-4 space-y-3">
+                {billing.card ? (
+                  <p className="text-sm text-foreground">
+                    <span className="font-mono">····</span>{" "}
+                    {billing.card.last4} · {billing.card.brand ?? "card"} · exp{" "}
+                    {billing.card.expMonth?.toString().padStart(2, "0")}/
+                    {billing.card.expYear?.toString().slice(-2) ?? "??"}
+                  </p>
+                ) : null}
+                {billing.address ? (
+                  <address className="not-italic text-xs text-muted-foreground space-y-0.5">
+                    {billing.address.line1 ? <div>{billing.address.line1}</div> : null}
+                    {billing.address.line2 ? <div>{billing.address.line2}</div> : null}
+                    {billing.address.city || billing.address.state || billing.address.postalCode ? (
+                      <div>
+                        {[
+                          billing.address.city,
+                          billing.address.state,
+                          billing.address.postalCode,
+                        ]
+                          .filter(Boolean)
+                          .join(", ")}
+                      </div>
+                    ) : null}
+                    {billing.address.country ? <div>{billing.address.country}</div> : null}
+                  </address>
+                ) : null}
+              </div>
+            ) : (
+              <p className="mt-4 text-xs text-muted-foreground">—</p>
+            )}
+          </section>
+
+          {/* 5. Business profile */}
+          {(googleBusinessUrl || industryFields.length > 0 || residualIntakeKeys.length > 0) ? (
+            <section className="rounded-xl border bg-card p-5">
+              <h2 className="text-sm font-semibold tracking-tight text-foreground pb-4 border-b flex items-center gap-2">
+                <Globe className="size-3.5 text-muted-foreground" />
+                Business profile
+              </h2>
+              <div className="mt-4 space-y-4">
+                {googleBusinessUrl ? (
+                  <div>
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">
+                      Google Business
+                    </p>
+                    <a
+                      href={googleBusinessUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-primary underline-offset-4 hover:underline break-all"
+                    >
+                      {googleBusinessUrl}
+                      <ExternalLink className="size-3 shrink-0" />
+                    </a>
+                  </div>
+                ) : null}
+                {industryFields.length > 0 ? (
+                  <dl className="space-y-2 text-sm">
+                    {industryFields.map((field) => {
+                      const raw = contact.customFields?.[field.key];
+                      const value = formatIndustryFieldValue(raw, field);
+                      return (
+                        <div key={field.key} className="flex items-start justify-between gap-3">
+                          <dt className="text-xs text-muted-foreground">{field.label}</dt>
+                          <dd
+                            className={`text-right text-xs ${
+                              value === "—" ? "text-muted-foreground" : "text-foreground"
+                            }`}
+                          >
+                            {value}
+                          </dd>
+                        </div>
+                      );
+                    })}
+                  </dl>
+                ) : null}
+                {residualIntakeKeys.length > 0 ? (
+                  <dl className="space-y-2 text-sm">
+                    {residualIntakeKeys.map((key) => {
+                      const raw = cf[key];
+                      const label = key
+                        .replace(/[_-]+/g, " ")
+                        .replace(/\b\w/g, (c) => c.toUpperCase());
+                      const value =
+                        typeof raw === "string"
+                          ? raw
+                          : typeof raw === "number" || typeof raw === "boolean"
+                            ? String(raw)
+                            : raw === null || raw === undefined
+                              ? "—"
+                              : JSON.stringify(raw);
+                      return (
+                        <div key={key} className="flex items-start justify-between gap-3">
+                          <dt className="text-xs text-muted-foreground">{label}</dt>
+                          <dd className="text-right text-xs text-foreground max-w-[60%] break-words">
+                            {value}
+                          </dd>
+                        </div>
+                      );
+                    })}
+                  </dl>
+                ) : null}
+              </div>
+            </section>
+          ) : null}
+
+          {/* May 1, 2026 — Client Portal V1: operator-side access toggle. */}
+          {orgId && portalGate ? (
+            <PortalAccessCard
+              contactId={contact.id}
+              contactEmail={contact.email}
+              orgId={orgId}
+              orgSlug={orgSlug}
+              initialEnabled={contact.portalAccessEnabled ?? false}
+              lastLoginAt={contact.portalLastLoginAt ?? null}
+              planAllowed={portalGate.allowed}
+              planReason={portalGate.reason ?? null}
+              appOrigin={appOrigin}
+            />
+          ) : null}
+        </div>
+
+        {/* ── RIGHT rail (slim) — relational context ──────────────── */}
+        <aside className="space-y-4">
+          {/* Deals */}
+          <div className="rounded-xl border bg-card p-5">
+            <div className="flex items-center justify-between gap-2 pb-3 border-b">
+              <h3 className="text-sm font-semibold text-foreground">{dealLabelPlural}</h3>
+              <span className="text-xs text-muted-foreground">
+                {deals.length} · ${dealsTotalValue.toLocaleString()}
+              </span>
+            </div>
+            {deals.length === 0 ? (
+              <p className="mt-3 text-xs text-muted-foreground">No deals linked yet.</p>
+            ) : (
+              <ul className="mt-3 space-y-2">
+                {deals.slice(0, 5).map((d) => {
+                  const ds = stageStyle(d.stage);
                   return (
-                    <div key={key} className="flex items-start justify-between gap-3">
-                      <dt className="text-xs text-muted-foreground">{label}</dt>
-                      <dd className="text-right text-xs text-foreground max-w-[60%] break-words">
-                        {value}
-                      </dd>
-                    </div>
+                    <li key={d.id}>
+                      <Link
+                        href={`/deals/${d.id}`}
+                        className="flex items-start justify-between gap-2 rounded-md p-2 hover:bg-muted/40"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-foreground">
+                            {d.title}
+                          </p>
+                          <span
+                            className={
+                              "mt-0.5 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] " +
+                              `${ds.bg} ${ds.text}`
+                            }
+                          >
+                            <span className={`size-1 rounded-full ${ds.dot}`} />
+                            {d.stage}
+                          </span>
+                        </div>
+                        <span className="text-xs font-semibold tabular-nums text-foreground">
+                          ${Number(d.value || 0).toLocaleString()}
+                        </span>
+                      </Link>
+                    </li>
                   );
                 })}
-              </dl>
-            </div>
-          );
-        })()}
+              </ul>
+            )}
+          </div>
 
-        {/* May 1, 2026 — Client Portal V1: operator-side access toggle. */}
-        {orgId && portalGate ? (
-          <PortalAccessCard
-            contactId={contact.id}
-            contactEmail={contact.email}
-            orgId={orgId}
-            orgSlug={orgSlug}
-            initialEnabled={contact.portalAccessEnabled ?? false}
-            lastLoginAt={contact.portalLastLoginAt ?? null}
-            planAllowed={portalGate.allowed}
-            planReason={portalGate.reason ?? null}
-            appOrigin={appOrigin}
-          />
-        ) : null}
-      </aside>
+          {/* Next booking */}
+          <div className="rounded-xl border bg-card p-5">
+            <h3 className="text-sm font-semibold text-foreground pb-3 border-b">
+              Next booking
+            </h3>
+            {upcomingBooking ? (
+              <div className="mt-3 space-y-1">
+                <p className="text-sm font-medium text-foreground">{upcomingBooking.title}</p>
+                <p className="text-xs text-muted-foreground">
+                  {formatDateTime(upcomingBooking.startsAt)}
+                </p>
+                {upcomingBooking.meetingUrl ? (
+                  <a
+                    href={upcomingBooking.meetingUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block text-xs text-primary underline-offset-4 hover:underline"
+                  >
+                    Join meeting →
+                  </a>
+                ) : null}
+              </div>
+            ) : (
+              <p className="mt-3 text-xs text-muted-foreground">
+                No upcoming bookings.
+              </p>
+            )}
+          </div>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+/* ────────────────────────── metric card ────────────────────────── */
+
+function MetricCard({
+  label,
+  value,
+  icon: Icon,
+}: {
+  label: string;
+  value: string;
+  icon: React.ComponentType<{ className?: string }>;
+}) {
+  return (
+    <div className="rounded-xl border bg-card p-4">
+      <div className="flex items-center gap-2 text-muted-foreground mb-2">
+        <Icon className="size-3.5" />
+        <span className="text-[11px] uppercase tracking-wide">{label}</span>
+      </div>
+      <p className="text-lg font-semibold tabular-nums text-foreground leading-tight">
+        {value}
+      </p>
     </div>
   );
 }
@@ -1310,7 +1472,7 @@ function EditableField({
             }
           >
             <span className={`size-1 rounded-full ${stageStyle(value).dot}`} />
-            {display}
+            {stageDisplayLabel(value) || display}
           </span>
         ) : (
           <span className="truncate">{display}</span>
