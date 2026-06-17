@@ -151,6 +151,26 @@ export default async function ContactRecordPage({
 
   if (!contact) notFound();
 
+  // Resolve the client's workspace slug from customFields.workspaceId.
+  // This is a lightweight second-pass query — runs after notFound() so
+  // we only hit the DB when a contact actually exists.
+  const contactCustomFields = (
+    (contact as { customFields?: Record<string, unknown> | null }).customFields ?? {}
+  ) as Record<string, unknown>;
+  const contactWorkspaceId =
+    typeof contactCustomFields.workspaceId === "string"
+      ? contactCustomFields.workspaceId
+      : null;
+  const clientWorkspaceSlug = contactWorkspaceId
+    ? await db
+        .select({ slug: organizations.slug })
+        .from(organizations)
+        .where(eq(organizations.id, contactWorkspaceId))
+        .limit(1)
+        .then((r) => r[0]?.slug ?? null)
+        .catch(() => null)
+    : null;
+
   const portalLastLogin = (contact as { portalLastLoginAt?: Date | string | null })
     .portalLastLoginAt;
 
@@ -267,6 +287,7 @@ export default async function ContactRecordPage({
         initialTab={initialTab}
         orgId={orgId}
         orgSlug={orgRow?.slug ?? null}
+        clientWorkspaceSlug={clientWorkspaceSlug}
         portalGate={{
           allowed: portalGate.allowed,
           reason: portalGate.reason ?? null,

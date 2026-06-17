@@ -560,11 +560,77 @@ export async function POST(request: Request) {
       // Wrapped in try/catch so a CRM failure never fails the webhook
       // response (Stripe would retry; the proposal is already accepted).
       try {
-        await createDealOnAcceptance({
-          ...proposal,
-          stripeSubscriptionId: subscriptionId || proposal.stripeSubscriptionId,
-          stripeCustomerId: customerId || proposal.stripeCustomerId,
-        });
+        // ── Slice 2: resolve billing info (address + card) ────────────────
+        // The session carries billing_details.address; the card lives on the
+        // subscription's default payment method (or the session's own PM),
+        // fetched on the CONNECTED account so Stripe authorises the read.
+        //
+        // ALL of this is best-effort — any failure sets billing null and we
+        // continue; we NEVER throw out of the webhook for bookkeeping errors.
+        let billingInfo: import("@/lib/proposals/create-deal-on-acceptance").BillingInfo = {
+          card: null,
+          address: null,
+        };
+
+        try {
+          // Address from the session's customer_details (populated when
+          // billing_address_collection = "required" on the Checkout Session).
+          const addr = session.customer_details?.address ?? null;
+          if (addr) {
+            billingInfo.address = {
+              line1: addr.line1 ?? null,
+              line2: addr.line2 ?? null,
+              city: addr.city ?? null,
+              state: addr.state ?? null,
+              postalCode: addr.postal_code ?? null,
+              country: addr.country ?? null,
+            };
+          }
+
+          // Card: retrieve the subscription's default_payment_method on the
+          // connected account so we can read card.brand / last4 / exp.
+          const pmId: string | null =
+            // Prefer subscription's default payment method
+            subscriptionId
+              ? await stripe
+                  .subscriptions
+                  .retrieve(subscriptionId, { expand: ["default_payment_method"] }, { stripeAccount })
+                  .then((sub) => {
+                    const dpm = sub.default_payment_method;
+                    return typeof dpm === "string" ? dpm : (dpm as Stripe.PaymentMethod | null)?.id ?? null;
+                  })
+                  .catch(() => null)
+              : null;
+
+          if (pmId) {
+            const pm = await stripe.paymentMethods.retrieve(pmId, { stripeAccount });
+            const card = pm.card ?? null;
+            if (card) {
+              billingInfo.card = {
+                brand: card.brand,
+                last4: card.last4,
+                expMonth: card.exp_month,
+                expYear: card.exp_year,
+              };
+            }
+          }
+        } catch (billingErr: unknown) {
+          // Non-fatal — log but don't let this stop CRM write
+          logEvent("proposal_acceptance_billing_lookup_failed", {
+            proposalId: proposal.id,
+            error: billingErr instanceof Error ? billingErr.message : String(billingErr),
+          });
+          // billingInfo remains { card: null, address: null }
+        }
+
+        await createDealOnAcceptance(
+          {
+            ...proposal,
+            stripeSubscriptionId: subscriptionId || proposal.stripeSubscriptionId,
+            stripeCustomerId: customerId || proposal.stripeCustomerId,
+          },
+          billingInfo,
+        );
       } catch (err: unknown) {
         logEvent("proposal_acceptance_crm_failed", {
           proposalId: proposal.id,

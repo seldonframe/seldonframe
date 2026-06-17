@@ -9,6 +9,8 @@
 //   4. Appends a deal_created proposal_event for audit trail.
 //   5. (2026-06-17) Updates existing contact status/fields; inserts a
 //      payment_records row so Lifetime Revenue shows correctly.
+//   6. (2026-06-17 Slice 2) Merges customFields.plan, customFields.workspaceId,
+//      and optionally customFields.billing onto the contact.
 //
 // Called in a try/catch inside the webhook route — if it throws, the
 // webhook still returns 200 (Stripe doesn't care about CRM bookkeeping).
@@ -18,6 +20,25 @@ import { db } from "@/db";
 import { contacts, deals, paymentRecords, pipelines, proposalEvents } from "@/db/schema";
 import type { Proposal } from "@/db/schema/proposals";
 import { logEvent } from "@/lib/observability/log";
+
+// ── Billing shape written to customFields.billing ────────────────────────────
+
+export type BillingInfo = {
+  card: {
+    brand: string;
+    last4: string;
+    expMonth: number;
+    expYear: number;
+  } | null;
+  address: {
+    line1: string | null;
+    line2: string | null;
+    city: string | null;
+    state: string | null;
+    postalCode: string | null;
+    country: string | null;
+  } | null;
+};
 
 /**
  * Pick the best "win" stage from an ordered stages array.
@@ -56,8 +77,33 @@ function formatPriceUSD(cents: number): string {
   return dollars;
 }
 
-export async function createDealOnAcceptance(proposal: Proposal): Promise<void> {
+export async function createDealOnAcceptance(
+  proposal: Proposal,
+  billing?: BillingInfo,
+): Promise<void> {
   const agencyOrgId = proposal.agencyOrgId;
+
+  // ── Build customFields.plan from the proposal ─────────────────────────────
+  const planFields = {
+    monthlyPriceCents: proposal.monthlyPriceCents,
+    setupFeeCents: proposal.setupFeeCents,
+    pricingTier: proposal.pricingTier,
+    services: Array.isArray(proposal.scopeItems)
+      ? (proposal.scopeItems as Array<{ label: string }>).map((s) => s.label)
+      : [],
+  };
+
+  /** Merge plan + workspaceId (and optionally billing) into an existing
+   *  customFields JSONB, preserving all keys not mentioned here. */
+  function mergeCustomFields(existing: Record<string, unknown>): Record<string, unknown> {
+    const merged: Record<string, unknown> = { ...existing };
+    merged.plan = planFields;
+    merged.workspaceId = proposal.previewWorkspaceId ?? null;
+    if (billing !== undefined) {
+      merged.billing = billing;
+    }
+    return merged;
+  }
 
   // ── 1. Find or create the contact ──────────────────────────────────────
   let contactId: string;
@@ -66,7 +112,7 @@ export async function createDealOnAcceptance(proposal: Proposal): Promise<void> 
 
   if (prospectEmail) {
     const [existing] = await db
-      .select({ id: contacts.id, status: contacts.status, company: contacts.company, phone: contacts.phone })
+      .select({ id: contacts.id, status: contacts.status, company: contacts.company, phone: contacts.phone, customFields: contacts.customFields })
       .from(contacts)
       .where(
         and(
@@ -79,9 +125,11 @@ export async function createDealOnAcceptance(proposal: Proposal): Promise<void> 
     if (existing) {
       contactId = existing.id;
 
-      // Promote the contact to 'customer' and backfill company/phone if missing.
+      // Promote the contact to 'customer', backfill company/phone if missing,
+      // and merge customFields.plan + workspaceId (+ billing if provided).
       const patch: Partial<typeof contacts.$inferInsert> = {
         status: "customer",
+        customFields: mergeCustomFields((existing.customFields as Record<string, unknown>) ?? {}),
         updatedAt: new Date(),
       };
       if (!existing.company && proposal.prospectName) {
@@ -118,6 +166,7 @@ export async function createDealOnAcceptance(proposal: Proposal): Promise<void> 
           phone: proposal.prospectPhone ?? null,
           source: "proposal",
           status: "customer",
+          customFields: mergeCustomFields({}),
         })
         .returning({ id: contacts.id });
 
@@ -148,6 +197,7 @@ export async function createDealOnAcceptance(proposal: Proposal): Promise<void> 
         phone: proposal.prospectPhone ?? null,
         source: "proposal",
         status: "customer",
+        customFields: mergeCustomFields({}),
       })
       .returning({ id: contacts.id });
 
