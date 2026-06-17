@@ -168,6 +168,13 @@ export function PublicBookingForm({
   // operator picked up the wrong appointment type.
   const searchParams = useSearchParams();
   const requestedServiceParam = searchParams?.get("service") ?? null;
+  // Prefill from query params (?name=&email=&phone=). Used by the
+  // post-checkout "Book onboarding call" link (start/return/page.tsx) so a
+  // client who just paid doesn't retype their details. Falls back to empty
+  // when the params are absent (the normal public-booking case).
+  const prefillName = searchParams?.get("name")?.trim() ?? "";
+  const prefillEmail = searchParams?.get("email")?.trim() ?? "";
+  const prefillPhone = searchParams?.get("phone")?.trim() ?? "";
   // Pretty-print "botox-dysport-injections" → "Botox Dysport Injections"
   const requestedServiceLabel = requestedServiceParam
     ? requestedServiceParam
@@ -237,9 +244,14 @@ export function PublicBookingForm({
   // v1.40.1 — full-name + email + dynamic intake fields tracked in
   // state. `intakeValues` is keyed by field id (e.g. {address: "...",
   // urgency: "Today"}). Submit serializes everything to the action.
-  const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
-  const [intakeValues, setIntakeValues] = useState<Record<string, string>>({});
+  const [fullName, setFullName] = useState(prefillName);
+  const [email, setEmail] = useState(prefillEmail);
+  // Seed the `phone` intake field from the prefill param when present. The
+  // onboarding-call booking declares a `phone` intake field, so a prefilled
+  // phone lands in the right input; harmless for booking types without one.
+  const [intakeValues, setIntakeValues] = useState<Record<string, string>>(
+    prefillPhone ? { phone: prefillPhone } : {},
+  );
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   function handleSubmitClick() {

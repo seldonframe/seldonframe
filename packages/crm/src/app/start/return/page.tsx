@@ -59,6 +59,7 @@ export default async function StartReturnPage({
   let sessionStatus: CheckoutStatus | null = null;
   let prospectName = "your client";
   let prospectEmail = "";
+  let prospectPhone = "";
   let previewWorkspaceId: string | null = null;
 
   if (stripe && conn) {
@@ -77,6 +78,7 @@ export default async function StartReturnPage({
           .select({
             prospectName: proposals.prospectName,
             prospectEmail: proposals.prospectEmail,
+            prospectPhone: proposals.prospectPhone,
             previewWorkspaceId: proposals.previewWorkspaceId,
           })
           .from(proposals)
@@ -86,6 +88,7 @@ export default async function StartReturnPage({
         if (proposalRow) {
           prospectName = proposalRow.prospectName;
           prospectEmail = proposalRow.prospectEmail;
+          prospectPhone = proposalRow.prospectPhone ?? "";
           previewWorkspaceId = proposalRow.previewWorkspaceId;
         }
       }
@@ -96,6 +99,7 @@ export default async function StartReturnPage({
           .select({
             prospectName: proposals.prospectName,
             prospectEmail: proposals.prospectEmail,
+            prospectPhone: proposals.prospectPhone,
             previewWorkspaceId: proposals.previewWorkspaceId,
           })
           .from(proposals)
@@ -105,6 +109,7 @@ export default async function StartReturnPage({
         if (bySession) {
           prospectName = bySession.prospectName;
           prospectEmail = bySession.prospectEmail;
+          prospectPhone = bySession.prospectPhone ?? "";
           previewWorkspaceId = bySession.previewWorkspaceId;
         }
       }
@@ -122,7 +127,21 @@ export default async function StartReturnPage({
   ]);
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() ?? "https://app.seldonframe.com";
-  const bookOnboardingUrl = `${appUrl}/book/${agencySlug}/${bookingSlug}`;
+  // Prefill the onboarding-call booking form with the details captured at
+  // checkout so the client (who just paid) doesn't retype name/email/phone.
+  // PublicBookingForm reads these params and pre-populates the matching
+  // fields. We skip the `name` param when it's still the "your client"
+  // placeholder (i.e. the proposal lookup didn't resolve a real name).
+  const prefillParams = new URLSearchParams();
+  if (prospectName && prospectName !== "your client") {
+    prefillParams.set("name", prospectName);
+  }
+  if (prospectEmail) prefillParams.set("email", prospectEmail);
+  if (prospectPhone) prefillParams.set("phone", prospectPhone);
+  const prefillQuery = prefillParams.toString();
+  const bookOnboardingUrl = `${appUrl}/book/${agencySlug}/${bookingSlug}${
+    prefillQuery ? `?${prefillQuery}` : ""
+  }`;
 
   // Agency branding
   const agencyName = user.agencyProfile?.name ?? user.name;
