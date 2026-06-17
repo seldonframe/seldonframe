@@ -265,11 +265,43 @@ export async function getOrCreateOnboardingCallBookingSlug(
       durationMinutes: 30,
       description: "30-minute onboarding call to get your workspace set up.",
       price: 0,
+      // This is an INTERNAL onboarding call with a client who JUST PAID —
+      // it must NOT re-qualify them. Set an explicit minimal field config so
+      // the public booking form renders only Phone + a free-text notes box
+      // (Full name + Email are rendered natively by PublicBookingForm). Without
+      // an explicit intakeFields here, resolvePublicBookingContext falls back to
+      // resolveIntakeFieldsFromSoul, which — for a health/wellness agency soul —
+      // classifies as a clinical archetype and stamps "Are you a new client?",
+      // "What's the matter you'd like to discuss?", "Insurance carrier", etc.
+      // onto an internal onboarding call. (See lib/bookings/actions.ts.)
+      intakeFields: ONBOARDING_CALL_INTAKE_FIELDS,
     },
   });
 
   return slug;
 }
+
+// Minimal booking-intake fields for the post-checkout onboarding call.
+// The client already paid; we just need to reach them and capture an
+// optional agenda — no new/returning, insurance, specialist, or
+// how-did-you-hear qualification. Full name + Email are rendered by the
+// PublicBookingForm itself, so this only declares Phone + the notes box.
+const ONBOARDING_CALL_INTAKE_FIELDS = [
+  {
+    id: "phone",
+    label: "Phone",
+    type: "tel" as const,
+    required: true,
+    placeholder: "(555) 123-4567",
+  },
+  {
+    id: "notes",
+    label: "Anything you'd like to cover on the call?",
+    type: "textarea" as const,
+    required: false,
+    placeholder: "Optional — questions, goals, or anything we should prep.",
+  },
+];
 
 // ─── helper: resolve agency slug (for booking URL) ───────────────────────────
 
