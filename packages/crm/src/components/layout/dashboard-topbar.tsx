@@ -41,7 +41,7 @@ function getTitle(pathname: string, labels: ReturnType<typeof useLabels>) {
   }
 
   if (pathname === "/deals") {
-    return "Engagements";
+    return labels.deal.plural;
   }
 
   if (pathname === "/bookings") {

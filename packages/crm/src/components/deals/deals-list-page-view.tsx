@@ -108,7 +108,7 @@ export async function DealsListPageView({
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 sm:gap-6">
         <div className="space-y-2">
           <h1 className="text-lg sm:text-[22px] font-semibold tracking-tight leading-relaxed text-foreground">
-            Engagements
+            {labels.deal.plural}
           </h1>
           <p className="text-sm sm:text-base text-muted-foreground">
             Track and move {labels.deal.plural.toLowerCase()} through your pipeline.
