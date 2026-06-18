@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   Building2,
   Calendar,
+  CheckCircle2,
   ClipboardList,
   CreditCard,
   DollarSign,
@@ -16,12 +17,17 @@ import {
   MessageSquare,
   Pencil,
   Phone,
+  Plus,
   StickyNote,
   Tag,
   TrendingUp,
+  X,
   Zap,
 } from "lucide-react";
 import { updateContactFieldAction } from "@/lib/contacts/actions";
+import { createActivityAction, completeTaskAction, updateActivityNotesAction } from "@/lib/activities/actions";
+import { isDemoBlockedError, isDemoReadonlyClient } from "@/lib/demo/client";
+import { useDemoToast } from "@/components/shared/demo-toast-provider";
 import { PortalAccessCard } from "./portal-access-card";
 import { ContactDocumentsTab, type DocumentRow } from "./contact-documents-tab";
 import type { PersonalityField } from "@/lib/crm/personality";
@@ -277,6 +283,7 @@ export function ContactRecordDetail({
   clientWorkspaceSlug,
   portalGate,
   appOrigin,
+  userId,
 }: {
   contact: ContactDetail;
   activity: ActivityRow[];
@@ -301,6 +308,8 @@ export function ContactRecordDetail({
   clientWorkspaceSlug?: string | null;
   portalGate?: PortalGateInfo;
   appOrigin?: string | null;
+  /** Current operator's user id — needed to log new activities. */
+  userId?: string | null;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -497,7 +506,7 @@ export function ContactRecordDetail({
           appOrigin={appOrigin ?? null}
         />
       ) : tab === "activity" ? (
-        <ActivityTab activity={activity} />
+        <ActivityTab activity={activity} contactId={contact.id} userId={userId ?? null} />
       ) : tab === "deals" ? (
         <DealsTab deals={deals} dealLabelPlural={dealLabelPlural} />
       ) : tab === "emails" ? (
@@ -1031,49 +1040,430 @@ function MetricCard({
 
 /* ────────────────────────── activity tab ────────────────────────── */
 
-function ActivityTab({ activity }: { activity: ActivityRow[] }) {
-  if (activity.length === 0) {
+const COMPOSER_TYPES = [
+  { value: "call", label: "Call" },
+  { value: "email", label: "Email" },
+  { value: "task", label: "Task" },
+  { value: "meeting", label: "Event" },
+  { value: "note", label: "Note" },
+] as const;
+
+type ComposerType = (typeof COMPOSER_TYPES)[number]["value"];
+
+const SCHEDULED_AT_TYPES: ComposerType[] = ["task", "meeting"];
+
+/**
+ * Log-activity composer embedded in the Activity tab.
+ * Maps the 5 user-facing types (Call, Email, Task, Event, Note)
+ * to activity.type values: call, email, task, meeting, note.
+ */
+function ActivityComposer({
+  contactId,
+  userId,
+}: {
+  contactId: string;
+  userId: string | null;
+}) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [type, setType] = useState<ComposerType>("note");
+  const [pending, startTransition] = useTransition();
+  const { showDemoToast } = useDemoToast();
+
+  const showScheduledAt = SCHEDULED_AT_TYPES.includes(type);
+
+  if (!open) {
     return (
-      <div className="rounded-xl border bg-card p-12 text-center">
-        <div className="mx-auto flex max-w-sm flex-col items-center gap-3">
-          <TrendingUp className="size-6 text-muted-foreground/60" />
-          <div className="space-y-1">
-            <p className="text-sm font-medium text-foreground">No activity yet</p>
-            <p className="text-xs text-muted-foreground">
-              Form submissions, bookings, emails, and notes will appear here as they
-              happen.
-            </p>
-          </div>
-        </div>
-      </div>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="mb-4 inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+      >
+        <Plus className="size-3.5" />
+        Log activity
+      </button>
     );
   }
 
   return (
-    <div className="rounded-xl border bg-card p-5 sm:p-6">
-      <ol className="relative space-y-5 border-l border-border pl-5">
-        {activity.map((a) => (
-          <li key={a.id} className="relative">
-            <span className="absolute -left-[27px] top-1.5 size-2.5 rounded-full bg-primary ring-4 ring-card" />
-            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
-              {activityTypeLabel(a.type)} · {relativeFromNow(a.createdAt)}
-            </div>
-            <p className="mt-0.5 text-sm font-medium text-foreground">
-              {a.subject || activityTypeLabel(a.type)}
-            </p>
-            {a.body ? (
-              <p className="mt-1 whitespace-pre-line text-xs text-muted-foreground">
-                {truncate(a.body, 240)}
-              </p>
-            ) : null}
-            {a.scheduledAt ? (
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                Scheduled {formatDateTime(a.scheduledAt)}
-              </p>
-            ) : null}
-          </li>
+    <form
+      className="mb-4 rounded-xl border bg-card p-4 space-y-3"
+      action={(formData) => {
+        formData.set("contactId", contactId);
+        formData.set("userId", userId ?? "");
+        startTransition(async () => {
+          try {
+            if (isDemoReadonlyClient) {
+              showDemoToast();
+              return;
+            }
+            await createActivityAction(formData);
+            setOpen(false);
+            setType("note");
+            router.refresh();
+          } catch (error) {
+            if (isDemoBlockedError(error)) {
+              showDemoToast();
+              return;
+            }
+            throw error;
+          }
+        });
+      }}
+    >
+      {/* Type selector */}
+      <div className="flex flex-wrap gap-1.5">
+        {COMPOSER_TYPES.map((t) => (
+          <button
+            key={t.value}
+            type="button"
+            onClick={() => setType(t.value)}
+            className={
+              "h-7 rounded-full px-3 text-xs font-medium transition-colors " +
+              (type === t.value
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-muted-foreground hover:text-foreground")
+            }
+          >
+            {t.label}
+          </button>
         ))}
-      </ol>
+      </div>
+
+      <input type="hidden" name="type" value={type} />
+
+      <input
+        className="crm-input h-9 w-full px-3 text-sm"
+        name="subject"
+        placeholder="Subject (e.g. 'Discovery call')"
+        required
+      />
+
+      <textarea
+        className="crm-input min-h-[72px] w-full p-3 text-sm"
+        name="body"
+        placeholder="Details (optional)"
+      />
+
+      {showScheduledAt ? (
+        <div className="flex flex-col gap-1">
+          <label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            {type === "task" ? "Due date / time" : "Event date / time"}
+          </label>
+          <input
+            className="crm-input h-9 w-full px-3 text-sm"
+            name="scheduledAt"
+            type="datetime-local"
+          />
+        </div>
+      ) : null}
+
+      <div className="flex items-center gap-2">
+        <button
+          type="submit"
+          disabled={pending}
+          className="h-8 rounded-md bg-primary px-4 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+        >
+          {pending ? "Saving…" : "Save"}
+        </button>
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          className="h-8 rounded-md px-3 text-xs text-muted-foreground hover:text-foreground"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/**
+ * Modal drawer showing full activity detail + editable notes + task
+ * completion. Opens when the operator clicks any timeline row.
+ */
+function ActivityDetailModal({
+  activity: a,
+  onClose,
+  onActivityUpdated,
+}: {
+  activity: ActivityRow;
+  onClose: () => void;
+  onActivityUpdated: (updated: Partial<ActivityRow>) => void;
+}) {
+  const router = useRouter();
+  const [notes, setNotes] = useState<string>(
+    typeof a.metadata?.notes === "string" ? a.metadata.notes : ""
+  );
+  const [notesPending, startNotesTx] = useTransition();
+  const [taskPending, startTaskTx] = useTransition();
+  const [savedNote, setSavedNote] = useState(false);
+  const { showDemoToast } = useDemoToast();
+
+  const isTask = a.type === "task";
+  const isDone = Boolean(a.completedAt);
+
+  function saveNotes() {
+    startNotesTx(async () => {
+      try {
+        if (isDemoReadonlyClient) {
+          showDemoToast();
+          return;
+        }
+        await updateActivityNotesAction({ activityId: a.id, notes });
+        setSavedNote(true);
+        setTimeout(() => setSavedNote(false), 2000);
+        onActivityUpdated({ metadata: { ...(a.metadata ?? {}), notes } });
+        router.refresh();
+      } catch (err) {
+        if (isDemoBlockedError(err)) {
+          showDemoToast();
+          return;
+        }
+        throw err;
+      }
+    });
+  }
+
+  function markDone() {
+    startTaskTx(async () => {
+      try {
+        if (isDemoReadonlyClient) {
+          showDemoToast();
+          return;
+        }
+        await completeTaskAction(a.id);
+        onActivityUpdated({ completedAt: new Date().toISOString() });
+        router.refresh();
+      } catch (err) {
+        if (isDemoBlockedError(err)) {
+          showDemoToast();
+          return;
+        }
+        throw err;
+      }
+    });
+  }
+
+  // Close on Escape
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    /* Backdrop */
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" aria-hidden />
+
+      {/* Panel */}
+      <div className="relative w-full max-w-lg rounded-2xl border bg-card shadow-xl">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3 border-b px-5 py-4">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="rounded-full bg-muted px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                {activityTypeLabel(a.type)}
+              </span>
+              {isTask && isDone ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
+                  <CheckCircle2 className="size-2.5" />
+                  Done
+                </span>
+              ) : null}
+            </div>
+            <h2 className="mt-1.5 text-base font-semibold text-foreground leading-snug">
+              {a.subject || activityTypeLabel(a.type)}
+            </h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {formatDateTime(a.createdAt)}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="px-5 py-4 space-y-4">
+          {/* Details */}
+          {a.body ? (
+            <div>
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">
+                Details
+              </p>
+              <p className="whitespace-pre-line text-sm text-foreground">{a.body}</p>
+            </div>
+          ) : null}
+
+          {a.scheduledAt ? (
+            <div>
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">
+                {isTask ? "Due" : "Scheduled"}
+              </p>
+              <p className="text-sm text-foreground">{formatDateTime(a.scheduledAt)}</p>
+            </div>
+          ) : null}
+
+          {/* Editable notes */}
+          <div>
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5">
+              Notes
+            </p>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={3}
+              placeholder="Record what was said, decisions made, next steps…"
+              className="crm-input w-full p-3 text-sm min-h-[80px] resize-y"
+            />
+            <div className="mt-2 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={saveNotes}
+                disabled={notesPending}
+                className="h-7 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+              >
+                {notesPending ? "Saving…" : savedNote ? "Saved!" : "Save notes"}
+              </button>
+            </div>
+          </div>
+
+          {/* Task completion */}
+          {isTask && !isDone ? (
+            <div className="border-t pt-4">
+              <button
+                type="button"
+                onClick={markDone}
+                disabled={taskPending}
+                className="inline-flex h-9 items-center gap-1.5 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 text-xs font-medium text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300 disabled:opacity-60"
+              >
+                <CheckCircle2 className="size-3.5" />
+                {taskPending ? "Marking done…" : "Mark as done"}
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ActivityTab({
+  activity,
+  contactId,
+  userId,
+}: {
+  activity: ActivityRow[];
+  contactId: string;
+  userId: string | null;
+}) {
+  // Local mirror of activity so task completions reflect immediately
+  // without waiting for the full router.refresh() round-trip.
+  const [localActivity, setLocalActivity] = useState<ActivityRow[]>(activity);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // Sync when the server pushes fresh data (after router.refresh).
+  useEffect(() => {
+    setLocalActivity(activity);
+  }, [activity]);
+
+  const selected = localActivity.find((a) => a.id === selectedId) ?? null;
+
+  function patchActivity(id: string, patch: Partial<ActivityRow>) {
+    setLocalActivity((prev) =>
+      prev.map((a) => (a.id === id ? { ...a, ...patch } : a))
+    );
+  }
+
+  return (
+    <div className="space-y-0">
+      {/* Composer */}
+      <ActivityComposer contactId={contactId} userId={userId} />
+
+      {/* Timeline */}
+      {localActivity.length === 0 ? (
+        <div className="rounded-xl border bg-card p-12 text-center">
+          <div className="mx-auto flex max-w-sm flex-col items-center gap-3">
+            <TrendingUp className="size-6 text-muted-foreground/60" />
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-foreground">No activity yet</p>
+              <p className="text-xs text-muted-foreground">
+                Use the button above to log a call, email, task, event, or note.
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-xl border bg-card p-5 sm:p-6">
+          <ol className="relative space-y-5 border-l border-border pl-5">
+            {localActivity.map((a) => {
+              const isDone = Boolean(a.completedAt);
+              return (
+                <li key={a.id} className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedId(a.id)}
+                    className="group w-full text-left"
+                  >
+                    <span
+                      className={
+                        "absolute -left-[27px] top-1.5 size-2.5 rounded-full ring-4 ring-card " +
+                        (isDone ? "bg-emerald-500" : "bg-primary")
+                      }
+                    />
+                    <div className="text-[11px] uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                      {activityTypeLabel(a.type)} · {relativeFromNow(a.createdAt)}
+                      {isDone ? (
+                        <CheckCircle2 className="size-3 text-emerald-500" />
+                      ) : null}
+                    </div>
+                    <p className="mt-0.5 text-sm font-medium text-foreground group-hover:text-primary transition-colors">
+                      {a.subject || activityTypeLabel(a.type)}
+                    </p>
+                    {a.body ? (
+                      <p className="mt-1 whitespace-pre-line text-xs text-muted-foreground">
+                        {truncate(a.body, 180)}
+                      </p>
+                    ) : null}
+                    {a.scheduledAt ? (
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        {a.type === "task" ? "Due" : "Scheduled"} {formatDateTime(a.scheduledAt)}
+                      </p>
+                    ) : null}
+                    {typeof a.metadata?.notes === "string" && a.metadata.notes.trim() ? (
+                      <p className="mt-1 text-[11px] italic text-muted-foreground">
+                        Note: {truncate(a.metadata.notes, 100)}
+                      </p>
+                    ) : null}
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+      )}
+
+      {/* Detail modal */}
+      {selected ? (
+        <ActivityDetailModal
+          activity={selected}
+          onClose={() => setSelectedId(null)}
+          onActivityUpdated={(patch) => patchActivity(selected.id, patch)}
+        />
+      ) : null}
     </div>
   );
 }

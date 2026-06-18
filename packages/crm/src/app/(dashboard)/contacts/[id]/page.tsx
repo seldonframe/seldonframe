@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { ChevronLeft, Mail, Phone } from "lucide-react";
 import { db } from "@/db";
 import { activities, bookings, contacts, deals, organizations, portalDocuments } from "@/db/schema";
-import { getOrgId } from "@/lib/auth/helpers";
+import { getOrgId, getCurrentUser } from "@/lib/auth/helpers";
 import { getLabels } from "@/lib/soul/labels";
 import { getPersonality } from "@/lib/crm/personality-server";
 import { getContactRevenue } from "@/lib/payments/actions";
@@ -60,7 +60,11 @@ export default async function ContactRecordPage({
     );
   }
 
-  const [labels, personality] = await Promise.all([getLabels(), getPersonality()]);
+  const [labels, personality, currentUser] = await Promise.all([
+    getLabels(),
+    getPersonality(),
+    getCurrentUser(),
+  ]);
 
   // May 1, 2026 — Client Portal V1: pull the org slug + plan-gate
   // result alongside the contact so the OverviewTab aside can render
@@ -298,6 +302,7 @@ export default async function ContactRecordPage({
           process.env.APP_URL?.trim() ||
           null
         }
+        userId={currentUser?.id ?? null}
       />
     </main>
   );
