@@ -84,27 +84,27 @@ const softwareApplicationSchema = {
   offers: [
     {
       "@type": "Offer",
-      name: "Free",
-      price: "0",
+      name: "Builder",
+      price: "19",
       priceCurrency: "USD",
       description:
-        "Free tier: 1 complete client workspace (CRM, booking, intake, AI chatbot). Card on file at signup, never charged on Free. BYOK LLM keys, no token margin.",
+        "Builder: up to 10 standalone landing pages with your own domain and branding.",
     },
     {
       "@type": "Offer",
-      name: "Growth",
-      price: "29",
+      name: "Workspace",
+      price: "49",
       priceCurrency: "USD",
       description:
-        "Growth tier: 3 client workspaces, custom domains. Designed for solo agencies serving 2-3 clients.",
+        "Workspace: one complete client workspace — website, booking, intake, and CRM. AI features available as metered add-ons.",
     },
     {
       "@type": "Offer",
-      name: "Scale",
-      price: "99",
+      name: "Agency",
+      price: "297",
       priceCurrency: "USD",
       description:
-        "Scale tier: unlimited client workspaces. Designed for agencies serving 5+ clients.",
+        "Agency (white-label): your brand on the platform, many client workspaces, and metered usage you rebill to clients at your own markup.",
     },
   ],
   url: "https://seldonframe.com",

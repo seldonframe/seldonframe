@@ -47,7 +47,7 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://seldonframe.com"),
   title: "SeldonFrame — Open-source alternative to GoHighLevel",
   description:
-    "Pre-wired client ops stack agencies deploy per client in minutes. CRM, booking, intake, AI chatbot — already connected. Free tier, AGPL-3.0, no Zapier required.",
+    "A complete AI front office — website, booking, CRM, intake, and AI chatbot — wired together in minutes. For your business or your clients'. Plans from $19/mo. AGPL-3.0, no Zapier required.",
   manifest: "/brand/manifest.webmanifest",
   icons: {
     icon: [
