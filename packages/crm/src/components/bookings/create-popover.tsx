@@ -31,9 +31,11 @@ export type CreatePopoverProps = {
   workspaceTimezone: string;
   contacts: ContactRow[];
   bookingTypes: BookingTypeRow[];
-  /** Pixel position of the popover anchor (relative to the viewport). */
-  anchorX: number;
-  anchorY: number;
+  /** Viewport pixel position of the originating click. Vestigial now that the
+   *  popover renders as a viewport-centered modal (no longer anchored to the
+   *  clicked cell); kept optional so existing callers compile unchanged. */
+  anchorX?: number;
+  anchorY?: number;
   createBookingAction: (formData: FormData) => Promise<unknown>;
   createBlockedTimeAction: (input: {
     label: string;
@@ -107,24 +109,29 @@ export function CreatePopover({
   const [pending, startTransition] = useTransition();
   const popoverRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  // Focused on open so keyboard users land inside the modal (basic a11y) and a
+  // stray Enter doesn't submit the page behind it. The search input is hidden
+  // on the "block" tab, so fall back to the card itself.
+  const closeBtnRef = useRef<HTMLButtonElement>(null);
 
-  // Close on outside-click or Escape.
+  // Close on Escape. (Backdrop click is handled on the overlay element below —
+  // no document mousedown listener, so clicks INSIDE the modal never bubble out
+  // and accidentally dismiss it.)
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
     }
-    function onMouseDown(e: MouseEvent) {
-      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    }
     document.addEventListener("keydown", onKey);
-    document.addEventListener("mousedown", onMouseDown);
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.removeEventListener("mousedown", onMouseDown);
-    };
+    return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  // Move focus into the modal on open: the search field on the "book" tab,
+  // otherwise the close button (the search input isn't mounted on "block").
+  useEffect(() => {
+    (inputRef.current ?? closeBtnRef.current)?.focus();
+    // Run once on mount; tab changes shouldn't steal focus mid-edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Filtered contact suggestions.
   const filtered =
@@ -202,12 +209,23 @@ export function CreatePopover({
   }
 
   return (
+    // Full-viewport backdrop layer: dims the page and centers the card in the
+    // MIDDLE OF THE SCREEN regardless of which cell was clicked, so a click on a
+    // low row no longer drops the popup near the bottom of the page. Clicking
+    // the backdrop closes; clicks inside the card stopPropagation so they don't
+    // reach the backdrop (or the calendar column behind it). Reduced-motion
+    // safe — no animation. The clicked slot's datetime still flows in via the
+    // `startsAt` prop and is unchanged.
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Create booking or block time"
+      onClick={onClose}
+    >
     <div
       ref={popoverRef}
-      className="fixed left-1/2 top-1/2 z-50 w-full max-w-[360px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-card shadow-lg"
-      // Centered modal-style so a click on the right-side columns never pushes
-      // the popover off-screen. Stop propagation so the calendar column's click
-      // handler doesn't re-fire and immediately close the just-opened popover.
+      className="w-full max-w-[360px] rounded-xl border border-border bg-card shadow-lg"
       onClick={(e) => e.stopPropagation()}
     >
       {/* Header */}
@@ -237,6 +255,7 @@ export function CreatePopover({
           </button>
         </div>
         <button
+          ref={closeBtnRef}
           type="button"
           onClick={onClose}
           className="inline-flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
@@ -510,6 +529,7 @@ export function CreatePopover({
           </form>
         )}
       </div>
+    </div>
     </div>
   );
 }
