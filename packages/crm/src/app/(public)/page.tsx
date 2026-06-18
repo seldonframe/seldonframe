@@ -38,34 +38,31 @@ import { MarketingNav } from "@/components/landing/marketing-nav";
 import { MarketingHero } from "@/components/landing/marketing-hero";
 import { MarketingProofStrip } from "@/components/landing/marketing-proof-strip";
 import { MarketingAgencyMath } from "@/components/landing/marketing-agency-math";
-import { MarketingOutreachMath } from "@/components/landing/marketing-outreach-math";
 import { MarketingBuildSteps } from "@/components/landing/marketing-build-steps";
 import { MarketingModules } from "@/components/landing/marketing-modules";
 import { MarketingReplace } from "@/components/landing/marketing-replace";
-import { MarketingSoul } from "@/components/landing/marketing-soul";
-import { MarketingComparisonTable } from "@/components/landing/marketing-comparison-table";
 import { LandingMarketingPricingSection } from "@/components/landing/marketing-pricing-section";
 import { LandingMarketingFaqSection } from "@/components/landing/marketing-faq-section";
 import { MarketingFinalCta } from "@/components/landing/marketing-final-cta";
 import { MarketingFooter } from "@/components/landing/marketing-footer";
 
 export const metadata: Metadata = {
-  title: "SeldonFrame — Spin up a client workspace in 60 seconds.",
+  title: "SeldonFrame — Your full AI front office, live in 60 seconds.",
   description:
-    "The OS your agency sells to local businesses. Paste a URL or business info — we ship the CRM, booking page, intake form, and AI chatbot in one pass. Live in 60 seconds.",
+    "Website, booking, AI receptionist, intake, and CRM — wired together and live in under a minute. For your business, or your clients'. Start free.",
   openGraph: {
-    title: "SeldonFrame — Spin up a client workspace in 60 seconds.",
+    title: "SeldonFrame — Your full AI front office, live in 60 seconds.",
     description:
-      "The OS your agency sells to local businesses. Paste a URL or business info — we ship the CRM, booking page, intake form, and AI chatbot in one pass.",
+      "Website, booking, AI receptionist, intake, and CRM — wired together and live in under a minute. For your business, or your clients'.",
     type: "website",
     url: "https://seldonframe.com",
     images: [{ url: "/brand/og-image.png", width: 1200, height: 630 }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "SeldonFrame — Spin up a client workspace in 60 seconds.",
+    title: "SeldonFrame — Your full AI front office, live in 60 seconds.",
     description:
-      "Paste a URL or business info — we ship the CRM, booking, intake, and AI chatbot in one pass.",
+      "Website, booking, AI receptionist, intake, and CRM — wired together in under a minute. For your business, or your clients'.",
     images: ["/brand/twitter-card.png"],
   },
 };
@@ -77,21 +74,21 @@ export default async function PublicHomePage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-zinc-100 selection:bg-[#14b8a6]/30 selection:text-[#14b8a6]">
+    // Light-theme marketing surface — warm paper / Hanken Grotesk /
+    // Newsreader italic. Matches seldonstudio.com aesthetic with
+    // SeldonFrame green (#00897B) instead of clay accent.
+    <div className="min-h-screen bg-[#F6F2EA] text-[#221D17] selection:bg-[#00897B]/20 selection:text-[#00897B]">
       <MarketingNav />
       <main id="main-content">
         <MarketingHero />
         <MarketingProofStrip />
-        <MarketingAgencyMath />
-        <MarketingOutreachMath />
         <MarketingBuildSteps />
         <MarketingModules />
+        <MarketingAgencyMath />
         <MarketingReplace />
-        <MarketingSoul />
-        <MarketingComparisonTable />
         <LandingMarketingPricingSection />
-        <LandingMarketingFaqSection />
         <MarketingFinalCta />
+        <LandingMarketingFaqSection />
       </main>
       <MarketingFooter />
     </div>

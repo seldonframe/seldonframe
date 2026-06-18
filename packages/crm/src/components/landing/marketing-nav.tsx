@@ -1,19 +1,10 @@
 // packages/crm/src/components/landing/marketing-nav.tsx
 //
-// 2026-05-22 — Port of the Claude Design HTML mockup nav (handoff
-// `seldonframe-home.html` §Nav). Replaces the older
-// `LandingNav` on the marketing surface. Sticky top bar with a
-// transparent-to-solid transition on scrollY > 80. Logo links to
-// "#top", center links anchor to in-page sections, right side has
-// Log in (outline) and Get started (teal CTA).
-//
-// The HTML mock included a hard-coded "1.4k" GitHub stars chip — per
-// the handoff README and task #82's truth-pass principle (no fake
-// numbers ship), the chip is REMOVED here entirely. A real
-// `GitHubStarsBadge` component exists at
-// `components/landing/github-stars-badge.tsx` if we ever want to
-// wire a real GitHub-API-fetched count, but it doesn't ship in the
-// nav today.
+// Redesign 2026-06-18 — warm light aesthetic matching seldonstudio.com.
+// Paper/parchment surface (#F6F2EA → #FFFDFA on scroll), Hanken Grotesk
+// sans, SeldonFrame green (#00897B) as accent (replaces teal #14b8a6).
+// Dual CTAs: "Start building" (SMB self-serve) + "For agencies →"
+// (white-label reseller path).
 
 "use client";
 
@@ -24,9 +15,10 @@ import { Menu, X } from "lucide-react";
 type NavLink = { href: string; label: string };
 
 const NAV_LINKS: readonly NavLink[] = [
-  { href: "#build", label: "Build" },
+  { href: "#build", label: "How it works" },
   { href: "#pricing", label: "Pricing" },
-  { href: "#modules", label: "Modules" },
+  { href: "#modules", label: "Features" },
+  { href: "#agencies", label: "Agencies" },
   { href: "#faq", label: "FAQ" },
 ];
 
@@ -35,7 +27,7 @@ export function MarketingNav() {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    const onScroll = () => setSolid(window.scrollY > 80);
+    const onScroll = () => setSolid(window.scrollY > 60);
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
@@ -43,44 +35,40 @@ export function MarketingNav() {
 
   return (
     <header
-      aria-label="Primary"
+      aria-label="Primary navigation"
       data-solid={solid ? "yes" : "no"}
       className={`fixed inset-x-0 top-0 z-50 border-b transition-[background-color,border-color,backdrop-filter] duration-200 ease-out ${
         solid
-          ? "border-zinc-800 bg-[#09090b]/80 backdrop-blur-md backdrop-saturate-150"
+          ? "border-[rgba(34,29,23,.10)] bg-[#FFFDFA]/90 backdrop-blur-md backdrop-saturate-150 shadow-[0_1px_0_rgba(34,29,23,.06)]"
           : "border-transparent bg-transparent"
       }`}
     >
       {/* Skip link for keyboard nav */}
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-2 focus:z-50 focus:rounded-lg focus:bg-[#14b8a6] focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-[#08332f]"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-2 focus:z-50 focus:rounded-full focus:bg-[#00897B] focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-[#FFFDFA]"
       >
         Skip to main content
       </a>
 
-      <div className="mx-auto flex max-w-[1200px] items-center justify-between gap-6 px-5 py-3.5 md:px-8 md:py-4 lg:px-12 lg:py-[18px]">
+      <div className="mx-auto flex max-w-[1120px] items-center justify-between gap-6 px-6 py-4 md:px-8 lg:px-12 lg:py-[18px]">
+        {/* Brand */}
         <Link
           href="/"
           aria-label="SeldonFrame — home"
-          className="inline-flex items-center gap-2.5 text-base font-semibold leading-none tracking-tight text-zinc-100"
+          className="inline-flex items-center gap-2.5 text-[15.5px] font-medium leading-none tracking-[-0.01em] text-[#221D17]"
         >
-          {/* Real Seldon frame mark — square frame with 3 filled corners + 1 open corner.
-              Matches /public/brand/seldonframe-icon.svg (color tweaked from #1FAE85
-              to the marketing-site teal #14b8a6 for accent consistency). */}
-          <svg width="22" height="22" viewBox="0 0 100 100" fill="none" aria-hidden>
-            <line x1="22" y1="22" x2="58" y2="22" stroke="#14b8a6" strokeWidth="2.5" strokeLinecap="round" />
-            <line x1="78" y1="42" x2="78" y2="78" stroke="#14b8a6" strokeWidth="2.5" strokeLinecap="round" />
-            <line x1="78" y1="78" x2="22" y2="78" stroke="#14b8a6" strokeWidth="2.5" strokeLinecap="round" />
-            <line x1="22" y1="78" x2="22" y2="22" stroke="#14b8a6" strokeWidth="2.5" strokeLinecap="round" />
-            <circle cx="22" cy="22" r="6" fill="#14b8a6" />
-            <circle cx="78" cy="22" r="6" fill="none" stroke="#14b8a6" strokeWidth="2.5" />
-            <circle cx="78" cy="78" r="6" fill="#14b8a6" />
-            <circle cx="22" cy="78" r="6" fill="#14b8a6" />
+          <svg width="24" height="30" viewBox="0 0 70 88" fill="none" aria-hidden>
+            <rect x="0" y="0" width="34" height="16" rx="3" fill="#4DB6AC" />
+            <rect x="36" y="0" width="34" height="16" rx="3" fill="#00897B" />
+            <rect x="0" y="18" width="34" height="16" rx="3" fill="#00796B" />
+            <rect x="0" y="36" width="34" height="16" rx="3" fill="#00897B" />
+            <rect x="36" y="36" width="34" height="16" rx="3" fill="#00796B" />
+            <rect x="36" y="54" width="34" height="16" rx="3" fill="#00695C" />
+            <rect x="0" y="72" width="34" height="16" rx="3" fill="#00796B" />
+            <rect x="36" y="72" width="34" height="16" rx="3" fill="#004D40" />
           </svg>
-          <span>
-            Seldon<span className="font-medium text-zinc-500">Frame</span>
-          </span>
+          <span>SeldonFrame</span>
         </Link>
 
         {/* Desktop center nav */}
@@ -89,7 +77,7 @@ export function MarketingNav() {
             <Link
               key={link.href}
               href={link.href}
-              className="text-sm font-medium text-zinc-400 transition-colors hover:text-zinc-100"
+              className="text-[14px] font-medium text-[#6E665A] transition-colors hover:text-[#221D17]"
             >
               {link.label}
             </Link>
@@ -97,18 +85,25 @@ export function MarketingNav() {
         </nav>
 
         {/* Right cluster */}
-        <div className="inline-flex items-center gap-2.5 md:gap-3">
+        <div className="inline-flex items-center gap-2 md:gap-3">
           <Link
             href="/login"
-            className="hidden h-[34px] items-center rounded-lg border border-zinc-800 bg-transparent px-3 text-sm font-medium text-zinc-300 transition-colors hover:border-zinc-700 hover:bg-zinc-900 hover:text-zinc-100 sm:inline-flex"
+            className="hidden h-[34px] items-center rounded-full border border-[rgba(34,29,23,.18)] bg-transparent px-4 text-[13.5px] font-medium text-[#6E665A] transition-colors hover:border-[rgba(34,29,23,.28)] hover:text-[#221D17] sm:inline-flex"
           >
             Log in
           </Link>
           <Link
-            href="/signup"
-            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[#14b8a6] px-3.5 text-sm font-semibold text-[#08332f] shadow-[0_6px_24px_rgba(20,184,166,0.22)] transition-all hover:bg-[#2dd4bf] hover:shadow-[0_10px_28px_rgba(20,184,166,0.32)] active:translate-y-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#14b8a6]"
+            href="#agencies"
+            className="hidden h-[34px] items-center rounded-full border border-[rgba(34,29,23,.18)] bg-transparent px-4 text-[13.5px] font-medium text-[#00897B] transition-colors hover:border-[#00897B]/40 hover:text-[#00695C] md:inline-flex"
           >
-            Get started
+            For agencies →
+          </Link>
+          <Link
+            href="/signup"
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-full bg-[#1F2B24] px-4 text-[13.5px] font-semibold text-[#F6F2EA] shadow-[0_1px_2px_rgba(34,29,23,.10),0_6px_16px_rgba(34,29,23,.10),0_18px_40px_rgba(34,29,23,.06),inset_0_1.5px_0_rgba(255,255,255,.12)] transition-all hover:-translate-y-px hover:shadow-[0_2px_4px_rgba(34,29,23,.12),0_12px_26px_rgba(34,29,23,.14),inset_0_1.5px_0_rgba(255,255,255,.14)] active:translate-y-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00897B]"
+          >
+            <span className="size-1.5 rounded-full bg-[#00897B]" aria-hidden />
+            Start building
           </Link>
 
           {/* Mobile menu toggle */}
@@ -118,9 +113,9 @@ export function MarketingNav() {
             aria-expanded={open}
             aria-controls="marketing-nav-drawer"
             onClick={() => setOpen((p) => !p)}
-            className="flex size-9 items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900/50 text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-zinc-100 min-[900px]:hidden"
+            className="flex size-9 items-center justify-center rounded-full border border-[rgba(34,29,23,.14)] bg-[#FFFDFA] text-[#6E665A] transition-colors hover:text-[#221D17] min-[900px]:hidden"
           >
-            {open ? <X size={18} /> : <Menu size={18} />}
+            {open ? <X size={17} /> : <Menu size={17} />}
           </button>
         </div>
       </div>
@@ -128,17 +123,17 @@ export function MarketingNav() {
       {/* Mobile drawer */}
       <div
         id="marketing-nav-drawer"
-        className={`overflow-hidden border-t border-zinc-800/50 bg-[#09090b]/95 backdrop-blur-md transition-[max-height] duration-200 ease-out min-[900px]:hidden ${
+        className={`overflow-hidden border-t border-[rgba(34,29,23,.08)] bg-[#FFFDFA]/97 backdrop-blur-md transition-[max-height] duration-200 ease-out min-[900px]:hidden ${
           open ? "max-h-80" : "max-h-0"
         }`}
       >
-        <ul className="flex flex-col gap-1 px-4 py-3 text-sm font-medium text-zinc-300">
+        <ul className="flex flex-col gap-1 px-4 py-3 text-[14px] font-medium text-[#6E665A]">
           {NAV_LINKS.map((link) => (
             <li key={link.href}>
               <Link
                 href={link.href}
                 onClick={() => setOpen(false)}
-                className="block rounded-lg px-3 py-2.5 transition-colors hover:bg-zinc-900 hover:text-zinc-100"
+                className="block rounded-lg px-3 py-2.5 transition-colors hover:bg-[#EFE9DD] hover:text-[#221D17]"
               >
                 {link.label}
               </Link>
@@ -148,9 +143,18 @@ export function MarketingNav() {
             <Link
               href="/login"
               onClick={() => setOpen(false)}
-              className="block rounded-lg px-3 py-2.5 transition-colors hover:bg-zinc-900 hover:text-zinc-100 sm:hidden"
+              className="block rounded-lg px-3 py-2.5 transition-colors hover:bg-[#EFE9DD] hover:text-[#221D17] sm:hidden"
             >
               Log in
+            </Link>
+          </li>
+          <li className="mt-2 border-t border-[rgba(34,29,23,.08)] pt-2">
+            <Link
+              href="/signup"
+              onClick={() => setOpen(false)}
+              className="block rounded-full bg-[#1F2B24] px-4 py-2.5 text-center text-[#F6F2EA]"
+            >
+              Start building
             </Link>
           </li>
         </ul>
