@@ -123,17 +123,18 @@ export function computeVisibleHourRange(input: {
   return { startHour, endHour };
 }
 
-/** px per hour-row, sized so the grid body lands ~470–510px tall for a typical
- *  10–12h range and clears the fold with no vertical scroll. Targets ~510px
- *  (≈15% more compact than the previous ~600px) and is clamped 38–54px (also
- *  ≈15% lower than the previous 44–64px) so very short ranges don't balloon and
- *  long ranges stay scannable (and may scroll as a graceful fallback). Pure —
- *  the renderer multiplies it by the row count, and every time→px helper reads
- *  the same value, so events stay aligned to their rows. */
+/** px per hour-row, sized so the grid body lands ~400–434px tall for a typical
+ *  10–12h range and clears the fold with no vertical scroll. Targets ~434px
+ *  (≈15% more compact than the previous ~510px) and is clamped 32–46px (also
+ *  ≈15% lower than the previous 38–54px) so very short ranges don't balloon and
+ *  long ranges stay scannable (and may scroll as a graceful fallback). A typical
+ *  10-hour business window resolves to ≈43px/row. Pure — the renderer multiplies
+ *  it by the row count, and every time→px helper reads the same value, so events
+ *  stay aligned to their rows. */
 export function pickHourHeightPx(hourCount: number): number {
-  const TARGET_BODY_PX = 510;
-  const MIN_HOUR_PX = 38;
-  const MAX_HOUR_PX = 54;
+  const TARGET_BODY_PX = 434;
+  const MIN_HOUR_PX = 32;
+  const MAX_HOUR_PX = 46;
   if (hourCount <= 0) return MAX_HOUR_PX;
   const ideal = Math.round(TARGET_BODY_PX / hourCount);
   return Math.max(MIN_HOUR_PX, Math.min(MAX_HOUR_PX, ideal));

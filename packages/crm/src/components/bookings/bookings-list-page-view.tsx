@@ -83,12 +83,12 @@ export async function BookingsListPageView({
   const bookingDefaults = getBookingDefaults(personalityVertical);
 
   return (
-    <section className="animate-page-enter space-y-4 sm:space-y-6">
-      <div className="border-b border-border bg-background px-3 sm:px-6 py-3 sm:py-4">
+    <section className="animate-page-enter space-y-3 sm:space-y-4">
+      <div className="border-b border-border bg-background px-3 sm:px-6 py-2 sm:py-2.5">
         <h1 className="text-sm md:text-base lg:text-lg font-semibold text-foreground truncate">
           {labels.activity.plural} · Booking
         </h1>
-        <p className="mt-1 text-xs text-muted-foreground">
+        <p className="mt-0.5 text-xs text-muted-foreground">
           Manage appointment types and upcoming{" "}
           {labels.activity.plural.toLowerCase()}.
         </p>

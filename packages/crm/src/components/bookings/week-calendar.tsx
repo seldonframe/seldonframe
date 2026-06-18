@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Search, Settings, SlidersHorizontal } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Search, Settings, SlidersHorizontal } from "lucide-react";
 import {
   computeVisibleHourRange,
   pickHourHeightPx,
@@ -18,6 +18,7 @@ import type {
 } from "@/lib/bookings/workspace-rules";
 import { toMinutes, weekdayKeys } from "@/lib/bookings/workspace-rules";
 import { BookingCard } from "@/components/bookings/booking-card";
+import { BookingDatePicker } from "@/components/bookings/booking-date-picker";
 import { CreatePopover } from "@/components/bookings/create-popover";
 import { RescheduleConfirm } from "@/components/bookings/reschedule-confirm";
 import { BookingActions } from "@/components/bookings/booking-actions";
@@ -313,6 +314,32 @@ function todayInZone(tz: string): Date {
   return new Date(`${ymdStr}T00:00:00Z`);
 }
 
+/** Whole-day delta between two UTC-midnight Dates (b − a), rounded to the
+ *  nearest day so DST shifts inside the span can't produce a fractional count.
+ *  Used to translate a date picked in the month grid into the `offsetDays`
+ *  that drives the week view. */
+function dayDeltaUtc(a: Date, b: Date): number {
+  return Math.round((b.getTime() - a.getTime()) / 86_400_000);
+}
+
+/** UTC-midnight Date for the calendar day a UTC-midnight Date represents,
+ *  re-expressed in the BROWSER's local timezone (i.e. a `new Date(y, m, d)`).
+ *  react-day-picker renders/selects in local time, so the toolbar picker is fed
+ *  local-midnight Dates while the week view stays on its UTC-midnight anchors;
+ *  this bridges the two without drifting the calendar day. */
+function utcMidnightToLocalDay(date: Date): Date {
+  return new Date(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+}
+
+/** Inverse of utcMidnightToLocalDay: a local-midnight Date (from the picker)
+ *  back to the UTC-midnight anchor for the same calendar day, so it shares the
+ *  coordinate system todayInZone() / startOfWeekMonday() operate in. */
+function localDayToUtcMidnight(date: Date): Date {
+  return new Date(
+    `${date.getFullYear()}-${`${date.getMonth() + 1}`.padStart(2, "0")}-${`${date.getDate()}`.padStart(2, "0")}T00:00:00Z`,
+  );
+}
+
 /** Monday-anchored week start. Operates on a UTC-midnight Date produced
  *  by todayInZone() so getDay() reflects the correct workspace-TZ weekday
  *  rather than the browser's local-timezone weekday. */
@@ -525,6 +552,20 @@ export function WeekCalendar({
     setToast(message);
     window.setTimeout(() => setToast(null), 2400);
   }, []);
+
+  // Toolbar date-picker → jump the week view to the week containing the picked
+  // day. The picker hands back a browser-local Date; convert it to the same
+  // UTC-midnight anchor todayInZone() uses, then set offsetDays to the whole-day
+  // delta. In Week mode startOfWeekMonday() snaps any in-week offset to that
+  // week; in Day mode the picked day becomes the single visible column.
+  const handleJumpToDate = useCallback(
+    (picked: Date) => {
+      const todayBase = todayInZone(workspaceTimezone);
+      const pickedUtcMidnight = localDayToUtcMidnight(picked);
+      setOffsetDays(dayDeltaUtc(todayBase, pickedUtcMidnight));
+    },
+    [workspaceTimezone],
+  );
 
   // Visible day columns: 7 (Monday-anchored week) in Week mode, 1 (the
   // offset day at midnight) in Day mode. Both the header row and the grid
@@ -889,9 +930,9 @@ export function WeekCalendar({
   }, []);
 
   return (
-    <section className="space-y-4 order-1">
+    <section className="space-y-3 order-1">
       {/* Control row */}
-      <div className="px-3 md:px-6 py-4 border-b border-border">
+      <div className="px-3 md:px-6 py-2.5 border-b border-border">
         <div className="flex items-center gap-2 md:gap-3 flex-wrap">
           <div className="relative flex-1 min-w-[200px] max-w-[280px] shrink-0">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
@@ -937,17 +978,20 @@ export function WeekCalendar({
             ))}
           </div>
 
-          <button
-            type="button"
-            className="crm-pressable inline-flex h-8 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-[background-color,color,transform] duration-150 ease-out hover:bg-accent hover:text-accent-foreground"
-          >
-            <CalendarIcon className="size-4 text-muted-foreground" />
-            <span className="text-xs text-foreground">
-              {viewMode === "day"
+          {/* Month-navigable date picker. The trigger keeps the week-span
+              label; the popover opens a month grid (prev/next month arrows,
+              today highlighted) whose day clicks jump the week view via the
+              same offsetDays mechanism the prev/next-week arrows use. */}
+          <BookingDatePicker
+            label={
+              viewMode === "day"
                 ? labelRangeEnd(visibleDays[0], workspaceTimezone)
-                : `${labelRangeStart(visibleDays[0], workspaceTimezone)} - ${labelRangeEnd(visibleDays[visibleDays.length - 1], workspaceTimezone)}`}
-            </span>
-          </button>
+                : `${labelRangeStart(visibleDays[0], workspaceTimezone)} - ${labelRangeEnd(visibleDays[visibleDays.length - 1], workspaceTimezone)}`
+            }
+            selectedDay={utcMidnightToLocalDay(visibleDays[0])}
+            today={utcMidnightToLocalDay(todayInZone(workspaceTimezone))}
+            onSelectDate={handleJumpToDate}
+          />
 
           <div className="ml-auto" />
 
