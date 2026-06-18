@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { contacts, intakeForms, intakeSubmissions, organizations } from "@/db/schema";
+import { contacts, intakeForms, intakeSubmissions, organizations, portalDocuments } from "@/db/schema";
 import type { IntakeFormField } from "@/db/schema/intake-forms";
 import { enforceContactLimit } from "@/lib/billing/limits";
 import { emitSeldonEvent } from "@/lib/events/bus";
@@ -237,7 +237,24 @@ export async function POST(request: Request) {
   // We enrich `answers` in-place so the rest of the submission path
   // (dedup, contact creation, event emits) sees the blob URLs as if
   // they were regular string answers.
+  //
+  // v1.57 — intake → Documents bridge: we also collect blob metadata so
+  // we can insert a portal_documents row per file after contactId is
+  // resolved below. This makes intake uploads appear in the operator's
+  // contact Documents tab. The insert is wrapped in try/catch so a DB
+  // failure never blocks the intake submission response.
   // ------------------------------------------------------------------
+
+  // Accumulated metadata for the portal_documents bridge inserts.
+  type BlobMeta = {
+    fileName: string;
+    fileSize: number;
+    mimeType: string;
+    blobUrl: string;
+    blobPath: string;
+  };
+  const intakeBlobMetas: BlobMeta[] = [];
+
   if (pendingFileUploads && pendingFileUploads.length > 0) {
     const formFields = (Array.isArray(form.fields) ? form.fields : []) as IntakeFormField[];
     // Build a map of questionId → field config for O(1) lookup.
@@ -285,6 +302,14 @@ export async function POST(request: Request) {
             token: process.env.BLOB_READ_WRITE_TOKEN,
           });
           urls.push(blob.url);
+          // Accumulate metadata for the portal_documents bridge insert.
+          intakeBlobMetas.push({
+            fileName: file.name,
+            fileSize: file.size,
+            mimeType: file.type || "application/octet-stream",
+            blobUrl: blob.url,
+            blobPath: blobKey,
+          });
         } catch (err) {
           console.error(
             JSON.stringify({
@@ -449,6 +474,48 @@ export async function POST(request: Request) {
     contactId: contactId ?? null,
     data: answers,
   });
+
+  // v1.57 — intake → Documents bridge. When the submission included file
+  // uploads, insert a portal_documents row per file so the operator sees
+  // them in the contact's Documents tab. Skipped when:
+  //   - no files were uploaded (intakeBlobMetas is empty)
+  //   - no contactId was resolved (contact limit hit, or no email field)
+  // Wrapped in try/catch so a DB failure NEVER blocks the intake response.
+  if (intakeBlobMetas.length > 0 && contactId) {
+    try {
+      await db.insert(portalDocuments).values(
+        intakeBlobMetas.map((meta) => ({
+          orgId: org.id,
+          contactId: contactId!,
+          fileName: meta.fileName,
+          fileSize: meta.fileSize,
+          mimeType: meta.mimeType,
+          blobUrl: meta.blobUrl,
+          blobPath: meta.blobPath,
+          // uploadedByUserId is null — intake is anonymous (no operator session).
+        }))
+      );
+      console.log(
+        JSON.stringify({
+          event: "public_intake_portal_docs_bridged",
+          org_id: org.id,
+          contact_id: contactId,
+          file_count: intakeBlobMetas.length,
+        })
+      );
+    } catch (bridgeErr) {
+      // Non-fatal: the intake submission and blob uploads already succeeded.
+      // Log for ops follow-up but don't surface to the submitter.
+      console.warn(
+        JSON.stringify({
+          event: "public_intake_portal_docs_bridge_failed",
+          org_id: org.id,
+          contact_id: contactId,
+          error: bridgeErr instanceof Error ? bridgeErr.message : String(bridgeErr),
+        })
+      );
+    }
+  }
 
   // Best-effort event emit — fire-and-forget so a Brain subscriber
   // crash never blocks the public submission response.
