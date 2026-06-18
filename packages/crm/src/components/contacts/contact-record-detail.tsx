@@ -1077,7 +1077,12 @@ function ActivityComposer({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="mb-4 inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+        className={
+          "mb-4 inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground " +
+          "transition-colors duration-fast " +
+          "hover:bg-primary/90 active:bg-primary/80 " +
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        }
       >
         <Plus className="size-3.5" />
         Log activity
@@ -1119,10 +1124,12 @@ function ActivityComposer({
             type="button"
             onClick={() => setType(t.value)}
             className={
-              "h-7 rounded-full px-3 text-xs font-medium transition-colors " +
+              "h-7 rounded-full px-3 text-xs font-medium " +
+              "transition-[background-color,color,box-shadow] duration-fast " +
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring " +
               (type === t.value
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted text-muted-foreground hover:text-foreground")
+                ? "bg-primary text-primary-foreground shadow-xs"
+                : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground active:bg-muted")
             }
           >
             {t.label}
@@ -1162,14 +1169,25 @@ function ActivityComposer({
         <button
           type="submit"
           disabled={pending}
-          className="h-8 rounded-md bg-primary px-4 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+          className={
+            "h-8 rounded-md bg-primary px-4 text-xs font-medium text-primary-foreground " +
+            "transition-colors duration-fast " +
+            "hover:bg-primary/90 active:bg-primary/80 " +
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring " +
+            "disabled:opacity-60 disabled:pointer-events-none"
+          }
         >
           {pending ? "Saving…" : "Save"}
         </button>
         <button
           type="button"
           onClick={() => setOpen(false)}
-          className="h-8 rounded-md px-3 text-xs text-muted-foreground hover:text-foreground"
+          className={
+            "h-8 rounded-md px-3 text-xs text-muted-foreground " +
+            "transition-colors duration-fast " +
+            "hover:bg-muted hover:text-foreground " +
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          }
         >
           Cancel
         </button>
@@ -1255,17 +1273,41 @@ function ActivityDetailModal({
   }, [onClose]);
 
   return (
-    /* Backdrop */
+    /* Backdrop — fades in on mount */
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
+      className={
+        "fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 " +
+        "animate-in fade-in duration-200 motion-reduce:animate-none"
+      }
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" aria-hidden />
+      {/* Dimmed backdrop layer */}
+      <div
+        className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+        aria-hidden
+      />
 
-      {/* Panel */}
-      <div className="relative w-full max-w-lg rounded-2xl border bg-card shadow-xl">
+      {/* Panel —
+           mobile:  slides up from bottom (full-width, rounded top corners only)
+           desktop: fades + scales up from ~0.97 (centered dialog style)
+           Both use 220ms with the app's premium ease.
+           prefers-reduced-motion: no transform/scale, plain fade only. */}
+      <div
+        className={
+          "relative w-full sm:max-w-lg " +
+          /* mobile sheet shape */
+          "rounded-t-2xl sm:rounded-2xl " +
+          "border bg-card shadow-modal " +
+          /* desktop: scale-up entrance */
+          "sm:animate-in sm:fade-in-0 sm:zoom-in-[0.97] " +
+          /* mobile: slide-up entrance */
+          "animate-in slide-in-from-bottom-4 " +
+          "duration-[220ms] ease-premium " +
+          "motion-reduce:animate-none motion-reduce:transform-none"
+        }
+      >
         {/* Header */}
         <div className="flex items-start justify-between gap-3 border-b px-5 py-4">
           <div className="min-w-0">
@@ -1290,7 +1332,12 @@ function ActivityDetailModal({
           <button
             type="button"
             onClick={onClose}
-            className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+            className={
+              "shrink-0 rounded-md p-1 text-muted-foreground " +
+              "transition-colors duration-fast " +
+              "hover:bg-muted hover:text-foreground " +
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            }
           >
             <X className="size-4" />
           </button>
@@ -1334,7 +1381,13 @@ function ActivityDetailModal({
                 type="button"
                 onClick={saveNotes}
                 disabled={notesPending}
-                className="h-7 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+                className={
+                  "h-7 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground " +
+                  "transition-colors duration-fast " +
+                  "hover:bg-primary/90 active:bg-primary/80 " +
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring " +
+                  "disabled:opacity-60 disabled:pointer-events-none"
+                }
               >
                 {notesPending ? "Saving…" : savedNote ? "Saved!" : "Save notes"}
               </button>
@@ -1348,7 +1401,16 @@ function ActivityDetailModal({
                 type="button"
                 onClick={markDone}
                 disabled={taskPending}
-                className="inline-flex h-9 items-center gap-1.5 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 text-xs font-medium text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300 disabled:opacity-60"
+                className={
+                  "inline-flex h-9 items-center gap-1.5 rounded-md px-3 text-xs font-medium " +
+                  "border border-emerald-500/40 bg-emerald-500/10 " +
+                  "text-emerald-700 dark:text-emerald-300 " +
+                  "transition-colors duration-fast " +
+                  "hover:bg-emerald-500/20 hover:border-emerald-500/60 " +
+                  "active:bg-emerald-500/30 " +
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring " +
+                  "disabled:opacity-60 disabled:pointer-events-none"
+                }
               >
                 <CheckCircle2 className="size-3.5" />
                 {taskPending ? "Marking done…" : "Mark as done"}
@@ -1416,11 +1478,17 @@ function ActivityTab({
                   <button
                     type="button"
                     onClick={() => setSelectedId(a.id)}
-                    className="group w-full text-left"
+                    className={
+                      "group w-full text-left rounded-lg border border-transparent px-3 py-2.5 -mx-3 " +
+                      "transition-[background-color,border-color] duration-fast ease-premium " +
+                      "hover:bg-accent/60 hover:border-border/60 " +
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-card " +
+                      "cursor-pointer"
+                    }
                   >
                     <span
                       className={
-                        "absolute -left-[27px] top-1.5 size-2.5 rounded-full ring-4 ring-card " +
+                        "absolute -left-[27px] top-[18px] size-2.5 rounded-full ring-4 ring-card " +
                         (isDone ? "bg-emerald-500" : "bg-primary")
                       }
                     />
@@ -1430,7 +1498,7 @@ function ActivityTab({
                         <CheckCircle2 className="size-3 text-emerald-500" />
                       ) : null}
                     </div>
-                    <p className="mt-0.5 text-sm font-medium text-foreground group-hover:text-primary transition-colors">
+                    <p className="mt-0.5 text-sm font-medium text-foreground transition-colors duration-fast group-hover:text-primary">
                       {a.subject || activityTypeLabel(a.type)}
                     </p>
                     {a.body ? (
