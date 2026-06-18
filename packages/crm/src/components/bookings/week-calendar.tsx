@@ -3,14 +3,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Search, Settings, SlidersHorizontal } from "lucide-react";
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Search, Settings, SlidersHorizontal } from "lucide-react";
 import {
-  WEEK_VIEW_START_HOUR,
-  WEEK_VIEW_END_HOUR,
-  HOUR_HEIGHT_PX,
-  yToSnappedMinutes,
-  minutesToClock,
+  computeVisibleHourRange,
+  pickHourHeightPx,
+  snapMinutesFromY,
+  clockFromGridMinutes,
+  topPxForClock,
+  type EventHourBounds,
 } from "@/lib/bookings/calendar-math";
+import type {
+  WorkspaceBookingRules,
+  AvailabilityDayKey,
+} from "@/lib/bookings/workspace-rules";
+import { toMinutes, weekdayKeys } from "@/lib/bookings/workspace-rules";
 import { BookingCard } from "@/components/bookings/booking-card";
 import { CreatePopover } from "@/components/bookings/create-popover";
 import { RescheduleConfirm } from "@/components/bookings/reschedule-confirm";
@@ -52,6 +58,10 @@ type WeekCalendarProps = {
   bookings: BookingRow[];
   contacts: ContactRow[];
   workspaceTimezone: string;
+  /** Workspace availability + rules (same blob the availability panel uses).
+   *  Drives the bounded hour range (Fix 1) and the open/closed cell shading
+   *  (Fix 3). Mon-Fri 09:00-17:00 defaults when unset. */
+  workspaceBookingRules: WorkspaceBookingRules;
   labels: {
     contact: { singular: string; plural: string };
     activity: { singular: string; plural: string };
@@ -74,11 +84,14 @@ type WeekCalendarProps = {
 };
 
 // ---------------------------------------------------------------------------
-// Grid constants (derived from calendar-math.ts)
+// Grid geometry is now DYNAMIC — computed per-render from the workspace
+// availability (so the visible window hugs business hours and the whole week
+// fits with no scroll). See the `geometry` useMemo inside the component.
 // ---------------------------------------------------------------------------
 
-const WEEK_VIEW_TOTAL_HEIGHT_PX =
-  (WEEK_VIEW_END_HOUR - WEEK_VIEW_START_HOUR) * HOUR_HEIGHT_PX;
+// Width of the left time-gutter (hour labels). The 7 day columns share the
+// rest of the row equally via the CSS grid, so there's no horizontal scroll.
+const TIME_GUTTER_PX = 52;
 
 // ---------------------------------------------------------------------------
 // Colour palette for left-border accent on booking cards.
@@ -117,16 +130,35 @@ function timeInZone(date: Date, tz: string): { hours: number; minutes: number } 
   return { hours, minutes };
 }
 
+// Resolved grid geometry for a render (computed from availability + events).
+type CalendarGeometry = {
+  startHour: number;
+  endHour: number;
+  hourHeightPx: number;
+  totalHours: number;
+  bodyHeightPx: number;
+};
+
 /** Position a booking card vertically within the week-view day column.
- *  Returns the top offset in px relative to the start of the visible grid
- *  (WEEK_VIEW_START_HOUR). Clamps so off-hours bookings still render at
+ *  Returns the top offset in px relative to the visible grid start
+ *  (geometry.startHour). Clamps so off-hours bookings still render just inside
  *  the top/bottom edge with their real time visible inside the card. */
-function bookingTopPx(startsAt: Date, tz: string): number {
+function bookingTopPx(startsAt: Date, tz: string, geometry: CalendarGeometry): number {
   const { hours, minutes } = timeInZone(startsAt, tz);
-  const offsetHours = hours + minutes / 60 - WEEK_VIEW_START_HOUR;
-  const maxOffset = WEEK_VIEW_END_HOUR - WEEK_VIEW_START_HOUR;
-  const clamped = Math.max(0, Math.min(offsetHours, maxOffset - 0.5));
-  return clamped * HOUR_HEIGHT_PX;
+  return topPxForClock({
+    hours,
+    minutes,
+    startHour: geometry.startHour,
+    endHour: geometry.endHour,
+    hourHeightPx: geometry.hourHeightPx,
+  });
+}
+
+/** Fractional wall-clock hour (e.g. 14.5 for 14:30) of a moment in `tz`.
+ *  Used to compute the event-hour bounds the visible range must contain. */
+function fractionalHourInZone(date: Date, tz: string): number {
+  const { hours, minutes } = timeInZone(date, tz);
+  return hours + minutes / 60;
 }
 
 /** YYYY-MM-DD in the given timezone (en-CA emits ISO-style). */
@@ -154,6 +186,23 @@ function labelRangeEnd(date: Date, tz: string) {
     year: "numeric",
     timeZone: tz,
   }).format(date);
+}
+
+/** Human label for an empty cell's slot, for the add-button aria-label
+ *  (e.g. "Mon, Jun 22, 9:00 AM"). The cell renders the day's date in `tz`,
+ *  so build that day at `hour:00` in the same zone for a faithful label. */
+function cellSlotLabel(day: Date, hour: number, tz: string): string {
+  const [year, month, dayNum] = ymdInZone(day, tz);
+  const at = buildStartUtc(year, month, dayNum, hour, 0, tz);
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).format(at);
 }
 
 function dayHeaderLabel(date: Date, tz: string) {
@@ -222,10 +271,17 @@ function ymdInZone(day: Date, tz: string): [number, number, number] {
 
 /** Build the UTC start for a dropped block: snap the y-offset within a column
  *  to a clock time, then resolve it to a UTC moment on the column's day in the
- *  workspace timezone. Pure — all snap math comes from calendar-math.ts. */
-function dropToStartUtc(day: Date, offsetY: number, tz: string): Date {
-  const snappedMinutes = yToSnappedMinutes(offsetY);
-  const { hours, minutes } = minutesToClock(snappedMinutes);
+ *  workspace timezone. Pure — all snap math comes from calendar-math.ts, but
+ *  parameterized by the dynamic grid geometry so the snapped time matches the
+ *  visible (business-hours-bounded) window. */
+function dropToStartUtc(
+  day: Date,
+  offsetY: number,
+  tz: string,
+  geometry: CalendarGeometry,
+): Date {
+  const snappedMinutes = snapMinutesFromY(offsetY, geometry.hourHeightPx, geometry.totalHours);
+  const { hours, minutes } = clockFromGridMinutes(snappedMinutes, geometry.startHour);
   const [year, month, dayNum] = ymdInZone(day, tz);
   return buildStartUtc(year, month, dayNum, hours, minutes, tz);
 }
@@ -268,6 +324,51 @@ function startOfWeekMonday(date: Date) {
   const diff = weekday === 0 ? -6 : 1 - weekday;
   next.setUTCDate(next.getUTCDate() + diff);
   return next;
+}
+
+/** Weekday key (sunday..saturday) for a column Date in the workspace tz.
+ *  Intl 'long' weekday → lowercased → matches AvailabilityDayKey. */
+function weekdayKeyForDate(day: Date, tz: string): AvailabilityDayKey {
+  const name = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    weekday: "long",
+  })
+    .format(day)
+    .toLowerCase();
+  // weekdayKeys are exactly the lowercased long names; fall back to monday.
+  return (weekdayKeys.includes(name as AvailabilityDayKey)
+    ? (name as AvailabilityDayKey)
+    : "monday");
+}
+
+/** Per-column open/closed window resolved from availability.
+ *  `closed` → whole day is unavailable (disabled day). When open, startMin/
+ *  endMin are minutes-from-midnight bounding the bookable window. */
+type DayAvailability =
+  | { closed: true }
+  | { closed: false; startMin: number; endMin: number };
+
+function resolveDayAvailability(
+  day: Date,
+  tz: string,
+  rules: WorkspaceBookingRules,
+): DayAvailability {
+  const window = rules.availability[weekdayKeyForDate(day, tz)];
+  if (!window?.enabled) return { closed: true };
+  const startMin = toMinutes(window.start);
+  const endMin = toMinutes(window.end);
+  if (!(endMin > startMin)) return { closed: true };
+  return { closed: false, startMin, endMin };
+}
+
+/** Is the hour-row beginning at `hour` (the cell [hour, hour+1)) fully or
+ *  partially inside the day's open window? A cell counts as open when it
+ *  overlaps [startMin, endMin). Used to shade off-hours cells (Fix 3). */
+function isHourCellOpen(hour: number, avail: DayAvailability): boolean {
+  if (avail.closed) return false;
+  const cellStart = hour * 60;
+  const cellEnd = cellStart + 60;
+  return cellStart < avail.endMin && cellEnd > avail.startMin;
 }
 
 // ---------------------------------------------------------------------------
@@ -362,6 +463,7 @@ export function WeekCalendar({
   bookings,
   contacts,
   workspaceTimezone,
+  workspaceBookingRules,
   labels,
   bookingTypes,
   createBookingAction,
@@ -476,6 +578,53 @@ export function WeekCalendar({
     return byDay;
   }, [bookings, visibleDays, searchQuery, workspaceTimezone]);
 
+  // ── Dynamic grid geometry (Fix 1) ──────────────────────────────────────
+  // Bound the visible hour range to the workspace's BUSINESS HOURS (earliest
+  // start / latest end across enabled days, padded ~1h, min 9h window) instead
+  // of a fixed 6am–10pm, then size the hour rows so the bounded range fits a
+  // typical viewport with no vertical scroll. The range is also widened to
+  // cover any booked event that falls outside business hours so those cards
+  // still render at their true time (clamped just inside the edge otherwise).
+  const geometry = useMemo<CalendarGeometry>(() => {
+    // Event bounds across the bookings visible in this week (post-filter), so
+    // off-hours bookings never get cropped out of the grid.
+    let earliestHour = Infinity;
+    let latestHour = -Infinity;
+    for (const rows of eventsByDay.values()) {
+      for (const row of rows) {
+        const start = fractionalHourInZone(new Date(row.startsAt), workspaceTimezone);
+        const end = fractionalHourInZone(new Date(row.endsAt), workspaceTimezone);
+        earliestHour = Math.min(earliestHour, start);
+        // An end exactly on the hour (e.g. 17:00) shouldn't force an extra
+        // empty row; nudge it down a hair so ceil() doesn't over-grow.
+        latestHour = Math.max(latestHour, end > Math.floor(end) ? end : end - 0.01);
+      }
+    }
+    const eventBounds: EventHourBounds =
+      earliestHour === Infinity ? null : { earliestHour, latestHour };
+
+    const { startHour, endHour } = computeVisibleHourRange({
+      availability: workspaceBookingRules.availability,
+      eventBounds,
+    });
+    const totalHours = endHour - startHour;
+    const hourHeightPx = pickHourHeightPx(totalHours);
+    return {
+      startHour,
+      endHour,
+      totalHours,
+      hourHeightPx,
+      bodyHeightPx: totalHours * hourHeightPx,
+    };
+  }, [eventsByDay, workspaceBookingRules.availability, workspaceTimezone]);
+
+  // Hour labels for the visible range, one per row.
+  const hourLabels = useMemo(
+    () =>
+      Array.from({ length: geometry.totalHours }, (_, i) => geometry.startHour + i),
+    [geometry.startHour, geometry.totalHours],
+  );
+
   // Build a colour map from booking title → border class.
   // WeekCalendar doesn't receive bookingTypes directly, so we derive
   // distinct titles from the bookings array in encounter order.
@@ -572,9 +721,13 @@ export function WeekCalendar({
         keyYmd(current.originStart, workspaceTimezone),
       );
       if (!hit) return;
-      const snappedMinutes = yToSnappedMinutes(hit.offsetY);
-      const topPx = (snappedMinutes / 60) * HOUR_HEIGHT_PX;
-      const previewStart = dropToStartUtc(hit.day, hit.offsetY, workspaceTimezone);
+      const snappedMinutes = snapMinutesFromY(
+        hit.offsetY,
+        geometry.hourHeightPx,
+        geometry.totalHours,
+      );
+      const topPx = (snappedMinutes / 60) * geometry.hourHeightPx;
+      const previewStart = dropToStartUtc(hit.day, hit.offsetY, workspaceTimezone, geometry);
       setDrag({
         ...current,
         isDragging: true,
@@ -585,7 +738,7 @@ export function WeekCalendar({
         },
       });
     },
-    [resolveDropTarget, workspaceTimezone],
+    [resolveDropTarget, workspaceTimezone, geometry],
   );
 
   // Apply an optimistic override + fire the action, reverting on conflict.
@@ -681,9 +834,13 @@ export function WeekCalendar({
         setDrag(null);
         return;
       }
-      const newStart = dropToStartUtc(hit.day, hit.offsetY, workspaceTimezone);
-      const snappedMinutes = yToSnappedMinutes(hit.offsetY);
-      const topPx = (snappedMinutes / 60) * HOUR_HEIGHT_PX;
+      const newStart = dropToStartUtc(hit.day, hit.offsetY, workspaceTimezone, geometry);
+      const snappedMinutes = snapMinutesFromY(
+        hit.offsetY,
+        geometry.hourHeightPx,
+        geometry.totalHours,
+      );
+      const topPx = (snappedMinutes / 60) * geometry.hourHeightPx;
       const optimisticPos: OptimisticOverride = { dayKey: hit.dayKey, topPx };
 
       const isProspect =
@@ -716,7 +873,7 @@ export function WeekCalendar({
       setDrag(null);
       void commitReschedule(current.bookingId, newStart, optimisticPos, false);
     },
-    [resolveDropTarget, workspaceTimezone, router, commitReschedule],
+    [resolveDropTarget, workspaceTimezone, router, commitReschedule, geometry],
   );
 
   // Escape cancels an in-progress drag (before drop). Pending confirm has its
@@ -833,55 +990,73 @@ export function WeekCalendar({
         </div>
       </div>
 
-      {/* Week grid */}
-      <div className="flex flex-col h-full overflow-x-auto w-full rounded-xl border bg-card">
+      {/* Week grid. Fix 1: a CSS grid of [time-gutter, 7×1fr] makes the 7 day
+          columns share the row width with NO horizontal scroll, and the hour
+          rows are sized (geometry.hourHeightPx) so the bounded business-hours
+          window fits with no vertical scroll. overflow-y-auto remains only as a
+          graceful fallback for unusually long ranges. */}
+      <div className="flex flex-col w-full overflow-y-auto rounded-xl border bg-card">
         {/* Day-header row */}
-        <div className="flex border-b border-border sticky top-0 z-30 bg-background w-max min-w-full">
-          <div className="w-[80px] md:w-[104px] flex items-center gap-1 md:gap-2 p-1.5 md:p-2 border-r border-border shrink-0">
+        <div
+          className="grid border-b border-border bg-background"
+          style={{
+            gridTemplateColumns: `${TIME_GUTTER_PX}px repeat(${visibleDays.length}, minmax(0, 1fr))`,
+          }}
+        >
+          <div className="flex items-center justify-center gap-1 p-1 border-r border-border">
             <button
               type="button"
-              className="crm-pressable inline-flex size-7 md:size-8 items-center justify-center rounded transition-[background-color,transform] duration-150 ease-out hover:bg-accent"
+              aria-label="Previous"
+              className="crm-pressable inline-flex size-6 items-center justify-center rounded transition-[background-color,transform] duration-150 ease-out hover:bg-accent"
               onClick={() => setOffsetDays((cur) => cur - (viewMode === "day" ? 1 : 7))}
             >
-              <ChevronLeft className="size-4 md:size-5" />
+              <ChevronLeft className="size-4" />
             </button>
             <button
               type="button"
-              className="crm-pressable inline-flex size-7 md:size-8 items-center justify-center rounded transition-[background-color,transform] duration-150 ease-out hover:bg-accent"
+              aria-label="Next"
+              className="crm-pressable inline-flex size-6 items-center justify-center rounded transition-[background-color,transform] duration-150 ease-out hover:bg-accent"
               onClick={() => setOffsetDays((cur) => cur + (viewMode === "day" ? 1 : 7))}
             >
-              <ChevronRight className="size-4 md:size-5" />
+              <ChevronRight className="size-4" />
             </button>
           </div>
-          {visibleDays.map((day) => (
-            <div
-              key={day.toISOString()}
-              className="flex-1 border-r border-border last:border-r-0 p-1.5 md:p-2 min-w-44 flex items-center"
-            >
-              <div className="text-xs md:text-sm font-medium text-foreground">
-                {dayHeaderLabel(day, workspaceTimezone)}
+          {visibleDays.map((day) => {
+            const closed = resolveDayAvailability(day, workspaceTimezone, workspaceBookingRules).closed;
+            return (
+              <div
+                key={day.toISOString()}
+                className={`min-w-0 border-r border-border last:border-r-0 p-1.5 md:p-2 flex items-center ${closed ? "bg-muted/40" : ""}`}
+              >
+                <div
+                  className={`truncate text-xs md:text-sm font-medium ${closed ? "text-muted-foreground" : "text-foreground"}`}
+                >
+                  {dayHeaderLabel(day, workspaceTimezone)}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
-        {/* Time column + day columns */}
-        <div className="flex min-w-full w-max">
-          {/* v1.40.13 — time column. Each hour is exactly HOUR_HEIGHT_PX tall. */}
+        {/* Time gutter + day columns. Each hour row is geometry.hourHeightPx tall. */}
+        <div
+          className="grid"
+          style={{
+            gridTemplateColumns: `${TIME_GUTTER_PX}px repeat(${visibleDays.length}, minmax(0, 1fr))`,
+          }}
+        >
+          {/* Time gutter — hour labels for the bounded visible range. */}
           <div
-            className="w-[80px] md:w-[104px] border-r border-border shrink-0 bg-background"
-            style={{ height: `${WEEK_VIEW_TOTAL_HEIGHT_PX}px` }}
+            className="border-r border-border bg-background"
+            style={{ height: `${geometry.bodyHeightPx}px` }}
           >
-            {Array.from(
-              { length: WEEK_VIEW_END_HOUR - WEEK_VIEW_START_HOUR },
-              (_, i) => `${i + WEEK_VIEW_START_HOUR}:00`
-            ).map((hour) => (
+            {hourLabels.map((hour) => (
               <div
                 key={hour}
-                className="border-b border-border/60 text-[10px] text-muted-foreground px-2 pt-1"
-                style={{ height: `${HOUR_HEIGHT_PX}px` }}
+                className="border-b border-border/60 text-[10px] text-muted-foreground px-1.5 pt-1 text-right"
+                style={{ height: `${geometry.hourHeightPx}px` }}
               >
-                {hour}
+                {hour}:00
               </div>
             ))}
           </div>
@@ -889,6 +1064,7 @@ export function WeekCalendar({
           {visibleDays.map((day) => {
             const key = keyYmd(day, workspaceTimezone);
             const events = eventsByDay.get(key) ?? [];
+            const dayAvail = resolveDayAvailability(day, workspaceTimezone, workspaceBookingRules);
             const ghostHere =
               drag?.isDragging && drag.ghost?.dayKey === key ? drag.ghost : null;
             return (
@@ -898,8 +1074,8 @@ export function WeekCalendar({
                   if (el) columnRefs.current.set(key, el);
                   else columnRefs.current.delete(key);
                 }}
-                className="flex-1 min-w-44 border-r border-border last:border-r-0 relative cursor-pointer"
-                style={{ height: `${WEEK_VIEW_TOTAL_HEIGHT_PX}px` }}
+                className={`min-w-0 border-r border-border last:border-r-0 relative ${dayAvail.closed ? "bg-muted/40 cursor-default" : "cursor-pointer"}`}
+                style={{ height: `${geometry.bodyHeightPx}px` }}
                 onClick={(e) => {
                   // Suppress the create-popover for the synthetic click that
                   // immediately follows a drag-drop's pointerup. Also bail if a
@@ -909,9 +1085,11 @@ export function WeekCalendar({
                     return;
                   }
                   if (dragRef.current) return;
+                  // Closed day → not bookable; ignore the click (Fix 3).
+                  if (dayAvail.closed) return;
                   // offsetY relative to this column element → snapped UTC start.
                   const rect = e.currentTarget.getBoundingClientRect();
-                  const startUtc = dropToStartUtc(day, e.clientY - rect.top, workspaceTimezone);
+                  const startUtc = dropToStartUtc(day, e.clientY - rect.top, workspaceTimezone, geometry);
                   setPopover({
                     startsAt: startUtc,
                     anchorX: e.clientX,
@@ -919,24 +1097,67 @@ export function WeekCalendar({
                   });
                 }}
               >
-                {/* Hour grid lines — match the time column's row borders */}
-                {Array.from(
-                  { length: WEEK_VIEW_END_HOUR - WEEK_VIEW_START_HOUR },
-                  (_, i) => (
-                    <div
-                      key={i}
-                      className="border-b border-border/60"
-                      style={{ height: `${HOUR_HEIGHT_PX}px` }}
-                    />
-                  )
-                )}
+                {/* Hour cells — one per visible hour. Open/bookable cells get a
+                    subtle hover affordance + "+" cue (Fix 2) and are real,
+                    keyboard-focusable buttons (Enter/Space opens the create
+                    popover at that hour). Off-hours cells inside an enabled day
+                    are muted + non-interactive (Fix 3); a closed day is already
+                    greyed by the column bg, so its cells stay plain divs. The
+                    column's own onClick still handles fine-grained Y→time clicks
+                    for the mouse; these buttons add the keyboard path + the
+                    visible affordance. */}
+                {hourLabels.map((hour) => {
+                  const open = isHourCellOpen(hour, dayAvail);
+                  if (!open) {
+                    return (
+                      <div
+                        key={hour}
+                        className={
+                          dayAvail.closed
+                            ? "border-b border-border/60"
+                            : "border-b border-border/60 bg-muted/30"
+                        }
+                        style={{ height: `${geometry.hourHeightPx}px` }}
+                      />
+                    );
+                  }
+                  return (
+                    <button
+                      key={hour}
+                      type="button"
+                      aria-label={`Add booking — ${cellSlotLabel(day, hour, workspaceTimezone)}`}
+                      className="group/cell relative block w-full border-b border-border/60 text-left transition-colors duration-150 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-primary/5 focus-visible:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40 motion-reduce:transition-none"
+                      style={{ height: `${geometry.hourHeightPx}px` }}
+                      onClick={(e) => {
+                        // Open at this cell's hour. stopPropagation so the
+                        // column's Y-based onClick doesn't also fire.
+                        e.stopPropagation();
+                        if (justDraggedRef.current) {
+                          justDraggedRef.current = false;
+                          return;
+                        }
+                        if (dragRef.current) return;
+                        const [year, month, dayNum] = ymdInZone(day, workspaceTimezone);
+                        const startUtc = buildStartUtc(year, month, dayNum, hour, 0, workspaceTimezone);
+                        setPopover({ startsAt: startUtc, anchorX: e.clientX, anchorY: e.clientY });
+                      }}
+                    >
+                      <span
+                        aria-hidden
+                        className="pointer-events-none absolute right-1.5 top-1 inline-flex size-4 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity duration-150 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover/cell:opacity-100 group-focus-visible/cell:opacity-100 motion-reduce:transition-none"
+                      >
+                        <Plus className="size-3.5" />
+                      </span>
+                    </button>
+                  );
+                })}
 
                 {/* Drag ghost — follows the pointer to the snapped slot while
                     dragging, showing the booking title + live target time. */}
                 {ghostHere ? (
                   <div
                     className="pointer-events-none absolute left-2 right-2 z-30 rounded-lg border-2 border-dashed border-primary/70 bg-primary/10 p-2"
-                    style={{ top: `${ghostHere.topPx}px`, height: `${HOUR_HEIGHT_PX - 4}px` }}
+                    style={{ top: `${ghostHere.topPx}px`, height: `${geometry.hourHeightPx - 4}px` }}
                   >
                     <p className="truncate text-xs font-medium text-foreground">
                       {drag?.title}
@@ -963,7 +1184,7 @@ export function WeekCalendar({
                   const borderClass =
                     borderByTitle.get(row.title.trim().toLowerCase()) ??
                     "border-l-primary";
-                  const top = bookingTopPx(startsAt, workspaceTimezone);
+                  const top = bookingTopPx(startsAt, workspaceTimezone, geometry);
 
                   // Optimistic override: while a reschedule for this booking is
                   // in flight (or awaiting confirm), render it at the new

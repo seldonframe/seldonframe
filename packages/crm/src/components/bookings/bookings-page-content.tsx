@@ -240,6 +240,7 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
         bookings={bookings}
         contacts={contacts}
         workspaceTimezone={workspaceTimezone}
+        workspaceBookingRules={workspaceBookingRules}
         labels={labels}
         bookingTypes={bookingTypes}
         createBookingAction={createBookingAction}
