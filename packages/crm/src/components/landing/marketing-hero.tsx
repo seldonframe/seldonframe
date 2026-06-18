@@ -24,6 +24,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, FileText, Globe } from "lucide-react";
 
+import { MarketingDemoMarquee } from "@/components/landing/marketing-demo-marquee";
+
 const URL_EXAMPLES = [
   "https://your-clients-hvac-company.com",
   "https://your-clients-dental-practice.com",
@@ -108,19 +110,6 @@ function useTypewriterPlaceholder(
     };
   }, [enabled, examples, ref]);
 }
-
-// The 9 live demo workspace URLs from seldonstudio.com's SITES list
-const LIVE_DEMOS = [
-  { name: "Rapid Rooter Plumbing", type: "Plumbing", href: "https://app.seldonframe.com/w/rapid-rooter-plumbing-828a" },
-  { name: "PeakAir Heating & Cooling", type: "HVAC", href: "https://app.seldonframe.com/w/peakair-heating-cooling-e7df" },
-  { name: "Summit Roofing Co.", type: "Roofing", href: "https://app.seldonframe.com/w/summit-roofing-co-e045" },
-  { name: "Voltware Electric", type: "Electrician", href: "https://app.seldonframe.com/w/voltware-electric-1325" },
-  { name: "Hearth & Home Builds", type: "General contractor", href: "https://app.seldonframe.com/w/hearth-home-builds-87ac" },
-  { name: "Coastline Garage Doors", type: "Garage doors", href: "https://app.seldonframe.com/w/coastline-garage-doors-4c77" },
-  { name: "Lumière Med Spa", type: "Med spa", href: "https://app.seldonframe.com/w/lumire-med-spa-20b0" },
-  { name: "Vitalis Weight Clinic", type: "GLP-1 clinic", href: "https://app.seldonframe.com/w/vitalis-weight-clinic-d320" },
-  { name: "Apex TRT & Hormone", type: "Men's health", href: "https://app.seldonframe.com/w/apex-trt-hormone-7b4a" },
-];
 
 export function MarketingHero() {
   const router = useRouter();
@@ -224,31 +213,6 @@ export function MarketingHero() {
           className="inline-flex items-center gap-2 rounded-full border border-[rgba(34,29,23,.16)] bg-[#FFFDFA] px-5 py-3.5 text-[15px] font-[500] text-[#221D17] shadow-[0_0_0_.5px_rgba(34,29,23,.08),0_4px_20px_rgba(34,29,23,.06)] transition-all hover:-translate-y-[1.5px]"
         >
           For agencies →
-        </a>
-      </div>
-
-      {/* Proof strip — live demo URL pills */}
-      <div className="mt-8 flex flex-wrap items-center justify-center gap-2">
-        <span className="mr-1 font-sans text-[11px] uppercase tracking-[0.10em] text-[#9A9183]">
-          Live demos
-        </span>
-        {LIVE_DEMOS.slice(0, 5).map((demo) => (
-          <a
-            key={demo.href}
-            href={demo.href}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-full border border-[rgba(34,29,23,.10)] bg-[#FFFDFA] px-3 py-1.5 text-[12px] font-[500] text-[#6E665A] shadow-[0_1px_3px_rgba(34,29,23,.06)] transition-all hover:-translate-y-px hover:border-[rgba(34,29,23,.18)] hover:text-[#221D17]"
-          >
-            <span className="size-1.5 rounded-full bg-[#6fc28f]" aria-hidden />
-            {demo.name}
-          </a>
-        ))}
-        <a
-          href="#demos"
-          className="inline-flex items-center gap-1.5 rounded-full border border-[rgba(34,29,23,.10)] bg-[#FFFDFA] px-3 py-1.5 text-[12px] font-[500] text-[#00897B] shadow-[0_1px_3px_rgba(34,29,23,.06)] transition-all hover:-translate-y-px"
-        >
-          +{LIVE_DEMOS.length - 5} more →
         </a>
       </div>
 
@@ -358,6 +322,11 @@ export function MarketingHero() {
           </li>
         ))}
       </ul>
+
+      {/* Rotating live-demo marquee (anchor target for "#demos") */}
+      <div id="demos" className="w-full scroll-mt-24">
+        <MarketingDemoMarquee />
+      </div>
 
       {/* Loading overlay */}
       {submitting ? (

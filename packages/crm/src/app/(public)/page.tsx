@@ -7,11 +7,12 @@
 // DemoVideo / Agencies / Marketplace / Pricing / FAQ / WhyNow / FinalCta)
 // with the new HTML-faithful section list.
 //
-// Order matches the HTML mockup:
-//   Nav (fixed) → Hero → ProofStrip → AgencyMath → OutreachMath
-//   → BuildSteps → Modules → Replace → Soul → ComparisonTable
-//   → Pricing (existing truth-pass component) → FAQ (existing truth-pass)
-//   → FinalCta → Footer
+// Order (2026-06-18 SMB-first conversion pass — pricing pulled up to sit
+// right after the SMB CTA; agency block follows pricing):
+//   Nav (fixed) → Hero (+ demo marquee) → ProofStrip (fear-alleviation)
+//   → BuildSteps → Modules → SmbCta (rotating industry word)
+//   → Pricing (existing truth-pass component) → AgencyMath → Replace
+//   → FinalCta → FAQ (existing truth-pass) → Footer
 //
 // Skipped from the HTML port:
 //   - §9 Marketplace (hidden in source HTML with display:none — README
@@ -40,6 +41,7 @@ import { MarketingProofStrip } from "@/components/landing/marketing-proof-strip"
 import { MarketingAgencyMath } from "@/components/landing/marketing-agency-math";
 import { MarketingBuildSteps } from "@/components/landing/marketing-build-steps";
 import { MarketingModules } from "@/components/landing/marketing-modules";
+import { MarketingSmbCta } from "@/components/landing/marketing-smb-cta";
 import { MarketingReplace } from "@/components/landing/marketing-replace";
 import { LandingMarketingPricingSection } from "@/components/landing/marketing-pricing-section";
 import { LandingMarketingFaqSection } from "@/components/landing/marketing-faq-section";
@@ -84,9 +86,10 @@ export default async function PublicHomePage() {
         <MarketingProofStrip />
         <MarketingBuildSteps />
         <MarketingModules />
+        <MarketingSmbCta />
+        <LandingMarketingPricingSection />
         <MarketingAgencyMath />
         <MarketingReplace />
-        <LandingMarketingPricingSection />
         <MarketingFinalCta />
         <LandingMarketingFaqSection />
       </main>

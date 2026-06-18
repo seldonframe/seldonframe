@@ -37,6 +37,17 @@ export function MarketingAgencyMath() {
       className="border-t border-[rgba(34,29,23,.08)] bg-[#1F2B24] px-5 py-20 md:px-8 md:py-28 lg:px-12"
     >
       <div className="mx-auto max-w-[1120px]">
+        {/* Audience divider — makes the SMB → agency shift unmistakable. */}
+        <div className="mb-12 border-b border-[rgba(255,255,255,.12)] pb-8 text-center md:mb-14">
+          <span className="inline-flex items-center gap-2.5 rounded-full border border-[rgba(111,194,143,.30)] bg-[rgba(111,194,143,.10)] px-4 py-1.5 text-[11.5px] font-[700] uppercase tracking-[0.14em] text-[#6fc28f]">
+            <span className="size-1.5 rounded-full bg-[#6fc28f]" aria-hidden />
+            For agencies &amp; operators
+          </span>
+          <p className="mx-auto mt-4 max-w-[46ch] font-[Newsreader,Georgia,serif] text-[clamp(18px,2.4vw,24px)] italic leading-[1.35] text-[rgba(246,242,234,.82)]">
+            Run an agency serving local businesses? Resell SeldonFrame under your own brand.
+          </p>
+        </div>
+
         {/* Section head */}
         <div className="grid grid-cols-1 items-start gap-10 min-[900px]:grid-cols-[1.1fr_.9fr] min-[900px]:gap-14">
           <div>

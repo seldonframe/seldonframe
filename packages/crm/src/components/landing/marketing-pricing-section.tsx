@@ -117,14 +117,14 @@ export function LandingMarketingPricingSection() {
             id="pricing-heading"
             className="mx-auto mt-3.5 max-w-[18ch] text-[clamp(27px,4.2vw,42px)] font-[500] leading-[1.08] tracking-[-0.025em] text-[#221D17]"
           >
-            Cheap to start.{" "}
+            One flat price.{" "}
             <em className="font-[Newsreader,Georgia,serif] font-normal not-italic text-[#6E665A]">
-              Scale as you grow.
+              Absurd value.
             </em>
           </h2>
           <p className="mx-auto mt-4 max-w-[52ch] text-[16px] leading-[1.55] text-[#6E665A]">
-            One flat monthly price per tier — no metered bills, no surprises. Run your own
-            front office, or white-label the platform and resell to clients at your markup.
+            Less than a part-time hire — and a single booked job pays for the year. One flat
+            monthly price: no metered bills, no surprise fees.
           </p>
         </div>
 

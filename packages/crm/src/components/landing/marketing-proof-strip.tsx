@@ -1,39 +1,53 @@
 // packages/crm/src/components/landing/marketing-proof-strip.tsx
 //
-// Redesign 2026-06-18 — warm light theme. Four stats on a parchment plate.
-// Updated stat list to dual-audience messaging.
+// Revamp 2026-06-18 — FEAR-ALLEVIATION strip (replaces the old stats grid).
+// Same parchment #EFE9DD band + placement. Defuses the top SMB objections:
+// the single most important being "I'm not technical" → you edit by chatting.
+// Server component — no client hooks needed.
 
-const ITEMS = [
-  { lt: "<", num: "60", unit: "s", label: "Workspace live" },
-  { num: "9", label: "Live demo workspaces" },
-  { num: "5", label: "Modules per workspace" },
-  { num: "5×", label: "Under GoHighLevel" },
+const CHIPS = [
+  "No contract",
+  "No code",
+  "Edit by chatting",
+  "Live in 60 seconds",
+  "Flat price — no surprise fees",
 ] as const;
 
 export function MarketingProofStrip() {
   return (
     <section
       id="proof"
-      aria-label="Product proof"
-      className="border-y border-[rgba(34,29,23,.08)] bg-[#EFE9DD] px-5 py-8"
+      aria-label="What to expect"
+      className="border-y border-[rgba(34,29,23,.08)] bg-[#EFE9DD] px-5 py-8 md:py-9"
     >
-      <div className="mx-auto grid max-w-[1120px] grid-cols-2 items-start gap-6 md:grid-cols-4 md:gap-10 md:px-3">
-        {ITEMS.map((it) => (
-          <div key={it.label} className="flex flex-col gap-1.5">
-            <div className="font-sans text-[clamp(30px,3.2vw,40px)] font-[600] leading-none tracking-[-0.025em] tabular-nums text-[#221D17]">
-              {"lt" in it && it.lt ? (
-                <span className="text-[0.55em] font-[500] text-[#9A9183]">{it.lt}</span>
-              ) : null}
-              {it.num}
-              {"unit" in it && it.unit ? (
-                <span className="ml-0.5 text-[0.50em] font-[500] text-[#00897B]">{it.unit}</span>
-              ) : null}
-            </div>
-            <div className="font-sans text-[11px] font-[500] uppercase tracking-[0.08em] text-[#9A9183]">
-              {it.label}
-            </div>
-          </div>
-        ))}
+      <div className="mx-auto flex max-w-[1120px] flex-col items-center gap-5 md:px-3">
+        {/* The reassurance line — the "you're not technical" objection, defused. */}
+        <p className="max-w-[64ch] text-pretty text-center text-[clamp(14.5px,1.7vw,16.5px)] leading-[1.5] text-[#221D17]">
+          <strong className="font-[600]">Not technical? You don&rsquo;t need to be</strong>
+          {" — "}
+          <span className="text-[#6E665A]">
+            change your hours, add a service, or tune your AI receptionist just by typing it,
+            like you&rsquo;d text ChatGPT.
+          </span>
+        </p>
+
+        {/* Reassurance chips */}
+        <ul className="flex flex-wrap items-center justify-center gap-2 md:gap-2.5">
+          {CHIPS.map((chip) => (
+            <li
+              key={chip}
+              className="inline-flex items-center gap-1.5 rounded-full border border-[rgba(34,29,23,.10)] bg-[#FFFDFA] px-3 py-1.5 text-[12.5px] font-[500] text-[#221D17] shadow-[0_1px_2px_rgba(34,29,23,.05)]"
+            >
+              <span
+                className="flex size-[15px] shrink-0 items-center justify-center rounded-full bg-[rgba(0,137,123,.12)] text-[9px] font-[700] leading-none text-[#00897B]"
+                aria-hidden
+              >
+                ✓
+              </span>
+              {chip}
+            </li>
+          ))}
+        </ul>
       </div>
     </section>
   );
