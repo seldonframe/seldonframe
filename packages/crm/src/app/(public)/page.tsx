@@ -49,7 +49,7 @@ import { MarketingFooter } from "@/components/landing/marketing-footer";
 export const metadata: Metadata = {
   title: "SeldonFrame — Your full AI front office, live in 60 seconds.",
   description:
-    "Website, booking, AI receptionist, intake, and CRM — wired together and live in under a minute. For your business, or your clients'. Start free.",
+    "Website, booking, AI receptionist, intake, and CRM — wired together and live in under a minute. Plans from $19/mo. For your business, or your clients'.",
   openGraph: {
     title: "SeldonFrame — Your full AI front office, live in 60 seconds.",
     description:

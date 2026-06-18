@@ -36,7 +36,7 @@ const FAQS: readonly FaqItem[] = [
   {
     question: "What are the metered add-ons?",
     answer:
-      "SMS messages, AI voice calls, phone numbers, review request texts, and AI chat messages are all pay-as-you-go from a usage wallet. You pre-load the wallet; agencies can rebill clients at their own markup. Prices: ~$0.008/SMS, ~$0.07/min voice, $2/mo per phone number.",
+      "SMS, AI chat and voice, phone numbers, review texts, and reminder texts are all pay-as-you-go from a prepaid usage wallet. Pre-load the wallet and only pay for what you use — no surprise bills. Agencies set their own markup and rebill clients at a profit.",
   },
   {
     question: "Does it work with my Anthropic key?",

@@ -89,13 +89,13 @@ const FEATURES: readonly FeatureRow[] = [
   { label: "Metered add-ons (SMS, AI, phones)", values: { builder: true, workspace: true, agency: true } },
 ];
 
-const ADDONS = [
-  { label: "SMS messages", price: "~$0.008/msg" },
-  { label: "AI voice calls", price: "~$0.07/min" },
-  { label: "Phone numbers", price: "$2/mo each" },
-  { label: "Review request texts", price: "~$0.008/msg" },
-  { label: "AI chat messages", price: "~$0.002/msg" },
-];
+const ADDON_CATEGORIES = [
+  "SMS messages",
+  "AI chat messages",
+  "AI voice calls",
+  "Phone numbers",
+  "Review & reminder texts",
+] as const;
 
 function renderCell(value: string | boolean) {
   if (value === true) {
@@ -238,21 +238,22 @@ export function LandingMarketingPricingSection() {
             </span>
           </div>
           <p className="mb-5 text-[13.5px] leading-[1.5] text-[#6E665A]">
-            Pre-load your usage wallet. Agencies can rebill clients at their own markup and keep the spread.
+            SMS, AI chat &amp; voice, phone numbers, and review texts are pay-as-you-go from a prepaid wallet.
+            Only pay for what you use. Agencies set their own markup and rebill clients at a profit.
           </p>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
-            {ADDONS.map((addon) => (
+            {ADDON_CATEGORIES.map((label) => (
               <div
-                key={addon.label}
+                key={label}
                 className="rounded-[12px] border border-[rgba(34,29,23,.08)] bg-[#FFFDFA] p-3.5"
               >
-                <div className="text-[13px] font-[500] text-[#221D17]">{addon.label}</div>
-                <div className="mt-1 font-mono text-[11px] text-[#00897B]">{addon.price}</div>
+                <div className="text-[13px] font-[500] text-[#221D17]">{label}</div>
+                <div className="mt-1 font-sans text-[11px] text-[#00897B]">Pay-as-you-go</div>
               </div>
             ))}
           </div>
           <p className="mt-4 font-sans text-[11.5px] text-[#9A9183]">
-            Prices are estimates and may vary. No surprise bills — your wallet balance caps spend.
+            No surprise bills — your wallet balance caps spend. Contact us for volume pricing.
           </p>
         </div>
       </div>
