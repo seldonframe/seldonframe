@@ -64,21 +64,21 @@ export function MarketingFooter() {
               aria-label="SeldonFrame — home"
               className="inline-flex items-center gap-2.5 text-[15px] font-[500] tracking-[-0.01em] text-[#221D17]"
             >
-              <svg width="20" height="25" viewBox="0 0 70 88" fill="none" aria-hidden>
-                <rect x="0" y="0" width="34" height="16" rx="3" fill="#4DB6AC" />
-                <rect x="36" y="0" width="34" height="16" rx="3" fill="#00897B" />
-                <rect x="0" y="18" width="34" height="16" rx="3" fill="#00796B" />
-                <rect x="0" y="36" width="34" height="16" rx="3" fill="#00897B" />
-                <rect x="36" y="36" width="34" height="16" rx="3" fill="#00796B" />
-                <rect x="36" y="54" width="34" height="16" rx="3" fill="#00695C" />
-                <rect x="0" y="72" width="34" height="16" rx="3" fill="#00796B" />
-                <rect x="36" y="72" width="34" height="16" rx="3" fill="#004D40" />
+              <svg width="20" height="20" viewBox="0 0 100 100" fill="none" aria-hidden>
+                <line x1="22" y1="22" x2="58" y2="22" stroke="#00897B" strokeWidth="6" strokeLinecap="round" />
+                <line x1="78" y1="42" x2="78" y2="78" stroke="#00897B" strokeWidth="6" strokeLinecap="round" />
+                <line x1="78" y1="78" x2="22" y2="78" stroke="#00897B" strokeWidth="6" strokeLinecap="round" />
+                <line x1="22" y1="78" x2="22" y2="22" stroke="#00897B" strokeWidth="6" strokeLinecap="round" />
+                <circle cx="22" cy="22" r="7" fill="#00897B" />
+                <circle cx="78" cy="22" r="7" fill="none" stroke="#00897B" strokeWidth="6" />
+                <circle cx="78" cy="78" r="7" fill="#00897B" />
+                <circle cx="22" cy="78" r="7" fill="#00897B" />
               </svg>
               SeldonFrame
             </Link>
             <p className="m-0 text-[13.5px] leading-[1.55] text-[#6E665A]">
-              A complete AI front office — website, booking, AI receptionist, intake form, and CRM —
-              wired together and live in under a minute.
+              Your complete front office — website, booking, AI receptionist, intake, and CRM —
+              wired together so your business never misses a lead.
             </p>
             <div className="flex flex-col gap-2.5">
               <Link

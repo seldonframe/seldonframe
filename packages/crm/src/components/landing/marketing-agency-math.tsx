@@ -52,19 +52,19 @@ export function MarketingAgencyMath() {
               Keep the spread.
             </h2>
             <p className="mt-4 max-w-[48ch] text-[15.5px] leading-[1.55] text-[rgba(246,242,234,.74)]">
-              The Agency plan ($297/mo) white-labels SeldonFrame under your brand — your logo,
-              your domain, your pricing. You set the markup, you keep the margin.
-              Agencies are running this at $149–$397/mo per client.
+              It&rsquo;s basically just $297/mo. White-label SeldonFrame under your brand — your
+              logo, your domain, your pricing — and resell each client workspace at whatever you
+              want. You set the markup, you keep the margin.
             </p>
 
             {/* Agency perks list */}
             <ul className="mt-6 flex flex-col gap-3">
               {[
                 "Your brand on the entire platform — clients never see SeldonFrame",
-                "Set your own per-client markup and keep the spread",
-                "Metered usage (SMS, AI calls, phone numbers) — rebill at your markup",
-                "Included usage credit every month",
-                "Many client workspaces — no per-seat limits",
+                "Set your own per-client pricing and keep the spread",
+                "Add an AI voice receptionist to any client — $99/mo, resell at your markup",
+                "10 client workspaces included — add more as you grow",
+                "Onboard a new client in 60 seconds from a URL",
                 "Priority support + partner onboarding",
               ].map((item) => (
                 <li key={item} className="flex items-start gap-3 text-[14px] leading-[1.5] text-[rgba(246,242,234,.82)]">

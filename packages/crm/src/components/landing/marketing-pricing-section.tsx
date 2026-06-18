@@ -1,15 +1,15 @@
 // packages/crm/src/components/landing/marketing-pricing-section.tsx
 //
-// Redesign 2026-06-18 — new 3-tier pricing + metered add-ons.
+// Redesign 2026-06-18 — flat 3-tier pricing (seat-based, no metered wallet).
 // Warm light aesthetic: paper/card surfaces, SeldonFrame green accent.
 //
-// Tier spec (locked per task requirements):
+// Tier spec (locked 2026-06-18):
 //   Builder   $19/mo — up to 10 landing pages, own domain, no CRM/booking
-//   Workspace $49/mo — 1 full workspace (website + booking + intake + CRM)
-//   Agency    $297/mo — white-labeled, many client workspaces, set markup, keep spread
+//   Workspace $49/mo — 1 full workspace (website + booking + intake + CRM + chat)
+//   Agency    $297/mo — white-label, 10 client workspaces included (+$10/ea beyond)
 //
-// Metered add-ons (wallet, any tier): SMS, AI chat/voice, phone numbers,
-// review/reminder texts — pay-as-you-grow; agencies rebill at markup.
+// One optional add-on (Workspace + Agency): AI voice receptionist, $99/mo per
+// agent, 500 talk-minutes included. No metered usage wallet — flat + predictable.
 //
 // The original dark-theme pricing component is preserved verbatim in
 // marketing-pricing-section-dark.tsx (unused) for rollback reference.
@@ -62,7 +62,7 @@ const TIERS: readonly Tier[] = [
     name: "Agency",
     price: "$297",
     period: "/month",
-    tagline: "White-labeled platform, many client workspaces. Set your own markup and keep the spread.",
+    tagline: "White-label the whole platform under your brand. Resell to clients at your own markup.",
     ctaLabel: "Start the Agency plan",
     ctaHref: "/signup?plan=agency",
   },
@@ -71,7 +71,7 @@ const TIERS: readonly Tier[] = [
 const FEATURES: readonly FeatureRow[] = [
   {
     label: "Client workspaces",
-    values: { builder: "Landing pages only", workspace: "1", agency: "Unlimited" },
+    values: { builder: "Landing pages only", workspace: "1", agency: "10 included" },
   },
   {
     label: "Landing pages",
@@ -83,19 +83,10 @@ const FEATURES: readonly FeatureRow[] = [
   { label: "Intake form", values: { builder: false, workspace: true, agency: true } },
   { label: "AI chatbot", values: { builder: false, workspace: true, agency: true } },
   { label: "White-label platform (your brand)", values: { builder: false, workspace: false, agency: true } },
-  { label: "Set your own usage markup", values: { builder: false, workspace: false, agency: true } },
-  { label: "Included usage credit", values: { builder: false, workspace: "Small", agency: "Generous" } },
+  { label: "Resell at your own markup", values: { builder: false, workspace: false, agency: true } },
   { label: "Priority support", values: { builder: false, workspace: false, agency: true } },
-  { label: "Metered add-ons (SMS, AI, phones)", values: { builder: true, workspace: true, agency: true } },
+  { label: "AI voice receptionist (add-on)", values: { builder: false, workspace: "Add-on", agency: "Add-on" } },
 ];
-
-const ADDON_CATEGORIES = [
-  "SMS messages",
-  "AI chat messages",
-  "AI voice calls",
-  "Phone numbers",
-  "Review & reminder texts",
-] as const;
 
 function renderCell(value: string | boolean) {
   if (value === true) {
@@ -132,8 +123,8 @@ export function LandingMarketingPricingSection() {
             </em>
           </h2>
           <p className="mx-auto mt-4 max-w-[52ch] text-[16px] leading-[1.55] text-[#6E665A]">
-            One flat fee per tier. Metered add-ons on your wallet — pay only for what you use.
-            Agencies set their own markup and keep the spread. Roughly 5× under GoHighLevel.
+            One flat monthly price per tier — no metered bills, no surprises. Run your own
+            front office, or white-label the platform and resell to clients at your markup.
           </p>
         </div>
 
@@ -229,31 +220,18 @@ export function LandingMarketingPricingSection() {
           </table>
         </div>
 
-        {/* Metered add-ons */}
+        {/* Optional add-on */}
         <div className="mt-6 rounded-[16px] border border-[rgba(34,29,23,.08)] bg-[#EFE9DD] p-6">
-          <div className="mb-4 flex items-center gap-2">
-            <h3 className="m-0 text-[14px] font-[600] text-[#221D17]">Metered usage add-ons</h3>
+          <div className="mb-3 flex items-center gap-2">
+            <h3 className="m-0 text-[14px] font-[600] text-[#221D17]">One optional add-on</h3>
             <span className="rounded-full border border-[rgba(34,29,23,.12)] bg-[#FFFDFA] px-2.5 py-0.5 text-[11px] font-[500] text-[#6E665A]">
-              Pay only for what you use
+              Workspace &amp; Agency
             </span>
           </div>
-          <p className="mb-5 text-[13.5px] leading-[1.5] text-[#6E665A]">
-            SMS, AI chat &amp; voice, phone numbers, and review texts are pay-as-you-go from a prepaid wallet.
-            Only pay for what you use. Agencies set their own markup and rebill clients at a profit.
-          </p>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
-            {ADDON_CATEGORIES.map((label) => (
-              <div
-                key={label}
-                className="rounded-[12px] border border-[rgba(34,29,23,.08)] bg-[#FFFDFA] p-3.5"
-              >
-                <div className="text-[13px] font-[500] text-[#221D17]">{label}</div>
-                <div className="mt-1 font-sans text-[11px] text-[#00897B]">Pay-as-you-go</div>
-              </div>
-            ))}
-          </div>
-          <p className="mt-4 font-sans text-[11.5px] text-[#9A9183]">
-            No surprise bills — your wallet balance caps spend. Contact us for volume pricing.
+          <p className="text-[13.5px] leading-[1.55] text-[#6E665A]">
+            <strong className="font-[600] text-[#221D17]">AI voice receptionist — $99/mo</strong> per agent,
+            500 talk-minutes included. It answers every call, books jobs, and texts back missed calls 24/7.
+            Everything else — website, booking, intake, CRM, and chat — is included in your plan.
           </p>
         </div>
       </div>

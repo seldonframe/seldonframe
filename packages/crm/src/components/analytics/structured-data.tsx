@@ -96,7 +96,7 @@ const softwareApplicationSchema = {
       price: "49",
       priceCurrency: "USD",
       description:
-        "Workspace: one complete client workspace — website, booking, intake, and CRM. AI features available as metered add-ons.",
+        "Workspace: one complete workspace — website, booking, intake, CRM, and AI chat — with an optional AI voice receptionist add-on.",
     },
     {
       "@type": "Offer",
@@ -104,7 +104,7 @@ const softwareApplicationSchema = {
       price: "297",
       priceCurrency: "USD",
       description:
-        "Agency (white-label): your brand on the platform, many client workspaces, and metered usage you rebill to clients at your own markup.",
+        "Agency (white-label): your brand on the platform, with client workspaces you resell at your own markup. Flat monthly pricing, no metered bills.",
     },
   ],
   url: "https://seldonframe.com",

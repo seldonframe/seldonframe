@@ -21,12 +21,12 @@ const FAQS: readonly FaqItem[] = [
   {
     question: "How many workspaces can I run?",
     answer:
-      "The Builder plan ($19/mo) gives you landing pages only — no full workspace. The Workspace plan ($49/mo) gives you 1 full workspace. The Agency plan ($297/mo) gives you unlimited client workspaces — plus white-labeling and the ability to set your own usage markup.",
+      "The Builder plan ($19/mo) gives you landing pages only — no full workspace. The Workspace plan ($49/mo) gives you 1 full workspace. The Agency plan ($297/mo) includes 10 client workspaces (add more as you grow), plus white-labeling and your own client pricing.",
   },
   {
     question: "Can I white-label this for my clients?",
     answer:
-      "Yes, on the Agency plan ($297/mo). Your brand appears on the entire platform — clients never see SeldonFrame. You set your own per-client markup on usage (SMS, AI calls, etc.) and keep the spread.",
+      "Yes, on the Agency plan ($297/mo). Your brand appears on the entire platform — clients never see SeldonFrame. You set your own per-client pricing and keep the spread.",
   },
   {
     question: "What if a client wants their own domain?",
@@ -34,14 +34,14 @@ const FAQS: readonly FaqItem[] = [
       "Every full workspace (Workspace and Agency tiers) can map to its own custom domain. Your client visits booking.theirbusiness.com, not a SeldonFrame subdomain.",
   },
   {
-    question: "What are the metered add-ons?",
+    question: "Are there usage fees or surprise bills?",
     answer:
-      "SMS, AI chat and voice, phone numbers, review texts, and reminder texts are all pay-as-you-go from a prepaid usage wallet. Pre-load the wallet and only pay for what you use — no surprise bills. Agencies set their own markup and rebill clients at a profit.",
+      "No. Pricing is flat per tier — no metered usage, no prepaid wallet, no surprise invoices. The only optional add-on is the AI voice receptionist ($99/mo per agent, with 500 talk-minutes included). Everything else — website, booking, intake, CRM, and chat — is included.",
   },
   {
-    question: "Does it work with my Anthropic key?",
+    question: "Do I need to bring my own AI key?",
     answer:
-      "Yes. Bring your own Anthropic key on any tier — we never charge a token margin, and the key is encrypted at rest with no plaintext logs.",
+      "No. AI is fully included and managed — no API keys to set up, no token bills to track. Paste your site and your front office builds itself.",
   },
   {
     question: "How does this compare to GoHighLevel?",

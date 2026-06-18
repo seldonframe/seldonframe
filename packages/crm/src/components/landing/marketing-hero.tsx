@@ -192,22 +192,22 @@ export function MarketingHero() {
       <p className="inline-flex items-center gap-2.5 font-sans text-[12.5px] tracking-[0.04em] text-[#6E665A]">
         <span className="inline-block h-px w-4 bg-[#9A9183]" aria-hidden />
         <span className="sf-blink-dot inline-block size-1.5 rounded-full bg-[#00897B]" aria-hidden />
-        For your business, or your clients&rsquo;
+        For your business — or resold to your clients
       </p>
 
       {/* Headline */}
       <h1 className="mt-3 max-w-[18ch] text-balance font-sans text-[clamp(34px,4.8vw,56px)] font-[500] leading-[1.04] tracking-[-0.025em] text-[#221D17]">
-        A complete{" "}
+        Your complete{" "}
         <em className="font-[Newsreader,Georgia,serif] font-normal not-italic tracking-[-0.01em]">
-          AI front office
-        </em>{" "}
-        in 60 seconds.
+          front office
+        </em>
+        , live in 60 seconds.
       </h1>
 
       {/* Subhead */}
       <p className="mx-auto mt-4 max-w-[60ch] text-pretty text-[clamp(15.5px,1.6vw,17.5px)] leading-[1.55] text-[#6E665A]">
-        Website, booking, AI receptionist, intake form, and CRM — wired together and live in under a minute.{" "}
-        <strong className="font-[500] text-[#221D17]">Paste a URL and go.</strong>
+        Website, booking, a 24/7 AI receptionist, intake, and CRM — wired together so your business never misses a lead.{" "}
+        <strong className="font-[500] text-[#221D17]">Paste your site and go live.</strong>
       </p>
 
       {/* Two CTAs */}
