@@ -2,7 +2,7 @@
 
 import crypto from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
-import { put } from "@vercel/blob";
+import { put, del } from "@vercel/blob";
 import { db } from "@/db";
 import { contacts, organizations, portalDocuments } from "@/db/schema";
 import { auth } from "@/auth";
@@ -317,4 +317,77 @@ export async function uploadPortalDocumentAction(
   );
 
   return { ok: true, documentId: created.id };
+}
+
+/**
+ * Operator-side: delete a portal document.
+ *
+ * Auth-scopes to the operator's org so operators can only delete
+ * documents that belong to their own workspace. Deletes the DB row
+ * first, then removes the blob (best-effort — a blob deletion failure
+ * is logged but does NOT re-insert the row, since the file may already
+ * be orphaned or the blob URL may have been manually removed).
+ *
+ * Returns:
+ *   { ok: true }           — row deleted (blob deletion best-effort)
+ *   { ok: false, reason }  — unauth / row not found / wrong org
+ */
+export async function deletePortalDocumentAction(input: {
+  documentId: string;
+  orgId: string;
+}): Promise<{ ok: true } | { ok: false; reason: string }> {
+  assertWritable();
+
+  const session = await auth();
+  if (!session?.user?.id) {
+    return { ok: false, reason: "unauthorized" };
+  }
+
+  if (!input.documentId || !input.orgId) {
+    return { ok: false, reason: "missing_fields" };
+  }
+
+  // Confirm the operator's org exists and the document belongs to it.
+  const [orgRow] = await db
+    .select({ id: organizations.id })
+    .from(organizations)
+    .where(eq(organizations.id, input.orgId))
+    .limit(1);
+  if (!orgRow) return { ok: false, reason: "org_not_found" };
+
+  const [doc] = await db
+    .select({ id: portalDocuments.id, blobPath: portalDocuments.blobPath })
+    .from(portalDocuments)
+    .where(
+      and(
+        eq(portalDocuments.id, input.documentId),
+        eq(portalDocuments.orgId, input.orgId)
+      )
+    )
+    .limit(1);
+
+  if (!doc) return { ok: false, reason: "document_not_found" };
+
+  // Delete DB row first — even if blob deletion fails the row is gone.
+  await db
+    .delete(portalDocuments)
+    .where(
+      and(
+        eq(portalDocuments.id, input.documentId),
+        eq(portalDocuments.orgId, input.orgId)
+      )
+    );
+
+  // Best-effort blob deletion. Failures are logged but non-fatal.
+  if (doc.blobPath) {
+    try {
+      await del(doc.blobPath);
+    } catch (blobErr) {
+      console.warn(
+        `[deletePortalDocumentAction] blob deletion failed for path=${doc.blobPath}: ${blobErr instanceof Error ? blobErr.message : String(blobErr)}`
+      );
+    }
+  }
+
+  return { ok: true };
 }
