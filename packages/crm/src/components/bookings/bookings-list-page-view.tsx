@@ -25,6 +25,10 @@ import { getIntegrationSettings } from "@/lib/integrations/actions";
 import { getLabels } from "@/lib/soul/labels";
 import { getSoul } from "@/lib/soul/server";
 import { getBookingDefaults } from "@/lib/crm/template-suggestions";
+// Workspace-level booking availability + rules (Mon-Fri 09:00-17:00 defaults
+// when unset). Rendered below the calendar; the public slot generator reads
+// the same settings.booking blob this fetch resolves.
+import { getWorkspaceBookingRules } from "@/lib/bookings/workspace-rules";
 import { BookingsPageContent } from "@/components/bookings/bookings-page-content";
 
 export type BookingsListPageViewProps = {
@@ -39,7 +43,7 @@ export async function BookingsListPageView({
   readonly = false,
 }: BookingsListPageViewProps) {
   void readonly;
-  const [labels, bookingTypes, bookings, contacts, soul, integrationSettings, orgRow] =
+  const [labels, bookingTypes, bookings, contacts, soul, integrationSettings, workspaceBookingRules, orgRow] =
     await Promise.all([
       getLabels(orgId),
       listAppointmentTypes(orgId),
@@ -47,6 +51,9 @@ export async function BookingsListPageView({
       listContacts({ orgId }),
       getSoul(orgId),
       getIntegrationSettings().catch(() => null),
+      // Workspace-wide availability + booking rules for the panel below the
+      // calendar. Returns documented defaults when settings.booking is unset.
+      getWorkspaceBookingRules(orgId),
       // v1.40.9 — also fetch workspace timezone so bookings render in the
       // operator's local time (e.g. America/Los_Angeles), not in the
       // viewer's browser timezone. Pre-1.40.9 a 9 AM PDT booking rendered
@@ -115,6 +122,7 @@ export async function BookingsListPageView({
         orgSlug={orgSlug}
         publicBaseUrl={`https://${process.env.WORKSPACE_BASE_DOMAIN?.trim() || "app.seldonframe.com"}`}
         workspaceTimezone={workspaceTimezone}
+        workspaceBookingRules={workspaceBookingRules}
         calendarConnected={false}
         googleCalendarConnectUrl=""
         createAppointmentTypeAction={createAppointmentTypeAction}

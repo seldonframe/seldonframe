@@ -5,6 +5,8 @@ import { useMemo, useState, useTransition } from "react";
 import { Check, Copy, Link as LinkIcon, Pencil, Trash2 } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { WeekCalendar, bookingBorderPalette } from "@/components/bookings/week-calendar";
+import { AvailabilityRulesPanel } from "@/components/bookings/availability-rules-panel";
+import type { WorkspaceBookingRules } from "@/lib/bookings/workspace-rules";
 
 /*
   Square UI class reference (source of truth):
@@ -91,6 +93,10 @@ type BookingsPageContentProps = {
    *  local time, not the viewer's browser timezone. Falls back to
    *  "UTC" upstream when not configured. */
   workspaceTimezone: string;
+  /** Workspace-level booking availability + rules (Mon-Fri 09:00-17:00
+   *  defaults when unset). Initial values for the Availability & booking
+   *  rules panel rendered below the calendar. */
+  workspaceBookingRules: WorkspaceBookingRules;
   calendarConnected: boolean;
   googleCalendarConnectUrl: string;
   createAppointmentTypeAction: (formData: FormData) => Promise<void>;
@@ -139,7 +145,7 @@ function formatDateGroupLabel(value: Date, tz: string) {
   return new Intl.DateTimeFormat("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: tz }).format(value);
 }
 
-export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, suggestedServices, orgSlug, publicBaseUrl, workspaceTimezone, calendarConnected, googleCalendarConnectUrl, createAppointmentTypeAction, editAppointmentTypeAction, bookingDefaults, createBookingAction, createBlockedTimeAction, rescheduleBookingAction }: BookingsPageContentProps) {
+export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, suggestedServices, orgSlug, publicBaseUrl, workspaceTimezone, workspaceBookingRules, calendarConnected, googleCalendarConnectUrl, createAppointmentTypeAction, editAppointmentTypeAction, bookingDefaults, createBookingAction, createBlockedTimeAction, rescheduleBookingAction }: BookingsPageContentProps) {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   // 2026-05-18 — Edit sheet state. When set, the slide-out renders
   // with this appointment-type's current title / slug / duration /
@@ -239,6 +245,15 @@ export function BookingsPageContent({ labels, bookingTypes, bookings, contacts, 
         createBookingAction={createBookingAction}
         createBlockedTimeAction={createBlockedTimeAction}
         rescheduleBookingAction={rescheduleBookingAction}
+      />
+
+      {/* Workspace availability + booking rules. Sits between the calendar
+          (order-1) and Appointment Types (order-2). The panel's own section
+          carries order-1 too; equal order ties resolve to DOM order, so it
+          renders directly below the calendar. */}
+      <AvailabilityRulesPanel
+        initialRules={workspaceBookingRules}
+        initialTimezone={workspaceTimezone}
       />
 
       <section className="space-y-3 order-2">
