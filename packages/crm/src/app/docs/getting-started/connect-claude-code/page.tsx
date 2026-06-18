@@ -73,11 +73,11 @@ claude mcp add seldonframe --command "npx @seldonframe/mcp"`}</CodeBlock>
         <li><strong>Observability</strong> — read agent conversations, run telemetry queries, inspect eval failures.</li>
       </ul>
 
-      <Callout variant="info" title="BYOK for the LLM">
-        Your agent's brain calls the LLM with{" "}
-        <em>your own</em> Anthropic or OpenAI key, which you paste into{" "}
-        <a href="/settings/integrations/llm">Settings → LLM keys</a>. SeldonFrame
-        never holds the LLM bill — you do.
+      <Callout variant="info" title="AI is included">
+        On hosted SeldonFrame, your agent's brain runs on managed AI —
+        there's no LLM key to paste and no token bill to watch. (If you{" "}
+        <a href="/docs/integrations/llm">self-host</a> instead, that's the
+        one path where you bring your own Anthropic or OpenAI key.)
       </Callout>
 
       <h2>Next</h2>

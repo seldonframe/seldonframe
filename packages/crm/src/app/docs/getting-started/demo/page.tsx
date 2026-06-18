@@ -36,7 +36,7 @@ export default function Page() {
         Open Claude Code and say:{" "}
         <em>"Build me an Acme HVAC website chatbot. It should answer FAQs
         about furnace and AC repair, give pricing for diagnostic visits ($89),
-        and book appointments. Use my Anthropic key."</em>
+        and book appointments."</em> AI is included — no key to set up.
         <br /><br />
         Claude Code calls{" "}
         <code>build_website_chatbot</code> — one tool that creates the
@@ -76,12 +76,11 @@ export default function Page() {
 
       <h2>Try it yourself</h2>
       <p>
-        If you have an Anthropic API key, you can run this end-to-end in
-        your own workspace right now:
+        You can run this end-to-end in your own workspace right now — AI
+        is included, so there's no key to set up first:
       </p>
       <ol>
         <li><InAppLink href="/signup">Sign up</InAppLink> and pick HVAC.</li>
-        <li><InAppLink href="/settings/integrations/llm">Paste your Anthropic key</InAppLink>.</li>
         <li><InAppLink href="/docs/getting-started/connect-claude-code">Connect Claude Code</InAppLink>.</li>
         <li>Tell it the prompt above. Watch it build.</li>
       </ol>

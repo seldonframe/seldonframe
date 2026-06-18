@@ -8,49 +8,49 @@ export default function Page() {
       category="Billing & plans"
       categoryHref="/docs"
       title="Plan tiers"
-      lede="What's included at each tier and what triggers an upgrade. Detailed feature breakdown."
+      lede="What's included at each plan and what triggers a move up. Detailed feature breakdown. Every hosted plan includes managed AI — no key, no usage wallet."
       githubPath="app/docs/billing/tiers/page.tsx"
     >
-      <h2>Hobby ($0/mo)</h2>
+      <h2>Builder ($19/mo)</h2>
       <ul>
-        <li>1 workspace</li>
-        <li>1 published agent (unlimited drafts)</li>
-        <li>Up to 1,000 contacts</li>
-        <li>SF subdomain only (no custom domain)</li>
-        <li>"Powered by SeldonFrame" badge on public pages</li>
+        <li>Up to 10 landing pages</li>
+        <li>Your own custom domain</li>
+        <li>Your branding (logo, colors, fonts)</li>
+        <li>Edit your whole site by chatting — no code</li>
+        <li>Managed AI included (no key to paste)</li>
+        <li>No CRM, booking, or AI agents (move to Workspace for those)</li>
         <li>Community support (Discord)</li>
       </ul>
 
-      <h2>Pro ($29/mo)</h2>
+      <h2>Workspace ($49/mo)</h2>
       <ul>
-        <li>1 workspace, unlimited published agents</li>
-        <li>Unlimited contacts</li>
-        <li>Custom domain</li>
-        <li>Hide "Powered by SeldonFrame" badge</li>
-        <li>Broadcast email (up to 10k/mo through Resend)</li>
-        <li>All automation triggers + actions</li>
-        <li>Customer Portal</li>
+        <li>One full AI front office: website + booking + intake + CRM + chatbot</li>
+        <li>Custom domain + your branding</li>
+        <li>Full CRM — contacts, deals, custom fields, kanban, customer portal</li>
+        <li>Booking page + intake forms, wired to the CRM</li>
+        <li>Website chatbot that books against the real calendar</li>
+        <li>Missed-call text-back so you never lose a lead</li>
+        <li>Managed AI included (no key, no usage wallet)</li>
         <li>Email support (24h response)</li>
       </ul>
 
-      <h2>Agency ($99/mo)</h2>
+      <h2>Agency ($297/mo)</h2>
       <ul>
-        <li>Up to 50 client workspaces under one agency account</li>
-        <li>Per-workspace custom domain</li>
-        <li>White-label brand (your name + logo on the dashboard for clients)</li>
-        <li>SSO (SAML / OIDC) for agency operators</li>
+        <li>10 client workspaces included, +$10/mo each beyond</li>
+        <li>White-label brand (your name + logo across the dashboard your clients see)</li>
+        <li>Per-workspace custom domains</li>
+        <li>Optional AI voice receptionist at +$99/mo per agent</li>
         <li>Bulk operations across client workspaces</li>
+        <li>Managed AI included on every client workspace</li>
         <li>Priority support (4h response)</li>
-        <li>SLA on uptime and incident response</li>
       </ul>
 
-      <h2>What forces an upgrade</h2>
+      <h2>What triggers a move up</h2>
       <ul>
-        <li>Hitting the contact / agent / workspace cap.</li>
-        <li>Wanting a custom domain.</li>
-        <li>Wanting to hide the SF badge on public pages.</li>
-        <li>Sending broadcast email at scale.</li>
-        <li>Hosting clients (agency mode).</li>
+        <li>Needing a CRM, booking, and a chatbot — not just landing pages (Builder → Workspace).</li>
+        <li>Wanting to white-label and resell to clients (→ Agency).</li>
+        <li>Going past 10 client workspaces (+$10/mo each on Agency).</li>
+        <li>Adding an AI voice receptionist that answers the phone (+$99/mo per agent).</li>
       </ul>
 
       <h2>Switching tiers</h2>

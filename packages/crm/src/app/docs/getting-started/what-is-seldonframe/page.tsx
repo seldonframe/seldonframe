@@ -13,17 +13,26 @@ export default function Page() {
       category="Getting started"
       categoryHref="/docs"
       title="What is SeldonFrame"
-      lede="An AI-native Business OS. CRM, website, agents, and automations live in one workspace — and you build all of it through natural language with Claude Code."
+      lede="Your AI front office — website, booking, AI receptionist, intake, CRM, and chatbot, wired together and live in 60 seconds from a URL. Edit your whole site by chatting; missed-call text-back so you never lose a lead."
       githubPath="app/docs/getting-started/what-is-seldonframe/page.tsx"
     >
       <h2>The short version</h2>
       <p>
-        Most small businesses end up paying for five tools — a CRM, a website
-        builder, an email tool, a chatbot, and a scheduler — that don't talk
-        to each other. SeldonFrame gives you all of that as one workspace.
-        Your customers, your booking page, your AI agent, and your reminders
-        share the same database, the same brand, and the same admin.
+        Most local-service businesses end up paying for five tools — a
+        CRM, a website builder, an email tool, a chatbot, and a scheduler
+        — that don't talk to each other. SeldonFrame gives you all of
+        that as one AI front office. Your website, booking page, AI
+        receptionist, intake form, CRM, and reminders share the same
+        database, the same brand, and the same admin — live in 60 seconds
+        from a URL, with no code.
       </p>
+
+      <Callout variant="tip" title="Never lose a lead">
+        When a call comes in that you can't pick up, missed-call
+        text-back fires automatically — the caller gets a friendly text
+        so the lead doesn't go cold. And you edit the whole site just by
+        chatting; you don't have to be technical.
+      </Callout>
 
       <h2>What you get on day one</h2>
       <ul>

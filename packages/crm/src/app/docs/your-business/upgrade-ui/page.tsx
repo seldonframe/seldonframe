@@ -149,8 +149,8 @@ export default function Page() {
 
       <h3>Lever 4 — Fork the block library directly</h3>
       <p>
-        SeldonFrame is MIT-licensed. For pixel-perfect customization
-        beyond what the levers above support:
+        SeldonFrame is AGPL-3.0. For pixel-perfect customization beyond
+        what the levers above support:
       </p>
       <Step n={1} title="Fork the repo">
         <CodeBlock language="bash">{`gh repo fork seldonframe/seldonframe --clone

@@ -42,8 +42,11 @@ export default function DocsHome() {
           SeldonFrame Docs
         </h1>
         <p className="text-lg text-muted-foreground max-w-2xl">
-          Everything you need to build a personalized AI-native business OS —
-          fully wired, customizable, deployed in minutes.
+          Everything you need to stand up an AI front office — website,
+          booking, AI receptionist, intake, CRM, and chatbot, wired
+          together and live in 60 seconds from a URL. Edit your whole
+          site by chatting; missed-call text-back so you never lose a
+          lead.
         </p>
       </header>
 
@@ -191,7 +194,7 @@ export default function DocsHome() {
           icon={<Zap className="size-5" />}
           title="Integrations"
           items={[
-            { title: "Anthropic / OpenAI", description: "BYOK — you pay the LLM provider directly; SF doesn't markup", href: "/docs#llm" },
+            { title: "Anthropic / OpenAI", description: "Managed AI on hosted (no key); bring your own key when you self-host", href: "/docs/integrations/llm" },
             { title: "Stripe", description: "Accept payments for bookings, services, subscriptions", href: "/docs#stripe" },
             { title: "Twilio", description: "Send SMS reminders, confirmations, follow-ups", href: "/docs#twilio" },
             { title: "Google Calendar", description: "Two-way sync for bookings", href: "/docs#google" },
@@ -213,9 +216,9 @@ export default function DocsHome() {
           icon={<CreditCard className="size-5" />}
           title="Billing"
           items={[
-            { title: "Pricing", description: "Free, Growth ($29/mo), Scale ($99/mo)", href: "/docs#pricing" },
-            { title: "BYOK economics", description: "You pay LLM providers directly; SF charges per agent turn separately", href: "/docs#byok" },
-            { title: "Invoices", description: "Stripe customer portal for receipts + payment methods", href: "/docs#invoices" },
+            { title: "Pricing", description: "Builder ($19/mo), Workspace ($49/mo), Agency ($297/mo)", href: "/docs/billing/pricing" },
+            { title: "Managed AI included", description: "AI is bundled on every plan — no key to paste, no usage wallet", href: "/docs/billing/pricing" },
+            { title: "Invoices", description: "Stripe customer portal for receipts + payment methods", href: "/docs/billing/invoices" },
           ]}
         />
       </section>
@@ -245,15 +248,15 @@ export default function DocsHome() {
         <div className="mx-auto max-w-xl space-y-4">
           <h2 className="text-2xl font-semibold tracking-tight">Build your first workspace</h2>
           <p className="text-muted-foreground">
-            Sign up, connect Claude Code, type one prompt. Your business OS is
-            live on a real subdomain in under 3 minutes.
+            Sign up, connect Claude Code, type one prompt. Your AI front
+            office is live on a real domain in 60 seconds.
           </p>
           <div className="flex flex-wrap justify-center gap-3 pt-2">
             <Link
               href="/signup"
               className="inline-flex h-10 items-center px-5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
             >
-              Get started — Free
+              Start building
             </Link>
             <Link
               href="https://seldonframe.com"

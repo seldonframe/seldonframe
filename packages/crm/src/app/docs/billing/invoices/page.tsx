@@ -47,8 +47,8 @@ export default function Page() {
       <h2>Cancelling</h2>
       <p>
         <InAppLink href="/settings/billing">Settings → Billing</InAppLink>{" "}
-        → "Cancel plan." You drop to Hobby tier at the end of the
-        current period. Your data stays — you can re-upgrade anytime.
+        → "Cancel plan." Your plan cancels at the end of the current
+        period. Your data stays — you can re-subscribe anytime.
       </p>
 
       <h2>Next</h2>
