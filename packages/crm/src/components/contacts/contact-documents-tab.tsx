@@ -2,8 +2,8 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Download, FileText, UploadCloud } from "lucide-react";
-import { uploadPortalDocumentAction } from "@/lib/portal/admin-actions";
+import { Download, FileText, Trash2, UploadCloud } from "lucide-react";
+import { deletePortalDocumentAction, uploadPortalDocumentAction } from "@/lib/portal/admin-actions";
 
 /**
  * May 1, 2026 — Client Portal V1: Operator Documents tab.
@@ -48,6 +48,9 @@ export function ContactDocumentsTab({
   const [isDragging, setDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [, startDeleteTransition] = useTransition();
 
   function upload(file: File) {
     setError(null);
@@ -59,6 +62,27 @@ export function ContactDocumentsTab({
       const res = await uploadPortalDocumentAction(fd);
       if (!res.ok) {
         setError(humanizeReason(res.reason));
+        return;
+      }
+      router.refresh();
+    });
+  }
+
+  function handleDelete(documentId: string) {
+    if (!confirm("Delete this document? This cannot be undone.")) return;
+    setDeleteError(null);
+    setDeletingId(documentId);
+    startDeleteTransition(async () => {
+      const res = await deletePortalDocumentAction({ documentId, orgId });
+      setDeletingId(null);
+      if (!res.ok) {
+        setDeleteError(
+          res.reason === "document_not_found"
+            ? "Document not found — it may have already been deleted."
+            : res.reason === "unauthorized"
+            ? "You don't have permission to delete this document."
+            : `Delete failed: ${res.reason}`
+        );
         return;
       }
       router.refresh();
@@ -127,6 +151,10 @@ export function ContactDocumentsTab({
         <p className="text-xs text-destructive">{error}</p>
       ) : null}
 
+      {deleteError ? (
+        <p className="text-xs text-destructive">{deleteError}</p>
+      ) : null}
+
       {documents.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           No documents uploaded yet.
@@ -164,15 +192,27 @@ export function ContactDocumentsTab({
                     {doc.downloadCount}
                   </td>
                   <td className="px-3 py-3 text-right">
-                    <a
-                      href={doc.blobUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex h-7 items-center gap-1 rounded-md border border-border bg-background px-2 text-xs font-medium text-foreground hover:bg-muted/50"
-                    >
-                      <Download className="size-3" />
-                      Open
-                    </a>
+                    <div className="flex items-center justify-end gap-1.5">
+                      <a
+                        href={doc.blobUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex h-7 items-center gap-1 rounded-md border border-border bg-background px-2 text-xs font-medium text-foreground hover:bg-muted/50"
+                      >
+                        <Download className="size-3" />
+                        Open
+                      </a>
+                      <button
+                        type="button"
+                        disabled={deletingId === doc.id}
+                        onClick={() => handleDelete(doc.id)}
+                        className="inline-flex h-7 items-center gap-1 rounded-md border border-border bg-background px-2 text-xs font-medium text-destructive hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-50"
+                        title="Delete document"
+                      >
+                        <Trash2 className="size-3" />
+                        {deletingId === doc.id ? "…" : "Delete"}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

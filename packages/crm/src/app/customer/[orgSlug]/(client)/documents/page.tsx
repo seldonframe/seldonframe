@@ -5,6 +5,11 @@
 // light-mode list with consistent row styling. Industry-aware
 // section heading via copy pack ("Your documents" / "Your records" /
 // "Project files" etc.).
+//
+// v1.57 — client upload. CustomerDocumentsUpload (client component) lets
+// portal clients upload their own files (images, videos, large PDFs) via
+// Vercel Blob client-side upload. No ~1 MB limit. Files appear in the
+// operator's contact Documents tab after upload.
 
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
@@ -15,6 +20,7 @@ import {
 } from "@/lib/portal/actions";
 import { requirePortalSessionForOrg } from "@/lib/portal/auth";
 import { pickCustomerCopyPack } from "@/lib/customer-portal/copy-packs";
+import { CustomerDocumentsUpload } from "@/components/customer-portal/customer-documents-upload";
 
 export default async function CustomerDocumentsPage({
   params,
@@ -50,9 +56,16 @@ export default async function CustomerDocumentsPage({
           {copy.documentsHeading}
         </h1>
         <p className="text-[13px]" style={{ color: "#666" }}>
-          Files and links your team has shared with you.
+          Files and links your team has shared with you — or upload your own.
         </p>
       </header>
+
+      {/* Client upload widget — Vercel Blob client-side, no size limit */}
+      <CustomerDocumentsUpload
+        orgSlug={orgSlug}
+        orgId={session.orgId}
+        contactId={session.contact.id}
+      />
 
       {!hasAny ? (
         <article
