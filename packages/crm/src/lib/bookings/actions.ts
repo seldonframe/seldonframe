@@ -34,6 +34,29 @@ import {
 import { getBookingIntakeFieldsForArchetype } from "@/lib/workspace/booking-intake-fields";
 import { classifyHealthTemplate } from "@/lib/landing/template-selection";
 import { PUBLIC_BOOKING_WINDOW_DAYS } from "./booking-window";
+// Workspace-level booking availability + rules. Types + pure helpers live
+// in a NON-"use server" module so they can be imported anywhere. The public
+// slot generator + submit validation resolve availability/timezone/min-notice
+// from the workspace rules (organizations.settings.booking), falling back to
+// the appointment type's own availability when the workspace rules are unset.
+import {
+  type AvailabilityDayKey,
+  type AvailabilityDaySettings,
+  type AvailabilitySchedule,
+  type WorkspaceBookingRules,
+  clampBufferMinutes,
+  clampDurationMinutes,
+  clampMinNoticeMinutes,
+  computeSlotsForDay,
+  defaultAvailabilitySchedule,
+  normalizeAvailability,
+  normalizeMaxBookingsPerDay,
+  partsInTimezone,
+  resolveContextBookingRules,
+  toMinutes,
+  utcMomentForLocalTime,
+  weekdayKeys,
+} from "./workspace-rules";
 
 function deriveEndsAt(startsAt: Date, durationMinutes: number) {
   return new Date(startsAt.getTime() + durationMinutes * 60_000);
@@ -97,16 +120,6 @@ type AppointmentTypeMeta = {
   intakeFields?: BookingIntakeField[];
 };
 
-type AvailabilityDayKey = "sunday" | "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday";
-
-type AvailabilityDaySettings = {
-  enabled: boolean;
-  start: string;
-  end: string;
-};
-
-type AvailabilitySchedule = Record<AvailabilityDayKey, AvailabilityDaySettings>;
-
 type PublicBookingContext = {
   orgId: string;
   bookingSlug: string;
@@ -124,7 +137,11 @@ type PublicBookingContext = {
   availability: AvailabilitySchedule;
   bufferBeforeMinutes: number;
   bufferAfterMinutes: number;
-  maxBookingsPerDay: number;
+  /** Workspace-level cap on bookings per calendar day, or null for no cap. */
+  maxBookingsPerDay: number | null;
+  /** Workspace-level minimum lead time (minutes) before a slot is bookable.
+   *  0 when the workspace has no booking rules (back-compat). */
+  minNoticeMinutes: number;
   /** v1.40.1 — vertical-aware booking form fields. Empty array if
    *  the appointment type doesn't define any (legacy templates). */
   intakeFields: BookingIntakeField[];
@@ -140,25 +157,13 @@ type PublicBookingContext = {
   workspaceTimezone: string;
 };
 
-const weekdayKeys: AvailabilityDayKey[] = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
-
-// v1.40.2 — weekdayByIndex (server-local Date.getDay() lookup) removed
-// because slot generation now resolves weekday via partsInTimezone(date,
-// workspaceTz).weekday — TZ-correct under DST. The submit handler also
-// uses partsInTimezone, so server-local-day lookups have no callers.
-
-function defaultAvailabilitySchedule(): AvailabilitySchedule {
-  return {
-    sunday: { enabled: false, start: "09:00", end: "17:00" },
-    monday: { enabled: true, start: "09:00", end: "17:00" },
-    tuesday: { enabled: true, start: "09:00", end: "17:00" },
-    wednesday: { enabled: true, start: "09:00", end: "17:00" },
-    thursday: { enabled: true, start: "09:00", end: "17:00" },
-    friday: { enabled: true, start: "09:00", end: "17:00" },
-    saturday: { enabled: false, start: "09:00", end: "17:00" },
-  };
-}
-
+// Day keys, defaultAvailabilitySchedule, toMinutes, normalizeAvailability,
+// partsInTimezone, and utcMomentForLocalTime now live in ./workspace-rules
+// (non-"use server") so the public slot route, the dashboard, and unit tests
+// can all import them. They're re-imported at the top of this file.
+//
+// normalizeTimeValue stays local — it's only used by the appointment-type
+// form parser below (parseAvailabilityFromForm).
 function normalizeTimeValue(value: unknown, fallback: string) {
   if (typeof value !== "string") {
     return fallback;
@@ -171,54 +176,6 @@ function normalizeTimeValue(value: unknown, fallback: string) {
   }
 
   return trimmed;
-}
-
-function toMinutes(value: string) {
-  const [hours, minutes] = value.split(":").map(Number);
-  return hours * 60 + minutes;
-}
-
-// v1.36.4 — short-key fallback for legacy rows. Pre-1.36.4 the MCP
-// `create_appointment_type` route stored availability with 3-letter
-// day keys (mon/tue/.../sun). All other writers (dashboard form,
-// blueprint persist, soul installer) used full names (monday/...).
-// Readers only know full names. So legacy rows came back as "all
-// undefined" → fell back to defaults silently, masking the bug at
-// create time but breaking partial overrides later. v1.36.4 fixes
-// the writer; this map lets us also rescue any rows already in the
-// DB without a backfill migration.
-const shortToFullDayKey: Record<string, AvailabilityDayKey> = {
-  sun: "sunday",
-  mon: "monday",
-  tue: "tuesday",
-  wed: "wednesday",
-  thu: "thursday",
-  fri: "friday",
-  sat: "saturday",
-};
-
-function normalizeAvailability(raw: unknown): AvailabilitySchedule {
-  const defaults = defaultAvailabilitySchedule();
-  const source = typeof raw === "object" && raw ? (raw as Record<string, unknown>) : {};
-
-  const normalized = weekdayKeys.reduce((acc, dayKey) => {
-    const dayDefaults = defaults[dayKey];
-    // v1.36.4 — read full-name key first, fall back to 3-letter key
-    // for legacy rows. The 3-letter shape was a bug; we accept it
-    // here so existing prod rows keep working without a migration.
-    const fullSource = source[dayKey] as Record<string, unknown> | undefined;
-    const shortKey = Object.entries(shortToFullDayKey).find(([, full]) => full === dayKey)?.[0];
-    const shortSource = shortKey ? (source[shortKey] as Record<string, unknown> | undefined) : undefined;
-    const daySource = fullSource ?? shortSource;
-    const start = normalizeTimeValue(daySource?.start, dayDefaults.start);
-    const end = normalizeTimeValue(daySource?.end, dayDefaults.end);
-    const enabled = typeof daySource?.enabled === "boolean" ? daySource.enabled : dayDefaults.enabled;
-
-    acc[dayKey] = toMinutes(start) < toMinutes(end) ? { enabled, start, end } : dayDefaults;
-    return acc;
-  }, {} as AvailabilitySchedule);
-
-  return normalized;
 }
 
 function resolveBufferMinutes(raw: unknown) {
@@ -309,53 +266,8 @@ function resolveDuration(duration: number | undefined) {
 // across both ends. The lone remaining mention in submitPublicBookingAction
 // is a comment noting why the strict slot-string match was relaxed.
 
-// v1.3.2 — extract date components in a specific IANA timezone using
-// Intl.DateTimeFormat. JS Date methods (.getHours/.getDay) are
-// SERVER-LOCAL — useless for cross-TZ booking validation. The booking
-// flow needs to compare a UTC moment against the workspace's local
-// hours (e.g. "is 4pm Vancouver between Mon-Sat 3pm-8pm Vancouver?")
-// regardless of where the server runs (Vercel runs in UTC).
-//
-// Returns { year, month, day, weekday, hour, minute } in the target TZ.
-// Weekday is "monday" / "tuesday" / ... matching the AvailabilitySchedule
-// keys.
-function partsInTimezone(
-  date: Date,
-  timeZone: string,
-): {
-  year: number;
-  month: number;
-  day: number;
-  weekday: AvailabilityDayKey;
-  hour: number;
-  minute: number;
-} {
-  // formatToParts gives us each component independently — robust
-  // across TZs + DST transitions without manual offset math.
-  const fmt = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    weekday: "long",
-    hour12: false,
-  });
-  const parts = Object.fromEntries(
-    fmt.formatToParts(date).map((p) => [p.type, p.value]),
-  );
-  // hour can be "24" in some locales when actually 00; normalize.
-  const rawHour = parseInt(parts.hour ?? "0", 10);
-  return {
-    year: parseInt(parts.year ?? "0", 10),
-    month: parseInt(parts.month ?? "0", 10),
-    day: parseInt(parts.day ?? "0", 10),
-    weekday: ((parts.weekday ?? "monday").toLowerCase()) as AvailabilityDayKey,
-    hour: rawHour === 24 ? 0 : rawHour,
-    minute: parseInt(parts.minute ?? "0", 10),
-  };
-}
+// partsInTimezone moved to ./workspace-rules (imported above) so the slot
+// generator + submit validation + dashboard share one TZ-correct helper.
 
 function normalizeVoiceConfirmation(rawSoul: unknown) {
   const soul = (rawSoul as { voice?: { samplePhrases?: string[] } } | null) ?? null;
@@ -371,6 +283,11 @@ async function resolvePublicBookingContext(orgSlug: string, bookingSlug: string)
       // v1.40.2 — fetch workspace timezone so slot generation +
       // display happen in the operator's TZ, not server-local UTC.
       timezone: organizations.timezone,
+      // Workspace-level booking availability + rules live in
+      // organizations.settings.booking. When present they drive
+      // availability/min-notice/buffer/cap; when absent we fall back to
+      // the appointment type's own metadata (back-compat).
+      settings: organizations.settings,
       // 2026-05-18 — fetch the theme so we can lazy-resolve intake
       // fields from theme.aestheticArchetype for workspaces created
       // before enhance-blocks ran (or via the lean URL flow that
@@ -402,11 +319,22 @@ async function resolvePublicBookingContext(orgSlug: string, bookingSlug: string)
 
   const metadata = (template?.metadata as AppointmentTypeMeta | null) ?? null;
   const confirmationMessage = metadata?.confirmationMessage || normalizeVoiceConfirmation(org.soul);
+  // Per-type duration is preserved; availability + buffers + cap + min-notice
+  // come from the workspace rules, falling back to the type's metadata when
+  // organizations.settings.booking is unset.
   const durationMinutes = resolveDuration(metadata?.durationMinutes);
-  const availability = normalizeAvailability(metadata?.availability);
-  const bufferBeforeMinutes = resolveBufferMinutes(metadata?.bufferBeforeMinutes);
-  const bufferAfterMinutes = resolveBufferMinutes(metadata?.bufferAfterMinutes);
-  const maxBookingsPerDay = resolveMaxBookingsPerDay(metadata?.maxBookingsPerDay);
+  const effectiveRules = resolveContextBookingRules({
+    workspaceSettings: org.settings,
+    typeAvailability: metadata?.availability,
+    typeBufferBeforeMinutes: resolveBufferMinutes(metadata?.bufferBeforeMinutes),
+    typeBufferAfterMinutes: resolveBufferMinutes(metadata?.bufferAfterMinutes),
+    typeMaxBookingsPerDay: resolveMaxBookingsPerDay(metadata?.maxBookingsPerDay),
+  });
+  const availability = effectiveRules.availability;
+  const bufferBeforeMinutes = effectiveRules.bufferBeforeMinutes;
+  const bufferAfterMinutes = effectiveRules.bufferAfterMinutes;
+  const maxBookingsPerDay = effectiveRules.maxBookingsPerDay;
+  const minNoticeMinutes = effectiveRules.minNoticeMinutes;
 
   // 2026-05-18 — lazy-resolve intake fields from theme.aestheticArchetype
   // (or classify from soul.industry as a last resort) when the booking
@@ -448,6 +376,7 @@ async function resolvePublicBookingContext(orgSlug: string, bookingSlug: string)
     bufferBeforeMinutes,
     bufferAfterMinutes,
     maxBookingsPerDay,
+    minNoticeMinutes,
     // v1.40.1 — vertical-aware booking intake fields. Populated during
     // create_full_workspace based on the classified archetype. Empty
     // array for legacy templates (renders the default name+email+notes).
@@ -586,22 +515,16 @@ export async function listPublicBookingSlotsAction({
     return { slots: [] as string[], durationMinutes: 30 };
   }
 
-  // v1.40.2 — slot generation now happens entirely in workspace TZ.
-  // Pre-1.40.2 the generator used server-local time (Vercel UTC),
-  // which produced "10:00" strings that meant 10:00 UTC. Customers in
-  // any other TZ saw those parsed as their local time, which created
-  // a 4-12 hour drift between what the picker showed and what the
-  // submit handler validated. Vesper test exposed it: customer in
-  // Toronto picked "2:00 PM" → submit received 14:00 UTC = 9 AM CDT,
-  // outside Vesper's 10 AM – 8 PM CDT hours, REJECTED.
+  // v1.40.2 — slot generation happens entirely in workspace TZ. Slots
+  // transit as full UTC ISO strings (with Z); the client formats them in
+  // the workspace TZ for display and the server interprets them
+  // unambiguously. The availability window + min-notice come from the
+  // WORKSPACE rules (resolved in resolvePublicBookingContext, with
+  // per-type fallback for workspaces that have no settings.booking).
   //
-  // New design:
-  //   1. Parse the requested date AS workspace-local "YYYY-MM-DD"
-  //   2. For each minute offset in the workday, build a UTC moment
-  //      whose workspace-TZ formatted hour/minute matches the offset
-  //   3. Return slots as full UTC ISO strings (with Z suffix) — the
-  //      client decodes them with toLocaleString({timeZone}) and the
-  //      server interprets them unambiguously
+  // The pure slot math lives in computeSlotsForDay (./workspace-rules) so
+  // it's unit-testable with an injected clock; this action keeps the DB
+  // I/O (booked-row lookup) + the booking-window guard.
   const tz = context.workspaceTimezone;
   const [yearStr, monthStr, dayStr] = date.split("-");
   const year = parseInt(yearStr ?? "0", 10);
@@ -619,22 +542,6 @@ export async function listPublicBookingSlotsAction({
   const requestedNoon = utcMomentForLocalTime(year, month, day, 12, 0, tz);
   const windowEnd = new Date(today.getTime() + PUBLIC_BOOKING_WINDOW_DAYS * 24 * 60 * 60 * 1000);
   if (requestedNoon < today || requestedNoon > windowEnd) {
-    return { slots: [] as string[], durationMinutes: context.durationMinutes };
-  }
-
-  // Determine weekday IN WORKSPACE TZ — not server local.
-  const requestedParts = partsInTimezone(requestedNoon, tz);
-  const weekdayKey: AvailabilityDayKey = requestedParts.weekday;
-  const dayAvailability = context.availability[weekdayKey];
-
-  if (!dayAvailability?.enabled) {
-    return { slots: [] as string[], durationMinutes: context.durationMinutes };
-  }
-
-  const workdayStartMinutes = toMinutes(dayAvailability.start);
-  const workdayEndMinutes = toMinutes(dayAvailability.end);
-
-  if (workdayStartMinutes >= workdayEndMinutes) {
     return { slots: [] as string[], durationMinutes: context.durationMinutes };
   }
 
@@ -657,46 +564,20 @@ export async function listPublicBookingSlotsAction({
       ),
     );
 
-  if (context.maxBookingsPerDay > 0 && bookedRows.length >= context.maxBookingsPerDay) {
-    return { slots: [] as string[], durationMinutes: context.durationMinutes };
-  }
-
-  const slots: string[] = [];
-  const slotStepMinutes = context.durationMinutes >= 60 ? 60 : 30;
-
-  for (let minuteOffset = workdayStartMinutes; minuteOffset < workdayEndMinutes; minuteOffset += slotStepMinutes) {
-    const hour = Math.floor(minuteOffset / 60);
-    const minute = minuteOffset % 60;
-
-    // Build the UTC moment for "Y-M-D HH:MM" in workspace TZ.
-    const slotStart = utcMomentForLocalTime(year, month, day, hour, minute, tz);
-    const slotEnd = new Date(slotStart.getTime() + context.durationMinutes * 60_000);
-
-    // Slot must fully fit inside the workday.
-    const slotEndMinutes = minuteOffset + context.durationMinutes;
-    if (slotEndMinutes > workdayEndMinutes) {
-      continue;
-    }
-
-    // Skip slots in the past.
-    if (slotStart.getTime() <= today.getTime()) {
-      continue;
-    }
-
-    const overlaps = bookedRows.some((row) => {
-      const bookedStart = new Date(row.startsAt);
-      const bookedEnd = new Date(row.endsAt);
-      const blockedStart = new Date(bookedStart.getTime() - context.bufferBeforeMinutes * 60_000);
-      const blockedEnd = new Date(bookedEnd.getTime() + context.bufferAfterMinutes * 60_000);
-      return slotStart < blockedEnd && slotEnd > blockedStart;
-    });
-
-    if (!overlaps) {
-      // v1.40.2 — emit UTC ISO strings (with Z). Client formats in
-      // workspace TZ for display; submit interprets as UTC.
-      slots.push(slotStart.toISOString());
-    }
-  }
+  const { slots } = computeSlotsForDay({
+    rules: {
+      availability: context.availability,
+      minNoticeMinutes: context.minNoticeMinutes,
+      maxBookingsPerDay: context.maxBookingsPerDay,
+    },
+    date,
+    timezone: tz,
+    durationMinutes: context.durationMinutes,
+    bufferBeforeMinutes: context.bufferBeforeMinutes,
+    bufferAfterMinutes: context.bufferAfterMinutes,
+    bookedRows,
+    now: today,
+  });
 
   return {
     slots,
@@ -707,26 +588,102 @@ export async function listPublicBookingSlotsAction({
   };
 }
 
-// v1.40.2 — build a UTC Date that, when formatted in `timeZone`,
-// shows the intended local Y-M-D H:M. Robust across DST transitions.
+// utcMomentForLocalTime moved to ./workspace-rules (imported above) — shared
+// by the slot generator, submit validation, and the pure slot math.
+
+// Workspace-level booking rules: read-modify-write organizations.settings.booking.
 //
-// Approach: start with a naive UTC moment, ask the formatter what
-// that moment LOOKS like in target TZ, compute the offset, apply.
-function utcMomentForLocalTime(
-  year: number,
-  month: number,
-  day: number,
-  hour: number,
-  minute: number,
-  timeZone: string,
-): Date {
-  const naive = new Date(Date.UTC(year, month - 1, day, hour, minute));
-  if (timeZone === "UTC") return naive;
-  const parts = partsInTimezone(naive, timeZone);
-  const intendedMs = Date.UTC(year, month - 1, day, hour, minute);
-  const actualMs = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute);
-  const offsetMs = intendedMs - actualMs;
-  return new Date(naive.getTime() + offsetMs);
+// Input shape (the UI form passes this structured object — NOT FormData —
+// so the dashboard can send the full per-day schedule + scalars in one call):
+//   availability?: partial per-day { enabled, start, end } for sunday..saturday
+//   minNoticeMinutes?: number (>= 0; default 0)
+//   defaultBufferMinutes?: number (clamped 0-120; default 0)
+//   defaultDurationMinutes?: number (clamped 30-180; default 30)
+//   maxBookingsPerDay?: number | null (positive int caps; null/0 = no cap)
+//   timezone?: string (IANA; when present, also updates organizations.timezone)
+//
+// The write uses jsonb_set on ARRAY['booking'] so sibling settings keys
+// (crmPersonality, blocks, soul_compile, …) are preserved under concurrent
+// writes (per L-03: never read-modify-write the whole settings blob in app
+// code). The booking object itself is replaced wholesale, which is correct —
+// the form always submits the complete rule set.
+export type UpdateWorkspaceBookingRulesInput = {
+  availability?: Partial<Record<AvailabilityDayKey, Partial<AvailabilityDaySettings>>>;
+  minNoticeMinutes?: number;
+  defaultBufferMinutes?: number;
+  defaultDurationMinutes?: number;
+  maxBookingsPerDay?: number | null;
+  timezone?: string;
+};
+
+export async function updateWorkspaceBookingRulesAction(
+  input: UpdateWorkspaceBookingRulesInput,
+): Promise<{ ok: true; rules: WorkspaceBookingRules; timezone: string | null }> {
+  assertWritable();
+
+  const orgId = await getOrgId();
+  if (!orgId) {
+    throw new Error("Unauthorized");
+  }
+
+  // Normalize through the same pure helpers the reader uses, so what we
+  // persist round-trips identically through getWorkspaceBookingRules.
+  const rules: WorkspaceBookingRules = {
+    availability: normalizeAvailability(input.availability),
+    minNoticeMinutes: clampMinNoticeMinutes(input.minNoticeMinutes ?? 0),
+    defaultBufferMinutes: clampBufferMinutes(input.defaultBufferMinutes ?? 0),
+    defaultDurationMinutes: clampDurationMinutes(
+      input.defaultDurationMinutes === undefined ? 30 : input.defaultDurationMinutes,
+    ),
+    maxBookingsPerDay: normalizeMaxBookingsPerDay(
+      input.maxBookingsPerDay === null ? 0 : input.maxBookingsPerDay,
+    ),
+  };
+
+  const bookingJson = JSON.stringify(rules);
+
+  // Optional IANA timezone — only validate + update the column when provided.
+  const nextTimezone =
+    typeof input.timezone === "string" && isValidIanaTimezone(input.timezone)
+      ? input.timezone
+      : null;
+
+  const settingsSql = sql`
+    jsonb_set(
+      COALESCE(${organizations.settings}, '{}'::jsonb),
+      ARRAY['booking']::text[],
+      ${bookingJson}::jsonb,
+      true
+    )
+  ` as unknown as typeof organizations.$inferInsert.settings;
+
+  const [updated] = await db
+    .update(organizations)
+    .set(
+      nextTimezone
+        ? { settings: settingsSql, timezone: nextTimezone, updatedAt: new Date() }
+        : { settings: settingsSql, updatedAt: new Date() },
+    )
+    .where(eq(organizations.id, orgId))
+    .returning({ timezone: organizations.timezone });
+
+  // Refresh the dashboard so the saved rules surface on navigate-back.
+  revalidatePath("/bookings");
+
+  return { ok: true, rules, timezone: updated?.timezone ?? nextTimezone };
+}
+
+// Lightweight IANA timezone validity check — mirrors the schedule-timezone
+// validator's approach (Intl throws on an unknown zone). Avoids persisting a
+// garbage timezone that would later break partsInTimezone.
+function isValidIanaTimezone(tz: string): boolean {
+  if (!tz.trim()) return false;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function createAppointmentTypeAction(formData: FormData) {
@@ -1557,6 +1514,21 @@ export async function submitPublicBookingAction({
       received: startsAt,
       hint: "starts_at must be a parseable ISO 8601 datetime",
     });
+  }
+
+  // Enforce the workspace minimum-notice window server-side (defense in
+  // depth — the slot generator already hides too-soon slots, but a crafted
+  // POST must not bypass it). minNoticeMinutes is 0 for workspaces without
+  // booking rules, so this is a no-op there.
+  if (bookingContext.minNoticeMinutes > 0) {
+    const earliestStartMs = Date.now() + bookingContext.minNoticeMinutes * 60_000;
+    if (bookingStart.getTime() < earliestStartMs) {
+      return rejectAndThrow("slot_within_min_notice", {
+        requested_start: bookingStart.toISOString(),
+        min_notice_minutes: bookingContext.minNoticeMinutes,
+        earliest_start: new Date(earliestStartMs).toISOString(),
+      });
+    }
   }
 
   // v1.3.2 — TIMEZONE-AWARE slot validation.
