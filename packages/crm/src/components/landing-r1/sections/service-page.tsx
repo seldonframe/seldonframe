@@ -91,7 +91,7 @@ export function ServicePageTemplate({
       {hasTestimonials && (
         <Testimonials
           archetype={archetype}
-          heading={`What clients say about our ${service.name.toLowerCase()}`}
+          heading={`What clients say about our ${String(service.name ?? "").toLowerCase()}`}
           testimonials={service.testimonials!}
         />
       )}

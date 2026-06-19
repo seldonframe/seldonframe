@@ -51,6 +51,14 @@ export type ServicesGridProps = {
   serviceBaseHref?: string;
 };
 
+// NOTE — multi-page slug coupling (P4 generator invariant):
+// The route slug here is derived from the GRID service NAME via serviceSlug().
+// For a card's "Learn more" to resolve to a real detail page, this derived slug
+// MUST equal some payload.servicePages[].slug. P1 fixtures align them by hand;
+// the navbar dropdown links via the STORED servicePages[].slug directly, so it
+// is always correct. The P4 r1-payload-generator MUST guarantee
+// servicePages[].slug === serviceSlug(gridServiceName) for the two link sources
+// to agree. A mismatch would 404 the card (the dropdown link would still work).
 /**
  * Pure: the "Learn more" target for a service card. With a workspace base href
  * (e.g. "/w/<slug>") it links to the service detail route; without one it keeps
