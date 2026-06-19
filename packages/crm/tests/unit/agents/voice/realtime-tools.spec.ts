@@ -110,13 +110,16 @@ describe("toRealtimeFunctionTools — wire shape", () => {
 // ─── executeVoiceToolCall — happy path ──────────────────────────────────────
 
 describe("executeVoiceToolCall — valid args route to the right tool", () => {
-  test("valid book_appointment args (testMode) → { ok: true }", async () => {
+  test("CONFIRMED book_appointment args (testMode) → { ok: true }", async () => {
+    // voice R1 — book_appointment now gates on `confirmed`. With confirmed:true
+    // the testMode write short-circuits to the synthetic success as before.
     const result = await executeVoiceToolCall({
       name: "book_appointment",
       argumentsJson: JSON.stringify({
         fullName: "Jane Doe",
         email: "jane@acme.co",
         slotIso: "2026-06-02T16:00:00Z",
+        confirmed: true,
       }),
       ctx: TEST_CTX,
     });
@@ -130,6 +133,33 @@ describe("executeVoiceToolCall — valid args route to the right tool", () => {
       // Realtime function_call_output item.
       assert.equal(typeof result.output, "string");
       assert.deepEqual(JSON.parse(result.output), result.result);
+    }
+  });
+
+  test("UNCONFIRMED book_appointment → bridge returns the read-back, no write", async () => {
+    // voice R1 — without confirmed:true the tool performs NO write; it returns
+    // a needsConfirmation payload with the spoken read-back. The bridge still
+    // reports ok:true (the tool ran without throwing) — the *tool result*
+    // carries ok:false + needsConfirmation for the model to act on.
+    const result = await executeVoiceToolCall({
+      name: "book_appointment",
+      argumentsJson: JSON.stringify({
+        fullName: "Jane Doe",
+        email: "jane@acme.co",
+        slotIso: "2026-06-02T16:00:00Z",
+      }),
+      ctx: TEST_CTX,
+    });
+    assert.equal(result.ok, true, "the tool executed without throwing");
+    if (result.ok) {
+      const out = result.result as {
+        ok?: boolean;
+        needsConfirmation?: boolean;
+        readBack?: string;
+      };
+      assert.equal(out.ok, false, "no booking written yet");
+      assert.equal(out.needsConfirmation, true);
+      assert.match(out.readBack ?? "", /Jane Doe/);
     }
   });
 

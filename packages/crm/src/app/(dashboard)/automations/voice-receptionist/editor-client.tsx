@@ -17,6 +17,9 @@ import {
 import { VOICE_OPTIONS } from "@/lib/agents/voice/card-status";
 
 type FaqRow = { q: string; a: string };
+// voice R1 — a per-service price band edited as strings (the inputs hold text;
+// we coerce low/high to numbers on save).
+type QuoteRangeRow = { service: string; low: string; high: string };
 
 type Props = {
   agentId: string;
@@ -28,6 +31,8 @@ type Props = {
     voice: string;
     capabilities: string[];
     faq: FaqRow[];
+    quoteRanges: { service: string; low: number; high: number }[];
+    notifyPhone: string;
   };
   allCapabilities: string[];
 };
@@ -42,6 +47,15 @@ export function VoiceReceptionistEditor(props: Props) {
     props.initialBlueprint.capabilities,
   );
   const [faq, setFaq] = useState<FaqRow[]>(props.initialBlueprint.faq);
+  // voice R1 — quote ranges (stringified for the inputs) + team callback number.
+  const [quoteRanges, setQuoteRanges] = useState<QuoteRangeRow[]>(
+    props.initialBlueprint.quoteRanges.map((r) => ({
+      service: r.service,
+      low: String(r.low),
+      high: String(r.high),
+    })),
+  );
+  const [notifyPhone, setNotifyPhone] = useState(props.initialBlueprint.notifyPhone);
   const [publishNotes, setPublishNotes] = useState("");
   const [isSaving, startSave] = useTransition();
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -62,6 +76,20 @@ export function VoiceReceptionistEditor(props: Props) {
     setSaveError(null);
     setSavedVersion(null);
     startSave(async () => {
+      // voice R1 — keep only fully-filled, numeric rows; coerce low/high.
+      const cleanedRanges = quoteRanges
+        .map((r) => ({
+          service: r.service.trim(),
+          low: Number(r.low),
+          high: Number(r.high),
+        }))
+        .filter(
+          (r) =>
+            r.service.length > 0 &&
+            Number.isFinite(r.low) &&
+            Number.isFinite(r.high) &&
+            r.high >= r.low,
+        );
       const result = await saveVoiceBlueprintAction({
         agentId: props.agentId,
         patch: {
@@ -69,6 +97,8 @@ export function VoiceReceptionistEditor(props: Props) {
           voice,
           capabilities,
           faq: faq.filter((r) => r.q.trim() && r.a.trim()),
+          quoteRanges: cleanedRanges,
+          notifyPhone: notifyPhone.trim() || undefined,
         },
         publishNotes: publishNotes.trim() || undefined,
       });
@@ -320,6 +350,108 @@ export function VoiceReceptionistEditor(props: Props) {
             ))}
           </div>
         )}
+      </div>
+
+      {/* Quote ranges (get_quote_range) */}
+      <div className="rounded-xl border bg-card p-5">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <h2 className="text-card-title">Pricing ranges</h2>
+            <p className="text-xs text-muted-foreground">
+              The receptionist never quotes a firm price — it gives the range
+              for a service and says a technician confirms the exact price
+              on-site. Add a low/high band per service. Services you don&apos;t
+              list here get &quot;a technician will confirm.&quot;
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() =>
+              setQuoteRanges([...quoteRanges, { service: "", low: "", high: "" }])
+            }
+            className="crm-button-secondary h-8 px-3 text-xs"
+          >
+            + Add service
+          </button>
+        </div>
+        {quoteRanges.length === 0 ? (
+          <p className="mt-3 text-xs text-muted-foreground">
+            No pricing ranges yet.
+          </p>
+        ) : (
+          <div className="mt-3 space-y-2">
+            {quoteRanges.map((row, idx) => (
+              <div
+                key={idx}
+                className="grid grid-cols-1 gap-2 rounded-md border bg-background p-3 sm:grid-cols-[2fr_1fr_1fr_auto]"
+              >
+                <input
+                  type="text"
+                  placeholder="Service (e.g. Furnace repair)"
+                  value={row.service}
+                  onChange={(e) => {
+                    const next = [...quoteRanges];
+                    next[idx] = { ...next[idx], service: e.target.value };
+                    setQuoteRanges(next);
+                  }}
+                  className="rounded border bg-background px-2 py-1 text-sm focus:border-primary focus:outline-none"
+                />
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  placeholder="Low $"
+                  value={row.low}
+                  onChange={(e) => {
+                    const next = [...quoteRanges];
+                    next[idx] = { ...next[idx], low: e.target.value };
+                    setQuoteRanges(next);
+                  }}
+                  className="rounded border bg-background px-2 py-1 text-sm focus:border-primary focus:outline-none"
+                />
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  placeholder="High $"
+                  value={row.high}
+                  onChange={(e) => {
+                    const next = [...quoteRanges];
+                    next[idx] = { ...next[idx], high: e.target.value };
+                    setQuoteRanges(next);
+                  }}
+                  className="rounded border bg-background px-2 py-1 text-sm focus:border-primary focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() =>
+                    setQuoteRanges(quoteRanges.filter((_, i) => i !== idx))
+                  }
+                  className="text-xs text-rose-600 hover:underline"
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Team callback number (take_message operator notification) */}
+      <div className="rounded-xl border bg-card p-5">
+        <h2 className="text-card-title">Callback alerts</h2>
+        <p className="text-xs text-muted-foreground">
+          When the receptionist takes a message (a caller is out of scope, it&apos;s
+          after-hours, or it&apos;s unsure), the team gets a text here. Leave blank
+          to send alerts to your voice number.
+        </p>
+        <input
+          type="tel"
+          value={notifyPhone}
+          onChange={(e) => setNotifyPhone(e.target.value)}
+          placeholder="+1 555 555 5555"
+          className="mt-3 w-full max-w-xs rounded-md border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+        />
       </div>
 
       {/* Save */}

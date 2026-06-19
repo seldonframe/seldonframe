@@ -39,12 +39,26 @@ const FaqRow = z.object({
   synthesizedFromSoulVersion: z.number().optional(),
 });
 
+// voice R1 — a per-service price band for the get_quote_range quote guard.
+// low/high are whole-currency amounts (e.g. dollars). high must be ≥ low.
+const QuoteRangeRow = z
+  .object({
+    service: z.string().min(1).max(120),
+    low: z.number().nonnegative(),
+    high: z.number().nonnegative(),
+    note: z.string().max(200).optional(),
+  })
+  .refine((r) => r.high >= r.low, { message: "high must be ≥ low" });
+
 const VoiceBlueprintPatchSchema = z
   .object({
     greeting: z.string().max(2000).optional(),
     voice: z.enum(VOICE_OPTIONS).optional(),
     capabilities: z.array(z.string()).optional(),
     faq: z.array(FaqRow).optional(),
+    // voice R1 — operator-editable quote ranges + team callback number.
+    quoteRanges: z.array(QuoteRangeRow).optional(),
+    notifyPhone: z.string().trim().max(40).optional(),
   })
   .strict();
 

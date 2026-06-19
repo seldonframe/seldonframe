@@ -75,6 +75,21 @@ export type AgentBlueprint = {
   /** OpenAI Realtime TTS voice id for voice-channel agents (e.g. "alloy",
    *  "echo"). Ignored by non-voice archetypes. Defaults to "alloy" at use. */
   voice?: string;
+  /** 2026-06-19 (voice R1) — operator-configured price RANGES for the
+   *  get_quote_range tool (quote guard). The voice agent NEVER states a firm
+   *  price; it calls get_quote_range, which returns the {low, high} band for a
+   *  service plus an "a technician confirms on-site" note. A service with no
+   *  entry here → the tool returns { hasRange:false } and the agent says a tech
+   *  will confirm. Operator-editable on /automations/voice-receptionist. */
+  quoteRanges?: Array<{ service: string; low: number; high: number; note?: string }>;
+  /** 2026-06-19 (voice R1) — the phone number the TEAM gets callback texts on.
+   *  When take_message captures an out-of-scope / after-hours message, the
+   *  operator SMS notification is sent to this number (via the same Twilio
+   *  fromNumber the workspace sends all SMS from). Empty/undefined → fall back
+   *  to the workspace's own voice number (organizations.integrations.twilio
+   *  .fromNumber) so the team still gets the alert. Operator-editable on
+   *  /automations/voice-receptionist. */
+  notifyPhone?: string;
 };
 
 export const agents = pgTable(

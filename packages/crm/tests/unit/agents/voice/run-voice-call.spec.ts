@@ -342,7 +342,7 @@ describe("runVoiceCall — wall-clock timeout", () => {
 // ─── PHASE 1: tools on session.update ────────────────────────────────────────
 
 describe("runVoiceCall — Phase 1 session.update with tools + voice", () => {
-  test("with a toolContext: declares the 6 tools, tool_choice:auto, SDR persona, voice via audio.output.voice", async () => {
+  test("with a toolContext: declares the voice tools, tool_choice:auto, SDR persona, voice via audio.output.voice", async () => {
     const { ctor, captures } = makeFakeSocketCtor();
     const promise = runVoiceCall({
       callId: CALL_ID,
@@ -358,10 +358,11 @@ describe("runVoiceCall — Phase 1 session.update with tools + voice", () => {
     assert.equal(sessionUpdate.type, "session.update");
     assert.equal(sessionUpdate.session.type, "realtime");
     assert.equal(sessionUpdate.session.instructions, VOICE_SDR_INSTRUCTIONS);
-    // 6 tools (provide_faq_answer excluded), each in the GA function wire shape.
+    // All voice tools (provide_faq_answer excluded), each in the GA function
+    // wire shape. voice R1 added take_message + get_quote_range → 8 total.
     assert.ok(Array.isArray(sessionUpdate.session.tools));
     assert.equal(sessionUpdate.session.tools.length, VOICE_TOOLS.length);
-    assert.equal(sessionUpdate.session.tools.length, 6);
+    assert.equal(sessionUpdate.session.tools.length, 8);
     assert.equal(sessionUpdate.session.tool_choice, "auto");
     for (const t of sessionUpdate.session.tools) {
       assert.equal(t.type, "function");

@@ -72,6 +72,8 @@ describe("getOrCreateVoiceAgent", () => {
 
     const blueprint = vals.blueprint as Record<string, unknown>;
     assert.ok(blueprint && typeof blueprint === "object", "blueprint must be an object");
-    assert.equal(blueprint.voice, "alloy", "blueprint.voice must default to 'alloy'");
+    // Default TTS voice is "cedar" (set in commit 8b8a00cf — the newest
+    // gpt-realtime voice). This assertion was stale ('alloy') before voice R1.
+    assert.equal(blueprint.voice, "cedar", "blueprint.voice must default to 'cedar'");
   });
 });

@@ -15,8 +15,9 @@ import { and, eq, gte, ilike, or } from "drizzle-orm";
 import { PUBLIC_BOOKING_WINDOW_DAYS } from "@/lib/bookings/booking-window";
 import { z } from "zod";
 import { db } from "@/db";
-import { bookings, contacts } from "@/db/schema";
+import { activities, agents, bookings, contacts, users } from "@/db/schema";
 import { listPublicBookingSlotsAction } from "@/lib/bookings/actions";
+import type { AgentBlueprint } from "@/db/schema/agents";
 
 export type ToolExecuteContext = {
   orgId: string;
@@ -264,6 +265,54 @@ export const lookUpAvailability: AgentTool<
   },
 };
 
+// ─── confirmation read-back gate (voice R1) ────────────────────────────────
+//
+// Before any state-changing write (book / reschedule / cancel) the agent must
+// READ BACK the details and get a yes. We enforce this at the TOOL layer, not
+// just in the prompt: each write tool takes a `confirmed: boolean` arg, and
+// when it isn't exactly `true` the tool performs NO write — it returns the
+// spoken read-back summary plus an instruction telling the model to confirm
+// with the caller and then call again with confirmed:true. Only confirmed:true
+// touches the database. This makes "the agent booked the wrong slot because it
+// skipped the confirmation" structurally impossible, even if the prompt drifts.
+
+/**
+ * Build the spoken read-back the agent says before a booking write. Pure.
+ * Ends in "…is that correct?" so the model naturally pauses for a yes.
+ * `slotIso` is formatted into the workspace timezone when one is supplied (so
+ * the caller hears "Monday, June 1 at 10:00 AM PDT", never the raw UTC iso).
+ */
+export function buildBookingReadBack(args: {
+  fullName: string;
+  slotIso: string;
+  service?: string;
+  timezone?: string;
+}): string {
+  const when = args.timezone
+    ? formatSlotLabel(args.slotIso, args.timezone)
+    : args.slotIso;
+  const parts = [args.fullName, args.service, when].filter(
+    (p): p is string => typeof p === "string" && p.trim().length > 0,
+  );
+  return `So that's ${parts.join(", ")} — is that correct?`;
+}
+
+/** The shape every write tool returns when it needs the caller to confirm
+ *  first. `ok:false` so the model never tells the caller "done"; `readBack` is
+ *  the exact sentence to speak; `instruction` nudges it to re-call with
+ *  confirmed:true after the caller says yes. */
+export type NeedsConfirmation = {
+  ok: false;
+  needsConfirmation: true;
+  readBack: string;
+  instruction: string;
+};
+
+const CONFIRM_INSTRUCTION =
+  "Read the readBack sentence to the caller verbatim and wait for them to say " +
+  "yes. Only after they confirm, call this tool again with confirmed:true to " +
+  "actually make the change. Do NOT tell the caller it's done until then.";
+
 // ─── book_appointment ──────────────────────────────────────────────────────
 
 const bookAppointmentInput = z.object({
@@ -273,15 +322,20 @@ const bookAppointmentInput = z.object({
   slotIso: z.string(),
   notes: z.string().optional(),
   bookingSlug: z.string().optional(),
+  /** voice R1 — confirmation gate. The tool writes ONLY when this is true.
+   *  Anything else (false / omitted) returns the spoken read-back instead. */
+  confirmed: z.boolean().optional(),
 });
 
 export const bookAppointment: AgentTool<
   z.infer<typeof bookAppointmentInput>,
-  { ok: boolean; bookingId?: string; testMode?: boolean; error?: string }
+  | { ok: boolean; bookingId?: string; testMode?: boolean; error?: string }
+  | NeedsConfirmation
 > = {
   name: "book_appointment",
   description:
-    "Create a confirmed booking. CALL ORDER: (1) look_up_availability({date}) FIRST to get real slots, (2) book_appointment with the chosen slot's `iso` field passed VERBATIM as slotIso. Never invent or hand-edit a slot — each slot's `iso` is a full UTC ISO timestamp ('2026-05-13T16:00:00Z') that carries timezone info; if you trim, reformat, or substitute the spoken `label` for it, the server will book the wrong time across timezones.",
+    "Create a confirmed booking. CALL ORDER: (1) look_up_availability({date}) FIRST to get real slots, (2) book_appointment with the chosen slot's `iso` field passed VERBATIM as slotIso. Never invent or hand-edit a slot — each slot's `iso` is a full UTC ISO timestamp ('2026-05-13T16:00:00Z') that carries timezone info; if you trim, reformat, or substitute the spoken `label` for it, the server will book the wrong time across timezones. " +
+    "CONFIRMATION REQUIRED: call FIRST with confirmed omitted to get a `readBack` sentence — say it to the caller, get a yes — THEN call again with confirmed:true to actually book. Without confirmed:true nothing is written.",
   inputSchema: bookAppointmentInput,
   jsonSchema: {
     type: "object",
@@ -296,10 +350,27 @@ export const bookAppointment: AgentTool<
       },
       notes: { type: "string" },
       bookingSlug: { type: "string" },
+      confirmed: {
+        type: "boolean",
+        description:
+          "Set true ONLY after you've read the details back to the caller and they confirmed. Omit (or false) on the first call to receive the read-back; the booking is written only when this is true.",
+      },
     },
     required: ["fullName", "email", "slotIso"],
   },
   execute: async (input, ctx) => {
+    // Confirmation gate — no write until the caller has confirmed the read-back.
+    if (input.confirmed !== true) {
+      return {
+        ok: false,
+        needsConfirmation: true,
+        readBack: buildBookingReadBack({
+          fullName: input.fullName,
+          slotIso: input.slotIso,
+        }),
+        instruction: CONFIRM_INSTRUCTION,
+      };
+    }
     if (ctx.testMode) {
       return {
         ok: true,
@@ -583,18 +654,85 @@ const rescheduleAppointmentInput = z.object({
   booking_id: z.string().uuid(),
   new_starts_at_iso: z.string().datetime(),
   customer_email: z.string().email(),
+  /** voice R1 — confirmation gate. Writes ONLY when true. */
+  confirmed: z.boolean().optional(),
 });
+
+/** Injectable DB seam for reschedule_appointment — lets the unit tests assert
+ *  the email-match guard + the write without a live database. `loadBooking` is
+ *  scoped to (orgId, bookingId, email) so a hallucinated id from another
+ *  workspace returns null; `updateBookingStart` is scoped to (orgId, id). */
+export type RescheduleDeps = {
+  loadBooking: (args: {
+    id: string;
+    orgId: string;
+    email: string;
+  }) => Promise<{ id: string; startsAt: Date; endsAt: Date } | null>;
+  updateBookingStart: (args: {
+    bookingId: string;
+    orgId: string;
+    startsAt: Date;
+    endsAt: Date;
+  }) => Promise<{ id: string } | null>;
+};
+
+function defaultRescheduleDeps(): RescheduleDeps {
+  return {
+    loadBooking: async ({ id, orgId, email }) => {
+      const [row] = await db
+        .select({
+          id: bookings.id,
+          startsAt: bookings.startsAt,
+          endsAt: bookings.endsAt,
+        })
+        .from(bookings)
+        .where(
+          and(
+            eq(bookings.id, id),
+            eq(bookings.orgId, orgId),
+            ilike(bookings.email, email),
+          ),
+        )
+        .limit(1);
+      if (!row) return null;
+      return {
+        id: row.id,
+        startsAt: row.startsAt instanceof Date ? row.startsAt : new Date(row.startsAt),
+        endsAt: row.endsAt instanceof Date ? row.endsAt : new Date(row.endsAt),
+      };
+    },
+    updateBookingStart: async ({ bookingId, orgId, startsAt, endsAt }) => {
+      const [updated] = await db
+        .update(bookings)
+        .set({ startsAt, endsAt, updatedAt: new Date() })
+        .where(and(eq(bookings.id, bookingId), eq(bookings.orgId, orgId)))
+        .returning({ id: bookings.id });
+      return updated ?? null;
+    },
+  };
+}
 
 export const rescheduleAppointment: AgentTool<
   z.infer<typeof rescheduleAppointmentInput>,
-  { ok: boolean; bookingId?: string; newStartsAt?: string; reason?: string }
-> = {
+  | { ok: boolean; bookingId?: string; newStartsAt?: string; reason?: string }
+  | NeedsConfirmation
+> & {
+  execute: (
+    input: z.infer<typeof rescheduleAppointmentInput>,
+    ctx: ToolExecuteContext,
+    deps?: RescheduleDeps,
+  ) => Promise<
+    | { ok: boolean; bookingId?: string; newStartsAt?: string; reason?: string }
+    | NeedsConfirmation
+  >;
+} = {
   name: "reschedule_appointment",
   description:
     "ACTUALLY reschedule an existing appointment. Updates the booking row in the database to the new start time. " +
     "USE WHEN the visitor confirms a new time after find_my_existing_appointment matched their booking. " +
     "Args: booking_id from find_my_existing_appointment, new_starts_at_iso (ISO 8601 in UTC; resolve relative dates like 'next Monday' to a concrete ISO using the temporal anchor in your system prompt), customer_email (must match the booking's email — security check). " +
-    "DO NOT confirm a reschedule to the visitor without calling this tool — saying 'done' without actually moving the booking is a critical failure. Tell them only AFTER ok=true.",
+    "CONFIRMATION REQUIRED: call FIRST with confirmed omitted to get a `readBack` sentence — say it, get a yes — THEN call again with confirmed:true. " +
+    "DO NOT confirm a reschedule to the visitor without ok=true — saying 'done' without actually moving the booking is a critical failure.",
   inputSchema: rescheduleAppointmentInput,
   jsonSchema: {
     type: "object",
@@ -602,58 +740,51 @@ export const rescheduleAppointment: AgentTool<
       booking_id: { type: "string", format: "uuid" },
       new_starts_at_iso: { type: "string", format: "date-time" },
       customer_email: { type: "string", format: "email" },
+      confirmed: {
+        type: "boolean",
+        description:
+          "Set true ONLY after the caller confirms the read-back. Omit on the first call to receive the read-back; the booking moves only when this is true.",
+      },
     },
     required: ["booking_id", "new_starts_at_iso", "customer_email"],
   },
-  execute: async (input, ctx) => {
+  execute: async (input, ctx, deps: RescheduleDeps = defaultRescheduleDeps()) => {
     const newStarts = new Date(input.new_starts_at_iso);
     if (Number.isNaN(newStarts.getTime())) {
       return { ok: false, reason: "invalid_date" };
     }
 
-    // Look up the booking to compute the new endsAt (preserve duration)
-    // and verify (orgId, email) match.
-    const [existing] = await db
-      .select({
-        id: bookings.id,
-        startsAt: bookings.startsAt,
-        endsAt: bookings.endsAt,
-        title: bookings.title,
-        contactId: bookings.contactId,
-      })
-      .from(bookings)
-      .where(
-        and(
-          eq(bookings.id, input.booking_id),
-          eq(bookings.orgId, ctx.orgId),
-          ilike(bookings.email, input.customer_email),
-        ),
-      )
-      .limit(1);
+    // Confirmation gate — read back BEFORE we touch (or even read) the DB.
+    if (input.confirmed !== true) {
+      return {
+        ok: false,
+        needsConfirmation: true,
+        readBack: `So I'll move your appointment to ${input.new_starts_at_iso} — is that correct?`,
+        instruction: CONFIRM_INSTRUCTION,
+      };
+    }
+
+    // Look up the booking to compute the new endsAt (preserve duration) and
+    // verify (orgId, email) match — the security guard.
+    const existing = await deps.loadBooking({
+      id: input.booking_id,
+      orgId: ctx.orgId,
+      email: input.customer_email,
+    });
 
     if (!existing) {
       return { ok: false, reason: "booking_not_found_or_email_mismatch" };
     }
 
-    const start = existing.startsAt instanceof Date ? existing.startsAt : new Date(existing.startsAt);
-    const end = existing.endsAt instanceof Date ? existing.endsAt : new Date(existing.endsAt);
-    const durationMs = end.getTime() - start.getTime();
+    const durationMs = existing.endsAt.getTime() - existing.startsAt.getTime();
     const newEndsAt = new Date(newStarts.getTime() + Math.max(durationMs, 30 * 60 * 1000));
 
-    const [updated] = await db
-      .update(bookings)
-      .set({
-        startsAt: newStarts,
-        endsAt: newEndsAt,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(bookings.id, input.booking_id),
-          eq(bookings.orgId, ctx.orgId),
-        ),
-      )
-      .returning({ id: bookings.id });
+    const updated = await deps.updateBookingStart({
+      bookingId: input.booking_id,
+      orgId: ctx.orgId,
+      startsAt: newStarts,
+      endsAt: newEndsAt,
+    });
 
     if (!updated) {
       return { ok: false, reason: "update_failed" };
@@ -676,18 +807,58 @@ const cancelAppointmentInput = z.object({
   booking_id: z.string().uuid(),
   customer_email: z.string().email(),
   reason: z.string().max(500).optional(),
+  /** voice R1 — confirmation gate. Cancels ONLY when true. */
+  confirmed: z.boolean().optional(),
 });
+
+/** Injectable DB seam for cancel_appointment — one scoped update returning the
+ *  row (or null when the (orgId, id, email) guard matched nothing). */
+export type CancelDeps = {
+  cancelBooking: (args: {
+    bookingId: string;
+    orgId: string;
+    email: string;
+  }) => Promise<{ id: string } | null>;
+};
+
+function defaultCancelDeps(): CancelDeps {
+  return {
+    cancelBooking: async ({ bookingId, orgId, email }) => {
+      const [updated] = await db
+        .update(bookings)
+        .set({ status: "cancelled", updatedAt: new Date() })
+        .where(
+          and(
+            eq(bookings.id, bookingId),
+            eq(bookings.orgId, orgId),
+            ilike(bookings.email, email),
+          ),
+        )
+        .returning({ id: bookings.id });
+      return updated ?? null;
+    },
+  };
+}
 
 export const cancelAppointment: AgentTool<
   z.infer<typeof cancelAppointmentInput>,
-  { ok: boolean; bookingId?: string; reason?: string }
-> = {
+  { ok: boolean; bookingId?: string; reason?: string } | NeedsConfirmation
+> & {
+  execute: (
+    input: z.infer<typeof cancelAppointmentInput>,
+    ctx: ToolExecuteContext,
+    deps?: CancelDeps,
+  ) => Promise<
+    { ok: boolean; bookingId?: string; reason?: string } | NeedsConfirmation
+  >;
+} = {
   name: "cancel_appointment",
   description:
     "ACTUALLY cancel an existing appointment. Sets the booking's status to cancelled in the database. " +
     "USE WHEN the visitor confirms they want to cancel a booking matched by find_my_existing_appointment. " +
     "Args: booking_id, customer_email (must match booking's email — security), reason (optional, surfaces in operator's CRM activity feed). " +
-    "DO NOT confirm a cancellation to the visitor without calling this tool. Tell them only AFTER ok=true.",
+    "CONFIRMATION REQUIRED: call FIRST with confirmed omitted to get a `readBack` sentence — say it, get a yes — THEN call again with confirmed:true. " +
+    "DO NOT confirm a cancellation to the visitor without ok=true.",
   inputSchema: cancelAppointmentInput,
   jsonSchema: {
     type: "object",
@@ -695,21 +866,30 @@ export const cancelAppointment: AgentTool<
       booking_id: { type: "string", format: "uuid" },
       customer_email: { type: "string", format: "email" },
       reason: { type: "string", maxLength: 500 },
+      confirmed: {
+        type: "boolean",
+        description:
+          "Set true ONLY after the caller confirms the read-back. Omit on the first call to receive the read-back; the cancellation happens only when this is true.",
+      },
     },
     required: ["booking_id", "customer_email"],
   },
-  execute: async (input, ctx) => {
-    const [updated] = await db
-      .update(bookings)
-      .set({ status: "cancelled", updatedAt: new Date() })
-      .where(
-        and(
-          eq(bookings.id, input.booking_id),
-          eq(bookings.orgId, ctx.orgId),
-          ilike(bookings.email, input.customer_email),
-        ),
-      )
-      .returning({ id: bookings.id });
+  execute: async (input, ctx, deps: CancelDeps = defaultCancelDeps()) => {
+    // Confirmation gate — read back BEFORE we touch the DB.
+    if (input.confirmed !== true) {
+      return {
+        ok: false,
+        needsConfirmation: true,
+        readBack: "Just to confirm — you'd like me to cancel your appointment, is that correct?",
+        instruction: CONFIRM_INSTRUCTION,
+      };
+    }
+
+    const updated = await deps.cancelBooking({
+      bookingId: input.booking_id,
+      orgId: ctx.orgId,
+      email: input.customer_email,
+    });
 
     if (!updated) {
       return { ok: false, reason: "booking_not_found_or_email_mismatch" };
@@ -717,6 +897,293 @@ export const cancelAppointment: AgentTool<
 
     return { ok: true, bookingId: updated.id };
   },
+};
+
+// ─── take_message (voice R1) ───────────────────────────────────────────────
+//
+// The safe exit. When the caller asks something out of scope, the agent is
+// unsure, or it's after-hours, the agent takes a message instead of guessing:
+// it upserts the caller as a contact, writes a "Callback requested" CRM
+// activity, AND fires an operator SMS so the team knows to call back. Returns a
+// short spoken confirmation. Reuses createContactForOrg (contact upsert) and
+// sendSmsFromApi (the same Twilio path the post-call SMS uses).
+
+const takeMessageInput = z.object({
+  caller_name: z.string().min(1),
+  caller_phone: z.string().min(1),
+  message: z.string().min(1),
+});
+
+/** Injectable side-effect seam for take_message — lets the unit tests assert
+ *  the contact upsert + activity + operator notify without a DB or Twilio. */
+export type TakeMessageDeps = {
+  upsertContact: (args: {
+    orgId: string;
+    fullName: string;
+    phone: string | null;
+  }) => Promise<{ id: string | null }>;
+  writeCallbackActivity: (args: {
+    orgId: string;
+    contactId: string | null;
+    subject: string;
+    body: string;
+    agentId: string;
+    conversationId: string;
+  }) => Promise<void>;
+  notifyOperator: (args: { orgId: string; body: string }) => Promise<void>;
+};
+
+/**
+ * Split a free-text caller name into first/last for the contacts table.
+ * "Jane Doe" → { first:"Jane", last:"Doe" }; single token → last:null.
+ */
+function splitName(full: string): { first: string; last: string | null } {
+  const parts = full.trim().split(/\s+/);
+  const first = parts.shift() ?? full.trim();
+  const last = parts.length > 0 ? parts.join(" ") : null;
+  return { first, last };
+}
+
+function defaultTakeMessageDeps(): TakeMessageDeps {
+  return {
+    upsertContact: async ({ orgId, fullName, phone }) => {
+      // Reuse the canonical contact create helper (emits contact.created +
+      // infers lifecycle). Callback leads land as status 'lead', source 'voice'.
+      const { createContactForOrg } = await import("@/lib/contacts/create-for-org");
+      const { first, last } = splitName(fullName);
+      return createContactForOrg({
+        orgId,
+        firstName: first,
+        lastName: last,
+        email: null,
+        phone,
+        status: "lead",
+        source: "voice-callback",
+      });
+    },
+    writeCallbackActivity: async ({ orgId, contactId, subject, body, agentId, conversationId }) => {
+      // activities.userId is NOT NULL — attribute to the workspace owner, the
+      // same way escalate_to_human does.
+      const [owner] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.orgId, orgId))
+        .limit(1);
+      if (!owner?.id) return; // no owner to attribute to — skip (best-effort)
+      await db.insert(activities).values({
+        orgId,
+        userId: owner.id,
+        contactId,
+        type: "voice_callback",
+        subject,
+        body,
+        metadata: { source: "voice", agentId, conversationId },
+        completedAt: new Date(),
+      });
+    },
+    notifyOperator: async ({ orgId, body }) => {
+      // Resolve the team's callback number: blueprint.notifyPhone if set, else
+      // the workspace's own voice number. Send via the same Twilio path the
+      // post-call SMS uses (sendSmsFromApi).
+      const [agentRow] = await db
+        .select({ blueprint: agents.blueprint })
+        .from(agents)
+        .where(and(eq(agents.orgId, orgId), eq(agents.archetype, "voice-receptionist")))
+        .limit(1);
+      const blueprint = (agentRow?.blueprint ?? {}) as AgentBlueprint;
+      let to = blueprint.notifyPhone?.trim() || "";
+      if (!to) {
+        const { organizations } = await import("@/db/schema");
+        const [org] = await db
+          .select({ integrations: organizations.integrations })
+          .from(organizations)
+          .where(eq(organizations.id, orgId))
+          .limit(1);
+        const integrations = (org?.integrations ?? {}) as {
+          twilio?: { fromNumber?: string };
+        };
+        to = integrations.twilio?.fromNumber?.trim() || "";
+      }
+      if (!to) return; // nowhere to send — skip (best-effort)
+      const { sendSmsFromApi } = await import("@/lib/sms/api");
+      await sendSmsFromApi({ orgId, userId: null, contactId: null, toNumber: to, body });
+    },
+  };
+}
+
+const TAKE_MESSAGE_SPOKEN =
+  "Got it — I've passed your message to the team and they'll call you right back.";
+
+/**
+ * Core take_message logic. Pure of I/O except through `deps`. Contact upsert
+ * and activity write are awaited (they're the record of the callback); the
+ * operator SMS is best-effort — a flaky gateway must never fail the call, so a
+ * throw there is swallowed and the caller still hears the confirmation.
+ */
+export async function runTakeMessage(
+  input: z.infer<typeof takeMessageInput>,
+  ctx: ToolExecuteContext,
+  deps: TakeMessageDeps = defaultTakeMessageDeps(),
+): Promise<{ ok: true; spoken: string }> {
+  if (ctx.testMode) {
+    return { ok: true, spoken: TAKE_MESSAGE_SPOKEN };
+  }
+
+  const { id: contactId } = await deps.upsertContact({
+    orgId: ctx.orgId,
+    fullName: input.caller_name,
+    phone: input.caller_phone,
+  });
+
+  const body = `${input.caller_name} (${input.caller_phone}) asked for a callback: ${input.message}`;
+  await deps.writeCallbackActivity({
+    orgId: ctx.orgId,
+    contactId,
+    subject: "Callback requested",
+    body,
+    agentId: ctx.agentId,
+    conversationId: ctx.conversationId,
+  });
+
+  // Operator SMS — best-effort. Never let a Twilio hiccup break the call.
+  try {
+    await deps.notifyOperator({
+      orgId: ctx.orgId,
+      body: `New callback request from ${input.caller_name} (${input.caller_phone}): ${input.message}`,
+    });
+  } catch {
+    // swallow — the contact + activity already captured the message
+  }
+
+  return { ok: true, spoken: TAKE_MESSAGE_SPOKEN };
+}
+
+export const takeMessage: AgentTool<
+  z.infer<typeof takeMessageInput>,
+  { ok: true; spoken: string }
+> = {
+  name: "take_message",
+  description:
+    "Take a message and have the team call the caller back. USE THIS as the safe exit whenever you can't help directly: the caller asks something out of scope, you're unsure of the answer, or it's after-hours — DON'T guess, take a message. " +
+    "Captures the caller as a contact, logs a callback request in the CRM, and alerts the team by text. " +
+    "Args: caller_name, caller_phone (a number the team can reach them at), message (what they need). After it returns, tell the caller their message was passed along and the team will call back.",
+  inputSchema: takeMessageInput,
+  jsonSchema: {
+    type: "object",
+    properties: {
+      caller_name: { type: "string", description: "The caller's name." },
+      caller_phone: {
+        type: "string",
+        description: "A phone number the team can call them back on.",
+      },
+      message: {
+        type: "string",
+        description: "What the caller needs — captured for the team to act on.",
+      },
+    },
+    required: ["caller_name", "caller_phone", "message"],
+  },
+  execute: (input, ctx) => runTakeMessage(input, ctx),
+};
+
+// ─── get_quote_range (voice R1 — quote guard) ──────────────────────────────
+//
+// Pricing becomes a tool that returns a RANGE, never a firm number. The agent
+// NEVER states a price itself; it calls get_quote_range, which reads the
+// operator-configured ranges off the voice agent's blueprint and returns a
+// {low, high} band plus an "a technician confirms on-site" note. No range
+// configured for the asked service → { hasRange:false }, and the agent says a
+// tech will confirm (and may take_message).
+
+const getQuoteRangeInput = z.object({
+  service: z.string().min(1),
+});
+
+/** A configured per-service price band. Matches AgentBlueprint.quoteRanges. */
+export type QuoteRange = { service: string; low: number; high: number; note?: string };
+
+/**
+ * Pure service→range matcher. Case-insensitive, trims whitespace. Returns the
+ * matching range or null. Exact (normalized) match only — we never guess a
+ * price for a service the operator didn't price.
+ */
+export function resolveQuoteRange(
+  service: string,
+  ranges: readonly QuoteRange[],
+): QuoteRange | null {
+  const needle = service.trim().toLowerCase();
+  if (!needle) return null;
+  return ranges.find((r) => r.service.trim().toLowerCase() === needle) ?? null;
+}
+
+const ON_SITE_NOTE = "a technician confirms the exact price on-site";
+
+export type GetQuoteRangeResult =
+  | { hasRange: true; service: string; low: number; high: number; note: string }
+  | { hasRange: false };
+
+/** Injectable seam: load the workspace's configured quote ranges. */
+export type GetQuoteRangeDeps = {
+  loadQuoteRanges: (ctx: ToolExecuteContext) => Promise<QuoteRange[]>;
+};
+
+function defaultGetQuoteRangeDeps(): GetQuoteRangeDeps {
+  return {
+    loadQuoteRanges: async (ctx) => {
+      const [agentRow] = await db
+        .select({ blueprint: agents.blueprint })
+        .from(agents)
+        .where(
+          and(eq(agents.orgId, ctx.orgId), eq(agents.archetype, "voice-receptionist")),
+        )
+        .limit(1);
+      const blueprint = (agentRow?.blueprint ?? {}) as AgentBlueprint;
+      return blueprint.quoteRanges ?? [];
+    },
+  };
+}
+
+/** Core get_quote_range logic — loads ranges via deps, matches purely. */
+export async function runGetQuoteRange(
+  input: z.infer<typeof getQuoteRangeInput>,
+  ctx: ToolExecuteContext,
+  deps: GetQuoteRangeDeps = defaultGetQuoteRangeDeps(),
+): Promise<GetQuoteRangeResult> {
+  const ranges = await deps.loadQuoteRanges(ctx);
+  const match = resolveQuoteRange(input.service, ranges);
+  if (!match) {
+    return { hasRange: false };
+  }
+  return {
+    hasRange: true,
+    service: match.service,
+    low: match.low,
+    high: match.high,
+    note: match.note?.trim() || ON_SITE_NOTE,
+  };
+}
+
+export const getQuoteRange: AgentTool<
+  z.infer<typeof getQuoteRangeInput>,
+  GetQuoteRangeResult
+> = {
+  name: "get_quote_range",
+  description:
+    "Get the price RANGE for a service. ALWAYS call this when a caller asks 'how much' — NEVER state a price yourself and NEVER commit to a firm number. " +
+    "Returns { hasRange:true, low, high, note } — quote the range as a ballpark and add the note ('a technician confirms the exact price on-site'). " +
+    "If hasRange:false, the service isn't priced — tell the caller a technician will confirm the price, and offer to take a message (take_message) so the team can follow up.",
+  inputSchema: getQuoteRangeInput,
+  jsonSchema: {
+    type: "object",
+    properties: {
+      service: {
+        type: "string",
+        description: "The service the caller is asking the price of (e.g. 'furnace repair').",
+      },
+    },
+    required: ["service"],
+  },
+  execute: (input, ctx) => runGetQuoteRange(input, ctx),
 };
 
 // ─── allowlist ─────────────────────────────────────────────────────────────
@@ -729,6 +1196,8 @@ export const ALL_TOOLS: AgentTool[] = [
   cancelAppointment as AgentTool,
   escalateToHuman as AgentTool,
   provideFaqAnswer as AgentTool,
+  takeMessage as AgentTool,
+  getQuoteRange as AgentTool,
 ];
 
 export function getToolsForCapabilities(

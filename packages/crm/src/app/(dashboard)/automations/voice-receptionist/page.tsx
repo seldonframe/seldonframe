@@ -32,7 +32,7 @@ import { VoiceReceptionistEditor } from "./editor-client";
 
 export const dynamic = "force-dynamic";
 
-// The 6 voice-exposed tools (mirror VOICE_TOOLS in openai-realtime.ts —
+// The voice-exposed tools (mirror VOICE_TOOLS in openai-realtime.ts —
 // provide_faq_answer is excluded on voice; FAQ is injected into the prompt).
 const VOICE_CAPABILITIES = [
   "look_up_availability",
@@ -41,6 +41,9 @@ const VOICE_CAPABILITIES = [
   "reschedule_appointment",
   "cancel_appointment",
   "escalate_to_human",
+  // voice R1 — the safe exit (take a message) + the quote guard.
+  "take_message",
+  "get_quote_range",
 ];
 
 const CONVERSATION_LIMIT = 20;
@@ -155,6 +158,14 @@ export default async function VoiceReceptionistPage({
           voice: blueprint.voice ?? "alloy",
           capabilities: blueprint.capabilities ?? [...VOICE_CAPABILITIES],
           faq: (blueprint.faq ?? []).map((f) => ({ q: f.q, a: f.a })),
+          // voice R1 — operator-editable price ranges (get_quote_range) + the
+          // team callback number (take_message operator notification).
+          quoteRanges: (blueprint.quoteRanges ?? []).map((r) => ({
+            service: r.service,
+            low: r.low,
+            high: r.high,
+          })),
+          notifyPhone: blueprint.notifyPhone ?? "",
         }}
         allCapabilities={VOICE_CAPABILITIES}
       />
