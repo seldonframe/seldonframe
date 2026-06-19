@@ -15,7 +15,6 @@ import { ServicePageTemplate } from "@/components/landing-r1/sections/service-pa
 import { ChatbotEmbedScript } from "@/components/landing/chatbot-script";
 
 import { loadLandingPayload } from "@/lib/landing/r1-save";
-import { getWorkspaceTemplateContext } from "@/lib/landing/public-workspace";
 import { rewriteR1Hrefs } from "@/lib/landing/r1-rewrite-hrefs";
 import { findServicePage, getServicePages } from "@/lib/landing/r1-site-tree";
 import { buildWorkspaceUrls } from "@/lib/billing/anonymous-workspace";
@@ -56,12 +55,6 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 export default async function WorkspaceServicePage({ params }: PageProps) {
   const { slug, service } = await params;
 
-  // Resolve the workspace — same pattern as the home page.
-  const ctx = await getWorkspaceTemplateContext(slug);
-  if (!ctx) {
-    notFound();
-  }
-
   // r1 payload required — no template fallback for per-service pages.
   const r1 = await loadLandingPayload(slug);
   if (!r1) {
@@ -78,7 +71,7 @@ export default async function WorkspaceServicePage({ params }: PageProps) {
   const workspaceUrls = buildWorkspaceUrls(
     slug,
     process.env.WORKSPACE_BASE_DOMAIN ?? "app.seldonframe.com",
-    ctx.orgId,
+    r1.orgId,
   );
   const payload = rewriteR1Hrefs(r1.payload, {
     book: workspaceUrls.book,
@@ -86,7 +79,7 @@ export default async function WorkspaceServicePage({ params }: PageProps) {
     home: workspaceUrls.home,
   });
 
-  const chatbotEmbed = await getPublicChatbotEmbed(ctx.orgId);
+  const chatbotEmbed = await getPublicChatbotEmbed(r1.orgId);
   const homeHref = `/w/${slug}`;
   const navServices = getServicePages(payload).map((p) => ({ slug: p.slug, name: p.name }));
 
