@@ -15,7 +15,7 @@
 "use client";
 
 import { Phone } from "lucide-react";
-import { ARCHETYPES, archetypeStyle, type AestheticArchetypeId } from "../archetypes";
+import { ARCHETYPES, type AestheticArchetypeId } from "../archetypes";
 import { telHref } from "../_shared/phone";
 import { Testimonials } from "./testimonials";
 import type { ServicePage } from "@/lib/landing/r1-site-tree";
@@ -41,7 +41,6 @@ export function ServicePageTemplate({
   return (
     <main
       data-archetype={arch.id}
-      style={archetypeStyle(arch.id)}
       className="sf-service"
     >
       {/* ── Hero ── */}
@@ -61,11 +60,11 @@ export function ServicePageTemplate({
               </a>
             </div>
             {/* P2 mount point: the intake form renders here on the service hero. */}
-            <div data-slot="intake" className="slot slot-intake" aria-label="Lead form mounts here in Phase 2" />
+            <div data-slot="intake" className="slot slot-intake" aria-hidden="true" />
           </div>
           <div className="hero-media">
             {service.heroPhoto ? (
-              <img src={service.heroPhoto.src} alt={service.heroPhoto.alt} loading="eager" />
+              <img src={service.heroPhoto.src} alt={service.heroPhoto.alt} loading="eager" fetchPriority="high" />
             ) : (
               <div className="hero-media-ph" aria-hidden />
             )}
@@ -113,7 +112,7 @@ export function ServicePageTemplate({
       {/* P2 mount point: the Google Maps embed renders here. */}
       <section className="sf-service-map">
         <div className="container">
-          <div data-slot="map" className="slot slot-map" aria-label="Map mounts here in Phase 2" />
+          <div data-slot="map" className="slot slot-map" aria-hidden="true" />
         </div>
       </section>
 
