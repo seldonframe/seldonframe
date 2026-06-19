@@ -47,6 +47,31 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { orgSlug, slug } = await params;
   const pageSlug = slug.join("/");
 
+  // Phase R: per-service SEO metadata for /services/<service> paths.
+  if (slug.length === 2 && slug[0] === "services") {
+    const r1Data = await loadLandingPayload(orgSlug);
+    const page = r1Data ? findServicePage(r1Data.payload, slug[1]) : null;
+    if (r1Data && page) {
+      const businessName = r1Data.payload.footer.businessName;
+      const title = `${page.name} — ${businessName}`;
+      return {
+        title,
+        description: page.summary,
+        openGraph: {
+          title,
+          description: page.summary,
+          ...(page.heroPhoto ? { images: [{ url: page.heroPhoto.src }] } : {}),
+          type: "website",
+        },
+        robots: { index: true, follow: true },
+        // Canonical uses relative path style, matching the home-page metadata
+        // above which uses `/w/${orgSlug}` (not an absolute subdomain URL).
+        alternates: { canonical: `/w/${orgSlug}/services/${slug[1]}` },
+      };
+    }
+    // No payload or unknown service → fall through to home/default handling.
+  }
+
   // Phase R: serve R-framework SEO metadata for home pages with a payload.
   if (isHomePage(pageSlug)) {
     const r1Data = await loadLandingPayload(orgSlug);
