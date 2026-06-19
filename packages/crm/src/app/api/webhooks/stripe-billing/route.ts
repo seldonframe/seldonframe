@@ -1,63 +1,96 @@
-import { eq, or } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import type Stripe from "stripe";
 import { verifyStripeWebhook } from "@seldonframe/payments";
 import { db } from "@/db";
-import { users } from "@/db/schema";
-import { getPlanByStripePriceId } from "@/lib/billing/plans";
+import { organizations, users } from "@/db/schema";
+import { getOrgSubscription, updateOrgSubscription } from "@/lib/billing/subscription";
 import { finalizeBlockPurchaseFromWebhook, finalizeSoulPurchaseFromWebhook } from "@/lib/marketplace/actions";
+import {
+  handleBillingSubscriptionEvent,
+  type BillingWebhookStore,
+} from "./handlers";
 
-type BillingStatus = "trialing" | "active" | "past_due" | "canceled" | "unpaid";
+// 2026-06-18 — Phase 2 (billing-state consolidation).
+//
+// This is the PLATFORM billing webhook (subscription lifecycle), NOT the
+// proposals Connect webhook (/api/webhooks/stripe/connect). It used to
+// write the legacy `users.planId/stripeCustomerId/stripeSubscriptionId`
+// columns while the app read `organizations.subscription` — the two
+// could drift. It now writes ONLY `organizations.subscription` (JSONB),
+// the single source of truth read by getOrgSubscription /
+// resolveTierForWorkspace. The `users` billing columns are no longer
+// written here (left intact for back-compat reads during migration);
+// the only `users` access that remains is a READ to resolve an org from
+// metadata.userId.
+//
+// Billing-event state mapping lives in ./handlers (pure + unit-tested).
+// This route does signature verification, the org-resolution + persist
+// wiring (the DB-backed BillingWebhookStore below), and keeps the
+// orthogonal marketplace block/soul purchase finalizers.
 
-function mapSubscriptionStatus(value: string | undefined): BillingStatus {
-  switch (value) {
-    case "trialing":
-      return "trialing";
-    case "active":
-      return "active";
-    case "past_due":
-      return "past_due";
-    case "canceled":
-      return "canceled";
-    case "unpaid":
-      return "unpaid";
-    default:
-      return "active";
-  }
-}
-
-async function updateUserBillingByIdentifiers(params: {
-  userId?: string | null;
+/** Resolve the org an incoming billing event belongs to. Order:
+ *    1. metadata.orgId — /api/stripe/checkout stamps it on both the
+ *       checkout session metadata AND subscription_data.metadata, so it
+ *       rides on the session and every later subscription event.
+ *    2. metadata.userId → users.orgId (read-only lookup).
+ *    3. the subscription id already stored on an org's subscription.
+ *    4. the customer id already stored on an org's subscription. */
+async function resolveOrgIdForBillingEvent(params: {
+  metadata?: Record<string, string> | null;
   customerId?: string | null;
-  values: Partial<{
-    planId: string | null;
-    stripeCustomerId: string | null;
-    stripeSubscriptionId: string | null;
-    billingPeriod: "monthly" | "yearly";
-    subscriptionStatus: BillingStatus;
-    trialEndsAt: Date | null;
-  }>;
-}) {
-  const hasUserId = Boolean(params.userId);
-  const hasCustomerId = Boolean(params.customerId);
-
-  if (!hasUserId && !hasCustomerId) {
-    return;
+  subscriptionId?: string | null;
+}): Promise<string | null> {
+  const metadataOrgId = params.metadata?.orgId?.trim();
+  if (metadataOrgId) {
+    return metadataOrgId;
   }
 
-  const where = hasUserId && hasCustomerId
-    ? or(eq(users.id, params.userId as string), eq(users.stripeCustomerId, params.customerId as string))
-    : hasUserId
-      ? eq(users.id, params.userId as string)
-      : eq(users.stripeCustomerId, params.customerId as string);
+  const metadataUserId = params.metadata?.userId?.trim();
+  if (metadataUserId) {
+    const [userRow] = await db
+      .select({ orgId: users.orgId })
+      .from(users)
+      .where(eq(users.id, metadataUserId))
+      .limit(1);
+    if (userRow?.orgId) {
+      return userRow.orgId;
+    }
+  }
 
-  await db
-    .update(users)
-    .set({
-      ...params.values,
-      updatedAt: new Date(),
-    })
-    .where(where);
+  if (params.subscriptionId) {
+    const [orgBySubscription] = await db
+      .select({ id: organizations.id })
+      .from(organizations)
+      .where(sql`${organizations.subscription}->>'stripeSubscriptionId' = ${params.subscriptionId}`)
+      .limit(1);
+    if (orgBySubscription?.id) {
+      return orgBySubscription.id;
+    }
+  }
+
+  if (params.customerId) {
+    const [orgByCustomer] = await db
+      .select({ id: organizations.id })
+      .from(organizations)
+      .where(sql`${organizations.subscription}->>'stripeCustomerId' = ${params.customerId}`)
+      .limit(1);
+    if (orgByCustomer?.id) {
+      return orgByCustomer.id;
+    }
+  }
+
+  return null;
 }
+
+/** DB-backed persistence surface for the pure handler. `updateOrgSubscription`
+ *  merges (read-modify-write spread) so sibling keys in
+ *  `organizations.subscription` are preserved on every write. */
+const billingWebhookStore: BillingWebhookStore = {
+  resolveOrgId: resolveOrgIdForBillingEvent,
+  getOrgSubscription: (orgId) => getOrgSubscription(orgId),
+  updateOrgSubscription: (orgId, updates) => updateOrgSubscription(orgId, updates),
+};
 
 export async function POST(request: Request) {
   const signature = request.headers.get("stripe-signature");
@@ -67,7 +100,7 @@ export async function POST(request: Request) {
   }
 
   const payload = await request.text();
-  let event: ReturnType<typeof verifyStripeWebhook>;
+  let event: Stripe.Event;
 
   try {
     const previousSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -78,116 +111,65 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid webhook signature" }, { status: 400 });
   }
 
+  // ── Marketplace one-off purchases (orthogonal to subscription state) ──
+  // These ride on checkout.session.completed but are payment_intent
+  // purchases, not subscriptions, so they short-circuit before the
+  // subscription handler.
+  if (event.type === "checkout.session.completed") {
+    const object = event.data.object as Stripe.Checkout.Session;
+
+    if (object.metadata?.type === "block_purchase") {
+      const stripePaymentId = asPaymentIntentId(object.payment_intent);
+      await finalizeBlockPurchaseFromWebhook({
+        orgId: object.metadata?.orgId || "",
+        userId: object.metadata?.userId || null,
+        blockId: object.metadata?.blockId || "",
+        stripePaymentId,
+      });
+      return NextResponse.json({ ok: true });
+    }
+
+    if (object.metadata?.type === "soul_purchase") {
+      const stripePaymentId = asPaymentIntentId(object.payment_intent);
+      await finalizeSoulPurchaseFromWebhook({
+        orgId: object.metadata?.orgId || "",
+        userId: object.metadata?.userId || null,
+        listingId: object.metadata?.listingId || null,
+        listingSlug: object.metadata?.listingSlug || null,
+        stripePaymentId,
+      });
+      return NextResponse.json({ ok: true });
+    }
+  }
+
+  // ── Subscription lifecycle → organizations.subscription ───────────────
   switch (event.type) {
-    case "checkout.session.completed": {
-      const object = event.data.object as {
-        client_reference_id?: string | null;
-        customer?: string | { id?: string } | null;
-        subscription?: string | { id?: string } | null;
-        payment_intent?: string | { id?: string } | null;
-        metadata?: Record<string, string> | null;
-      };
-
-      if (object.metadata?.type === "block_purchase") {
-        const stripePaymentId =
-          typeof object.payment_intent === "string" ? object.payment_intent : object.payment_intent?.id || null;
-
-        await finalizeBlockPurchaseFromWebhook({
-          orgId: object.metadata?.orgId || "",
-          userId: object.metadata?.userId || null,
-          blockId: object.metadata?.blockId || "",
-          stripePaymentId,
-        });
-
-        break;
-      }
-
-      if (object.metadata?.type === "soul_purchase") {
-        const stripePaymentId =
-          typeof object.payment_intent === "string" ? object.payment_intent : object.payment_intent?.id || null;
-
-        await finalizeSoulPurchaseFromWebhook({
-          orgId: object.metadata?.orgId || "",
-          userId: object.metadata?.userId || null,
-          listingId: object.metadata?.listingId || null,
-          listingSlug: object.metadata?.listingSlug || null,
-          stripePaymentId,
-        });
-
-        break;
-      }
-
-      const userId = object.metadata?.seldonframe_user_id || object.client_reference_id || null;
-      const customerId = typeof object.customer === "string" ? object.customer : object.customer?.id || null;
-      const subscriptionId =
-        typeof object.subscription === "string" ? object.subscription : object.subscription?.id || null;
-      const planId = object.metadata?.seldonframe_plan_id ?? null;
-
-      await updateUserBillingByIdentifiers({
-        userId,
-        customerId,
-        values: {
-          planId,
-          stripeCustomerId: customerId,
-          stripeSubscriptionId: subscriptionId,
-          subscriptionStatus: "trialing",
-        },
-      });
-
-      break;
-    }
-
+    case "checkout.session.completed":
     case "customer.subscription.updated":
-    case "customer.subscription.deleted": {
-      const object = event.data.object as {
-        id?: string;
-        customer?: string | { id?: string };
-        status?: string;
-        items?: {
-          data?: Array<{
-            price?: {
-              id?: string;
-            };
-          }>;
-        };
-      };
-
-      const customerId = typeof object.customer === "string" ? object.customer : object.customer?.id || null;
-      const firstPriceId = object.items?.data?.[0]?.price?.id;
-      const resolvedPlan = firstPriceId ? getPlanByStripePriceId(firstPriceId) : null;
-
-      await updateUserBillingByIdentifiers({
-        customerId,
-        values: {
-          planId: resolvedPlan?.plan.id ?? null,
-          billingPeriod: resolvedPlan?.billingPeriod,
-          stripeSubscriptionId: object.id ?? null,
-          subscriptionStatus: event.type === "customer.subscription.deleted" ? "canceled" : mapSubscriptionStatus(object.status),
-        },
-      });
-
-      break;
-    }
-
-    case "invoice.payment_failed":
-    case "invoice.paid": {
-      const object = event.data.object as {
-        customer?: string | { id?: string };
-        subscription?: string | { id?: string } | null;
-      };
-
-      const customerId = typeof object.customer === "string" ? object.customer : object.customer?.id || null;
-      const subscriptionId =
-        typeof object.subscription === "string" ? object.subscription : object.subscription?.id || null;
-
-      await updateUserBillingByIdentifiers({
-        customerId,
-        values: {
-          stripeSubscriptionId: subscriptionId,
-          subscriptionStatus: event.type === "invoice.payment_failed" ? "past_due" : "active",
-        },
-      });
-
+    case "customer.subscription.deleted":
+    case "invoice.paid":
+    case "invoice.payment_failed": {
+      const result = await handleBillingSubscriptionEvent(event, billingWebhookStore);
+      if (result === null) {
+        console.info("[stripe-billing] no org resolved for event", {
+          eventId: event.id,
+          eventType: event.type,
+        });
+      } else if (result.action === "duplicate") {
+        console.info("[stripe-billing] duplicate event ignored", {
+          eventId: event.id,
+          eventType: event.type,
+          orgId: result.orgId,
+        });
+      } else {
+        console.info("[stripe-billing] subscription state applied", {
+          eventId: event.id,
+          eventType: event.type,
+          orgId: result.orgId,
+          tier: result.tier,
+          status: result.status,
+        });
+      }
       break;
     }
 
@@ -196,4 +178,10 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ ok: true });
+}
+
+function asPaymentIntentId(
+  value: string | { id?: string } | null | undefined,
+): string | null {
+  return typeof value === "string" ? value : value?.id || null;
 }
