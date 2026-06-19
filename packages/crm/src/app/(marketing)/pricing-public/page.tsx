@@ -20,7 +20,7 @@ import { MarketingFooter } from "@/components/landing/marketing-footer";
 export const metadata: Metadata = {
   title: "Pricing — SeldonFrame",
   description:
-    "Builder $19/mo · Workspace $49/mo · Agency $297/mo. Metered SMS, AI voice, and review add-ons. Start free. Roughly 5× under GoHighLevel.",
+    "Builder $19/mo · Workspace $49/mo · Agency $297/mo. One flat monthly price per tier — no metered bills. Roughly 5× under GoHighLevel.",
 };
 
 export default function PricingPublicPage() {
@@ -43,7 +43,7 @@ export default function PricingPublicPage() {
               </em>
             </h1>
             <p className="mx-auto mt-4 max-w-[52ch] text-[16px] leading-[1.55] text-[#6E665A]">
-              One flat fee per tier. Metered add-ons from your usage wallet.
+              One flat monthly fee per tier — no metered bills, no surprise fees.
               Agencies set their own markup and keep the spread.
               Roughly 5× under GoHighLevel.
             </p>

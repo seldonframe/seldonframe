@@ -246,10 +246,11 @@ export default async function BillingSettingsPage({
 
       {wantedNewWorkspace ? (
         <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 text-sm">
-          <p className="font-medium text-foreground">You&apos;ve used your free workspace.</p>
+          <p className="font-medium text-foreground">You&apos;ve reached your workspace limit.</p>
           <p className="mt-1 text-muted-foreground">
-            Upgrade to Growth ($29/mo) for up to 3 workspaces, or Scale ($99/mo) for unlimited.
-            Both tiers also unlock custom domain, remove SeldonFrame branding, and add the client portal.
+            Upgrade to Workspace ($49/mo) for one full business OS, or Agency ($297/mo) for 10 client
+            workspaces (then $10/mo each). Both unlock custom domain, remove SeldonFrame branding, and
+            add the client portal.
           </p>
         </div>
       ) : null}
@@ -264,8 +265,8 @@ export default async function BillingSettingsPage({
         <div className="rounded-xl border border-caution/30 bg-caution/10 p-4 text-sm">
           <p className="font-medium text-foreground">No active subscription to manage yet.</p>
           <p className="mt-1 text-muted-foreground">
-            You&apos;re on the free tier. Upgrade below to manage your subscription, unlock custom
-            domains, remove SeldonFrame branding, and access the client portal.
+            You don&apos;t have an active plan. Choose Builder, Workspace, or Agency below to manage your
+            subscription, unlock custom domains, remove SeldonFrame branding, and access the client portal.
           </p>
         </div>
       ) : null}

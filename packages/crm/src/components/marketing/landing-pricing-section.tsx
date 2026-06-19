@@ -8,14 +8,14 @@ import { BorderBeam } from "@/components/ui/border-beam";
 type BillingPeriod = "monthly" | "yearly";
 
 type PlanCard = {
-  id: "self_host" | "free" | "growth" | "scale";
+  id: "self_host" | "builder" | "workspace" | "agency";
   name: string;
   monthly: number;
   yearly: number;
   /** Tier id passed to /api/stripe/checkout. The server reads this and
-   *  builds the multi-price subscription (base + metered overages)
-   *  from `lib/billing/checkout-items.ts`. */
-  tier: "growth" | "scale" | null;
+   *  builds the per-tier base line item + metadata from
+   *  `lib/billing/checkout-items.ts`. */
+  tier: "builder" | "workspace" | "agency" | null;
   cta?: "checkout" | "github" | "signup";
   features: string[];
   badge?: string;
@@ -34,54 +34,51 @@ const PLANS: PlanCard[] = [
     features: ["Unlimited workspaces", "BYOK API", "Community support"],
   },
   {
-    id: "free",
-    name: "Free",
-    monthly: 0,
+    id: "builder",
+    name: "Builder",
+    monthly: 19,
     yearly: 0,
-    tier: null,
-    cta: "signup",
-    tagline: "Free forever — upgrade when you grow",
-    features: [
-      "1 workspace",
-      "50 contacts",
-      "100 agent runs / mo",
-      "All core blocks (landing, booking, intake, CRM, agents)",
-      "SeldonFrame branding on surfaces",
-      "Community support",
-    ],
-  },
-  {
-    id: "growth",
-    name: "Growth",
-    monthly: 29,
-    yearly: 0,
-    tier: "growth",
+    tier: "builder",
     cta: "checkout",
-    badge: "Recommended",
-    tagline: "For operators with paying clients",
+    tagline: "Landing pages on your own domain",
     features: [
-      "3 workspaces",
-      "500 contacts included (then $0.02 / contact)",
-      "1,000 agent runs included (then $0.03 / run)",
-      "Custom domain",
+      "Up to 10 landing pages",
+      "Your own custom domain",
       "No SeldonFrame branding",
-      "Client portal access",
+      "Managed AI page generation",
+      "Email support",
     ],
   },
   {
-    id: "scale",
-    name: "Scale",
-    monthly: 99,
+    id: "workspace",
+    name: "Workspace",
+    monthly: 49,
     yearly: 0,
-    tier: "scale",
+    tier: "workspace",
     cta: "checkout",
-    tagline: "For agencies building for multiple clients",
+    badge: "Most popular",
+    tagline: "One complete business OS",
     features: [
-      "Unlimited workspaces",
-      "Unlimited contacts",
-      "Agent runs $0.02 / run (all metered)",
-      "Full white-label",
-      "Client portal with custom branding",
+      "1 full client workspace",
+      "Website, booking, intake & CRM",
+      "AI chatbot included",
+      "Custom domain · client portal",
+      "Email support",
+    ],
+  },
+  {
+    id: "agency",
+    name: "Agency",
+    monthly: 297,
+    yearly: 0,
+    tier: "agency",
+    cta: "checkout",
+    tagline: "White-label for multiple clients",
+    features: [
+      "10 client workspaces included",
+      "+$10/mo per workspace beyond 10",
+      "Full white-label platform",
+      "Marketplace access",
       "Priority support",
     ],
   },
@@ -89,17 +86,17 @@ const PLANS: PlanCard[] = [
 
 function formatAmount(amount: number, period: BillingPeriod) {
   if (amount === 0) {
-    return "Free forever";
+    return "Free";
   }
 
-  return period === "monthly" ? `$${amount}/mo + usage` : `$${amount}/yr + usage`;
+  return period === "monthly" ? `$${amount}/mo` : `$${amount}/yr`;
 }
 
 export function LandingPricingSection() {
   const [period, setPeriod] = useState<BillingPeriod>("monthly");
   const [loadingTier, setLoadingTier] = useState<string | null>(null);
 
-  async function handleSubscribe(tier: "growth" | "scale") {
+  async function handleSubscribe(tier: "builder" | "workspace" | "agency") {
     setLoadingTier(tier);
 
     try {
@@ -134,7 +131,7 @@ export function LandingPricingSection() {
       <div className="rounded-3xl border border-white/10 bg-[#071216] p-6 md:p-8">
         <h2 className="text-3xl font-semibold tracking-tight md:text-4xl">Simple pricing. No surprises.</h2>
         <p className="mt-2 text-[#9fb7bc]">
-          Free forever to start. Pay base + usage as you scale. No per-workspace charge.
+          One flat monthly price per tier. No metered bills, no surprise fees.
         </p>
 
         <div className="mt-6 inline-flex rounded-full border border-white/10 bg-[#0a191d] p-1">
@@ -172,7 +169,7 @@ export function LandingPricingSection() {
                 key={plan.id}
                 className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0a181d] p-5"
               >
-                {plan.id === "growth" ? (
+                {plan.id === "workspace" ? (
                   <BorderBeam size={90} duration={7} colorFrom="#16b5ae" colorTo="#89fff8" borderWidth={1.5} />
                 ) : null}
 
@@ -231,7 +228,7 @@ export function LandingPricingSection() {
         </div>
 
         <p className="mt-5 text-sm text-[#8faab0]">
-          Billed monthly · cancel anytime. No per-workspace charge — Scale ships with unlimited workspaces.
+          Billed monthly · cancel anytime. Agency includes 10 client workspaces; extra workspaces are $10/mo each.
         </p>
       </div>
     </section>

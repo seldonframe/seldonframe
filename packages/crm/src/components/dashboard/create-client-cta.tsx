@@ -108,10 +108,10 @@ export function CreateClientCta({ tier, used, limit }: CreateClientCtaProps) {
             <UpgradeModal
               open={open}
               onOpenChange={setOpen}
-              // UpgradeModal accepts "free" | "growth" — Scale users never
-              // hit the at-limit branch (cap is unlimited), so coerce
-              // defensively to "growth" if it ever does.
-              tier={tier === "scale" ? "growth" : (tier as "free" | "growth")}
+              // The modal renders the Workspace/Agency upgrade cards for any
+              // current paid tier and the card-capture branch for
+              // free/inactive. Pass the current tier straight through.
+              tier={tier}
               used={used}
               limit={finite ? limit : 0}
             />

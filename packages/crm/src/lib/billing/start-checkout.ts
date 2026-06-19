@@ -1,23 +1,28 @@
 // packages/crm/src/lib/billing/start-checkout.ts
 //
-// Browser-side helper used by UpgradeModal (Cut A) to wire its two upgrade
-// buttons to the existing /api/stripe/checkout route. Returns the Stripe
-// checkout URL the caller redirects to (`window.location.href = url`).
+// Browser-side helper used by UpgradeModal to wire its upgrade buttons to
+// the /api/stripe/checkout route. Returns the Stripe checkout URL the
+// caller redirects to (`window.location.href = url`).
 //
-// The existing /api/stripe/checkout route at packages/crm/src/app/api/stripe/checkout/route.ts
-// already understands `{ tier: "growth" | "scale" }` body fields (lines 117,
-// 136-137) and assembles the multi-price line items via
-// `buildCheckoutLineItemsForTier(targetTier)`. This helper just builds the
-// JSON body with the right `successPath` + `cancelPath` and POSTs it.
+// The /api/stripe/checkout route at packages/crm/src/app/api/stripe/checkout/route.ts
+// understands `{ tier: "builder" | "workspace" | "agency" }` body fields
+// and assembles the per-tier base line item + the payment-critical
+// metadata via `buildCheckoutSessionParams(...)`. This helper just builds
+// the JSON body with the right `successPath` + `cancelPath` and POSTs it.
 //
-// Cut B Phase 5, Task 28 — TDD-extractable so the modal can be tested
-// without poking at fetch globals.
+// 2026-06-18 pricing migration (Phase 3): the tier union is the new
+// ladder (builder / workspace / agency). Legacy "growth"/"scale" no
+// longer originate from the client; the route still accepts them for
+// replayed/old links.
+//
+// TDD-extractable so the modal can be tested without poking at fetch
+// globals.
 
-type AgencyTier = "growth" | "scale";
+import type { TierId } from "@/lib/billing/plans";
 
 export type StartCheckoutInput = {
   priceId: string;
-  tier: AgencyTier;
+  tier: TierId;
   /** Test seam — production callers omit and fall back to global `fetch`. */
   fetchImpl?: typeof fetch;
 };

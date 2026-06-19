@@ -16,7 +16,7 @@ import {
   isSelfServiceCheckoutPriceId,
 } from "@/lib/billing/price-ids";
 import {
-  buildCheckoutLineItemsForTier,
+  buildCheckoutSessionParams,
   tierFromBasePriceId,
 } from "@/lib/billing/checkout-items";
 import type { TierId } from "@/lib/billing/plans";
@@ -188,51 +188,66 @@ export async function POST(req: NextRequest) {
   const requestedWorkspaceId = typeof body.workspaceId === "string" ? body.workspaceId.trim() : "";
   const targetWorkspaceId = requestedWorkspaceId || orgId || "";
 
-  // Resolve the line items + checkout type.
-  let lineItems: Array<{ price: string; quantity?: 1 }>;
-  let basePriceId: string;
-  let checkoutType: "self_service_workspace" | "workspace_addon";
+  const origin = getRequestOrigin(req);
 
+  // ── Tier path (Builder / Workspace / Agency) ────────────────────────
+  // The self-service tiers go through the pure session-params builder so
+  // the payment-critical metadata (orgId + tier on BOTH the session and
+  // subscription_data — the Phase 2 webhook contract) is assembled from
+  // a single, unit-tested source of truth.
   if (targetTier) {
-    const tierItems = buildCheckoutLineItemsForTier(targetTier);
-    if (!tierItems || tierItems.length === 0) {
+    // Self-service tiers are bound to a specific workspace.
+    if (!targetWorkspaceId) {
+      return NextResponse.json(
+        { error: "workspaceId is required for self-service tiers." },
+        { status: 400 }
+      );
+    }
+
+    const params = buildCheckoutSessionParams({
+      tier: targetTier,
+      userId,
+      orgId: orgId ?? "",
+      workspaceId: targetWorkspaceId,
+      customerEmail: dbUser.email,
+      origin,
+      successPath,
+      cancelPath,
+    });
+
+    if (!params) {
       return NextResponse.json(
         { error: `No checkout items configured for tier '${targetTier}'.` },
         { status: 500 }
       );
     }
-    lineItems = tierItems;
-    basePriceId = tierItems[0].price;
-    checkoutType = "self_service_workspace";
-  } else {
-    // Fallback: legacy single-price subscription (workspace add-on).
-    // Used by old links that explicitly request the addon price id.
-    const resolvedPriceId = requestedPriceId || WORKSPACE_ADDON_MONTHLY_PRICE_ID;
-    lineItems = [{ price: resolvedPriceId, quantity: 1 }];
-    basePriceId = resolvedPriceId;
-    checkoutType = isSelfServiceCheckoutPriceId(resolvedPriceId)
-      ? "self_service_workspace"
-      : "workspace_addon";
+
+    const checkoutSession = await stripe.checkout.sessions.create({
+      ...params,
+      payment_method_types: ["card"],
+    });
+
+    return NextResponse.json({ url: checkoutSession.url, tier: targetTier });
   }
 
-  // Self-service tiers are bound to a specific workspace. Only the
-  // legacy workspace-addon price doesn't require a workspaceId.
+  // ── Legacy fallback: single-price subscription (workspace add-on) ────
+  // Used only by old links that explicitly request the add-on price id.
+  // The new pricing model never lands here.
+  const resolvedPriceId = requestedPriceId || WORKSPACE_ADDON_MONTHLY_PRICE_ID;
+  const checkoutType: "self_service_workspace" | "workspace_addon" =
+    isSelfServiceCheckoutPriceId(resolvedPriceId)
+      ? "self_service_workspace"
+      : "workspace_addon";
+
   if (checkoutType === "self_service_workspace" && !targetWorkspaceId) {
     return NextResponse.json({ error: "workspaceId is required for self-service tiers." }, { status: 400 });
   }
 
-  // Honor the legacy `quantity` request only on the workspace-addon
-  // path. Multi-price tier subscriptions never use quantity (metered
-  // lines must omit it; the base flat line is already 1).
-  if (checkoutType === "workspace_addon" && quantity > 1) {
-    lineItems = [{ price: basePriceId, quantity: 1 }];
-    // (We previously honored quantity here for the per-seat add-on;
-    // the new pricing model has no per-seat surface so we collapse
-    // to 1. Operators that still hold legacy add-on subscriptions
-    // can adjust quantity via the Stripe Billing portal.)
-  }
-
-  const origin = getRequestOrigin(req);
+  // The per-seat add-on has no surface in the new pricing model; the
+  // legacy `quantity` body field (still range-validated above) is
+  // collapsed to 1 here. Operators on a legacy add-on can adjust quantity
+  // via the Stripe Billing portal.
+  const lineItems = [{ price: resolvedPriceId, quantity: 1 as const }];
 
   const checkoutSession = await stripe.checkout.sessions.create({
     customer_email: dbUser.email ?? undefined,
@@ -247,8 +262,8 @@ export async function POST(req: NextRequest) {
       userId,
       orgId: orgId ?? "",
       workspaceId: targetWorkspaceId,
-      tier: targetTier ?? "",
-      priceId: basePriceId,
+      tier: "",
+      priceId: resolvedPriceId,
       type: checkoutType,
     },
     subscription_data: {
@@ -257,8 +272,8 @@ export async function POST(req: NextRequest) {
         userId,
         orgId: orgId ?? "",
         workspaceId: targetWorkspaceId,
-        tier: targetTier ?? "",
-        priceId: basePriceId,
+        tier: "",
+        priceId: resolvedPriceId,
         type: checkoutType,
       },
     },

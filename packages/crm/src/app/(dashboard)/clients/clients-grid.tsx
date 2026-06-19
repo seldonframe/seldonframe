@@ -212,11 +212,10 @@ export function ClientsGrid({ workspaces, tier, used, limit }: ClientsGridProps)
       <UpgradeModal
         open={modalOpen}
         onOpenChange={setModalOpen}
-        // UpgradeModal accepts "free" | "growth" only; Scale users
-        // never reach the at-limit branch (cap is unlimited), so the
-        // coercion is defensive — if it somehow runs, show the same
-        // upgrade copy a Growth user would see.
-        tier={tier === "scale" ? "growth" : tier}
+        // The modal shows the Workspace/Agency upgrade cards for any
+        // current paid tier and the card-capture branch for free/inactive.
+        // Pass the operator's current tier straight through.
+        tier={tier}
         used={used}
         limit={finite ? limit : 0}
       />

@@ -1,7 +1,8 @@
-// Snapshot-shape test for LandingMarketingPricingSection (Cut C Phase 4).
-// Asserts the 3-tier matrix structure: Free / Growth / Scale columns,
-// 10 feature rows from spec §Cut B, and CTAs that route to /signup
-// (note: /signup, NOT /auth/signup — (auth) is a Next.js route group).
+// Snapshot-shape test for LandingMarketingPricingSection.
+//
+// 2026-06-18 pricing migration (Phase 3): the homepage pricing section is
+// the flat 3-tier ladder — Builder $19 / Workspace $49 / Agency $297 —
+// with CTAs that route to /signup?plan=<tier>. (Was Free/Growth/Scale.)
 //
 // Same shape-walking pattern as hero-cta.spec.ts and how-it-works.spec.ts
 // so we don't need jsdom for what is otherwise a static surface.
@@ -41,74 +42,70 @@ function safeText(node: unknown): string {
 }
 
 describe("LandingMarketingPricingSection — 3-column matrix", () => {
-  test("renders 3 tier columns: Free, Growth, Scale", () => {
+  test("renders 3 tier columns: Builder, Workspace, Agency", () => {
     const result = LandingMarketingPricingSection();
     const cols = flatten(result).filter(
       (el) =>
         typeof (el.props as { "data-tier"?: string })?.["data-tier"] === "string",
     );
     const tiers = cols.map((c) => (c.props as { "data-tier": string })["data-tier"]);
-    assert.deepEqual(tiers, ["free", "growth", "scale"]);
+    assert.deepEqual(tiers, ["builder", "workspace", "agency"]);
   });
 
   test("each tier card surfaces its price label", () => {
     const result = LandingMarketingPricingSection();
     const text = safeText(result);
-    assert.match(text, /\$0/);
-    assert.match(text, /\$29/);
-    assert.match(text, /\$99/);
+    assert.match(text, /\$19/);
+    assert.match(text, /\$49/);
+    assert.match(text, /\$297/);
   });
 
-  test("Free column CTA links to /signup", () => {
+  test("Builder CTA links to /signup?plan=builder", () => {
     const result = LandingMarketingPricingSection();
     const ctas = flatten(result).filter(
-      (el) => (el.props as { "data-tier-cta"?: string })?.["data-tier-cta"] === "free",
+      (el) => (el.props as { "data-tier-cta"?: string })?.["data-tier-cta"] === "builder",
     );
     assert.equal(ctas.length, 1);
     assert.equal(
       (ctas[0].props as { href?: string }).href,
-      "/signup",
+      "/signup?plan=builder",
     );
   });
 
-  test("Growth + Scale CTAs link to /signup with plan query param", () => {
+  test("Workspace + Agency CTAs link to /signup with plan query param", () => {
     const result = LandingMarketingPricingSection();
-    const growthCta = flatten(result).find(
-      (el) => (el.props as { "data-tier-cta"?: string })?.["data-tier-cta"] === "growth",
+    const workspaceCta = flatten(result).find(
+      (el) => (el.props as { "data-tier-cta"?: string })?.["data-tier-cta"] === "workspace",
     );
-    const scaleCta = flatten(result).find(
-      (el) => (el.props as { "data-tier-cta"?: string })?.["data-tier-cta"] === "scale",
-    );
-    assert.equal(
-      (growthCta?.props as { href?: string } | undefined)?.href,
-      "/signup?plan=growth",
+    const agencyCta = flatten(result).find(
+      (el) => (el.props as { "data-tier-cta"?: string })?.["data-tier-cta"] === "agency",
     );
     assert.equal(
-      (scaleCta?.props as { href?: string } | undefined)?.href,
-      "/signup?plan=scale",
+      (workspaceCta?.props as { href?: string } | undefined)?.href,
+      "/signup?plan=workspace",
+    );
+    assert.equal(
+      (agencyCta?.props as { href?: string } | undefined)?.href,
+      "/signup?plan=agency",
     );
   });
 
-  test("all 10 feature rows from spec §Cut B render", () => {
-    // Labels here are deliberately short substrings of the real
-    // (longer) marketing copy so a future copy polish that adds
-    // qualifiers — "Bring your own Anthropic key" instead of
-    // "BYOK Anthropic key", "Branded client portal" instead of
-    // "Client portal" — doesn't break the test. The substrings
-    // must still uniquely identify each spec row.
+  test("the key feature rows render", () => {
+    // Short substrings of the real (longer) marketing copy so a future
+    // copy polish doesn't break the test; the substrings must still
+    // uniquely identify each row in the comparison table.
     const result = LandingMarketingPricingSection();
     const text = safeText(result);
     for (const label of [
-      "workspaces",
-      "Anthropic key",
-      "Unlimited contacts",
-      "No SeldonFrame branding",
-      "Custom domain",
-      "client portal",
-      "AI agents",
-      "white-label",
+      "Client workspaces",
+      "Landing pages",
+      "Own domain",
+      "CRM",
+      "Booking page",
+      "Intake form",
+      "AI chatbot",
+      "White-label",
       "Priority support",
-      "Claude Code MCP",
     ]) {
       assert.match(text, new RegExp(label, "i"), `missing feature row: ${label}`);
     }
