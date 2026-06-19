@@ -41,6 +41,7 @@ import {
   rescheduleAppointment,
   cancelAppointment,
   buildBookingReadBack,
+  formatSlotLabel,
   type ToolExecuteContext,
   type BookAppointmentDeps,
   type SubmitPublicBookingArgs,
@@ -270,6 +271,34 @@ describe("buildBookingReadBack — spoken summary", () => {
     assert.match(text, /Jane Doe/);
     assert.match(text, /correct\?\s*$/i, "ends by asking the caller to confirm");
   });
+
+  // Production bug: on a real call the agent spoke the raw UTC ISO —
+  // "So that's Tom Cruise, 2026-06-25T13:00:00.000Z — is that correct?".
+  // When a workspace timezone is supplied the read-back must carry the
+  // SERVER-FORMATTED human label (formatSlotLabel), never the raw ISO.
+  test("with a timezone, speaks the human-local time, NOT the raw UTC ISO", () => {
+    const slotIso = "2026-06-25T13:00:00.000Z";
+    const label = formatSlotLabel(slotIso, "America/Toronto"); // e.g. "Thursday, June 25 at 9:00 AM EDT"
+    const text = buildBookingReadBack({
+      fullName: "Tom",
+      slotIso,
+      timezone: "America/Toronto",
+    });
+    assert.match(text, /Tom/);
+    // The exact server-rendered label is embedded verbatim.
+    assert.ok(
+      text.includes(label),
+      `read-back should contain the formatted label "${label}", got "${text}"`,
+    );
+    // And specifically the human pieces of it.
+    assert.match(text, /9:00\s?AM/i, `expected local 9:00 AM, got "${text}"`);
+    assert.match(text, /June\s*25\b/, `expected calendar date, got "${text}"`);
+    // Regression guard: the machine ISO time must never be spoken.
+    assert.ok(
+      !text.includes("T13:00:00"),
+      `must not surface the raw UTC ISO time: "${text}"`,
+    );
+  });
 });
 
 describe("book_appointment — confirmation gate", () => {
@@ -287,6 +316,36 @@ describe("book_appointment — confirmation gate", () => {
     assert.equal(out.needsConfirmation, true);
     assert.match(out.readBack ?? "", /Jane Doe/);
     assert.match(out.readBack ?? "", /correct\?\s*$/i);
+  });
+
+  // Production bug regression: a voice call carries the workspace timezone on
+  // ctx. The unconfirmed read-back (which the model speaks verbatim) must
+  // render the slot in that timezone, not echo the raw UTC ISO.
+  test("WITH ctx.timezone: read-back speaks the human-local time, not the raw ISO", async () => {
+    const slotIso = "2026-06-25T13:00:00.000Z";
+    const label = formatSlotLabel(slotIso, "America/Toronto");
+    const out = (await bookAppointment.execute(
+      {
+        fullName: "Tom Cruise",
+        email: "tom@acme.co",
+        slotIso,
+      },
+      { ...CTX, timezone: "America/Toronto" },
+      // No deps needed: the gate returns before any submit/DB call.
+    )) as { ok: boolean; needsConfirmation?: boolean; readBack?: string };
+
+    assert.equal(out.ok, false);
+    assert.equal(out.needsConfirmation, true);
+    assert.match(out.readBack ?? "", /Tom Cruise/);
+    assert.ok(
+      (out.readBack ?? "").includes(label),
+      `read-back should contain "${label}", got "${out.readBack}"`,
+    );
+    assert.match(out.readBack ?? "", /9:00\s?AM/i);
+    assert.ok(
+      !(out.readBack ?? "").includes("T13:00:00"),
+      `must not surface the raw UTC ISO: "${out.readBack}"`,
+    );
   });
 
   test("confirmed:true in testMode performs the (synthetic) write", async () => {
@@ -341,6 +400,42 @@ describe("reschedule_appointment — confirmation gate + email guard", () => {
     assert.equal(out.ok, false);
     assert.equal(out.needsConfirmation, true);
     assert.match(out.readBack ?? "", /correct\?\s*$/i);
+  });
+
+  // Same production bug as book_appointment: the reschedule read-back spoke
+  // the raw new_starts_at_iso. With ctx.timezone it must speak a human time.
+  test("WITH ctx.timezone: read-back speaks the human-local time, not the raw ISO", async () => {
+    const newIso = "2026-06-25T13:00:00.000Z";
+    const label = formatSlotLabel(newIso, "America/Toronto");
+    const out = (await rescheduleAppointment.execute(
+      {
+        booking_id: BOOKING_ID,
+        new_starts_at_iso: newIso,
+        customer_email: "jane@acme.co",
+      },
+      { ...CTX, timezone: "America/Toronto" },
+      {
+        loadBooking: async () => {
+          throw new Error("must not read the DB before confirmation");
+        },
+        updateBookingStart: async () => {
+          throw new Error("must not write before confirmation");
+        },
+      },
+    )) as { ok: boolean; needsConfirmation?: boolean; readBack?: string };
+
+    assert.equal(out.ok, false);
+    assert.equal(out.needsConfirmation, true);
+    assert.match(out.readBack ?? "", /correct\?\s*$/i);
+    assert.ok(
+      (out.readBack ?? "").includes(label),
+      `read-back should contain "${label}", got "${out.readBack}"`,
+    );
+    assert.match(out.readBack ?? "", /9:00\s?AM/i);
+    assert.ok(
+      !(out.readBack ?? "").includes("T13:00:00"),
+      `must not surface the raw UTC ISO: "${out.readBack}"`,
+    );
   });
 
   test("confirmed:true with a matching email writes the new start", async () => {

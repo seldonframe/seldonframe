@@ -256,6 +256,11 @@ export async function POST(request: Request): Promise<Response> {
             resolved.ctx.orgId,
             resolved.ctx.agentId,
           );
+          // Workspace timezone → tool context. The booking/reschedule read-backs
+          // format the spoken slot time in this zone so the caller hears
+          // "June 25 at 9:00 AM EDT", never the raw UTC ISO. (loadVoicePersonaInputs
+          // always returns a concrete zone, defaulting to "UTC".)
+          resolved.ctx.timezone = personaInputs.timezone;
           // Stage B READ — load learned patterns (readBrainNote ticks `uses`),
           // inject them into the persona, and remember the consumed ids so a
           // booking win can bump exactly those notes' confidence.

@@ -35,6 +35,12 @@ export type ToolExecuteContext = {
    *  didn't collect one — so the caller never has to be asked for the number
    *  the call already carries. A model-supplied phone still wins. */
   callerPhone?: string;
+  /** The workspace's IANA timezone (e.g. "America/Toronto"), set by the voice
+   *  webhook after the persona inputs load. Used to format spoken times in the
+   *  booking/reschedule read-backs so the caller hears "June 25 at 9:00 AM EDT"
+   *  instead of the raw UTC ISO. Web/text callers may omit it → formatting
+   *  falls back to UTC, still human-readable, never a raw ISO. */
+  timezone?: string;
 };
 
 export type AgentTool<I = unknown, O = unknown> = {
@@ -462,6 +468,9 @@ export const bookAppointment: AgentTool<
         readBack: buildBookingReadBack({
           fullName: input.fullName,
           slotIso: input.slotIso,
+          // Voice calls carry the workspace timezone → the read-back speaks a
+          // human-local time, never the raw UTC ISO. Web/text omit it (UTC).
+          timezone: ctx.timezone,
         }),
         instruction: CONFIRM_INSTRUCTION,
       };
@@ -865,7 +874,13 @@ export const rescheduleAppointment: AgentTool<
       return {
         ok: false,
         needsConfirmation: true,
-        readBack: `So I'll move your appointment to ${input.new_starts_at_iso} — is that correct?`,
+        // Speak a human-local time, not the raw UTC ISO. formatSlotLabel needs
+        // a concrete zone; voice supplies ctx.timezone, web/text fall back to
+        // UTC (formatSlotLabel itself also degrades a bad zone to UTC).
+        readBack: `So I'll move your appointment to ${formatSlotLabel(
+          input.new_starts_at_iso,
+          ctx.timezone ?? "UTC",
+        )} — is that correct?`,
         instruction: CONFIRM_INSTRUCTION,
       };
     }
