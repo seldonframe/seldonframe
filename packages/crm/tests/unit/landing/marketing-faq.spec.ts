@@ -1,11 +1,13 @@
 // Snapshot-shape tests for LandingMarketingFaqSection (Cut C Phase 6 +
 // onboarding-pivot Q7/Q8 additions).
 //
-// Eight agency-focused Q&As. The tests check (a) exactly 8 <details>
-// rendered, (b) each expected concept is present (white-label, domain,
-// Anthropic key, workspace count, Claude Code, isolation, GHL
-// comparison, tool-stack replacement), (c) a few load-bearing claims
-// (Growth+Scale mention, "every tier" for BYOK, $29/$497 comparison),
+// Eight Q&As aligned to the locked 2026-06-18 pricing ladder
+// (Builder $19 / Workspace $49 / Agency $297, no free tier). The tests
+// check (a) exactly 8 <details> rendered, (b) each expected concept is
+// present (who-it's-for, workspace count, white-label, domain, usage
+// fees, managed AI, GHL comparison, tool-stack replacement), (c) a few
+// load-bearing claims (white-label = Agency $297 with no Growth/Scale,
+// managed AI with BYOK only on self-host, $497 GHL comparison),
 // (d) the FAQPage JSON-LD schema script is emitted with the same
 // answer text — Google's structured-data validator drops the schema
 // otherwise.
@@ -31,14 +33,14 @@ function flatten(node: unknown, acc: AnyEl[] = []): AnyEl[] {
 }
 
 const EXPECTED_QUESTIONS = [
-  /white-label/i,
-  /domain/i,
-  /Anthropic/i,
-  /how many .*workspaces/i,
-  /Claude Code/i,
-  /isolated|isolation/i,
-  /GoHighLevel/i,
-  /Zapier|Calendly|Typeform/i,
+  /SMB|agenc/i, // Q1 — who SeldonFrame is for
+  /how many .*workspaces/i, // Q2 — workspace count per plan
+  /white-label/i, // Q3 — white-label for clients
+  /domain/i, // Q4 — custom domain
+  /usage fees|surprise/i, // Q5 — no metered / surprise bills
+  /AI key|managed/i, // Q6 — managed AI, no BYOK required
+  /GoHighLevel/i, // Q7 — GHL comparison
+  /Zapier|Calendly|Typeform/i, // Q8 — replaces the tool stack
 ];
 
 describe("LandingMarketingFaqSection — 8 agency-focused Q&A", () => {
@@ -56,20 +58,26 @@ describe("LandingMarketingFaqSection — 8 agency-focused Q&A", () => {
     }
   });
 
-  test("answer for white-label mentions both Growth and Scale", () => {
+  test("white-label answer is scoped to the Agency plan ($297), not Growth/Scale", () => {
     const result = LandingMarketingFaqSection();
     const text = JSON.stringify(result);
-    assert.match(text, /Growth/);
-    assert.match(text, /Scale/);
+    // New locked ladder: white-label is the Agency tier ($297/mo).
+    assert.match(text, /white-label/i);
+    assert.match(text, /Agency/);
+    assert.match(text, /\$297/);
+    // The retired Free / Growth / Scale tiers must not reappear.
+    assert.doesNotMatch(text, /Growth|Scale/);
   });
 
-  test("answer for BYOK signals every-tier availability", () => {
+  test("AI answer: managed on paid plans, BYOK only on self-host", () => {
     const result = LandingMarketingFaqSection();
     const text = JSON.stringify(result);
-    // The refined copy says "every tier" (was "all tiers" in the
-    // draft); tolerate either phrasing so a future ux-copy polish
-    // doesn't break the spec contract.
-    assert.match(text, /(all tiers|every tier)/i);
+    // New locked ladder: AI is managed/included on every paid plan;
+    // bring-your-own-key is only for the self-hosted edition.
+    assert.match(text, /managed/i);
+    assert.match(text, /self-host/i);
+    // The retired "every tier / all tiers" BYOK promise is gone.
+    assert.doesNotMatch(text, /(all tiers|every tier)/i);
   });
 
   test("GHL-comparison answer carries the $29 vs $497 wallet math", () => {

@@ -21,7 +21,7 @@ const FAQS: readonly FaqItem[] = [
   {
     question: "How many workspaces can I run?",
     answer:
-      "The Builder plan ($19/mo) gives you landing pages only — no full workspace. The Workspace plan ($49/mo) gives you 1 full workspace. The Agency plan ($297/mo) includes 10 client workspaces (add more as you grow), plus white-labeling and your own client pricing.",
+      "The Builder plan ($19/mo) gives you up to 10 landing pages on your own domain — no full workspace. The Workspace plan ($49/mo) gives you 1 full workspace. The Agency plan ($297/mo) includes 10 client workspaces — then $10/mo for each additional workspace — plus white-labeling and your own client pricing. There's no free tier — paid plans start at $19/mo.",
   },
   {
     question: "Can I white-label this for my clients?",
@@ -41,7 +41,7 @@ const FAQS: readonly FaqItem[] = [
   {
     question: "Do I need to bring my own AI key?",
     answer:
-      "No. AI is fully included and managed — no API keys to set up, no token bills to track. Paste your site and your front office builds itself.",
+      "No. Managed AI is included on every paid plan — no API keys to set up, no token bills to track. (Bring-your-own-key is only for the self-hosted, open-source edition.) Paste your site and your front office builds itself.",
   },
   {
     question: "How does this compare to GoHighLevel?",
