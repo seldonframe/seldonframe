@@ -48,7 +48,7 @@ export function buildServiceNavLinks(
   const base = homeHref === "/" ? "" : homeHref.replace(/\/+$/, "");
   return pages
     .filter((p) => typeof p?.slug === "string" && p.slug.trim() && typeof p?.name === "string" && p.name.trim())
-    .map((p) => ({ label: p.name, href: `${base}/services/${p.slug}` }));
+    .map((p) => ({ label: p.name, href: `${base}/services/${p.slug.trim()}` }));
 }
 
 export type NavbarProps = {
@@ -110,16 +110,16 @@ export function Navbar({
         <nav className="sf-navbar-links" aria-label="Page sections">
           {serviceLinks.length > 0 && (
             <div className="sf-navbar-dropdown">
-              <button type="button" className="sf-navbar-link sf-navbar-dropdown-trigger" aria-haspopup="true">
+              <button type="button" className="sf-navbar-link sf-navbar-dropdown-trigger">
                 Services
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                  strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M6 9l6 6 6-6" />
                 </svg>
               </button>
-              <div className="sf-navbar-menu" role="menu">
+              <div className="sf-navbar-menu">
                 {serviceLinks.map((l) => (
-                  <a key={l.href} className="sf-navbar-menu-item" href={l.href} role="menuitem">
+                  <a key={l.href} className="sf-navbar-menu-item" href={l.href}>
                     {l.label}
                   </a>
                 ))}
