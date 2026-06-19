@@ -213,7 +213,20 @@ export const MAX_CALL_MS = 4 * 60 * 1000;
  * identically regardless of which path delivered the transcript.
  */
 export const CALLER_GOODBYE_RE =
-  /\b(good ?bye|bye|that'?s all|thank you,? bye|hang up)\b/i;
+  /\b(good ?bye|bye|that'?s all|thank you,? bye|hang up|have a (great|good|nice|wonderful) (day|one|evening|weekend)|take care|talk (to you )?(soon|later)|that'?s (all|it|everything)|(i'?m |we'?re )?all set|no,? thanks?)\b/i;
+
+/**
+ * voice-r1 (FIX 2+3) — the AGENT's sign-off pattern. SEPARATE from
+ * CALLER_GOODBYE_RE on purpose: it matches ONLY unambiguous closings, and
+ * deliberately EXCLUDES "all set" / "no thanks" — phrases the AGENT says while
+ * CONFIRMING a booking ("you're all set for Friday"). Using the broad caller
+ * regex on the agent would end the call mid-confirmation. When the assistant's
+ * spoken transcript matches this, we set `sawGoodbye` so the call ends right
+ * after the agent's closing line (the existing `response.done` → goodbye path).
+ * `\b`-bounded, case-insensitive.
+ */
+export const AGENT_SIGNOFF_RE =
+  /\b(good ?bye|bye|have a (great|good|nice|wonderful) (day|one|evening|weekend)|take care|talk (to you )?(soon|later))\b/i;
 
 /**
  * Build the OUT-OF-BAND caller-speech transcription request.
@@ -421,6 +434,41 @@ export async function acceptCall(params: {
   }
 }
 
+/**
+ * Best-effort SIP hangup. POSTs to the OpenAI Realtime SIP hangup endpoint to
+ * actually TERMINATE the caller's SIP leg — closing the control WS alone does
+ * NOT end the call (the caller hears dead air until the wall-clock cap). A 200
+ * means teardown has started. Mirrors acceptCall's style (single fetch,
+ * injectable `fetchImpl` for tests) but NEVER throws: a hangup failure must
+ * never affect call teardown, so a thrown/rejected fetch is caught and reported
+ * as `{ ok:false, status:0 }`.
+ *
+ * NOTE: OpenAI has a known issue where this endpoint occasionally does not
+ * terminate the call; best-effort is acceptable — the control-WS close + the
+ * wall-clock cap remain as belt-and-suspenders.
+ */
+export async function hangupCall(params: {
+  callId: string;
+  apiKey: string;
+  // Injectable for tests; defaults to global fetch.
+  fetchImpl?: typeof fetch;
+}): Promise<{ ok: boolean; status: number }> {
+  const doFetch = params.fetchImpl ?? fetch;
+  const url = `${OPENAI_API_BASE}/v1/realtime/calls/${encodeURIComponent(params.callId)}/hangup`;
+  try {
+    const res = await doFetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${params.apiKey}`,
+      },
+    });
+    return { ok: res.ok, status: res.status };
+  } catch {
+    // Best-effort — a failed hangup must never break call teardown.
+    return { ok: false, status: 0 };
+  }
+}
+
 /** Reasons a held call WS finally closed — surfaced in the final log line so a
  *  failed validation call can be diagnosed from the Vercel log export alone. */
 export type CallEndReason =
@@ -491,6 +539,10 @@ export async function runVoiceCall(params: {
   instructions?: string;
   // Injectable tool executor for tests (defaults to the real bridge).
   executeToolCall?: typeof defaultExecuteVoiceToolCall;
+  // voice-r1 (FIX 3) — injectable SIP hangup for tests (defaults to the real
+  // hangupCall). finish() fires this for the ends WE initiate so the caller's
+  // SIP leg is actually torn down (closing the WS alone leaves it open).
+  hangupImpl?: typeof hangupCall;
   // PHASE 2 — per-agent TTS voice (blueprint.voice). Defaults to the GA fallback.
   audioVoice?: string;
   // PHASE 2 — per-workspace opening line (blueprint.greeting). When set, the
@@ -525,6 +577,7 @@ export async function runVoiceCall(params: {
   const toolContext = params.toolContext;
   const toolsEnabled = Boolean(toolContext);
   const executeToolCall = params.executeToolCall ?? defaultExecuteVoiceToolCall;
+  const hangup = params.hangupImpl ?? hangupCall;
   const instructions =
     params.instructions ??
     (toolsEnabled ? VOICE_SDR_INSTRUCTIONS : PHASE0_GREETING_INSTRUCTIONS);
@@ -605,6 +658,20 @@ export async function runVoiceCall(params: {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      // voice-r1 (FIX 3) — for the ends WE initiate (goodbye / max_turns /
+      // timeout), actually tear down the caller's SIP leg. Closing the control
+      // WS (below) does NOT end the SIP call — without this hangup the caller
+      // hears dead air until the wall-clock cap. We do NOT hang up on
+      // "ws_closed" (the caller already hung up — nothing to tear down) or
+      // "open_failed" / "ws_error" (no live session). Best-effort + fire-and-
+      // forget: hangupCall never throws, and we don't await it so teardown isn't
+      // blocked on the network. (OpenAI has a known issue where hangup
+      // occasionally doesn't terminate — the ws.close below + the wall-clock cap
+      // remain as belt-and-suspenders.)
+      if (reason === "goodbye" || reason === "max_turns" || reason === "timeout") {
+        logEvent("voice_call_hangup_requested", { call_id: params.callId, reason });
+        void hangup({ callId: params.callId, apiKey: params.apiKey });
+      }
       try {
         // 1000 = normal closure.
         if (ws.readyState === ws.OPEN || ws.readyState === ws.CONNECTING) {
@@ -1098,6 +1165,20 @@ export async function runVoiceCall(params: {
               params.onAssistantTurn?.(transcript);
             } catch {
               // best-effort
+            }
+            // voice-r1 (FIX 2b) — detect the AGENT's own sign-off. When the
+            // agent delivers a clear closing line ("have a great day", "take
+            // care", "goodbye"), set sawGoodbye so the call ends right after
+            // this spoken turn finishes (the response.done handler already does
+            // `if (sawGoodbye) finish("goodbye")`). Uses the NARROW
+            // AGENT_SIGNOFF_RE — NOT the broad caller regex — so a booking
+            // confirmation ("you're all set") never ends the call mid-confirm.
+            if (AGENT_SIGNOFF_RE.test(transcript)) {
+              sawGoodbye = true;
+              logEvent("voice_call_goodbye_detected", {
+                call_id: params.callId,
+                side: "agent",
+              });
             }
           }
           break;

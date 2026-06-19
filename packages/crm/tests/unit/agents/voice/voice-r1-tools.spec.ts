@@ -766,11 +766,14 @@ describe("book_appointment — execute passes phone + intakeResponses through (D
 });
 
 // ───────────────────────────────────────────────────────────────────────────
-// 5. caller-ID auto-fill (voice R1+) — the inbound call carries the caller's
-//    number. The webhook stamps it onto ctx.callerPhone, and book_appointment
-//    defaults intakeResponses.phone to it WHEN the model supplied no phone of
-//    its own. A model-supplied phone (top-level or in intakeResponses) wins.
-//    This captures the caller's number even when the agent forgets to ask.
+// 5. caller-ID override (voice R1+) — the inbound VOICE call carries the
+//    caller's REAL number on ctx.callerPhone (stamped by the webhook). The
+//    model cannot know the real number and routinely HALLUCINATES junk into
+//    intakeResponses.phone (e.g. "+10000000000", "[caller ID captured
+//    automatically]"). On a voice call the caller ID is AUTHORITATIVE, so when
+//    ctx.callerPhone is present it ALWAYS overrides whatever the model supplied.
+//    Web/text surfaces never set ctx.callerPhone, so their behavior (model
+//    phone passes through) is unchanged.
 // ───────────────────────────────────────────────────────────────────────────
 
 describe("book_appointment — caller-ID auto-fill from ctx.callerPhone", () => {
@@ -812,12 +815,15 @@ describe("book_appointment — caller-ID auto-fill from ctx.callerPhone", () => 
     );
   });
 
-  test("model-supplied top-level phone WINS over ctx.callerPhone", async () => {
+  // CHANGED (voice R1+ FIX 1): on a VOICE call the real caller ID is
+  // authoritative and the model hallucinates phone values, so ctx.callerPhone
+  // now OVERRIDES a model-supplied top-level phone rather than deferring to it.
+  test("ctx.callerPhone OVERRIDES a model-supplied top-level phone (voice — caller ID wins)", async () => {
     const { deps, calls } = makeDeps();
     await bookAppointment.execute(
       {
         fullName: "Jane Doe",
-        phone: "+15550000000", // the model collected a different number
+        phone: "+15550000000", // the model collected a (possibly wrong) number
         slotIso: "2026-06-02T17:00:00Z",
         confirmed: true,
       },
@@ -827,12 +833,14 @@ describe("book_appointment — caller-ID auto-fill from ctx.callerPhone", () => 
     assert.equal(calls.length, 1);
     assert.equal(
       calls[0]!.intakeResponses?.phone,
-      "+15550000000",
-      "a model-supplied phone overrides the caller-ID default",
+      "+15557654321",
+      "the real caller ID overrides whatever phone the model supplied",
     );
   });
 
-  test("model-supplied intakeResponses.phone WINS over ctx.callerPhone", async () => {
+  // CHANGED (voice R1+ FIX 1): likewise, a model-supplied intakeResponses.phone
+  // is overridden by the authoritative caller ID on a voice call.
+  test("ctx.callerPhone OVERRIDES a model-supplied intakeResponses.phone (voice — caller ID wins)", async () => {
     const { deps, calls } = makeDeps();
     await bookAppointment.execute(
       {
@@ -847,9 +855,51 @@ describe("book_appointment — caller-ID auto-fill from ctx.callerPhone", () => 
     assert.equal(calls.length, 1);
     assert.equal(
       calls[0]!.intakeResponses?.phone,
-      "+15559999999",
-      "an explicit intakeResponses.phone wins over the caller-ID default",
+      "+15557654321",
+      "the real caller ID overrides a model-supplied intakeResponses.phone",
     );
+    // The other intake fields the model collected are preserved.
+    assert.equal(calls[0]!.intakeResponses?.address, "1 Main");
+  });
+
+  // The headline FIX 1 case: the model puts literal GARBAGE in the phone field
+  // (the exact strings seen on real calls). The caller ID must win regardless.
+  test("ctx.callerPhone OVERRIDES a JUNK model-supplied intakeResponses.phone", async () => {
+    for (const junk of ["+10000000000", "[caller ID captured automatically]"]) {
+      const { deps, calls } = makeDeps();
+      const out = (await bookAppointment.execute(
+        {
+          fullName: "Jane Doe",
+          slotIso: "2026-06-02T17:00:00Z",
+          intakeResponses: { phone: junk, address: "1 Main" },
+          confirmed: true,
+        },
+        { ...CTX, callerPhone: "+15557654321" },
+        deps,
+      )) as { ok: boolean };
+      assert.equal(out.ok, true);
+      assert.equal(calls.length, 1, "exactly one submit");
+      assert.equal(
+        calls[0]!.intakeResponses?.phone,
+        "+15557654321",
+        `the real caller ID must override junk model phone "${junk}"`,
+      );
+    }
+  });
+
+  test("ctx.callerPhone is trimmed before it overrides", async () => {
+    const { deps, calls } = makeDeps();
+    await bookAppointment.execute(
+      {
+        fullName: "Jane Doe",
+        slotIso: "2026-06-02T17:00:00Z",
+        intakeResponses: { phone: "+15559999999" },
+        confirmed: true,
+      },
+      { ...CTX, callerPhone: "  +15557654321  " },
+      deps,
+    );
+    assert.equal(calls[0]!.intakeResponses?.phone, "+15557654321");
   });
 
   test("no ctx.callerPhone (anonymous caller) + email present → behaves exactly as before", async () => {
@@ -876,7 +926,12 @@ describe("book_appointment — caller-ID auto-fill from ctx.callerPhone", () => 
     );
   });
 
-  test("ctx.callerPhone does NOT clobber an intakeResponses with a non-empty phone", async () => {
+  // CHANGED (voice R1+ FIX 1): the authoritative caller ID now DOES override a
+  // non-empty model phone on a voice call (the inverse of the pre-FIX-1
+  // behavior). Web/text — which never set ctx.callerPhone — keep the model's
+  // phone (covered by the "explicit intakeResponses.phone is NOT overwritten by
+  // the phone arg" test above, which runs with no callerPhone).
+  test("ctx.callerPhone DOES clobber a non-empty intakeResponses phone on a voice call", async () => {
     const { deps, calls } = makeDeps();
     await bookAppointment.execute(
       {
@@ -888,6 +943,6 @@ describe("book_appointment — caller-ID auto-fill from ctx.callerPhone", () => 
       { ...CTX, callerPhone: "+15557654321" },
       deps,
     );
-    assert.equal(calls[0]!.intakeResponses?.phone, "+15551112222");
+    assert.equal(calls[0]!.intakeResponses?.phone, "+15557654321");
   });
 });

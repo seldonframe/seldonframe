@@ -496,10 +496,22 @@ export const bookAppointment: AgentTool<
       // voice R1+ — caller-ID fallback. If the model collected NO phone (neither
       // top-level `phone` nor intakeResponses.phone), default to the caller's
       // number from the inbound call's caller ID (ctx.callerPhone, set by the
-      // voice webhook). A model-supplied phone always wins; anonymous callers
-      // leave ctx.callerPhone undefined so nothing is added. Voice-only: web /
-      // text surfaces never set callerPhone, so their behavior is unchanged.
+      // voice webhook). Anonymous callers leave ctx.callerPhone undefined so
+      // nothing is added. Voice-only: web / text surfaces never set callerPhone,
+      // so their behavior is unchanged.
       if (!hasPhone() && typeof ctx.callerPhone === "string" && ctx.callerPhone.trim().length > 0) {
+        intakeResponses.phone = ctx.callerPhone.trim();
+      }
+      // voice R1+ (FIX 1) — caller-ID AUTHORITATIVE OVERRIDE. On a VOICE call the
+      // real caller ID (ctx.callerPhone) is the ground truth: the model cannot
+      // know the caller's actual number and routinely HALLUCINATES junk into the
+      // phone field (observed on real calls: "+10000000000", "[caller ID captured
+      // automatically]"). So whenever a caller ID is present, it WINS over
+      // whatever the model supplied — overwriting the top-level/intake phone
+      // folded in above. This runs last so it is the final word. Web/text callers
+      // never set ctx.callerPhone, so their model-supplied phone passes through
+      // untouched (this block is a no-op for them).
+      if (typeof ctx.callerPhone === "string" && ctx.callerPhone.trim().length > 0) {
         intakeResponses.phone = ctx.callerPhone.trim();
       }
       // submitPublicBookingAction returns { success, confirmationMessage,

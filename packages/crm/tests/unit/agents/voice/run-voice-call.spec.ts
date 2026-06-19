@@ -21,8 +21,11 @@ import assert from "node:assert/strict";
 import {
   runVoiceCall,
   acceptCall,
+  hangupCall,
   buildCallerTranscriptionRequest,
   responseHasAudioOutput,
+  CALLER_GOODBYE_RE,
+  AGENT_SIGNOFF_RE,
   MAX_ASSISTANT_TURNS,
   PHASE0_GREETING_INSTRUCTIONS,
   PHASE0_ACCEPT_INSTRUCTIONS,
@@ -1189,5 +1192,329 @@ describe("runVoiceCall — response.done guard (out-of-band text vs assistant au
       "timeout",
       "the text-only transcription response.done must not be the call-ending turn",
     );
+  });
+});
+
+// ─── voice-r1 (FIX 2+3): goodbye detection regexes + SIP hangup ───────────────
+// The live bug: after the conversation reaches its natural end ("…have a great
+// day", "take care"), neither side's sign-off was detected, so the call hung
+// open until the wall-clock cap. AND even when goodbye WAS detected, finish()
+// only closed the control WS — it never told OpenAI to hang up the caller's SIP
+// leg, so the caller heard dead air until the cap. These tests pin: (a) the
+// broadened caller regex, (b) a separate agent-signoff regex, (c) the hangupCall
+// helper's HTTP shape, and (d) that finish() fires the hangup only for the
+// reasons WE initiate (goodbye/max_turns/timeout), never on a caller hang-up.
+
+describe("CALLER_GOODBYE_RE — broadened caller sign-off detection", () => {
+  test("still matches the original alternatives", () => {
+    for (const s of ["goodbye", "good bye", "bye", "that's all", "thank you, bye", "hang up"]) {
+      assert.match(s, CALLER_GOODBYE_RE, `should still match "${s}"`);
+    }
+  });
+
+  test("matches natural caller sign-offs added in FIX 2", () => {
+    for (const s of [
+      "thank you, have a great day",
+      "have a good one",
+      "have a nice evening",
+      "have a wonderful weekend",
+      "take care",
+      "talk to you soon",
+      "talk later",
+      "that's it",
+      "that's everything",
+      "I'm all set",
+      "we're all set",
+      "all set",
+      "no thanks",
+      "no, thank you",
+    ]) {
+      assert.match(s, CALLER_GOODBYE_RE, `should match caller sign-off "${s}"`);
+    }
+  });
+
+  test("does NOT match ordinary mid-call speech", () => {
+    for (const s of [
+      "can I book an appointment",
+      "what times are available",
+      "my furnace is broken",
+      "yes that works for me",
+    ]) {
+      assert.doesNotMatch(s, CALLER_GOODBYE_RE, `should NOT match "${s}"`);
+    }
+  });
+});
+
+describe("AGENT_SIGNOFF_RE — agent closing-line detection (narrow)", () => {
+  test("matches clear agent closings", () => {
+    for (const s of [
+      "Goodbye!",
+      "Bye now!",
+      "have a great day",
+      "Have a wonderful evening.",
+      "take care",
+      "talk to you soon",
+      "talk later",
+    ]) {
+      assert.match(s, AGENT_SIGNOFF_RE, `should match agent closing "${s}"`);
+    }
+  });
+
+  test("does NOT match a booking CONFIRMATION (must not end mid-confirm)", () => {
+    // The agent says "all set" / "you're all set" when CONFIRMING a booking —
+    // that must NOT be treated as a sign-off, or the call ends mid-confirmation.
+    for (const s of [
+      "you're all set for Friday",
+      "Great, you're all set!",
+      "All set — I've booked you for 10 AM.",
+      "Perfect, that's all booked.",
+    ]) {
+      assert.doesNotMatch(s, AGENT_SIGNOFF_RE, `must NOT match confirmation "${s}"`);
+    }
+  });
+});
+
+describe("hangupCall — POSTs to the SIP hangup endpoint", () => {
+  test("POSTs to /v1/realtime/calls/<id>/hangup with Authorization: Bearer <key>", async () => {
+    let capturedUrl: string | null = null;
+    let capturedInit: { method?: string; headers?: Record<string, string> } | null = null;
+    const fakeFetch = (async (url: string, init?: { method?: string; headers?: Record<string, string> }) => {
+      capturedUrl = url;
+      capturedInit = init ?? null;
+      return new Response("", { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const res = await hangupCall({ callId: "rtc_hang_1", apiKey: "sk-hang", fetchImpl: fakeFetch });
+
+    assert.equal(res.ok, true);
+    assert.equal(res.status, 200);
+    assert.equal(
+      capturedUrl,
+      "https://api.openai.com/v1/realtime/calls/rtc_hang_1/hangup",
+    );
+    assert.equal(capturedInit!.method, "POST");
+    assert.equal(capturedInit!.headers!.Authorization, "Bearer sk-hang");
+  });
+
+  test("URL-encodes the call id", async () => {
+    let capturedUrl: string | null = null;
+    const fakeFetch = (async (url: string) => {
+      capturedUrl = url;
+      return new Response("", { status: 200 });
+    }) as unknown as typeof fetch;
+    await hangupCall({ callId: "rtc/weird id", apiKey: "k", fetchImpl: fakeFetch });
+    assert.ok(capturedUrl!.includes(encodeURIComponent("rtc/weird id")));
+  });
+
+  test("a non-2xx response surfaces ok:false with the status (never throws)", async () => {
+    const fakeFetch = (async () => new Response("nope", { status: 404 })) as unknown as typeof fetch;
+    const res = await hangupCall({ callId: "x", apiKey: "k", fetchImpl: fakeFetch });
+    assert.equal(res.ok, false);
+    assert.equal(res.status, 404);
+  });
+
+  test("a fetch throw is swallowed → { ok:false, status:0 } (best-effort)", async () => {
+    const fakeFetch = (async () => {
+      throw new Error("network down");
+    }) as unknown as typeof fetch;
+    const res = await hangupCall({ callId: "x", apiKey: "k", fetchImpl: fakeFetch });
+    assert.deepEqual(res, { ok: false, status: 0 });
+  });
+});
+
+describe("runVoiceCall — agent sign-off ends the call", () => {
+  test("an assistant 'have a great day' transcript ends the call (goodbye) on the next response.done", async () => {
+    const { ctor, captures } = makeFakeSocketCtor();
+    const hangups: Array<{ callId: string; apiKey: string }> = [];
+    const promise = runVoiceCall({
+      callId: CALL_ID,
+      apiKey: API_KEY,
+      WebSocketImpl: ctor,
+      maxCallMs: 2000,
+      hangupImpl: async ({ callId, apiKey }) => {
+        hangups.push({ callId, apiKey });
+        return { ok: true, status: 200 };
+      },
+    });
+    const cap = captures[0]!;
+    cap.emit("open");
+
+    // The agent delivers its closing line — detected via AGENT_SIGNOFF_RE in the
+    // assistant audio-transcript handler. This sets sawGoodbye.
+    cap.emit("message", {
+      data: Buffer.from(
+        JSON.stringify({
+          type: "response.output_audio_transcript.done",
+          transcript: "Perfect — have a great day!",
+        }),
+        "utf8",
+      ),
+    });
+    // The SAME response then finishes as a spoken (audio) reply → response.done
+    // with sawGoodbye already true → finish("goodbye").
+    cap.emit("message", {
+      data: Buffer.from(
+        JSON.stringify({
+          type: "response.done",
+          response: { output: [{ type: "message", role: "assistant", content: [{ type: "audio", transcript: "Perfect — have a great day!" }] }] },
+        }),
+        "utf8",
+      ),
+    });
+
+    const reason = await promise;
+    assert.equal(reason, "goodbye", "the agent's closing line must end the call");
+    assert.equal(hangups.length, 1, "a goodbye finish must request a SIP hangup");
+    assert.equal(hangups[0]!.callId, CALL_ID);
+    assert.equal(hangups[0]!.apiKey, API_KEY);
+  });
+
+  test("the beta event name response.audio_transcript.done also triggers agent sign-off", async () => {
+    const { ctor, captures } = makeFakeSocketCtor();
+    const promise = runVoiceCall({
+      callId: CALL_ID,
+      apiKey: API_KEY,
+      WebSocketImpl: ctor,
+      maxCallMs: 2000,
+      hangupImpl: async () => ({ ok: true, status: 200 }),
+    });
+    const cap = captures[0]!;
+    cap.emit("open");
+    cap.emit("message", {
+      data: Buffer.from(
+        JSON.stringify({ type: "response.audio_transcript.done", transcript: "take care!" }),
+        "utf8",
+      ),
+    });
+    cap.emit("message", {
+      data: Buffer.from(
+        JSON.stringify({
+          type: "response.done",
+          response: { output: [{ type: "message", role: "assistant", content: [{ type: "audio", transcript: "take care!" }] }] },
+        }),
+        "utf8",
+      ),
+    });
+    const reason = await promise;
+    assert.equal(reason, "goodbye");
+  });
+
+  test("an agent CONFIRMATION ('you're all set for Friday') does NOT end the call", async () => {
+    const { ctor, captures } = makeFakeSocketCtor();
+    const promise = runVoiceCall({
+      callId: CALL_ID,
+      apiKey: API_KEY,
+      WebSocketImpl: ctor,
+      maxCallMs: 50, // short — the call should run to the wall-clock cap, not end early
+      hangupImpl: async () => ({ ok: true, status: 200 }),
+    });
+    const cap = captures[0]!;
+    cap.emit("open");
+    // Agent confirms a booking — "all set" must NOT be read as a sign-off.
+    cap.emit("message", {
+      data: Buffer.from(
+        JSON.stringify({
+          type: "response.output_audio_transcript.done",
+          transcript: "Great, you're all set for Friday at 10 AM!",
+        }),
+        "utf8",
+      ),
+    });
+    cap.emit("message", {
+      data: Buffer.from(
+        JSON.stringify({
+          type: "response.done",
+          response: { output: [{ type: "message", role: "assistant", content: [{ type: "audio", transcript: "Great, you're all set for Friday at 10 AM!" }] }] },
+        }),
+        "utf8",
+      ),
+    });
+    const reason = await promise;
+    assert.equal(reason, "timeout", "a booking confirmation must not be treated as a sign-off");
+  });
+});
+
+describe("runVoiceCall — finish() requests a SIP hangup only for self-initiated ends", () => {
+  test("a caller hang-up (ws close → ws_closed) does NOT request a hangup", async () => {
+    const { ctor, captures } = makeFakeSocketCtor();
+    const hangups: unknown[] = [];
+    const promise = runVoiceCall({
+      callId: CALL_ID,
+      apiKey: API_KEY,
+      WebSocketImpl: ctor,
+      maxCallMs: 2000,
+      hangupImpl: async (a) => {
+        hangups.push(a);
+        return { ok: true, status: 200 };
+      },
+    });
+    const cap = captures[0]!;
+    cap.emit("open");
+    cap.emit("close"); // OpenAI/caller closed the SIP leg — we did NOT initiate
+    const reason = await promise;
+    assert.equal(reason, "ws_closed");
+    assert.equal(hangups.length, 0, "must NOT hang up a call the caller already ended");
+  });
+
+  test("a timeout finish DOES request a hangup (we initiated the end)", async () => {
+    const { ctor, captures } = makeFakeSocketCtor();
+    const hangups: unknown[] = [];
+    const promise = runVoiceCall({
+      callId: CALL_ID,
+      apiKey: API_KEY,
+      WebSocketImpl: ctor,
+      maxCallMs: 20,
+      hangupImpl: async (a) => {
+        hangups.push(a);
+        return { ok: true, status: 200 };
+      },
+    });
+    const cap = captures[0]!;
+    cap.emit("open");
+    const reason = await promise;
+    assert.equal(reason, "timeout");
+    assert.equal(hangups.length, 1, "a timeout-initiated end must hang up the SIP leg");
+  });
+
+  test("a max_turns finish DOES request a hangup", async () => {
+    const { ctor, captures } = makeFakeSocketCtor();
+    const hangups: unknown[] = [];
+    const promise = runVoiceCall({
+      callId: CALL_ID,
+      apiKey: API_KEY,
+      WebSocketImpl: ctor,
+      maxCallMs: 5000,
+      maxTurns: 1,
+      hangupImpl: async (a) => {
+        hangups.push(a);
+        return { ok: true, status: 200 };
+      },
+    });
+    const cap = captures[0]!;
+    cap.emit("open");
+    cap.emit("message", audioResponseDoneFrame()); // one spoken turn → hits cap
+    const reason = await promise;
+    assert.equal(reason, "max_turns");
+    assert.equal(hangups.length, 1);
+  });
+
+  test("an open_failed finish does NOT request a hangup (no session to tear down)", async () => {
+    const { ctor, captures } = makeFakeSocketCtor();
+    const hangups: unknown[] = [];
+    const promise = runVoiceCall({
+      callId: CALL_ID,
+      apiKey: API_KEY,
+      WebSocketImpl: ctor,
+      maxCallMs: 5000,
+      hangupImpl: async (a) => {
+        hangups.push(a);
+        return { ok: true, status: 200 };
+      },
+    });
+    const cap = captures[0]!;
+    cap.emitOn("unexpected-response", {}, { statusCode: 401, statusMessage: "Unauthorized" });
+    const reason = await promise;
+    assert.equal(reason, "open_failed");
+    assert.equal(hangups.length, 0, "no hangup when the WS never opened");
   });
 });
