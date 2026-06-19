@@ -149,10 +149,18 @@ export const PHASE0_ACCEPT_INSTRUCTIONS =
  * Safety cap on assistant turns. gpt-realtime-2 normally ends the call itself
  * when the caller says goodbye (via the persona instruction), but this is a
  * belt-and-suspenders ceiling so a stuck/looping call can't pin the function
- * open until maxDuration. Phase 0 is a hello-world: a handful of turns proves
- * the pipe.
+ * open until maxDuration.
+ *
+ * This counts ONLY genuine SPOKEN (audio) assistant replies — see
+ * `responseHasAudioOutput` and the `response.done` handler. Tool-call responses
+ * (function_call output, no audio) and out-of-band transcription responses
+ * (text/empty output) do NOT count. A real booking conversation is ~9 spoken
+ * turns; 20 leaves comfortable headroom so the cap never cuts a booking short at
+ * the read-back, while still bounding a stuck/looping call. (Was 12 — which,
+ * combined with the old bug that counted tool-call + transcription responses,
+ * fired finish("max_turns") mid-booking before the caller could confirm.)
  */
-export const MAX_ASSISTANT_TURNS = 12;
+export const MAX_ASSISTANT_TURNS = 20;
 
 /**
  * Build the body of the post-call follow-up SMS sent to the caller after a
@@ -291,6 +299,50 @@ export function isOutOfBandTranscriptionDone(
     }
   }
   return sawText;
+}
+
+/**
+ * Decide whether a `response.done` payload is a genuine SPOKEN assistant reply —
+ * i.e. its output carries an AUDIO content part. This is the gate for the
+ * assistant-turn safety cap: ONLY spoken replies count toward MAX_ASSISTANT_TURNS.
+ *
+ * WHY this exists: a single booking conversation produces several `response.done`
+ * events that are NOT spoken replies — tool-call responses (their output is a
+ * `function_call` item, no audio) and out-of-band caller-transcription responses
+ * (text/empty output). Counting those toward the cap blew past the old ceiling
+ * of 12 and fired finish("max_turns") right at the booking read-back, before the
+ * caller could confirm — so NO booking was created. Gating the increment on this
+ * helper means tool-call and transcription responses are naturally excluded (no
+ * audio), and only real spoken turns advance the counter.
+ *
+ * Mirrors the defensive parsing of `isOutOfBandTranscriptionDone`: reads
+ * `response.output` as an array, each item's `.content` as an array, and returns
+ * true iff ANY content part is `type:"audio"` || `type:"output_audio"`.
+ *
+ * Pure + total — never throws on malformed JSON; an unrecognizable shape (no
+ * audio part) simply returns false.
+ */
+export function responseHasAudioOutput(msg: Record<string, unknown>): boolean {
+  const response = msg?.response;
+  const output =
+    response && typeof response === "object"
+      ? (response as { output?: unknown }).output
+      : undefined;
+  if (!Array.isArray(output) || output.length === 0) return false;
+
+  for (const rawItem of output) {
+    if (!rawItem || typeof rawItem !== "object") continue;
+    const content = (rawItem as { content?: unknown }).content;
+    if (!Array.isArray(content)) continue;
+    for (const rawPart of content) {
+      if (!rawPart || typeof rawPart !== "object") continue;
+      const partType = (rawPart as { type?: unknown }).type;
+      if (partType === "audio" || partType === "output_audio") {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 export type AcceptCallResult =
@@ -969,7 +1021,15 @@ export async function runVoiceCall(params: {
             void dispatchFunctionCalls(msg, terminalCalls);
           }
 
-          assistantTurns += 1;
+          // Count ONLY genuine SPOKEN assistant turns toward the safety cap. A
+          // tool-call response (function_call output → no audio) and an
+          // out-of-band transcription response (text/empty output → no audio)
+          // are NOT spoken replies; counting them tripped finish("max_turns")
+          // mid-booking (the live bug). responseHasAudioOutput gates the
+          // increment so the cap reflects real conversation length.
+          if (responseHasAudioOutput(msg)) {
+            assistantTurns += 1;
+          }
           logEvent("voice_call_response_done", {
             call_id: params.callId,
             assistant_turns: assistantTurns,

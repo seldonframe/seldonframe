@@ -22,6 +22,8 @@ import {
   runVoiceCall,
   acceptCall,
   buildCallerTranscriptionRequest,
+  responseHasAudioOutput,
+  MAX_ASSISTANT_TURNS,
   PHASE0_GREETING_INSTRUCTIONS,
   PHASE0_ACCEPT_INSTRUCTIONS,
   VOICE_SDR_INSTRUCTIONS,
@@ -319,8 +321,32 @@ describe("runVoiceCall — message frame coercion", () => {
 
 // ─── Turn cap ────────────────────────────────────────────────────────────────
 
+// A `response.done` for a genuine SPOKEN assistant turn carries an audio content
+// part. ONLY these count toward the turn cap (tool-call + out-of-band text
+// responses produce no audio, so they must NOT). Helper to build one as the ws
+// package would deliver it (a Buffer frame).
+function audioResponseDoneFrame(): { data: Buffer } {
+  return {
+    data: Buffer.from(
+      JSON.stringify({
+        type: "response.done",
+        response: {
+          output: [
+            {
+              type: "message",
+              role: "assistant",
+              content: [{ type: "audio", transcript: "spoken reply" }],
+            },
+          ],
+        },
+      }),
+      "utf8",
+    ),
+  };
+}
+
 describe("runVoiceCall — assistant-turn safety cap", () => {
-  test("ends with max_turns after maxTurns response.done events (no goodbye)", async () => {
+  test("ends with max_turns after maxTurns SPOKEN (audio) response.done events (no goodbye)", async () => {
     const { ctor, captures } = makeFakeSocketCtor();
     const promise = runVoiceCall({
       callId: CALL_ID,
@@ -331,11 +357,199 @@ describe("runVoiceCall — assistant-turn safety cap", () => {
     });
     const cap = captures[0]!;
     cap.emit("open");
+    // Each response.done must carry AUDIO output to count as a spoken turn — a
+    // bare response.done has no audio and (correctly) no longer increments.
     for (let i = 0; i < 3; i += 1) {
-      cap.emit("message", { data: Buffer.from(JSON.stringify({ type: "response.done" }), "utf8") });
+      cap.emit("message", audioResponseDoneFrame());
     }
     const reason = await promise;
     assert.equal(reason, "max_turns");
+  });
+
+  test("ends with max_turns at the DEFAULT cap (MAX_ASSISTANT_TURNS=20) of spoken turns", async () => {
+    // Drive the real default cap (no maxTurns override) with audio response.done
+    // events. The cap is 20 — a long booking call should not be cut short before
+    // ~20 genuine spoken replies.
+    assert.equal(MAX_ASSISTANT_TURNS, 20, "the spoken-turn safety cap is 20");
+    const { ctor, captures } = makeFakeSocketCtor();
+    const promise = runVoiceCall({
+      callId: CALL_ID,
+      apiKey: API_KEY,
+      WebSocketImpl: ctor,
+      maxCallMs: 5000,
+      // no maxTurns → uses MAX_ASSISTANT_TURNS (20)
+    });
+    const cap = captures[0]!;
+    cap.emit("open");
+    for (let i = 0; i < MAX_ASSISTANT_TURNS; i += 1) {
+      cap.emit("message", audioResponseDoneFrame());
+    }
+    const reason = await promise;
+    assert.equal(reason, "max_turns");
+  });
+});
+
+// ─── responseHasAudioOutput — pure helper (the turn-counting gate) ───────────
+// THE BUG THIS GUARDS: the turn cap previously incremented on EVERY response.done,
+// including tool-call responses (function_call output, no audio) and out-of-band
+// transcription responses (text/empty output). A normal booking conversation
+// (~9 spoken turns + ~3 tool calls + several transcription responses) blew past
+// the old cap of 12 → finish("max_turns") killed the call mid-booking before the
+// caller could confirm. The fix gates the increment on this helper so ONLY
+// genuine SPOKEN (audio) replies count. The helper must be total — an
+// unrecognizable shape returns false (never throws).
+
+describe("responseHasAudioOutput — counts only genuine spoken (audio) replies", () => {
+  test("true for an output with an `audio` content part", () => {
+    assert.equal(
+      responseHasAudioOutput({
+        response: {
+          output: [
+            {
+              type: "message",
+              role: "assistant",
+              content: [{ type: "audio", transcript: "hi" }],
+            },
+          ],
+        },
+      }),
+      true,
+    );
+  });
+
+  test("true for an output with an `output_audio` content part", () => {
+    assert.equal(
+      responseHasAudioOutput({
+        response: {
+          output: [
+            { type: "message", content: [{ type: "output_audio", transcript: "hi" }] },
+          ],
+        },
+      }),
+      true,
+    );
+  });
+
+  test("true when audio sits alongside a text part (mixed content)", () => {
+    assert.equal(
+      responseHasAudioOutput({
+        response: {
+          output: [
+            {
+              type: "message",
+              content: [{ type: "text", text: "hi" }, { type: "audio", transcript: "hi" }],
+            },
+          ],
+        },
+      }),
+      true,
+    );
+  });
+
+  test("false for a function_call-only output (tool-call turn — no audio)", () => {
+    assert.equal(
+      responseHasAudioOutput({
+        response: {
+          output: [
+            { type: "function_call", call_id: "c1", name: "book_appointment", arguments: "{}" },
+          ],
+        },
+      }),
+      false,
+    );
+  });
+
+  test("false for a text-only output (out-of-band transcription)", () => {
+    assert.equal(
+      responseHasAudioOutput({
+        response: {
+          output: [{ type: "message", content: [{ type: "output_text", text: "caller said hi" }] }],
+        },
+      }),
+      false,
+    );
+  });
+
+  test("false for an empty output array", () => {
+    assert.equal(responseHasAudioOutput({ response: { output: [] } }), false);
+  });
+
+  test("false for an absent output / bare response.done", () => {
+    assert.equal(responseHasAudioOutput({ type: "response.done" }), false);
+    assert.equal(responseHasAudioOutput({}), false);
+    assert.equal(responseHasAudioOutput({ response: {} }), false);
+  });
+
+  test("total — does not throw on malformed shapes (returns false)", () => {
+    // Non-array output, non-object items, non-array content, null parts, etc.
+    assert.equal(responseHasAudioOutput({ response: { output: "nope" } }), false);
+    assert.equal(responseHasAudioOutput({ response: { output: [null, 42, "x"] } }), false);
+    assert.equal(
+      responseHasAudioOutput({ response: { output: [{ content: "nope" }] } }),
+      false,
+    );
+    assert.equal(
+      responseHasAudioOutput({ response: { output: [{ content: [null, 7] }] } }),
+      false,
+    );
+  });
+});
+
+// ─── Tool-call responses must NOT consume the turn cap ───────────────────────
+// A booking call makes ~3 tool calls (look_up_availability, book_appointment,
+// etc.); each surfaces a terminal response.done whose output is a function_call
+// (NO audio). Those must NOT count toward the turn cap, or a booking-length call
+// trips finish("max_turns") before the read-back. This is the live-call bug.
+
+describe("runVoiceCall — tool-call response.done does NOT consume the turn cap", () => {
+  test("many function_call response.done events do not trigger max_turns; an audio one does", async () => {
+    let runCount = 0;
+    const { ctor, captures } = makeFakeSocketCtor();
+    const promise = runVoiceCall({
+      callId: CALL_ID,
+      apiKey: API_KEY,
+      WebSocketImpl: ctor,
+      // Generous wall-clock so the test ends via max_turns, not timeout.
+      maxCallMs: 5000,
+      maxTurns: 1, // a SINGLE spoken turn should be enough to hit the cap
+      toolContext: TOOL_CTX,
+      executeToolCall: async () => {
+        runCount += 1;
+        return { ok: true, result: {}, output: "{}" };
+      },
+    });
+    const cap = captures[0]!;
+    cap.emit("open");
+
+    // Fire FAR more tool-call response.done events than maxTurns. Each uses a
+    // DISTINCT call_id (seenCallIds dedupes per id, not the point here) and
+    // carries ONLY a function_call output → no audio → must not increment.
+    for (let i = 0; i < 8; i += 1) {
+      cap.emit("message", {
+        data: Buffer.from(
+          JSON.stringify({
+            type: "response.done",
+            response: {
+              output: [
+                { type: "function_call", call_id: `call_${i}`, name: "look_up_availability", arguments: "{}" },
+              ],
+            },
+          }),
+          "utf8",
+        ),
+      });
+    }
+    // Let the async tool dispatch microtasks flush.
+    await new Promise((r) => setTimeout(r, 0));
+
+    // The tools ran but the call is STILL OPEN (no max_turns despite 8 > 1).
+    assert.equal(runCount, 8, "each tool-call response.done dispatched its tool");
+    assert.equal(cap.closed, null, "tool-call turns must not trip max_turns / close the call");
+
+    // Now ONE genuine spoken (audio) turn → with maxTurns:1 this hits the cap.
+    cap.emit("message", audioResponseDoneFrame());
+    const reason = await promise;
+    assert.equal(reason, "max_turns", "only a spoken (audio) turn consumes the cap");
   });
 });
 
