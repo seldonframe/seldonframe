@@ -90,6 +90,19 @@ export type AgentBlueprint = {
    *  .fromNumber) so the team still gets the alert. Operator-editable on
    *  /automations/voice-receptionist. */
   notifyPhone?: string;
+  /** 2026-06-19 (voice R1) — MISSED-CALL TEXT-BACK. When a call to the voice
+   *  number is missed/abandoned (Twilio CallStatus no-answer | busy | failed |
+   *  canceled — i.e. the realtime agent never engaged), a speed-to-lead SMS is
+   *  sent back to the caller so the lead never reaches a competitor. The signal
+   *  is the Twilio call-status callback to /api/v1/voice/missed-call. A
+   *  "completed" (engaged) call does NOT fire this (the post-call SMS covered
+   *  it) — no double-text. `enabled` defaults ON (undefined ⇒ on); `message`
+   *  is the operator copy with {business}/{link} placeholders (blank ⇒ default
+   *  copy). Operator-editable on /automations/voice-receptionist. */
+  missedCallTextBack?: {
+    enabled?: boolean;
+    message?: string;
+  };
 };
 
 export const agents = pgTable(

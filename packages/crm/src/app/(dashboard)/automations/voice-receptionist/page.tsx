@@ -27,6 +27,7 @@ import {
 } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
 import { getOrCreateVoiceAgent } from "@/lib/agents/voice/voice-agent";
+import { DEFAULT_MISSED_CALL_MESSAGE } from "@/lib/agents/voice/missed-call-textback";
 import { listBrainDir } from "@/lib/brain/store";
 import { VoiceReceptionistEditor } from "./editor-client";
 
@@ -166,6 +167,13 @@ export default async function VoiceReceptionistPage({
             high: r.high,
           })),
           notifyPhone: blueprint.notifyPhone ?? "",
+          // voice R1 — missed-call text-back. Default ON; default copy when the
+          // operator hasn't customised the message.
+          missedCallTextBack: {
+            enabled: blueprint.missedCallTextBack?.enabled !== false,
+            message:
+              blueprint.missedCallTextBack?.message ?? DEFAULT_MISSED_CALL_MESSAGE,
+          },
         }}
         allCapabilities={VOICE_CAPABILITIES}
       />

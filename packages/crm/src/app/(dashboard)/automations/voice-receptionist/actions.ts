@@ -59,6 +59,16 @@ const VoiceBlueprintPatchSchema = z
     // voice R1 — operator-editable quote ranges + team callback number.
     quoteRanges: z.array(QuoteRangeRow).optional(),
     notifyPhone: z.string().trim().max(40).optional(),
+    // voice R1 — missed-call text-back toggle + copy. Default ON (the page
+    // seeds enabled:true). message supports {business}/{link} placeholders; a
+    // blank message falls back to the default copy at send time.
+    missedCallTextBack: z
+      .object({
+        enabled: z.boolean().optional(),
+        message: z.string().max(480).optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 

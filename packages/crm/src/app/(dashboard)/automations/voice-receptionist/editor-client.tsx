@@ -33,6 +33,7 @@ type Props = {
     faq: FaqRow[];
     quoteRanges: { service: string; low: number; high: number }[];
     notifyPhone: string;
+    missedCallTextBack: { enabled: boolean; message: string };
   };
   allCapabilities: string[];
 };
@@ -56,6 +57,13 @@ export function VoiceReceptionistEditor(props: Props) {
     })),
   );
   const [notifyPhone, setNotifyPhone] = useState(props.initialBlueprint.notifyPhone);
+  // voice R1 — missed-call text-back toggle + copy.
+  const [missedCallEnabled, setMissedCallEnabled] = useState(
+    props.initialBlueprint.missedCallTextBack.enabled,
+  );
+  const [missedCallMessage, setMissedCallMessage] = useState(
+    props.initialBlueprint.missedCallTextBack.message,
+  );
   const [publishNotes, setPublishNotes] = useState("");
   const [isSaving, startSave] = useTransition();
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -99,6 +107,11 @@ export function VoiceReceptionistEditor(props: Props) {
           faq: faq.filter((r) => r.q.trim() && r.a.trim()),
           quoteRanges: cleanedRanges,
           notifyPhone: notifyPhone.trim() || undefined,
+          missedCallTextBack: {
+            enabled: missedCallEnabled,
+            // Persist trimmed copy; blank → omit so the send-time default applies.
+            message: missedCallMessage.trim() || undefined,
+          },
         },
         publishNotes: publishNotes.trim() || undefined,
       });
@@ -451,6 +464,42 @@ export function VoiceReceptionistEditor(props: Props) {
           onChange={(e) => setNotifyPhone(e.target.value)}
           placeholder="+1 555 555 5555"
           className="mt-3 w-full max-w-xs rounded-md border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+        />
+      </div>
+
+      {/* Missed-call text-back */}
+      <div className="rounded-xl border bg-card p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-card-title">Missed-call text-back</h2>
+            <p className="text-xs text-muted-foreground max-w-2xl">
+              When a call is missed or abandoned (the receptionist doesn&apos;t
+              pick up — no-answer, busy, or the call drops), automatically text
+              the caller back within seconds so the lead never reaches a
+              competitor. Calls the receptionist answers don&apos;t get this
+              text. Use{" "}
+              <code className="font-mono">{"{business}"}</code> and{" "}
+              <code className="font-mono">{"{link}"}</code> in your message.
+            </p>
+          </div>
+          <label className="inline-flex shrink-0 cursor-pointer items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={missedCallEnabled}
+              onChange={(e) => setMissedCallEnabled(e.target.checked)}
+            />
+            <span className="font-medium">
+              {missedCallEnabled ? "On" : "Off"}
+            </span>
+          </label>
+        </div>
+        <textarea
+          value={missedCallMessage}
+          onChange={(e) => setMissedCallMessage(e.target.value)}
+          rows={3}
+          disabled={!missedCallEnabled}
+          className="mt-3 w-full rounded-md border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
+          placeholder="Hi, sorry we missed your call! This is {business} — how can we help? Reply here or book at {link}"
         />
       </div>
 
