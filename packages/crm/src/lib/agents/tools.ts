@@ -27,6 +27,14 @@ export type ToolExecuteContext = {
   /** True for status='test' conversations: tool execution returns
    *  synthetic responses, no DB writes. */
   testMode: boolean;
+  /** voice-only — the caller's phone number from the inbound call's caller ID
+   *  (From / P-Asserted-Identity SIP headers). Set by the voice webhook after
+   *  the workspace resolves; undefined for anonymous/blocked callers and for
+   *  every non-voice surface (web booking, text chatbot never set it).
+   *  book_appointment uses it to auto-fill the contact phone when the model
+   *  didn't collect one — so the caller never has to be asked for the number
+   *  the call already carries. A model-supplied phone still wins. */
+  callerPhone?: string;
 };
 
 export type AgentTool<I = unknown, O = unknown> = {
@@ -471,11 +479,19 @@ export const bookAppointment: AgentTool<
       // (the submit action derives the contact phone from there) — UNLESS the
       // model already supplied an intakeResponses.phone, which wins.
       const intakeResponses: Record<string, string> = { ...(input.intakeResponses ?? {}) };
-      if (
-        input.phone &&
-        !(typeof intakeResponses.phone === "string" && intakeResponses.phone.trim().length > 0)
-      ) {
+      const hasPhone = () =>
+        typeof intakeResponses.phone === "string" && intakeResponses.phone.trim().length > 0;
+      if (input.phone && !hasPhone()) {
         intakeResponses.phone = input.phone;
+      }
+      // voice R1+ — caller-ID fallback. If the model collected NO phone (neither
+      // top-level `phone` nor intakeResponses.phone), default to the caller's
+      // number from the inbound call's caller ID (ctx.callerPhone, set by the
+      // voice webhook). A model-supplied phone always wins; anonymous callers
+      // leave ctx.callerPhone undefined so nothing is added. Voice-only: web /
+      // text surfaces never set callerPhone, so their behavior is unchanged.
+      if (!hasPhone() && typeof ctx.callerPhone === "string" && ctx.callerPhone.trim().length > 0) {
+        intakeResponses.phone = ctx.callerPhone.trim();
       }
       // submitPublicBookingAction returns { success, confirmationMessage,
       // checkoutUrl }. We don't surface checkoutUrl to the LLM (would need

@@ -201,3 +201,75 @@ describe("composeVoicePersona — per-workspace booking fields", () => {
     assert.equal(a, b);
   });
 });
+
+// ───────────────────────────────────────────────────────────────────────────
+// Voice R1+ — caller-ID awareness. When the inbound call carries the caller's
+// number (caller ID known), the persona tells the agent NOT to ask for the
+// phone — it's recorded automatically from the caller ID. For anonymous callers
+// (callerPhoneKnown false/absent) no such line is emitted, so the agent asks
+// for the phone normally.
+// ───────────────────────────────────────────────────────────────────────────
+
+describe("composeVoicePersona — caller-ID awareness", () => {
+  test("callerPhoneKnown:true emits a 'do NOT ask … caller ID' line near the booking block", () => {
+    const result = composeVoicePersona({
+      soul: SOUL,
+      blueprint: BLUEPRINT,
+      timezone: TIMEZONE,
+      now: NOW,
+      intakeFields: PLUMBER_FIELDS,
+      callerPhoneKnown: true,
+    });
+    // The deterministic instruction is present and mentions caller ID + not asking.
+    assert.match(result, /caller ID/i, "mentions the caller ID source");
+    assert.match(
+      result,
+      /do NOT ask|don't ask|already have/i,
+      "tells the agent not to ask the caller for their phone",
+    );
+    // It sits in/with the booking-fields block (after the 'To book, collect' line).
+    const bookIdx = result.search(/to book/i);
+    const callerIdx = result.search(/caller ID/i);
+    assert.ok(bookIdx >= 0, "booking block present");
+    assert.ok(callerIdx > bookIdx, "caller-ID line appears alongside/after the booking block");
+  });
+
+  test("callerPhoneKnown:false omits the caller-ID line (agent asks normally)", () => {
+    const result = composeVoicePersona({
+      soul: SOUL,
+      blueprint: BLUEPRINT,
+      timezone: TIMEZONE,
+      now: NOW,
+      intakeFields: PLUMBER_FIELDS,
+      callerPhoneKnown: false,
+    });
+    assert.ok(
+      !/caller ID/i.test(result),
+      "no caller-ID line when the caller's number is unknown",
+    );
+  });
+
+  test("omitting callerPhoneKnown entirely also omits the caller-ID line", () => {
+    const result = composeVoicePersona({
+      soul: SOUL,
+      blueprint: BLUEPRINT,
+      timezone: TIMEZONE,
+      now: NOW,
+      intakeFields: PLUMBER_FIELDS,
+    });
+    assert.ok(!/caller ID/i.test(result), "absent flag → no caller-ID line");
+  });
+
+  test("caller-ID line is emitted on the agency (email) path too", () => {
+    // Even with no custom intake fields (agency collects email), a known caller
+    // ID still means we don't need to ASK for the phone — it's captured.
+    const result = composeVoicePersona({
+      soul: SOUL,
+      blueprint: BLUEPRINT,
+      timezone: TIMEZONE,
+      now: NOW,
+      callerPhoneKnown: true,
+    });
+    assert.match(result, /caller ID/i);
+  });
+});

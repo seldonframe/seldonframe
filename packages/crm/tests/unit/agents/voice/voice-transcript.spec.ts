@@ -63,6 +63,46 @@ describe("startVoiceConversation", () => {
 
     assert.equal(result, null);
   });
+
+  test("(e) caller number is written to channel_meta.from_number", async () => {
+    // Voice R1+ — the inbound call's caller ID must be persisted on the call
+    // record so the operator sees who phoned, instead of a null from_number.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test capture, mutated inside an injected closure
+    let capturedValues: any = null;
+    await startVoiceConversation({
+      agentId: AGENT_ID,
+      orgId: ORG_ID,
+      callId: "call-caller-id",
+      fromNumber: "+15553334444",
+      deps: {
+        insertConversation: async (values) => {
+          capturedValues = values;
+          return CONV_ID;
+        },
+      },
+    });
+    const meta = capturedValues!.channelMeta as Record<string, unknown>;
+    assert.equal(meta.from_number, "+15553334444", "caller number lands in from_number");
+  });
+
+  test("(f) from_number is null when no caller number is supplied (anonymous, back-compat)", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test capture, mutated inside an injected closure
+    let capturedValues: any = null;
+    await startVoiceConversation({
+      agentId: AGENT_ID,
+      orgId: ORG_ID,
+      callId: "call-anon",
+      // no fromNumber — anonymous / blocked caller
+      deps: {
+        insertConversation: async (values) => {
+          capturedValues = values;
+          return CONV_ID;
+        },
+      },
+    });
+    const meta = capturedValues!.channelMeta as Record<string, unknown>;
+    assert.equal(meta.from_number, null, "absent caller number stays null");
+  });
 });
 
 describe("appendVoiceTurn", () => {

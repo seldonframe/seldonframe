@@ -70,6 +70,11 @@ export function composeVoicePersona(args: {
   // as a trailing section so the model treats them as soft guidance, not hard
   // rules. Optional: absent/empty → no brain section.
   brainNotes?: string[];
+  // Voice R1+ — true when the inbound call carries the caller's number (caller
+  // ID). When set, the persona tells the agent NOT to ask for the phone — it's
+  // captured automatically from the caller ID. False/absent (e.g. anonymous
+  // callers) → no such line, so the agent collects the phone normally.
+  callerPhoneKnown?: boolean;
 }): string {
   const { soul, blueprint, timezone, now } = args;
 
@@ -129,6 +134,19 @@ export function composeVoicePersona(args: {
   // so the deterministic "collect exactly these" instruction sits alongside the
   // booking-flow guidance the model just read.
   sections.push(composeBookingFieldsInstruction(args.intakeFields));
+
+  // Voice R1+ — caller-ID short-circuit. When the inbound call carries the
+  // caller's number, the agent already HAS the phone — asking for it is a
+  // jarring, redundant question on a phone call. Emit a deterministic line right
+  // after the booking-fields block instructing the agent not to ask (the number
+  // is recorded automatically from caller ID). Omitted for anonymous callers so
+  // the agent collects the phone the normal way.
+  if (args.callerPhoneKnown) {
+    sections.push(
+      "You already have the caller's phone number from their caller ID — do NOT " +
+        "ask them for it; it's recorded automatically. Collect only the remaining fields.",
+    );
+  }
 
   // Business facts header
   const factLines: string[] = [];

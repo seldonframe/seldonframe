@@ -669,3 +669,130 @@ describe("book_appointment — execute passes phone + intakeResponses through (D
     assert.equal(calls.length, 0, "testMode never hits submit");
   });
 });
+
+// ───────────────────────────────────────────────────────────────────────────
+// 5. caller-ID auto-fill (voice R1+) — the inbound call carries the caller's
+//    number. The webhook stamps it onto ctx.callerPhone, and book_appointment
+//    defaults intakeResponses.phone to it WHEN the model supplied no phone of
+//    its own. A model-supplied phone (top-level or in intakeResponses) wins.
+//    This captures the caller's number even when the agent forgets to ask.
+// ───────────────────────────────────────────────────────────────────────────
+
+describe("book_appointment — caller-ID auto-fill from ctx.callerPhone", () => {
+  function makeDeps() {
+    const calls: SubmitPublicBookingArgs[] = [];
+    const deps: BookAppointmentDeps = {
+      submitBooking: async (args) => {
+        calls.push(args);
+        return { success: true };
+      },
+    };
+    return { deps, calls };
+  }
+
+  test("no model phone but ctx.callerPhone set → submits with intakeResponses.phone === ctx.callerPhone", async () => {
+    const { deps, calls } = makeDeps();
+    const out = (await bookAppointment.execute(
+      {
+        fullName: "Jane Doe",
+        // No top-level phone, no email — the agent forgot to ask. The address
+        // alone would normally fail the contact-method refine, BUT the model
+        // can still pass it; here we rely on ctx.callerPhone to be the contact
+        // method. The schema refine fires on the INPUT only, so we include a
+        // throwaway intakeResponses to satisfy the model's typical shape.
+        slotIso: "2026-06-02T17:00:00Z",
+        intakeResponses: { address: "1234 Main St", service: "Leak repair", phone: "" },
+        confirmed: true,
+      },
+      { ...CTX, callerPhone: "+15557654321" },
+      deps,
+    )) as { ok: boolean };
+
+    assert.equal(out.ok, true);
+    assert.equal(calls.length, 1, "exactly one submit");
+    assert.equal(
+      calls[0]!.intakeResponses?.phone,
+      "+15557654321",
+      "caller ID is auto-filled into intakeResponses.phone when the model gave none",
+    );
+  });
+
+  test("model-supplied top-level phone WINS over ctx.callerPhone", async () => {
+    const { deps, calls } = makeDeps();
+    await bookAppointment.execute(
+      {
+        fullName: "Jane Doe",
+        phone: "+15550000000", // the model collected a different number
+        slotIso: "2026-06-02T17:00:00Z",
+        confirmed: true,
+      },
+      { ...CTX, callerPhone: "+15557654321" },
+      deps,
+    );
+    assert.equal(calls.length, 1);
+    assert.equal(
+      calls[0]!.intakeResponses?.phone,
+      "+15550000000",
+      "a model-supplied phone overrides the caller-ID default",
+    );
+  });
+
+  test("model-supplied intakeResponses.phone WINS over ctx.callerPhone", async () => {
+    const { deps, calls } = makeDeps();
+    await bookAppointment.execute(
+      {
+        fullName: "Jane Doe",
+        slotIso: "2026-06-02T17:00:00Z",
+        intakeResponses: { phone: "+15559999999", address: "1 Main" },
+        confirmed: true,
+      },
+      { ...CTX, callerPhone: "+15557654321" },
+      deps,
+    );
+    assert.equal(calls.length, 1);
+    assert.equal(
+      calls[0]!.intakeResponses?.phone,
+      "+15559999999",
+      "an explicit intakeResponses.phone wins over the caller-ID default",
+    );
+  });
+
+  test("no ctx.callerPhone (anonymous caller) + email present → behaves exactly as before", async () => {
+    const { deps, calls } = makeDeps();
+    const out = (await bookAppointment.execute(
+      {
+        fullName: "Acme Lead",
+        email: "lead@acme.co",
+        slotIso: "2026-06-02T17:00:00Z",
+        confirmed: true,
+      },
+      // ctx.callerPhone undefined — anonymous / blocked caller.
+      CTX,
+      deps,
+    )) as { ok: boolean };
+    assert.equal(out.ok, true);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0]!.email, "lead@acme.co");
+    // No phone anywhere → intakeResponses.phone stays unset (no auto-fill).
+    assert.equal(
+      calls[0]!.intakeResponses?.phone,
+      undefined,
+      "anonymous caller with no phone gets no synthetic phone",
+    );
+  });
+
+  test("ctx.callerPhone does NOT clobber an intakeResponses with a non-empty phone", async () => {
+    const { deps, calls } = makeDeps();
+    await bookAppointment.execute(
+      {
+        fullName: "Jane Doe",
+        slotIso: "2026-06-02T17:00:00Z",
+        intakeResponses: { phone: "+15551112222", address: "1 Main" },
+        confirmed: true,
+      },
+      { ...CTX, callerPhone: "+15557654321" },
+      deps,
+    );
+    assert.equal(calls[0]!.intakeResponses?.phone, "+15551112222");
+  });
+});
