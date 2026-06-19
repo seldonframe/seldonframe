@@ -42,6 +42,8 @@ import {
   cancelAppointment,
   buildBookingReadBack,
   type ToolExecuteContext,
+  type BookAppointmentDeps,
+  type SubmitPublicBookingArgs,
 } from "../../../../src/lib/agents/tools";
 
 import { VOICE_TOOLS } from "../../../../src/lib/agents/voice/openai-realtime";
@@ -455,5 +457,215 @@ describe("cancel_appointment — confirmation gate + email guard", () => {
     )) as { ok: boolean; reason?: string };
     assert.equal(out.ok, false);
     assert.match(out.reason ?? "", /not_found|mismatch/);
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// 4. book_appointment — per-workspace fields (email optional, phone +
+//    intakeResponses passthrough). Voice R1: a plumber workspace needs
+//    name + phone + address + service (NO email); the agency needs email.
+// ───────────────────────────────────────────────────────────────────────────
+
+describe("book_appointment — input schema: email optional, intakeResponses", () => {
+  test("accepts a booking with phone but NO email", () => {
+    assert.equal(
+      bookAppointment.inputSchema.safeParse({
+        fullName: "Jane Doe",
+        phone: "+15551234567",
+        slotIso: "2026-06-02T17:00:00Z",
+        intakeResponses: { address: "1234 Main St", service: "Leak repair" },
+      }).success,
+      true,
+      "phone-only booking is valid (no email required)",
+    );
+  });
+
+  test("accepts a booking with email and no phone (agency path unchanged)", () => {
+    assert.equal(
+      bookAppointment.inputSchema.safeParse({
+        fullName: "Jane Doe",
+        email: "jane@acme.co",
+        slotIso: "2026-06-02T17:00:00Z",
+      }).success,
+      true,
+    );
+  });
+
+  test("REJECTS a booking with neither email nor phone", () => {
+    assert.equal(
+      bookAppointment.inputSchema.safeParse({
+        fullName: "Jane Doe",
+        slotIso: "2026-06-02T17:00:00Z",
+      }).success,
+      false,
+      "a booking with no contact method (no email AND no phone) is invalid",
+    );
+  });
+
+  test("intakeResponses must be a string->string record", () => {
+    assert.equal(
+      bookAppointment.inputSchema.safeParse({
+        fullName: "Jane Doe",
+        phone: "+15551234567",
+        slotIso: "2026-06-02T17:00:00Z",
+        intakeResponses: { address: 123 },
+      }).success,
+      false,
+      "non-string intake values are rejected",
+    );
+  });
+});
+
+describe("book_appointment — jsonSchema (what the model sees)", () => {
+  const schema = bookAppointment.jsonSchema as {
+    properties?: Record<string, { type?: string; description?: string }>;
+    required?: string[];
+  };
+
+  test("required no longer includes email — only fullName + slotIso", () => {
+    assert.deepEqual(schema.required, ["fullName", "slotIso"]);
+  });
+
+  test("exposes an intakeResponses object property documented for the model", () => {
+    assert.ok(schema.properties?.intakeResponses, "intakeResponses property present");
+    assert.equal(schema.properties!.intakeResponses!.type, "object");
+    assert.match(
+      schema.properties!.intakeResponses!.description ?? "",
+      /field id|keyed|phone|address/i,
+      "description tells the model to key by field id",
+    );
+  });
+
+  test("email + phone properties carry guidance about when each is needed", () => {
+    assert.ok(schema.properties?.email, "email still offered");
+    assert.ok(schema.properties?.phone, "phone offered");
+  });
+});
+
+describe("book_appointment — execute passes phone + intakeResponses through (DI)", () => {
+  // Capture the args the tool would hand submitPublicBookingAction, via the
+  // injectable deps seam (mirrors RescheduleDeps/CancelDeps — no DB).
+  function makeDeps() {
+    const calls: SubmitPublicBookingArgs[] = [];
+    const deps: BookAppointmentDeps = {
+      submitBooking: async (args) => {
+        calls.push(args);
+        return { success: true };
+      },
+    };
+    return { deps, calls };
+  }
+
+  test("UNCONFIRMED phone-only booking → read-back first, no submit", async () => {
+    const { deps, calls } = makeDeps();
+    const out = (await bookAppointment.execute(
+      {
+        fullName: "Jane Doe",
+        phone: "+15551234567",
+        slotIso: "2026-06-02T17:00:00Z",
+        intakeResponses: { address: "1234 Main St", service: "Leak repair" },
+      },
+      CTX,
+      deps,
+    )) as { ok: boolean; needsConfirmation?: boolean; readBack?: string };
+
+    assert.equal(out.ok, false, "no write without confirmation");
+    assert.equal(out.needsConfirmation, true);
+    assert.match(out.readBack ?? "", /Jane Doe/);
+    assert.equal(calls.length, 0, "submit must NOT be called before confirmation");
+  });
+
+  test("CONFIRMED phone-only booking → submit called with email '' and intakeResponses incl. phone", async () => {
+    const { deps, calls } = makeDeps();
+    const out = (await bookAppointment.execute(
+      {
+        fullName: "Jane Doe",
+        phone: "+15551234567",
+        slotIso: "2026-06-02T17:00:00Z",
+        intakeResponses: { address: "1234 Main St", service: "Leak repair" },
+        confirmed: true,
+      },
+      CTX,
+      deps,
+    )) as { ok: boolean };
+
+    assert.equal(out.ok, true);
+    assert.equal(calls.length, 1, "exactly one submit");
+    const arg = calls[0]!;
+    assert.equal(arg.orgSlug, "acme");
+    assert.equal(arg.fullName, "Jane Doe");
+    assert.equal(arg.startsAt, "2026-06-02T17:00:00Z");
+    // Email absent → passed as empty string (submitPublicBookingAction treats
+    // empty as "resolve contact by phone").
+    assert.equal(arg.email, "");
+    // Phone is folded INTO intakeResponses.phone (submit derives contact phone
+    // from there) — not jammed into notes.
+    assert.equal(arg.intakeResponses?.phone, "+15551234567");
+    assert.equal(arg.intakeResponses?.address, "1234 Main St");
+    assert.equal(arg.intakeResponses?.service, "Leak repair");
+    // No "Phone: ..." stop-gap in notes anymore.
+    assert.ok(
+      !/Phone:/.test(arg.notes ?? ""),
+      "phone is not jammed into notes",
+    );
+  });
+
+  test("CONFIRMED email booking (agency) → submit gets the email, phone omitted", async () => {
+    const { deps, calls } = makeDeps();
+    const out = (await bookAppointment.execute(
+      {
+        fullName: "Acme Lead",
+        email: "lead@acme.co",
+        slotIso: "2026-06-02T17:00:00Z",
+        confirmed: true,
+      },
+      CTX,
+      deps,
+    )) as { ok: boolean };
+
+    assert.equal(out.ok, true);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0]!.email, "lead@acme.co");
+    // No phone collected → intakeResponses has no phone key.
+    assert.equal(calls[0]!.intakeResponses?.phone, undefined);
+  });
+
+  test("explicit intakeResponses.phone is NOT overwritten by the phone arg", async () => {
+    const { deps, calls } = makeDeps();
+    await bookAppointment.execute(
+      {
+        fullName: "Jane Doe",
+        phone: "+15550000000",
+        slotIso: "2026-06-02T17:00:00Z",
+        // Model already put a (different) phone in intakeResponses — keep it.
+        intakeResponses: { phone: "+15559999999", address: "1 Main" },
+        confirmed: true,
+      },
+      CTX,
+      deps,
+    );
+    assert.equal(calls.length, 1);
+    assert.equal(
+      calls[0]!.intakeResponses?.phone,
+      "+15559999999",
+      "an explicit intakeResponses.phone wins over the loose phone arg",
+    );
+  });
+
+  test("confirmed:true in testMode still short-circuits to synthetic success (no submit)", async () => {
+    const { deps, calls } = makeDeps();
+    const out = (await bookAppointment.execute(
+      {
+        fullName: "Jane Doe",
+        phone: "+15551234567",
+        slotIso: "2026-06-02T17:00:00Z",
+        confirmed: true,
+      },
+      { ...CTX, testMode: true },
+      deps,
+    )) as { ok: boolean; testMode?: boolean };
+    assert.equal(out.ok, true);
+    assert.equal(out.testMode, true);
+    assert.equal(calls.length, 0, "testMode never hits submit");
   });
 });

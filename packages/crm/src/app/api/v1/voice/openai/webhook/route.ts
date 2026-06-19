@@ -266,6 +266,8 @@ export async function POST(request: Request): Promise<Response> {
             blueprint: personaInputs.blueprint,
             timezone: personaInputs.timezone,
             now: new Date(),
+            // Voice R1 — collect exactly the fields THIS workspace declares.
+            intakeFields: personaInputs.intakeFields,
             brainNotes: brain.notes,
           });
           audioVoice = personaInputs.blueprint.voice;

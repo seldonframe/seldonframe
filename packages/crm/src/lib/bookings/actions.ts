@@ -10,6 +10,7 @@ import { assertWritable } from "@/lib/demo/server";
 import { emitSeldonEvent } from "@/lib/events/bus";
 import { createBookingCheckoutSession } from "@/lib/payments/actions";
 import { createBookingForCustomer } from "./create-for-customer";
+import { resolveBookingContactIdentity } from "./contact-identity";
 import { recordBookingOutcomeLearning } from "@/lib/soul/learning";
 import { computeRescheduledEnd, intervalsOverlap, shouldSendRescheduleEmail as shouldSendRescheduleEmailPure } from "./calendar-math";
 import { sendBookingRescheduleEmail } from "@/lib/messaging/skills/booking-reschedule";
@@ -1392,13 +1393,19 @@ export async function submitPublicBookingAction({
   orgSlug: string;
   bookingSlug: string;
   fullName: string;
-  email: string;
+  /** Voice R1 — OPTIONAL. The web booking page + text chatbot always send an
+   *  email; the voice receptionist for a phone-first vertical (plumber/HVAC)
+   *  sends none and we resolve the contact by phone instead. Empty/absent →
+   *  the nullable email columns store null. */
+  email?: string;
   notes?: string;
   startsAt: string;
   /** v1.40.1 — vertical-aware intake field responses keyed by field id.
    *  e.g. { address: "1234 Main St", urgency: "Today", issue_type: "..." }
    *  Stored on the booking row's metadata so the operator sees actionable
-   *  context the moment the lead lands in their CRM. */
+   *  context the moment the lead lands in their CRM. The canonical "phone"
+   *  key (when present) is ALSO used to resolve the contact when no email
+   *  was provided. */
   intakeResponses?: Record<string, string>;
 }) {
   assertWritable();
@@ -1457,11 +1464,31 @@ export async function submitPublicBookingAction({
       ? responses.phone.trim()
       : null;
 
-  const [existing] = await db
-    .select({ id: contacts.id, phone: contacts.phone, customFields: contacts.customFields, lastName: contacts.lastName })
-    .from(contacts)
-    .where(and(eq(contacts.orgId, bookingContext.orgId), eq(contacts.email, email)))
-    .limit(1);
+  // Voice R1 — decide how to resolve the contact. Web booking + text chatbot
+  // always send an email → match/create by email (UNCHANGED behavior). The
+  // voice receptionist for a phone-first vertical sends no email → match/create
+  // by phone, and store NULL (never "") for the nullable email columns.
+  const identity = resolveBookingContactIdentity({ email, phone: intakePhone });
+  // The value written to the nullable email columns (booking + contact).
+  const effectiveEmail = identity.storedEmail;
+
+  // Build the (orgId, email|phone) match predicate from the identity. "none"
+  // (no contact method at all) skips the lookup → orphan path below.
+  const contactMatch =
+    identity.matchBy === "email" && identity.email
+      ? and(eq(contacts.orgId, bookingContext.orgId), eq(contacts.email, identity.email))
+      : identity.matchBy === "phone" && identity.phone
+        ? and(eq(contacts.orgId, bookingContext.orgId), eq(contacts.phone, identity.phone))
+        : null;
+
+  const existingRows = contactMatch
+    ? await db
+        .select({ id: contacts.id, phone: contacts.phone, customFields: contacts.customFields, lastName: contacts.lastName })
+        .from(contacts)
+        .where(contactMatch)
+        .limit(1)
+    : [];
+  const existing = existingRows[0];
 
   let contactId = existing?.id ?? null;
 
@@ -1472,7 +1499,7 @@ export async function submitPublicBookingAction({
         orgId: bookingContext.orgId,
         firstName,
         lastName,
-        email,
+        email: effectiveEmail,
         phone: intakePhone,
         status: "lead",
         source: "booking",
@@ -1662,7 +1689,7 @@ export async function submitPublicBookingAction({
         contactId,
         firstName,
         lastName,
-        email,
+        email: effectiveEmail,
         phone: intakePhone ?? "",
       },
       appointmentTypeId: bookingContext.bookingTemplateId,
@@ -1693,7 +1720,7 @@ export async function submitPublicBookingAction({
         title: "Booked consultation",
         bookingSlug,
         fullName,
-        email,
+        email: effectiveEmail,
         notes: notes ?? null,
         provider,
         status: bookingContext.price > 0 ? "pending_payment" : "scheduled",
@@ -1719,7 +1746,10 @@ export async function submitPublicBookingAction({
         orgId: bookingContext.orgId,
         bookingId: createdBooking.id,
         contactId,
-        customerEmail: email,
+        // Voice R1 — a phone-only caller may book a paid type; Stripe accepts
+        // an empty email (just won't prefill it). Confirmation/receipt then
+        // rides SMS via the booking.created trigger.
+        customerEmail: effectiveEmail ?? "",
         amount: bookingContext.price,
         successPath: `/book/${orgSlug}/${bookingSlug}?success=1`,
         cancelPath: `/book/${orgSlug}/${bookingSlug}?canceled=1`,
@@ -1939,7 +1969,7 @@ export async function submitPublicBookingAction({
           orgId: bookingContext.orgId,
           scope: "workspace",
           path: "pipeline/booked-appointments.md",
-          paragraph: `**${bookingContext.appointmentName}** booked for ${localTime} (${workspaceTz}). Lead source: public-booking. Email domain: ${email.split("@")[1] ?? "unknown"}.`,
+          paragraph: `**${bookingContext.appointmentName}** booked for ${localTime} (${workspaceTz}). Lead source: public-booking. Email domain: ${effectiveEmail ? effectiveEmail.split("@")[1] ?? "unknown" : "n/a (phone booking)"}.`,
           metadata: {
             type: "fact",
             tags: ["booking", "conversion"],

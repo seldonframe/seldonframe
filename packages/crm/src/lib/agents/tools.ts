@@ -315,23 +315,87 @@ const CONFIRM_INSTRUCTION =
 
 // ─── book_appointment ──────────────────────────────────────────────────────
 
-const bookAppointmentInput = z.object({
-  fullName: z.string().min(2),
-  email: z.string().email(),
-  phone: z.string().optional(),
-  slotIso: z.string(),
-  notes: z.string().optional(),
-  bookingSlug: z.string().optional(),
-  /** voice R1 — confirmation gate. The tool writes ONLY when this is true.
-   *  Anything else (false / omitted) returns the spoken read-back instead. */
-  confirmed: z.boolean().optional(),
-});
+const bookAppointmentInput = z
+  .object({
+    fullName: z.string().min(2),
+    // voice R1 — email is OPTIONAL. A plumber workspace collects phone +
+    // address + service (no email); the agency collects email. The refine
+    // below requires AT LEAST ONE contact method.
+    email: z.string().email().optional(),
+    phone: z.string().optional(),
+    slotIso: z.string(),
+    notes: z.string().optional(),
+    bookingSlug: z.string().optional(),
+    /** voice R1 — vertical-aware intake field responses keyed by field id
+     *  (e.g. { phone, address, service }). Threaded to
+     *  submitPublicBookingAction → stored on the booking + contact so the
+     *  operator sees actionable lead context. */
+    intakeResponses: z.record(z.string(), z.string()).optional(),
+    /** voice R1 — confirmation gate. The tool writes ONLY when this is true.
+     *  Anything else (false / omitted) returns the spoken read-back instead. */
+    confirmed: z.boolean().optional(),
+  })
+  .refine(
+    (v) =>
+      (typeof v.email === "string" && v.email.trim().length > 0) ||
+      (typeof v.phone === "string" && v.phone.trim().length > 0) ||
+      (typeof v.intakeResponses?.phone === "string" &&
+        v.intakeResponses.phone.trim().length > 0),
+    {
+      message:
+        "Collect at least one contact method: an email OR a phone number.",
+      path: ["email"],
+    },
+  );
+
+/** The exact arg shape book_appointment hands to submitPublicBookingAction.
+ *  Exported so the unit test can assert it without a live DB. */
+export type SubmitPublicBookingArgs = {
+  orgSlug: string;
+  bookingSlug: string;
+  fullName: string;
+  /** Empty string when the caller gave no email — submitPublicBookingAction
+   *  then resolves/creates the contact by phone (from intakeResponses.phone). */
+  email: string;
+  notes?: string;
+  startsAt: string;
+  intakeResponses?: Record<string, string>;
+};
+
+/** Injectable DB seam for book_appointment — lets the unit test assert the
+ *  args that reach submitPublicBookingAction (email passthrough, phone folded
+ *  into intakeResponses) without a live database. Mirrors RescheduleDeps /
+ *  CancelDeps. */
+export type BookAppointmentDeps = {
+  submitBooking: (args: SubmitPublicBookingArgs) => Promise<unknown>;
+};
+
+function defaultBookAppointmentDeps(): BookAppointmentDeps {
+  return {
+    submitBooking: async (args) => {
+      // Lazy import — submitPublicBookingAction lives in bookings/actions and
+      // imports many other modules; keeping it lazy reduces the tools-module
+      // load cost during runtime startup.
+      const { submitPublicBookingAction } = await import("@/lib/bookings/actions");
+      return submitPublicBookingAction(args);
+    },
+  };
+}
 
 export const bookAppointment: AgentTool<
   z.infer<typeof bookAppointmentInput>,
   | { ok: boolean; bookingId?: string; testMode?: boolean; error?: string }
   | NeedsConfirmation
-> = {
+> & {
+  execute: (
+    input: z.infer<typeof bookAppointmentInput>,
+    ctx: ToolExecuteContext,
+    deps?: BookAppointmentDeps,
+  ) => Promise<
+    | { ok: boolean; bookingId?: string; testMode?: boolean; error?: string }
+    | NeedsConfirmation
+  >;
+} = {
   name: "book_appointment",
   description:
     "Create a confirmed booking. CALL ORDER: (1) look_up_availability({date}) FIRST to get real slots, (2) book_appointment with the chosen slot's `iso` field passed VERBATIM as slotIso. Never invent or hand-edit a slot — each slot's `iso` is a full UTC ISO timestamp ('2026-05-13T16:00:00Z') that carries timezone info; if you trim, reformat, or substitute the spoken `label` for it, the server will book the wrong time across timezones. " +
@@ -341,14 +405,33 @@ export const bookAppointment: AgentTool<
     type: "object",
     properties: {
       fullName: { type: "string" },
-      email: { type: "string", format: "email" },
-      phone: { type: "string" },
+      email: {
+        type: "string",
+        format: "email",
+        description:
+          "The caller's email. OPTIONAL — only collect it if this workspace's booking fields ask for it (see your system prompt's 'To book, collect…' line). Many service businesses (plumber, HVAC) take a phone instead. You MUST collect at least one of email or phone.",
+      },
+      phone: {
+        type: "string",
+        description:
+          "The caller's phone number in E.164 if possible (e.g. '+15551234567'). Collect this when the workspace's booking fields list a phone (most service businesses). You MUST collect at least one of email or phone.",
+      },
       slotIso: {
         type: "string",
         description:
           "MUST be the `iso` field of one of the slots returned by look_up_availability, copied VERBATIM. Format is full UTC ISO with Z suffix (e.g. '2026-05-13T16:00:00Z'). Do NOT pass the human `label` (e.g. '10:00 AM PDT') or a naive local time like '2026-05-13T09:00' — those get misinterpreted and book the wrong time.",
       },
-      notes: { type: "string" },
+      intakeResponses: {
+        type: "object",
+        description:
+          "The workspace's collected intake fields, keyed by field id, as a flat object of strings (e.g. { \"phone\":\"+15551234567\", \"address\":\"1234 Main St\", \"service\":\"Leak repair\" }). Put EVERY field your system prompt's 'To book, collect…' line names here, using the exact field id given there. Phone may go here as \"phone\" or in the top-level phone arg — either works.",
+        additionalProperties: { type: "string" },
+      },
+      notes: {
+        type: "string",
+        description:
+          "Optional free-text notes only (e.g. an aside the caller mentioned). Do NOT stuff structured fields like phone/address here — use intakeResponses for those.",
+      },
       bookingSlug: { type: "string" },
       confirmed: {
         type: "boolean",
@@ -356,9 +439,13 @@ export const bookAppointment: AgentTool<
           "Set true ONLY after you've read the details back to the caller and they confirmed. Omit (or false) on the first call to receive the read-back; the booking is written only when this is true.",
       },
     },
-    required: ["fullName", "email", "slotIso"],
+    required: ["fullName", "slotIso"],
   },
-  execute: async (input, ctx) => {
+  execute: async (
+    input,
+    ctx,
+    deps: BookAppointmentDeps = defaultBookAppointmentDeps(),
+  ) => {
     // Confirmation gate — no write until the caller has confirmed the read-back.
     if (input.confirmed !== true) {
       return {
@@ -378,29 +465,32 @@ export const bookAppointment: AgentTool<
         bookingId: `test-${Date.now()}`,
       };
     }
-    // Lazy import — submitPublicBookingAction lives in bookings/actions
-    // and imports many other modules; keeping it lazy reduces the
-    // tools-module load cost during runtime startup.
-    const { submitPublicBookingAction } = await import("@/lib/bookings/actions");
     try {
+      // voice R1 — thread the workspace's collected intake fields through to
+      // submitPublicBookingAction. Phone is folded INTO intakeResponses.phone
+      // (the submit action derives the contact phone from there) — UNLESS the
+      // model already supplied an intakeResponses.phone, which wins.
+      const intakeResponses: Record<string, string> = { ...(input.intakeResponses ?? {}) };
+      if (
+        input.phone &&
+        !(typeof intakeResponses.phone === "string" && intakeResponses.phone.trim().length > 0)
+      ) {
+        intakeResponses.phone = input.phone;
+      }
       // submitPublicBookingAction returns { success, confirmationMessage,
-      // checkoutUrl }. We don't surface checkoutUrl to the LLM (would
-      // need handoff to a payment flow which v1.26 doesn't model).
-      // Phone goes into notes as a stop-gap until v1.26.1 widens the
-      // public-booking signature to accept phone explicitly.
-      const composedNotes = [
-        input.notes,
-        input.phone ? `Phone: ${input.phone}` : null,
-      ]
-        .filter(Boolean)
-        .join("\n");
-      await submitPublicBookingAction({
+      // checkoutUrl }. We don't surface checkoutUrl to the LLM (would need
+      // handoff to a payment flow which v1.26 doesn't model). When email is
+      // absent we pass "" — the submit action treats empty email as "resolve
+      // the contact by phone" and stores null for the email columns.
+      await deps.submitBooking({
         orgSlug: ctx.orgSlug,
         bookingSlug: input.bookingSlug ?? "default",
         fullName: input.fullName,
-        email: input.email,
-        notes: composedNotes || undefined,
+        email: input.email ?? "",
+        notes: input.notes || undefined,
         startsAt: input.slotIso,
+        intakeResponses:
+          Object.keys(intakeResponses).length > 0 ? intakeResponses : undefined,
       });
       return { ok: true };
     } catch (err) {

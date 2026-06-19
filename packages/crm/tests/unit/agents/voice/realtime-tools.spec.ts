@@ -75,10 +75,12 @@ describe("toRealtimeFunctionTools — wire shape", () => {
     assert.ok(params.properties!.fullName, "expected a fullName property");
     assert.ok(params.properties!.email, "expected an email property");
     assert.ok(params.properties!.slotIso, "expected a slotIso property");
+    // Voice R1: email is OPTIONAL (a plumber workspace collects phone, not
+    // email). Only fullName + slotIso are hard-required now.
     assert.deepEqual(
       params.required,
-      ["fullName", "email", "slotIso"],
-      "book_appointment requires fullName + email + slotIso",
+      ["fullName", "slotIso"],
+      "book_appointment requires fullName + slotIso (email optional)",
     );
   });
 
