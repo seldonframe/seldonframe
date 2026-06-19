@@ -194,6 +194,105 @@ export function buildPostCallSmsBody(params: {
  */
 export const MAX_CALL_MS = 4 * 60 * 1000;
 
+/**
+ * Goodbye-detection pattern. Shared by BOTH caller-transcript code paths so the
+ * literal is defined exactly once:
+ *   1. the (legacy / fallback) `conversation.item.input_audio_transcription.completed`
+ *      handler, and
+ *   2. the out-of-band caller transcript that comes back as `response.output_text`.
+ * On the OpenAI Realtime SIP path (1) never fires, so (2) is the live source of
+ * caller text; keeping the same regex means a spoken "goodbye" closes the call
+ * identically regardless of which path delivered the transcript.
+ */
+export const CALLER_GOODBYE_RE =
+  /\b(good ?bye|bye|that'?s all|thank you,? bye|hang up)\b/i;
+
+/**
+ * Build the OUT-OF-BAND caller-speech transcription request.
+ *
+ * WHY this exists: on our OpenAI Realtime SIP calls the built-in
+ * `conversation.item.input_audio_transcription.completed` event never fires, so
+ * the caller's transcript is dark (the assistant's `response.output_audio_transcript`
+ * works fine). OpenAI's own remedy is "out-of-band transcription": after the
+ * caller's turn ends, send a SEPARATE text-only `response.create` whose
+ * `conversation:"none"` keeps it OUT of the live conversation state (so it does
+ * not interrupt or alter the spoken audio response), asking the model to
+ * transcribe the caller's most recent utterance. The returned text is routed to
+ * `onUserTurn` exactly like a normal caller transcript.
+ *
+ * Pure function — no I/O, no side effects. The exact shape is asserted in
+ * run-voice-call.spec.ts so a drift in any field is caught.
+ */
+export function buildCallerTranscriptionRequest(): {
+  type: "response.create";
+  response: {
+    conversation: "none";
+    output_modalities: ["text"];
+    instructions: string;
+  };
+} {
+  return {
+    type: "response.create",
+    response: {
+      conversation: "none",
+      output_modalities: ["text"],
+      instructions:
+        "Transcribe the user's most recent spoken message, word for word and verbatim. Output ONLY the transcription text — no preamble, no quotes. If there is no recent user message, output nothing.",
+    },
+  };
+}
+
+/**
+ * Decide whether a `response.done` payload is an OUT-OF-BAND TRANSCRIPTION
+ * response (which must NOT be counted as an assistant turn) versus a real
+ * assistant AUDIO reply.
+ *
+ * The distinction is content modality, inspected robustly off `response.output[]`:
+ *   - the out-of-band transcription response was requested with
+ *     `output_modalities:["text"]`, so its output items carry only TEXT content
+ *     parts (`type:"text"` / `"output_text"`) — never `audio` / `output_audio`.
+ *   - a spoken assistant reply carries an `audio` / `output_audio` content part
+ *     (the transcript rides alongside it).
+ *
+ * Returns true ONLY when there is at least one text content part AND no audio
+ * content part anywhere in the output. An EMPTY / ABSENT output (e.g. a bare
+ * `{ type:"response.done" }`) returns false, so the existing assistant-turn
+ * accounting for those is unchanged (some tests rely on that).
+ *
+ * Pure + total — never throws on malformed JSON; an unrecognizable shape that
+ * contains no text parts simply returns false (treated as a normal turn).
+ */
+export function isOutOfBandTranscriptionDone(
+  msg: Record<string, unknown>,
+): boolean {
+  const response = msg?.response;
+  const output =
+    response && typeof response === "object"
+      ? (response as { output?: unknown }).output
+      : undefined;
+  if (!Array.isArray(output) || output.length === 0) return false;
+
+  let sawText = false;
+  for (const rawItem of output) {
+    if (!rawItem || typeof rawItem !== "object") continue;
+    const content = (rawItem as { content?: unknown }).content;
+    if (!Array.isArray(content)) continue;
+    for (const rawPart of content) {
+      if (!rawPart || typeof rawPart !== "object") continue;
+      const partType = (rawPart as { type?: unknown }).type;
+      if (partType === "audio" || partType === "output_audio") {
+        // Any audio content → this is a spoken assistant reply, not the
+        // transcription response. Bail immediately.
+        return false;
+      }
+      if (partType === "text" || partType === "output_text") {
+        sawText = true;
+      }
+    }
+  }
+  return sawText;
+}
+
 export type AcceptCallResult =
   | { ok: true; status: number; body: string; headers: Record<string, string | null> }
   | { ok: false; status: number; body: string };
@@ -435,6 +534,18 @@ export async function runVoiceCall(params: {
     // terminal `response.done` output[]; tracking the id here means we execute
     // it exactly once (no double-booking). See realtime-function-calls.ts.
     const seenCallIds = new Set<string>();
+
+    // voice-r1 — accumulator for the OUT-OF-BAND caller transcription. The model
+    // may stream the transcript as `response.output_text.delta` events and then
+    // emit a `.done` that omits the full text; we concat the deltas here and
+    // flush on `.done`. Reset after each flush so consecutive caller turns don't
+    // bleed together. (When `.done` carries the full `text`, we use that and the
+    // buffer stays empty.)
+    let oobTranscript = "";
+    // voice-r1 — log the raw `response.done` output content-types exactly ONCE
+    // per call so the live-call logs confirm the assistant-audio vs out-of-band-
+    // text shape we key the turn-accounting guard on (without spamming every turn).
+    let loggedResponseDoneShape = false;
 
     // Single resolution path — closes the socket (if still open) and resolves
     // the promise exactly once, logging the final reason.
@@ -712,7 +823,135 @@ export async function runVoiceCall(params: {
           break;
         }
 
+        // voice-r1 — OUT-OF-BAND caller transcription TRIGGER. When the caller's
+        // input audio buffer is COMMITTED (server VAD has closed the caller's
+        // turn), fire a separate text-only response that transcribes what the
+        // caller just said. `conversation:"none"` keeps this request out of the
+        // live conversation so it does NOT interrupt or replace the assistant's
+        // spoken audio reply (which the model produces in parallel from the same
+        // committed audio). The returned text is captured in the
+        // `response.output_text.done` case below and routed to onUserTurn.
+        //
+        // NOTE: it is not yet confirmed which buffer event the GA SIP path emits.
+        // We log BOTH `input_audio_buffer.committed` and
+        // `input_audio_buffer.speech_stopped` so the next live call's logs reveal
+        // which one fires. If `committed` never fires on SIP but `speech_stopped`
+        // does, MOVE the `send(buildCallerTranscriptionRequest())` line into the
+        // `speech_stopped` case below.
+        case "input_audio_buffer.committed": {
+          logEvent("voice_call_realtime_event", {
+            call_id: params.callId,
+            event_type: msg.type,
+          });
+          try {
+            send(buildCallerTranscriptionRequest());
+          } catch {
+            // best-effort — a failed out-of-band send must never affect the call
+          }
+          break;
+        }
+
+        // voice-r1 — diagnostic only (NO send). Logs whether the GA SIP path
+        // emits `speech_stopped`; pairs with the `committed` log above so the
+        // next live call shows which buffer event actually fires. See the note
+        // on the `committed` case for moving the send here if needed.
+        case "input_audio_buffer.speech_stopped": {
+          logEvent("voice_call_realtime_event", {
+            call_id: params.callId,
+            event_type: msg.type,
+          });
+          break;
+        }
+
+        // voice-r1 — OUT-OF-BAND caller transcription DELTA accumulation. The
+        // model may stream the transcript in pieces before the `.done`. Buffer
+        // them so a `.done` that omits the full `text` can still be finalized.
+        case "response.output_text.delta":
+        case "response.text.delta": {
+          const delta = typeof msg.delta === "string" ? msg.delta : "";
+          if (delta) oobTranscript += delta;
+          break;
+        }
+
+        // voice-r1 — OUT-OF-BAND caller transcription CAPTURE. The text-only
+        // response we requested above completes here (GA: `response.output_text.done`,
+        // beta: `response.text.done`). Prefer the full `text` on the event; fall
+        // back to the accumulated deltas. Route any non-empty transcript to
+        // onUserTurn (the caller's turn) and run the SAME goodbye detection the
+        // legacy input_audio_transcription path uses (shared CALLER_GOODBYE_RE).
+        case "response.output_text.done":
+        case "response.text.done": {
+          const fullText = typeof msg.text === "string" ? msg.text : "";
+          const text = (fullText || oobTranscript).trim();
+          oobTranscript = ""; // reset for the next caller turn either way
+          logEvent("voice_call_realtime_event", {
+            call_id: params.callId,
+            event_type: msg.type,
+            text_len: text.length,
+          });
+          if (text) {
+            try {
+              params.onUserTurn?.(text);
+            } catch {
+              // best-effort transcript capture — never affect the call
+            }
+            if (CALLER_GOODBYE_RE.test(text)) {
+              sawGoodbye = true;
+              logEvent("voice_call_goodbye_detected", { call_id: params.callId });
+            }
+          }
+          break;
+        }
+
         case "response.done": {
+          // voice-r1 — log the raw output content-types ONCE so the live call
+          // confirms the shape of an assistant-audio vs an out-of-band-text
+          // response.done (truncated; this is what the turn guard keys on).
+          if (!loggedResponseDoneShape) {
+            loggedResponseDoneShape = true;
+            try {
+              const output = (msg.response as { output?: unknown })?.output;
+              const outTypes = Array.isArray(output)
+                ? output
+                    .map((it) => {
+                      const content = (it as { content?: unknown })?.content;
+                      const partTypes = Array.isArray(content)
+                        ? content.map((p) => (p as { type?: unknown })?.type)
+                        : [];
+                      return {
+                        type: (it as { type?: unknown })?.type,
+                        content_types: partTypes,
+                      };
+                    })
+                    .slice(0, 4)
+                : null;
+              logEvent("voice_call_realtime_event", {
+                call_id: params.callId,
+                event_type: "response.done.output_shape",
+                output_types: JSON.stringify(outTypes).slice(0, 400),
+              });
+            } catch {
+              // best-effort diagnostic — never let logging affect the call
+            }
+          }
+
+          // voice-r1 — OUT-OF-BAND TRANSCRIPTION GUARD. Our caller-transcription
+          // request (buildCallerTranscriptionRequest) ALSO emits a `response.done`.
+          // Its output is TEXT-only (no audio content), which distinguishes it
+          // from a spoken assistant reply. It must NOT count as an assistant turn
+          // and must NOT trip the goodbye/max_turns finish — the caller's text was
+          // already captured + goodbye-scanned in the `response.output_text.done`
+          // case. Skip ALL turn accounting for it. (The capture/goodbye logic must
+          // live in the output_text case, not here, because a `.done` carrying the
+          // full text only when audio is absent would otherwise be ambiguous.)
+          if (isOutOfBandTranscriptionDone(msg)) {
+            logEvent("voice_call_realtime_event", {
+              call_id: params.callId,
+              event_type: "response.done.out_of_band_transcription",
+            });
+            break;
+          }
+
           // PHASE 1 — a response can finish as a TOOL-CALL turn (its output[]
           // holds function_call items) rather than a spoken reply. Extract +
           // dispatch any terminal calls first; `seenCallIds` makes this a no-op
@@ -775,7 +1014,7 @@ export async function runVoiceCall(params: {
               // best-effort transcript capture — never affect the call
             }
           }
-          if (/\b(good ?bye|bye|that'?s all|thank you,? bye|hang up)\b/i.test(transcript)) {
+          if (CALLER_GOODBYE_RE.test(transcript)) {
             sawGoodbye = true;
             logEvent("voice_call_goodbye_detected", { call_id: params.callId });
           }
