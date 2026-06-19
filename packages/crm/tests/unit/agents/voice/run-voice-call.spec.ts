@@ -407,6 +407,13 @@ describe("runVoiceCall — Phase 1 session.update with tools + voice", () => {
     }
     // Voice goes via audio.output.voice (NOT a top-level voice, NOT in accept).
     assert.equal(sessionUpdate.session.audio.output.voice, VOICE_AUDIO_OUTPUT_VOICE);
+    // Caller-speech transcription uses the GA realtime transcribe model
+    // (whisper-1 is legacy and was silently dropped on the GA SIP path —
+    // see voice-r1 CHANGE B). Without it, caller turns never transcribe.
+    assert.equal(
+      sessionUpdate.session.audio.input.transcription.model,
+      "gpt-4o-mini-transcribe",
+    );
 
     cap.emit("close");
     await promise;

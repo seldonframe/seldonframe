@@ -628,7 +628,11 @@ export async function runVoiceCall(params: {
         // (logged via voice_call_realtime_error) but the call still runs.
         audio: {
           input: {
-            transcription: { model: "whisper-1" },
+            // gpt-4o-mini-transcribe is the current GA realtime transcription
+            // model. whisper-1 is legacy and may be silently dropped on the GA
+            // SIP path (verified: input_audio_transcription.completed never
+            // fired with whisper-1 while assistant transcripts streamed fine).
+            transcription: { model: "gpt-4o-mini-transcribe" },
             // CALLER TRANSCRIPT FIX (2026-06-02, OpenAI GA docs): input
             // transcription only runs when the caller's audio buffer is
             // COMMITTED, and server VAD is what commits each turn. Without an
@@ -754,6 +758,16 @@ export async function runVoiceCall(params: {
         // (Phase 0 has no other use for transcripts.)
         case "conversation.item.input_audio_transcription.completed": {
           const transcript = typeof msg.transcript === "string" ? msg.transcript : "";
+          // Diagnostic (voice-r1 CHANGE B): log the event the moment it fires —
+          // BEFORE the empty-transcript guard — so the next live call's logs
+          // definitively show whether this event reaches us at all and whether
+          // it carries text. The caller-transcript bug is that it has fired zero
+          // times on the GA SIP path; this line proves the fix on the next call.
+          logEvent("voice_call_realtime_event", {
+            call_id: params.callId,
+            event_type: msg.type,
+            transcript_len: transcript.length,
+          });
           if (transcript) {
             try {
               params.onUserTurn?.(transcript);

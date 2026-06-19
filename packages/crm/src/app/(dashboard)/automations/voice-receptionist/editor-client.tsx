@@ -28,6 +28,7 @@ type Props = {
   initialNumber: string;
   initialBlueprint: {
     greeting: string;
+    customSkillMd: string;
     voice: string;
     capabilities: string[];
     faq: FaqRow[];
@@ -43,6 +44,10 @@ export function VoiceReceptionistEditor(props: Props) {
 
   // ── blueprint buffer ──────────────────────────────────────────────────
   const [greeting, setGreeting] = useState(props.initialBlueprint.greeting);
+  // voice R1 — the agent's core persona script (blueprint.customSkillMd).
+  const [customSkillMd, setCustomSkillMd] = useState(
+    props.initialBlueprint.customSkillMd,
+  );
   const [voice, setVoice] = useState(props.initialBlueprint.voice);
   const [capabilities, setCapabilities] = useState<string[]>(
     props.initialBlueprint.capabilities,
@@ -102,6 +107,8 @@ export function VoiceReceptionistEditor(props: Props) {
         agentId: props.agentId,
         patch: {
           greeting: greeting.trim() || undefined,
+          // voice R1 — persist the edited persona script (blank → omit).
+          customSkillMd: customSkillMd.trim() || undefined,
           voice,
           capabilities,
           faq: faq.filter((r) => r.q.trim() && r.a.trim()),
@@ -256,6 +263,22 @@ export function VoiceReceptionistEditor(props: Props) {
           rows={2}
           className="mt-3 w-full rounded-md border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
           placeholder="Thanks for calling! How can I help you today?"
+        />
+      </div>
+
+      {/* Receptionist script (core persona — blueprint.customSkillMd) */}
+      <div className="rounded-xl border bg-card p-5">
+        <h2 className="text-card-title">Receptionist script</h2>
+        <p className="text-xs text-muted-foreground">
+          The agent&apos;s core instructions — what it says and does on every
+          call. Edit with care. Takes effect on the next call after you save.
+        </p>
+        <textarea
+          value={customSkillMd}
+          onChange={(e) => setCustomSkillMd(e.target.value)}
+          rows={16}
+          className="mt-3 w-full rounded-md border bg-background px-3 py-2 font-mono text-xs leading-relaxed focus:border-primary focus:outline-none"
+          placeholder="You are the receptionist for {business}. You are warm, concise, and helpful…"
         />
       </div>
 

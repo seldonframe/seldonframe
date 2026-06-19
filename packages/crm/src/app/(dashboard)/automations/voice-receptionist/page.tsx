@@ -156,6 +156,8 @@ export default async function VoiceReceptionistPage({
         initialNumber={voiceNumber}
         initialBlueprint={{
           greeting: blueprint.greeting ?? "",
+          // voice R1 — the agent's core persona script, editable from the page.
+          customSkillMd: blueprint.customSkillMd ?? "",
           voice: blueprint.voice ?? "alloy",
           capabilities: blueprint.capabilities ?? [...VOICE_CAPABILITIES],
           faq: (blueprint.faq ?? []).map((f) => ({ q: f.q, a: f.a })),

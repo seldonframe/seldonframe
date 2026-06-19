@@ -26,51 +26,11 @@ import { db } from "@/db";
 import { organizations, type AgentBlueprint, type OrganizationIntegrations } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
 import { assertWritable } from "@/lib/demo/server";
-import { normalizeVoiceNumber, VOICE_OPTIONS } from "@/lib/agents/voice/card-status";
+import { normalizeVoiceNumber } from "@/lib/agents/voice/card-status";
 import { publishAgent, updateAgentBlueprint, type PublishAgentResult } from "@/lib/agents/store";
-
-const FaqRow = z.object({
-  q: z.string().min(1),
-  a: z.string().min(1),
-  // v1.45 (faq-from-url) provenance fields — optional, preserved on round-trip.
-  source: z.enum(["extracted", "synthesized", "operator"]).optional(),
-  sourceUrl: z.string().url().optional(),
-  synthesizedAt: z.string().optional(),
-  synthesizedFromSoulVersion: z.number().optional(),
-});
-
-// voice R1 — a per-service price band for the get_quote_range quote guard.
-// low/high are whole-currency amounts (e.g. dollars). high must be ≥ low.
-const QuoteRangeRow = z
-  .object({
-    service: z.string().min(1).max(120),
-    low: z.number().nonnegative(),
-    high: z.number().nonnegative(),
-    note: z.string().max(200).optional(),
-  })
-  .refine((r) => r.high >= r.low, { message: "high must be ≥ low" });
-
-const VoiceBlueprintPatchSchema = z
-  .object({
-    greeting: z.string().max(2000).optional(),
-    voice: z.enum(VOICE_OPTIONS).optional(),
-    capabilities: z.array(z.string()).optional(),
-    faq: z.array(FaqRow).optional(),
-    // voice R1 — operator-editable quote ranges + team callback number.
-    quoteRanges: z.array(QuoteRangeRow).optional(),
-    notifyPhone: z.string().trim().max(40).optional(),
-    // voice R1 — missed-call text-back toggle + copy. Default ON (the page
-    // seeds enabled:true). message supports {business}/{link} placeholders; a
-    // blank message falls back to the default copy at send time.
-    missedCallTextBack: z
-      .object({
-        enabled: z.boolean().optional(),
-        message: z.string().max(480).optional(),
-      })
-      .strict()
-      .optional(),
-  })
-  .strict();
+// voice R1 — the editor's patch allow-list lives in a plain sibling module so
+// it can be unit-tested ("use server" files may export only async functions).
+import { VoiceBlueprintPatchSchema } from "./schema";
 
 export type SaveVoiceBlueprintResult =
   | { ok: true; version: number }
