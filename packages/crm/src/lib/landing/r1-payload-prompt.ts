@@ -14,6 +14,11 @@
 import type { AestheticArchetypeId } from "@/lib/workspace/aesthetic-archetypes";
 import { ARCHETYPES, getArchetype } from "@/lib/workspace/aesthetic-archetypes";
 import type { ExtractedBusinessFacts } from "@/lib/web-onboarding/extraction-prompt";
+import type {
+  ServicePage,
+  R1NavConfig,
+  R1ThemeConfig,
+} from "./r1-site-tree";
 
 // ── TypeScript types mirroring the R-framework section props ──────────────────
 
@@ -164,7 +169,16 @@ export type R1LeadFormSection = {
   consentText?: string;
 };
 
-/** Full R1 landing payload — union of all section prop shapes. */
+/** Full R1 landing payload — union of all section prop shapes.
+ *
+ * Phase-1 multi-page additions are all OPTIONAL so existing single-page
+ * payloads render unchanged:
+ *   • servicePages — one ServicePage per service (the /w/[slug]/services/[x]
+ *     route renders these). NOTE: distinct from `services` above, which is the
+ *     home services GRID (R1ServicesSection). See the plan's Spec↔Code section.
+ *   • nav          — shared navbar config (extra links + CTA override).
+ *   • theme        — { mode?: "light" | "dark" }; threaded through SiteShell.
+ */
 export type R1LandingPayload = {
   hero: R1HeroSection;
   services: R1ServicesSection;
@@ -175,7 +189,17 @@ export type R1LandingPayload = {
   sticky?: R1StickySection;
   /** Speed-to-Lead bottom section (optional). */
   leadForm?: R1LeadFormSection;
+  /** Multi-page: per-service detail pages (Phase 1+). Optional. */
+  servicePages?: ServicePage[];
+  /** Multi-page: shared navbar config. Optional. */
+  nav?: R1NavConfig;
+  /** Multi-page: site theme (light/dark mode). Optional. */
+  theme?: R1ThemeConfig;
 };
+
+// Re-export the site-tree types so existing importers of this module can reach
+// them without a second import path.
+export type { ServicePage, R1NavConfig, R1ThemeConfig } from "./r1-site-tree";
 
 // ── Prompt builder ────────────────────────────────────────────────────────────
 
