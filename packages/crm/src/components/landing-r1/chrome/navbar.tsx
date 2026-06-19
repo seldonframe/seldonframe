@@ -32,6 +32,25 @@ const DEFAULT_SECTIONS = [
   { label: "Contact", href: "#contact" },
 ];
 
+/** A service entry the navbar dropdown links to. */
+export type NavServiceLink = { slug: string; name: string };
+
+/**
+ * Pure: build the Services-dropdown links for a workspace. Each becomes
+ * `${homeHref}/services/${slug}` with homeHref's trailing slash normalized.
+ * Skips entries with a blank slug or name. Exported for unit testing.
+ */
+export function buildServiceNavLinks(
+  homeHref: string,
+  pages: NavServiceLink[],
+): { label: string; href: string }[] {
+  if (!Array.isArray(pages)) return [];
+  const base = homeHref === "/" ? "" : homeHref.replace(/\/+$/, "");
+  return pages
+    .filter((p) => typeof p?.slug === "string" && p.slug.trim() && typeof p?.name === "string" && p.name.trim())
+    .map((p) => ({ label: p.name, href: `${base}/services/${p.slug}` }));
+}
+
 export type NavbarProps = {
   archetype: AestheticArchetypeId;
   businessName: string;
@@ -41,6 +60,12 @@ export type NavbarProps = {
   serviceAreas?: string[];
   /** Anchor links — defaults to Services / Reviews / FAQ / Contact. */
   sections?: { label: string; href: string }[];
+  /** Multi-page: when non-empty, render a Services dropdown linking to each
+   *  service detail page. Empty/omitted → no dropdown (current behavior). */
+  servicePages?: NavServiceLink[];
+  /** Base href for the workspace home + service links. Default "/". On /w it
+   *  is "/w/<slug>"; on the subdomain it stays "/". */
+  homeHref?: string;
 };
 
 export function Navbar({
@@ -49,10 +74,13 @@ export function Navbar({
   phone,
   serviceAreas,
   sections = DEFAULT_SECTIONS,
+  servicePages,
+  homeHref = "/",
 }: NavbarProps) {
   if (ARCHETYPES_WITHOUT_NAVBAR.includes(archetype)) return null;
 
   const arch = ARCHETYPES[archetype];
+  const serviceLinks = buildServiceNavLinks(homeHref, servicePages ?? []);
   const areaLine = serviceAreas && serviceAreas.length > 0
     ? serviceAreas.slice(0, 4).join(" · ")
     : null;
@@ -67,7 +95,7 @@ export function Navbar({
       <div className="sf-navbar-inner">
         {/* Left: wordmark + optional service-area tagline */}
         <div className="sf-navbar-brand">
-          <a className="sf-navbar-wordmark" href="/" aria-label={`${businessName} — home`}>
+          <a className="sf-navbar-wordmark" href={homeHref} aria-label={`${businessName} — home`}>
             {businessName.toUpperCase()}
           </a>
           {areaLine && (
@@ -77,8 +105,27 @@ export function Navbar({
           )}
         </div>
 
-        {/* Center: section anchors — hidden on mobile */}
+        {/* Center: Services dropdown (when multi-page) + section anchors —
+            hidden on mobile. */}
         <nav className="sf-navbar-links" aria-label="Page sections">
+          {serviceLinks.length > 0 && (
+            <div className="sf-navbar-dropdown">
+              <button type="button" className="sf-navbar-link sf-navbar-dropdown-trigger" aria-haspopup="true">
+                Services
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </button>
+              <div className="sf-navbar-menu" role="menu">
+                {serviceLinks.map((l) => (
+                  <a key={l.href} className="sf-navbar-menu-item" href={l.href} role="menuitem">
+                    {l.label}
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
           {sections.map((s) => (
             <a key={s.href} className="sf-navbar-link" href={s.href}>
               {s.label}
@@ -210,6 +257,70 @@ export function Navbar({
           .sf-navbar-link {
             transition: none;
           }
+        }
+
+        /* ── Services dropdown (CSS-only; opens on hover + keyboard focus) ── */
+        .sf-navbar-dropdown {
+          position: relative;
+          display: inline-flex;
+        }
+        .sf-navbar-dropdown-trigger {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          background: none;
+          border: none;
+          cursor: pointer;
+          font: inherit;
+        }
+        .sf-navbar-dropdown-trigger svg { transition: transform 140ms ease; }
+        .sf-navbar-dropdown:hover .sf-navbar-dropdown-trigger svg,
+        .sf-navbar-dropdown:focus-within .sf-navbar-dropdown-trigger svg {
+          transform: rotate(180deg);
+        }
+        .sf-navbar-menu {
+          position: absolute;
+          top: calc(100% + 6px);
+          left: 0;
+          min-width: 220px;
+          max-width: min(320px, calc(100vw - 32px));
+          background: var(--bg);
+          border: 1px solid var(--border);
+          border-radius: 10px;
+          box-shadow: 0 10px 30px color-mix(in oklab, var(--text) 14%, transparent);
+          padding: 6px;
+          display: grid;
+          gap: 2px;
+          opacity: 0;
+          visibility: hidden;
+          transform: translateY(-4px);
+          transition: opacity 140ms ease, transform 140ms ease, visibility 140ms;
+          z-index: 60;
+        }
+        .sf-navbar-dropdown:hover .sf-navbar-menu,
+        .sf-navbar-dropdown:focus-within .sf-navbar-menu {
+          opacity: 1;
+          visibility: visible;
+          transform: translateY(0);
+        }
+        .sf-navbar-menu-item {
+          padding: 8px 12px;
+          border-radius: 6px;
+          font-size: 13.5px;
+          font-weight: 500;
+          color: color-mix(in oklab, var(--text) 80%, transparent);
+          text-decoration: none;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .sf-navbar-menu-item:hover {
+          background: color-mix(in oklab, var(--text) 6%, transparent);
+          color: var(--text);
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .sf-navbar-menu,
+          .sf-navbar-dropdown-trigger svg { transition: none; }
         }
 
         /* ── Right: phone CTA button ── */
