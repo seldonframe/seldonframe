@@ -1,54 +1,66 @@
-// April 30, 2026 pricing migration. Central resolver: given an arbitrary
+// 2026-06-18 pricing migration. Central resolver: given an arbitrary
 // list of Stripe price IDs (from a subscription's items.data), figure
 // out which tier the org is on. Used by the webhook handler so a
-// multi-price subscription (base flat + metered overages) resolves
-// correctly to "growth" or "scale" — the single-price-resolution that
-// existed before the migration only looked at items[0] and would have
-// flapped depending on item ordering.
+// multi-price subscription resolves correctly. The new base prices map
+// to builder / workspace / agency; legacy Growth/Scale base prices
+// grandfather to workspace / agency. The no-subscription sentinel is
+// "inactive".
 
 import {
+  BUILDER_PRICE_ID,
+  WORKSPACE_PRICE_ID,
+  AGENCY_BASE_PRICE_ID,
   GROWTH_BASE_PRICE_ID,
   SCALE_BASE_PRICE_ID,
   LEGACY_CLOUD_STARTER_PRICE_ID,
   LEGACY_CLOUD_PRO_PRICE_ID,
   LEGACY_CLOUD_AGENCY_PRICE_ID,
 } from "./price-ids";
-import type { TierId } from "./plans";
+import type { BillingTier } from "./features";
 
 /** Resolve the org's tier from a list of Stripe price ids on the
  *  subscription. Scans for the "highest" base price found:
- *    Scale > Growth > Free
- *  Legacy price ids resolve to growth (Cloud Starter) or scale (Cloud
- *  Pro / Cloud Agency / Pro_3 / Pro_5 / Pro_10 / Pro_20). The metered
- *  overage prices are ignored — they ride along with a base. */
-export function resolveTierFromPriceIds(priceIds: (string | null | undefined)[]): TierId {
+ *    agency > workspace > builder > inactive
+ *  Legacy price ids resolve to workspace (Growth/Cloud Starter) or
+ *  agency (Scale/Cloud Pro/Cloud Agency). Overage/metered prices are
+ *  ignored — they ride along with a base. */
+export function resolveTierFromPriceIds(priceIds: (string | null | undefined)[]): BillingTier {
   const set = new Set(
     priceIds.filter((p): p is string => typeof p === "string" && p.length > 0)
   );
 
-  if (set.size === 0) return "free";
+  if (set.size === 0) return "inactive";
 
-  // Scale takes precedence (heaviest tier).
+  // Agency takes precedence (heaviest tier).
   if (
+    set.has(AGENCY_BASE_PRICE_ID) ||
     set.has(SCALE_BASE_PRICE_ID) ||
     set.has(LEGACY_CLOUD_PRO_PRICE_ID) ||
     set.has(LEGACY_CLOUD_AGENCY_PRICE_ID)
   ) {
-    return "scale";
+    return "agency";
   }
 
-  if (set.has(GROWTH_BASE_PRICE_ID) || set.has(LEGACY_CLOUD_STARTER_PRICE_ID)) {
-    return "growth";
+  if (
+    set.has(WORKSPACE_PRICE_ID) ||
+    set.has(GROWTH_BASE_PRICE_ID) ||
+    set.has(LEGACY_CLOUD_STARTER_PRICE_ID)
+  ) {
+    return "workspace";
   }
 
-  return "free";
+  if (set.has(BUILDER_PRICE_ID)) {
+    return "builder";
+  }
+
+  return "inactive";
 }
 
 /** Resolve the tier from a Stripe Subscription object. Pulls every
  *  item's price.id and routes through `resolveTierFromPriceIds`. */
 export function resolveTierFromSubscription(subscription: {
   items: { data: Array<{ price?: { id?: string | null } | null }> };
-}): TierId {
+}): BillingTier {
   const priceIds = subscription.items.data.map((item) => item.price?.id ?? null);
   return resolveTierFromPriceIds(priceIds);
 }

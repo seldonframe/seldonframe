@@ -1,31 +1,33 @@
 // packages/crm/src/lib/proposals/check-tier-quota.ts
 // 2026-05-19 — Proposal Builder tier gate. Spec open-question #5.
-// Growth: 10/mo cap. Scale: unlimited. Free: blocked.
 //
-// 2026-05-20 — production hotfix: production stores legacy plan IDs
-// (cloud-pro, pro-3, etc.) that don't match the canonical free/growth/
-// scale enum. Use the existing getPlan() resolver from lib/billing/plans
-// to alias legacy IDs to current TierIds before quota evaluation.
+// 2026-06-18 pricing migration — remapped to the builder/workspace/
+// agency ladder:
+//   Agency:    unlimited proposals.
+//   Workspace: 10/mo cap (the single-workspace operator can still pitch).
+//   Builder / no-plan: blocked (proposals are a workspace+ feature).
+//
+// Production may store legacy plan IDs (cloud-pro, pro-3, growth, etc.);
+// getPlan() aliases them to current TierIds before quota evaluation.
 
 import { and, eq, gte } from "drizzle-orm";
 import { db } from "@/db";
 import { proposals } from "@/db/schema";
-import { getPlan } from "@/lib/billing/plans";
+import { getPlan, type TierId } from "@/lib/billing/plans";
 
-const GROWTH_MONTHLY_CAP = 10;
+const WORKSPACE_MONTHLY_CAP = 10;
 
 export type ProposalQuotaResult =
   | { allowed: true; remaining?: number }
   | { allowed: false; reason: string; capacity: number };
 
-/** Normalize whatever string lives on users.planId into the canonical
- *  TierId space (free | growth | scale). Returns "free" for null /
- *  unknown so the gate fails closed. */
-export function resolveTierId(planId: string | null | undefined): "free" | "growth" | "scale" {
-  if (!planId) return "free";
+/** Normalize whatever string lives on users.planId into the offered
+ *  TierId space (builder | workspace | agency), or null when there's no
+ *  active plan / unknown id, so the gate fails closed. */
+export function resolveTierId(planId: string | null | undefined): TierId | null {
+  if (!planId) return null;
   const plan = getPlan(planId);
-  if (!plan) return "free";
-  return plan.id;
+  return plan?.id ?? null;
 }
 
 export function evaluateProposalQuota(input: {
@@ -36,16 +38,16 @@ export function evaluateProposalQuota(input: {
   // before branching. Callers may pass user.planId directly.
   const tier = resolveTierId(input.tier);
 
-  if (tier === "scale") return { allowed: true };
-  if (tier === "growth") {
-    if (input.proposalsThisMonth >= GROWTH_MONTHLY_CAP) {
+  if (tier === "agency") return { allowed: true };
+  if (tier === "workspace") {
+    if (input.proposalsThisMonth >= WORKSPACE_MONTHLY_CAP) {
       return {
         allowed: false,
         reason: "monthly_quota_exceeded",
-        capacity: GROWTH_MONTHLY_CAP,
+        capacity: WORKSPACE_MONTHLY_CAP,
       };
     }
-    return { allowed: true, remaining: GROWTH_MONTHLY_CAP - input.proposalsThisMonth };
+    return { allowed: true, remaining: WORKSPACE_MONTHLY_CAP - input.proposalsThisMonth };
   }
   return { allowed: false, reason: "tier_does_not_include_proposals", capacity: 0 };
 }

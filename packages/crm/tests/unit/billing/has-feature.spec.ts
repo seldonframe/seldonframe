@@ -8,9 +8,9 @@
 // hasFeature() function accepts an optional deps arg so tests can
 // inject a fake getOrgSubscription without touching the DB.
 //
-// The Growth+ vs Scale-only matrix is the source-of-truth for tier
-// gating in the Cut B onboarding pivot. A regression here would let a
-// free-tier operator silently access custom-domain or ai_agents UI.
+// 2026-06-18 pricing migration — builder / workspace / agency ladder.
+// custom_domain unlocks at builder; ai_agents at workspace;
+// white_label_portal at agency.
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
@@ -20,47 +20,56 @@ function fakeSubscription(tier: string | undefined) {
   return async (_orgId: string | null | undefined) => ({ tier });
 }
 
-describe("hasFeature — Growth+ flags", () => {
-  test("growth tier passes custom_domain", async () => {
+describe("hasFeature — builder+ flags (custom_domain)", () => {
+  test("builder tier passes custom_domain", async () => {
     const result = await hasFeature("org-1", "custom_domain", {
-      getOrgSubscription: fakeSubscription("growth"),
+      getOrgSubscription: fakeSubscription("builder"),
     });
     assert.equal(result, true);
   });
 
-  test("scale tier passes custom_domain", async () => {
+  test("agency tier passes custom_domain", async () => {
     const result = await hasFeature("org-1", "custom_domain", {
-      getOrgSubscription: fakeSubscription("scale"),
+      getOrgSubscription: fakeSubscription("agency"),
     });
     assert.equal(result, true);
   });
 
-  test("free tier fails custom_domain", async () => {
+  test("inactive (no plan) fails custom_domain", async () => {
     const result = await hasFeature("org-1", "custom_domain", {
-      getOrgSubscription: fakeSubscription("free"),
+      getOrgSubscription: fakeSubscription("inactive"),
     });
     assert.equal(result, false);
   });
 });
 
-describe("hasFeature — Scale-only flags", () => {
-  test("scale tier passes ai_agents", async () => {
+describe("hasFeature — workspace+ flags (ai_agents)", () => {
+  test("workspace tier passes ai_agents", async () => {
     const result = await hasFeature("org-1", "ai_agents", {
-      getOrgSubscription: fakeSubscription("scale"),
+      getOrgSubscription: fakeSubscription("workspace"),
     });
     assert.equal(result, true);
   });
 
-  test("growth tier FAILS ai_agents (Scale-only)", async () => {
+  test("builder tier FAILS ai_agents (workspace+ only)", async () => {
     const result = await hasFeature("org-1", "ai_agents", {
-      getOrgSubscription: fakeSubscription("growth"),
+      getOrgSubscription: fakeSubscription("builder"),
     });
     assert.equal(result, false);
   });
+});
 
-  test("growth tier FAILS white_label_portal (Scale-only)", async () => {
+describe("hasFeature — agency-only flags", () => {
+  test("agency tier passes white_label_portal", async () => {
     const result = await hasFeature("org-1", "white_label_portal", {
-      getOrgSubscription: fakeSubscription("growth"),
+      getOrgSubscription: fakeSubscription("agency"),
+    });
+    assert.equal(result, true);
+  });
+
+  test("workspace tier FAILS white_label_portal (agency-only)", async () => {
+    const result = await hasFeature("org-1", "white_label_portal", {
+      getOrgSubscription: fakeSubscription("workspace"),
     });
     assert.equal(result, false);
   });
@@ -72,7 +81,7 @@ describe("hasFeature — defensive cases", () => {
     const result = await hasFeature(null, "ai_agents", {
       getOrgSubscription: async () => {
         called = true;
-        return { tier: "scale" };
+        return { tier: "agency" };
       },
     });
     assert.equal(result, false);
@@ -84,17 +93,24 @@ describe("hasFeature — defensive cases", () => {
     const result = await hasFeature(undefined, "ai_agents", {
       getOrgSubscription: async () => {
         called = true;
-        return { tier: "scale" };
+        return { tier: "agency" };
       },
     });
     assert.equal(result, false);
     assert.equal(called, false);
   });
 
-  test("subscription with no tier defaults to free behavior", async () => {
+  test("subscription with no tier defaults to inactive behavior", async () => {
     const result = await hasFeature("org-1", "custom_domain", {
       getOrgSubscription: async () => ({}),
     });
     assert.equal(result, false);
+  });
+
+  test("legacy 'scale' tier grandfathers and passes white_label_portal", async () => {
+    const result = await hasFeature("org-1", "white_label_portal", {
+      getOrgSubscription: fakeSubscription("scale"),
+    });
+    assert.equal(result, true);
   });
 });

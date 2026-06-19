@@ -2,12 +2,11 @@
 // items. Pins the contract used by the webhook handler so a change to
 // the price-ids constants doesn't silently regress tier resolution.
 //
-// April 30, 2026 — pricing migration. Multi-price subscriptions
-// (base + metered) made the items[0]?.price?.id approach brittle: the
-// metered overage line could sort to items[0] depending on Stripe's
-// item ordering, defaulting the tier to "free" for an active paying
-// customer. resolveTierFromPriceIds scans every price id and picks
-// the highest tier present.
+// 2026-06-18 pricing migration — base prices map to the new ladder:
+//   BUILDER_PRICE_ID   → builder
+//   WORKSPACE_PRICE_ID → workspace   (legacy growth/starter also → workspace)
+//   AGENCY_BASE_PRICE_ID → agency    (legacy scale/pro/agency also → agency)
+// The no-subscription sentinel is "inactive" (was "free").
 
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
@@ -17,67 +16,60 @@ import {
   resolveTierFromSubscription,
 } from "@/lib/billing/tier-resolve";
 import {
-  GROWTH_BASE_PRICE_ID,
-  SCALE_BASE_PRICE_ID,
+  BUILDER_PRICE_ID,
+  WORKSPACE_PRICE_ID,
+  AGENCY_BASE_PRICE_ID,
   LEGACY_CLOUD_STARTER_PRICE_ID,
   LEGACY_CLOUD_PRO_PRICE_ID,
   LEGACY_CLOUD_AGENCY_PRICE_ID,
 } from "@/lib/billing/price-ids";
 
 describe("resolveTierFromPriceIds", () => {
-  test("returns 'free' for empty input", () => {
-    assert.equal(resolveTierFromPriceIds([]), "free");
-    assert.equal(resolveTierFromPriceIds([null, null]), "free");
-    assert.equal(resolveTierFromPriceIds([undefined, ""]), "free");
+  test("returns 'inactive' for empty input", () => {
+    assert.equal(resolveTierFromPriceIds([]), "inactive");
+    assert.equal(resolveTierFromPriceIds([null, null]), "inactive");
+    assert.equal(resolveTierFromPriceIds([undefined, ""]), "inactive");
   });
 
-  test("returns 'growth' for the growth base id alone", () => {
-    assert.equal(resolveTierFromPriceIds([GROWTH_BASE_PRICE_ID]), "growth");
+  test("resolves each new base price id", () => {
+    assert.equal(resolveTierFromPriceIds([BUILDER_PRICE_ID]), "builder");
+    assert.equal(resolveTierFromPriceIds([WORKSPACE_PRICE_ID]), "workspace");
+    assert.equal(resolveTierFromPriceIds([AGENCY_BASE_PRICE_ID]), "agency");
   });
 
-  test("returns 'scale' for the scale base id alone", () => {
-    assert.equal(resolveTierFromPriceIds([SCALE_BASE_PRICE_ID]), "scale");
-  });
-
-  test("returns 'growth' when growth base + metered overage prices are present", () => {
-    // Multi-price subscription: base flat + 2 metered overages. The
-    // metered prices are arbitrary strings (env-driven, may be unset
-    // in tests); the key thing is that the growth base still wins
-    // the lookup.
+  test("workspace base still wins alongside arbitrary metered/overage ids", () => {
     assert.equal(
       resolveTierFromPriceIds([
-        "price_growth_metered_contacts_xxx",
-        GROWTH_BASE_PRICE_ID,
-        "price_growth_metered_runs_xxx",
+        "price_metered_xxx",
+        WORKSPACE_PRICE_ID,
+        "price_other_yyy",
       ]),
-      "growth"
+      "workspace"
     );
   });
 
-  test("scale takes precedence when both growth and scale ids appear (mid-cycle upgrade safety)", () => {
-    // Defensive — if a subscription somehow carries both base prices
-    // (e.g. mid-upgrade race), pick the heavier tier so the operator
-    // doesn't get downgraded entitlements transiently.
+  test("agency takes precedence when multiple base ids appear (mid-cycle upgrade safety)", () => {
     assert.equal(
-      resolveTierFromPriceIds([GROWTH_BASE_PRICE_ID, SCALE_BASE_PRICE_ID]),
-      "scale"
+      resolveTierFromPriceIds([BUILDER_PRICE_ID, AGENCY_BASE_PRICE_ID]),
+      "agency"
+    );
+    assert.equal(
+      resolveTierFromPriceIds([WORKSPACE_PRICE_ID, AGENCY_BASE_PRICE_ID]),
+      "agency"
     );
   });
 
-  test("legacy starter price grandfathers to growth", () => {
-    assert.equal(resolveTierFromPriceIds([LEGACY_CLOUD_STARTER_PRICE_ID]), "growth");
+  test("legacy starter price grandfathers to workspace", () => {
+    assert.equal(resolveTierFromPriceIds([LEGACY_CLOUD_STARTER_PRICE_ID]), "workspace");
   });
 
-  test("legacy cloud_pro grandfathers to scale", () => {
-    assert.equal(resolveTierFromPriceIds([LEGACY_CLOUD_PRO_PRICE_ID]), "scale");
+  test("legacy cloud_pro / cloud_agency grandfather to agency", () => {
+    assert.equal(resolveTierFromPriceIds([LEGACY_CLOUD_PRO_PRICE_ID]), "agency");
+    assert.equal(resolveTierFromPriceIds([LEGACY_CLOUD_AGENCY_PRICE_ID]), "agency");
   });
 
-  test("legacy cloud_agency grandfathers to scale", () => {
-    assert.equal(resolveTierFromPriceIds([LEGACY_CLOUD_AGENCY_PRICE_ID]), "scale");
-  });
-
-  test("unknown price id resolves to free (no price id allowlist match)", () => {
-    assert.equal(resolveTierFromPriceIds(["price_unknown_xxx"]), "free");
+  test("unknown price id resolves to inactive", () => {
+    assert.equal(resolveTierFromPriceIds(["price_unknown_xxx"]), "inactive");
   });
 });
 
@@ -87,19 +79,19 @@ describe("resolveTierFromSubscription", () => {
       items: {
         data: [
           { price: { id: "price_metered_xxx" } },
-          { price: { id: GROWTH_BASE_PRICE_ID } },
+          { price: { id: WORKSPACE_PRICE_ID } },
         ],
       },
     };
-    assert.equal(resolveTierFromSubscription(subscription), "growth");
+    assert.equal(resolveTierFromSubscription(subscription), "workspace");
   });
 
   test("handles missing price gracefully", () => {
     const subscription = {
       items: {
-        data: [{ price: null }, { price: { id: SCALE_BASE_PRICE_ID } }],
+        data: [{ price: null }, { price: { id: AGENCY_BASE_PRICE_ID } }],
       },
     };
-    assert.equal(resolveTierFromSubscription(subscription), "scale");
+    assert.equal(resolveTierFromSubscription(subscription), "agency");
   });
 });

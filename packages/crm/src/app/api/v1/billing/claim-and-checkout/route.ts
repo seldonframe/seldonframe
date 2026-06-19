@@ -99,10 +99,15 @@ export async function POST(req: NextRequest) {
 
   // Resolve the target tier: prefer an explicit `tier` body field;
   // fall back to deriving from `priceId`. Both must land on a known
-  // paid tier (growth | scale).
+  // paid tier (builder | workspace | agency). Legacy growth/scale are
+  // remapped to workspace/agency.
   let targetTier: TierId | null = null;
-  if (rawTier === "growth" || rawTier === "scale") {
+  if (rawTier === "builder" || rawTier === "workspace" || rawTier === "agency") {
     targetTier = rawTier;
+  } else if (rawTier === "growth") {
+    targetTier = "workspace";
+  } else if (rawTier === "scale") {
+    targetTier = "agency";
   } else if (priceId) {
     targetTier = tierFromBasePriceId(priceId);
   }
@@ -113,7 +118,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         error:
-          "A supported tier is required. Pass { tier: 'growth' | 'scale' } or { priceId: <growth or scale base> }.",
+          "A supported tier is required. Pass { tier: 'builder' | 'workspace' | 'agency' } or { priceId: <a base price id> }.",
       },
       { status: 400 }
     );

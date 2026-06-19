@@ -5,6 +5,9 @@ import Stripe from "stripe";
 import { db } from "@/db";
 import { organizations, users } from "@/db/schema";
 import {
+  BUILDER_PRICE_ID,
+  WORKSPACE_PRICE_ID,
+  AGENCY_BASE_PRICE_ID,
   GROWTH_BASE_PRICE_ID,
   SCALE_BASE_PRICE_ID,
   LEGACY_CLOUD_STARTER_PRICE_ID,
@@ -12,7 +15,7 @@ import {
   LEGACY_CLOUD_AGENCY_PRICE_ID,
 } from "@/lib/billing/price-ids";
 import { resolveTierFromSubscription } from "@/lib/billing/tier-resolve";
-import type { TierId } from "@/lib/billing/plans";
+import type { BillingTier } from "@/lib/billing/features";
 import { getOrgSubscription, updateOrgSubscription } from "@/lib/billing/subscription";
 import { applyBrandingForTier, reRenderAllSurfacesForOrg } from "@/lib/blueprint/rerender-org";
 import { trackEvent } from "@/lib/analytics/track";
@@ -110,20 +113,25 @@ function isEnabledMetadataFlag(value: string | undefined) {
  */
 function pickBasePriceId(
   subscription: Stripe.Subscription,
-  tier: TierId
+  tier: BillingTier
 ): string | null {
   const ids = subscription.items.data
     .map((item) => item.price?.id ?? null)
     .filter((id): id is string => typeof id === "string" && id.length > 0);
 
-  if (tier === "scale") {
+  if (tier === "agency") {
+    if (ids.includes(AGENCY_BASE_PRICE_ID)) return AGENCY_BASE_PRICE_ID;
     if (ids.includes(SCALE_BASE_PRICE_ID)) return SCALE_BASE_PRICE_ID;
     if (ids.includes(LEGACY_CLOUD_PRO_PRICE_ID)) return LEGACY_CLOUD_PRO_PRICE_ID;
     if (ids.includes(LEGACY_CLOUD_AGENCY_PRICE_ID)) return LEGACY_CLOUD_AGENCY_PRICE_ID;
   }
-  if (tier === "growth") {
+  if (tier === "workspace") {
+    if (ids.includes(WORKSPACE_PRICE_ID)) return WORKSPACE_PRICE_ID;
     if (ids.includes(GROWTH_BASE_PRICE_ID)) return GROWTH_BASE_PRICE_ID;
     if (ids.includes(LEGACY_CLOUD_STARTER_PRICE_ID)) return LEGACY_CLOUD_STARTER_PRICE_ID;
+  }
+  if (tier === "builder") {
+    if (ids.includes(BUILDER_PRICE_ID)) return BUILDER_PRICE_ID;
   }
   return null;
 }
@@ -234,9 +242,9 @@ export async function POST(req: NextRequest) {
       // Workspace cap from the resolved tier (-1 = unlimited stored as
       // a sentinel; the create-workspace gate uses `getMaxOrgs()` to
       // turn it into POSITIVE_INFINITY).
-      const maxWorkspaces = tier === "scale" ? -1 : tier === "growth" ? 3 : 1;
+      const maxWorkspaces = tier === "agency" ? -1 : tier === "workspace" ? 1 : 0;
       const currentPeriodEnd = (subscription as Stripe.Subscription & { current_period_end?: number }).current_period_end;
-      const selfServiceEnabled = tier !== "free";
+      const selfServiceEnabled = tier !== "inactive";
       // OpenClaw / layer2 metadata flags ride along on the base price
       // record. Look them up from the base price's metadata when we
       // have a base priceId.
@@ -350,9 +358,9 @@ export async function POST(req: NextRequest) {
         const subscription = event.data.object as Stripe.Subscription;
         const customerId = typeof subscription.customer === "string" ? subscription.customer : subscription.customer?.id ?? null;
         const tierId = resolveTierFromSubscription(subscription);
-        if (tierId === "free" || !customerId) {
-          // Free-tier "subscriptions" (none expected in our setup, but
-          // possible via stripe.subscriptions.create with only metered
+        if (tierId === "inactive" || !customerId) {
+          // No-plan "subscriptions" (none expected in our setup, but
+          // possible via stripe.subscriptions.create with only stray
           // items) shouldn't trigger a revenue alert. Bail without
           // logging — this is normal for non-revenue events.
           break;
@@ -436,9 +444,9 @@ export async function POST(req: NextRequest) {
 
       const tier = resolveTierFromSubscription(subscription);
       const priceId = pickBasePriceId(subscription, tier) ?? subscription.items.data[0]?.price?.id ?? null;
-      const maxWorkspaces = tier === "scale" ? -1 : tier === "growth" ? 3 : 1;
+      const maxWorkspaces = tier === "agency" ? -1 : tier === "workspace" ? 1 : 0;
       const currentPeriodEnd = (subscription as Stripe.Subscription & { current_period_end?: number }).current_period_end;
-      const selfServiceEnabled = tier !== "free";
+      const selfServiceEnabled = tier !== "inactive";
       let openClawEnabled = false;
       let layer2Enabled = false;
       if (priceId) {
@@ -499,8 +507,8 @@ export async function POST(req: NextRequest) {
       }
 
       await updateOrgSubscription(orgId, {
-        tier: "free",
-        maxWorkspaces: 1,
+        tier: "inactive",
+        maxWorkspaces: 0,
         status: "canceled",
         stripeSubscriptionId: null,
         selfServiceEnabled: false,
@@ -519,9 +527,9 @@ export async function POST(req: NextRequest) {
       });
 
       // P0 (post-launch fix): flip page-level white-label flag back
-      // to false so the badge returns. Tier is "free" → canRemoveBranding
-      // is false → branding.removePoweredBy gets written as false.
-      await applyBrandingForTier(orgId, "free").catch((err) =>
+      // to false so the badge returns. Tier is "inactive" →
+      // canRemoveBranding is false → branding.removePoweredBy = false.
+      await applyBrandingForTier(orgId, "inactive").catch((err) =>
         console.warn(`[stripe-webhook] applyBrandingForTier failed for ${orgId}:`, err)
       );
 
@@ -567,8 +575,8 @@ export async function POST(req: NextRequest) {
       const previousSubscription = await getOrgSubscription(orgId);
 
       let stripePriceId: string | null = null;
-      let maxWorkspaces = 1;
-      let tier: "free" | "growth" | "scale" = "free";
+      let maxWorkspaces = 0;
+      let tier: BillingTier = "inactive";
       let selfServiceEnabled = false;
       let openClawEnabled = false;
       let layer2Enabled = false;
@@ -577,8 +585,8 @@ export async function POST(req: NextRequest) {
         const subscription = await stripe.subscriptions.retrieve(subscriptionId);
         tier = resolveTierFromSubscription(subscription);
         stripePriceId = pickBasePriceId(subscription, tier) ?? subscription.items.data[0]?.price?.id ?? null;
-        maxWorkspaces = tier === "scale" ? -1 : tier === "growth" ? 3 : 1;
-        selfServiceEnabled = tier !== "free";
+        maxWorkspaces = tier === "agency" ? -1 : tier === "workspace" ? 1 : 0;
+        selfServiceEnabled = tier !== "inactive";
 
         if (stripePriceId) {
           try {

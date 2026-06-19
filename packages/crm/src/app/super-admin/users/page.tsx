@@ -11,7 +11,7 @@ import type { TierId } from "@/lib/billing/plans";
 
 export const dynamic = "force-dynamic";
 
-const VALID_PLANS: TierId[] = ["free", "growth", "scale"];
+const VALID_PLANS: TierId[] = ["builder", "workspace", "agency"];
 
 export default async function UsersTabPage({
   searchParams,

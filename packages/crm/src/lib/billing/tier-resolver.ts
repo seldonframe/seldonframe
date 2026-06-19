@@ -48,15 +48,13 @@ import { and, eq, or } from "drizzle-orm";
 import { cache } from "react";
 import { db } from "@/db";
 import { organizations, users } from "@/db/schema";
-import { normalizeTierId } from "./features";
-import type { TierId } from "./plans";
+import { normalizeTierId, type BillingTier } from "./features";
 
 /** Internal: extract a tier from an organizations row's subscription/plan
- *  columns. Mirrors the old loadOrgTier logic so step 1+2 stay byte-
- *  identical to the prior behavior. */
-function tierFromOrgRow(row: { plan: string | null; subscription: unknown }): TierId {
+ *  columns. "inactive" = no active paid plan. */
+function tierFromOrgRow(row: { plan: string | null; subscription: unknown }): BillingTier {
   const subscription = row.subscription as { tier?: string } | null | undefined;
-  return normalizeTierId(subscription?.tier ?? row.plan ?? "free");
+  return normalizeTierId(subscription?.tier ?? row.plan ?? "inactive");
 }
 
 /**
@@ -67,8 +65,8 @@ function tierFromOrgRow(row: { plan: string | null; subscription: unknown }): Ti
  * request share one DB read pair instead of fanning out.
  */
 export const resolveTierForWorkspace = cache(
-  async (orgId: string | null | undefined): Promise<TierId> => {
-    if (!orgId) return "free";
+  async (orgId: string | null | undefined): Promise<BillingTier> => {
+    if (!orgId) return "inactive";
 
     const [org] = await db
       .select({
@@ -81,19 +79,19 @@ export const resolveTierForWorkspace = cache(
       .from(organizations)
       .where(eq(organizations.id, orgId))
       .limit(1);
-    if (!org) return "free";
+    if (!org) return "inactive";
 
     // Step 1+2: the workspace's own subscription/plan takes precedence.
     // A workspace with its OWN paid sub stays on its own tier even if
     // the agency owner downgrades. This covers the "white-label resold
     // to client who pays directly" future case.
     const ownTier = tierFromOrgRow(org);
-    if (ownTier !== "free") return ownTier;
+    if (ownTier !== "inactive") return ownTier;
 
     // Step 3: agency-managed workspace. Walk up to the owning user,
     // read THEIR tier from the primary org row OR users.planId.
     const ownerUserId = org.parentUserId ?? org.ownerId;
-    if (!ownerUserId) return "free";
+    if (!ownerUserId) return "inactive";
 
     const [owner] = await db
       .select({
@@ -103,7 +101,7 @@ export const resolveTierForWorkspace = cache(
       .from(users)
       .where(eq(users.id, ownerUserId))
       .limit(1);
-    if (!owner) return "free";
+    if (!owner) return "inactive";
 
     // Prefer the operator's primary-org subscription (Stripe-direct).
     if (owner.orgId) {
@@ -117,7 +115,7 @@ export const resolveTierForWorkspace = cache(
         .limit(1);
       if (parentOrg) {
         const parentTier = tierFromOrgRow(parentOrg);
-        if (parentTier !== "free") return parentTier;
+        if (parentTier !== "inactive") return parentTier;
       }
     }
 
@@ -127,19 +125,20 @@ export const resolveTierForWorkspace = cache(
     // organizations.subscription column.
     if (owner.planId) {
       const tier = normalizeTierId(owner.planId);
-      if (tier !== "free") return tier;
+      if (tier !== "inactive") return tier;
     }
 
-    return "free";
+    return "inactive";
   },
 );
 
 /**
  * Convenience helper: returns true when the workspace's effective
- * tier is paid (Growth or Scale). Used by feature gates that don't
- * care WHICH paid tier — just "is this a paid workspace at all".
+ * tier is any paid plan (builder / workspace / agency). Used by
+ * feature gates that don't care WHICH paid tier — just "is this a paid
+ * workspace at all".
  */
 export async function workspaceHasPaidTier(orgId: string | null | undefined): Promise<boolean> {
   const tier = await resolveTierForWorkspace(orgId);
-  return tier === "growth" || tier === "scale";
+  return tier !== "inactive";
 }

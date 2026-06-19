@@ -42,13 +42,13 @@ import { resolveTierForWorkspace } from "./tier-resolver";
 import { normalizeTierId, type BillingTier } from "./features";
 
 export type DomainGateDecision =
-  /** Tier qualifies (paid) OR free-tier user already has a card on
+  /** Tier qualifies (paid) OR no-plan user already has a card on
    *  file. Render the existing domain-connection form. */
   | { kind: "render-form"; tier: BillingTier; reason: "paid-tier" | "free-tier-with-card" }
-  /** Free tier AND no card on file. Render the upsell card instead of
-   *  the form. The CTA routes to /signup/billing?next=/settings/domain
+  /** No active plan AND no card on file. Render the upsell card instead
+   *  of the form. The CTA routes to /signup/billing?next=/settings/domain
    *  so the user lands back on the form once the card is saved. */
-  | { kind: "render-upsell"; tier: "free" };
+  | { kind: "render-upsell"; tier: "inactive" };
 
 export type DomainGateInputs = {
   /** The resolved tier string (already legacy-normalised). The page
@@ -69,15 +69,15 @@ export type DomainGateInputs = {
  *   tier === "free" + nope  → render-upsell
  */
 export function decideDomainGate(inputs: DomainGateInputs): DomainGateDecision {
-  if (inputs.tier !== "free") {
+  if (inputs.tier !== "inactive") {
     return { kind: "render-form", tier: inputs.tier, reason: "paid-tier" };
   }
 
   if (inputs.hasCardOnFile) {
-    return { kind: "render-form", tier: "free", reason: "free-tier-with-card" };
+    return { kind: "render-form", tier: "inactive", reason: "free-tier-with-card" };
   }
 
-  return { kind: "render-upsell", tier: "free" };
+  return { kind: "render-upsell", tier: "inactive" };
 }
 
 /**

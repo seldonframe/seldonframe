@@ -39,9 +39,11 @@ const validFacts = {
 
 function baseDeps() {
   return {
-    enforceWorkspaceLimit: async () => ({ allowed: true as const, tier: "free" as const }),
+    enforceWorkspaceLimit: async () => ({ allowed: true as const, tier: "workspace" as const }),
     getOwnedWorkspaceCount: async () => 0,
-    getOperatorByokAnthropicKey: async () => ({ key: "sk-ant-test", source: "byok" as const }),
+    // 2026-06-18 — MANAGED AI (BYOK gate removed). Resolver returns a key
+    // (operator BYOK or platform). Specific tests override to null.
+    resolveExtractionKey: async () => ({ key: "sk-ant-test" }),
     extractBusinessFactsFromUrl: async () => validFacts,
     createFullWorkspace: async () => ({
       status: "ready" as const,
@@ -90,17 +92,21 @@ describe("runCreateFromUrl", () => {
   });
 
   test("emits 402 with upgradeUrl when at workspace limit", async () => {
-    const deps = { ...baseDeps(), enforceWorkspaceLimit: async () => ({ allowed: false as const, tier: "free" as const, reason: "workspace_limit_reached" as const, message: "...", upgradeUrl: "/settings/billing", used: 1, limit: 1 }) };
+    const deps = { ...baseDeps(), enforceWorkspaceLimit: async () => ({ allowed: false as const, tier: "workspace" as const, reason: "workspace_limit_reached" as const, message: "...", upgradeUrl: "/settings/billing", used: 1, limit: 1 }) };
     const sse = await runCreateFromUrl({ deps, body: { url: "https://x.com" }, sessionUser: { id: "u1", primaryOrgId: "o1" } });
     const text = await readAll(sse.stream);
     assert.match(text, /event: error\n.*"code":402.*upgradeUrl/);
   });
 
-  test("emits 412 with needs_byok when BYOK key is missing", async () => {
-    const deps = { ...baseDeps(), getOperatorByokAnthropicKey: async () => null };
+  // 2026-06-18 — BYOK gate removed (managed AI). When no key is
+  // resolvable anywhere we now emit a non-BYOK extraction_unavailable
+  // error (503), NOT the old needs_byok 412.
+  test("emits 503 extraction_unavailable when no managed/BYOK key resolves", async () => {
+    const deps = { ...baseDeps(), resolveExtractionKey: async () => null };
     const sse = await runCreateFromUrl({ deps, body: { url: "https://x.com" }, sessionUser: { id: "u1", primaryOrgId: "o1" } });
     const text = await readAll(sse.stream);
-    assert.match(text, /event: error\n.*"code":412.*needs_byok/);
+    assert.match(text, /event: error\n.*"code":503.*extraction_unavailable/);
+    assert.ok(!text.includes("needs_byok"), "the removed BYOK gate must not fire");
   });
 
   test("emits the success sequence: fetching → extracting → soul_built → chatbot_built → demo_seeded → done", async () => {

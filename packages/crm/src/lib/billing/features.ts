@@ -16,71 +16,121 @@ import { getOrgSubscription as getOrgSubscriptionDb } from "./subscription";
 export type { FeatureFlag } from "./feature-flags";
 export { FEATURE_FLAGS, FEATURE_TIERS, tierMeetsMinimum } from "./feature-flags";
 
+// 2026-06-18 pricing migration — three offered tiers plus an
+// "inactive" no-plan state (replaces the old "free" tier; nobody is on
+// a free plan anymore). Shape is a superset of the old dict so callers
+// reading `features.maxWorkspaces` / `.customDomains` / `.managedEmail`
+// keep working; new keys (`maxLandingPages`, `crm`, `booking`,
+// `agents`, `includedWorkspaces`) drive the builder/workspace split.
+//
+//   inactive  — no active subscription: nothing unlocked.
+//   builder   — landing pages only (cap 10), own domain + branding.
+//   workspace — one full workspace, all modules, client portal.
+//   agency    — white-label, 10 included client workspaces, marketplace.
 export const TIER_FEATURES = {
-  free: {
-    maxWorkspaces: 1,
-    maxContacts: 50,
-    maxAgentRunsPerMonth: 100,
-    seldonIt: "byok",
+  inactive: {
+    maxWorkspaces: 0,
+    maxLandingPages: 0,
+    includedWorkspaces: 0,
+    crm: false,
+    booking: false,
+    agents: false,
+    seldonIt: "none",
     customDomains: false,
     whiteLabel: false,
     clientPortal: false,
     managedEmail: false,
     marketplace: false,
     support: "community",
+    // Legacy no-op caps (kept for usage.ts / dashboard compat).
+    maxContacts: 0,
+    maxAgentRunsPerMonth: 0,
   },
-  growth: {
-    maxWorkspaces: 3,
-    maxContacts: 500,
-    maxAgentRunsPerMonth: 1000,
-    seldonIt: "unlimited",
+  builder: {
+    maxWorkspaces: 0,
+    maxLandingPages: 10,
+    includedWorkspaces: 0,
+    crm: false,
+    booking: false,
+    agents: false,
+    seldonIt: "managed",
+    customDomains: true,
+    whiteLabel: false,
+    clientPortal: false,
+    managedEmail: false,
+    marketplace: false,
+    support: "email",
+    maxContacts: 0,
+    maxAgentRunsPerMonth: 0,
+  },
+  workspace: {
+    maxWorkspaces: 1,
+    maxLandingPages: -1,
+    includedWorkspaces: 1,
+    crm: true,
+    booking: true,
+    agents: true,
+    seldonIt: "managed",
     customDomains: true,
     whiteLabel: false,
     clientPortal: true,
     managedEmail: true,
     marketplace: false,
     support: "email",
-  },
-  scale: {
-    // -1 = unlimited
-    maxWorkspaces: -1,
     maxContacts: -1,
     maxAgentRunsPerMonth: -1,
-    seldonIt: "unlimited",
+  },
+  agency: {
+    // -1 = unlimited
+    maxWorkspaces: -1,
+    maxLandingPages: -1,
+    includedWorkspaces: 10,
+    crm: true,
+    booking: true,
+    agents: true,
+    seldonIt: "managed",
     customDomains: true,
     whiteLabel: true,
     clientPortal: true,
     managedEmail: true,
     marketplace: true,
     support: "priority",
+    maxContacts: -1,
+    maxAgentRunsPerMonth: -1,
   },
 } as const;
 
 export type BillingTier = keyof typeof TIER_FEATURES;
 
 /** Map a stored tier string (which may be a legacy value like
- *  "cloud_pro" or "pro_3") to one of the three current tiers. Defaults
- *  to "free" if the input is null / empty / unrecognized. */
+ *  "cloud_pro", "growth", or "pro_3") to one of the current tiers.
+ *  Defaults to "inactive" (no plan) for null / empty / "free" /
+ *  unrecognized input. growth-family → workspace, scale-family →
+ *  agency. */
 export function normalizeTierId(raw: string | null | undefined): BillingTier {
-  if (!raw) return "free";
+  if (!raw) return "inactive";
   const v = raw.trim().toLowerCase();
-  if (v === "free") return "free";
-  if (v === "growth") return "growth";
-  if (v === "scale") return "scale";
-  // Legacy → new tier mapping. Starter ($49) was the lowest paid tier
-  // and matches Growth's price band most closely; everything heavier
-  // (Cloud Pro $99, Pro 3 $149, Pro 5/10/20) gets Scale's entitlements
-  // since they were already paying for unlimited usage.
+  if (v === "builder") return "builder";
+  if (v === "workspace") return "workspace";
+  if (v === "agency") return "agency";
+  // Legacy growth-family ($29 Growth / Cloud Starter / Starter) →
+  // Workspace (the closest single-full-workspace tier).
   if (
+    v === "growth" ||
     v === "starter" ||
     v === "cloud_starter" ||
     v === "cloud-starter"
   ) {
-    return "growth";
+    return "workspace";
   }
+  // Legacy scale-family ($99 Scale / Cloud Pro / Cloud Agency / Pro_N)
+  // → Agency (they were already paying for multi-workspace/unlimited).
   if (
+    v === "scale" ||
     v === "cloud_pro" ||
     v === "cloud-pro" ||
+    v === "cloud_agency" ||
+    v === "cloud-agency" ||
     v === "pro" ||
     v === "self_service" ||
     v === "pro_3" ||
@@ -92,9 +142,10 @@ export function normalizeTierId(raw: string | null | undefined): BillingTier {
     v === "pro_20" ||
     v === "pro-20"
   ) {
-    return "scale";
+    return "agency";
   }
-  return "free";
+  // "free" and everything unknown → no active plan.
+  return "inactive";
 }
 
 export function getOrgFeatures(tier: string | null | undefined) {

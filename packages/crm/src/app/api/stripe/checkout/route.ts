@@ -7,6 +7,9 @@ import { users } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
 import {
   WORKSPACE_ADDON_MONTHLY_PRICE_ID,
+  BUILDER_PRICE_ID,
+  WORKSPACE_PRICE_ID,
+  AGENCY_BASE_PRICE_ID,
   GROWTH_BASE_PRICE_ID,
   SCALE_BASE_PRICE_ID,
   isAllowedCheckoutPriceId,
@@ -125,28 +128,45 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unsupported priceId." }, { status: 400 });
   }
 
-  // Resolve the target tier. Three paths, in order of precedence:
-  //   1. Explicit `tier: "growth" | "scale"` body field (preferred —
-  //      the marketing page's new pricing buttons send this).
-  //   2. Marketing lookup_key like "growth_monthly" / "scale_monthly".
-  //   3. priceId derived from the legacy starter / cloud_pro / agency
-  //      payloads still floating around (mapped via tierFromBasePriceId
-  //      with legacy ids accepted as growth/scale per migration).
+  // Resolve the target tier (builder / workspace / agency). Paths in
+  // order of precedence:
+  //   1. Explicit `tier` body field (the new pricing buttons send this).
+  //      Legacy "growth"/"scale" are accepted and remapped.
+  //   2. Marketing lookup_key (e.g. "workspace_monthly", legacy
+  //      "growth_monthly").
+  //   3. priceId — new base ids directly, or legacy Growth/Scale/Cloud
+  //      base ids grandfathered to workspace/agency.
   let targetTier: TierId | null = null;
-  if (rawTier === "growth" || rawTier === "scale") {
+  if (rawTier === "builder" || rawTier === "workspace" || rawTier === "agency") {
     targetTier = rawTier;
-  } else if (lookupKey === "growth_monthly" || lookupKey === "growth_yearly") {
-    targetTier = "growth";
-  } else if (lookupKey === "scale_monthly" || lookupKey === "scale_yearly") {
-    targetTier = "scale";
-  } else if (requestedPriceId === GROWTH_BASE_PRICE_ID) {
-    targetTier = "growth";
-  } else if (requestedPriceId === SCALE_BASE_PRICE_ID) {
-    targetTier = "scale";
+  } else if (rawTier === "growth") {
+    targetTier = "workspace";
+  } else if (rawTier === "scale") {
+    targetTier = "agency";
+  } else if (lookupKey === "builder_monthly" || lookupKey === "builder_yearly") {
+    targetTier = "builder";
+  } else if (
+    lookupKey === "workspace_monthly" ||
+    lookupKey === "workspace_yearly" ||
+    lookupKey === "growth_monthly" ||
+    lookupKey === "growth_yearly"
+  ) {
+    targetTier = "workspace";
+  } else if (
+    lookupKey === "agency_monthly" ||
+    lookupKey === "agency_yearly" ||
+    lookupKey === "scale_monthly" ||
+    lookupKey === "scale_yearly"
+  ) {
+    targetTier = "agency";
+  } else if (requestedPriceId === BUILDER_PRICE_ID) {
+    targetTier = "builder";
+  } else if (requestedPriceId === WORKSPACE_PRICE_ID || requestedPriceId === GROWTH_BASE_PRICE_ID) {
+    targetTier = "workspace";
+  } else if (requestedPriceId === AGENCY_BASE_PRICE_ID || requestedPriceId === SCALE_BASE_PRICE_ID) {
+    targetTier = "agency";
   } else if (requestedPriceId) {
-    // Legacy ids (Cloud Starter / Pro / Agency) — server-side
-    // grandfather them to the closest new tier so existing checkout
-    // links still work for one cycle of marketing emails.
+    // Legacy Cloud Starter / Pro / Agency ids → closest new tier.
     targetTier = tierFromBasePriceId(requestedPriceId);
   }
 
@@ -173,7 +193,7 @@ export async function POST(req: NextRequest) {
   let basePriceId: string;
   let checkoutType: "self_service_workspace" | "workspace_addon";
 
-  if (targetTier === "growth" || targetTier === "scale") {
+  if (targetTier) {
     const tierItems = buildCheckoutLineItemsForTier(targetTier);
     if (!tierItems || tierItems.length === 0) {
       return NextResponse.json(

@@ -8,35 +8,35 @@ export function resolvePlanFromPlanId(planId: string | null | undefined) {
   return planId ? getPlan(planId) ?? null : null;
 }
 
-/** Free + Growth get the standard catalog; Scale unlocks the everything
- *  tier. Self-hosted is always allowed. */
+/** Any paid tier can install marketplace blocks. Self-hosted is always
+ *  allowed. (A null plan = no active subscription → not allowed.) */
 export function canInstallBlocks(plan: Plan | null): boolean {
   if (isSelfHosted(plan)) return true;
-  return plan.id !== "free";
+  return true;
 }
 
-/** Submitting a custom block to the marketplace requires the same
- *  entitlement as ratings — i.e., a paid tier. Scale was the previous
- *  "Pro" gate. */
+/** Submitting a custom block to the marketplace is an Agency feature
+ *  (marketplace entitlement). */
 export function canSubmitBlocks(plan: Plan | null): boolean {
   if (isSelfHosted(plan)) return true;
-  return plan.id === "scale";
+  return plan.limits.marketplace;
 }
 
 export function canSellBlocks(plan: Plan | null): boolean {
   if (isSelfHosted(plan)) return true;
-  return plan.id === "scale";
+  return plan.limits.marketplace;
 }
 
 export function canRateBlocks(plan: Plan | null): boolean {
   if (isSelfHosted(plan)) return true;
-  return plan.id !== "free";
+  return true;
 }
 
-/** Seldon It (managed inference) is gated behind a paid tier. */
+/** Managed AI generation is included on EVERY paid tier (no BYOK gate).
+ *  Self-hosted is always allowed (it supplies its own platform key). */
 export function canSeldonIt(plan: Plan | null): boolean {
   if (isSelfHosted(plan)) return true;
-  return plan.id === "growth" || plan.id === "scale";
+  return true;
 }
 
 export function getMaxOrgs(plan: Plan | null): number {

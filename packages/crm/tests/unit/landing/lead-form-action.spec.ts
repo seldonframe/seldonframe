@@ -30,7 +30,7 @@ function makeDeps(overrides: Partial<LeadFormDeps> = {}): {
   const deps: LeadFormDeps = {
     assertWritable: () => {},
     resolveOrgIdBySlug: async () => "org-1",
-    enforceContactLimit: async () => ({ allowed: true, tier: "free" }),
+    enforceContactLimit: async () => ({ allowed: true, tier: "workspace" }),
     findContactByPhone: async () => null,
     getContactById: async () => null,
     createContact: async (values) => {
@@ -169,9 +169,9 @@ describe("submitLeadFormWithDeps — contact-limit reached", () => {
     const { deps, inserts, smsCalls, events } = makeDeps({
       enforceContactLimit: async () => ({
         allowed: false,
-        tier: "free",
+        tier: "inactive",
         reason: "contact_limit_reached",
-        message: "You've reached 50 contacts on the Free plan. Upgrade to Growth to keep adding clients.",
+        message: "Upgrade to a paid plan to keep adding contacts.",
         upgradeUrl: "/settings/billing",
         used: 50,
         limit: 50,

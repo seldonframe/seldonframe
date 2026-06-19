@@ -30,7 +30,47 @@ function readEnv(name: string, fallback = ""): string {
   return process.env[name]?.trim() ?? fallback;
 }
 
-// ─── New tier base price IDs (April 30, 2026 pricing) ────────────────
+// ─── 2026-06-18 pricing: Builder / Workspace / Agency price IDs ──────
+//
+// One flat recurring price per tier, plus a quantity-licensed overage
+// price on Agency. Max creates these products in Stripe (test first,
+// then live) and pastes the resulting price ids into the env vars
+// below — see docs/pricing/STRIPE-SETUP.md. The hard-coded fallbacks
+// are PLACEHOLDERS ("price_PLACEHOLDER_*") so the catalog stays
+// non-empty and checkout assembly doesn't crash pre-configuration;
+// they will NOT resolve at Stripe until the real ids are set.
+
+/** Builder $19/mo flat. Env: STRIPE_BUILDER_PRICE_ID. */
+export const BUILDER_PRICE_ID = readEnv(
+  "STRIPE_BUILDER_PRICE_ID",
+  "price_PLACEHOLDER_builder_19"
+);
+
+/** Workspace $49/mo flat. Env: STRIPE_WORKSPACE_PRICE_ID. */
+export const WORKSPACE_PRICE_ID = readEnv(
+  "STRIPE_WORKSPACE_PRICE_ID",
+  "price_PLACEHOLDER_workspace_49"
+);
+
+/** Agency $297/mo base. Env: STRIPE_AGENCY_BASE_PRICE_ID. */
+export const AGENCY_BASE_PRICE_ID = readEnv(
+  "STRIPE_AGENCY_BASE_PRICE_ID",
+  "price_PLACEHOLDER_agency_297"
+);
+
+/** Agency "Extra client workspace" $10/mo, usage type = licensed
+ *  (quantity). Drives the per-active-workspace overage (Phase 4).
+ *  Env-only (no placeholder) — quantity items must reference a REAL
+ *  Stripe price; an unset value means overage sync is a no-op until
+ *  Max creates the price. Env: STRIPE_AGENCY_WORKSPACE_OVERAGE_PRICE_ID. */
+export const AGENCY_WORKSPACE_OVERAGE_PRICE_ID = readEnv(
+  "STRIPE_AGENCY_WORKSPACE_OVERAGE_PRICE_ID"
+);
+
+// ─── Legacy tier base price IDs (April 30, 2026 pricing) ─────────────
+// Kept readable for webhook back-compat: when Stripe replays an event
+// for an existing Growth/Scale subscription during the migration, the
+// resolver still maps these ids → workspace / agency.
 
 /** Growth $29/mo flat base. Required for Growth checkout. */
 export const GROWTH_BASE_PRICE_ID = readEnv(

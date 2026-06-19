@@ -233,12 +233,13 @@ function loadWorkspaceTierStatus(
 ) {
   const tier = normalizeTierId(orgSubscription?.tier ?? null);
   const stripeSubscriptionId = orgSubscription?.stripeSubscriptionId ?? null;
-  const active = tier === "growth" || tier === "scale";
+  const active = tier !== "inactive";
 
-  // Paid-tier workspace allowance beyond the free one. Scale =
-  // sentinel `999` (effectively unlimited for UI/display purposes;
-  // the actual gate uses `enforceWorkspaceLimit`).
-  const tierAllowance = tier === "scale" ? 999 : tier === "growth" ? 2 : 0;
+  // Full-workspace allowance per tier. Agency = sentinel `999`
+  // (effectively unlimited for UI/display; the real gate uses
+  // `enforceWorkspaceLimit`); Workspace = 1; Builder = 0 (landing pages
+  // only).
+  const tierAllowance = tier === "agency" ? 999 : tier === "workspace" ? 1 : 0;
 
   return {
     stripeSubscriptionId,

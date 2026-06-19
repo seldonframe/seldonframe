@@ -106,11 +106,20 @@ async function dispatchCreateFromUrl(url: unknown, landingTemplate?: unknown): P
           ownedWorkspaceCount: args.ownedWorkspaceCount,
         }),
       getOwnedWorkspaceCount,
-      getOperatorByokAnthropicKey: async (orgId: string) => {
-        const result = await getOperatorByokAnthropicKey({ orgId });
-        return result.source === "byok" && result.key
-          ? { key: result.key, source: "byok" as const }
-          : null;
+      // 2026-06-18 — MANAGED AI (BYOK gate removed). Use the operator's
+      // own Anthropic key if they've stored one, otherwise fall back to
+      // the platform-managed key (process.env.ANTHROPIC_API_KEY). Returns
+      // null only when neither exists, which the orchestrator surfaces as
+      // a non-BYOK `extraction_unavailable` error.
+      resolveExtractionKey: async (orgId: string | null) => {
+        if (orgId) {
+          const result = await getOperatorByokAnthropicKey({ orgId });
+          if (result.source === "byok" && result.key) {
+            return { key: result.key };
+          }
+        }
+        const platformKey = process.env.ANTHROPIC_API_KEY?.trim();
+        return platformKey ? { key: platformKey } : null;
       },
       extractBusinessFactsFromUrl,
       createFullWorkspace,

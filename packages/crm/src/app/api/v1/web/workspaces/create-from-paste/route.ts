@@ -61,11 +61,18 @@ async function dispatchCreateFromPaste(text: unknown, landingTemplate?: unknown)
           ownedWorkspaceCount: args.ownedWorkspaceCount,
         }),
       getOwnedWorkspaceCount,
-      getOperatorByokAnthropicKey: async (orgId: string) => {
-        const result = await getOperatorByokAnthropicKey({ orgId });
-        return result.source === "byok" && result.key
-          ? { key: result.key, source: "byok" as const }
-          : null;
+      // 2026-06-18 — MANAGED AI (BYOK gate removed). Operator BYOK if
+      // present, else the platform-managed key. Null only when neither
+      // exists → orchestrator surfaces a non-BYOK error.
+      resolveExtractionKey: async (orgId: string | null) => {
+        if (orgId) {
+          const result = await getOperatorByokAnthropicKey({ orgId });
+          if (result.source === "byok" && result.key) {
+            return { key: result.key };
+          }
+        }
+        const platformKey = process.env.ANTHROPIC_API_KEY?.trim();
+        return platformKey ? { key: platformKey } : null;
       },
       extractBusinessFactsFromPaste,
       createFullWorkspace,

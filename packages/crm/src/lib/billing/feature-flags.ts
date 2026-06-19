@@ -14,28 +14,35 @@ export const FEATURE_FLAGS = [
 
 export type FeatureFlag = (typeof FEATURE_FLAGS)[number];
 
-export type MinimumTier = "growth" | "scale";
+// 2026-06-18 pricing migration — minimum-tier map for the builder /
+// workspace / agency ladder. Builder unlocks own domain + branding;
+// Workspace adds the client portal + AI agents (the full business OS);
+// Agency adds the white-label portal + priority support.
+export type MinimumTier = "builder" | "workspace" | "agency";
 
 export const FEATURE_TIERS: Record<FeatureFlag, MinimumTier> = {
-  branding_hidden: "growth",
-  custom_domain: "growth",
-  client_portal: "growth",
-  ai_agents: "scale",
-  white_label_portal: "scale",
-  priority_support: "scale",
+  branding_hidden: "builder",
+  custom_domain: "builder",
+  client_portal: "workspace",
+  ai_agents: "workspace",
+  white_label_portal: "agency",
+  priority_support: "agency",
 };
 
+// Rank order. "inactive" (no plan) and any legacy/unknown string sort
+// to 0 so they unlock nothing.
 const TIER_RANK: Record<string, number> = {
-  free: 0,
-  growth: 1,
-  scale: 2,
+  inactive: 0,
+  builder: 1,
+  workspace: 2,
+  agency: 3,
 };
 
 export function tierMeetsMinimum(
   currentTier: string | null | undefined,
   minimumTier: MinimumTier
 ): boolean {
-  const currentRank = TIER_RANK[currentTier ?? "free"] ?? 0;
+  const currentRank = TIER_RANK[currentTier ?? "inactive"] ?? 0;
   const minimumRank = TIER_RANK[minimumTier];
   return currentRank >= minimumRank;
 }

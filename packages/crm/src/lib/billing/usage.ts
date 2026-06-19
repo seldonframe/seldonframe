@@ -20,11 +20,11 @@ import { and, eq, gte, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { contacts } from "@/db/schema/contacts";
 import { workflowRuns } from "@/db/schema/workflow-runs";
-import { getPlan, type Plan, type TierId } from "./plans";
-import { normalizeTierId } from "./features";
+import { getPlan, type Plan } from "./plans";
+import { normalizeTierId, type BillingTier } from "./features";
 
 export type UsageSummary = {
-  tier: TierId;
+  tier: BillingTier;
   plan: Plan;
   contacts: {
     used: number;
@@ -81,9 +81,10 @@ export async function getUsageSummary(
   storedTier: string | null | undefined
 ): Promise<UsageSummary> {
   const tier = normalizeTierId(storedTier);
-  // getPlan() always resolves a tier id since the catalog ships free /
-  // growth / scale; cast handles the typescript narrowing.
-  const plan = (getPlan(tier) ?? getPlan("free"))!;
+  // getPlan() resolves the three offered tiers; "inactive" has no plan,
+  // so fall back to the Builder plan for display purposes (flat tiers
+  // have no overage, so the usage numbers below are all zero anyway).
+  const plan = (getPlan(tier) ?? getPlan("builder"))!;
 
   const [contactsUsed, agentRunsUsed] = orgId
     ? await Promise.all([getCurrentContactCount(orgId), getAgentRunsThisMonth(orgId)])

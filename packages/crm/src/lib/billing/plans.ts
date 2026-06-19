@@ -1,37 +1,48 @@
-// April 30, 2026 pricing migration. The PLAN catalog now describes the
-// three public tiers (Free / Growth / Scale) plus the metered overage
-// items each one ships with. Legacy plan ids ("cloud-starter",
+// 2026-06-18 pricing migration. The PLAN catalog now describes the
+// three public tiers — Builder $19 / Workspace $49 / Agency $297 —
+// each a flat monthly subscription (no per-contact / per-run metering).
+//
+//   Builder   ($19/mo) — landing pages only (cap 10), own domain +
+//                        branding, managed AI generation. NO CRM /
+//                        booking / agents / client portal.
+//   Workspace ($49/mo) — ONE full workspace (website + booking + intake
+//                        + CRM + chatbot), managed AI, custom domain,
+//                        client portal.
+//   Agency    ($297/mo) — white-label, 10 client workspaces included
+//                        (overage billed at $10/workspace via a
+//                        quantity-licensed Stripe item — Phase 4),
+//                        marketplace, priority support.
+//
+// Legacy plan ids ("free", "growth", "scale", "cloud-starter",
 // "cloud-pro", "pro-3", etc.) are still resolvable via `getPlan()` so
-// callers that read a stored `planId` from a stale users row continue
-// to work — they're aliased to the new tiers via `getPlan()`.
+// callers reading a stored `planId` from a stale row keep working:
+//   growth-family → workspace, scale-family → agency, free → no plan.
+//
+// The metered overage fields (`metered`, `maxContacts`,
+// `maxAgentRunsPerMonth`) are retained as LEGACY no-op fields so
+// `lib/billing/usage.ts` and the billing settings page keep compiling.
+// The new tiers are flat (unlimited contacts/runs, no metered lines).
 
 import {
-  GROWTH_BASE_PRICE_ID,
-  GROWTH_CONTACTS_PRICE_ID,
-  GROWTH_AGENT_RUNS_PRICE_ID,
-  SCALE_BASE_PRICE_ID,
-  SCALE_AGENT_RUNS_PRICE_ID,
+  BUILDER_PRICE_ID,
+  WORKSPACE_PRICE_ID,
+  AGENCY_BASE_PRICE_ID,
+  AGENCY_WORKSPACE_OVERAGE_PRICE_ID,
   LEGACY_CLOUD_STARTER_PRICE_ID,
   LEGACY_CLOUD_PRO_PRICE_ID,
   LEGACY_CLOUD_AGENCY_PRICE_ID,
 } from "./price-ids";
 
-export type TierId = "free" | "growth" | "scale";
+export type TierId = "builder" | "workspace" | "agency";
 
 export interface MeteredItem {
-  /** Number of units bundled in the base subscription. Beyond this we
-   *  bill the per-unit price. For Scale agent runs this is 0 — every
-   *  run is metered. */
+  /** Number of units bundled in the base subscription. */
   includedQty: number;
   /** Per-unit price in dollars. Used for in-app overage estimation. */
   pricePerUnit: number;
-  /** Stripe price id of the metered overage line. Empty string means
-   *  the price hasn't been created in Stripe yet — checkout will skip
-   *  this line. The base flat subscription still works; meter events
-   *  are reported but not billed until the price exists. */
+  /** Stripe price id of the metered overage line. Empty = not created. */
   stripePriceId: string;
-  /** Stripe meter `event_name` the price consumes. Used by
-   *  `lib/billing/meters.ts` when emitting meter events. */
+  /** Stripe meter `event_name` the price consumes. */
   meterEventName: string;
 }
 
@@ -40,36 +51,50 @@ export interface Plan {
   name: string;
   /** Public-facing one-liner shown on /pricing + /settings/billing. */
   tagline: string;
-  /** Internal classification — keeps backward compat with old code
-   *  that did `plan.type === "pro"`. New code should branch on
-   *  `plan.id` instead. */
-  type: "free" | "paid";
-  /** Flat base price in dollars/mo. 0 for Free. */
+  /** Internal classification — all three current tiers are paid. */
+  type: "paid";
+  /** Flat base price in dollars/mo. */
   price: number;
   /** Yearly base price in dollars/yr. 0 = no yearly variant yet. */
   yearlyPrice: number;
-  /** Stripe price id for the base flat subscription. Empty string for
-   *  Free (Free has no Stripe subscription). */
+  /** Stripe price id for the base flat subscription. */
   stripePriceId: string;
   stripeYearlyPriceId: string;
+  /** Agency only — the $10 quantity-licensed "extra client workspace"
+   *  overage price. Empty string for builder/workspace. */
+  workspaceOveragePriceId: string;
   limits: {
-    /** Max workspaces under the same Stripe customer. -1 = unlimited. */
+    /** Max FULL workspaces (org with CRM/booking/etc). -1 = unlimited.
+     *  builder = 0 (landing pages only), workspace = 1, agency = -1. */
     maxOrgs: number;
-    /** Hard cap on total contacts per workspace. -1 = unlimited.
-     *  Free is hard-capped (no overage); Growth has soft-cap with
-     *  metered overage; Scale is unlimited. */
-    maxContacts: number;
-    /** Hard cap on agent runs per calendar month. -1 = unlimited.
-     *  Free hard-caps; Growth + Scale soft-cap (overage metered). */
-    maxAgentRunsPerMonth: number;
+    /** Standalone landing-page cap (builder's product). -1 = unlimited.
+     *  Only builder is capped here; workspace/agency are unlimited. */
+    maxLandingPages: number;
+    /** Agency: number of client workspaces included before the $10
+     *  per-workspace overage kicks in. */
+    includedWorkspaces: number;
+    /** Full CRM (contacts/deals/pipeline). builder = false. */
+    crm: boolean;
+    /** Booking page + appointment types. builder = false. */
+    booking: boolean;
+    /** Intake forms. builder = false. */
+    intake: boolean;
+    /** AI agents / website chatbot. builder = false. */
+    agents: boolean;
     customDomain: boolean;
     removeBranding: boolean;
     fullWhiteLabel: boolean;
     clientPortal: boolean;
+    marketplace: boolean;
     prioritySupport: boolean;
+    // ── LEGACY no-op fields (flat tiers → unlimited, no metering) ──
+    /** @deprecated Flat tiers don't cap contacts. -1 = unlimited. */
+    maxContacts: number;
+    /** @deprecated Flat tiers don't cap agent runs. -1 = unlimited. */
+    maxAgentRunsPerMonth: number;
   };
-  /** Metered overage items added to the subscription on checkout.
-   *  Null means the tier has no overage line for that resource. */
+  /** @deprecated Legacy metered overage items. The new flat tiers have
+   *  no metered lines; retained as null so usage.ts keeps compiling. */
   metered: {
     contacts: MeteredItem | null;
     agentRuns: MeteredItem | null;
@@ -78,113 +103,122 @@ export interface Plan {
 
 export const PLANS: Plan[] = [
   {
-    id: "free",
-    name: "Free",
-    tagline: "Free forever — upgrade when you grow",
-    type: "free",
-    price: 0,
+    id: "builder",
+    name: "Builder",
+    tagline: "Launch up to 10 landing pages on your own domain",
+    type: "paid",
+    price: 19,
     yearlyPrice: 0,
-    stripePriceId: "",
+    stripePriceId: BUILDER_PRICE_ID,
     stripeYearlyPriceId: "",
+    workspaceOveragePriceId: "",
     limits: {
-      maxOrgs: 1,
-      maxContacts: 50,
-      maxAgentRunsPerMonth: 100,
-      customDomain: false,
-      removeBranding: false,
+      maxOrgs: 0,
+      maxLandingPages: 10,
+      includedWorkspaces: 0,
+      crm: false,
+      booking: false,
+      intake: false,
+      agents: false,
+      customDomain: true,
+      removeBranding: true,
       fullWhiteLabel: false,
       clientPortal: false,
+      marketplace: false,
       prioritySupport: false,
+      maxContacts: -1,
+      maxAgentRunsPerMonth: -1,
     },
     metered: { contacts: null, agentRuns: null },
   },
   {
-    id: "growth",
-    name: "Growth",
-    tagline: "For operators with paying clients",
+    id: "workspace",
+    name: "Workspace",
+    tagline: "One complete business OS — website, booking, CRM & chatbot",
     type: "paid",
-    price: 29,
+    price: 49,
     yearlyPrice: 0,
-    stripePriceId: GROWTH_BASE_PRICE_ID,
+    stripePriceId: WORKSPACE_PRICE_ID,
     stripeYearlyPriceId: "",
+    workspaceOveragePriceId: "",
     limits: {
-      maxOrgs: 3,
-      maxContacts: -1,
-      maxAgentRunsPerMonth: -1,
+      maxOrgs: 1,
+      maxLandingPages: -1,
+      includedWorkspaces: 1,
+      crm: true,
+      booking: true,
+      intake: true,
+      agents: true,
       customDomain: true,
       removeBranding: true,
       fullWhiteLabel: false,
       clientPortal: true,
+      marketplace: false,
       prioritySupport: false,
-    },
-    metered: {
-      contacts: {
-        includedQty: 500,
-        pricePerUnit: 0.02,
-        stripePriceId: GROWTH_CONTACTS_PRICE_ID,
-        meterEventName: "seldonframe_contacts",
-      },
-      agentRuns: {
-        includedQty: 1000,
-        pricePerUnit: 0.03,
-        stripePriceId: GROWTH_AGENT_RUNS_PRICE_ID,
-        meterEventName: "seldonframe_agent_runs",
-      },
-    },
-  },
-  {
-    id: "scale",
-    name: "Scale",
-    tagline: "For agencies building for multiple clients",
-    type: "paid",
-    price: 99,
-    yearlyPrice: 0,
-    stripePriceId: SCALE_BASE_PRICE_ID,
-    stripeYearlyPriceId: "",
-    limits: {
-      maxOrgs: -1,
       maxContacts: -1,
       maxAgentRunsPerMonth: -1,
+    },
+    metered: { contacts: null, agentRuns: null },
+  },
+  {
+    id: "agency",
+    name: "Agency",
+    tagline: "White-label platform — 10 client workspaces included",
+    type: "paid",
+    price: 297,
+    yearlyPrice: 0,
+    stripePriceId: AGENCY_BASE_PRICE_ID,
+    stripeYearlyPriceId: "",
+    workspaceOveragePriceId: AGENCY_WORKSPACE_OVERAGE_PRICE_ID,
+    limits: {
+      // -1 = unlimited; billed per-workspace ($10) past `includedWorkspaces`.
+      maxOrgs: -1,
+      maxLandingPages: -1,
+      includedWorkspaces: 10,
+      crm: true,
+      booking: true,
+      intake: true,
+      agents: true,
       customDomain: true,
       removeBranding: true,
       fullWhiteLabel: true,
       clientPortal: true,
+      marketplace: true,
       prioritySupport: true,
+      maxContacts: -1,
+      maxAgentRunsPerMonth: -1,
     },
-    metered: {
-      contacts: null,
-      agentRuns: {
-        includedQty: 0,
-        pricePerUnit: 0.02,
-        stripePriceId: SCALE_AGENT_RUNS_PRICE_ID,
-        meterEventName: "seldonframe_agent_runs",
-      },
-    },
+    metered: { contacts: null, agentRuns: null },
   },
 ];
 
 /** Legacy plan-id → new tier-id remap. Used by `getPlan()` so a stale
- *  `users.planId` value (e.g. "cloud-starter") still resolves to a
- *  current Plan object. Existing paying customers on legacy tiers are
- *  grandfathered to the closest new tier (Starter → Growth, everything
- *  else → Scale). */
+ *  `users.planId` / `subscription.tier` value (e.g. "cloud-starter")
+ *  still resolves to a current Plan object. growth-family → workspace,
+ *  scale-family → agency. "free" is intentionally absent — it no longer
+ *  maps to any offered plan (callers treat undefined as "no plan"). */
 const LEGACY_PLAN_ID_REMAP: Record<string, TierId> = {
-  // Old kebab ids
-  "cloud-starter": "growth",
-  "cloud-pro": "scale",
-  "pro-3": "scale",
-  "pro-5": "scale",
-  "pro-10": "scale",
-  "pro-20": "scale",
-  // Old snake / single-word ids (some surfaces store these)
-  cloud_starter: "growth",
-  cloud_pro: "scale",
-  pro_3: "scale",
-  pro_5: "scale",
-  pro_10: "scale",
-  pro_20: "scale",
-  starter: "growth",
-  pro: "scale",
+  // Growth-family ($29 Growth / Cloud Starter / Starter) → Workspace
+  growth: "workspace",
+  "cloud-starter": "workspace",
+  cloud_starter: "workspace",
+  starter: "workspace",
+  // Scale-family ($99 Scale / Cloud Pro / Cloud Agency / Pro_N) → Agency
+  scale: "agency",
+  "cloud-pro": "agency",
+  cloud_pro: "agency",
+  "cloud-agency": "agency",
+  cloud_agency: "agency",
+  pro: "agency",
+  self_service: "agency",
+  "pro-3": "agency",
+  "pro-5": "agency",
+  "pro-10": "agency",
+  "pro-20": "agency",
+  pro_3: "agency",
+  pro_5: "agency",
+  pro_10: "agency",
+  pro_20: "agency",
 };
 
 export function getPlan(planId: string): Plan | undefined {
@@ -192,8 +226,8 @@ export function getPlan(planId: string): Plan | undefined {
   const direct = PLANS.find((plan) => plan.id === planId);
   if (direct) return direct;
 
-  // Legacy alias remap
-  const remapped = LEGACY_PLAN_ID_REMAP[planId];
+  // Legacy alias remap (case-insensitive)
+  const remapped = LEGACY_PLAN_ID_REMAP[planId] ?? LEGACY_PLAN_ID_REMAP[planId?.toLowerCase?.() ?? ""];
   if (remapped) return PLANS.find((plan) => plan.id === remapped);
 
   return undefined;
@@ -204,16 +238,14 @@ export function getCloudPlans(): Plan[] {
 }
 
 /** @deprecated The old "Pro" tier family no longer exists. Returns
- *  empty array. Kept so legacy callers don't break — remove once
- *  references are gone. */
+ *  empty array. Kept so legacy callers don't break. */
 export function getProPlans(): Plan[] {
   return [];
 }
 
 /** Resolve the plan that owns a given Stripe base price id. Walks new
- *  tier prices first, then legacy ids (which are pinned to growth /
- *  scale via constants below). Returns null for metered overage prices
- *  — those are not standalone plans. */
+ *  tier prices first, then legacy ids (which are pinned to workspace /
+ *  agency). Returns null for unknown / overage prices. */
 export function getPlanByStripePriceId(
   priceId: string
 ): { plan: Plan; billingPeriod: "monthly" | "yearly" } | null {
@@ -227,19 +259,18 @@ export function getPlanByStripePriceId(
     }
   }
 
-  // Legacy price ids — grandfathered to growth or scale. Match by the
-  // hard-coded legacy constants so this works regardless of env vars.
-  const growth = PLANS.find((plan) => plan.id === "growth");
-  const scale = PLANS.find((plan) => plan.id === "scale");
+  // Legacy price ids — grandfathered to workspace or agency.
+  const workspace = PLANS.find((plan) => plan.id === "workspace");
+  const agency = PLANS.find((plan) => plan.id === "agency");
 
-  if (priceId === LEGACY_CLOUD_STARTER_PRICE_ID && growth) {
-    return { plan: growth, billingPeriod: "monthly" };
+  if (priceId === LEGACY_CLOUD_STARTER_PRICE_ID && workspace) {
+    return { plan: workspace, billingPeriod: "monthly" };
   }
   if (
     (priceId === LEGACY_CLOUD_PRO_PRICE_ID || priceId === LEGACY_CLOUD_AGENCY_PRICE_ID) &&
-    scale
+    agency
   ) {
-    return { plan: scale, billingPeriod: "monthly" };
+    return { plan: agency, billingPeriod: "monthly" };
   }
 
   return null;

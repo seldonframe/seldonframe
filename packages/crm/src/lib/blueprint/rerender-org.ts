@@ -81,7 +81,12 @@ export async function applyBrandingForTier(
   tier: string | null | undefined
 ): Promise<{ removePoweredBy: boolean }> {
   const plan = tier ? getPlan(tier) ?? null : null;
-  const removePoweredBy = canRemoveBranding(plan);
+  // NOTE: a null plan here means "no active paid plan" (e.g. tier
+  // "inactive" after a cancellation), NOT self-hosted — so branding
+  // STAYS. We read the entitlement off the resolved plan directly and
+  // default to false when there's no plan, rather than going through
+  // canRemoveBranding() whose null case is the self-host allowance.
+  const removePoweredBy = plan ? canRemoveBranding(plan) : false;
 
   const [org] = await db
     .select({ settings: organizations.settings })

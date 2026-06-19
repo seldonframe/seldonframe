@@ -44,7 +44,15 @@ import { applyLandingTemplateForWorkspace } from "@/lib/landing/apply-landing-te
 export type RunDeps = {
   enforceWorkspaceLimit: (args: { primaryOrgId: string | null; ownedWorkspaceCount: number }) => Promise<LimitDecision>;
   getOwnedWorkspaceCount: (userId: string) => Promise<number>;
-  getOperatorByokAnthropicKey: (orgId: string) => Promise<{ key: string; source: "byok" } | null>;
+  /**
+   * 2026-06-18 — MANAGED AI (BYOK gate removed). Resolves the Anthropic
+   * key used for URL extraction: the operator's own BYOK key if they've
+   * stored one, otherwise the platform-managed key. Returns null only
+   * when NO key is resolvable anywhere (neither BYOK nor a platform key
+   * configured) — in which case the flow surfaces a non-BYOK
+   * `extraction_unavailable` error instead of the old `needs_byok` 412.
+   */
+  resolveExtractionKey: (orgId: string | null) => Promise<{ key: string } | null>;
   extractBusinessFactsFromUrl: (args: { url: string; byokKey: string }) => Promise<ExtractedBusinessFacts>;
   createFullWorkspace: (input: CreateFullWorkspaceInput) => Promise<CreateFullWorkspaceResult>;
   /**
@@ -158,15 +166,18 @@ export async function runCreateFromUrl(input: RunInput): Promise<RunResult> {
         return;
       }
 
-      // 4. BYOK precondition
-      if (!input.sessionUser.primaryOrgId) {
-        sse.error(412, { reason: "needs_byok", message: "Add your Anthropic API key to extract from URLs." });
-        sse.close();
-        return;
-      }
-      const byok = await input.deps.getOperatorByokAnthropicKey(input.sessionUser.primaryOrgId);
-      if (!byok) {
-        sse.error(412, { reason: "needs_byok", message: "Add your Anthropic API key to extract from URLs." });
+      // 4. Resolve the extraction key — MANAGED AI for all paid tiers.
+      //    The old BYOK 412 gate is gone: we use the operator's own key
+      //    if present, else the platform-managed key. Only a total
+      //    absence of any key (managed AI unconfigured on this
+      //    deployment) blocks the flow, and it surfaces as a non-BYOK
+      //    `extraction_unavailable` error.
+      const extraction = await input.deps.resolveExtractionKey(input.sessionUser.primaryOrgId);
+      if (!extraction) {
+        sse.error(503, {
+          reason: "extraction_unavailable",
+          message: "Managed AI is temporarily unavailable. Please try again shortly.",
+        });
         sse.close();
         return;
       }
@@ -175,7 +186,7 @@ export async function runCreateFromUrl(input: RunInput): Promise<RunResult> {
       sse.emit("fetching", { url: validation.url });
       let facts: ExtractedBusinessFacts;
       try {
-        facts = await input.deps.extractBusinessFactsFromUrl({ url: validation.url, byokKey: byok.key });
+        facts = await input.deps.extractBusinessFactsFromUrl({ url: validation.url, byokKey: extraction.key });
       } catch (err: unknown) {
         const reason = (err as { reason?: string }).reason ?? "extraction_failed";
         sse.error(422, { reason });
@@ -353,7 +364,7 @@ export async function runCreateFromUrl(input: RunInput): Promise<RunResult> {
         const r1Result = await runR1LandingStep({
           workspaceId: result.workspace_id,
           facts,
-          byokKey: byok.key,
+          byokKey: extraction.key,
         });
         if (r1Result.ok) {
           sse.emit("landing_built", { workspaceId: result.workspace_id });

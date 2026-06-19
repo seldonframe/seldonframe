@@ -60,6 +60,14 @@ export type OrganizationSubscription = {
   trialEndsAt?: string | null;
   currentPeriodEnd?: string | null;
   stripeProcessedEventIds?: string[];
+  /** Agency only — the Stripe subscription-item id for the $10
+   *  quantity-licensed "extra client workspace" overage line. Tracked
+   *  so Phase 4 can update its quantity = max(0, activeWorkspaces −
+   *  includedWorkspaces) without re-scanning the subscription. */
+  stripeWorkspaceItemId?: string | null;
+  /** Agency only — number of client workspaces included in the base
+   *  price before the overage item is billed. Defaults to 10. */
+  includedWorkspaces?: number;
 };
 
 export const organizations = pgTable("organizations", {

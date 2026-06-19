@@ -51,9 +51,10 @@ function formatMoney(amount: number) {
  *  paying customers from before the migration see a sensible label. */
 function getTierDisplay(rawTier: string | null | undefined) {
   const tier = normalizeTierId(rawTier);
-  if (tier === "scale") return { label: "Scale", caption: "$99/mo + $0.02 per agent run" };
-  if (tier === "growth") return { label: "Growth", caption: "$29/mo + usage" };
-  return { label: "Free", caption: "Free forever — upgrade when you grow" };
+  if (tier === "agency") return { label: "Agency", caption: "$297/mo · 10 client workspaces included" };
+  if (tier === "workspace") return { label: "Workspace", caption: "$49/mo · full business OS" };
+  if (tier === "builder") return { label: "Builder", caption: "$19/mo · up to 10 landing pages" };
+  return { label: "No active plan", caption: "Choose a plan to get started" };
 }
 
 function ProgressBar({ percent, tone }: { percent: number; tone: "primary" | "warn" | "danger" }) {
@@ -105,8 +106,8 @@ function pickTone(percent: number): "primary" | "warn" | "danger" {
 }
 
 function UsageCard({ usage }: { usage: UsageSummary }) {
-  const isFree = usage.tier === "free";
-  const isScale = usage.tier === "scale";
+  const isFree = usage.tier === "inactive";
+  const isScale = usage.tier === "agency";
 
   const contactsTone = pickTone(usage.contacts.percent);
   const agentRunsTone = pickTone(usage.agentRuns.percent);
@@ -214,7 +215,8 @@ export default async function BillingSettingsPage({
   const orgId = await getOrgId();
   const activeOrgId = orgId ?? session.user.orgId ?? null;
   const subscription = await getOrgSubscription(activeOrgId);
-  const tier = subscription.tier ?? "free";
+  // Normalised tier ("inactive" when there's no active paid plan).
+  const tier = normalizeTierId(subscription.tier);
   const trialEndsAt = subscription.trialEndsAt ?? null;
   const status = subscription.status ?? "trialing";
   const billingPeriod = subscription.stripePriceId?.includes("year") ? "yearly" : "monthly";
@@ -279,11 +281,13 @@ export default async function BillingSettingsPage({
             <p className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Workspaces</p>
             <p className="text-lg font-semibold text-foreground">{managedOrgs.length}</p>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              {usage.tier === "scale"
-                ? "Unlimited on Scale"
-                : usage.tier === "growth"
-                  ? `up to ${usage.plan.limits.maxOrgs}`
-                  : "1 included on Free"}
+              {usage.tier === "agency"
+                ? "10 client workspaces included"
+                : usage.tier === "workspace"
+                  ? "1 workspace included"
+                  : usage.tier === "builder"
+                    ? "landing pages only"
+                    : "no active plan"}
             </p>
           </div>
           <div>
@@ -292,7 +296,7 @@ export default async function BillingSettingsPage({
               {formatMoney(usage.estimatedTotal)}
             </p>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              {usage.tier === "free" ? "No charge" : "Base + metered usage"}
+              {usage.tier === "inactive" ? "No active plan" : "Flat monthly"}
             </p>
           </div>
         </div>
@@ -309,7 +313,7 @@ export default async function BillingSettingsPage({
               "Upgrade" as the primary CTA instead. This prevents the
               click-action-crash class entirely; the action's graceful
               redirect on missing customerId is defense in depth. */}
-          {!isGuestAdminToken && tier !== "free" ? (
+          {!isGuestAdminToken && tier !== "inactive" ? (
             <form action={createBillingPortalSessionAction}>
               <button type="submit" className="crm-button-primary h-10 px-4">
                 Manage subscription
@@ -371,11 +375,11 @@ export default async function BillingSettingsPage({
           </ul>
 
           <p className="text-xs text-muted-foreground">
-            {usage.tier === "scale"
-              ? "Scale includes unlimited workspaces. Each workspace uses your shared agent-run + contact pool."
-              : usage.tier === "growth"
-                ? `Growth includes up to ${usage.plan.limits.maxOrgs} workspaces. Upgrade to Scale for unlimited.`
-                : "Free includes 1 workspace. Upgrade to Growth for up to 3, or Scale for unlimited."}
+            {usage.tier === "agency"
+              ? "Agency includes 10 client workspaces; extra workspaces are billed at $10/mo each."
+              : usage.tier === "workspace"
+                ? "Workspace includes 1 full workspace. Upgrade to Agency to manage multiple client workspaces."
+                : "Upgrade to Workspace for a full business OS, or Agency to manage client workspaces."}
           </p>
         </div>
       ) : null}

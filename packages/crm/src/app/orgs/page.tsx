@@ -19,13 +19,11 @@ export default async function OrganizationsPage({
 
   const plan = getPlan(session.user.planId ?? "");
 
-  // April 30, 2026 — pricing migration. The /orgs managed-workspaces
-  // surface is for users who own multiple workspaces; that's the
-  // Scale tier under the new pricing (Growth allows 3 workspaces but
-  // doesn't unlock the agency-style management UI). Legacy "pro"
-  // plan ids resolve to scale via getPlan() so this still works for
-  // grandfathered customers.
-  if (!plan || plan.id !== "scale") {
+  // 2026-06-18 — pricing migration. The /orgs managed-workspaces
+  // surface is the agency-style multi-client management UI, so it's
+  // gated to the Agency tier. Legacy "scale"/"pro" plan ids resolve to
+  // agency via getPlan() so grandfathered customers still reach it.
+  if (!plan || plan.id !== "agency") {
     redirect("/dashboard");
   }
 

@@ -1,38 +1,30 @@
-// April 30, 2026 — free-tier hard caps + workspace creation gates.
+// 2026-06-18 pricing migration — workspace-creation gate for the
+// builder / workspace / agency ladder.
 //
-// Three caps, one helper each:
-//   - enforceContactLimit(orgId)   — used by the public intake POST
-//     and any place that creates a contacts row. Returns
-//     { allowed: false, message } when at limit on free; never blocks
-//     paid tiers (they overflow into metered overage).
-//   - enforceAgentRunLimit(orgId)  — used by the agent dispatcher
-//     before creating a workflow_runs row. Same shape: free hard-caps,
-//     paid tiers always allow (overage is metered).
-//   - enforceWorkspaceLimit(userId) — used by the workspace creation
-//     flows. Free = 1, Growth = 3, Scale = unlimited.
+// The old Free-tier hard caps (50 contacts / 100 agent runs) are gone:
+// there is no free tier, and the paid tiers are flat (unlimited
+// contacts/runs). enforceContactLimit / enforceAgentRunLimit are kept
+// as always-allow shims so existing call sites (the public intake POST,
+// the agent dispatcher) keep compiling and never block.
 //
-// We deliberately do NOT throw — callers branch on the returned shape
-// so the UI can surface a consistent upgrade CTA. This also keeps the
-// public intake form working when the workspace is at limit (the form
-// still accepts submissions; the contact row just isn't created — the
-// next slice will queue them for review when the operator upgrades).
+// enforceWorkspaceLimit is the live gate:
+//   inactive (no plan) = 0 full workspaces
+//   builder            = 0 full workspaces (landing pages capped at 10
+//                        separately via lib/tier/limits.ts)
+//   workspace          = 1
+//   agency             = unlimited (billed per-seat past 10)
+//
+// The tier resolver is injectable via `deps` so the gate is
+// unit-testable without a DB (mirrors hasFeature's DI pattern).
 
-import { eq } from "drizzle-orm";
-import { db } from "@/db";
-import { organizations } from "@/db/schema";
-import { normalizeTierId } from "./features";
-import { getPlan, type TierId } from "./plans";
+import { normalizeTierId, type BillingTier } from "./features";
 import { resolveTierForWorkspace } from "./tier-resolver";
-import {
-  getAgentRunsThisMonth,
-  getCurrentContactCount,
-} from "./usage";
 
 export type LimitDecision =
-  | { allowed: true; tier: TierId }
+  | { allowed: true; tier: BillingTier }
   | {
       allowed: false;
-      tier: TierId;
+      tier: BillingTier;
       reason: "contact_limit_reached" | "agent_run_limit_reached" | "workspace_limit_reached";
       message: string;
       upgradeUrl: string;
@@ -40,150 +32,87 @@ export type LimitDecision =
       limit: number;
     };
 
-async function loadOrgTier(orgId: string): Promise<TierId> {
-  // 2026-05-17 — delegated to resolveTierForWorkspace, which walks the
-  // parent_user_id chain for agency-managed workspaces (so a Scale-
-  // paying operator's client workspaces inherit Scale automatically
-  // instead of staying on free until manually backfilled). See
-  // ./tier-resolver.ts header for the full resolution order.
-  return resolveTierForWorkspace(orgId);
+export type WorkspaceLimitDeps = {
+  /** Resolve the effective tier for an org. Injected in tests; the
+   *  production default walks the agency chain via tier-resolver. */
+  resolveTier: (orgId: string | null | undefined) => Promise<BillingTier>;
+};
+
+const defaultDeps: WorkspaceLimitDeps = {
+  resolveTier: async (orgId) => normalizeTierId(await resolveTierForWorkspace(orgId)),
+};
+
+/** Full-workspace allowance per tier. builder + inactive get 0 (builder
+ *  sells landing pages, not workspaces); workspace = 1; agency = -1
+ *  (unlimited, overage billed per-seat past the included count). */
+function maxFullWorkspacesForTier(tier: BillingTier): number {
+  if (tier === "agency") return -1;
+  if (tier === "workspace") return 1;
+  return 0; // builder, inactive
 }
 
 /**
- * Free-tier contacts cap. Returns `allowed: false` with an upgrade
- * message when the org has 50+ contacts and is on Free; paid tiers
- * always pass (overage is metered and billed per-contact on Growth,
- * unlimited on Scale).
+ * @deprecated No free tier → no contact hard cap. Always allows. Kept
+ * so the public intake POST + contact-create paths keep compiling.
  */
 export async function enforceContactLimit(orgId: string): Promise<LimitDecision> {
-  const tier = await loadOrgTier(orgId);
-  if (tier !== "free") return { allowed: true, tier };
-
-  const plan = getPlan("free")!;
-  const cap = plan.limits.maxContacts; // 50
-  const used = await getCurrentContactCount(orgId);
-
-  if (used < cap) return { allowed: true, tier };
-
-  return {
-    allowed: false,
-    tier,
-    reason: "contact_limit_reached",
-    message: `You've reached ${cap} contacts on the Free plan. Upgrade to Growth to keep adding clients.`,
-    upgradeUrl: "/settings/billing",
-    used,
-    limit: cap,
-  };
+  const tier = normalizeTierId(await resolveTierForWorkspace(orgId));
+  return { allowed: true, tier };
 }
 
 /**
- * Free-tier agent runs cap. Returns `allowed: false` with an upgrade
- * message when the org has 100+ workflow_runs this calendar month
- * and is on Free; paid tiers always pass (overage metered).
+ * @deprecated No free tier → no agent-run hard cap. Always allows.
  */
 export async function enforceAgentRunLimit(orgId: string): Promise<LimitDecision> {
-  const tier = await loadOrgTier(orgId);
-  if (tier !== "free") return { allowed: true, tier };
-
-  const plan = getPlan("free")!;
-  const cap = plan.limits.maxAgentRunsPerMonth; // 100
-  const used = await getAgentRunsThisMonth(orgId);
-
-  if (used < cap) return { allowed: true, tier };
-
-  return {
-    allowed: false,
-    tier,
-    reason: "agent_run_limit_reached",
-    message: `Monthly agent run limit reached on the Free plan. Upgrade to Growth to continue running agents.`,
-    upgradeUrl: "/settings/billing",
-    used,
-    limit: cap,
-  };
+  const tier = normalizeTierId(await resolveTierForWorkspace(orgId));
+  return { allowed: true, tier };
 }
 
 /**
- * Workspace creation cap. Free = 1 workspace, Growth = 3, Scale =
- * unlimited. The user's tier is read from the user's "primary" org's
- * subscription (the org pointed to by users.orgId).
- *
- * 2026-05-27 — Copy revised for the deferred-card signup flow. Card
- * capture moved out of the mandatory signup chain (was a 100% drop-off);
- * the over-limit prompt is now the first place we ever ask the operator
- * to save a card. The copy reflects that change: instead of "Upgrade to
- * Growth" (jargony, implies a multi-tier choice the user hasn't seen
- * yet), free-tier users hit "add a card to unlock more workspaces" and
- * the upgradeUrl points at /signup/billing?next=/clients/new — the
- * existing SetupIntent page, now reached as an opt-in step. Paid-tier
- * upgrade copy (Growth → Scale) is unchanged because those users have
- * already seen the pricing matrix.
+ * Workspace-creation cap. builder/inactive = 0 full workspaces,
+ * workspace = 1, agency = unlimited. The acting org's tier is resolved
+ * from its primary org (walking the agency chain for managed
+ * workspaces).
  */
-export async function enforceWorkspaceLimit(params: {
-  userId: string;
-  primaryOrgId: string | null | undefined;
-  ownedWorkspaceCount: number;
-}): Promise<LimitDecision> {
+export async function enforceWorkspaceLimit(
+  params: {
+    userId: string;
+    primaryOrgId: string | null | undefined;
+    ownedWorkspaceCount: number;
+  },
+  deps: WorkspaceLimitDeps = defaultDeps,
+): Promise<LimitDecision> {
   const tier = params.primaryOrgId
-    ? await loadOrgTier(params.primaryOrgId)
-    : "free";
+    ? await deps.resolveTier(params.primaryOrgId)
+    : "inactive";
 
-  const plan = getPlan(tier) ?? getPlan("free")!;
-  const cap = plan.limits.maxOrgs; // 1 / 3 / -1 (unlimited)
+  const cap = maxFullWorkspacesForTier(tier);
 
   if (cap === -1) return { allowed: true, tier };
   if (params.ownedWorkspaceCount < cap) return { allowed: true, tier };
 
-  // Free-tier users — first ever ask to save a card. Route to the
-  // existing /signup/billing SetupIntent page (now opt-in) instead of
-  // /settings/billing so the visitor lands in a single-purpose surface
-  // with the Stripe Elements card form already mounted. ?next=/clients/new
-  // brings them straight back here after they save the card.
-  if (tier === "free") {
-    return {
-      allowed: false,
-      tier,
-      reason: "workspace_limit_reached",
-      message: `You've used ${params.ownedWorkspaceCount}/${cap} free workspace${cap === 1 ? "" : "s"} — add a card to unlock more.`,
-      upgradeUrl: "/signup/billing?next=/clients/new",
-      used: params.ownedWorkspaceCount,
-      limit: cap,
-    };
-  }
+  // Over (or at) the cap. Builder + no-plan users are told to upgrade to
+  // Workspace; Workspace users are told to upgrade to Agency.
+  const message =
+    tier === "workspace"
+      ? `You're on Workspace, which includes 1 workspace. Upgrade to Agency to manage multiple client workspaces.`
+      : tier === "builder"
+        ? `Builder includes landing pages only. Upgrade to Workspace to create a full business workspace (CRM, booking, chatbot).`
+        : `Choose a plan to create a workspace.`;
 
-  // Paid-tier upgrade prompt (Growth → Scale) keeps the old shape —
-  // these users have already seen the pricing matrix and the
-  // /settings/billing manager is the right surface for tier swaps.
   return {
     allowed: false,
     tier,
     reason: "workspace_limit_reached",
-    message: `Workspace limit reached on the ${plan.name} plan (${cap} workspace${cap === 1 ? "" : "s"}). Upgrade to Scale for unlimited workspaces.`,
+    message,
     upgradeUrl: "/settings/billing",
     used: params.ownedWorkspaceCount,
     limit: cap,
   };
 }
 
-/** Helper used by the dashboard's free-tier banner thresholds. Returns
- *  the percent-of-cap usage (clamped to 100) for display. */
-export async function getFreeTierUsageBannerData(orgId: string) {
-  const tier = await loadOrgTier(orgId);
-  if (tier !== "free") return null;
-  const [contactsUsed, runsUsed] = await Promise.all([
-    getCurrentContactCount(orgId),
-    getAgentRunsThisMonth(orgId),
-  ]);
-  const plan = getPlan("free")!;
-  return {
-    contactsUsed,
-    contactsCap: plan.limits.maxContacts,
-    contactsPercent: Math.min(100, Math.round((contactsUsed / plan.limits.maxContacts) * 100)),
-    runsUsed,
-    runsCap: plan.limits.maxAgentRunsPerMonth,
-    runsPercent: Math.min(
-      100,
-      Math.round((runsUsed / plan.limits.maxAgentRunsPerMonth) * 100)
-    ),
-  };
+/** @deprecated No free tier → no free-usage banner. Always null. Kept
+ *  so the dashboard banner caller keeps compiling. */
+export async function getFreeTierUsageBannerData(_orgId: string): Promise<null> {
+  return null;
 }
-

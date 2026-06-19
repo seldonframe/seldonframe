@@ -20,7 +20,9 @@ import { applyLandingTemplateForWorkspace } from "@/lib/landing/apply-landing-te
 export type RunPasteDeps = {
   enforceWorkspaceLimit: (args: { primaryOrgId: string | null; ownedWorkspaceCount: number }) => Promise<LimitDecision>;
   getOwnedWorkspaceCount: (userId: string) => Promise<number>;
-  getOperatorByokAnthropicKey: (orgId: string) => Promise<{ key: string; source: "byok" } | null>;
+  /** 2026-06-18 — MANAGED AI (BYOK gate removed). See run-create-from-url
+   *  RunDeps.resolveExtractionKey for the contract. */
+  resolveExtractionKey: (orgId: string | null) => Promise<{ key: string } | null>;
   extractBusinessFactsFromPaste: (args: { pastedText: string; byokKey: string }) => Promise<ExtractedBusinessFacts>;
   createFullWorkspace: (input: CreateFullWorkspaceInput) => Promise<CreateFullWorkspaceResult>;
   markOperatorOnboarded: (operatorOrgId: string, operatorUserId?: string) => Promise<void>;
@@ -91,15 +93,16 @@ export async function runCreateFromPaste(input: RunPasteInput): Promise<RunPaste
         return;
       }
 
-      // 4. BYOK precondition
-      if (!input.sessionUser.primaryOrgId) {
-        sse.error(412, { reason: "needs_byok", message: "Add your Anthropic API key to extract business facts." });
-        sse.close();
-        return;
-      }
-      const byok = await input.deps.getOperatorByokAnthropicKey(input.sessionUser.primaryOrgId);
-      if (!byok) {
-        sse.error(412, { reason: "needs_byok", message: "Add your Anthropic API key to extract business facts." });
+      // 4. Resolve the extraction key — MANAGED AI for all paid tiers.
+      //    The old BYOK 412 gate is gone (see run-create-from-url for the
+      //    full rationale). Operator BYOK if present, else platform key;
+      //    only a total absence blocks, as a non-BYOK error.
+      const extraction = await input.deps.resolveExtractionKey(input.sessionUser.primaryOrgId);
+      if (!extraction) {
+        sse.error(503, {
+          reason: "extraction_unavailable",
+          message: "Managed AI is temporarily unavailable. Please try again shortly.",
+        });
         sse.close();
         return;
       }
@@ -110,7 +113,7 @@ export async function runCreateFromPaste(input: RunPasteInput): Promise<RunPaste
       sse.emit("fetching", { source: "paste" });
       let facts: ExtractedBusinessFacts;
       try {
-        facts = await input.deps.extractBusinessFactsFromPaste({ pastedText, byokKey: byok.key });
+        facts = await input.deps.extractBusinessFactsFromPaste({ pastedText, byokKey: extraction.key });
       } catch (err: unknown) {
         const reason = (err as { reason?: string }).reason ?? "extraction_failed";
         sse.error(422, { reason });
@@ -233,7 +236,7 @@ export async function runCreateFromPaste(input: RunPasteInput): Promise<RunPaste
         const r1Result = await runR1LandingStep({
           workspaceId: result.workspace_id,
           facts,
-          byokKey: byok.key,
+          byokKey: extraction.key,
         });
         if (r1Result.ok) {
           sse.emit("landing_built", { workspaceId: result.workspace_id });

@@ -3,8 +3,13 @@ import assert from "node:assert/strict";
 
 import { FEATURE_FLAGS, FEATURE_TIERS, tierMeetsMinimum, type FeatureFlag } from "../../../src/lib/billing/feature-flags";
 
+// 2026-06-18 pricing migration — minimum-tier map rewritten for the
+// builder / workspace / agency ladder. Builder unlocks own
+// domain+branding; Workspace adds the client portal + AI agents;
+// Agency adds the white-label portal + priority support.
+
 describe("FEATURE_FLAGS enum", () => {
-  test("exports exactly the 6 flags from the Cut B spec", () => {
+  test("exports exactly the 6 flags", () => {
     assert.deepEqual(
       [...FEATURE_FLAGS].sort(),
       [
@@ -20,45 +25,52 @@ describe("FEATURE_FLAGS enum", () => {
 });
 
 describe("FEATURE_TIERS map", () => {
-  test("Growth+ unlocks branding_hidden, custom_domain, client_portal", () => {
-    assert.equal(FEATURE_TIERS.branding_hidden, "growth");
-    assert.equal(FEATURE_TIERS.custom_domain, "growth");
-    assert.equal(FEATURE_TIERS.client_portal, "growth");
+  test("builder unlocks branding_hidden + custom_domain", () => {
+    assert.equal(FEATURE_TIERS.branding_hidden, "builder");
+    assert.equal(FEATURE_TIERS.custom_domain, "builder");
   });
 
-  test("Scale-only unlocks ai_agents, white_label_portal, priority_support", () => {
-    assert.equal(FEATURE_TIERS.ai_agents, "scale");
-    assert.equal(FEATURE_TIERS.white_label_portal, "scale");
-    assert.equal(FEATURE_TIERS.priority_support, "scale");
+  test("workspace unlocks client_portal + ai_agents", () => {
+    assert.equal(FEATURE_TIERS.client_portal, "workspace");
+    assert.equal(FEATURE_TIERS.ai_agents, "workspace");
+  });
+
+  test("agency unlocks white_label_portal + priority_support", () => {
+    assert.equal(FEATURE_TIERS.white_label_portal, "agency");
+    assert.equal(FEATURE_TIERS.priority_support, "agency");
   });
 
   test("every FeatureFlag has a tier entry (exhaustive)", () => {
+    const valid = new Set(["builder", "workspace", "agency"]);
     for (const flag of FEATURE_FLAGS) {
-      const tier: "growth" | "scale" = FEATURE_TIERS[flag as FeatureFlag];
-      assert.ok(tier === "growth" || tier === "scale", `${flag} must map to growth or scale`);
+      const tier = FEATURE_TIERS[flag as FeatureFlag];
+      assert.ok(valid.has(tier), `${flag} must map to a known tier`);
     }
   });
 });
 
 describe("tierMeetsMinimum", () => {
-  test("scale meets growth and scale", () => {
-    assert.equal(tierMeetsMinimum("scale", "growth"), true);
-    assert.equal(tierMeetsMinimum("scale", "scale"), true);
+  test("agency meets workspace and agency", () => {
+    assert.equal(tierMeetsMinimum("agency", "workspace"), true);
+    assert.equal(tierMeetsMinimum("agency", "agency"), true);
   });
 
-  test("growth meets growth but not scale", () => {
-    assert.equal(tierMeetsMinimum("growth", "growth"), true);
-    assert.equal(tierMeetsMinimum("growth", "scale"), false);
+  test("workspace meets workspace + builder but not agency", () => {
+    assert.equal(tierMeetsMinimum("workspace", "workspace"), true);
+    assert.equal(tierMeetsMinimum("workspace", "builder"), true);
+    assert.equal(tierMeetsMinimum("workspace", "agency"), false);
   });
 
-  test("free meets nothing", () => {
-    assert.equal(tierMeetsMinimum("free", "growth"), false);
-    assert.equal(tierMeetsMinimum("free", "scale"), false);
+  test("builder meets builder but not workspace", () => {
+    assert.equal(tierMeetsMinimum("builder", "builder"), true);
+    assert.equal(tierMeetsMinimum("builder", "workspace"), false);
+    assert.equal(tierMeetsMinimum("builder", "agency"), false);
   });
 
-  test("unknown / null / undefined tier falls back to free", () => {
-    assert.equal(tierMeetsMinimum(null, "growth"), false);
-    assert.equal(tierMeetsMinimum(undefined, "growth"), false);
-    assert.equal(tierMeetsMinimum("starter", "growth"), false);
+  test("inactive / free / unknown meets nothing", () => {
+    assert.equal(tierMeetsMinimum("inactive", "builder"), false);
+    assert.equal(tierMeetsMinimum("free", "builder"), false);
+    assert.equal(tierMeetsMinimum(null, "workspace"), false);
+    assert.equal(tierMeetsMinimum(undefined, "workspace"), false);
   });
 });
