@@ -130,6 +130,22 @@ export const PHASE0_GREETING_INSTRUCTIONS =
   "unhurried. If the caller says goodbye, thank them warmly and end the call.";
 
 /**
+ * Accept-time instructions. The model must NOT greet at /accept: the call's
+ * per-agent voice (e.g. Cedar) and the per-workspace persona are only applied
+ * later over the control WS (session.update sets audio.output.voice + the real
+ * persona, then a single response.create delivers the greeting). A greeting at
+ * /accept would therefore land in the WRONG voice AND collide with the WS
+ * greeting — the "double hello" operators reported. So we hold the model silent
+ * until the WS turn fires (within a moment of connect). Used ONLY at /accept;
+ * PHASE0_GREETING_INSTRUCTIONS stays the no-tools WS fallback persona.
+ */
+export const PHASE0_ACCEPT_INSTRUCTIONS =
+  "Do not speak yet. Stay completely silent and do not greet or respond to the " +
+  "caller. Your full persona and your greeting instruction arrive over the " +
+  "control channel within a moment of the call connecting — wait for them, then " +
+  "greet the caller exactly once.";
+
+/**
  * Safety cap on assistant turns. gpt-realtime-2 normally ends the call itself
  * when the caller says goodbye (via the persona instruction), but this is a
  * belt-and-suspenders ceiling so a stuck/looping call can't pin the function
@@ -210,7 +226,9 @@ export async function acceptCall(params: {
   const acceptBody = {
     type: "realtime" as const,
     model: VOICE_MODEL,
-    instructions: PHASE0_GREETING_INSTRUCTIONS,
+    // Silent at accept — greet once over the WS (in the right voice). See
+    // PHASE0_ACCEPT_INSTRUCTIONS for why this isn't the greeting persona.
+    instructions: PHASE0_ACCEPT_INSTRUCTIONS,
   };
 
   try {

@@ -20,7 +20,9 @@ import assert from "node:assert/strict";
 
 import {
   runVoiceCall,
+  acceptCall,
   PHASE0_GREETING_INSTRUCTIONS,
+  PHASE0_ACCEPT_INSTRUCTIONS,
   VOICE_SDR_INSTRUCTIONS,
   VOICE_TOOLS,
   VOICE_AUDIO_OUTPUT_VOICE,
@@ -38,6 +40,40 @@ const TOOL_CTX: ToolExecuteContext = {
   conversationId: "conv-1",
   testMode: false,
 };
+
+// ─── acceptCall ──────────────────────────────────────────────────────────────
+// The /accept HTTP body sets the model's persona until the control WS lands.
+// It MUST keep the model SILENT: the call's per-agent voice + persona are only
+// applied over the WS, so any greeting at /accept is in the wrong voice AND
+// collides with the WS greeting — the "double hello" operators reported. DI a
+// fake fetch and assert the accept body uses the silent instruction.
+
+describe("acceptCall", () => {
+  test("holds the model silent at /accept (not the greeting persona) — prevents the double-hello", async () => {
+    let capturedBody: unknown = null;
+    const fakeFetch = (async (_url: string, init?: { body?: string }) => {
+      capturedBody = init?.body ? JSON.parse(init.body) : null;
+      return new Response("{}", { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const res = await acceptCall({
+      callId: "rtc_test",
+      apiKey: "sk-test",
+      fetchImpl: fakeFetch,
+    });
+
+    assert.equal(res.ok, true);
+    const body = capturedBody as { type?: string; instructions?: string } | null;
+    assert.ok(body, "accept must POST a body");
+    assert.equal(body.type, "realtime");
+    assert.equal(body.instructions, PHASE0_ACCEPT_INSTRUCTIONS);
+    assert.notEqual(
+      body.instructions,
+      PHASE0_GREETING_INSTRUCTIONS,
+      "accept must NOT use the greeting persona (causes the wrong-voice double-hello)",
+    );
+  });
+});
 
 // ─── Fake control socket ─────────────────────────────────────────────────────
 // Records the ctor (url + options), captures addEventListener / .on handlers so
