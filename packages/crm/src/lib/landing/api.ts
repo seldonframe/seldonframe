@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import { landingPages, organizations } from "@/db/schema";
 import { emitSeldonEvent } from "@/lib/events/bus";
+import { syncWorkspaceBillingForChild } from "@/lib/billing/workspace-billing";
 import {
   validatePuckPayload,
   type PuckPayload,
@@ -216,6 +217,11 @@ export async function publishLandingPageFromApi(params: {
   } else {
     await emitSeldonEvent("landing.unpublished", { pageId: row.id, orgId: params.orgId }, { orgId: params.orgId });
   }
+
+  // Phase 4 — per-active-workspace billing. (Un)publishing can flip this
+  // workspace's "active" status for its parent agency's overage count.
+  // Best-effort fire-and-forget; nightly reconcile cron is the safety net.
+  void syncWorkspaceBillingForChild(params.orgId);
 
   return { ok: true as const, page: row };
 }

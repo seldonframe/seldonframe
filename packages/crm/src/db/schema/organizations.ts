@@ -65,6 +65,11 @@ export type OrganizationSubscription = {
    *  so Phase 4 can update its quantity = max(0, activeWorkspaces −
    *  includedWorkspaces) without re-scanning the subscription. */
   stripeWorkspaceItemId?: string | null;
+  /** Agency only — the quantity last pushed to the overage
+   *  subscription-item (Phase 4). Lets syncAgencyWorkspaceQuantity skip
+   *  the Stripe round-trip when the active-workspace count hasn't moved,
+   *  so the nightly reconcile is a no-op in steady state. */
+  stripeWorkspaceItemQuantity?: number | null;
   /** Agency only — number of client workspaces included in the base
    *  price before the overage item is billed. Defaults to 10. */
   includedWorkspaces?: number;

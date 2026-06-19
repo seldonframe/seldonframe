@@ -4,6 +4,10 @@ import { db } from "@/db";
 import { organizations, users } from "@/db/schema";
 import { resolveV1Identity } from "@/lib/auth/v1-identity";
 import { listManagedOrganizations } from "@/lib/billing/orgs";
+import {
+  resolveParentAgencyOrgId,
+  syncAgencyWorkspaceQuantity,
+} from "@/lib/billing/workspace-billing";
 import { demoApiBlockedResponse, isDemoReadonly } from "@/lib/demo/server";
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -53,6 +57,12 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     return NextResponse.json({ error: "Workspace not found." }, { status: 404 });
   }
 
+  // Phase 4 — per-active-workspace billing. Resolve the parent agency
+  // org BEFORE the row is hard-deleted (afterward parent_agency_id is
+  // gone). We re-sync the agency's overage quantity after the delete so
+  // an archived/deleted client workspace stops counting toward billing.
+  const parentAgencyOrgId = await resolveParentAgencyOrgId(targetOrgId).catch(() => null);
+
   const [deleted] = await db
     .delete(organizations)
     .where(and(eq(organizations.id, targetOrgId)))
@@ -64,6 +74,12 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
 
   if (!deleted) {
     return NextResponse.json({ error: "Workspace not found." }, { status: 404 });
+  }
+
+  // Best-effort fire-and-forget: never block the delete response on the
+  // Stripe sync. The nightly reconcile cron corrects any drift.
+  if (parentAgencyOrgId) {
+    void syncAgencyWorkspaceQuantity(parentAgencyOrgId);
   }
 
   return NextResponse.json({

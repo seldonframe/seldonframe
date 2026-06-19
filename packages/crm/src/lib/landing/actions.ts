@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import { contacts, landingPages, organizations } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
+import { syncWorkspaceBillingForChild } from "@/lib/billing/workspace-billing";
 import { assertWritable } from "@/lib/demo/server";
 import { emitSeldonEvent } from "@/lib/events/bus";
 import { sectionsToHTML } from "@/lib/landing/section-to-html";
@@ -335,6 +336,12 @@ export async function publishLandingPageAction(pageId: string, published: boolea
       orgId,
     }, { orgId });
   }
+
+  // Phase 4 — per-active-workspace billing. Publishing (or unpublishing)
+  // a landing page can flip this workspace's "active" status for its
+  // parent agency's overage count. Best-effort + fire-and-forget: never
+  // blocks or fails the publish; the nightly reconcile cron is the net.
+  void syncWorkspaceBillingForChild(orgId);
 }
 
 export async function getPublicLandingPage(orgSlug: string, slug: string) {
