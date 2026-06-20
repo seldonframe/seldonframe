@@ -20,11 +20,13 @@ import type { LandingSection } from "@/lib/landing/types";
 // workspaces that have no _r1 row (all existing production workspaces).
 import { loadLandingPayload } from "@/lib/landing/r1-save";
 import { rewriteR1Hrefs } from "@/lib/landing/r1-rewrite-hrefs";
+import { joinFooterAddress } from "@/lib/landing/map-embed";
 import { buildWorkspaceUrls } from "@/lib/billing/anonymous-workspace";
 import { Hero } from "@/components/landing-r1/sections/hero";
 import { ServicesGrid } from "@/components/landing-r1/sections/services-grid";
 import { Testimonials } from "@/components/landing-r1/sections/testimonials";
 import { Faq } from "@/components/landing-r1/sections/faq";
+import { MapSection } from "@/components/landing-r1/sections/map";
 import { LeadFormSection } from "@/components/landing-r1/sections/lead-form";
 import { Footer } from "@/components/landing-r1/sections/footer";
 import { EmergencyStrip } from "@/components/landing-r1/chrome/emergency-strip";
@@ -172,6 +174,7 @@ export default async function PublicSPage({ params }: PageProps) {
             orgSlug={orgSlug}
             businessName={payload.hero.businessName}
             leadForm={payload.leadForm}
+            address={joinFooterAddress(payload.footer.address)}
           />
           <Footer {...payload.footer} />
           {r1ChatbotEmbed && <ChatbotEmbedScript embedUrl={r1ChatbotEmbed.embedUrl} />}
@@ -222,6 +225,7 @@ export default async function PublicSPage({ params }: PageProps) {
           <ServicesGrid {...payload.services} serviceBaseHref={serviceBaseHref} />
           <Testimonials {...payload.testimonials} />
           <Faq {...payload.faq} />
+          <MapSection address={joinFooterAddress(payload.footer.address)} archetype={payload.hero.archetype} heading="Where we work" />
           {payload.leadForm?.enabled && (
             <LeadFormSection
               orgSlug={orgSlug}

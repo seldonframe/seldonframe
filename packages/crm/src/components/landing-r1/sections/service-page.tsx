@@ -19,6 +19,7 @@ import { ARCHETYPES, type AestheticArchetypeId } from "../archetypes";
 import { telHref } from "../_shared/phone";
 import { Testimonials } from "./testimonials";
 import { LeadFormCard } from "./lead-form";
+import { MapSection } from "./map";
 import type { ServicePage } from "@/lib/landing/r1-site-tree";
 import type { R1LeadFormSection } from "@/lib/landing/r1-payload-prompt";
 
@@ -32,6 +33,7 @@ export type ServicePageTemplateProps = {
   orgSlug: string;
   businessName: string;
   leadForm?: R1LeadFormSection;
+  address?: string | null;
 };
 
 export function ServicePageTemplate({
@@ -42,6 +44,7 @@ export function ServicePageTemplate({
   orgSlug,
   businessName,
   leadForm,
+  address,
 }: ServicePageTemplateProps) {
   const arch = ARCHETYPES[archetype];
   const hasTestimonials = Array.isArray(service.testimonials) && service.testimonials.length > 0;
@@ -120,12 +123,7 @@ export function ServicePageTemplate({
         </div>
       </section>
 
-      {/* P2 mount point: the Google Maps embed renders here. */}
-      <section className="sf-service-map">
-        <div className="container">
-          <div data-slot="map" className="slot slot-map" aria-hidden="true" />
-        </div>
-      </section>
+      <MapSection address={address} archetype={archetype} />
 
       <ServicePageStyles />
     </main>
@@ -231,14 +229,6 @@ function ServicePageStyles() {
         font-size: 22px; margin-bottom: 4px; letter-spacing: -0.015em;
       }
       .cta-text span { color: rgba(255,255,255,0.82); font-size: 15px; }
-
-      /* Map */
-      .sf-service-map { padding: 0 0 64px; }
-      .slot-map {
-        width: 100%; aspect-ratio: 16 / 7; min-height: 220px;
-        border-radius: 14px; border: 1px dashed color-mix(in oklab, var(--text) 24%, transparent);
-        background: var(--surface);
-      }
 
       @media (prefers-reduced-motion: reduce) {
         .btn { transition: none; }

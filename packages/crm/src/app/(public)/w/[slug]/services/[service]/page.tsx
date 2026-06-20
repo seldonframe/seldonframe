@@ -16,6 +16,7 @@ import { ChatbotEmbedScript } from "@/components/landing/chatbot-script";
 
 import { loadLandingPayload } from "@/lib/landing/r1-save";
 import { rewriteR1Hrefs } from "@/lib/landing/r1-rewrite-hrefs";
+import { joinFooterAddress } from "@/lib/landing/map-embed";
 import { findServicePage, getServicePages } from "@/lib/landing/r1-site-tree";
 import { buildWorkspaceUrls } from "@/lib/billing/anonymous-workspace";
 import { getPublicChatbotEmbed } from "@/lib/agents/public-embed";
@@ -101,6 +102,7 @@ export default async function WorkspaceServicePage({ params }: PageProps) {
         orgSlug={slug}
         businessName={payload.hero.businessName}
         leadForm={payload.leadForm}
+        address={joinFooterAddress(payload.footer.address)}
       />
       <Footer {...payload.footer} />
       {chatbotEmbed && <ChatbotEmbedScript embedUrl={chatbotEmbed.embedUrl} />}
