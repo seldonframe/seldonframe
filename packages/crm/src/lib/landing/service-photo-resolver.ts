@@ -17,21 +17,17 @@ export type StockResolver = (
 // Adapter over the existing Unsplash hero resolver.
 // resolveHeroImage returns ResolvedUnsplashImage | null, where:
 //   .url         — the CDN URL (already HD, 1600×900 params applied)
-//   .attribution — { photographer_name, photographer_username, photographer_url, photo_id }
-// There is no .alt on ResolvedUnsplashImage; we derive a usable alt from
-// photographer_name so callers downstream get attribution-quality alt text.
+//   .attribution — { photographer_name, ... } for a VISIBLE photo credit/link
+// ResolvedUnsplashImage carries no descriptive alt, so we leave `alt` undefined
+// and let resolveServicePhoto supply a descriptive fallback ("<service> —
+// <business>"). Attribution is NOT alt text — it belongs in a visible credit.
 const defaultStock: StockResolver = async (query, ctx) => {
   const img = await resolveHeroImage(query, {
     archetype: ctx.archetype,
     businessName: ctx.businessName,
   });
   if (!img) return null;
-  return {
-    url: img.url,
-    alt: img.attribution.photographer_name
-      ? `Photo by ${img.attribution.photographer_name} on Unsplash`
-      : undefined,
-  };
+  return { url: img.url, alt: undefined };
 };
 
 export async function resolveServicePhoto(input: {
