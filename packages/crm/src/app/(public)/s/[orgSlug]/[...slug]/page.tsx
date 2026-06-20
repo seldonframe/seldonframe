@@ -169,6 +169,9 @@ export default async function PublicSPage({ params }: PageProps) {
             service={servicePage}
             phone={payload.footer.phone}
             ctaHref={workspaceUrls.book}
+            orgSlug={orgSlug}
+            businessName={payload.hero.businessName}
+            leadForm={payload.leadForm}
           />
           <Footer {...payload.footer} />
           {r1ChatbotEmbed && <ChatbotEmbedScript embedUrl={r1ChatbotEmbed.embedUrl} />}

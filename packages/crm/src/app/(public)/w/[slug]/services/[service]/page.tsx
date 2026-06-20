@@ -98,6 +98,9 @@ export default async function WorkspaceServicePage({ params }: PageProps) {
         service={page}
         phone={payload.footer.phone}
         ctaHref={workspaceUrls.book}
+        orgSlug={slug}
+        businessName={payload.hero.businessName}
+        leadForm={payload.leadForm}
       />
       <Footer {...payload.footer} />
       {chatbotEmbed && <ChatbotEmbedScript embedUrl={chatbotEmbed.embedUrl} />}

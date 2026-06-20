@@ -18,7 +18,9 @@ import { Phone } from "lucide-react";
 import { ARCHETYPES, type AestheticArchetypeId } from "../archetypes";
 import { telHref } from "../_shared/phone";
 import { Testimonials } from "./testimonials";
+import { LeadFormCard } from "./lead-form";
 import type { ServicePage } from "@/lib/landing/r1-site-tree";
+import type { R1LeadFormSection } from "@/lib/landing/r1-payload-prompt";
 
 export type ServicePageTemplateProps = {
   archetype: AestheticArchetypeId;
@@ -27,6 +29,9 @@ export type ServicePageTemplateProps = {
   phone: string;
   /** Where the CTA buttons point (workspace-scoped, e.g. the booking URL). */
   ctaHref: string;
+  orgSlug: string;
+  businessName: string;
+  leadForm?: R1LeadFormSection;
 };
 
 export function ServicePageTemplate({
@@ -34,6 +39,9 @@ export function ServicePageTemplate({
   service,
   phone,
   ctaHref,
+  orgSlug,
+  businessName,
+  leadForm,
 }: ServicePageTemplateProps) {
   const arch = ARCHETYPES[archetype];
   const hasTestimonials = Array.isArray(service.testimonials) && service.testimonials.length > 0;
@@ -59,8 +67,11 @@ export function ServicePageTemplate({
                 {phone}
               </a>
             </div>
-            {/* P2 mount point: the intake form renders here on the service hero. */}
-            <div data-slot="intake" className="slot slot-intake" aria-hidden="true" />
+            {leadForm?.enabled && orgSlug ? (
+              <div data-slot="intake" className="slot-intake-live">
+                <LeadFormCard orgSlug={orgSlug} businessName={businessName} leadForm={leadForm} />
+              </div>
+            ) : null}
           </div>
           <div className="hero-media">
             {service.heroPhoto ? (
@@ -175,11 +186,7 @@ function ServicePageStyles() {
       }
       .btn-ghost:hover { border-color: var(--primary); color: var(--primary); }
 
-      .slot-intake {
-        margin-top: 28px; min-height: 64px;
-        border: 1px dashed color-mix(in oklab, var(--text) 24%, transparent);
-        border-radius: 10px;
-      }
+      .slot-intake-live { margin-top: 28px; }
 
       .hero-media img,
       .hero-media-ph {
