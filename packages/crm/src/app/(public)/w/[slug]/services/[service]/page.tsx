@@ -25,10 +25,11 @@ type PageProps = {
   params: Promise<{ slug: string; service: string }>;
 };
 
-// On-demand: services are generated per workspace; do not prebuild any.
-export function generateStaticParams(): { slug: string; service: string }[] {
-  return [];
-}
+// Per-workspace, DB-backed payload — must render dynamically per request, like
+// the home route (/w/[slug]). A `generateStaticParams` here opted the route into
+// static generation, which threw DYNAMIC_SERVER_USAGE at request time because the
+// page reads request-scoped data (loadLandingPayload / getPublicChatbotEmbed).
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug, service } = await params;
