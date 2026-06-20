@@ -39,7 +39,7 @@ export const dynamic = "force-dynamic";
 // GET: EventSource-compatible (browser EventSource only supports GET).
 //      Reads "text" as a query param.
 // POST: Programmatic callers — reads body.text as JSON.
-async function dispatchCreateFromPaste(text: unknown, landingTemplate?: unknown): Promise<Response> {
+async function dispatchCreateFromPaste(text: unknown, landingTemplate?: unknown, themeMode?: unknown): Promise<Response> {
   const session = await auth();
 
   const sessionUser = session?.user?.id
@@ -96,7 +96,11 @@ async function dispatchCreateFromPaste(text: unknown, landingTemplate?: unknown)
       seedDefaultOutboundTriggers,
       workspaceBaseDomain: process.env.WORKSPACE_BASE_DOMAIN ?? "app.seldonframe.com",
     },
-    body: { text, landingTemplate: typeof landingTemplate === "string" ? landingTemplate : undefined },
+    body: {
+      text,
+      landingTemplate: typeof landingTemplate === "string" ? landingTemplate : undefined,
+      themeMode: typeof themeMode === "string" ? themeMode : undefined,
+    },
     sessionUser,
   });
 
@@ -109,11 +113,14 @@ export async function GET(request: NextRequest): Promise<Response> {
   // cannot POST a body.
   const text = request.nextUrl.searchParams.get("text");
   const template = request.nextUrl.searchParams.get("template");
-  return dispatchCreateFromPaste(text, template);
+  // Operator's pre-build light/dark mode pick ("light" | "dark"; omitted /
+  // "auto" → resolveThemeMode picks by archetype default).
+  const mode = request.nextUrl.searchParams.get("mode") ?? undefined;
+  return dispatchCreateFromPaste(text, template, mode);
 }
 
 export async function POST(request: Request): Promise<Response> {
   // Programmatic JSON-body entry point.
-  const body = (await request.json().catch(() => ({}))) as { text?: unknown; template?: unknown };
-  return dispatchCreateFromPaste(body.text, body.template);
+  const body = (await request.json().catch(() => ({}))) as { text?: unknown; template?: unknown; mode?: unknown };
+  return dispatchCreateFromPaste(body.text, body.template, body.mode);
 }
