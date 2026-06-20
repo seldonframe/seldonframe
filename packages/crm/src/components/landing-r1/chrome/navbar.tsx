@@ -17,7 +17,7 @@
 
 "use client";
 
-import { ARCHETYPES, archetypeStyle, type AestheticArchetypeId } from "../archetypes";
+import { ARCHETYPES, type AestheticArchetypeId } from "../archetypes";
 import { telHref } from "../_shared/phone";
 
 const ARCHETYPES_WITHOUT_NAVBAR: AestheticArchetypeId[] = [
@@ -89,7 +89,6 @@ export function Navbar({
     <header
       role="banner"
       data-archetype={arch.id}
-      style={archetypeStyle(arch.id)}
       className="sf-navbar"
     >
       <div className="sf-navbar-inner">

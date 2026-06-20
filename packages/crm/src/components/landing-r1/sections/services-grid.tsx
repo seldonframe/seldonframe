@@ -12,7 +12,7 @@
 "use client";
 
 import { ArrowRight, Phone } from "lucide-react";
-import { ARCHETYPES, archetypeStyle, type AestheticArchetypeId } from "../archetypes";
+import { ARCHETYPES, type AestheticArchetypeId } from "../archetypes";
 import { telHref } from "../_shared/phone";
 import { StaggerGroup, StaggerItem, Reveal } from "../_shared/motion";
 import { serviceSlug } from "@/lib/landing/r1-site-tree";
@@ -85,7 +85,6 @@ export function ServicesGrid(props: ServicesGridProps) {
     <section
       data-archetype={arch.id}
       data-layout={layout}
-      style={archetypeStyle(arch.id)}
       className="sf-services"
       id="services"
     >

@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useReducedMotion } from "framer-motion";
-import { ARCHETYPES, archetypeStyle, type AestheticArchetypeId } from "../archetypes";
+import { ARCHETYPES, type AestheticArchetypeId } from "../archetypes";
 import { Reveal, CountUp } from "../_shared/motion";
 import { Stars } from "../_shared/stars";
 
@@ -83,7 +83,6 @@ export function Testimonials({
   return (
     <section
       data-archetype={arch.id}
-      style={archetypeStyle(arch.id)}
       className="sf-testimonials"
       id="testimonials"
     >

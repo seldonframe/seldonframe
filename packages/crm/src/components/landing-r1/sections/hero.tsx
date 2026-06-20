@@ -14,7 +14,7 @@
 
 import type { ReactNode } from "react";
 import { Phone, Calendar, ArrowRight, Zap } from "lucide-react";
-import { ARCHETYPES, archetypeStyle, type AestheticArchetypeId } from "../archetypes";
+import { ARCHETYPES, type AestheticArchetypeId } from "../archetypes";
 import { telHref } from "../_shared/phone";
 import { Reveal, CountUp } from "../_shared/motion";
 import { TrustBadge } from "../_shared/trust-badge";
@@ -47,7 +47,6 @@ export function Hero(props: HeroProps) {
   return (
     <section
       data-archetype={arch.id}
-      style={archetypeStyle(arch.id)}
       className="sf-hero"
     >
       {arch.heroVariant === "split-screen-50-50" && <HeroSplit {...props} />}

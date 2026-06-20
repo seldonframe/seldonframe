@@ -11,7 +11,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { ARCHETYPES, archetypeStyle, type AestheticArchetypeId } from "../archetypes";
+import { ARCHETYPES, type AestheticArchetypeId } from "../archetypes";
 import { submitLeadFormAction } from "@/lib/landing/lead-form-action";
 import type { R1LeadFormSection } from "@/lib/landing/r1-payload-prompt";
 
@@ -97,7 +97,6 @@ export function LeadFormSection({ orgSlug, businessName, archetype, leadForm }: 
     <section
       id="lead-form"
       data-archetype={arch.id}
-      style={archetypeStyle(arch.id)}
       className="sf-leadform"
       aria-label={`Contact ${businessName}`}
     >
