@@ -14,10 +14,60 @@ import {
 import type { ExtractedBusinessFacts } from "@/lib/web-onboarding/extraction-prompt";
 import { generateR1Payload } from "./r1-payload-generator";
 import { saveLandingPayload } from "./r1-save";
-import { inferVertical } from "./r1-payload-prompt";
+import { inferVertical, type R1LandingPayload, type R1LeadFormSection } from "./r1-payload-prompt";
 import { resolveThemeMode, type ThemeModeChoice } from "./theme-mode";
 import { generateServicePages } from "./service-pages-generator";
 import { validateSiteTree } from "./r1-site-tree";
+
+/**
+ * Pure helper — ensures every generated payload ships with an enabled lead form
+ * and hero intake form flag. The LLM prompt intentionally omits `leadForm` (it
+ * is a Speed-to-Lead surface managed deterministically server-side, not copy),
+ * so this function fills the gap before the payload is persisted.
+ *
+ * Rules:
+ *  • Preserves any leadForm content the LLM already produced (shouldn't happen,
+ *    but safe-by-default). Only fills missing fields and forces enabled = true.
+ *  • needOptions: derived from the grid service names so the select reflects the
+ *    real services on the site (R1LeadFormSection.needOptions is string[]).
+ *  • hero.leadFormInHero: always set to true. Safe across all archetypes — the
+ *    hero only renders the form in two-column variants (HeroSplit /
+ *    HeroLeftAsymmetric); other variants ignore the flag. The bottom
+ *    LeadFormSection always renders when leadForm.enabled is true.
+ *
+ * @param payload  The raw generated R1LandingPayload (mutated in-place + returned).
+ * @param services List of service names from payload.services.services (for needOptions).
+ * @returns The same payload reference with leadForm and hero.leadFormInHero set.
+ */
+export function withDefaultLeadForm(
+  payload: R1LandingPayload,
+  services: string[],
+): R1LandingPayload {
+  const existing: Partial<R1LeadFormSection> = payload.leadForm ?? {};
+
+  payload.leadForm = {
+    // LLM-supplied content is preserved; defaults fill any gaps.
+    heading: existing.heading ?? "Request a free quote",
+    subheading:
+      existing.subheading ??
+      "Tell us what you need — we'll get back to you within the hour.",
+    needLabel: existing.needLabel ?? "What do you need?",
+    // needOptions: use real service names when available; omit (text input) when empty.
+    ...(existing.needOptions
+      ? { needOptions: existing.needOptions }
+      : services.length > 0
+        ? { needOptions: services }
+        : {}),
+    ...(existing.consentText ? { consentText: existing.consentText } : {}),
+    // Force enabled last so it always wins regardless of what the LLM emitted.
+    enabled: true,
+  };
+
+  // Always enable the hero intake form column.
+  payload.hero = { ...payload.hero, leadFormInHero: true };
+
+  return payload;
+}
 
 export type R1LandingStepResult =
   | { ok: true; archetype: AestheticArchetypeId }
@@ -100,6 +150,15 @@ export async function runR1LandingStep(args: {
     // Step 5 (P4): Navbar booking CTA — rewriteR1Hrefs maps "/book" → the
     // workspace booking URL at render time (same as the hero CTA).
     payload.nav = { ...(payload.nav ?? {}), cta: { label: "Book now", href: "/book" } };
+
+    // Step 5b (P4.1): Ensure lead form is enabled and hero intake flag is set.
+    // The LLM prompt does not emit leadForm (Speed-to-Lead is a product surface,
+    // not copy). withDefaultLeadForm fills it deterministically from real service
+    // names so both the hero column and the bottom section render on every site.
+    withDefaultLeadForm(
+      payload,
+      payload.services.services.map((s) => s.name),
+    );
 
     // Step 6: Persist.
     await saveLandingPayload(workspaceId, payload, archetype);

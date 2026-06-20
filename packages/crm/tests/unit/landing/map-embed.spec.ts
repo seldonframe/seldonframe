@@ -1,7 +1,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import { mapEmbedUrl, joinFooterAddress } from "../../../src/lib/landing/map-embed";
+import { mapEmbedUrl, joinFooterAddress, resolveMapQuery } from "../../../src/lib/landing/map-embed";
 
 describe("joinFooterAddress", () => {
   test("joins line1/city/state/zip into one string", () => {
@@ -14,6 +14,33 @@ describe("joinFooterAddress", () => {
     assert.equal(joinFooterAddress({ line1: "123 Main St", city: "Beacon", state: "", zip: "" }), "123 Main St, Beacon");
     assert.equal(joinFooterAddress(undefined), "");
     assert.equal(joinFooterAddress(null), "");
+  });
+});
+
+describe("resolveMapQuery", () => {
+  test("returns the full street address when present", () => {
+    assert.equal(
+      resolveMapQuery({ address: { line1: "123 Main St", city: "Portland", state: "OR", zip: "97201" }, serviceAreas: ["Gresham"] }),
+      "123 Main St, Portland, OR 97201",
+    );
+  });
+  test("falls back to the primary service area when no street address", () => {
+    assert.equal(
+      resolveMapQuery({ address: null, serviceAreas: ["Gresham", "Troutdale"] }),
+      "Gresham",
+    );
+    assert.equal(
+      resolveMapQuery({ serviceAreas: ["Bend"] }),
+      "Bend",
+    );
+  });
+  test("returns empty string when neither address nor service areas are present", () => {
+    assert.equal(resolveMapQuery({}), "");
+    assert.equal(resolveMapQuery({ address: null, serviceAreas: [] }), "");
+    assert.equal(resolveMapQuery({ address: null, serviceAreas: null }), "");
+  });
+  test("ignores a blank service area string", () => {
+    assert.equal(resolveMapQuery({ address: null, serviceAreas: ["  "] }), "");
   });
 });
 

@@ -23,3 +23,26 @@ export function mapEmbedUrl(address: string | null | undefined): string | null {
   if (!q) return null;
   return `https://www.google.com/maps?q=${encodeURIComponent(q)}&output=embed`;
 }
+
+/**
+ * Best map query for a workspace footer:
+ * 1. The full street address when present.
+ * 2. The primary service-area city when there is no street address (so
+ *    service-area businesses still get a "where we serve" map).
+ * 3. Empty string when nothing usable exists (MapSection self-hides).
+ *
+ * Note: `state` is not a top-level footer field — it lives inside
+ * `address` — so it is only available when a street address is present
+ * (case 1). The service-area fallback (case 2) uses the city alone,
+ * which geocodes accurately in Google Maps.
+ */
+export function resolveMapQuery(footer: {
+  address?: FooterAddress;
+  serviceAreas?: string[] | null;
+}): string {
+  const fromAddress = joinFooterAddress(footer.address);
+  if (fromAddress) return fromAddress;
+  const primaryArea = (footer.serviceAreas ?? [])[0];
+  if (primaryArea && primaryArea.trim()) return primaryArea.trim();
+  return "";
+}
