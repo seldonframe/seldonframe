@@ -45,6 +45,9 @@ export type R1HeroSection = {
   emergencyService?: boolean;
   heroImage?: { src: string; alt: string };
   heroOverlay?: R1HeroOverlay;
+  /** P2: when true (and payload.leadForm.enabled), the hero renders the intake
+   *  form in its right column (desktop) / below the text (mobile). */
+  leadFormInHero?: boolean;
 };
 
 export type R1Service = {

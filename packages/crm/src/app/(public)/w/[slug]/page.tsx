@@ -226,7 +226,7 @@ export default async function WorkspaceLandingPage({ params }: PageProps) {
         homeHref={homeHref}
       />
       {payload.emergency && <EmergencyStrip {...payload.emergency} />}
-      <Hero {...payload.hero} />
+      <Hero {...payload.hero} orgSlug={slug} leadForm={payload.leadForm} />
       <ServicesGrid {...payload.services} serviceBaseHref={serviceBaseHref} />
       <Testimonials {...payload.testimonials} />
       <Faq {...payload.faq} />

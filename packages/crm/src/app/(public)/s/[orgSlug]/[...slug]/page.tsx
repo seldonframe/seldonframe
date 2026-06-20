@@ -215,7 +215,7 @@ export default async function PublicSPage({ params }: PageProps) {
             homeHref="/"
           />
           {payload.emergency && <EmergencyStrip {...payload.emergency} />}
-          <Hero {...payload.hero} />
+          <Hero {...payload.hero} orgSlug={orgSlug} leadForm={payload.leadForm} />
           <ServicesGrid {...payload.services} serviceBaseHref={serviceBaseHref} />
           <Testimonials {...payload.testimonials} />
           <Faq {...payload.faq} />
