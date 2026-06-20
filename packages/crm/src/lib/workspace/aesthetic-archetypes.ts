@@ -539,7 +539,7 @@ export const ARCHETYPES: Record<AestheticArchetypeId, AestheticArchetype> = {
       border: "#1e2a23",    // subtle dark-green divider
     },
     fonts: {
-      headline: "Outfit",   // copied verbatim from bold-urgency
+      headline: "Outfit",   // geometric weight reads bold against near-black; already in the Google Fonts allowlist
       body: "Geist",
     },
     dials: {
@@ -555,11 +555,11 @@ export const ARCHETYPES: Record<AestheticArchetypeId, AestheticArchetype> = {
       "warm tones",
       "pure black #000000",
       "Inter font",
-      "3-equal-card grids",
+      "3-equal-card horizontal grids",
     ],
     motionPreset: "balanced",
     voice: {
-      tone: "confident, crafted, understated",
+      tone: "confident, crafted, understated. Let the work fill the silence — every word earns its place.",
       pace: "measured",
       leanInto: ["craftsmanship", "materials", "portfolio"],
       avoid: ["hype", "discount language"],

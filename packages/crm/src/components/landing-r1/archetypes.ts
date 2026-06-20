@@ -236,7 +236,7 @@ export const ARCHETYPES: Record<AestheticArchetypeId, Archetype> = {
     heroVariant: "left-aligned-asymmetric",
     desktopStickyCTA: false,
     motionPreset: "balanced",
-    bannedHere: ["light/cream backgrounds", "warm tones", "pure black #000000", "Inter font", "3-equal-card grids"],
+    bannedHere: ["light/cream backgrounds", "warm tones", "pure black #000000", "Inter font", "3-equal-card horizontal grids"],
     voice: {
       tone: "confident, crafted, understated",
       pace: "measured",
