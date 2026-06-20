@@ -41,7 +41,8 @@ export type AestheticArchetypeId =
   | "cinematic-aspirational"
   | "technical-restrained"
   | "soft-residential"
-  | "brutalist";
+  | "brutalist"
+  | "midnight-craft";
 
 export interface AestheticArchetype {
   id: AestheticArchetypeId;
@@ -129,6 +130,11 @@ export interface AestheticArchetype {
    *  generic stock-photo filler. Picked deterministically by
    *  hash(business_name) % len so regenerate gives the same fallback. */
   fallbackImageQueries: string[];
+  /** v1.56.0 — Default color-scheme mode for workspaces using this archetype.
+   *  "light" is the default for all existing archetypes; "midnight-craft" is
+   *  the first "dark" archetype. Used by resolveThemeMode to seed the initial
+   *  theme.mode before the operator overrides it. */
+  defaultThemeMode: "light" | "dark";
 }
 
 export const ARCHETYPES: Record<AestheticArchetypeId, AestheticArchetype> = {
@@ -184,6 +190,7 @@ export const ARCHETYPES: Record<AestheticArchetypeId, AestheticArchetype> = {
       "warm restoration project",
       "craft detail",
     ],
+    defaultThemeMode: "light",
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -237,6 +244,7 @@ export const ARCHETYPES: Record<AestheticArchetypeId, AestheticArchetype> = {
       "uniform worker",
       "trade professional",
     ],
+    defaultThemeMode: "light",
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -291,6 +299,7 @@ export const ARCHETYPES: Record<AestheticArchetypeId, AestheticArchetype> = {
       "law firm interior",
       "professional handshake",
     ],
+    defaultThemeMode: "light",
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -347,6 +356,7 @@ export const ARCHETYPES: Record<AestheticArchetypeId, AestheticArchetype> = {
       "spa relaxation",
       "aesthetic beauty",
     ],
+    defaultThemeMode: "light",
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -407,6 +417,7 @@ export const ARCHETYPES: Record<AestheticArchetypeId, AestheticArchetype> = {
       "tech workspace",
       "professional collaboration",
     ],
+    defaultThemeMode: "light",
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -459,6 +470,7 @@ export const ARCHETYPES: Record<AestheticArchetypeId, AestheticArchetype> = {
       "pet grooming",
       "homeowner happy",
     ],
+    defaultThemeMode: "light",
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -511,6 +523,53 @@ export const ARCHETYPES: Record<AestheticArchetypeId, AestheticArchetype> = {
       "modern sculpture",
       "design exhibit",
     ],
+    defaultThemeMode: "light",
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  "midnight-craft": {
+    id: "midnight-craft",
+    label: "Midnight craft — near-black, emerald accent",
+    fits: "Premium trades, design-build remodelers, and studios that want a bold dark site.",
+    palette: {
+      primary: "#34d399",   // emerald-400, sat ~70%, not neon
+      secondary: "#10b981", // emerald-500, supporting accent
+      background: "#0d100e", // near-black green tint
+      text: "#f2f5f3",      // near-white, never #fff
+      border: "#1e2a23",    // subtle dark-green divider
+    },
+    fonts: {
+      headline: "Outfit",   // copied verbatim from bold-urgency
+      body: "Geist",
+    },
+    dials: {
+      designVariance: 7,
+      motionIntensity: 6,
+      visualDensity: 5,
+    },
+    heroVariant: "left-aligned-asymmetric",
+    defaultTemplate: "",
+    desktopStickyCTA: false,
+    bannedHere: [
+      "light/cream backgrounds",
+      "warm tones",
+      "pure black #000000",
+      "Inter font",
+      "3-equal-card grids",
+    ],
+    motionPreset: "balanced",
+    voice: {
+      tone: "confident, crafted, understated",
+      pace: "measured",
+      leanInto: ["craftsmanship", "materials", "portfolio"],
+      avoid: ["hype", "discount language"],
+    },
+    fallbackImageQueries: [
+      "dark modern kitchen remodel",
+      "moody craftsman interior",
+      "architectural detail low light",
+    ],
+    defaultThemeMode: "dark",
   },
 };
 
@@ -579,6 +638,14 @@ export function classifyArchetype(input: ArchetypeClassifierInput): AestheticArc
       return "editorial-warm";
     }
     return "bold-urgency";
+  }
+
+  // Midnight-craft override — premium/dark-leaning trades + studios that
+  // specifically signal luxury-tier craftsmanship or architectural work.
+  // Conservative regex: must match a strong premium signal to avoid
+  // capturing plain craft trades that belong in editorial-warm.
+  if (/\b(luxury|high[- ]end|premium|design[- ]build|bespoke|custom home|architect|studio)\b/i.test(desc)) {
+    return "midnight-craft";
   }
 
   // Catch-all. editorial-warm is the safest "looks great by default" pick

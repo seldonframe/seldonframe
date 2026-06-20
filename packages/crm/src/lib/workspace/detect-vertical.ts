@@ -463,4 +463,5 @@ export const ARCHETYPE_LABELS: Record<AestheticArchetypeId, string> = {
   "soft-residential": "Soft residential",
   "editorial-warm": "Editorial warm",
   brutalist: "Brutalist",
+  "midnight-craft": "Midnight craft",
 };
