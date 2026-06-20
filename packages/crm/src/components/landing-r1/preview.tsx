@@ -19,7 +19,7 @@ import { stocktonFixture } from "./fixtures/bold-urgency-stockton";
 export default function LandingPreview() {
   const f = stocktonFixture;
   return (
-    <SiteShell archetype={f.archetype} mode="light">
+    <SiteShell archetype={f.hero.archetype} mode="light">
       <Hero {...f.hero} />
       <ServicesGrid {...f.services} />
       <Testimonials {...f.testimonials} />
