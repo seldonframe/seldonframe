@@ -151,9 +151,6 @@ function ServiceCard({ service, baseHref }: { service: Service; baseHref?: strin
             loading="lazy"
           />
         ) : null}
-        <span className="icon-tile" aria-hidden>
-          {service.icon ?? <DefaultGlyph />}
-        </span>
         {!service.photo && (
           <span className="ph-label">photo · {service.name.toLowerCase()}</span>
         )}
@@ -167,16 +164,6 @@ function ServiceCard({ service, baseHref }: { service: Service; baseHref?: strin
         </a>
       </div>
     </article>
-  );
-}
-
-function DefaultGlyph() {
-  // Minimal generic icon — Lucide Wrench style.
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
-    </svg>
   );
 }
 
@@ -333,14 +320,6 @@ function ServicesStyles() {
         border: 1px solid var(--border);
       }
 
-      :global(.icon-tile) {
-        position: absolute; top: 14px; right: 14px;
-        width: 38px; height: 38px;
-        display: inline-flex; align-items: center; justify-content: center;
-        background: var(--primary); color: var(--primary-ink, #fff);
-        border-radius: var(--radius-sm, 6px);
-        box-shadow: 0 4px 10px color-mix(in oklab, var(--primary) 25%, transparent);
-      }
 
       :global(.card .body) { display: flex; flex-direction: column; gap: 8px; flex: 1; }
       :global(.card h3) {
