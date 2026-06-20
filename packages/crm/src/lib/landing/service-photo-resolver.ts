@@ -4,7 +4,7 @@
 // an injectable seam so the generator's unit tests stay offline + deterministic.
 
 import { resolveHeroImage } from "@/lib/crm/personality-images";
-import { upscaleCdnImageUrl, isLowResImageUrl } from "./service-photo";
+import { upscaleCdnImageUrl, isLowResImageUrl, isNonPhotoAsset } from "./service-photo";
 import type { AestheticArchetypeId } from "@/components/landing-r1/archetypes";
 
 export type ServicePhoto = { src: string; alt: string };
@@ -40,8 +40,11 @@ export async function resolveServicePhoto(input: {
   stock?: StockResolver; // DI seam (tests inject a fake)
 }): Promise<ServicePhoto | null> {
   const real = (input.realSrc ?? "").trim();
-  // Prefer real when present AND not a tiny thumbnail.
-  if (real && !isLowResImageUrl(real)) {
+  // A "usable photo" is present, not a tiny thumbnail, and not a non-photo asset
+  // (icon, logo, sprite, favicon, badge, or SVG). Icons/logos scraped into photo
+  // fields must NOT block the HD Unsplash fallback.
+  const realIsUsablePhoto = real && !isLowResImageUrl(real) && !isNonPhotoAsset(real);
+  if (realIsUsablePhoto) {
     return { src: upscaleCdnImageUrl(real), alt: input.realAlt?.trim() || input.serviceName };
   }
   // Fallback: HD stock keyed to service + vertical (graceful null on failure/rate-limit).
@@ -55,6 +58,11 @@ export async function resolveServicePhoto(input: {
   } catch {
     /* rate-limited / network — degrade */
   }
-  // Last resort: an upscaled real (even if small) beats nothing; else null (placeholder).
-  return real ? { src: upscaleCdnImageUrl(real), alt: input.realAlt?.trim() || input.serviceName } : null;
+  // Last resort: a low-res-but-real PHOTO is better than nothing.
+  // But if the real URL is an icon/logo/SVG, returning it would be worse than a
+  // placeholder — return null so the renderer can show a clean empty state.
+  if (real && !isNonPhotoAsset(real)) {
+    return { src: upscaleCdnImageUrl(real), alt: input.realAlt?.trim() || input.serviceName };
+  }
+  return null;
 }
