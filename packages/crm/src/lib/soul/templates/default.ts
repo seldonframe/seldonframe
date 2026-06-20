@@ -2,7 +2,7 @@ import type { OrgSoul } from "@/lib/soul/types";
 
 export const defaultSoulTemplate: Partial<OrgSoul> = {
   entityLabels: {
-    contact: { singular: "Client", plural: "Clients" },
+    contact: { singular: "Customer", plural: "Customers" },
     deal: { singular: "Deal", plural: "Deals" },
     activity: { singular: "Activity", plural: "Activities" },
     pipeline: { singular: "Pipeline", plural: "Pipelines" },

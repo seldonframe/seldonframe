@@ -22,7 +22,7 @@ import type { NavGroup } from "../../../src/components/layout/sidebar-nav";
 // ---------------------------------------------------------------------
 
 const LABELS = {
-  contact: { singular: "Contact", plural: "Contacts" },
+  contact: { singular: "Customer", plural: "Customers" },
   deal: { singular: "Deal", plural: "Deals" },
   intakeForm: { singular: "Intake Form", plural: "Intake Forms" },
 };

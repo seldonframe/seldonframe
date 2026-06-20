@@ -40,8 +40,8 @@ export default function Page() {
       </Step>
 
       <Step n={4} title="Add your first contact">
-        Open <InAppLink href="/contacts">Clients</InAppLink> and click
-        "Add client." Or import a CSV. Or — most fun — open Claude Code
+        Open <InAppLink href="/contacts">Customers</InAppLink> and click
+        "Add customer." Or import a CSV. Or — most fun — open Claude Code
         and say <em>"add Jane Doe (jane@example.com, 555-0100) to my CRM"</em>.
       </Step>
 

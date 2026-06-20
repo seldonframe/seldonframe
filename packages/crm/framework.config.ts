@@ -5,7 +5,7 @@ const config: FrameworkConfig = {
   appDescription: "Client management for coaching businesses",
   logo: "/logo.svg",
   entities: {
-    contact: { singular: "Client", plural: "Clients" },
+    contact: { singular: "Customer", plural: "Customers" },
     deal: { singular: "Engagement", plural: "Engagements" },
     activity: { singular: "Interaction", plural: "Interactions" },
     pipeline: { singular: "Pipeline", plural: "Pipelines" },

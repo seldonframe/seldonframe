@@ -8,19 +8,19 @@ export default function Page() {
       category="Customers (CRM)"
       categoryHref="/docs"
       title="Adding customers"
-      lede="Three ways to get contacts in: manual add, CSV import, and inbound (form / chatbot / API). They all land in the same Clients view."
+      lede="Three ways to get contacts in: manual add, CSV import, and inbound (form / chatbot / API). They all land in the same Customers view."
       githubPath="app/docs/customers/contacts/page.tsx"
     >
       <h2>Manual add</h2>
       <p>
-        <InAppLink href="/contacts">Clients</InAppLink> → "New client."
+        <InAppLink href="/contacts">Customers</InAppLink> → "New customer."
         Name, email, phone are required. Stage and tags are optional but
         recommended (you'll thank yourself when you filter later).
       </p>
 
       <h2>CSV import</h2>
       <p>
-        <InAppLink href="/contacts">Clients</InAppLink> → "Import." Drop
+        <InAppLink href="/contacts">Customers</InAppLink> → "Import." Drop
         a CSV. The importer auto-maps columns by header name (Name, Email,
         Phone, Company, etc.) and lets you remap anything it got wrong.
         Custom fields without a column-name match show up as "Skip" by

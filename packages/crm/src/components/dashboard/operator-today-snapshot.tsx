@@ -183,7 +183,7 @@ export async function OperatorTodaySnapshot({ orgId }: OperatorTodaySnapshotProp
                   <span className="truncate">
                     <span className="font-medium text-foreground">{time}</span>
                     <span className="ml-2 text-muted-foreground">
-                      {b.fullName ?? "Client"} — {b.title}
+                      {b.fullName ?? "Customer"} — {b.title}
                     </span>
                   </span>
                 </li>

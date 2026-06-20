@@ -119,12 +119,12 @@ export type BookingRow = {
  * Display label overrides for contact status values.
  * The stored value (e.g. "customer") never changes — only the
  * label shown in the badge and editable field is remapped.
- * "customer", "won", and "active" all display as "Client".
+ * "customer", "won", and "active" all display as "Customer".
  */
 const STAGE_DISPLAY_LABEL: Record<string, string> = {
-  customer: "Client",
-  won: "Client",
-  active: "Client",
+  customer: "Customer",
+  won: "Customer",
+  active: "Customer",
 };
 
 function stageDisplayLabel(status: string): string {

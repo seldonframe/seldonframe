@@ -200,7 +200,7 @@ export function buildNavGroups(input: BuildNavInput): NavGroup[] {
         // Customers is the CRM contacts surface (today mislabeled
         // "Clients"). Bookings + Intake Forms hang under it as the
         // other inbound-customer surfaces.
-        { href: "/contacts", label: "Customers", icon: "Users" },
+        { href: "/contacts", label: labels.contact.plural, icon: "Users" },
         { href: "/bookings", label: "Bookings", icon: "Calendar", indent: true },
         { href: "/forms", label: labels.intakeForm.plural, icon: "FileText", indent: true },
       ]),
