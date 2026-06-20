@@ -2,15 +2,11 @@
 //
 // The single per-service detail template, populated from one ServicePage.
 // Archetype-themed via CSS vars only (no hard-coded hex). Layout:
-//   hero (name + heroPhoto? + CTA placeholder where P2's intake form mounts)
+//   hero (name + heroPhoto? + CTA + LeadFormCard when leadForm.enabled)
 //   → description (body[] blocks)
 //   → testimonials (reuses the existing <Testimonials> component)
 //   → CTA band
-//   → map placeholder (P2 mounts the real Google Maps embed)
-//
-// The two P2 mount points are <div data-slot="intake"> and <div data-slot="map">
-// — Phase 2 replaces their inner content; Phase 1 ships labeled placeholders so
-// the page is complete and walkable now.
+//   → MapSection (when an address is provided)
 
 "use client";
 
@@ -168,21 +164,21 @@ function ServicePageStyles() {
       }
       .hero-cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
 
-      .btn {
+      .sf-service .btn {
         display: inline-flex; align-items: center; gap: 8px;
-        height: 46px; padding: 0 20px; border-radius: 8px;
+        height: 46px; padding: 0 20px; border-radius: var(--radius, 8px);
         font-weight: 600; font-size: 15px; text-decoration: none;
         transition: background 140ms ease, box-shadow 160ms ease, transform 120ms ease;
       }
-      .btn-xl { height: 52px; padding: 0 26px; font-size: 16px; }
-      .btn-primary { background: var(--primary); color: var(--primary-ink, #fff); }
-      .btn-primary:hover { background: color-mix(in oklab, var(--primary) 84%, #000); }
-      .btn-primary:active { transform: translateY(1px); }
-      .btn-ghost {
+      .sf-service .btn-xl { height: 52px; padding: 0 26px; font-size: 16px; }
+      .sf-service .btn-primary { background: var(--primary); color: var(--primary-ink, #fff); }
+      .sf-service .btn-primary:hover { background: color-mix(in oklab, var(--primary) 84%, #000); }
+      .sf-service .btn-primary:active { transform: translateY(1px); }
+      .sf-service .btn-ghost {
         background: transparent; color: var(--text);
         border: 1px solid var(--border);
       }
-      .btn-ghost:hover { border-color: var(--primary); color: var(--primary); }
+      .sf-service .btn-ghost:hover { border-color: var(--primary); color: var(--primary); }
 
       .slot-intake-live { margin-top: 28px; }
 
@@ -231,8 +227,8 @@ function ServicePageStyles() {
       .cta-text span { color: rgba(255,255,255,0.82); font-size: 15px; }
 
       @media (prefers-reduced-motion: reduce) {
-        .btn { transition: none; }
-        .btn-primary:active { transform: none; }
+        .sf-service .btn { transition: none; }
+        .sf-service .btn-primary:active { transform: none; }
       }
     `}</style>
   );
