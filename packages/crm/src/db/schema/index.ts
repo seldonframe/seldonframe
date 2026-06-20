@@ -125,3 +125,9 @@ export * from "./onboarding";
 // 2026-06-15 — Operator Portal PWA v2: conversation notes (internal notes
 // on SMS threads visible only to the operator team).
 export * from "./conversation-notes";
+
+// ICP-3 — builder-deploys-to-many-SMBs foundation: reusable agent templates,
+// lite-tenant deployments (no-login client), and BYOK LLM keys per builder.
+export * from "./agent-templates";
+export * from "./deployments";
+export * from "./builder-llm-keys";

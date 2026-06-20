@@ -169,6 +169,13 @@
       "when": 1781526008406,
       "tag": "0023_lively_sugar_man",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1781992678610,
+      "tag": "0024_outgoing_white_tiger",
+      "breakpoints": true
     }
   ]
 }
