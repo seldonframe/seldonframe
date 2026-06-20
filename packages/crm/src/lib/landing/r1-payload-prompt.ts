@@ -282,8 +282,8 @@ hero:
   businessName: from facts.business_name
   tagline: 10-15 words. For bold-urgency, split into two clauses: "Problem? Solution in X." — the component renders the second clause in accent color. For other archetypes, a confident declarative headline.
   subhead: 25-40 words that reinforce the value proposition using facts (city, emergency service, certifications, years in business from trust_signals, service area).
-  primaryCTA: { label, href } — href = "${telHref}", label reflects the archetype voice. For bold-urgency: "Call now — {phone}". For clinical-trust: "Book a consultation". For editorial-warm: "Get a free estimate". Always actionable.
-  secondaryCTA (optional): { label: "Book online", href: "/book" } — include for urgency archetypes.
+  primaryCTA: { label, href } — href = "/book" (literal string — the renderer rewrites this to the workspace booking URL at runtime), label reflects the archetype voice. For bold-urgency: "Get a free estimate". For clinical-trust: "Book a consultation". For editorial-warm: "Get a free estimate". Always actionable.
+  secondaryCTA: { label: "Call ${facts.phone}", href: "${telHref}" } — always include; keeps the phone number prominent in the hero.
   trustBadges: array of { label } — derive from certifications + trust_signals. Add "Family-owned since X" if trust_signals mentions it. Max 4 badges. Min 1.
   reviewRating: from facts.review_rating (number) or null if absent.
   reviewCount: from facts.review_count (number) or null if absent.
@@ -350,7 +350,7 @@ ${JSON.stringify(facts.photos, null, 2)}
 
 Photo usage rules:
 - hero.heroImage: prefer the entry with section==="hero". If none, use the first entry.
-- services tiles: if services has 4+ items, assign photos with section==="services" to service tiles (one per tile, in order). Skip if fewer than 4 photos have section==="services".
+- services tiles: if services has 4+ items, assign photos with section==="services" to service tiles (one per tile, in order) — write each as \`photo: { src, alt }\` on the matching service object (use the key name "photo", NOT "image"). Skip if fewer than 4 photos have section==="services".
 - testimonials: use photos with section==="testimonial" for testimonial avatars if needed.
 - NEVER invent an image URL. Only use URLs from ENRICHMENT_PHOTOS or the Unsplash fallback when no ENRICHMENT_PHOTOS are provided.
 ` : ""}
