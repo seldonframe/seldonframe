@@ -17,8 +17,13 @@ import type { ExtractedBusinessFacts } from "@/lib/web-onboarding/extraction-pro
 import type { AestheticArchetypeId } from "@/lib/workspace/aesthetic-archetypes";
 import {
   buildR1PayloadPrompt,
+  inferVertical,
   type R1LandingPayload,
 } from "./r1-payload-prompt";
+import {
+  resolveServicePhoto,
+  type ServicePhoto,
+} from "./service-photo-resolver";
 
 // Prefer a smaller model for payload generation — the prompt is highly
 // structured (JSON schema is fully specified), so Haiku is sufficient
@@ -40,7 +45,7 @@ const SYSTEM_PROMPT =
 
 // ── AnthropicLike shim (matches markdown-extractor.ts pattern) ───────────────
 
-type AnthropicContentBlock = { type: string; text?: string };
+export type AnthropicContentBlock = { type: string; text?: string };
 
 type AnthropicLike = {
   messages: {
@@ -54,7 +59,7 @@ type AnthropicLike = {
   };
 };
 
-function pickText(content: Array<AnthropicContentBlock>): string {
+export function pickText(content: Array<AnthropicContentBlock>): string {
   return content
     .map((part) => (part.type === "text" ? part.text ?? "" : ""))
     .join("\n")
@@ -88,13 +93,28 @@ function isR1LandingPayload(v: unknown): v is R1LandingPayload {
  * Strip markdown fences if the model wraps the JSON despite instructions.
  * Same defensiveness as extraction-parser.ts.
  */
-function stripFences(text: string): string {
+export function stripFences(text: string): string {
   const trimmed = text.trim();
   // ```json ... ``` or ``` ... ```
   const fenceMatch = trimmed.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?```\s*$/);
   if (fenceMatch) return fenceMatch[1].trim();
   return trimmed;
 }
+
+// ── Service photo post-process ────────────────────────────────────────────────
+
+/**
+ * Injectable function signature matching resolveServicePhoto.
+ * Tests pass a fake to avoid Unsplash network calls.
+ */
+export type ResolveServicePhotoFn = (input: {
+  realSrc?: string | null;
+  realAlt?: string | null;
+  serviceName: string;
+  vertical: string;
+  archetype: AestheticArchetypeId;
+  businessName: string;
+}) => Promise<ServicePhoto | null>;
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
@@ -113,6 +133,11 @@ export async function generateR1Payload(args: {
   /** Test seam — inject a mock Anthropic-compatible client. */
   anthropicClient?: unknown;
   model?: string;
+  /**
+   * Test seam — inject a fake photo resolver to keep tests offline.
+   * Defaults to the real resolveServicePhoto (which may call Unsplash).
+   */
+  resolveServicePhotoFn?: ResolveServicePhotoFn;
 }): Promise<R1LandingPayload> {
   const client = (args.anthropicClient ??
     new Anthropic({ apiKey: args.byokKey })) as AnthropicLike;
@@ -191,6 +216,44 @@ export async function generateR1Payload(args: {
     throw new Error(
       `r1_payload_generation_failed: payload missing required sections. Got: ${preview}`,
     );
+  }
+
+  // ── Photo post-process ─────────────────────────────────────────────────────
+  // After the payload is validated, enrich each service with an HD photo.
+  // Infer the vertical from facts (same source as classifyArchetype in the
+  // orchestrator — pure, sync, no deps).
+  const photoFn = args.resolveServicePhotoFn ?? resolveServicePhoto;
+  const vertical = inferVertical(
+    args.facts.services,
+    args.facts.business_description,
+  );
+
+  for (const service of parsed.services.services) {
+    // Tolerate the legacy `image` key emitted by older prompts.
+    const legacySrc =
+      (service as { image?: { src?: string; alt?: string } }).image?.src;
+    const legacyAlt =
+      (service as { image?: { src?: string; alt?: string } }).image?.alt;
+    const realSrc = service.photo?.src ?? legacySrc ?? null;
+    const realAlt = service.photo?.alt ?? legacyAlt ?? null;
+
+    try {
+      const resolved = await photoFn({
+        realSrc,
+        realAlt,
+        serviceName: service.name,
+        vertical,
+        archetype: args.archetype,
+        businessName: args.facts.business_name,
+      });
+      if (resolved) {
+        service.photo = resolved;
+      }
+      // When resolved is null: leave service.photo as-is (or absent) —
+      // the renderer placeholder handles it.
+    } catch {
+      // One photo failure must never abort the build — degrade silently.
+    }
   }
 
   return parsed;

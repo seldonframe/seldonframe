@@ -109,5 +109,11 @@ export function rewriteR1Hrefs(
     }
   }
 
+  // nav CTA — added in P4: the "/book" href is rewritten to the workspace
+  // booking URL, exactly like the hero primary CTA.
+  if (p.nav?.cta) {
+    p.nav.cta.href = rewriteHref(p.nav.cta.href, urls);
+  }
+
   return p;
 }

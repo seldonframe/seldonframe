@@ -16,6 +16,8 @@ import { generateR1Payload } from "./r1-payload-generator";
 import { saveLandingPayload } from "./r1-save";
 import { inferVertical } from "./r1-payload-prompt";
 import { resolveThemeMode, type ThemeModeChoice } from "./theme-mode";
+import { generateServicePages } from "./service-pages-generator";
+import { validateSiteTree } from "./r1-site-tree";
 
 export type R1LandingStepResult =
   | { ok: true; archetype: AestheticArchetypeId }
@@ -67,7 +69,39 @@ export async function runR1LandingStep(args: {
     // Step 3: Inject resolved theme mode server-side before persisting.
     payload.theme = { mode: resolveThemeMode(args.themeMode, archetype) };
 
-    // Step 4: Persist.
+    // Step 4 (P4): Generate one service detail page per real grid service.
+    // Graceful — any failure leaves the site single-page rather than blocking
+    // the whole build. validateSiteTree is used as a final gate to keep only
+    // structurally valid pages (generateServicePages already runs it per-page
+    // internally, so this filters out any that slipped through on a bad payload).
+    try {
+      const servicePages = await generateServicePages({
+        gridServices: payload.services.services,
+        facts,
+        vertical,
+        archetype,
+        byokKey,
+      });
+      const valid = servicePages.filter(
+        (p) => validateSiteTree({ servicePages: [p] }).valid,
+      );
+      if (valid.length) payload.servicePages = valid;
+    } catch (err) {
+      console.warn(
+        JSON.stringify({
+          event: "r1_service_pages_failed",
+          workspace_id: workspaceId,
+          message:
+            err instanceof Error ? err.message.slice(0, 300) : String(err),
+        }),
+      );
+    }
+
+    // Step 5 (P4): Navbar booking CTA — rewriteR1Hrefs maps "/book" → the
+    // workspace booking URL at render time (same as the hero CTA).
+    payload.nav = { ...(payload.nav ?? {}), cta: { label: "Book now", href: "/book" } };
+
+    // Step 6: Persist.
     await saveLandingPayload(workspaceId, payload, archetype);
 
     return { ok: true, archetype };

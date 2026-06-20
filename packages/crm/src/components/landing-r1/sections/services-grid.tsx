@@ -16,6 +16,7 @@ import { ARCHETYPES, type AestheticArchetypeId } from "../archetypes";
 import { telHref } from "../_shared/phone";
 import { StaggerGroup, StaggerItem, Reveal } from "../_shared/motion";
 import { serviceSlug } from "@/lib/landing/r1-site-tree";
+import { upscaleCdnImageUrl } from "@/lib/landing/service-photo";
 import type { ReactNode } from "react";
 
 export type Service = {
@@ -143,15 +144,15 @@ function ServiceCard({ service, baseHref }: { service: Service; baseHref?: strin
   return (
     <article className="card">
       <div className="placeholder">
-        {service.photo ? (
-          <img
-            className="ph-img"
-            src={service.photo.src}
-            alt={service.photo.alt}
-            loading="lazy"
-          />
-        ) : null}
-        {!service.photo && (
+        {(() => {
+          // P4: tolerate legacy payloads that stored the photo under `image`, and
+          // upscale small CDN renders. Existing builds get photos without regeneration.
+          const p = service.photo ?? (service as { image?: { src: string; alt: string } }).image;
+          return p?.src ? (
+            <img className="ph-img" src={upscaleCdnImageUrl(p.src)} alt={p.alt ?? service.name} loading="lazy" />
+          ) : null;
+        })()}
+        {!service.photo && !(service as { image?: { src: string; alt: string } }).image && (
           <span className="ph-label">photo · {service.name.toLowerCase()}</span>
         )}
       </div>
