@@ -40,7 +40,7 @@ const SYSTEM_PROMPT =
 
 // ── AnthropicLike shim (matches markdown-extractor.ts pattern) ───────────────
 
-type AnthropicContentBlock = { type: string; text?: string };
+export type AnthropicContentBlock = { type: string; text?: string };
 
 type AnthropicLike = {
   messages: {
@@ -54,7 +54,7 @@ type AnthropicLike = {
   };
 };
 
-function pickText(content: Array<AnthropicContentBlock>): string {
+export function pickText(content: Array<AnthropicContentBlock>): string {
   return content
     .map((part) => (part.type === "text" ? part.text ?? "" : ""))
     .join("\n")
@@ -88,7 +88,7 @@ function isR1LandingPayload(v: unknown): v is R1LandingPayload {
  * Strip markdown fences if the model wraps the JSON despite instructions.
  * Same defensiveness as extraction-parser.ts.
  */
-function stripFences(text: string): string {
+export function stripFences(text: string): string {
   const trimmed = text.trim();
   // ```json ... ``` or ``` ... ```
   const fenceMatch = trimmed.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?```\s*$/);
