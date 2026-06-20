@@ -19,8 +19,9 @@ export type ShellMode = "light" | "dark";
 /**
  * Dark-mode token overrides. We keep the archetype's --primary (brand accent)
  * and --secondary, but flip surfaces/text to a near-black, high-contrast set.
- * Phase 1 only consumes this when theme.mode === "dark"; the dedicated dark
- * ARCHETYPE + operator toggle are P2.
+ * `resolveShellStyle` merges these when theme.mode === "dark". The dedicated
+ * dark archetype (`midnight-craft`) and the `/clients/new` light/dark operator
+ * toggle both shipped in P2 and consume this path.
  */
 const DARK_OVERRIDES: Record<string, string> = {
   "--bg": "#0d0d0f",

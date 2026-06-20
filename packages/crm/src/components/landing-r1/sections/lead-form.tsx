@@ -1,8 +1,9 @@
 // landing-r1/sections/lead-form.tsx
 //
-// Speed-to-Lead bottom section. Archetype-themed (palette / fonts / radius
-// via archetypeStyle() CSS vars — same theming contract as every other
-// landing-r1 section; no hard-coded hex). Centered card: heading, subheading,
+// Speed-to-Lead bottom section. Palette / fonts / radius are inherited from the
+// SiteShell ancestor (it applies archetypeStyle() + dark-mode overrides) — same
+// theming contract as every other landing-r1 section; no hard-coded hex.
+// Centered card: heading, subheading,
 // Name · Phone · "What do you need?" (select from needOptions, else short
 // text), bold submit, trust line, TCPA consent. Imports submitLeadFormAction
 // directly (mirrors components/bookings/public-booking-form.tsx).

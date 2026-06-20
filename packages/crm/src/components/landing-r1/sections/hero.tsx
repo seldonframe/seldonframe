@@ -7,8 +7,9 @@
 //   • cinematic-aura     → cinematic-aspirational, technical-restrained
 //                                                                (Phase R.1.2)
 //
-// Theming is 100% via CSS vars emitted by archetypeStyle(). This file does
-// not hard-code hex anywhere.
+// Theming is 100% via CSS vars inherited from the SiteShell ancestor
+// (shell/site-shell.tsx applies archetypeStyle() + dark-mode overrides there).
+// This file does not call archetypeStyle() and does not hard-code hex.
 
 "use client";
 
