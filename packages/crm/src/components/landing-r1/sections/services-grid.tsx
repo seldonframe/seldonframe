@@ -15,6 +15,7 @@ import { ArrowRight, Phone } from "lucide-react";
 import { ARCHETYPES, archetypeStyle, type AestheticArchetypeId } from "../archetypes";
 import { telHref } from "../_shared/phone";
 import { StaggerGroup, StaggerItem, Reveal } from "../_shared/motion";
+import { serviceSlug } from "@/lib/landing/r1-site-tree";
 import type { ReactNode } from "react";
 
 export type Service = {
@@ -45,10 +46,36 @@ export type ServicesGridProps = {
     /** Body copy shown to the left of the CTA. Bold-urgency leans "Not sure what you need?". */
     text?: { title: string; sub: string };
   };
+  /** Multi-page: when set (e.g. "/w/<slug>"), each card's "Learn more" links to
+   *  the per-service detail route. Omitted → legacy in-page #anchor. */
+  serviceBaseHref?: string;
 };
 
+// NOTE — multi-page slug coupling (P4 generator invariant):
+// The route slug here is derived from the GRID service NAME via serviceSlug().
+// For a card's "Learn more" to resolve to a real detail page, this derived slug
+// MUST equal some payload.servicePages[].slug. P1 fixtures align them by hand;
+// the navbar dropdown links via the STORED servicePages[].slug directly, so it
+// is always correct. The P4 r1-payload-generator MUST guarantee
+// servicePages[].slug === serviceSlug(gridServiceName) for the two link sources
+// to agree. A mismatch would 404 the card (the dropdown link would still work).
+/**
+ * Pure: the "Learn more" target for a service card. With a workspace base href
+ * (e.g. "/w/<slug>") it links to the service detail route; without one it keeps
+ * the legacy in-page anchor so existing direct callers are unchanged. Exported
+ * for unit testing.
+ */
+export function serviceCardHref(name: string, baseHref: string | undefined): string {
+  const slug = serviceSlug(name);
+  if (baseHref && baseHref.trim()) {
+    const base = baseHref === "/" ? "" : baseHref.replace(/\/+$/, "");
+    return `${base}/services/${slug}`;
+  }
+  return `#service-${slug}`;
+}
+
 export function ServicesGrid(props: ServicesGridProps) {
-  const { archetype, eyebrow = "What we fix", heading, intro, services, cta } = props;
+  const { archetype, eyebrow = "What we fix", heading, intro, services, cta, serviceBaseHref } = props;
   const arch = ARCHETYPES[archetype];
   // Calm 2×2 grid for archetypes that want more whitespace (visualDensity ≤ 4).
   // Dense asymmetric grid (1 large + 1 wide + 2 standard) otherwise.
@@ -83,7 +110,7 @@ export function ServicesGrid(props: ServicesGridProps) {
               key={s.id ?? s.name}
               className={layout === "dense" ? cardClassForIndex(i, services.length) : undefined}
             >
-              <ServiceCard service={s} />
+              <ServiceCard service={s} baseHref={serviceBaseHref} />
             </StaggerItem>
           ))}
         </StaggerGroup>
@@ -113,7 +140,7 @@ export function ServicesGrid(props: ServicesGridProps) {
 }
 
 // ── Service card ───────────────────────────────────────────────────────────
-function ServiceCard({ service }: { service: Service }) {
+function ServiceCard({ service, baseHref }: { service: Service; baseHref?: string }) {
   return (
     <article className="card">
       <div className="placeholder">
@@ -135,7 +162,7 @@ function ServiceCard({ service }: { service: Service }) {
       <div className="body">
         <h3>{service.name}</h3>
         <p>{service.description}</p>
-        <a className="more" href={`#service-${slugify(service.name)}`}>
+        <a className="more" href={serviceCardHref(service.name, baseHref)}>
           Learn more
           <ArrowRight size={14} strokeWidth={2.4} aria-hidden />
         </a>
@@ -152,10 +179,6 @@ function DefaultGlyph() {
       <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
     </svg>
   );
-}
-
-function slugify(s: string) {
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
 
 // Asymmetric grid — first card spans 2 rows, second card spans 2 cols.

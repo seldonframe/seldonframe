@@ -23,11 +23,13 @@ import { Footer } from "@/components/landing-r1/sections/footer";
 import { EmergencyStrip } from "@/components/landing-r1/chrome/emergency-strip";
 import { StickyMobileBar } from "@/components/landing-r1/chrome/sticky-mobile-bar";
 import { Navbar } from "@/components/landing-r1/chrome/navbar";
+import { SiteShell } from "@/components/landing-r1/shell/site-shell";
 import { ChatbotEmbedScript } from "@/components/landing/chatbot-script";
 
 import { loadLandingPayload } from "@/lib/landing/r1-save";
 import { getWorkspaceTemplateContext } from "@/lib/landing/public-workspace";
 import { rewriteR1Hrefs } from "@/lib/landing/r1-rewrite-hrefs";
+import { getServicePages } from "@/lib/landing/r1-site-tree";
 import { buildWorkspaceUrls } from "@/lib/billing/anonymous-workspace";
 import { getPublicChatbotEmbed } from "@/lib/agents/public-embed";
 import {
@@ -207,18 +209,25 @@ export default async function WorkspaceLandingPage({ params }: PageProps) {
     home: workspaceUrls.home,
   });
 
+  const homeHref = `/w/${slug}`;
+  const navServices = getServicePages(payload).map((p) => ({ slug: p.slug, name: p.name }));
+  // Only link cards out to detail pages when this workspace actually has them.
+  const serviceBaseHref = navServices.length > 0 ? homeHref : undefined;
+
   return (
-    <>
+    <SiteShell archetype={payload.hero.archetype} mode={payload.theme?.mode ?? "light"}>
       {/* bisect 4/4: all three pieces wired. */}
       <Navbar
         archetype={payload.hero.archetype}
         businessName={payload.hero.businessName}
         phone={payload.footer.phone}
         serviceAreas={payload.footer.serviceAreas}
+        servicePages={navServices}
+        homeHref={homeHref}
       />
       {payload.emergency && <EmergencyStrip {...payload.emergency} />}
       <Hero {...payload.hero} />
-      <ServicesGrid {...payload.services} />
+      <ServicesGrid {...payload.services} serviceBaseHref={serviceBaseHref} />
       <Testimonials {...payload.testimonials} />
       <Faq {...payload.faq} />
       {payload.leadForm?.enabled && (
@@ -232,6 +241,6 @@ export default async function WorkspaceLandingPage({ params }: PageProps) {
       <Footer {...payload.footer} />
       {payload.sticky && <StickyMobileBar {...payload.sticky} />}
       {chatbotEmbed && <ChatbotEmbedScript embedUrl={chatbotEmbed.embedUrl} />}
-    </>
+    </SiteShell>
   );
 }
