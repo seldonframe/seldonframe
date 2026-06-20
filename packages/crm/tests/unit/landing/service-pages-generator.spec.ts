@@ -52,4 +52,13 @@ describe("generateServicePages", () => {
     });
     assert.deepEqual(pages, []);
   });
+
+  test("returns [] gracefully when the LLM call throws", async () => {
+    const pages = await generateServicePages({
+      gridServices, facts, vertical: "landscaping", archetype: "editorial-warm", byokKey: "x",
+      anthropicClient: { messages: { create: async () => { throw new Error("rate limited"); } } },
+      photoResolver: fakePhoto as never,
+    });
+    assert.deepEqual(pages, []);
+  });
 });
