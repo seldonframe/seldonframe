@@ -134,11 +134,16 @@ import path in `faq.tsx` if your `tsconfig.paths` differs.
 Every section accepts an `archetype: AestheticArchetypeId` plus a typed
 content prop bundle. The component does **two** things with the archetype:
 
-1. **Theming** — `archetypeStyle(id)` emits CSS variables (`--primary`,
+1. **Theming** — `SiteShell` (`shell/site-shell.tsx`) is the single element
+   that applies the archetype CSS-var palette via `archetypeStyle()`. When
+   `theme.mode === "dark"`, `resolveShellStyle` also merges `DARK_OVERRIDES`
+   (the `midnight-craft` dark archetype and the `/clients/new` light/dark
+   operator toggle both shipped in P2). Every section and chrome component
+   renders inside a `SiteShell` and **inherits** those vars (`--primary`,
    `--secondary`, `--bg`, `--text`, `--border`, `--surface`, `--surface-deep`,
-   `--font-headline`, `--font-body`, `--font-mono`, `--motion-scale`) inline on
-   the section root. All section CSS reads from these vars; nothing is
-   hard-coded.
+   `--font-headline`, `--font-body`, `--font-mono`, `--motion-scale`). Sections
+   set only `data-archetype` on their root for CSS targeting — they do **not**
+   call `archetypeStyle()` themselves.
 2. **Layout** — Hero branches on `archetype.heroVariant`. Other sections share
    a single layout because the variance is absorbed by tokens (fonts, density,
    color).

@@ -192,6 +192,10 @@ export function ClientsNewForm({
   // the idle scene). "auto" → the pipeline auto-picks by vertical; a concrete
   // template id is threaded to the create SSE as ?template= and overrides it.
   const [landingTemplate, setLandingTemplate] = useState<DesignId>("auto");
+  // 2026-06-20 — Operator's pre-build light/dark mode pick (the Theme toggle
+  // in the idle scene). "auto" → resolveThemeMode picks by archetype default;
+  // "light"/"dark" are threaded as ?mode= and override it in runR1LandingStep.
+  const [themeMode, setThemeMode] = useState<"auto" | "light" | "dark">("auto");
   // Tracks which mode was last submitted so BYOK retry re-submits the right stream.
   const lastModeRef = useRef<"url" | "biz">(prefillBiz && !prefillUrl ? "biz" : "url");
   // Guard so the autoSubmit effect only fires once per mount even if
@@ -225,6 +229,7 @@ export function ClientsNewForm({
 
     const qs = new URLSearchParams({ url: targetUrl });
     if (landingTemplate && landingTemplate !== "auto") qs.set("template", landingTemplate);
+    if (themeMode && themeMode !== "auto") qs.set("mode", themeMode);
     const es = new EventSource(`/api/v1/web/workspaces/create-from-url?${qs.toString()}`);
     esRef.current = es;
     setLiveEventSource(es);
@@ -301,6 +306,7 @@ export function ClientsNewForm({
 
     const qs = new URLSearchParams({ text });
     if (landingTemplate && landingTemplate !== "auto") qs.set("template", landingTemplate);
+    if (themeMode && themeMode !== "auto") qs.set("mode", themeMode);
     const es = new EventSource(`/api/v1/web/workspaces/create-from-paste?${qs.toString()}`);
     esRef.current = es;
     setLiveEventSource(es);
@@ -568,6 +574,8 @@ export function ClientsNewForm({
             initialTab={initialTab}
             landingTemplate={landingTemplate}
             onLandingTemplateChange={setLandingTemplate}
+            themeMode={themeMode}
+            onThemeModeChange={setThemeMode}
           />
         </div>
 

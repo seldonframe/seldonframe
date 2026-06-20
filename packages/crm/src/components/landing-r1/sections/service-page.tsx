@@ -2,15 +2,11 @@
 //
 // The single per-service detail template, populated from one ServicePage.
 // Archetype-themed via CSS vars only (no hard-coded hex). Layout:
-//   hero (name + heroPhoto? + CTA placeholder where P2's intake form mounts)
+//   hero (name + heroPhoto? + CTA + LeadFormCard when leadForm.enabled)
 //   → description (body[] blocks)
 //   → testimonials (reuses the existing <Testimonials> component)
 //   → CTA band
-//   → map placeholder (P2 mounts the real Google Maps embed)
-//
-// The two P2 mount points are <div data-slot="intake"> and <div data-slot="map">
-// — Phase 2 replaces their inner content; Phase 1 ships labeled placeholders so
-// the page is complete and walkable now.
+//   → MapSection (when an address is provided)
 
 "use client";
 
@@ -18,7 +14,10 @@ import { Phone } from "lucide-react";
 import { ARCHETYPES, type AestheticArchetypeId } from "../archetypes";
 import { telHref } from "../_shared/phone";
 import { Testimonials } from "./testimonials";
+import { LeadFormCard } from "./lead-form";
+import { MapSection } from "./map";
 import type { ServicePage } from "@/lib/landing/r1-site-tree";
+import type { R1LeadFormSection } from "@/lib/landing/r1-payload-prompt";
 
 export type ServicePageTemplateProps = {
   archetype: AestheticArchetypeId;
@@ -27,6 +26,10 @@ export type ServicePageTemplateProps = {
   phone: string;
   /** Where the CTA buttons point (workspace-scoped, e.g. the booking URL). */
   ctaHref: string;
+  orgSlug: string;
+  businessName: string;
+  leadForm?: R1LeadFormSection;
+  address?: string | null;
 };
 
 export function ServicePageTemplate({
@@ -34,6 +37,10 @@ export function ServicePageTemplate({
   service,
   phone,
   ctaHref,
+  orgSlug,
+  businessName,
+  leadForm,
+  address,
 }: ServicePageTemplateProps) {
   const arch = ARCHETYPES[archetype];
   const hasTestimonials = Array.isArray(service.testimonials) && service.testimonials.length > 0;
@@ -59,8 +66,11 @@ export function ServicePageTemplate({
                 {phone}
               </a>
             </div>
-            {/* P2 mount point: the intake form renders here on the service hero. */}
-            <div data-slot="intake" className="slot slot-intake" aria-hidden="true" />
+            {leadForm?.enabled && orgSlug ? (
+              <div data-slot="intake" className="slot-intake-live">
+                <LeadFormCard orgSlug={orgSlug} businessName={businessName} leadForm={leadForm} />
+              </div>
+            ) : null}
           </div>
           <div className="hero-media">
             {service.heroPhoto ? (
@@ -109,12 +119,7 @@ export function ServicePageTemplate({
         </div>
       </section>
 
-      {/* P2 mount point: the Google Maps embed renders here. */}
-      <section className="sf-service-map">
-        <div className="container">
-          <div data-slot="map" className="slot slot-map" aria-hidden="true" />
-        </div>
-      </section>
+      <MapSection address={address} archetype={archetype} />
 
       <ServicePageStyles />
     </main>
@@ -159,27 +164,23 @@ function ServicePageStyles() {
       }
       .hero-cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
 
-      .btn {
+      .sf-service .btn {
         display: inline-flex; align-items: center; gap: 8px;
-        height: 46px; padding: 0 20px; border-radius: 8px;
+        height: 46px; padding: 0 20px; border-radius: var(--radius, 8px);
         font-weight: 600; font-size: 15px; text-decoration: none;
         transition: background 140ms ease, box-shadow 160ms ease, transform 120ms ease;
       }
-      .btn-xl { height: 52px; padding: 0 26px; font-size: 16px; }
-      .btn-primary { background: var(--primary); color: var(--primary-ink, #fff); }
-      .btn-primary:hover { background: color-mix(in oklab, var(--primary) 84%, #000); }
-      .btn-primary:active { transform: translateY(1px); }
-      .btn-ghost {
+      .sf-service .btn-xl { height: 52px; padding: 0 26px; font-size: 16px; }
+      .sf-service .btn-primary { background: var(--primary); color: var(--primary-ink, #fff); }
+      .sf-service .btn-primary:hover { background: color-mix(in oklab, var(--primary) 84%, #000); }
+      .sf-service .btn-primary:active { transform: translateY(1px); }
+      .sf-service .btn-ghost {
         background: transparent; color: var(--text);
         border: 1px solid var(--border);
       }
-      .btn-ghost:hover { border-color: var(--primary); color: var(--primary); }
+      .sf-service .btn-ghost:hover { border-color: var(--primary); color: var(--primary); }
 
-      .slot-intake {
-        margin-top: 28px; min-height: 64px;
-        border: 1px dashed color-mix(in oklab, var(--text) 24%, transparent);
-        border-radius: 10px;
-      }
+      .slot-intake-live { margin-top: 28px; }
 
       .hero-media img,
       .hero-media-ph {
@@ -225,17 +226,9 @@ function ServicePageStyles() {
       }
       .cta-text span { color: rgba(255,255,255,0.82); font-size: 15px; }
 
-      /* Map */
-      .sf-service-map { padding: 0 0 64px; }
-      .slot-map {
-        width: 100%; aspect-ratio: 16 / 7; min-height: 220px;
-        border-radius: 14px; border: 1px dashed color-mix(in oklab, var(--text) 24%, transparent);
-        background: var(--surface);
-      }
-
       @media (prefers-reduced-motion: reduce) {
-        .btn { transition: none; }
-        .btn-primary:active { transform: none; }
+        .sf-service .btn { transition: none; }
+        .sf-service .btn-primary:active { transform: none; }
       }
     `}</style>
   );

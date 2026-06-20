@@ -21,6 +21,7 @@ import { ServicesGrid } from "@/components/landing-r1/sections/services-grid";
 import { Testimonials } from "@/components/landing-r1/sections/testimonials";
 import { Faq } from "@/components/landing-r1/sections/faq";
 import { Footer } from "@/components/landing-r1/sections/footer";
+import { SiteShell } from "@/components/landing-r1/shell/site-shell";
 import { stocktonFixture } from "@/components/landing-r1/fixtures/bold-urgency-stockton";
 import { hudsonValleyFixture } from "@/components/landing-r1/fixtures/editorial-warm-hudson-valley";
 import { foothillDentalFixture } from "@/components/landing-r1/fixtures/clinical-trust-foothill-dental";
@@ -56,7 +57,7 @@ export default async function LandingPreviewPage({
   const fixture = FIXTURES[archetype as Archetype] as FixtureWithChrome | undefined;
   if (!fixture) notFound();
   return (
-    <>
+    <SiteShell archetype={fixture.hero.archetype} mode="light">
       {fixture.emergency && <EmergencyStrip {...fixture.emergency} />}
       <Hero {...fixture.hero} />
       <ServicesGrid {...fixture.services} />
@@ -64,7 +65,7 @@ export default async function LandingPreviewPage({
       <Faq {...fixture.faq} />
       <Footer {...fixture.footer} />
       {fixture.sticky && <StickyMobileBar {...fixture.sticky} />}
-    </>
+    </SiteShell>
   );
 }
 

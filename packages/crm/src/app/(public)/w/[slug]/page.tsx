@@ -18,6 +18,7 @@ import { Hero } from "@/components/landing-r1/sections/hero";
 import { ServicesGrid } from "@/components/landing-r1/sections/services-grid";
 import { Testimonials } from "@/components/landing-r1/sections/testimonials";
 import { Faq } from "@/components/landing-r1/sections/faq";
+import { MapSection } from "@/components/landing-r1/sections/map";
 import { LeadFormSection } from "@/components/landing-r1/sections/lead-form";
 import { Footer } from "@/components/landing-r1/sections/footer";
 import { EmergencyStrip } from "@/components/landing-r1/chrome/emergency-strip";
@@ -27,6 +28,7 @@ import { SiteShell } from "@/components/landing-r1/shell/site-shell";
 import { ChatbotEmbedScript } from "@/components/landing/chatbot-script";
 
 import { loadLandingPayload } from "@/lib/landing/r1-save";
+import { joinFooterAddress } from "@/lib/landing/map-embed";
 import { getWorkspaceTemplateContext } from "@/lib/landing/public-workspace";
 import { rewriteR1Hrefs } from "@/lib/landing/r1-rewrite-hrefs";
 import { getServicePages } from "@/lib/landing/r1-site-tree";
@@ -226,10 +228,11 @@ export default async function WorkspaceLandingPage({ params }: PageProps) {
         homeHref={homeHref}
       />
       {payload.emergency && <EmergencyStrip {...payload.emergency} />}
-      <Hero {...payload.hero} />
+      <Hero {...payload.hero} orgSlug={slug} leadForm={payload.leadForm} />
       <ServicesGrid {...payload.services} serviceBaseHref={serviceBaseHref} />
       <Testimonials {...payload.testimonials} />
       <Faq {...payload.faq} />
+      <MapSection address={joinFooterAddress(payload.footer.address)} archetype={payload.hero.archetype} heading="Where we work" />
       {payload.leadForm?.enabled && (
         <LeadFormSection
           orgSlug={slug}

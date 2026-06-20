@@ -26,7 +26,8 @@ export type AestheticArchetypeId =
   | "cinematic-aspirational"
   | "technical-restrained"
   | "soft-residential"
-  | "brutalist";
+  | "brutalist"
+  | "midnight-craft";
 
 export const ARCHETYPE_IDS: readonly AestheticArchetypeId[] = [
   "editorial-warm",
@@ -36,6 +37,7 @@ export const ARCHETYPE_IDS: readonly AestheticArchetypeId[] = [
   "technical-restrained",
   "soft-residential",
   "brutalist",
+  "midnight-craft",
 ] as const;
 
 export type HeroVariant =
@@ -222,6 +224,26 @@ export const ARCHETYPES: Record<AestheticArchetypeId, Archetype> = {
       avoid: ["passionate", "love what we do", "team of experts"],
     },
     fallbackImageQueries: ["concrete architecture", "industrial design", "raw studio space", "minimalist gallery", "modern sculpture", "design exhibit"],
+  },
+
+  "midnight-craft": {
+    id: "midnight-craft",
+    label: "Midnight craft — near-black, emerald accent",
+    fits: "Premium trades, design-build remodelers, and studios that want a bold dark site.",
+    palette: { primary: "#34d399", secondary: "#10b981", background: "#0d100e", text: "#f2f5f3", border: "#1e2a23" },
+    fonts: { headline: "Outfit", body: "Geist" },
+    dials: { designVariance: 7, motionIntensity: 6, visualDensity: 5 },
+    heroVariant: "left-aligned-asymmetric",
+    desktopStickyCTA: false,
+    motionPreset: "balanced",
+    bannedHere: ["light/cream backgrounds", "warm tones", "pure black #000000", "Inter font", "3-equal-card horizontal grids"],
+    voice: {
+      tone: "confident, crafted, understated",
+      pace: "measured",
+      leanInto: ["craftsmanship", "materials", "portfolio"],
+      avoid: ["hype", "discount language"],
+    },
+    fallbackImageQueries: ["dark modern kitchen remodel", "moody craftsman interior", "architectural detail low light"],
   },
 };
 

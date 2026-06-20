@@ -12,7 +12,7 @@
 
 import type { ReactNode } from "react";
 import { Phone, Star } from "lucide-react";
-import { ARCHETYPES, archetypeStyle, type AestheticArchetypeId } from "../archetypes";
+import { ARCHETYPES, type AestheticArchetypeId } from "../archetypes";
 import { telHref } from "../_shared/phone";
 import { TrustBadge } from "../_shared/trust-badge";
 
@@ -46,7 +46,6 @@ export function Footer(props: FooterProps) {
   return (
     <footer
       data-archetype={arch.id}
-      style={archetypeStyle(arch.id)}
       className="sf-footer"
       id="footer"
     >

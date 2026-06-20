@@ -103,6 +103,10 @@ export type IdleSceneProps = {
   // input-box toolbar; "auto" is the default (pipeline picks by vertical).
   landingTemplate: DesignId;
   onLandingTemplateChange: (v: DesignId) => void;
+  // 2026-06-20 — pre-build light/dark mode pick. "auto" lets resolveThemeMode
+  // pick by archetype default; "light"/"dark" override it in runR1LandingStep.
+  themeMode: "auto" | "light" | "dark";
+  onThemeModeChange: (m: "auto" | "light" | "dark") => void;
 };
 
 type TabId = "url" | "biz";
@@ -188,6 +192,8 @@ export function IdleScene({
   initialTab = "url",
   landingTemplate,
   onLandingTemplateChange,
+  themeMode,
+  onThemeModeChange,
 }: IdleSceneProps) {
   const [tab, setTab] = useState<TabId>(initialTab);
   const [urlFocused, setUrlFocused] = useState(false);
@@ -417,6 +423,22 @@ export function IdleScene({
                     (pipeline picks by vertical); operators can choose a premium
                     health/wellness template before building. */}
                 <DesignChip value={landingTemplate} onChange={onLandingTemplateChange} />
+                {/* 2026-06-20 — pre-build light/dark mode toggle. "auto" lets
+                    resolveThemeMode pick by archetype default; "light"/"dark"
+                    thread through ?mode= → runR1LandingStep. */}
+                <span className="sf-theme-toggle" role="group" aria-label="Site theme">
+                  {(["auto", "light", "dark"] as const).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      className={`sf-theme-btn${themeMode === m ? " is-active" : ""}`}
+                      aria-pressed={themeMode === m}
+                      onClick={() => onThemeModeChange(m)}
+                    >
+                      {m === "auto" ? "Auto" : m === "light" ? "Light" : "Dark"}
+                    </button>
+                  ))}
+                </span>
                 <span className="sf-idle-hint">
                   <span className="sf-kbd">⌘</span>
                   <span className="sf-kbd">↵</span>
@@ -940,6 +962,47 @@ function IdleStyles() {
 
       .sf-idle-error {
         max-width: 720px;
+      }
+
+      /* 2026-06-20 — 3-way segmented theme toggle (Auto / Light / Dark).
+         Sits next to the DesignChip in the form footer toolbar. Reuses the
+         same --pk-* token palette as the design chip so both controls share
+         identical chrome (border radius, border color, font, backdrop blur). */
+      .sf-theme-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        padding: 3px;
+        background: color-mix(in oklab, var(--card) 86%, transparent);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        backdrop-filter: blur(8px);
+        flex-shrink: 0;
+      }
+      .sf-theme-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 26px;
+        padding: 0 10px;
+        background: transparent;
+        border: none;
+        border-radius: 999px;
+        color: var(--muted-foreground);
+        font-family: inherit;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 160ms ease, color 160ms ease;
+        white-space: nowrap;
+      }
+      .sf-theme-btn:hover {
+        color: var(--foreground);
+      }
+      .sf-theme-btn.is-active {
+        background: var(--card);
+        color: var(--foreground);
+        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.10), 0 0 0 1px var(--border);
       }
 
       .sf-idle-skip {

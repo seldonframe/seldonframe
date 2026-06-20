@@ -362,6 +362,7 @@ const FIELDS_BY_ARCHETYPE: Record<AestheticArchetypeId, BookingIntakeField[]> = 
   "technical-restrained": TECHNICAL_RESTRAINED_FIELDS,
   "soft-residential": SOFT_RESIDENTIAL_FIELDS,
   brutalist: BRUTALIST_FIELDS,
+  "midnight-craft": BRUTALIST_FIELDS, // premium creative/studio shape — same inquiry-style fields
 };
 
 /**

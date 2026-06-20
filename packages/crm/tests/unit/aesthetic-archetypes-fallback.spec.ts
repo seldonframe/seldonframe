@@ -7,7 +7,7 @@
 //   2. Each query is 2-4 words (broad enough to guarantee Unsplash hits,
 //      narrow enough not to be useless filler)
 //   3. Queries within an archetype are unique
-//   4. The 7 known archetypes are still present (regression guard)
+//   4. The 8 known archetypes are still present (regression guard)
 //   5. The classifier still routes plumbing/dental/medspa correctly
 
 import { describe, test } from "node:test";
@@ -27,6 +27,7 @@ const ARCHETYPE_IDS: AestheticArchetypeId[] = [
   "technical-restrained",
   "soft-residential",
   "brutalist",
+  "midnight-craft",
 ];
 
 describe("ARCHETYPES.fallbackImageQueries — invariants", () => {
@@ -61,14 +62,14 @@ describe("ARCHETYPES.fallbackImageQueries — invariants", () => {
     });
   }
 
-  test("all 7 archetype ids are present", () => {
+  test("all 8 archetype ids are present", () => {
     for (const id of ARCHETYPE_IDS) {
       assert.ok(ARCHETYPES[id], `missing archetype: ${id}`);
     }
     assert.equal(
       Object.keys(ARCHETYPES).length,
-      7,
-      "exactly 7 archetypes expected",
+      8,
+      "exactly 8 archetypes expected",
     );
   });
 });

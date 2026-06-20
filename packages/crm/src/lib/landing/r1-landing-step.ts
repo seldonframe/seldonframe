@@ -15,6 +15,7 @@ import type { ExtractedBusinessFacts } from "@/lib/web-onboarding/extraction-pro
 import { generateR1Payload } from "./r1-payload-generator";
 import { saveLandingPayload } from "./r1-save";
 import { inferVertical } from "./r1-payload-prompt";
+import { resolveThemeMode, type ThemeModeChoice } from "./theme-mode";
 
 export type R1LandingStepResult =
   | { ok: true; archetype: AestheticArchetypeId }
@@ -35,6 +36,7 @@ export async function runR1LandingStep(args: {
   workspaceId: string;
   facts: ExtractedBusinessFacts;
   byokKey: string;
+  themeMode?: ThemeModeChoice;
 }): Promise<R1LandingStepResult> {
   const { workspaceId, facts, byokKey } = args;
 
@@ -62,7 +64,10 @@ export async function runR1LandingStep(args: {
     // template, instead of a blind per-build stock search.)
     const payload = await generateR1Payload({ facts, archetype, byokKey });
 
-    // Step 3: Persist.
+    // Step 3: Inject resolved theme mode server-side before persisting.
+    payload.theme = { mode: resolveThemeMode(args.themeMode, archetype) };
+
+    // Step 4: Persist.
     await saveLandingPayload(workspaceId, payload, archetype);
 
     return { ok: true, archetype };
