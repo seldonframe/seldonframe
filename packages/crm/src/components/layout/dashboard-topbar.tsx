@@ -35,7 +35,10 @@ const staticTitleMap: Record<string, string> = {
   // deletion) but they aren't a first-class workspace surface anymore.
   "/emails": "Messaging",
   "/conversations": "Inbox",
-  "/automations": "Agents",
+  // ICP-3 — "Agents" noun is the Agent Builder (/studio/agents); the legacy
+  // catalog at /automations is now titled "Automations".
+  "/studio/agents": "Agents",
+  "/automations": "Automations",
   "/proposals": "Proposals",
   "/hub": "Hub",
   "/settings": "Settings",

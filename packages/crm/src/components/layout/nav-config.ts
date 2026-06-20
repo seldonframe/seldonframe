@@ -14,7 +14,7 @@
 //
 // The mapping (every legacy href preserved):
 //   Home      → /dashboard
-//   Agents    → /automations
+//   Agents    → /studio/agents       (sub: /automations [Automations])
 //   Customers → /contacts            (sub: /bookings, /forms)
 //   Inbox     → /conversations       (sub: /emails [Messaging])
 //   Money     → /deals               (sub: /proposals)
@@ -189,9 +189,17 @@ export function buildNavGroups(input: BuildNavInput): NavGroup[] {
     {
       // The six nouns. Untitled lead group keeps Home/Agents flush to
       // the top like Shopify's primary admin rail.
+      //
+      // ICP-3 — "Agents" is now the AGENT BUILDER (Studio): the builder
+      // creates reusable, sellable agent templates at /studio/agents and
+      // deploys them to many SMB clients. The legacy /automations catalog
+      // (typed workflow templates + the per-workspace voice receptionist)
+      // hangs UNDER Agents as an indented "Automations" sub-item so it stays
+      // reachable — nothing that was reachable before becomes unreachable.
       items: filterHidden([
         { href: "/dashboard", label: "Home", icon: "Home" },
-        { href: "/automations", label: "Agents", icon: "Bot" },
+        { href: "/studio/agents", label: "Agents", icon: "Bot" },
+        { href: "/automations", label: "Automations", icon: "Zap", indent: true },
       ]),
     },
     {

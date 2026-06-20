@@ -65,6 +65,9 @@ function findItem(groups: NavGroup[], href: string) {
 // workspaceCount > 1 and asserted separately.
 const AGENCY_CORE_HREFS = [
   "/dashboard",
+  // ICP-3 — "Agents" noun now points at the Agent Builder (Studio); the
+  // legacy /automations catalog hangs under it as an indented sub-item.
+  "/studio/agents",
   "/automations",
   "/contacts",
   "/bookings",
@@ -97,12 +100,17 @@ describe("buildNavGroups — agency, solo operator (workspaceCount <= 1)", () =>
   test("renders the six core nouns as primary (non-indented) links", () => {
     const groups = buildNavGroups(baseInput({ workspaceCount: 1 }));
     // The five always-on nouns (Clients is the 6th, gated). Each must be
-    // a primary link (no indent flag).
-    for (const href of ["/dashboard", "/automations", "/contacts", "/conversations", "/deals"]) {
+    // a primary link (no indent flag). ICP-3 — Agents is now /studio/agents.
+    for (const href of ["/dashboard", "/studio/agents", "/contacts", "/conversations", "/deals"]) {
       const item = findItem(groups, href);
       assert.ok(item, `${href} should be present`);
       assert.notEqual(item?.indent, true, `${href} should be a primary noun, not indented`);
     }
+  });
+
+  test("renders Automations as a sub-item (indented) under Agents", () => {
+    const groups = buildNavGroups(baseInput({ workspaceCount: 1 }));
+    assert.equal(findItem(groups, "/automations")?.indent, true, "/automations should be a sub-item");
   });
 
   test("renders Bookings + Intake Forms as sub-items (indented) under Customers", () => {
@@ -120,7 +128,9 @@ describe("buildNavGroups — agency, solo operator (workspaceCount <= 1)", () =>
   test("Home/Agents/Customers/Inbox/Money use the new noun labels", () => {
     const groups = buildNavGroups(baseInput({ workspaceCount: 1 }));
     assert.equal(findItem(groups, "/dashboard")?.label, "Home");
-    assert.equal(findItem(groups, "/automations")?.label, "Agents");
+    // ICP-3 — Agents noun → the Agent Builder; /automations is now "Automations".
+    assert.equal(findItem(groups, "/studio/agents")?.label, "Agents");
+    assert.equal(findItem(groups, "/automations")?.label, "Automations");
     assert.equal(findItem(groups, "/contacts")?.label, "Customers");
     assert.equal(findItem(groups, "/conversations")?.label, "Inbox");
     assert.equal(findItem(groups, "/deals")?.label, "Money");
@@ -172,9 +182,12 @@ describe("buildNavGroups — hiddenBlocks filtering", () => {
     assert.equal(hasHref(groups, "/forms"), false);
   });
 
-  test("hiding 'automations' removes the Agents noun (/automations)", () => {
+  test("hiding 'automations' removes the Automations sub-item but keeps the Agents noun", () => {
     const groups = buildNavGroups(baseInput({ hiddenBlocks: ["automations"] }));
+    // ICP-3 — /automations is the indented sub-item; hiding it drops the
+    // sub-item only. The Agents noun (the Agent Builder) is not gated on it.
     assert.equal(hasHref(groups, "/automations"), false);
+    assert.equal(hasHref(groups, "/studio/agents"), true, "Agents noun must remain");
   });
 
   test("hiding 'email' removes the Messaging sub-item (/emails)", () => {
@@ -228,7 +241,7 @@ describe("buildNavGroups — operator-portal session", () => {
 
   test("never shows agency-level surfaces (Clients, Proposals, Automations, Docs, Settings)", () => {
     const groups = buildNavGroups(baseInput({ sessionType: "operator-portal", workspaceCount: 5, isSuperAdmin: true }));
-    for (const href of ["/clients", "/proposals", "/automations", "/docs", "/settings", "/super-admin", "/emails", "/forms", "/conversations"]) {
+    for (const href of ["/clients", "/proposals", "/automations", "/studio/agents", "/docs", "/settings", "/super-admin", "/emails", "/forms", "/conversations"]) {
       assert.equal(hasHref(groups, href), false, `${href} must never appear in the operator portal`);
     }
   });
