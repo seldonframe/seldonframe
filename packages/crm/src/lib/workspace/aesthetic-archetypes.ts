@@ -568,6 +568,8 @@ export const ARCHETYPES: Record<AestheticArchetypeId, AestheticArchetype> = {
       "dark modern kitchen remodel",
       "moody craftsman interior",
       "architectural detail low light",
+      "premium trades workmanship",
+      "dark wood texture detail",
     ],
     defaultThemeMode: "dark",
   },
