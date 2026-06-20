@@ -17,7 +17,9 @@ import { db } from "@/db";
 import { agentTemplates, deployments } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
 import { NewAgentButton } from "./new-agent-button";
+import { DeployButton } from "./deploy-button";
 import { TemplateStatusBadge, formatTemplateType } from "./status-badge";
+import { StudioTabs } from "../studio-tabs";
 
 export const dynamic = "force-dynamic";
 
@@ -65,6 +67,7 @@ export default async function AgentsStudioPage() {
 
   return (
     <section className="animate-page-enter space-y-5">
+      <StudioTabs />
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-page-title">Agents</h1>
@@ -128,6 +131,7 @@ export default async function AgentsStudioPage() {
                     >
                       Configure
                     </Link>
+                    <DeployButton templateId={tmpl.id} variant="primary" />
                   </div>
                 </div>
               </article>

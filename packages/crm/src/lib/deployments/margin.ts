@@ -1,0 +1,130 @@
+// ICP-3 — deployment PURE helpers (no DB, no side effects).
+//
+// Lives OUTSIDE store.ts / actions.ts so it can be imported by the client
+// stepper (the live margin readout), the server actions, AND the unit tests.
+// All math here is DISPLAY/ESTIMATE only — nothing here bills anyone. The actual
+// SeldonFrame fee, telephony cost, and LLM cost are reconciled at billing time
+// in a LATER, gated task (needs Stripe + Twilio + the builder's BYOK LLM key);
+// these constants are the honest "what you'll roughly net" preview the builder
+// sees before they deploy.
+
+import type {
+  DeploymentStatus,
+  DeploymentSurface,
+} from "@/db/schema/deployments";
+
+// ─── estimate constants (DISPLAY ONLY — not billed here) ─────────────────────
+
+/** SeldonFrame's platform fee as a fraction of the price the SMB pays. Display
+ *  estimate for the margin readout — the real fee is applied at billing time
+ *  (later, gated). */
+export const DEFAULT_SELDONFRAME_FEE_PCT = 0.05;
+
+/** Estimated monthly telephony cost (phone number + minutes), in cents. Display
+ *  estimate only — real telephony is provisioned + billed via Twilio later. */
+export const DEFAULT_TELEPHONY_CENTS = 1200;
+
+/** Estimated monthly LLM cost (on the builder's own key), in cents. Display
+ *  estimate only — real usage is metered against the builder's BYOK key later. */
+export const DEFAULT_LLM_CENTS = 2500;
+
+// ─── computeDeploymentMargin ─────────────────────────────────────────────────
+
+export type ComputeDeploymentMarginInput = {
+  /** What the SMB client pays the builder per month, in cents. */
+  priceCents: number;
+  /** SeldonFrame fee fraction. Defaults to DEFAULT_SELDONFRAME_FEE_PCT (0.05). */
+  feePct?: number;
+  /** Estimated telephony cost/mo in cents. Defaults to DEFAULT_TELEPHONY_CENTS. */
+  telephonyCents?: number;
+  /** Estimated LLM cost/mo in cents. Defaults to DEFAULT_LLM_CENTS. */
+  llmCents?: number;
+};
+
+export type DeploymentMargin = {
+  /** round(price * feePct) — the SeldonFrame platform fee, in cents. */
+  feeCents: number;
+  /** price - fee - telephony - llm, in cents. MAY be negative (honest). */
+  netCents: number;
+};
+
+/**
+ * Compute the builder's estimated monthly margin on a deployment. Pure.
+ *
+ *   feeCents = round(price * feePct)
+ *   netCents = price - feeCents - telephony - llm
+ *
+ * `price` is clamped to ≥ 0 defensively (the UI should never send a negative),
+ * but `netCents` is intentionally left un-clamped so the readout honestly shows
+ * a loss when the SMB price is below the estimated cost floor.
+ */
+export function computeDeploymentMargin(
+  input: ComputeDeploymentMarginInput,
+): DeploymentMargin {
+  const price = Math.max(0, Math.round(input.priceCents || 0));
+  const feePct = input.feePct ?? DEFAULT_SELDONFRAME_FEE_PCT;
+  const telephony = input.telephonyCents ?? DEFAULT_TELEPHONY_CENTS;
+  const llm = input.llmCents ?? DEFAULT_LLM_CENTS;
+
+  const feeCents = Math.round(price * feePct);
+  const netCents = price - feeCents - telephony - llm;
+  return { feeCents, netCents };
+}
+
+// ─── formatCentsMonthly ──────────────────────────────────────────────────────
+
+/**
+ * Format a cents amount as a monthly price string, e.g. 10000 → "$100/mo",
+ * 9950 → "$99.50/mo", -2750 → "-$27.50/mo". Whole-dollar amounts omit the
+ * decimals; fractional amounts show two. Pure.
+ */
+export function formatCentsMonthly(cents: number): string {
+  const safe = Math.round(cents || 0);
+  const negative = safe < 0;
+  const abs = Math.abs(safe);
+  const dollars = Math.trunc(abs / 100);
+  const remainder = abs % 100;
+
+  const dollarsStr = dollars.toLocaleString("en-US");
+  const body =
+    remainder === 0
+      ? `$${dollarsStr}`
+      : `$${dollarsStr}.${remainder.toString().padStart(2, "0")}`;
+
+  return `${negative ? "-" : ""}${body}/mo`;
+}
+
+// ─── surface / status validators (allow-list guards) ─────────────────────────
+
+const DEPLOYMENT_SURFACES = ["phone", "embed", "link"] as const;
+const DEPLOYMENT_STATUSES = ["draft", "active", "paused", "canceled"] as const;
+
+/** True iff `value` is one of the known deployment surfaces. */
+export function isDeploymentSurface(value: unknown): value is DeploymentSurface {
+  return (
+    typeof value === "string" &&
+    (DEPLOYMENT_SURFACES as readonly string[]).includes(value)
+  );
+}
+
+/** True iff `value` is one of the known deployment statuses. */
+export function isDeploymentStatus(value: unknown): value is DeploymentStatus {
+  return (
+    typeof value === "string" &&
+    (DEPLOYMENT_STATUSES as readonly string[]).includes(value)
+  );
+}
+
+/** Human label for a surface id, e.g. "phone" → "Phone". */
+export function formatDeploymentSurface(surface: string): string {
+  switch (surface) {
+    case "phone":
+      return "Phone";
+    case "embed":
+      return "Embed";
+    case "link":
+      return "Link";
+    default:
+      return surface.charAt(0).toUpperCase() + surface.slice(1);
+  }
+}

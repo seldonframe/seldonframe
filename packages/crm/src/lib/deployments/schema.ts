@@ -1,0 +1,36 @@
+// ICP-3 — the Deploy-to-client action's input allow-list (a plain module).
+//
+// Lives OUTSIDE actions.ts (NOT "use server") so it can be imported by both
+// actions.ts (which validates the stepper's submit) AND any test. A "use server"
+// file may export only async functions, so this zod object cannot live in
+// actions.ts (next build + scripts/check-use-server.sh both reject it) — same
+// split agent-templates/schema.ts uses.
+//
+// .strict(): only the fields the deploy stepper legitimately sends. Provisioning
+// and billing fields (phoneNumber, stripe*, calendarRef) are intentionally NOT
+// accepted here — they're set by LATER, GATED steps, never by this flow.
+
+import { z } from "zod";
+
+const ClientContactSchema = z
+  .object({
+    phone: z.string().max(40).optional(),
+    email: z.string().email().max(200).optional().or(z.literal("")),
+    address: z.string().max(300).optional(),
+  })
+  .strict();
+
+export const CreateDeploymentSchema = z
+  .object({
+    agentTemplateId: z.string().uuid(),
+    clientName: z.string().min(2).max(200),
+    clientContact: ClientContactSchema.optional(),
+    // 'phone' | 'embed' | 'link' — defaults to phone in the store if omitted.
+    surface: z.enum(["phone", "embed", "link"]).optional(),
+    // What the SMB pays per month, in cents. Non-negative; capped at a sane
+    // ceiling ($100k/mo) to reject obviously-bogus input.
+    priceCents: z.number().int().min(0).max(10_000_000).optional(),
+  })
+  .strict();
+
+export type CreateDeploymentInputSchema = z.infer<typeof CreateDeploymentSchema>;

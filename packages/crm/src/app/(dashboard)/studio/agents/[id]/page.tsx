@@ -18,6 +18,7 @@ import {
 import type { AgentBlueprint } from "@/db/schema";
 import { AgentTemplateEditor } from "./editor-client";
 import { TemplateStatusBadge, formatTemplateType } from "../status-badge";
+import { DeployButton } from "../deploy-button";
 
 export const dynamic = "force-dynamic";
 
@@ -58,14 +59,14 @@ export default async function AgentTemplatePage({
         <span className="text-foreground">{template.name}</span>
       </nav>
 
-      <header className="flex items-start gap-3">
+      <header className="flex flex-wrap items-start gap-3">
         <span
           className="inline-flex size-10 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-500 dark:text-indigo-400"
           aria-hidden
         >
           <Bot className="size-5" />
         </span>
-        <div className="space-y-1">
+        <div className="min-w-0 flex-1 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-lg sm:text-[22px] font-semibold tracking-tight leading-relaxed text-foreground">
               {template.name}
@@ -78,6 +79,7 @@ export default async function AgentTemplatePage({
             publishing come next.
           </p>
         </div>
+        <DeployButton templateId={template.id} variant="primary" />
       </header>
 
       <AgentTemplateEditor
