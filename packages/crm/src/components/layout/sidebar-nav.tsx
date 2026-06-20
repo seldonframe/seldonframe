@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, Bot, Briefcase, Building2, Calendar, ChevronLeft, ChevronRight, ExternalLink, FileText, Layout, LayoutDashboard, Mail, MessageCircle, Puzzle, Settings, Shield, Sparkles, Users, Zap } from "lucide-react";
+import { BookOpen, Bot, Briefcase, Building2, Calendar, ChevronLeft, ChevronRight, DollarSign, ExternalLink, FileText, Home, Inbox, Layout, LayoutDashboard, Mail, MessageCircle, Puzzle, Settings, Shield, Sparkles, Users, Zap } from "lucide-react";
 
-type NavItem = {
+export type NavItem = {
   href: string;
   label: string;
   icon: string;
@@ -15,6 +15,12 @@ type NavItem = {
    *  of a Next.js Link. Used for off-platform destinations like the
    *  SeldonFrame Discord. */
   external?: boolean;
+  /** 2026-06-20 — when true, render the row indented under the noun
+   *  above it. The six-noun nav (nav-config.ts) keeps each noun a real
+   *  clickable link and hangs its extra legacy screens beneath it as
+   *  indented sub-items (e.g. Bookings + Intake Forms under Customers)
+   *  so nothing that was reachable before becomes unreachable. */
+  indent?: boolean;
 };
 
 export type NavGroup = {
@@ -25,6 +31,12 @@ export type NavGroup = {
 const iconMap = {
   dashboard: LayoutDashboard,
   layoutdashboard: LayoutDashboard,
+  // 2026-06-20 — six-noun nav: Home/Money/Inbox glyphs for the new
+  // noun labels (Home, Money [$], Inbox). Outline style, matching the
+  // existing lucide set.
+  home: Home,
+  dollarsign: DollarSign,
+  inbox: Inbox,
   bookopen: BookOpen,
   contacts: Users,
   users: Users,
@@ -66,9 +78,14 @@ function NavItemLink({ item, pathname, onNavigate, icon: Icon }: { item: NavItem
   // 2026-05-17 — Vercel-style compact rows. The base .crm-sidebar-link
   // class drives min-height (2rem desktop / 2.125rem mobile) + 13px font;
   // here we only tune the horizontal padding for the same effect.
+  // 2026-06-20 — six-noun nav sub-items (indent: true) get extra left
+  // padding so they read as nested under the noun above them (e.g.
+  // Bookings/Intake Forms under Customers). The icon column stays
+  // aligned; only the row's left inset shifts.
+  const indentClass = item.indent ? " pl-7" : "";
   const className = item.disabled
-    ? "crm-sidebar-link cursor-not-allowed border border-transparent px-2.5 font-medium opacity-55"
-    : "crm-sidebar-link border px-2.5 font-medium";
+    ? `crm-sidebar-link cursor-not-allowed border border-transparent px-2.5 font-medium opacity-55${indentClass}`
+    : `crm-sidebar-link border px-2.5 font-medium${indentClass}`;
 
   // May 1, 2026 — external links (Discord, etc.) render as plain
   // <a target="_blank"> so they don't trip Next.js client-side

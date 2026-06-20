@@ -6,7 +6,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Check, ChevronsUpDown, Plus, Settings2 } from "lucide-react";
 import type { BlockManifest } from "@seldonframe/core/blocks";
-import { SidebarNav, type NavGroup } from "@/components/layout/sidebar-nav";
+import { SidebarNav } from "@/components/layout/sidebar-nav";
+import { buildNavGroups, type NavSessionType } from "@/components/layout/nav-config";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useLabels } from "@/lib/hooks/use-labels";
 
@@ -17,22 +18,6 @@ import { useLabels } from "@/lib/hooks/use-labels";
     - content spacing: "px-3 sm:px-4 lg:px-5"
     - account card shell: "flex items-center gap-2 sm:gap-3 rounded-lg border bg-card p-2 sm:p-3"
 */
-
-const hiddenSlugToHref: Record<string, string> = {
-  // `contacts` deliberately omitted — Clients is a baseline CRM
-  // surface and must always appear in the sidebar even when other
-  // blocks are hidden via the visibility settings. Operators with
-  // `crm` in their hiddenBlocks array still see Clients in nav so
-  // they can re-enable; otherwise the page becomes unreachable.
-  bookings: "/bookings",
-  deals: "/deals",
-  email: "/emails",
-  pages: "/landing",
-  forms: "/forms",
-  automations: "/automations",
-  payments: "/settings/integrations",
-  seldon: "/seldon",
-};
 
 export function Sidebar(props: {
   blocks: BlockManifest[];
@@ -110,211 +95,38 @@ export function Sidebar(props: {
   } = props;
   const labels = useLabels();
   const pathname = usePathname();
-  const hiddenHrefs = new Set(hiddenBlocks.map((slug) => hiddenSlugToHref[slug]).filter(Boolean));
 
-  function filterHidden<T extends { href: string }>(items: T[]): T[] {
-    return items.filter((item) => !hiddenHrefs.has(item.href));
-  }
-
-  // v1.25.1 — operator portal sessions see a trimmed nav: Dashboard +
-  // CRM essentials only. The full SF nav (Soul Marketplace, Pages, Email,
-  // Forms, Automations, Studio) belongs to the SF agency operator
-  // (Acme AI), not the sub-tenant operator (HVAC owner).
-  //
-  // 2026-05-17 — agency operators who have SWITCHED into a client
-  // workspace get a similar lighter view (between the trimmed operator
-  // portal and the full agency view). This is what the SMB owner
-  // would see if they signed into their own workspace: contacts/deals/
-  // bookings + their own pages/email/forms, but NOT the agency-level
-  // builder items (Client workspaces, Agents, Automations, Templates).
-  // Per operator feedback 2026-05-17 — "they see the same /contacts,
-  // /deals, /bookings but they dont see pages like agents, automations,
-  // templates, etc — these are for the agency."
-  const navGroups: NavGroup[] = isOperatorSession
-    ? [
-        // v1.25.3 — operator sidebar trimmed further: no SF Discord
-        // help link. HVAC owner / dentist / etc. get support from
-        // their AGENCY (Acme AI), not SF community. The agency-side
-        // contact info lives in the user-account dropdown footer
-        // (workspace settings / brand chrome).
-        {
-          title: "OVERVIEW",
-          items: filterHidden([
-            { href: "/dashboard", label: "Dashboard", icon: "LayoutDashboard" },
-          ]),
-        },
-        {
-          title: "CRM",
-          items: filterHidden([
-            { href: "/contacts", label: labels.contact.plural, icon: "Users" },
-            { href: "/deals", label: labels.deal.plural, icon: "Building2" },
-            { href: "/bookings", label: "Booking", icon: "Calendar" },
-          ]),
-        },
-      ].filter((group) => group.items.length > 0)
+  // 2026-06-20 — icp3-wedge: the left nav is now built by a single
+  // PURE function (nav-config.ts) instead of three inline hardcoded
+  // branches. It produces the unified SIX-NOUN structure (Home ·
+  // Agents · Customers · Inbox · Money · Clients + System) that adapts
+  // by what the operator HAS, not who they are. The three legacy
+  // session shapes map to one of three NavSessionType values; the
+  // builder owns the per-session item sets, the noun labels, the
+  // enabledBlocks/hiddenBlocks filtering, and the progressive-
+  // disclosure rule (Clients portfolio noun appears only when the
+  // operator owns more than one workspace).
+  const workspaceCount = workspaceOptions.length;
+  const sessionType: NavSessionType = isOperatorSession
+    ? "operator-portal"
     : isInsideClientWorkspace
-    ? [
-        {
-          title: "OVERVIEW",
-          items: filterHidden([
-            { href: "/dashboard", label: "Dashboard", icon: "LayoutDashboard" },
-            // Escape hatch back to the agency workspace. Hits the
-            // /switch-workspace route which sets sf_active_org_id back
-            // to the agency's primary org id BEFORE redirecting —
-            // crucial so the operator lands on the agency dashboard
-            // with the full nav restored (Agents/Automations/Templates/
-            // Client workspaces). Without flipping the cookie the back
-            // link would just navigate but leave us pinned to the
-            // client's workspace context.
-            ...(primaryOrgId
-              ? [
-                  {
-                    href: `/switch-workspace?to=${encodeURIComponent(primaryOrgId)}&next=${encodeURIComponent("/dashboard")}`,
-                    label: "← Back to agency",
-                    icon: "ChevronLeft",
-                  },
-                ]
-              : [
-                  // Fallback: no primary org id (rare — synthesised
-                  // user). Send them to /clients which at least lists
-                  // their workspaces.
-                  { href: "/clients", label: "← Back to agency", icon: "ChevronLeft" },
-                ]),
-          ]),
-        },
-        {
-          title: "WORKSPACE",
-          items: filterHidden([
-            { href: "/contacts", label: labels.contact.plural, icon: "Users" },
-            { href: "/deals", label: labels.deal.plural, icon: "Building2" },
-            { href: "/bookings", label: "Bookings", icon: "Calendar" },
-            // 2026-05-18 — messaging-layer slice 4. Two-way SMS inbox
-            // — every contact this workspace has had inbound SMS from,
-            // with an inline operator reply box. Placed adjacent to
-            // Bookings since both are inbound-customer surfaces.
-            { href: "/conversations", label: "Conversations", icon: "MessageCircle" },
-            // 2026-05-18 — renamed "Email" → "Messaging" because the
-            // page now also hosts Twilio SMS connect + outbound trigger
-            // editor for both channels. "Email" was misleading.
-            { href: "/emails", label: "Messaging", icon: "Mail" },
-            { href: "/forms", label: labels.intakeForm.plural, icon: "FileText" },
-            // 2026-06-02 — Automations is now shown INSIDE the client
-            // workspace. The Voice Receptionist editor (greeting/voice/number,
-            // call transcripts, learned patterns) lives at
-            // /automations/voice-receptionist, which is a PER-CLIENT-WORKSPACE
-            // surface — so the client view needs a path to it. (It was hidden
-            // before because the only automations were agency-level; the
-            // per-workspace voice agent changed that.)
-            { href: "/automations", label: "Automations", icon: "Zap" },
-            // 2026-05-17 — Pages (/landing) dropped from the nav. SF
-            // isn't a landing-page builder; existing rows still render
-            // via the public /l/<slug>/<page> route for backward compat
-            // but operators no longer create new ones from the dashboard.
-            // Agents, Templates intentionally hidden — operator manages
-            // chatbots via the Ready hub's "Test chatbot" deep link.
-          ]),
-        },
-        {
-          title: "SYSTEM",
-          items: filterHidden([
-            { href: "/settings", label: "Settings", icon: "Settings" },
-            ...(isSuperAdmin
-              ? [
-                  {
-                    href: "/super-admin",
-                    label: "SF Admin",
-                    icon: "Shield",
-                  },
-                ]
-              : []),
-          ]),
-        },
-      ].filter((group) => group.items.length > 0)
-    : [
-        // v1.29.0 — operator-language sidebar. Two flat groups instead
-        // of three jargon-named ones ("YOUR SOUL" / "YOUR BLOCKS" /
-        // "SYSTEM"). Operators don't say "Soul" or "Block." They say
-        // "my customers", "my schedule", "my settings."
-        {
-          title: "OVERVIEW",
-          items: filterHidden([
-            { href: "/dashboard", label: "Dashboard", icon: "LayoutDashboard" },
-            // Cut B Phase 3 Task 23 — /clients is the agency's daily
-            // landing surface (lists every client workspace they've
-            // built). Belongs in OVERVIEW next to Dashboard since
-            // it's a workspace-level surface, not a CRM record type.
-            // Label is "Client workspaces" (not just "Clients") to
-            // avoid colliding with the CRM "Contacts" entry below,
-            // which several personality templates re-label as
-            // "Clients" (see lib/crm/personality.ts coaching/agency/
-            // consulting templates). Operator-session branch above
-            // intentionally omits this (operators don't manage
-            // agency workspaces).
-            { href: "/clients", label: "Client workspaces", icon: "Building2" },
-          ]),
-        },
-        {
-          title: "RUN THE BUSINESS",
-          items: filterHidden([
-            { href: "/contacts", label: labels.contact.plural, icon: "Users" },
-            { href: "/deals", label: labels.deal.plural, icon: "Building2" },
-            // 2026-05-21 — Proposals sidebar item (Phase L). Operators
-            // previously had to type /proposals directly or click through
-            // /clients. Placed between Deals and Bookings since proposals
-            // are the upstream of Won deals.
-            { href: "/proposals", label: "Proposals", icon: "FileText" },
-            { href: "/bookings", label: "Bookings", icon: "Calendar" },
-            // 2026-05-18 — messaging-layer slice 4. See sibling comment
-            // in the isInsideClientWorkspace branch.
-            { href: "/conversations", label: "Conversations", icon: "MessageCircle" },
-            // 2026-05-18 — /agents removed from sidebar entirely per
-            // operator feedback ("/agents page is confusing, just keep
-            // /automations"). Route still resolves for deep links from
-            // the Ready hub's "Test chatbot" CTA, but agency operators
-            // manage AI surfaces exclusively through /automations now.
-            // 2026-05-17 — Pages (/landing) dropped from nav. See
-            // the matching comment in the isInsideClientWorkspace branch.
-            // 2026-05-18 — renamed "Email" → "Messaging" because the
-            // page now also hosts SMS (Twilio connect + per-trigger
-            // skill editor for both channels).
-            { href: "/emails", label: "Messaging", icon: "Mail" },
-            { href: "/forms", label: labels.intakeForm.plural, icon: "FileText" },
-            { href: "/automations", label: "Automations", icon: "Zap" },
-            // 2026-05-18 — Removed "Templates" (route /marketplace).
-            // Per operator feedback: the marketplace is future scope and
-            // surfacing it now just clutters the agency sidebar. The
-            // /marketplace route still resolves (no 404) for anyone who
-            // bookmarked it; we just don't link to it from the nav until
-            // the marketplace product is real.
-          ]),
-        },
-        {
-          title: "SYSTEM",
-          items: filterHidden([
-            { href: "/docs", label: "Docs", icon: "BookOpen" },
-            {
-              href: "https://discord.gg/sbVUu976NW",
-              label: "Discord",
-              icon: "MessageCircle",
-              external: true,
-            },
-            { href: "/settings", label: "Settings", icon: "Settings" },
-            // v1.35.6 — SF Admin entry, only rendered for super-admins.
-            // Surfaces the platform-admin dashboard from inside the
-            // operator chrome so SF team members can switch surfaces
-            // without typing the URL.
-            ...(isSuperAdmin
-              ? [
-                  {
-                    href: "/super-admin",
-                    label: "SF Admin",
-                    icon: "Shield",
-                  },
-                ]
-              : []),
-          ]),
-        },
-      ].filter((group) => group.items.length > 0);
+      ? "inside-client-workspace"
+      : "agency";
+  // Drives both the Clients noun (inside buildNavGroups) and the
+  // workspace switcher render below — a solo operator sees neither.
+  const showWorkspaceSwitcher = sessionType !== "operator-portal" && workspaceCount > 1;
+  const navGroups = buildNavGroups({
+    sessionType,
+    workspaceCount,
+    hiddenBlocks,
+    isSuperAdmin,
+    primaryOrgId,
+    labels: {
+      contact: labels.contact,
+      deal: labels.deal,
+      intakeForm: labels.intakeForm,
+    },
+  });
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
@@ -380,6 +192,13 @@ export function Sidebar(props: {
         </div>
 
         <div className="px-3 sm:px-3.5 lg:px-4">
+          {/* 2026-06-20 — progressive disclosure: the workspace
+              switcher only renders for multi-tenant operators (more
+              than one workspace). A solo operator has nothing to switch
+              between, so the tile + popover are hidden entirely — the
+              nav goes straight under the brand header. Mirrors the
+              Clients portfolio noun gate in nav-config.ts. */}
+          {showWorkspaceSwitcher ? (
           <div className="relative mb-3 mt-3">
             <button
               type="button"
@@ -491,6 +310,7 @@ export function Sidebar(props: {
               </div>
             ) : null}
           </div>
+          ) : null}
 
           <SidebarNav groups={navGroups} onNavigate={() => setMobileOpen(false)} />
         </div>

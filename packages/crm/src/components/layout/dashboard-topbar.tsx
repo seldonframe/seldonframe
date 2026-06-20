@@ -21,15 +21,22 @@ import type { NotificationItem } from "@/lib/notifications/feed";
 */
 
 const staticTitleMap: Record<string, string> = {
-  "/dashboard": "Dashboard",
+  // 2026-06-20 — six-noun nav: page titles aligned to the renamed nav
+  // nouns. Home (was Dashboard), Agents (was Automations), Inbox (the
+  // Conversations page), Money (the Deals page — handled in getTitle so
+  // it still respects soul labels). /emails stays "Messaging" to match
+  // its Inbox sub-item label.
+  "/dashboard": "Home",
   "/seldon": "Seldon It",
   "/orgs": "Organizations",
   "/bookings": "Booking",
   // 2026-05-17 — "/landing" page title kept out of the map since the
   // nav item is gone. Existing /landing pages still render (no route
   // deletion) but they aren't a first-class workspace surface anymore.
-  "/emails": "Email",
-  "/automations": "Automations",
+  "/emails": "Messaging",
+  "/conversations": "Inbox",
+  "/automations": "Agents",
+  "/proposals": "Proposals",
   "/hub": "Hub",
   "/settings": "Settings",
   "/clients/new": "New Client",
