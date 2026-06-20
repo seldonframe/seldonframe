@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 // ---------------------------------------------------------------------------
 // RescheduleConfirm — small confirm card shown after a PROSPECT booking is
@@ -36,6 +37,15 @@ export function RescheduleConfirm({
   onCancel,
 }: RescheduleConfirmProps) {
   const cardRef = useRef<HTMLDivElement>(null);
+  // Portal to document.body so `position: fixed` (and the window-relative
+  // left/top below) resolve against the VIEWPORT, not the nearest transformed
+  // ancestor. The dashboard shell + /bookings section both carry
+  // `.animate-page-enter`, whose keyframes animate `transform` with fill-mode
+  // `both`; that non-`none` transform establishes a containing block for fixed
+  // descendants, which would offset this card from its intended drop point.
+  // Mounted gate keeps the portal (and the window.innerWidth reads) client-only.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   // Escape + outside-click cancel the reschedule.
   useEffect(() => {
@@ -55,13 +65,17 @@ export function RescheduleConfirm({
     };
   }, [onCancel]);
 
+  // Client-only: reads window.* and portals to document.body, neither of which
+  // is available during SSR. (This card only ever renders after a drag anyway.)
+  if (!mounted) return null;
+
   // Keep the card inside the viewport.
   const cardW = 300;
   const cardH = 170;
   const left = Math.max(8, Math.min(anchorX, window.innerWidth - cardW - 8));
   const top = Math.max(8, Math.min(anchorY, window.innerHeight - cardH - 8));
 
-  return (
+  return createPortal(
     <div
       ref={cardRef}
       className="fixed z-50 rounded-xl border border-border bg-card p-4 shadow-lg"
@@ -89,6 +103,7 @@ export function RescheduleConfirm({
           Cancel
         </button>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
