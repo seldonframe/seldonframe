@@ -98,8 +98,10 @@ function normalizeBody(raw: unknown): ServicePageBody[] {
 // ── Public args type ─────────────────────────────────────────────────────────
 
 export type GenerateServicePagesArgs = {
-  /** The REAL grid services — source of truth for which pages to emit. */
-  gridServices: { id: string; name: string; description: string }[];
+  /** The REAL grid services — source of truth for which pages to emit. The
+   *  optional `photo` (set by the grid HD post-process) is reused real-first for
+   *  the service-page hero. */
+  gridServices: { id: string; name: string; description: string; photo?: { src: string; alt: string } }[];
   facts: ExtractedBusinessFacts;
   vertical?: string;
   archetype: AestheticArchetypeId;
@@ -276,8 +278,11 @@ export async function generateServicePages(
     let heroPhoto: ServicePhoto | undefined;
     try {
       const resolved = await photoFn({
-        realSrc: undefined,
-        realAlt: undefined,
+        // Real-first: reuse the grid service's already-resolved photo (the grid
+        // HD post-process set it real-upscaled-or-Unsplash). resolveServicePhoto
+        // keeps it when it isn't low-res, so the hero matches the card.
+        realSrc: gridSvc.photo?.src,
+        realAlt: gridSvc.photo?.alt,
         serviceName: gridSvc.name,
         vertical,
         archetype,
