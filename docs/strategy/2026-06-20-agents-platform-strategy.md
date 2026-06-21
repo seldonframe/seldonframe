@@ -45,31 +45,55 @@ Today, deploying an agent effectively means creating a workspace. **The entire e
 
 None require the client to log into a SeldonFrame workspace.
 
-## 3. The three actors
+## 3. One ICP, one price (revised 2026-06-21)
 
-| Actor | Tier | What they do | Status |
-|---|---|---|---|
-| **Operator** | $19 / workspace | Runs their *own* service biz on the full suite | today's product |
-| **Builder** | **$49/mo** | Builds agents/services and **sells them to other businesses** | the expansion |
-| **Agency** | **$297/mo** | **Resells full workspace capabilities** to many clients (white-label, rebill-with-markup) | mostly exists |
+The three "actors" are **one persona at different scale — the service operator**: anyone who delivers a service, or builds an agent that delivers one, and needs to *run it, get paid, and (optionally) sell what they built* to others. A solo plumber and a 50-client agency are the same primitive — the agency just runs more workspaces and resells. (Shopify treats a solo store and a Plus agency as one product that scales; same here.) The old $19/$49/$297 split is **retired**.
 
-The Builder runs an *agents* business, not necessarily a service business. The Agency keeps the markup on what it resells (GHL SaaS-Mode style — "arm the rebels").
+| Was | Now |
+|---|---|
+| Operator $19 / Builder $49 / Agency $297 | **$29/mo flat · unlimited workspaces · 14-day free trial** |
 
-**All three point *outward*** — ICP 1 sells a *service* to consumers, ICP 2 sells *front offices* to ICP 1, ICP 3 *rents agents* to any business. What differs is what's sold and SeldonFrame's role: a **product they use** (ICP 1/2) vs the **infrastructure they build on** (ICP 3). An ICP-3 builder is effectively a micro-SaaS founder; SeldonFrame is their entire backend (hosting + multi-tenancy + Stripe).
+- **$29/mo flat** — the "run your business" floor; captures value from everyone whether or not they sell agents. Undercuts GHL ($97–$497) and bundles more than Shopify.
+- **Unlimited workspaces** — agencies are just power users running many; we deliberately *don't* meter workspaces (nobody else gives this flat) because the money is the GMV cut, not seat-counting.
+- **14-day trial → $29** — an SMB usually runs one workspace; the agency runs many at the same flat price.
 
-## 4. Monetization (confirmed model — no outcome pricing)
-Four layers, all on rails you already have:
+Messaging stays uniform because the product *is* uniform: **build it, run it, sell it.** What differs is only *what* they sell — a service to consumers, front offices to other operators, or rented agents to businesses — not the product or the price. An agent-builder is effectively a micro-SaaS founder; SeldonFrame is their entire backend (hosting + multi-tenancy + Stripe).
 
-1. **Subscription floor** — $49 builder / $297 agency. Cheap-to-deliver (build tools + console).
-2. **Metered usage at markup** (#139 wallet) — voice minutes, SMS, AI tokens, phone numbers. The builder pays SeldonFrame and marks it up to their clients. *Highest-margin engine.*
-3. **GMV cut** (Connect `application_fee`) — when a builder bills their client through SeldonFrame, SeldonFrame takes a small %. The Shopify engine, applied to the agent economy. Plumbing exists (proposals) — flip it on.
-4. **Marketplace rev-share** (later) — when a builder sells an agent to another business via the marketplace, SeldonFrame takes a developer-generous cut (Shopify's 0%-on-first-$1M / 15%-after).
+## 4. Monetization (finalized 2026-06-21 — BYO economics)
 
-The builder charges their clients per-usage or fixed; SeldonFrame provides the Connect rails and earns (2) the usage markup + (3) the application_fee.
+Committing to **BYOK + BYO-Twilio** (the builder brings their own LLM key *and* their own Twilio account — the Vapi model) simplified the model hard. SeldonFrame becomes pure rails — **build, test, eval, host, log, deploy, rent** — and **COGS → ~zero**: no token cost, no telephony float, **no A2P liability** (the builder's Twilio account holds the brand/campaign/numbers). This *deletes* the usage-metering-markup engine and the subaccount/wallet/A2P-ISV machinery — you don't resell usage you don't carry.
 
-**BYOK refinement — two models for two comfort levels:**
-- **ICP 1 / SMBs (not key-comfortable):** SeldonFrame provides the LLM key and meters usage at markup (layer 2).
-- **ICP 3 / builders (key-comfortable): BYOK** — the builder brings their own LLM key, so SeldonFrame carries *no token COGS*. Monetize mainly via the **GMV cut (now near-pure-margin** — cleaner + higher-margin than reselling tokens) + **telephony resale** (buy Twilio wholesale, resell at markup; also absorbs A2P/compliance for the builder). This makes a **low/zero monthly base + % of GMV** viable for ICP 3 — a sharp wedge under GHL's $397/mo ("$0 down, we only make money when you do"). Optionally still offer managed-key + markup for builders who don't want BYOK. The same Connect rail monetizes a human *or* an agent buyer (Phase 3) — build once.
+**Three things the user pays for, nothing else:**
+1. **$29/mo flat to run** (14-day trial, unlimited workspaces) — the floor, from everyone.
+2. **GMV cut — 5% → 3% over $10k/mo → 2% over $50k/mo** — *only* when SeldonFrame is the **sales channel**: a builder sells or rents an agent (or a whole workspace) to *another* business through SeldonFrame Connect. **Not** on the operator's own service revenue (that's just payment passthrough). Declining band = retention for the big builders who could most afford to leave. Flip the dormant Connect `application_fee` (proposals rail).
+3. **Marketplace usage fee** — a builder lists an agent on the marketplace; other agents/builders buy it per-usage; SeldonFrame takes its GMV cut on each cross-agent call. (Built on the MCP layer — see next section.)
+
+**Usage = $0 to us** (BYO keys; providers bill the builder directly). "We don't tax your usage" is a weapon vs GHL's rebill-markup. *Managed-key remains an optional path for SMBs not comfortable with BYOK — then #139 metering applies — but BYO is the default.*
+
+The principle in one breath: **we don't tax your work — flat to run, free to start, a cut only when we help you *sell* something new.** Structurally simpler and more aligned than GHL (profits on complexity + usage markup), Vapi (per-minute platform fee), or Shopify (taxes your own product sales).
+
+> *Trade-off:* BYO-Twilio adds onboarding friction (connect Twilio) vs an instant number — but it fits **progressive disclosure**: first-run (site/booking/CRM/chatbot) needs no key; telephony is disclosed when the builder reaches for a phone agent, and the rails automate the setup so it still feels magical. (This also simplifies the telephony spec to "builder connects their own Twilio.")
+
+## 4b. The MCP connector directory + agents-as-MCP-servers marketplace (added 2026-06-21)
+
+**The product:** on the agent-builder page, a searchable/scrollable **connector directory** — a built-in Zapier-for-agents — where a builder finds a tool and connects it to their agent **via MCP**. SeldonFrame is already MCP-native (it *is* an MCP server); this adds the **client** side (agents consuming other MCP servers).
+
+**Complexity, honestly** (grounded in the codebase): agents today use a fixed `capabilities` allowlist on `AgentBlueprint` → a tool registry → injected into the runtime/voice loops. To add user-selectable MCP tools:
+- *Catalog + search UI* — **Low** (bootstrap by syncing a public MCP registry: Smithery / mcp.so / PulseMCP / the official registry).
+- *Store the connection per agent* (`mcpConnections[]` on the blueprint) — **trivial** (this is the "just store it" part).
+- *Runtime MCP client* (connect → `listTools` → merge into the existing tool bridge) — **Medium**; new muscle (we're a server, not a client today), but the MCP SDK does the protocol.
+- *Per-tool auth* — **the real work.** API-key/token servers = easy (reuse `encryptValue`); **OAuth is the hard part**, and it collapses to essentially **Google + Microsoft + Slack** (everything else has an API-key or paste-a-token path).
+
+**The native-coverage unlock (integration Pareto, researched 2026-06-21):** SeldonFrame *already* natively owns **6 of the highest-frequency categories** — booking (cal.diy), transactional email (Resend), SMS/voice (Twilio), CRM (built-in), payments (Stripe Connect), intake (Formbricks). That neutralizes most must-have OAuth integrations. The user's hypothesis holds: **cal.diy covers the *booking* job, so Google Calendar drops to nice-to-have** (only needed for two-way busy/free *sync*).
+
+**v1 build shortlist (max capability per unit of auth engineering):**
+- **(a) Wrap native as MCP tools** — booking / payments / email / SMS / CRM / intake (skip external connectors for these).
+- **(b) Easy API-key wins (add now):** web search/scrape (Tavily / Brave / Firecrawl — highest ROI; native has none), Mailchimp (the campaign/list gap Resend doesn't fill), Airtable (PAT), Notion (internal-token path), Slack incoming-webhook (≈70% of Slack value — alerts — with zero OAuth).
+- **(c) The one OAuth must-have:** a **single Google Workspace OAuth client** unlocks Calendar-sync + Gmail-read + Sheets + Docs + Drive in one flow — by far the best OAuth investment. Defer Microsoft / full-Slack / HubSpot-OAuth to v2 by demand.
+
+With native (a) + ~4 API-key connectors (b) + one Google OAuth (c), a builder's agent does an estimated **~95% of what service-business users actually want**, with the only heavy auth being one Google client.
+
+**The crown jewel — this directory *is* the marketplace.** Make every SeldonFrame agent **exposable as an MCP server**, and "list your agent on the marketplace at a usage fee" = **publish it as an MCP tool other agents can connect to.** The directory then lists third-party servers *and* other builders' SeldonFrame agents side by side, and SeldonFrame becomes **the MCP registry + the billing/metering layer** between them — every cross-agent call is a GMV event (monetization layer 3). This is the "agents become clients of agents" thesis made real. The durable moat isn't the catalog (anyone can sync a registry) — it's being the **trusted, billed exchange**; the ongoing work is auth + **trust/safety** (vetting listed servers, prompt-injection via tool results, scope limits), and that curation *is* the moat.
 
 ## 5. Phasing (confirmed order)
 
@@ -123,7 +147,7 @@ The article's only real test: *why switch from what you already use?*
 - **GoHighLevel** = a selling layer but *not agent-native* (CRM/funnel tool with AI bolted on), *forces the SMB into a sub-account*, *locks the AI* (its model + markup, no BYOK), bloated. $397/mo fixed.
 - **SeldonFrame** = the whole *business backend for rented agents* (eval, test, host, deploy, sell, bill, brain/memory, telephony) where **the SMB never logs into anything** (standalone deploy) and the builder **keeps their own LLM key + margin** (BYOK, multi-vendor-neutral).
 
-**The 10x switch case** (agent-first builder): fire 5 subscriptions + the glue (Vapi + Make + Stripe wiring + Twilio + hosting), kill the $397/mo fixed cost for **$0-base + a small %**, keep your LLM margin, sell to SMBs who don't adopt a suite — on infra that rides every model gain instead of locking you to one vendor's AI.
+**The 10x switch case** (agent-first builder): fire 5 subscriptions + the glue (Vapi + Make + Stripe wiring + Twilio + hosting), kill the $397/mo fixed cost for **$29 flat + a small %** (no usage tax — BYO keys), keep your LLM margin, sell to SMBs who don't adopt a suite — on infra that rides every model gain instead of locking you to one vendor's AI.
 
 **Who NOT to chase:** happy full-funnel marketing agencies (GHL's funnels/email/courses aren't our surface) and low-level voice devs who want Vapi's knobs. Target **agent-first builders, new entrants, and duct-tapers in pain.** Switching live clients is real friction — win the *next* agent they build; migration follows.
 
