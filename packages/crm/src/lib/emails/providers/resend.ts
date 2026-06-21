@@ -52,7 +52,17 @@ export const resendProvider: EmailProvider = {
       throw new EmailProviderSendError("resend", "Resend API key not configured", { retriable: false });
     }
 
-    const response = await fetch("https://api.resend.com/emails", {
+    // 2026-06-21 — only include the `attachments` key when there's at least
+    // one attachment, so existing (attachment-free) sends produce a
+    // byte-for-byte identical request body.
+    const hasAttachments =
+      Array.isArray(request.attachments) && request.attachments.length > 0;
+
+    // 2026-06-21 — injectable fetch (defaults to global) so unit tests can
+    // assert the request body without hitting the network.
+    const doFetch = request.fetcher ?? fetch;
+
+    const response = await doFetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -66,6 +76,15 @@ export const resendProvider: EmailProvider = {
         text: request.text,
         headers: request.headers,
         tags: request.tags,
+        ...(hasAttachments
+          ? {
+              attachments: request.attachments!.map((a) => ({
+                filename: a.filename,
+                content: a.content,
+                ...(a.contentType ? { content_type: a.contentType } : {}),
+              })),
+            }
+          : {}),
       }),
     });
 

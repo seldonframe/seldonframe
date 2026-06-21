@@ -8,6 +8,7 @@ export type {
   EmailSendRequest,
   EmailSendResult,
   EmailSendFailure,
+  EmailAttachment,
 } from "./interface";
 export { EmailProviderSendError } from "./interface";
 

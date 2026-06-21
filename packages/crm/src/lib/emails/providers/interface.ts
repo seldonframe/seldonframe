@@ -1,3 +1,17 @@
+/**
+ * 2026-06-21 — A file attached to an outbound email. Shape mirrors the
+ * Resend API: `content` is base64-encoded bytes. Used for the RFC-5545
+ * calendar invite (`.ics`) emitted on booking.created. Additive — callers
+ * that don't set `attachments` are unaffected.
+ */
+export type EmailAttachment = {
+  filename: string;
+  /** Base64-encoded file content. */
+  content: string;
+  /** MIME type, e.g. "text/calendar; method=REQUEST". */
+  contentType?: string;
+};
+
 export type EmailSendRequest = {
   orgId: string;
   from: string;
@@ -14,6 +28,19 @@ export type EmailSendRequest = {
    * live mode dispatches leave it undefined and the provider self-resolves.
    */
   apiKeyOverride?: string;
+  /**
+   * 2026-06-21 — optional attachments (e.g. an .ics calendar invite).
+   * Undefined or empty → existing behavior byte-for-byte (no attachments
+   * key on the wire request).
+   */
+  attachments?: EmailAttachment[];
+  /**
+   * 2026-06-21 — injectable fetch for unit tests. Defaults to the global
+   * fetch in production. Mirrors the DI pattern in lib/notifications/
+   * ops-notifications.ts so attachment forwarding can be asserted without
+   * reaching the network.
+   */
+  fetcher?: typeof fetch;
 };
 
 export type EmailSendResult = {

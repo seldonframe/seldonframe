@@ -5,6 +5,7 @@ import {
   getEmailProvider,
   resolveDefaultFromEmail,
   resolveEmailProvider,
+  type EmailAttachment,
 } from "./providers";
 import { isEmailSuppressed, normalizeEmail } from "./suppression";
 import { renderPlainEmailTemplate, type EmailBrandingInput } from "./templates";
@@ -83,6 +84,10 @@ export async function sendEmailFromApi(params: {
   // lookup so callers can inject agency-profile fields (logo_url,
   // brand_color) that don't live on the organizations table.
   brandingOverride?: Partial<EmailBrandingInput>;
+  // 2026-06-21 — optional attachments (e.g. an .ics calendar invite on
+  // booking confirmations). Threaded straight to the provider send().
+  // Undefined → existing behavior byte-for-byte.
+  attachments?: EmailAttachment[];
 }): Promise<ApiSendEmailResult> {
   const toEmail = normalizeEmail(params.toEmail);
 
@@ -171,6 +176,9 @@ export async function sendEmailFromApi(params: {
       text: rendered.text,
       tags: [{ name: "email_id", value: created.id }],
       apiKeyOverride: isTestMode ? resolved.apiKey : undefined,
+      // 2026-06-21 — forward optional attachments (e.g. the .ics calendar
+      // invite). Undefined when the caller omits it → no change on the wire.
+      attachments: params.attachments,
     });
     externalMessageId = result.externalMessageId;
   }
