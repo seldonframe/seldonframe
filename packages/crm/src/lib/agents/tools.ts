@@ -206,7 +206,10 @@ export function labelSlots(slots: readonly string[], timeZone: string): LabeledS
 
 export const lookUpAvailability: AgentTool<
   z.infer<typeof lookUpAvailabilityInput>,
-  { slots: LabeledSlot[]; durationMinutes: number; date: string; timezone: string }
+  // Native result, OR a booking-mode handoff (ICP-3, deployed agents on a
+  // non-native mode — no slot lookup, just the handoff message/url).
+  | { slots: LabeledSlot[]; durationMinutes: number; date: string; timezone: string }
+  | { bookingHandoff: "external_link" | "followup"; message: string; url?: string | null }
 > = {
   name: "look_up_availability",
   description:
@@ -228,6 +231,29 @@ export const lookUpAvailability: AgentTool<
     required: ["date"],
   },
   execute: async (input, ctx) => {
+    // ── booking-mode branch (ICP-3, deployed agents only) ──
+    // Workspace/operator agents never set ctx.booking → mode is 'native' and the
+    // existing availability chain below runs byte-for-byte unchanged. A deployed
+    // agent on a non-native mode hands off here BEFORE any slot lookup or DB read.
+    const mode = ctx.booking?.mode ?? "native";
+    if (mode === "external_link") {
+      const url = ctx.booking?.externalUrl ?? null;
+      return {
+        bookingHandoff: "external_link",
+        message: url
+          ? `We book through our online scheduler. I can text you the link: ${url}`
+          : "We book through our online scheduler — I can have someone send you the link.",
+        url,
+      };
+    }
+    if (mode === "api_mcp" || mode === "cal_com") {
+      return {
+        bookingHandoff: "followup",
+        message:
+          "I've got your details — our team will reach out shortly to lock in a time.",
+      };
+    }
+    // mode === "native": existing code path continues unchanged ↓
     const bookingSlug = input.bookingSlug ?? "default";
     // Parse the requested start date as a UTC noon moment so the walk
     // is stable across DST (it just increments by 24h in pure UTC).
@@ -406,9 +432,22 @@ function defaultBookAppointmentDeps(): BookAppointmentDeps {
   };
 }
 
+/** The result a booking tool returns for a non-native deployment booking mode
+ *  (ICP-3): instead of writing a booking, the deployed agent hands off — either
+ *  sharing the client's own scheduler link (`external_link`) or promising a
+ *  human follow-up (`followup`, for the coming-soon api_mcp/cal_com modes). The
+ *  realtime layer JSON-stringifies this; the agent speaks `message`. */
+export type BookingHandoffResult = {
+  ok: boolean;
+  bookingHandoff: "external_link" | "followup";
+  message: string;
+  url?: string | null;
+};
+
 export const bookAppointment: AgentTool<
   z.infer<typeof bookAppointmentInput>,
   | { ok: boolean; bookingId?: string; testMode?: boolean; error?: string }
+  | BookingHandoffResult
   | NeedsConfirmation
 > & {
   execute: (
@@ -417,6 +456,7 @@ export const bookAppointment: AgentTool<
     deps?: BookAppointmentDeps,
   ) => Promise<
     | { ok: boolean; bookingId?: string; testMode?: boolean; error?: string }
+    | BookingHandoffResult
     | NeedsConfirmation
   >;
 } = {
@@ -470,6 +510,33 @@ export const bookAppointment: AgentTool<
     ctx,
     deps: BookAppointmentDeps = defaultBookAppointmentDeps(),
   ) => {
+    // ── booking-mode branch (ICP-3, deployed agents only) ──
+    // Runs BEFORE the confirmation gate so a non-native deployment hands off
+    // immediately (no read-back of a booking we won't make, no DB write).
+    // Workspace/operator agents never set ctx.booking → mode is 'native' and the
+    // entire existing chain below (confirmation gate + submitBooking) runs
+    // byte-for-byte unchanged.
+    const mode = ctx.booking?.mode ?? "native";
+    if (mode === "external_link") {
+      const url = ctx.booking?.externalUrl ?? null;
+      return {
+        ok: true,
+        bookingHandoff: "external_link",
+        message: url
+          ? `We take bookings through our online scheduler — here's the link to grab a time: ${url}`
+          : "We take bookings through our online scheduler — I'll have someone send you the link to grab a time.",
+        url,
+      };
+    }
+    if (mode === "api_mcp" || mode === "cal_com") {
+      return {
+        ok: true,
+        bookingHandoff: "followup",
+        message:
+          "I've got your details — our team will reach out shortly to confirm and schedule your time.",
+      };
+    }
+    // mode === "native": existing code path continues unchanged ↓
     // Confirmation gate — no write until the caller has confirmed the read-back.
     if (input.confirmed !== true) {
       return {
