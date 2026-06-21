@@ -22,6 +22,9 @@ export type DeploymentNumberRow = {
   id: string;
   builderOrgId: string;
   agentTemplateId: string;
+  /** The SMB client this deployment serves — the deployed agent speaks AS this
+   *  business (composeVoicePersona identity), so the voice path needs it. */
+  clientName: string;
   phoneNumber: string | null;
   status: string;
 };
@@ -64,6 +67,7 @@ function buildDefaultDeps(): ResolveDeploymentDeps {
           id: deployments.id,
           builderOrgId: deployments.builderOrgId,
           agentTemplateId: deployments.agentTemplateId,
+          clientName: deployments.clientName,
           phoneNumber: deployments.phoneNumber,
           status: deployments.status,
         })

@@ -1,11 +1,14 @@
 // ICP-3 — tests for loadDeploymentVoiceContext (deployment-voice.ts).
 //
 // The deployment voice path composes a persona from the agent TEMPLATE's
-// blueprint, but scopes the tool-execution context + soul/timezone/intake to the
-// BUILDER's org (so book_appointment lands in the builder's workspace calendar —
-// per-client calendar is a LATER refinement). This test locks that assembly:
+// blueprint and the deployment's CLIENT identity, but scopes the tool-execution
+// context + timezone/intake to the BUILDER's org (so book_appointment lands in
+// the builder's workspace calendar — per-client calendar is a LATER refinement).
+// This test locks that assembly:
 //   - blueprint comes from the template (greeting/voice/capabilities/customSkillMd)
-//   - soul + timezone + intakeFields come from the builder org
+//   - the persona speaks AS THE CLIENT (deployment.clientName); the builder's own
+//     soul (industry / services / facts) must NOT leak into the instructions
+//   - timezone + intakeFields come from the builder org
 //   - the ctx is scoped to builderOrgId (NOT the template's builderOrgId by
 //     accident — same value here, but the ctx.orgId must be the builder org)
 //   - testMode:false (a real booking, the ICP-3 payoff)
@@ -34,6 +37,8 @@ const DEPLOYMENT: Deployment = {
   clientContact: null,
   surface: "phone",
   phoneNumber: "+18335550100",
+  phoneNumberSid: null,
+  numberOrigin: null,
   calendarRef: null,
   priceCents: 0,
   stripeSubscriptionId: null,
@@ -74,13 +79,20 @@ function baseDeps(): DeploymentVoiceDeps {
       assert.equal(id, "tmpl-1", "loads the deployment's template");
       return TEMPLATE;
     },
-    // The builder-org persona inputs (soul/timezone/intake) — blueprint here is
-    // the builder's OWN voice agent blueprint and must be OVERRIDDEN by the
-    // template's blueprint in the result.
+    // The builder-org persona inputs. The blueprint here is the builder's OWN
+    // voice agent blueprint and must be OVERRIDDEN by the template's. The soul is
+    // the BUILDER's business (Seldon Studio, an agency) and must be DROPPED — the
+    // deployed agent speaks as the CLIENT, never the builder. Only timezone +
+    // intakeFields are consumed. Every field below uses a recognizable sentinel
+    // so a leak is unambiguous.
     loadVoicePersonaInputs: async (orgId: string) => {
-      assert.equal(orgId, "builder-org-1", "soul/tz come from the builder org");
+      assert.equal(orgId, "builder-org-1", "tz/intake come from the builder org");
       return {
-        soul: { businessName: "Bright Smile Dental", industry: "dentistry" },
+        soul: {
+          businessName: "Seldon Studio Agency",
+          businessDescription: "BUILDER-SOUL-LEAK we build AI agents for SMBs",
+          services: [{ name: "BUILDER-SERVICE-LEAK agent deployment" }],
+        },
         timezone: "America/New_York",
         blueprint: { greeting: "WRONG — builder's own greeting", voice: "cedar" } as AgentBlueprint,
         intakeFields: BUILDER_FIELDS,
@@ -124,15 +136,24 @@ describe("loadDeploymentVoiceContext — template blueprint + builder-org tools"
     assert.doesNotMatch(result!.instructions, /WRONG — builder's own greeting/);
   });
 
-  test("persona includes the builder org's business facts + intake fields", async () => {
+  test("persona speaks AS THE CLIENT — client name in, builder soul facts out", async () => {
     const result = await loadDeploymentVoiceContext({
       deployment: DEPLOYMENT,
       now: new Date("2026-06-01T17:00:00Z"),
       deps: baseDeps(),
     });
-    // soul businessName flows into the persona header.
+    // The persona header names the CLIENT (deployment.clientName), so the agent
+    // introduces itself as the client's receptionist.
     assert.match(result!.instructions, /Bright Smile Dental/);
-    // builder-org appointment intake field id appears in the booking instruction.
+    // The builder's OWN soul must NOT leak — neither its business name nor any of
+    // its facts (description / services). This is the bug this phase fixes: a
+    // deployed agent must never pitch the builder's business to the client's
+    // callers. baseDeps() returns a builder soul stuffed with sentinels.
+    assert.doesNotMatch(result!.instructions, /Seldon Studio Agency/);
+    assert.doesNotMatch(result!.instructions, /BUILDER-SOUL-LEAK/);
+    assert.doesNotMatch(result!.instructions, /BUILDER-SERVICE-LEAK/);
+    // builder-org appointment intake fields still drive the booking instruction
+    // (booking lands in the builder calendar — that part is unchanged).
     assert.match(result!.instructions, /reason/);
   });
 

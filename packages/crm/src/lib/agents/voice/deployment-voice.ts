@@ -6,14 +6,20 @@
 //   - persona via composeVoicePersona using the agent TEMPLATE's blueprint
 //     (greeting / voice / FAQ / customSkillMd / capabilities) — the product the
 //     builder shaped and sells.
-//   - soul + timezone + appointment intake fields from the BUILDER's org
-//     (loadVoicePersonaInputs(builderOrgId)) — so the receptionist speaks the
-//     builder's business facts and collects the builder's intake fields, and so
+//   - business IDENTITY = the deployment's CLIENT (deployment.clientName). The
+//     deployed receptionist speaks AS THE CLIENT, not as the builder. We pass a
+//     minimal soul carrying ONLY { businessName: clientName }; the builder's own
+//     soul (industry / services / facts) is deliberately NOT used, so the agent
+//     never pitches the builder's business to the client's callers.
+//   - timezone + appointment intake fields from the BUILDER's org
+//     (loadVoicePersonaInputs(builderOrgId)) — booking needs them, and
 //     book_appointment lands in the builder's workspace calendar.
 //   - a ToolExecuteContext scoped to the BUILDER's org (orgId = builderOrgId),
 //     testMode:false (a real booking — the ICP-3 payoff).
 //
 // TEST-scope simplifications (future refinements, NOT built here):
+//   - persona identity is the client NAME only; richer per-client business facts
+//     (the client's own services / soul) are a LATER refinement.
 //   - book into the builder org (per-client calendar via deployment.calendarRef
 //     is a LATER refinement).
 //   - transcript persisted to the builder org (no deployment_id column yet).
@@ -41,7 +47,7 @@ import { getOrCreateVoiceAgent } from "./voice-agent";
 export type DeploymentVoiceContext = {
   /** Tool-execution context scoped to the BUILDER's org (real booking). */
   ctx: ToolExecuteContext;
-  /** Composed persona (template blueprint + builder-org soul/intake). */
+  /** Composed persona (template blueprint + CLIENT identity + builder-org intake). */
   instructions: string;
   /** Per-call TTS voice from the TEMPLATE blueprint. */
   audioVoice: string | undefined;
@@ -56,10 +62,10 @@ export type DeploymentVoiceContext = {
 export type DeploymentVoiceDeps = {
   /** Load the agent template (its blueprint is the persona source). */
   getAgentTemplate: (id: string) => Promise<AgentTemplate | null>;
-  /** Builder-org persona inputs (soul / timezone / intake). agentId is irrelevant
-   *  to the result because we OVERRIDE the blueprint with the template's, but the
-   *  underlying loader still needs one — the default supplies the builder's voice
-   *  agent id. */
+  /** Builder-org persona inputs — only `timezone` + `intakeFields` are used (the
+   *  blueprint is overridden by the template's, and the soul is replaced by the
+   *  client identity). agentId is irrelevant to the result, but the underlying
+   *  loader still needs one — the default supplies the builder's voice agent id. */
   loadVoicePersonaInputs: (orgId: string) => Promise<VoicePersonaInputs>;
   /** The builder org's voice-receptionist agent id (ctx.agentId + transcript). */
   getVoiceAgentId: (orgId: string) => Promise<string>;
@@ -94,7 +100,10 @@ function buildDefaultDeps(): DeploymentVoiceDeps {
  * best-effort (safe defaults), exactly as on the workspace path.
  */
 export async function loadDeploymentVoiceContext(args: {
-  deployment: Pick<Deployment, "builderOrgId" | "agentTemplateId">;
+  deployment: Pick<
+    Deployment,
+    "builderOrgId" | "agentTemplateId" | "clientName"
+  >;
   now: Date;
   deps?: DeploymentVoiceDeps;
 }): Promise<DeploymentVoiceContext | null> {
@@ -107,16 +116,27 @@ export async function loadDeploymentVoiceContext(args: {
   if (!template) return null;
   const templateBlueprint = (template.blueprint ?? {}) as AgentBlueprint;
 
-  // 2. Builder-org soul / timezone / intake fields. We DISCARD the builder's own
-  //    agent blueprint and use the template's instead.
+  // 2. Builder-org persona inputs. We take ONLY the timezone + appointment intake
+  //    fields (booking needs them, and book_appointment lands in the builder's
+  //    calendar). We DISCARD the builder's own agent blueprint (the template's is
+  //    used instead) AND the builder's soul (so the agent never speaks the
+  //    builder's business facts — see step 4).
   const personaInputs = await deps.loadVoicePersonaInputs(builderOrgId);
 
   // 3. The builder org's voice agent id — for the tool ctx + transcript row.
   const agentId = await deps.getVoiceAgentId(builderOrgId);
 
-  // 4. Compose the persona: TEMPLATE blueprint + builder-org soul/timezone/intake.
+  // 4. Compose the persona: TEMPLATE blueprint + the CLIENT's identity. The
+  //    deployed receptionist speaks AS THE CLIENT (deployment.clientName), so we
+  //    pass a minimal soul carrying ONLY the client's business name. The builder's
+  //    own soul (industry / services / facts) is deliberately NOT passed — it
+  //    would make the agent pitch the builder's business to the client's callers.
+  //    composeVoicePersona derives the business name solely from soul.businessName,
+  //    so this minimal soul names the client without leaking any builder facts.
+  //    timezone + intakeFields stay from the builder (booking).
+  const clientSoul = { businessName: args.deployment.clientName };
   const instructions = composeVoicePersona({
-    soul: personaInputs.soul,
+    soul: clientSoul,
     blueprint: templateBlueprint,
     timezone: personaInputs.timezone,
     now: args.now,
