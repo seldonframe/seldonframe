@@ -17,8 +17,10 @@
 import { revalidatePath } from "next/cache";
 import { getOrgId } from "@/lib/auth/helpers";
 import { assertWritable } from "@/lib/demo/server";
-import { createDeployment } from "./store";
-import { CreateDeploymentSchema } from "./schema";
+import { createDeployment, getDeployment, updateDeployment } from "./store";
+import type { UpdateDeploymentDeps } from "./store";
+import { CreateDeploymentSchema, ActivateDeploymentSchema, PauseDeploymentSchema } from "./schema";
+import { isE164 } from "./margin";
 
 export type CreateDeploymentActionResult =
   | { ok: true; id: string }
@@ -68,4 +70,106 @@ export async function createDeploymentAction(input: {
   revalidatePath("/studio/clients");
   revalidatePath("/studio/agents");
   return { ok: true, id: result.deployment.id };
+}
+
+// ─── activateDeploymentAction ────────────────────────────────────────────────
+
+export type ActivateDeploymentActionResult =
+  | { ok: true }
+  | { ok: false; error: "unauthorized" | "invalid_phone" | "phone_in_use" | "not_found" | "update_failed" };
+
+/**
+ * Activate a draft deployment: assign the builder's Twilio phone number and
+ * flip status to 'active'. Org-guarded — verifies the deployment's
+ * builder_org_id matches the current operator's org. Validates E.164. Maps
+ * the unique-constraint violation (number already assigned) to {ok:false,
+ * error:"phone_in_use"}.
+ *
+ * Does NOT provision the Twilio number (no API call) — the builder supplies
+ * their own number string. The actual inbound-call→deployment routing is
+ * wired in task 2.3.
+ *
+ * @param _deps - optional DI; injected in unit tests to avoid DB.
+ */
+export async function activateDeploymentAction(
+  input: { deploymentId: string; phoneNumber: string },
+  _deps?: Partial<UpdateDeploymentDeps & { findDeploymentById: (id: string) => Promise<import("@/db/schema/deployments").Deployment | null> }>,
+): Promise<ActivateDeploymentActionResult> {
+  assertWritable();
+
+  const orgId = await getOrgId();
+  if (!orgId) return { ok: false, error: "unauthorized" };
+
+  const parsed = ActivateDeploymentSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "invalid_phone" };
+
+  if (!isE164(parsed.data.phoneNumber)) return { ok: false, error: "invalid_phone" };
+
+  // Org guard: load the deployment and verify ownership.
+  const existing = await getDeployment(parsed.data.deploymentId, _deps ? { findById: _deps.findDeploymentById ?? _deps.findById } : undefined);
+  if (!existing || existing.builderOrgId !== orgId) return { ok: false, error: "not_found" };
+
+  try {
+    const result = await updateDeployment({
+      id: parsed.data.deploymentId,
+      patch: { phoneNumber: parsed.data.phoneNumber, status: "active" },
+      deps: _deps,
+    });
+    if (!result.ok) {
+      return { ok: false, error: result.error === "deployment_not_found" ? "not_found" : "update_failed" };
+    }
+    revalidatePath("/studio/clients");
+    return { ok: true };
+  } catch (err) {
+    // Map the Postgres unique-constraint violation to a typed error.
+    // pg/neon throws an error with code '23505' (unique_violation).
+    const isUniqueViolation =
+      err instanceof Error &&
+      ("code" in err
+        ? (err as unknown as { code: string }).code === "23505"
+        : err.message.includes("unique") || err.message.includes("duplicate"));
+    if (isUniqueViolation) return { ok: false, error: "phone_in_use" };
+    throw err;
+  }
+}
+
+// ─── pauseDeploymentAction ───────────────────────────────────────────────────
+
+export type PauseDeploymentActionResult =
+  | { ok: true }
+  | { ok: false; error: "unauthorized" | "not_found" | "update_failed" };
+
+/**
+ * Pause an active deployment (active → paused). Org-guarded. Does not touch
+ * the phone number — the number stays assigned so the builder can re-activate
+ * without re-entering it.
+ *
+ * @param _deps - optional DI; injected in unit tests to avoid DB.
+ */
+export async function pauseDeploymentAction(
+  input: { deploymentId: string },
+  _deps?: Partial<UpdateDeploymentDeps & { findDeploymentById: (id: string) => Promise<import("@/db/schema/deployments").Deployment | null> }>,
+): Promise<PauseDeploymentActionResult> {
+  assertWritable();
+
+  const orgId = await getOrgId();
+  if (!orgId) return { ok: false, error: "unauthorized" };
+
+  const parsed = PauseDeploymentSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "not_found" };
+
+  // Org guard: load the deployment and verify ownership.
+  const existing = await getDeployment(parsed.data.deploymentId, _deps ? { findById: _deps.findDeploymentById ?? _deps.findById } : undefined);
+  if (!existing || existing.builderOrgId !== orgId) return { ok: false, error: "not_found" };
+
+  const result = await updateDeployment({
+    id: parsed.data.deploymentId,
+    patch: { status: "paused" },
+    deps: _deps,
+  });
+  if (!result.ok) {
+    return { ok: false, error: result.error === "deployment_not_found" ? "not_found" : "update_failed" };
+  }
+  revalidatePath("/studio/clients");
+  return { ok: true };
 }

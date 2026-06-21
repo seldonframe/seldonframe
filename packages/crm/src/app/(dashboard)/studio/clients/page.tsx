@@ -19,6 +19,7 @@ import { listDeployments } from "@/lib/deployments/store";
 import { formatCentsMonthly, formatDeploymentSurface } from "@/lib/deployments/margin";
 import { StudioTabs } from "../studio-tabs";
 import { DeploymentStatusBadge } from "./status-badge";
+import { ActivateForm, PauseButton } from "./activate-form";
 
 export const dynamic = "force-dynamic";
 
@@ -82,15 +83,24 @@ export default async function StudioClientsPage() {
         <div className="space-y-3">
           {deployments.map((d) => (
             <article key={d.id} className="rounded-xl border bg-card p-5">
-              <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-card-title truncate">{d.clientName}</p>
                   <p className="text-sm text-muted-foreground">
                     {d.templateName ?? "Agent"} • {formatDeploymentSurface(d.surface)} •{" "}
                     {formatCentsMonthly(d.priceCents)}
                   </p>
+                  <div className="mt-2">
+                    <DeploymentStatusBadge status={d.status} />
+                  </div>
                 </div>
-                <DeploymentStatusBadge status={d.status} />
+                {/* Activation / pause affordances — client components */}
+                {d.status === "draft" && (
+                  <ActivateForm deploymentId={d.id} />
+                )}
+                {d.status === "active" && (
+                  <PauseButton deploymentId={d.id} phoneNumber={d.phoneNumber} />
+                )}
               </div>
             </article>
           ))}

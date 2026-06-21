@@ -115,6 +115,31 @@ export function isDeploymentStatus(value: unknown): value is DeploymentStatus {
   );
 }
 
+// ─── isE164 ──────────────────────────────────────────────────────────────────
+
+/**
+ * Returns true iff `phone` is a valid E.164 phone number:
+ *   - starts with '+'
+ *   - followed by a non-zero leading digit
+ *   - total 8–15 digits (i.e. 7–14 after the '+')
+ *
+ * Pure, zero-dependencies. Used by activateDeploymentAction to validate the
+ * builder's Twilio number before writing it to the deployments row.
+ *
+ * Examples:
+ *   isE164("+15125550148") → true   (US local)
+ *   isE164("+447911123456") → true  (UK)
+ *   isE164("+12125551234") → true
+ *   isE164("15125550148")  → false  (missing '+')
+ *   isE164("+1512555")     → false  (too short — only 7 digits)
+ *   isE164("+0123456789")  → false  (leading zero after '+')
+ *   isE164("+1" + "2".repeat(14)) → false (16 digits total, over max 15)
+ */
+export function isE164(phone: unknown): phone is string {
+  if (typeof phone !== "string") return false;
+  return /^\+[1-9]\d{7,14}$/.test(phone);
+}
+
 /** Human label for a surface id, e.g. "phone" → "Phone". */
 export function formatDeploymentSurface(surface: string): string {
   switch (surface) {

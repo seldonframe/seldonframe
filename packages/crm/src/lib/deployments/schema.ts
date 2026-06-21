@@ -34,3 +34,29 @@ export const CreateDeploymentSchema = z
   .strict();
 
 export type CreateDeploymentInputSchema = z.infer<typeof CreateDeploymentSchema>;
+
+// ─── ActivateDeploymentSchema / PauseDeploymentSchema ────────────────────────
+// Used by activateDeploymentAction and pauseDeploymentAction (actions.ts).
+// Lives here (not in actions.ts) because "use server" files may only export
+// async functions — same split as CreateDeploymentSchema above.
+
+/** Validates the activate payload: a deployment id + an E.164 phone number. */
+export const ActivateDeploymentSchema = z
+  .object({
+    deploymentId: z.string().uuid(),
+    // E.164: '+' + 8–15 digits with non-zero leading digit.
+    // Fine-grained isE164() check in the action catches edge cases.
+    phoneNumber: z.string().min(8).max(20),
+  })
+  .strict();
+
+export type ActivateDeploymentInput = z.infer<typeof ActivateDeploymentSchema>;
+
+/** Validates the pause payload: just the deployment id. */
+export const PauseDeploymentSchema = z
+  .object({
+    deploymentId: z.string().uuid(),
+  })
+  .strict();
+
+export type PauseDeploymentInput = z.infer<typeof PauseDeploymentSchema>;
