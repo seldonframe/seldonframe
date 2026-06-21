@@ -5,6 +5,20 @@
 // deploy or sell it. It is:
 //   - org-guarded — the template must belong to the operator's org (mirrors
 //     saveAgentTemplateBlueprintAction's builderOrgId === orgId check).
+//   - IDENTITY-NEUTRAL — a template is a REUSABLE agent the builder sells to
+//     OTHER businesses; it is NOT the builder's own front office. So the test
+//     turn must NOT adopt the builder's business identity. We pass
+//     `soul: null` (do not leak the builder workspace's industry/services/
+//     business-facts into the prompt) and a neutral `orgName: "your business"`
+//     placeholder instead of the builder org's real name. Otherwise an HVAC
+//     template tested from the "Seldon Studio" workspace would answer as Seldon
+//     Studio (its persona line + soul-derived "About this business" / "Services"
+//     / "Business facts" sections in lib/agents/prompt.ts come from orgName +
+//     soul). With both neutralized, the tested agent is driven purely by the
+//     template's own blueprint (customSkillMd persona + FAQ + pricingFacts +
+//     quote ranges) — exactly what a deployed client would get. orgId / orgSlug
+//     / timezone are still real (the read-only availability tool + temporal
+//     grounding need a workspace + clock; harmless for a sandbox demo).
 //   - sandboxed — runs through the SAME agent runtime building blocks the live
 //     chatbot/voice agent uses (composeSystemPrompt + the tool registry, via
 //     runStatelessAgentTurn) with testMode=true, so every write tool
@@ -38,7 +52,6 @@ import {
   type StatelessToolCall,
 } from "@/lib/agents/stateless-turn";
 import type { AgentBlueprint } from "@/db/schema/agents";
-import type { OrgSoul } from "@/lib/soul/types";
 import { getAgentTemplate } from "./store";
 
 // Hard cap on the messages we accept from the client — a test sandbox never
@@ -57,9 +70,10 @@ export type TestAgentTemplateTurnResult =
 /**
  * Run ONE sandboxed test turn against an agent template's brain. The client
  * passes the full chat history (plain user/assistant text); we build the agent
- * context from the template's blueprint + the org's soul/timezone and run a
- * single non-persisting, testMode turn. Returns the assistant reply + any tool
- * calls (so the UI can note "checked availability").
+ * context from the template's blueprint (NOT the builder's own business soul/
+ * name — see the file header) plus the workspace timezone, and run a single
+ * non-persisting, testMode turn. Returns the assistant reply + any tool calls
+ * (so the UI can note "checked availability").
  */
 export async function testAgentTemplateTurn(input: {
   templateId: string;
@@ -89,12 +103,13 @@ export async function testAgentTemplateTurn(input: {
     return { ok: false, error: "no_llm_key" };
   }
 
-  // Load the workspace context the brain needs (name / soul / timezone).
+  // Load only the workspace context a TEMPLATE test legitimately needs: slug
+  // (read-only availability tool) + timezone (temporal grounding). We do NOT
+  // load name/soul — a template is identity-neutral (see the file header), so
+  // the builder's own business identity must not flow into the prompt.
   const [org] = await db
     .select({
-      name: organizations.name,
       slug: organizations.slug,
-      soul: organizations.soul,
       timezone: organizations.timezone,
     })
     .from(organizations)
@@ -105,8 +120,15 @@ export async function testAgentTemplateTurn(input: {
   const result = await runStatelessAgentTurn({
     orgId,
     orgSlug: org.slug,
-    orgName: org.name,
-    soul: (org.soul as OrgSoul | null) ?? null,
+    // Neutral placeholder — NOT the builder org's name. The template's own
+    // customSkillMd persona is what actually drives identity; this is just the
+    // {orgName} fallback in the persona line ("the receptionist for your
+    // business"). See the file header for why we don't pass org.name.
+    orgName: "your business",
+    // Do NOT pass the builder workspace's soul — it would inject Seldon Studio's
+    // industry/services/business-facts into the template test. A deployed client
+    // gets ITS OWN soul; a sandbox test gets none.
+    soul: null,
     timezone: org.timezone ?? "UTC",
     blueprint: (template.blueprint ?? {}) as AgentBlueprint,
     messages,

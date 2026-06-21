@@ -64,6 +64,13 @@ export function buildGeneratePrompt(
   const system = [
     `You are SeldonFrame's agent designer. Produce a production-ready agent configuration.`,
     surfaceLine,
+    // A generated config is a REUSABLE TEMPLATE sold to many businesses, not a
+    // one-off for a single named client. Write the persona for the business
+    // TYPE generically (e.g. "You are the receptionist for an HVAC company")
+    // and never invent or assume a specific business name — the real client
+    // name is filled in at deploy time. Using a fixed name here would make
+    // every deployment wrongly identify as that one business.
+    `Write the persona generically for the kind of business in the intent (e.g. "You are the receptionist for an HVAC company"). Do NOT invent or assume a specific company name — a real business name is substituted in when the template is deployed to a client.`,
     HOUSE_RULES,
     `Available tools (choose only what the intent needs): ${input.allowedCapabilities.join(", ")}`,
     `Return ONLY valid JSON matching:`,
