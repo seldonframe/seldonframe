@@ -78,13 +78,35 @@ const REGISTRY: Skill[] = [
   },
 ];
 
+// ICP-3 — archetype aliases.
+//
+// The Agent Builder's chat templates carry archetype "chat-assistant" on their
+// blueprint (buildDefaultTemplateBlueprint / DEFAULT_CHAT_ASSISTANT_*). That id
+// is the BUILDER's surface vocabulary; the runtime's skill packs + personas are
+// keyed on the original web-chat archetype id "website-chatbot". Without this
+// alias, getSkillsForArchetype("chat-assistant") returns [] — a chat template
+// would lose temporal-reasoning, the SDR funnel, AND the hard-rules safety
+// invariants. Map it to the proven website-chatbot pack so a generated chat
+// agent behaves like the live website chatbot. Voice already matches
+// ("voice-receptionist") so it's a no-op.
+const ARCHETYPE_ALIASES: Record<string, string> = {
+  "chat-assistant": "website-chatbot",
+};
+
+/** Resolve a blueprint archetype id to the canonical skill/persona archetype. */
+export function canonicalArchetype(archetype: string): string {
+  return ARCHETYPE_ALIASES[archetype] ?? archetype;
+}
+
 /**
  * Returns the skills applicable to a given archetype, in the order they
  * should appear in the system prompt. Composer renders each via
- * renderSkill() with whatever context vars it has.
+ * renderSkill() with whatever context vars it has. Aliased archetypes (e.g.
+ * the builder's "chat-assistant") resolve to their canonical skill pack.
  */
 export function getSkillsForArchetype(archetype: string): Skill[] {
-  return REGISTRY.filter((s) => s.archetypes.includes(archetype));
+  const canonical = canonicalArchetype(archetype);
+  return REGISTRY.filter((s) => s.archetypes.includes(canonical));
 }
 
 /**

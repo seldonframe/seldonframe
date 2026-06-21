@@ -12,8 +12,11 @@ import { ChevronLeft, Bot } from "lucide-react";
 import { getOrgId } from "@/lib/auth/helpers";
 import {
   getAgentTemplate,
+  surfaceForType,
   DEFAULT_VOICE_RECEPTIONIST_CAPABILITIES,
   DEFAULT_VOICE_RECEPTIONIST_VOICE,
+  DEFAULT_CHAT_ASSISTANT_CAPABILITIES,
+  type AgentTemplateType,
 } from "@/lib/agent-templates/store";
 import type { AgentBlueprint } from "@/db/schema";
 import { AgentTemplateEditor } from "./editor-client";
@@ -23,10 +26,12 @@ import { TestButton } from "../test-button";
 
 export const dynamic = "force-dynamic";
 
-// The voice-exposed tools a voice_receptionist template can toggle. Mirrors the
-// voice editor's VOICE_CAPABILITIES (provide_faq_answer is excluded on voice;
-// FAQ is injected into the prompt).
+// The tools a template can toggle, per surface. Voice mirrors the voice
+// editor's VOICE_CAPABILITIES (provide_faq_answer is excluded on voice; FAQ is
+// injected into the prompt). Chat gets the chat-assistant set (incl.
+// provide_faq_answer, which voice filters out as a v1.26 placeholder).
 const VOICE_CAPABILITIES = [...DEFAULT_VOICE_RECEPTIONIST_CAPABILITIES];
+const CHAT_CAPABILITIES = [...DEFAULT_CHAT_ASSISTANT_CAPABILITIES];
 
 export default async function AgentTemplatePage({
   params,
@@ -42,6 +47,12 @@ export default async function AgentTemplatePage({
   if (!template || template.builderOrgId !== orgId) notFound();
 
   const blueprint = (template.blueprint ?? {}) as AgentBlueprint;
+  // template.type is the DB text column (typed `string`); the column only ever
+  // holds a valid AgentTemplateType, and surfaceForType safely defaults
+  // anything non-chat to voice.
+  const surface = surfaceForType(template.type as AgentTemplateType);
+  const allCapabilities =
+    surface === "chat" ? CHAT_CAPABILITIES : VOICE_CAPABILITIES;
 
   return (
     <section className="animate-page-enter space-y-5 sm:space-y-6">
@@ -88,14 +99,20 @@ export default async function AgentTemplatePage({
 
       <AgentTemplateEditor
         templateId={template.id}
+        surface={surface}
         initialBlueprint={{
           greeting: blueprint.greeting ?? "",
           customSkillMd: blueprint.customSkillMd ?? "",
           voice: blueprint.voice ?? DEFAULT_VOICE_RECEPTIONIST_VOICE,
-          capabilities: blueprint.capabilities ?? [...VOICE_CAPABILITIES],
+          capabilities: blueprint.capabilities ?? [...allCapabilities],
           faq: (blueprint.faq ?? []).map((f) => ({ q: f.q, a: f.a })),
+          quoteRanges: (blueprint.quoteRanges ?? []).map((r) => ({
+            service: r.service,
+            low: r.low,
+            high: r.high,
+          })),
         }}
-        allCapabilities={VOICE_CAPABILITIES}
+        allCapabilities={allCapabilities}
       />
     </section>
   );

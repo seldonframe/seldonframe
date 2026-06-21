@@ -19,7 +19,12 @@
 
 import type { OrgSoul } from "@/lib/soul/types";
 import type { AgentBlueprint } from "@/db/schema/agents";
-import { composeDefaultSkillMd, getSkillsForArchetype, renderSkill } from "./skills/registry";
+import {
+  canonicalArchetype,
+  composeDefaultSkillMd,
+  getSkillsForArchetype,
+  renderSkill,
+} from "./skills/registry";
 import { frameFaqForSystemPrompt, type FaqEntry } from "./runtime/scraped-content-framing";
 import {
   summarizeWeeklyHours,
@@ -67,8 +72,11 @@ export async function composeSystemPrompt(input: ComposeSystemPromptInput): Prom
     timezone,
   } = input;
 
+  // Resolve aliased archetypes (e.g. the builder's "chat-assistant" →
+  // "website-chatbot") so persona + skills stay in lockstep.
+  const canonical = canonicalArchetype(archetype);
   const personaTemplate =
-    ARCHETYPE_PERSONAS[archetype] ?? ARCHETYPE_PERSONAS["website-chatbot"];
+    ARCHETYPE_PERSONAS[canonical] ?? ARCHETYPE_PERSONAS["website-chatbot"];
   const persona = personaTemplate.replace("{orgName}", orgName);
 
   const sections: string[] = [persona];
