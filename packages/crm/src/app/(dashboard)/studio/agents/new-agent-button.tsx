@@ -15,9 +15,10 @@
 // action-calling pattern, and the rounded-xl border bg-card card layout.
 
 import { useEffect, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Plus, Phone, MessageSquare, Sparkles } from "lucide-react";
+import { Plus, Phone, MessageSquare, Sparkles, X } from "lucide-react";
 import {
   createAgentTemplateAction,
   saveAgentTemplateBlueprintAction,
@@ -64,6 +65,39 @@ export function NewAgentButton({
     }, GEN_STATUS_INTERVAL_MS);
     return () => clearInterval(id);
   }, [isPending]);
+
+  // Close the modal (used by backdrop click, the X, Cancel, and Escape). Never
+  // close mid-generation — a click-out shouldn't abandon an in-flight draft.
+  const close = () => {
+    if (isPending) return;
+    setOpen(false);
+    setError(null);
+  };
+
+  // Portal to document.body so the `fixed inset-0` overlay is viewport-relative
+  // (the dashboard shell's `.animate-page-enter` transform would otherwise scope
+  // a fixed child to that section). Mounted gate keeps the portal client-only.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  // While the modal is open: close on Escape + lock body scroll. Both are no-ops
+  // when closed, and the cleanup restores the prior overflow on close/unmount.
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") close();
+    }
+    document.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+    // `close` reads isPending but is stable enough for this guard; re-run only
+    // when open toggles.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   // Shared tail: create the template of the right type, optionally save the
   // generated patch, then route to its editor. Returns false (and sets an
@@ -128,25 +162,10 @@ export function NewAgentButton({
     });
   };
 
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className={
-          variant === "primary"
-            ? "crm-button-primary inline-flex h-10 items-center gap-1.5 px-4 text-sm"
-            : "crm-button-secondary inline-flex h-10 items-center gap-1.5 px-4 text-sm"
-        }
-      >
-        <Plus className="size-4" />
-        New agent
-      </button>
-    );
-  }
-
-  return (
-    <div className="w-full max-w-2xl rounded-xl border bg-card p-5 text-left">
+  // The card body — identical content/logic to the previous inline card, now
+  // rendered inside the centered modal below.
+  const cardBody = (
+    <>
       <div className="flex items-start gap-2">
         <span
           className="inline-flex size-8 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-500 dark:text-indigo-400"
@@ -161,6 +180,16 @@ export function NewAgentButton({
             edit and test.
           </p>
         </div>
+        {/* Close (X) — disabled mid-generation, matching the other controls. */}
+        <button
+          type="button"
+          onClick={close}
+          disabled={isPending}
+          aria-label="Close"
+          className="-mr-1 -mt-1 inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted/50 hover:text-foreground disabled:opacity-60"
+        >
+          <X className="size-4" />
+        </button>
       </div>
 
       <textarea
@@ -214,10 +243,7 @@ export function NewAgentButton({
         </button>
         <button
           type="button"
-          onClick={() => {
-            setOpen(false);
-            setError(null);
-          }}
+          onClick={close}
           disabled={isPending}
           className="ml-auto text-xs text-muted-foreground hover:text-foreground disabled:opacity-60"
         >
@@ -228,7 +254,48 @@ export function NewAgentButton({
       {error && (
         <p className="mt-3 text-xs text-rose-600 dark:text-rose-400">{error}</p>
       )}
-    </div>
+    </>
+  );
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className={
+          variant === "primary"
+            ? "crm-button-primary inline-flex h-10 items-center gap-1.5 px-4 text-sm"
+            : "crm-button-secondary inline-flex h-10 items-center gap-1.5 px-4 text-sm"
+        }
+      >
+        <Plus className="size-4" />
+        New agent
+      </button>
+
+      {/* Centered modal. Portal to document.body so the fixed overlay covers the
+          viewport (not the transformed dashboard section). Backdrop click +
+          Escape close; clicks inside the card stopPropagation so they don't
+          dismiss. Body scroll is locked while open (effect above). */}
+      {open &&
+        mounted &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Describe your agent"
+            onClick={close}
+          >
+            <div
+              className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border bg-card p-5 text-left shadow-lg"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {cardBody}
+            </div>
+          </div>,
+          document.body,
+        )}
+    </>
   );
 }
 
