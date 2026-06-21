@@ -7,20 +7,25 @@
 // lives in a plain sibling module, then delegate to the store.
 //
 // "use server" — only async exports here (types/consts live in schema.ts and
-// store.ts). NO live LLM calls, NO eval runs (later tasks 1.2 / 1.3).
+// store.ts). generateAgentDraftAction is the LLM call that converts a single
+// English sentence of intent into a TemplateBlueprintPatch.
 
 "use server";
 
 import { revalidatePath } from "next/cache";
 import { getOrgId } from "@/lib/auth/helpers";
 import { assertWritable } from "@/lib/demo/server";
+import { getAIClient } from "@/lib/ai/client";
 import {
   createAgentTemplate,
   getAgentTemplate,
   updateAgentTemplate,
+  ALL_TEMPLATE_CAPABILITIES,
   type AgentTemplateType,
+  type TemplateBlueprintPatch,
 } from "./store";
 import { TemplateBlueprintPatchSchema } from "./schema";
+import { generateDraft } from "./generate";
 
 export type CreateAgentTemplateResult =
   | { ok: true; id: string }
@@ -101,4 +106,69 @@ export async function saveAgentTemplateBlueprintAction(input: {
   revalidatePath(`/agents/${input.templateId}`);
   revalidatePath("/agents");
   return { ok: true };
+}
+
+// ─── generateAgentDraftAction ─────────────────────────────────────────────────
+//
+// Converts a single English sentence of builder intent into a
+// TemplateBlueprintPatch via a real Anthropic call (BYOK anthropic first,
+// then platform fallback — same resolution order as testAgentTemplateTurn
+// in test-actions.ts line 87). The pure LLM logic lives in generate.ts (DI'd
+// so it's unit-testable without a key); this action wires the real client.
+
+const GEN_MODEL =
+  process.env.ANTHROPIC_AGENT_MODEL?.trim() || "claude-sonnet-4-5-20250929";
+
+export type GenerateAgentDraftResult =
+  | { ok: true; patch: TemplateBlueprintPatch }
+  | { ok: false; error: "unauthorized" | "needs_key" | "generation_failed" };
+
+/**
+ * Generate a TemplateBlueprintPatch from a builder's English description of
+ * what their agent should do. Requires a configured LLM key (BYOK or
+ * platform). Returns needs_key if no usable key is available.
+ */
+export async function generateAgentDraftAction(input: {
+  prompt: string;
+  surface: "voice" | "chat";
+}): Promise<GenerateAgentDraftResult> {
+  assertWritable();
+
+  const orgId = await getOrgId();
+  if (!orgId) return { ok: false, error: "unauthorized" };
+
+  // Guard: empty prompt has no useful intent to generate from.
+  const intent = (input.prompt ?? "").trim();
+  if (!intent) return { ok: false, error: "generation_failed" };
+
+  const { client } = await getAIClient({ orgId });
+  if (!client) return { ok: false, error: "needs_key" };
+
+  const result = await generateDraft(
+    {
+      intent,
+      surface: input.surface,
+      allowedCapabilities: ALL_TEMPLATE_CAPABILITIES,
+    },
+    {
+      complete: async ({ system, user }) => {
+        const resp = await client.messages.create({
+          model: GEN_MODEL,
+          max_tokens: 2048,
+          system,
+          messages: [{ role: "user", content: user }],
+        });
+        return resp.content
+          .filter(
+            (b): b is Extract<typeof b, { type: "text" }> => b.type === "text",
+          )
+          .map((b) => b.text)
+          .join("\n");
+      },
+    },
+  );
+
+  return result.ok
+    ? { ok: true, patch: result.patch }
+    : { ok: false, error: "generation_failed" };
 }
