@@ -7,6 +7,88 @@ with a checkable plan, gets ticked off as it ships, and ends with a review block
 
 ## In flight
 
+### Builder Fix Pass — persona isolation + 3 UX fixes (feature/agent-builder) — DONE
+
+Follow-up on the merged builder (Phases 0-2). 4 commits.
+
+- [x] Fix 1 (persona isolation, CRITICAL) — `test-actions.ts testAgentTemplateTurn`:
+      pass `soul: null` + `orgName: "your business"` to runStatelessAgentTurn (was
+      org.name + org.soul → Seldon Studio identity bled into the HVAC template test).
+      Stop selecting org.name/soul (keep slug+timezone). Header comment updated.
+      → commit f8efeed7
+- [x] Fix 1b — `generate.ts buildGeneratePrompt`: added a line telling the model to
+      write the persona for the business TYPE generically (no invented client name).
+      → commit f8efeed7
+- [x] Fix 2 (surface-filtered tools) — added pure `capabilitiesForSurface(surface)` to
+      store.ts (TDD in store.spec.ts); used it in `generateAgentDraftAction` instead of
+      ALL_TEMPLATE_CAPABILITIES + routed the editor page through it. → commit 87404e81
+- [x] Fix 3 (rotating loader) — cycle status messages every 1500ms while pending in
+      new-agent-button.tsx (Generate) + [id]/editor-client.tsx (Refine). → commit fa275244
+- [x] Fix 4 (create card → modal) — new-agent-button.tsx inline-expand → centered
+      modal (portal + backdrop/Cancel/X/Escape close + body-scroll lock). Body+logic
+      unchanged. → commit 43f1cb45
+- [x] Verify: agent-templates spec suite green (79/79) + tsc 0-new + check-use-server ✓.
+
+#### Review
+- Persona isolation: a tested template no longer inherits the builder workspace's
+  identity. Confirmed by reading lib/agents/prompt.ts — passing `soul:null` skips
+  every `if (soul?…)` / `if (soulRaw…)` block (About this business / Services /
+  Business facts), and `orgName:"your business"` only feeds the persona-line {orgName}
+  fallback, which `customSkillMd` already replaces. The template's own blueprint
+  (customSkillMd + FAQ + pricingFacts + quoteRanges) now drives the reply.
+- The editor already filtered tool checkboxes by surface (page.tsx ternary on
+  VOICE/CHAT caps); Fix 2 just unified both call sites on the new helper.
+- LLM output can't be unit-tested; verified Fix 1/1b by tsc + reasoning. The
+  pure helper (capabilitiesForSurface) IS unit-tested.
+- Out of scope (untouched): loadDeploymentVoiceContext (deployed voice path has the
+  same builder-soul bleed; telephony Phase 2.2 fixes it separately).
+- Manual click-through of a real generate/refine/modal is the user's to run.
+
+### ICP-3 Task 1.2 — Sandboxed test panel for agent templates
+
+Let a builder TEST a voice-receptionist TEMPLATE via chat before deploy/sell.
+Sandboxed: testMode (write tools synthetic), NO persistence, NO deployment.
+
+Key reuse: `executeTurn` (runtime.ts) is DB-coupled (loads + persists conversation
++ turns) so it can't run a no-persist template test directly — but it's a thin
+orchestration over reusable blocks: `composeSystemPrompt` (prompt.ts),
+`getToolsForCapabilities`/`findTool` (tools.ts), `getAIClient` (ai/client.ts), and
+the documented Anthropic tool-loop. `ToolExecuteContext.testMode` short-circuits
+every write tool (book_appointment, escalate_to_human, take_message → synthetic,
+no DB writes). I lift that loop into a shared DB-free helper that both could use.
+
+- [x] 1. `lib/agents/stateless-turn.ts` — `runStatelessAgentTurn(input)`: pure,
+      DB-free, DI Anthropic client; reuses composeSystemPrompt + tools registry +
+      the same loop/MODEL/iteration cap as executeTurn. Returns { reply, toolCalls }.
+- [x] 2. `lib/agent-templates/test-actions.ts` ("use server"):
+      `testAgentTemplateTurn({ templateId, messages })` org-guarded, no-persist,
+      testMode; `no_llm_key` branch via getAIClient. + `markAgentTemplateTestedAction`.
+- [x] 3. `/studio/agents/[id]/test` route (mirror /deploy): server page (org-guard
+      + resolveAgentKeyStatus pre-flight) + test-client.tsx chat island.
+- [x] 4. "Test" button in the editor header + Mark-as-tested.
+- [x] 5. TDD stateless-turn (mocked client) + system-prompt-from-blueprint.
+- [x] 6. Verify: tsx --test, tsc -p, check-use-server.sh.
+
+Review (ICP-3 Task 1.2):
+- Reuse: `runStatelessAgentTurn` (new lib/agents/stateless-turn.ts) lifts the
+  EXACT LLM↔tools loop from `executeTurn` (same MODEL, MAX_TURN_ITERATIONS,
+  Messages-API message shape) and reuses `composeSystemPrompt` + the tool
+  registry verbatim — no new prompt assembly, no new tool dispatch. It just
+  drops the persistence/budgeting/validator-regen layers (don't apply to a
+  throwaway sandbox) and injects the Anthropic client (DI for tests). NO `@/db`
+  import in the module → structurally cannot mutate.
+- Sandbox proof: testMode flows into every tool's ToolExecuteContext.
+  book_appointment/escalate_to_human/take_message short-circuit to synthetic
+  results before any DB import. The spec asserts the booking tool_result fed
+  back to the model is testMode:true with a `test-` id — would have ECONNREFUSED
+  if it hit the DB. No conversation/turn rows written (action never calls
+  executeTurn).
+- no_llm_key UX: action returns {ok:false,error:"no_llm_key"} when getAIClient
+  yields no Anthropic client; page pre-flights via resolveAgentKeyStatus and the
+  client halts the input + shows a banner linking /settings/integrations/llm.
+- Tests: 6 new (stateless-turn.spec.ts) all green; existing store.spec 19/19;
+  tsc 0 source errors (10 .next/ baseline only); check-use-server clean.
+
 - [ ] **Portal Documents (file upload)** — first-class file uploads on the
       Client Portal. New `portal_documents` table + Vercel Blob, server actions
       `uploadPortalDocumentAction` / `markPortalDocumentDownloadedAction`,
