@@ -3,8 +3,8 @@
 // Loads the builder's template (org-guarded via getOrgId + builderOrgId match),
 // then renders the editor — greeting / persona script / FAQ / voice / tools —
 // reusing the voice-receptionist editor's section patterns. Saves flow through
-// saveAgentTemplateBlueprintAction. NO "Test" or "Deploy" buttons yet (later
-// tasks 1.2 live test + 1.3 eval gate).
+// saveAgentTemplateBlueprintAction. The header offers Test (the sandboxed chat
+// panel, task 1.2) + Deploy (the deploy-to-client flow). The eval gate is 1.3.
 
 import { notFound } from "next/navigation";
 import Link from "next/link";
@@ -19,6 +19,7 @@ import type { AgentBlueprint } from "@/db/schema";
 import { AgentTemplateEditor } from "./editor-client";
 import { TemplateStatusBadge, formatTemplateType } from "../status-badge";
 import { DeployButton } from "../deploy-button";
+import { TestButton } from "../test-button";
 
 export const dynamic = "force-dynamic";
 
@@ -75,11 +76,14 @@ export default async function AgentTemplatePage({
           </div>
           <p className="text-sm text-muted-foreground max-w-3xl">
             {formatTemplateType(template.type)} template. Configure it once here,
-            then deploy it to as many clients as you like. Testing it live and
-            publishing come next.
+            test it in the sandbox, then deploy it to as many clients as you
+            like.
           </p>
         </div>
-        <DeployButton templateId={template.id} variant="primary" />
+        <div className="flex flex-wrap items-center gap-2">
+          <TestButton templateId={template.id} variant="secondary" />
+          <DeployButton templateId={template.id} variant="primary" />
+        </div>
       </header>
 
       <AgentTemplateEditor

@@ -8,8 +8,8 @@
 // editable surface is the TEMPLATE blueprint — greeting, persona script
 // (customSkillMd), TTS voice, tools, FAQ. Deployment-only controls (number
 // assignment, Live/Pause, missed-call text-back) are intentionally NOT here:
-// those belong to a deployment, configured per-client in a later task. There is
-// also NO "Test" or "Deploy" button yet (tasks 1.2 / 1.3).
+// those belong to a deployment, configured per-client in a later task. Test
+// (sandboxed chat, task 1.2) + Deploy live in the page header, not this form.
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -219,8 +219,8 @@ export function AgentTemplateEditor(props: Props) {
       <div className="rounded-xl border bg-card p-5">
         <h2 className="text-card-title">Save</h2>
         <p className="text-xs text-muted-foreground">
-          Saves your changes to this template. Testing it live and publishing it
-          come next.
+          Saves your changes to this template. Use Test to try it in the sandbox,
+          then Deploy to set it up for a client.
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <button

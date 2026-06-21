@@ -1,0 +1,274 @@
+// ICP-3 (task 1.2) — TDD for the stateless agent turn runner (the template test
+// sandbox's engine).
+//
+// These tests drive runStatelessAgentTurn with a FAKE Anthropic client (no
+// network, no DB) and assert the wiring we added:
+//   1. A text-only turn returns the assistant's reply + no tool calls.
+//   2. The tool allowlist sent to the model is built from the blueprint's
+//      capabilities (reuse of getToolsForCapabilities) — NOT the full registry.
+//   3. A tool-call turn loops: execute the tool, feed the result back, then the
+//      model's follow-up text is returned + the tool call is surfaced.
+//   4. testMode flows into tool execution — book_appointment short-circuits to a
+//      synthetic result and writes NOTHING (no DB import path taken). This is the
+//      sandbox guarantee.
+//   5. A model error surfaces as ok:false with a diagnostic (test sandbox shows
+//      the real reason).
+//
+// node:test has no module mocking, so the Anthropic client is injected
+// (DI convention — mirrors lib/agent-templates/store.spec.ts).
+
+import { describe, test } from "node:test";
+import assert from "node:assert/strict";
+
+import {
+  runStatelessAgentTurn,
+  type RunStatelessAgentTurnInput,
+} from "../../../src/lib/agents/stateless-turn";
+import type { AgentBlueprint } from "../../../src/db/schema/agents";
+
+// ─── fake Anthropic client ───────────────────────────────────────────────────
+//
+// Minimal shape: messages.create returns a scripted response per call. We track
+// every request so tests can assert the tools/messages we sent.
+
+type FakeResponse = {
+  content: Array<
+    | { type: "text"; text: string }
+    | { type: "tool_use"; id: string; name: string; input: unknown }
+  >;
+  stop_reason: string;
+  usage?: { input_tokens: number; output_tokens: number };
+};
+
+function makeFakeClient(responses: FakeResponse[]) {
+  const requests: Array<Record<string, unknown>> = [];
+  let i = 0;
+  const client = {
+    messages: {
+      create: async (req: Record<string, unknown>) => {
+        requests.push(req);
+        const res = responses[i] ?? responses[responses.length - 1];
+        i += 1;
+        return res as unknown;
+      },
+    },
+  };
+  // Cast through unknown — the real type is Anthropic, but the loop only touches
+  // messages.create + the response shape we model above.
+  return { client: client as unknown as RunStatelessAgentTurnInput["client"], requests };
+}
+
+function baseInput(
+  over: Partial<RunStatelessAgentTurnInput> = {},
+): RunStatelessAgentTurnInput {
+  const blueprint: AgentBlueprint = {
+    archetype: "voice-receptionist",
+    capabilities: ["look_up_availability", "book_appointment"],
+    greeting: "Thanks for calling!",
+    faq: [{ q: "Hours?", a: "9 to 5, Mon–Fri." }],
+    voice: "cedar",
+  };
+  return {
+    orgId: "org-1",
+    orgSlug: "acme",
+    orgName: "Acme Plumbing",
+    soul: null,
+    timezone: "America/New_York",
+    blueprint,
+    messages: [{ role: "user", content: "What are your hours?" }],
+    testMode: true,
+    client: makeFakeClient([
+      { content: [{ type: "text", text: "We're open 9 to 5." }], stop_reason: "end_turn" },
+    ]).client,
+    now: new Date("2026-06-20T12:00:00Z"),
+    ...over,
+  };
+}
+
+// ─── 1. text-only turn ───────────────────────────────────────────────────────
+
+describe("runStatelessAgentTurn — text-only", () => {
+  test("returns the assistant reply and no tool calls", async () => {
+    const { client } = makeFakeClient([
+      {
+        content: [{ type: "text", text: "We're open 9 to 5, Monday to Friday." }],
+        stop_reason: "end_turn",
+      },
+    ]);
+    const result = await runStatelessAgentTurn(baseInput({ client }));
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.reply, "We're open 9 to 5, Monday to Friday.");
+    assert.deepEqual(result.toolCalls, []);
+  });
+});
+
+// ─── 2. tool allowlist comes from the blueprint capabilities ──────────────────
+
+describe("runStatelessAgentTurn — tool allowlist", () => {
+  test("sends ONLY the blueprint's capabilities as tools (reuses getToolsForCapabilities)", async () => {
+    const fake = makeFakeClient([
+      { content: [{ type: "text", text: "ok" }], stop_reason: "end_turn" },
+    ]);
+    await runStatelessAgentTurn(
+      baseInput({
+        client: fake.client,
+        blueprint: {
+          archetype: "voice-receptionist",
+          capabilities: ["look_up_availability"], // only ONE tool
+          greeting: "Hi",
+        },
+      }),
+    );
+    assert.equal(fake.requests.length, 1);
+    const tools = fake.requests[0].tools as Array<{ name: string }>;
+    const names = tools.map((t) => t.name);
+    assert.deepEqual(names, ["look_up_availability"], "only the allowed tool is exposed");
+    // System prompt must be present (composeSystemPrompt was used).
+    assert.equal(typeof fake.requests[0].system, "string");
+    assert.ok((fake.requests[0].system as string).length > 0);
+  });
+
+  test("system prompt is built from the blueprint (FAQ answer appears)", async () => {
+    const fake = makeFakeClient([
+      { content: [{ type: "text", text: "ok" }], stop_reason: "end_turn" },
+    ]);
+    await runStatelessAgentTurn(baseInput({ client: fake.client }));
+    const system = fake.requests[0].system as string;
+    // The FAQ answer text from the blueprint must be embedded in the prompt.
+    assert.match(system, /9 to 5, Mon–Fri\./);
+    // Acme name is woven into the persona.
+    assert.match(system, /Acme Plumbing/);
+  });
+});
+
+// ─── 3. tool-call loop + sandbox (testMode) ───────────────────────────────────
+
+describe("runStatelessAgentTurn — tool-call loop in testMode", () => {
+  test("executes book_appointment in testMode (synthetic, no DB write) then returns follow-up text", async () => {
+    // Turn 1: model asks to book. Turn 2: model confirms in text.
+    const fake = makeFakeClient([
+      {
+        content: [
+          {
+            type: "tool_use",
+            id: "tu_1",
+            name: "book_appointment",
+            input: {
+              fullName: "Jane Doe",
+              phone: "+15551234567",
+              slotIso: "2026-06-25T16:00:00Z",
+              confirmed: true,
+            },
+          },
+        ],
+        stop_reason: "tool_use",
+      },
+      {
+        content: [{ type: "text", text: "You're all set for June 25." }],
+        stop_reason: "end_turn",
+      },
+    ]);
+
+    const result = await runStatelessAgentTurn(
+      baseInput({
+        client: fake.client,
+        messages: [{ role: "user", content: "Book me for the 25th at noon." }],
+      }),
+    );
+
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    // Final text comes from the SECOND model call (post-tool).
+    assert.equal(result.reply, "You're all set for June 25.");
+    // The tool call is surfaced for the UI note.
+    assert.equal(result.toolCalls.length, 1);
+    assert.equal(result.toolCalls[0].name, "book_appointment");
+
+    // The loop made TWO model calls (tool round-trip).
+    assert.equal(fake.requests.length, 2);
+
+    // The SECOND request must carry a tool_result for tu_1 whose content is the
+    // SYNTHETIC testMode booking (testMode:true, a "test-" booking id) — proving
+    // sandboxing flowed into ToolExecuteContext and NO real booking was written.
+    const secondMessages = fake.requests[1].messages as Array<{
+      role: string;
+      content: unknown;
+    }>;
+    const toolResultMsg = secondMessages.find(
+      (m) =>
+        Array.isArray(m.content) &&
+        (m.content as Array<{ type?: string }>).some(
+          (b) => b.type === "tool_result",
+        ),
+    );
+    assert.ok(toolResultMsg, "a tool_result message is fed back to the model");
+    const block = (toolResultMsg!.content as Array<{
+      type: string;
+      tool_use_id: string;
+      content: string;
+    }>).find((b) => b.type === "tool_result")!;
+    assert.equal(block.tool_use_id, "tu_1");
+    const parsed = JSON.parse(block.content) as { testMode?: boolean; bookingId?: string };
+    assert.equal(parsed.testMode, true, "booking ran in sandbox (testMode)");
+    assert.ok(
+      typeof parsed.bookingId === "string" && parsed.bookingId.startsWith("test-"),
+      "synthetic booking id, not a real one",
+    );
+  });
+
+  test("invalid tool input is fed back as an error, loop continues to text", async () => {
+    const fake = makeFakeClient([
+      {
+        content: [
+          {
+            type: "tool_use",
+            id: "tu_bad",
+            name: "book_appointment",
+            // Missing required fields → schema rejects → error tool_result.
+            input: { fullName: "X" },
+          },
+        ],
+        stop_reason: "tool_use",
+      },
+      {
+        content: [{ type: "text", text: "Let me get a few more details." }],
+        stop_reason: "end_turn",
+      },
+    ]);
+    const result = await runStatelessAgentTurn(
+      baseInput({ client: fake.client, messages: [{ role: "user", content: "book" }] }),
+    );
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.reply, "Let me get a few more details.");
+    // The error tool_result was sent back.
+    const second = fake.requests[1].messages as Array<{ role: string; content: unknown }>;
+    const errBlock = (second
+      .flatMap((m) => (Array.isArray(m.content) ? (m.content as Array<Record<string, unknown>>) : []))
+      .find((b) => b.type === "tool_result" && b.is_error === true)) as
+      | { content: string }
+      | undefined;
+    assert.ok(errBlock, "schema failure surfaces as an is_error tool_result");
+  });
+});
+
+// ─── 4. model error ──────────────────────────────────────────────────────────
+
+describe("runStatelessAgentTurn — model error", () => {
+  test("surfaces a diagnostic on client failure (sandbox shows the real reason)", async () => {
+    const client = {
+      messages: {
+        create: async () => {
+          throw new Error("invalid x-api-key");
+        },
+      },
+    } as unknown as RunStatelessAgentTurnInput["client"];
+
+    const result = await runStatelessAgentTurn(baseInput({ client }));
+    assert.equal(result.ok, false);
+    if (result.ok) return;
+    assert.equal(result.reason, "llm_error");
+    assert.match(result.message, /invalid x-api-key/);
+  });
+});
