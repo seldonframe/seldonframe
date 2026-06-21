@@ -14,6 +14,8 @@ type TwilioIntegration = {
   authToken?: string;
   fromNumber?: string;
   connected?: boolean;
+  /** Elastic SIP Trunk SID (TK…) used for voice-number provisioning (Phase 0). */
+  voiceTrunkSid?: string;
 };
 
 async function resolveTwilioAuth(orgId: string) {

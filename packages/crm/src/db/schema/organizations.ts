@@ -15,6 +15,9 @@ export type OrganizationIntegrations = {
     test?: TwilioTestConfig;
     /** Operator Portal PWA v2: A2P campaign approved; outbound SMS enabled. */
     outboundSmsEnabled?: boolean;
+    /** Elastic SIP Trunk SID (TK…) for voice-number provisioning (Phase 0).
+     *  Set via the Telephony settings UI (later phase). */
+    voiceTrunkSid?: string;
   };
   resend?: {
     apiKey: string;
