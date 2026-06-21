@@ -9,6 +9,8 @@ import { sendTriggeredEmailsForContactEvent, sendWelcomeEmailForContact } from "
 import { syncContactToNewsletter } from "@/lib/integrations/newsletter-sync";
 // 2026-05-18 — Outbound messaging dispatch (plan v2, slice 2).
 import { dispatchOutboundMessagesForEvent } from "@/lib/messaging/dispatch";
+// 2026-06-21 — ICS-push: emit an .ics calendar invite on booking.created.
+import { sendBookingCalendarInvite } from "@/lib/calendar/booking-invite";
 // 2026-05-18 — Slice 6: cancel pending scheduled sends (e.g. 24h
 // reminders) when their target booking is cancelled.
 import { cancelScheduledSendsForBooking } from "@/lib/messaging/schedule";
@@ -335,6 +337,26 @@ export function registerCrmEventListeners() {
       } catch (err) {
         console.warn(
           `[listeners] dispatchOutboundMessagesForEvent booking.created failed:`,
+          err,
+        );
+      }
+
+      // 2026-06-21 — ICS-push: email an RFC-5545 calendar invite (.ics) so
+      // the appointment lands in the workspace owner's real calendar (the
+      // core "it's in my calendar" win) and the customer's. Additive +
+      // soft-failing: sendBookingCalendarInvite never throws, so a build/
+      // send failure here can NEVER break the booking or the existing
+      // confirmation email/SMS dispatched above. Runs after the existing
+      // confirmation logic and does not alter it.
+      try {
+        await sendBookingCalendarInvite({
+          orgId: bookingOrgId,
+          bookingId,
+        });
+      } catch (err) {
+        // Belt-and-suspenders — the function is already soft-fail internally.
+        console.warn(
+          `[listeners] sendBookingCalendarInvite booking.created failed:`,
           err,
         );
       }
