@@ -80,12 +80,10 @@ export type DeploymentClientContext = {
 
 ## Phase 3 — book into the client's own (native) calendar
 
-### Task 5: SPIKE — pin the booking-availability internals (no code; output into this plan)
-The booking engine is regression-sensitive and only partially mapped. Before changing it, pin:
-- [ ] How an **appointment type** is created (the `bookings` row with `status='template'` — `lib/bookings/actions.ts:~314`; the `create_appointment_type` MCP tool) and what fields hold **availability/hours** (days, hours, slot length, timezone). Exact function + payload to create one programmatically.
-- [ ] The exact params of `listPublicBookingSlotsAction` + `submitPublicBookingAction` (`lib/bookings/actions.ts:504,1384`) — confirm they key off `{ orgSlug, bookingSlug }` → `resolvePublicBookingContext` → `orgId` + the appointment type, and where the `WHERE bookings.orgId` lives.
-- [ ] Whether `bookings` has (or needs) a `deployment_id` column for per-client attribution.
-- [ ] Append findings here. **If creating a per-deployment appointment type with custom availability is NOT a clean reuse, STOP and flag** — we'll re-scope to "tag bookings with deploymentId + the agent uses the client's hours from clientContext for its spoken availability" (a smaller, LLM-guided fallback) rather than a full second appointment type.
+### Task 5: SPIKE — DONE (cal.diy architecture pinned 2026-06-21)
+**Verdict: SeldonFrame booking is HOME-GROWN NATIVE, NOT Cal.com.** Bookings `INSERT` into the Postgres `bookings` table (`lib/bookings/create-for-customer.ts:124`); availability is computed **locally** from `organizations.settings.booking` rules + local conflict queries (`lib/bookings/actions.ts:554` + `computeSlotsForDay`/`workspace-rules`); **"cal.diy" is only a namespace/visual label** (`caldiy-booking` block, `calcom-month-v1` renderer) — NO Cal.com API, NO app-store, NO OAuth, NO CalDAV. Google Calendar sync was **explicitly removed** (`google-calendar-sync.ts` is a no-op stub: *"the Cal.diy booking page IS the operator's calendar; external sync was redundant"*). An **appointment type = a `bookings` row with `status='template'`**; its hours/buffers live in the workspace booking rules / the template row's metadata. `bookings` has **no `deployment_id`** yet (additive column needed for per-client tagging).
+
+**Implication:** Phase 3 below (native per-deployment calendar) is a clean, no-debt MVP (bookings in SeldonFrame, the client's hours, isolated + tagged). BUT **"book into the client's REAL Google/Outlook" is a genuine multi-week build, NOT free** — see the **calendar-architecture fork** in Deferred. So treat Phase 3 as an **optional stepping stone**; the real "bookings land in the client's own calendar" win (what owners actually want) is a separate strategic bet, and Phase 3's native work is partly thrown away if we later adopt real Cal.com. **Recommend: ship Phases 0–2 (speak as the client) now; decide the calendar fork deliberately before investing in Phase 3.**
 
 ### Task 6: provision a per-deployment appointment type (client hours) on activate
 **Files:** `lib/deployments/actions.ts` (activate/provision path) + a new `lib/deployments/provision-calendar.ts` (DI'd).
@@ -114,7 +112,10 @@ The booking engine is regression-sensitive and only partially mapped. Before cha
 ---
 
 ## Deferred (explicit — not this plan)
-- **External-calendar sync (the real CalDAV/Google/Outlook bridge):** new integration layer (OAuth or CalDAV creds per client, sync engine). The single biggest follow-on; only worth it after the native per-deployment calendar proves demand.
+- **External-calendar sync — "bookings land in the client's REAL Outlook/Google" (what business owners actually want — see the Amplify Voice video).** Because our booking is home-grown (Task 5 spike), this is a multi-week **strategic FORK**, not config:
+  - **(ii) Adopt a real Cal.com / cal.diy instance** — provision a per-client Cal.com event type; the client self-connects their Google/Outlook/HubSpot via Cal.com's native **app-store** (1-click OAuth, no creds shared); the agent books against the event-type id; Cal.com handles sync + conflict-check for free. The Amplify/Retell model. **~3–4 weeks**, ongoing Cal.com dependency (~$15/user/mo). Biggest integration breadth for least of our own code. *(Note: this would replace SeldonFrame's native booking for deployments — Phase 3's native work is superseded.)*
+  - **(iii) Build our own Google + Microsoft-Graph OAuth + sync layer** — full control, no third-party dependency, but ~**4–6 weeks** (OAuth, token refresh, two-way sync, conflict detection, + CRM if needed).
+  This is the single biggest calendar decision; make it deliberately. The video confirms it WILL be demanded ("meetings in my Outlook"), so it's a *when*, not an *if*.
 - **Chat / embed / link deploy parity:** the `api/v1/public/agent/[slug]/turn` route doesn't resolve deployments today (runs on the builder workspace soul). Wire deployment resolution + `clientContext` into it once the chat-deploy routing is settled. (Voice is the live path; do it first.)
 - **Per-client FAQ-from-URL:** v1 generates from a pasted description (the backend `compileSoulService` takes text, not URLs — URL→soul lives in the MCP client). A backend URL-scrape→clientContext is a nice follow-on.
 
