@@ -17,6 +17,7 @@
 import type {
   Deployment,
   DeploymentClientContact,
+  DeploymentClientContext,
   DeploymentStatus,
   DeploymentSurface,
   NewDeployment,
@@ -156,6 +157,9 @@ export type CreateDeploymentInput = {
   agentTemplateId: string;
   clientName: string;
   clientContact?: DeploymentClientContact;
+  /** The CLIENT's captured business context (narrow soul + FAQ). Optional —
+   *  an empty/absent value persists as null (today's name-only behavior). */
+  clientContext?: DeploymentClientContext;
   /** 'phone' | 'embed' | 'link'. Defaults to 'phone'. */
   surface?: DeploymentSurface;
   /** What the SMB pays per month, in cents. Defaults to 0. */
@@ -202,12 +206,16 @@ export async function createDeployment(
 
   // Drop empty contact fields so we never persist {} or whitespace-only values.
   const clientContact = normalizeClientContact(input.clientContact);
+  // Collapse an empty captured context to null so the voice path's
+  // "no clientContext → name-only" fallback fires (never persist {}).
+  const clientContext = normalizeClientContext(input.clientContext);
 
   const values: NewDeployment = {
     builderOrgId,
     agentTemplateId: input.agentTemplateId,
     clientName,
     clientContact,
+    clientContext,
     surface,
     priceCents,
     // Draft only — provisioning + billing activate this later (gated).
@@ -230,6 +238,69 @@ export function normalizeClientContact(
   if (phone) out.phone = phone;
   if (email) out.email = email;
   if (address) out.address = address;
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/**
+ * Drop empty branches from a captured client context so an all-blank capture
+ * collapses to `undefined` (→ null column → the voice path's name-only
+ * fallback). Trims strings, drops blank-named services, drops empty FAQ entries.
+ * Returns undefined when nothing usable remains. Pure.
+ *
+ * Note: input is already shape-validated by ClientContextSchema at the action
+ * boundary; this is the persistence-layer "never store {}" guard (mirrors
+ * normalizeClientContact) so direct store callers stay honest too.
+ */
+export function normalizeClientContext(
+  ctx: DeploymentClientContext | undefined,
+): DeploymentClientContext | undefined {
+  if (!ctx || typeof ctx !== "object") return undefined;
+
+  const soulIn = ctx.soul;
+  const soulOut: NonNullable<DeploymentClientContext["soul"]> = {};
+  if (soulIn && typeof soulIn === "object") {
+    const businessName = soulIn.businessName?.trim();
+    const businessDescription = soulIn.businessDescription?.trim();
+    if (businessName) soulOut.businessName = businessName;
+    if (businessDescription) soulOut.businessDescription = businessDescription;
+
+    if (Array.isArray(soulIn.services)) {
+      const services = soulIn.services
+        .map((s) => {
+          const name = s?.name?.trim();
+          if (!name) return null;
+          const description = s?.description?.trim();
+          return description ? { name, description } : { name };
+        })
+        .filter((s): s is { name: string; description?: string } => s !== null);
+      if (services.length > 0) soulOut.services = services;
+    }
+
+    if (soulIn.business_hours && typeof soulIn.business_hours === "object") {
+      if (Object.keys(soulIn.business_hours).length > 0) {
+        soulOut.business_hours = soulIn.business_hours;
+      }
+    }
+
+    const style = soulIn.voice?.style?.trim();
+    if (style) soulOut.voice = { style };
+  }
+
+  let faqOut: { q: string; a: string }[] | undefined;
+  if (Array.isArray(ctx.faq)) {
+    const faq = ctx.faq
+      .map((f) => {
+        const q = f?.q?.trim();
+        const a = f?.a?.trim();
+        return q && a ? { q, a } : null;
+      })
+      .filter((f): f is { q: string; a: string } => f !== null);
+    if (faq.length > 0) faqOut = faq;
+  }
+
+  const out: DeploymentClientContext = {};
+  if (Object.keys(soulOut).length > 0) out.soul = soulOut;
+  if (faqOut) out.faq = faqOut;
   return Object.keys(out).length > 0 ? out : undefined;
 }
 

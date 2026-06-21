@@ -27,6 +27,11 @@ import {
   CancelDeploymentSchema,
 } from "./schema";
 import { isE164, isAreaCode } from "./margin";
+import { mapSoulToClientContext } from "./client-context";
+import { compileSoulService } from "@/lib/soul-compiler/service";
+import { resolveBuilderClaudeKey } from "./client-context-server";
+import type { DeploymentClientContext } from "@/db/schema/deployments";
+import type { SoulV4 } from "@/lib/soul-compiler/schema";
 import { resolveBuilderTelephony } from "@/lib/telephony/config";
 import { createTwilioTelephonyClient } from "@/lib/telephony/twilio-client";
 import { provisionVoiceNumber } from "@/lib/telephony/provision-voice-number";
@@ -50,6 +55,7 @@ export async function createDeploymentAction(input: {
   agentTemplateId: string;
   clientName: string;
   clientContact?: { phone?: string; email?: string; address?: string };
+  clientContext?: DeploymentClientContext;
   surface?: string;
   priceCents?: number;
 }): Promise<CreateDeploymentActionResult> {
@@ -68,6 +74,7 @@ export async function createDeploymentAction(input: {
     agentTemplateId: parsed.data.agentTemplateId,
     clientName: parsed.data.clientName,
     clientContact: parsed.data.clientContact,
+    clientContext: parsed.data.clientContext,
     surface: parsed.data.surface,
     priceCents: parsed.data.priceCents,
   });
@@ -79,6 +86,73 @@ export async function createDeploymentAction(input: {
   revalidatePath("/studio/clients");
   revalidatePath("/studio/agents");
   return { ok: true, id: result.deployment.id };
+}
+
+// ─── generateClientContextAction ─────────────────────────────────────────────
+
+export type GenerateClientContextActionResult =
+  | { ok: true; clientContext: DeploymentClientContext }
+  | { ok: false; error: "unauthorized" | "empty" | "no_key" | "compile_failed" };
+
+/** DI seam: compile a description → a SoulV4 (or an error). The default resolves
+ *  the builder org's Claude key + calls compileSoulService; tests inject a stub
+ *  so the action is network-free. */
+export type GenerateClientContextDeps = {
+  compile: (args: {
+    orgId: string;
+    description: string;
+  }) => Promise<
+    | { ok: true; soul: SoulV4 }
+    | { ok: false; error: "no_key" | "compile_failed" }
+  >;
+};
+
+function buildDefaultGenerateDeps(): GenerateClientContextDeps {
+  return {
+    compile: async ({ orgId, description }) => {
+      const claudeApiKey = await resolveBuilderClaudeKey(orgId);
+      if (!claudeApiKey) return { ok: false, error: "no_key" };
+
+      const result = await compileSoulService({ input: description, claudeApiKey });
+      // 'ready' is the only status that yields a usable soul. 'split_required'
+      // (the business has product+service halves) and 'error' both can't fill
+      // the persona, so we surface a generic compile_failed — the deploy UI
+      // treats it as "auto-fill didn't work, edit by hand".
+      if (result.status === "ready") return { ok: true, soul: result.soul };
+      return { ok: false, error: "compile_failed" };
+    },
+  };
+}
+
+/**
+ * Compile a free-form description of the CLIENT's business into a
+ * DeploymentClientContext (narrow soul + FAQ) for the deploy wizard's
+ * "Auto-fill" button. Org-guarded. A blank description short-circuits to
+ * {ok:false, error:'empty'} WITHOUT calling the compiler (no wasted LLM spend).
+ *
+ * On success returns the mapped clientContext — the wizard renders it as
+ * editable services / FAQ / description rows, hand-editable before deploy. This
+ * action does NOT persist anything; the assembled context is threaded into
+ * createDeploymentAction when the builder submits.
+ */
+export async function generateClientContextAction(
+  input: { description: string },
+  _deps?: Partial<GenerateClientContextDeps>,
+): Promise<GenerateClientContextActionResult> {
+  assertWritable();
+
+  const orgId = await getOrgId();
+  if (!orgId) return { ok: false, error: "unauthorized" };
+
+  const description = (input.description ?? "").trim();
+  if (!description) return { ok: false, error: "empty" };
+
+  const compile = _deps?.compile ?? buildDefaultGenerateDeps().compile;
+  const compiled = await compile({ orgId, description });
+  if (!compiled.ok) return { ok: false, error: compiled.error };
+
+  const clientContext = mapSoulToClientContext(compiled.soul);
+  return { ok: true, clientContext };
 }
 
 // ─── activateDeploymentAction ────────────────────────────────────────────────

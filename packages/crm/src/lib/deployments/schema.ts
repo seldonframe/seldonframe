@@ -20,11 +20,55 @@ const ClientContactSchema = z
   })
   .strict();
 
+// ─── ClientContextSchema ─────────────────────────────────────────────────────
+// The CLIENT's captured business context (narrow soul + FAQ) the deploy wizard
+// assembles (optionally auto-filled by generateClientContextAction) and threads
+// into createDeploymentAction. Mirrors DeploymentClientContext in
+// db/schema/deployments.ts. .strict() at each level so only the persona-relevant
+// fields are persisted — never the full SoulV4. Bounded lengths/counts so a
+// hand-edited payload can't bloat the row.
+
+const ClientServiceSchema = z
+  .object({
+    name: z.string().min(1).max(120),
+    description: z.string().max(400).optional(),
+  })
+  .strict();
+
+const ClientSoulSchema = z
+  .object({
+    businessName: z.string().max(200).optional(),
+    businessDescription: z.string().max(2000).optional(),
+    services: z.array(ClientServiceSchema).max(50).optional(),
+    business_hours: z.record(z.string(), z.unknown()).optional(),
+    voice: z.object({ style: z.string().max(200).optional() }).strict().optional(),
+  })
+  .strict();
+
+const ClientFaqEntrySchema = z
+  .object({
+    q: z.string().min(1).max(400),
+    a: z.string().min(1).max(2000),
+  })
+  .strict();
+
+export const ClientContextSchema = z
+  .object({
+    soul: ClientSoulSchema.optional(),
+    faq: z.array(ClientFaqEntrySchema).max(50).optional(),
+  })
+  .strict();
+
+export type ClientContextInput = z.infer<typeof ClientContextSchema>;
+
 export const CreateDeploymentSchema = z
   .object({
     agentTemplateId: z.string().uuid(),
     clientName: z.string().min(2).max(200),
     clientContact: ClientContactSchema.optional(),
+    // The CLIENT's captured business context (narrow soul + FAQ). Optional —
+    // absent → today's name-only behavior on the voice path.
+    clientContext: ClientContextSchema.optional(),
     // 'phone' | 'embed' | 'link' — defaults to phone in the store if omitted.
     surface: z.enum(["phone", "embed", "link"]).optional(),
     // What the SMB pays per month, in cents. Non-negative; capped at a sane

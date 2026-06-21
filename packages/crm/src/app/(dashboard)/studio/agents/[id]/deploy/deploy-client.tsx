@@ -27,8 +27,16 @@ import {
   Code2,
   LinkIcon,
   Rocket,
+  Sparkles,
+  Plus,
+  X,
+  ChevronDown,
 } from "lucide-react";
-import { createDeploymentAction } from "@/lib/deployments/actions";
+import {
+  createDeploymentAction,
+  generateClientContextAction,
+} from "@/lib/deployments/actions";
+import type { DeploymentClientContext } from "@/db/schema/deployments";
 import {
   computeDeploymentMargin,
   formatCentsMonthly,
@@ -47,10 +55,52 @@ type TemplateOption = {
 
 type Surface = "phone" | "embed" | "link";
 
+/** Editable row shapes for the optional "Client's business" capture. Kept as
+ *  flat strings so the inputs are trivially controlled; assembled into the
+ *  typed DeploymentClientContext (dropping blanks) only at submit time. */
+type ServiceRow = { name: string; description: string };
+type FaqRow = { q: string; a: string };
+
 type Props = {
   templates: TemplateOption[];
   initialTemplateId: string;
 };
+
+/** Assemble the editable rows into a DeploymentClientContext, dropping blank
+ *  entries. Returns undefined when nothing usable was entered (so the deploy
+ *  call omits clientContext and the agent falls back to name-only). Pure. */
+function assembleClientContext(input: {
+  description: string;
+  services: ServiceRow[];
+  faq: FaqRow[];
+}): DeploymentClientContext | undefined {
+  const soul: NonNullable<DeploymentClientContext["soul"]> = {};
+  const description = input.description.trim();
+  if (description) soul.businessDescription = description;
+
+  const services = input.services
+    .map((s) => {
+      const name = s.name.trim();
+      if (!name) return null;
+      const d = s.description.trim();
+      return d ? { name, description: d } : { name };
+    })
+    .filter((s): s is { name: string; description?: string } => s !== null);
+  if (services.length > 0) soul.services = services;
+
+  const faq = input.faq
+    .map((f) => {
+      const q = f.q.trim();
+      const a = f.a.trim();
+      return q && a ? { q, a } : null;
+    })
+    .filter((f): f is { q: string; a: string } => f !== null);
+
+  const out: DeploymentClientContext = {};
+  if (Object.keys(soul).length > 0) out.soul = soul;
+  if (faq.length > 0) out.faq = faq;
+  return Object.keys(out).length > 0 ? out : undefined;
+}
 
 const STEPS = [
   { id: 1, label: "Agent" },
@@ -81,6 +131,17 @@ export function DeployFlowClient({ templates, initialTemplateId }: Props) {
   const [clientPhone, setClientPhone] = useState("");
   const [clientEmail, setClientEmail] = useState("");
 
+  // Step 2 — the CLIENT's business context (optional). Lets the deployed agent
+  // speak AS the client (their services + FAQ), not just name them. Entirely
+  // optional: left blank → today's name-only behavior.
+  const [bizOpen, setBizOpen] = useState(false);
+  const [bizSource, setBizSource] = useState(""); // pasted website text / description
+  const [bizDescription, setBizDescription] = useState("");
+  const [bizServices, setBizServices] = useState<ServiceRow[]>([]);
+  const [bizFaq, setBizFaq] = useState<FaqRow[]>([]);
+  const [isAutofilling, startAutofill] = useTransition();
+  const [autofillError, setAutofillError] = useState<string | null>(null);
+
   // Step 3 — surface + price
   const [surface, setSurface] = useState<Surface>("phone");
   // Price the SMB pays, as a dollars string for the input. Default $99/mo.
@@ -106,9 +167,43 @@ export function DeployFlowClient({ templates, initialTemplateId }: Props) {
 
   const canSubmit = clientName.trim().length >= 2 && !!templateId;
 
+  // Auto-fill the client's business from pasted website text / a description.
+  // Compiles it server-side, then PRE-FILLS the editable rows (the builder can
+  // still hand-edit everything before deploying).
+  const runAutofill = () => {
+    setAutofillError(null);
+    startAutofill(async () => {
+      const result = await generateClientContextAction({ description: bizSource });
+      if (!result.ok) {
+        setAutofillError(
+          result.error === "empty"
+            ? "Paste a few sentences about the client first."
+            : result.error === "no_key"
+              ? "Connect your Claude API key in Settings to auto-fill."
+              : "Couldn't read that — add the services and FAQ by hand below.",
+        );
+        return;
+      }
+      const ctx = result.clientContext;
+      if (ctx.soul?.businessDescription) setBizDescription(ctx.soul.businessDescription);
+      setBizServices(
+        (ctx.soul?.services ?? []).map((s) => ({
+          name: s.name,
+          description: s.description ?? "",
+        })),
+      );
+      setBizFaq((ctx.faq ?? []).map((f) => ({ q: f.q, a: f.a })));
+    });
+  };
+
   const deploy = () => {
     setError(null);
     startDeploy(async () => {
+      const clientContext = assembleClientContext({
+        description: bizDescription,
+        services: bizServices,
+        faq: bizFaq,
+      });
       const result = await createDeploymentAction({
         agentTemplateId: templateId,
         clientName: clientName.trim(),
@@ -116,6 +211,7 @@ export function DeployFlowClient({ templates, initialTemplateId }: Props) {
           phone: clientPhone.trim() || undefined,
           email: clientEmail.trim() || undefined,
         },
+        clientContext,
         surface,
         priceCents,
       });
@@ -257,6 +353,146 @@ export function DeployFlowClient({ templates, initialTemplateId }: Props) {
                 />
               </Field>
             </div>
+          </div>
+
+          {/* ── Optional: the CLIENT's business (makes the agent speak as them) ── */}
+          <div className="rounded-lg border bg-background">
+            <button
+              type="button"
+              onClick={() => setBizOpen((v) => !v)}
+              className="flex w-full items-center gap-2 px-4 py-3 text-left"
+              aria-expanded={bizOpen}
+            >
+              <span className="inline-flex size-7 items-center justify-center rounded-md bg-indigo-500/10 text-indigo-500 dark:text-indigo-400" aria-hidden>
+                <Sparkles className="size-4" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-medium">
+                  Client&apos;s business{" "}
+                  <span className="font-normal text-muted-foreground">(optional)</span>
+                </span>
+                <span className="block text-xs text-muted-foreground">
+                  Makes the agent speak as them — their services &amp; FAQ, not generic.
+                </span>
+              </span>
+              <ChevronDown
+                className={`size-4 text-muted-foreground transition-transform ${bizOpen ? "rotate-180" : ""}`}
+                aria-hidden
+              />
+            </button>
+
+            {bizOpen && (
+              <div className="space-y-4 border-t px-4 py-4">
+                {/* Source text + Auto-fill */}
+                <Field label="Paste their website text or describe their services & hours">
+                  <textarea
+                    value={bizSource}
+                    onChange={(e) => setBizSource(e.target.value)}
+                    rows={4}
+                    placeholder="e.g. Acme Plumbing is a family-owned shop in Austin. We do drain cleaning, water heater installs, and 24/7 emergency calls. Open Mon–Sat 7am–6pm…"
+                    className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                  />
+                </Field>
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={runAutofill}
+                    disabled={isAutofilling || bizSource.trim().length === 0}
+                    className="crm-button-secondary inline-flex h-9 items-center gap-1.5 px-4 text-sm"
+                  >
+                    <Sparkles className="size-4" />
+                    {isAutofilling ? "Reading…" : "Auto-fill"}
+                  </button>
+                  <span className="text-xs text-muted-foreground">
+                    Fills the fields below — edit anything before you deploy.
+                  </span>
+                </div>
+                {autofillError && (
+                  <p className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+                    {autofillError}
+                  </p>
+                )}
+
+                {/* Description */}
+                <Field label="One-line description (optional)">
+                  <input
+                    type="text"
+                    value={bizDescription}
+                    onChange={(e) => setBizDescription(e.target.value)}
+                    placeholder="Family-owned plumbing serving greater Austin."
+                    className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                  />
+                </Field>
+
+                {/* Services */}
+                <RowEditor
+                  legend="Services"
+                  addLabel="Add service"
+                  emptyHint="No services yet — add the work this client does so the agent can describe it."
+                  rows={bizServices}
+                  onAdd={() => setBizServices((r) => [...r, { name: "", description: "" }])}
+                  onRemove={(i) => setBizServices((r) => r.filter((_, idx) => idx !== i))}
+                  renderRow={(row, i) => (
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+                      <input
+                        type="text"
+                        value={row.name}
+                        onChange={(e) =>
+                          setBizServices((r) =>
+                            r.map((x, idx) => (idx === i ? { ...x, name: e.target.value } : x)),
+                          )
+                        }
+                        placeholder="Service name"
+                        className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                      />
+                      <input
+                        type="text"
+                        value={row.description}
+                        onChange={(e) =>
+                          setBizServices((r) =>
+                            r.map((x, idx) => (idx === i ? { ...x, description: e.target.value } : x)),
+                          )
+                        }
+                        placeholder="Short description (optional)"
+                        className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                      />
+                    </div>
+                  )}
+                />
+
+                {/* FAQ */}
+                <RowEditor
+                  legend="FAQ"
+                  addLabel="Add question"
+                  emptyHint="No FAQ yet — add common questions so the agent answers in the client's words."
+                  rows={bizFaq}
+                  onAdd={() => setBizFaq((r) => [...r, { q: "", a: "" }])}
+                  onRemove={(i) => setBizFaq((r) => r.filter((_, idx) => idx !== i))}
+                  renderRow={(row, i) => (
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        value={row.q}
+                        onChange={(e) =>
+                          setBizFaq((r) => r.map((x, idx) => (idx === i ? { ...x, q: e.target.value } : x)))
+                        }
+                        placeholder="Question"
+                        className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                      />
+                      <textarea
+                        value={row.a}
+                        onChange={(e) =>
+                          setBizFaq((r) => r.map((x, idx) => (idx === i ? { ...x, a: e.target.value } : x)))
+                        }
+                        rows={2}
+                        placeholder="Answer"
+                        className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                      />
+                    </div>
+                  )}
+                />
+              </div>
+            )}
           </div>
 
           {/* Captured-intent rows — NOT provisioned now. */}
@@ -471,6 +707,59 @@ function Field({
       </span>
       {children}
     </label>
+  );
+}
+
+function RowEditor<T>({
+  legend,
+  addLabel,
+  emptyHint,
+  rows,
+  onAdd,
+  onRemove,
+  renderRow,
+}: {
+  legend: string;
+  addLabel: string;
+  emptyHint: string;
+  rows: T[];
+  onAdd: () => void;
+  onRemove: (index: number) => void;
+  renderRow: (row: T, index: number) => React.ReactNode;
+}) {
+  return (
+    <fieldset className="space-y-2">
+      <div className="flex items-center justify-between">
+        <legend className="text-xs font-medium text-foreground">{legend}</legend>
+        <button
+          type="button"
+          onClick={onAdd}
+          className="inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/50"
+        >
+          <Plus className="size-3.5" />
+          {addLabel}
+        </button>
+      </div>
+      {rows.length === 0 ? (
+        <p className="text-xs text-muted-foreground">{emptyHint}</p>
+      ) : (
+        <ul className="space-y-2">
+          {rows.map((row, i) => (
+            <li key={i} className="flex items-start gap-2 rounded-md border bg-muted/20 p-2.5">
+              <div className="min-w-0 flex-1">{renderRow(row, i)}</div>
+              <button
+                type="button"
+                onClick={() => onRemove(i)}
+                aria-label={`Remove ${legend} ${i + 1}`}
+                className="mt-1 inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-rose-500/10 hover:text-rose-600"
+              >
+                <X className="size-4" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </fieldset>
   );
 }
 
