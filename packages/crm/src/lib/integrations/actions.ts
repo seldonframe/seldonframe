@@ -15,7 +15,7 @@ type IntegrationService = "twilio" | "resend" | "kit" | "mailchimp" | "beehiiv" 
 export type IntegrationViewModel = {
   orgId: string;
   orgName: string;
-  twilio: { connected: boolean; accountSid: string; fromNumber: string; authTokenHint: string };
+  twilio: { connected: boolean; accountSid: string; fromNumber: string; authTokenHint: string; voiceTrunkSid: string };
   resend: { connected: boolean; apiKeyHint: string; fromEmail: string; fromName: string };
   newsletter: {
     provider: NewsletterProvider | null;
@@ -108,6 +108,7 @@ export async function getIntegrationSettings(): Promise<IntegrationViewModel | n
       accountSid: integrations.twilio?.accountSid ?? "",
       fromNumber: integrations.twilio?.fromNumber ?? "",
       authTokenHint: twilioToken ? "••••••••" : "",
+      voiceTrunkSid: integrations.twilio?.voiceTrunkSid ?? "",
     },
     resend: {
       connected: Boolean(integrations.resend?.connected),
@@ -168,10 +169,16 @@ export async function updateIntegration(orgId: string, service: string, credenti
     const authToken = credentials.authToken?.trim() || existingToken;
 
     integrations.twilio = {
+      // Preserve any existing per-provider fields (test creds, outbound flag)
+      // so saving SMS/voice settings doesn't silently drop them.
+      ...integrations.twilio,
       accountSid: credentials.accountSid?.trim() || integrations.twilio?.accountSid || "",
       authToken: authToken ? encryptValue(authToken) : "",
       fromNumber: credentials.fromNumber?.trim() || integrations.twilio?.fromNumber || "",
       connected: Boolean((credentials.accountSid?.trim() || integrations.twilio?.accountSid) && authToken),
+      // Voice SIP Trunk SID (TK…) for deployment voice-number provisioning.
+      // Only overwrite when the form submitted a value; blank keeps existing.
+      voiceTrunkSid: credentials.voiceTrunkSid?.trim() || integrations.twilio?.voiceTrunkSid || "",
     };
   }
 
@@ -426,6 +433,7 @@ export async function updateIntegrationAction(formData: FormData) {
     accountSid: String(formData.get("accountSid") ?? ""),
     authToken: String(formData.get("authToken") ?? ""),
     fromNumber: String(formData.get("fromNumber") ?? ""),
+    voiceTrunkSid: String(formData.get("voiceTrunkSid") ?? ""),
     apiKey: String(formData.get("apiKey") ?? ""),
     fromEmail: String(formData.get("fromEmail") ?? ""),
     fromName: String(formData.get("fromName") ?? ""),

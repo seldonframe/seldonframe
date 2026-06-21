@@ -123,7 +123,7 @@ export default async function IntegrationsSettingsPage({
 
         <article className="rounded-xl border bg-card p-5">
           <div className="flex items-center justify-between">
-            <h2 className="text-card-title">Twilio (SMS)</h2>
+            <h2 className="text-card-title">Twilio (SMS + Voice)</h2>
             {renderConnectionBadge(settings.twilio.connected)}
           </div>
           <form action={updateIntegrationAction} className="mt-4 grid gap-3">
@@ -151,6 +151,22 @@ export default async function IntegrationsSettingsPage({
                 Phone Number
               </label>
               <input id="twilio-from-number" name="fromNumber" className="crm-input h-10 w-full px-3" defaultValue={settings.twilio.fromNumber} placeholder="+1 555 123 4567" />
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="twilio-voice-trunk-sid" className="text-label">
+                Voice SIP Trunk SID
+              </label>
+              <input
+                id="twilio-voice-trunk-sid"
+                name="voiceTrunkSid"
+                className="crm-input h-10 w-full px-3"
+                defaultValue={settings.twilio.voiceTrunkSid}
+                placeholder="TK…"
+              />
+              <p className="text-xs text-muted-foreground">
+                The Elastic SIP Trunk that routes to your voice agent (OpenAI).
+                Required to provision numbers for client deployments.
+              </p>
             </div>
             <div className="flex flex-wrap gap-2 pt-1">
               <button type="submit" className="crm-button-primary h-10 px-4">

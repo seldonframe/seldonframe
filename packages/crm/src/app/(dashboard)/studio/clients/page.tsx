@@ -96,7 +96,10 @@ export default async function StudioClientsPage() {
                 </div>
                 {/* Activation / pause affordances — client components */}
                 {d.status === "draft" && (
-                  <ActivateForm deploymentId={d.id} />
+                  <ActivateForm
+                    deploymentId={d.id}
+                    contactPhone={d.clientContact?.phone ?? null}
+                  />
                 )}
                 {d.status === "active" && (
                   <PauseButton deploymentId={d.id} phoneNumber={d.phoneNumber} />
