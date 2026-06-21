@@ -16,7 +16,7 @@
 // natural language (generateAgentDraftAction → merge the returned patch into
 // local state → review → Save).
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Sparkles } from "lucide-react";
@@ -26,6 +26,18 @@ import {
 } from "@/lib/agent-templates/actions";
 import type { AgentSurface } from "@/lib/agent-templates/store";
 import { VOICE_OPTIONS } from "@/lib/agents/voice/card-status";
+
+// Rotating status copy shown on the Refine button while a refinement is being
+// generated, so the multi-second LLM call feels alive. Cycled every
+// REFINE_STATUS_INTERVAL_MS.
+const REFINE_STATUS_MESSAGES = [
+  "Drafting the persona…",
+  "Choosing the right tools…",
+  "Writing the guardrails…",
+  "Adding starter FAQs…",
+  "Polishing the greeting…",
+];
+const REFINE_STATUS_INTERVAL_MS = 1500;
 
 type FaqRow = { q: string; a: string };
 type QuoteRange = { service: string; low: string; high: string };
@@ -106,6 +118,19 @@ export function AgentTemplateEditor(props: Props) {
   const [isRefining, startRefine] = useTransition();
   const [refineError, setRefineError] = useState<React.ReactNode | null>(null);
   const [refined, setRefined] = useState(false);
+
+  // Rotating loader copy index for the Refine button. Resets to 0 when a
+  // refinement starts, advances on an interval while pending, and clears the
+  // interval when pending ends or the component unmounts. Plain client timer.
+  const [refineStatusIdx, setRefineStatusIdx] = useState(0);
+  useEffect(() => {
+    if (!isRefining) return;
+    setRefineStatusIdx(0);
+    const id = setInterval(() => {
+      setRefineStatusIdx((i) => (i + 1) % REFINE_STATUS_MESSAGES.length);
+    }, REFINE_STATUS_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [isRefining]);
 
   const save = () => {
     setSaveError(null);
@@ -238,8 +263,8 @@ export function AgentTemplateEditor(props: Props) {
             disabled={isRefining}
             className="crm-button-secondary inline-flex h-10 shrink-0 items-center gap-1.5 px-4 text-sm"
           >
-            <Sparkles className="size-4" />
-            {isRefining ? "Refining…" : "Refine"}
+            <Sparkles className={`size-4 ${isRefining ? "animate-pulse" : ""}`} />
+            {isRefining ? REFINE_STATUS_MESSAGES[refineStatusIdx] : "Refine"}
           </button>
         </div>
         {refined && (

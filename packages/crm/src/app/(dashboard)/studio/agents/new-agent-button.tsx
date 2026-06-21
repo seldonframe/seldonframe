@@ -14,7 +14,7 @@
 // Reuses the existing crm-button-primary/secondary classes, the useTransition +
 // action-calling pattern, and the rounded-xl border bg-card card layout.
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Plus, Phone, MessageSquare, Sparkles } from "lucide-react";
@@ -28,6 +28,18 @@ import { deriveName, type AgentSurface } from "@/lib/agent-templates/store";
 const PLACEHOLDER =
   "Answer my plumbing company's phone, book jobs, and text customers a quote range…";
 
+// Rotating status copy shown on the Generate button while the draft is being
+// written, so a multi-second LLM call feels alive instead of a frozen
+// "Writing your agent…". Cycled every GEN_STATUS_INTERVAL_MS.
+const GEN_STATUS_MESSAGES = [
+  "Drafting the persona…",
+  "Choosing the right tools…",
+  "Writing the guardrails…",
+  "Adding starter FAQs…",
+  "Polishing the greeting…",
+];
+const GEN_STATUS_INTERVAL_MS = 1500;
+
 export function NewAgentButton({
   variant = "primary",
 }: {
@@ -39,6 +51,19 @@ export function NewAgentButton({
   const [surface, setSurface] = useState<AgentSurface>("voice");
   const [error, setError] = useState<React.ReactNode | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  // Rotating loader copy index. Resets to 0 each time a generation starts and
+  // advances on an interval while pending; the interval is cleared when pending
+  // ends or the component unmounts (cleanup return). Plain client-side timer.
+  const [statusIdx, setStatusIdx] = useState(0);
+  useEffect(() => {
+    if (!isPending) return;
+    setStatusIdx(0);
+    const id = setInterval(() => {
+      setStatusIdx((i) => (i + 1) % GEN_STATUS_MESSAGES.length);
+    }, GEN_STATUS_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [isPending]);
 
   // Shared tail: create the template of the right type, optionally save the
   // generated patch, then route to its editor. Returns false (and sets an
@@ -176,8 +201,8 @@ export function NewAgentButton({
           disabled={isPending}
           className="crm-button-primary inline-flex h-10 items-center gap-1.5 px-5 text-sm"
         >
-          <Sparkles className="size-4" />
-          {isPending ? "Writing your agent…" : "Generate"}
+          <Sparkles className={`size-4 ${isPending ? "animate-pulse" : ""}`} />
+          {isPending ? GEN_STATUS_MESSAGES[statusIdx] : "Generate"}
         </button>
         <button
           type="button"
