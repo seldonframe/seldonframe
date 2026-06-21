@@ -58,6 +58,10 @@ import {
   appendVoiceTurn,
   endVoiceConversation,
 } from "@/lib/agents/voice/transcript";
+// ICP-3 — deployment voice path (strictly ADDITIVE). Tried FIRST; falls through
+// to the existing workspace resolution below when no active deployment matches.
+import { resolveDeploymentByNumber } from "@/lib/agents/voice/resolve-deployment-by-number";
+import { loadDeploymentVoiceContext } from "@/lib/agents/voice/deployment-voice";
 
 // Node runtime (not edge) — we use node:crypto for HMAC and the Node global
 // WebSocket/undici options bag for the realtime control socket.
@@ -204,6 +208,103 @@ export async function POST(request: Request): Promise<Response> {
       // META loop — extract the caller's own number for the post-call follow-up SMS.
       // From / P-Asserted-Identity SIP headers carry it. Null for anonymous callers.
       const callerNumber = extractCallerNumber(event.data?.sip_headers);
+
+      // ── ICP-3 deployment voice path (strictly ADDITIVE) ──────────────────
+      // Try the DEPLOYMENT path FIRST: an inbound call to a DEPLOYMENT's number
+      // is answered by that deployment's agent TEMPLATE and books into the
+      // builder's workspace. If NO active deployment matches the dialed number,
+      // we fall through COMPLETELY UNCHANGED to the existing workspace
+      // resolution below (the live 839 line — a workspace fromNumber, not a
+      // deployment — still resolves there exactly as before). Best-effort: a
+      // resolve/compose error logs + falls through rather than dropping the call.
+      const deployment = await resolveDeploymentByNumber(dialedNumber).catch(
+        (err) => {
+          logEvent(
+            "voice_call_deployment_resolve_error",
+            { call_id: callId, error: err instanceof Error ? err.message : String(err) },
+            { severity: "error" },
+          );
+          return null;
+        },
+      );
+
+      if (deployment) {
+        logEvent("voice_call_deployment_resolved", {
+          call_id: callId,
+          deployment_id: deployment.id,
+          dialed_number: dialedNumber,
+          builder_org_id: deployment.builderOrgId,
+          agent_template_id: deployment.agentTemplateId,
+        });
+
+        // Compose the persona from the agent TEMPLATE blueprint + the builder
+        // org's soul/timezone/intake; scope tools to the builder org (real
+        // booking). Null → the template is missing; fall through to the existing
+        // path rather than dropping the call.
+        const dctx = await loadDeploymentVoiceContext({
+          deployment,
+          now: new Date(),
+        }).catch((err) => {
+          logEvent(
+            "voice_call_deployment_compose_error",
+            { call_id: callId, error: err instanceof Error ? err.message : String(err) },
+            { severity: "error" },
+          );
+          return null;
+        });
+
+        if (dctx) {
+          // Caller-ID → tool context (same as the workspace path): auto-fill the
+          // contact phone so book_appointment never has to ask. Anonymous callers
+          // leave it undefined.
+          if (callerNumber) {
+            dctx.ctx.callerPhone = callerNumber;
+          }
+
+          // Open the transcript against the BUILDER org (no deployment_id column
+          // yet — a later refinement). Best-effort: null on failure.
+          const depConversationId = await startVoiceConversation({
+            agentId: dctx.transcriptAgentId,
+            orgId: dctx.transcriptOrgId,
+            callId,
+            fromNumber: callerNumber ?? undefined,
+            toNumber: dialedNumber ?? undefined,
+          });
+
+          let depTurnIndex = 0;
+          const depCid = depConversationId;
+          const depTranscriptCallbacks = depCid
+            ? {
+                onUserTurn: (text: string) => {
+                  void appendVoiceTurn({ conversationId: depCid, turnIndex: depTurnIndex++, role: "user", content: text });
+                },
+                onAssistantTurn: (text: string) => {
+                  void appendVoiceTurn({ conversationId: depCid, turnIndex: depTurnIndex++, role: "assistant", content: text });
+                },
+                onCallEnd: () => {
+                  void endVoiceConversation({ conversationId: depCid, turnCount: depTurnIndex });
+                },
+              }
+            : {};
+
+          // Run the call on the SAME platform OpenAI Realtime key the existing
+          // path uses (BYOK-for-voice is a later refinement — key handling is
+          // unchanged). Tools + template persona + template voice are passed.
+          await runVoiceCall({
+            callId,
+            apiKey,
+            toolContext: dctx.ctx,
+            instructions: dctx.instructions,
+            audioVoice: dctx.audioVoice,
+            greeting: dctx.greeting,
+            ...depTranscriptCallbacks,
+          });
+          return; // deployment handled the call — do NOT run the workspace path.
+        }
+        // dctx === null → fall through to the existing workspace path below.
+      }
+      // ── end ICP-3 deployment voice path ──────────────────────────────────
+
       const resolved = await resolveVoiceContextByNumber({ dialedNumber }).catch((err) => {
         logEvent(
           "voice_call_workspace_resolve_error",
