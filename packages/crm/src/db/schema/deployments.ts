@@ -107,6 +107,16 @@ export const deployments = pgTable(
     priceCents: integer("price_cents").notNull().default(0),
     stripeSubscriptionId: text("stripe_subscription_id"),
     stripeCustomerId: text("stripe_customer_id"),
+    /** The auto-provisioned, agency-branded CLIENT workspace (org) this
+     *  deployment owns — the full front office the deployed agent writes into
+     *  (bookings/contacts/messages/transcripts retarget here). Set at
+     *  activation by provisionClientWorkspaceForDeployment (idempotent +
+     *  soft-fail); NULL for legacy deployments + before provisioning succeeds,
+     *  in which case the agent falls back to writing the builder org. */
+    clientOrgId: uuid("client_org_id").references(() => organizations.id),
+    /** When the agency opted this client into portal access (magic-link sent).
+     *  NULL = never invited. Re-invite updates the timestamp. */
+    portalInvitedAt: timestamp("portal_invited_at", { withTimezone: true }),
     /** 'draft' | 'active' | 'paused' | 'canceled' */
     status: text("status").notNull().default("draft"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

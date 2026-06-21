@@ -127,6 +127,13 @@ export const organizations = pgTable("organizations", {
   // references users, organizations references partner_agencies via
   // FK constraint at the SQL layer only).
   parentAgencyId: uuid("parent_agency_id"),
+  // 2026-06-21 — Deployment front-office bridge. When set, this workspace was
+  // an agency-managed CLIENT workspace whose owning deployment was canceled;
+  // it is ARCHIVED (data retained, never deleted) and excluded from active
+  // workspace lists + the billing workspace-count (so an archived client org
+  // never counts against the builder's limit / triggers a charge). NULL =
+  // active (existing behavior). Set via cancelDeploymentAction.
+  archivedAt: timestamp("archived_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

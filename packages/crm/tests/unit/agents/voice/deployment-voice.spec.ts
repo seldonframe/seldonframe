@@ -43,6 +43,8 @@ const DEPLOYMENT: Deployment = {
   calendarRef: null,
   bookingMode: "native",
   externalBookingUrl: null,
+  clientOrgId: null,
+  portalInvitedAt: null,
   priceCents: 0,
   stripeSubscriptionId: null,
   stripeCustomerId: null,
