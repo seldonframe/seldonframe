@@ -183,6 +183,13 @@
       "when": 1782068594801,
       "tag": "0025_gray_black_tom",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1782073542465,
+      "tag": "0026_chief_nitro",
+      "breakpoints": true
     }
   ]
 }

@@ -29,6 +29,39 @@ export type DeploymentCalendarRef = {
   calendarId?: string;
 };
 
+/** A single service the CLIENT offers — name + optional one-line description.
+ *  Mirrors the `{ name, description? }` shape composeVoicePersona reads from
+ *  soul.services so the deployed agent can list the client's services. */
+export type DeploymentClientService = {
+  name: string;
+  description?: string;
+};
+
+/** The CLIENT's business soul, captured at deploy time. A deliberately NARROW
+ *  subset of the builder's SoulV4 — only the fields composeVoicePersona reads to
+ *  make the voice agent speak AS the client. NO landing/pricing/intake config:
+ *  this exists purely so the receptionist names the client, describes them, and
+ *  lists their services. Every field is optional (blank capture → name-only). */
+export type DeploymentClientSoul = {
+  businessName?: string;
+  businessDescription?: string;
+  services?: DeploymentClientService[];
+  /** Client business hours, snake_case to match the persona's business-facts
+   *  reads. Free-form Record so we don't over-constrain the capture. */
+  business_hours?: Record<string, unknown>;
+  /** Voice/tone hint, e.g. { style: "warm, concise" }. */
+  voice?: { style?: string };
+};
+
+/** Everything captured about the CLIENT's business at deploy time so the
+ *  deployed agent speaks as them: a narrow soul + the client's own FAQ (which
+ *  overrides the template blueprint's FAQ on the voice path). Persisted as the
+ *  nullable `client_context` jsonb column; absent → today's name-only behavior. */
+export type DeploymentClientContext = {
+  soul?: DeploymentClientSoul;
+  faq?: { q: string; a: string }[];
+};
+
 export const deployments = pgTable(
   "deployments",
   {
@@ -53,6 +86,10 @@ export const deployments = pgTable(
      *  builder brought their own number (never release). */
     numberOrigin: text("number_origin"),
     calendarRef: jsonb("calendar_ref").$type<DeploymentCalendarRef>(),
+    /** The CLIENT's business context (narrow soul + FAQ), captured at deploy
+     *  time so the deployed agent speaks AS the client. Nullable — absent →
+     *  the agent falls back to naming the client only (clientName). */
+    clientContext: jsonb("client_context").$type<DeploymentClientContext>(),
     /** Monthly amount the SMB client pays the builder (in cents). */
     priceCents: integer("price_cents").notNull().default(0),
     stripeSubscriptionId: text("stripe_subscription_id"),
