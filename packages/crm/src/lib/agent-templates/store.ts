@@ -30,8 +30,16 @@ import type { AgentBlueprint } from "@/db/schema/agents";
 // "cedar" default getOrCreateVoiceAgent uses). Kept in sync deliberately so a
 // template behaves like the live voice agent the builder already knows.
 
-/** Template type id. v1 ships voice_receptionist only. */
-export type AgentTemplateType = "voice_receptionist";
+/** Template type id. v1 ships voice_receptionist; v2 adds chat_assistant. */
+export type AgentTemplateType = "voice_receptionist" | "chat_assistant";
+
+/** Which channel surface a template targets. */
+export type AgentSurface = "voice" | "chat";
+
+/** Map a template type to its surface channel. Pure — no DB. */
+export function surfaceForType(type: AgentTemplateType): AgentSurface {
+  return type === "chat_assistant" ? "chat" : "voice";
+}
 
 /** Default voice-receptionist capabilities — mirrors lib/agents/store.ts
  *  DEFAULT_CAPABILITIES_BY_ARCHETYPE["voice-receptionist"] (the live agent's
@@ -56,15 +64,50 @@ export const DEFAULT_VOICE_RECEPTIONIST_GREETING =
  *  (the newest gpt-realtime voice). */
 export const DEFAULT_VOICE_RECEPTIONIST_VOICE = "cedar";
 
+/** Default chat-assistant capabilities. Mirrors the website-chatbot archetype
+ *  capabilities from lib/agents/store.ts DEFAULT_CAPABILITIES_BY_ARCHETYPE
+ *  ["chat-assistant"], plus provide_faq_answer (chat-only; excluded from
+ *  voice because openai-realtime.ts filters it out as a v1.26 placeholder). */
+export const DEFAULT_CHAT_ASSISTANT_CAPABILITIES: string[] = [
+  "look_up_availability",
+  "book_appointment",
+  "find_my_existing_appointment",
+  "reschedule_appointment",
+  "cancel_appointment",
+  "escalate_to_human",
+  "provide_faq_answer",
+];
+
+/** Default greeting a new chat-assistant template ships with. */
+export const DEFAULT_CHAT_ASSISTANT_GREETING = "Hi! How can I help you today?";
+
+/** Union of ALL capabilities available across any template type. De-duplicated
+ *  so callers can render a combined UI capability picker or seed permissions. */
+export const ALL_TEMPLATE_CAPABILITIES: string[] = Array.from(
+  new Set([
+    ...DEFAULT_VOICE_RECEPTIONIST_CAPABILITIES,
+    ...DEFAULT_CHAT_ASSISTANT_CAPABILITIES,
+  ]),
+);
+
 /**
  * Build the DEFAULT blueprint for a template of the given type. Pure (no DB) so
- * it's unit-testable. v1 only knows voice_receptionist; any other type still
- * returns a sane voice-receptionist-shaped default rather than throwing (the
- * Studio only offers voice_receptionist today).
+ * it's unit-testable. Branches on type: voice_receptionist gets the same
+ * defaults a live voice-receptionist agent gets (incl. cedar voice + quote
+ * guard); chat_assistant gets web-chat defaults (no voice key).
  */
 export function buildDefaultTemplateBlueprint(
-  _type: AgentTemplateType,
+  type: AgentTemplateType,
 ): AgentBlueprint {
+  if (type === "chat_assistant") {
+    return {
+      archetype: "chat-assistant",
+      capabilities: [...DEFAULT_CHAT_ASSISTANT_CAPABILITIES],
+      faq: [],
+      pricingFacts: [],
+      greeting: DEFAULT_CHAT_ASSISTANT_GREETING,
+    };
+  }
   return {
     archetype: "voice-receptionist",
     capabilities: [...DEFAULT_VOICE_RECEPTIONIST_CAPABILITIES],

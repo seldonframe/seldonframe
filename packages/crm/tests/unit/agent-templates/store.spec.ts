@@ -20,7 +20,10 @@ import {
   mergeTemplateBlueprint,
   resolveUniqueTemplateSlug,
   slugifyTemplateName,
+  surfaceForType,
   updateAgentTemplate,
+  ALL_TEMPLATE_CAPABILITIES,
+  DEFAULT_CHAT_ASSISTANT_CAPABILITIES,
   DEFAULT_VOICE_RECEPTIONIST_CAPABILITIES,
   type CreateAgentTemplateDeps,
   type UpdateAgentTemplateDeps,
@@ -234,6 +237,85 @@ describe("createAgentTemplate", () => {
       () => createAgentTemplate({ builderOrgId: "", name: "Reception", type: "voice_receptionist", deps }),
       /builderOrgId is required/,
     );
+  });
+});
+
+// ---------------------------------------------------------------------
+// surfaceForType
+// ---------------------------------------------------------------------
+
+describe("surfaceForType", () => {
+  test("voice_receptionist → 'voice'", () => {
+    assert.equal(surfaceForType("voice_receptionist"), "voice");
+  });
+
+  test("chat_assistant → 'chat'", () => {
+    assert.equal(surfaceForType("chat_assistant"), "chat");
+  });
+});
+
+// ---------------------------------------------------------------------
+// buildDefaultTemplateBlueprint (chat_assistant)
+// ---------------------------------------------------------------------
+
+describe("buildDefaultTemplateBlueprint (chat_assistant)", () => {
+  test("has chat-assistant archetype + chat greeting (no voice key)", () => {
+    const bp = buildDefaultTemplateBlueprint("chat_assistant");
+    assert.equal(bp.archetype, "chat-assistant");
+    assert.equal(bp.greeting, "Hi! How can I help you today?");
+    assert.equal(bp.voice, undefined, "voice must be absent for chat archetype");
+    assert.deepEqual(bp.faq, []);
+    assert.deepEqual(bp.pricingFacts, []);
+  });
+
+  test("capabilities deep-equal DEFAULT_CHAT_ASSISTANT_CAPABILITIES", () => {
+    const bp = buildDefaultTemplateBlueprint("chat_assistant");
+    assert.deepEqual(bp.capabilities, DEFAULT_CHAT_ASSISTANT_CAPABILITIES);
+  });
+
+  test("chat capabilities include provide_faq_answer but NOT get_quote_range (voice-only)", () => {
+    const bp = buildDefaultTemplateBlueprint("chat_assistant");
+    assert.ok(bp.capabilities?.includes("provide_faq_answer"), "chat should include provide_faq_answer");
+    assert.ok(!bp.capabilities?.includes("get_quote_range"), "chat must not have get_quote_range (voice-only)");
+  });
+
+  test("chat blueprint is a fresh array each call (no shared mutation)", () => {
+    const a = buildDefaultTemplateBlueprint("chat_assistant");
+    const b = buildDefaultTemplateBlueprint("chat_assistant");
+    a.capabilities?.push("mutated");
+    assert.ok(!b.capabilities?.includes("mutated"), "each blueprint owns its array");
+  });
+});
+
+// ---------------------------------------------------------------------
+// voice_receptionist regression (after generalization)
+// ---------------------------------------------------------------------
+
+describe("buildDefaultTemplateBlueprint (voice_receptionist regression)", () => {
+  test("still has archetype voice-receptionist + voice cedar + get_quote_range", () => {
+    const bp = buildDefaultTemplateBlueprint("voice_receptionist");
+    assert.equal(bp.archetype, "voice-receptionist");
+    assert.equal(bp.voice, "cedar");
+    assert.ok(bp.capabilities?.includes("get_quote_range"));
+    assert.ok(bp.capabilities?.includes("take_message"));
+  });
+});
+
+// ---------------------------------------------------------------------
+// ALL_TEMPLATE_CAPABILITIES
+// ---------------------------------------------------------------------
+
+describe("ALL_TEMPLATE_CAPABILITIES", () => {
+  test("includes voice-only capability get_quote_range", () => {
+    assert.ok(ALL_TEMPLATE_CAPABILITIES.includes("get_quote_range"));
+  });
+
+  test("includes chat-only capability provide_faq_answer", () => {
+    assert.ok(ALL_TEMPLATE_CAPABILITIES.includes("provide_faq_answer"));
+  });
+
+  test("is de-duplicated (no repeats)", () => {
+    assert.equal(new Set(ALL_TEMPLATE_CAPABILITIES).size, ALL_TEMPLATE_CAPABILITIES.length);
   });
 });
 
