@@ -6,7 +6,7 @@ import {
   getBookingProvider,
   resolveBookingMode,
   type BookingMode,
-} from "../../../src/lib/deployments/booking-providers.ts";
+} from "../../../src/lib/deployments/booking-providers";
 
 test("native + external_link are available; api_mcp + cal_com are coming_soon", () => {
   assert.equal(getBookingProvider("native").status, "available");

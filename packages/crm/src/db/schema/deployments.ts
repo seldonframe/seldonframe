@@ -11,11 +11,17 @@ import {
 } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
 import { agentTemplates } from "./agent-templates";
+import type { BookingMode } from "@/lib/deployments/booking-providers";
 
 // ─── deployments ──────────────────────────────────────────────────────────
 
 export type DeploymentStatus = "draft" | "active" | "paused" | "canceled";
 export type DeploymentSurface = "phone" | "embed" | "link";
+
+/** How a DEPLOYED agent books — re-exported from the pure registry so
+ *  downstream imports (tools ctx, zod enum) have one stable source. Distinct
+ *  from the conferencing `BookingProvider` in bookings/providers.ts. */
+export type { BookingMode } from "@/lib/deployments/booking-providers";
 
 export type DeploymentClientContact = {
   phone?: string;
@@ -86,6 +92,13 @@ export const deployments = pgTable(
      *  builder brought their own number (never release). */
     numberOrigin: text("number_origin"),
     calendarRef: jsonb("calendar_ref").$type<DeploymentCalendarRef>(),
+    /** How a DEPLOYED agent books (native | external_link | api_mcp | cal_com).
+     *  Per-deployment menu; defaults to 'native' (the current booking chain).
+     *  Distinct from the conferencing `bookings.provider`. */
+    bookingMode: text("booking_mode").$type<BookingMode>().notNull().default("native"),
+    /** The client's OWN booking page URL — only meaningful when
+     *  bookingMode === 'external_link'; the deployed agent hands this off. */
+    externalBookingUrl: text("external_booking_url"),
     /** The CLIENT's business context (narrow soul + FAQ), captured at deploy
      *  time so the deployed agent speaks AS the client. Nullable — absent →
      *  the agent falls back to naming the client only (clientName). */

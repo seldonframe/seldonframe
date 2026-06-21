@@ -41,6 +41,8 @@ const DEPLOYMENT: Deployment = {
   phoneNumberSid: null,
   numberOrigin: null,
   calendarRef: null,
+  bookingMode: "native",
+  externalBookingUrl: null,
   priceCents: 0,
   stripeSubscriptionId: null,
   stripeCustomerId: null,
