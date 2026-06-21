@@ -33,12 +33,15 @@
 
 ## Phase 0 — Recon + data foundations
 
-### Task 0: Recon — pin the LLM + key-resolution seam (no code; output paths into this plan)
+### Task 0: Recon results (DONE — pinned by controller 2026-06-21)
 
-- [ ] **Step 1:** Locate the existing one-shot LLM completion path + LLM-key resolution that the chatbot / `lib/agents/stateless-turn.ts` use (Anthropic client construction, model id, how the org's key is resolved from `builder_llm_keys` / `organizations.integrations.anthropic`, and the `needs_key` / not-configured signal). Record exact `file:symbol` for: (a) the Anthropic client/`messages.create` call site, (b) the key-resolver fn, (c) the default model id constant.
-- [ ] **Step 2:** Locate the chat-agent runtime entry the sandbox test uses (`lib/agents/stateless-turn.ts`) and confirm a `chat_assistant` template can run there unchanged (capabilities → tools mapping is surface-agnostic).
-- [ ] **Step 3:** Confirm `new-agent-button.tsx` → `createAgentTemplateAction` is the only create path, and whether it routes to `/studio/agents/[id]` after create.
-- [ ] **Step 4:** Append findings to this plan under "Recon results" (exact paths). These feed Task 5 (the action wires to the resolver + client found here).
+- **LLM client + key (THE seam):** `getAIClient({ orgId })` from `@/lib/ai/client` → `{ client: Anthropic | null }`. Resolution order: BYOK anthropic (`organizations.integrations.anthropic.apiKey`, decrypted) → platform `process.env.ANTHROPIC_API_KEY` fallback. **`!resolution.client` ⇒ no usable key ⇒ map to `needs_key`** (exactly as `testAgentTemplateTurn` does — `lib/agent-templates/test-actions.ts:85-90`). NOTE: thanks to the platform fallback, generation works even for a builder who hasn't added their own key (low-friction first-run; the deployed *runtime* still uses BYOK). `needs_key` only fires when BOTH are absent.
+- **One-shot completion shape:** `client.messages.create({ model, max_tokens, system, messages: [{ role: "user", content: user }] })`; read `response.content[]`, concat blocks where `block.type === "text"` → `block.text`. (Mirrors `lib/agents/stateless-turn.ts:150-189`.)
+- **Model:** `process.env.ANTHROPIC_AGENT_MODEL?.trim() || "claude-sonnet-4-5-20250929"` (mirror `stateless-turn.ts:43-44`).
+- **Action shape to mirror:** `lib/agent-templates/test-actions.ts` `testAgentTemplateTurn` — `assertWritable()` → `getOrgId()` → (ownership guard where relevant) → `getAIClient({orgId})`. The generate action lives in `lib/agent-templates/actions.ts` and follows this shape (no template row needed — generate runs pre-create).
+- **Surface-agnostic runtime:** `runStatelessAgentTurn` builds tools from `blueprint.capabilities` + prompt from `composeSystemPrompt` — a `chat_assistant` template runs unchanged (no voice-only coupling in the loop). So the sandbox Test works for chat with no runtime change.
+- **Create entry:** `studio/agents/new-agent-button.tsx` → `createAgentTemplateAction({ name, type? })` (type defaults `voice_receptionist`; accepts the new `chat_assistant` once the union lands). Routes to `/studio/agents/[id]` after create.
+- **`needs_key` UI hint:** reuse the existing `AgentKeyStatus` pattern (`resolveAgentKeyStatusFromInputs`, `lib/ai/client.ts`) for the "add a key in Settings" affordance.
 
 ### Task 1: Generalize the template type + surface + chat defaults
 
@@ -424,9 +427,16 @@ export async function generateDraft(
 
 - [ ] **Step 4: Run — expect PASS.**
 
-- [ ] **Step 5: Add the server action** in `actions.ts` (wire the real key-resolver + Anthropic client from Task 0's recon; shape shown — substitute the exact resolver/client symbols found):
+- [ ] **Step 5: Add the server action** in `actions.ts` (grounded — uses the real `getAIClient` from Task 0):
 
 ```ts
+import { getAIClient } from "@/lib/ai/client";
+import { generateDraft } from "./generate";
+import { ALL_TEMPLATE_CAPABILITIES } from "./store";
+
+const GEN_MODEL =
+  process.env.ANTHROPIC_AGENT_MODEL?.trim() || "claude-sonnet-4-5-20250929";
+
 export type GenerateAgentDraftResult =
   | { ok: true; patch: TemplateBlueprintPatch }
   | { ok: false; error: "unauthorized" | "needs_key" | "generation_failed" };
@@ -439,22 +449,34 @@ export async function generateAgentDraftAction(input: {
   const orgId = await getOrgId();
   if (!orgId) return { ok: false, error: "unauthorized" };
 
-  // From Task 0: resolve the org's LLM key; null/empty => needs_key.
-  const key = await resolveLlmKey(orgId); // <- exact symbol from recon
-  if (!key) return { ok: false, error: "needs_key" };
+  // BYOK anthropic → platform fallback (same as testAgentTemplateTurn).
+  const { client } = await getAIClient({ orgId });
+  if (!client) return { ok: false, error: "needs_key" };
 
-  const allowedCapabilities = ALL_TEMPLATE_CAPABILITIES; // shared allow-list (Task 6)
   const result = await generateDraft(
-    { intent: input.prompt, surface: input.surface, allowedCapabilities },
+    {
+      intent: input.prompt,
+      surface: input.surface,
+      allowedCapabilities: ALL_TEMPLATE_CAPABILITIES,
+    },
     {
       complete: async ({ system, user }) => {
-        // From Task 0: construct the Anthropic client with `key`, call messages.create
-        // with the default model; return the text block.
-        return runOneShotCompletion({ key, system, user }); // <- exact symbol from recon
+        const resp = await client.messages.create({
+          model: GEN_MODEL,
+          max_tokens: 2048,
+          system,
+          messages: [{ role: "user", content: user }],
+        });
+        return resp.content
+          .filter((b): b is Extract<typeof b, { type: "text" }> => b.type === "text")
+          .map((b) => b.text)
+          .join("\n");
       },
     },
   );
-  return result.ok ? { ok: true, patch: result.patch } : { ok: false, error: "generation_failed" };
+  return result.ok
+    ? { ok: true, patch: result.patch }
+    : { ok: false, error: "generation_failed" };
 }
 ```
 

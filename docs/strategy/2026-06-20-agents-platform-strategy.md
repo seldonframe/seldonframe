@@ -89,11 +89,34 @@ The principle in one breath: **we don't tax your work — flat to run, free to s
 **v1 build shortlist (max capability per unit of auth engineering):**
 - **(a) Wrap native as MCP tools** — booking / payments / email / SMS / CRM / intake (skip external connectors for these).
 - **(b) Easy API-key wins (add now):** web search/scrape (Tavily / Brave / Firecrawl — highest ROI; native has none), Mailchimp (the campaign/list gap Resend doesn't fill), Airtable (PAT), Notion (internal-token path), Slack incoming-webhook (≈70% of Slack value — alerts — with zero OAuth).
-- **(c) The one OAuth must-have:** a **single Google Workspace OAuth client** unlocks Calendar-sync + Gmail-read + Sheets + Docs + Drive in one flow — by far the best OAuth investment. Defer Microsoft / full-Slack / HubSpot-OAuth to v2 by demand.
+- **(c) OAuth, only where a native bridge can't reach:** a **single Google Workspace OAuth client** unlocks Gmail-read + Sheets + Docs + Drive in one flow — the best OAuth investment *if* you need inbox/docs. **But calendar is no longer on this list:** cal.diy is the **universal calendar adapter** — the agent always books via cal.diy, and cal.diy bridges to the client's existing Google/Outlook/Apple calendar via **CalDAV or a webhook automation — no Google OAuth to build** (CalDAV has client-side app-password/2FA friction + Google is deprecating it in places, so the webhook/automation path is the more robust default). **Principle: prefer a native abstraction that bridges outward (cal.diy ↔ CalDAV/webhook) over building per-provider OAuth.** Defer Microsoft / full-Slack / HubSpot-OAuth to v2 by demand.
 
-With native (a) + ~4 API-key connectors (b) + one Google OAuth (c), a builder's agent does an estimated **~95% of what service-business users actually want**, with the only heavy auth being one Google client.
+With native (a) + ~4 API-key connectors (b) + (only if inbox/docs are needed) one Google OAuth (c), a builder's agent does an estimated **~95% of what service-business users actually want**, with calendar — the highest-frequency need — covered by cal.diy with **zero OAuth**.
+
+**Two integration surfaces (don't conflate):** (A) the **builder's own workspace** — native fully covers it; (B) the **agent deployed to a client** — it acts on the *client's* business, so it binds to the *client's* tools. Tools bind at two levels: the **template** declares capability *types* (book / CRM-log / SMS), and each **deployment** binds them to that client's *actual accounts* — **native default** (auto-provision cal.diy + lite CRM for a client with no stack) **or BYO** (the client's own calendar via cal.diy's CalDAV/webhook bridge; their own CRM via API-key/MCP). That per-deployment binding is the invisible-multi-tenancy moat.
 
 **The crown jewel — this directory *is* the marketplace.** Make every SeldonFrame agent **exposable as an MCP server**, and "list your agent on the marketplace at a usage fee" = **publish it as an MCP tool other agents can connect to.** The directory then lists third-party servers *and* other builders' SeldonFrame agents side by side, and SeldonFrame becomes **the MCP registry + the billing/metering layer** between them — every cross-agent call is a GMV event (monetization layer 3). This is the "agents become clients of agents" thesis made real. The durable moat isn't the catalog (anyone can sync a registry) — it's being the **trusted, billed exchange**; the ongoing work is auth + **trust/safety** (vetting listed servers, prompt-injection via tool results, scope limits), and that curation *is* the moat.
+
+## 4c. The agent builder: 6 primitives + generate-from-English (added 2026-06-21)
+
+To make building *almost any* agent trivial — **"anybody with an LLM key builds + tests + deploys + sells an agent in minutes"** — factor the builder into **6 orthogonal primitives**. The current voice-receptionist page (`/studio/agents/[id]`) is just these, pre-set for voice:
+
+1. **Surface** — how it's reached: voice · chat-embed · SMS · email · DM · MCP-endpoint.
+2. **Skill** — the SKILL.md: persona + playbook (`AgentBlueprint.customSkillMd` + greeting). The fat skill.
+3. **Tools** — what it can *do*: native tools (`capabilities` allowlist) + the MCP connector directory (§4b).
+4. **Knowledge / Brain** — what it *knows*: FAQ + pricing facts today → **Brain v2 + per-deployment memory** (the Karpathy brain; the part that *compounds*).
+5. **Guardrails** — what it must *not* do: the deterministic-vs-LLM boundary (quote-guard, read-back, validators), per agent.
+6. **Voice / Format** — TTS voice (voice) / tone + format (text).
+
+**Any agent = Surface + Skill + Tools + Knowledge + Guardrails + Voice.** Maps cleanly onto the locked vision: **thin harness** = one generic runtime over the 6 inputs (rides every model gain for free); **fat skill** = #2 + #3 (forkable + sellable); **Karpathy brain** = #4 (compounds per deployment).
+
+**The unlock — generate the whole bundle from one English sentence.** The user describes intent ("answer my HVAC phone, book jobs, text a quote range, never quote a firm price") and a meta-agent drafts the **entire bundle**: a world-class SKILL.md in SeldonFrame's *house style* (which bakes in the voice-R1 anti-hallucination playbook), the tool selection, proposed guardrails, FAQ stubs, **and the eval tasks that gate deploy** — *"describe it → we write the agent AND its tests."* The user reviews/edits a draft — never a black box. This collapses the hardest part (authoring a good agent) into a sentence, and makes *your* playbook everyone's default = the defensible core.
+
+**Templates** = surface-based presets of the 6 primitives (Voice receptionist · Web chat · SMS · Email · DM), **forkable + sellable** (a customized template → a marketplace listing).
+
+**Flow (build → sell in minutes, ~5 required steps):** Describe → Generate → Review/tweak (optional) → Test (sandbox) → Eval (auto-gate) → Deploy/rent (bind tools: native cal.diy default, or cal.diy bridges to the client's calendar) → List on marketplace (optional).
+
+**First spec slice** = the AI-assisted generalized builder (generate-from-English + the 6-primitive UI + 2–3 templates) on the **existing** chat/voice runtime + native tools — UI/UX-forward. MCP connector directory, Brain v2, new surfaces (email/DM), and per-deployment OAuth are explicit follow-ons. Spec: `docs/superpowers/specs/2026-06-21-ai-assisted-agent-builder-design.md`.
 
 ## 5. Phasing (confirmed order)
 
