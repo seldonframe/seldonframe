@@ -257,6 +257,67 @@ describe("updateDeployment", () => {
     assert.ok(args.patch.updatedAt instanceof Date, "updatedAt bumped");
   });
 
+  test("persists phoneNumberSid + numberOrigin (provisioning fields)", async () => {
+    let updateArgs: { id: string; patch: Record<string, unknown> } | null = null;
+    const deps: UpdateDeploymentDeps = {
+      findById: async () => fakeDeployment(),
+      update: async (id, patch) => {
+        updateArgs = { id, patch: patch as Record<string, unknown> };
+        return fakeDeployment({
+          phoneNumber: (patch.phoneNumber as string) ?? null,
+          status: "active",
+        });
+      },
+    };
+    const result = await updateDeployment({
+      id: "dep-1",
+      patch: {
+        phoneNumber: "+15125550148",
+        phoneNumberSid: "PN0123456789abcdef",
+        numberOrigin: "provisioned",
+        status: "active",
+      },
+      deps,
+    });
+    assert.equal(result.ok, true);
+    const args = updateArgs as unknown as { id: string; patch: Record<string, unknown> };
+    assert.equal(args.patch.phoneNumber, "+15125550148");
+    assert.equal(args.patch.phoneNumberSid, "PN0123456789abcdef");
+    assert.equal(args.patch.numberOrigin, "provisioned");
+  });
+
+  test("nulls phoneNumberSid + numberOrigin on release (cancel path)", async () => {
+    let updateArgs: { id: string; patch: Record<string, unknown> } | null = null;
+    const deps: UpdateDeploymentDeps = {
+      findById: async () =>
+        fakeDeployment({
+          phoneNumber: "+15125550148",
+          status: "active",
+        }),
+      update: async (id, patch) => {
+        updateArgs = { id, patch: patch as Record<string, unknown> };
+        return fakeDeployment({ status: "canceled" });
+      },
+    };
+    const result = await updateDeployment({
+      id: "dep-1",
+      patch: {
+        phoneNumber: null,
+        phoneNumberSid: null,
+        numberOrigin: null,
+        status: "canceled",
+      },
+      deps,
+    });
+    assert.equal(result.ok, true);
+    const args = updateArgs as unknown as { id: string; patch: Record<string, unknown> };
+    // null must be written through (not skipped) so the columns are cleared.
+    assert.equal(args.patch.phoneNumber, null);
+    assert.equal(args.patch.phoneNumberSid, null);
+    assert.equal(args.patch.numberOrigin, null);
+    assert.equal(args.patch.status, "canceled");
+  });
+
   test("rejects an unknown status / surface", async () => {
     const deps: UpdateDeploymentDeps = {
       findById: async () => fakeDeployment(),

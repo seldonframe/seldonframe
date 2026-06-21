@@ -275,9 +275,13 @@ export async function getDeployment(
 // ─── updateDeployment ────────────────────────────────────────────────────────
 
 /** The deployment fields callers may patch. Provisioning/billing fields
- *  (phoneNumber, stripe*) are intentionally writable here because the LATER
- *  gated tasks (number provisioning, billing) flip them — but this task never
- *  sets them. status is validated against the allow-list. */
+ *  (phoneNumber, phoneNumberSid, numberOrigin, stripe*) are intentionally
+ *  writable here because the gated tasks (number provisioning, billing) flip
+ *  them. status is validated against the allow-list.
+ *
+ *  phoneNumberSid + numberOrigin are persisted by the Phase-2 provisioning /
+ *  release actions: provision writes the Twilio PN… SID + numberOrigin
+ *  'provisioned'; cancel nulls them after releasing the number. */
 export type DeploymentPatch = Partial<{
   clientName: string;
   clientContact: DeploymentClientContact | null;
@@ -285,6 +289,8 @@ export type DeploymentPatch = Partial<{
   priceCents: number;
   status: DeploymentStatus;
   phoneNumber: string | null;
+  phoneNumberSid: string | null;
+  numberOrigin: string | null;
 }>;
 
 export type UpdateDeploymentInput = {
@@ -339,6 +345,12 @@ export async function updateDeployment(
   }
   if (p.phoneNumber !== undefined) {
     patch.phoneNumber = p.phoneNumber;
+  }
+  if (p.phoneNumberSid !== undefined) {
+    patch.phoneNumberSid = p.phoneNumberSid;
+  }
+  if (p.numberOrigin !== undefined) {
+    patch.numberOrigin = p.numberOrigin;
   }
 
   const updated = await update(input.id, patch);

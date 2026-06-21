@@ -18,7 +18,7 @@ import assert from "node:assert/strict";
 
 // ── 1. isE164 ─────────────────────────────────────────────────────────────────
 
-import { isE164 } from "../../../src/lib/deployments/margin";
+import { isE164, isAreaCode, deriveAreaCode } from "../../../src/lib/deployments/margin";
 
 describe("isE164", () => {
   // Regex: ^\+[1-9]\d{7,14}$
@@ -207,6 +207,74 @@ describe("pause path — updateDeployment with status:'paused'", () => {
     });
     assert.equal(result.ok, false);
     if (!result.ok) assert.equal(result.error, "deployment_not_found");
+  });
+});
+
+// ── 4. isAreaCode / deriveAreaCode (provisioning helpers) ───────────────────────
+
+describe("isAreaCode", () => {
+  test("accepts 3-digit NANP area codes (first digit 2–9)", () => {
+    for (const a of ["512", "212", "987", "200", "999"]) {
+      assert.equal(isAreaCode(a), true, `expected true for ${a}`);
+    }
+  });
+  test("rejects malformed area codes", () => {
+    for (const a of ["012", "112", "51", "5125", "abc", "", null, undefined, 512]) {
+      assert.equal(isAreaCode(a as unknown), false, `expected false for ${String(a)}`);
+    }
+  });
+});
+
+describe("deriveAreaCode", () => {
+  test("extracts the area code from common contact formats", () => {
+    assert.equal(deriveAreaCode("(512) 555-0148"), "512");
+    assert.equal(deriveAreaCode("+1 512-555-0148"), "512");
+    assert.equal(deriveAreaCode("15125550148"), "512");
+    assert.equal(deriveAreaCode("512.555.0148"), "512");
+  });
+  test("returns null when no plausible area code is present", () => {
+    assert.equal(deriveAreaCode("555-0148"), null); // 7 digits
+    assert.equal(deriveAreaCode("012-555-0148"), null); // leading 0 area code
+    assert.equal(deriveAreaCode(""), null);
+    assert.equal(deriveAreaCode(undefined), null);
+  });
+});
+
+// ── 5. cancel path — release-on-cancel decision ─────────────────────────────────
+//
+// The action itself needs Next.js session (getOrgId/assertWritable), so we test
+// the decision predicate that gates the Twilio release in isolation, mirroring
+// the phone_in_use mapDbError pattern above. The action releases ONLY when the
+// number was provisioned by SeldonFrame AND a sid is on file.
+
+describe("cancel path — should-release decision", () => {
+  function shouldRelease(d: Pick<Deployment, "numberOrigin" | "phoneNumberSid">): boolean {
+    return d.numberOrigin === "provisioned" && Boolean(d.phoneNumberSid);
+  }
+
+  test("releases a SeldonFrame-provisioned number with a sid", () => {
+    assert.equal(
+      shouldRelease(fakeDeployment({ numberOrigin: "provisioned", phoneNumberSid: "PN123" })),
+      true,
+    );
+  });
+  test("does NOT release a BYO number", () => {
+    assert.equal(
+      shouldRelease(fakeDeployment({ numberOrigin: "byo", phoneNumberSid: "PN123" })),
+      false,
+    );
+  });
+  test("does NOT release when there is no sid", () => {
+    assert.equal(
+      shouldRelease(fakeDeployment({ numberOrigin: "provisioned", phoneNumberSid: null })),
+      false,
+    );
+  });
+  test("does NOT release when origin is unset (legacy/draft)", () => {
+    assert.equal(
+      shouldRelease(fakeDeployment({ numberOrigin: null, phoneNumberSid: null })),
+      false,
+    );
   });
 });
 

@@ -60,3 +60,30 @@ export const PauseDeploymentSchema = z
   .strict();
 
 export type PauseDeploymentInput = z.infer<typeof PauseDeploymentSchema>;
+
+// ─── ProvisionDeploymentNumberSchema / CancelDeploymentSchema ─────────────────
+// Used by provisionDeploymentNumberAction + cancelDeploymentAction (actions.ts).
+// Same "use server" split rationale as the schemas above.
+
+/** Validates the provision payload: a deployment id + a 3-digit NANP area code.
+ *  Fine-grained isAreaCode() check in the action catches the 2–9 leading-digit
+ *  rule; this just enforces the 3-digit shape. */
+export const ProvisionDeploymentNumberSchema = z
+  .object({
+    deploymentId: z.string().uuid(),
+    areaCode: z.string().regex(/^\d{3}$/, "area code must be 3 digits"),
+  })
+  .strict();
+
+export type ProvisionDeploymentNumberInput = z.infer<
+  typeof ProvisionDeploymentNumberSchema
+>;
+
+/** Validates the cancel payload: just the deployment id. */
+export const CancelDeploymentSchema = z
+  .object({
+    deploymentId: z.string().uuid(),
+  })
+  .strict();
+
+export type CancelDeploymentInput = z.infer<typeof CancelDeploymentSchema>;

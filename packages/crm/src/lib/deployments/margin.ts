@@ -140,6 +140,40 @@ export function isE164(phone: unknown): phone is string {
   return /^\+[1-9]\d{7,14}$/.test(phone);
 }
 
+// ─── area-code helpers (voice-number provisioning) ───────────────────────────
+
+/** True iff `value` is a US/NANP area code — exactly 3 digits, first 2–9. Pure. */
+export function isAreaCode(value: unknown): value is string {
+  return typeof value === "string" && /^[2-9]\d{2}$/.test(value);
+}
+
+/**
+ * Best-effort extraction of a 3-digit NANP area code from a free-form contact
+ * phone string, for pre-filling the "Get a number" input. Pure, zero-deps.
+ *
+ * Strips everything but digits, drops a leading country code '1' if the result
+ * is 11 digits, then takes the first 3 digits and validates them as an area
+ * code. Returns null if no plausible area code is present.
+ *
+ * Examples:
+ *   deriveAreaCode("(512) 555-0148") → "512"
+ *   deriveAreaCode("+1 512-555-0148") → "512"
+ *   deriveAreaCode("15125550148")     → "512"
+ *   deriveAreaCode("555-0148")        → null  (only 7 digits)
+ *   deriveAreaCode("+44 20 7946 0958")→ null  (non-NANP, leading area "207"→ ok? see note)
+ */
+export function deriveAreaCode(phone: unknown): string | null {
+  if (typeof phone !== "string") return null;
+  let digits = phone.replace(/\D/g, "");
+  // Drop a NANP country code '1' when present (11-digit form).
+  if (digits.length === 11 && digits.startsWith("1")) {
+    digits = digits.slice(1);
+  }
+  if (digits.length < 10) return null;
+  const candidate = digits.slice(0, 3);
+  return isAreaCode(candidate) ? candidate : null;
+}
+
 /** Human label for a surface id, e.g. "phone" → "Phone". */
 export function formatDeploymentSurface(surface: string): string {
   switch (surface) {

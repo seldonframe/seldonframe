@@ -19,8 +19,17 @@ import { getOrgId } from "@/lib/auth/helpers";
 import { assertWritable } from "@/lib/demo/server";
 import { createDeployment, getDeployment, updateDeployment } from "./store";
 import type { UpdateDeploymentDeps } from "./store";
-import { CreateDeploymentSchema, ActivateDeploymentSchema, PauseDeploymentSchema } from "./schema";
-import { isE164 } from "./margin";
+import {
+  CreateDeploymentSchema,
+  ActivateDeploymentSchema,
+  PauseDeploymentSchema,
+  ProvisionDeploymentNumberSchema,
+  CancelDeploymentSchema,
+} from "./schema";
+import { isE164, isAreaCode } from "./margin";
+import { resolveBuilderTelephony } from "@/lib/telephony/config";
+import { createTwilioTelephonyClient } from "@/lib/telephony/twilio-client";
+import { provisionVoiceNumber } from "@/lib/telephony/provision-voice-number";
 
 export type CreateDeploymentActionResult =
   | { ok: true; id: string }
@@ -165,6 +174,181 @@ export async function pauseDeploymentAction(
   const result = await updateDeployment({
     id: parsed.data.deploymentId,
     patch: { status: "paused" },
+    deps: _deps,
+  });
+  if (!result.ok) {
+    return { ok: false, error: result.error === "deployment_not_found" ? "not_found" : "update_failed" };
+  }
+  revalidatePath("/studio/clients");
+  return { ok: true };
+}
+
+// ─── provisionDeploymentNumberAction ─────────────────────────────────────────
+
+export type ProvisionDeploymentNumberActionResult =
+  | { ok: true; phoneNumber: string }
+  | { ok: false; error: "unauthorized" | "not_found" | "invalid_area_code" }
+  | { ok: false; error: "needs_telephony"; missing: ("twilio" | "trunk")[] }
+  | {
+      ok: false;
+      error:
+        | "no_numbers_available"
+        | "provisioning_unavailable"
+        | "attach_failed"
+        | "deployment_not_found";
+    };
+
+/**
+ * Provision a REAL Twilio voice number for a deployment and attach it to the
+ * builder's Elastic SIP Trunk (→ OpenAI voice gateway), then flip the
+ * deployment to 'active'. This is the "Get a number" primary path (vs.
+ * activateDeploymentAction, where the builder pastes a number they already own).
+ *
+ * Org-guarded: verifies the deployment's builder_org_id matches the current
+ * operator's org. If the builder hasn't connected Twilio or set their voice
+ * trunk SID, returns {error:'needs_telephony', missing} so the UI can point
+ * them at Settings. Otherwise delegates to the idempotent provisionVoiceNumber
+ * state machine (search → buy → persist sid → attach → active), which writes
+ * phoneNumberSid + numberOrigin:'provisioned' via updateDeployment.
+ *
+ * No raw Twilio calls here — the network client is created from the builder's
+ * resolved BYO creds and injected into the state machine.
+ */
+export async function provisionDeploymentNumberAction(input: {
+  deploymentId: string;
+  areaCode: string;
+}): Promise<ProvisionDeploymentNumberActionResult> {
+  assertWritable();
+
+  const orgId = await getOrgId();
+  if (!orgId) return { ok: false, error: "unauthorized" };
+
+  const parsed = ProvisionDeploymentNumberSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "invalid_area_code" };
+  if (!isAreaCode(parsed.data.areaCode)) {
+    return { ok: false, error: "invalid_area_code" };
+  }
+
+  // Org guard: load the deployment and verify ownership.
+  const existing = await getDeployment(parsed.data.deploymentId);
+  if (!existing || existing.builderOrgId !== orgId) {
+    return { ok: false, error: "not_found" };
+  }
+
+  // Resolve the builder's BYO Twilio creds + voice trunk SID.
+  const telephony = await resolveBuilderTelephony(orgId);
+  if (!telephony.ok) {
+    return { ok: false, error: "needs_telephony", missing: telephony.missing };
+  }
+
+  const client = createTwilioTelephonyClient({
+    accountSid: telephony.accountSid,
+    authToken: telephony.authToken,
+  });
+
+  const result = await provisionVoiceNumber(
+    {
+      client,
+      loadDeployment: (id) => getDeployment(id),
+      updateDeployment: async (id, patch) => {
+        const res = await updateDeployment({ id, patch });
+        return res.ok ? res.deployment : null;
+      },
+      friendlyName: (d) => d.clientName,
+    },
+    {
+      deploymentId: parsed.data.deploymentId,
+      areaCode: parsed.data.areaCode,
+      trunkSid: telephony.voiceTrunkSid,
+    },
+  );
+
+  if (!result.ok) {
+    return { ok: false, error: result.error };
+  }
+
+  revalidatePath("/studio/clients");
+  return { ok: true, phoneNumber: result.phoneNumber };
+}
+
+// ─── cancelDeploymentAction ──────────────────────────────────────────────────
+
+export type CancelDeploymentActionResult =
+  | { ok: true }
+  | { ok: false; error: "unauthorized" | "not_found" | "update_failed" };
+
+/**
+ * Cancel a deployment (→ 'canceled'). Org-guarded.
+ *
+ * Release-on-cancel: if the number was PROVISIONED by SeldonFrame
+ * (numberOrigin === 'provisioned') and a phoneNumberSid is on file, we release
+ * it from the builder's Twilio account so they stop paying for it. Release is
+ * BEST-EFFORT — if the Twilio call throws (already released, network), we log
+ * and still cancel the row. BYO numbers (numberOrigin !== 'provisioned') are
+ * never released — the builder owns them.
+ *
+ * After a successful release we null phoneNumber + phoneNumberSid so the row no
+ * longer points at a dead number (and frees the unique phone index). Pause, by
+ * contrast, keeps the number assigned (see pauseDeploymentAction).
+ *
+ * @param _deps - optional DI; injected in unit tests to avoid DB.
+ */
+export async function cancelDeploymentAction(
+  input: { deploymentId: string },
+  _deps?: Partial<UpdateDeploymentDeps & { findDeploymentById: (id: string) => Promise<import("@/db/schema/deployments").Deployment | null> }>,
+): Promise<CancelDeploymentActionResult> {
+  assertWritable();
+
+  const orgId = await getOrgId();
+  if (!orgId) return { ok: false, error: "unauthorized" };
+
+  const parsed = CancelDeploymentSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "not_found" };
+
+  // Org guard: load the deployment and verify ownership.
+  const existing = await getDeployment(
+    parsed.data.deploymentId,
+    _deps ? { findById: _deps.findDeploymentById ?? _deps.findById } : undefined,
+  );
+  if (!existing || existing.builderOrgId !== orgId) {
+    return { ok: false, error: "not_found" };
+  }
+
+  // Release-on-cancel for SeldonFrame-provisioned numbers (best-effort).
+  const shouldRelease =
+    existing.numberOrigin === "provisioned" && Boolean(existing.phoneNumberSid);
+
+  if (shouldRelease) {
+    try {
+      const telephony = await resolveBuilderTelephony(orgId);
+      if (telephony.ok) {
+        const client = createTwilioTelephonyClient({
+          accountSid: telephony.accountSid,
+          authToken: telephony.authToken,
+        });
+        await client.releaseNumber({ phoneNumberSid: existing.phoneNumberSid! });
+      } else {
+        // Creds gone — can't call Twilio. Cancel anyway; the number may linger
+        // in the builder's account but we don't block the cancel on it.
+        console.warn(
+          "[deployments][cancel] skipping release — telephony unresolved",
+          { deploymentId: existing.id, missing: telephony.missing },
+        );
+      }
+    } catch (err) {
+      // Already released / network / etc. — swallow and still cancel.
+      console.warn("[deployments][cancel] number release failed (continuing)", {
+        deploymentId: existing.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  const result = await updateDeployment({
+    id: parsed.data.deploymentId,
+    patch: shouldRelease
+      ? { status: "canceled", phoneNumber: null, phoneNumberSid: null }
+      : { status: "canceled" },
     deps: _deps,
   });
   if (!result.ok) {
