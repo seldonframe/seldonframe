@@ -16,7 +16,10 @@
 import { eq } from "drizzle-orm";
 
 import { toE164 } from "@/lib/sms/providers";
-import type { DeploymentClientContext } from "@/db/schema/deployments";
+import type {
+  DeploymentClientContext,
+  BookingMode,
+} from "@/db/schema/deployments";
 
 /** The slice of a deployments row this resolver needs. */
 export type DeploymentNumberRow = {
@@ -30,6 +33,11 @@ export type DeploymentNumberRow = {
    *  persona facts so the agent speaks the CLIENT's services/FAQ. Nullable —
    *  absent → name-only fallback. */
   clientContext: DeploymentClientContext | null;
+  /** How this deployment books (native | external_link | api_mcp | cal_com).
+   *  Threaded into ctx.booking so the deployed agent's tools branch correctly. */
+  bookingMode: BookingMode;
+  /** The client's own booking URL — only meaningful for external_link. */
+  externalBookingUrl: string | null;
   phoneNumber: string | null;
   status: string;
 };
@@ -74,6 +82,8 @@ function buildDefaultDeps(): ResolveDeploymentDeps {
           agentTemplateId: deployments.agentTemplateId,
           clientName: deployments.clientName,
           clientContext: deployments.clientContext,
+          bookingMode: deployments.bookingMode,
+          externalBookingUrl: deployments.externalBookingUrl,
           phoneNumber: deployments.phoneNumber,
           status: deployments.status,
         })

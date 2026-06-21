@@ -41,6 +41,16 @@ export type ToolExecuteContext = {
    *  instead of the raw UTC ISO. Web/text callers may omit it → formatting
    *  falls back to UTC, still human-readable, never a raw ISO. */
   timezone?: string;
+  /** DEPLOYED-agent only (ICP-3). How this deployment books: `native` →
+   *  the existing availability + booking chain (unchanged); `external_link`
+   *  → the agent hands off the client's own booking URL; `api_mcp` / `cal_com`
+   *  → capture-the-lead handoff (real adapters TBD). ABSENT for workspace /
+   *  operator agents, so their booking tools keep the byte-for-byte native
+   *  path (the tool branch reads `ctx.booking?.mode ?? "native"`). */
+  booking?: {
+    mode: import("@/lib/deployments/booking-providers").BookingMode;
+    externalUrl?: string | null;
+  };
 };
 
 export type AgentTool<I = unknown, O = unknown> = {

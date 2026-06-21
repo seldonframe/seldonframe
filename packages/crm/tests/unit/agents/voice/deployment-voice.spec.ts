@@ -274,3 +274,59 @@ describe("loadDeploymentVoiceContext — speaks the CLIENT's services + FAQ", ()
     assert.match(result!.instructions, /Captured Brand Name/);
   });
 });
+
+describe("loadDeploymentVoiceContext — threads the booking mode into ctx", () => {
+  // ICP-3: the deployment's bookingMode + externalBookingUrl must land on
+  // ctx.booking so the deployed agent's tools can branch (native vs handoff).
+  // Workspace/operator agents never set ctx.booking — proven elsewhere; here
+  // we lock that the DEPLOYMENT path populates it.
+  const FIXED_NOW = new Date("2026-06-01T17:00:00Z");
+
+  test("threads external_link booking (mode + url) into ctx", async () => {
+    const deployment: Deployment = {
+      ...DEPLOYMENT,
+      bookingMode: "external_link",
+      externalBookingUrl: "https://book.acme.test/clientx",
+    };
+    const result = await loadDeploymentVoiceContext({
+      deployment,
+      now: FIXED_NOW,
+      deps: baseDeps(),
+    });
+    assert.ok(result);
+    assert.equal(result!.ctx.booking?.mode, "external_link");
+    assert.equal(result!.ctx.booking?.externalUrl, "https://book.acme.test/clientx");
+  });
+
+  test("defaults to native when bookingMode is the default", async () => {
+    const deployment: Deployment = {
+      ...DEPLOYMENT,
+      bookingMode: "native",
+      externalBookingUrl: null,
+    };
+    const result = await loadDeploymentVoiceContext({
+      deployment,
+      now: FIXED_NOW,
+      deps: baseDeps(),
+    });
+    assert.ok(result);
+    assert.equal(result!.ctx.booking?.mode, "native");
+    assert.equal(result!.ctx.booking?.externalUrl, null);
+  });
+
+  test("coerces an unknown stored bookingMode back to native (resolveBookingMode)", async () => {
+    const deployment = {
+      ...DEPLOYMENT,
+      // Simulate a legacy / corrupt value persisted before the enum existed.
+      bookingMode: "bogus" as Deployment["bookingMode"],
+      externalBookingUrl: null,
+    } as Deployment;
+    const result = await loadDeploymentVoiceContext({
+      deployment,
+      now: FIXED_NOW,
+      deps: baseDeps(),
+    });
+    assert.ok(result);
+    assert.equal(result!.ctx.booking?.mode, "native");
+  });
+});

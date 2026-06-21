@@ -42,6 +42,7 @@ import {
 } from "./voice-workspace";
 import { getAgentTemplate } from "@/lib/agent-templates/store";
 import { getOrCreateVoiceAgent } from "./voice-agent";
+import { resolveBookingMode } from "@/lib/deployments/booking-providers";
 
 /** What the webhook needs to run a deployment-routed call. Mirrors the fields
  *  the workspace path threads into runVoiceCall + startVoiceConversation. */
@@ -103,7 +104,12 @@ function buildDefaultDeps(): DeploymentVoiceDeps {
 export async function loadDeploymentVoiceContext(args: {
   deployment: Pick<
     Deployment,
-    "builderOrgId" | "agentTemplateId" | "clientName" | "clientContext"
+    | "builderOrgId"
+    | "agentTemplateId"
+    | "clientName"
+    | "clientContext"
+    | "bookingMode"
+    | "externalBookingUrl"
   >;
   now: Date;
   deps?: DeploymentVoiceDeps;
@@ -167,6 +173,14 @@ export async function loadDeploymentVoiceContext(args: {
     conversationId: deps.generateConversationId(),
     testMode: false,
     timezone: personaInputs.timezone,
+    // 6. Per-deployment booking mode (ICP-3). resolveBookingMode coerces any
+    //    legacy/unknown stored value back to 'native', so the tool branch always
+    //    sees a valid mode. Only the DEPLOYMENT path sets ctx.booking — workspace
+    //    agents leave it undefined and keep the unchanged native booking chain.
+    booking: {
+      mode: resolveBookingMode(args.deployment.bookingMode),
+      externalUrl: args.deployment.externalBookingUrl ?? null,
+    },
   };
 
   return {

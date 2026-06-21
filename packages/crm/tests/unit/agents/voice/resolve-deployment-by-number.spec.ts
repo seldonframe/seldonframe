@@ -20,6 +20,8 @@ const ACTIVE_A: DeploymentNumberRow = {
   agentTemplateId: "tmpl-1",
   clientName: "Acme HVAC",
   clientContext: null,
+  bookingMode: "native",
+  externalBookingUrl: null,
   phoneNumber: "+18335550100",
   status: "active",
 };
@@ -29,6 +31,8 @@ const ACTIVE_B_LOOSE: DeploymentNumberRow = {
   agentTemplateId: "tmpl-2",
   clientName: "Lone Star Plumbing",
   clientContext: null,
+  bookingMode: "native",
+  externalBookingUrl: null,
   // Stored loosely — must normalize to +15125550111 before comparing.
   phoneNumber: "(512) 555-0111",
   status: "active",
@@ -39,6 +43,8 @@ const DRAFT: DeploymentNumberRow = {
   agentTemplateId: "tmpl-3",
   clientName: "Draft Co",
   clientContext: null,
+  bookingMode: "native",
+  externalBookingUrl: null,
   phoneNumber: "+15125550111", // same number as ACTIVE_B but not active
   status: "draft",
 };
@@ -48,6 +54,8 @@ const PAUSED: DeploymentNumberRow = {
   agentTemplateId: "tmpl-4",
   clientName: "Paused Co",
   clientContext: null,
+  bookingMode: "native",
+  externalBookingUrl: null,
   phoneNumber: "+19998887777",
   status: "paused",
 };
@@ -91,6 +99,8 @@ describe("matchDeploymentByPhoneNumber — pure matcher", () => {
       agentTemplateId: "t",
       clientName: "No Phone Co",
       clientContext: null,
+      bookingMode: "native",
+      externalBookingUrl: null,
       phoneNumber: null,
       status: "active",
     };
