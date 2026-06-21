@@ -26,8 +26,9 @@ import { and, eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 
 import { db } from "@/db";
-import { agents, organizations } from "@/db/schema";
+import { agents, bookings, organizations } from "@/db/schema";
 import type { AgentBlueprint } from "@/db/schema/agents";
+import type { BookingIntakeField } from "@/lib/bookings/actions";
 import type { ToolExecuteContext } from "../tools";
 import { resolveWorkspaceByPhoneNumber } from "./resolve-workspace-by-number";
 import { getOrCreateVoiceAgent } from "./voice-agent";
@@ -37,32 +38,102 @@ export type VoicePersonaInputs = {
   soul: unknown;
   timezone: string;
   blueprint: AgentBlueprint;
+  /** Voice R1 — this workspace's appointment-type intake fields (status=
+   *  'template', metadata.kind='appointment_type', metadata.intakeFields).
+   *  Empty array when the workspace defines none → persona falls back to
+   *  name + email. */
+  intakeFields: BookingIntakeField[];
 };
 
+/** Minimal shape of a bookings row needed to pick intake fields. */
+type TemplateRow = { metadata: unknown };
+
 /**
- * Load the soul + workspace timezone + voice-agent blueprint for persona
- * composition. Best-effort: on any miss it returns safe defaults (null soul,
- * UTC, empty blueprint) so the call still runs with a generic persona rather
- * than crashing. Used by the voice webhook AFTER the workspace is resolved.
+ * Voice R1 — pure: pick the appointment-type intake fields from a set of
+ * template rows. Returns the first appointment-type template's non-empty
+ * intakeFields, else []. Defensive about the loosely-typed metadata JSON.
+ */
+export function selectAppointmentIntakeFields(
+  rows: TemplateRow[],
+): BookingIntakeField[] {
+  for (const row of rows) {
+    const meta = (row?.metadata as Record<string, unknown> | null) ?? {};
+    if (meta.kind !== "appointment_type") continue;
+    const fields = meta.intakeFields;
+    if (Array.isArray(fields) && fields.length > 0) {
+      return fields as BookingIntakeField[];
+    }
+  }
+  return [];
+}
+
+/** Injectable DB seam for loadVoicePersonaInputs — DI over drizzle-chain
+ *  mocking (repo convention) so the intake-fields threading is unit-tested
+ *  without a real Postgres. */
+export type LoadVoicePersonaDeps = {
+  loadOrg: (orgId: string) => Promise<{ soul: unknown; timezone: string | null } | null>;
+  loadBlueprint: (agentId: string) => Promise<AgentBlueprint | null>;
+  /** All appointment-type intake fields for the org (first non-empty wins). */
+  loadAppointmentIntakeFields: (orgId: string) => Promise<BookingIntakeField[]>;
+};
+
+function defaultLoadVoicePersonaDeps(): LoadVoicePersonaDeps {
+  return {
+    loadOrg: async (orgId) => {
+      const [org] = await db
+        .select({ soul: organizations.soul, timezone: organizations.timezone })
+        .from(organizations)
+        .where(eq(organizations.id, orgId))
+        .limit(1);
+      return org ?? null;
+    },
+    loadBlueprint: async (agentId) => {
+      const [agent] = await db
+        .select({ blueprint: agents.blueprint })
+        .from(agents)
+        .where(eq(agents.id, agentId))
+        .limit(1);
+      return (agent?.blueprint ?? null) as AgentBlueprint | null;
+    },
+    loadAppointmentIntakeFields: async (orgId) => {
+      // All template rows for the org; the pure helper filters to
+      // appointment_type and picks the first with intakeFields.
+      const rows = await db
+        .select({ metadata: bookings.metadata })
+        .from(bookings)
+        .where(and(eq(bookings.orgId, orgId), eq(bookings.status, "template")));
+      return selectAppointmentIntakeFields(rows);
+    },
+  };
+}
+
+/**
+ * Load the soul + workspace timezone + voice-agent blueprint + appointment-type
+ * intake fields for persona composition. Best-effort: on any miss it returns
+ * safe defaults (null soul, UTC, empty blueprint, [] intakeFields) so the call
+ * still runs with a generic persona rather than crashing. Used by the voice
+ * webhook AFTER the workspace is resolved.
  */
 export async function loadVoicePersonaInputs(
   orgId: string,
   agentId: string,
+  deps: LoadVoicePersonaDeps = defaultLoadVoicePersonaDeps(),
 ): Promise<VoicePersonaInputs> {
-  const [org] = await db
-    .select({ soul: organizations.soul, timezone: organizations.timezone })
-    .from(organizations)
-    .where(eq(organizations.id, orgId))
-    .limit(1);
-  const [agent] = await db
-    .select({ blueprint: agents.blueprint })
-    .from(agents)
-    .where(eq(agents.id, agentId))
-    .limit(1);
+  const org = await deps.loadOrg(orgId);
+  const blueprint = await deps.loadBlueprint(agentId);
+  // Intake fields are best-effort — a failure here must NOT abort the call;
+  // the persona simply falls back to name + email.
+  let intakeFields: BookingIntakeField[] = [];
+  try {
+    intakeFields = await deps.loadAppointmentIntakeFields(orgId);
+  } catch {
+    intakeFields = [];
+  }
   return {
     soul: org?.soul ?? null,
     timezone: org?.timezone || "UTC",
-    blueprint: (agent?.blueprint ?? {}) as AgentBlueprint,
+    blueprint: (blueprint ?? {}) as AgentBlueprint,
+    intakeFields,
   };
 }
 

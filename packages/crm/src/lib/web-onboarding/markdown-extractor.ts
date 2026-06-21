@@ -56,11 +56,13 @@ export type { WebFetchErrorReason };
 const DEFAULT_MODEL =
   process.env.WEB_ONBOARDING_MODEL?.trim() || "claude-opus-4-7";
 
-// Smaller than the old 8192 because the model no longer reasons about
-// tool use — input is pre-fetched MD, output is just JSON. 4096 fits
-// the full ExtractedBusinessFacts shape comfortably (~2k tokens for the
-// JSON body) with slack for whitespace.
-const MAX_TOKENS = 4096;
+// Output is JSON only (no tool-use reasoning). 4096 proved too tight for
+// content-rich sites: a long services_detailed + photos[] + faq +
+// testimonials payload could exceed it, truncating the JSON mid-field so the
+// parser rejected it (markdown_extractor_parse_failed in prod, e.g.
+// gardensfortexas.com). Restored to 8192 (the prior value) for comfortable
+// headroom; photos are already capped at 12 in EXTRACTION_INSTRUCTIONS_MD.
+const MAX_TOKENS = 8192;
 
 // System prompt — strongest format constraint Anthropic offers. The new
 // architecture eliminates tool-use turns so the model can't go
@@ -212,6 +214,10 @@ export async function extractBusinessFactsFromUrl(params: {
         event: "markdown_extractor_parse_failed",
         url: params.url,
         model: modelInUse,
+        // stop_reason="max_tokens" + a large text_len ⇒ truncation (raise
+        // MAX_TOKENS); "end_turn" with valid-looking text ⇒ malformed JSON.
+        stop_reason: response.stop_reason ?? null,
+        text_len: text.length,
         text_preview: text.slice(0, 500),
       }),
     );

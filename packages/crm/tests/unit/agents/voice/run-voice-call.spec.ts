@@ -20,7 +20,15 @@ import assert from "node:assert/strict";
 
 import {
   runVoiceCall,
+  acceptCall,
+  hangupCall,
+  buildCallerTranscriptionRequest,
+  responseHasAudioOutput,
+  CALLER_GOODBYE_RE,
+  AGENT_SIGNOFF_RE,
+  MAX_ASSISTANT_TURNS,
   PHASE0_GREETING_INSTRUCTIONS,
+  PHASE0_ACCEPT_INSTRUCTIONS,
   VOICE_SDR_INSTRUCTIONS,
   VOICE_TOOLS,
   VOICE_AUDIO_OUTPUT_VOICE,
@@ -38,6 +46,40 @@ const TOOL_CTX: ToolExecuteContext = {
   conversationId: "conv-1",
   testMode: false,
 };
+
+// ─── acceptCall ──────────────────────────────────────────────────────────────
+// The /accept HTTP body sets the model's persona until the control WS lands.
+// It MUST keep the model SILENT: the call's per-agent voice + persona are only
+// applied over the WS, so any greeting at /accept is in the wrong voice AND
+// collides with the WS greeting — the "double hello" operators reported. DI a
+// fake fetch and assert the accept body uses the silent instruction.
+
+describe("acceptCall", () => {
+  test("holds the model silent at /accept (not the greeting persona) — prevents the double-hello", async () => {
+    let capturedBody: unknown = null;
+    const fakeFetch = (async (_url: string, init?: { body?: string }) => {
+      capturedBody = init?.body ? JSON.parse(init.body) : null;
+      return new Response("{}", { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const res = await acceptCall({
+      callId: "rtc_test",
+      apiKey: "sk-test",
+      fetchImpl: fakeFetch,
+    });
+
+    assert.equal(res.ok, true);
+    const body = capturedBody as { type?: string; instructions?: string } | null;
+    assert.ok(body, "accept must POST a body");
+    assert.equal(body.type, "realtime");
+    assert.equal(body.instructions, PHASE0_ACCEPT_INSTRUCTIONS);
+    assert.notEqual(
+      body.instructions,
+      PHASE0_GREETING_INSTRUCTIONS,
+      "accept must NOT use the greeting persona (causes the wrong-voice double-hello)",
+    );
+  });
+});
 
 // ─── Fake control socket ─────────────────────────────────────────────────────
 // Records the ctor (url + options), captures addEventListener / .on handlers so
@@ -282,8 +324,32 @@ describe("runVoiceCall — message frame coercion", () => {
 
 // ─── Turn cap ────────────────────────────────────────────────────────────────
 
+// A `response.done` for a genuine SPOKEN assistant turn carries an audio content
+// part. ONLY these count toward the turn cap (tool-call + out-of-band text
+// responses produce no audio, so they must NOT). Helper to build one as the ws
+// package would deliver it (a Buffer frame).
+function audioResponseDoneFrame(): { data: Buffer } {
+  return {
+    data: Buffer.from(
+      JSON.stringify({
+        type: "response.done",
+        response: {
+          output: [
+            {
+              type: "message",
+              role: "assistant",
+              content: [{ type: "audio", transcript: "spoken reply" }],
+            },
+          ],
+        },
+      }),
+      "utf8",
+    ),
+  };
+}
+
 describe("runVoiceCall — assistant-turn safety cap", () => {
-  test("ends with max_turns after maxTurns response.done events (no goodbye)", async () => {
+  test("ends with max_turns after maxTurns SPOKEN (audio) response.done events (no goodbye)", async () => {
     const { ctor, captures } = makeFakeSocketCtor();
     const promise = runVoiceCall({
       callId: CALL_ID,
@@ -294,11 +360,199 @@ describe("runVoiceCall — assistant-turn safety cap", () => {
     });
     const cap = captures[0]!;
     cap.emit("open");
+    // Each response.done must carry AUDIO output to count as a spoken turn — a
+    // bare response.done has no audio and (correctly) no longer increments.
     for (let i = 0; i < 3; i += 1) {
-      cap.emit("message", { data: Buffer.from(JSON.stringify({ type: "response.done" }), "utf8") });
+      cap.emit("message", audioResponseDoneFrame());
     }
     const reason = await promise;
     assert.equal(reason, "max_turns");
+  });
+
+  test("ends with max_turns at the DEFAULT cap (MAX_ASSISTANT_TURNS=20) of spoken turns", async () => {
+    // Drive the real default cap (no maxTurns override) with audio response.done
+    // events. The cap is 20 — a long booking call should not be cut short before
+    // ~20 genuine spoken replies.
+    assert.equal(MAX_ASSISTANT_TURNS, 20, "the spoken-turn safety cap is 20");
+    const { ctor, captures } = makeFakeSocketCtor();
+    const promise = runVoiceCall({
+      callId: CALL_ID,
+      apiKey: API_KEY,
+      WebSocketImpl: ctor,
+      maxCallMs: 5000,
+      // no maxTurns → uses MAX_ASSISTANT_TURNS (20)
+    });
+    const cap = captures[0]!;
+    cap.emit("open");
+    for (let i = 0; i < MAX_ASSISTANT_TURNS; i += 1) {
+      cap.emit("message", audioResponseDoneFrame());
+    }
+    const reason = await promise;
+    assert.equal(reason, "max_turns");
+  });
+});
+
+// ─── responseHasAudioOutput — pure helper (the turn-counting gate) ───────────
+// THE BUG THIS GUARDS: the turn cap previously incremented on EVERY response.done,
+// including tool-call responses (function_call output, no audio) and out-of-band
+// transcription responses (text/empty output). A normal booking conversation
+// (~9 spoken turns + ~3 tool calls + several transcription responses) blew past
+// the old cap of 12 → finish("max_turns") killed the call mid-booking before the
+// caller could confirm. The fix gates the increment on this helper so ONLY
+// genuine SPOKEN (audio) replies count. The helper must be total — an
+// unrecognizable shape returns false (never throws).
+
+describe("responseHasAudioOutput — counts only genuine spoken (audio) replies", () => {
+  test("true for an output with an `audio` content part", () => {
+    assert.equal(
+      responseHasAudioOutput({
+        response: {
+          output: [
+            {
+              type: "message",
+              role: "assistant",
+              content: [{ type: "audio", transcript: "hi" }],
+            },
+          ],
+        },
+      }),
+      true,
+    );
+  });
+
+  test("true for an output with an `output_audio` content part", () => {
+    assert.equal(
+      responseHasAudioOutput({
+        response: {
+          output: [
+            { type: "message", content: [{ type: "output_audio", transcript: "hi" }] },
+          ],
+        },
+      }),
+      true,
+    );
+  });
+
+  test("true when audio sits alongside a text part (mixed content)", () => {
+    assert.equal(
+      responseHasAudioOutput({
+        response: {
+          output: [
+            {
+              type: "message",
+              content: [{ type: "text", text: "hi" }, { type: "audio", transcript: "hi" }],
+            },
+          ],
+        },
+      }),
+      true,
+    );
+  });
+
+  test("false for a function_call-only output (tool-call turn — no audio)", () => {
+    assert.equal(
+      responseHasAudioOutput({
+        response: {
+          output: [
+            { type: "function_call", call_id: "c1", name: "book_appointment", arguments: "{}" },
+          ],
+        },
+      }),
+      false,
+    );
+  });
+
+  test("false for a text-only output (out-of-band transcription)", () => {
+    assert.equal(
+      responseHasAudioOutput({
+        response: {
+          output: [{ type: "message", content: [{ type: "output_text", text: "caller said hi" }] }],
+        },
+      }),
+      false,
+    );
+  });
+
+  test("false for an empty output array", () => {
+    assert.equal(responseHasAudioOutput({ response: { output: [] } }), false);
+  });
+
+  test("false for an absent output / bare response.done", () => {
+    assert.equal(responseHasAudioOutput({ type: "response.done" }), false);
+    assert.equal(responseHasAudioOutput({}), false);
+    assert.equal(responseHasAudioOutput({ response: {} }), false);
+  });
+
+  test("total — does not throw on malformed shapes (returns false)", () => {
+    // Non-array output, non-object items, non-array content, null parts, etc.
+    assert.equal(responseHasAudioOutput({ response: { output: "nope" } }), false);
+    assert.equal(responseHasAudioOutput({ response: { output: [null, 42, "x"] } }), false);
+    assert.equal(
+      responseHasAudioOutput({ response: { output: [{ content: "nope" }] } }),
+      false,
+    );
+    assert.equal(
+      responseHasAudioOutput({ response: { output: [{ content: [null, 7] }] } }),
+      false,
+    );
+  });
+});
+
+// ─── Tool-call responses must NOT consume the turn cap ───────────────────────
+// A booking call makes ~3 tool calls (look_up_availability, book_appointment,
+// etc.); each surfaces a terminal response.done whose output is a function_call
+// (NO audio). Those must NOT count toward the turn cap, or a booking-length call
+// trips finish("max_turns") before the read-back. This is the live-call bug.
+
+describe("runVoiceCall — tool-call response.done does NOT consume the turn cap", () => {
+  test("many function_call response.done events do not trigger max_turns; an audio one does", async () => {
+    let runCount = 0;
+    const { ctor, captures } = makeFakeSocketCtor();
+    const promise = runVoiceCall({
+      callId: CALL_ID,
+      apiKey: API_KEY,
+      WebSocketImpl: ctor,
+      // Generous wall-clock so the test ends via max_turns, not timeout.
+      maxCallMs: 5000,
+      maxTurns: 1, // a SINGLE spoken turn should be enough to hit the cap
+      toolContext: TOOL_CTX,
+      executeToolCall: async () => {
+        runCount += 1;
+        return { ok: true, result: {}, output: "{}" };
+      },
+    });
+    const cap = captures[0]!;
+    cap.emit("open");
+
+    // Fire FAR more tool-call response.done events than maxTurns. Each uses a
+    // DISTINCT call_id (seenCallIds dedupes per id, not the point here) and
+    // carries ONLY a function_call output → no audio → must not increment.
+    for (let i = 0; i < 8; i += 1) {
+      cap.emit("message", {
+        data: Buffer.from(
+          JSON.stringify({
+            type: "response.done",
+            response: {
+              output: [
+                { type: "function_call", call_id: `call_${i}`, name: "look_up_availability", arguments: "{}" },
+              ],
+            },
+          }),
+          "utf8",
+        ),
+      });
+    }
+    // Let the async tool dispatch microtasks flush.
+    await new Promise((r) => setTimeout(r, 0));
+
+    // The tools ran but the call is STILL OPEN (no max_turns despite 8 > 1).
+    assert.equal(runCount, 8, "each tool-call response.done dispatched its tool");
+    assert.equal(cap.closed, null, "tool-call turns must not trip max_turns / close the call");
+
+    // Now ONE genuine spoken (audio) turn → with maxTurns:1 this hits the cap.
+    cap.emit("message", audioResponseDoneFrame());
+    const reason = await promise;
+    assert.equal(reason, "max_turns", "only a spoken (audio) turn consumes the cap");
   });
 });
 
@@ -342,7 +596,7 @@ describe("runVoiceCall — wall-clock timeout", () => {
 // ─── PHASE 1: tools on session.update ────────────────────────────────────────
 
 describe("runVoiceCall — Phase 1 session.update with tools + voice", () => {
-  test("with a toolContext: declares the 6 tools, tool_choice:auto, SDR persona, voice via audio.output.voice", async () => {
+  test("with a toolContext: declares the voice tools, tool_choice:auto, SDR persona, voice via audio.output.voice", async () => {
     const { ctor, captures } = makeFakeSocketCtor();
     const promise = runVoiceCall({
       callId: CALL_ID,
@@ -358,10 +612,11 @@ describe("runVoiceCall — Phase 1 session.update with tools + voice", () => {
     assert.equal(sessionUpdate.type, "session.update");
     assert.equal(sessionUpdate.session.type, "realtime");
     assert.equal(sessionUpdate.session.instructions, VOICE_SDR_INSTRUCTIONS);
-    // 6 tools (provide_faq_answer excluded), each in the GA function wire shape.
+    // All voice tools (provide_faq_answer excluded), each in the GA function
+    // wire shape. voice R1 added take_message + get_quote_range → 8 total.
     assert.ok(Array.isArray(sessionUpdate.session.tools));
     assert.equal(sessionUpdate.session.tools.length, VOICE_TOOLS.length);
-    assert.equal(sessionUpdate.session.tools.length, 6);
+    assert.equal(sessionUpdate.session.tools.length, 8);
     assert.equal(sessionUpdate.session.tool_choice, "auto");
     for (const t of sessionUpdate.session.tools) {
       assert.equal(t.type, "function");
@@ -370,6 +625,13 @@ describe("runVoiceCall — Phase 1 session.update with tools + voice", () => {
     }
     // Voice goes via audio.output.voice (NOT a top-level voice, NOT in accept).
     assert.equal(sessionUpdate.session.audio.output.voice, VOICE_AUDIO_OUTPUT_VOICE);
+    // Caller-speech transcription uses the GA realtime transcribe model
+    // (whisper-1 is legacy and was silently dropped on the GA SIP path —
+    // see voice-r1 CHANGE B). Without it, caller turns never transcribe.
+    assert.equal(
+      sessionUpdate.session.audio.input.transcription.model,
+      "gpt-4o-mini-transcribe",
+    );
 
     cap.emit("close");
     await promise;
@@ -601,5 +863,658 @@ describe("runVoiceCall — function-call loop (terminal response.done variant + 
     assert.equal(runCount, 0, "no tool dispatch without a toolContext");
     cap.emit("close");
     await promise;
+  });
+});
+
+// ─── voice-r1: OUT-OF-BAND caller-speech transcription ───────────────────────
+// On the OpenAI Realtime SIP path the built-in
+// `conversation.item.input_audio_transcription.completed` event never fires, so
+// the caller's transcript is dark (the assistant's transcript works fine). The
+// fix: after the caller's turn ends (input_audio_buffer.committed) send a
+// SEPARATE text-only response with `conversation:"none"` that transcribes the
+// caller's last utterance, then route the returned text to onUserTurn. These
+// tests pin the helper's exact shape, the trigger, the capture, and the
+// response.done guard that keeps the out-of-band response from being miscounted
+// as an assistant turn.
+
+describe("buildCallerTranscriptionRequest — exact wire shape", () => {
+  test("returns a text-only response.create with conversation:none", () => {
+    const req = buildCallerTranscriptionRequest();
+    assert.deepEqual(req, {
+      type: "response.create",
+      response: {
+        conversation: "none",
+        output_modalities: ["text"],
+        instructions:
+          "Transcribe the user's most recent spoken message, word for word and verbatim. Output ONLY the transcription text — no preamble, no quotes. If there is no recent user message, output nothing.",
+      },
+    });
+    // Spell the load-bearing fields out individually too (a deepEqual regression
+    // on an unrelated field shouldn't mask which property drifted).
+    assert.equal(req.type, "response.create");
+    assert.equal(req.response.conversation, "none");
+    assert.deepEqual(req.response.output_modalities, ["text"]);
+  });
+});
+
+describe("runVoiceCall — out-of-band transcription trigger", () => {
+  test("input_audio_buffer.committed sends a response.create with conversation:none", async () => {
+    const { ctor, captures } = makeFakeSocketCtor();
+    const promise = runVoiceCall({
+      callId: CALL_ID,
+      apiKey: API_KEY,
+      WebSocketImpl: ctor,
+      maxCallMs: 2000,
+    });
+    const cap = captures[0]!;
+    cap.emit("open");
+    const sentAfterOpen = cap.sent.length; // session.update + greeting response.create
+
+    cap.emit("message", {
+      data: Buffer.from(JSON.stringify({ type: "input_audio_buffer.committed" }), "utf8"),
+    });
+
+    const newMsgs = cap.sent.slice(sentAfterOpen).map((s) => JSON.parse(s));
+    // Exactly one new control message: the out-of-band transcription request.
+    const oob = newMsgs.find(
+      (m) => m.type === "response.create" && m.response?.conversation === "none",
+    );
+    assert.ok(oob, "committed must trigger a conversation:none response.create");
+    assert.deepEqual(oob.response.output_modalities, ["text"]);
+
+    cap.emit("close");
+    await promise;
+  });
+
+  test("input_audio_buffer.speech_stopped does NOT send (logs only)", async () => {
+    const { ctor, captures } = makeFakeSocketCtor();
+    const promise = runVoiceCall({
+      callId: CALL_ID,
+      apiKey: API_KEY,
+      WebSocketImpl: ctor,
+      maxCallMs: 2000,
+    });
+    const cap = captures[0]!;
+    cap.emit("open");
+    const sentAfterOpen = cap.sent.length;
+
+    cap.emit("message", {
+      data: Buffer.from(JSON.stringify({ type: "input_audio_buffer.speech_stopped" }), "utf8"),
+    });
+
+    // speech_stopped is diagnostic-only — it must not send any control message.
+    assert.equal(
+      cap.sent.length,
+      sentAfterOpen,
+      "speech_stopped must NOT send a control message (log-only diagnostic)",
+    );
+
+    cap.emit("close");
+    await promise;
+  });
+});
+
+describe("runVoiceCall — out-of-band transcription capture (output_text)", () => {
+  test("response.output_text.done with text routes it to onUserTurn", async () => {
+    const userTurns: string[] = [];
+    const { ctor, captures } = makeFakeSocketCtor();
+    const promise = runVoiceCall({
+      callId: CALL_ID,
+      apiKey: API_KEY,
+      WebSocketImpl: ctor,
+      maxCallMs: 2000,
+      onUserTurn: (t) => userTurns.push(t),
+    });
+    const cap = captures[0]!;
+    cap.emit("open");
+
+    cap.emit("message", {
+      data: Buffer.from(
+        JSON.stringify({ type: "response.output_text.done", text: "I'd like to book" }),
+        "utf8",
+      ),
+    });
+
+    assert.deepEqual(userTurns, ["I'd like to book"], "caller transcript routed to onUserTurn");
+
+    cap.emit("close");
+    await promise;
+  });
+
+  test("response.text.done (beta event name) also routes to onUserTurn", async () => {
+    const userTurns: string[] = [];
+    const { ctor, captures } = makeFakeSocketCtor();
+    const promise = runVoiceCall({
+      callId: CALL_ID,
+      apiKey: API_KEY,
+      WebSocketImpl: ctor,
+      maxCallMs: 2000,
+      onUserTurn: (t) => userTurns.push(t),
+    });
+    const cap = captures[0]!;
+    cap.emit("open");
+
+    cap.emit("message", {
+      data: Buffer.from(
+        JSON.stringify({ type: "response.text.done", text: "reschedule please" }),
+        "utf8",
+      ),
+    });
+
+    assert.deepEqual(userTurns, ["reschedule please"]);
+
+    cap.emit("close");
+    await promise;
+  });
+
+  test("empty transcript text does NOT call onUserTurn", async () => {
+    const userTurns: string[] = [];
+    const { ctor, captures } = makeFakeSocketCtor();
+    const promise = runVoiceCall({
+      callId: CALL_ID,
+      apiKey: API_KEY,
+      WebSocketImpl: ctor,
+      maxCallMs: 2000,
+      onUserTurn: (t) => userTurns.push(t),
+    });
+    const cap = captures[0]!;
+    cap.emit("open");
+
+    cap.emit("message", {
+      data: Buffer.from(JSON.stringify({ type: "response.output_text.done", text: "" }), "utf8"),
+    });
+
+    assert.equal(userTurns.length, 0, "empty transcription must not produce a user turn");
+
+    cap.emit("close");
+    await promise;
+  });
+
+  test("accumulates output_text.delta and finalizes on .done when .done has no text", async () => {
+    const userTurns: string[] = [];
+    const { ctor, captures } = makeFakeSocketCtor();
+    const promise = runVoiceCall({
+      callId: CALL_ID,
+      apiKey: API_KEY,
+      WebSocketImpl: ctor,
+      maxCallMs: 2000,
+      onUserTurn: (t) => userTurns.push(t),
+    });
+    const cap = captures[0]!;
+    cap.emit("open");
+
+    // Streamed deltas, then a .done that omits the full text (must use buffer).
+    cap.emit("message", {
+      data: Buffer.from(JSON.stringify({ type: "response.output_text.delta", delta: "can I " }), "utf8"),
+    });
+    cap.emit("message", {
+      data: Buffer.from(JSON.stringify({ type: "response.output_text.delta", delta: "book a slot" }), "utf8"),
+    });
+    cap.emit("message", {
+      data: Buffer.from(JSON.stringify({ type: "response.output_text.done" }), "utf8"),
+    });
+
+    assert.deepEqual(userTurns, ["can I book a slot"], "deltas accumulate and flush on done");
+
+    cap.emit("close");
+    await promise;
+  });
+
+  test("a goodbye in the caller transcript ends the call after the next assistant audio turn", async () => {
+    const { ctor, captures } = makeFakeSocketCtor();
+    const promise = runVoiceCall({
+      callId: CALL_ID,
+      apiKey: API_KEY,
+      WebSocketImpl: ctor,
+      maxCallMs: 2000,
+    });
+    const cap = captures[0]!;
+    cap.emit("open");
+
+    // Caller's transcript arrives via the out-of-band text path, not the
+    // (dark) input_audio_transcription.completed event.
+    cap.emit("message", {
+      data: Buffer.from(
+        JSON.stringify({ type: "response.output_text.done", text: "ok, goodbye!" }),
+        "utf8",
+      ),
+    });
+    // Assistant's closing line finishes (an AUDIO response.done).
+    cap.emit("message", {
+      data: Buffer.from(
+        JSON.stringify({
+          type: "response.done",
+          response: { output: [{ type: "message", role: "assistant", content: [{ type: "audio", transcript: "Bye now!" }] }] },
+        }),
+        "utf8",
+      ),
+    });
+
+    const reason = await promise;
+    assert.equal(reason, "goodbye", "goodbye from the out-of-band transcript must end the call");
+  });
+});
+
+describe("runVoiceCall — response.done guard (out-of-band text vs assistant audio)", () => {
+  test("an AUDIO response.done counts as an assistant turn (existing behavior)", async () => {
+    const { ctor, captures } = makeFakeSocketCtor();
+    const promise = runVoiceCall({
+      callId: CALL_ID,
+      apiKey: API_KEY,
+      WebSocketImpl: ctor,
+      maxCallMs: 5000,
+      maxTurns: 1,
+    });
+    const cap = captures[0]!;
+    cap.emit("open");
+
+    // One assistant AUDIO turn with maxTurns:1 → must hit the cap and end.
+    cap.emit("message", {
+      data: Buffer.from(
+        JSON.stringify({
+          type: "response.done",
+          response: { output: [{ type: "message", role: "assistant", content: [{ type: "audio", transcript: "Hi there" }] }] },
+        }),
+        "utf8",
+      ),
+    });
+
+    const reason = await promise;
+    assert.equal(reason, "max_turns", "an audio response.done is a real assistant turn");
+  });
+
+  test("a TEXT-ONLY (out-of-band) response.done does NOT count as an assistant turn", async () => {
+    const { ctor, captures } = makeFakeSocketCtor();
+    const promise = runVoiceCall({
+      callId: CALL_ID,
+      apiKey: API_KEY,
+      WebSocketImpl: ctor,
+      maxCallMs: 60,
+      maxTurns: 1,
+    });
+    const cap = captures[0]!;
+    cap.emit("open");
+
+    // Two text-only (transcription) response.done events. With maxTurns:1 these
+    // would trip the cap if (wrongly) counted; the call must instead stay open
+    // until the wall-clock timeout.
+    for (let i = 0; i < 2; i += 1) {
+      cap.emit("message", {
+        data: Buffer.from(
+          JSON.stringify({
+            type: "response.done",
+            response: { output: [{ type: "message", role: "assistant", content: [{ type: "text", text: "transcribed caller line" }] }] },
+          }),
+          "utf8",
+        ),
+      });
+    }
+
+    const reason = await promise;
+    assert.equal(reason, "timeout", "a text-only response.done must NOT count toward the turn cap");
+  });
+
+  test("a text-only (output_text) response.done does NOT end the call even after a goodbye", async () => {
+    // The out-of-band transcription response must never be the response that
+    // 'closes the loop' on a goodbye — only the assistant's spoken (audio)
+    // closing line should. Otherwise we'd hang up before the agent says bye.
+    const { ctor, captures } = makeFakeSocketCtor();
+    const promise = runVoiceCall({
+      callId: CALL_ID,
+      apiKey: API_KEY,
+      WebSocketImpl: ctor,
+      maxCallMs: 60,
+    });
+    const cap = captures[0]!;
+    cap.emit("open");
+
+    // Caller says goodbye (out-of-band transcript), then the TRANSCRIPTION
+    // response.done arrives (text-only). The call must NOT end here.
+    cap.emit("message", {
+      data: Buffer.from(
+        JSON.stringify({ type: "response.output_text.done", text: "goodbye" }),
+        "utf8",
+      ),
+    });
+    cap.emit("message", {
+      data: Buffer.from(
+        JSON.stringify({
+          type: "response.done",
+          response: { output: [{ type: "message", role: "assistant", content: [{ type: "output_text", text: "goodbye" }] }] },
+        }),
+        "utf8",
+      ),
+    });
+
+    const reason = await promise;
+    assert.equal(
+      reason,
+      "timeout",
+      "the text-only transcription response.done must not be the call-ending turn",
+    );
+  });
+});
+
+// ─── voice-r1 (FIX 2+3): goodbye detection regexes + SIP hangup ───────────────
+// The live bug: after the conversation reaches its natural end ("…have a great
+// day", "take care"), neither side's sign-off was detected, so the call hung
+// open until the wall-clock cap. AND even when goodbye WAS detected, finish()
+// only closed the control WS — it never told OpenAI to hang up the caller's SIP
+// leg, so the caller heard dead air until the cap. These tests pin: (a) the
+// broadened caller regex, (b) a separate agent-signoff regex, (c) the hangupCall
+// helper's HTTP shape, and (d) that finish() fires the hangup only for the
+// reasons WE initiate (goodbye/max_turns/timeout), never on a caller hang-up.
+
+describe("CALLER_GOODBYE_RE — broadened caller sign-off detection", () => {
+  test("still matches the original alternatives", () => {
+    for (const s of ["goodbye", "good bye", "bye", "that's all", "thank you, bye", "hang up"]) {
+      assert.match(s, CALLER_GOODBYE_RE, `should still match "${s}"`);
+    }
+  });
+
+  test("matches natural caller sign-offs added in FIX 2", () => {
+    for (const s of [
+      "thank you, have a great day",
+      "have a good one",
+      "have a nice evening",
+      "have a wonderful weekend",
+      "take care",
+      "talk to you soon",
+      "talk later",
+      "that's it",
+      "that's everything",
+      "I'm all set",
+      "we're all set",
+      "all set",
+      "no thanks",
+      "no, thank you",
+    ]) {
+      assert.match(s, CALLER_GOODBYE_RE, `should match caller sign-off "${s}"`);
+    }
+  });
+
+  test("does NOT match ordinary mid-call speech", () => {
+    for (const s of [
+      "can I book an appointment",
+      "what times are available",
+      "my furnace is broken",
+      "yes that works for me",
+    ]) {
+      assert.doesNotMatch(s, CALLER_GOODBYE_RE, `should NOT match "${s}"`);
+    }
+  });
+});
+
+describe("AGENT_SIGNOFF_RE — agent closing-line detection (narrow)", () => {
+  test("matches clear agent closings", () => {
+    for (const s of [
+      "Goodbye!",
+      "Bye now!",
+      "have a great day",
+      "Have a wonderful evening.",
+      "take care",
+      "talk to you soon",
+      "talk later",
+    ]) {
+      assert.match(s, AGENT_SIGNOFF_RE, `should match agent closing "${s}"`);
+    }
+  });
+
+  test("does NOT match a booking CONFIRMATION (must not end mid-confirm)", () => {
+    // The agent says "all set" / "you're all set" when CONFIRMING a booking —
+    // that must NOT be treated as a sign-off, or the call ends mid-confirmation.
+    for (const s of [
+      "you're all set for Friday",
+      "Great, you're all set!",
+      "All set — I've booked you for 10 AM.",
+      "Perfect, that's all booked.",
+    ]) {
+      assert.doesNotMatch(s, AGENT_SIGNOFF_RE, `must NOT match confirmation "${s}"`);
+    }
+  });
+});
+
+describe("hangupCall — POSTs to the SIP hangup endpoint", () => {
+  test("POSTs to /v1/realtime/calls/<id>/hangup with Authorization: Bearer <key>", async () => {
+    let capturedUrl: string | null = null;
+    let capturedInit: { method?: string; headers?: Record<string, string> } | null = null;
+    const fakeFetch = (async (url: string, init?: { method?: string; headers?: Record<string, string> }) => {
+      capturedUrl = url;
+      capturedInit = init ?? null;
+      return new Response("", { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const res = await hangupCall({ callId: "rtc_hang_1", apiKey: "sk-hang", fetchImpl: fakeFetch });
+
+    assert.equal(res.ok, true);
+    assert.equal(res.status, 200);
+    assert.equal(
+      capturedUrl,
+      "https://api.openai.com/v1/realtime/calls/rtc_hang_1/hangup",
+    );
+    assert.equal(capturedInit!.method, "POST");
+    assert.equal(capturedInit!.headers!.Authorization, "Bearer sk-hang");
+  });
+
+  test("URL-encodes the call id", async () => {
+    let capturedUrl: string | null = null;
+    const fakeFetch = (async (url: string) => {
+      capturedUrl = url;
+      return new Response("", { status: 200 });
+    }) as unknown as typeof fetch;
+    await hangupCall({ callId: "rtc/weird id", apiKey: "k", fetchImpl: fakeFetch });
+    assert.ok(capturedUrl!.includes(encodeURIComponent("rtc/weird id")));
+  });
+
+  test("a non-2xx response surfaces ok:false with the status (never throws)", async () => {
+    const fakeFetch = (async () => new Response("nope", { status: 404 })) as unknown as typeof fetch;
+    const res = await hangupCall({ callId: "x", apiKey: "k", fetchImpl: fakeFetch });
+    assert.equal(res.ok, false);
+    assert.equal(res.status, 404);
+  });
+
+  test("a fetch throw is swallowed → { ok:false, status:0 } (best-effort)", async () => {
+    const fakeFetch = (async () => {
+      throw new Error("network down");
+    }) as unknown as typeof fetch;
+    const res = await hangupCall({ callId: "x", apiKey: "k", fetchImpl: fakeFetch });
+    assert.deepEqual(res, { ok: false, status: 0 });
+  });
+});
+
+describe("runVoiceCall — agent sign-off ends the call", () => {
+  test("an assistant 'have a great day' transcript ends the call (goodbye) on the next response.done", async () => {
+    const { ctor, captures } = makeFakeSocketCtor();
+    const hangups: Array<{ callId: string; apiKey: string }> = [];
+    const promise = runVoiceCall({
+      callId: CALL_ID,
+      apiKey: API_KEY,
+      WebSocketImpl: ctor,
+      maxCallMs: 2000,
+      hangupImpl: async ({ callId, apiKey }) => {
+        hangups.push({ callId, apiKey });
+        return { ok: true, status: 200 };
+      },
+    });
+    const cap = captures[0]!;
+    cap.emit("open");
+
+    // The agent delivers its closing line — detected via AGENT_SIGNOFF_RE in the
+    // assistant audio-transcript handler. This sets sawGoodbye.
+    cap.emit("message", {
+      data: Buffer.from(
+        JSON.stringify({
+          type: "response.output_audio_transcript.done",
+          transcript: "Perfect — have a great day!",
+        }),
+        "utf8",
+      ),
+    });
+    // The SAME response then finishes as a spoken (audio) reply → response.done
+    // with sawGoodbye already true → finish("goodbye").
+    cap.emit("message", {
+      data: Buffer.from(
+        JSON.stringify({
+          type: "response.done",
+          response: { output: [{ type: "message", role: "assistant", content: [{ type: "audio", transcript: "Perfect — have a great day!" }] }] },
+        }),
+        "utf8",
+      ),
+    });
+
+    const reason = await promise;
+    assert.equal(reason, "goodbye", "the agent's closing line must end the call");
+    assert.equal(hangups.length, 1, "a goodbye finish must request a SIP hangup");
+    assert.equal(hangups[0]!.callId, CALL_ID);
+    assert.equal(hangups[0]!.apiKey, API_KEY);
+  });
+
+  test("the beta event name response.audio_transcript.done also triggers agent sign-off", async () => {
+    const { ctor, captures } = makeFakeSocketCtor();
+    const promise = runVoiceCall({
+      callId: CALL_ID,
+      apiKey: API_KEY,
+      WebSocketImpl: ctor,
+      maxCallMs: 2000,
+      hangupImpl: async () => ({ ok: true, status: 200 }),
+    });
+    const cap = captures[0]!;
+    cap.emit("open");
+    cap.emit("message", {
+      data: Buffer.from(
+        JSON.stringify({ type: "response.audio_transcript.done", transcript: "take care!" }),
+        "utf8",
+      ),
+    });
+    cap.emit("message", {
+      data: Buffer.from(
+        JSON.stringify({
+          type: "response.done",
+          response: { output: [{ type: "message", role: "assistant", content: [{ type: "audio", transcript: "take care!" }] }] },
+        }),
+        "utf8",
+      ),
+    });
+    const reason = await promise;
+    assert.equal(reason, "goodbye");
+  });
+
+  test("an agent CONFIRMATION ('you're all set for Friday') does NOT end the call", async () => {
+    const { ctor, captures } = makeFakeSocketCtor();
+    const promise = runVoiceCall({
+      callId: CALL_ID,
+      apiKey: API_KEY,
+      WebSocketImpl: ctor,
+      maxCallMs: 50, // short — the call should run to the wall-clock cap, not end early
+      hangupImpl: async () => ({ ok: true, status: 200 }),
+    });
+    const cap = captures[0]!;
+    cap.emit("open");
+    // Agent confirms a booking — "all set" must NOT be read as a sign-off.
+    cap.emit("message", {
+      data: Buffer.from(
+        JSON.stringify({
+          type: "response.output_audio_transcript.done",
+          transcript: "Great, you're all set for Friday at 10 AM!",
+        }),
+        "utf8",
+      ),
+    });
+    cap.emit("message", {
+      data: Buffer.from(
+        JSON.stringify({
+          type: "response.done",
+          response: { output: [{ type: "message", role: "assistant", content: [{ type: "audio", transcript: "Great, you're all set for Friday at 10 AM!" }] }] },
+        }),
+        "utf8",
+      ),
+    });
+    const reason = await promise;
+    assert.equal(reason, "timeout", "a booking confirmation must not be treated as a sign-off");
+  });
+});
+
+describe("runVoiceCall — finish() requests a SIP hangup only for self-initiated ends", () => {
+  test("a caller hang-up (ws close → ws_closed) does NOT request a hangup", async () => {
+    const { ctor, captures } = makeFakeSocketCtor();
+    const hangups: unknown[] = [];
+    const promise = runVoiceCall({
+      callId: CALL_ID,
+      apiKey: API_KEY,
+      WebSocketImpl: ctor,
+      maxCallMs: 2000,
+      hangupImpl: async (a) => {
+        hangups.push(a);
+        return { ok: true, status: 200 };
+      },
+    });
+    const cap = captures[0]!;
+    cap.emit("open");
+    cap.emit("close"); // OpenAI/caller closed the SIP leg — we did NOT initiate
+    const reason = await promise;
+    assert.equal(reason, "ws_closed");
+    assert.equal(hangups.length, 0, "must NOT hang up a call the caller already ended");
+  });
+
+  test("a timeout finish DOES request a hangup (we initiated the end)", async () => {
+    const { ctor, captures } = makeFakeSocketCtor();
+    const hangups: unknown[] = [];
+    const promise = runVoiceCall({
+      callId: CALL_ID,
+      apiKey: API_KEY,
+      WebSocketImpl: ctor,
+      maxCallMs: 20,
+      hangupImpl: async (a) => {
+        hangups.push(a);
+        return { ok: true, status: 200 };
+      },
+    });
+    const cap = captures[0]!;
+    cap.emit("open");
+    const reason = await promise;
+    assert.equal(reason, "timeout");
+    assert.equal(hangups.length, 1, "a timeout-initiated end must hang up the SIP leg");
+  });
+
+  test("a max_turns finish DOES request a hangup", async () => {
+    const { ctor, captures } = makeFakeSocketCtor();
+    const hangups: unknown[] = [];
+    const promise = runVoiceCall({
+      callId: CALL_ID,
+      apiKey: API_KEY,
+      WebSocketImpl: ctor,
+      maxCallMs: 5000,
+      maxTurns: 1,
+      hangupImpl: async (a) => {
+        hangups.push(a);
+        return { ok: true, status: 200 };
+      },
+    });
+    const cap = captures[0]!;
+    cap.emit("open");
+    cap.emit("message", audioResponseDoneFrame()); // one spoken turn → hits cap
+    const reason = await promise;
+    assert.equal(reason, "max_turns");
+    assert.equal(hangups.length, 1);
+  });
+
+  test("an open_failed finish does NOT request a hangup (no session to tear down)", async () => {
+    const { ctor, captures } = makeFakeSocketCtor();
+    const hangups: unknown[] = [];
+    const promise = runVoiceCall({
+      callId: CALL_ID,
+      apiKey: API_KEY,
+      WebSocketImpl: ctor,
+      maxCallMs: 5000,
+      hangupImpl: async (a) => {
+        hangups.push(a);
+        return { ok: true, status: 200 };
+      },
+    });
+    const cap = captures[0]!;
+    cap.emitOn("unexpected-response", {}, { statusCode: 401, statusMessage: "Unauthorized" });
+    const reason = await promise;
+    assert.equal(reason, "open_failed");
+    assert.equal(hangups.length, 0, "no hangup when the WS never opened");
   });
 });

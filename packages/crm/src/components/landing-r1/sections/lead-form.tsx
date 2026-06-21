@@ -1,8 +1,9 @@
 // landing-r1/sections/lead-form.tsx
 //
-// Speed-to-Lead bottom section. Archetype-themed (palette / fonts / radius
-// via archetypeStyle() CSS vars — same theming contract as every other
-// landing-r1 section; no hard-coded hex). Centered card: heading, subheading,
+// Speed-to-Lead bottom section. Palette / fonts / radius are inherited from the
+// SiteShell ancestor (it applies archetypeStyle() + dark-mode overrides) — same
+// theming contract as every other landing-r1 section; no hard-coded hex.
+// Centered card: heading, subheading,
 // Name · Phone · "What do you need?" (select from needOptions, else short
 // text), bold submit, trust line, TCPA consent. Imports submitLeadFormAction
 // directly (mirrors components/bookings/public-booking-form.tsx).
@@ -11,7 +12,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { ARCHETYPES, archetypeStyle, type AestheticArchetypeId } from "../archetypes";
+import { ARCHETYPES, type AestheticArchetypeId } from "../archetypes";
 import { submitLeadFormAction } from "@/lib/landing/lead-form-action";
 import type { R1LeadFormSection } from "@/lib/landing/r1-payload-prompt";
 
@@ -54,15 +55,22 @@ export function leadFormConfirmation(input: {
   };
 }
 
-export type LeadFormSectionProps = {
+// ---------------------------------------------------------------------------
+// LeadFormCard — reusable card (no section wrapper, no id, no archetype attr)
+// ---------------------------------------------------------------------------
+
+export type LeadFormCardProps = {
   orgSlug: string;
   businessName: string;
-  archetype: AestheticArchetypeId;
   leadForm: R1LeadFormSection;
 };
 
-export function LeadFormSection({ orgSlug, businessName, archetype, leadForm }: LeadFormSectionProps) {
-  const arch = ARCHETYPES[archetype];
+/**
+ * The form card itself: heading, fields, submit, trust line, consent.
+ * Root element is `.sf-leadform-card` — no `<section>`, no `id`, no
+ * `data-archetype`. Mount it anywhere (hero column, service page, etc.).
+ */
+export function LeadFormCard({ orgSlug, businessName, leadForm }: LeadFormCardProps) {
   const [pending, startTransition] = useTransition();
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -94,13 +102,7 @@ export function LeadFormSection({ orgSlug, businessName, archetype, leadForm }: 
   }
 
   return (
-    <section
-      id="lead-form"
-      data-archetype={arch.id}
-      style={archetypeStyle(arch.id)}
-      className="sf-leadform"
-      aria-label={`Contact ${businessName}`}
-    >
+    <>
       <div className="sf-leadform-card">
         {confirm ? (
           <div className="sf-leadform-success" role="status">
@@ -191,19 +193,10 @@ export function LeadFormSection({ orgSlug, businessName, archetype, leadForm }: 
         )}
       </div>
 
-      {/* Global styled-jsx — class names are sf-leadform-* prefixed to avoid
-          collisions. Scoped jsx breaks with reactCompiler:true (see chrome/navbar.tsx
-          comment for the full explanation). Global mode matches the pattern
-          used by hero.tsx, faq.tsx, etc. */}
+      {/* Card-level styled-jsx. Global mode (no `scoped`) matches the pattern
+          used by hero.tsx, faq.tsx, etc. — reactCompiler:true breaks scoped jsx.
+          These rules own .sf-leadform-card and all its children. */}
       <style jsx global>{`
-        .sf-leadform {
-          background: var(--surface, #f5f5f5);
-          color: var(--text, #111);
-          font-family: var(--font-body);
-          padding: clamp(48px, 8vw, 96px) 20px;
-          display: flex;
-          justify-content: center;
-        }
         .sf-leadform-card {
           width: 100%;
           max-width: 520px;
@@ -311,6 +304,51 @@ export function LeadFormSection({ orgSlug, businessName, archetype, leadForm }: 
         }
         .sf-leadform-success .sf-leadform-submit {
           margin-top: 16px;
+        }
+      `}</style>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// LeadFormSection — thin section wrapper; public API unchanged
+// ---------------------------------------------------------------------------
+
+export type LeadFormSectionProps = {
+  orgSlug: string;
+  businessName: string;
+  archetype: AestheticArchetypeId;
+  leadForm: R1LeadFormSection;
+};
+
+/**
+ * Full-width section shell. Passes orgSlug / businessName / leadForm down to
+ * LeadFormCard. Keeps `data-archetype` so CSS-var theming works as before.
+ * archetypeStyle() is intentionally omitted — the shell inherits from the
+ * page-level theme (per the prior task).
+ */
+export function LeadFormSection({ orgSlug, businessName, archetype, leadForm }: LeadFormSectionProps) {
+  const arch = ARCHETYPES[archetype];
+
+  return (
+    <section
+      id="lead-form"
+      data-archetype={arch.id}
+      className="sf-leadform"
+      aria-label={`Contact ${businessName}`}
+    >
+      <LeadFormCard orgSlug={orgSlug} businessName={businessName} leadForm={leadForm} />
+
+      {/* Section-level layout rules only — centering and padding. Card rules
+          live in LeadFormCard's own styled-jsx block above. */}
+      <style jsx global>{`
+        .sf-leadform {
+          background: var(--surface, #f5f5f5);
+          color: var(--text, #111);
+          font-family: var(--font-body);
+          padding: clamp(48px, 8vw, 96px) 20px;
+          display: flex;
+          justify-content: center;
         }
       `}</style>
     </section>

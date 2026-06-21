@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 
 import type { OrgSoul } from "../../../../src/lib/soul/types";
 import type { AgentBlueprint } from "../../../../src/db/schema/agents";
+import type { BookingIntakeField } from "../../../../src/lib/bookings/actions";
 import { composeVoicePersona } from "../../../../src/lib/agents/voice/persona";
 
 const NOW = new Date("2026-06-01T17:00:00Z");
@@ -89,5 +90,186 @@ describe("composeVoicePersona", () => {
       !/look_up_availability/.test(result),
       "Output must NOT contain default voice-sdr prose when customSkillMd is set",
     );
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// Voice R1 — per-workspace booking fields injected into the persona.
+// The plumber workspace declares intakeFields; the persona must tell the model
+// exactly what to collect and to pass them to book_appointment as
+// intakeResponses keyed by field id. With no intakeFields → name + email.
+// ───────────────────────────────────────────────────────────────────────────
+
+const PLUMBER_FIELDS: BookingIntakeField[] = [
+  { id: "phone", type: "tel", label: "Phone number", required: true },
+  { id: "address", type: "text", label: "Service address", required: true },
+  { id: "service", type: "text", label: "Service needed", required: true },
+  { id: "notes", type: "textarea", label: "Anything else?", required: false },
+];
+
+describe("composeVoicePersona — per-workspace booking fields", () => {
+  test("lists the workspace's intake fields to collect, marking required ones", () => {
+    const result = composeVoicePersona({
+      soul: SOUL,
+      blueprint: BLUEPRINT,
+      timezone: TIMEZONE,
+      now: NOW,
+      intakeFields: PLUMBER_FIELDS,
+    });
+
+    // A deterministic "collect" instruction is present.
+    assert.match(
+      result,
+      /to book[\s\S]*collect/i,
+      "persona must instruct what to collect before booking",
+    );
+    // Each field's human label is named.
+    assert.match(result, /Phone number/);
+    assert.match(result, /Service address/);
+    assert.match(result, /Service needed/);
+    // Required vs optional is conveyed.
+    assert.match(result, /required/i, "required fields are marked required");
+    assert.match(result, /optional/i, "optional fields are marked optional");
+    // The model is told to pass them to book_appointment as intakeResponses
+    // keyed by field id, with the actual ids enumerated.
+    assert.match(result, /intakeResponses/);
+    assert.match(result, /\bphone\b/);
+    assert.match(result, /\baddress\b/);
+    assert.match(result, /\bservice\b/);
+  });
+
+  test("does NOT hardcode email when the workspace collects phone instead", () => {
+    const result = composeVoicePersona({
+      soul: SOUL,
+      blueprint: BLUEPRINT,
+      timezone: TIMEZONE,
+      now: NOW,
+      intakeFields: PLUMBER_FIELDS,
+    });
+    // The collect-instruction block must not demand an email for a phone-only
+    // workspace. (We scope the check to the collect line to avoid matching an
+    // unrelated mention elsewhere.)
+    const collectLine =
+      result.split("\n").find((l) => /to book/i.test(l) && /collect/i.test(l)) ?? "";
+    assert.ok(collectLine.length > 0, "expected a 'To book, collect…' line");
+    assert.ok(
+      !/email/i.test(collectLine),
+      "phone-only workspace's collect line must not ask for email",
+    );
+  });
+
+  test("falls back to name + email when there are NO custom intake fields", () => {
+    const result = composeVoicePersona({
+      soul: SOUL,
+      blueprint: BLUEPRINT,
+      timezone: TIMEZONE,
+      now: NOW,
+      intakeFields: [],
+    });
+    assert.match(
+      result,
+      /to book[\s\S]*collect[\s\S]*full name[\s\S]*email/i,
+      "with no custom fields, collect full name and email",
+    );
+  });
+
+  test("omitting intakeFields entirely also falls back to name + email", () => {
+    const result = composeVoicePersona({
+      soul: SOUL,
+      blueprint: BLUEPRINT,
+      timezone: TIMEZONE,
+      now: NOW,
+    });
+    assert.match(result, /to book[\s\S]*collect[\s\S]*full name[\s\S]*email/i);
+  });
+
+  test("stays pure — same inputs yield identical output", () => {
+    const a = composeVoicePersona({
+      soul: SOUL,
+      blueprint: BLUEPRINT,
+      timezone: TIMEZONE,
+      now: NOW,
+      intakeFields: PLUMBER_FIELDS,
+    });
+    const b = composeVoicePersona({
+      soul: SOUL,
+      blueprint: BLUEPRINT,
+      timezone: TIMEZONE,
+      now: NOW,
+      intakeFields: PLUMBER_FIELDS,
+    });
+    assert.equal(a, b);
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// Voice R1+ — caller-ID awareness. When the inbound call carries the caller's
+// number (caller ID known), the persona tells the agent NOT to ask for the
+// phone — it's recorded automatically from the caller ID. For anonymous callers
+// (callerPhoneKnown false/absent) no such line is emitted, so the agent asks
+// for the phone normally.
+// ───────────────────────────────────────────────────────────────────────────
+
+describe("composeVoicePersona — caller-ID awareness", () => {
+  test("callerPhoneKnown:true emits a 'do NOT ask … caller ID' line near the booking block", () => {
+    const result = composeVoicePersona({
+      soul: SOUL,
+      blueprint: BLUEPRINT,
+      timezone: TIMEZONE,
+      now: NOW,
+      intakeFields: PLUMBER_FIELDS,
+      callerPhoneKnown: true,
+    });
+    // The deterministic instruction is present and mentions caller ID + not asking.
+    assert.match(result, /caller ID/i, "mentions the caller ID source");
+    assert.match(
+      result,
+      /do NOT ask|don't ask|already have/i,
+      "tells the agent not to ask the caller for their phone",
+    );
+    // It sits in/with the booking-fields block (after the 'To book, collect' line).
+    const bookIdx = result.search(/to book/i);
+    const callerIdx = result.search(/caller ID/i);
+    assert.ok(bookIdx >= 0, "booking block present");
+    assert.ok(callerIdx > bookIdx, "caller-ID line appears alongside/after the booking block");
+  });
+
+  test("callerPhoneKnown:false omits the caller-ID line (agent asks normally)", () => {
+    const result = composeVoicePersona({
+      soul: SOUL,
+      blueprint: BLUEPRINT,
+      timezone: TIMEZONE,
+      now: NOW,
+      intakeFields: PLUMBER_FIELDS,
+      callerPhoneKnown: false,
+    });
+    assert.ok(
+      !/caller ID/i.test(result),
+      "no caller-ID line when the caller's number is unknown",
+    );
+  });
+
+  test("omitting callerPhoneKnown entirely also omits the caller-ID line", () => {
+    const result = composeVoicePersona({
+      soul: SOUL,
+      blueprint: BLUEPRINT,
+      timezone: TIMEZONE,
+      now: NOW,
+      intakeFields: PLUMBER_FIELDS,
+    });
+    assert.ok(!/caller ID/i.test(result), "absent flag → no caller-ID line");
+  });
+
+  test("caller-ID line is emitted on the agency (email) path too", () => {
+    // Even with no custom intake fields (agency collects email), a known caller
+    // ID still means we don't need to ASK for the phone — it's captured.
+    const result = composeVoicePersona({
+      soul: SOUL,
+      blueprint: BLUEPRINT,
+      timezone: TIMEZONE,
+      now: NOW,
+      callerPhoneKnown: true,
+    });
+    assert.match(result, /caller ID/i);
   });
 });

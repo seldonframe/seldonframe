@@ -1,0 +1,235 @@
+// landing-r1/sections/service-page.tsx
+//
+// The single per-service detail template, populated from one ServicePage.
+// Archetype-themed via CSS vars only (no hard-coded hex). Layout:
+//   hero (name + heroPhoto? + CTA + LeadFormCard when leadForm.enabled)
+//   → description (body[] blocks)
+//   → testimonials (reuses the existing <Testimonials> component)
+//   → CTA band
+//   → MapSection (when an address is provided)
+
+"use client";
+
+import { Phone } from "lucide-react";
+import { ARCHETYPES, type AestheticArchetypeId } from "../archetypes";
+import { telHref } from "../_shared/phone";
+import { Testimonials } from "./testimonials";
+import { LeadFormCard } from "./lead-form";
+import { MapSection } from "./map";
+import type { ServicePage } from "@/lib/landing/r1-site-tree";
+import type { R1LeadFormSection } from "@/lib/landing/r1-payload-prompt";
+
+export type ServicePageTemplateProps = {
+  archetype: AestheticArchetypeId;
+  service: ServicePage;
+  /** Verbatim phone for the CTA tel: link. */
+  phone: string;
+  /** Where the CTA buttons point (workspace-scoped, e.g. the booking URL). */
+  ctaHref: string;
+  orgSlug: string;
+  businessName: string;
+  leadForm?: R1LeadFormSection;
+  address?: string | null;
+};
+
+export function ServicePageTemplate({
+  archetype,
+  service,
+  phone,
+  ctaHref,
+  orgSlug,
+  businessName,
+  leadForm,
+  address,
+}: ServicePageTemplateProps) {
+  const arch = ARCHETYPES[archetype];
+  const hasTestimonials = Array.isArray(service.testimonials) && service.testimonials.length > 0;
+
+  return (
+    <main
+      data-archetype={arch.id}
+      className="sf-service"
+    >
+      {/* ── Hero ── */}
+      <section className="sf-service-hero">
+        <div className="container hero-grid">
+          <div className="hero-copy">
+            <span className="eyebrow">Service</span>
+            <h1>{service.name}</h1>
+            {service.summary && <p className="summary">{service.summary}</p>}
+            <div className="hero-cta">
+              <a className="btn btn-primary" href={ctaHref}>
+                {service.ctaLabel}
+              </a>
+              <a className="btn btn-ghost" href={telHref(phone)}>
+                <Phone size={18} strokeWidth={2.4} aria-hidden />
+                {phone}
+              </a>
+            </div>
+            {leadForm?.enabled && orgSlug ? (
+              <div data-slot="intake" className="slot-intake-live">
+                <LeadFormCard orgSlug={orgSlug} businessName={businessName} leadForm={leadForm} />
+              </div>
+            ) : null}
+          </div>
+          <div className="hero-media">
+            {service.heroPhoto ? (
+              <img src={service.heroPhoto.src} alt={service.heroPhoto.alt} loading="eager" fetchPriority="high" />
+            ) : (
+              <div className="hero-media-ph" aria-hidden />
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Description (body blocks) ── */}
+      {Array.isArray(service.body) && service.body.length > 0 && (
+        <section className="sf-service-body">
+          <div className="container body-col">
+            {service.body.map((block, i) =>
+              block.kind === "heading" ? (
+                <h2 key={i}>{block.text}</h2>
+              ) : (
+                <p key={i}>{block.text}</p>
+              ),
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* ── Testimonials (reuse existing component) ── */}
+      {hasTestimonials && (
+        <Testimonials
+          archetype={archetype}
+          heading={`What clients say about our ${String(service.name ?? "").toLowerCase()}`}
+          testimonials={service.testimonials!}
+        />
+      )}
+
+      {/* ── CTA band ── */}
+      <section className="sf-service-cta">
+        <div className="container cta-band">
+          <div className="cta-text">
+            <b>Ready to get started?</b>
+            <span>Tell us about your project and we&apos;ll be in touch fast.</span>
+          </div>
+          <a className="btn btn-primary btn-xl" href={ctaHref}>
+            {service.ctaLabel}
+          </a>
+        </div>
+      </section>
+
+      <MapSection address={address} archetype={archetype} />
+
+      <ServicePageStyles />
+    </main>
+  );
+}
+
+function ServicePageStyles() {
+  return (
+    // global: styled-jsx scope is per-function (see faq.tsx rationale), so a
+    // dedicated *Styles helper must use global mode.
+    <style jsx global>{`
+      .sf-service {
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--font-body);
+      }
+      .container {
+        max-width: 1200px; margin: 0 auto;
+        padding-left: 20px; padding-right: 20px;
+      }
+      @media (min-width: 768px) { .container { padding-left: 32px; padding-right: 32px; } }
+      @media (min-width: 1024px) { .container { padding-left: 48px; padding-right: 48px; } }
+
+      /* Hero */
+      .sf-service-hero { padding: 48px 0; }
+      @media (min-width: 768px) { .sf-service-hero { padding: 72px 0; } }
+      .hero-grid { display: grid; grid-template-columns: 1fr; gap: 32px; align-items: center; }
+      @media (min-width: 900px) { .hero-grid { grid-template-columns: 1.1fr 1fr; gap: 48px; } }
+      .eyebrow {
+        font-size: 11.5px; font-weight: 600; letter-spacing: 0.14em;
+        text-transform: uppercase; color: var(--primary);
+      }
+      .hero-copy h1 {
+        margin: 12px 0 0;
+        font-family: var(--font-headline); font-weight: 800;
+        font-size: clamp(34px, 5vw, 56px); letter-spacing: -0.022em;
+        line-height: 1.02; text-wrap: balance;
+      }
+      .hero-copy .summary {
+        margin: 16px 0 0; font-size: 17px; line-height: 1.55;
+        color: color-mix(in oklab, var(--text) 72%, transparent); max-width: 520px;
+      }
+      .hero-cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
+
+      .sf-service .btn {
+        display: inline-flex; align-items: center; gap: 8px;
+        height: 46px; padding: 0 20px; border-radius: var(--radius, 8px);
+        font-weight: 600; font-size: 15px; text-decoration: none;
+        transition: background 140ms ease, box-shadow 160ms ease, transform 120ms ease;
+      }
+      .sf-service .btn-xl { height: 52px; padding: 0 26px; font-size: 16px; }
+      .sf-service .btn-primary { background: var(--primary); color: var(--primary-ink, #fff); }
+      .sf-service .btn-primary:hover { background: color-mix(in oklab, var(--primary) 84%, #000); }
+      .sf-service .btn-primary:active { transform: translateY(1px); }
+      .sf-service .btn-ghost {
+        background: transparent; color: var(--text);
+        border: 1px solid var(--border);
+      }
+      .sf-service .btn-ghost:hover { border-color: var(--primary); color: var(--primary); }
+
+      .slot-intake-live { margin-top: 28px; }
+
+      .hero-media img,
+      .hero-media-ph {
+        width: 100%; aspect-ratio: 4 / 3; object-fit: cover;
+        border-radius: 14px; border: 1px solid var(--border); display: block;
+      }
+      .hero-media-ph {
+        background: repeating-linear-gradient(
+          135deg, var(--surface-deep) 0 12px,
+          color-mix(in oklab, var(--surface-deep) 60%, var(--bg)) 12px 24px
+        );
+      }
+
+      /* Body */
+      .sf-service-body { padding: 8px 0 48px; }
+      @media (min-width: 768px) { .sf-service-body { padding: 8px 0 72px; } }
+      .body-col { max-width: 760px; }
+      .body-col h2 {
+        margin: 32px 0 12px; font-family: var(--font-headline);
+        font-weight: 800; font-size: clamp(24px, 3vw, 32px);
+        letter-spacing: -0.015em; line-height: 1.1;
+      }
+      .body-col h2:first-child { margin-top: 0; }
+      .body-col p {
+        margin: 0 0 16px; font-size: 16.5px; line-height: 1.65;
+        color: color-mix(in oklab, var(--text) 82%, transparent);
+      }
+
+      /* CTA band */
+      .sf-service-cta { padding: 0 0 48px; }
+      @media (min-width: 768px) { .sf-service-cta { padding: 0 0 72px; } }
+      .cta-band {
+        background: var(--secondary); color: #fff;
+        border-radius: 16px; padding: 28px;
+        display: flex; flex-direction: column; gap: 18px; align-items: flex-start;
+      }
+      @media (min-width: 768px) {
+        .cta-band { flex-direction: row; align-items: center; justify-content: space-between; }
+      }
+      .cta-text b {
+        display: block; font-family: var(--font-headline); font-weight: 800;
+        font-size: 22px; margin-bottom: 4px; letter-spacing: -0.015em;
+      }
+      .cta-text span { color: rgba(255,255,255,0.82); font-size: 15px; }
+
+      @media (prefers-reduced-motion: reduce) {
+        .sf-service .btn { transition: none; }
+        .sf-service .btn-primary:active { transform: none; }
+      }
+    `}</style>
+  );
+}

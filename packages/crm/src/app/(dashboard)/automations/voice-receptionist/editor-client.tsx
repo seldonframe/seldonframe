@@ -17,6 +17,9 @@ import {
 import { VOICE_OPTIONS } from "@/lib/agents/voice/card-status";
 
 type FaqRow = { q: string; a: string };
+// voice R1 — a per-service price band edited as strings (the inputs hold text;
+// we coerce low/high to numbers on save).
+type QuoteRangeRow = { service: string; low: string; high: string };
 
 type Props = {
   agentId: string;
@@ -25,9 +28,13 @@ type Props = {
   initialNumber: string;
   initialBlueprint: {
     greeting: string;
+    customSkillMd: string;
     voice: string;
     capabilities: string[];
     faq: FaqRow[];
+    quoteRanges: { service: string; low: number; high: number }[];
+    notifyPhone: string;
+    missedCallTextBack: { enabled: boolean; message: string };
   };
   allCapabilities: string[];
 };
@@ -37,11 +44,31 @@ export function VoiceReceptionistEditor(props: Props) {
 
   // ── blueprint buffer ──────────────────────────────────────────────────
   const [greeting, setGreeting] = useState(props.initialBlueprint.greeting);
+  // voice R1 — the agent's core persona script (blueprint.customSkillMd).
+  const [customSkillMd, setCustomSkillMd] = useState(
+    props.initialBlueprint.customSkillMd,
+  );
   const [voice, setVoice] = useState(props.initialBlueprint.voice);
   const [capabilities, setCapabilities] = useState<string[]>(
     props.initialBlueprint.capabilities,
   );
   const [faq, setFaq] = useState<FaqRow[]>(props.initialBlueprint.faq);
+  // voice R1 — quote ranges (stringified for the inputs) + team callback number.
+  const [quoteRanges, setQuoteRanges] = useState<QuoteRangeRow[]>(
+    props.initialBlueprint.quoteRanges.map((r) => ({
+      service: r.service,
+      low: String(r.low),
+      high: String(r.high),
+    })),
+  );
+  const [notifyPhone, setNotifyPhone] = useState(props.initialBlueprint.notifyPhone);
+  // voice R1 — missed-call text-back toggle + copy.
+  const [missedCallEnabled, setMissedCallEnabled] = useState(
+    props.initialBlueprint.missedCallTextBack.enabled,
+  );
+  const [missedCallMessage, setMissedCallMessage] = useState(
+    props.initialBlueprint.missedCallTextBack.message,
+  );
   const [publishNotes, setPublishNotes] = useState("");
   const [isSaving, startSave] = useTransition();
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -62,13 +89,36 @@ export function VoiceReceptionistEditor(props: Props) {
     setSaveError(null);
     setSavedVersion(null);
     startSave(async () => {
+      // voice R1 — keep only fully-filled, numeric rows; coerce low/high.
+      const cleanedRanges = quoteRanges
+        .map((r) => ({
+          service: r.service.trim(),
+          low: Number(r.low),
+          high: Number(r.high),
+        }))
+        .filter(
+          (r) =>
+            r.service.length > 0 &&
+            Number.isFinite(r.low) &&
+            Number.isFinite(r.high) &&
+            r.high >= r.low,
+        );
       const result = await saveVoiceBlueprintAction({
         agentId: props.agentId,
         patch: {
           greeting: greeting.trim() || undefined,
+          // voice R1 — persist the edited persona script (blank → omit).
+          customSkillMd: customSkillMd.trim() || undefined,
           voice,
           capabilities,
           faq: faq.filter((r) => r.q.trim() && r.a.trim()),
+          quoteRanges: cleanedRanges,
+          notifyPhone: notifyPhone.trim() || undefined,
+          missedCallTextBack: {
+            enabled: missedCallEnabled,
+            // Persist trimmed copy; blank → omit so the send-time default applies.
+            message: missedCallMessage.trim() || undefined,
+          },
         },
         publishNotes: publishNotes.trim() || undefined,
       });
@@ -216,6 +266,22 @@ export function VoiceReceptionistEditor(props: Props) {
         />
       </div>
 
+      {/* Receptionist script (core persona — blueprint.customSkillMd) */}
+      <div className="rounded-xl border bg-card p-5">
+        <h2 className="text-card-title">Receptionist script</h2>
+        <p className="text-xs text-muted-foreground">
+          The agent&apos;s core instructions — what it says and does on every
+          call. Edit with care. Takes effect on the next call after you save.
+        </p>
+        <textarea
+          value={customSkillMd}
+          onChange={(e) => setCustomSkillMd(e.target.value)}
+          rows={16}
+          className="mt-3 w-full rounded-md border bg-background px-3 py-2 font-mono text-xs leading-relaxed focus:border-primary focus:outline-none"
+          placeholder="You are the receptionist for {business}. You are warm, concise, and helpful…"
+        />
+      </div>
+
       {/* TTS voice */}
       <div className="rounded-xl border bg-card p-5">
         <h2 className="text-card-title">Voice</h2>
@@ -320,6 +386,144 @@ export function VoiceReceptionistEditor(props: Props) {
             ))}
           </div>
         )}
+      </div>
+
+      {/* Quote ranges (get_quote_range) */}
+      <div className="rounded-xl border bg-card p-5">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <h2 className="text-card-title">Pricing ranges</h2>
+            <p className="text-xs text-muted-foreground">
+              The receptionist never quotes a firm price — it gives the range
+              for a service and says a technician confirms the exact price
+              on-site. Add a low/high band per service. Services you don&apos;t
+              list here get &quot;a technician will confirm.&quot;
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() =>
+              setQuoteRanges([...quoteRanges, { service: "", low: "", high: "" }])
+            }
+            className="crm-button-secondary h-8 px-3 text-xs"
+          >
+            + Add service
+          </button>
+        </div>
+        {quoteRanges.length === 0 ? (
+          <p className="mt-3 text-xs text-muted-foreground">
+            No pricing ranges yet.
+          </p>
+        ) : (
+          <div className="mt-3 space-y-2">
+            {quoteRanges.map((row, idx) => (
+              <div
+                key={idx}
+                className="grid grid-cols-1 gap-2 rounded-md border bg-background p-3 sm:grid-cols-[2fr_1fr_1fr_auto]"
+              >
+                <input
+                  type="text"
+                  placeholder="Service (e.g. Furnace repair)"
+                  value={row.service}
+                  onChange={(e) => {
+                    const next = [...quoteRanges];
+                    next[idx] = { ...next[idx], service: e.target.value };
+                    setQuoteRanges(next);
+                  }}
+                  className="rounded border bg-background px-2 py-1 text-sm focus:border-primary focus:outline-none"
+                />
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  placeholder="Low $"
+                  value={row.low}
+                  onChange={(e) => {
+                    const next = [...quoteRanges];
+                    next[idx] = { ...next[idx], low: e.target.value };
+                    setQuoteRanges(next);
+                  }}
+                  className="rounded border bg-background px-2 py-1 text-sm focus:border-primary focus:outline-none"
+                />
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  placeholder="High $"
+                  value={row.high}
+                  onChange={(e) => {
+                    const next = [...quoteRanges];
+                    next[idx] = { ...next[idx], high: e.target.value };
+                    setQuoteRanges(next);
+                  }}
+                  className="rounded border bg-background px-2 py-1 text-sm focus:border-primary focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() =>
+                    setQuoteRanges(quoteRanges.filter((_, i) => i !== idx))
+                  }
+                  className="text-xs text-rose-600 hover:underline"
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Team callback number (take_message operator notification) */}
+      <div className="rounded-xl border bg-card p-5">
+        <h2 className="text-card-title">Callback alerts</h2>
+        <p className="text-xs text-muted-foreground">
+          When the receptionist takes a message (a caller is out of scope, it&apos;s
+          after-hours, or it&apos;s unsure), the team gets a text here. Leave blank
+          to send alerts to your voice number.
+        </p>
+        <input
+          type="tel"
+          value={notifyPhone}
+          onChange={(e) => setNotifyPhone(e.target.value)}
+          placeholder="+1 555 555 5555"
+          className="mt-3 w-full max-w-xs rounded-md border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+        />
+      </div>
+
+      {/* Missed-call text-back */}
+      <div className="rounded-xl border bg-card p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-card-title">Missed-call text-back</h2>
+            <p className="text-xs text-muted-foreground max-w-2xl">
+              When a call is missed or abandoned (the receptionist doesn&apos;t
+              pick up — no-answer, busy, or the call drops), automatically text
+              the caller back within seconds so the lead never reaches a
+              competitor. Calls the receptionist answers don&apos;t get this
+              text. Use{" "}
+              <code className="font-mono">{"{business}"}</code> and{" "}
+              <code className="font-mono">{"{link}"}</code> in your message.
+            </p>
+          </div>
+          <label className="inline-flex shrink-0 cursor-pointer items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={missedCallEnabled}
+              onChange={(e) => setMissedCallEnabled(e.target.checked)}
+            />
+            <span className="font-medium">
+              {missedCallEnabled ? "On" : "Off"}
+            </span>
+          </label>
+        </div>
+        <textarea
+          value={missedCallMessage}
+          onChange={(e) => setMissedCallMessage(e.target.value)}
+          rows={3}
+          disabled={!missedCallEnabled}
+          className="mt-3 w-full rounded-md border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
+          placeholder="Hi, sorry we missed your call! This is {business} — how can we help? Reply here or book at {link}"
+        />
       </div>
 
       {/* Save */}

@@ -16,7 +16,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useReducedMotion } from "framer-motion";
-import { ARCHETYPES, archetypeStyle, type AestheticArchetypeId } from "../archetypes";
+import { ARCHETYPES, type AestheticArchetypeId } from "../archetypes";
 import { telHref } from "../_shared/phone";
 
 const ARCHETYPES_WITHOUT_STICKY: AestheticArchetypeId[] = [
@@ -81,7 +81,7 @@ export function StickyMobileBar({
     <nav
       data-archetype={arch.id}
       data-visible={visible ? "yes" : "no"}
-      style={{ ...archetypeStyle(arch.id), ["--sf-sticky-cols" as never]: String(cols) }}
+      style={{ ["--sf-sticky-cols" as never]: String(cols) }}
       className="sf-sticky-mobile-bar"
       aria-label="Quick actions"
     >

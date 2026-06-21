@@ -7,18 +7,21 @@
 //   • cinematic-aura     → cinematic-aspirational, technical-restrained
 //                                                                (Phase R.1.2)
 //
-// Theming is 100% via CSS vars emitted by archetypeStyle(). This file does
-// not hard-code hex anywhere.
+// Theming is 100% via CSS vars inherited from the SiteShell ancestor
+// (shell/site-shell.tsx applies archetypeStyle() + dark-mode overrides there).
+// This file does not call archetypeStyle() and does not hard-code hex.
 
 "use client";
 
 import type { ReactNode } from "react";
 import { Phone, Calendar, ArrowRight, Zap } from "lucide-react";
-import { ARCHETYPES, archetypeStyle, type AestheticArchetypeId } from "../archetypes";
+import { ARCHETYPES, type AestheticArchetypeId } from "../archetypes";
 import { telHref } from "../_shared/phone";
 import { Reveal, CountUp } from "../_shared/motion";
 import { TrustBadge } from "../_shared/trust-badge";
 import { Stars } from "../_shared/stars";
+import { LeadFormCard } from "./lead-form";
+import type { R1LeadFormSection } from "@/lib/landing/r1-payload-prompt";
 
 export type CTA = { label: string; href: string };
 
@@ -40,18 +43,28 @@ export type HeroProps = {
     techMeta: string;
     callout?: string;
   };
+  /** P2: when true + leadForm.enabled, the hero right column shows the form. */
+  leadFormInHero?: boolean;
+  /** P2: the lead-form payload (passed from page.tsx alongside hero spread). */
+  leadForm?: R1LeadFormSection;
+  /** P2: workspace slug, needed by LeadFormCard to submit the form. */
+  orgSlug?: string;
 };
 
 export function Hero(props: HeroProps) {
   const arch = ARCHETYPES[props.archetype];
+  const showHeroForm = Boolean(props.leadFormInHero && props.leadForm?.enabled && props.orgSlug);
   return (
     <section
       data-archetype={arch.id}
-      style={archetypeStyle(arch.id)}
       className="sf-hero"
     >
-      {arch.heroVariant === "split-screen-50-50" && <HeroSplit {...props} />}
-      {arch.heroVariant === "left-aligned-asymmetric" && <HeroLeftAsymmetric {...props} />}
+      {arch.heroVariant === "split-screen-50-50" && (
+        <HeroSplit {...props} showHeroForm={showHeroForm} />
+      )}
+      {arch.heroVariant === "left-aligned-asymmetric" && (
+        <HeroLeftAsymmetric {...props} showHeroForm={showHeroForm} />
+      )}
       {arch.heroVariant === "cinematic-aura" && <HeroCinematic {...props} />}
 
       <HeroStyles />
@@ -60,9 +73,10 @@ export function Hero(props: HeroProps) {
 }
 
 // ── split-screen-50-50  (bold-urgency) ─────────────────────────────────────
-function HeroSplit(props: HeroProps) {
+function HeroSplit(props: HeroProps & { showHeroForm: boolean }) {
   const { businessName, tagline, subhead, primaryCTA, secondaryCTA, trustBadges,
-          reviewRating, reviewCount, emergencyService, heroImage, heroOverlay } = props;
+          reviewRating, reviewCount, emergencyService, heroImage, heroOverlay,
+          orgSlug, leadForm, showHeroForm } = props;
 
   // Bold-urgency tagline pattern: split on the first sentence terminator and
   // render the back half as the accent line. If the LLM doesn't follow that
@@ -137,7 +151,11 @@ function HeroSplit(props: HeroProps) {
         </div>
       </div>
 
-      {heroImage && (
+      {showHeroForm && orgSlug && leadForm ? (
+        <div className="hero-form-col">
+          <LeadFormCard orgSlug={orgSlug} businessName={businessName} leadForm={leadForm} />
+        </div>
+      ) : heroImage ? (
         <Reveal delay={0.08} className="hero-photo-wrap">
           <div className="hero-photo">
             {/* Raw <img> instead of next/image: hero photos come from arbitrary
@@ -168,15 +186,16 @@ function HeroSplit(props: HeroProps) {
             )}
           </div>
         </Reveal>
-      )}
+      ) : null}
     </div>
   );
 }
 
 // ── left-aligned-asymmetric  (editorial-warm / clinical-trust / soft-residential / brutalist) ──
-function HeroLeftAsymmetric(props: HeroProps) {
+function HeroLeftAsymmetric(props: HeroProps & { showHeroForm: boolean }) {
   const { businessName, tagline, subhead, primaryCTA, secondaryCTA, trustBadges,
-          reviewRating, reviewCount, heroImage, heroOverlay } = props;
+          reviewRating, reviewCount, heroImage, heroOverlay,
+          orgSlug, leadForm, showHeroForm } = props;
   const arch = ARCHETYPES[props.archetype];
 
   return (
@@ -236,37 +255,46 @@ function HeroLeftAsymmetric(props: HeroProps) {
           </div>
         </div>
 
-        {/* Asymmetric photo block — offset 60px down on desktop, hugs the right
-            edge, intentional vertical mismatch with the text column. */}
-        {heroImage && arch.id !== "brutalist" && (
-          <Reveal delay={0.10} className="hero-left-photo-wrap">
-            <div className="hero-left-photo">
-              <img
-                src={heroImage.src}
-                alt={heroImage.alt}
-                fetchPriority="high"
-                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
-              />
-              {heroOverlay && (
-                <div className="hero-left-caption">
-                  <b>{heroOverlay.techName}</b>
-                  <small>{heroOverlay.techMeta}</small>
+        {/* Right column: form (when showHeroForm) or photo / brutalist block. */}
+        {showHeroForm && orgSlug && leadForm ? (
+          <div className="hero-form-col">
+            <LeadFormCard orgSlug={orgSlug} businessName={businessName} leadForm={leadForm} />
+          </div>
+        ) : (
+          <>
+            {/* Asymmetric photo block — offset 60px down on desktop, hugs the right
+                edge, intentional vertical mismatch with the text column. */}
+            {heroImage && arch.id !== "brutalist" && (
+              <Reveal delay={0.10} className="hero-left-photo-wrap">
+                <div className="hero-left-photo">
+                  <img
+                    src={heroImage.src}
+                    alt={heroImage.alt}
+                    fetchPriority="high"
+                    style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+                  />
+                  {heroOverlay && (
+                    <div className="hero-left-caption">
+                      <b>{heroOverlay.techName}</b>
+                      <small>{heroOverlay.techMeta}</small>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          </Reveal>
-        )}
+              </Reveal>
+            )}
 
-        {/* Brutalist gets a stark color block in place of the photo — keeps the
-            asymmetric counterweight without violating the "no soft pastels /
-            drop shadows / gradients" bans. */}
-        {arch.id === "brutalist" && (
-          <Reveal delay={0.10} className="hero-left-photo-wrap">
-            <div className="hero-left-block">
-              <span className="hero-left-block-label">Selected work · {new Date().getFullYear()}</span>
-              <span className="hero-left-block-num">01</span>
-            </div>
-          </Reveal>
+            {/* Brutalist gets a stark color block in place of the photo — keeps the
+                asymmetric counterweight without violating the "no soft pastels /
+                drop shadows / gradients" bans. */}
+            {arch.id === "brutalist" && (
+              <Reveal delay={0.10} className="hero-left-photo-wrap">
+                <div className="hero-left-block">
+                  <span className="hero-left-block-label">Selected work · {new Date().getFullYear()}</span>
+                  <span className="hero-left-block-num">01</span>
+                </div>
+              </Reveal>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -634,6 +662,16 @@ function HeroStyles() {
         letter-spacing: -0.04em;
         text-align: right;
       }
+
+      /* ───────── hero-form-col (P2: leadFormInHero) ───────── */
+      /* Used by both HeroSplit and HeroLeftAsymmetric as the right/second column
+         when leadFormInHero is true. The card is max-width:520px internally;
+         width:100% keeps it within the grid column and prevents horizontal
+         overflow at 375px. Desktop sticky keeps the form in view as users
+         scroll the hero text on short viewports.
+         NOTE: HeroCinematic intentionally does NOT use this — out of scope P2. */
+      .hero-form-col { width: 100%; }
+      @media (min-width: 1024px) { .hero-form-col { position: sticky; top: 88px; } }
 
       /* ───────── cinematic-aura ───────── */
       .hero-cinematic {

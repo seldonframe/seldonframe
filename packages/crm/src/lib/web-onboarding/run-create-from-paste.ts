@@ -43,7 +43,7 @@ export type RunPasteDeps = {
 
 export type RunPasteInput = {
   deps: RunPasteDeps;
-  body: { text: unknown; landingTemplate?: string };
+  body: { text: unknown; landingTemplate?: string; themeMode?: string };
   sessionUser: { id: string; primaryOrgId: string | null } | null;
 };
 
@@ -237,6 +237,7 @@ export async function runCreateFromPaste(input: RunPasteInput): Promise<RunPaste
           workspaceId: result.workspace_id,
           facts,
           byokKey: extraction.key,
+          themeMode: input.body.themeMode as ("auto" | "light" | "dark") | undefined,
         });
         if (r1Result.ok) {
           sse.emit("landing_built", { workspaceId: result.workspace_id });

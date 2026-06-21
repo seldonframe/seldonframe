@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -113,6 +114,16 @@ export function CreatePopover({
   // stray Enter doesn't submit the page behind it. The search input is hidden
   // on the "block" tab, so fall back to the card itself.
   const closeBtnRef = useRef<HTMLButtonElement>(null);
+  // Portal to document.body so the `fixed inset-0` backdrop covers the real
+  // VIEWPORT rather than the nearest transformed ancestor. The dashboard shell
+  // and the /bookings page section both carry `.animate-page-enter`, whose
+  // keyframes animate `transform` with fill-mode `both` — a non-`none`
+  // transform permanently establishes a containing block for fixed
+  // descendants, so without the portal this overlay would be sized/positioned
+  // against that tall section (dropping the card below the fold) instead of the
+  // screen. Mounted gate keeps the portal client-only (no SSR `document`).
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   // Close on Escape. (Backdrop click is handled on the overlay element below —
   // no document mousedown listener, so clicks INSIDE the modal never bubble out
@@ -208,14 +219,19 @@ export function CreatePopover({
     });
   }
 
-  return (
+  // Client-only: the portal target (document.body) doesn't exist during SSR.
+  if (!mounted) return null;
+
+  return createPortal(
     // Full-viewport backdrop layer: dims the page and centers the card in the
     // MIDDLE OF THE SCREEN regardless of which cell was clicked, so a click on a
-    // low row no longer drops the popup near the bottom of the page. Clicking
-    // the backdrop closes; clicks inside the card stopPropagation so they don't
-    // reach the backdrop (or the calendar column behind it). Reduced-motion
-    // safe — no animation. The clicked slot's datetime still flows in via the
-    // `startsAt` prop and is unchanged.
+    // low row no longer drops the popup near the bottom of the page. Rendered
+    // through a portal to document.body so `fixed inset-0` is viewport-relative
+    // (an `.animate-page-enter` ancestor's transform would otherwise scope it).
+    // Clicking the backdrop closes; clicks inside the card stopPropagation so
+    // they don't reach the backdrop (or the calendar column behind it).
+    // Reduced-motion safe — no animation. The clicked slot's datetime still
+    // flows in via the `startsAt` prop and is unchanged.
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 p-4"
       role="dialog"
@@ -530,6 +546,7 @@ export function CreatePopover({
         )}
       </div>
     </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

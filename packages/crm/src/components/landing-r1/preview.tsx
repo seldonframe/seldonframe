@@ -13,12 +13,13 @@ import { ServicesGrid } from "./sections/services-grid";
 import { Testimonials } from "./sections/testimonials";
 import { Faq } from "./sections/faq";
 import { Footer } from "./sections/footer";
+import { SiteShell } from "./shell/site-shell";
 import { stocktonFixture } from "./fixtures/bold-urgency-stockton";
 
 export default function LandingPreview() {
   const f = stocktonFixture;
   return (
-    <>
+    <SiteShell archetype={f.hero.archetype} mode="light">
       <Hero {...f.hero} />
       <ServicesGrid {...f.services} />
       <Testimonials {...f.testimonials} />
@@ -30,6 +31,6 @@ export default function LandingPreview() {
         site shell) so they persist across all sections.
         See README → "Sticky CTAs" for the wiring.
       */}
-    </>
+    </SiteShell>
   );
 }

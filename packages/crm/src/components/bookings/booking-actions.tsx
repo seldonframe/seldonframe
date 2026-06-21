@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { Mail, MapPin, Phone, X } from "lucide-react";
 
@@ -91,6 +92,16 @@ export function BookingActions({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const popoverRef = useRef<HTMLDivElement>(null);
+  // Portal to document.body so `position: fixed` is resolved against the
+  // VIEWPORT, not the nearest transformed ancestor. The dashboard shell and the
+  // /bookings page section both carry `.animate-page-enter`, whose keyframes
+  // animate `transform` with fill-mode `both` — a non-`none` transform that
+  // permanently establishes a containing block for fixed descendants. Without
+  // the portal, `fixed left-1/2 top-1/2` centers inside that tall (full-scroll-
+  // height) section, dropping this popup far below the fold. Mounted gate keeps
+  // the portal client-only so SSR never touches `document`.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   // The address (if any) is stored as a leading line inside the notes; pull it
   // out for its own field and edit only the remaining free-text notes. On save
@@ -153,7 +164,10 @@ export function BookingActions({
 
   const notesDirty = notesDraft.trim() !== rest.trim();
 
-  return (
+  // Client-only: don't touch document.body during SSR.
+  if (!mounted) return null;
+
+  return createPortal(
     <div
       ref={popoverRef}
       className="fixed left-1/2 top-1/2 z-50 w-full max-w-[360px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-card shadow-lg"
@@ -265,6 +279,7 @@ export function BookingActions({
           Tip: drag the card to reschedule.
         </p>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

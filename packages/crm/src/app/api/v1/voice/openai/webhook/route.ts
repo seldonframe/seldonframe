@@ -239,6 +239,15 @@ export async function POST(request: Request): Promise<Response> {
           conversation_id: resolved.ctx.conversationId,
         });
 
+        // Caller-ID → tool context. The inbound call already carries the
+        // caller's number; stamp it on the tool-execution context so
+        // book_appointment auto-fills the contact phone (the agent never has to
+        // ask). Only set it when present — anonymous/blocked callers leave it
+        // undefined, and the booking tools then behave exactly as before.
+        if (callerNumber) {
+          resolved.ctx.callerPhone = callerNumber;
+        }
+
         // Per-workspace persona (soul + skill registry + workspace timezone) and
         // per-agent TTS voice. Best-effort: a failure falls back to the built-in
         // SDR persona/voice inside runVoiceCall.
@@ -247,6 +256,11 @@ export async function POST(request: Request): Promise<Response> {
             resolved.ctx.orgId,
             resolved.ctx.agentId,
           );
+          // Workspace timezone → tool context. The booking/reschedule read-backs
+          // format the spoken slot time in this zone so the caller hears
+          // "June 25 at 9:00 AM EDT", never the raw UTC ISO. (loadVoicePersonaInputs
+          // always returns a concrete zone, defaulting to "UTC".)
+          resolved.ctx.timezone = personaInputs.timezone;
           // Stage B READ — load learned patterns (readBrainNote ticks `uses`),
           // inject them into the persona, and remember the consumed ids so a
           // booking win can bump exactly those notes' confidence.
@@ -266,7 +280,12 @@ export async function POST(request: Request): Promise<Response> {
             blueprint: personaInputs.blueprint,
             timezone: personaInputs.timezone,
             now: new Date(),
+            // Voice R1 — collect exactly the fields THIS workspace declares.
+            intakeFields: personaInputs.intakeFields,
             brainNotes: brain.notes,
+            // Voice R1+ — when the caller ID gave us a number, tell the agent not
+            // to ask for the phone (it's auto-captured). Anonymous → ask normally.
+            callerPhoneKnown: !!callerNumber,
           });
           audioVoice = personaInputs.blueprint.voice;
           greeting = personaInputs.blueprint.greeting;
@@ -279,10 +298,13 @@ export async function POST(request: Request): Promise<Response> {
         }
 
         // Open the transcript conversation (best-effort — null on failure).
+        // Persist the caller's number (caller ID) as channel_meta.from_number so
+        // the operator sees who phoned — null for anonymous/blocked callers.
         conversationId = await startVoiceConversation({
           agentId: resolved.ctx.agentId,
           orgId: resolved.ctx.orgId,
           callId,
+          fromNumber: callerNumber ?? undefined,
           toNumber: dialedNumber ?? undefined,
         });
       } else {

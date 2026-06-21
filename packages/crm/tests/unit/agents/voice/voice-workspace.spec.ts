@@ -11,8 +11,11 @@ import assert from "node:assert/strict";
 
 import {
   resolvePhase1VoiceContext,
+  loadVoicePersonaInputs,
+  selectAppointmentIntakeFields,
   type VoiceOrg,
 } from "../../../../src/lib/agents/voice/voice-workspace";
+import type { BookingIntakeField } from "../../../../src/lib/bookings/actions";
 
 const STABLE_CONV_ID = "conv-fixed-uuid";
 const fixedConvId = () => STABLE_CONV_ID;
@@ -134,5 +137,79 @@ describe("resolvePhase1VoiceContext — context shape + agentId fallback", () =>
       // sanity: looks like a uuid
       assert.match(r1.ctx.conversationId, /^[0-9a-f-]{36}$/i);
     }
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// Voice R1 — loadVoicePersonaInputs threads the workspace's appointment-type
+// intakeFields into the persona inputs (so the receptionist collects exactly
+// what the workspace needs). DI the DB reads (repo convention).
+// ───────────────────────────────────────────────────────────────────────────
+
+const PLUMBER_FIELDS: BookingIntakeField[] = [
+  { id: "phone", type: "tel", label: "Phone", required: true },
+  { id: "address", type: "text", label: "Service address", required: true },
+];
+
+describe("selectAppointmentIntakeFields — pure pick from template rows", () => {
+  test("returns intakeFields from the first appointment-type template that has them", () => {
+    const rows = [
+      { metadata: { kind: "appointment_type" } },
+      { metadata: { kind: "appointment_type", intakeFields: PLUMBER_FIELDS } },
+    ];
+    assert.deepEqual(selectAppointmentIntakeFields(rows), PLUMBER_FIELDS);
+  });
+
+  test("returns [] when no template declares intakeFields", () => {
+    const rows = [
+      { metadata: { kind: "appointment_type" } },
+      { metadata: { kind: "appointment_type", intakeFields: [] } },
+    ];
+    assert.deepEqual(selectAppointmentIntakeFields(rows), []);
+  });
+
+  test("returns [] for no rows at all", () => {
+    assert.deepEqual(selectAppointmentIntakeFields([]), []);
+  });
+
+  test("ignores a non-array intakeFields value defensively", () => {
+    const rows = [{ metadata: { kind: "appointment_type", intakeFields: "nope" } }];
+    assert.deepEqual(selectAppointmentIntakeFields(rows), []);
+  });
+});
+
+describe("loadVoicePersonaInputs — threads intakeFields via injected loader", () => {
+  test("includes the workspace's appointment-type intakeFields", async () => {
+    const inputs = await loadVoicePersonaInputs("org-1", "agt-1", {
+      loadOrg: async () => ({ soul: { businessName: "Spark" }, timezone: "America/Chicago" }),
+      loadBlueprint: async () => ({}),
+      loadAppointmentIntakeFields: async (orgId) => {
+        assert.equal(orgId, "org-1", "loader is scoped to the call's org");
+        return PLUMBER_FIELDS;
+      },
+    });
+    assert.deepEqual(inputs.intakeFields, PLUMBER_FIELDS);
+    assert.equal(inputs.timezone, "America/Chicago");
+  });
+
+  test("falls back to [] intakeFields when the loader yields none", async () => {
+    const inputs = await loadVoicePersonaInputs("org-1", "agt-1", {
+      loadOrg: async () => ({ soul: null, timezone: "UTC" }),
+      loadBlueprint: async () => ({}),
+      loadAppointmentIntakeFields: async () => [],
+    });
+    assert.deepEqual(inputs.intakeFields, []);
+  });
+
+  test("never throws on a failing intake-fields loader — returns [] (call still runs)", async () => {
+    const inputs = await loadVoicePersonaInputs("org-1", "agt-1", {
+      loadOrg: async () => ({ soul: null, timezone: "UTC" }),
+      loadBlueprint: async () => ({}),
+      loadAppointmentIntakeFields: async () => {
+        throw new Error("db down");
+      },
+    });
+    assert.deepEqual(inputs.intakeFields, []);
+    assert.equal(inputs.timezone, "UTC");
   });
 });

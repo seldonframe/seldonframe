@@ -20,16 +20,21 @@ import type { LandingSection } from "@/lib/landing/types";
 // workspaces that have no _r1 row (all existing production workspaces).
 import { loadLandingPayload } from "@/lib/landing/r1-save";
 import { rewriteR1Hrefs } from "@/lib/landing/r1-rewrite-hrefs";
+import { resolveMapQuery } from "@/lib/landing/map-embed";
 import { buildWorkspaceUrls } from "@/lib/billing/anonymous-workspace";
 import { Hero } from "@/components/landing-r1/sections/hero";
 import { ServicesGrid } from "@/components/landing-r1/sections/services-grid";
 import { Testimonials } from "@/components/landing-r1/sections/testimonials";
 import { Faq } from "@/components/landing-r1/sections/faq";
+import { MapSection } from "@/components/landing-r1/sections/map";
 import { LeadFormSection } from "@/components/landing-r1/sections/lead-form";
 import { Footer } from "@/components/landing-r1/sections/footer";
 import { EmergencyStrip } from "@/components/landing-r1/chrome/emergency-strip";
 import { StickyMobileBar } from "@/components/landing-r1/chrome/sticky-mobile-bar";
 import { Navbar } from "@/components/landing-r1/chrome/navbar";
+import { SiteShell } from "@/components/landing-r1/shell/site-shell";
+import { ServicePageTemplate } from "@/components/landing-r1/sections/service-page";
+import { findServicePage, getServicePages } from "@/lib/landing/r1-site-tree";
 
 type PageProps = {
   params: Promise<{ orgSlug: string; slug: string[] }>;
@@ -43,6 +48,31 @@ function isHomePage(pageSlug: string): boolean {
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { orgSlug, slug } = await params;
   const pageSlug = slug.join("/");
+
+  // Phase R: per-service SEO metadata for /services/<service> paths.
+  if (slug.length === 2 && slug[0] === "services") {
+    const r1Data = await loadLandingPayload(orgSlug);
+    const page = r1Data ? findServicePage(r1Data.payload, slug[1]) : null;
+    if (r1Data && page) {
+      const businessName = r1Data.payload.footer.businessName;
+      const title = `${page.name} — ${businessName}`;
+      return {
+        title,
+        description: page.summary,
+        openGraph: {
+          title,
+          description: page.summary,
+          ...(page.heroPhoto ? { images: [{ url: page.heroPhoto.src }] } : {}),
+          type: "website",
+        },
+        robots: { index: true, follow: true },
+        // Canonical uses relative path style, matching the home-page metadata
+        // above which uses `/w/${orgSlug}` (not an absolute subdomain URL).
+        alternates: { canonical: `/w/${orgSlug}/services/${slug[1]}` },
+      };
+    }
+    // No payload or unknown service → fall through to home/default handling.
+  }
 
   // Phase R: serve R-framework SEO metadata for home pages with a payload.
   if (isHomePage(pageSlug)) {
@@ -102,6 +132,60 @@ export default async function PublicSPage({ params }: PageProps) {
   const { orgSlug, slug } = await params;
   const pageSlug = slug.join("/");
 
+  // Multi-page: subdomain /services/<service> → /s/<orgSlug>/services/<service>.
+  // Render the shared shell + per-service template when the workspace has an r1
+  // payload that contains the requested service.
+  if (slug.length === 2 && slug[0] === "services") {
+    const serviceSlugParam = slug[1];
+    const r1Data = await loadLandingPayload(orgSlug);
+    if (r1Data) {
+      const servicePage = findServicePage(r1Data.payload, serviceSlugParam);
+      if (!servicePage) {
+        notFound();
+      }
+      const workspaceUrls = buildWorkspaceUrls(
+        orgSlug,
+        process.env.WORKSPACE_BASE_DOMAIN ?? "app.seldonframe.com",
+        r1Data.orgId,
+      );
+      const payload = rewriteR1Hrefs(r1Data.payload, {
+        book: workspaceUrls.book,
+        intake: workspaceUrls.intake,
+        home: workspaceUrls.home,
+      });
+      const r1ChatbotEmbed = await getPublicChatbotEmbed(r1Data.orgId);
+      const navServices = getServicePages(payload).map((p) => ({ slug: p.slug, name: p.name }));
+      // On the subdomain the workspace IS the root, so links stay relative to "/".
+      return (
+        <SiteShell archetype={payload.hero.archetype} mode={payload.theme?.mode ?? "light"}>
+          <Navbar
+            archetype={payload.hero.archetype}
+            businessName={payload.hero.businessName}
+            phone={payload.footer.phone}
+            serviceAreas={payload.footer.serviceAreas}
+            servicePages={navServices}
+            homeHref="/"
+            cta={payload.nav?.cta}
+          />
+          <ServicePageTemplate
+            archetype={payload.hero.archetype}
+            service={servicePage}
+            phone={payload.footer.phone}
+            ctaHref={workspaceUrls.book}
+            orgSlug={orgSlug}
+            businessName={payload.hero.businessName}
+            leadForm={payload.leadForm}
+            address={resolveMapQuery(payload.footer)}
+          />
+          <Footer {...payload.footer} />
+          {r1ChatbotEmbed && <ChatbotEmbedScript embedUrl={r1ChatbotEmbed.embedUrl} />}
+        </SiteShell>
+      );
+    }
+    // If there's no r1 payload at all, fall through to the existing logic below
+    // (do not notFound here — let the existing handling decide).
+  }
+
   // Phase R: when the home page is requested AND the workspace has an R
   // framework payload, render the R framework components and return early.
   // Sub-pages (/s/{orgSlug}/about, /s/{orgSlug}/services, etc.) have no R
@@ -122,19 +206,28 @@ export default async function PublicSPage({ params }: PageProps) {
       });
       // Subdomain R-branch chatbot embed (mirrors /w/[slug] route).
       const r1ChatbotEmbed = await getPublicChatbotEmbed(r1Data.orgId);
+      const navServices = getServicePages(payload).map((p) => ({ slug: p.slug, name: p.name }));
+      // ⚠️ Sentinel MUST be "/" not "" — serviceCardHref("", …) returns the
+      // legacy #service-… anchor (empty string is falsy); "/" returns
+      // /services/<slug> (root-relative), which is correct on the subdomain.
+      const serviceBaseHref = navServices.length > 0 ? "/" : undefined;
       return (
-        <>
+        <SiteShell archetype={payload.hero.archetype} mode={payload.theme?.mode ?? "light"}>
           <Navbar
             archetype={payload.hero.archetype}
             businessName={payload.hero.businessName}
             phone={payload.footer.phone}
             serviceAreas={payload.footer.serviceAreas}
+            servicePages={navServices}
+            homeHref="/"
+            cta={payload.nav?.cta}
           />
           {payload.emergency && <EmergencyStrip {...payload.emergency} />}
-          <Hero {...payload.hero} />
-          <ServicesGrid {...payload.services} />
+          <Hero {...payload.hero} orgSlug={orgSlug} leadForm={payload.leadForm} />
+          <ServicesGrid {...payload.services} serviceBaseHref={serviceBaseHref} />
           <Testimonials {...payload.testimonials} />
           <Faq {...payload.faq} />
+          <MapSection address={resolveMapQuery(payload.footer)} archetype={payload.hero.archetype} heading="Where we work" />
           {payload.leadForm?.enabled && (
             <LeadFormSection
               orgSlug={orgSlug}
@@ -146,7 +239,7 @@ export default async function PublicSPage({ params }: PageProps) {
           <Footer {...payload.footer} />
           {payload.sticky && <StickyMobileBar {...payload.sticky} />}
           {r1ChatbotEmbed && <ChatbotEmbedScript embedUrl={r1ChatbotEmbed.embedUrl} />}
-        </>
+        </SiteShell>
       );
     }
   }

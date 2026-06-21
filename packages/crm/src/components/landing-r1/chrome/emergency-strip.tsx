@@ -11,7 +11,7 @@
 
 "use client";
 
-import { ARCHETYPES, archetypeStyle, type AestheticArchetypeId } from "../archetypes";
+import { ARCHETYPES, type AestheticArchetypeId } from "../archetypes";
 import { telHref } from "../_shared/phone";
 
 const URGENCY_SUPPORTED: AestheticArchetypeId[] = [
@@ -50,7 +50,6 @@ export function EmergencyStrip({ archetype, message, phone, show }: EmergencyStr
       role="region"
       aria-label="Emergency service"
       data-archetype={arch.id}
-      style={archetypeStyle(arch.id)}
       className="sf-emergency-strip"
     >
       <div className="sf-emergency-inner">

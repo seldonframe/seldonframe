@@ -22,7 +22,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { ARCHETYPES, archetypeStyle, type AestheticArchetypeId } from "../archetypes";
+import { ARCHETYPES, type AestheticArchetypeId } from "../archetypes";
 import { Reveal } from "../_shared/motion";
 
 export type FaqItem = {
@@ -64,7 +64,6 @@ export function Faq({
   return (
     <section
       data-archetype={arch.id}
-      style={archetypeStyle(arch.id)}
       className="sf-faq"
       id="faq"
     >

@@ -17,26 +17,58 @@
 
 import { describe, test } from "node:test";
 
-import { assertOrgIdExpr } from "./emit-site-extractor";
+import { assertOrgIdExpr, assertEmitOrgId } from "./emit-site-extractor";
 
-describe("SLICE 1-a — bookings/actions.ts (6 sites)", () => {
-  test("line 705 booking.created — orgId (from getOrgId())", () => {
-    assertOrgIdExpr("src/lib/bookings/actions.ts", 705, "orgId");
+// bookings/actions.ts — asserted by (event + enclosing function), NOT by line
+// number. The original line-anchored assertions (705/751/789/833/894/1001)
+// silently broke when the file grew ~400 lines: extractOrgIdExpr finds the
+// FIRST emit at-or-after a line, so every hardcoded line started checking the
+// wrong call once sites drifted. Two events appear twice in this file
+// (booking.created in createBookingAction vs submitPublicBookingAction;
+// booking.cancelled in cancelBookingAction vs cancelBookingByTokenAction), so
+// we disambiguate by the enclosing function. This survives code motion.
+describe("SLICE 1-a — bookings/actions.ts (by event + enclosing fn)", () => {
+  test("booking.created (createBookingAction) — orgId from getOrgId()", () => {
+    assertEmitOrgId(
+      "src/lib/bookings/actions.ts",
+      { event: "booking.created", inFunction: "createBookingAction" },
+      "orgId",
+    );
   });
-  test("line 751 booking.completed — orgId", () => {
-    assertOrgIdExpr("src/lib/bookings/actions.ts", 751, "orgId");
+  test("booking.completed (completeBookingAction) — orgId", () => {
+    assertEmitOrgId(
+      "src/lib/bookings/actions.ts",
+      { event: "booking.completed", inFunction: "completeBookingAction" },
+      "orgId",
+    );
   });
-  test("line 789 booking.cancelled — orgId", () => {
-    assertOrgIdExpr("src/lib/bookings/actions.ts", 789, "orgId");
+  test("booking.cancelled (cancelBookingAction) — orgId", () => {
+    assertEmitOrgId(
+      "src/lib/bookings/actions.ts",
+      { event: "booking.cancelled", inFunction: "cancelBookingAction" },
+      "orgId",
+    );
   });
-  test("line 833 booking.no_show — orgId", () => {
-    assertOrgIdExpr("src/lib/bookings/actions.ts", 833, "orgId");
+  test("booking.no_show (markBookingNoShowAction) — orgId", () => {
+    assertEmitOrgId(
+      "src/lib/bookings/actions.ts",
+      { event: "booking.no_show", inFunction: "markBookingNoShowAction" },
+      "orgId",
+    );
   });
-  test("line 894 contact.created (nested createBookingContext) — bookingContext.orgId", () => {
-    assertOrgIdExpr("src/lib/bookings/actions.ts", 894, "bookingContext.orgId");
+  test("contact.created (submitPublicBookingAction) — bookingContext.orgId", () => {
+    assertEmitOrgId(
+      "src/lib/bookings/actions.ts",
+      { event: "contact.created", inFunction: "submitPublicBookingAction" },
+      "bookingContext.orgId",
+    );
   });
-  test("line 1001 booking.created (nested createBookingContext) — bookingContext.orgId", () => {
-    assertOrgIdExpr("src/lib/bookings/actions.ts", 1001, "bookingContext.orgId");
+  test("booking.created (submitPublicBookingAction) — bookingContext.orgId", () => {
+    assertEmitOrgId(
+      "src/lib/bookings/actions.ts",
+      { event: "booking.created", inFunction: "submitPublicBookingAction" },
+      "bookingContext.orgId",
+    );
   });
 });
 

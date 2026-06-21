@@ -117,7 +117,7 @@ export type RunDeps = {
 
 export type RunInput = {
   deps: RunDeps;
-  body: { url: unknown; landingTemplate?: string };
+  body: { url: unknown; landingTemplate?: string; themeMode?: string };
   sessionUser: { id: string; primaryOrgId: string | null } | null;
 };
 
@@ -365,6 +365,7 @@ export async function runCreateFromUrl(input: RunInput): Promise<RunResult> {
           workspaceId: result.workspace_id,
           facts,
           byokKey: extraction.key,
+          themeMode: input.body.themeMode as ("auto" | "light" | "dark") | undefined,
         });
         if (r1Result.ok) {
           sse.emit("landing_built", { workspaceId: result.workspace_id });

@@ -82,6 +82,9 @@ const DEFAULT_CAPABILITIES_BY_ARCHETYPE: Record<string, string[]> = {
     "reschedule_appointment",
     "cancel_appointment",
     "escalate_to_human",
+    // voice R1 — the safe exit + the quote guard.
+    "take_message",
+    "get_quote_range",
   ],
   "sms-followup-bot": [
     "look_up_availability",

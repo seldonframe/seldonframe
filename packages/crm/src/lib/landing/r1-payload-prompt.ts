@@ -14,6 +14,11 @@
 import type { AestheticArchetypeId } from "@/lib/workspace/aesthetic-archetypes";
 import { ARCHETYPES, getArchetype } from "@/lib/workspace/aesthetic-archetypes";
 import type { ExtractedBusinessFacts } from "@/lib/web-onboarding/extraction-prompt";
+import type {
+  ServicePage,
+  R1NavConfig,
+  R1ThemeConfig,
+} from "./r1-site-tree";
 
 // ── TypeScript types mirroring the R-framework section props ──────────────────
 
@@ -40,6 +45,9 @@ export type R1HeroSection = {
   emergencyService?: boolean;
   heroImage?: { src: string; alt: string };
   heroOverlay?: R1HeroOverlay;
+  /** P2: when true (and payload.leadForm.enabled), the hero renders the intake
+   *  form in its right column (desktop) / below the text (mobile). */
+  leadFormInHero?: boolean;
 };
 
 export type R1Service = {
@@ -164,7 +172,16 @@ export type R1LeadFormSection = {
   consentText?: string;
 };
 
-/** Full R1 landing payload — union of all section prop shapes. */
+/** Full R1 landing payload — union of all section prop shapes.
+ *
+ * Phase-1 multi-page additions are all OPTIONAL so existing single-page
+ * payloads render unchanged:
+ *   • servicePages — one ServicePage per service (the /w/[slug]/services/[x]
+ *     route renders these). NOTE: distinct from `services` above, which is the
+ *     home services GRID (R1ServicesSection). See the plan's Spec↔Code section.
+ *   • nav          — shared navbar config (extra links + CTA override).
+ *   • theme        — { mode?: "light" | "dark" }; threaded through SiteShell.
+ */
 export type R1LandingPayload = {
   hero: R1HeroSection;
   services: R1ServicesSection;
@@ -175,7 +192,17 @@ export type R1LandingPayload = {
   sticky?: R1StickySection;
   /** Speed-to-Lead bottom section (optional). */
   leadForm?: R1LeadFormSection;
+  /** Multi-page: per-service detail pages (Phase 1+). Optional. */
+  servicePages?: ServicePage[];
+  /** Multi-page: shared navbar config. Optional. */
+  nav?: R1NavConfig;
+  /** Multi-page: site theme (light/dark mode). Optional. */
+  theme?: R1ThemeConfig;
 };
+
+// Re-export the site-tree types so existing importers of this module can reach
+// them without a second import path.
+export type { ServicePage, R1NavConfig, R1ThemeConfig } from "./r1-site-tree";
 
 // ── Prompt builder ────────────────────────────────────────────────────────────
 
@@ -255,8 +282,8 @@ hero:
   businessName: from facts.business_name
   tagline: 10-15 words. For bold-urgency, split into two clauses: "Problem? Solution in X." — the component renders the second clause in accent color. For other archetypes, a confident declarative headline.
   subhead: 25-40 words that reinforce the value proposition using facts (city, emergency service, certifications, years in business from trust_signals, service area).
-  primaryCTA: { label, href } — href = "${telHref}", label reflects the archetype voice. For bold-urgency: "Call now — {phone}". For clinical-trust: "Book a consultation". For editorial-warm: "Get a free estimate". Always actionable.
-  secondaryCTA (optional): { label: "Book online", href: "/book" } — include for urgency archetypes.
+  primaryCTA: { label, href } — href = "/book" (literal string — the renderer rewrites this to the workspace booking URL at runtime), label reflects the archetype voice. For bold-urgency: "Get a free estimate". For clinical-trust: "Book a consultation". For editorial-warm: "Get a free estimate". Always actionable.
+  secondaryCTA: { label: "Call ${facts.phone}", href: "${telHref}" } — always include; keeps the phone number prominent in the hero.
   trustBadges: array of { label } — derive from certifications + trust_signals. Add "Family-owned since X" if trust_signals mentions it. Max 4 badges. Min 1.
   reviewRating: from facts.review_rating (number) or null if absent.
   reviewCount: from facts.review_count (number) or null if absent.
@@ -323,7 +350,7 @@ ${JSON.stringify(facts.photos, null, 2)}
 
 Photo usage rules:
 - hero.heroImage: prefer the entry with section==="hero". If none, use the first entry.
-- services tiles: if services has 4+ items, assign photos with section==="services" to service tiles (one per tile, in order). Skip if fewer than 4 photos have section==="services".
+- services tiles: if services has 4+ items, assign photos with section==="services" to service tiles (one per tile, in order) — write each as \`photo: { src, alt }\` on the matching service object (use the key name "photo", NOT "image"). Skip if fewer than 4 photos have section==="services".
 - testimonials: use photos with section==="testimonial" for testimonial avatars if needed.
 - NEVER invent an image URL. Only use URLs from ENRICHMENT_PHOTOS or the Unsplash fallback when no ENRICHMENT_PHOTOS are provided.
 ` : ""}

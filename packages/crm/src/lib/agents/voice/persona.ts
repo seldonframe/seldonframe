@@ -9,17 +9,72 @@
 //   4. blueprint.faq inline if present.
 
 import type { AgentBlueprint } from "@/db/schema/agents";
+import type { BookingIntakeField } from "@/lib/bookings/actions";
 import { composeDefaultSkillMd } from "@/lib/agents/skills/registry";
+
+/**
+ * Voice R1 — build the deterministic "what to collect before booking"
+ * instruction for THIS workspace from its appointment-type intakeFields. Pure.
+ *
+ * A plumber workspace declares phone + address + service (no email); the agency
+ * declares email. We list each field's label with required/optional, and tell
+ * the model to pass them to book_appointment as `intakeResponses` keyed by the
+ * exact field id. With NO custom fields we fall back to name + email.
+ */
+export function composeBookingFieldsInstruction(
+  intakeFields: BookingIntakeField[] | undefined,
+): string {
+  const fields = (intakeFields ?? []).filter(
+    (f): f is BookingIntakeField =>
+      !!f && typeof f.id === "string" && f.id.trim().length > 0,
+  );
+
+  if (fields.length === 0) {
+    // Legacy / agency default: name + email.
+    return (
+      "## Booking — what to collect\n\n" +
+      "To book, collect the caller's full name and email. Pass the email to " +
+      "book_appointment (the `email` field). Always read the details back and " +
+      "get a yes before calling book_appointment with confirmed:true."
+    );
+  }
+
+  const lines = fields.map((f) => {
+    const label = typeof f.label === "string" && f.label.trim().length > 0 ? f.label.trim() : f.id;
+    const req = f.required ? "required" : "optional";
+    return `- ${label} (${req}) — field id: \`${f.id}\``;
+  });
+  const ids = fields.map((f) => f.id).join(", ");
+
+  return (
+    "## Booking — what to collect\n\n" +
+    "To book, collect the caller's full name plus:\n" +
+    `${lines.join("\n")}\n\n` +
+    `Pass these to book_appointment as \`intakeResponses\` keyed by field id ` +
+    `(${ids}). Collect every required field before booking. Always read the ` +
+    `details back and get a yes before calling book_appointment with confirmed:true.`
+  );
+}
 
 export function composeVoicePersona(args: {
   soul: unknown;
   blueprint: AgentBlueprint;
   timezone: string;
   now: Date;
+  // Voice R1 — this workspace's appointment-type intake fields. Drives the
+  // deterministic "To book, collect…" instruction so the receptionist asks for
+  // exactly what THIS workspace needs (plumber: phone+address+service; agency:
+  // email). Absent/empty → falls back to name + email.
+  intakeFields?: BookingIntakeField[];
   // Stage B — learned patterns from past calls (loadAgentBrainContext). Injected
   // as a trailing section so the model treats them as soft guidance, not hard
   // rules. Optional: absent/empty → no brain section.
   brainNotes?: string[];
+  // Voice R1+ — true when the inbound call carries the caller's number (caller
+  // ID). When set, the persona tells the agent NOT to ask for the phone — it's
+  // captured automatically from the caller ID. False/absent (e.g. anonymous
+  // callers) → no such line, so the agent collects the phone normally.
+  callerPhoneKnown?: boolean;
 }): string {
   const { soul, blueprint, timezone, now } = args;
 
@@ -74,6 +129,24 @@ export function composeVoicePersona(args: {
 
   // Skill section
   sections.push(skillBody);
+
+  // Voice R1 — per-workspace booking fields. Emitted right after the skill body
+  // so the deterministic "collect exactly these" instruction sits alongside the
+  // booking-flow guidance the model just read.
+  sections.push(composeBookingFieldsInstruction(args.intakeFields));
+
+  // Voice R1+ — caller-ID short-circuit. When the inbound call carries the
+  // caller's number, the agent already HAS the phone — asking for it is a
+  // jarring, redundant question on a phone call. Emit a deterministic line right
+  // after the booking-fields block instructing the agent not to ask (the number
+  // is recorded automatically from caller ID). Omitted for anonymous callers so
+  // the agent collects the phone the normal way.
+  if (args.callerPhoneKnown) {
+    sections.push(
+      "You already have the caller's phone number from their caller ID — do NOT " +
+        "ask them for it; it's recorded automatically. Collect only the remaining fields.",
+    );
+  }
 
   // Business facts header
   const factLines: string[] = [];

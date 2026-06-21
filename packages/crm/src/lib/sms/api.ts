@@ -68,6 +68,10 @@ export async function sendSmsFromApi(params: {
   toNumber: string;
   body: string;
   provider?: string | null;
+  /** Extra metadata merged into the smsMessages row (after the default
+   *  { source, testMode }). Used e.g. by the missed-call text-back to tag the
+   *  row with { source: "missed-call-text-back", callSid } for idempotency. */
+  metadata?: Record<string, unknown>;
 }): Promise<SendSmsResult> {
   const toNumber = normalizePhone(params.toNumber);
   if (!toNumber) {
@@ -128,7 +132,7 @@ export async function sendSmsFromApi(params: {
       toNumber,
       body: params.body,
       status: "queued",
-      metadata: { source: "api", testMode: isTestMode },
+      metadata: { source: "api", testMode: isTestMode, ...(params.metadata ?? {}) },
     })
     .returning({ id: smsMessages.id, contactId: smsMessages.contactId });
 
