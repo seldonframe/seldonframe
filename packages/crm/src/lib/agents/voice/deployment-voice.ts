@@ -4,13 +4,16 @@
 // This is the genuinely-new piece of the deployment voice path. It is built
 // ENTIRELY from existing, unchanged primitives:
 //   - persona via composeVoicePersona using the agent TEMPLATE's blueprint
-//     (greeting / voice / FAQ / customSkillMd / capabilities) — the product the
-//     builder shaped and sells.
-//   - business IDENTITY = the deployment's CLIENT (deployment.clientName). The
-//     deployed receptionist speaks AS THE CLIENT, not as the builder. We pass a
-//     minimal soul carrying ONLY { businessName: clientName }; the builder's own
-//     soul (industry / services / facts) is deliberately NOT used, so the agent
-//     never pitches the builder's business to the client's callers.
+//     (greeting / voice / customSkillMd / capabilities) — the product the
+//     builder shaped and sells. FAQ comes from the template UNLESS the client
+//     supplied their own (deployment.clientContext.faq), which then wins.
+//   - business IDENTITY + FACTS = the deployment's CLIENT. The deployed
+//     receptionist speaks AS THE CLIENT, not as the builder. The persona soul is
+//     built from deployment.clientContext (the client's OWN description +
+//     services), with the business name defaulting to deployment.clientName. The
+//     builder's own soul (industry / services / facts) is deliberately NOT used,
+//     so the agent never pitches the builder's business to the client's callers.
+//     No clientContext captured → a name-only soul (the original behavior).
 //   - timezone + appointment intake fields from the BUILDER's org
 //     (loadVoicePersonaInputs(builderOrgId)) — booking needs them, and
 //     book_appointment lands in the builder's workspace calendar.
@@ -18,8 +21,6 @@
 //     testMode:false (a real booking — the ICP-3 payoff).
 //
 // TEST-scope simplifications (future refinements, NOT built here):
-//   - persona identity is the client NAME only; richer per-client business facts
-//     (the client's own services / soul) are a LATER refinement.
 //   - book into the builder org (per-client calendar via deployment.calendarRef
 //     is a LATER refinement).
 //   - transcript persisted to the builder org (no deployment_id column yet).
@@ -102,7 +103,7 @@ function buildDefaultDeps(): DeploymentVoiceDeps {
 export async function loadDeploymentVoiceContext(args: {
   deployment: Pick<
     Deployment,
-    "builderOrgId" | "agentTemplateId" | "clientName"
+    "builderOrgId" | "agentTemplateId" | "clientName" | "clientContext"
   >;
   now: Date;
   deps?: DeploymentVoiceDeps;
@@ -126,18 +127,29 @@ export async function loadDeploymentVoiceContext(args: {
   // 3. The builder org's voice agent id — for the tool ctx + transcript row.
   const agentId = await deps.getVoiceAgentId(builderOrgId);
 
-  // 4. Compose the persona: TEMPLATE blueprint + the CLIENT's identity. The
-  //    deployed receptionist speaks AS THE CLIENT (deployment.clientName), so we
-  //    pass a minimal soul carrying ONLY the client's business name. The builder's
-  //    own soul (industry / services / facts) is deliberately NOT passed — it
-  //    would make the agent pitch the builder's business to the client's callers.
-  //    composeVoicePersona derives the business name solely from soul.businessName,
-  //    so this minimal soul names the client without leaking any builder facts.
-  //    timezone + intakeFields stay from the builder (booking).
-  const clientSoul = { businessName: args.deployment.clientName };
+  // 4. Compose the persona: TEMPLATE blueprint + the CLIENT's identity AND
+  //    business facts. The deployed receptionist speaks AS THE CLIENT, so the
+  //    soul is built from the deployment's captured clientContext (the client's
+  //    OWN business — description + services), NEVER from personaInputs.soul (the
+  //    builder's business). When no clientContext was captured we fall back to a
+  //    name-only soul (today's behavior). The client's business name defaults to
+  //    deployment.clientName when the captured soul doesn't override it.
+  //
+  //    FAQ: when the client supplied their own FAQ we compose with it INSTEAD of
+  //    the template's (the client's answers win — they're the ones on the phone),
+  //    by shallow-overriding blueprint.faq. Absent → the template's FAQ stands.
+  const clientContext = args.deployment.clientContext ?? null;
+  const clientSoul = {
+    ...(clientContext?.soul ?? {}),
+    businessName: clientContext?.soul?.businessName || args.deployment.clientName,
+  };
+  const personaBlueprint: AgentBlueprint =
+    clientContext?.faq && clientContext.faq.length > 0
+      ? { ...templateBlueprint, faq: clientContext.faq }
+      : templateBlueprint;
   const instructions = composeVoicePersona({
     soul: clientSoul,
-    blueprint: templateBlueprint,
+    blueprint: personaBlueprint,
     timezone: personaInputs.timezone,
     now: args.now,
     intakeFields: personaInputs.intakeFields,

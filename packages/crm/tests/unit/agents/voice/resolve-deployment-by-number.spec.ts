@@ -19,6 +19,7 @@ const ACTIVE_A: DeploymentNumberRow = {
   builderOrgId: "builder-1",
   agentTemplateId: "tmpl-1",
   clientName: "Acme HVAC",
+  clientContext: null,
   phoneNumber: "+18335550100",
   status: "active",
 };
@@ -27,6 +28,7 @@ const ACTIVE_B_LOOSE: DeploymentNumberRow = {
   builderOrgId: "builder-2",
   agentTemplateId: "tmpl-2",
   clientName: "Lone Star Plumbing",
+  clientContext: null,
   // Stored loosely — must normalize to +15125550111 before comparing.
   phoneNumber: "(512) 555-0111",
   status: "active",
@@ -36,6 +38,7 @@ const DRAFT: DeploymentNumberRow = {
   builderOrgId: "builder-3",
   agentTemplateId: "tmpl-3",
   clientName: "Draft Co",
+  clientContext: null,
   phoneNumber: "+15125550111", // same number as ACTIVE_B but not active
   status: "draft",
 };
@@ -44,6 +47,7 @@ const PAUSED: DeploymentNumberRow = {
   builderOrgId: "builder-4",
   agentTemplateId: "tmpl-4",
   clientName: "Paused Co",
+  clientContext: null,
   phoneNumber: "+19998887777",
   status: "paused",
 };
@@ -86,6 +90,7 @@ describe("matchDeploymentByPhoneNumber — pure matcher", () => {
       builderOrgId: "b",
       agentTemplateId: "t",
       clientName: "No Phone Co",
+      clientContext: null,
       phoneNumber: null,
       status: "active",
     };

@@ -16,6 +16,7 @@
 import { eq } from "drizzle-orm";
 
 import { toE164 } from "@/lib/sms/providers";
+import type { DeploymentClientContext } from "@/db/schema/deployments";
 
 /** The slice of a deployments row this resolver needs. */
 export type DeploymentNumberRow = {
@@ -25,6 +26,10 @@ export type DeploymentNumberRow = {
   /** The SMB client this deployment serves — the deployed agent speaks AS this
    *  business (composeVoicePersona identity), so the voice path needs it. */
   clientName: string;
+  /** The client's captured business context (narrow soul + FAQ). Drives the
+   *  persona facts so the agent speaks the CLIENT's services/FAQ. Nullable —
+   *  absent → name-only fallback. */
+  clientContext: DeploymentClientContext | null;
   phoneNumber: string | null;
   status: string;
 };
@@ -68,6 +73,7 @@ function buildDefaultDeps(): ResolveDeploymentDeps {
           builderOrgId: deployments.builderOrgId,
           agentTemplateId: deployments.agentTemplateId,
           clientName: deployments.clientName,
+          clientContext: deployments.clientContext,
           phoneNumber: deployments.phoneNumber,
           status: deployments.status,
         })

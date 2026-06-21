@@ -35,6 +35,7 @@ const DEPLOYMENT: Deployment = {
   agentTemplateId: "tmpl-1",
   clientName: "Bright Smile Dental",
   clientContact: null,
+  clientContext: null,
   surface: "phone",
   phoneNumber: "+18335550100",
   phoneNumberSid: null,
@@ -177,5 +178,97 @@ describe("loadDeploymentVoiceContext — template blueprint + builder-org tools"
     // The webhook persists the transcript to the builder org with this agent id.
     assert.equal(result!.transcriptOrgId, "builder-org-1");
     assert.equal(result!.transcriptAgentId, "builder-voice-agent");
+  });
+});
+
+describe("loadDeploymentVoiceContext — speaks the CLIENT's services + FAQ", () => {
+  // The deployment now carries the CLIENT's captured business context. The
+  // persona must surface the client's OWN services + FAQ (so the agent answers
+  // as them), the client's FAQ must OVERRIDE the template's, and the BUILDER's
+  // soul must STILL never leak. Sentinels make any leak/miss unambiguous.
+  const DEPLOYMENT_WITH_CONTEXT: Deployment = {
+    ...DEPLOYMENT,
+    clientContext: {
+      soul: {
+        businessName: "Bright Smile Dental",
+        businessDescription: "CLIENT-DESC-XYZ a cosmetic + family dental practice",
+        services: [
+          { name: "CLIENT-SVC-XYZ teeth whitening", description: "in-office, one visit" },
+        ],
+      },
+      faq: [{ q: "Do you offer financing?", a: "CLIENT-FAQ-XYZ yes, 0% for 12 months." }],
+    },
+  };
+
+  test("composed instructions contain the client's service + FAQ + name", async () => {
+    const result = await loadDeploymentVoiceContext({
+      deployment: DEPLOYMENT_WITH_CONTEXT,
+      now: new Date("2026-06-01T17:00:00Z"),
+      deps: baseDeps(),
+    });
+    assert.ok(result);
+    // The client's own service + FAQ answer + name all surface.
+    assert.match(result!.instructions, /CLIENT-SVC-XYZ teeth whitening/);
+    assert.match(result!.instructions, /CLIENT-FAQ-XYZ yes, 0% for 12 months\./);
+    assert.match(result!.instructions, /CLIENT-DESC-XYZ/);
+    assert.match(result!.instructions, /Bright Smile Dental/);
+  });
+
+  test("the client's FAQ OVERRIDES the template's FAQ", async () => {
+    const result = await loadDeploymentVoiceContext({
+      deployment: DEPLOYMENT_WITH_CONTEXT,
+      now: new Date("2026-06-01T17:00:00Z"),
+      deps: baseDeps(),
+    });
+    // Client FAQ in…
+    assert.match(result!.instructions, /Do you offer financing\?/);
+    // …and the TEMPLATE's FAQ answer ("By appointment only.") is replaced, not
+    // appended. The template Q ("Do you take walk-ins?") must be gone too.
+    assert.doesNotMatch(result!.instructions, /By appointment only\./);
+    assert.doesNotMatch(result!.instructions, /Do you take walk-ins\?/);
+  });
+
+  test("the BUILDER's soul STILL never leaks, even with a client context present", async () => {
+    const result = await loadDeploymentVoiceContext({
+      deployment: DEPLOYMENT_WITH_CONTEXT,
+      now: new Date("2026-06-01T17:00:00Z"),
+      deps: baseDeps(),
+    });
+    assert.doesNotMatch(result!.instructions, /Seldon Studio Agency/);
+    assert.doesNotMatch(result!.instructions, /BUILDER-SOUL-LEAK/);
+    assert.doesNotMatch(result!.instructions, /BUILDER-SERVICE-LEAK/);
+  });
+
+  test("no clientContext → name-only fallback (today's behavior, no client facts)", async () => {
+    // DEPLOYMENT has clientContext: null. The persona names the client but
+    // surfaces NO client services/FAQ-from-context, and the template FAQ stands.
+    const result = await loadDeploymentVoiceContext({
+      deployment: DEPLOYMENT,
+      now: new Date("2026-06-01T17:00:00Z"),
+      deps: baseDeps(),
+    });
+    assert.ok(result);
+    assert.match(result!.instructions, /Bright Smile Dental/);
+    // No client-context sentinels (there was no context).
+    assert.doesNotMatch(result!.instructions, /CLIENT-SVC-XYZ/);
+    assert.doesNotMatch(result!.instructions, /CLIENT-FAQ-XYZ/);
+    // The TEMPLATE's FAQ is used (not overridden), so its answer is present.
+    assert.match(result!.instructions, /By appointment only\./);
+    // And the builder soul still never leaks.
+    assert.doesNotMatch(result!.instructions, /BUILDER-SOUL-LEAK/);
+  });
+
+  test("clientContext with a name overrides the clientName for the persona header", async () => {
+    const renamed: Deployment = {
+      ...DEPLOYMENT,
+      clientName: "Fallback Name Co",
+      clientContext: { soul: { businessName: "Captured Brand Name" } },
+    };
+    const result = await loadDeploymentVoiceContext({
+      deployment: renamed,
+      now: new Date("2026-06-01T17:00:00Z"),
+      deps: baseDeps(),
+    });
+    assert.match(result!.instructions, /Captured Brand Name/);
   });
 });
