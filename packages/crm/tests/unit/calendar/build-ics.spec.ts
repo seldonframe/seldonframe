@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildBookingICS } from "../../../src/lib/calendar/build-ics.ts";
+import { buildBookingICS } from "@/lib/calendar/build-ics";
 
 const base = {
   uid: "booking-abc123@seldonframe.com",

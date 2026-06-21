@@ -16,7 +16,7 @@ import {
   sendBookingCalendarInvite,
   type BookingInviteDeps,
   type InviteData,
-} from "../../../src/lib/calendar/booking-invite.ts";
+} from "@/lib/calendar/booking-invite";
 
 type SentEmail = {
   orgId: string;

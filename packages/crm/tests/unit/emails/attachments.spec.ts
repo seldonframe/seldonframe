@@ -14,8 +14,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { resendProvider } from "../../../src/lib/emails/providers/resend.ts";
-import type { EmailSendRequest } from "../../../src/lib/emails/providers/interface.ts";
+import { resendProvider } from "@/lib/emails/providers/resend";
+import type { EmailSendRequest } from "@/lib/emails/providers/interface";
 
 type CapturedBody = {
   from?: string;
