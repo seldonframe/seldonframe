@@ -46,10 +46,16 @@ export type ScrapeDeps = {
 // + a paragraph" floor).
 const MIN_MARKDOWN_CHARS = 200;
 
-// Per-scrape budget. Firecrawl's own default is 30s for /scrape; we set
-// the SDK's timeout option explicitly so we don't depend on whatever the
-// upstream default is on any given SDK version.
-const TIMEOUT_MS = 30_000;
+// Per-scrape budget. Raised to 45s to accommodate waitFor (JS render delay)
+// + the auto proxy strategy escalating to stealth on anti-bot sites — both
+// add latency but are what make flaky JS/Cloudflare sites scrape reliably.
+const TIMEOUT_MS = 45_000;
+
+// JS-render delay before Firecrawl grabs the DOM (in addition to its smart
+// wait). JS-heavy marketing sites (e.g. some WordPress/Wix/Squarespace builds)
+// render services/content client-side; without this we sometimes captured a
+// thin shell and the LLM extractor emitted _error ("couldn't read that site").
+const WAIT_FOR_MS = 2500;
 
 /**
  * Document shape we read from the SDK response. Keep this minimal so an
@@ -110,6 +116,14 @@ export async function firecrawlScrape(
       // Keep header/footer/nav — business facts (phone, address, hours,
       // "Family-owned since 1998") frequently live there, not in <main>.
       onlyMainContent: false,
+      // Give client-rendered (JS) sites time to populate before we read the DOM
+      // — without it we sometimes captured a pre-hydration shell.
+      waitFor: WAIT_FOR_MS,
+      // "auto" starts on the basic proxy and auto-escalates to stealth on
+      // anti-bot / Cloudflare sites that otherwise return a thin challenge page.
+      proxy: "auto",
+      // Drop ad/consent overlays so they don't crowd out real content.
+      blockAds: true,
       timeout: TIMEOUT_MS,
     })) as DocumentLike;
   } catch (err) {
