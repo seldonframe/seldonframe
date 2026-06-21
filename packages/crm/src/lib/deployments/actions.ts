@@ -58,6 +58,10 @@ export async function createDeploymentAction(input: {
   clientContext?: DeploymentClientContext;
   surface?: string;
   priceCents?: number;
+  /** How the deployed agent books (ICP-3). Defaults to 'native'. */
+  bookingMode?: "native" | "external_link" | "api_mcp" | "cal_com";
+  /** The client's own booking URL — required by the schema for external_link. */
+  externalBookingUrl?: string | null;
 }): Promise<CreateDeploymentActionResult> {
   assertWritable();
 
@@ -77,6 +81,8 @@ export async function createDeploymentAction(input: {
     clientContext: parsed.data.clientContext,
     surface: parsed.data.surface,
     priceCents: parsed.data.priceCents,
+    bookingMode: parsed.data.bookingMode,
+    externalBookingUrl: parsed.data.externalBookingUrl,
   });
 
   if (!result.ok) {

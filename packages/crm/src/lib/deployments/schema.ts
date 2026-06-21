@@ -74,8 +74,30 @@ export const CreateDeploymentSchema = z
     // What the SMB pays per month, in cents. Non-negative; capped at a sane
     // ceiling ($100k/mo) to reject obviously-bogus input.
     priceCents: z.number().int().min(0).max(10_000_000).optional(),
+    // How the DEPLOYED agent books (ICP-3). Defaults to native. api_mcp/cal_com
+    // are "coming soon" — accepted (so the row records the operator's intent) but
+    // they behave as a capture-the-lead handoff until their adapters ship.
+    bookingMode: z
+      .enum(["native", "external_link", "api_mcp", "cal_com"])
+      .default("native"),
+    // The client's own booking page URL — required only for external_link (the
+    // refinement below enforces that). Bounded so a row can't bloat.
+    externalBookingUrl: z.string().url().max(2000).optional().nullable(),
   })
-  .strict();
+  .strict()
+  // external_link is only useful with a real URL to hand off; demand one. Other
+  // modes ignore the URL (the store drops it). Attaching the error to the URL
+  // field surfaces it inline in the wizard.
+  .refine(
+    (v) =>
+      v.bookingMode !== "external_link" ||
+      (typeof v.externalBookingUrl === "string" &&
+        v.externalBookingUrl.trim().length > 0),
+    {
+      message: "Add the client's booking link to use 'their own booking link'.",
+      path: ["externalBookingUrl"],
+    },
+  );
 
 export type CreateDeploymentInputSchema = z.infer<typeof CreateDeploymentSchema>;
 

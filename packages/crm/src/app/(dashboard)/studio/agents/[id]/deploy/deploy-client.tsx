@@ -38,6 +38,10 @@ import {
 } from "@/lib/deployments/actions";
 import type { DeploymentClientContext } from "@/db/schema/deployments";
 import {
+  BOOKING_PROVIDERS,
+  type BookingMode,
+} from "@/lib/deployments/booking-providers";
+import {
   computeDeploymentMargin,
   formatCentsMonthly,
   DEFAULT_SELDONFRAME_FEE_PCT,
@@ -147,6 +151,11 @@ export function DeployFlowClient({ templates, initialTemplateId }: Props) {
   // Price the SMB pays, as a dollars string for the input. Default $99/mo.
   const [priceDollars, setPriceDollars] = useState("99");
 
+  // Step 3 — how the deployed agent books (ICP-3). Default 'native' (zero setup).
+  // 'external_link' reveals a required URL; the coming-soon modes aren't selectable.
+  const [bookingMode, setBookingMode] = useState<BookingMode>("native");
+  const [externalBookingUrl, setExternalBookingUrl] = useState("");
+
   // Step 4 — submit
   const [isDeploying, startDeploy] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -165,7 +174,22 @@ export function DeployFlowClient({ templates, initialTemplateId }: Props) {
 
   const margin = useMemo(() => computeDeploymentMargin({ priceCents }), [priceCents]);
 
-  const canSubmit = clientName.trim().length >= 2 && !!templateId;
+  // external_link is the only mode that needs a URL — and it must look like one.
+  const externalUrlValid = useMemo(() => {
+    const v = externalBookingUrl.trim();
+    if (!v) return false;
+    try {
+      const u = new URL(v);
+      return u.protocol === "http:" || u.protocol === "https:";
+    } catch {
+      return false;
+    }
+  }, [externalBookingUrl]);
+
+  const bookingValid = bookingMode !== "external_link" || externalUrlValid;
+
+  const canSubmit =
+    clientName.trim().length >= 2 && !!templateId && bookingValid;
 
   // Auto-fill the client's business from pasted website text / a description.
   // Compiles it server-side, then PRE-FILLS the editable rows (the builder can
@@ -214,6 +238,11 @@ export function DeployFlowClient({ templates, initialTemplateId }: Props) {
         clientContext,
         surface,
         priceCents,
+        bookingMode,
+        // Only send the URL for external_link; other modes ignore it (the
+        // store/schema also drop a stray URL, this just keeps the payload clean).
+        externalBookingUrl:
+          bookingMode === "external_link" ? externalBookingUrl.trim() : undefined,
       });
       if (!result.ok) {
         setError(result.error);
@@ -571,7 +600,30 @@ export function DeployFlowClient({ templates, initialTemplateId }: Props) {
 
           <MarginReadout priceCents={priceCents} margin={margin} />
 
-          <StepNav onBack={() => setStep(2)} onNext={() => setStep(4)} />
+          {/* ── How should this agent book? (ICP-3 calendar-provider chooser) ── */}
+          <div className="space-y-3 border-t pt-5">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">
+                How should this agent book?
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                Pick the calendar the agent books into. You can change this later.
+              </p>
+            </div>
+            <BookingModeChooser
+              value={bookingMode}
+              onSelect={setBookingMode}
+              externalBookingUrl={externalBookingUrl}
+              onExternalUrlChange={setExternalBookingUrl}
+              externalUrlValid={externalUrlValid}
+            />
+          </div>
+
+          <StepNav
+            onBack={() => setStep(2)}
+            onNext={() => setStep(4)}
+            nextDisabled={!bookingValid}
+          />
         </div>
       )}
 
@@ -594,6 +646,15 @@ export function DeployFlowClient({ templates, initialTemplateId }: Props) {
               value={[clientPhone.trim(), clientEmail.trim()].filter(Boolean).join(" · ") || "—"}
             />
             <ReviewRow label="Surface" value={SURFACES.find((s) => s.id === surface)?.label ?? surface} />
+            <ReviewRow
+              label="Booking"
+              value={
+                BOOKING_PROVIDERS.find((p) => p.id === bookingMode)?.label ?? bookingMode
+              }
+            />
+            {bookingMode === "external_link" && externalBookingUrl.trim() && (
+              <ReviewRow label="Booking link" value={externalBookingUrl.trim()} />
+            )}
             <ReviewRow label="Price" value={formatCentsMonthly(priceCents)} />
             <ReviewRow label="Your estimated net" value={formatCentsMonthly(margin.netCents)} />
             <ReviewRow label="Status on save" value="Draft (pending activation)" />
@@ -781,6 +842,88 @@ function PendingRow({
       <span className="rounded-full bg-amber-500/15 px-2.5 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-400">
         {note}
       </span>
+    </div>
+  );
+}
+
+/** The "How should this agent book?" chooser. Renders the BOOKING_PROVIDERS
+ *  registry: available modes are selectable cards; coming-soon modes render
+ *  disabled with a "Coming soon" pill. Selecting external_link reveals a required
+ *  booking-URL input with inline validation. */
+function BookingModeChooser({
+  value,
+  onSelect,
+  externalBookingUrl,
+  onExternalUrlChange,
+  externalUrlValid,
+}: {
+  value: BookingMode;
+  onSelect: (mode: BookingMode) => void;
+  externalBookingUrl: string;
+  onExternalUrlChange: (v: string) => void;
+  externalUrlValid: boolean;
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {BOOKING_PROVIDERS.map((p) => {
+          const comingSoon = p.status === "coming_soon";
+          const active = p.id === value;
+          return (
+            <button
+              key={p.id}
+              type="button"
+              disabled={comingSoon}
+              aria-pressed={active}
+              onClick={() => !comingSoon && onSelect(p.id)}
+              className={`flex flex-col items-start gap-1 rounded-lg border p-4 text-left transition-colors ${
+                comingSoon
+                  ? "cursor-not-allowed border-dashed bg-muted/20 opacity-70"
+                  : active
+                    ? "border-primary bg-primary/5"
+                    : "bg-background hover:bg-muted/50"
+              }`}
+            >
+              <span className="flex w-full items-center gap-2">
+                <span className="text-sm font-medium">{p.label}</span>
+                {comingSoon ? (
+                  <span className="ml-auto rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">
+                    Coming soon
+                  </span>
+                ) : (
+                  active && <Check className="ml-auto size-4 text-primary" aria-hidden />
+                )}
+              </span>
+              <span className="text-xs text-muted-foreground">{p.description}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {value === "external_link" && (
+        <div className="rounded-lg border bg-background p-4">
+          <Field label="Their booking link" required>
+            <input
+              type="url"
+              inputMode="url"
+              value={externalBookingUrl}
+              onChange={(e) => onExternalUrlChange(e.target.value)}
+              placeholder="https://calendly.com/their-business"
+              aria-invalid={externalBookingUrl.trim().length > 0 && !externalUrlValid}
+              className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+            />
+          </Field>
+          {externalBookingUrl.trim().length > 0 && !externalUrlValid && (
+            <p className="mt-1.5 text-xs text-rose-600">
+              Enter a full URL starting with http:// or https://
+            </p>
+          )}
+          <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+            The agent captures the caller, then shares this link instead of booking
+            into SeldonFrame.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

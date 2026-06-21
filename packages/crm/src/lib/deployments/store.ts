@@ -15,6 +15,7 @@
 // Twilio, NO Stripe, NO voice runtime, NO live LLM calls.
 
 import type {
+  BookingMode,
   Deployment,
   DeploymentClientContact,
   DeploymentClientContext,
@@ -164,6 +165,11 @@ export type CreateDeploymentInput = {
   surface?: DeploymentSurface;
   /** What the SMB pays per month, in cents. Defaults to 0. */
   priceCents?: number;
+  /** How the deployed agent books (ICP-3). Defaults to 'native'. */
+  bookingMode?: BookingMode;
+  /** The client's own booking URL — persisted ONLY for bookingMode
+   *  'external_link'; any other mode drops it (never store a stray URL). */
+  externalBookingUrl?: string | null;
   deps?: Partial<CreateDeploymentDeps>;
 };
 
@@ -210,6 +216,15 @@ export async function createDeployment(
   // "no clientContext → name-only" fallback fires (never persist {}).
   const clientContext = normalizeClientContext(input.clientContext);
 
+  // Booking mode (ICP-3): default native. The booking URL is only meaningful for
+  // external_link — for every other mode we store null so a stray URL never
+  // lingers on the row (mirrors the contact/context "never store junk" guard).
+  const bookingMode: BookingMode = input.bookingMode ?? "native";
+  const externalBookingUrl =
+    bookingMode === "external_link"
+      ? input.externalBookingUrl?.trim() || null
+      : null;
+
   const values: NewDeployment = {
     builderOrgId,
     agentTemplateId: input.agentTemplateId,
@@ -218,6 +233,8 @@ export async function createDeployment(
     clientContext,
     surface,
     priceCents,
+    bookingMode,
+    externalBookingUrl,
     // Draft only — provisioning + billing activate this later (gated).
     status: "draft" satisfies DeploymentStatus,
   };
