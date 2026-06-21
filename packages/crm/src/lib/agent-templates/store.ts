@@ -120,6 +120,22 @@ export const ALL_TEMPLATE_CAPABILITIES: string[] = Array.from(
 );
 
 /**
+ * The tools allowed for a given channel surface. Pure (no DB) so callers (the
+ * generator's allow-list, the editor's tool picker) stay in lockstep on which
+ * tools belong to which surface — voice gets the voice-receptionist set (incl.
+ * get_quote_range, excl. the chat-only provide_faq_answer), chat gets the
+ * chat-assistant set (the reverse). Returns a FRESH array each call so callers
+ * may mutate it freely. Prefer this over ALL_TEMPLATE_CAPABILITIES (the
+ * voice+chat union) whenever the surface is known, so a voice agent is never
+ * offered chat-only tools and vice-versa.
+ */
+export function capabilitiesForSurface(surface: AgentSurface): string[] {
+  return surface === "chat"
+    ? [...DEFAULT_CHAT_ASSISTANT_CAPABILITIES]
+    : [...DEFAULT_VOICE_RECEPTIONIST_CAPABILITIES];
+}
+
+/**
  * Build the DEFAULT blueprint for a template of the given type. Pure (no DB) so
  * it's unit-testable. Branches on type: voice_receptionist gets the same
  * defaults a live voice-receptionist agent gets (incl. cedar voice + quote

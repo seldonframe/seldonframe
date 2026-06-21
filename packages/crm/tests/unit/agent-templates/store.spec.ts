@@ -16,6 +16,7 @@ import assert from "node:assert/strict";
 
 import {
   buildDefaultTemplateBlueprint,
+  capabilitiesForSurface,
   createAgentTemplate,
   mergeTemplateBlueprint,
   resolveUniqueTemplateSlug,
@@ -316,6 +317,39 @@ describe("ALL_TEMPLATE_CAPABILITIES", () => {
 
   test("is de-duplicated (no repeats)", () => {
     assert.equal(new Set(ALL_TEMPLATE_CAPABILITIES).size, ALL_TEMPLATE_CAPABILITIES.length);
+  });
+});
+
+// ---------------------------------------------------------------------
+// capabilitiesForSurface
+// ---------------------------------------------------------------------
+
+describe("capabilitiesForSurface", () => {
+  test("voice → voice-receptionist caps (incl. get_quote_range, NOT provide_faq_answer)", () => {
+    const caps = capabilitiesForSurface("voice");
+    assert.deepEqual(caps, DEFAULT_VOICE_RECEPTIONIST_CAPABILITIES);
+    assert.ok(caps.includes("get_quote_range"), "voice must offer get_quote_range");
+    assert.ok(
+      !caps.includes("provide_faq_answer"),
+      "voice must NOT offer provide_faq_answer (chat-only)",
+    );
+  });
+
+  test("chat → chat-assistant caps (incl. provide_faq_answer, NOT get_quote_range)", () => {
+    const caps = capabilitiesForSurface("chat");
+    assert.deepEqual(caps, DEFAULT_CHAT_ASSISTANT_CAPABILITIES);
+    assert.ok(caps.includes("provide_faq_answer"), "chat must offer provide_faq_answer");
+    assert.ok(
+      !caps.includes("get_quote_range"),
+      "chat must NOT offer get_quote_range (voice-only)",
+    );
+  });
+
+  test("returns a fresh array each call (caller may mutate without leaking)", () => {
+    const a = capabilitiesForSurface("voice");
+    const b = capabilitiesForSurface("voice");
+    a.push("mutated");
+    assert.ok(!b.includes("mutated"), "each call must own its array");
   });
 });
 

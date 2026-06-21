@@ -13,9 +13,8 @@ import { getOrgId } from "@/lib/auth/helpers";
 import {
   getAgentTemplate,
   surfaceForType,
-  DEFAULT_VOICE_RECEPTIONIST_CAPABILITIES,
+  capabilitiesForSurface,
   DEFAULT_VOICE_RECEPTIONIST_VOICE,
-  DEFAULT_CHAT_ASSISTANT_CAPABILITIES,
   type AgentTemplateType,
 } from "@/lib/agent-templates/store";
 import type { AgentBlueprint } from "@/db/schema";
@@ -25,13 +24,6 @@ import { DeployButton } from "../deploy-button";
 import { TestButton } from "../test-button";
 
 export const dynamic = "force-dynamic";
-
-// The tools a template can toggle, per surface. Voice mirrors the voice
-// editor's VOICE_CAPABILITIES (provide_faq_answer is excluded on voice; FAQ is
-// injected into the prompt). Chat gets the chat-assistant set (incl.
-// provide_faq_answer, which voice filters out as a v1.26 placeholder).
-const VOICE_CAPABILITIES = [...DEFAULT_VOICE_RECEPTIONIST_CAPABILITIES];
-const CHAT_CAPABILITIES = [...DEFAULT_CHAT_ASSISTANT_CAPABILITIES];
 
 export default async function AgentTemplatePage({
   params,
@@ -51,8 +43,10 @@ export default async function AgentTemplatePage({
   // holds a valid AgentTemplateType, and surfaceForType safely defaults
   // anything non-chat to voice.
   const surface = surfaceForType(template.type as AgentTemplateType);
-  const allCapabilities =
-    surface === "chat" ? CHAT_CAPABILITIES : VOICE_CAPABILITIES;
+  // The tools a template can toggle, per surface — voice gets the voice set
+  // (excl. the chat-only provide_faq_answer), chat gets the chat set (excl. the
+  // voice-only get_quote_range). Same helper the generator's allow-list uses.
+  const allCapabilities = capabilitiesForSurface(surface);
 
   return (
     <section className="animate-page-enter space-y-5 sm:space-y-6">

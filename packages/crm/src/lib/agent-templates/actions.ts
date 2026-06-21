@@ -20,7 +20,7 @@ import {
   createAgentTemplate,
   getAgentTemplate,
   updateAgentTemplate,
-  ALL_TEMPLATE_CAPABILITIES,
+  capabilitiesForSurface,
   type AgentTemplateType,
   type TemplateBlueprintPatch,
 } from "./store";
@@ -148,7 +148,10 @@ export async function generateAgentDraftAction(input: {
     {
       intent,
       surface: input.surface,
-      allowedCapabilities: ALL_TEMPLATE_CAPABILITIES,
+      // Surface-scoped allow-list so a voice agent is never offered chat-only
+      // tools (provide_faq_answer) and a chat agent never gets voice-only ones
+      // (get_quote_range). Was ALL_TEMPLATE_CAPABILITIES (the voice+chat union).
+      allowedCapabilities: capabilitiesForSurface(input.surface),
     },
     {
       complete: async ({ system, user }) => {
