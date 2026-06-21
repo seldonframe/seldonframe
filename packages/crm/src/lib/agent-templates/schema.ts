@@ -35,6 +35,19 @@ export const TemplateBlueprintPatchSchema = z
     voice: z.enum(VOICE_OPTIONS).optional(),
     capabilities: z.array(z.string()).optional(),
     faq: z.array(FaqRow).optional(),
+    // The operator-configured price ranges for the get_quote_range tool (voice
+    // R1 quote guard). A service with no entry returns { hasRange:false } and
+    // the agent says a tech will confirm on-site. Mirrors AgentBlueprint.quoteRanges.
+    quoteRanges: z
+      .array(
+        z.object({
+          service: z.string().min(1),
+          low: z.number(),
+          high: z.number(),
+          note: z.string().optional(),
+        }),
+      )
+      .optional(),
   })
   .strict();
 

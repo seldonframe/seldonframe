@@ -162,11 +162,11 @@ export function resolveUniqueTemplateSlug(
 
 /** The blueprint fields the template editor may patch. Mirrors the
  *  voice-receptionist editor's editable surface (greeting / script / FAQ /
- *  voice), expressed as a Partial<AgentBlueprint>. */
+ *  voice / quoteRanges), expressed as a Partial<AgentBlueprint>. */
 export type TemplateBlueprintPatch = Partial<
   Pick<
     AgentBlueprint,
-    "greeting" | "customSkillMd" | "faq" | "voice" | "capabilities"
+    "greeting" | "customSkillMd" | "faq" | "voice" | "capabilities" | "quoteRanges"
   >
 >;
 
