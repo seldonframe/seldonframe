@@ -45,6 +45,13 @@ export const deployments = pgTable(
     surface: text("surface").notNull().default("phone"),
     /** E.164 phone number (nullable). */
     phoneNumber: text("phone_number"),
+    /** Twilio PN… SID for the provisioned number. Required to attach the
+     *  number to an Elastic SIP Trunk and to release it on cancellation. */
+    phoneNumberSid: text("phone_number_sid"),
+    /** How the phone number was acquired: 'provisioned' = SeldonFrame bought
+     *  it in the builder's Twilio account (release on cancel); 'byo' = the
+     *  builder brought their own number (never release). */
+    numberOrigin: text("number_origin"),
     calendarRef: jsonb("calendar_ref").$type<DeploymentCalendarRef>(),
     /** Monthly amount the SMB client pays the builder (in cents). */
     priceCents: integer("price_cents").notNull().default(0),

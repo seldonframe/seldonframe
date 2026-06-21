@@ -176,6 +176,13 @@
       "when": 1781992678610,
       "tag": "0024_outgoing_white_tiger",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1782068594801,
+      "tag": "0025_gray_black_tom",
+      "breakpoints": true
     }
   ]
 }
