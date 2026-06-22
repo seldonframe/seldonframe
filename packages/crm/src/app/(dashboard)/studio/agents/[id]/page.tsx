@@ -8,7 +8,10 @@
 
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { eq } from "drizzle-orm";
 import { ChevronLeft, Bot } from "lucide-react";
+import { db } from "@/db";
+import { organizations } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
 import {
   getAgentTemplate,
@@ -17,9 +20,11 @@ import {
   DEFAULT_VOICE_RECEPTIONIST_VOICE,
   type AgentTemplateType,
 } from "@/lib/agent-templates/store";
+import { getSellerListingContextAction } from "@/lib/marketplace/seller-actions";
 import { VETTED_CONNECTORS } from "@/lib/agents/mcp/connectors";
 import type { AgentBlueprint } from "@/db/schema";
 import { AgentTemplateEditor } from "./editor-client";
+import { ListOnMarketplace } from "./list-on-marketplace";
 import { TemplateStatusBadge, formatTemplateType } from "../status-badge";
 import { DeployButton } from "../deploy-button";
 import { TestButton } from "../test-button";
@@ -48,6 +53,22 @@ export default async function AgentTemplatePage({
   // (excl. the chat-only provide_faq_answer), chat gets the chat set (excl. the
   // voice-only get_quote_range). Same helper the generator's allow-list uses.
   const allCapabilities = capabilitiesForSurface(surface);
+
+  // Seller marketplace context: the current listing for this template (if any)
+  // + the builder's Stripe Connect status, so the "List on the marketplace"
+  // panel opens pre-filled. Plus the builder's org name for the listing's
+  // "built by" credit. Both are best-effort — never block the editor.
+  const [listingCtx, orgRow] = await Promise.all([
+    getSellerListingContextAction({ templateId: template.id }),
+    db
+      .select({ name: organizations.name })
+      .from(organizations)
+      .where(eq(organizations.id, orgId))
+      .limit(1),
+  ]);
+  const sellerListing = listingCtx.ok ? listingCtx.listing : null;
+  const sellerConnect = listingCtx.ok ? listingCtx.connect : { ready: false, pending: false };
+  const builderName = orgRow[0]?.name ?? "A SeldonFrame builder";
 
   return (
     <section className="animate-page-enter space-y-5 sm:space-y-6">
@@ -91,6 +112,17 @@ export default async function AgentTemplatePage({
           <DeployButton templateId={template.id} variant="primary" />
         </div>
       </header>
+
+      {/* List on the marketplace — publish this template as a sellable
+          kind:'agent' listing, with a live preview + the paid Connect gate. */}
+      <ListOnMarketplace
+        templateId={template.id}
+        templateName={template.name}
+        agentType={template.type}
+        builderName={builderName}
+        initialListing={sellerListing}
+        initialConnect={sellerConnect}
+      />
 
       <AgentTemplateEditor
         templateId={template.id}

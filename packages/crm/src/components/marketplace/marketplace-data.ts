@@ -232,6 +232,65 @@ export function rowToStorefrontAgent(row: MarketplaceAgentRow): StorefrontAgent 
   };
 }
 
+// ─── live publish-preview → view-model ───────────────────────────────────────
+
+/** The seller's in-progress listing draft (the publish panel's form state). */
+export type ListingPreviewInput = {
+  name: string;
+  /** One-time install price in cents (0 → free). */
+  priceCents: number;
+  niche: string;
+  /** The agent template type — drives the default surfaces. */
+  agentType: string | null;
+  /** Marketing tagline / blurb the seller is typing. */
+  description: string;
+  /** The seller's display name (builder credit on the card). */
+  builder: string;
+  /** Lifetime installs, if the listing already exists (else 0 → "New"). */
+  installCount?: number;
+};
+
+/**
+ * Build the EXACT StorefrontAgent the marketplace AgentCard renders, from the
+ * seller's live publish-form state. Reuses the same niche→category +
+ * type→surfaces derivation as a real published row (rowToStorefrontAgent) so the
+ * publish panel's preview is pixel-faithful to the live listing. Pure — no DB.
+ *
+ * `isSeed: false` + `installs: 0` makes a brand-new draft read "New" (no
+ * fabricated rating/installs), exactly like a just-published listing.
+ */
+export function buildPreviewStorefrontAgent(input: ListingPreviewInput): StorefrontAgent {
+  const category = nicheToCategory(input.niche);
+  const surfaces = agentTypeToSurfaces(input.agentType);
+  const name = input.name.trim() || "Your agent";
+  const tagline = input.description.trim() || `${name} — works 24/7 for your business.`;
+  return {
+    slug: "preview",
+    name,
+    category,
+    icon: CATEGORY_META[category].icon,
+    surfaces,
+    installs: Math.max(0, input.installCount ?? 0),
+    rating: "5.0",
+    reviewCount: 0,
+    priceCents: Math.max(0, input.priceCents),
+    featured: false,
+    builder: input.builder.trim() || "A SeldonFrame builder",
+    verified: true,
+    tagline,
+    blurb: tagline,
+    highlights: [],
+    tools: [],
+    sampleChannel: surfaces.includes("voice") ? "phone call" : "conversation",
+    channelIcon: surfaces.includes("voice") ? "phone" : "message",
+    sampleTitle: "",
+    sample: [],
+    outcome: "",
+    reviews: [],
+    isSeed: false,
+  };
+}
+
 function formatRating(rating: number | null | undefined): string {
   const n = Number(rating ?? 0);
   return (n > 0 ? n : 5).toFixed(1);
