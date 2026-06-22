@@ -39,14 +39,14 @@ export function MarketingAgencyMath() {
       className="border-t border-[rgba(34,29,23,.08)] bg-[#1F2B24] px-5 py-20 md:px-8 md:py-28 lg:px-12"
     >
       <div className="mx-auto max-w-[1120px]">
-        {/* Audience divider — makes the SMB → agency shift unmistakable. */}
+        {/* Audience divider — the supply-side / builder rung (where "agencies" live). */}
         <div className="mb-12 border-b border-[rgba(255,255,255,.12)] pb-8 text-center md:mb-14">
           <span className="inline-flex items-center gap-2.5 rounded-full border border-[rgba(111,194,143,.30)] bg-[rgba(111,194,143,.10)] px-4 py-1.5 text-[11.5px] font-[700] uppercase tracking-[0.14em] text-[#6fc28f]">
             <span className="size-1.5 rounded-full bg-[#6fc28f]" aria-hidden />
-            For agencies &amp; operators
+            For builders &amp; agencies
           </span>
-          <p className="mx-auto mt-4 max-w-[46ch] font-[Newsreader,Georgia,serif] text-[clamp(18px,2.4vw,24px)] italic leading-[1.35] text-[rgba(246,242,234,.82)]">
-            Run an agency serving local businesses? Resell SeldonFrame under your own brand.
+          <p className="mx-auto mt-4 max-w-[48ch] font-[Newsreader,Georgia,serif] text-[clamp(18px,2.4vw,24px)] italic leading-[1.35] text-[rgba(246,242,234,.82)]">
+            Build agents for a living? List them — or run unlimited client workspaces under your own brand.
           </p>
         </div>
 
@@ -55,31 +55,30 @@ export function MarketingAgencyMath() {
           <div>
             <div className="inline-flex items-center gap-2.5 text-[12px] font-[600] uppercase tracking-[0.09em] text-[rgba(111,194,143,.9)]">
               <span className="h-px w-4 bg-[rgba(111,194,143,.5)]" aria-hidden />
-              For agencies
+              Build &amp; sell
             </div>
             <h2 className="mt-3.5 text-[clamp(27px,4.2vw,40px)] font-[500] leading-[1.08] tracking-[-0.025em] text-[#F6F2EA]">
-              Resell it under{" "}
+              Build an agent once.{" "}
               <em className="font-[Newsreader,Georgia,serif] font-normal not-italic text-[rgba(246,242,234,.75)]">
-                your brand.
-              </em>{" "}
-              Keep the spread.
+                Sell it to thousands.
+              </em>
             </h2>
-            <p className="mt-4 max-w-[48ch] text-[15.5px] leading-[1.55] text-[rgba(246,242,234,.74)]">
-              It&rsquo;s $29/mo flat — plus a small GMV fee only when SeldonFrame is your sales
-              channel. White-label it under your brand — your logo, your domain, your pricing —
-              and resell each client workspace at whatever you want. You set the markup, you keep
-              the rest.
+            <p className="mt-4 max-w-[50ch] text-[15.5px] leading-[1.55] text-[rgba(246,242,234,.74)]">
+              Build an AI agent for your business — then list it so other businesses can install it.
+              The marketplace puts it in front of them; you earn without marketing it. Run unlimited
+              client workspaces under your brand for one flat{" "}
+              <strong className="font-[600] text-[#F6F2EA]">$29/mo</strong>.
             </p>
 
-            {/* Agency perks list */}
+            {/* Builder perks list */}
             <ul className="mt-6 flex flex-col gap-3">
               {[
+                "List your agent on the marketplace — earn without marketing it",
+                "Build any agent in the Studio, in plain English — voice, SMS, chat & email",
                 "Your brand on the entire platform — clients never see SeldonFrame",
                 "Set your own per-client pricing and keep the spread",
-                "Voice, SMS, chat & email AI agents on every client — included, no add-on",
                 "Unlimited client workspaces on the flat $29/mo — no per-seat tax",
                 "Onboard a new client in 60 seconds from a URL",
-                "Build any agent in the Studio and deploy it across your book",
               ].map((item) => (
                 <li key={item} className="flex items-start gap-3 text-[14px] leading-[1.5] text-[rgba(246,242,234,.82)]">
                   <span className="mt-0.5 flex size-[18px] shrink-0 items-center justify-center rounded-full bg-[#1F2B24] border border-[rgba(111,194,143,.35)]">
@@ -142,7 +141,7 @@ export function MarketingAgencyMath() {
               <ResultCell label="Monthly recurring" value={fmtUsd(results.mrr)} sub={`${fmtUsd(results.mrr * 12)} / year`} />
               <ResultCell label="Setup pool" value={fmtUsd(results.setupPool)} sub="One-time" />
               <ResultCell label="Year-1 total" value={fmtUsd(results.year1)} sub="MRR × 12 + setup" positive />
-              <ResultCell label="Gross margin" value={`${Math.round(results.margin * 100)}%`} sub={`After $${SF_PLAN_COST}/mo + GMV to SF`} positive />
+              <ResultCell label="Gross margin" value={`${Math.round(results.margin * 100)}%`} sub={`after $${SF_PLAN_COST}/mo + ~2% on SeldonFrame sales`} positive />
             </div>
 
             <p className="mt-3 text-[11.5px] leading-[1.5] text-[rgba(246,242,234,.35)]">

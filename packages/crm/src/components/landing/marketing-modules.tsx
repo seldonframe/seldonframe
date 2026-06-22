@@ -49,8 +49,8 @@ const FEATURES = [
   },
   {
     icon: MessageSquare,
-    title: "AI receptionist",
-    body: "Trained on the workspace soul. Books appointments and qualifies leads in the client's own voice.",
+    title: "A receptionist that books",
+    body: "Not just a chatbot — it answers, qualifies, and books the job straight into your calendar, in your own voice. Never miss a lead.",
     mock: <ChatMock />,
   },
   {
@@ -87,7 +87,7 @@ export function MarketingModules() {
         <div className="section-head-center text-center">
           <div className="inline-flex items-center justify-center gap-2.5 text-[12px] font-[600] uppercase tracking-[0.09em] text-[#00897B]">
             <span className="h-px w-4 bg-[#00897B] opacity-50" aria-hidden />
-            Everything you get
+            Run your business
             <span className="h-px w-4 bg-[#00897B] opacity-50" aria-hidden />
           </div>
           <h2 className="mx-auto mt-3.5 max-w-[20ch] text-[clamp(27px,4.2vw,42px)] font-[500] leading-[1.08] tracking-[-0.025em] text-[#221D17]">
@@ -96,9 +96,11 @@ export function MarketingModules() {
               wired together.
             </em>
           </h2>
-          <p className="mx-auto mt-4 max-w-[54ch] text-[clamp(15.5px,1.9vw,18px)] leading-[1.55] text-[#6E665A]">
-            One system. Change a phone number once and the CRM, booking page,
-            intake form, and chatbot all update — instantly.
+          <p className="mx-auto mt-4 max-w-[56ch] text-[clamp(15.5px,1.9vw,18px)] leading-[1.55] text-[#6E665A]">
+            A multi-page website, booking page, intake form, CRM, payments, and a
+            24/7 receptionist that <strong className="font-[500] text-[#221D17]">books the job</strong> — one
+            connected system, so you never miss a lead. Change a phone number once
+            and everything updates, instantly.
           </p>
         </div>
 
@@ -116,39 +118,71 @@ export function MarketingModules() {
           ))}
         </div>
 
-        {/* Agents callout */}
-        <div className="mt-5 rounded-[18px] border border-[rgba(0,137,123,.20)] bg-[#1F2B24] p-6 shadow-[0_24px_60px_rgba(31,43,36,.20)]">
-          <div className="inline-flex items-center gap-2.5">
-            <span className="inline-flex size-7 items-center justify-center rounded-md border border-[rgba(0,137,123,.35)] bg-[rgba(0,137,123,.20)] text-[#6fc28f]">
-              <Bot size={14} aria-hidden />
-            </span>
-            <span className="font-sans text-[11px] font-[600] uppercase tracking-[0.12em] text-[#6fc28f]">
-              Plus: build &amp; sell any agent
-            </span>
+      </div>
+    </section>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   "Hire agents, not people" — the demand-side rung of the ladder.
+   Promoted out of the Modules section (2026-06-22 positioning v2) into its
+   own section so the homepage holds one idea per rung. Deep-green #1F2B24
+   slab (the seldonstudio dark-block pattern), SeldonFrame green accents.
+   ════════════════════════════════════════════════════════════════════════ */
+
+export function MarketingAgents() {
+  return (
+    <section
+      id="agents"
+      aria-label="Hire agents, not people"
+      className="border-t border-[rgba(34,29,23,.08)] bg-[#1F2B24] px-5 py-20 md:px-8 md:py-28 lg:px-12"
+    >
+      <div className="mx-auto max-w-[1120px]">
+        {/* Section head */}
+        <div className="max-w-[640px]">
+          <div className="inline-flex items-center gap-2.5 text-[12px] font-[600] uppercase tracking-[0.09em] text-[rgba(111,194,143,.9)]">
+            <span className="h-px w-4 bg-[rgba(111,194,143,.5)]" aria-hidden />
+            Hire agents, not people
           </div>
-          <p className="mt-3.5 max-w-[760px] text-[14.5px] leading-[1.55] text-[rgba(246,242,234,.82)]">
-            <strong className="font-[500] text-[#FFFDFA]">Build ANY agent in the Studio</strong> — voice, chat, SMS, or
-            email — connect external tools (Postiz, and more), then deploy it to clients as a whitelabel front office
-            and resell it. A starter pack ships with the platform:{" "}
-            <strong className="font-[500] text-[#FFFDFA]">Speed-to-Lead</strong> calls inbound leads within 60 seconds.{" "}
-            <strong className="font-[500] text-[#FFFDFA]">Review Agent</strong> asks happy customers for a Google review at the right moment.{" "}
-            <strong className="font-[500] text-[#FFFDFA]">Reactivation Agent</strong> wakes up cold leads on a cadence.{" "}
-            <strong className="font-[500] text-[#FFFDFA]">Quote Agent</strong> drafts and sends estimates. New agents ship every month.
+          <h2 className="mt-3.5 text-[clamp(27px,4.2vw,42px)] font-[500] leading-[1.08] tracking-[-0.025em] text-[#F6F2EA]">
+            Hire agents,{" "}
+            <em className="font-[Newsreader,Georgia,serif] font-normal not-italic text-[rgba(246,242,234,.75)]">
+              not people.
+            </em>
+          </h2>
+          <p className="mt-4 max-w-[60ch] text-[clamp(15.5px,1.9vw,18px)] leading-[1.55] text-[rgba(246,242,234,.78)]">
+            Add no-code AI agents to do the work — answer every call, text back missed calls,
+            request 5-star reviews, reply to DMs and email, win back cold leads. Start from a
+            template or build your own in plain English.{" "}
+            <strong className="font-[500] text-[#FFFDFA]">A 24/7 worker for pennies — not an employee or an agency.</strong>
           </p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {AGENTS.map((name) => (
-              <span
-                key={name}
-                className="inline-flex items-center gap-1.5 rounded-full border border-[rgba(255,255,255,.12)] bg-[rgba(255,255,255,.06)] px-3 py-1.5 text-[12.5px] font-[500] text-[rgba(246,242,234,.88)]"
-              >
-                <span className="size-1.5 shrink-0 rounded-full bg-[#6fc28f] shadow-[0_0_0_3px_rgba(111,194,143,.22)]" aria-hidden />
-                {name}
-              </span>
-            ))}
-            <span className="inline-flex items-center rounded-full border border-dashed border-[rgba(255,255,255,.14)] bg-transparent px-3 py-1.5 font-sans text-[11px] tracking-[0.04em] text-[rgba(246,242,234,.45)]">
-              + more shipping monthly
+        </div>
+
+        {/* Agent chips */}
+        <div className="mt-7 flex flex-wrap gap-2">
+          {AGENTS.map((name) => (
+            <span
+              key={name}
+              className="inline-flex items-center gap-1.5 rounded-full border border-[rgba(255,255,255,.12)] bg-[rgba(255,255,255,.06)] px-3 py-1.5 text-[12.5px] font-[500] text-[rgba(246,242,234,.88)]"
+            >
+              <span className="size-1.5 shrink-0 rounded-full bg-[#6fc28f] shadow-[0_0_0_3px_rgba(111,194,143,.22)]" aria-hidden />
+              {name}
             </span>
-          </div>
+          ))}
+          <span className="inline-flex items-center rounded-full border border-dashed border-[rgba(255,255,255,.14)] bg-transparent px-3 py-1.5 font-sans text-[11px] tracking-[0.04em] text-[rgba(246,242,234,.45)]">
+            + more shipping monthly
+          </span>
+        </div>
+
+        {/* Marketplace line — honest framing (templates today, marketplace coming) */}
+        <div className="mt-8 inline-flex items-center gap-2.5 rounded-[14px] border border-[rgba(0,137,123,.30)] bg-[rgba(0,137,123,.10)] px-4 py-3">
+          <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-md border border-[rgba(0,137,123,.35)] bg-[rgba(0,137,123,.20)] text-[#6fc28f]">
+            <Bot size={14} aria-hidden />
+          </span>
+          <p className="m-0 text-[13.5px] leading-[1.5] text-[rgba(246,242,234,.82)]">
+            A growing library of agents to install in one click —{" "}
+            <strong className="font-[500] text-[#FFFDFA]">templates today, a full marketplace coming.</strong>
+          </p>
         </div>
       </div>
     </section>

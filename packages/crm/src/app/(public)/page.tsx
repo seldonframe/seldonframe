@@ -7,12 +7,13 @@
 // DemoVideo / Agencies / Marketplace / Pricing / FAQ / WhyNow / FinalCta)
 // with the new HTML-faithful section list.
 //
-// Order (2026-06-18 SMB-first conversion pass — pricing pulled up to sit
-// right after the SMB CTA; agency block follows pricing):
-//   Nav (fixed) → Hero (+ demo marquee) → ProofStrip (fear-alleviation)
-//   → BuildSteps → Modules → SmbCta (rotating industry word)
-//   → Pricing (existing truth-pass component) → AgencyMath → Replace
-//   → FinalCta → FAQ (existing truth-pass) → Footer
+// Order (2026-06-22 positioning v2 — one idea per section ladder):
+//   Nav (fixed) → Hero (+ demo marquee) → BuildSteps (the 60s demo)
+//   → Modules (Run rung) → SmbCta (Sell rung) → Agents (Hire agents,
+//   not people) → AgencyMath (Build & sell rung) → Pricing → ProofStrip
+//   → FAQ → FinalCta → Footer.
+//   MarketingReplace ("Why not just…") is demoted off the homepage to
+//   keep the ladder to one idea per rung (component still ships).
 //
 // Skipped from the HTML port:
 //   - §9 Marketplace (hidden in source HTML with display:none — README
@@ -40,9 +41,8 @@ import { MarketingHero } from "@/components/landing/marketing-hero";
 import { MarketingProofStrip } from "@/components/landing/marketing-proof-strip";
 import { MarketingAgencyMath } from "@/components/landing/marketing-agency-math";
 import { MarketingBuildSteps } from "@/components/landing/marketing-build-steps";
-import { MarketingModules } from "@/components/landing/marketing-modules";
+import { MarketingModules, MarketingAgents } from "@/components/landing/marketing-modules";
 import { MarketingSmbCta } from "@/components/landing/marketing-smb-cta";
-import { MarketingReplace } from "@/components/landing/marketing-replace";
 import { LandingMarketingPricingSection } from "@/components/landing/marketing-pricing-section";
 import { LandingMarketingFaqSection } from "@/components/landing/marketing-faq-section";
 import { MarketingFinalCta } from "@/components/landing/marketing-final-cta";
@@ -82,16 +82,21 @@ export default async function PublicHomePage() {
     <div className="min-h-screen bg-[#F6F2EA] text-[#221D17] selection:bg-[#00897B]/20 selection:text-[#00897B]">
       <MarketingNav />
       <main id="main-content">
+        {/* Positioning v2 ladder (2026-06-22) — one idea per section:
+            Hero + 60s demo → Run → Sell → Hire agents → Build & sell →
+            pricing / proof / FAQ / close. The "Why not just…" comparison
+            (MarketingReplace) is demoted off the homepage to keep the
+            ladder to one idea per rung; the component still ships. */}
         <MarketingHero />
-        <MarketingProofStrip />
         <MarketingBuildSteps />
         <MarketingModules />
         <MarketingSmbCta />
-        <LandingMarketingPricingSection />
+        <MarketingAgents />
         <MarketingAgencyMath />
-        <MarketingReplace />
-        <MarketingFinalCta />
+        <LandingMarketingPricingSection />
+        <MarketingProofStrip />
         <LandingMarketingFaqSection />
+        <MarketingFinalCta />
       </main>
       <MarketingFooter />
     </div>
