@@ -49,6 +49,68 @@ describe("TemplateBlueprintPatchSchema — quoteRanges", () => {
 });
 
 // ---------------------------------------------------------------------
+// connectors (#3 — Studio MCP connector picker; reuses #2's schema)
+// ---------------------------------------------------------------------
+
+describe("TemplateBlueprintPatchSchema — connectors", () => {
+  test("accepts a valid vetted connector binding", () => {
+    const result = TemplateBlueprintPatchSchema.safeParse({
+      connectors: [
+        {
+          id: "postiz",
+          kind: "vetted",
+          serviceName: "postiz",
+          enabledTools: ["schedulePost"],
+        },
+      ],
+    });
+    assert.equal(
+      result.success,
+      true,
+      `Expected success but got: ${!result.success ? JSON.stringify((result as { error: unknown }).error) : ""}`,
+    );
+  });
+
+  test("accepts a valid BYO https connector + an empty connectors array", () => {
+    const byo = TemplateBlueprintPatchSchema.safeParse({
+      connectors: [
+        {
+          id: "my-mcp",
+          kind: "byo",
+          serviceName: "byo_my-mcp",
+          endpoint: "https://x.example.com/mcp",
+          enabledTools: [],
+        },
+      ],
+    });
+    assert.equal(byo.success, true, "https BYO endpoint should pass");
+
+    const empty = TemplateBlueprintPatchSchema.safeParse({ connectors: [] });
+    assert.equal(empty.success, true, "empty connectors array is valid");
+  });
+
+  test("rejects a BYO connector with a non-HTTPS endpoint", () => {
+    const result = TemplateBlueprintPatchSchema.safeParse({
+      connectors: [
+        {
+          id: "evil",
+          kind: "byo",
+          serviceName: "byo_evil",
+          endpoint: "http://insecure.example.com/mcp",
+          enabledTools: [],
+        },
+      ],
+    });
+    assert.equal(result.success, false, "non-HTTPS BYO endpoint must be rejected");
+  });
+
+  test("connectors is optional (omittable)", () => {
+    const result = TemplateBlueprintPatchSchema.safeParse({ greeting: "Hi" });
+    assert.equal(result.success, true, "connectors is optional");
+  });
+});
+
+// ---------------------------------------------------------------------
 // Strict reject undeclared keys
 // ---------------------------------------------------------------------
 

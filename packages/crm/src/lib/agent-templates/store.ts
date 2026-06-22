@@ -161,6 +161,10 @@ export function buildDefaultTemplateBlueprint(
       faq: [],
       pricingFacts: [],
       greeting: DEFAULT_CHAT_ASSISTANT_GREETING,
+      // No MCP connectors by default; the builder binds them in the Studio's
+      // "Connectors & Tools" picker (#3). An empty array keeps the runtime seam
+      // on its byte-for-byte native path until a connector is actually bound.
+      connectors: [],
     };
   }
   return {
@@ -170,6 +174,7 @@ export function buildDefaultTemplateBlueprint(
     pricingFacts: [],
     greeting: DEFAULT_VOICE_RECEPTIONIST_GREETING,
     voice: DEFAULT_VOICE_RECEPTIONIST_VOICE,
+    connectors: [],
   };
 }
 
@@ -217,11 +222,19 @@ export function resolveUniqueTemplateSlug(
 
 /** The blueprint fields the template editor may patch. Mirrors the
  *  voice-receptionist editor's editable surface (greeting / script / FAQ /
- *  voice / quoteRanges), expressed as a Partial<AgentBlueprint>. */
+ *  voice / quoteRanges), expressed as a Partial<AgentBlueprint>. `connectors`
+ *  carries the Studio MCP connector picker's bindings (#3) onto the template
+ *  blueprint; the runtime seam reads it identically to the agent-scoped path. */
 export type TemplateBlueprintPatch = Partial<
   Pick<
     AgentBlueprint,
-    "greeting" | "customSkillMd" | "faq" | "voice" | "capabilities" | "quoteRanges"
+    | "greeting"
+    | "customSkillMd"
+    | "faq"
+    | "voice"
+    | "capabilities"
+    | "quoteRanges"
+    | "connectors"
   >
 >;
 

@@ -15,6 +15,7 @@
 
 import { z } from "zod";
 import { VOICE_OPTIONS } from "@/lib/agents/voice/card-status";
+import { connectorBindingsSchema } from "@/lib/agents/mcp/connectors";
 
 const FaqRow = z.object({
   q: z.string().min(1),
@@ -48,6 +49,12 @@ export const TemplateBlueprintPatchSchema = z
         }),
       )
       .optional(),
+    // MCP connector bindings (#3 — Studio "Connectors & Tools" picker). Reuses
+    // #2's vetted+BYO discriminated-union schema verbatim (HTTPS-only for BYO,
+    // length-bounded) so the template editor's connector save is validated by the
+    // exact same rules the agent-scoped path uses. Stored on blueprint.connectors
+    // (jsonb — no migration); the runtime seam (getToolsForCapabilities) reads it.
+    connectors: connectorBindingsSchema.optional(),
   })
   .strict();
 
