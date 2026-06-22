@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { blockPurchases, blockRatings, generatedBlocks, marketplaceBlocks, marketplaceListings, marketplaceReviews, organizations } from "@/db/schema";
 import { getCurrentUser, getOrgId } from "@/lib/auth/helpers";
 import { canInstallBlocks, canRateBlocks, canSubmitBlocks, resolvePlanFromPlanId } from "@/lib/billing/entitlements";
+import { computeInvoiceApplicationFeeCents } from "@/lib/billing/gmv";
 import { assertWritable } from "@/lib/demo/server";
 import { installSoulPackage } from "@/lib/marketplace/install-soul";
 import type { SoulPackage } from "@/lib/marketplace/soul-package";
@@ -501,8 +502,11 @@ export async function purchaseSoulListingAction(formData: FormData) {
       },
     ],
     payment_intent_data: {
-      // GMV policy TBD for soul-marketplace sales — left at 0 (decide separately).
-      application_fee_amount: 0,
+      // SeldonFrame marketplace takes a 2% GMV fee on soul sales
+      // (Stripe Connect destination charge). `price` is already in cents,
+      // matching the `unit_amount` above, so we fee off the same rounded
+      // cents value. computeInvoiceApplicationFeeCents = round(cents * 2/100).
+      application_fee_amount: computeInvoiceApplicationFeeCents(Math.round(price)),
       transfer_data: {
         destination: listing.stripeConnectAccountId,
       },
@@ -676,8 +680,12 @@ export async function purchaseMarketplaceBlockAction(formData: FormData) {
       },
     ],
     payment_intent_data: {
-      // GMV policy TBD for soul-marketplace sales — left at 0 (decide separately).
-      application_fee_amount: 0,
+      // SeldonFrame marketplace takes a 2% GMV fee on block sales
+      // (Stripe Connect destination charge). `price` here is in DOLLARS
+      // (multiplied by 100 for `unit_amount` above), so convert to the
+      // same cents amount first, then fee off it.
+      // computeInvoiceApplicationFeeCents = round(cents * 2/100).
+      application_fee_amount: computeInvoiceApplicationFeeCents(Math.round(price * 100)),
       transfer_data: {
         destination: block.sellerStripeAccountId,
       },
