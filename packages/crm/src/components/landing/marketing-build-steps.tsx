@@ -41,7 +41,7 @@ const STEPS: readonly Step[] = [
   {
     num: "2",
     title: "Watch it spin up in 60 seconds.",
-    body: "The build runs live — website, booking, AI chat, intake form, CRM. Everything wired together.",
+    body: "The build runs live — website, booking, intake, CRM, and a 24/7 AI agent that answers across voice, SMS, chat, and email. Everything wired together.",
     mock: (
       <ArriveMock
         rows={[

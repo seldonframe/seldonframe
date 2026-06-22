@@ -123,11 +123,13 @@ export function MarketingModules() {
               <Bot size={14} aria-hidden />
             </span>
             <span className="font-sans text-[11px] font-[600] uppercase tracking-[0.12em] text-[#6fc28f]">
-              Plus: a growing agents library
+              Plus: build &amp; sell any agent
             </span>
           </div>
           <p className="mt-3.5 max-w-[760px] text-[14.5px] leading-[1.55] text-[rgba(246,242,234,.82)]">
-            Spin up purpose-built AI agents in one click on top of any workspace.{" "}
+            <strong className="font-[500] text-[#FFFDFA]">Build ANY agent in the Studio</strong> — voice, chat, SMS, or
+            email — connect external tools (Postiz, and more), then deploy it to clients as a whitelabel front office
+            and resell it. A starter pack ships with the platform:{" "}
             <strong className="font-[500] text-[#FFFDFA]">Speed-to-Lead</strong> calls inbound leads within 60 seconds.{" "}
             <strong className="font-[500] text-[#FFFDFA]">Review Agent</strong> asks happy customers for a Google review at the right moment.{" "}
             <strong className="font-[500] text-[#FFFDFA]">Reactivation Agent</strong> wakes up cold leads on a cadence.{" "}

@@ -94,7 +94,7 @@ export function MarketingSmbCta() {
         </h2>
 
         <p className="mx-auto mt-4 max-w-[52ch] text-[clamp(15px,1.7vw,17px)] leading-[1.55] text-[#6E665A]">
-          Paste your site, watch it build, go live. No contract, cancel anytime.
+          Paste your site, watch it build, go live. First one free. $29/mo flat after — no contract, cancel anytime.
         </p>
 
         <div className="mt-8 flex justify-center">
