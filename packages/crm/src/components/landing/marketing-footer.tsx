@@ -16,6 +16,7 @@ const COLUMNS: readonly Column[] = [
       { label: "How it works", href: "#build" },
       { label: "Features", href: "#modules" },
       { label: "Pricing", href: "#pricing" },
+      { label: "Marketplace", href: "/marketplace" },
       { label: "For agencies", href: "#agencies" },
       { label: "Changelog", href: "https://github.com/seldonframe/crm/releases", external: true },
     ],

@@ -18,6 +18,7 @@ const NAV_LINKS: readonly NavLink[] = [
   { href: "#build", label: "How it works" },
   { href: "#pricing", label: "Pricing" },
   { href: "#modules", label: "Features" },
+  { href: "/marketplace", label: "Marketplace" },
   { href: "#agencies", label: "Agencies" },
   { href: "#faq", label: "FAQ" },
 ];
