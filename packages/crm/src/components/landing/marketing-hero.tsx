@@ -181,12 +181,12 @@ export function MarketingHero() {
       <p className="inline-flex items-center gap-2.5 font-sans text-[12.5px] tracking-[0.04em] text-[#6E665A]">
         <span className="inline-block h-px w-4 bg-[#9A9183]" aria-hidden />
         <span className="sf-blink-dot inline-block size-1.5 rounded-full bg-[#00897B]" aria-hidden />
-        For your business — or resold to your clients
+        Build it for your business — or sell it to your clients
       </p>
 
       {/* Headline */}
-      <h1 className="mt-3 max-w-[18ch] text-balance font-sans text-[clamp(34px,4.8vw,56px)] font-[500] leading-[1.04] tracking-[-0.025em] text-[#221D17]">
-        Your complete{" "}
+      <h1 className="mt-3 max-w-[20ch] text-balance font-sans text-[clamp(34px,4.8vw,56px)] font-[500] leading-[1.04] tracking-[-0.025em] text-[#221D17]">
+        Build, run &amp; sell AI agents — and a complete{" "}
         <em className="font-[Newsreader,Georgia,serif] font-normal not-italic tracking-[-0.01em]">
           front office
         </em>
@@ -194,9 +194,10 @@ export function MarketingHero() {
       </h1>
 
       {/* Subhead */}
-      <p className="mx-auto mt-4 max-w-[60ch] text-pretty text-[clamp(15.5px,1.6vw,17.5px)] leading-[1.55] text-[#6E665A]">
-        Website, booking, a 24/7 AI receptionist, intake, and CRM — wired together so your business never misses a lead.{" "}
-        <strong className="font-[500] text-[#221D17]">Paste your site and go live.</strong>
+      <p className="mx-auto mt-4 max-w-[62ch] text-pretty text-[clamp(15.5px,1.6vw,17.5px)] leading-[1.55] text-[#6E665A]">
+        Website, booking, intake, CRM, and a 24/7 AI agent that answers across{" "}
+        <strong className="font-[500] text-[#221D17]">voice, chat, SMS &amp; email</strong> — wired together so you never miss a lead.{" "}
+        <strong className="font-[500] text-[#221D17]">Paste your site and go live. First one&rsquo;s free.</strong>
       </p>
 
       {/* Two CTAs */}
@@ -315,7 +316,7 @@ export function MarketingHero() {
 
       {/* Proof checklist */}
       <ul className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
-        {["Plans from $19/mo", "Live in 60 seconds", "Cancel anytime"].map((item) => (
+        {["First workspace free", "Live in 60 seconds", "$29/mo flat after", "Cancel anytime"].map((item) => (
           <li key={item} className="flex items-center gap-2 text-[13.5px] text-[#6E665A]">
             <span className="flex size-[17px] items-center justify-center rounded-full bg-[rgba(0,137,123,.12)] text-[10px] font-[700] text-[#00897B]" aria-hidden>✓</span>
             {item}

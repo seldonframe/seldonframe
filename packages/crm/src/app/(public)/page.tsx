@@ -49,22 +49,22 @@ import { MarketingFinalCta } from "@/components/landing/marketing-final-cta";
 import { MarketingFooter } from "@/components/landing/marketing-footer";
 
 export const metadata: Metadata = {
-  title: "SeldonFrame — Your full AI front office, live in 60 seconds.",
+  title: "SeldonFrame — Build, run & sell AI agents + a complete front office.",
   description:
-    "Website, booking, AI receptionist, intake, and CRM — wired together and live in under a minute. Plans from $19/mo. For your business, or your clients'.",
+    "Website, booking, intake, CRM, and a 24/7 AI agent across voice, chat, SMS & email — live in 60 seconds. First workspace free, then $29/mo flat. Build any agent and sell it to your clients.",
   openGraph: {
-    title: "SeldonFrame — Your full AI front office, live in 60 seconds.",
+    title: "SeldonFrame — Build, run & sell AI agents + a complete front office.",
     description:
-      "Website, booking, AI receptionist, intake, and CRM — wired together and live in under a minute. For your business, or your clients'.",
+      "A complete AI front office (voice, chat, SMS, email) live in 60 seconds. First workspace free, then $29/mo flat. Build any agent and resell it to your clients.",
     type: "website",
     url: "https://seldonframe.com",
     images: [{ url: "/brand/og-image.png", width: 1200, height: 630 }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "SeldonFrame — Your full AI front office, live in 60 seconds.",
+    title: "SeldonFrame — Build, run & sell AI agents + a complete front office.",
     description:
-      "Website, booking, AI receptionist, intake, and CRM — wired together in under a minute. For your business, or your clients'.",
+      "A complete AI front office (voice, chat, SMS, email) live in 60 seconds. First workspace free, then $29/mo flat. Build any agent and resell it.",
     images: ["/brand/twitter-card.png"],
   },
 };

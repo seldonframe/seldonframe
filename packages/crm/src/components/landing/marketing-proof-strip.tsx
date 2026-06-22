@@ -10,7 +10,7 @@ const CHIPS = [
   "No code",
   "Edit by chatting",
   "Live in 60 seconds",
-  "Flat price — no surprise fees",
+  "$29/mo flat — no surprise fees",
 ] as const;
 
 export function MarketingProofStrip() {
