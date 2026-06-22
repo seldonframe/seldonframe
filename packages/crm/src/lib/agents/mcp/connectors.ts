@@ -20,6 +20,8 @@
 // hard-coded HTTPS. The bearer key NEVER lives here — only the `serviceName`
 // pointer into the encrypted workspaceSecrets store.
 
+import { z } from "zod";
+
 /** A tool schema as discovered from an MCP server (mirrors the client's
  *  McpToolDescriptor). Cached on a binding so the runtime never has to do a
  *  live tools/list per turn. */
@@ -115,3 +117,64 @@ export function resolveConnectorEndpoint(binding: ConnectorBinding): string {
 export function connectorSecretService(binding: ConnectorBinding): string {
   return binding.serviceName;
 }
+
+// ─── validation (Zod) ────────────────────────────────────────────────────────
+//
+// These live HERE (a pure module, not the "use server" actions file) so they
+// are (a) directly unit-testable and (b) importable into BlueprintPatchSchema
+// without tripping the "use server can only export async functions" rule
+// (check-use-server.sh). Bounds keep the blueprint jsonb from growing without
+// limit: at most MAX_CONNECTORS bindings, each capping enabledTools and the
+// cached tool schemas.
+
+/** Caps. A workspace binds a handful of connectors; an MCP server exposes tens
+ *  of tools at most. Bounding both keeps blueprint jsonb small + predictable. */
+export const MAX_CONNECTORS = 16;
+export const MAX_ENABLED_TOOLS = 64;
+export const MAX_CACHED_TOOLS = 128;
+
+const mcpToolSchemaSchema = z
+  .object({
+    name: z.string().min(1).max(128),
+    description: z.string().max(4000),
+    inputSchema: z.record(z.string(), z.unknown()),
+  })
+  .strict();
+
+/** A single connector binding. `.strict()` so unknown keys are rejected (no
+ *  smuggling extra fields into the blueprint). BYO requires an HTTPS endpoint;
+ *  vetted must NOT carry one (the registry owns it). */
+export const connectorBindingSchema: z.ZodType<ConnectorBinding> = z
+  .discriminatedUnion("kind", [
+    z
+      .object({
+        id: z.string().min(1).max(64),
+        kind: z.literal("vetted"),
+        serviceName: z.string().min(1).max(128),
+        enabledTools: z.array(z.string().min(1).max(128)).max(MAX_ENABLED_TOOLS),
+        tools: z.array(mcpToolSchemaSchema).max(MAX_CACHED_TOOLS).optional(),
+        discoveredAt: z.string().optional(),
+      })
+      .strict(),
+    z
+      .object({
+        id: z.string().min(1).max(64),
+        kind: z.literal("byo"),
+        serviceName: z.string().min(1).max(128),
+        endpoint: z
+          .string()
+          .url()
+          .refine((u) => u.startsWith("https://"), {
+            message: "BYO MCP endpoint must use https://",
+          }),
+        enabledTools: z.array(z.string().min(1).max(128)).max(MAX_ENABLED_TOOLS),
+        tools: z.array(mcpToolSchemaSchema).max(MAX_CACHED_TOOLS).optional(),
+        discoveredAt: z.string().optional(),
+      })
+      .strict(),
+  ]) as z.ZodType<ConnectorBinding>;
+
+/** The full `blueprint.connectors` array, length-bounded. */
+export const connectorBindingsSchema = z
+  .array(connectorBindingSchema)
+  .max(MAX_CONNECTORS);

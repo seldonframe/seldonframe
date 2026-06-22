@@ -103,6 +103,15 @@ export type AgentBlueprint = {
     enabled?: boolean;
     message?: string;
   };
+  /** 2026-06-22 (MCP connector layer) — per-agent external-tool bindings. Each
+   *  binding points at a hosted MCP server (a vetted connector like Postiz, or
+   *  a BYO HTTPS endpoint); its bearer key lives ENCRYPTED in the
+   *  workspaceSecrets store (keyed by `serviceName`), never here. At runtime the
+   *  seam (getToolsForCapabilities) wraps each binding's cached + enabled tools
+   *  into AgentTools, appended AFTER the native capability-filtered list — the
+   *  native tool path is byte-for-byte unchanged when this is empty/undefined.
+   *  Stored as jsonb (no migration). See lib/agents/mcp/connectors.ts. */
+  connectors?: import("@/lib/agents/mcp/connectors").ConnectorBinding[];
 };
 
 export const agents = pgTable(

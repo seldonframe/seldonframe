@@ -22,6 +22,7 @@ import {
   type PublishAgentResult,
 } from "./store";
 import { runEvalSuite, type EvalRunSummary } from "./eval-runner";
+import { connectorBindingsSchema } from "./mcp/connectors";
 
 const FaqRow = z.object({
   q: z.string().min(1),
@@ -55,6 +56,12 @@ const BlueprintPatchSchema = z
     // chars (~2k tokens) so a runaway operator can't blow up the
     // system prompt. Empty string clears the override.
     customSkillMd: z.string().max(8000).optional(),
+    // 2026-06-22 — MCP connector bindings (external tools). The schema
+    // (defined in the pure mcp/connectors.ts module so it stays importable
+    // here without a "use server" export violation) validates kind /
+    // serviceName / enabledTools, requires HTTPS for BYO endpoints, and
+    // bounds the array + per-binding tool counts.
+    connectors: connectorBindingsSchema.optional(),
   })
   .strict();
 
