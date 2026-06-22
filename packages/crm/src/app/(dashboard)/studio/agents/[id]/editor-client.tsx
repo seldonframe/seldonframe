@@ -19,12 +19,26 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Sparkles } from "lucide-react";
+import {
+  Sparkles,
+  Plug,
+  RefreshCw,
+  Trash2,
+  ChevronDown,
+  Plus,
+} from "lucide-react";
 import {
   saveAgentTemplateBlueprintAction,
   generateAgentDraftAction,
 } from "@/lib/agent-templates/actions";
+import {
+  bindTemplateConnectorAction,
+  unbindTemplateConnectorAction,
+  setTemplateConnectorToolsAction,
+  refreshTemplateConnectorAction,
+} from "@/lib/agent-templates/template-mcp-server";
 import type { AgentSurface } from "@/lib/agent-templates/store";
+import type { ConnectorBinding } from "@/lib/agents/mcp/connectors";
 import { VOICE_OPTIONS } from "@/lib/agents/voice/card-status";
 
 // Rotating status copy shown on the Refine button while a refinement is being
@@ -42,6 +56,9 @@ const REFINE_STATUS_INTERVAL_MS = 1500;
 type FaqRow = { q: string; a: string };
 type QuoteRange = { service: string; low: string; high: string };
 
+/** Minimal serializable vetted-connector descriptor passed from the server. */
+type VettedConnectorOption = { id: string; label: string; secretService: string };
+
 type Props = {
   templateId: string;
   surface: AgentSurface;
@@ -52,8 +69,11 @@ type Props = {
     capabilities: string[];
     faq: FaqRow[];
     quoteRanges: Array<{ service: string; low: number; high: number }>;
+    connectors: ConnectorBinding[];
   };
   allCapabilities: string[];
+  /** The shipped vetted connectors (id + label + secret service) for the Add form. */
+  vettedConnectors: VettedConnectorOption[];
 };
 
 // ─── surface-aware copy ────────────────────────────────────────────────────
@@ -347,6 +367,14 @@ export function AgentTemplateEditor(props: Props) {
         </div>
       </div>
 
+      {/* Connectors & Tools — bind external MCP servers (#3) */}
+      <ConnectorsCard
+        templateId={props.templateId}
+        surface={props.surface}
+        initialConnectors={props.initialBlueprint.connectors}
+        vettedConnectors={props.vettedConnectors}
+      />
+
       {/* FAQ */}
       <div className="rounded-xl border bg-card p-5">
         <div className="flex items-center justify-between gap-2">
@@ -520,4 +548,443 @@ export function AgentTemplateEditor(props: Props) {
       </div>
     </div>
   );
+}
+
+// ─── Connectors & Tools (#3) ────────────────────────────────────────────────
+//
+// Binds external MCP servers (vetted Postiz / BYO HTTPS endpoint) onto the
+// TEMPLATE blueprint via the template-scoped MCP actions, then lists each
+// binding with per-tool enable toggles + Refresh/Remove. Connectors give the
+// agent external tools at runtime (the getToolsForCapabilities seam appends them
+// to the native list). Voice (realtime) is native-only, so the help copy is
+// honest: connectors apply to chat / SMS / email agents.
+//
+// SECURITY: the API key is collected, submitted, and immediately cleared from
+// state on success — it is NEVER rendered back, stored in component state beyond
+// the in-flight submit, or logged. The server stores it encrypted; only the
+// (non-secret) discovered tool schemas come back to render here.
+function ConnectorsCard({
+  templateId,
+  surface,
+  initialConnectors,
+  vettedConnectors,
+}: {
+  templateId: string;
+  surface: AgentSurface;
+  initialConnectors: ConnectorBinding[];
+  vettedConnectors: VettedConnectorOption[];
+}) {
+  const router = useRouter();
+  const isVoice = surface === "voice";
+
+  // Bound connectors render from props (server is source of truth); after each
+  // mutation we router.refresh() so the server re-supplies the canonical list.
+  const connectors = initialConnectors;
+
+  // ── Add-connector form state ──
+  const [adding, setAdding] = useState(false);
+  // "postiz" (vetted id) or "byo". Default to the first vetted connector.
+  const [choice, setChoice] = useState<string>(vettedConnectors[0]?.id ?? "byo");
+  const [byoEndpoint, setByoEndpoint] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [isBinding, startBind] = useTransition();
+  const [bindError, setBindError] = useState<string | null>(null);
+
+  const isByo = choice === "byo";
+  const byoValid = (() => {
+    const v = byoEndpoint.trim();
+    if (!v) return false;
+    try {
+      return new URL(v).protocol === "https:";
+    } catch {
+      return false;
+    }
+  })();
+  const canConnect =
+    apiKey.trim().length > 0 && (!isByo || byoValid) && !isBinding;
+
+  const connect = () => {
+    setBindError(null);
+    const key = apiKey.trim();
+    startBind(async () => {
+      // Build the #2 BindConnectorInput. A BYO serviceName is namespaced so it
+      // never collides with a vetted secret slot.
+      const connector = isByo
+        ? ({
+            kind: "byo" as const,
+            id: slugForByo(byoEndpoint),
+            serviceName: `byo_${slugForByo(byoEndpoint)}`,
+            endpoint: byoEndpoint.trim(),
+          })
+        : (() => {
+            const vetted = vettedConnectors.find((c) => c.id === choice)!;
+            return {
+              kind: "vetted" as const,
+              id: vetted.id,
+              serviceName: vetted.secretService,
+            };
+          })();
+
+      const result = await bindTemplateConnectorAction({
+        templateId,
+        connector,
+        apiKey: key,
+      });
+      // Clear the key from state regardless of outcome — never keep it around.
+      setApiKey("");
+      if (!result.ok) {
+        setBindError(friendlyBindError(result.error));
+        return;
+      }
+      setByoEndpoint("");
+      setAdding(false);
+      router.refresh();
+    });
+  };
+
+  return (
+    <div className="rounded-xl border bg-card p-5">
+      <div className="flex items-start gap-2">
+        <span
+          className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-500 dark:text-indigo-400"
+          aria-hidden
+        >
+          <Plug className="size-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-card-title">Connectors &amp; Tools</h2>
+          <p className="text-xs text-muted-foreground">
+            Connectors give this agent external tools (e.g. Postiz to publish
+            social posts).{" "}
+            <span className="font-medium text-foreground">
+              Available on chat / SMS / email agents
+            </span>{" "}
+            — voice agents use built-in tools only.
+          </p>
+        </div>
+      </div>
+
+      {isVoice && (
+        <p className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+          This is a voice template. Connectors won&apos;t run on calls (the voice
+          runtime is native-only) — they apply when this agent answers chat, SMS,
+          or email.
+        </p>
+      )}
+
+      {/* Bound connectors */}
+      {connectors.length === 0 ? (
+        <p className="mt-4 text-xs text-muted-foreground">
+          No connectors yet. Add one below to give this agent external tools.
+        </p>
+      ) : (
+        <ul className="mt-4 space-y-2">
+          {connectors.map((binding) => (
+            <ConnectorRow
+              key={binding.id}
+              templateId={templateId}
+              binding={binding}
+              onChanged={() => router.refresh()}
+            />
+          ))}
+        </ul>
+      )}
+
+      {/* Add connector */}
+      <div className="mt-4 border-t pt-4">
+        {!adding ? (
+          <button
+            type="button"
+            onClick={() => {
+              setAdding(true);
+              setBindError(null);
+            }}
+            className="crm-button-secondary inline-flex h-9 items-center gap-1.5 px-3 text-sm"
+          >
+            <Plus className="size-4" />
+            Add connector
+          </button>
+        ) : (
+          <div className="space-y-3 rounded-lg border bg-background p-4">
+            <div className="space-y-1.5">
+              <span className="text-xs font-medium text-foreground">
+                Connector
+              </span>
+              <select
+                value={choice}
+                onChange={(e) => setChoice(e.target.value)}
+                disabled={isBinding}
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-60"
+              >
+                {vettedConnectors.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.label}
+                  </option>
+                ))}
+                <option value="byo">Custom MCP (bring your own endpoint)</option>
+              </select>
+            </div>
+
+            {isByo && (
+              <div className="space-y-1.5">
+                <span className="text-xs font-medium text-foreground">
+                  MCP endpoint (https://…)
+                </span>
+                <input
+                  type="url"
+                  inputMode="url"
+                  value={byoEndpoint}
+                  onChange={(e) => setByoEndpoint(e.target.value)}
+                  disabled={isBinding}
+                  placeholder="https://your-mcp-server.com/mcp"
+                  aria-invalid={byoEndpoint.trim().length > 0 && !byoValid}
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-60"
+                />
+                {byoEndpoint.trim().length > 0 && !byoValid && (
+                  <p className="text-xs text-rose-600">
+                    Enter a full https:// URL.
+                  </p>
+                )}
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <span className="text-xs font-medium text-foreground">API key</span>
+              <input
+                type="password"
+                autoComplete="off"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                disabled={isBinding}
+                placeholder="Paste the connector's API key"
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-60"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Stored encrypted. We never show it again after you connect.
+              </p>
+            </div>
+
+            {bindError && (
+              <p className="text-xs text-rose-600 dark:text-rose-400">
+                {bindError}
+              </p>
+            )}
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={connect}
+                disabled={!canConnect}
+                className="crm-button-primary inline-flex h-9 items-center gap-1.5 px-4 text-sm"
+              >
+                <Plug className={`size-4 ${isBinding ? "animate-pulse" : ""}`} />
+                {isBinding ? "Connecting…" : "Connect"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAdding(false);
+                  setApiKey("");
+                  setByoEndpoint("");
+                  setBindError(null);
+                }}
+                disabled={isBinding}
+                className="crm-button-secondary h-9 px-4 text-sm"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** One bound connector: label + tool-count badge, expandable per-tool enable
+ *  checkboxes (setTemplateConnectorToolsAction), Refresh + Remove. Optimistic on
+ *  the toggle; router.refresh() reconciles with the server. */
+function ConnectorRow({
+  templateId,
+  binding,
+  onChanged,
+}: {
+  templateId: string;
+  binding: ConnectorBinding;
+  onChanged: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [busy, startBusy] = useTransition();
+  const [rowError, setRowError] = useState<string | null>(null);
+  // Optimistic enabled set so the checkboxes feel instant; seeded from props.
+  const [enabled, setEnabled] = useState<string[]>(binding.enabledTools);
+
+  const tools = binding.tools ?? [];
+  const label =
+    binding.kind === "vetted"
+      ? binding.id === "postiz"
+        ? "Postiz"
+        : binding.id
+      : `Custom: ${hostOf(binding.endpoint)}`;
+
+  const toggleTool = (name: string) => {
+    const next = enabled.includes(name)
+      ? enabled.filter((n) => n !== name)
+      : [...enabled, name];
+    setEnabled(next);
+    setRowError(null);
+    startBusy(async () => {
+      const result = await setTemplateConnectorToolsAction({
+        templateId,
+        connectorId: binding.id,
+        enabledTools: next,
+      });
+      if (!result.ok) {
+        setEnabled(binding.enabledTools); // revert
+        setRowError("Couldn't update tools.");
+        return;
+      }
+      onChanged();
+    });
+  };
+
+  const refresh = () => {
+    setRowError(null);
+    startBusy(async () => {
+      const result = await refreshTemplateConnectorAction({
+        templateId,
+        connectorId: binding.id,
+      });
+      if (!result.ok) {
+        setRowError("Couldn't refresh tools.");
+        return;
+      }
+      onChanged();
+    });
+  };
+
+  const remove = () => {
+    setRowError(null);
+    startBusy(async () => {
+      const result = await unbindTemplateConnectorAction({
+        templateId,
+        connectorId: binding.id,
+      });
+      if (!result.ok) {
+        setRowError("Couldn't remove connector.");
+        return;
+      }
+      onChanged();
+    });
+  };
+
+  return (
+    <li className="rounded-lg border bg-background">
+      <div className="flex items-center gap-2 p-3">
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+          aria-expanded={expanded}
+        >
+          <ChevronDown
+            className={`size-4 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`}
+            aria-hidden
+          />
+          <span className="truncate text-sm font-medium">{label}</span>
+          <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+            {enabled.length}/{tools.length} tools
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={refresh}
+          disabled={busy}
+          title="Re-discover tools"
+          className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted/50 disabled:opacity-50"
+        >
+          <RefreshCw className={`size-4 ${busy ? "animate-spin" : ""}`} aria-hidden />
+          <span className="sr-only">Refresh</span>
+        </button>
+        <button
+          type="button"
+          onClick={remove}
+          disabled={busy}
+          title="Remove connector"
+          className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-rose-500/10 hover:text-rose-600 disabled:opacity-50"
+        >
+          <Trash2 className="size-4" aria-hidden />
+          <span className="sr-only">Remove</span>
+        </button>
+      </div>
+
+      {rowError && (
+        <p className="px-3 pb-2 text-xs text-rose-600 dark:text-rose-400">
+          {rowError}
+        </p>
+      )}
+
+      {expanded && (
+        <div className="border-t px-3 py-3">
+          {tools.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              No tools discovered. Use Refresh to re-discover from the server.
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+              {tools.map((t) => (
+                <label
+                  key={t.name}
+                  className="flex cursor-pointer items-start gap-2 rounded-md border bg-card p-2.5 text-sm hover:bg-muted/40"
+                  title={t.description}
+                >
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={enabled.includes(t.name)}
+                    disabled={busy}
+                    onChange={() => toggleTool(t.name)}
+                  />
+                  <code className="min-w-0 break-all font-mono text-xs">
+                    {t.name}
+                  </code>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </li>
+  );
+}
+
+/** Map a bind action error code to friendly copy. */
+function friendlyBindError(error: string): string {
+  if (error === "api_key_required") return "Enter the connector's API key.";
+  if (error === "unauthorized") return "You don't have access to this template.";
+  if (error === "template_not_found") return "Template not found.";
+  if (/https/i.test(error)) return "The MCP endpoint must use https://.";
+  // Discovery / network failures surface the server message (no secret in it).
+  return `Couldn't connect: ${error}`;
+}
+
+/** Derive a stable, filesystem-safe id from a BYO endpoint (host + path slug). */
+function slugForByo(endpoint: string): string {
+  try {
+    const u = new URL(endpoint.trim());
+    const raw = `${u.host}${u.pathname}`.toLowerCase();
+    const slug = raw.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48);
+    return slug || "custom-mcp";
+  } catch {
+    return "custom-mcp";
+  }
+}
+
+/** Host portion of a URL for the "Custom: host" label (falls back to the raw). */
+function hostOf(endpoint: string): string {
+  try {
+    return new URL(endpoint).host;
+  } catch {
+    return endpoint;
+  }
 }

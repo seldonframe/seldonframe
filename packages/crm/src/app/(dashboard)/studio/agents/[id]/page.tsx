@@ -17,6 +17,7 @@ import {
   DEFAULT_VOICE_RECEPTIONIST_VOICE,
   type AgentTemplateType,
 } from "@/lib/agent-templates/store";
+import { VETTED_CONNECTORS } from "@/lib/agents/mcp/connectors";
 import type { AgentBlueprint } from "@/db/schema";
 import { AgentTemplateEditor } from "./editor-client";
 import { TemplateStatusBadge, formatTemplateType } from "../status-badge";
@@ -105,8 +106,17 @@ export default async function AgentTemplatePage({
             low: r.low,
             high: r.high,
           })),
+          // MCP connector bindings (#3). Plain JSON (serviceName pointer + cached
+          // tool schemas — NEVER the bearer key) so they cross the server→client
+          // boundary safely. The picker renders + toggles these.
+          connectors: blueprint.connectors ?? [],
         }}
         allCapabilities={allCapabilities}
+        vettedConnectors={VETTED_CONNECTORS.map((c) => ({
+          id: c.id,
+          label: c.label,
+          secretService: c.secretService,
+        }))}
       />
     </section>
   );
