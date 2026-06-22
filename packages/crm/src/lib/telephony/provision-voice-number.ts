@@ -40,6 +40,10 @@ export type ProvisionVoiceNumberDeps = {
   updateDeployment: (id: string, patch: Record<string, unknown>) => Promise<Deployment | null>;
   /** Optional override for the Twilio FriendlyName. Defaults to deployment clientName. */
   friendlyName?: (deployment: Deployment) => string;
+  /** When set, the provisioned number's inbound SMS webhook is pointed here
+   *  (after the trunk attach) so the number answers calls + texts, both routed
+   *  to SeldonFrame. Absent → voice-only (unchanged behavior). Best-effort. */
+  smsUrl?: string;
 };
 
 export type ProvisionVoiceNumberInput = {
@@ -148,6 +152,23 @@ export async function provisionVoiceNumber(
   } catch {
     // Attach failed — leave row with sid persisted (PURCHASED state) for retry.
     return { ok: false, error: "attach_failed" };
+  }
+
+  // ── Multi-surface number: point the inbound SMS webhook at SeldonFrame ────
+  // Voice is now live (trunk attached); also wire SMS so the SAME number
+  // answers texts → /api/webhooks/twilio/sms (which routes to the client org's
+  // agent). Idempotent + STRICTLY BEST-EFFORT: a failure here must NOT block
+  // voice provisioning (the deployment still goes active and answers calls).
+  if (deps.smsUrl && deps.client.configureSmsUrl) {
+    try {
+      await deps.client.configureSmsUrl({ phoneNumberSid, smsUrl: deps.smsUrl });
+    } catch (err) {
+      console.error(
+        `[provision-voice-number] sms_webhook_config_failed deploymentId=${deployment.id} sid=${phoneNumberSid} err=${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
   }
 
   // ── Mark active ────────────────────────────────────────────────────────

@@ -340,6 +340,11 @@ export async function provisionDeploymentNumberAction(input: {
     authToken: telephony.authToken,
   });
 
+  // Multi-surface number: point the provisioned number's inbound SMS webhook at
+  // SeldonFrame so it answers calls + texts (both → the client org's agent).
+  const appBaseUrl =
+    process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://app.seldonframe.com";
+
   const result = await provisionVoiceNumber(
     {
       client,
@@ -349,6 +354,7 @@ export async function provisionDeploymentNumberAction(input: {
         return res.ok ? res.deployment : null;
       },
       friendlyName: (d) => d.clientName,
+      smsUrl: `${appBaseUrl}/api/webhooks/twilio/sms`,
     },
     {
       deploymentId: parsed.data.deploymentId,

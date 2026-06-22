@@ -47,6 +47,21 @@ export interface TwilioTelephonyClient {
    * when numberOrigin === 'provisioned'.
    */
   releaseNumber(input: { phoneNumberSid: string }): Promise<void>;
+
+  /**
+   * Point an already-purchased number's INBOUND SMS webhook at SeldonFrame, so
+   * the same provisioned number answers BOTH voice (via the SIP trunk) AND SMS
+   * (POSTed to smsUrl → /api/webhooks/twilio/sms). Multi-surface number.
+   * Idempotent: setting the same SmsUrl twice is a harmless no-op on Twilio.
+   *
+   * Optional on the interface so existing fakes/clients that predate the
+   * multi-surface runtime still satisfy the type; the state machine guards the
+   * call with `?.` + only invokes it when an smsUrl is configured.
+   */
+  configureSmsUrl?(input: {
+    phoneNumberSid: string;
+    smsUrl: string;
+  }): Promise<void>;
 }
 
 // ─── Concrete implementation ──────────────────────────────────────────────────
@@ -180,6 +195,28 @@ export function createTwilioTelephonyClient(creds: {
 
       // DELETE returns 204 No Content on success — treat any 2xx as ok.
       await assertOk(response, "IncomingPhoneNumbers release");
+    },
+
+    async configureSmsUrl({ phoneNumberSid, smsUrl }) {
+      // POST to IncomingPhoneNumbers/{sid}.json updates the number in place.
+      // Twilio uses POST (not PUT) for resource updates.
+      const form = new URLSearchParams();
+      form.set("SmsUrl", smsUrl);
+      form.set("SmsMethod", "POST");
+
+      const url = `${baseUrl}/IncomingPhoneNumbers/${encodeURIComponent(phoneNumberSid)}.json`;
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          Authorization: auth,
+          "Content-Type": "application/x-www-form-urlencoded",
+          Accept: "application/json",
+        },
+        body: form.toString(),
+      });
+
+      await assertOk(response, "IncomingPhoneNumbers SMS-URL update");
     },
   };
 }

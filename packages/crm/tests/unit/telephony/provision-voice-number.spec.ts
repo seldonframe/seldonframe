@@ -295,4 +295,99 @@ describe("provisionVoiceNumber", () => {
       );
     });
   });
+
+  // ── Multi-surface number: SMS webhook on the provisioned number ───────────
+  describe("SMS webhook (multi-surface number)", () => {
+    test("sets the number's smsUrl after attach when deps.smsUrl is provided", async () => {
+      const dep = fakeDeployment({ status: "draft", phoneNumberSid: null });
+      const deps = buildFakeDeps(dep);
+      const smsCalls: Array<{ phoneNumberSid: string; smsUrl: string }> = [];
+      const callOrder: string[] = [];
+      deps.client.attachNumberToTrunk = async () => {
+        callOrder.push("attach");
+      };
+      deps.client.configureSmsUrl = async (arg) => {
+        callOrder.push("sms");
+        smsCalls.push(arg);
+      };
+      deps.smsUrl = "https://app.seldonframe.com/api/webhooks/twilio/sms";
+
+      const result = await provisionVoiceNumber(deps, {
+        deploymentId: "dep-1",
+        areaCode: "415",
+        trunkSid: "TKtrunk001",
+      });
+
+      assert.ok(result.ok);
+      assert.equal(smsCalls.length, 1, "configureSmsUrl should be called once");
+      assert.deepEqual(smsCalls[0], {
+        phoneNumberSid: "PNtest001",
+        smsUrl: "https://app.seldonframe.com/api/webhooks/twilio/sms",
+      });
+      // SMS config happens AFTER the trunk attach (voice first, then SMS).
+      assert.deepEqual(callOrder, ["attach", "sms"]);
+    });
+
+    test("does NOT set smsUrl when deps.smsUrl is absent (unchanged voice-only behavior)", async () => {
+      const dep = fakeDeployment({ status: "draft", phoneNumberSid: null });
+      const deps = buildFakeDeps(dep);
+      let smsCalls = 0;
+      deps.client.configureSmsUrl = async () => {
+        smsCalls++;
+      };
+      // deps.smsUrl intentionally left undefined.
+
+      const result = await provisionVoiceNumber(deps, {
+        deploymentId: "dep-1",
+        areaCode: "415",
+        trunkSid: "TKtrunk001",
+      });
+
+      assert.ok(result.ok);
+      assert.equal(smsCalls, 0, "no smsUrl → configureSmsUrl never called");
+    });
+
+    test("soft-fail: configureSmsUrl throwing does NOT fail provisioning (status still active)", async () => {
+      const dep = fakeDeployment({ status: "draft", phoneNumberSid: null });
+      const deps = buildFakeDeps(dep);
+      deps.client.configureSmsUrl = async () => {
+        throw new Error("Twilio IncomingPhoneNumbers update 500");
+      };
+      deps.smsUrl = "https://app.seldonframe.com/api/webhooks/twilio/sms";
+
+      const result = await provisionVoiceNumber(deps, {
+        deploymentId: "dep-1",
+        areaCode: "415",
+        trunkSid: "TKtrunk001",
+      });
+
+      // Voice provisioning succeeds even though the SMS config threw.
+      assert.ok(result.ok, "SMS-config failure must not break voice provisioning");
+      const activePatches = deps.patches.filter((p) => p.patch.status === "active");
+      assert.ok(activePatches.length >= 1, "status should still be set to active");
+    });
+
+    test("does NOT set smsUrl when attach fails (number isn't live yet)", async () => {
+      const dep = fakeDeployment({ status: "draft", phoneNumberSid: null });
+      const deps = buildFakeDeps(dep, {
+        async attachNumberToTrunk() {
+          throw new Error("Trunk 503");
+        },
+      });
+      let smsCalls = 0;
+      deps.client.configureSmsUrl = async () => {
+        smsCalls++;
+      };
+      deps.smsUrl = "https://app.seldonframe.com/api/webhooks/twilio/sms";
+
+      const result = await provisionVoiceNumber(deps, {
+        deploymentId: "dep-1",
+        areaCode: "415",
+        trunkSid: "TKtrunk001",
+      });
+
+      assert.ok(!result.ok);
+      assert.equal(smsCalls, 0, "SMS webhook must not be set when the attach failed");
+    });
+  });
 });
