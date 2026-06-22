@@ -1,9 +1,10 @@
 // packages/crm/src/components/landing/marketing-hero.tsx
 //
 // Redesign 2026-06-18 — warm light aesthetic (seldonstudio.com style).
-// Dual-audience: SMBs who want their own front office + agencies who
-// resell it DFY to clients. Two clear CTAs:
-//   Primary: "Start building" → /signup (SMB self-serve)
+// Positioning v2 (2026-06-22): one promise, one CTA. Leads the service-business
+// owner (SMB); the builder/agency is the top rung of the same ladder, lower on
+// the page. Two CTAs:
+//   Primary: "Start your 14-day free trial →" → /signup (SMB self-serve)
 //   Secondary: "For agencies →" → #agencies (white-label reseller pitch)
 //
 // Design tokens used:

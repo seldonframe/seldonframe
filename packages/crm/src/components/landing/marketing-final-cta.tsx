@@ -39,7 +39,7 @@ export function MarketingFinalCta() {
             className="inline-flex items-center gap-2.5 rounded-full bg-[#F6F2EA] px-7 py-4 text-[15px] font-[500] text-[#1F2B24] shadow-[0_1px_2px_rgba(0,0,0,.2),0_12px_30px_rgba(0,0,0,.25),inset_0_1.5px_0_rgba(255,255,255,.6)] transition-all hover:-translate-y-[1.5px] active:translate-y-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00897B]"
           >
             <span className="size-[7px] rounded-full bg-[#00897B]" aria-hidden />
-            Start building
+            Start your 14-day free trial →
           </Link>
           <Link
             href="#agencies"
