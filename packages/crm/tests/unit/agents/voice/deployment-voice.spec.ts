@@ -332,3 +332,69 @@ describe("loadDeploymentVoiceContext — threads the booking mode into ctx", () 
     assert.equal(result!.ctx.booking?.mode, "native");
   });
 });
+
+describe("loadDeploymentVoiceContext — retargets writes to the client org", () => {
+  // Front-office bridge: when the deployment has a provisioned CLIENT workspace
+  // (clientOrgId), ALL the agent's writes must route there — bookings via
+  // ctx.orgSlug (the booking tools resolve the workspace by slug), contacts/
+  // messages via ctx.orgId, transcripts via transcriptOrgId. When clientOrgId is
+  // null (legacy deployments + pre-provisioning) the behavior must be byte-for-
+  // byte the original: all three target the BUILDER org. This is the regression
+  // guard for the most important guardrail.
+  const FIXED_NOW = new Date("2026-06-01T17:00:00Z");
+
+  test("clientOrgId + clientOrgSlug present → orgId/transcript = client org, orgSlug = client slug", async () => {
+    const deployment = {
+      ...DEPLOYMENT,
+      clientOrgId: "client-org-123",
+      clientOrgSlug: "acme-plumbing",
+    } as Deployment & { clientOrgSlug: string | null };
+    const result = await loadDeploymentVoiceContext({
+      deployment,
+      now: FIXED_NOW,
+      deps: baseDeps(),
+    });
+    assert.ok(result);
+    // Writes (contacts/messages) + the booking-by-slug + transcript all target
+    // the CLIENT org — not the builder org.
+    assert.equal(result!.ctx.orgId, "client-org-123");
+    assert.equal(result!.ctx.orgSlug, "acme-plumbing");
+    assert.equal(result!.transcriptOrgId, "client-org-123");
+    // The builder org id must NOT be the routing target anymore.
+    assert.notEqual(result!.ctx.orgId, "builder-org-1");
+    assert.notEqual(result!.transcriptOrgId, "builder-org-1");
+  });
+
+  test("clientOrgId absent → orgId/orgSlug/transcriptOrgId ALL = builderOrgId (unchanged behavior)", async () => {
+    // DEPLOYMENT has clientOrgId: null. This is the byte-for-byte-unchanged path
+    // (legacy deployments + workspace agents + before activation provisions).
+    const result = await loadDeploymentVoiceContext({
+      deployment: DEPLOYMENT,
+      now: FIXED_NOW,
+      deps: baseDeps(),
+    });
+    assert.ok(result);
+    assert.equal(result!.ctx.orgId, "builder-org-1");
+    assert.equal(result!.ctx.orgSlug, "builder-org-1");
+    assert.equal(result!.transcriptOrgId, "builder-org-1");
+  });
+
+  test("clientOrgId set but clientOrgSlug missing → orgSlug falls back to the client org id (never empty)", async () => {
+    const deployment = {
+      ...DEPLOYMENT,
+      clientOrgId: "client-org-999",
+      clientOrgSlug: null, // join miss / since-deleted org
+    } as Deployment & { clientOrgSlug: string | null };
+    const result = await loadDeploymentVoiceContext({
+      deployment,
+      now: FIXED_NOW,
+      deps: baseDeps(),
+    });
+    assert.ok(result);
+    // orgId + transcript still target the client org; orgSlug falls back to the
+    // client org id (a non-empty value), NOT the builder org.
+    assert.equal(result!.ctx.orgId, "client-org-999");
+    assert.equal(result!.ctx.orgSlug, "client-org-999");
+    assert.equal(result!.transcriptOrgId, "client-org-999");
+  });
+});

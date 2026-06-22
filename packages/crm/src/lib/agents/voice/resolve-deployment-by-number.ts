@@ -38,6 +38,16 @@ export type DeploymentNumberRow = {
   bookingMode: BookingMode;
   /** The client's own booking URL — only meaningful for external_link. */
   externalBookingUrl: string | null;
+  /** The auto-provisioned CLIENT workspace (org) this deployment writes into.
+   *  Front-office bridge: when set, ALL of the deployed agent's writes
+   *  (bookings/contacts/messages/transcripts) retarget to this org. Null for
+   *  legacy deployments + before provisioning → writes stay on the builder org
+   *  (unchanged behavior). */
+  clientOrgId: string | null;
+  /** The client org's slug (left-joined). The booking tools resolve the org by
+   *  SLUG (ctx.orgSlug → organizations.slug), so the retarget needs the real
+   *  slug, not the org id. Null when clientOrgId is null OR the join missed. */
+  clientOrgSlug: string | null;
   phoneNumber: string | null;
   status: string;
 };
@@ -75,6 +85,12 @@ function buildDefaultDeps(): ResolveDeploymentDeps {
       // Lazy imports so unit tests that inject deps never touch Neon.
       const { db } = await import("@/db");
       const { deployments } = await import("@/db/schema/deployments");
+      const { organizations } = await import("@/db/schema/organizations");
+      // Left-join the client org so we can project its SLUG (the booking tools
+      // resolve the workspace by slug, not id). Left (not inner) join so a
+      // deployment with a null clientOrgId — or a since-deleted client org —
+      // still resolves and answers the call (clientOrgSlug just comes back null,
+      // and the retarget falls back to the builder org).
       const rows = await db
         .select({
           id: deployments.id,
@@ -84,10 +100,13 @@ function buildDefaultDeps(): ResolveDeploymentDeps {
           clientContext: deployments.clientContext,
           bookingMode: deployments.bookingMode,
           externalBookingUrl: deployments.externalBookingUrl,
+          clientOrgId: deployments.clientOrgId,
+          clientOrgSlug: organizations.slug,
           phoneNumber: deployments.phoneNumber,
           status: deployments.status,
         })
         .from(deployments)
+        .leftJoin(organizations, eq(deployments.clientOrgId, organizations.id))
         .where(eq(deployments.status, "active"));
       return rows;
     },

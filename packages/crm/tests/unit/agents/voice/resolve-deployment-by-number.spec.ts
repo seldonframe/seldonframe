@@ -22,6 +22,8 @@ const ACTIVE_A: DeploymentNumberRow = {
   clientContext: null,
   bookingMode: "native",
   externalBookingUrl: null,
+  clientOrgId: null,
+  clientOrgSlug: null,
   phoneNumber: "+18335550100",
   status: "active",
 };
@@ -33,6 +35,8 @@ const ACTIVE_B_LOOSE: DeploymentNumberRow = {
   clientContext: null,
   bookingMode: "native",
   externalBookingUrl: null,
+  clientOrgId: null,
+  clientOrgSlug: null,
   // Stored loosely — must normalize to +15125550111 before comparing.
   phoneNumber: "(512) 555-0111",
   status: "active",
@@ -45,6 +49,8 @@ const DRAFT: DeploymentNumberRow = {
   clientContext: null,
   bookingMode: "native",
   externalBookingUrl: null,
+  clientOrgId: null,
+  clientOrgSlug: null,
   phoneNumber: "+15125550111", // same number as ACTIVE_B but not active
   status: "draft",
 };
@@ -56,6 +62,8 @@ const PAUSED: DeploymentNumberRow = {
   clientContext: null,
   bookingMode: "native",
   externalBookingUrl: null,
+  clientOrgId: null,
+  clientOrgSlug: null,
   phoneNumber: "+19998887777",
   status: "paused",
 };
@@ -101,6 +109,8 @@ describe("matchDeploymentByPhoneNumber — pure matcher", () => {
       clientContext: null,
       bookingMode: "native",
       externalBookingUrl: null,
+      clientOrgId: null,
+      clientOrgSlug: null,
       phoneNumber: null,
       status: "active",
     };

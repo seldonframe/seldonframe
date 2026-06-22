@@ -15,15 +15,16 @@
 //     so the agent never pitches the builder's business to the client's callers.
 //     No clientContext captured → a name-only soul (the original behavior).
 //   - timezone + appointment intake fields from the BUILDER's org
-//     (loadVoicePersonaInputs(builderOrgId)) — booking needs them, and
-//     book_appointment lands in the builder's workspace calendar.
-//   - a ToolExecuteContext scoped to the BUILDER's org (orgId = builderOrgId),
-//     testMode:false (a real booking — the ICP-3 payoff).
+//     (loadVoicePersonaInputs(builderOrgId)) — booking needs them.
+//   - a ToolExecuteContext whose orgId/orgSlug + transcriptOrgId RETARGET to the
+//     deployment's provisioned CLIENT workspace (deployment.clientOrgId) when set
+//     (front-office bridge), so bookings/contacts/messages/transcripts all land
+//     in the client's own front office. When clientOrgId is null (legacy
+//     deployments + before activation provisions), all three fall back to the
+//     BUILDER org — byte-for-byte the original behavior. testMode:false (a real
+//     booking — the ICP-3 payoff).
 //
 // TEST-scope simplifications (future refinements, NOT built here):
-//   - book into the builder org (per-client calendar via deployment.calendarRef
-//     is a LATER refinement).
-//   - transcript persisted to the builder org (no deployment_id column yet).
 //   - the call runs on the platform OpenAI Realtime key (BYOK-for-voice later).
 //
 // All DB / template access is behind injectable `deps` (repo convention) so the
@@ -47,7 +48,8 @@ import { resolveBookingMode } from "@/lib/deployments/booking-providers";
 /** What the webhook needs to run a deployment-routed call. Mirrors the fields
  *  the workspace path threads into runVoiceCall + startVoiceConversation. */
 export type DeploymentVoiceContext = {
-  /** Tool-execution context scoped to the BUILDER's org (real booking). */
+  /** Tool-execution context. orgId/orgSlug target the CLIENT org when the
+   *  deployment is provisioned (clientOrgId set), else the builder org. */
   ctx: ToolExecuteContext;
   /** Composed persona (template blueprint + CLIENT identity + builder-org intake). */
   instructions: string;
@@ -55,7 +57,8 @@ export type DeploymentVoiceContext = {
   audioVoice: string | undefined;
   /** Opening line from the TEMPLATE blueprint. */
   greeting: string | undefined;
-  /** Where the transcript is persisted (builder org + its voice agent). */
+  /** Where the transcript is persisted — the CLIENT org when provisioned, else
+   *  the builder org (with the builder's voice agent id). */
   transcriptOrgId: string;
   transcriptAgentId: string;
 };
@@ -110,7 +113,13 @@ export async function loadDeploymentVoiceContext(args: {
     | "clientContext"
     | "bookingMode"
     | "externalBookingUrl"
-  >;
+    | "clientOrgId"
+  > & {
+    /** The client org's slug, left-joined by resolveDeploymentByNumber. The
+     *  booking tools resolve the workspace by slug, so the retarget needs it.
+     *  Optional/null → fall back to the client org id (or the builder org). */
+    clientOrgSlug?: string | null;
+  };
   now: Date;
   deps?: DeploymentVoiceDeps;
 }): Promise<DeploymentVoiceContext | null> {
@@ -161,14 +170,36 @@ export async function loadDeploymentVoiceContext(args: {
     intakeFields: personaInputs.intakeFields,
   });
 
-  // 5. Tool context scoped to the BUILDER org → real booking in the builder's
-  //    workspace calendar (per-client calendar is a later refinement).
+  // 5. RETARGET (front-office bridge — the one load-bearing routing change).
+  //    Every agent write keys off these three fields: bookings via ctx.orgSlug
+  //    (the booking tools resolve the workspace by SLUG → organizations.slug),
+  //    contacts/leads/messages via ctx.orgId, transcripts via transcriptOrgId.
+  //    When the deployment has been provisioned a CLIENT workspace
+  //    (clientOrgId set), point ALL THREE at the client org so the deployed
+  //    agent's entire output lands in the client's own front office.
+  //
+  //    Fallback: clientOrgId null → builderOrgId for all three (legacy
+  //    deployments + the window before activation provisions). This is the
+  //    BYTE-FOR-BYTE-UNCHANGED path — when clientOrgId is null, orgId/orgSlug/
+  //    transcriptOrgId are exactly what they were before this change. The
+  //    persona (clientContext) + bookingMode already describe the client, so
+  //    targeting the client org is consistent with them.
+  //
+  //    orgSlug uses the joined clientOrgSlug; if that's somehow missing (join
+  //    miss / since-deleted org) we fall back to the client org id, then to the
+  //    builder org id — never empty.
+  const clientOrgId = args.deployment.clientOrgId ?? null;
+  const targetOrgId = clientOrgId ?? builderOrgId;
+  const targetOrgSlug = clientOrgId
+    ? args.deployment.clientOrgSlug ?? clientOrgId
+    : builderOrgId;
+
   const ctx: ToolExecuteContext = {
-    orgId: builderOrgId,
-    // The builder org's slug isn't needed for booking (orgId drives it); the
-    // public-booking action keys off orgId. Use the builder org id as a stable
-    // non-empty placeholder so the ctx shape is satisfied.
-    orgSlug: builderOrgId,
+    orgId: targetOrgId,
+    // The booking tools resolve the workspace by slug (organizations.slug), so
+    // this must be the real client org slug when retargeted. On the legacy path
+    // (clientOrgId null) it stays the builder org id, unchanged.
+    orgSlug: targetOrgSlug,
     agentId,
     conversationId: deps.generateConversationId(),
     testMode: false,
@@ -188,7 +219,9 @@ export async function loadDeploymentVoiceContext(args: {
     instructions,
     audioVoice: templateBlueprint.voice,
     greeting: templateBlueprint.greeting,
-    transcriptOrgId: builderOrgId,
+    // Transcript persists to the SAME org the writes target — the client org
+    // when provisioned, else the builder org (unchanged).
+    transcriptOrgId: targetOrgId,
     transcriptAgentId: agentId,
   };
 }
