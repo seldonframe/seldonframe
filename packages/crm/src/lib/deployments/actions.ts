@@ -28,7 +28,10 @@ import {
   resolvePrimaryContactIdForOrg,
 } from "./store";
 import type { UpdateDeploymentDeps } from "./store";
-import { provisionClientWorkspaceForDeployment } from "./provision-client-workspace";
+import {
+  provisionClientWorkspaceForDeployment,
+  copyTemplateConnectorsToAgent,
+} from "./provision-client-workspace";
 import { inviteClientToPortal } from "./portal-invite";
 import { createFullWorkspace } from "@/lib/workspace/create-full";
 import { createPortalMagicLink } from "@/lib/portal/auth";
@@ -408,6 +411,58 @@ function buildProvisionDeps() {
     setParentAgency: setOrgParentAgency,
     updateDeployment: async (id: string, patch: { clientOrgId: string }) => {
       await updateDeployment({ id, patch });
+    },
+    // #3 — best-effort copy of the deploying template's MCP connectors onto the
+    // client workspace's default TEXT agent. Soft-fail by construction
+    // (copyTemplateConnectorsToAgent try/catches), and the provisioner wraps the
+    // whole call in its own try/catch — so this never breaks provisioning. Voice
+    // is native-only; this copy only changes behavior for the text runtime.
+    copyTemplateConnectors: async (args: {
+      builderOrgId: string;
+      agentTemplateId: string;
+      clientOrgId: string;
+    }) => {
+      await copyTemplateConnectorsToAgent(
+        {
+          loadTemplateConnectors: async ({ builderOrgId, agentTemplateId }) => {
+            const { getAgentTemplate } = await import("@/lib/agent-templates/store");
+            const template = await getAgentTemplate(agentTemplateId);
+            // Org guard — only the deploying builder's own template is read.
+            if (!template || template.builderOrgId !== builderOrgId) return [];
+            const { blueprint } = template;
+            return (
+              (blueprint as { connectors?: import("@/lib/agents/mcp/connectors").ConnectorBinding[] })
+                .connectors ?? []
+            );
+          },
+          findClientDefaultAgentId: async (clientOrgId) => {
+            const { db } = await import("@/db");
+            const { agents } = await import("@/db/schema");
+            const { and, eq, sql } = await import("drizzle-orm");
+            const [row] = await db
+              .select({ id: agents.id })
+              .from(agents)
+              .where(
+                and(
+                  eq(agents.orgId, clientOrgId),
+                  sql`lower(${agents.slug}) = 'default'`,
+                ),
+              )
+              .limit(1);
+            return row?.id ?? null;
+          },
+          updateAgentConnectors: async ({ agentId, orgId, connectors }) => {
+            const { updateAgentBlueprint } = await import("@/lib/agents/store");
+            return updateAgentBlueprint({
+              agentId,
+              orgId,
+              patch: { connectors },
+              publishNotes: "Copied connectors from deploying template",
+            });
+          },
+        },
+        args,
+      );
     },
   };
 }

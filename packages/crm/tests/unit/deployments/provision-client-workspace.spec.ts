@@ -17,9 +17,12 @@ import assert from "node:assert/strict";
 
 import {
   provisionClientWorkspaceForDeployment,
+  copyTemplateConnectorsToAgent,
   type ProvisionClientWorkspaceDeps,
+  type CopyTemplateConnectorsDeps,
 } from "../../../src/lib/deployments/provision-client-workspace";
 import type { Deployment } from "../../../src/db/schema/deployments";
+import type { ConnectorBinding } from "../../../src/lib/agents/mcp/connectors";
 
 function fakeDeployment(over: Partial<Deployment> = {}): Deployment {
   return {
@@ -252,5 +255,152 @@ describe("provisionClientWorkspaceForDeployment — activation wiring", () => {
     const result = await provisionClientWorkspaceForDeployment(deps, fakeDeployment());
     assert.equal(result.ok, false);
     assert.equal(captured.clientOrgId, undefined, "no clientOrgId persisted on failure");
+  });
+});
+
+// ── #3 Task 5 Step 2 — copy template connectors onto the deployed text agent ──
+//
+// After the client workspace is provisioned, the deploying template's bound MCP
+// connectors must be copied onto the client's slug='default' agent blueprint so
+// the deployed TEXT agent gets the builder's connectors (the runtime seam reads
+// agents.blueprint.connectors). It's:
+//   - OPT-IN by data: a template with no connectors → a no-op (never touch the
+//     agent), so the byte-for-byte native path is preserved for the common case.
+//   - IDEMPOTENT + SOFT-FAIL: invoked best-effort from the provisioner; a failure
+//     (or absence of the dep) NEVER breaks provisioning.
+//   - VOICE NOT WIRED: this runs at provisioning regardless of surface, but only
+//     the TEXT runtime (executeTurn) consumes connectors; the voice realtime path
+//     ignores them (it's native-only). The copy is harmless either way.
+describe("copyTemplateConnectorsToAgent (deploy-copy)", () => {
+  const CONNECTORS: ConnectorBinding[] = [
+    {
+      id: "postiz",
+      kind: "vetted",
+      serviceName: "postiz",
+      enabledTools: ["schedulePost"],
+      tools: [{ name: "schedulePost", description: "x", inputSchema: { type: "object" } }],
+    },
+  ];
+
+  function copyDeps(over: Partial<CopyTemplateConnectorsDeps> = {}): CopyTemplateConnectorsDeps {
+    return {
+      loadTemplateConnectors: async () => CONNECTORS,
+      findClientDefaultAgentId: async () => "client-agent-1",
+      updateAgentConnectors: async () => ({ ok: true }),
+      ...over,
+    };
+  }
+
+  test("copies the template's connectors onto the client default agent", async () => {
+    let updated: { agentId: string; orgId: string; connectors: ConnectorBinding[] } | null = null;
+    const deps = copyDeps({
+      updateAgentConnectors: async (args) => {
+        updated = args;
+        return { ok: true };
+      },
+    });
+    const result = await copyTemplateConnectorsToAgent(deps, {
+      builderOrgId: "builder-1",
+      agentTemplateId: "tmpl-1",
+      clientOrgId: "client-org-9",
+    });
+    assert.deepEqual(result, { ok: true, copied: 1 });
+    assert.deepEqual(updated, {
+      agentId: "client-agent-1",
+      orgId: "client-org-9",
+      connectors: CONNECTORS,
+    });
+  });
+
+  test("no connectors on the template → no-op (agent blueprint untouched)", async () => {
+    let updateCalled = false;
+    const deps = copyDeps({
+      loadTemplateConnectors: async () => [],
+      updateAgentConnectors: async () => {
+        updateCalled = true;
+        return { ok: true };
+      },
+    });
+    const result = await copyTemplateConnectorsToAgent(deps, {
+      builderOrgId: "builder-1",
+      agentTemplateId: "tmpl-1",
+      clientOrgId: "client-org-9",
+    });
+    assert.deepEqual(result, { ok: true, copied: 0 });
+    assert.equal(updateCalled, false, "native path preserved — never update when no connectors");
+  });
+
+  test("client default agent missing → clean skip (no throw)", async () => {
+    const deps = copyDeps({ findClientDefaultAgentId: async () => null });
+    const result = await copyTemplateConnectorsToAgent(deps, {
+      builderOrgId: "builder-1",
+      agentTemplateId: "tmpl-1",
+      clientOrgId: "client-org-9",
+    });
+    assert.deepEqual(result, { ok: false, reason: "no_client_agent" });
+  });
+
+  test("soft-fail — a thrown dep yields {ok:false}, never throws out", async () => {
+    const deps = copyDeps({
+      loadTemplateConnectors: async () => {
+        throw new Error("db down");
+      },
+    });
+    const result = await copyTemplateConnectorsToAgent(deps, {
+      builderOrgId: "builder-1",
+      agentTemplateId: "tmpl-1",
+      clientOrgId: "client-org-9",
+    });
+    assert.equal(result.ok, false);
+  });
+});
+
+describe("provisionClientWorkspaceForDeployment — connector copy wiring", () => {
+  test("after clientOrgId is persisted, the copy seam runs with the template + client org", async () => {
+    let copyArgs: { agentTemplateId: string; clientOrgId: string; builderOrgId: string } | null = null;
+    const deps = baseDeps({
+      createFullWorkspace: async () => ({ status: "ready", workspace_id: "client-org-42" }),
+      // New best-effort seam (defaulted in the action). Provisioner calls it
+      // after persisting clientOrgId.
+      copyTemplateConnectors: async (args) => {
+        copyArgs = args;
+      },
+    });
+    const result = await provisionClientWorkspaceForDeployment(deps, fakeDeployment());
+    assert.deepEqual(result, { ok: true, orgId: "client-org-42" });
+    assert.deepEqual(copyArgs, {
+      builderOrgId: "builder-1",
+      agentTemplateId: "tmpl-1",
+      clientOrgId: "client-org-42",
+    });
+  });
+
+  test("a thrown copy seam never fails provisioning (clientOrgId still persisted)", async () => {
+    let persisted: string | null = null;
+    const deps = baseDeps({
+      updateDeployment: async (_id, patch) => {
+        persisted = patch.clientOrgId ?? null;
+      },
+      copyTemplateConnectors: async () => {
+        throw new Error("copy blew up");
+      },
+    });
+    const result = await provisionClientWorkspaceForDeployment(deps, fakeDeployment());
+    assert.deepEqual(result, { ok: true, orgId: "client-org-9" });
+    assert.equal(persisted, "client-org-9", "connector copy failure must not block provisioning");
+  });
+
+  test("idempotent skip path does NOT run the copy seam", async () => {
+    let copyCalled = false;
+    const deps = baseDeps({
+      copyTemplateConnectors: async () => {
+        copyCalled = true;
+      },
+    });
+    await provisionClientWorkspaceForDeployment(
+      deps,
+      fakeDeployment({ clientOrgId: "existing-org" }),
+    );
+    assert.equal(copyCalled, false, "already-provisioned no-op must not re-copy connectors");
   });
 });

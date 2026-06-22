@@ -29,6 +29,7 @@ import type {
   CreateFullWorkspaceResult,
 } from "@/lib/workspace/create-full";
 import type { Deployment } from "@/db/schema/deployments";
+import type { ConnectorBinding } from "@/lib/agents/mcp/connectors";
 import {
   buildClientWorkspaceInput,
   type BuildClientWorkspaceInputArgs,
@@ -51,6 +52,16 @@ export type ProvisionClientWorkspaceDeps = {
     id: string,
     patch: { clientOrgId: string },
   ) => Promise<void>;
+  /** OPTIONAL (#3) — copy the deploying template's MCP connectors onto the new
+   *  client workspace's default TEXT agent so it gets the builder's connectors.
+   *  Best-effort: invoked after clientOrgId is persisted; a throw/absence NEVER
+   *  fails provisioning. Voice is native-only, so this only matters for the text
+   *  runtime (the copy is harmless for a voice deployment). */
+  copyTemplateConnectors?: (args: {
+    builderOrgId: string;
+    agentTemplateId: string;
+    clientOrgId: string;
+  }) => Promise<void>;
 };
 
 export type ProvisionClientWorkspaceResult =
@@ -60,7 +71,13 @@ export type ProvisionClientWorkspaceResult =
 /** The deployment fields provisioning reads. */
 type ProvisionableDeployment = Pick<
   Deployment,
-  "id" | "builderOrgId" | "clientName" | "clientContext" | "clientContact" | "clientOrgId"
+  | "id"
+  | "builderOrgId"
+  | "agentTemplateId"
+  | "clientName"
+  | "clientContext"
+  | "clientContact"
+  | "clientOrgId"
 >;
 
 /**
@@ -109,5 +126,94 @@ export async function provisionClientWorkspaceForDeployment(
   // Persist the link last — once this lands, the agent retargets to the client org.
   await deps.updateDeployment(deployment.id, { clientOrgId: orgId });
 
+  // Best-effort (#3): copy the deploying template's MCP connectors onto the new
+  // client workspace's default text agent. Runs AFTER clientOrgId is persisted
+  // (so the agent exists + is linked). A throw/absence NEVER fails provisioning —
+  // the deployment is already created + linked; missing connectors just mean the
+  // builder re-binds or a later retry copies them. The text runtime consumes
+  // them; voice ignores them (native-only).
+  if (deps.copyTemplateConnectors) {
+    try {
+      await deps.copyTemplateConnectors({
+        builderOrgId: deployment.builderOrgId,
+        agentTemplateId: deployment.agentTemplateId,
+        clientOrgId: orgId,
+      });
+    } catch {
+      /* connector copy is best-effort — never block provisioning on it */
+    }
+  }
+
   return { ok: true, orgId };
+}
+
+// ─── connector copy (#3 — Studio connectors → deployed text agent) ───────────
+//
+// The pure orchestration for copying a deploying template's MCP connectors onto
+// the provisioned client workspace's default agent. DI'd so it's unit-tested with
+// no DB; the action (deployments/actions.ts) wires the real template load + the
+// client default-agent lookup + updateAgentBlueprint. Kept here (not in the
+// "use server" action) so the branching logic is directly testable.
+//
+// REGRESSION: a template with NO connectors is a no-op — the client agent's
+// blueprint is never touched, so the runtime's byte-for-byte native path holds
+// for the overwhelmingly common case. Voice is native-only; this copy targets the
+// TEXT agent only (the runtime seam reads agents.blueprint.connectors, which the
+// realtime path ignores).
+
+/** Injectable seams for the connector copy. */
+export type CopyTemplateConnectorsDeps = {
+  /** Load the deploying template's connectors (org-guarded by builderOrgId). */
+  loadTemplateConnectors: (args: {
+    builderOrgId: string;
+    agentTemplateId: string;
+  }) => Promise<ConnectorBinding[]>;
+  /** Find the client workspace's default agent id (slug='default'), or null. */
+  findClientDefaultAgentId: (clientOrgId: string) => Promise<string | null>;
+  /** Merge the connectors onto the client agent's blueprint (updateAgentBlueprint). */
+  updateAgentConnectors: (args: {
+    agentId: string;
+    orgId: string;
+    connectors: ConnectorBinding[];
+  }) => Promise<{ ok: true } | { ok: false; error: string }>;
+};
+
+export type CopyTemplateConnectorsResult =
+  | { ok: true; copied: number }
+  | { ok: false; reason: "no_client_agent" | "update_failed" | "threw" };
+
+/**
+ * Copy a deploying template's connectors onto the client workspace's default
+ * agent. Returns {ok:true, copied:0} (a no-op) when the template has none — never
+ * touching the agent. Soft: any thrown dep maps to {ok:false, reason:'threw'} so
+ * the caller (best-effort in the provisioner) never crashes provisioning.
+ */
+export async function copyTemplateConnectorsToAgent(
+  deps: CopyTemplateConnectorsDeps,
+  args: { builderOrgId: string; agentTemplateId: string; clientOrgId: string },
+): Promise<CopyTemplateConnectorsResult> {
+  try {
+    const connectors = await deps.loadTemplateConnectors({
+      builderOrgId: args.builderOrgId,
+      agentTemplateId: args.agentTemplateId,
+    });
+    // No connectors → no-op (preserve the native path; never write the blueprint).
+    if (!connectors || connectors.length === 0) {
+      return { ok: true, copied: 0 };
+    }
+
+    const agentId = await deps.findClientDefaultAgentId(args.clientOrgId);
+    if (!agentId) return { ok: false, reason: "no_client_agent" };
+
+    const result = await deps.updateAgentConnectors({
+      agentId,
+      orgId: args.clientOrgId,
+      connectors,
+    });
+    if (!result.ok) return { ok: false, reason: "update_failed" };
+
+    return { ok: true, copied: connectors.length };
+  } catch {
+    return { ok: false, reason: "threw" };
+  }
 }

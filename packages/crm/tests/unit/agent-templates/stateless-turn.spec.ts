@@ -142,6 +142,78 @@ describe("runStatelessAgentTurn — tool allowlist", () => {
   });
 });
 
+// ─── 2b. Studio-bound connectors reach the test runner (#3) ───────────────────
+//
+// A builder who binds an MCP connector (e.g. Postiz) onto the TEMPLATE blueprint
+// must be able to Test the agent and watch it call the connector tool. The
+// runner already threads blueprint.connectors into getToolsForCapabilities; this
+// locks that the connector's enabled + cached tool is exposed to the model,
+// namespaced `${serviceName}__${tool}`, AFTER the native capability tools. No
+// secret read happens at LIST time (only the cached schemas are used), so this
+// stays DB/network-free.
+
+describe("runStatelessAgentTurn — Studio connectors in the test path", () => {
+  test("a bound connector's enabled tool is exposed to the model (namespaced, after natives)", async () => {
+    const fake = makeFakeClient([
+      { content: [{ type: "text", text: "ok" }], stop_reason: "end_turn" },
+    ]);
+    await runStatelessAgentTurn(
+      baseInput({
+        client: fake.client,
+        blueprint: {
+          archetype: "chat-assistant",
+          capabilities: ["look_up_availability"], // one native tool
+          greeting: "Hi",
+          connectors: [
+            {
+              id: "postiz",
+              kind: "vetted",
+              serviceName: "postiz",
+              enabledTools: ["schedulePost"],
+              tools: [
+                {
+                  name: "schedulePost",
+                  description: "Schedule a social post",
+                  inputSchema: { type: "object" },
+                },
+                {
+                  name: "listChannels",
+                  description: "List channels",
+                  inputSchema: { type: "object" },
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+    const tools = fake.requests[0].tools as Array<{ name: string }>;
+    const names = tools.map((t) => t.name);
+    // Native tool first, then the ENABLED connector tool (namespaced). The
+    // disabled listChannels must NOT appear.
+    assert.deepEqual(names, ["look_up_availability", "postiz__schedulePost"]);
+  });
+
+  test("no connectors → identical native-only list (regression: byte-for-byte path)", async () => {
+    const fake = makeFakeClient([
+      { content: [{ type: "text", text: "ok" }], stop_reason: "end_turn" },
+    ]);
+    await runStatelessAgentTurn(
+      baseInput({
+        client: fake.client,
+        blueprint: {
+          archetype: "chat-assistant",
+          capabilities: ["look_up_availability"],
+          greeting: "Hi",
+          connectors: [],
+        },
+      }),
+    );
+    const names = (fake.requests[0].tools as Array<{ name: string }>).map((t) => t.name);
+    assert.deepEqual(names, ["look_up_availability"], "empty connectors → native list unchanged");
+  });
+});
+
 // ─── 3. tool-call loop + sandbox (testMode) ───────────────────────────────────
 
 describe("runStatelessAgentTurn — tool-call loop in testMode", () => {
