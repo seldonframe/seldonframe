@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { boolean, index, integer, jsonb, numeric, pgTable, real, text, timestamp, uuid, uniqueIndex } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
 import { users } from "./users";
+import type { AgentBlueprint } from "./agents";
 
 export const marketplaceBlocks = pgTable(
   "marketplace_blocks",
@@ -120,6 +121,18 @@ export const marketplaceListings = pgTable(
     tags: jsonb("tags").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
     price: integer("price").notNull().default(0),
     soulPackage: jsonb("soul_package").notNull(),
+    // 2026-06-22 — listing kind discriminator. `'soul'` (the original product:
+    // a workspace Soul package) or `'agent'` (a Studio agent_templates
+    // blueprint cloned into the buyer's org on install). Defaults to `'soul'`
+    // so every EXISTING row keeps its current meaning untouched and the soul
+    // list/purchase/install path is byte-for-byte unchanged.
+    kind: text("kind").notNull().default("soul"),
+    // Populated ONLY when kind = 'agent': the AgentBlueprint the buyer's
+    // createAgentTemplate clones. Nullable; soul listings leave it null.
+    agentBlueprint: jsonb("agent_blueprint").$type<AgentBlueprint>(),
+    // Populated ONLY when kind = 'agent': the template type
+    // ('voice_receptionist' | 'chat_assistant'). Nullable for soul listings.
+    agentType: text("agent_type"),
     previewImageUrl: text("preview_image_url"),
     previewImages: jsonb("preview_images").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
     installCount: integer("install_count").notNull().default(0),
