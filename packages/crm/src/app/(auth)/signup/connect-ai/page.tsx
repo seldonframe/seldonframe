@@ -98,10 +98,11 @@ export default async function SignupConnectAiPage({
           </span>
         </h1>
         <p className="text-label text-[hsl(var(--color-text-secondary))]">
-          Your <span className="font-medium text-foreground">first workspace
-          is free on us</span> — paste a site and watch it build. Add your own
-          key when you&apos;re ready to <span className="italic">run</span> your
-          agents or add more client workspaces.
+          Start your <span className="font-medium text-foreground">14-day free
+          trial</span> — we&apos;ll build your first workspace on us so you can
+          see it work. Add your own key when you&apos;re ready to{" "}
+          <span className="italic">run</span> your agents (you probably already
+          have one: ChatGPT, Claude, or Gemini).
         </p>
       </div>
 
@@ -109,7 +110,7 @@ export default async function SignupConnectAiPage({
 
       {/* 2026-06-22 — Magic first-run: the first workspace builds on
           SeldonFrame's platform key, so this step is now OPTIONAL. The
-          "Skip — start free →" action fires skipConnectAiAction (no key
+          "Skip — start my trial →" action fires skipConnectAiAction (no key
           stored, marks the step skipped, redirects to ?next= =
           /clients/new). BYOK becomes the gate only at the unbounded-COGS
           moments — building/running agents in the Studio or a 2nd
@@ -120,7 +121,7 @@ export default async function SignupConnectAiPage({
           type="submit"
           className="text-sm text-[hsl(var(--color-text-secondary))] underline-offset-4 hover:text-foreground hover:underline"
         >
-          Skip — start free &rarr;
+          Skip — start my trial &rarr;
         </button>
       </form>
 
@@ -134,7 +135,7 @@ export default async function SignupConnectAiPage({
         <span className="font-medium text-foreground">Why add a key?</span>{" "}
         With your own key you pay Anthropic directly for tokens — and it
         unlocks building &amp; running your own agents plus extra client
-        workspaces. Your first workspace stays free either way.
+        workspaces. Either way, your 14-day trial starts now.
       </p>
 
       <footer className="border-t border-border pt-4 text-xs text-[hsl(var(--color-text-secondary))]">

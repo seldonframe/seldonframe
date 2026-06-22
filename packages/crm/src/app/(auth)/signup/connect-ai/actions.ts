@@ -164,13 +164,13 @@ export async function saveConnectAiKeyAction(
 }
 
 /**
- * 2026-06-22 — Magic first-run. This is the "Skip — start free →" path on
+ * 2026-06-22 — Magic first-run. This is the "Skip — start my trial →" path on
  * the signup connect-ai page. The first workspace builds on SeldonFrame's
  * platform key (create-from-url/paste resolve BYOK → ANTHROPIC_API_KEY),
  * so a key is NOT required to sign up. This action marks the step skipped
  * (stores NO key) + redirects to the same ?next= destination
  * (= /clients/new), where the visitor's pasted URL builds their workspace
- * for free. BYOK is prompted later, only at the unbounded-COGS moments:
+ * during the trial. BYOK is prompted later, only at the unbounded-COGS moments:
  * building/running agents in the Studio (generateAgentDraftAction /
  * testAgentTemplateTurn gate on mode !== "byok") or a 2nd workspace.
  *
