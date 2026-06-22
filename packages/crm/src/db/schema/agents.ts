@@ -112,6 +112,13 @@ export type AgentBlueprint = {
    *  native tool path is byte-for-byte unchanged when this is empty/undefined.
    *  Stored as jsonb (no migration). See lib/agents/mcp/connectors.ts. */
   connectors?: import("@/lib/agents/mcp/connectors").ConnectorBinding[];
+  /** 2026-06-22 (agency multi-client deploy) — when this agent was created by
+   *  deploying a marketplace agent TEMPLATE into a client workspace, the source
+   *  `agent_templates.id`. Used purely for IDEMPOTENCY: a re-deploy of the same
+   *  template skips any client org that already has an agent carrying this id, so
+   *  the agency never gets duplicate agents on re-run. Undefined for agents
+   *  created any other way. Stored in the jsonb blueprint — no migration. */
+  sourceTemplateId?: string;
 };
 
 export const agents = pgTable(

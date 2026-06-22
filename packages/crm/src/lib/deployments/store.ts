@@ -609,3 +609,82 @@ export async function resolvePrimaryContactIdForOrg(
     .limit(1);
   return row?.id ?? null;
 }
+
+// ─── agency multi-client deploy: enumerate clients + idempotency ─────────────
+//
+// Back the "deploy a marketplace agent template to many EXISTING client
+// workspaces" action. An agency's client workspaces are the organizations whose
+// parentAgencyId points at the agency (set when the workspace was attached /
+// provisioned) and that are not archived — the same filter
+// billing/orgs.ts uses for the agency's active workspace list. Lazy DB imports
+// so the real path is the only thing that touches Neon.
+
+/** A client workspace the agency can deploy into. */
+export type AgencyClientOrg = {
+  id: string;
+  name: string;
+  slug: string;
+};
+
+/**
+ * List the agency's EXISTING client workspaces: organizations WHERE
+ * parentAgencyId = agencyId AND archivedAt IS NULL, newest first. These are the
+ * orgs a marketplace agent template can be deployed into (one live agent each,
+ * each grounded by that org's own soul at runtime). Returns [] when the agency
+ * has no client workspaces yet (drives the UI's empty state). Lazy DB import.
+ */
+export async function listClientOrgsForAgency(
+  agencyId: string,
+): Promise<AgencyClientOrg[]> {
+  if (!agencyId) return [];
+  const { db } = await import("@/db");
+  const { organizations } = await import("@/db/schema/organizations");
+  const { and, desc, eq, isNull } = await import("drizzle-orm");
+  const rows = await db
+    .select({
+      id: organizations.id,
+      name: organizations.name,
+      slug: organizations.slug,
+    })
+    .from(organizations)
+    .where(
+      and(
+        eq(organizations.parentAgencyId, agencyId),
+        isNull(organizations.archivedAt),
+      ),
+    )
+    .orderBy(desc(organizations.createdAt));
+  return rows;
+}
+
+/**
+ * Of the given client org ids, return the SUBSET that already runs an agent
+ * created from `templateId` (its blueprint carries sourceTemplateId === the
+ * template). This is the idempotency input for planClientDeployments: those
+ * clients are skipped on a re-deploy so the agency never gets duplicate agents.
+ *
+ * Matches on the jsonb `blueprint->>'sourceTemplateId'` text, scoped to the
+ * requested orgs so it never scans agents outside the agency. Returns a Set for
+ * O(1) membership in the planner. Empty input → empty set (no query). Lazy DB
+ * import (real path only).
+ */
+export async function listClientOrgIdsWithTemplateAgent(
+  clientOrgIds: string[],
+  templateId: string,
+): Promise<Set<string>> {
+  const ids = clientOrgIds.filter(Boolean);
+  if (ids.length === 0 || !templateId) return new Set();
+  const { db } = await import("@/db");
+  const { agents } = await import("@/db/schema");
+  const { and, inArray, sql } = await import("drizzle-orm");
+  const rows = await db
+    .selectDistinct({ orgId: agents.orgId })
+    .from(agents)
+    .where(
+      and(
+        inArray(agents.orgId, ids),
+        sql`${agents.blueprint} ->> 'sourceTemplateId' = ${templateId}`,
+      ),
+    );
+  return new Set(rows.map((r) => r.orgId));
+}

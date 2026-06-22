@@ -136,3 +136,81 @@ export function planClientDeployments(
   }
   return plan;
 }
+
+// ─── run the plan (DI'd create — testable with no DB) ────────────────────────
+//
+// The action's orchestration CORE, factored out of the "use server" shell so it
+// can be unit-tested with a fake `createOne` (repo DI convention — see
+// createDeployment / archiveClientOrg). Given the plan + the set already
+// deployed + a create function, it: records the already-deployed clients as
+// skipped (idempotency), then creates one agent per planned client, soft-failing
+// per client so one failure never aborts the batch. Pure of any DB itself.
+
+/** One client's outcome. */
+export type DeployedClientResult = { orgId: string; orgName: string; agentId: string };
+export type SkippedClientResult = {
+  orgId: string;
+  orgName: string;
+  reason: "already_deployed" | "create_failed";
+  error?: string;
+};
+export type RunClientDeploymentsResult = {
+  deployed: DeployedClientResult[];
+  skipped: SkippedClientResult[];
+};
+
+/** The create seam: turn one planned deployment into an agent id, or fail. */
+export type CreateOneAgent = (
+  item: PlannedClientDeployment,
+) => Promise<{ ok: true; agentId: string } | { ok: false; error: string }>;
+
+/**
+ * Execute a plan: emit already-deployed clients as skipped, then createOne per
+ * planned client (soft-fail per client). `targetIds` is the full intersected
+ * selection (used to derive the already-deployed skips); `plan` is the subset
+ * that needs creating; `alreadyDeployed` marks which targets were idempotency
+ * skips; `nameById` resolves display names. Order: skips (already-deployed)
+ * follow input order of targetIds, then created/failed follow plan order.
+ */
+export async function runClientDeployments(args: {
+  targetIds: string[];
+  plan: PlannedClientDeployment[];
+  alreadyDeployed: Set<string>;
+  nameById: Map<string, string>;
+  createOne: CreateOneAgent;
+}): Promise<RunClientDeploymentsResult> {
+  const { targetIds, plan, alreadyDeployed, nameById, createOne } = args;
+  const deployed: DeployedClientResult[] = [];
+  const skipped: SkippedClientResult[] = [];
+
+  for (const id of targetIds) {
+    if (alreadyDeployed.has(id)) {
+      skipped.push({
+        orgId: id,
+        orgName: nameById.get(id) ?? "Client workspace",
+        reason: "already_deployed",
+      });
+    }
+  }
+
+  for (const item of plan) {
+    const orgName = nameById.get(item.orgId) ?? "Client workspace";
+    try {
+      const result = await createOne(item);
+      if (result.ok) {
+        deployed.push({ orgId: item.orgId, orgName, agentId: result.agentId });
+      } else {
+        skipped.push({ orgId: item.orgId, orgName, reason: "create_failed", error: result.error });
+      }
+    } catch (err) {
+      skipped.push({
+        orgId: item.orgId,
+        orgName,
+        reason: "create_failed",
+        error: err instanceof Error ? err.message : "unknown_error",
+      });
+    }
+  }
+
+  return { deployed, skipped };
+}

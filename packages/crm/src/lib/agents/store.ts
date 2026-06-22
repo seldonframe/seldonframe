@@ -59,6 +59,12 @@ export type CreateAgentInput = {
    *  v2/complete sets this to "test" so the auto-created website
    *  chatbot is responsive on the preview page immediately. */
   status?: "draft" | "test" | "live";
+  /** 2026-06-22 (agency multi-client deploy) — when this agent is created by
+   *  deploying a marketplace agent TEMPLATE into a client workspace, the source
+   *  `agent_templates.id`. Stamped into the blueprint as the idempotency marker
+   *  so a re-deploy of the same template skips clients that already have it.
+   *  Omitted for every other create path (no behavior change). */
+  sourceTemplateId?: string;
 };
 
 export type CreateAgentResult =
@@ -158,6 +164,10 @@ export async function createAgent(input: CreateAgentInput): Promise<CreateAgentR
     faq: input.faq ?? [],
     pricingFacts: input.pricingFacts ?? [],
     greeting: input.greeting ?? "Hi! How can I help you today?",
+    // Idempotency marker for the agency multi-client deploy — only set when this
+    // agent was deployed from a template (omitted otherwise so existing create
+    // paths are byte-for-byte unchanged).
+    ...(input.sourceTemplateId ? { sourceTemplateId: input.sourceTemplateId } : {}),
   };
 
   const [created] = await db
