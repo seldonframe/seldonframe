@@ -22,6 +22,7 @@ import { MarketplaceIcon } from "./marketplace-icons";
 import { TypingDots } from "./marketplace-styles";
 import { MKT, priceColor, type StorefrontAgent } from "./marketplace-data";
 import { installAgentListingAction } from "@/lib/marketplace/actions";
+import { generateAgentRentalKeyAction } from "@/lib/marketplace/rental";
 
 type Phase = "idle" | "installing" | "done";
 
@@ -41,6 +42,13 @@ export function ListingActionsClient({
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [installedTemplateId, setInstalledTemplateId] = useState<string | null>(null);
+  // Phase 2 — the freshly-minted rental key + the real config snippet. Until the
+  // renter clicks "Generate rental key" the panel shows the placeholder snippet
+  // (with `Bearer sk_live_…`); after, the snippet carries the REAL key.
+  const [rentalKey, setRentalKey] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [keyCopied, setKeyCopied] = useState(false);
+  const keyCopyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const ceremonyTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -49,8 +57,17 @@ export function ListingActionsClient({
     return () => {
       if (ceremonyTimer.current) clearInterval(ceremonyTimer.current);
       if (copyTimer.current) clearTimeout(copyTimer.current);
+      if (keyCopyTimer.current) clearTimeout(keyCopyTimer.current);
     };
   }, []);
+
+  // Build the config snippet with the REAL key spliced in (replacing the
+  // `sk_live_…` placeholder) once a key has been generated. Before that, the
+  // server-provided placeholder snippet is shown as-is.
+  const liveSnippet =
+    rentalKey != null
+      ? snippet.replace(/Bearer [^"']*/i, `Bearer ${rentalKey}`)
+      : snippet;
 
   const short = agent.category === "Receptionist" ? "Receptionist" : agent.name;
 
@@ -103,14 +120,49 @@ export function ListingActionsClient({
 
   const copySnippet = useCallback(() => {
     try {
-      void navigator.clipboard.writeText(snippet);
+      void navigator.clipboard.writeText(liveSnippet);
     } catch {
       /* clipboard unavailable — no-op */
     }
     setCopied(true);
     if (copyTimer.current) clearTimeout(copyTimer.current);
     copyTimer.current = setTimeout(() => setCopied(false), 1800);
-  }, [snippet]);
+  }, [liveSnippet]);
+
+  const onGenerateKey = useCallback(async () => {
+    setError(null);
+    // Seed/demo listings have no DB row to mint a real key against — show a
+    // representative placeholder so the panel still demonstrates the flow.
+    if (agent.isSeed) {
+      setRentalKey("rk_demo_preview_key_generate_on_a_live_listing");
+      return;
+    }
+    setGenerating(true);
+    try {
+      const result = await generateAgentRentalKeyAction({ slug: agent.slug });
+      if (result.ok) {
+        setRentalKey(result.key);
+      } else {
+        setError(result.error || "Could not generate a rental key.");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not generate a rental key.");
+    } finally {
+      setGenerating(false);
+    }
+  }, [agent.isSeed, agent.slug]);
+
+  const copyKey = useCallback(() => {
+    if (!rentalKey) return;
+    try {
+      void navigator.clipboard.writeText(rentalKey);
+    } catch {
+      /* clipboard unavailable — no-op */
+    }
+    setKeyCopied(true);
+    if (keyCopyTimer.current) clearTimeout(keyCopyTimer.current);
+    keyCopyTimer.current = setTimeout(() => setKeyCopied(false), 1800);
+  }, [rentalKey]);
 
   const isFree = agent.priceCents <= 0;
 
@@ -203,6 +255,68 @@ export function ListingActionsClient({
                 {mcpEndpoint}
               </code>
             </div>
+
+            {/* Rental key — mint a real, scoped Bearer key for this agent. */}
+            <div style={mcpLabel}>Rental key</div>
+            {rentalKey ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, background: MKT.dark, borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
+                <code style={{ flex: 1, color: "#9FE8DD", fontFamily: MKT.fontMono, fontSize: 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {rentalKey}
+                </code>
+                <button
+                  type="button"
+                  className="sf-btn"
+                  onClick={copyKey}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 5,
+                    border: "1px solid rgba(246,242,234,0.18)",
+                    background: "rgba(246,242,234,0.06)",
+                    color: MKT.paper,
+                    fontFamily: "inherit",
+                    fontSize: 11.5,
+                    fontWeight: 600,
+                    padding: "5px 10px",
+                    borderRadius: 8,
+                    cursor: "pointer",
+                    flex: "none",
+                  }}
+                >
+                  <MarketplaceIcon name="copy" size={13} />
+                  {keyCopied ? "Copied" : "Copy"}
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="sf-btn"
+                onClick={onGenerateKey}
+                disabled={generating}
+                style={{
+                  width: "100%",
+                  marginBottom: 12,
+                  border: "1px solid rgba(0,137,123,0.35)",
+                  background: "rgba(0,137,123,0.08)",
+                  color: MKT.green,
+                  fontFamily: "inherit",
+                  fontWeight: 650,
+                  fontSize: 13.5,
+                  padding: "10px 12px",
+                  borderRadius: 10,
+                  cursor: generating ? "default" : "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                  opacity: generating ? 0.7 : 1,
+                }}
+              >
+                <MarketplaceIcon name="terminal" size={15} />
+                {generating ? "Generating…" : "Generate rental key"}
+              </button>
+            )}
+
             <div style={mcpLabel}>Add to your client</div>
             <div style={{ position: "relative", background: MKT.dark, borderRadius: 11, padding: 14, overflow: "auto" }}>
               <button
@@ -231,11 +345,13 @@ export function ListingActionsClient({
                 {copied ? "Copied" : "Copy"}
               </button>
               <pre style={{ margin: 0, color: "#E8E2D6", fontFamily: MKT.fontMono, fontSize: 11.5, lineHeight: 1.6, whiteSpace: "pre" }}>
-                {snippet}
+                {liveSnippet}
               </pre>
             </div>
             <p style={{ margin: "12px 0 0", fontSize: 12.5, color: "rgba(34,29,23,0.55)", lineHeight: 1.45 }}>
-              Pay only for what it runs. Metered per conversation — no monthly minimum.
+              {rentalKey
+                ? "Your key is in the snippet above. Connect any MCP client and call the agent's “ask” tool."
+                : "Generate a key, then paste this into your MCP client to call the agent's “ask” tool."}
             </p>
           </div>
         ) : null}
