@@ -14,7 +14,7 @@ export default async function MarketplaceBlockDetailPage({ params, searchParams 
     const formData = new FormData();
     formData.set("blockId", blockId);
     await finalizeMarketplacePurchaseReturnAction(formData);
-    redirect(`/marketplace/${blockId}`);
+    redirect(`/templates/${blockId}`);
   }
 
   const details = await getMarketplaceBlockDetailsAction(blockId);
@@ -53,7 +53,7 @@ export default async function MarketplaceBlockDetailPage({ params, searchParams 
             if (result.checkoutUrl) {
               redirect(result.checkoutUrl);
             }
-            redirect(`/marketplace/${blockId}`);
+            redirect(`/templates/${blockId}`);
           }}
           className="mt-3"
         >

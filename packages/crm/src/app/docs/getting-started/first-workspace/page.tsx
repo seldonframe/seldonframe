@@ -25,7 +25,7 @@ export default function Page() {
       </Step>
 
       <Step n={2} title="Pick a template">
-        Open <InAppLink href="/marketplace">Templates</InAppLink>. Each
+        Open <InAppLink href="/templates">Templates</InAppLink>. Each
         template is a starter Soul (HVAC, dentist, coach, agency, e-commerce,
         consultant) — it pre-fills your CRM fields, pipeline stages,
         booking types, and a starter chatbot tuned for that vertical. You

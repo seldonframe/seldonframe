@@ -25,7 +25,7 @@ export default function MarketplaceSubmitPage() {
         action={async (formData) => {
           "use server";
           const result = await generateBlockForReviewAction(formData);
-          redirect(`/marketplace/review/${result.blockId}`);
+          redirect(`/templates/review/${result.blockId}`);
         }}
         className="grid gap-4 rounded-xl border bg-card p-6"
       >

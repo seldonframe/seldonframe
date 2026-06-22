@@ -245,3 +245,27 @@ function builderFromTags(tags: string[] | null | undefined): string | null {
   const tag = tags.find((t) => t.startsWith("builder:"));
   return tag ? tag.slice("builder:".length).trim() || null : null;
 }
+
+// ─── MCP rent surface (UI now; the endpoint is Phase 2) ──────────────────────
+
+/** The public Rent-via-MCP endpoint for a listing. Phase 2 implements the
+ *  JSON-RPC bridge behind it; the listing UI surfaces it + a copy button now. */
+export function mcpEndpointFor(slug: string): string {
+  return `https://app.seldonframe.com/api/v1/agents/${slug}/mcp`;
+}
+
+/** A copyable MCP client config snippet pointing at the listing's endpoint. */
+export function mcpSnippetFor(slug: string): string {
+  return [
+    "{",
+    '  "mcpServers": {',
+    `    "${slug}": {`,
+    `      "url": "${mcpEndpointFor(slug)}",`,
+    '      "headers": {',
+    '        "Authorization": "Bearer sk_live_…"',
+    "      }",
+    "    }",
+    "  }",
+    "}",
+  ].join("\n");
+}

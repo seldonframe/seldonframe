@@ -36,7 +36,7 @@ export default async function MarketplacePage({
           <h1 className="text-page-title">Templates</h1>
           <p className="text-label text-[hsl(var(--color-text-secondary))]">Add new pages, integrations, and AI capabilities to your workspace.</p>
         </div>
-        <Link href="/marketplace/submit" className="crm-button-primary h-10 px-4">
+        <Link href="/templates/submit" className="crm-button-primary h-10 px-4">
           Submit a Template
         </Link>
       </div>
@@ -84,7 +84,7 @@ export default async function MarketplacePage({
                 ★ {Number(block.ratingAverage ?? 0).toFixed(1)} ({block.ratingCount ?? 0}) · {block.installCount ?? 0} installs
               </p>
               <div className="mt-4">
-                <Link href={`/marketplace/${block.blockId}`} className="crm-button-secondary h-9 px-4 text-xs">
+                <Link href={`/templates/${block.blockId}`} className="crm-button-secondary h-9 px-4 text-xs">
                   {block.installed ? "Installed ✓" : Number(block.price ?? 0) > 0 ? `Buy $${Number(block.price).toFixed(0)}` : "Install"}
                 </Link>
               </div>
@@ -105,7 +105,7 @@ export default async function MarketplacePage({
                   <p className="font-medium text-foreground">{item.name}</p>
                   <p className="text-xs text-muted-foreground">{item.blockId}</p>
                 </div>
-                <Link href={`/marketplace/review/${item.blockId}`} className="rounded border border-border px-3 py-1.5 text-xs">
+                <Link href={`/templates/review/${item.blockId}`} className="rounded border border-border px-3 py-1.5 text-xs">
                   {item.status}
                 </Link>
               </li>

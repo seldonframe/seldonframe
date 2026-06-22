@@ -27,7 +27,7 @@ export default function Page() {
 
       <h2>Available templates</h2>
       <p>
-        Browse them in <InAppLink href="/marketplace">Templates</InAppLink>.
+        Browse them in <InAppLink href="/templates">Templates</InAppLink>.
         Current set:
       </p>
       <ul>

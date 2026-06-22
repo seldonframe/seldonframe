@@ -637,8 +637,8 @@ export async function finalizeMarketplacePurchaseReturnAction(formData: FormData
   }
 
   await enableBlockForOrg(orgId, blockId);
-  revalidatePath(`/marketplace/${blockId}`);
-  revalidatePath("/marketplace");
+  revalidatePath(`/templates/${blockId}`);
+  revalidatePath("/templates");
 }
 
 export async function finalizeSoulListingPurchaseReturnAction(formData: FormData) {
@@ -913,8 +913,8 @@ export async function purchaseMarketplaceBlockAction(formData: FormData) {
       .set({ installCount: sql`${marketplaceBlocks.installCount} + 1`, updatedAt: new Date() })
       .where(eq(marketplaceBlocks.blockId, blockId));
 
-    revalidatePath("/marketplace");
-    revalidatePath(`/marketplace/${blockId}`);
+    revalidatePath("/templates");
+    revalidatePath(`/templates/${blockId}`);
 
     return { installed: true };
   }
@@ -931,8 +931,8 @@ export async function purchaseMarketplaceBlockAction(formData: FormData) {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
-    success_url: `${baseUrl}/marketplace/${blockId}?purchased=true`,
-    cancel_url: `${baseUrl}/marketplace/${blockId}`,
+    success_url: `${baseUrl}/templates/${blockId}?purchased=true`,
+    cancel_url: `${baseUrl}/templates/${blockId}`,
     line_items: [
       {
         quantity: 1,
@@ -1036,8 +1036,8 @@ export async function submitBlockRatingAction(formData: FormData) {
     })
     .where(eq(marketplaceBlocks.blockId, blockId));
 
-  revalidatePath(`/marketplace/${blockId}`);
-  revalidatePath("/marketplace");
+  revalidatePath(`/templates/${blockId}`);
+  revalidatePath("/templates");
 }
 
 function parseSubmission(formData: FormData, fallbackSellerName: string): BlockSubmission {
@@ -1258,8 +1258,8 @@ export async function generateBlockForReviewAction(formData: FormData) {
     .set({ generationStatus: "review", updatedAt: new Date() })
     .where(eq(marketplaceBlocks.blockId, marketplace.blockId));
 
-  revalidatePath("/marketplace");
-  revalidatePath(`/marketplace/review/${marketplace.blockId}`);
+  revalidatePath("/templates");
+  revalidatePath(`/templates/review/${marketplace.blockId}`);
 
   return { blockId: marketplace.blockId };
 }
@@ -1353,7 +1353,7 @@ export async function approveGeneratedBlockAction(formData: FormData) {
     reviewUrl: `${appUrl}/admin/blocks/review`,
   });
 
-  revalidatePath(`/marketplace/review/${blockId}`);
+  revalidatePath(`/templates/review/${blockId}`);
   revalidatePath("/admin/blocks/review");
 }
 
@@ -1392,7 +1392,7 @@ export async function rejectGeneratedBlockAction(formData: FormData) {
     .set({ generationStatus: "rejected", updatedAt: new Date() })
     .where(eq(marketplaceBlocks.blockId, blockId));
 
-  revalidatePath(`/marketplace/review/${blockId}`);
+  revalidatePath(`/templates/review/${blockId}`);
 }
 
 function isAdminUser(userEmail: string | null | undefined) {
@@ -1450,5 +1450,5 @@ export async function mergeGeneratedBlockAction(formData: FormData) {
     .where(eq(marketplaceBlocks.blockId, blockId));
 
   revalidatePath("/admin/blocks/review");
-  revalidatePath(`/marketplace/review/${blockId}`);
+  revalidatePath(`/templates/review/${blockId}`);
 }
