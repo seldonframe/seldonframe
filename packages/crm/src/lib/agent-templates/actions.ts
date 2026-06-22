@@ -27,6 +27,10 @@ import {
 } from "./store";
 import { TemplateBlueprintPatchSchema } from "./schema";
 import { generateDraft } from "./generate";
+import {
+  instantiateStarter,
+  buildDefaultInstantiateDeps,
+} from "./starter-pack";
 
 export type CreateAgentTemplateResult =
   | { ok: true; id: string }
@@ -64,6 +68,41 @@ export async function createAgentTemplateAction(input: {
       error: error instanceof Error ? error.message : "create_failed",
     };
   }
+}
+
+export type CreateTemplateFromStarterResult =
+  | { ok: true; id: string }
+  | { ok: false; error: string };
+
+/**
+ * One-click fork a curated STARTER_TEMPLATES seed into a builder-OWNED
+ * agent_template: create a template of the starter's type, then apply its seed
+ * blueprint via the same blueprint-save path the editor uses. The Studio routes
+ * the builder straight to /studio/agents/[id] to edit → test → deploy → resell.
+ *
+ * Thin auth shell: assertWritable + the org guard, then delegate to the pure,
+ * DI'd instantiateStarter (unit-tested in instantiate-starter.spec.ts) wired to
+ * the real createAgentTemplate + updateAgentTemplate. Additive reuse — no new
+ * write path, no migration.
+ */
+export async function createTemplateFromStarterAction(input: {
+  starterId: string;
+}): Promise<CreateTemplateFromStarterResult> {
+  assertWritable();
+
+  const orgId = await getOrgId();
+  if (!orgId) return { ok: false, error: "unauthorized" };
+
+  const result = await instantiateStarter(
+    { builderOrgId: orgId, starterId: input.starterId },
+    buildDefaultInstantiateDeps(),
+  );
+
+  if (result.ok) {
+    revalidatePath("/studio/agents");
+    revalidatePath("/agents");
+  }
+  return result;
 }
 
 export type SaveTemplateBlueprintResult =
