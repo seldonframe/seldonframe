@@ -1,29 +1,33 @@
 // packages/crm/src/app/(auth)/signup/page.tsx
 //
 // 2026-05-22 — Reads the ?url= / ?biz= / ?intent=build query params the
-// marketing hero forwards, then routes them through the two-step
-// signup flow:
+// marketing hero forwards, then routes the new account straight to the
+// build screen:
 //
 //   /signup?url=https://acme.com&intent=build
-//     → magic-link → /signup/connect-ai?next=/clients/new?url=...&intent=build
-//     → key save → /clients/new?url=...&intent=build (auto-submits)
+//     → magic-link → /clients/new?url=...&intent=build (auto-submits)
 //
 // The form's hidden `redirectTo` field carries the eventual destination
-// so the magic-link callback lands the visitor on /signup/connect-ai
-// without dropping the original prompt.
+// so the magic-link callback lands the visitor on /clients/new without
+// dropping the original prompt.
 //
-// 2026-05-27 — Step 2/2 moved from /signup/billing (card capture) to
-// /signup/connect-ai (Anthropic BYOK). Card capture was a 100% drop-off
-// wall in early telemetry (0/12 real signups in 3.5d). The new step is
-// far more achievable AND directly unblocks the next action (/clients/new
-// extraction requires the operator's key), so the gate stops being
-// "optional friction the user can't see value in" and becomes "the thing
-// they need to do their first build". Card capture still lives at
-// /signup/billing and is reached via the over-limit upgrade prompt.
+// 2026-06-22 — Removed the forced /signup/connect-ai (Anthropic BYOK)
+// stop from the first-run path. New accounts build their first workspace
+// on the SeldonFrame platform key, so the key step is now skippable: we
+// land brand-new operators directly on /clients/new instead of detouring
+// through the (optional) key page. /signup/connect-ai is still reachable
+// for operators who want to add their own key up front — it's just no
+// longer a counted step in the forced onboarding arc.
+//
+// History: the step here was previously /signup/connect-ai (Anthropic
+// BYOK, 2026-05-27), which itself replaced /signup/billing (card capture)
+// after card capture proved a 100% drop-off wall (0/12 real signups in
+// 3.5d). Card capture still lives at /signup/billing and is reached via
+// the over-limit upgrade prompt.
 
 import { SignupForm } from "./signup-form";
 import Link from "next/link";
-import { buildSignupConnectAiRedirect } from "@/lib/auth/signup-redirect";
+import { buildSignupNextPath } from "@/lib/auth/signup-redirect";
 
 export default async function SignupPage({
   searchParams,
@@ -38,24 +42,24 @@ export default async function SignupPage({
   const params = await searchParams;
   const token = typeof params.token === "string" ? params.token : "";
 
-  // Build the post-magic-link redirectTo. Three cases:
+  // Build the post-magic-link redirectTo. Two cases:
   //   1. Token-claim flow (visitor came via a claim invite) — preserve
-  //      the existing /claim?token=... destination unchanged. Bypasses
-  //      the BYOK step because claim flows attach the new user to an
-  //      existing agency org which inherits the agency operator's key.
-  //   2. Prompt-driven signup (?url= or ?biz= present) — route through
-  //      /signup/connect-ai so the BYOK step runs, then land on
-  //      /clients/new with the prefill + auto-submit signal.
-  //   3. Bare /signup — also route through /signup/connect-ai. /clients/new
-  //      requires the operator's Anthropic key to extract a workspace, so
-  //      gating signup on the key is the cheapest way to avoid the
-  //      mid-build "needs_byok" prompt that strands visitors who don't
-  //      know what to do next.
+  //      the existing /claim?token=... destination unchanged. Claim flows
+  //      attach the new user to an existing agency org which inherits the
+  //      agency operator's key.
+  //   2. Everything else (prompt-driven ?url=/?biz= OR bare /signup) —
+  //      route STRAIGHT to /clients/new with the prefill + auto-submit
+  //      signal. The Anthropic-key step (/signup/connect-ai) is no longer
+  //      a forced stop: a brand-new account builds its first workspace on
+  //      the platform key, so we land them directly on the build screen
+  //      instead of detouring through the (now optional) key page. Users
+  //      who DO want to add their own key first can still reach
+  //      /signup/connect-ai via its link; it's just not in the forced path.
   let redirectTo: string;
   if (token) {
     redirectTo = `/claim?token=${encodeURIComponent(token)}`;
   } else {
-    redirectTo = buildSignupConnectAiRedirect({
+    redirectTo = buildSignupNextPath({
       url: typeof params.url === "string" ? params.url : null,
       biz: typeof params.biz === "string" ? params.biz : null,
       intent: typeof params.intent === "string" ? params.intent : null,

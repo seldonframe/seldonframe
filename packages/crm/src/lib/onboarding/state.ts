@@ -14,13 +14,31 @@
 //     → { completed: true, currentStep: null }     (shell never renders)
 //
 //   no BYOK Anthropic key on the operator's agency org
-//     → { completed: false, currentStep: 1 }       (step 1/3 — Connect AI)
+//     → { completed: false, currentStep: 1 }       (Connect AI page)
 //
 //   has BYOK key, no owned/parented workspace
-//     → { completed: false, currentStep: 2 }       (step 2/3 — Build)
+//     → { completed: false, currentStep: 2 }       (Build page)
 //
 //   has BYOK key + at least one workspace
-//     → { completed: false, currentStep: 3 }       (step 3/3 — Make it yours)
+//     → { completed: false, currentStep: 3 }       (Make it yours page)
+//
+// `currentStep` is a PAGE IDENTITY (1=Connect-AI, 2=Build, 3=Ready), not
+// the number shown in the progress strip. Each onboarding page guards on
+// its own `currentStep === N`, so this number must stay stable.
+//
+// 2026-06-22 — The Anthropic-key step is no longer a FORCED stop in
+// first-run: a brand-new (keyless) account is routed straight to /clients/new
+// and builds on the platform key, so it never lands on /signup/connect-ai
+// unless it chooses to. The progress strip therefore counts a SHORTER arc
+// for keyless operators so they don't awkwardly start at "Step 2 of 3":
+//
+//   keyless operator → forced arc is  Build (1 of 2) → Make it yours (2 of 2)
+//   keyed   operator → full arc is    Connect AI (1 of 3) → Build (2 of 3)
+//                                       → Make it yours (3 of 3)
+//
+// `display` carries the position + total to render in the strip. It is
+// derived alongside `currentStep` so the shell never has to re-derive the
+// arc length (it would need the BYOK fact, which lives only here).
 //
 // The shell decides what to render based on `currentStep`. The page
 // itself is always allowed to render — we never *block* navigation,
@@ -40,9 +58,42 @@ import { operatorHasByokAnthropicKey } from "@/lib/web-onboarding/byok-resolver"
 
 export type OnboardingStep = 1 | 2 | 3;
 
+/**
+ * What the progress strip should render: the operator's position in the
+ * forced arc and the arc's total length. Distinct from `currentStep`
+ * (a page identity) because the key step is skipped for keyless operators,
+ * so the *displayed* arc is shorter than the page-id space.
+ */
+export type OnboardingDisplay = { step: number; total: number };
+
 export type OnboardingState =
-  | { completed: true; currentStep: null }
-  | { completed: false; currentStep: OnboardingStep };
+  | { completed: true; currentStep: null; display: null }
+  | { completed: false; currentStep: OnboardingStep; display: OnboardingDisplay };
+
+/**
+ * Derive the progress-strip {step, total} from the page identity plus
+ * whether the operator has a BYOK key.
+ *
+ * Keyless operators never get forced through Connect-AI (they build on the
+ * platform key), so their arc is the 2-step Build → Make-it-yours. A keyed
+ * operator (one who chose to add a key, or is returning mid-arc) walks the
+ * full 3-step arc with Connect-AI as step 1.
+ */
+export function deriveOnboardingDisplay(
+  currentStep: OnboardingStep,
+  hasByokAnthropicKey: boolean,
+): OnboardingDisplay {
+  if (hasByokAnthropicKey) {
+    // Full 3-step arc: page identity === displayed position.
+    return { step: currentStep, total: 3 };
+  }
+  // Keyless 2-step arc. currentStep is 1 only when the operator chose to
+  // visit Connect-AI (handled by the keyed branch normally, but a keyless
+  // operator sitting ON connect-ai shows as step 1 of 2); Build → 1,
+  // Make-it-yours → 2.
+  const step = currentStep === 1 ? 1 : currentStep - 1;
+  return { step, total: 2 };
+}
 
 /**
  * Resolve the current onboarding state for a given user. Pure read; safe
@@ -63,7 +114,7 @@ export async function getOnboardingState(
     // session, so the shell shouldn't render. Treat as completed=true
     // (shell hidden) rather than throwing — the auth gate on each page
     // is responsible for redirecting unauthed users away.
-    return { completed: true, currentStep: null };
+    return { completed: true, currentStep: null, display: null };
   }
 
   const [userRow] = await db
@@ -78,11 +129,11 @@ export async function getOnboardingState(
   if (!userRow) {
     // User row missing (deleted? mid-bootstrap?) — same defensive
     // posture as the empty-id branch above.
-    return { completed: true, currentStep: null };
+    return { completed: true, currentStep: null, display: null };
   }
 
   if (userRow.onboardingCompletedAt) {
-    return { completed: true, currentStep: null };
+    return { completed: true, currentStep: null, display: null };
   }
 
   const resolvedOrgId = orgId ?? userRow.orgId ?? null;
@@ -92,12 +143,20 @@ export async function getOnboardingState(
   // and a brand-new user might not yet (edge case during the post-magic-
   // link auth callback). In that case we know they're on step 1.
   if (!resolvedOrgId) {
-    return { completed: false, currentStep: 1 };
+    return {
+      completed: false,
+      currentStep: 1,
+      display: deriveOnboardingDisplay(1, false),
+    };
   }
 
   const hasKey = await operatorHasByokAnthropicKey(resolvedOrgId);
   if (!hasKey) {
-    return { completed: false, currentStep: 1 };
+    return {
+      completed: false,
+      currentStep: 1,
+      display: deriveOnboardingDisplay(1, false),
+    };
   }
 
   // Step 2 gate — has the BYOK key but hasn't successfully built a
@@ -129,10 +188,18 @@ export async function getOnboardingState(
   );
 
   if (!hasClientWorkspace) {
-    return { completed: false, currentStep: 2 };
+    return {
+      completed: false,
+      currentStep: 2,
+      display: deriveOnboardingDisplay(2, true),
+    };
   }
 
-  return { completed: false, currentStep: 3 };
+  return {
+    completed: false,
+    currentStep: 3,
+    display: deriveOnboardingDisplay(3, true),
+  };
 }
 
 /**
@@ -187,13 +254,25 @@ export function deriveOnboardingState(input: {
   hasClientWorkspace: boolean;
 }): OnboardingState {
   if (input.onboardingCompletedAt) {
-    return { completed: true, currentStep: null };
+    return { completed: true, currentStep: null, display: null };
   }
   if (!input.hasByokAnthropicKey) {
-    return { completed: false, currentStep: 1 };
+    return {
+      completed: false,
+      currentStep: 1,
+      display: deriveOnboardingDisplay(1, false),
+    };
   }
   if (!input.hasClientWorkspace) {
-    return { completed: false, currentStep: 2 };
+    return {
+      completed: false,
+      currentStep: 2,
+      display: deriveOnboardingDisplay(2, true),
+    };
   }
-  return { completed: false, currentStep: 3 };
+  return {
+    completed: false,
+    currentStep: 3,
+    display: deriveOnboardingDisplay(3, true),
+  };
 }

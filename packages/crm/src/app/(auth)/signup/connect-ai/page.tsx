@@ -75,20 +75,23 @@ export default async function SignupConnectAiPage({
     redirect(next);
   }
 
-  // 2026-05-27 — Unified onboarding shell. This is step 1/3 of the arc:
-  //   Step 1 — Connect AI  (← here)
-  //   Step 2 — Build       (/clients/new)
-  //   Step 3 — Make it yours (/clients/[slug]/ready → /settings/domain)
+  // 2026-05-27 — Unified onboarding shell.
+  // 2026-06-22 — Connect-AI is no longer a FORCED step. We only reach this
+  // render path when the operator is keyless (the existing-user-skip above
+  // already redirected anyone who has a key), and a keyless operator's
+  // forced arc is the 2-step Build → Make-it-yours. An operator who lands
+  // here did so by CHOICE (e.g. followed the "add a key first" link), so we
+  // show them as step 1 of that 2-step arc — the bar fills to 50% here.
+  //   Step 1 — Connect AI  (← here, optional)
+  //   then    Build        (/clients/new)
+  //           Make it yours (/clients/[slug]/ready → /settings/domain)
   //
-  // The shell renders the header strip with logo + progress bar +
-  // "Step 1 of 3" counter at the top. The bar fills to 33% here
-  // (endowed-progress effect — they get credit for signing up). We
-  // pass showLogo={false} because the (auth) layout already renders
-  // the SeldonFrame wordmark above this card; two marks side-by-side
-  // would look noisy.
+  // We pass showLogo={false} because the (auth) layout already renders the
+  // SeldonFrame wordmark above this card; two marks side-by-side would look
+  // noisy.
   return (
     <div className="space-y-6">
-      <OnboardingShell step={1} title="Connect AI" showLogo={false} />
+      <OnboardingShell step={1} total={2} title="Connect AI" showLogo={false} />
 
       <div className="space-y-2 text-center">
         <h1 className="text-section-title text-foreground">

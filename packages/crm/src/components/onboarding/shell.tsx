@@ -32,13 +32,18 @@
 
 import Link from "next/link";
 
-import type { OnboardingStep } from "@/lib/onboarding/state";
-
 export type OnboardingShellProps = {
-  /** The step the user is currently ON (NOT the step they're heading
-   *  toward). Drives both the "Step N of 3" text and the progress fill
-   *  percentage. */
-  step: OnboardingStep;
+  /** The operator's position in the forced arc (1-based). Drives both the
+   *  "Step N of M" text and the progress fill. NOTE: this is the DISPLAYED
+   *  position, not the page identity — the Anthropic-key step is skipped
+   *  for keyless operators, so a keyless Build page is "Step 1 of 2" even
+   *  though its page identity is currentStep=2. Resolve this from
+   *  `getOnboardingState(...).display.step`. */
+  step: number;
+  /** Total number of steps in the forced arc (2 for keyless operators who
+   *  skip the key step, 3 for keyed operators who walk the full arc).
+   *  Resolve from `getOnboardingState(...).display.total`. */
+  total: number;
   /** Short title shown next to the step counter. Mirrors what the
    *  page itself says is happening — "Connect AI", "Build your first
    *  workspace", "Make it yours". The shell is just the chrome; the
@@ -54,22 +59,22 @@ export type OnboardingShellProps = {
   showLogo?: boolean;
 };
 
-// Percentage fill for each step. Step 1 starts at 33% (endowed progress —
-// they signed up, they get credit for one third). Step 2 is 67%
-// (build is the magic-moment step, halfway through visually). Step 3
-// is 100% — they're on the final action; we want it to feel completable.
-//
-// Why not 0/50/100? A 0% bar on step 1 reads "haven't started yet" and
-// kills momentum. Calendly's research showed visible initial progress
-// drove the largest conversion lift in their onboarding flow.
-const STEP_FILL_PERCENT: Record<OnboardingStep, number> = {
-  1: 33,
-  2: 67,
-  3: 100,
-};
+// Percentage fill is derived from the operator's position in their arc:
+// `step / total`. On the full 3-step arc that's 33% / 67% / 100%; on the
+// keyless 2-step arc (key step skipped) it's 50% / 100%. Either way the
+// operator is never shown a 0% bar — step 1 always reads as meaningful
+// progress (the "endowed progress effect"). A 0% bar on the first step
+// reads "haven't started yet" and kills momentum; Calendly's research
+// showed visible initial progress drove the largest conversion lift in
+// their onboarding flow.
+function fillPercentFor(step: number, total: number): number {
+  if (total <= 0) return 100;
+  const pct = Math.round((step / total) * 100);
+  return Math.max(0, Math.min(100, pct));
+}
 
-export function OnboardingShell({ step, title, showLogo = true }: OnboardingShellProps) {
-  const fillPercent = STEP_FILL_PERCENT[step];
+export function OnboardingShell({ step, total, title, showLogo = true }: OnboardingShellProps) {
+  const fillPercent = fillPercentFor(step, total);
 
   return (
     <div
@@ -125,7 +130,7 @@ export function OnboardingShell({ step, title, showLogo = true }: OnboardingShel
             />
           </div>
           <span className="shrink-0 whitespace-nowrap text-xs font-medium text-muted-foreground sm:text-[13px]">
-            <span className="text-foreground">Step {step} of 3</span>
+            <span className="text-foreground">Step {step} of {total}</span>
             <span className="mx-1.5 text-muted-foreground/60">·</span>
             <span>{title}</span>
           </span>

@@ -447,8 +447,12 @@ export default async function WorkspaceReadyPage({ params, searchParams }: Ready
           operator is mid-arc. Once they complete (either path), this
           page goes back to its non-onboarding layout — no shell, no
           Maybe-later CTA, no celebration banner. */}
-      {showShell ? (
-        <OnboardingShell step={3} title="Make it yours" />
+      {showShell && onboardingState.display ? (
+        <OnboardingShell
+          step={onboardingState.display.step}
+          total={onboardingState.display.total}
+          title="Make it yours"
+        />
       ) : null}
       <div className="mx-auto max-w-5xl p-4 sm:p-6 md:p-8">
       {justCompleted ? (

@@ -91,8 +91,12 @@ export default async function ClientsNewPage({
     // subtract the shell's own height (~52px). The non-onboarding
     // calc(100vh - 9rem) stays unchanged for repeat visitors.
     <div className="flex h-full min-h-full w-full flex-col">
-      {showShell ? (
-        <OnboardingShell step={2} title="Build your first workspace" />
+      {showShell && onboardingState.display ? (
+        <OnboardingShell
+          step={onboardingState.display.step}
+          total={onboardingState.display.total}
+          title="Build your first workspace"
+        />
       ) : null}
       <main
         className="w-full flex-1"
