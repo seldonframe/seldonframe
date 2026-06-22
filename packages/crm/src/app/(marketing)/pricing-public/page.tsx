@@ -19,7 +19,7 @@ import { MarketingFooter } from "@/components/landing/marketing-footer";
 export const metadata: Metadata = {
   title: "Pricing — SeldonFrame",
   description:
-    "$29/mo flat · unlimited workspaces · first workspace free · 14-day trial. No metered bills — plus a small GMV fee only when SeldonFrame is your sales channel. We don't tax your work.",
+    "$29/mo flat · unlimited workspaces · 14-day free trial. No metered bills — plus a small GMV fee only when SeldonFrame is your sales channel. We don't tax your work.",
 };
 
 export default function PricingPublicPage() {
@@ -43,7 +43,7 @@ export default function PricingPublicPage() {
             </h1>
             <p className="mx-auto mt-4 max-w-[54ch] text-[16px] leading-[1.55] text-[#6E665A]">
               One flat monthly price — unlimited workspaces, no metered bills, no surprise fees.
-              Your first workspace is free. We add a small GMV fee only when SeldonFrame is your
+              Start with a 14-day free trial. We add a small GMV fee only when SeldonFrame is your
               sales channel — so we only make money when you do.
             </p>
           </div>
