@@ -100,3 +100,16 @@ Strategy detail in memory: `seldonframe-positioning-synthesis`, `agent-builder-p
 - *Agency risk-reversal (already baked in):* "We only take our cut when YOU get paid (GMV fee). We don't tax your work." — a Hormozi-grade reversal; lead with it.
 
 **Pricing read:** $29 flat + GMV (5→3→2%) + marketplace fee. The "we only win when you win" GMV alignment is excellent risk-reversal. Watch-out: $29 flat may *under-price* perceived value (it replaces a $4k/mo receptionist + a $300/mo GHL stack) — so **never sell on the $29; value-anchor** ("one booked job pays for it 10× over"). The $29 is the land-and-expand wedge; the GMV is the upside — sound, *as long as SF is genuinely the sales channel* often enough for the GMV to fire (else it's under-monetized).
+
+## Voice is surface #1 — the platform generalizes
+This arc instantiates ONE surface (voice). The same machinery generalizes to ANY agent on ANY surface — chat-embed · SMS · email · DM · MCP-endpoint — composed from the **6 primitives** (Surface · Skill · Tools · Knowledge/Brain · Guardrails · Voice/Format) and bound to the client's tools via MCP/API. **The bridge is surface-agnostic:** a chat/email/SMS agent deployed to a client provisions the SAME whitelabel front office and writes into the SAME client org. So the deliverable is not "a voice receptionist" — it's *the first surface of a general build-and-sell-any-agent platform*. See `[[agent-builder-primitives]]`.
+
+## Remaining queue (confirmed)
+1. **Live smoke** (deploy→activate→call→cancel).
+2. **BYO-OAuth-app two-way calendar** (premium, when demanded).
+3. **MCP connector layer** (vetted-broker + BYO-MCP + the directory).
+4. **Multi-surface deploys** (chat/SMS/email/DM — reuse the bridge + primitives).
+5. **Small deferrals:** ICS reschedule/cancel + webcal feed; reactivation-from-archive; legacy-deployment backfill.
+
+## How this gets built — the loop (working method)
+Each feature this session ran ONE loop: **brainstorm → spec → plan → subagent build → controller-verify (tests + tsc + check-use-server + migration-journal + regression-grep) → merge → memory.** Maker (implementer) ≠ checker (controller review) = the quality. Next leverage: codify it as a `/ship-feature` skill, harden the verify-gate as `/verify-build`, distill each correction into CLAUDE.md/memory constraints, swarm for breadth + gate for depth, promote stable loops to `/schedule`. **Loop the BUILD; keep the JUDGMENT human.** See `[[loops-working-style]]`.
