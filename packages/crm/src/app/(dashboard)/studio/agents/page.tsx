@@ -20,6 +20,8 @@ import { NewAgentButton } from "./new-agent-button";
 import { DeployButton } from "./deploy-button";
 import { TemplateStatusBadge, formatTemplateType } from "./status-badge";
 import { StudioTabs } from "../studio-tabs";
+import { StarterPackSection } from "./starter-pack-section";
+import { STARTER_TEMPLATES } from "@/lib/agent-templates/starter-pack";
 
 export const dynamic = "force-dynamic";
 
@@ -65,6 +67,16 @@ export default async function AgentsStudioPage() {
     deployCounts.map((r) => [r.agentTemplateId, Number(r.n)]),
   );
 
+  // Trim the static registry to the card-facing menu copy (no blueprint shipped
+  // to the client — the action holds the blueprint server-side).
+  const starterCards = STARTER_TEMPLATES.map((s) => ({
+    id: s.id,
+    name: s.name,
+    category: s.category,
+    type: s.type,
+    summary: s.summary,
+  }));
+
   return (
     <section className="animate-page-enter space-y-5">
       <StudioTabs />
@@ -80,25 +92,32 @@ export default async function AgentsStudioPage() {
       </div>
 
       {templates.length === 0 ? (
-        <article className="rounded-xl border bg-card p-8 text-center">
-          <div className="mx-auto max-w-md space-y-4">
-            <span
-              className="mx-auto inline-flex size-12 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-500 dark:text-indigo-400"
-              aria-hidden
-            >
-              <Bot className="size-6" />
-            </span>
-            <h2 className="text-lg font-semibold">Build your first agent.</h2>
-            <p className="text-sm text-muted-foreground">
-              Start with a voice receptionist — an AI that answers calls, books
-              appointments, and answers questions. Configure it once, then deploy
-              it to every client you serve.
-            </p>
-            <div className="flex justify-center pt-2">
-              <NewAgentButton />
+        <div className="space-y-6">
+          {/* Primary path for a brand-new builder: a curated, forkable menu. */}
+          <StarterPackSection starters={starterCards} />
+
+          {/* Secondary: describe-your-own / start-blank, kept available. */}
+          <article className="rounded-xl border bg-card p-6 text-center">
+            <div className="mx-auto max-w-md space-y-3">
+              <span
+                className="mx-auto inline-flex size-10 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-500 dark:text-indigo-400"
+                aria-hidden
+              >
+                <Bot className="size-5" />
+              </span>
+              <h2 className="text-base font-semibold">
+                Or build one from scratch.
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Describe what your agent should do in a sentence and we&apos;ll
+                draft it — or start from a blank template.
+              </p>
+              <div className="flex justify-center pt-1">
+                <NewAgentButton />
+              </div>
             </div>
-          </div>
-        </article>
+          </article>
+        </div>
       ) : (
         <div className="space-y-3">
           {templates.map((tmpl) => {
@@ -137,6 +156,11 @@ export default async function AgentsStudioPage() {
               </article>
             );
           })}
+
+          {/* Always-available resale menu: fork another curated starter. */}
+          <div className="border-t pt-6">
+            <StarterPackSection starters={starterCards} />
+          </div>
         </div>
       )}
     </section>
