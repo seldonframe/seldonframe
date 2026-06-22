@@ -3,8 +3,8 @@
 // Positioning v2 (2026-06-22) — the "Sell" rung of the homepage ladder.
 // Repurposed from the old SMB-first CTA band (which rotated an industry word)
 // to the single Sell idea: take payments, send proposals, sell packages right
-// through SeldonFrame. GMV framing lives here ("+2% only on SF sales — we don't
-// tax your work"), pulled out of the hero so each rung holds one idea.
+// through SeldonFrame. GMV framing lives here (a small fee only on SF sales),
+// pulled out of the hero so each rung holds one idea.
 //
 // Design tokens: card #FFFDFA, paper #F6F2EA, ink #221D17, muted #6E665A,
 // accent green #00897B, border rgba(34,29,23,.10). Newsreader italic accent.
@@ -35,9 +35,8 @@ export function MarketingSmbCta() {
         <p className="mx-auto mt-4 max-w-[54ch] text-[clamp(15px,1.7vw,17px)] leading-[1.55] text-[#6E665A]">
           Take payments, send proposals, and sell packages from the same place you run
           everything — no extra tools. We only charge{" "}
-          <strong className="font-[500] text-[#221D17]">~2% on what you sell through SeldonFrame</strong>.
-          Sell anywhere else? We take nothing.{" "}
-          <strong className="font-[500] text-[#221D17]">We don&rsquo;t tax your work.</strong>
+          <strong className="font-[500] text-[#221D17]">a small fee on what you sell through SeldonFrame</strong>.
+          Sell anywhere else? We take nothing.
         </p>
 
         <div className="mt-8 flex justify-center">

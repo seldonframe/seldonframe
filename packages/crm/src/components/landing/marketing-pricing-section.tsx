@@ -8,9 +8,9 @@
 //   Everything included — website, booking, CRM, intake, web chat, AND the
 //   voice + SMS + email AI agents (the voice receptionist is included, not a
 //   paid add-on).
-//   + a GMV fee — 5% → 3% over $10k/mo → 2% over $50k/mo — billed ONLY when
-//   SeldonFrame is your sales channel (marketplace, booking, proposals).
-//   "We only make money when you do — we don't tax your work."
+//   + a small GMV fee — billed ONLY when SeldonFrame is your sales channel
+//   (marketplace, booking, proposals).
+//   "We only make money when you do."
 //   Flat because it's BYOK + BYO-Twilio under the hood: you pay the AI +
 //   telephony providers directly at cost, we don't mark up your usage.
 //
@@ -30,13 +30,6 @@ const INCLUDED: readonly string[] = [
   "Build ANY agent in the Studio — connect external tools",
   "Whitelabel + resell each workspace to clients",
   "Own + export everything (AGPL — no lock-in)",
-];
-
-// The GMV ladder — only billed when SeldonFrame is the sales channel.
-const GMV_TIERS: readonly { rate: string; band: string }[] = [
-  { rate: "5%", band: "on your first $10k/mo" },
-  { rate: "3%", band: "over $10k/mo" },
-  { rate: "2%", band: "over $50k/mo" },
 ];
 
 export function LandingMarketingPricingSection() {
@@ -130,7 +123,7 @@ export function LandingMarketingPricingSection() {
             </div>
           </article>
 
-          {/* ── GMV explainer — "we don't tax your work" ─────────────────── */}
+          {/* ── GMV explainer — only when SeldonFrame is your sales channel ─── */}
           <aside
             aria-label="How the GMV fee works"
             className="flex flex-col rounded-[20px] border border-[rgba(34,29,23,.08)] bg-[#EFE9DD] p-7 md:p-8"
@@ -139,7 +132,7 @@ export function LandingMarketingPricingSection() {
               + A small GMV fee
             </p>
             <h3 className="mt-2 max-w-[22ch] font-[Newsreader,Georgia,serif] text-[clamp(20px,2.6vw,26px)] not-italic leading-[1.2] text-[#221D17]">
-              We don&rsquo;t tax your work.
+              We only make money when you do.
             </h3>
             <p className="mt-3 text-[13.5px] leading-[1.55] text-[#6E665A]">
               On top of the flat $29, we take a small percentage of revenue —{" "}
@@ -148,19 +141,9 @@ export function LandingMarketingPricingSection() {
               through us, the fee is zero.
             </p>
 
-            <ul className="mt-5 flex flex-col gap-2.5">
-              {GMV_TIERS.map((t) => (
-                <li
-                  key={t.rate}
-                  className="flex items-baseline gap-3 rounded-[12px] border border-[rgba(34,29,23,.08)] bg-[#FFFDFA] px-4 py-3"
-                >
-                  <span className="font-sans text-[22px] font-[600] leading-none tracking-[-0.02em] text-[#00897B] tabular-nums">
-                    {t.rate}
-                  </span>
-                  <span className="text-[13px] leading-[1.4] text-[#6E665A]">{t.band}</span>
-                </li>
-              ))}
-            </ul>
+            <p className="mt-5 rounded-[12px] border border-[rgba(34,29,23,.08)] bg-[#FFFDFA] px-4 py-3 text-[13px] leading-[1.45] text-[#6E665A]">
+              Only on what you sell through SeldonFrame — sell anywhere else and we take nothing.
+            </p>
 
             <p className="mt-auto pt-5 text-[12.5px] leading-[1.5] text-[#6E665A]">
               No metered AI bills. No per-workspace tax. You only ever pay more when you&rsquo;re

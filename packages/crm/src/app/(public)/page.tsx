@@ -9,8 +9,8 @@
 //
 // Order (2026-06-22 positioning v2 — one idea per section ladder):
 //   Nav (fixed) → Hero (+ demo marquee) → BuildSteps (the 60s demo)
-//   → Modules (Run rung) → SmbCta (Sell rung) → Agents (Hire agents,
-//   not people) → AgencyMath (Build & sell rung) → Pricing → ProofStrip
+//   → Modules (Run rung) → SmbCta (Sell rung) → Agents (Hire agents)
+//   → AgencyMath (Build & sell rung) → Pricing → ProofStrip
 //   → FAQ → FinalCta → Footer.
 //   MarketingReplace ("Why not just…") is demoted off the homepage to
 //   keep the ladder to one idea per rung (component still ships).

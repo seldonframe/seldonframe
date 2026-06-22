@@ -21,12 +21,12 @@ const FAQS: readonly FaqItem[] = [
   {
     question: "Do I need my own AI key?",
     answer:
-      "Yes — and if you use ChatGPT, Claude, or Gemini, you already have what you need. Your agents run on your own key (and Twilio for calls/texts), billed by the provider at cost. That's why it's a flat $29 with no usage markup — we don't tax your work. The website, booking, and CRM build with no key during your trial; you connect a key when you switch an agent on (we show you how).",
+      "Yes — and if you use ChatGPT, Claude, or Gemini, you already have what you need. Your agents run on your own key (and Twilio for calls/texts), billed by the provider at cost. That's why it's a flat $29 with no usage markup. The website, booking, and CRM build with no key during your trial; you connect a key when you switch an agent on (we show you how).",
   },
   {
     question: "How much is it?",
     answer:
-      "$29/mo flat, unlimited workspaces, with a 14-day free trial. Plus ~2% only on what you sell through SeldonFrame (payments, proposals, packages) — sell anywhere else and we take nothing.",
+      "$29/mo flat, unlimited workspaces, with a 14-day free trial. Plus a small fee only on what you sell through SeldonFrame (payments, proposals, packages) — sell anywhere else and we take nothing.",
   },
   {
     question: "Is it free to start?",

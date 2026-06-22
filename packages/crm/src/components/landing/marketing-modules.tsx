@@ -124,7 +124,7 @@ export function MarketingModules() {
 }
 
 /* ════════════════════════════════════════════════════════════════════════
-   "Hire agents, not people" — the demand-side rung of the ladder.
+   "Hire agents" — the demand-side rung of the ladder.
    Promoted out of the Modules section (2026-06-22 positioning v2) into its
    own section so the homepage holds one idea per rung. Deep-green #1F2B24
    slab (the seldonstudio dark-block pattern), SeldonFrame green accents.
@@ -134,7 +134,7 @@ export function MarketingAgents() {
   return (
     <section
       id="agents"
-      aria-label="Hire agents, not people"
+      aria-label="Hire agents"
       className="border-t border-[rgba(34,29,23,.08)] bg-[#1F2B24] px-5 py-20 md:px-8 md:py-28 lg:px-12"
     >
       <div className="mx-auto max-w-[1120px]">
@@ -142,13 +142,10 @@ export function MarketingAgents() {
         <div className="max-w-[640px]">
           <div className="inline-flex items-center gap-2.5 text-[12px] font-[600] uppercase tracking-[0.09em] text-[rgba(111,194,143,.9)]">
             <span className="h-px w-4 bg-[rgba(111,194,143,.5)]" aria-hidden />
-            Hire agents, not people
+            Hire agents
           </div>
           <h2 className="mt-3.5 text-[clamp(27px,4.2vw,42px)] font-[500] leading-[1.08] tracking-[-0.025em] text-[#F6F2EA]">
-            Hire agents,{" "}
-            <em className="font-[Newsreader,Georgia,serif] font-normal not-italic text-[rgba(246,242,234,.75)]">
-              not people.
-            </em>
+            Hire agents.
           </h2>
           <p className="mt-4 max-w-[60ch] text-[clamp(15.5px,1.9vw,18px)] leading-[1.55] text-[rgba(246,242,234,.78)]">
             Add no-code AI agents to do the work — answer every call, text back missed calls,

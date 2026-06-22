@@ -141,7 +141,7 @@ export function MarketingAgencyMath() {
               <ResultCell label="Monthly recurring" value={fmtUsd(results.mrr)} sub={`${fmtUsd(results.mrr * 12)} / year`} />
               <ResultCell label="Setup pool" value={fmtUsd(results.setupPool)} sub="One-time" />
               <ResultCell label="Year-1 total" value={fmtUsd(results.year1)} sub="MRR × 12 + setup" positive />
-              <ResultCell label="Gross margin" value={`${Math.round(results.margin * 100)}%`} sub={`after $${SF_PLAN_COST}/mo + ~2% on SeldonFrame sales`} positive />
+              <ResultCell label="Gross margin" value={`${Math.round(results.margin * 100)}%`} sub={`after $${SF_PLAN_COST}/mo + a small fee on SeldonFrame sales`} positive />
             </div>
 
             <p className="mt-3 text-[11.5px] leading-[1.5] text-[rgba(246,242,234,.35)]">
