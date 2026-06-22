@@ -164,16 +164,19 @@ export async function saveConnectAiKeyAction(
 }
 
 /**
- * Escape hatch for environments where encryption isn't set up (no
- * ENCRYPTION_KEY env var) or for future A/B tests that want to expose
- * a "set up later" link. Logs the skip + redirects to the same ?next=
- * destination. /clients/new will surface the inline BYOK prompt on
- * first submission as the safety net.
+ * 2026-06-22 — Magic first-run. This is the "Skip — start free →" path on
+ * the signup connect-ai page. The first workspace builds on SeldonFrame's
+ * platform key (create-from-url/paste resolve BYOK → ANTHROPIC_API_KEY),
+ * so a key is NOT required to sign up. This action marks the step skipped
+ * (stores NO key) + redirects to the same ?next= destination
+ * (= /clients/new), where the visitor's pasted URL builds their workspace
+ * for free. BYOK is prompted later, only at the unbounded-COGS moments:
+ * building/running agents in the Studio (generateAgentDraftAction /
+ * testAgentTemplateTurn gate on mode !== "byok") or a 2nd workspace.
  *
- * We deliberately do NOT expose this in the default UI per the spec —
- * the gate stops being a gate if there's a skip button. The action is
- * preserved so degraded env paths and future copy experiments can fire
- * it without round-trip code changes.
+ * Also doubles as the escape hatch for env-degraded paths (no
+ * ENCRYPTION_KEY in the deployment); the skip is logged either way so ops
+ * can see how often it fires.
  */
 export async function skipConnectAiAction(formData: FormData): Promise<never> {
   assertWritable();

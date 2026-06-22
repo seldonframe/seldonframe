@@ -41,6 +41,7 @@ import { operatorHasByokAnthropicKey } from "@/lib/web-onboarding/byok-resolver"
 import { OnboardingShell } from "@/components/onboarding/shell";
 
 import { ConnectAiForm } from "./connect-ai-form";
+import { skipConnectAiAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -90,15 +91,38 @@ export default async function SignupConnectAiPage({
       <OnboardingShell step={1} title="Connect AI" showLogo={false} />
 
       <div className="space-y-2 text-center">
-        <h1 className="text-section-title text-foreground">Connect your AI provider</h1>
+        <h1 className="text-section-title text-foreground">
+          Connect your AI provider{" "}
+          <span className="font-normal text-[hsl(var(--color-text-secondary))]">
+            · optional
+          </span>
+        </h1>
         <p className="text-label text-[hsl(var(--color-text-secondary))]">
-          This unlocks workspace creation. You stay in control of cost, model,
-          and rate limits. Estimated cost per workspace: ~$0.50–$1 in Claude
-          tokens.
+          Your <span className="font-medium text-foreground">first workspace
+          is free on us</span> — paste a site and watch it build. Add your own
+          key when you&apos;re ready to <span className="italic">run</span> your
+          agents or add more client workspaces.
         </p>
       </div>
 
       <ConnectAiForm next={next} />
+
+      {/* 2026-06-22 — Magic first-run: the first workspace builds on
+          SeldonFrame's platform key, so this step is now OPTIONAL. The
+          "Skip — start free →" action fires skipConnectAiAction (no key
+          stored, marks the step skipped, redirects to ?next= =
+          /clients/new). BYOK becomes the gate only at the unbounded-COGS
+          moments — building/running agents in the Studio or a 2nd
+          workspace — which prompt for a key there. */}
+      <form action={skipConnectAiAction} className="text-center">
+        <input type="hidden" name="next" value={next} />
+        <button
+          type="submit"
+          className="text-sm text-[hsl(var(--color-text-secondary))] underline-offset-4 hover:text-foreground hover:underline"
+        >
+          Skip — start free &rarr;
+        </button>
+      </form>
 
       {/* 2026-05-27 — Reassurance line beneath the form (above the
           encryption footer in ConnectAiForm), pulled into the page
@@ -107,10 +131,10 @@ export default async function SignupConnectAiPage({
           marketing site makes so the visitor isn't surprised by token
           charges on their Anthropic statement later. */}
       <p className="text-center text-xs text-[hsl(var(--color-text-secondary))]">
-        <span className="font-medium text-foreground">Why this first?</span>{" "}
-        SeldonFrame doesn&apos;t proxy your AI usage — you pay Anthropic
-        directly for tokens (~$0.50/workspace). This step unlocks workspace
-        creation.
+        <span className="font-medium text-foreground">Why add a key?</span>{" "}
+        With your own key you pay Anthropic directly for tokens — and it
+        unlocks building &amp; running your own agents plus extra client
+        workspaces. Your first workspace stays free either way.
       </p>
 
       <footer className="border-t border-border pt-4 text-xs text-[hsl(var(--color-text-secondary))]">
