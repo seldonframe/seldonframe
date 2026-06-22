@@ -371,9 +371,12 @@ describe("updateDeployment", () => {
     assert.equal(badStatus.ok, false);
     if (!badStatus.ok) assert.equal(badStatus.error, "invalid_input");
 
+    // "voice" is an agent surface but NOT a deployment surface (phone | embed |
+    // link | sms | email), so it's still rejected. ("sms" became valid when the
+    // multi-surface runtime added it to DeploymentSurface.)
     const badSurface = await updateDeployment({
       id: "dep-1",
-      patch: { surface: "sms" as never },
+      patch: { surface: "voice" as never },
       deps,
     });
     assert.equal(badSurface.ok, false);
