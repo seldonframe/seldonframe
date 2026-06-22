@@ -33,7 +33,6 @@ import type { OrgSoul } from "@/lib/soul/types";
 import type { AgentBlueprint, AgentToolCall } from "@/db/schema/agents";
 import { composeSystemPrompt } from "./prompt";
 import {
-  findTool,
   getToolsForCapabilities,
   type AgentTool,
   type ToolExecuteContext,
@@ -133,7 +132,15 @@ export async function runStatelessAgentTurn(
     timezone: input.timezone || "UTC",
   });
 
-  const tools = getToolsForCapabilities(input.blueprint.capabilities);
+  // Same seam as production: native (capability-filtered) tools plus any MCP
+  // connector tools bound on the template's blueprint. Templates rarely bind
+  // connectors, so this is usually the identical native list; when they do, the
+  // sandbox exercises them too (the bearer is read from the workspace's
+  // encrypted store via the default deps). orgId threads the secret lookup.
+  const tools = await getToolsForCapabilities(input.blueprint.capabilities, {
+    orgId: input.orgId,
+    connectors: input.blueprint.connectors,
+  });
 
   // Seed the messages array from the plain-text chat history.
   const messages: AnthropicMessage[] = input.messages.map((m) => ({
@@ -211,7 +218,10 @@ export async function runStatelessAgentTurn(
         name: tu.name,
         input: (tu.input as Record<string, unknown>) ?? {},
       });
-      const tool = findTool(tu.name);
+      // Resolve across the built tool set (natives + any wrapped MCP tools),
+      // matching production's dispatch. Native-only templates resolve exactly as
+      // the prior findTool lookup did.
+      const tool = tools.find((t) => t.name === tu.name);
       if (!tool) {
         toolResultsForThisIter.push({
           type: "tool_result",

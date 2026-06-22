@@ -1410,13 +1410,93 @@ export const ALL_TOOLS: AgentTool[] = [
   getQuoteRange as AgentTool,
 ];
 
-export function getToolsForCapabilities(
+/** Compute the NATIVE (capability-filtered) tool list. This is the ENTIRE
+ *  pre-connector behavior, preserved byte-for-byte: no capabilities → the full
+ *  ALL_TOOLS (same references, same order); otherwise the same filter. Pulling
+ *  it into a helper lets getToolsForCapabilities stay obviously-identical on the
+ *  no-connectors path (it just returns this). */
+function nativeToolsForCapabilities(
   capabilities: string[] | undefined,
 ): AgentTool[] {
   if (!capabilities || capabilities.length === 0) {
     return ALL_TOOLS;
   }
   return ALL_TOOLS.filter((tool) => capabilities.includes(tool.name));
+}
+
+/** Options for the connector merge. ABSENT/empty → the native path, unchanged. */
+export type GetToolsOptions = {
+  /** Workspace id — threaded to each wrapped MCP tool's secret lookup. */
+  orgId?: string;
+  /** Per-agent connector bindings (blueprint.connectors). */
+  connectors?: import("./mcp/connectors").ConnectorBinding[];
+  /** Injectable MCP deps (default = real encrypted-secret read + inline client).
+   *  Tests pass fakes so no network/DB is touched. */
+  mcpDeps?: import("./mcp/wrap-tool").WrapMcpDeps;
+};
+
+/** Lazily-built default MCP deps: read the bearer from the encrypted
+ *  workspaceSecrets store (skipAccessCheck — the runtime has no user session in
+ *  voice/SMS/public-chat), and build the inline MCP-over-HTTP client. Imported
+ *  lazily so the connector path never loads on the native-only hot path. */
+async function defaultMcpDeps(): Promise<
+  import("./mcp/wrap-tool").WrapMcpDeps
+> {
+  const [{ getSecretValue }, { createMcpClient }] = await Promise.all([
+    import("@/lib/secrets"),
+    import("./mcp/client"),
+  ]);
+  return {
+    getSecret: async (orgId, serviceName) =>
+      getSecretValue({ workspaceId: orgId, serviceName, skipAccessCheck: true }),
+    makeClient: (endpoint, bearer) => createMcpClient({ endpoint, bearer }),
+  };
+}
+
+/**
+ * THE SEAM. Returns the agent's tool set = native (capability-filtered) tools,
+ * then — if any connectors are bound — their enabled + cached tools wrapped as
+ * AgentTools (namespaced `${serviceName}__${tool}`), appended AFTER the natives.
+ *
+ * REGRESSION INVARIANT: with no connectors (the live voice/web/SMS agents), the
+ * return is the IDENTICAL native list this function produced before connectors
+ * existed — same tools, same order, same object references. Proven by
+ * wrap-tool.spec.ts. Native tools are never copied, re-wrapped, or reordered.
+ *
+ * Async because building wrapped tools may need the (lazy) MCP deps; the
+ * no-connectors branch returns synchronously-equivalent natives (no deps loaded).
+ */
+export async function getToolsForCapabilities(
+  capabilities: string[] | undefined,
+  opts?: GetToolsOptions,
+): Promise<AgentTool[]> {
+  const native = nativeToolsForCapabilities(capabilities);
+
+  const connectors = opts?.connectors;
+  if (!connectors || connectors.length === 0) {
+    // No connectors → byte-for-byte the native list. Nothing loaded, nothing
+    // appended. This is the path every live agent takes today.
+    return native;
+  }
+
+  // Connector path. Only reached when an agent actually has bindings.
+  const { wrapMcpTool } = await import("./mcp/wrap-tool");
+  const deps = opts?.mcpDeps ?? (await defaultMcpDeps());
+
+  const wrapped: AgentTool[] = [];
+  for (const binding of connectors) {
+    const cached = binding.tools ?? [];
+    const enabled = new Set(binding.enabledTools);
+    for (const mcpTool of cached) {
+      // Allowlist: only the binding's enabledTools are exposed. A cached but
+      // disabled tool (or an enabled name with no cached schema) is skipped.
+      if (!enabled.has(mcpTool.name)) continue;
+      wrapped.push(wrapMcpTool(binding, mcpTool, deps) as AgentTool);
+    }
+  }
+
+  // Natives FIRST (unchanged), then the wrapped MCP tools.
+  return [...native, ...wrapped];
 }
 
 export function findTool(name: string): AgentTool | undefined {

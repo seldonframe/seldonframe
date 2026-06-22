@@ -40,7 +40,6 @@ import { composeSystemPrompt } from "./prompt";
 import { runValidators } from "./validators";
 import { composeCorrectionPrompt, selectFinalFallback } from "./fallbacks";
 import {
-  findTool,
   getToolsForCapabilities,
   type AgentTool,
   type ToolExecuteContext,
@@ -222,7 +221,14 @@ export async function executeTurn(input: {
     now: new Date(),
     timezone: orgRow.timezone ?? "UTC",
   });
-  const tools = getToolsForCapabilities(blueprint.capabilities);
+  // The seam: native (capability-filtered) tools PLUS any bound MCP connector
+  // tools (blueprint.connectors), wrapped to look native. With no connectors
+  // this returns the identical native list it always did — the dispatch loop
+  // below is unchanged. orgId threads each wrapped tool's encrypted-key lookup.
+  const tools = await getToolsForCapabilities(blueprint.capabilities, {
+    orgId: agent.orgId,
+    connectors: blueprint.connectors,
+  });
 
   // v1.26.1 — BYOK. Resolve the LLM client from the workspace's
   // configured key (organizations.integrations.anthropic.apiKey,
@@ -320,7 +326,11 @@ export async function executeTurn(input: {
     }> = [];
     for (const tu of toolUseBlocks) {
       allToolCalls.push({ id: tu.id, name: tu.name, input: tu.input as Record<string, unknown> });
-      const tool = findTool(tu.name);
+      // Resolve by name across the tool set we built above — which now includes
+      // wrapped MCP connector tools alongside the natives. (Native-only behavior
+      // is unchanged: with no connectors this is exactly `tools` = the native
+      // list, so resolution is identical to the prior findTool(NATIVE) lookup.)
+      const tool = tools.find((t) => t.name === tu.name);
       if (!tool) {
         const result: AgentToolResult = {
           toolCallId: tu.id,
