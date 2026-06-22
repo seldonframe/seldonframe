@@ -33,10 +33,16 @@ import type { AgentBlueprint } from "@/db/schema/agents";
 /** Template type id. v1 ships voice_receptionist; v2 adds chat_assistant. */
 export type AgentTemplateType = "voice_receptionist" | "chat_assistant";
 
-/** Which channel surface a template targets. */
-export type AgentSurface = "voice" | "chat";
+/** Which channel surface a template / agent targets. `voice` + `chat` are the
+ *  original two; `sms` + `email` are text surfaces that route inbound messages
+ *  through the SAME agent loop as web chat (multi-surface runtime), so they
+ *  share the chat capability set (book/reschedule/cancel/find/escalate/faq) and
+ *  deliberately exclude voice-only tools (the get_quote_range read-back guard). */
+export type AgentSurface = "voice" | "chat" | "sms" | "email";
 
-/** Map a template type to its surface channel. Pure — no DB. */
+/** Map a template type to its surface channel. Pure — no DB. v1 template types
+ *  only span voice/chat; sms/email surfaces are reached via agents.channel +
+ *  the channel adapters, not a distinct template type. */
 export function surfaceForType(type: AgentTemplateType): AgentSurface {
   return type === "chat_assistant" ? "chat" : "voice";
 }
@@ -130,9 +136,13 @@ export const ALL_TEMPLATE_CAPABILITIES: string[] = Array.from(
  * offered chat-only tools and vice-versa.
  */
 export function capabilitiesForSurface(surface: AgentSurface): string[] {
-  return surface === "chat"
-    ? [...DEFAULT_CHAT_ASSISTANT_CAPABILITIES]
-    : [...DEFAULT_VOICE_RECEPTIONIST_CAPABILITIES];
+  // Only `voice` gets the voice-receptionist set (with the get_quote_range
+  // read-back guard, minus the chat-only provide_faq_answer). Every text
+  // surface — chat, sms, email — shares the chat-assistant set, since an SMS /
+  // email agent reasons in text exactly like the web chatbot.
+  return surface === "voice"
+    ? [...DEFAULT_VOICE_RECEPTIONIST_CAPABILITIES]
+    : [...DEFAULT_CHAT_ASSISTANT_CAPABILITIES];
 }
 
 /**

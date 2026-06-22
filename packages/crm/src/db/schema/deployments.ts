@@ -16,7 +16,12 @@ import type { BookingMode } from "@/lib/deployments/booking-providers";
 // ─── deployments ──────────────────────────────────────────────────────────
 
 export type DeploymentStatus = "draft" | "active" | "paused" | "canceled";
-export type DeploymentSurface = "phone" | "embed" | "link";
+/** How a deployment is reached. `phone` (voice + SMS on the provisioned
+ *  number), `embed` (web chat), `link` (hosted page); `sms` + `email` are the
+ *  text surfaces routed through the multi-surface agent loop. A `phone`
+ *  deployment already answers SMS too (the provisioned number's SMS webhook
+ *  points at SeldonFrame), so `sms` here marks a text-only deployment. */
+export type DeploymentSurface = "phone" | "embed" | "link" | "sms" | "email";
 
 /** How a DEPLOYED agent books — re-exported from the pure registry so
  *  downstream imports (tools ctx, zod enum) have one stable source. Distinct

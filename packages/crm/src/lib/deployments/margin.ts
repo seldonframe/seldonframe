@@ -96,7 +96,7 @@ export function formatCentsMonthly(cents: number): string {
 
 // ─── surface / status validators (allow-list guards) ─────────────────────────
 
-const DEPLOYMENT_SURFACES = ["phone", "embed", "link"] as const;
+const DEPLOYMENT_SURFACES = ["phone", "embed", "link", "sms", "email"] as const;
 const DEPLOYMENT_STATUSES = ["draft", "active", "paused", "canceled"] as const;
 
 /** True iff `value` is one of the known deployment surfaces. */
@@ -183,6 +183,10 @@ export function formatDeploymentSurface(surface: string): string {
       return "Embed";
     case "link":
       return "Link";
+    case "sms":
+      return "SMS";
+    case "email":
+      return "Email";
     default:
       return surface.charAt(0).toUpperCase() + surface.slice(1);
   }

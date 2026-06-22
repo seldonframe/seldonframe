@@ -345,6 +345,25 @@ describe("capabilitiesForSurface", () => {
     );
   });
 
+  test("sms + email → the SAME chat-assistant caps (text surfaces reason like chat)", () => {
+    // Multi-surface runtime: an SMS / email agent reasons in text exactly like
+    // the web chatbot, so it shares the chat capability set (and excludes the
+    // voice-only get_quote_range read-back guard).
+    for (const surface of ["sms", "email"] as const) {
+      const caps = capabilitiesForSurface(surface);
+      assert.deepEqual(
+        caps,
+        DEFAULT_CHAT_ASSISTANT_CAPABILITIES,
+        `${surface} must use the chat-assistant caps`,
+      );
+      assert.ok(caps.includes("provide_faq_answer"), `${surface} offers provide_faq_answer`);
+      assert.ok(
+        !caps.includes("get_quote_range"),
+        `${surface} must NOT offer get_quote_range (voice-only)`,
+      );
+    }
+  });
+
   test("returns a fresh array each call (caller may mutate without leaking)", () => {
     const a = capabilitiesForSurface("voice");
     const b = capabilitiesForSurface("voice");

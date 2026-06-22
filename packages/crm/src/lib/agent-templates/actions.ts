@@ -21,6 +21,7 @@ import {
   getAgentTemplate,
   updateAgentTemplate,
   capabilitiesForSurface,
+  type AgentSurface,
   type AgentTemplateType,
   type TemplateBlueprintPatch,
 } from "./store";
@@ -130,7 +131,9 @@ export type GenerateAgentDraftResult =
  */
 export async function generateAgentDraftAction(input: {
   prompt: string;
-  surface: "voice" | "chat";
+  // Canonical surface union (voice | chat | sms | email). The Studio UI sends
+  // voice | chat today; the generator treats any non-voice surface as text.
+  surface: AgentSurface;
 }): Promise<GenerateAgentDraftResult> {
   assertWritable();
 

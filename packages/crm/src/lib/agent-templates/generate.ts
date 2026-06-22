@@ -13,11 +13,16 @@
 // be "use server" — scripts/check-use-server.sh enforces this.
 
 import { z } from "zod";
-import type { TemplateBlueprintPatch } from "./store";
+import type { AgentSurface, TemplateBlueprintPatch } from "./store";
 
 // ─── surface type ─────────────────────────────────────────────────────────────
 
-export type AgentSurfaceInput = "voice" | "chat";
+/** Reuse the canonical surface union so the generator stays in lockstep with
+ *  store.ts. The Studio create/refine UI only ever sends voice | chat (sms +
+ *  email agents are reached via agents.channel + the channel adapters, not a
+ *  distinct template type), but the generator treats any non-voice surface as a
+ *  text surface — so widening here never produces a wrong prompt. */
+export type AgentSurfaceInput = AgentSurface;
 
 // ─── Task 3: house-style prompt builder ───────────────────────────────────────
 //
@@ -56,10 +61,14 @@ export type BuildGeneratePromptInput = {
 export function buildGeneratePrompt(
   input: BuildGeneratePromptInput,
 ): { system: string; user: string } {
+  // Voice gets the spoken-turn line; chat keeps the WEB CHAT line; sms/email
+  // (text surfaces that reason like chat) get a generic text line.
   const surfaceLine =
     input.surface === "voice"
       ? "This is a VOICE phone agent — short spoken turns, no markdown, confirm by voice."
-      : "This is a WEB CHAT agent — concise text, may use light formatting.";
+      : input.surface === "chat"
+        ? "This is a WEB CHAT agent — concise text, may use light formatting."
+        : "This is a TEXT agent (SMS/email) — concise text, may use light formatting.";
 
   const system = [
     `You are SeldonFrame's agent designer. Produce a production-ready agent configuration.`,

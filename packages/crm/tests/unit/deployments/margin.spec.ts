@@ -107,14 +107,18 @@ describe("formatCentsMonthly", () => {
 // ---------------------------------------------------------------------
 
 describe("isDeploymentSurface", () => {
-  test("accepts the three known surfaces", () => {
+  test("accepts the known surfaces (incl. the sms + email text surfaces)", () => {
     assert.equal(isDeploymentSurface("phone"), true);
     assert.equal(isDeploymentSurface("embed"), true);
     assert.equal(isDeploymentSurface("link"), true);
+    // Multi-surface runtime added these to DeploymentSurface; the validator
+    // must accept them in lockstep with the type union.
+    assert.equal(isDeploymentSurface("sms"), true);
+    assert.equal(isDeploymentSurface("email"), true);
   });
 
   test("rejects anything else", () => {
-    assert.equal(isDeploymentSurface("sms"), false);
+    assert.equal(isDeploymentSurface("voice"), false); // not a deployment surface id
     assert.equal(isDeploymentSurface(""), false);
     assert.equal(isDeploymentSurface("PHONE"), false);
     assert.equal(isDeploymentSurface(undefined), false);
