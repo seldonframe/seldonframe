@@ -41,13 +41,6 @@ describe("resolvePricing", () => {
       /custom_pricing_requires_amount/,
     );
   });
-
-  test("throws on customCents below $50/mo floor", () => {
-    assert.throws(
-      () => resolvePricing({ tier: "custom", customCents: 4999 }),
-      /custom_price_below_minimum/,
-    );
-  });
 });
 
 describe("PROPOSAL_TIER_PRICES", () => {

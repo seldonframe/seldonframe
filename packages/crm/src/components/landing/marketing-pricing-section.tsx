@@ -8,7 +8,7 @@
 //   Everything included — website, booking, CRM, intake, web chat, AND the
 //   voice + SMS + email AI agents (the voice receptionist is included, not a
 //   paid add-on).
-//   + a small GMV fee — billed ONLY when SeldonFrame is your sales channel
+//   + a flat 2% GMV fee — billed ONLY when SeldonFrame is your sales channel
 //   (marketplace, booking, proposals).
 //   "We only make money when you do."
 //   Flat because it's BYOK + BYO-Twilio under the hood: you pay the AI +
@@ -129,13 +129,13 @@ export function LandingMarketingPricingSection() {
             className="flex flex-col rounded-[20px] border border-[rgba(34,29,23,.08)] bg-[#EFE9DD] p-7 md:p-8"
           >
             <p className="text-[11px] font-[600] uppercase tracking-[0.08em] text-[#00897B]">
-              + A small GMV fee
+              + A flat 2% fee
             </p>
             <h3 className="mt-2 max-w-[22ch] font-[Newsreader,Georgia,serif] text-[clamp(20px,2.6vw,26px)] not-italic leading-[1.2] text-[#221D17]">
               We only make money when you do.
             </h3>
             <p className="mt-3 text-[13.5px] leading-[1.55] text-[#6E665A]">
-              On top of the flat $29, we take a small percentage of revenue —{" "}
+              On top of the flat $29, we take 2% of revenue —{" "}
               <strong className="font-[600] text-[#221D17]">only when SeldonFrame is your sales channel</strong>{" "}
               (a marketplace sale, a booking, an accepted proposal). When the work doesn&rsquo;t flow
               through us, the fee is zero.

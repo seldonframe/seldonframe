@@ -26,7 +26,7 @@ const FAQS: readonly FaqItem[] = [
   {
     question: "How much is it?",
     answer:
-      "$29/mo flat, unlimited workspaces, with a 14-day free trial. Plus a small fee only on what you sell through SeldonFrame (payments, proposals, packages) — sell anywhere else and we take nothing.",
+      "$29/mo flat, unlimited workspaces, with a 14-day free trial. Plus 2% only on what you sell through SeldonFrame (payments, proposals, packages) — sell anywhere else and we take nothing.",
   },
   {
     question: "Is it free to start?",

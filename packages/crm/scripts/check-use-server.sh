@@ -16,6 +16,16 @@ set -euo pipefail
 ROOT="${1:-src}"
 violations=0
 
+# Populate the file list via a temp file rather than a `< <(...)` process
+# substitution. Some build environments (e.g. certain Vercel build machines)
+# don't expose /dev/fd, which makes process substitution fail
+# non-deterministically: "/dev/fd/NN: No such file or directory". A temp file
+# is portable AND keeps `violations` in the parent shell — a naive pipe would
+# run the while-loop in a subshell and silently lose the count.
+filelist="$(mktemp)"
+trap 'rm -f "$filelist"' EXIT
+grep -rln "^[\"']use server[\"']" "$ROOT" 2>/dev/null > "$filelist" || true
+
 while IFS= read -r f; do
   # Find any line that exports a value (not a type, not an async function).
   # Patterns we flag:
@@ -42,7 +52,7 @@ while IFS= read -r f; do
     echo
     violations=$((violations + 1))
   fi
-done < <(grep -rln "^[\"']use server[\"']" "$ROOT" 2>/dev/null)
+done < "$filelist"
 
 if [ "$violations" -gt 0 ]; then
   echo "✗ $violations 'use server' file(s) have invalid exports. See https://nextjs.org/docs/messages/invalid-use-server-value"
