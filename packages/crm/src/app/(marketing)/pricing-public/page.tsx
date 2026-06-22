@@ -1,10 +1,9 @@
 // packages/crm/src/app/(marketing)/pricing-public/page.tsx
 //
-// New marketing pricing page (2026-06-18).
-// Standalone deep-dive on pricing — light warm theme, full
-// 3-tier table + metered add-ons + agency calculator + FAQ.
-// Unauthenticated visitors can reach this from the nav or
-// "Learn more about pricing" links.
+// New marketing pricing page (2026-06-18; flat-model rewrite 2026-06-22).
+// Standalone deep-dive on pricing — light warm theme, the flat $29/mo
+// model + GMV explainer + FAQ. Unauthenticated visitors can reach this
+// from the nav or "Learn more about pricing" links.
 //
 // Route: /pricing-public
 // The in-product billing page at /pricing (with Stripe SetupIntent)
@@ -20,7 +19,7 @@ import { MarketingFooter } from "@/components/landing/marketing-footer";
 export const metadata: Metadata = {
   title: "Pricing — SeldonFrame",
   description:
-    "Builder $19/mo · Workspace $49/mo · Agency $297/mo. One flat monthly price per tier — no metered bills. Roughly 5× under GoHighLevel.",
+    "$29/mo flat · unlimited workspaces · first workspace free · 14-day trial. No metered bills — plus a small GMV fee only when SeldonFrame is your sales channel. We don't tax your work.",
 };
 
 export default function PricingPublicPage() {
@@ -36,16 +35,16 @@ export default function PricingPublicPage() {
               Pricing
               <span className="h-px w-4 bg-[#00897B] opacity-50" aria-hidden />
             </div>
-            <h1 className="mx-auto mt-3.5 max-w-[18ch] text-[clamp(34px,4.8vw,56px)] font-[500] leading-[1.04] tracking-[-0.025em] text-[#221D17]">
-              Cheap to start.{" "}
+            <h1 className="mx-auto mt-3.5 max-w-[20ch] text-[clamp(34px,4.8vw,56px)] font-[500] leading-[1.04] tracking-[-0.025em] text-[#221D17]">
+              $29 a month.{" "}
               <em className="font-[Newsreader,Georgia,serif] font-normal not-italic text-[#6E665A]">
-                Scale as you grow.
+                We don&rsquo;t tax your work.
               </em>
             </h1>
-            <p className="mx-auto mt-4 max-w-[52ch] text-[16px] leading-[1.55] text-[#6E665A]">
-              One flat monthly fee per tier — no metered bills, no surprise fees.
-              Agencies set their own markup and keep the spread.
-              Roughly 5× under GoHighLevel.
+            <p className="mx-auto mt-4 max-w-[54ch] text-[16px] leading-[1.55] text-[#6E665A]">
+              One flat monthly price — unlimited workspaces, no metered bills, no surprise fees.
+              Your first workspace is free. We add a small GMV fee only when SeldonFrame is your
+              sales channel — so we only make money when you do.
             </p>
           </div>
         </section>

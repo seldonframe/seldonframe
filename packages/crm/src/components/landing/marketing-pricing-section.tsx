@@ -1,102 +1,42 @@
 // packages/crm/src/components/landing/marketing-pricing-section.tsx
 //
-// Redesign 2026-06-18 — flat 3-tier pricing (seat-based, no metered wallet).
+// Rewrite 2026-06-22 — flat $29/mo model (replaces the old 3-tier table).
 // Warm light aesthetic: paper/card surfaces, SeldonFrame green accent.
 //
-// Tier spec (locked 2026-06-18):
-//   Builder   $19/mo — up to 10 landing pages, own domain, no CRM/booking
-//   Workspace $49/mo — 1 full workspace (website + booking + intake + CRM + chat)
-//   Agency    $297/mo — white-label, 10 client workspaces included (+$10/ea beyond)
-//
-// One optional add-on (Workspace + Agency): AI voice receptionist, $99/mo per
-// agent, 500 talk-minutes included. No metered usage wallet — flat + predictable.
+// The model (finalized 2026-06-21):
+//   $29/mo flat · unlimited workspaces · first workspace free · 14-day trial.
+//   Everything included — website, booking, CRM, intake, web chat, AND the
+//   voice + SMS + email AI agents (voice is NOT a $99 add-on anymore).
+//   + a GMV fee — 5% → 3% over $10k/mo → 2% over $50k/mo — billed ONLY when
+//   SeldonFrame is your sales channel (marketplace, booking, proposals).
+//   "We only make money when you do — we don't tax your work."
+//   Flat because it's BYOK + BYO-Twilio under the hood: you pay the AI +
+//   telephony providers directly at cost, we don't mark up your usage.
 //
 // The original dark-theme pricing component is preserved verbatim in
 // marketing-pricing-section-dark.tsx (unused) for rollback reference.
 
 import Link from "next/link";
-import { Check, Minus } from "lucide-react";
+import { Check } from "lucide-react";
 
-type TierKey = "builder" | "workspace" | "agency";
-
-type Tier = {
-  key: TierKey;
-  name: string;
-  price: string;
-  period: string;
-  tagline: string;
-  ctaLabel: string;
-  ctaHref: string;
-  highlighted?: boolean;
-  badge?: string;
-};
-
-type FeatureRow = {
-  label: string;
-  values: Readonly<Record<TierKey, string | boolean>>;
-};
-
-const TIERS: readonly Tier[] = [
-  {
-    key: "builder",
-    name: "Builder",
-    price: "$19",
-    period: "/month",
-    tagline: "Up to 10 landing pages on your own domain. Capture leads without the full workspace.",
-    ctaLabel: "Start with Builder",
-    ctaHref: "/signup?plan=builder",
-  },
-  {
-    key: "workspace",
-    name: "Workspace",
-    price: "$49",
-    period: "/month",
-    tagline: "1 full workspace — website, booking, intake form, CRM, and AI chatbot. Everything wired.",
-    ctaLabel: "Start with Workspace",
-    ctaHref: "/signup?plan=workspace",
-    highlighted: true,
-    badge: "Most popular",
-  },
-  {
-    key: "agency",
-    name: "Agency",
-    price: "$297",
-    period: "/month",
-    tagline: "White-label the whole platform under your brand. Resell to clients at your own markup.",
-    ctaLabel: "Start the Agency plan",
-    ctaHref: "/signup?plan=agency",
-  },
+// Everything that's included in the flat $29/mo (the whole platform).
+const INCLUDED: readonly string[] = [
+  "Website + landing pages on your own domain",
+  "Booking page (Cal.diy) tied to live availability",
+  "CRM — contacts, deals, tasks, notes",
+  "Intake forms wired to the CRM",
+  "24/7 AI agent across voice, SMS, web chat & email",
+  "Build ANY agent in the Studio — connect external tools",
+  "Whitelabel + resell each workspace to clients",
+  "Own + export everything (AGPL — no lock-in)",
 ];
 
-const FEATURES: readonly FeatureRow[] = [
-  {
-    label: "Client workspaces",
-    values: { builder: "Landing pages only", workspace: "1", agency: "10 included" },
-  },
-  {
-    label: "Landing pages",
-    values: { builder: "Up to 10", workspace: "Included", agency: "Included" },
-  },
-  { label: "Own domain + branding", values: { builder: true, workspace: true, agency: true } },
-  { label: "CRM", values: { builder: false, workspace: true, agency: true } },
-  { label: "Booking page (Cal.diy)", values: { builder: false, workspace: true, agency: true } },
-  { label: "Intake form", values: { builder: false, workspace: true, agency: true } },
-  { label: "AI chatbot", values: { builder: false, workspace: true, agency: true } },
-  { label: "White-label platform (your brand)", values: { builder: false, workspace: false, agency: true } },
-  { label: "Resell at your own markup", values: { builder: false, workspace: false, agency: true } },
-  { label: "Priority support", values: { builder: false, workspace: false, agency: true } },
-  { label: "AI voice receptionist (add-on)", values: { builder: false, workspace: "Add-on", agency: "Add-on" } },
+// The GMV ladder — only billed when SeldonFrame is the sales channel.
+const GMV_TIERS: readonly { rate: string; band: string }[] = [
+  { rate: "5%", band: "on your first $10k/mo" },
+  { rate: "3%", band: "over $10k/mo" },
+  { rate: "2%", band: "over $50k/mo" },
 ];
-
-function renderCell(value: string | boolean) {
-  if (value === true) {
-    return <Check size={16} className="mx-auto text-[#00897B]" aria-label="Included" />;
-  }
-  if (value === false) {
-    return <Minus size={16} className="mx-auto text-[#9A9183]" aria-label="Not available" />;
-  }
-  return <span className="text-[13px] text-[#221D17]">{value}</span>;
-}
 
 export function LandingMarketingPricingSection() {
   return (
@@ -115,124 +55,116 @@ export function LandingMarketingPricingSection() {
           </div>
           <h2
             id="pricing-heading"
-            className="mx-auto mt-3.5 max-w-[18ch] text-[clamp(27px,4.2vw,42px)] font-[500] leading-[1.08] tracking-[-0.025em] text-[#221D17]"
+            className="mx-auto mt-3.5 max-w-[20ch] text-[clamp(27px,4.2vw,42px)] font-[500] leading-[1.08] tracking-[-0.025em] text-[#221D17]"
           >
             One flat price.{" "}
             <em className="font-[Newsreader,Georgia,serif] font-normal not-italic text-[#6E665A]">
-              Absurd value.
+              We only make money when you do.
             </em>
           </h2>
-          <p className="mx-auto mt-4 max-w-[52ch] text-[16px] leading-[1.55] text-[#6E665A]">
-            Less than a part-time hire — and a single booked job pays for the year. One flat
-            monthly price: no metered bills, no surprise fees.
+          <p className="mx-auto mt-4 max-w-[56ch] text-[16px] leading-[1.55] text-[#6E665A]">
+            $29 a month flat — less than a part-time hire, and a single booked job pays for
+            the year. No metered bills, no per-seat tax, no surprise invoices. Your first
+            workspace is free.
           </p>
         </div>
 
-        {/* Tier cards */}
-        <div className="mt-12 grid grid-cols-1 gap-4 md:grid-cols-3">
-          {TIERS.map((tier) => {
-            const isHighlighted = Boolean(tier.highlighted);
-            return (
-              <article
-                key={tier.key}
-                data-tier={tier.key}
-                aria-labelledby={`pricing-tier-${tier.key}-name`}
-                className={`relative flex flex-col rounded-[20px] p-6 transition-shadow ${
-                  isHighlighted
-                    ? "border border-[rgba(0,137,123,.35)] bg-[#FFFDFA] shadow-[0_24px_60px_rgba(34,29,23,.12)]"
-                    : "border border-[rgba(34,29,23,.08)] bg-[#FFFDFA] shadow-[0_1px_2px_rgba(34,29,23,.05),0_10px_30px_rgba(34,29,23,.07)]"
-                }`}
-              >
-                {tier.badge ? (
-                  <span className="absolute -top-3 right-5 rounded-full border border-[rgba(0,137,123,.25)] bg-[rgba(0,137,123,.12)] px-3 py-1 text-[10.5px] font-[600] uppercase tracking-wider text-[#00897B] ring-2 ring-[#F6F2EA]">
-                    {tier.badge}
-                  </span>
-                ) : null}
-
-                <h3 id={`pricing-tier-${tier.key}-name`} className="text-[17px] font-[600] text-[#221D17]">
-                  {tier.name}
-                </h3>
-                <p className="mt-1.5 min-h-[3rem] text-[13.5px] leading-[1.5] text-[#6E665A]">{tier.tagline}</p>
-
-                <div className="mt-5 flex items-baseline gap-1">
-                  <span className="font-sans text-[clamp(40px,5.5vw,52px)] font-[600] leading-none tracking-[-0.03em] text-[#221D17]">
-                    {tier.price}
-                  </span>
-                  <span className="text-[14px] text-[#9A9183]">{tier.period}</span>
-                </div>
-
-                <Link
-                  href={tier.ctaHref}
-                  data-tier-cta={tier.key}
-                  className={`mt-6 inline-flex items-center justify-center gap-2.5 rounded-full px-6 py-3.5 text-[14px] font-[500] transition-all hover:-translate-y-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00897B] ${
-                    isHighlighted
-                      ? "bg-[#1F2B24] text-[#F6F2EA] shadow-[0_1px_2px_rgba(34,29,23,.10),0_6px_16px_rgba(34,29,23,.10),inset_0_1.5px_0_rgba(255,255,255,.12)]"
-                      : "border border-[rgba(34,29,23,.18)] bg-transparent text-[#221D17] hover:border-[rgba(34,29,23,.28)]"
-                  }`}
-                >
-                  {isHighlighted ? (
-                    <span className="size-[7px] rounded-full bg-[#00897B] shadow-[0_0_0_3px_rgba(0,137,123,.22)]" aria-hidden />
-                  ) : null}
-                  {tier.ctaLabel}
-                </Link>
-              </article>
-            );
-          })}
-        </div>
-
-        {/* Feature comparison table */}
-        <div className="mt-8 overflow-x-auto rounded-[16px] border border-[rgba(34,29,23,.10)] bg-[#FFFDFA] shadow-[0_1px_2px_rgba(34,29,23,.05)]">
-          <table className="w-full min-w-[640px] text-[13px]">
-            <caption className="sr-only">Tier feature comparison</caption>
-            <thead>
-              <tr className="border-b border-[rgba(34,29,23,.08)] bg-[#EFE9DD]">
-                <th scope="col" className="p-4 text-left text-[11px] font-[600] uppercase tracking-wider text-[#9A9183]">
-                  Feature
-                </th>
-                {TIERS.map((tier) => (
-                  <th
-                    key={tier.key}
-                    scope="col"
-                    className="p-4 text-center text-[11px] font-[600] uppercase tracking-wider text-[#9A9183]"
-                  >
-                    {tier.name}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {FEATURES.map((row, i) => (
-                <tr
-                  key={row.label}
-                  className={`border-t border-[rgba(34,29,23,.06)] ${i % 2 === 0 ? "bg-[#FFFDFA]" : "bg-[#F6F2EA]/50"}`}
-                >
-                  <th scope="row" className="p-4 text-left font-[400] text-[#221D17]">
-                    {row.label}
-                  </th>
-                  {TIERS.map((tier) => (
-                    <td key={tier.key} className="p-4 text-center">
-                      {renderCell(row.values[tier.key])}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Optional add-on */}
-        <div className="mt-6 rounded-[16px] border border-[rgba(34,29,23,.08)] bg-[#EFE9DD] p-6">
-          <div className="mb-3 flex items-center gap-2">
-            <h3 className="m-0 text-[14px] font-[600] text-[#221D17]">One optional add-on</h3>
-            <span className="rounded-full border border-[rgba(34,29,23,.12)] bg-[#FFFDFA] px-2.5 py-0.5 text-[11px] font-[500] text-[#6E665A]">
-              Workspace &amp; Agency
+        {/* The two-up layout: the flat plan card + the GMV explainer. */}
+        <div className="mt-12 grid grid-cols-1 gap-5 lg:grid-cols-[1.15fr_.85fr]">
+          {/* ── Primary flat-price card ─────────────────────────────────── */}
+          <article
+            data-plan="flat"
+            aria-labelledby="pricing-plan-name"
+            className="relative flex flex-col rounded-[20px] border border-[rgba(0,137,123,.35)] bg-[#FFFDFA] p-7 shadow-[0_24px_60px_rgba(34,29,23,.12)] md:p-8"
+          >
+            <span className="absolute -top-3 right-6 rounded-full border border-[rgba(0,137,123,.25)] bg-[rgba(0,137,123,.12)] px-3 py-1 text-[10.5px] font-[600] uppercase tracking-wider text-[#00897B] ring-2 ring-[#F6F2EA]">
+              First workspace free
             </span>
-          </div>
-          <p className="text-[13.5px] leading-[1.55] text-[#6E665A]">
-            <strong className="font-[600] text-[#221D17]">AI voice receptionist — $99/mo</strong> per agent,
-            500 talk-minutes included. It answers every call, books jobs, and texts back missed calls 24/7.
-            Everything else — website, booking, intake, CRM, and chat — is included in your plan.
-          </p>
+
+            <h3 id="pricing-plan-name" className="text-[17px] font-[600] text-[#221D17]">
+              SeldonFrame
+            </h3>
+            <p className="mt-1.5 text-[13.5px] leading-[1.5] text-[#6E665A]">
+              The whole platform — build it for your business, or sell it to your clients.
+            </p>
+
+            <div className="mt-5 flex items-baseline gap-1.5">
+              <span className="font-sans text-[clamp(40px,5.5vw,54px)] font-[600] leading-none tracking-[-0.03em] text-[#221D17]">
+                $29
+              </span>
+              <span className="text-[14px] text-[#9A9183]">/month flat</span>
+            </div>
+            <p className="mt-2 text-[13px] leading-[1.5] text-[#6E665A]">
+              Unlimited workspaces · 14-day free trial · cancel anytime
+            </p>
+
+            <Link
+              href="/signup"
+              data-plan-cta="flat"
+              className="mt-6 inline-flex items-center justify-center gap-2.5 rounded-full bg-[#1F2B24] px-6 py-3.5 text-[14px] font-[500] text-[#F6F2EA] shadow-[0_1px_2px_rgba(34,29,23,.10),0_6px_16px_rgba(34,29,23,.10),inset_0_1.5px_0_rgba(255,255,255,.12)] transition-all hover:-translate-y-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00897B]"
+            >
+              <span className="size-[7px] rounded-full bg-[#00897B] shadow-[0_0_0_3px_rgba(0,137,123,.22)]" aria-hidden />
+              Start free — build your first workspace
+            </Link>
+
+            {/* Everything included */}
+            <div className="mt-7 border-t border-[rgba(34,29,23,.08)] pt-6">
+              <p className="text-[11px] font-[600] uppercase tracking-[0.08em] text-[#9A9183]">
+                Everything included
+              </p>
+              <ul className="mt-4 grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
+                {INCLUDED.map((item) => (
+                  <li key={item} className="flex items-start gap-2.5 text-[13.5px] leading-[1.45] text-[#221D17]">
+                    <Check size={16} className="mt-0.5 shrink-0 text-[#00897B]" aria-hidden />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-5 text-[12.5px] leading-[1.5] text-[#6E665A]">
+                The voice receptionist is <strong className="font-[600] text-[#221D17]">included</strong> — not a $99
+                add-on. It&rsquo;s flat because you bring your own AI key (and Twilio for calls/texts) and pay those
+                providers at cost — we never mark up your usage.
+              </p>
+            </div>
+          </article>
+
+          {/* ── GMV explainer — "we don't tax your work" ─────────────────── */}
+          <aside
+            aria-label="How the GMV fee works"
+            className="flex flex-col rounded-[20px] border border-[rgba(34,29,23,.08)] bg-[#EFE9DD] p-7 md:p-8"
+          >
+            <p className="text-[11px] font-[600] uppercase tracking-[0.08em] text-[#00897B]">
+              + A small GMV fee
+            </p>
+            <h3 className="mt-2 max-w-[22ch] font-[Newsreader,Georgia,serif] text-[clamp(20px,2.6vw,26px)] not-italic leading-[1.2] text-[#221D17]">
+              We don&rsquo;t tax your work.
+            </h3>
+            <p className="mt-3 text-[13.5px] leading-[1.55] text-[#6E665A]">
+              On top of the flat $29, we take a small percentage of revenue —{" "}
+              <strong className="font-[600] text-[#221D17]">only when SeldonFrame is your sales channel</strong>{" "}
+              (a marketplace sale, a booking, an accepted proposal). When the work doesn&rsquo;t flow
+              through us, the fee is zero.
+            </p>
+
+            <ul className="mt-5 flex flex-col gap-2.5">
+              {GMV_TIERS.map((t) => (
+                <li
+                  key={t.rate}
+                  className="flex items-baseline gap-3 rounded-[12px] border border-[rgba(34,29,23,.08)] bg-[#FFFDFA] px-4 py-3"
+                >
+                  <span className="font-sans text-[22px] font-[600] leading-none tracking-[-0.02em] text-[#00897B] tabular-nums">
+                    {t.rate}
+                  </span>
+                  <span className="text-[13px] leading-[1.4] text-[#6E665A]">{t.band}</span>
+                </li>
+              ))}
+            </ul>
+
+            <p className="mt-auto pt-5 text-[12.5px] leading-[1.5] text-[#6E665A]">
+              No metered AI bills. No per-workspace tax. You only ever pay more when you&rsquo;re
+              already making more.
+            </p>
+          </aside>
         </div>
       </div>
     </section>
