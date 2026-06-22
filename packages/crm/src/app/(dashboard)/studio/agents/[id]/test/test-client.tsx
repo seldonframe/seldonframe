@@ -59,8 +59,12 @@ export function TemplateTestClient(props: {
   ]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
-  // Set when the org has no usable LLM key — halts the input + shows a prompt.
-  const [noKey, setNoKey] = useState(props.keyMode === "none");
+  // Magic first-run: the Studio sandbox is the unbounded-COGS build/test
+  // work, so it requires the operator's OWN key (keyMode "byok"). Both
+  // "platform" (on the free first-workspace allowance) and "none" block the
+  // sandbox with an actionable "add your key" prompt — the first workspace +
+  // its embedded chatbot stay free, but testing agents to resell needs a key.
+  const [noKey, setNoKey] = useState(props.keyMode !== "byok");
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const [status, setStatus] = useState(props.status);
@@ -112,7 +116,8 @@ export function TemplateTestClient(props: {
           {
             role: "system",
             content:
-              "No LLM key is configured for this workspace, so the agent can't reply. Add your key in Settings to start testing.",
+              result.message ??
+              "Add your Anthropic key in Settings to build + test agents — your first workspace stays free.",
           },
         ]);
       } else {
@@ -156,46 +161,29 @@ export function TemplateTestClient(props: {
 
   return (
     <div className="space-y-3">
-      {/* No-key blocker — actionable prompt to Settings. */}
+      {/* BYOK gate — the Studio sandbox is unbounded-COGS build/test work, so
+          it needs the operator's own key. Shown whenever keyMode !== "byok"
+          (both "platform" and "none"). The first workspace + its embedded
+          chatbot stay free on the platform key; only building agents to
+          resell needs a key. Friendly, actionable prompt to Settings. */}
       {noKey && (
-        <div className="flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-200">
+        <div className="flex items-start gap-3 rounded-xl border border-indigo-200 bg-indigo-50 p-3 text-sm text-indigo-900 dark:border-indigo-900/50 dark:bg-indigo-950/40 dark:text-indigo-200">
           <span aria-hidden className="text-base leading-none pt-0.5">
-            ⛔
+            ✨
           </span>
           <div className="flex-1 min-w-0">
-            <p className="font-medium">No LLM key configured</p>
+            <p className="font-medium">Add your key to test agents</p>
             <p className="mt-0.5 opacity-90">
-              The test sandbox runs on your workspace&apos;s Anthropic key. Add
-              one to start chatting with your agent.
+              Your first workspace stays free on us. Building and testing your
+              own agents runs on your Anthropic key — add one to start chatting
+              with this agent in the sandbox.
             </p>
           </div>
           <Link
             href="/settings/integrations/llm"
             className="shrink-0 rounded-md border border-current/30 px-3 py-1 text-xs font-medium hover:bg-current/10"
           >
-            Add your LLM key
-          </Link>
-        </div>
-      )}
-
-      {/* Platform-quota warning (sandbox still works). */}
-      {!noKey && props.keyMode === "platform" && (
-        <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200">
-          <span aria-hidden className="text-base leading-none pt-0.5">
-            ⚠
-          </span>
-          <div className="flex-1 min-w-0">
-            <p className="font-medium">Using SeldonFrame&apos;s included quota</p>
-            <p className="mt-0.5 opacity-90">
-              No Anthropic key on this workspace — test turns run on the included
-              platform quota. Add your own key before serving real clients.
-            </p>
-          </div>
-          <Link
-            href="/settings/integrations/llm"
-            className="shrink-0 rounded-md border border-current/30 px-3 py-1 text-xs font-medium hover:bg-current/10"
-          >
-            Add key
+            Add your key &rarr;
           </Link>
         </div>
       )}

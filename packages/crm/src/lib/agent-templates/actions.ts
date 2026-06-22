@@ -31,6 +31,7 @@ import {
   instantiateStarter,
   buildDefaultInstantiateDeps,
 } from "./starter-pack";
+import { resolveStudioBuildGate, NEEDS_BYOK_MESSAGE } from "./studio-build-gate";
 
 export type CreateAgentTemplateResult =
   | { ok: true; id: string }
@@ -151,22 +152,31 @@ export async function saveAgentTemplateBlueprintAction(input: {
 // ─── generateAgentDraftAction ─────────────────────────────────────────────────
 //
 // Converts a single English sentence of builder intent into a
-// TemplateBlueprintPatch via a real Anthropic call (BYOK anthropic first,
-// then platform fallback — same resolution order as testAgentTemplateTurn
-// in test-actions.ts line 87). The pure LLM logic lives in generate.ts (DI'd
-// so it's unit-testable without a key); this action wires the real client.
+// TemplateBlueprintPatch via a real Anthropic call. This is the unbounded-COGS
+// Studio BUILD work, so it is gated on the operator having their OWN key
+// (mode === "byok") — NOT merely on a usable client existing. An operator who
+// skipped BYOK at signup is on the platform key (mode "included"/"metered"),
+// which powers the free first workspace + its embedded chatbot but is NOT
+// burned on arbitrary agent building; they get a friendly "Add your key →"
+// prompt instead. See studio-build-gate.ts for the rule + rationale.
 
 const GEN_MODEL =
   process.env.ANTHROPIC_AGENT_MODEL?.trim() || "claude-sonnet-4-5-20250929";
 
 export type GenerateAgentDraftResult =
   | { ok: true; patch: TemplateBlueprintPatch }
-  | { ok: false; error: "unauthorized" | "needs_key" | "generation_failed" };
+  | {
+      ok: false;
+      error: "unauthorized" | "needs_byok" | "generation_failed";
+      message?: string;
+    };
 
 /**
  * Generate a TemplateBlueprintPatch from a builder's English description of
- * what their agent should do. Requires a configured LLM key (BYOK or
- * platform). Returns needs_key if no usable key is available.
+ * what their agent should do. Requires the operator's OWN Anthropic key
+ * (BYOK). Returns needs_byok (with a friendly message) when the org is on
+ * the platform allowance instead — the first workspace stays free, but
+ * building agents to resell needs a key.
  */
 export async function generateAgentDraftAction(input: {
   prompt: string;
@@ -183,8 +193,14 @@ export async function generateAgentDraftAction(input: {
   const intent = (input.prompt ?? "").trim();
   if (!intent) return { ok: false, error: "generation_failed" };
 
-  const { client } = await getAIClient({ orgId });
-  if (!client) return { ok: false, error: "needs_key" };
+  // BYOK gate: only the operator's own key may drive Studio agent building.
+  // (getAIClient still returns a platform client on the included/metered
+  // allowance — that's reserved for the first-workspace magic, not this.)
+  const { client, mode } = await getAIClient({ orgId });
+  const gate = resolveStudioBuildGate(mode);
+  if (!gate.ok || !client) {
+    return { ok: false, error: "needs_byok", message: NEEDS_BYOK_MESSAGE };
+  }
 
   const result = await generateDraft(
     {

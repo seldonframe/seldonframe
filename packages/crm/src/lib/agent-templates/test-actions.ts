@@ -53,6 +53,7 @@ import {
 } from "@/lib/agents/stateless-turn";
 import type { AgentBlueprint } from "@/db/schema/agents";
 import { getAgentTemplate } from "./store";
+import { resolveStudioBuildGate, NEEDS_BYOK_MESSAGE } from "./studio-build-gate";
 
 // Hard cap on the messages we accept from the client — a test sandbox never
 // needs a long history, and it bounds the prompt sent to Anthropic.
@@ -96,11 +97,18 @@ export async function testAgentTemplateTurn(input: {
     return { ok: false, error: "template_not_found" };
   }
 
-  // Resolve the org's LLM client (BYOK anthropic → platform fallback). The
-  // agent runtime is Anthropic-only; a null client means no usable key.
+  // BYOK gate: a Studio sandbox turn is the unbounded-COGS build/test work,
+  // so it requires the operator's OWN key (mode === "byok"). The platform
+  // allowance ("included"/"metered") powers the free first workspace + its
+  // embedded chatbot, NOT arbitrary template testing — an operator on the
+  // platform key gets the friendly "add your key" prompt (no_llm_key) the UI
+  // already renders. (We also still reject a null client, e.g. an OpenAI-only
+  // BYOK key, since the agent runtime is Anthropic-only.) See
+  // studio-build-gate.ts for the rule.
   const resolution = await getAIClient({ orgId });
-  if (!resolution.client) {
-    return { ok: false, error: "no_llm_key" };
+  const gate = resolveStudioBuildGate(resolution.mode);
+  if (!gate.ok || !resolution.client) {
+    return { ok: false, error: "no_llm_key", message: NEEDS_BYOK_MESSAGE };
   }
 
   // Load only the workspace context a TEMPLATE test legitimately needs: slug

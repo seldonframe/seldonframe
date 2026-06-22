@@ -202,15 +202,16 @@ export function AgentTemplateEditor(props: Props) {
         surface: props.surface,
       });
       if (!draft.ok) {
-        if (draft.error === "needs_key") {
+        if (draft.error === "needs_byok") {
           setRefineError(
             <span>
-              Add your LLM key to generate.{" "}
+              {draft.message ??
+                "Add your Anthropic key to build + test agents — your first workspace stays free."}{" "}
               <Link
                 href="/settings/integrations/llm"
                 className="font-medium underline underline-offset-2 hover:opacity-80"
               >
-                Add LLM key
+                Add your key &rarr;
               </Link>
             </span>,
           );

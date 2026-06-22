@@ -132,15 +132,16 @@ export function NewAgentButton({
     startTransition(async () => {
       const draft = await generateAgentDraftAction({ prompt: intent, surface });
       if (!draft.ok) {
-        if (draft.error === "needs_key") {
+        if (draft.error === "needs_byok") {
           setError(
             <span>
-              Add your LLM key to generate.{" "}
+              {draft.message ??
+                "Add your Anthropic key to build + test agents — your first workspace stays free."}{" "}
               <Link
                 href="/settings/integrations/llm"
                 className="font-medium underline underline-offset-2 hover:opacity-80"
               >
-                Add LLM key
+                Add your key &rarr;
               </Link>
             </span>,
           );

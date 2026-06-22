@@ -91,14 +91,15 @@ export async function enforceWorkspaceLimit(
   if (cap === -1) return { allowed: true, tier };
   if (params.ownedWorkspaceCount < cap) return { allowed: true, tier };
 
-  // Over (or at) the cap. Builder + no-plan users are told to upgrade to
-  // Workspace; Workspace users are told to upgrade to Agency.
+  // Over (or at) the cap. 2026-06-22 magic first-run: the first workspace is
+  // free on us, so the over-cap copy leads with that and points at the BYOK
+  // + plan upgrade as the path to more — not a scolding "you're capped".
   const message =
     tier === "workspace"
-      ? `You're on Workspace, which includes 1 workspace. Upgrade to Agency to manage multiple client workspaces.`
+      ? `Your first workspace is free. Add your Anthropic key and upgrade to spin up more client workspaces.`
       : tier === "builder"
         ? `Builder includes landing pages only. Upgrade to Workspace to create a full business workspace (CRM, booking, chatbot).`
-        : `Choose a plan to create a workspace.`;
+        : `Your first workspace is free. Choose a plan to add more.`;
 
   return {
     allowed: false,
