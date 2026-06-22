@@ -50,7 +50,7 @@ export function MarketingFinalCta() {
         </div>
 
         <p className="mt-6 font-sans text-[13px] text-[rgba(246,242,234,.45)]">
-          First workspace free · $29/mo flat · Cancel anytime · Your data exports as JSON
+          14-day free trial · then $29/mo · unlimited workspaces · cancel anytime · your data exports as JSON
         </p>
       </div>
     </section>

@@ -4,8 +4,8 @@
 // FAQ section. Paper background, stacked <details> cards with
 // SeldonFrame green plus/minus icon. FAQPage JSON-LD preserved.
 //
-// Copy updated to reflect new pricing tiers (Builder/Workspace/Agency)
-// while keeping the same factual content.
+// Copy reflects the flat $29/mo + 14-day-trial + GMV model and the
+// BYOK-as-qualifier framing (positioning v2, 2026-06-22).
 
 type FaqItem = { question: string; answer: string };
 
@@ -16,17 +16,27 @@ const FAQS: readonly FaqItem[] = [
   {
     question: "Who is SeldonFrame for?",
     answer:
-      "Two audiences on one platform: SMBs who want a complete AI front office (website, booking, intake, CRM, and a 24/7 agent across voice, chat, SMS, and email) for their own business — and builders and agencies who build any agent in the Studio, deploy it to clients as a whitelabel front office, and resell it.",
+      "Service-business owners — plumbers, estheticians, contractors, clinics, coaches — who want a complete AI front office (website, booking, intake, CRM, and a 24/7 agent across voice, chat, SMS, and email) for their own business. It's also for builders and agencies, who are simply the top rung of the same ladder: power users whose product is agents — they build one in the Studio and resell it, or run it for clients under their own brand.",
   },
   {
-    question: "How much does it cost?",
+    question: "Do I need my own AI key?",
     answer:
-      "$29/mo flat, unlimited workspaces, with a 14-day free trial — and your first workspace is free forever. On top of that there's a small GMV fee, but only when SeldonFrame is your sales channel (a marketplace sale, a booking, an accepted proposal): 5% on your first $10k/mo, 3% over $10k, 2% over $50k. We only make money when you do — we don't tax your work.",
+      "Yes — and if you use ChatGPT, Claude, or Gemini, you already have what you need. Your agents run on your own key (and Twilio for calls/texts), billed by the provider at cost. That's why it's a flat $29 with no usage markup — we don't tax your work. The website, booking, and CRM build with no key during your trial; you connect a key when you switch an agent on (we show you how).",
+  },
+  {
+    question: "How much is it?",
+    answer:
+      "$29/mo flat, unlimited workspaces, with a 14-day free trial. Plus ~2% only on what you sell through SeldonFrame (payments, proposals, packages) — sell anywhere else and we take nothing.",
+  },
+  {
+    question: "Is it free to start?",
+    answer:
+      "You get a 14-day free trial — we even build your first workspace on our AI key so you can see it work instantly. After that it's $29/mo flat for unlimited workspaces.",
   },
   {
     question: "How many workspaces can I run?",
     answer:
-      "$29/mo flat covers unlimited workspaces, and the first one is free. There's no per-workspace tax and no per-seat pricing — build one front office for yourself or a hundred for your clients on the same flat plan.",
+      "Unlimited, on the flat $29/mo. There's no per-workspace tax and no per-seat pricing — build one front office for yourself or a hundred for your clients on the same flat plan.",
   },
   {
     question: "Can I white-label this for my clients?",
@@ -37,16 +47,6 @@ const FAQS: readonly FaqItem[] = [
     question: "What if a client wants their own domain?",
     answer:
       "Every workspace can map to its own custom domain. Your client visits booking.theirbusiness.com, not a SeldonFrame subdomain.",
-  },
-  {
-    question: "Are there usage fees or surprise bills?",
-    answer:
-      "No metered markup. It's a flat $29/mo plus a GMV fee that only applies when SeldonFrame is your sales channel. The voice, SMS, chat, and email AI agents are all included — voice is not a $99 add-on. You bring your own AI key (and Twilio for calls and texts) and pay those providers directly at cost, which is exactly why the platform fee can stay flat with no usage surprises.",
-  },
-  {
-    question: "Do I need to bring my own AI key?",
-    answer:
-      "Not to start. Your first workspace is free — no key to babysit, just paste your site and watch it build. To run your agents live and spin up more client workspaces, you add your own AI key (and Twilio for calls and texts). That's why it's a flat $29 with no usage markup: you pay the providers at cost, and we don't tax your work.",
   },
   {
     question: "How does this compare to GoHighLevel?",

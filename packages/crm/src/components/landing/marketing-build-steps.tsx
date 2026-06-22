@@ -93,6 +93,15 @@ export function MarketingBuildSteps() {
             Whether you&rsquo;re setting up your own front office or onboarding a client,
             the flow is identical — and it takes under a minute.
           </p>
+
+          {/* "What you need" beat — BYOK as a qualifier, not a barrier. */}
+          <p className="mt-5 inline-flex max-w-[60ch] items-start gap-2 rounded-[12px] border border-[rgba(34,29,23,.10)] bg-[#FFFDFA] px-4 py-3 text-[13.5px] leading-[1.5] text-[#6E665A] shadow-[0_1px_2px_rgba(34,29,23,.05)]">
+            <span className="mt-0.5 inline-block size-1.5 shrink-0 rounded-full bg-[#00897B]" aria-hidden />
+            <span>
+              <strong className="font-[600] text-[#221D17]">All you need:</strong> a URL, and an AI key you probably
+              already have (ChatGPT, Claude, or Gemini). We show you how to connect it in 30 seconds.
+            </span>
+          </p>
         </div>
 
         {/* Step cards */}
