@@ -177,27 +177,28 @@ export function MarketingHero() {
       aria-label="SeldonFrame hero"
       className="relative flex flex-col items-center justify-center overflow-hidden px-5 pb-24 pt-[100px] text-center md:px-8 md:pb-32 md:pt-[120px] lg:px-12"
     >
-      {/* Eyebrow */}
+      {/* Eyebrow — leads SMB, keeps the dual build-or-sell hint */}
       <p className="inline-flex items-center gap-2.5 font-sans text-[12.5px] tracking-[0.04em] text-[#6E665A]">
         <span className="inline-block h-px w-4 bg-[#9A9183]" aria-hidden />
         <span className="sf-blink-dot inline-block size-1.5 rounded-full bg-[#00897B]" aria-hidden />
-        Build it for your business — or sell it to your clients
+        Run your service business — or build agents and sell them
       </p>
 
       {/* Headline */}
       <h1 className="mt-3 max-w-[20ch] text-balance font-sans text-[clamp(34px,4.8vw,56px)] font-[500] leading-[1.04] tracking-[-0.025em] text-[#221D17]">
-        Build, run &amp; sell AI agents — and a complete{" "}
+        Your entire service business,{" "}
         <em className="font-[Newsreader,Georgia,serif] font-normal not-italic tracking-[-0.01em]">
-          front office
+          live in 60 seconds.
         </em>
-        , live in 60 seconds.
       </h1>
 
       {/* Subhead */}
       <p className="mx-auto mt-4 max-w-[62ch] text-pretty text-[clamp(15.5px,1.6vw,17.5px)] leading-[1.55] text-[#6E665A]">
-        Website, booking, intake, CRM, and a 24/7 AI agent that answers across{" "}
-        <strong className="font-[500] text-[#221D17]">voice, chat, SMS &amp; email</strong> — wired together so you never miss a lead.{" "}
-        <strong className="font-[500] text-[#221D17]">Paste your site and go live. First one&rsquo;s free.</strong>
+        Paste your URL and watch it build — a multi-page{" "}
+        <strong className="font-[500] text-[#221D17]">website, booking page, intake form, and CRM</strong>, wired
+        together and ready for customers. Then add no-code AI agents — start from a template or build your own — to{" "}
+        <strong className="font-[500] text-[#221D17]">answer every call, request reviews, and handle your DMs and email.</strong>{" "}
+        The busywork, done for you.
       </p>
 
       {/* Two CTAs */}
@@ -207,7 +208,7 @@ export function MarketingHero() {
           className="inline-flex items-center gap-2.5 rounded-full bg-[#1F2B24] px-6 py-3.5 text-[15px] font-[500] text-[#F6F2EA] shadow-[0_1px_2px_rgba(34,29,23,.10),0_6px_16px_rgba(34,29,23,.10),0_18px_40px_rgba(34,29,23,.06),inset_0_1.5px_0_rgba(255,255,255,.12)] transition-all hover:-translate-y-[1.5px] hover:shadow-[0_2px_4px_rgba(34,29,23,.12),0_12px_26px_rgba(34,29,23,.14),inset_0_1.5px_0_rgba(255,255,255,.14)] active:translate-y-px"
         >
           <span className="size-[7px] rounded-full bg-[#00897B] shadow-[0_0_0_4px_rgba(0,137,123,.22)]" aria-hidden />
-          Start building
+          Start your 14-day free trial →
         </a>
         <a
           href="#agencies"
@@ -216,6 +217,11 @@ export function MarketingHero() {
           For agencies →
         </a>
       </div>
+
+      {/* Trust line under the CTA — replaces the old "free" line */}
+      <p className="mt-4 max-w-[60ch] text-pretty text-[13.5px] leading-[1.5] text-[#6E665A]">
+        then $29/mo · unlimited workspaces · works with your ChatGPT, Claude, or Gemini key — we show you how
+      </p>
 
       {/* Input form */}
       <form
@@ -316,7 +322,7 @@ export function MarketingHero() {
 
       {/* Proof checklist */}
       <ul className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
-        {["First workspace free", "Live in 60 seconds", "$29/mo flat after", "Cancel anytime"].map((item) => (
+        {["14-day free trial", "Live in 60 seconds", "$29/mo flat after", "Cancel anytime"].map((item) => (
           <li key={item} className="flex items-center gap-2 text-[13.5px] text-[#6E665A]">
             <span className="flex size-[17px] items-center justify-center rounded-full bg-[rgba(0,137,123,.12)] text-[10px] font-[700] text-[#00897B]" aria-hidden>✓</span>
             {item}

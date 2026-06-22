@@ -48,23 +48,23 @@ import { LandingMarketingFaqSection } from "@/components/landing/marketing-faq-s
 import { MarketingFinalCta } from "@/components/landing/marketing-final-cta";
 import { MarketingFooter } from "@/components/landing/marketing-footer";
 
+const POSITIONING_ONE_LINER =
+  "SeldonFrame — the all-in-one platform to run and sell your service business: website, booking, CRM, payments, and AI agents that do the work, built from your URL in 60 seconds. 14-day free trial, then $29/mo.";
+
 export const metadata: Metadata = {
-  title: "SeldonFrame — Build, run & sell AI agents + a complete front office.",
-  description:
-    "Website, booking, intake, CRM, and a 24/7 AI agent across voice, chat, SMS & email — live in 60 seconds. First workspace free, then $29/mo flat. Build any agent and sell it to your clients.",
+  title: "SeldonFrame — Your entire service business, live in 60 seconds.",
+  description: POSITIONING_ONE_LINER,
   openGraph: {
-    title: "SeldonFrame — Build, run & sell AI agents + a complete front office.",
-    description:
-      "A complete AI front office (voice, chat, SMS, email) live in 60 seconds. First workspace free, then $29/mo flat. Build any agent and resell it to your clients.",
+    title: "SeldonFrame — Your entire service business, live in 60 seconds.",
+    description: POSITIONING_ONE_LINER,
     type: "website",
     url: "https://seldonframe.com",
     images: [{ url: "/brand/og-image.png", width: 1200, height: 630 }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "SeldonFrame — Build, run & sell AI agents + a complete front office.",
-    description:
-      "A complete AI front office (voice, chat, SMS, email) live in 60 seconds. First workspace free, then $29/mo flat. Build any agent and resell it.",
+    title: "SeldonFrame — Your entire service business, live in 60 seconds.",
+    description: POSITIONING_ONE_LINER,
     images: ["/brand/twitter-card.png"],
   },
 };

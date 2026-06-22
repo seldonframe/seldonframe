@@ -6,11 +6,11 @@
 // Server component — no client hooks needed.
 
 const CHIPS = [
-  "No contract",
-  "No code",
-  "Edit by chatting",
+  "14-day free trial",
   "Live in 60 seconds",
-  "$29/mo flat — no surprise fees",
+  "$29/mo flat after",
+  "No code",
+  "Cancel anytime",
 ] as const;
 
 export function MarketingProofStrip() {
