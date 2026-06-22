@@ -69,8 +69,12 @@ export const CreateDeploymentSchema = z
     // The CLIENT's captured business context (narrow soul + FAQ). Optional —
     // absent → today's name-only behavior on the voice path.
     clientContext: ClientContextSchema.optional(),
-    // 'phone' | 'embed' | 'link' — defaults to phone in the store if omitted.
-    surface: z.enum(["phone", "embed", "link"]).optional(),
+    // 'phone' | 'embed' | 'link' | 'sms' | 'email' — defaults to phone in the
+    // store if omitted. sms/email are text-only deployments routed through the
+    // multi-surface agent loop (the store + DB `surface` text column already
+    // accept them via isDeploymentSurface); this widens the action allow-list so
+    // a builder can deploy a text agent from the Studio.
+    surface: z.enum(["phone", "embed", "link", "sms", "email"]).optional(),
     // What the SMB pays per month, in cents. Non-negative; capped at a sane
     // ceiling ($100k/mo) to reject obviously-bogus input.
     priceCents: z.number().int().min(0).max(10_000_000).optional(),

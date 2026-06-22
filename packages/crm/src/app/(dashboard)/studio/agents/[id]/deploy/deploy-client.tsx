@@ -31,6 +31,8 @@ import {
   Plus,
   X,
   ChevronDown,
+  MessageSquare,
+  Mail,
 } from "lucide-react";
 import {
   createDeploymentAction,
@@ -57,7 +59,7 @@ type TemplateOption = {
   status: string;
 };
 
-type Surface = "phone" | "embed" | "link";
+type Surface = "phone" | "embed" | "link" | "sms" | "email";
 
 /** Editable row shapes for the optional "Client's business" capture. Kept as
  *  flat strings so the inputs are trivially controlled; assembled into the
@@ -122,6 +124,10 @@ const SURFACES: Array<{
   { id: "phone", label: "Phone", hint: "A dedicated phone number answers calls.", icon: Phone },
   { id: "embed", label: "Embed", hint: "A chat widget on the client's website.", icon: Code2 },
   { id: "link", label: "Link", hint: "A shareable hosted chat link.", icon: LinkIcon },
+  // Text surfaces (#1) — routed through the multi-surface agent loop. These carry
+  // the template's MCP connectors on the deployed agent (voice does not).
+  { id: "sms", label: "SMS", hint: "Texts to the agent's number, answered by chat.", icon: MessageSquare },
+  { id: "email", label: "Email", hint: "Inbound email, answered by the same agent.", icon: Mail },
 ];
 
 export function DeployFlowClient({ templates, initialTemplateId }: Props) {

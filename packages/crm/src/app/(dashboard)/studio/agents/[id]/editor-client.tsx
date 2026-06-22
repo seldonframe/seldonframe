@@ -26,6 +26,8 @@ import {
   Trash2,
   ChevronDown,
   Plus,
+  Phone,
+  MessageSquare,
 } from "lucide-react";
 import {
   saveAgentTemplateBlueprintAction,
@@ -248,6 +250,9 @@ export function AgentTemplateEditor(props: Props) {
 
   return (
     <div className="space-y-4">
+      {/* Surfaces — where this agent answers (template-type-derived, read-only) */}
+      <SurfacesCard surface={props.surface} />
+
       {/* Refine with a prompt — AI-assisted iteration over the whole config */}
       <div className="rounded-xl border bg-card p-5">
         <div className="flex items-start gap-2">
@@ -546,6 +551,48 @@ export function AgentTemplateEditor(props: Props) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── Surfaces (#1 — read-only, template-type-derived) ───────────────────────
+//
+// Shows where this agent answers. The surface is DERIVED from the template type
+// (voice → Voice; chat → Web chat) and is read-only today — the data model
+// stores one surface per template, so we present it clearly rather than faking
+// an editable control the schema can't honor. A chat/text template also answers
+// SMS + email once deployed (the multi-surface runtime routes inbound text
+// through the same agent loop), so we say so honestly.
+function SurfacesCard({ surface }: { surface: AgentSurface }) {
+  const isVoice = surface === "voice";
+  return (
+    <div className="rounded-xl border bg-card p-5">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-card-title">Surface</h2>
+          <p className="text-xs text-muted-foreground">
+            Where this agent answers. Set by the template type.
+          </p>
+        </div>
+        <span className="inline-flex items-center gap-1.5 rounded-full border bg-background px-3 py-1 text-xs font-medium">
+          {isVoice ? (
+            <>
+              <Phone className="size-3.5 text-indigo-500 dark:text-indigo-400" aria-hidden />
+              Voice
+            </>
+          ) : (
+            <>
+              <MessageSquare className="size-3.5 text-indigo-500 dark:text-indigo-400" aria-hidden />
+              Web chat
+            </>
+          )}
+        </span>
+      </div>
+      {!isVoice && (
+        <p className="mt-2 text-xs text-muted-foreground">
+          This agent also answers SMS + email when deployed.
+        </p>
+      )}
     </div>
   );
 }
