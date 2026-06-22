@@ -1869,6 +1869,32 @@ C4 close-out with empirical SLICE 11 data.
 
 ---
 
+## L-30 — Making the agent tool-set seam async forces ALL its consumers, and the dispatch loop must resolve from the merged list
+
+- **Trigger:** MCP connector layer (2026-06-22). The plan named only one seam
+  consumer (`runtime.ts:225`), but `getToolsForCapabilities` had THREE callers
+  (`runtime.ts`, `stateless-turn.ts`, and indirectly the voice path via
+  `ALL_TOOLS`). Making the seam `async` to merge per-agent MCP tools breaks any
+  caller that uses the result synchronously (`.map`) — `stateless-turn.ts`
+  needed the same `await` + connectors pass-through, or tsc fails. Separately,
+  the dispatch loop resolved tools via the module-global `findTool` (searches
+  `ALL_TOOLS` only) — which can NEVER see per-agent MCP tools, so a wrapped tool
+  would be advertised to the model but fail to dispatch ("unknown tool").
+- **Rule:** When you widen a shared tool/registry seam to be per-agent + async:
+  (1) grep ALL call sites first (`getToolsForCapabilities`, `findTool`) — there
+  is usually a stateless/sandbox twin of the production loop that must change in
+  lockstep. (2) The dispatch resolution MUST read from the per-call merged list
+  the seam returned (`tools.find(t => t.name === name)`), NOT a module-global
+  `findTool(ALL_TOOLS)` — otherwise the appended tools are undispatchable. This
+  is a real, necessary 2-line deviation from a "only change the seam call"
+  instruction; keep the loop BODY (validate → execute → tool_result + its
+  try/catch) byte-for-byte and prove the no-connectors path is identical with a
+  reference-equality regression test (`tools[i] === ALL_TOOLS[i]`). Per-agent
+  secrets can't live on the global `findTool` safely (concurrency), so global
+  resolution is the wrong layer by construction.
+
+---
+
 ## Template for new entries
 
 ```
