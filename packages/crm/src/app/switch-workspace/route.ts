@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { and, eq, or } from "drizzle-orm";
+import { and, eq, isNull, or } from "drizzle-orm";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { orgMembers, organizations, partnerAgencies, users } from "@/db/schema";
@@ -90,6 +90,8 @@ async function checkWorkspaceAccess(
     .where(
       and(
         eq(organizations.id, targetOrgId),
+        // Front-office bridge: an archived client workspace is not switchable.
+        isNull(organizations.archivedAt),
         or(
           eq(organizations.ownerId, userId),
           eq(organizations.parentUserId, userId),
@@ -118,7 +120,9 @@ async function checkWorkspaceAccess(
   const [targetWs] = await db
     .select({ parentAgencyId: organizations.parentAgencyId })
     .from(organizations)
-    .where(eq(organizations.id, targetOrgId))
+    // Front-office bridge: an archived client workspace is not switchable, even
+    // via the agency-attached path.
+    .where(and(eq(organizations.id, targetOrgId), isNull(organizations.archivedAt)))
     .limit(1);
   if (targetWs?.parentAgencyId) {
     const [agency] = await db

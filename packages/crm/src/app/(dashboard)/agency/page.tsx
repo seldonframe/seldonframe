@@ -18,7 +18,7 @@
 // one active agency. Otherwise we render an empty state pointing
 // at register_partner_agency.
 
-import { eq } from "drizzle-orm";
+import { eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { organizations, partnerAgencies } from "@/db/schema";
 import { auth } from "@/auth";
@@ -65,7 +65,10 @@ export default async function AgencyDashboardPage() {
         parentAgencyId: organizations.parentAgencyId,
         plan: organizations.plan,
       })
-      .from(organizations);
+      .from(organizations)
+      // Front-office bridge: archived client workspaces drop out of the agency's
+      // active client list (they remain in the DB for reactivation/handoff).
+      .where(isNull(organizations.archivedAt));
     for (const ws of allWorkspaces) {
       if (ws.parentAgencyId && agencyIds.includes(ws.parentAgencyId)) {
         const list = workspacesByAgency.get(ws.parentAgencyId) ?? [];

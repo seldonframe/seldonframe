@@ -528,3 +528,44 @@ export async function setOrgParentAgency(
     .set({ parentAgencyId: agencyId, updatedAt: new Date() })
     .where(eq(organizations.id, orgId));
 }
+
+/** Injectable seams for archiveClientOrg so the patch shape is unit-tested with
+ *  no DB. The default `update` does the real organizations UPDATE. */
+export type ArchiveClientOrgDeps = {
+  update: (id: string, patch: { archivedAt: Date }) => Promise<void>;
+};
+
+/**
+ * Archive a client workspace on deployment cancel: stamp organizations.archivedAt
+ * (data retained — NEVER deleted). The deployment keeps its clientOrgId so the
+ * agency can reactivate / hand off later. The `now` clock is injectable for
+ * deterministic tests; defaults to new Date. Idempotent in effect (re-archiving
+ * just rewrites the timestamp).
+ */
+export async function archiveClientOrg(
+  args: { orgId: string; now?: () => Date },
+  deps?: ArchiveClientOrgDeps,
+): Promise<void> {
+  const at = (args.now ?? (() => new Date()))();
+  const update =
+    deps?.update ??
+    (async (id: string, patch: { archivedAt: Date }) => {
+      const { db } = await import("@/db");
+      const { organizations } = await import("@/db/schema/organizations");
+      const { eq } = await import("drizzle-orm");
+      await db
+        .update(organizations)
+        .set({ archivedAt: patch.archivedAt, updatedAt: new Date() })
+        .where(eq(organizations.id, id));
+    });
+  await update(args.orgId, { archivedAt: at });
+}
+
+/**
+ * Pure predicate mirroring the SQL `archivedAt IS NULL` filter: an org is ACTIVE
+ * (eligible for workspace lists + the billing workspace-count) only when it has
+ * not been archived. Lets fixture-level tests assert the exclusion without a DB.
+ */
+export function isOrgActiveRow(row: { archivedAt: Date | null }): boolean {
+  return row.archivedAt == null;
+}

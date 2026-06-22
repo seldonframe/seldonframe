@@ -23,6 +23,7 @@ import {
   updateDeployment,
   resolveBuilderAgency,
   setOrgParentAgency,
+  archiveClientOrg,
 } from "./store";
 import type { UpdateDeploymentDeps } from "./store";
 import { provisionClientWorkspaceForDeployment } from "./provision-client-workspace";
@@ -468,6 +469,23 @@ export async function cancelDeploymentAction(
       // Already released / network / etc. — swallow and still cancel.
       console.warn("[deployments][cancel] number release failed (continuing)", {
         deploymentId: existing.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  // Front-office bridge: ARCHIVE the provisioned client workspace (data
+  // retained, never deleted) so it drops out of active workspace lists + the
+  // billing workspace-count but can be reactivated / handed off later. We KEEP
+  // deployments.clientOrgId. Best-effort: a failure here must not block the
+  // cancel (the number release already happened); log + continue.
+  if (existing.clientOrgId) {
+    try {
+      await archiveClientOrg({ orgId: existing.clientOrgId });
+    } catch (err) {
+      console.warn("[deployments][cancel] client workspace archive failed (continuing)", {
+        deploymentId: existing.id,
+        clientOrgId: existing.clientOrgId,
         error: err instanceof Error ? err.message : String(err),
       });
     }

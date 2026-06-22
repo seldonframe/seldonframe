@@ -7,9 +7,9 @@
 //
 // The "owner" relationship in this codebase is via orgMembers.role === "owner".
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
-import { orgMembers } from "@/db/schema";
+import { orgMembers, organizations } from "@/db/schema";
 
 /** Pure helper extracted for testability — dedupes by orgId (defensive). */
 export function countOwnedWorkspacesFromRows(
@@ -26,7 +26,17 @@ export async function getOwnedWorkspaceCount(userId: string): Promise<number> {
   const rows = await db
     .select({ orgId: orgMembers.orgId })
     .from(orgMembers)
-    .where(and(eq(orgMembers.userId, userId), eq(orgMembers.role, "owner")));
+    // Join organizations so archived client workspaces (front-office bridge) are
+    // excluded from the workspace-limit count — they must not count against the
+    // builder's limit / trigger a charge.
+    .innerJoin(organizations, eq(organizations.id, orgMembers.orgId))
+    .where(
+      and(
+        eq(orgMembers.userId, userId),
+        eq(orgMembers.role, "owner"),
+        isNull(organizations.archivedAt),
+      ),
+    );
 
   return countOwnedWorkspacesFromRows(rows);
 }

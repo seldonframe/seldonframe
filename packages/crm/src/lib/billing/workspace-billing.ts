@@ -49,7 +49,7 @@
 // safety net.
 
 import Stripe from "stripe";
-import { and, eq, exists, sql } from "drizzle-orm";
+import { and, eq, exists, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { landingPages, organizations, partnerAgencies, users, type OrganizationSubscription } from "@/db/schema";
 import { AGENCY_WORKSPACE_OVERAGE_PRICE_ID } from "@/lib/billing/price-ids";
@@ -176,6 +176,9 @@ export async function loadActiveAgencyWorkspaceCount(agencyOrgId: string): Promi
         sql`${organizations.parentAgencyId} = ANY(${agencyIds})`,
         // not proposal-provisioned (billing-gated)
         eq(organizations.previewMode, false),
+        // front-office bridge: archived client workspaces must NOT count toward
+        // the agency's billed workspace quantity (excluded from the overage sync)
+        isNull(organizations.archivedAt),
         // published / live to the public
         exists(
           db

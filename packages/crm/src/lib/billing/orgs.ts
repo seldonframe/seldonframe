@@ -2,7 +2,7 @@
 
 import { randomUUID } from "node:crypto";
 import bcrypt from "bcryptjs";
-import { and, eq, inArray, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -210,7 +210,9 @@ async function getOwnedWorkspaceCount(userId: string) {
   const [result] = await db
     .select({ count: sql<number>`count(*)` })
     .from(organizations)
-    .where(eq(organizations.ownerId, userId));
+    // Front-office bridge: archived client workspaces are excluded so they never
+    // count against the builder's workspace limit / trigger a charge.
+    .where(and(eq(organizations.ownerId, userId), isNull(organizations.archivedAt)));
 
   return Number(result?.count ?? 0);
 }
@@ -311,11 +313,18 @@ async function fetchAgencyAttachedWorkspaceIds(userId: string): Promise<string[]
 
   const agencyIds = ownedAgencies.map((a) => a.id);
 
-  // Find organizations attached to any of those agencies.
+  // Find organizations attached to any of those agencies. Exclude archived
+  // client workspaces (front-office bridge) so they drop out of the agency's
+  // active workspace list + the billing rollup.
   const attached = await db
     .select({ id: organizations.id })
     .from(organizations)
-    .where(inArray(organizations.parentAgencyId, agencyIds));
+    .where(
+      and(
+        inArray(organizations.parentAgencyId, agencyIds),
+        isNull(organizations.archivedAt),
+      ),
+    );
 
   return attached.map((ws) => ws.id);
 }
@@ -461,7 +470,9 @@ export async function listManagedOrganizations(userId?: string) {
       createdAt: organizations.createdAt,
     })
     .from(organizations)
-    .where(or(...orgListOrConditions));
+    // Exclude archived client workspaces (front-office bridge) from the
+    // workspace switcher + dashboard org list.
+    .where(and(or(...orgListOrConditions), isNull(organizations.archivedAt)));
 
   if (rows.length === 0) {
     return [];
@@ -544,7 +555,9 @@ export async function listManagedOrganizationsForUser(userId: string) {
       createdAt: organizations.createdAt,
     })
     .from(organizations)
-    .where(or(...orgListOrConditions));
+    // Exclude archived client workspaces (front-office bridge) from the
+    // workspace switcher + dashboard org list.
+    .where(and(or(...orgListOrConditions), isNull(organizations.archivedAt)));
 
   if (rows.length === 0) {
     return [];
