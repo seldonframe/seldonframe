@@ -1,14 +1,15 @@
 "use client";
 
-// ICP-3 — the shared sub-nav for the Agents Studio console. Two tabs:
-//   Agents   (/studio/agents)  — the builder's reusable template roster
-//   Clients  (/studio/clients) — the builder's book of deployments
-// so both surfaces are reachable and the Studio reads as one console. Mirrors
+// ICP-3 — the shared sub-nav for the Agents Studio console. Three tabs:
+//   Agents    (/studio/agents)   — the builder's reusable template roster
+//   Clients   (/studio/clients)  — the builder's book of deployments
+//   Earnings  (/studio/earnings) — marketplace income (Phase 3, seller side)
+// so all surfaces are reachable and the Studio reads as one console. Mirrors
 // the agents/[id]/agent-tabs.tsx active-link chrome exactly.
 //
 // Deliberately NOT a /studio/layout.tsx: that route group also contains the
 // separate Creator Studio (/studio, the block generator), which must NOT get
-// these tabs. So this is an explicit shared component the two pages render.
+// these tabs. So this is an explicit shared component the pages render.
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -16,6 +17,7 @@ import { usePathname } from "next/navigation";
 const TABS = [
   { href: "/studio/agents", label: "Agents" },
   { href: "/studio/clients", label: "Clients" },
+  { href: "/studio/earnings", label: "Earnings" },
 ];
 
 export function StudioTabs() {
