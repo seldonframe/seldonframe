@@ -18,8 +18,8 @@ import assert from "node:assert/strict";
 import {
   provisionClientWorkspaceForDeployment,
   type ProvisionClientWorkspaceDeps,
-} from "../../../src/lib/deployments/provision-client-workspace.ts";
-import type { Deployment } from "../../../src/db/schema/deployments.ts";
+} from "../../../src/lib/deployments/provision-client-workspace";
+import type { Deployment } from "../../../src/db/schema/deployments";
 
 function fakeDeployment(over: Partial<Deployment> = {}): Deployment {
   return {
@@ -205,5 +205,52 @@ describe("provisionClientWorkspaceForDeployment", () => {
     const result = await provisionClientWorkspaceForDeployment(deps, fakeDeployment());
     assert.equal(result.ok, false);
     assert.equal(updated, false);
+  });
+});
+
+// ── Activation-wiring contract ────────────────────────────────────────────
+// The "use server" provisionDeploymentNumberAction can't be unit-booted (it
+// calls getOrgId()/assertWritable()/real Twilio with no DI seam — repo
+// convention is to test the logic layer). These lock the wiring the action
+// performs: the provisioner is called with the deployments-store updateDeployment
+// adapter shape, persists clientOrgId on success, and on a provisioning failure
+// returns {ok:false} WITHOUT persisting + WITHOUT throwing — so the action can
+// log + continue and activation still succeeds.
+describe("provisionClientWorkspaceForDeployment — activation wiring", () => {
+  // Mirror the action's updateDeployment adapter: a {clientOrgId} patch routed
+  // through the store's updateDeployment(input) signature.
+  function storeAdapter(captured: { id?: string; clientOrgId?: string }) {
+    return async (id: string, patch: { clientOrgId: string }) => {
+      // shape-equivalent to: await updateDeployment({ id, patch })
+      captured.id = id;
+      captured.clientOrgId = patch.clientOrgId;
+    };
+  }
+
+  test("on success, the clientOrgId is persisted via the store adapter", async () => {
+    const captured: { id?: string; clientOrgId?: string } = {};
+    const deps = baseDeps({
+      createFullWorkspace: async () => ({ status: "ready", workspace_id: "client-org-77" }),
+      updateDeployment: storeAdapter(captured),
+    });
+    const result = await provisionClientWorkspaceForDeployment(deps, fakeDeployment());
+    assert.deepEqual(result, { ok: true, orgId: "client-org-77" });
+    assert.equal(captured.id, "dep-1");
+    assert.equal(captured.clientOrgId, "client-org-77");
+  });
+
+  test("activation still succeeds when provisioning fails (no persist, no throw)", async () => {
+    const captured: { id?: string; clientOrgId?: string } = {};
+    const deps = baseDeps({
+      createFullWorkspace: async () => {
+        throw new Error("workspace creation exploded");
+      },
+      updateDeployment: storeAdapter(captured),
+    });
+    // The action wraps this in try/catch + an {ok:false} check; here we prove the
+    // provisioner itself yields a clean {ok:false} (the action then continues).
+    const result = await provisionClientWorkspaceForDeployment(deps, fakeDeployment());
+    assert.equal(result.ok, false);
+    assert.equal(captured.clientOrgId, undefined, "no clientOrgId persisted on failure");
   });
 });

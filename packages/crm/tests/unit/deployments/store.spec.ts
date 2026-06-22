@@ -286,6 +286,46 @@ describe("updateDeployment", () => {
     assert.equal(args.patch.numberOrigin, "provisioned");
   });
 
+  test("persists clientOrgId (front-office bridge provisioning link)", async () => {
+    let updateArgs: { id: string; patch: Record<string, unknown> } | null = null;
+    const deps: UpdateDeploymentDeps = {
+      findById: async () => fakeDeployment(),
+      update: async (id, patch) => {
+        updateArgs = { id, patch: patch as Record<string, unknown> };
+        return fakeDeployment({ clientOrgId: patch.clientOrgId as string });
+      },
+    };
+    const result = await updateDeployment({
+      id: "dep-1",
+      patch: { clientOrgId: "client-org-42" },
+      deps,
+    });
+    assert.equal(result.ok, true);
+    const args = updateArgs as unknown as { id: string; patch: Record<string, unknown> };
+    assert.equal(args.patch.clientOrgId, "client-org-42");
+    assert.ok(args.patch.updatedAt instanceof Date, "updatedAt bumped");
+  });
+
+  test("persists portalInvitedAt (portal opt-in stamp)", async () => {
+    let updateArgs: { patch: Record<string, unknown> } | null = null;
+    const when = new Date("2026-06-21T12:00:00Z");
+    const deps: UpdateDeploymentDeps = {
+      findById: async () => fakeDeployment(),
+      update: async (_id, patch) => {
+        updateArgs = { patch: patch as Record<string, unknown> };
+        return fakeDeployment();
+      },
+    };
+    const result = await updateDeployment({
+      id: "dep-1",
+      patch: { portalInvitedAt: when },
+      deps,
+    });
+    assert.equal(result.ok, true);
+    const args = updateArgs as unknown as { patch: Record<string, unknown> };
+    assert.equal(args.patch.portalInvitedAt, when);
+  });
+
   test("nulls phoneNumberSid + numberOrigin on release (cancel path)", async () => {
     let updateArgs: { id: string; patch: Record<string, unknown> } | null = null;
     const deps: UpdateDeploymentDeps = {

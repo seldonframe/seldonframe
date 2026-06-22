@@ -13,7 +13,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildClientWorkspaceInput } from "../../../src/lib/deployments/client-workspace-seed.ts";
+import { buildClientWorkspaceInput } from "../../../src/lib/deployments/client-workspace-seed";
 
 test("maps a full clientContext", () => {
   const input = buildClientWorkspaceInput({

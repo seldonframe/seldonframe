@@ -17,8 +17,16 @@
 import { revalidatePath } from "next/cache";
 import { getOrgId } from "@/lib/auth/helpers";
 import { assertWritable } from "@/lib/demo/server";
-import { createDeployment, getDeployment, updateDeployment } from "./store";
+import {
+  createDeployment,
+  getDeployment,
+  updateDeployment,
+  resolveBuilderAgency,
+  setOrgParentAgency,
+} from "./store";
 import type { UpdateDeploymentDeps } from "./store";
+import { provisionClientWorkspaceForDeployment } from "./provision-client-workspace";
+import { createFullWorkspace } from "@/lib/workspace/create-full";
 import {
   CreateDeploymentSchema,
   ActivateDeploymentSchema,
@@ -347,8 +355,49 @@ export async function provisionDeploymentNumberAction(input: {
     return { ok: false, error: result.error };
   }
 
+  // Front-office bridge: now that the deployment is active, auto-provision its
+  // isolated, agency-branded CLIENT workspace and link it via clientOrgId. This
+  // is IDEMPOTENT (re-activation safe) + SOFT-FAIL: if it errors, we log and
+  // continue — activation MUST still succeed (the agent runs, writing to the
+  // builder org as a fallback until a later retry provisions). Reload the row so
+  // the idempotent clientOrgId guard sees the latest persisted state. Never
+  // block the action's success on provisioning, and never let it throw.
+  try {
+    const fresh = (await getDeployment(parsed.data.deploymentId)) ?? existing;
+    const provisioned = await provisionClientWorkspaceForDeployment(
+      buildProvisionDeps(),
+      fresh,
+    );
+    if (!provisioned.ok) {
+      console.warn("[deployments][provision] client workspace not provisioned (continuing)", {
+        deploymentId: existing.id,
+        error: provisioned.error,
+      });
+    }
+  } catch (err) {
+    console.warn("[deployments][provision] threw (continuing — activation still succeeds)", {
+      deploymentId: existing.id,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
   revalidatePath("/studio/clients");
   return { ok: true, phoneNumber: result.phoneNumber };
+}
+
+/** Real default deps for provisionClientWorkspaceForDeployment, wired to the
+ *  workspace-creation core + the deployments store helpers. Kept as a builder so
+ *  the action body stays declarative and a future caller (e.g. a backfill) can
+ *  reuse the same wiring. */
+function buildProvisionDeps() {
+  return {
+    createFullWorkspace,
+    resolveBuilderAgency,
+    setParentAgency: setOrgParentAgency,
+    updateDeployment: async (id: string, patch: { clientOrgId: string }) => {
+      await updateDeployment({ id, patch });
+    },
+  };
 }
 
 // ─── cancelDeploymentAction ──────────────────────────────────────────────────

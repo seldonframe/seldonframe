@@ -379,6 +379,12 @@ export type DeploymentPatch = Partial<{
   phoneNumber: string | null;
   phoneNumberSid: string | null;
   numberOrigin: string | null;
+  /** The auto-provisioned client workspace (org) this deployment owns. Set by
+   *  provisionClientWorkspaceForDeployment on activation; never nulled. */
+  clientOrgId: string | null;
+  /** When the agency invited the client to portal access. Set by the
+   *  portal-invite action; re-invite updates it. */
+  portalInvitedAt: Date | null;
 }>;
 
 export type UpdateDeploymentInput = {
@@ -440,8 +446,85 @@ export async function updateDeployment(
   if (p.numberOrigin !== undefined) {
     patch.numberOrigin = p.numberOrigin;
   }
+  if (p.clientOrgId !== undefined) {
+    patch.clientOrgId = p.clientOrgId;
+  }
+  if (p.portalInvitedAt !== undefined) {
+    patch.portalInvitedAt = p.portalInvitedAt;
+  }
 
   const updated = await update(input.id, patch);
   if (!updated) return { ok: false, error: "update_failed" };
   return { ok: true, deployment: updated };
+}
+
+// ─── agency + client-org helpers (front-office bridge) ───────────────────────
+//
+// These back the activation-time client-workspace provisioning (provision-
+// client-workspace.ts) and archive-on-cancel. Lazy DB imports so unit tests that
+// DI the provisioner never touch Neon — these run only on the real action path.
+
+/**
+ * Resolve the partner agency owned by a builder org, for white-label branding of
+ * its client workspaces, or null if the builder has no agency yet. Mirrors the
+ * billing/orgs.ts resolution: load the org's owner user, then find a
+ * partner_agencies row owned by that user OR by the workspace itself
+ * (polymorphic ownership). Prefers an `active` agency; falls back to any
+ * non-archived row (the branding layer itself re-checks status). Best-effort:
+ * returns null on any miss so provisioning never fails on branding.
+ */
+export async function resolveBuilderAgency(
+  builderOrgId: string,
+): Promise<string | null> {
+  const { db } = await import("@/db");
+  const { organizations } = await import("@/db/schema/organizations");
+  const { partnerAgencies } = await import("@/db/schema/partner-agencies");
+  const { and, eq, ne, or } = await import("drizzle-orm");
+
+  const [org] = await db
+    .select({ ownerId: organizations.ownerId })
+    .from(organizations)
+    .where(eq(organizations.id, builderOrgId))
+    .limit(1);
+
+  const ownerId = org?.ownerId ?? null;
+  // The owner condition: by owner user (claimed builders) OR by the workspace
+  // itself (anonymous builders own the agency via ownerWorkspaceId).
+  const ownerCondition = ownerId
+    ? or(
+        eq(partnerAgencies.ownerUserId, ownerId),
+        eq(partnerAgencies.ownerWorkspaceId, builderOrgId),
+      )
+    : eq(partnerAgencies.ownerWorkspaceId, builderOrgId);
+
+  const rows = await db
+    .select({ id: partnerAgencies.id, status: partnerAgencies.status })
+    .from(partnerAgencies)
+    .where(and(ownerCondition, ne(partnerAgencies.status, "archived")));
+
+  if (rows.length === 0) return null;
+  // Prefer an active agency; otherwise the first non-archived one.
+  const active = rows.find((r) => r.status === "active");
+  return (active ?? rows[0]).id;
+}
+
+/**
+ * Store-level attach: set organizations.parentAgencyId for a client workspace so
+ * it inherits the agency's branding. This is the SAME update attachWorkspaceToAgency
+ * performs (partner-agencies/store.ts) — but WITHOUT its interactive
+ * ownership/tier validation, because here the caller is the server provisioning a
+ * workspace it just created (not a user request). Not gated; the agency-creation
+ * tier check already happened upstream.
+ */
+export async function setOrgParentAgency(
+  orgId: string,
+  agencyId: string,
+): Promise<void> {
+  const { db } = await import("@/db");
+  const { organizations } = await import("@/db/schema/organizations");
+  const { eq } = await import("drizzle-orm");
+  await db
+    .update(organizations)
+    .set({ parentAgencyId: agencyId, updatedAt: new Date() })
+    .where(eq(organizations.id, orgId));
 }
