@@ -11,6 +11,17 @@
 - Everything stays connected via the Soul (single source of truth)
 - First workspace is free forever. Additional workspaces = $9/month
 
+## 1b. Current Direction Constraints (settled 2026-06-21 — do not re-litigate)
+These supersede older notes in §1 where they conflict. Read before any product/build decision so the loop never re-derives them.
+- **Positioning:** *never-lies* (reliability — grounded + enforced read-back + guardrails + auto-evals) / *never-taxes* (flat pricing, owned + portable, no lock-in) / *never-goes-stale* (antifragile thin harness rides every model gain). Lead with these; sell on value, never on the $ (anchor "one booked job pays for it").
+- **BYOK is plumbing, not the pitch.** It's *how* pricing stays flat (COGS≈0); never the front-door ask — buyers experience key-juggling as the pain.
+- **Pricing (finalized):** $29/mo flat · unlimited workspaces · 14-day trial · + GMV fee 5→3→2% (only when SF is the sales channel) · + marketplace usage fee. "We don't tax your work." (Supersedes the older "$9/extra workspace" line above and the $19/$49/$297 tiers.)
+- **Voice is surface #1, not the product.** SF builds ANY agent on ANY surface (voice · web-chat · SMS · email · DM · MCP-endpoint) from the **6 primitives** (Surface · Skill · Tools · Knowledge/Brain · Guardrails · Voice/Format), bound to the client's tools via MCP/API. Build surface-agnostic.
+- **SF is the source of truth that pushes outward** (ICS for calendar; MCP/API for tools) — never a dependent pulling through middleware. **No Zapier/Make.** BYO-OAuth-app (the builder brings their own OAuth app, reused per client) → SF never does Google CASA.
+- **Reuse, don't rebuild.** Before building a subsystem, find the existing pipeline and call it (the front-office bridge reused `createFullWorkspace`; the deployed-agent calendar reused the `bookingMode` abstraction). Rebuilding what exists is the #1 avoidable waste.
+- **Deliverable = a whitelabel AI front office per client** (agent + CRM + calendar + portal + landing + reviews, agency-branded); the agency operates it + shares a portal.
+- **The build loop:** brainstorm → spec → plan → subagent-build → `/verify-build` → merge → memory. **Maker ≠ checker.** Swarm for breadth, gate for depth. **Loop the build; keep the judgment human.** Skills: `.claude/skills/{ship-feature,verify-build}`.
+
 ## 2. Workflow Orchestration Rules
 
 ### 2.1 Plan Mode Default
