@@ -9,7 +9,7 @@ import type { ReactElement } from "react";
 import { MarketplaceIcon } from "./marketplace-icons";
 import {
   SURFACE_META,
-  formatInstalls,
+  installsLabel,
   priceLabel,
   priceColor,
   priceBg,
@@ -145,11 +145,32 @@ export function AgentCard({ agent, featured = false }: { agent: StorefrontAgent;
         }}
       >
         <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12.5, color: "rgba(34,29,23,0.6)" }}>
-          <span style={{ color: MKT.green, display: "flex" }}>
-            <MarketplaceIcon name="star" size={featured ? 12 : 13} filled />
-          </span>
-          <span style={{ fontWeight: 700, color: MKT.ink, fontFamily: MKT.fontMono }}>{agent.rating}</span>
-          <span style={{ fontFamily: MKT.fontMono }}>· {formatInstalls(agent.installs)}</span>
+          {agent.isSeed || agent.installs <= 0 ? (
+            // Honest "just launched" state — no fabricated rating or install count.
+            <span
+              style={{
+                fontWeight: 700,
+                fontSize: 11,
+                letterSpacing: "0.04em",
+                textTransform: "uppercase",
+                color: MKT.green,
+                background: "rgba(0,137,123,0.10)",
+                padding: "3px 8px",
+                borderRadius: 999,
+                fontFamily: MKT.fontMono,
+              }}
+            >
+              New
+            </span>
+          ) : (
+            <>
+              <span style={{ color: MKT.green, display: "flex" }}>
+                <MarketplaceIcon name="star" size={featured ? 12 : 13} filled />
+              </span>
+              <span style={{ fontWeight: 700, color: MKT.ink, fontFamily: MKT.fontMono }}>{agent.rating}</span>
+              <span style={{ fontFamily: MKT.fontMono }}>· {installsLabel(agent)}</span>
+            </>
+          )}
         </span>
         {featured ? (
           <span style={{ fontWeight: 700, fontSize: 14.5, color: priceColor(agent.priceCents), fontFamily: MKT.fontMono }}>

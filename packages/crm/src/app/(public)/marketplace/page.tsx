@@ -58,9 +58,37 @@ async function loadStorefrontAgents(): Promise<StorefrontAgent[]> {
   return MARKETPLACE_SEED;
 }
 
+/**
+ * The REAL "businesses on SeldonFrame" count — 1 workspace = 1 business.
+ *
+ * Transparency over fabricated social proof: we count live workspace
+ * `organizations` (non-archived, not a proposal-pitch preview shell). This is
+ * the same definition of a real client/builder workspace used by the billing
+ * workspace-count helpers (lib/billing/orgs.ts + owned-workspace-count.ts both
+ * exclude `archivedAt`); we additionally exclude `previewMode` rows, which are
+ * un-activated pitch shells gated from billing until a prospect accepts.
+ *
+ * Returns 0 on any DB failure (preview without a database) so the hero simply
+ * omits the stat rather than crashing or guessing.
+ */
+async function countLiveBusinesses(): Promise<number> {
+  try {
+    const { db } = await import("@/db");
+    const { organizations } = await import("@/db/schema");
+    const { and, eq, isNull, sql } = await import("drizzle-orm");
+    const [row] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(organizations)
+      .where(and(isNull(organizations.archivedAt), eq(organizations.previewMode, false)));
+    return Number(row?.count ?? 0);
+  } catch {
+    return 0;
+  }
+}
+
 export default async function MarketplaceBrowsePage({ searchParams }: BrowsePageProps) {
   const params = await searchParams;
-  const agents = await loadStorefrontAgents();
+  const [agents, businessCount] = await Promise.all([loadStorefrontAgents(), countLiveBusinesses()]);
 
   const initialQuery = String(params.q ?? "").trim();
   const initialCategory: CategoryKey | null = params.niche
@@ -71,7 +99,12 @@ export default async function MarketplaceBrowsePage({ searchParams }: BrowsePage
     <div className="sf-mkt" style={{ minHeight: "100vh", background: MKT.paper, color: MKT.ink, fontFamily: MKT.fontSans }}>
       <MarketplaceStyles />
       <MarketplaceNav active="browse" defaultQuery={initialQuery} />
-      <BrowseClient agents={agents} initialCategory={initialCategory} initialQuery={initialQuery} />
+      <BrowseClient
+        agents={agents}
+        businessCount={businessCount}
+        initialCategory={initialCategory}
+        initialQuery={initialQuery}
+      />
       <MarketplaceFooter />
     </div>
   );

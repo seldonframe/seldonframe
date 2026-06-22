@@ -22,12 +22,16 @@ import {
 
 type BrowseClientProps = {
   agents: StorefrontAgent[];
+  /** REAL count of live workspaces on SeldonFrame (1 workspace = 1 business),
+   *  computed server-side. 0 → the hero omits the numeric claim entirely rather
+   *  than fabricating one. */
+  businessCount?: number;
   /** Initial category from ?niche / popular-link deep-links. */
   initialCategory?: CategoryKey | null;
   initialQuery?: string;
 };
 
-export function BrowseClient({ agents, initialCategory = null, initialQuery = "" }: BrowseClientProps): ReactElement {
+export function BrowseClient({ agents, businessCount = 0, initialCategory = null, initialQuery = "" }: BrowseClientProps): ReactElement {
   const [query, setQuery] = useState(initialQuery);
   const [category, setCategory] = useState<CategoryKey | null>(initialCategory);
 
@@ -181,8 +185,20 @@ export function BrowseClient({ agents, initialCategory = null, initialQuery = ""
                 ))}
               </div>
               <div style={{ fontSize: 14, color: "rgba(34,29,23,0.6)", lineHeight: 1.4 }}>
-                <strong style={{ color: MKT.ink, fontWeight: 700 }}>12,000+ businesses</strong> hiring agents ·{" "}
-                <span style={{ color: MKT.green, fontWeight: 700 }}>★ 4.9</span> avg
+                {businessCount > 0 ? (
+                  // REAL number — 1 workspace = 1 business. No fabricated rating.
+                  <>
+                    <strong style={{ color: MKT.ink, fontWeight: 700 }}>
+                      {formatInstalls(businessCount)} {businessCount === 1 ? "business" : "businesses"}
+                    </strong>{" "}
+                    on SeldonFrame
+                  </>
+                ) : (
+                  // Honest pre-launch line — no invented count or rating.
+                  <>
+                    <strong style={{ color: MKT.ink, fontWeight: 700 }}>Built by operators</strong>, for operators
+                  </>
+                )}
               </div>
             </div>
           </div>

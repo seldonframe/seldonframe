@@ -29,6 +29,7 @@ import {
   AVATAR_BG,
   MKT,
   formatInstalls,
+  installsLabel,
   priceLabel,
   priceColor,
   rowToStorefrontAgent,
@@ -98,7 +99,14 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
   const mcpEndpoint = mcpEndpointFor(agent.slug);
   const snippet = mcpSnippetFor(agent.slug);
 
-  // schema.org SoftwareApplication — name/description/aggregateRating/offers/author.
+  // A real, rated listing (not a brand-new seed) — drives whether we emit
+  // aggregateRating / the "⭐ rating" credibility line. Never fabricate a rating
+  // for a just-launched agent.
+  const hasRealRating = !agent.isSeed && agent.reviewCount > 0 && Number(agent.rating) > 0;
+
+  // schema.org SoftwareApplication — name/description/offers/author. We only
+  // include aggregateRating when the listing actually has reviews; emitting a
+  // fake rating would be misleading (and invalid structured data).
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
@@ -111,11 +119,15 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
       price: (agent.priceCents / 100).toFixed(2),
       priceCurrency: "USD",
     },
-    aggregateRating: {
-      "@type": "AggregateRating",
-      ratingValue: agent.rating,
-      reviewCount: agent.reviewCount,
-    },
+    ...(hasRealRating
+      ? {
+          aggregateRating: {
+            "@type": "AggregateRating",
+            ratingValue: agent.rating,
+            reviewCount: agent.reviewCount,
+          },
+        }
+      : {}),
     author: { "@type": "Organization", name: agent.builder },
   };
 
@@ -152,16 +164,40 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
                 <h1 style={{ margin: "5px 0 0", fontSize: 38, fontWeight: 700, letterSpacing: "-0.025em", lineHeight: 1.05 }}>{agent.name}</h1>
                 <p style={{ margin: "8px 0 0", fontSize: 17.5, lineHeight: 1.45, color: "rgba(34,29,23,0.66)", maxWidth: 540 }}>{agent.tagline}</p>
                 <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 16, flexWrap: "wrap" }}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 14 }}>
-                    <span style={{ color: MKT.green, display: "flex" }}>
-                      <MarketplaceIcon name="star" size={15} filled />
+                  {hasRealRating ? (
+                    <>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 14 }}>
+                        <span style={{ color: MKT.green, display: "flex" }}>
+                          <MarketplaceIcon name="star" size={15} filled />
+                        </span>
+                        <strong style={{ fontFamily: MKT.fontMono }}>{agent.rating}</strong>
+                        <span style={{ color: "rgba(34,29,23,0.5)", fontFamily: MKT.fontMono }}>({formatInstalls(agent.reviewCount)})</span>
+                      </span>
+                      <span style={{ fontSize: 14, color: "rgba(34,29,23,0.6)", fontFamily: MKT.fontMono }}>
+                        installed by {formatInstalls(agent.installs)}
+                      </span>
+                    </>
+                  ) : (
+                    // Honest "just launched" state — no fabricated rating / install count.
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                        fontSize: 12.5,
+                        fontWeight: 700,
+                        letterSpacing: "0.04em",
+                        textTransform: "uppercase",
+                        color: MKT.green,
+                        background: "rgba(0,137,123,0.10)",
+                        padding: "4px 10px",
+                        borderRadius: 999,
+                        fontFamily: MKT.fontMono,
+                      }}
+                    >
+                      <MarketplaceIcon name="sparkles" size={13} /> New · just launched
                     </span>
-                    <strong style={{ fontFamily: MKT.fontMono }}>{agent.rating}</strong>
-                    <span style={{ color: "rgba(34,29,23,0.5)", fontFamily: MKT.fontMono }}>({formatInstalls(agent.reviewCount)})</span>
-                  </span>
-                  <span style={{ fontSize: 14, color: "rgba(34,29,23,0.6)", fontFamily: MKT.fontMono }}>
-                    installed by {formatInstalls(agent.installs)}
-                  </span>
+                  )}
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 14, color: "rgba(34,29,23,0.6)", whiteSpace: "nowrap" }}>
                     built by <strong style={{ color: MKT.ink, fontWeight: 650 }}>{agent.builder}</strong>
                     {agent.verified ? (
@@ -335,7 +371,15 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
                     <div style={{ fontSize: 11.5, color: "rgba(246,242,234,0.7)", marginTop: 4, lineHeight: 1.35 }}>{agent.tagline}</div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "rgba(246,242,234,0.75)", fontFamily: MKT.fontMono }}>
-                    <span style={{ color: MKT.greenLight }}>★ {agent.rating}</span>· {formatInstalls(agent.installs)} installs · {priceLabel(agent.priceCents)}
+                    {hasRealRating ? (
+                      <>
+                        <span style={{ color: MKT.greenLight }}>★ {agent.rating}</span>· {installsLabel(agent)} · {priceLabel(agent.priceCents)}
+                      </>
+                    ) : (
+                      <>
+                        <span style={{ color: MKT.greenLight }}>New</span> · {priceLabel(agent.priceCents)}
+                      </>
+                    )}
                   </div>
                 </div>
                 <div>

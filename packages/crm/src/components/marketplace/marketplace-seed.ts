@@ -1,12 +1,20 @@
 // Marketplace seed catalog — real-but-tasteful fallback agents shown ONLY when
 // no kind:'agent' listings are published yet, so the storefront always renders
-// with credible content. Ported verbatim from the Claude Design output
+// with credible content. Ported from the Claude Design output
 // (sf-mkt-design/SeldonFrame Marketplace.dc.html, the AGENTS array).
 //
-// IMPORTANT (noted in the task report): these are demo listings. The browse +
-// listing pages prefer live DB listings via listMarketplaceAgentsFromDb and
-// fall back to this catalog only when the published set is empty. Seed slugs are
-// stable so the listing route resolves them.
+// IMPORTANT (noted in the task report): these are starter/demo listings. The
+// browse + listing pages prefer live DB listings via listMarketplaceAgentsFromDb
+// and fall back to this catalog only when the published set is empty. Seed slugs
+// are stable so the listing route resolves them.
+//
+// TRANSPARENCY (2026-06-22): seeds carry NO fabricated social proof. installs,
+// rating, reviewCount are 0 and the reviews arrays are empty, so a brand-new
+// marketplace reads as genuinely NEW ("just launched"), not fake-popular. The UI
+// renders a "New" badge for any agent with isSeed/zero installs (see
+// installsLabel + the isSeed guards in the card + listing detail). The blurbs,
+// sample conversations, highlights, and tools are illustrative product copy —
+// kept so the storefront still demonstrates what each agent does.
 
 import type { StorefrontAgent } from "./marketplace-data";
 
@@ -17,9 +25,9 @@ export const MARKETPLACE_SEED: StorefrontAgent[] = [
     category: "Receptionist",
     icon: "phone",
     surfaces: ["voice", "sms"],
-    installs: 12840,
-    rating: "4.9",
-    reviewCount: 1203,
+    installs: 0,
+    rating: "0",
+    reviewCount: 0,
     priceCents: 2900,
     featured: true,
     builder: "Northlight Ops",
@@ -51,10 +59,7 @@ export const MARKETPLACE_SEED: StorefrontAgent[] = [
       { role: "agent", text: "Booked for 2:00 PM. I've texted you a confirmation and your tech Daniel's details. Anything else?" },
     ],
     outcome: "Answered in 1 ring · 38s · booked a $420 service call",
-    reviews: [
-      { author: "Marcus Lee", role: "Owner · 3-truck HVAC, Phoenix", verified: true, stars: 5, text: "We stopped missing after-hours calls completely. It booked 14 jobs last month while we were on the tools — that paid for the whole year in a week." },
-      { author: "Priya N.", role: "Office manager · Plumbing", verified: true, stars: 5, text: "It sounds human. Customers don't realize it's an agent until we tell them, and even then they don't mind because it's faster than we ever were." },
-    ],
+    reviews: [],
     isSeed: true,
   },
   {
@@ -63,9 +68,9 @@ export const MARKETPLACE_SEED: StorefrontAgent[] = [
     category: "Reviews",
     icon: "starLine",
     surfaces: ["sms", "email"],
-    installs: 9120,
-    rating: "4.8",
-    reviewCount: 842,
+    installs: 0,
+    rating: "0",
+    reviewCount: 0,
     priceCents: 1900,
     featured: true,
     builder: "Northlight Ops",
@@ -95,10 +100,7 @@ export const MARKETPLACE_SEED: StorefrontAgent[] = [
       { role: "customer", text: "Done — left 5 stars." },
     ],
     outcome: "Review captured · rating up from 4.4 to 4.8 in 60 days",
-    reviews: [
-      { author: "Dana Whitfield", role: "Owner · Med spa, Scottsdale", verified: true, stars: 5, text: "Went from 31 reviews to 240 in three months. The timing is what does it — asking while the customer is still glowing." },
-      { author: "Sam O.", role: "GM · Roofing", verified: false, stars: 4, text: "Works great. Wish it supported a second follow-up, but the catch-unhappy-customers feature alone is worth it." },
-    ],
+    reviews: [],
     isSeed: true,
   },
   {
@@ -107,9 +109,9 @@ export const MARKETPLACE_SEED: StorefrontAgent[] = [
     category: "Reactivation",
     icon: "repeat",
     surfaces: ["sms", "email"],
-    installs: 6410,
-    rating: "4.7",
-    reviewCount: 512,
+    installs: 0,
+    rating: "0",
+    reviewCount: 0,
     priceCents: 1900,
     featured: false,
     builder: "Loop & Co",
@@ -140,10 +142,7 @@ export const MARKETPLACE_SEED: StorefrontAgent[] = [
       { role: "agent", text: "Done. Confirmation texted. Talk soon, Tom." },
     ],
     outcome: "Reactivated · $310 booked from a dormant customer",
-    reviews: [
-      { author: "Eli Rosen", role: "Owner · 2-truck HVAC", verified: true, stars: 5, text: "It quietly pulls in a few thousand dollars a month from people I would have never gotten around to calling." },
-      { author: "Carmen V.", role: "Owner · Cleaning service", verified: true, stars: 4, text: "Brought back a dozen lapsed clients in the first month. The tone is warm, not pushy, which matters in my business." },
-    ],
+    reviews: [],
     isSeed: true,
   },
   {
@@ -152,9 +151,9 @@ export const MARKETPLACE_SEED: StorefrontAgent[] = [
     category: "Quote",
     icon: "file",
     surfaces: ["chat", "email"],
-    installs: 4980,
-    rating: "4.7",
-    reviewCount: 388,
+    installs: 0,
+    rating: "0",
+    reviewCount: 0,
     priceCents: 3900,
     featured: false,
     builder: "Northlight Ops",
@@ -184,10 +183,7 @@ export const MARKETPLACE_SEED: StorefrontAgent[] = [
       { role: "agent", text: "Sent to your email and texted a copy. It's good for 30 days — reply 'book' and I'll schedule the install." },
     ],
     outcome: "Quote sent in 90s · accepted next morning",
-    reviews: [
-      { author: "Nate K.", role: "Owner · Electrical", verified: true, stars: 5, text: "Quotes that used to take me an evening go out before I leave the driveway. Close rate is up because nothing sits." },
-      { author: "Lina Park", role: "Estimator · Remodeling", verified: false, stars: 4, text: "Great for ballparks and follow-ups. I still tweak the big jobs by hand, but it saves me hours every week." },
-    ],
+    reviews: [],
     isSeed: true,
   },
   {
@@ -196,9 +192,9 @@ export const MARKETPLACE_SEED: StorefrontAgent[] = [
     category: "Support",
     icon: "calendar",
     surfaces: ["voice", "chat", "sms"],
-    installs: 8230,
-    rating: "4.8",
-    reviewCount: 691,
+    installs: 0,
+    rating: "0",
+    reviewCount: 0,
     priceCents: 0,
     featured: true,
     builder: "Tidewater Labs",
@@ -230,10 +226,7 @@ export const MARKETPLACE_SEED: StorefrontAgent[] = [
       { role: "agent", text: "Moved to Thursday 11:00 AM. Confirmation on its way." },
     ],
     outcome: "Rescheduled in 30s · no-show avoided · free to install",
-    reviews: [
-      { author: "Grace Lim", role: "Owner · Salon, 6 chairs", verified: true, stars: 5, text: "No-shows dropped by half once the reminders kicked in. And reschedules just... handle themselves now." },
-      { author: "Tomás R.", role: "Owner · Mobile detailing", verified: true, stars: 5, text: "Can't believe this one is free. It runs my entire calendar across text and phone." },
-    ],
+    reviews: [],
     isSeed: true,
   },
   {
@@ -242,9 +235,9 @@ export const MARKETPLACE_SEED: StorefrontAgent[] = [
     category: "Support",
     icon: "zap",
     surfaces: ["sms"],
-    installs: 7150,
-    rating: "4.8",
-    reviewCount: 604,
+    installs: 0,
+    rating: "0",
+    reviewCount: 0,
     priceCents: 1900,
     featured: false,
     builder: "Tidewater Labs",
@@ -275,10 +268,7 @@ export const MARKETPLACE_SEED: StorefrontAgent[] = [
       { role: "agent", text: "Done, booked for 3:00 PM today. You'll get a confirmation text shortly." },
     ],
     outcome: "Replied in 47s · lead booked before a competitor called back",
-    reviews: [
-      { author: "Jordan M.", role: "Owner · Garage doors", verified: true, stars: 5, text: "Lead response time went from “whenever I see it” to under a minute. Our booked rate basically doubled." },
-      { author: "Wesley A.", role: "Owner · Pest control", verified: true, stars: 4, text: "Simple and it just works. Speed is everything in our trade and this nails it." },
-    ],
+    reviews: [],
     isSeed: true,
   },
   {
@@ -287,9 +277,9 @@ export const MARKETPLACE_SEED: StorefrontAgent[] = [
     category: "Social",
     icon: "share",
     surfaces: ["chat", "email"],
-    installs: 3870,
-    rating: "4.6",
-    reviewCount: 274,
+    installs: 0,
+    rating: "0",
+    reviewCount: 0,
     priceCents: 2900,
     featured: false,
     builder: "Bright Signal",
@@ -319,10 +309,7 @@ export const MARKETPLACE_SEED: StorefrontAgent[] = [
       { role: "agent", text: "Perfect — I'll DM you to grab a couple details and get that moving today." },
     ],
     outcome: "Public reply in 3 min · moved to a private quote",
-    reviews: [
-      { author: "Bianca T.", role: "Owner · Landscaping", verified: true, stars: 5, text: "It catches the comments I always missed. Picked up two commercial accounts from Facebook alone." },
-      { author: "Derek S.", role: "Marketing lead · Agency", verified: false, stars: 4, text: "Solid for replies and DMs. The voice matching is better than I expected." },
-    ],
+    reviews: [],
     isSeed: true,
   },
   {
@@ -331,9 +318,9 @@ export const MARKETPLACE_SEED: StorefrontAgent[] = [
     category: "Support",
     icon: "headphones",
     surfaces: ["chat", "email", "sms"],
-    installs: 5290,
-    rating: "4.7",
-    reviewCount: 431,
+    installs: 0,
+    rating: "0",
+    reviewCount: 0,
     priceCents: 0,
     featured: false,
     builder: "Bright Signal",
@@ -363,10 +350,7 @@ export const MARKETPLACE_SEED: StorefrontAgent[] = [
       { role: "agent", text: "Booked for 9:00 AM Saturday. Confirmation texted!" },
     ],
     outcome: "Answered + booked in under a minute · free to install",
-    reviews: [
-      { author: "Hana B.", role: "Owner · Auto repair", verified: true, stars: 5, text: "My phone stopped ringing for the same five questions all day. Worth far more than free." },
-      { author: "Owen P.", role: "Owner · Locksmith", verified: false, stars: 4, text: "Great front line. Handles the basics flawlessly and knows when to pass it to me." },
-    ],
+    reviews: [],
     isSeed: true,
   },
 ];

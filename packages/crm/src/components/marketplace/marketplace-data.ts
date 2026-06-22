@@ -149,6 +149,17 @@ export function formatInstalls(n: number): string {
   return n.toLocaleString("en-US");
 }
 
+/**
+ * Honest install label for a storefront agent. A brand-new listing (real or
+ * seed) with no installs reads as "New" rather than fabricating a count. Real
+ * listings with installs show the real number; seeds always read "New" until
+ * a real published catalog replaces them.
+ */
+export function installsLabel(agent: Pick<StorefrontAgent, "installs" | "isSeed">): string {
+  if (agent.isSeed || agent.installs <= 0) return "New";
+  return `${formatInstalls(agent.installs)} installed`;
+}
+
 /** "Free" or "$29/mo". priceCents → whole dollars. */
 export function priceLabel(priceCents: number): string {
   return priceCents <= 0 ? "Free" : `$${Math.round(priceCents / 100)}/mo`;
