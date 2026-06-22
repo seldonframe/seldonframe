@@ -42,3 +42,61 @@ Strategy detail in memory: `seldonframe-positioning-synthesis`, `agent-builder-p
 ## 5. Other open tracks (not this arc)
 - **#139** Pricing backend (Stripe $19/$49/$297 per-workspace billing) — in progress, separate track.
 - **#131** operator-portal design-system Wave 2 · **#135** recurring appointments · **#124/#125** SMB-pivot / Seldon-Studio go-live.
+
+---
+
+# UPDATE — end of 2026-06-21 (bridge shipped)
+
+## ✅ Now shipped to main (the whole arc)
+| Build | Commit |
+|---|---|
+| Per-client persona | `b27201ff` (0026) |
+| Calendar-provider menu | `37903b80` (0027) |
+| ICS-push | `c526ebbb` |
+| **Front-office bridge** (deploy→activate spins an isolated agency-branded client workspace; agent writes everything there; portal opt-in; archive-on-cancel) | `07a298ce` (0028) |
+
+**The deliverable is complete:** a builder describes an agent → tests → deploys → gets a number → and the client automatically receives a full **whitelabel AI front office** (agent + CRM + calendar + portal + landing + reviews), agency-branded, that the agent writes into and the agency operates.
+
+## 🔓 What the bridge unlocks
+- **A 10× deliverable vs Vapi/Retell** — they hand over an agent + raw transcripts; we hand over a running business front office under the agency's brand.
+- **True per-client isolation + multi-tenancy** — every deployment is its own workspace; the "agency-of-agencies" topology is real.
+- **The native calendar is now real** — `bookingMode: native` books into the client's *own* workspace calendar + ICS-pushes outward (no vendor, no CASA).
+- **The portal = the recurring-revenue hook** — the client logs into a branded system their leads/bookings live in (sticky).
+- **The agency dashboard already aggregates it** (MRR rollup, operate-via-support-session) — the resale business runs on existing rails.
+
+## 🔜 Remaining
+1. **Live smoke** (deploy→activate→branded workspace→call→data in client org→cancel→archived).
+2. **BYO-OAuth-app relay** (real two-way calendar; premium) — when demanded.
+3. **MCP connector layer** (vetted-broker + BYO-MCP) — composes on #2.
+4. Deferred: ICS reschedule/cancel + webcal feed; reactivation-from-archive; backfill legacy deployments; chat-deploy parity.
+
+## 🎯 Clean positioning (vs what exists, against ICP pain)
+**One-liner:** *SeldonFrame is the AI front office that never lies, never taxes your work, and never goes stale — live in 60 seconds, yours to keep, and (for agencies) yours to resell under your brand.*
+
+| Alternative | Their pain | SeldonFrame |
+|---|---|---|
+| **Vapi / Retell** (voice toolkits) | agent + API + you duct-tape CRM/calendar/site; per-minute bill-shock; lock-in | the *whole* front office, flat-priced, owned, never-lies |
+| **GoHighLevel** (all-in-one) | 6–8wk learning curve; surprise SMS/AI bills; $497 white-label paywall; Frankenstein; robotic bots | live in 60s; flat; white-label included; grounded + never-double-books |
+| **Human receptionist / answering service** | $400–$4,000/mo; business hours; sick days; misses calls | a fraction of the cost; 24/7; never misses; books into the real calendar |
+| **DIY on model APIs** | months of OAuth/CASA/evals/glue; goes stale as models change | antifragile thin harness — rides every model gain for free |
+
+## 💯 Hormozi $100M-Offer evaluation
+
+**The Value Equation** — Value = (Dream Outcome × Perceived Likelihood) ÷ (Time Delay × Effort/Sacrifice). SeldonFrame maxes the numerator AND crushes the denominator:
+- **Dream Outcome ↑↑** — "never miss a job again" (SMB) / "a resellable product that prints recurring revenue under your brand" (agency).
+- **Perceived Likelihood ↑** — never-lies (grounded + read-back + no double-book), the *call-it-yourself* live demo, books into *their* real calendar (proof). *Gap: no explicit guarantee yet.*
+- **Time Delay ↓↓ (the killer lever)** — live in **60 seconds** vs GHL's 6–8 weeks.
+- **Effort/Sacrifice ↓↓** — one English sentence; no rebuild; no keys to babysit; agency-branded out of the box; flat price (no bill-shock anxiety); owned (no lock-in fear).
+→ **Structurally a Grand Slam Offer.** The denominator (60s + one sentence) is where it dominates every alternative.
+
+**Escape the commodity war:** never sell "a voice agent" (compared on per-minute price). Sell "a complete white-label AI front office, live in 60 seconds, that never lies." Uncompared → no price-shopping.
+
+**Problem → Solution stack** (every ICP pain has a deliverable): miss calls→24/7 agent; cold leads→speed-to-lead + missed-call text-back; robotic/hallucinating bot→grounded + read-back + get_quote_range; bookings not in my calendar→native + ICS-push; weeks to set up→60s from a sentence; surprise bills→flat $29; lock-in→owned/portable; goes stale→antifragile; (agency) can't resell profitably→white-label front office, no paywall, agency operates + portal; duct-taped stack→one connected system.
+
+**Guarantees to ADD (Hormozi's highest-leverage missing piece):**
+- *Reliability:* "Your agent never quotes a wrong price or double-books — or we make it right."
+- *Speed:* "A live front office in 60 seconds — or it's free."
+- *Keep-the-asset:* first workspace **free forever** (already true → an implied guarantee; make it explicit).
+- *Agency risk-reversal (already baked in):* "We only take our cut when YOU get paid (GMV fee). We don't tax your work." — a Hormozi-grade reversal; lead with it.
+
+**Pricing read:** $29 flat + GMV (5→3→2%) + marketplace fee. The "we only win when you win" GMV alignment is excellent risk-reversal. Watch-out: $29 flat may *under-price* perceived value (it replaces a $4k/mo receptionist + a $300/mo GHL stack) — so **never sell on the $29; value-anchor** ("one booked job pays for it 10× over"). The $29 is the land-and-expand wedge; the GMV is the upside — sound, *as long as SF is genuinely the sales channel* often enough for the GMV to fire (else it's under-monetized).
