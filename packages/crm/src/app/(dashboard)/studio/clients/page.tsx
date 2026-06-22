@@ -19,7 +19,7 @@ import { listDeployments } from "@/lib/deployments/store";
 import { formatCentsMonthly, formatDeploymentSurface } from "@/lib/deployments/margin";
 import { StudioTabs } from "../studio-tabs";
 import { DeploymentStatusBadge } from "./status-badge";
-import { ActivateForm, PauseButton } from "./activate-form";
+import { ActivateForm, PauseButton, PortalInviteButton } from "./activate-form";
 
 export const dynamic = "force-dynamic";
 
@@ -102,7 +102,14 @@ export default async function StudioClientsPage() {
                   />
                 )}
                 {d.status === "active" && (
-                  <PauseButton deploymentId={d.id} phoneNumber={d.phoneNumber} />
+                  <div className="flex items-start gap-2">
+                    <PortalInviteButton
+                      deploymentId={d.id}
+                      clientOrgId={d.clientOrgId}
+                      portalInvitedAt={d.portalInvitedAt ? d.portalInvitedAt.toISOString() : null}
+                    />
+                    <PauseButton deploymentId={d.id} phoneNumber={d.phoneNumber} />
+                  </div>
                 )}
               </div>
             </article>

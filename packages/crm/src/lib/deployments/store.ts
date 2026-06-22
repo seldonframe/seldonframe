@@ -101,6 +101,8 @@ function buildDefaultListDeps(): ListDeploymentsDeps {
           createdAt: deployments.createdAt,
           updatedAt: deployments.updatedAt,
           templateName: agentTemplates.name,
+          clientOrgId: deployments.clientOrgId,
+          portalInvitedAt: deployments.portalInvitedAt,
         })
         .from(deployments)
         .leftJoin(
@@ -338,6 +340,11 @@ export type DeploymentListItem = {
   updatedAt: Date;
   /** The deployed template's display name (null if the join missed). */
   templateName: string | null;
+  /** The provisioned client workspace (front-office bridge) — gates the portal
+   *  invite toggle (disabled until set). Null = not provisioned. */
+  clientOrgId: string | null;
+  /** When the client was invited to portal access (null = never). */
+  portalInvitedAt: Date | null;
 };
 
 /** List a builder's deployments, most-recently-updated first, with template name. */
@@ -568,4 +575,37 @@ export async function archiveClientOrg(
  */
 export function isOrgActiveRow(row: { archivedAt: Date | null }): boolean {
   return row.archivedAt == null;
+}
+
+/** Load an org's slug (the portal magic-link + booking tools key off it), or
+ *  null if the org is gone. Lazy DB import (real path only). */
+export async function loadOrgSlug(orgId: string): Promise<string | null> {
+  const { db } = await import("@/db");
+  const { organizations } = await import("@/db/schema/organizations");
+  const { eq } = await import("drizzle-orm");
+  const [row] = await db
+    .select({ slug: organizations.slug })
+    .from(organizations)
+    .where(eq(organizations.id, orgId))
+    .limit(1);
+  return row?.slug ?? null;
+}
+
+/** The primary contact id in an org for portal-invite addressing: the oldest
+ *  contact that has an email. Null when the org has no emailed contact yet (the
+ *  caller then falls back to creating one from the captured client email). Lazy
+ *  DB import (real path only). */
+export async function resolvePrimaryContactIdForOrg(
+  orgId: string,
+): Promise<string | null> {
+  const { db } = await import("@/db");
+  const { contacts } = await import("@/db/schema");
+  const { and, asc, eq, isNotNull } = await import("drizzle-orm");
+  const [row] = await db
+    .select({ id: contacts.id })
+    .from(contacts)
+    .where(and(eq(contacts.orgId, orgId), isNotNull(contacts.email)))
+    .orderBy(asc(contacts.createdAt))
+    .limit(1);
+  return row?.id ?? null;
 }

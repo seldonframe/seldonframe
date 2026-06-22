@@ -24,10 +24,15 @@ import {
   resolveBuilderAgency,
   setOrgParentAgency,
   archiveClientOrg,
+  loadOrgSlug,
+  resolvePrimaryContactIdForOrg,
 } from "./store";
 import type { UpdateDeploymentDeps } from "./store";
 import { provisionClientWorkspaceForDeployment } from "./provision-client-workspace";
+import { inviteClientToPortal } from "./portal-invite";
 import { createFullWorkspace } from "@/lib/workspace/create-full";
+import { createPortalMagicLink } from "@/lib/portal/auth";
+import { createContactForOrg } from "@/lib/contacts/create-for-org";
 import {
   CreateDeploymentSchema,
   ActivateDeploymentSchema,
@@ -503,4 +508,83 @@ export async function cancelDeploymentAction(
   }
   revalidatePath("/studio/clients");
   return { ok: true };
+}
+
+// ─── inviteClientToPortalAction ──────────────────────────────────────────────
+
+export type InviteClientToPortalActionResult =
+  | { ok: true; inviteUrl: string }
+  | {
+      ok: false;
+      error:
+        | "unauthorized"
+        | "not_found"
+        | "no_client_org"
+        | "no_contact_email"
+        | "org_not_found"
+        | "send_failed";
+    };
+
+/**
+ * Opt-in client portal access. The agency flips this on from the deployment
+ * management UI to send the client a magic link into their (provisioned) client
+ * workspace + stamp deployments.portalInvitedAt. Org-guarded. Requires
+ * deployment.clientOrgId — disabled in the UI until the workspace exists.
+ *
+ * The orchestration logic + its branches are unit-tested in portal-invite.ts
+ * (inviteClientToPortal, DI'd); this action just enforces the org guard and
+ * wires the real store/portal/contact effects.
+ */
+export async function inviteClientToPortalAction(input: {
+  deploymentId: string;
+}): Promise<InviteClientToPortalActionResult> {
+  assertWritable();
+
+  const orgId = await getOrgId();
+  if (!orgId) return { ok: false, error: "unauthorized" };
+
+  const parsed = PauseDeploymentSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "not_found" };
+
+  // Org guard: the deployment must belong to the current operator's org.
+  const existing = await getDeployment(parsed.data.deploymentId);
+  if (!existing || existing.builderOrgId !== orgId) {
+    return { ok: false, error: "not_found" };
+  }
+
+  const result = await inviteClientToPortal(
+    {
+      loadOrgSlug,
+      resolvePrimaryContactId: resolvePrimaryContactIdForOrg,
+      createContactForEmail: async (clientOrgId, email) => {
+        const { id } = await createContactForOrg({
+          orgId: clientOrgId,
+          firstName: existing.clientName,
+          lastName: null,
+          email,
+          phone: existing.clientContact?.phone ?? null,
+          status: "lead",
+          source: "portal_invite",
+        });
+        return id;
+      },
+      createMagicLink: async ({ orgSlug, contactId }) => {
+        const invite = await createPortalMagicLink({
+          orgSlug,
+          contactId,
+          redirectTo: `/customer/${orgSlug}?onboarding=1`,
+        });
+        return { inviteUrl: invite.inviteUrl };
+      },
+      updateDeployment: async (id, patch) => {
+        await updateDeployment({ id, patch });
+      },
+      now: () => new Date(),
+    },
+    existing,
+  );
+
+  if (!result.ok) return result;
+  revalidatePath("/studio/clients");
+  return { ok: true, inviteUrl: result.inviteUrl };
 }

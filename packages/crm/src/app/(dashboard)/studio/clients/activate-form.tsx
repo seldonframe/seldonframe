@@ -25,11 +25,12 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { Phone, Pause, Loader2, ChevronDown, ChevronUp, Sparkles } from "lucide-react";
+import { Phone, Pause, Loader2, ChevronDown, ChevronUp, Sparkles, KeyRound } from "lucide-react";
 import {
   activateDeploymentAction,
   pauseDeploymentAction,
   provisionDeploymentNumberAction,
+  inviteClientToPortalAction,
 } from "@/lib/deployments/actions";
 import { deriveAreaCode } from "@/lib/deployments/margin";
 
@@ -324,6 +325,94 @@ export function PauseButton({ deploymentId, phoneNumber }: PauseButtonProps) {
         )}
         Pause
       </button>
+      {error && (
+        <p className="text-[11px] text-rose-600 dark:text-rose-400">{error}</p>
+      )}
+    </div>
+  );
+}
+
+// ─── PortalInviteButton ────────────────────────────────────────────────────────
+//
+// Opt-in client portal access (front-office bridge). Disabled until the client
+// workspace has been provisioned (clientOrgId set on the deployment). On success
+// it surfaces the magic-link URL for the agency to send (the action generates
+// the link; it isn't auto-emailed — mirrors the existing portal-invite route).
+// Once invited, shows "Invited <date>" but re-invites are still allowed.
+
+type PortalInviteButtonProps = {
+  deploymentId: string;
+  /** Provisioned client workspace id — gates the button (disabled until set). */
+  clientOrgId: string | null;
+  /** When the client was previously invited (ISO string) — null = never. */
+  portalInvitedAt: string | null;
+};
+
+export function PortalInviteButton({
+  deploymentId,
+  clientOrgId,
+  portalInvitedAt,
+}: PortalInviteButtonProps) {
+  const [invitedAt, setInvitedAt] = useState<string | null>(portalInvitedAt);
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  const provisioned = Boolean(clientOrgId);
+
+  function handleInvite() {
+    setError(null);
+    setInviteUrl(null);
+    startTransition(async () => {
+      const result = await inviteClientToPortalAction({ deploymentId });
+      if (result.ok) {
+        setInviteUrl(result.inviteUrl);
+        setInvitedAt(new Date().toISOString());
+      } else {
+        setError(
+          result.error === "no_contact_email"
+            ? "Add a client email first — there's no contact to invite."
+            : result.error === "no_client_org"
+              ? "The client workspace isn't ready yet."
+              : "Couldn't create the invite. Please try again.",
+        );
+      }
+    });
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <button
+        type="button"
+        onClick={handleInvite}
+        disabled={!provisioned || isPending}
+        title={
+          provisioned
+            ? "Send the client a magic link into their portal"
+            : "Available once the client workspace is provisioned"
+        }
+        className="crm-button-secondary flex h-8 items-center gap-1.5 px-3 text-sm disabled:opacity-50"
+      >
+        {isPending ? (
+          <Loader2 className="size-3.5 animate-spin" />
+        ) : (
+          <KeyRound className="size-3.5" />
+        )}
+        {invitedAt ? "Re-invite to portal" : "Give portal access"}
+      </button>
+      {invitedAt && !inviteUrl && (
+        <p className="text-[11px] text-muted-foreground">
+          Invited {new Date(invitedAt).toLocaleDateString()}
+        </p>
+      )}
+      {inviteUrl && (
+        <p className="max-w-[16rem] truncate text-[11px] text-emerald-700 dark:text-emerald-400">
+          Magic link ready — send it to the client:{" "}
+          <a href={inviteUrl} className="underline" target="_blank" rel="noreferrer">
+            open
+          </a>
+        </p>
+      )}
       {error && (
         <p className="text-[11px] text-rose-600 dark:text-rose-400">{error}</p>
       )}
