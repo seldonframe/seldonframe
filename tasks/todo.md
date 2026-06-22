@@ -7,6 +7,41 @@ with a checkable plan, gets ticked off as it ships, and ends with a review block
 
 ## In flight
 
+### Phase 3 (seller side) — Agent Marketplace Seller UI (feature/agent-marketplace-seller) — IN PROGRESS
+
+Goal: a builder lists a Studio agent in a few clicks + sees earnings, with the
+**2% shown ONLY here** ("you keep 98%"). NO migration. Do NOT merge.
+
+Recon facts (verified):
+- `publishAgentTemplateAction({templateId,priceCents,niche,tags})` →
+  `lib/marketplace/actions.ts:433`. Free→`isPublished=true`; paid→stays unpublished
+  (needs Connect). Hardcodes `description: template.name`.
+- `marketplaceListings` (`db/schema/marketplace.ts:107`) has `description`,
+  `longDescription`, `tags`, `price`, `niche`, `kind`, `installCount`,
+  `stripeConnectAccountId`, `isPublished`, `creatorOrgId` → marketing copy fits, NO migration.
+- `AgentCard` (`components/marketplace/agent-card.tsx:20`, server cmpt, `{agent: StorefrontAgent}`);
+  `StorefrontAgent` via `rowToStorefrontAgent` (`marketplace-data.ts:185`). REUSE for preview.
+- Connect gate mirror: soul gate `api/v1/marketplace/listings/[id]/publish/route.ts:44`
+  (`price>0 && !stripeConnectAccountId`). Onboarding = POST `/api/v1/proposals/connect/start`→`{url}`
+  (`ConnectStartButton`). Status = `stripeConnections` row → `isActive` (`proposals/page.tsx:50`).
+- Earnings: rentals = `seldonframe_events` `event='agent_rental_call'`, attributed via
+  `orgId=creator_org_id` (`api/v1/agents/[slug]/mcp/route.ts:62`). installs =
+  `marketplaceListings.installCount`. revenue = price × installs.
+- Fee = `computeInvoiceApplicationFeeCents` + `GMV_FEE_PERCENT=2` (`lib/billing/gmv.ts`).
+- Studio nav = `app/(dashboard)/studio/studio-tabs.tsx`. Editor header = `studio/agents/[id]/page.tsx:89`.
+
+Plan:
+- [ ] S1 — Pure earnings math (TDD) `lib/marketplace/earnings.ts` + spec.
+- [ ] S2 — Seller actions `lib/marketplace/seller-actions.ts` (publish/update/unpublish/republish
+      + connect status), org-guarded, marketing fields, paid→needs_connect.
+- [ ] S3 — Preview helper (pure, spec) + `list-on-marketplace.tsx` panel wired into editor header.
+- [ ] S4 — `studio/earnings/page.tsx` + "Earnings" tab (2% shown ONLY here).
+- [ ] S5 — Verify (tsc 0 new / check-use-server / unit tests) + report.
+
+Review: (to fill in)
+
+---
+
 ### Builder Fix Pass — persona isolation + 3 UX fixes (feature/agent-builder) — DONE
 
 Follow-up on the merged builder (Phases 0-2). 4 commits.
