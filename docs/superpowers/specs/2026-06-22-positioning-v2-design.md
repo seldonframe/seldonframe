@@ -6,7 +6,7 @@
 seldonframe.com confuses because it answers **two buyers' searches at once** (an SMB running a business *vs* an agency building to sell) and stacks **five concepts in the hero** (front office · build-and-sell · multi-surface · flat pricing · GMV). A visitor holds **one** idea in ~5 seconds, so they can't answer the only question that matters — *"is this for me, and what is it?"* — and they bounce. The recent rewrite made it worse by layering the platform/GMV story on top. **Confusion is the enemy of sales.** The fix is a decision, not better words: one buyer, one transformation, one idea per section.
 
 ## What SeldonFrame IS (one sentence)
-> **The all-in-one platform to run *and sell* your service business — a website, booking, CRM, and AI agents that do the work — built from your URL in 60 seconds.**
+> **The all-in-one platform to run *and sell* your service business — website, booking, CRM, payments, and AI agents that do the work — built from your URL in 60 seconds.**
 
 **Internal spine (NEVER consumer copy):** "Shopify for service & agent businesses." A plumber doesn't know what Shopify is — he knows he's drowning in missed calls. The Shopify frame guides *our* thinking and investor narrative only.
 
