@@ -40,6 +40,16 @@ describe("buildCheckoutSessionParams", () => {
     assert.equal(params.subscription_data?.metadata?.preview_workspace_id, "ws_456");
   });
 
+  test("takes a 2% GMV application fee on the connected-account subscription", () => {
+    const params = buildCheckoutSessionParams(input);
+    assert.equal(params.subscription_data?.application_fee_percent, 2);
+  });
+
+  test("still takes 2% GMV when a setup fee is present", () => {
+    const params = buildCheckoutSessionParams({ ...input, setupFeeCents: 75000 });
+    assert.equal(params.subscription_data?.application_fee_percent, 2);
+  });
+
   test("sets success_url + cancel_url back to /p/[token]", () => {
     const params = buildCheckoutSessionParams(input);
     assert.ok(

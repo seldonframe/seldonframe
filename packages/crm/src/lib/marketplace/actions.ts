@@ -501,6 +501,7 @@ export async function purchaseSoulListingAction(formData: FormData) {
       },
     ],
     payment_intent_data: {
+      // GMV policy TBD for soul-marketplace sales — left at 0 (decide separately).
       application_fee_amount: 0,
       transfer_data: {
         destination: listing.stripeConnectAccountId,
@@ -675,6 +676,7 @@ export async function purchaseMarketplaceBlockAction(formData: FormData) {
       },
     ],
     payment_intent_data: {
+      // GMV policy TBD for soul-marketplace sales — left at 0 (decide separately).
       application_fee_amount: 0,
       transfer_data: {
         destination: block.sellerStripeAccountId,

@@ -3,6 +3,10 @@ import Stripe from "stripe";
 import { db } from "@/db";
 import { stripeConnections } from "@/db/schema";
 import {
+  GMV_FEE_PERCENT,
+  computeInvoiceApplicationFeeCents,
+} from "@/lib/billing/gmv";
+import {
   PaymentProviderError,
   type CancelSubscriptionInput,
   type CancelSubscriptionResult,
@@ -127,6 +131,18 @@ export const stripeProvider: PaymentProvider = {
       );
     }
 
+    // 2026-06-22 — 2% GMV application fee on the SMB's OWN sale. This
+    // invoice is created on the SMB's connected account (stripeAccount),
+    // so the fee is the platform's cut of the SMB's revenue — NOT the
+    // platform $29. Sum the same per-item amount the loop above charged,
+    // then ONLY set application_fee_amount when > 0 (Stripe rejects a 0
+    // amount on some invoice shapes).
+    const totalCents = input.items.reduce(
+      (sum, it) => sum + Math.round(it.unitAmount * (it.quantity ?? 1) * 100),
+      0
+    );
+    const applicationFeeCents = computeInvoiceApplicationFeeCents(totalCents);
+
     const invoice = await stripe.invoices.create(
       {
         customer: customer.id,
@@ -135,6 +151,9 @@ export const stripeProvider: PaymentProvider = {
           ? Math.max(1, Math.ceil((input.dueAt.getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
           : 30,
         auto_advance: input.autoAdvance ?? false,
+        ...(applicationFeeCents > 0
+          ? { application_fee_amount: applicationFeeCents }
+          : {}),
         metadata: {
           seldonframe_org_id: input.orgId,
           seldonframe_contact_id: input.contactId ?? "",
@@ -207,6 +226,10 @@ export const stripeProvider: PaymentProvider = {
         customer: customer.id,
         items: [{ price: input.priceId }],
         trial_period_days: input.trialDays,
+        // 2026-06-22 — 2% GMV application fee on the SMB's OWN recurring
+        // sale. Created on the SMB's connected account (stripeAccount) →
+        // the platform's cut of the SMB's revenue, NOT the platform $29.
+        application_fee_percent: GMV_FEE_PERCENT,
         metadata: {
           seldonframe_org_id: input.orgId,
           seldonframe_contact_id: input.contactId ?? "",

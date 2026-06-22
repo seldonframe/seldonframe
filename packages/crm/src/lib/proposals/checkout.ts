@@ -6,6 +6,7 @@
 // 2026-05-20 — Extended: optional one-time setup fee (Phase A).
 
 import type Stripe from "stripe";
+import { GMV_FEE_PERCENT } from "@/lib/billing/gmv";
 
 export type BuildCheckoutSessionParamsInput = {
   proposalId: string;
@@ -63,6 +64,11 @@ export function buildCheckoutSessionParams(
       signed_token: input.signedToken,
     },
     subscription_data: {
+      // 2026-06-22 — 2% GMV application fee on the SMB's OWN sale. This
+      // checkout is a DIRECT charge on the agency's connected account
+      // (the accept route passes { stripeAccount }), so the fee is the
+      // platform's cut of the SMB's revenue — NOT the platform $29.
+      application_fee_percent: GMV_FEE_PERCENT,
       metadata: {
         proposal_id: input.proposalId,
         preview_workspace_id: input.previewWorkspaceId ?? "",
