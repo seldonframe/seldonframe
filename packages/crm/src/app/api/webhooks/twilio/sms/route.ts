@@ -5,7 +5,7 @@ import { organizations, smsEvents, smsMessages, workflowRuns, workflowWaits } fr
 import { decryptValue } from "@/lib/encryption";
 import { emitSeldonEvent } from "@/lib/events/bus";
 import { logEvent } from "@/lib/observability/log";
-import { handleIncomingTurn } from "@/lib/conversation/runtime";
+import { dispatchSmsAutoReply } from "@/lib/agents/channels/sms-auto-reply";
 import { classifyInboundIntent, shouldAutoReplyForIntent } from "@/lib/messaging/classify-intent";
 import { findContactByPhone, persistInboundSms } from "@/lib/sms/api";
 import { toE164 } from "@/lib/sms/providers";
@@ -376,7 +376,7 @@ export async function POST(request: Request) {
 
   // Always emit sms.replied — the conversation engine's pause_event
   // listener is the path that resumes a paused conversation step. The
-  // chatbot path (handleIncomingTurn below) is gated separately by
+  // auto-reply path (dispatchSmsAutoReply below) is gated separately by
   // conversationOwnsReply.
   //
   // 2026-05-19 — payload now includes `phone` (E.164 sender) so the
@@ -423,33 +423,27 @@ export async function POST(request: Request) {
     });
 
     if (autoReply) {
-      const result = await handleIncomingTurn({
+      // Multi-surface runtime: route the auto-reply through the agent loop
+      // (executeTurn + tools) via the unified channel seam. The deployment
+      // resolver inside makes a deployment-number text resolve to the CLIENT
+      // workspace's default agent (writes land in the client org). When the
+      // workspace has no default agent, dispatchSmsAutoReply falls back to
+      // today's soul-aware chatbot — so nothing regresses. Best-effort: it
+      // never throws (Twilio must get a 200).
+      const outcome = await dispatchSmsAutoReply({
         orgId,
         contactId,
-        channel: "sms",
-        incomingMessage: inboundBody,
+        fromNumber,
+        toNumber,
+        inboundBody,
         smsMessageId: inbound.id,
       });
-
-      // Send the generated reply back via the outbound SMS path.
-      if (result.responseText) {
-        // Intentionally re-export through sendSmsFromApi for the full
-        // suppression-check + activity-log + webhook dispatch treatment.
-        const { sendSmsFromApi } = await import("@/lib/sms/api");
-        await sendSmsFromApi({
-          orgId,
-          userId: null,
-          contactId,
-          toNumber: fromNumber,
-          body: result.responseText,
-        }).catch((error) => {
-          logEvent("twilio_webhook_reply_send_failed", {
-            org_id: orgId,
-            contact_id: contactId,
-            error: error instanceof Error ? error.message : String(error),
-          });
-        });
-      }
+      logEvent("twilio_webhook_auto_reply", {
+        org_id: orgId,
+        contact_id: contactId,
+        path: outcome.path,
+        handled: outcome.handled,
+      });
     }
     // else: classified as 'other' (complaint / ambiguous). Inbound row
     // is already persisted + sms.replied was emitted earlier, so the
