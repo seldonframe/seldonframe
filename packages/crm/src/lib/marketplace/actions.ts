@@ -10,6 +10,14 @@ import { computeInvoiceApplicationFeeCents } from "@/lib/billing/gmv";
 import { assertWritable } from "@/lib/demo/server";
 import { installSoulPackage } from "@/lib/marketplace/install-soul";
 import type { SoulPackage } from "@/lib/marketplace/soul-package";
+import {
+  buildInstalledAgentTemplate,
+  mapTemplateToAgentListing,
+  type AgentListingForBuyer,
+} from "@/lib/marketplace/agent-listings";
+import { agentTemplates } from "@/db/schema/agent-templates";
+import { resolveUniqueTemplateSlug } from "@/lib/agent-templates/store";
+import type { AgentBlueprint } from "@/db/schema/agents";
 import { getStripeClient } from "@seldonframe/payments";
 
 type GeneratedFile = { path: string; content: string };
@@ -295,6 +303,66 @@ export async function finalizeBlockPurchaseFromWebhook(params: {
   await enableBlockForOrg(params.orgId, params.blockId);
 }
 
+/** The columns both the soul and agent finalize/install paths read off a
+ *  marketplace_listings row. `kind` discriminates which clone runs. */
+const LISTING_INSTALL_COLUMNS = {
+  id: marketplaceListings.id,
+  slug: marketplaceListings.slug,
+  name: marketplaceListings.name,
+  kind: marketplaceListings.kind,
+  soulPackage: marketplaceListings.soulPackage,
+  agentType: marketplaceListings.agentType,
+  agentBlueprint: marketplaceListings.agentBlueprint,
+} as const;
+
+type ListingInstallRow = {
+  id: string;
+  slug: string;
+  name: string;
+  kind: string;
+  soulPackage: unknown;
+  agentType: string | null;
+  agentBlueprint: AgentBlueprint | null;
+};
+
+/**
+ * Clone a kind:'agent' listing into the buyer's org as a fresh DRAFT
+ * agent_templates row (the buyer runs it on their OWN BYOK — nothing here
+ * touches keys). Reuses the pure mapper (buildInstalledAgentTemplate) + the
+ * agent-templates slug primitive (resolveUniqueTemplateSlug), and inserts via
+ * the same agentTemplates table createAgentTemplate uses. Returns the new
+ * template id.
+ */
+async function cloneAgentListingIntoOrg(listing: ListingInstallRow, buyerOrgId: string): Promise<string> {
+  const args = buildInstalledAgentTemplate(
+    {
+      id: listing.id,
+      slug: listing.slug,
+      name: listing.name,
+      kind: listing.kind,
+      agentType: listing.agentType,
+      agentBlueprint: listing.agentBlueprint,
+    } satisfies AgentListingForBuyer,
+    buyerOrgId,
+  );
+
+  const existing = await db
+    .select({ slug: agentTemplates.slug })
+    .from(agentTemplates)
+    .where(eq(agentTemplates.builderOrgId, buyerOrgId));
+  const slug = resolveUniqueTemplateSlug(args.name, existing.map((r) => r.slug));
+
+  const [created] = await db
+    .insert(agentTemplates)
+    .values({ ...args, slug })
+    .returning({ id: agentTemplates.id });
+
+  if (!created) {
+    throw new Error("agent_templates insert returned no row");
+  }
+  return created.id;
+}
+
 export async function finalizeSoulPurchaseFromWebhook(params: {
   orgId: string;
   userId?: string | null;
@@ -306,14 +374,10 @@ export async function finalizeSoulPurchaseFromWebhook(params: {
     return;
   }
 
-  const listing = params.listingId
+  const listing = (params.listingId
     ? (
         await db
-          .select({
-            id: marketplaceListings.id,
-            slug: marketplaceListings.slug,
-            soulPackage: marketplaceListings.soulPackage,
-          })
+          .select(LISTING_INSTALL_COLUMNS)
           .from(marketplaceListings)
           .where(and(eq(marketplaceListings.id, params.listingId), eq(marketplaceListings.isPublished, true)))
           .limit(1)
@@ -321,16 +385,12 @@ export async function finalizeSoulPurchaseFromWebhook(params: {
     : params.listingSlug
       ? (
           await db
-            .select({
-              id: marketplaceListings.id,
-              slug: marketplaceListings.slug,
-              soulPackage: marketplaceListings.soulPackage,
-            })
+            .select(LISTING_INSTALL_COLUMNS)
             .from(marketplaceListings)
             .where(and(eq(marketplaceListings.slug, params.listingSlug), eq(marketplaceListings.isPublished, true)))
             .limit(1)
         )[0]
-      : null;
+      : null) as ListingInstallRow | undefined;
 
   if (!listing) {
     return;
@@ -341,7 +401,15 @@ export async function finalizeSoulPurchaseFromWebhook(params: {
     return;
   }
 
-  await installSoulPackage(params.orgId, listing.soulPackage as SoulPackage);
+  // kind:'agent' → clone the blueprint into the buyer org. Same Stripe charge +
+  // 2% application fee already fired at the checkout site (purchaseAgentListing
+  // path), exactly like a paid soul. kind:'soul' (default) → the original soul
+  // install, untouched.
+  if (listing.kind === "agent") {
+    await cloneAgentListingIntoOrg(listing, params.orgId);
+  } else {
+    await installSoulPackage(params.orgId, listing.soulPackage as SoulPackage);
+  }
   await markOrgInstalledListing(params.orgId, listing.id);
 
   await db
@@ -351,6 +419,205 @@ export async function finalizeSoulPurchaseFromWebhook(params: {
 
   revalidatePath("/soul-marketplace");
   revalidatePath(`/soul-marketplace/${listing.slug}`);
+  revalidatePath("/marketplace");
+  revalidatePath(`/marketplace/${listing.slug}`);
+}
+
+// ─── agent listings — publish + install ──────────────────────────────────────
+//
+// A builder lists a Studio agent_templates blueprint as a kind:'agent'
+// marketplace listing; a buyer installs it (clone into their org). Both reuse
+// the EXISTING marketplaceListings table + the soul purchase/install/Stripe/2%
+// engine via the kind discriminator — no parallel commerce stack.
+
+export async function publishAgentTemplateAction(input: {
+  templateId: string;
+  priceCents: number;
+  niche: string;
+  tags?: string[];
+}) {
+  assertWritable();
+
+  const user = await getCurrentUser();
+  const orgId = await getOrgId();
+  if (!user?.id || !orgId) {
+    throw new Error("Unauthorized");
+  }
+
+  const templateId = String(input.templateId ?? "").trim();
+  if (!templateId) {
+    throw new Error("Template ID is required");
+  }
+
+  const niche = String(input.niche ?? "other").trim() || "other";
+  const priceCents = Number.isFinite(input.priceCents) ? Math.max(0, Math.round(input.priceCents)) : 0;
+  const tags = Array.isArray(input.tags) ? input.tags.map((t) => String(t).trim()).filter(Boolean) : [];
+
+  // Load the template and confirm it belongs to this builder's org.
+  const [template] = await db
+    .select()
+    .from(agentTemplates)
+    .where(and(eq(agentTemplates.id, templateId), eq(agentTemplates.builderOrgId, orgId)))
+    .limit(1);
+
+  if (!template) {
+    throw new Error("Agent template not found");
+  }
+
+  // Resolve a globally-unique listing slug (marketplace_listings.slug is UNIQUE).
+  const baseSlug = slugify(template.name) || "agent";
+  let slug = baseSlug;
+  const [slugTaken] = await db
+    .select({ id: marketplaceListings.id })
+    .from(marketplaceListings)
+    .where(eq(marketplaceListings.slug, slug))
+    .limit(1);
+  if (slugTaken) {
+    slug = `${baseSlug}-${Date.now().toString().slice(-6)}`;
+  }
+
+  const values = mapTemplateToAgentListing(template, {
+    creatorOrgId: orgId,
+    slug,
+    priceCents,
+    niche,
+    tags,
+    description: template.name,
+  });
+
+  // Mirror soul publish: a FREE agent goes live immediately; a PAID agent stays
+  // unpublished until the builder connects Stripe + publishes (the existing
+  // /api/v1/marketplace/listings/[id]/publish gate: price>0 needs a connect
+  // account). Buyers run the agent on their OWN BYOK regardless.
+  const isPublished = priceCents <= 0;
+
+  const [created] = await db
+    .insert(marketplaceListings)
+    .values({ ...values, isPublished })
+    .returning({ slug: marketplaceListings.slug });
+
+  if (!created) {
+    throw new Error("Could not create agent listing");
+  }
+
+  revalidatePath("/marketplace");
+  revalidatePath(`/marketplace/${created.slug}`);
+
+  return { slug: created.slug };
+}
+
+export async function installAgentListingAction(input: { slug: string }) {
+  assertWritable();
+
+  const user = await getCurrentUser();
+  const orgId = await getOrgId();
+  if (!user?.id || !orgId) {
+    throw new Error("Unauthorized");
+  }
+
+  const slug = String(input.slug ?? "").trim();
+  if (!slug) {
+    throw new Error("Listing slug is required");
+  }
+
+  const [listing] = await db
+    .select({
+      id: marketplaceListings.id,
+      slug: marketplaceListings.slug,
+      name: marketplaceListings.name,
+      description: marketplaceListings.description,
+      kind: marketplaceListings.kind,
+      price: marketplaceListings.price,
+      stripeConnectAccountId: marketplaceListings.stripeConnectAccountId,
+      agentType: marketplaceListings.agentType,
+      agentBlueprint: marketplaceListings.agentBlueprint,
+      soulPackage: marketplaceListings.soulPackage,
+    })
+    .from(marketplaceListings)
+    .where(and(eq(marketplaceListings.slug, slug), eq(marketplaceListings.isPublished, true)))
+    .limit(1);
+
+  if (!listing || listing.kind !== "agent") {
+    throw new Error("Agent listing not found");
+  }
+
+  // Idempotent: an org installs a given listing once.
+  const alreadyInstalled = await hasOrgInstalledListing(orgId, listing.id);
+  if (alreadyInstalled) {
+    return { ok: true as const };
+  }
+
+  const price = Number(listing.price ?? 0);
+
+  // FREE → clone immediately into the buyer org.
+  if (price <= 0) {
+    const templateId = await cloneAgentListingIntoOrg(listing as ListingInstallRow, orgId);
+    await markOrgInstalledListing(orgId, listing.id);
+
+    await db
+      .update(marketplaceListings)
+      .set({ installCount: sql`${marketplaceListings.installCount} + 1`, updatedAt: new Date() })
+      .where(eq(marketplaceListings.id, listing.id));
+
+    revalidatePath("/marketplace");
+    revalidatePath(`/marketplace/${listing.slug}`);
+
+    return { ok: true as const, templateId };
+  }
+
+  // PAID → reuse the soul Stripe-checkout path. metadata.type "soul_purchase"
+  // routes the webhook to finalizeSoulPurchaseFromWebhook, which now branches on
+  // kind:'agent' to clone the template. The 2% application fee is computed off
+  // the SAME computeInvoiceApplicationFeeCents(price) as a paid soul, so the
+  // platform fee carries identically to the agent paid path.
+  if (!listing.stripeConnectAccountId) {
+    throw new Error("Seller payout account is not configured for this agent.");
+  }
+
+  const stripe = getStripeClient();
+  if (!stripe) {
+    throw new Error("Stripe is not configured.");
+  }
+
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const session = await stripe.checkout.sessions.create({
+    mode: "payment",
+    success_url: `${baseUrl}/marketplace/${listing.slug}?purchased=true`,
+    cancel_url: `${baseUrl}/marketplace/${listing.slug}`,
+    line_items: [
+      {
+        quantity: 1,
+        price_data: {
+          currency: "usd",
+          unit_amount: Math.round(price),
+          product_data: {
+            name: `SeldonFrame Agent: ${listing.name}`,
+            description: listing.description || undefined,
+          },
+        },
+      },
+    ],
+    payment_intent_data: {
+      // SeldonFrame marketplace takes a 2% GMV fee on agent sales — the SAME
+      // computeInvoiceApplicationFeeCents off the same rounded cents value as a
+      // paid soul (Stripe Connect destination charge). `price` is already cents.
+      application_fee_amount: computeInvoiceApplicationFeeCents(Math.round(price)),
+      transfer_data: {
+        destination: listing.stripeConnectAccountId,
+      },
+    },
+    metadata: {
+      // Reuse the soul finalize entry point; it is now kind-aware and clones
+      // the agent when listing.kind === 'agent'.
+      type: "soul_purchase",
+      orgId,
+      userId: user.id,
+      listingId: listing.id,
+      listingSlug: listing.slug,
+    },
+  });
+
+  return { ok: true as const, checkoutUrl: session.url };
 }
 
 export async function finalizeMarketplacePurchaseReturnAction(formData: FormData) {
