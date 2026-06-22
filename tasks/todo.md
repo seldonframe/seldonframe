@@ -7,7 +7,7 @@ with a checkable plan, gets ticked off as it ships, and ends with a review block
 
 ## In flight
 
-### Phase 3 (seller side) — Agent Marketplace Seller UI (feature/agent-marketplace-seller) — IN PROGRESS
+### Phase 3 (seller side) — Agent Marketplace Seller UI (feature/agent-marketplace-seller) — DONE
 
 Goal: a builder lists a Studio agent in a few clicks + sees earnings, with the
 **2% shown ONLY here** ("you keep 98%"). NO migration. Do NOT merge.
@@ -31,14 +31,31 @@ Recon facts (verified):
 - Studio nav = `app/(dashboard)/studio/studio-tabs.tsx`. Editor header = `studio/agents/[id]/page.tsx:89`.
 
 Plan:
-- [ ] S1 — Pure earnings math (TDD) `lib/marketplace/earnings.ts` + spec.
-- [ ] S2 — Seller actions `lib/marketplace/seller-actions.ts` (publish/update/unpublish/republish
-      + connect status), org-guarded, marketing fields, paid→needs_connect.
-- [ ] S3 — Preview helper (pure, spec) + `list-on-marketplace.tsx` panel wired into editor header.
-- [ ] S4 — `studio/earnings/page.tsx` + "Earnings" tab (2% shown ONLY here).
-- [ ] S5 — Verify (tsc 0 new / check-use-server / unit tests) + report.
+- [x] S1 — Pure earnings math (TDD) `lib/marketplace/earnings.ts` + spec. `263cd243`
+- [x] S2 — Seller actions `lib/marketplace/seller-actions.ts` (publish/update/unpublish/republish
+      + connect status), org-guarded, marketing fields, paid→needs_connect. `537cb935`
+- [x] S3 — Preview helper (pure, spec) + `list-on-marketplace.tsx` wired into editor header. `7cc5b17a`
+- [x] S4 — `studio/earnings/page.tsx` + "Earnings" tab (2% shown ONLY here). `54c3a718`
+- [x] S5 — Verify (tsc 0 / check-use-server clean / unit tests) + report.
 
-Review: (to fill in)
+Review:
+- 4 feature commits (+ this todo update). tsc = 0 errors (was 0). check-use-server clean.
+- 23 new unit tests, all green (earnings 7, listing-tags 9, listing-preview 7). Full suite:
+  4324 pass / 77 fail — the 77 are the documented pre-existing baseline (workflow runtime,
+  pricing-catalog mid-implementation #139, archetype isolation, block-gen, signup forms);
+  ZERO failures reference any file I added or touched (verified per-spec).
+- NO migration (the `tmpl:<id>` reserved tag is the template↔listing FK; reuses
+  description/tags/price columns). Did NOT merge.
+- Files: lib/marketplace/{earnings,seller-actions,listing-tags}.ts;
+  components/marketplace/marketplace-data.ts (buildPreviewStorefrontAgent);
+  app/(dashboard)/studio/agents/[id]/{list-on-marketplace.tsx,page.tsx};
+  app/(dashboard)/studio/earnings/page.tsx; studio-tabs.tsx; lib/utils/formatters.ts.
+- 2% appears ONLY on /studio/earnings. Publish panel + buyer surfaces stay fee-free.
+  (Pre-existing, separate: deploy-margin readout + marketing pricing pages — out of scope.)
+- Honest gaps: rentals are a usage signal (count only — the agent_rental_call payload carries
+  no $ amount, so not summed into revenue); revenue = price × installCount (lifetime, not a
+  webhook-confirmed paid ledger); the rental query is the first jsonb `->>` in app code
+  (validated via Drizzle .toSQL() — parameterized, correct). No DB/staging run.
 
 ---
 
