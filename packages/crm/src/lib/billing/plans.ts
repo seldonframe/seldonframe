@@ -1,17 +1,18 @@
-// 2026-06-18 pricing migration. The PLAN catalog now describes the
-// three public tiers — Builder $19 / Workspace $49 / Agency $297 —
-// each a flat monthly subscription (no per-contact / per-run metering).
+// 2026-06-22 pricing reconciliation. The catalog now offers ONE public
+// plan — the "agency" tier, repurposed to **$29/mo flat · unlimited
+// workspaces · 14-day free trial** — matching the marketing site. The
+// builder/workspace tiers remain in the catalog (no longer offered) only
+// so legacy subscriptions + stored planIds keep resolving in the webhook.
 //
-//   Builder   ($19/mo) — landing pages only (cap 10), own domain +
-//                        branding, managed AI generation. NO CRM /
-//                        booking / agents / client portal.
-//   Workspace ($49/mo) — ONE full workspace (website + booking + intake
-//                        + CRM + chatbot), managed AI, custom domain,
-//                        client portal.
-//   Agency    ($297/mo) — white-label, 10 client workspaces included
-//                        (overage billed at $10/workspace via a
-//                        quantity-licensed Stripe item — Phase 4),
-//                        marketplace, priority support.
+//   SeldonFrame ($29/mo, id "agency") — the single offered plan:
+//                        UNLIMITED full workspaces (no per-workspace
+//                        overage), white-label, marketplace, all
+//                        modules. 14-day trial set on the platform
+//                        checkout routes.
+//
+// (Earlier 2026-06-18 model — Builder $19 / Workspace $49 / Agency $297
+// with a $10/workspace overage — is superseded. Those tier objects stay
+// catalogued for back-compat; only "agency" is sold, now at $29 flat.)
 //
 // Legacy plan ids ("free", "growth", "scale", "cloud-starter",
 // "cloud-pro", "pro-3", etc.) are still resolvable via `getPlan()` so
@@ -27,7 +28,6 @@ import {
   BUILDER_PRICE_ID,
   WORKSPACE_PRICE_ID,
   AGENCY_BASE_PRICE_ID,
-  AGENCY_WORKSPACE_OVERAGE_PRICE_ID,
   LEGACY_CLOUD_STARTER_PRICE_ID,
   LEGACY_CLOUD_PRO_PRICE_ID,
   LEGACY_CLOUD_AGENCY_PRICE_ID,
@@ -161,20 +161,27 @@ export const PLANS: Plan[] = [
     metered: { contacts: null, agentRuns: null },
   },
   {
+    // 2026-06-22 pricing reconciliation: the "agency" tier is now the
+    // SINGLE offered plan — $29/mo flat, UNLIMITED workspaces, no
+    // per-workspace overage. (The id stays "agency" so legacy
+    // subscriptions + the data-driven webhook tier-resolver keep
+    // resolving; a future cleanup can rename it to "flat".)
     id: "agency",
-    name: "Agency",
-    tagline: "White-label platform — 10 client workspaces included",
+    name: "SeldonFrame",
+    tagline: "$29/mo · unlimited workspaces · 14-day free trial",
     type: "paid",
-    price: 297,
+    price: 29,
     yearlyPrice: 0,
     stripePriceId: AGENCY_BASE_PRICE_ID,
     stripeYearlyPriceId: "",
-    workspaceOveragePriceId: AGENCY_WORKSPACE_OVERAGE_PRICE_ID,
+    // No overage on the flat plan — workspaces are unlimited at $29.
+    workspaceOveragePriceId: "",
     limits: {
-      // -1 = unlimited; billed per-workspace ($10) past `includedWorkspaces`.
+      // -1 = unlimited workspaces, with NO per-workspace overage
+      // (includedWorkspaces: -1 → max(0, active − included) is always 0).
       maxOrgs: -1,
       maxLandingPages: -1,
-      includedWorkspaces: 10,
+      includedWorkspaces: -1,
       crm: true,
       booking: true,
       intake: true,

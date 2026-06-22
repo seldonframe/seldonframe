@@ -266,6 +266,10 @@ export async function POST(req: NextRequest) {
       claim_flow: claimFlow,
     },
     subscription_data: {
+      // 14-day free trial on the PLATFORM subscription (SF billing the
+      // customer their own $29). This is SF's own platform subscription,
+      // NOT a connected account — it carries NO GMV application fee.
+      trial_period_days: 14,
       metadata: {
         seldonframe_user_id: checkoutUser.id,
         userId: checkoutUser.id,

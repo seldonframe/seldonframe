@@ -52,10 +52,12 @@ export const WORKSPACE_PRICE_ID = readEnv(
   "price_PLACEHOLDER_workspace_49"
 );
 
-/** Agency $297/mo base. Env: STRIPE_AGENCY_BASE_PRICE_ID. */
+/** The single offered plan — $29/mo flat (unlimited workspaces). Env:
+ *  STRIPE_AGENCY_BASE_PRICE_ID (var name reused; Max points it at the
+ *  new $29 price). The "agency" naming is retained for back-compat. */
 export const AGENCY_BASE_PRICE_ID = readEnv(
   "STRIPE_AGENCY_BASE_PRICE_ID",
-  "price_PLACEHOLDER_agency_297"
+  "price_PLACEHOLDER_flat_29"
 );
 
 /** Agency "Extra client workspace" $10/mo, usage type = licensed
