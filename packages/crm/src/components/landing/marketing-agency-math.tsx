@@ -9,8 +9,10 @@
 
 import { useMemo, useState } from "react";
 
-// New Agency plan pricing (per the spec)
-const AGENCY_PLAN_COST = 297; // $297/mo
+// Flat platform price (finalized 2026-06-21): $29/mo, unlimited workspaces.
+// The GMV fee only applies when SeldonFrame is the sales channel — reselling
+// to your own clients goes through your brand, so it isn't taxed here.
+const SF_PLAN_COST = 29; // $29/mo flat
 
 function fmtUsd(n: number): string {
   return "$" + Math.round(n).toLocaleString();
@@ -25,7 +27,7 @@ export function MarketingAgencyMath() {
     const mrr = charge * clients;
     const setupPool = setup * clients;
     const year1 = mrr * 12 + setupPool;
-    const year1Cost = AGENCY_PLAN_COST * 12;
+    const year1Cost = SF_PLAN_COST * 12;
     const margin = year1 === 0 ? 0 : Math.max(0, (year1 - year1Cost) / year1);
     return { mrr, setupPool, year1, margin };
   }, [charge, setup, clients]);
@@ -63,9 +65,10 @@ export function MarketingAgencyMath() {
               Keep the spread.
             </h2>
             <p className="mt-4 max-w-[48ch] text-[15.5px] leading-[1.55] text-[rgba(246,242,234,.74)]">
-              It&rsquo;s basically just $297/mo. White-label SeldonFrame under your brand — your
-              logo, your domain, your pricing — and resell each client workspace at whatever you
-              want. You set the markup, you keep the margin.
+              It&rsquo;s $29/mo flat — plus a small GMV fee only when SeldonFrame is your sales
+              channel. White-label it under your brand — your logo, your domain, your pricing —
+              and resell each client workspace at whatever you want. You set the markup, you keep
+              the rest.
             </p>
 
             {/* Agency perks list */}
@@ -73,10 +76,10 @@ export function MarketingAgencyMath() {
               {[
                 "Your brand on the entire platform — clients never see SeldonFrame",
                 "Set your own per-client pricing and keep the spread",
-                "Add an AI voice receptionist to any client — $99/mo, resell at your markup",
-                "10 client workspaces included — add more as you grow",
+                "Voice, SMS, chat & email AI agents on every client — included, no add-on",
+                "Unlimited client workspaces on the flat $29/mo — no per-seat tax",
                 "Onboard a new client in 60 seconds from a URL",
-                "Priority support + partner onboarding",
+                "Build any agent in the Studio and deploy it across your book",
               ].map((item) => (
                 <li key={item} className="flex items-start gap-3 text-[14px] leading-[1.5] text-[rgba(246,242,234,.82)]">
                   <span className="mt-0.5 flex size-[18px] shrink-0 items-center justify-center rounded-full bg-[#1F2B24] border border-[rgba(111,194,143,.35)]">
@@ -139,7 +142,7 @@ export function MarketingAgencyMath() {
               <ResultCell label="Monthly recurring" value={fmtUsd(results.mrr)} sub={`${fmtUsd(results.mrr * 12)} / year`} />
               <ResultCell label="Setup pool" value={fmtUsd(results.setupPool)} sub="One-time" />
               <ResultCell label="Year-1 total" value={fmtUsd(results.year1)} sub="MRR × 12 + setup" positive />
-              <ResultCell label="Gross margin" value={`${Math.round(results.margin * 100)}%`} sub={`After $${AGENCY_PLAN_COST}/mo to SF`} positive />
+              <ResultCell label="Gross margin" value={`${Math.round(results.margin * 100)}%`} sub={`After $${SF_PLAN_COST}/mo + GMV to SF`} positive />
             </div>
 
             <p className="mt-3 text-[11.5px] leading-[1.5] text-[rgba(246,242,234,.35)]">

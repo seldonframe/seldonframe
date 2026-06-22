@@ -9,49 +9,54 @@
 
 type FaqItem = { question: string; answer: string };
 
-// Updated to reflect the new 3-tier pricing (Builder/Workspace/Agency).
-// The FAQPage JSON-LD schema reads from the same const so answers
-// cannot drift between visible text and structured data.
+// Updated 2026-06-22 to the flat $29/mo + GMV model. The FAQPage JSON-LD
+// schema reads from this same const, so the visible answers and the
+// structured data can never drift — edit here and the schema regenerates.
 const FAQS: readonly FaqItem[] = [
   {
     question: "Who is SeldonFrame for?",
     answer:
-      "Two audiences: SMBs who want a complete AI front office (website, booking, chatbot, CRM) for their own business, and agencies who resell these systems done-for-you to their clients — white-labeled under their own brand.",
+      "Two audiences on one platform: SMBs who want a complete AI front office (website, booking, intake, CRM, and a 24/7 agent across voice, chat, SMS, and email) for their own business — and builders and agencies who build any agent in the Studio, deploy it to clients as a whitelabel front office, and resell it.",
+  },
+  {
+    question: "How much does it cost?",
+    answer:
+      "$29/mo flat, unlimited workspaces, with a 14-day free trial — and your first workspace is free forever. On top of that there's a small GMV fee, but only when SeldonFrame is your sales channel (a marketplace sale, a booking, an accepted proposal): 5% on your first $10k/mo, 3% over $10k, 2% over $50k. We only make money when you do — we don't tax your work.",
   },
   {
     question: "How many workspaces can I run?",
     answer:
-      "The Builder plan ($19/mo) gives you up to 10 landing pages on your own domain — no full workspace. The Workspace plan ($49/mo) gives you 1 full workspace. The Agency plan ($297/mo) includes 10 client workspaces — then $10/mo for each additional workspace — plus white-labeling and your own client pricing. There's no free tier — paid plans start at $19/mo.",
+      "$29/mo flat covers unlimited workspaces, and the first one is free. There's no per-workspace tax and no per-seat pricing — build one front office for yourself or a hundred for your clients on the same flat plan.",
   },
   {
     question: "Can I white-label this for my clients?",
     answer:
-      "Yes, on the Agency plan ($297/mo). Your brand appears on the entire platform — clients never see SeldonFrame. You set your own per-client pricing and keep the spread.",
+      "Yes — it's included in the flat $29/mo. Your brand appears on the entire platform; clients never see SeldonFrame. You set your own per-client pricing and keep the spread. Reselling to your own clients goes through your brand, so it isn't subject to the GMV fee.",
   },
   {
     question: "What if a client wants their own domain?",
     answer:
-      "Every full workspace (Workspace and Agency tiers) can map to its own custom domain. Your client visits booking.theirbusiness.com, not a SeldonFrame subdomain.",
+      "Every workspace can map to its own custom domain. Your client visits booking.theirbusiness.com, not a SeldonFrame subdomain.",
   },
   {
     question: "Are there usage fees or surprise bills?",
     answer:
-      "No. Pricing is flat per tier — no metered usage, no prepaid wallet, no surprise invoices. The only optional add-on is the AI voice receptionist ($99/mo per agent, with 500 talk-minutes included). Everything else — website, booking, intake, CRM, and chat — is included.",
+      "No metered markup. It's a flat $29/mo plus a GMV fee that only applies when SeldonFrame is your sales channel. The voice, SMS, chat, and email AI agents are all included — voice is not a $99 add-on. You bring your own AI key (and Twilio for calls and texts) and pay those providers directly at cost, which is exactly why the platform fee can stay flat with no usage surprises.",
   },
   {
     question: "Do I need to bring my own AI key?",
     answer:
-      "No. Managed AI is included on every paid plan — no API keys to set up, no token bills to track. (Bring-your-own-key is only for the self-hosted, open-source edition.) Paste your site and your front office builds itself.",
+      "Not to start. Your first workspace is free — no key to babysit, just paste your site and watch it build. To run your agents live and spin up more client workspaces, you add your own AI key (and Twilio for calls and texts). That's why it's a flat $29 with no usage markup: you pay the providers at cost, and we don't tax your work.",
   },
   {
     question: "How does this compare to GoHighLevel?",
     answer:
-      "SeldonFrame builds a CRM, booking page, intake form, and AI chatbot in 60 seconds from a URL — no 2–4 week onboarding. Pricing starts at $19/mo vs. GoHighLevel Agency Pro at $497/mo. SeldonFrame is open source (AGPL-3.0), so you can self-host or use the cloud.",
+      "SeldonFrame builds a website, CRM, booking page, intake form, and a multi-surface AI agent in 60 seconds from a URL — no 2–4 week onboarding and no Zapier glue. It's $29/mo flat vs. GoHighLevel Agency Pro at $497/mo, the agents answer across voice, chat, SMS, and email, and you own it (AGPL-3.0 — self-host or use the cloud).",
   },
   {
     question: "Do I still need Zapier, Calendly, or Typeform?",
     answer:
-      "No. CRM, scheduling, intake forms, and the AI chatbot are all native and wired together. No Zapier task fees, no broken integrations, no tab-switching between five tools.",
+      "No. CRM, scheduling, intake forms, and the AI agents are all native and wired together. No Zapier task fees, no broken integrations, no tab-switching between five tools.",
   },
 ];
 
