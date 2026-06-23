@@ -27,6 +27,7 @@ import { AgentTemplateEditor } from "./editor-client";
 import { ListOnMarketplace } from "./list-on-marketplace";
 import { TemplateStatusBadge, formatTemplateType } from "../status-badge";
 import { DeployButton } from "../deploy-button";
+import { DeployToClientsButton } from "../deploy-to-clients-button";
 import { TestButton } from "../test-button";
 
 export const dynamic = "force-dynamic";
@@ -109,6 +110,7 @@ export default async function AgentTemplatePage({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <TestButton templateId={template.id} variant="secondary" />
+          <DeployToClientsButton templateId={template.id} variant="secondary" />
           <DeployButton templateId={template.id} variant="primary" />
         </div>
       </header>
