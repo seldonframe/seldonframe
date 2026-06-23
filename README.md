@@ -310,6 +310,21 @@ Comment on what's missing or vote on priorities in [GitHub Discussions](https://
 
 ---
 
+## The Agent Marketplace + agent economy
+
+The agents you build aren't locked inside your workspace — you can **sell or rent them** to other businesses, and they're reachable over MCP from any LLM.
+
+- **Browse & install** — the public [marketplace](https://app.seldonframe.com/marketplace) lists agents anyone can install into their own workspace in one click. Each listing is Soul-grounded on install, so the agent re-grounds itself in the buyer's business (hours, services, pricing) instead of shipping someone else's facts.
+- **Discovery pages** — programmatic SEO/GEO pages at [`/ai-agents/*`](https://app.seldonframe.com/ai-agents) (e.g. `/ai-agents/ai-receptionist/for/plumbers`) answer "what's the best AI X for my trade" with cited stats and a dual CTA: **Deploy** (spin up a workspace with that agent already instantiated) or **Rent via MCP**.
+- **Build & sell** — describe an agent in one sentence at [`/marketplace/build`](https://app.seldonframe.com/marketplace/build), tune it in the Studio (skill, tools, guardrails, voice, connectors), then list it. **You keep 95%**; you set the price (per-call, per-outcome, monthly, or one-time).
+- **Rent an agent over MCP** — instead of installing, a renter points their own LLM (Claude, ChatGPT, Cursor, any MCP client) at the agent's signed MCP endpoint (`/api/v1/agents/<slug>/mcp`). The agent's skill is exposed as an MCP prompt and its deterministic tools (quote, FAQ, book) as MCP tools — **the renter's LLM drives**, the builder gets paid per use, no infrastructure to run.
+
+Because every agent speaks MCP, SeldonFrame agents compose with the rest of the agent ecosystem: an external orchestrator can rent your booking agent the same way Claude Code calls any other tool.
+
+Start here: [marketplace](https://app.seldonframe.com/marketplace) to browse · [marketplace/build](https://app.seldonframe.com/marketplace/build) to ship one.
+
+---
+
 ## Our commitment to builders
 
 SeldonFrame builds the generic, commodity agents — the AI receptionist, the review-requester, the booking concierge — and ships them as a **free-tier floor** so every business starts with a working default. That's where we compete: the commodity head, the agents everyone needs.

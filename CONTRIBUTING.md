@@ -169,6 +169,27 @@ Each recipe maps to a layer in the architecture. Pick whichever matches your int
 
 ---
 
+## Build & sell agents (not a PR — a business)
+
+The six recipes above contribute *to the platform*. This one is about building *on* it: the agents you create are yours to **sell or rent** on the [Agent Marketplace](https://app.seldonframe.com/marketplace), and you keep the upside.
+
+You don't touch this repo to do it. Build in the product:
+
+1. **Describe the agent in one sentence** at [`/marketplace/build`](https://app.seldonframe.com/marketplace/build) — SeldonFrame generates the bundle (skill, tools, guardrails, voice).
+2. **Tune it in the Studio** — edit the skill prose, bind MCP connectors, set surfaces (voice / chat / SMS / email), run the eval gate.
+3. **List it** — publish to the public marketplace. Buyers **install** it (it re-grounds on their Soul) or **rent it over MCP** (`/api/v1/agents/<slug>/mcp`), where the renter's own LLM drives and you get paid per use.
+
+**The deal, in writing:**
+
+- **Generic agents are SeldonFrame's; the niche is yours.** We build the commodity head — the AI receptionist, the review-requester, the booking concierge — and ship them as a free-tier floor. The **vertical / niche / deep-edge-case agents are your blue ocean**, and we will not build first-party agents that compete with them.
+- **You keep 95%.** We take 5% only when your agent sells or is rented — never a listing fee, never a tax on your own work.
+- **You set the price** — per-call, per-outcome, monthly, or one-time.
+- **We never clone you.** Your agent's data, prompts, and performance are never used to build a competing first-party agent.
+
+If you want the platform to make selling agents *easier* (better Studio ergonomics, new connector types, richer rental metering), that part *is* a PR — and it's exactly the kind of leverage we want. See the recipes above.
+
+---
+
 ## Development setup
 
 ```bash
