@@ -131,3 +131,8 @@ export * from "./conversation-notes";
 export * from "./agent-templates";
 export * from "./deployments";
 export * from "./builder-llm-keys";
+
+// 2026-06-23 — ACP (Agentic Commerce Protocol): ChatGPT Instant-Checkout
+// session persistence. Additive table; money-safe (the wired processor is a
+// no-charge dev stub — see lib/acp/processor.ts).
+export * from "./acp";
