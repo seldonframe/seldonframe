@@ -30,10 +30,10 @@ export function GET(): Response {
   // Tier-1: the agent library (one entry per job, with its cited stat).
   lines.push("## AI agents (deploy a working one in 60 seconds)");
   lines.push("");
-  lines.push(`- [The agent library](${base}/agents): browse every AI agent for local service businesses.`);
+  lines.push(`- [The agent library](${base}/ai-agents): browse every AI agent for local service businesses.`);
   for (const job of AGENT_JOBS) {
     lines.push(
-      `- [${job.name}](${base}/agents/${job.slug}): ${job.oneLiner} Cited stat: ${job.painStat.text} (${job.painStat.source})`,
+      `- [${job.name}](${base}/ai-agents/${job.slug}): ${job.oneLiner} Cited stat: ${job.painStat.text} (${job.painStat.source})`,
     );
   }
   lines.push("");
@@ -47,7 +47,7 @@ export function GET(): Response {
   for (const job of AGENT_JOBS) {
     for (const v of sampleVerticals) {
       lines.push(
-        `- [${job.name} for ${v.plural}](${base}/agents/${job.slug}/for/${v.slug}): ${job.name} tailored for ${v.plural}.`,
+        `- [${job.name} for ${v.plural}](${base}/ai-agents/${job.slug}/for/${v.slug}): ${job.name} tailored for ${v.plural}.`,
       );
     }
   }

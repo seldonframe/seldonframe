@@ -99,7 +99,7 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
   const categoryLabel = CATEGORY_META[agent.category].label;
   const mcpEndpoint = mcpEndpointFor(agent.slug);
   const snippet = mcpSnippetFor(agent.slug);
-  // Flywheel back-link: if a programmatic /agents/[job] page maps to this
+  // Flywheel back-link: if a programmatic /ai-agents/[job] page maps to this
   // listing, surface it so the marketplace↔agent-page cross-links resolve both
   // ways (the agent page already links here).
   const programmaticJob = jobForMarketplaceSlug(agent.slug);
@@ -404,7 +404,7 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
                   {programmaticJob ? (
                     <p style={{ margin: "14px 0 0", fontSize: 13.5, color: "rgba(34,29,23,0.6)", lineHeight: 1.5 }}>
                       Learn more on the{" "}
-                      <Link href={`/agents/${programmaticJob.slug}`} style={{ color: MKT.green, fontWeight: 600, textDecoration: "none" }}>
+                      <Link href={`/ai-agents/${programmaticJob.slug}`} style={{ color: MKT.green, fontWeight: 600, textDecoration: "none" }}>
                         {programmaticJob.name} guide
                       </Link>{" "}
                       — a stat-backed answer page you can deploy from in 60 seconds.

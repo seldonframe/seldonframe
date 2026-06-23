@@ -1,5 +1,5 @@
-// Tier-2 programmatic agent page — /agents/[job]/for/[vertical]
-// (e.g. /agents/ai-receptionist/for/plumbers).
+// Tier-2 programmatic agent page — /ai-agents/[job]/for/[vertical]
+// (e.g. /ai-agents/ai-receptionist/for/plumbers).
 //
 // Public, no auth. Statically generated for every job × vertical pair via
 // generateStaticParams (the long-tail SEO/GEO surface). generateMetadata emits
@@ -36,7 +36,7 @@ export async function generateMetadata({ params }: RouteParams): Promise<Metadat
     return { title: "Agent not found — SeldonFrame" };
   }
   const copy = composePageCopy(job, vertical);
-  const canonical = `/agents/${job.slug}/for/${vertical.slug}`;
+  const canonical = `/ai-agents/${job.slug}/for/${vertical.slug}`;
   return {
     title: copy.title,
     description: copy.metaDescription,

@@ -3,8 +3,8 @@
 // purely from the registry (+ the marketplace seed/live catalog), so it needs
 // no DB and never blocks.
 //
-// Scope: the /agents index, every Tier-1 /agents/[job], every Tier-2
-// /agents/[job]/for/[vertical], the /marketplace browse page, and every live (or
+// Scope: the /ai-agents index, every Tier-1 /ai-agents/[job], every Tier-2
+// /ai-agents/[job]/for/[vertical], the /marketplace browse page, and every live (or
 // seed) /marketplace/[slug] listing — so search engines discover the full tree
 // and the programmatic↔marketplace cross-links are crawlable both ways.
 //
@@ -41,7 +41,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   // The agent library hub.
   entries.push({
-    url: `${base}/agents`,
+    url: `${base}/ai-agents`,
     lastModified: now,
     changeFrequency: "weekly",
     priority: 0.9,
@@ -50,7 +50,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // Tier-1: one per job (the highest-value single-dimension pages).
   for (const job of AGENT_JOBS) {
     entries.push({
-      url: `${base}/agents/${job.slug}`,
+      url: `${base}/ai-agents/${job.slug}`,
       lastModified: now,
       changeFrequency: "weekly",
       priority: 0.8,
@@ -60,7 +60,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // Tier-2: job × vertical (the long tail).
   for (const { job, vertical } of allJobVerticalPairs()) {
     entries.push({
-      url: `${base}/agents/${job}/for/${vertical}`,
+      url: `${base}/ai-agents/${job}/for/${vertical}`,
       lastModified: now,
       changeFrequency: "monthly",
       priority: 0.6,

@@ -1,7 +1,7 @@
-// /agents — the index hub for the programmatic agent pages. Public, no auth.
+// /ai-agents — the index hub for the programmatic agent pages. Public, no auth.
 // Lists every agent "job" with its one-liner + cited stat teaser, each linking
 // to its Tier-1 page. This is the human entry point AND the internal-linking
-// root that ties the whole /agents/* tree together (the breadcrumb on every
+// root that ties the whole /ai-agents/* tree together (the breadcrumb on every
 // agent page links back here).
 //
 // Statically rendered from the registry — no DB, no migration.
@@ -18,12 +18,12 @@ export const metadata: Metadata = {
   title: "AI Agents for local business — deploy a working one in 60 seconds | SeldonFrame",
   description:
     "Receptionists, review chasers, missed-call text-back, speed-to-lead, lead qualifiers, booking, quoting, win-back, social, and website chat — each deploys a real working agent into your own hosted workspace.",
-  alternates: { canonical: "/agents" },
+  alternates: { canonical: "/ai-agents" },
   openGraph: {
     title: "AI Agents that work 24/7 for your business | SeldonFrame",
     description:
       "Browse AI agents for local service businesses. Each one deploys into your own hosted workspace in about a minute — or rent it over MCP.",
-    url: "/agents",
+    url: "/ai-agents",
     type: "website",
   },
 };
@@ -52,7 +52,7 @@ export default function AgentsIndexPage() {
           {AGENT_JOBS.map((job) => (
             <Link
               key={job.slug}
-              href={`/agents/${job.slug}`}
+              href={`/ai-agents/${job.slug}`}
               className="sf-cardhover"
               style={{
                 textDecoration: "none",

@@ -1,4 +1,4 @@
-// Tier-1 programmatic agent page — /agents/[job] (e.g. /agents/ai-receptionist).
+// Tier-1 programmatic agent page — /ai-agents/[job] (e.g. /ai-agents/ai-receptionist).
 //
 // Public, no auth (it lives in the (public) route group). Statically generated
 // from the SEO registry: generateStaticParams enumerates every job, and
@@ -28,7 +28,7 @@ export async function generateMetadata({ params }: RouteParams): Promise<Metadat
     return { title: "Agent not found — SeldonFrame" };
   }
   const copy = composePageCopy(job);
-  const canonical = `/agents/${job.slug}`;
+  const canonical = `/ai-agents/${job.slug}`;
   return {
     title: copy.title,
     description: copy.metaDescription,

@@ -108,13 +108,13 @@ export function AgentPage({ job, vertical }: AgentPageProps): ReactElement {
           aria-label="Breadcrumb"
           style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13.5, fontWeight: 600, color: "rgba(34,29,23,0.5)", marginBottom: 22 }}
         >
-          <Link href="/agents" className="sf-link" style={{ color: "rgba(34,29,23,0.55)", textDecoration: "none" }}>
+          <Link href="/ai-agents" className="sf-link" style={{ color: "rgba(34,29,23,0.55)", textDecoration: "none" }}>
             Agents
           </Link>
           <span style={{ color: "rgba(34,29,23,0.3)" }}>/</span>
           {vertical ? (
             <>
-              <Link href={`/agents/${job.slug}`} className="sf-link" style={{ color: "rgba(34,29,23,0.55)", textDecoration: "none" }}>
+              <Link href={`/ai-agents/${job.slug}`} className="sf-link" style={{ color: "rgba(34,29,23,0.55)", textDecoration: "none" }}>
                 {job.name}
               </Link>
               <span style={{ color: "rgba(34,29,23,0.3)" }}>/</span>
@@ -329,7 +329,7 @@ export function AgentPage({ job, vertical }: AgentPageProps): ReactElement {
               {related.map((r) => (
                 <Link
                   key={r.slug}
-                  href={vertical ? `/agents/${r.slug}/for/${vertical.slug}` : `/agents/${r.slug}`}
+                  href={vertical ? `/ai-agents/${r.slug}/for/${vertical.slug}` : `/ai-agents/${r.slug}`}
                   className="sf-cardhover"
                   style={{
                     textDecoration: "none",
