@@ -211,6 +211,13 @@
       "when": 1782165138477,
       "tag": "0029_bouncy_korath",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1782212415038,
+      "tag": "0030_amusing_hercules",
+      "breakpoints": true
     }
   ]
 }

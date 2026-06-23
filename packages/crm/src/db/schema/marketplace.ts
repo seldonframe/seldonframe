@@ -119,7 +119,21 @@ export const marketplaceListings = pgTable(
     longDescription: text("long_description"),
     niche: text("niche").notNull(),
     tags: jsonb("tags").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+    // The ORIGINAL one-time install price in cents. Stays the source of truth
+    // for the `onetime` (and `free` = 0) price model — backward-compatible, so
+    // every existing row keeps its current meaning.
     price: integer("price").notNull().default(0),
+    // 2026-06-22 — pricing MENU (BUILD #2). The seller picks ONE pricing model.
+    // `onetime` (default) reads `price`; the others read the matching *_cents
+    // column below. NOT hard-gated by audience — research shows 27% of SMBs now
+    // also want outcome pricing, so all four models are selectable for anyone.
+    // The actual per-usage/per-outcome metered SETTLEMENT is a later x402/AP2
+    // follow-on; this build only SETS + DISPLAYS the chosen model.
+    priceModel: text("price_model").notNull().default("onetime"), // onetime | monthly | per_usage | per_outcome
+    monthlyPriceCents: integer("monthly_price_cents"), // set when priceModel = 'monthly'
+    perCallPriceCents: integer("per_call_price_cents"), // set when priceModel = 'per_usage'
+    perOutcomePriceCents: integer("per_outcome_price_cents"), // set when priceModel = 'per_outcome'
+    outcomeType: text("outcome_type"), // booking | review | quote | message — the billable outcome for per_outcome
     soulPackage: jsonb("soul_package").notNull(),
     // 2026-06-22 — listing kind discriminator. `'soul'` (the original product:
     // a workspace Soul package) or `'agent'` (a Studio agent_templates
