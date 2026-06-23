@@ -211,7 +211,15 @@ export function MarketplaceFooter(): ReactElement {
           </p>
         </div>
         <FooterCol title="Browse" items={["Receptionists", "Reviews & reputation", "Reactivation", "Quoting"]} />
-        <FooterCol title="Build" items={["List an agent", "MCP for builders", "Earnings & payouts", "Builder docs"]} />
+        <FooterCol
+          title="Build"
+          items={[
+            { label: "List an agent", href: "/marketplace/build" },
+            "MCP for builders",
+            "Earnings & payouts",
+            { label: "Builder docs", href: "/marketplace/build" },
+          ]}
+        />
         <FooterCol title="Company" items={["About", "Trust & safety", "Status", "Contact"]} />
       </div>
       <div style={{ borderTop: "1px solid rgba(246,242,234,0.12)" }}>
@@ -239,7 +247,10 @@ export function MarketplaceFooter(): ReactElement {
   );
 }
 
-function FooterCol({ title, items }: { title: string; items: string[] }): ReactElement {
+/** A footer link is either inert label text or a real navigable `{ label, href }`. */
+type FooterItem = string | { label: string; href: string };
+
+function FooterCol({ title, items }: { title: string; items: FooterItem[] }): ReactElement {
   return (
     <div>
       <div
@@ -255,9 +266,20 @@ function FooterCol({ title, items }: { title: string; items: string[] }): ReactE
         {title}
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 10, fontSize: 14, color: "rgba(246,242,234,0.7)" }}>
-        {items.map((item) => (
-          <span key={item}>{item}</span>
-        ))}
+        {items.map((item) =>
+          typeof item === "string" ? (
+            <span key={item}>{item}</span>
+          ) : (
+            <Link
+              key={item.label}
+              href={item.href}
+              className="sf-link"
+              style={{ color: "rgba(246,242,234,0.7)", textDecoration: "none", width: "fit-content" }}
+            >
+              {item.label}
+            </Link>
+          ),
+        )}
       </div>
     </div>
   );
