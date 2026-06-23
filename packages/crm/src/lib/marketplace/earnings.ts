@@ -7,14 +7,17 @@
 // — so what the seller sees is exactly what Stripe withholds as the application
 // fee on a paid install.
 //
-// Revenue model: a paid agent listing is a ONE-TIME install price. A listing's
-// gross = priceCents × installCount. Fee = the 5% marketplace fee on that gross,
-// summed PER listing (so line items always add up to the summary — no
-// fee-on-total rounding drift). Net = gross − fee.
-//
-// Rentals (agent_rental_call events attributed to the creator org) are surfaced
-// as a usage signal next to installs, but the rental event payload carries no
-// dollar amount, so rentals are NOT summed into revenue.
+// Revenue model: a listing earns from TWO streams.
+//   1. INSTALLS — a one-time install price: installGross = priceCents ×
+//      installCount; the 5% fee is taken on that gross.
+//   2. METERED RENTALS (x402) — paid agent_rental_call events now carry an
+//      amount_cents + fee_cents on their property bag (the rail accrues them).
+//      We sum those into rentalRevenueCents + rentalFeeCents per listing.
+// A listing's combined gross = installGross + rentalRevenue; combined fee =
+// installFee + rentalFee (each computed/accrued separately so no rounding drift);
+// net = gross − fee. Fees are summed PER listing so line items always reconcile
+// to the summary. (rentalCount remains a usage signal; rentalRevenueCents is the
+// settled dollars.)
 
 import { MARKETPLACE_FEE_PERCENT, computeMarketplaceFeeCents } from "@/lib/billing/gmv";
 import {
@@ -35,6 +38,11 @@ export type SellerListingEarningsInput = {
   installCount: number;
   /** Lifetime agent_rental_call events attributed to this seller's org. */
   rentalCount: number;
+  /** Sum of amount_cents across SETTLED paid rental calls for this listing (the
+   *  x402 metered revenue). Optional — legacy/free listings default to 0. */
+  rentalRevenueCents?: number | null;
+  /** Sum of fee_cents (SF's 5% cut) across those paid rental calls. Optional. */
+  rentalFeeCents?: number | null;
   isPublished: boolean;
   // ── pricing MODEL (BUILD #2) — DISPLAY ONLY. ──
   // The seller's chosen model + its amounts, so the dashboard can show "$29/mo"
@@ -52,9 +60,15 @@ export type SellerListingEarningsInput = {
 
 /** A listing row with its money computed. Extends the input with cents fields. */
 export type SellerListingEarnings = SellerListingEarningsInput & {
-  /** priceCents × installCount, clamped to ≥ 0. */
+  /** Install-only gross: priceCents × installCount, clamped to ≥ 0. */
+  installGrossCents: number;
+  /** Settled metered-rental revenue (sum of paid amount_cents), clamped ≥ 0. */
+  rentalRevenueCents: number;
+  /** SF's 5% cut accrued on those paid rentals, clamped ≥ 0. */
+  rentalFeeCents: number;
+  /** Combined gross: installGrossCents + rentalRevenueCents. */
   grossCents: number;
-  /** The 5% SeldonFrame marketplace fee on grossCents. */
+  /** Combined fee: the 5% install fee + the accrued rental fee. */
   feeCents: number;
   /** What the seller keeps: grossCents − feeCents. */
   netCents: number;
@@ -68,6 +82,8 @@ export type SellerEarningsSummary = {
   grossCents: number;
   feeCents: number;
   netCents: number;
+  /** Settled metered-rental revenue across all listings. */
+  rentalRevenueCents: number;
   installCount: number;
   rentalCount: number;
   listingCount: number;
@@ -100,10 +116,19 @@ export function computeListingEarnings(
     const priceCents = nonNegInt(row.priceCents);
     const installCount = nonNegInt(row.installCount);
     const rentalCount = nonNegInt(row.rentalCount);
-    // Money math UNCHANGED: gross = one-time price × installs, fee = the same
-    // checkout primitive. (Per-usage/per-outcome settlement is a follow-on.)
-    const grossCents = priceCents * installCount;
-    const feeCents = computeMarketplaceFeeCents(grossCents);
+    // INSTALL stream: gross = one-time price × installs, fee = the checkout
+    // primitive (so "you keep 95%" is exact for installs).
+    const installGrossCents = priceCents * installCount;
+    const installFeeCents = computeMarketplaceFeeCents(installGrossCents);
+    // RENTAL stream (x402): the dollars + SF cut the rail ALREADY accrued onto
+    // the paid agent_rental_call events. We sum them as-is — the 5% was computed
+    // per call at settlement (computeMarketplaceFeeCents on the builder lane), so
+    // re-deriving here would risk rounding drift. Clamp defensively.
+    const rentalRevenueCents = nonNegInt(row.rentalRevenueCents ?? 0);
+    const rentalFeeCents = nonNegInt(row.rentalFeeCents ?? 0);
+    // COMBINED.
+    const grossCents = installGrossCents + rentalRevenueCents;
+    const feeCents = installFeeCents + rentalFeeCents;
     const netCents = grossCents - feeCents;
     // DISPLAY: resolve the model + its human label off the shared pure helper.
     const priceModel: PriceModel = isPriceModel(row.priceModel) ? row.priceModel : "onetime";
@@ -120,6 +145,9 @@ export function computeListingEarnings(
       priceCents,
       installCount,
       rentalCount,
+      installGrossCents,
+      rentalRevenueCents,
+      rentalFeeCents,
       grossCents,
       feeCents,
       netCents,
@@ -133,6 +161,7 @@ export function computeListingEarnings(
       acc.grossCents += row.grossCents;
       acc.feeCents += row.feeCents;
       acc.netCents += row.netCents;
+      acc.rentalRevenueCents += row.rentalRevenueCents;
       acc.installCount += row.installCount;
       acc.rentalCount += row.rentalCount;
       acc.listingCount += 1;
@@ -143,6 +172,7 @@ export function computeListingEarnings(
       grossCents: 0,
       feeCents: 0,
       netCents: 0,
+      rentalRevenueCents: 0,
       installCount: 0,
       rentalCount: 0,
       listingCount: 0,
