@@ -40,7 +40,7 @@ One prompt in Claude Code. A complete client ops stack — CRM with HVAC-specifi
 
 The agency-tier alternative builds this exact stack in **GoHighLevel**: days to weeks of per-client configuration, $97-$497/month per agency before white-label, and a real learning curve. SeldonFrame ships it in minutes.
 
-> Live demo workspace: [phoenix-ac-air-conditioning-heating-inc.app.seldonframe.com](https://phoenix-ac-air-conditioning-heating-inc.app.seldonframe.com). Generated 2026-05-10 from a public Google Maps paste — the chatbot bottom-right books real appointments in `America/Phoenix` time.
+> See it live: browse ready-to-install agents on the [marketplace](https://app.seldonframe.com/marketplace), or open a discovery page like [AI receptionist → for plumbers](https://app.seldonframe.com/ai-agents/ai-receptionist/for/plumbers). Each one **Deploys** into a fresh workspace (with that agent already instantiated) or **Rents over MCP** — the chatbot books against the real calendar in the workspace's own timezone.
 
 ---
 
