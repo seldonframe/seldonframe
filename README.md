@@ -4,11 +4,11 @@
 
 # SeldonFrame
 
-**An open-source AI front office for local-service businesses — and the white-label stack agencies resell. Website + booking + AI receptionist + intake + CRM + chatbot, wired together and live in 60 seconds from a URL.**
+**The open-source platform to run AND sell your service business — a website, booking, CRM, payments, and AI agents that do the work, built from your URL in 60 seconds. Plus the agent marketplace: build, sell, and rent AI agents, reachable over MCP from Claude, ChatGPT, Cursor, or any LLM.**
 
 SeldonFrame stands up a complete front office — a website, a booking page, an AI receptionist, an intake form, a CRM, and a website chatbot — already connected on the first generation. The chatbot books against the real calendar. The intake form writes to the real CRM. Missed-call text-back fires when you can't pick up, so you never lose a lead. You edit your whole site just by chatting — no code, not technical. No Zapier, no integration work, no duct tape.
 
-It's open-source and self-hostable, and you can drive the whole thing from Claude Code over MCP. SMBs run it as their own front office; agencies white-label it and resell it to clients. (If you've shopped GoHighLevel, [there's a comparison below](#seldonframe-vs-gohighlevel).)
+It's open-source and self-hostable, and you can drive the whole thing from Claude Code over MCP. SMBs run it as their own front office **and sell their services through it**; builders and agencies go a rung further — they **build AI agents and sell or rent them on the marketplace** (you keep 95%) and white-label the whole stack for clients. One platform, one ladder. (If you've shopped GoHighLevel, [there's a comparison below](#seldonframe-vs-gohighlevel).)
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-1FAE85.svg)](LICENSE)
 [![npm version](https://img.shields.io/npm/v/@seldonframe/mcp.svg?color=1FAE85)](https://www.npmjs.com/package/@seldonframe/mcp)
@@ -51,7 +51,7 @@ The agency-tier alternative builds this exact stack in **GoHighLevel**: days to 
 | **What it is** | All-in-one agency platform: CRM, funnels, automations, SMS/email, booking | Pre-wired client ops stack: CRM, booking, intake, chatbot — deployed per client in minutes |
 | **Setup time per client** | Days to weeks. Full builds quoted at $3,500-$6,000 | Approximately 3 minutes via Claude Code MCP. One prompt generates the entire stack |
 | **Learning curve** | Steep. Cited consistently as the #1 complaint in agency communities | Minimal. The agency describes the client in natural language; the stack generates |
-| **Pricing** | $97-$497/month per agency. White-label costs extra | Builder $19 / Workspace $49 / Agency $297 per month (white-label, 10 client workspaces included). AGPL-3.0 — self-host for $0 |
+| **Pricing** | $97-$497/month per agency. White-label costs extra | **$29/mo flat · unlimited workspaces · 14-day free trial** (white-label + voice included), + a small GMV fee only on what you sell *through* SeldonFrame (~2% your services / 5% marketplace). AGPL-3.0 — self-host for $0 |
 | **Integration work** | Reduced vs. separate tools, but still significant per-client configuration | Zero. CRM, booking, intake, chatbot are pre-wired on generation |
 | **Open source** | No | Yes. AGPL-3.0. Fork it, extend it for your vertical, self-host it |
 | **MCP-native** | No | Yes. Drives end-to-end from Claude Code, Cursor, Cline, or any MCP client |
@@ -64,7 +64,7 @@ Every generated workspace ships with all surfaces connected to one workspace dat
 
 - **AI receptionist** — answers the phone, qualifies the caller, and books straight into the calendar. Optional white-label add-on for agencies (per voice agent).
 - **Missed-call text-back** — when a call comes in that nobody picks up, the caller gets a friendly text within seconds. The lead never goes cold. Wired by default to the workspace's branded sender.
-- **AI chatbot** — embeds on any site, eval-gated, books appointments against the real calendar, refuses to invent prices outside the operator's configured rates. Managed AI on hosted (no key); your own key when you self-host.
+- **AI chatbot** — embeds on any site, eval-gated, books appointments against the real calendar, refuses to invent prices outside the operator's configured rates. Runs on **your own AI key** (BYOK): your first workspace builds on us during the trial, then you connect your ChatGPT/Claude/Gemini key — no usage markup, you pay the provider at cost.
 - **CRM** — contacts, deals, custom fields per vertical, kanban pipeline, customer portal
 - **Booking page** — source-of-truth scheduling. The customer books on the branded SeldonFrame page; the appointment lands in the CRM AND syncs to Google Calendar in real time. SeldonFrame is the authority; Google Calendar is a downstream view.
 - **Intake forms** — multi-step, vertical-specific fields, auto-CRM routing
@@ -102,7 +102,7 @@ Then in Claude Code:
 
 Or skip the IDE and sign up at the dashboard: [app.seldonframe.com/signup](https://app.seldonframe.com/signup). Both flows hit the same hosted backend; switch between them anytime.
 
-Hosted plans: **Builder $19/mo** (up to 10 landing pages, your domain + branding) · **Workspace $49/mo** (one full front office: website + booking + intake + CRM + chatbot, managed AI included) · **Agency $297/mo** (white-label; 10 client workspaces included, +$10/mo each beyond; optional AI voice receptionist +$99/mo per agent). Flat, seat-based, no contract. See [seldonframe.com/#pricing](https://seldonframe.com/#pricing).
+Hosted pricing: **$29/mo flat · unlimited workspaces · 14-day free trial, no card to start** — white-label and the voice receptionist included. **Bring your own AI key** to run agents (no usage markup — you pay the provider at cost). Plus a small GMV fee only on money that flows *through* SeldonFrame: **~2%** on your own sales (bookings/proposals/payments) and **5%** on marketplace agent sales/rentals — sell anywhere else and we take nothing. See [seldonframe.com/#pricing](https://seldonframe.com/#pricing).
 
 ### Self-host
 
@@ -122,16 +122,16 @@ Requires: Node 20+, Postgres 15+, an Anthropic or OpenAI API key. See [docs/gett
 ## FAQ
 
 ### How does SeldonFrame compare to GoHighLevel?
-SeldonFrame is the open-source alternative to GoHighLevel. Both bundle CRM, booking, and chatbot for businesses and the agencies that serve them. The difference is deployment time, cost, and openness. GoHighLevel requires days-to-weeks of configuration per client and costs $97-$497/month per agency before white-label. SeldonFrame stands up the pre-wired equivalent in about 3 minutes from one Claude Code prompt, runs on flat seat-based pricing (Builder $19 / Workspace $49 / Agency $297) with managed AI included, and is AGPL-3.0 if you want to self-host for $0.
+SeldonFrame is the open-source alternative to GoHighLevel — and then some: it's also the marketplace where you build, sell, and rent AI agents. Both bundle CRM, booking, and chatbot for businesses and the agencies that serve them. The difference is deployment time, cost, and openness. GoHighLevel requires days-to-weeks of configuration per client and costs $97-$497/month per agency before white-label. SeldonFrame stands up the pre-wired equivalent in about 3 minutes from one Claude Code prompt, runs on **$29/mo flat with unlimited workspaces and a 14-day free trial** (you bring your own AI key — no usage markup), and is AGPL-3.0 if you want to self-host for $0.
 
 ### How long does it take to deploy a client ops stack?
 Approximately 3 minutes from a single Claude Code prompt. The MCP server generates a CRM with vertical-specific pipeline stages, a booking page wired to the client's hours and timezone, an intake form with vertical-specific fields, and an AI chatbot that books against the real calendar. All four surfaces share one workspace database; nothing needs to be wired by you after generation.
 
 ### Can I white-label SeldonFrame for my agency clients?
-Yes — that's the Agency plan ($297/mo): white-label brand everywhere, 10 client workspaces included (+$10/mo each beyond), and an optional AI voice receptionist (+$99/mo per agent). Each workspace runs on its own subdomain (`client-slug.app.seldonframe.com`) or a custom domain. Per-workspace branding includes logo, colors, hero copy, and the chatbot's voice. Self-host under AGPL-3.0 if you want full visual control without any SeldonFrame chrome.
+Yes — white-label is **included in the flat $29/mo**, with **unlimited client workspaces** (no per-workspace fee) and the voice receptionist included. Each workspace runs on its own subdomain (`client-slug.app.seldonframe.com`) or a custom domain. Per-workspace branding includes logo, colors, hero copy, and the chatbot's voice. Self-host under AGPL-3.0 if you want full visual control without any SeldonFrame chrome.
 
 ### Is SeldonFrame free?
-The code is. SeldonFrame is AGPL-3.0, so you can **self-host the entire stack for $0** — you just supply your own Anthropic or OpenAI key for the AI. The hosted product is paid and flat: **Builder $19/mo** (up to 10 landing pages, your domain + branding), **Workspace $49/mo** (one full front office: website + booking + intake + CRM + chatbot), **Agency $297/mo** (white-label; 10 client workspaces included, +$10/mo each beyond). Managed AI is included on every hosted plan — no key to paste, no per-token markup, no metered usage wallet. No contract.
+The code is. SeldonFrame is AGPL-3.0, so you can **self-host the entire stack for $0** — you just supply your own Anthropic or OpenAI key. The hosted product is **$29/mo flat · unlimited workspaces · 14-day free trial, no card to start** (white-label + voice included). You **bring your own AI key** to run agents — that's why it stays flat: you pay the AI provider directly at cost, with no per-token markup and no metered wallet. The only other charge is a small GMV fee on money that flows *through* SeldonFrame (~2% on your own sales, 5% on marketplace agent sales/rentals) — sell anywhere else and we take nothing. No contract.
 
 ### What verticals does SeldonFrame support?
 20+ vertical archetypes ship out of the box. Trades use bold-urgency (HVAC, plumbers, electricians, roofers, locksmiths). Medical and legal use clinical-trust (dental, chiropractors, attorneys, accountants). Beauty verticals use cinematic-aspirational (medspas, salons). Creative verticals use editorial-warm (real estate, photographers). The MCP detects the right archetype from the client's business description; each archetype changes hero copy, intake fields, pipeline stages, and chatbot tone.
@@ -171,7 +171,7 @@ No. The agency uses Claude Code with the SeldonFrame MCP server — describe the
 └──────────────────────────────────────────────────────────────────────┘
                                   ↕
 ┌──────────────────────────────────────────────────────────────────────┐
-│  Managed AI (hosted) / your own key (self-host)                      │
+│  Your own AI key (BYOK) — trial workspace builds on us               │
 │  Anthropic · OpenAI · Stripe · Twilio · Resend · Google Calendar     │
 └──────────────────────────────────────────────────────────────────────┘
 ```
@@ -257,9 +257,9 @@ The full stack is described in our [stack](https://seldonframe.com/docs) docs. O
 
 | | Self-host | Hosted |
 |---|---|---|
-| Cost | $0 (self-host) | $19 / $49 / $297 (hosted) |
-| Plans | run it yourself | Builder / Workspace / Agency |
-| Client workspaces | unlimited | 1 (Workspace) · 10+ (Agency, +$10/mo each) |
+| Cost | $0 (self-host) | $29/mo flat (hosted) |
+| Plans | run it yourself | one flat plan · 14-day trial |
+| Client workspaces | unlimited | unlimited |
 | Custom domain | yes (you bring) | yes |
 | White-label | full | full (Agency) |
 | AI | yes (your own key) | managed (hosted) / yes (self-host) |
