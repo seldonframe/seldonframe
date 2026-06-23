@@ -21,6 +21,8 @@ import {
   buildPromptGetResult,
   parsePromptsGetParams,
   promptNameForSlug,
+  isDeterministicTool,
+  executeDeterministicTool,
   extractAskArgs,
   jsonRpcResult,
   jsonRpcError,
@@ -153,6 +155,24 @@ export async function handleAgentRentalRpc(
       const auth = authorize(bearer, slug, id, deps);
       if (!auth.ok) return auth.outcome;
 
+      // DEFAULT rental path: a deterministic, blueprint-carried tool (quote/faq).
+      // Pure server-side lookup — NO agent loop, NO owner LLM, so NO usage is
+      // logged (there's nothing to bill). The renter's own model called it.
+      const toolName = typeof params.name === "string" ? params.name : "";
+      if (isDeterministicTool(toolName)) {
+        const args =
+          typeof params.arguments === "object" && params.arguments !== null
+            ? (params.arguments as Record<string, unknown>)
+            : {};
+        const det = executeDeterministicTool(toolName, args, agent.blueprint);
+        if (!det.ok) {
+          return { status: 200, body: jsonRpcError(id, det.error.code, det.error.message) };
+        }
+        return { status: 200, body: jsonRpcResult(id, toolTextResult(JSON.stringify(det.result))) };
+      }
+
+      // Optional agent-as-a-service path: `ask` delegates to the live agent on
+      // the OWNER's compute (their LLM key + workspace tools). Usage IS logged.
       const askArgs = extractAskArgs(params);
       if (!askArgs.ok) {
         return { status: 200, body: jsonRpcError(id, askArgs.error.code, askArgs.error.message) };

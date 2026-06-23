@@ -32,6 +32,8 @@ import {
   buildPromptsListResult,
   buildPromptGetResult,
   parsePromptsGetParams,
+  buildDeterministicToolDescriptors,
+  executeDeterministicTool,
   GET_QUOTE_RANGE_TOOL_NAME,
   PROVIDE_FAQ_ANSWER_TOOL_NAME,
   JSONRPC_METHOD_NOT_FOUND,
@@ -132,12 +134,15 @@ describe("buildInitializeResult", () => {
 });
 
 describe("buildToolsListResult", () => {
-  test("wraps the ask descriptor under a tools array", () => {
+  test("wraps the deterministic tools + the ask descriptor under a tools array", () => {
     const result = buildToolsListResult({ agentName: "Helper", capabilities: ["provide_faq_answer"] }) as {
       tools: Array<{ name: string }>;
     };
-    assert.equal(result.tools.length, 1);
-    assert.equal(result.tools[0].name, "ask");
+    // Deterministic rental tools (zero owner compute) + the optional `ask`.
+    const names = result.tools.map((t) => t.name);
+    assert.ok(names.includes("ask"));
+    assert.ok(names.includes("get_quote_range"));
+    assert.ok(names.includes("provide_faq_answer"));
   });
 });
 
@@ -315,5 +320,108 @@ describe("buildPromptGetResult — the playbook (customSkillMd) as the prompt bo
   });
 });
 
-// (Deterministic quote/faq tool descriptors + executors + the ask relabel land
-// with the deterministic-tools work — tested there.)
+describe("buildDeterministicToolDescriptors — quote/faq ONLY (no stateful tools)", () => {
+  test("advertises get_quote_range + provide_faq_answer with real input schemas", () => {
+    const tools = buildDeterministicToolDescriptors({ agentName: "Sunset Receptionist" });
+    const names = tools.map((t) => t.name);
+    assert.deepEqual(names.sort(), [GET_QUOTE_RANGE_TOOL_NAME, PROVIDE_FAQ_ANSWER_TOOL_NAME].sort());
+    for (const tool of tools) {
+      const schema = tool.inputSchema as { type: string; properties: Record<string, unknown>; required: string[] };
+      assert.equal(schema.type, "object");
+      assert.ok(schema.required.length >= 1, `${tool.name} requires an argument`);
+      assert.ok(tool.description.length > 10);
+    }
+  });
+
+  test("does NOT advertise workspace-stateful tools (book/availability/CRM)", () => {
+    const names = buildDeterministicToolDescriptors({ agentName: "X" }).map((t) => t.name);
+    assert.ok(!names.includes("book_appointment"));
+    assert.ok(!names.includes("look_up_availability"));
+    assert.ok(!names.includes("take_message"));
+  });
+});
+
+describe("executeDeterministicTool — pure server-side lookups, NO LLM", () => {
+  test("get_quote_range returns the blueprint's range (case-insensitive match)", () => {
+    const out = executeDeterministicTool(
+      GET_QUOTE_RANGE_TOOL_NAME,
+      { service: "furnace repair" },
+      RENTAL_BLUEPRINT,
+    );
+    assert.equal(out.ok, true);
+    if (!out.ok) return;
+    const payload = out.result as { hasRange: boolean; low?: number; high?: number; note?: string };
+    assert.equal(payload.hasRange, true);
+    assert.equal(payload.low, 150);
+    assert.equal(payload.high, 600);
+    assert.match(String(payload.note), /part/);
+  });
+
+  test("get_quote_range for an unpriced service → hasRange:false (never guesses)", () => {
+    const out = executeDeterministicTool(GET_QUOTE_RANGE_TOOL_NAME, { service: "spaceship detailing" }, RENTAL_BLUEPRINT);
+    assert.equal(out.ok, true);
+    if (!out.ok) return;
+    assert.deepEqual(out.result, { hasRange: false });
+  });
+
+  test("provide_faq_answer returns the best blueprint FAQ match for the question", () => {
+    const out = executeDeterministicTool(
+      PROVIDE_FAQ_ANSWER_TOOL_NAME,
+      { question: "what areas do you serve?" },
+      RENTAL_BLUEPRINT,
+    );
+    assert.equal(out.ok, true);
+    if (!out.ok) return;
+    const payload = out.result as { matches: Array<{ question: string; answer: string; score: number }> };
+    assert.ok(payload.matches.length >= 1);
+    assert.match(payload.matches[0].answer, /Phoenix metro/);
+    assert.ok(payload.matches[0].score > 0);
+  });
+
+  test("provide_faq_answer with no relevant match returns an empty match set (no hallucination)", () => {
+    const out = executeDeterministicTool(
+      PROVIDE_FAQ_ANSWER_TOOL_NAME,
+      { question: "zzzzz totally unrelated quantum" },
+      RENTAL_BLUEPRINT,
+    );
+    assert.equal(out.ok, true);
+    if (!out.ok) return;
+    const payload = out.result as { matches: unknown[] };
+    assert.equal(payload.matches.length, 0);
+  });
+
+  test("get_quote_range with a missing/blank service → invalid params (-32602)", () => {
+    const out = executeDeterministicTool(GET_QUOTE_RANGE_TOOL_NAME, { service: "  " }, RENTAL_BLUEPRINT);
+    assert.equal(out.ok, false);
+    if (out.ok) return;
+    assert.equal(out.error.code, JSONRPC_INVALID_PARAMS);
+  });
+
+  test("an unknown deterministic tool name → method-not-found (-32601)", () => {
+    const out = executeDeterministicTool("wipe_db", { x: 1 }, RENTAL_BLUEPRINT);
+    assert.equal(out.ok, false);
+    if (out.ok) return;
+    assert.equal(out.error.code, JSONRPC_METHOD_NOT_FOUND);
+  });
+});
+
+describe("buildToolsListResult — now lists ask + the deterministic tools", () => {
+  test("includes ask, get_quote_range, provide_faq_answer (and NOT book_appointment)", () => {
+    const result = buildToolsListResult({
+      agentName: "Sunset Receptionist",
+      capabilities: RENTAL_BLUEPRINT.capabilities,
+    }) as { tools: Array<{ name: string }> };
+    const names = result.tools.map((t) => t.name);
+    assert.ok(names.includes(ASK_TOOL_NAME));
+    assert.ok(names.includes(GET_QUOTE_RANGE_TOOL_NAME));
+    assert.ok(names.includes(PROVIDE_FAQ_ANSWER_TOOL_NAME));
+    assert.ok(!names.includes("book_appointment"));
+  });
+});
+
+describe("buildAskToolDescriptor — relabelled as the owner's-compute path", () => {
+  test("description makes clear it delegates to the live agent on the owner's compute", () => {
+    const tool = buildAskToolDescriptor({ agentName: "Sunset Receptionist", capabilities: ["book_appointment"] });
+    assert.match(tool.description.toLowerCase(), /owner|compute|live/);
+  });
+});

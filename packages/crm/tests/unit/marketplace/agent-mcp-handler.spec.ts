@@ -128,12 +128,15 @@ describe("tools/list — gated by a valid key", () => {
     assert.match(body.error.message, /Missing rental key/);
   });
 
-  test("with a valid key → the one `ask` tool", async () => {
+  test("with a valid key → the deterministic tools + the optional `ask` tool", async () => {
     const h = makeHarness();
     const out = await handleAgentRentalRpc(SLUG, req("tools/list"), validKey(), h.deps);
     const body = out.body as { result: { tools: Array<{ name: string }> } };
-    assert.equal(body.result.tools.length, 1);
-    assert.equal(body.result.tools[0].name, ASK_TOOL_NAME);
+    const names = body.result.tools.map((t) => t.name);
+    // Deterministic, renter-driven tools (zero owner compute) + agent-as-a-service.
+    assert.ok(names.includes(ASK_TOOL_NAME));
+    assert.ok(names.includes("get_quote_range"));
+    assert.ok(names.includes("provide_faq_answer"));
   });
 });
 
@@ -340,5 +343,75 @@ describe("prompts/get — returns the agent's skill (customSkillMd)", () => {
   });
 });
 
-// (Deterministic tools/call dispatch — get_quote_range / provide_faq_answer with
-// zero owner compute — lands with the deterministic-tools work; tested there.)
+describe("tools/call — deterministic tools run with ZERO owner compute", () => {
+  test("get_quote_range returns the blueprint range; runTurn NOT called, no usage logged", async () => {
+    const h = makeHarness({ agent: RENTAL_AGENT });
+    const out = await handleAgentRentalRpc(
+      SLUG,
+      req("tools/call", { name: "get_quote_range", arguments: { service: "furnace repair" } }),
+      validKey(),
+      h.deps,
+    );
+    assert.equal(out.status, 200);
+    const body = out.body as { result: { content: Array<{ type: string; text: string }> } };
+    assert.equal(body.result.content[0].type, "text");
+    // The structured result is serialized into the text content.
+    assert.match(body.result.content[0].text, /150/);
+    assert.match(body.result.content[0].text, /600/);
+    // The whole point: no agent loop, no owner LLM spend, nothing to bill.
+    assert.equal(h.turns.length, 0);
+    assert.equal(h.usage.length, 0);
+  });
+
+  test("provide_faq_answer returns a grounded match without running the agent", async () => {
+    const h = makeHarness({ agent: RENTAL_AGENT });
+    const out = await handleAgentRentalRpc(
+      SLUG,
+      req("tools/call", { name: "provide_faq_answer", arguments: { question: "what areas do you serve?" } }),
+      validKey(),
+      h.deps,
+    );
+    const body = out.body as { result: { content: Array<{ text: string }> } };
+    assert.match(body.result.content[0].text, /Phoenix metro/);
+    assert.equal(h.turns.length, 0);
+  });
+
+  test("get_quote_range with a blank service → invalid-params, no turn", async () => {
+    const h = makeHarness({ agent: RENTAL_AGENT });
+    const out = await handleAgentRentalRpc(
+      SLUG,
+      req("tools/call", { name: "get_quote_range", arguments: { service: " " } }),
+      validKey(),
+      h.deps,
+    );
+    const body = out.body as { error: { code: number } };
+    assert.equal(body.error.code, JSONRPC_INVALID_PARAMS);
+    assert.equal(h.turns.length, 0);
+  });
+
+  test("a deterministic tool still requires a valid key", async () => {
+    const h = makeHarness({ agent: RENTAL_AGENT });
+    const out = await handleAgentRentalRpc(
+      SLUG,
+      req("tools/call", { name: "get_quote_range", arguments: { service: "furnace repair" } }),
+      null,
+      h.deps,
+    );
+    const body = out.body as { error: { code: number } };
+    assert.equal(body.error.code, JSONRPC_UNAUTHORIZED);
+  });
+
+  test("ask STILL routes to the live agent (owner's compute) and logs usage", async () => {
+    const h = makeHarness({ agent: RENTAL_AGENT });
+    const out = await handleAgentRentalRpc(
+      SLUG,
+      req("tools/call", { name: "ask", arguments: { message: "Got 2pm Friday?" } }),
+      validKey(),
+      h.deps,
+    );
+    assert.equal(out.status, 200);
+    // The agent-as-a-service path is unchanged — it ran and logged usage.
+    assert.equal(h.turns.length, 1);
+    assert.equal(h.usage.length, 1);
+  });
+});

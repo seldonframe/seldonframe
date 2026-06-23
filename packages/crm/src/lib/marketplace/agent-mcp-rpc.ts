@@ -12,25 +12,38 @@
 // agent-mcp-rpc.spec.ts.
 //
 // RENTAL MODEL — "the renter brings the fuel" (BUILD #1):
-//   The agent's SKILL is exposed as an MCP *prompt* (prompts/list + prompts/get
-//   → blueprint.customSkillMd, the playbook). The RENTER's OWN LLM loads the
-//   prompt and drives the agent — zero compute cost to the agent owner. The
-//   `ask` tool remains as the optional agent-as-a-service path (owner's compute).
+//   The DEFAULT rental value is the agent's SKILL exposed as an MCP *prompt*
+//   (prompts/list + prompts/get → blueprint.customSkillMd, the playbook) plus
+//   its DETERMINISTIC, blueprint-carried tools (get_quote_range ← quoteRanges,
+//   provide_faq_answer ← faq). The RENTER's OWN LLM loads the prompt and drives
+//   those pure lookups — ZERO compute cost to the agent owner/platform.
+//
+//   The `ask` tool is RETAINED but relabelled as the OPTIONAL "agent-as-a-
+//   service (owner's compute)" path: it delegates the whole task to the live
+//   agent, which runs the agent loop on the CREATOR's LLM key (see
+//   agent-rental-run.ts → runStatelessAgentTurn). That path bills the owner; the
+//   prompt + deterministic tools don't.
+//
+//   We deliberately do NOT expose the workspace-STATEFUL tools (book_appointment,
+//   look_up_availability, take_message, CRM writes). Those execute against the
+//   CREATOR's workspace (orgId comes from the creator-org runtime), so letting a
+//   renter call them would write to the wrong business. They stay INSTALL-ONLY
+//   (an installed agent runs in the installer's own workspace). See
+//   buildDeterministicToolDescriptors below.
 
 import type { McpToolDescriptor } from "@/lib/agents/mcp/client";
 import type { AgentBlueprint } from "@/db/schema/agents";
+import { resolveQuoteRange, type QuoteRange } from "@/lib/agents/tools";
 
 /** Advertised MCP protocol version. Matches the client's PROTOCOL_VERSION so a
  *  SeldonFrame-to-SeldonFrame connection negotiates cleanly. Renters on other
  *  clients negotiate down as needed. */
 export const MCP_PROTOCOL_VERSION = "2025-06-18";
 
-/** The single delegating tool name. */
+/** The optional agent-as-a-service delegating tool name (owner's compute). */
 export const ASK_TOOL_NAME = "ask";
 
-/** Names of the deterministic, blueprint-carried tools a renter's own model
- *  drives (their descriptors + executors land with the deterministic-tools
- *  work). The skill prompt below lists them so the renter knows what to call. */
+/** Deterministic, blueprint-carried rental tools (zero-LLM, renter-driven). */
 export const GET_QUOTE_RANGE_TOOL_NAME = "get_quote_range";
 export const PROVIDE_FAQ_ANSWER_TOOL_NAME = "provide_faq_answer";
 
@@ -118,7 +131,11 @@ export function summarizeCapabilities(capabilities: string[] | undefined | null)
   return `${phrases.slice(0, -1).join(", ")}, and ${phrases[phrases.length - 1]}`;
 }
 
-/** Build the ONE delegating `ask` tool descriptor for a given agent. */
+/** Build the OPTIONAL `ask` (agent-as-a-service) tool descriptor for an agent.
+ *  Relabelled (BUILD #1): this delegates the task to the LIVE agent, which runs
+ *  on the AGENT OWNER's compute (their LLM key + their workspace tools). It's the
+ *  optional path — the default rental is the skill prompt + the deterministic
+ *  quote/faq tools, which the renter's own LLM drives at zero cost to the owner. */
 export function buildAskToolDescriptor(input: {
   agentName: string;
   capabilities: string[] | undefined | null;
@@ -127,8 +144,10 @@ export function buildAskToolDescriptor(input: {
   return {
     name: ASK_TOOL_NAME,
     description:
-      `Send a task or message to the ${input.agentName} agent — it can ${summary}. ` +
-      `Returns the agent's reply. Pass conversation_id to continue an existing thread.`,
+      `Delegate a task to the live ${input.agentName} agent (uses the agent owner's compute). ` +
+      `It can ${summary}, running on the owner's LLM + workspace. ` +
+      `Returns the agent's reply. Pass conversation_id to continue an existing thread. ` +
+      `Prefer the act_as_${"<slug>"} prompt + the get_quote_range / provide_faq_answer tools when you want to drive the agent with your OWN model (no owner compute).`,
     inputSchema: {
       type: "object",
       properties: {
@@ -159,12 +178,20 @@ export function buildInitializeResult(input: { agentName: string }): Record<stri
   };
 }
 
-/** The `tools/list` result: just the one `ask` tool. */
+/** The `tools/list` result: the deterministic, renter-driven tools
+ *  (get_quote_range + provide_faq_answer — zero owner compute) PLUS the optional
+ *  `ask` agent-as-a-service tool. Workspace-stateful tools are intentionally
+ *  excluded (they'd write to the creator's workspace). */
 export function buildToolsListResult(input: {
   agentName: string;
   capabilities: string[] | undefined | null;
 }): Record<string, unknown> {
-  return { tools: [buildAskToolDescriptor(input)] };
+  return {
+    tools: [
+      ...buildDeterministicToolDescriptors({ agentName: input.agentName }),
+      buildAskToolDescriptor(input),
+    ],
+  };
 }
 
 // ─── tools/call argument extraction ──────────────────────────────────────────
@@ -288,6 +315,166 @@ export function buildPromptGetResult(input: {
       ],
     },
   };
+}
+
+// ─── deterministic rental tools (zero-LLM, renter-driven) ────────────────────
+//
+// These are the BLUEPRINT-CARRIED, deterministic capabilities — pure server-side
+// lookups, NO LLM call, NO workspace writes. They're safe to rent because they
+// read ONLY the listing's own blueprint (quoteRanges / faq), carried inline at
+// publish time. The renter's model calls them after loading the skill prompt.
+//
+// EXCLUDED ON PURPOSE — workspace-stateful tools (book_appointment,
+// look_up_availability, take_message, and any CRM write) are NOT exposed here.
+// They resolve orgId from the CREATOR-org runtime and would write to the
+// creator's business, so renting them would corrupt the wrong workspace. They
+// remain INSTALL-ONLY: installing the agent runs those tools in the installer's
+// own workspace, which is correct. See tools.ts ALL_TOOLS for the full set.
+
+/** Build the deterministic tool descriptors (get_quote_range + provide_faq_answer)
+ *  with real MCP inputSchemas. Independent of capabilities: the data lives on the
+ *  blueprint and a missing range/faq simply yields an empty/`hasRange:false`
+ *  result, so advertising them is always safe. */
+export function buildDeterministicToolDescriptors(input: { agentName: string }): McpToolDescriptor[] {
+  return [
+    {
+      name: GET_QUOTE_RANGE_TOOL_NAME,
+      description:
+        `Get the price RANGE the ${input.agentName} business quotes for a service. ` +
+        `Returns { hasRange:true, low, high, note } for a configured service, or { hasRange:false } when it isn't priced ` +
+        `(then tell the customer a person will confirm). Never invent a price. Deterministic lookup — no AI, no cost.`,
+      inputSchema: {
+        type: "object",
+        properties: {
+          service: {
+            type: "string",
+            description: "The service the customer is asking the price of (e.g. 'furnace repair').",
+          },
+        },
+        required: ["service"],
+      },
+    },
+    {
+      name: PROVIDE_FAQ_ANSWER_TOOL_NAME,
+      description:
+        `Answer a customer question from the ${input.agentName} business's FAQ knowledge. ` +
+        `Returns up to 3 best-matching { question, answer, score } pairs, or an empty list when nothing matches ` +
+        `(then don't guess). Deterministic keyword lookup — no AI, no cost.`,
+      inputSchema: {
+        type: "object",
+        properties: {
+          question: {
+            type: "string",
+            description: "The customer's question, in their own words.",
+          },
+        },
+        required: ["question"],
+      },
+    },
+  ];
+}
+
+/** True when a tools/call name targets a deterministic (zero-LLM) tool. */
+export function isDeterministicTool(name: string): boolean {
+  return deterministicToolNames().includes(name);
+}
+
+export type DeterministicToolOutcome =
+  | { ok: true; result: unknown }
+  | { ok: false; error: JsonRpcErrorShape };
+
+/** Normalize a string for keyword matching (lowercase, strip punctuation). */
+function normalizeForMatch(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+const FAQ_STOPWORDS = new Set([
+  "the", "a", "an", "of", "to", "do", "does", "is", "are", "you", "your", "i",
+  "we", "what", "how", "can", "and", "or", "for", "in", "on", "with", "my",
+]);
+
+/**
+ * Pure FAQ matcher over blueprint.faq. Scores each Q&A by overlap of meaningful
+ * tokens between the question and the stored q (+ a smaller weight for the
+ * answer), returns up to 3 matches with score > 0, sorted desc. No match → [].
+ * Deterministic, no LLM — so a renter's model gets grounded answers for free
+ * and an empty set (rather than a hallucination) when nothing fits.
+ */
+export function matchFaq(
+  question: string,
+  faq: AgentBlueprint["faq"],
+): Array<{ question: string; answer: string; score: number }> {
+  const entries = faq ?? [];
+  const qTokens = normalizeForMatch(question)
+    .split(" ")
+    .filter((t) => t.length > 1 && !FAQ_STOPWORDS.has(t));
+  if (qTokens.length === 0 || entries.length === 0) return [];
+  const qSet = new Set(qTokens);
+
+  const scored = entries.map((entry) => {
+    const entryTokens = new Set(
+      normalizeForMatch(entry.q).split(" ").filter((t) => t.length > 1 && !FAQ_STOPWORDS.has(t)),
+    );
+    const answerTokens = new Set(
+      normalizeForMatch(entry.a).split(" ").filter((t) => t.length > 1 && !FAQ_STOPWORDS.has(t)),
+    );
+    let score = 0;
+    for (const t of qSet) {
+      if (entryTokens.has(t)) score += 2; // a question-word match is strong
+      else if (answerTokens.has(t)) score += 1; // an answer-word match is weaker
+    }
+    return { question: entry.q, answer: entry.a, score };
+  });
+
+  return scored
+    .filter((m) => m.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3);
+}
+
+/**
+ * Execute a deterministic rental tool PURELY against the listing's blueprint —
+ * NO LLM, NO workspace I/O. Returns the MCP tool's structured result, or a
+ * JSON-RPC error (-32601 unknown tool, -32602 bad args). The handler shapes the
+ * `ok:true` result into MCP content; usage is NOT logged for these (no owner
+ * compute was spent — nothing to bill).
+ */
+export function executeDeterministicTool(
+  name: string,
+  args: Record<string, unknown>,
+  blueprint: AgentBlueprint,
+): DeterministicToolOutcome {
+  if (name === GET_QUOTE_RANGE_TOOL_NAME) {
+    const service = typeof args.service === "string" ? args.service.trim() : "";
+    if (!service) {
+      return { ok: false, error: { code: JSONRPC_INVALID_PARAMS, message: "Invalid params: `service` (non-empty string) is required." } };
+    }
+    const ranges: QuoteRange[] = blueprint.quoteRanges ?? [];
+    const match = resolveQuoteRange(service, ranges);
+    if (!match) {
+      return { ok: true, result: { hasRange: false } };
+    }
+    return {
+      ok: true,
+      result: {
+        hasRange: true,
+        service: match.service,
+        low: match.low,
+        high: match.high,
+        note: match.note?.trim() || "a technician confirms the exact price on-site",
+      },
+    };
+  }
+
+  if (name === PROVIDE_FAQ_ANSWER_TOOL_NAME) {
+    const question = typeof args.question === "string" ? args.question.trim() : "";
+    if (!question) {
+      return { ok: false, error: { code: JSONRPC_INVALID_PARAMS, message: "Invalid params: `question` (non-empty string) is required." } };
+    }
+    return { ok: true, result: { matches: matchFaq(question, blueprint.faq) } };
+  }
+
+  return { ok: false, error: { code: JSONRPC_METHOD_NOT_FOUND, message: `Unknown tool: ${name || "(none)"}.` } };
 }
 
 // ─── envelope builders ───────────────────────────────────────────────────────
