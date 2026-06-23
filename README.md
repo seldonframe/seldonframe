@@ -310,6 +310,21 @@ Comment on what's missing or vote on priorities in [GitHub Discussions](https://
 
 ---
 
+## Our commitment to builders
+
+SeldonFrame builds the generic, commodity agents — the AI receptionist, the review-requester, the booking concierge — and ships them as a **free-tier floor** so every business starts with a working default. That's where we compete: the commodity head, the agents everyone needs.
+
+**We will not build vertical-specialized agents that compete with you.** The blue ocean is yours — niche agents, deep edge-cases, vertical playbooks, integrated workflows, and the service around them. We stay in the commodity head; the long tail is your domain.
+
+- **You keep 95%.** We take 5% only when your agent sells or is rented — never a listing fee, never a tax on your own work.
+- **You set the price** — per-call, per-outcome, monthly, or one-time.
+- **We never clone you.** We don't use your agent's data, prompts, or performance to build a competing first-party agent.
+- **Our incentive is your success** — we make money when you do.
+
+The generics get businesses in the door. The niches — the agents only *you* know how to build — are where the money is.
+
+---
+
 ## Why open source
 
 Three reasons we ship the entire platform under AGPL-3.0:
