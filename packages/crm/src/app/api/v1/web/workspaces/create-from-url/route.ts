@@ -79,8 +79,32 @@ export const dynamic = "force-dynamic";
 // future programmatic callers (curl, future SDKs) that prefer JSON body
 // posting; both call the same runCreateFromUrl orchestrator with the same
 // RunDeps.
-async function dispatchCreateFromUrl(url: unknown, landingTemplate?: unknown, themeMode?: unknown): Promise<Response> {
+async function dispatchCreateFromUrl(
+  url: unknown,
+  landingTemplate?: unknown,
+  themeMode?: unknown,
+  // 2026-06-23 — Programmatic SEO/GEO deploy intent. `canonicalAgent` is the
+  // starter-pack id the visitor chose on a /agents/* page ("Deploy it for my
+  // business"); `niche` is the vertical hint. They arrive on the SSE query
+  // string from /clients/new. SEAM: once the orchestrator's RunDeps exposes the
+  // freshly-created workspace's builderOrgId, fork this starter post-build via
+  // instantiateStarter({ builderOrgId, starterId: canonicalAgent },
+  // buildDefaultInstantiateDeps()) so the operator lands with THAT agent. Until
+  // then we accept + log the intent so the param is preserved end-to-end and the
+  // wiring is a one-call change, not a re-thread. (lib/agent-templates/starter-pack.ts)
+  canonicalAgent?: unknown,
+  niche?: unknown,
+): Promise<Response> {
   const session = await auth();
+
+  // Preserve the SEO deploy intent at the build boundary (the seam above).
+  const canonicalAgentId = typeof canonicalAgent === "string" && canonicalAgent.trim() ? canonicalAgent.trim() : null;
+  const nicheHint = typeof niche === "string" && niche.trim() ? niche.trim() : null;
+  if (canonicalAgentId) {
+    console.info(
+      JSON.stringify({ event: "seo_deploy_intent", canonical_agent: canonicalAgentId, niche: nicheHint }),
+    );
+  }
 
   // The session callback in lib/auth/config.ts exposes `orgId` (NOT
   // `primaryOrgId`). For this route's purposes the user's primary org IS
@@ -175,7 +199,10 @@ export async function GET(request: NextRequest): Promise<Response> {
   // Operator's pre-build light/dark mode pick ("light" | "dark"; omitted /
   // "auto" → resolveThemeMode picks by archetype default).
   const mode = request.nextUrl.searchParams.get("mode") ?? undefined;
-  return dispatchCreateFromUrl(url, template, mode);
+  // 2026-06-23 — Programmatic SEO/GEO deploy intent (see dispatchCreateFromUrl).
+  const agent = request.nextUrl.searchParams.get("agent") ?? undefined;
+  const niche = request.nextUrl.searchParams.get("niche") ?? undefined;
+  return dispatchCreateFromUrl(url, template, mode, agent, niche);
 }
 
 export async function POST(request: Request): Promise<Response> {

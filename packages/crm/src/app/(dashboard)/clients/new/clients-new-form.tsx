@@ -76,6 +76,15 @@ type ClientsNewFormProps = {
   prefillUrl?: string | null;
   prefillBiz?: string | null;
   autoSubmit?: boolean;
+  // 2026-06-23 — Programmatic SEO/GEO deploy CTA. `prefillAgent` is the
+  // canonical starter-pack id the visitor wants instantiated (from the
+  // /agents/* "Deploy it for my business" link); `prefillVertical` is a niche
+  // hint. Both are threaded onto the build SSE query string (as ?agent= and
+  // ?niche=) so the create pipeline can fork that starter post-build and seed
+  // the niche. They survive the same way the existing ?template=/?mode= picks
+  // do — purely additive to the build request.
+  prefillAgent?: string | null;
+  prefillVertical?: string | null;
 };
 
 /**
@@ -143,9 +152,18 @@ export function ClientsNewForm({
   prefillUrl = null,
   prefillBiz = null,
   autoSubmit = false,
+  prefillAgent = null,
+  prefillVertical = null,
 }: ClientsNewFormProps) {
   // source is currently unused post-P but kept for future skip-link suppression
   void source;
+
+  // 2026-06-23 — The canonical agent + vertical hint from a /agents/* deploy
+  // link, stable across the component's lifetime, so both SSE builders can
+  // append them to the create request. Refs (not state) — they never change
+  // after mount and must not retrigger the build effect.
+  const agentRef = useRef<string | null>(prefillAgent);
+  const verticalRef = useRef<string | null>(prefillVertical);
 
   // Seed the inputs with the marketing-prompt prefill values. The
   // controlled-input contract is preserved by defaulting to "".
@@ -230,6 +248,11 @@ export function ClientsNewForm({
     const qs = new URLSearchParams({ url: targetUrl });
     if (landingTemplate && landingTemplate !== "auto") qs.set("template", landingTemplate);
     if (themeMode && themeMode !== "auto") qs.set("mode", themeMode);
+    // 2026-06-23 — Carry the programmatic-SEO deploy intent into the build:
+    // `agent` = the canonical starter to fork post-build; `niche` = the vertical
+    // hint. The create-from-url route reads these from its query string.
+    if (agentRef.current) qs.set("agent", agentRef.current);
+    if (verticalRef.current) qs.set("niche", verticalRef.current);
     const es = new EventSource(`/api/v1/web/workspaces/create-from-url?${qs.toString()}`);
     esRef.current = es;
     setLiveEventSource(es);
@@ -307,6 +330,10 @@ export function ClientsNewForm({
     const qs = new URLSearchParams({ text });
     if (landingTemplate && landingTemplate !== "auto") qs.set("template", landingTemplate);
     if (themeMode && themeMode !== "auto") qs.set("mode", themeMode);
+    // 2026-06-23 — Carry the programmatic-SEO deploy intent into the build (see
+    // startStream): `agent` = canonical starter to fork; `niche` = vertical hint.
+    if (agentRef.current) qs.set("agent", agentRef.current);
+    if (verticalRef.current) qs.set("niche", verticalRef.current);
     const es = new EventSource(`/api/v1/web/workspaces/create-from-paste?${qs.toString()}`);
     esRef.current = es;
     setLiveEventSource(es);

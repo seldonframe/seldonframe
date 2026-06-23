@@ -37,14 +37,30 @@ export default async function ClientsNewPage({
     url?: string;
     biz?: string;
     intent?: string;
+    // 2026-06-23 — Programmatic SEO/GEO deploy CTA. The /agents/* pages link
+    // here as ?agent=<starter-pack-id>&intent=build (+ optional ?vertical=).
+    // `agent` names the canonical starter the visitor wants instantiated; it
+    // is threaded through the form into the build SSE so the pipeline can fork
+    // that starter post-build (see clients-new-form.tsx + the create-from-url
+    // route's `agent` seam). `vertical` is a niche hint for the build.
+    agent?: string;
+    vertical?: string;
   }>;
 }) {
   const session = await auth();
   if (!session?.user?.id) {
-    redirect("/login?callbackUrl=/clients/new");
+    // Preserve the agent/vertical/intent params across the login round-trip so
+    // a cold visitor who must sign in still lands back here carrying the agent.
+    const cb = new URLSearchParams();
+    const sp = await searchParams;
+    if (sp.agent) cb.set("agent", sp.agent);
+    if (sp.vertical) cb.set("vertical", sp.vertical);
+    if (sp.intent) cb.set("intent", sp.intent);
+    const qs = cb.toString();
+    redirect(`/login?callbackUrl=${encodeURIComponent(`/clients/new${qs ? `?${qs}` : ""}`)}`);
   }
 
-  const { source, url, biz, intent } = await searchParams;
+  const { source, url, biz, intent, agent, vertical } = await searchParams;
 
   // Trim + sanitize the inbound prefill values. We don't validate the
   // URL shape here — IdleScene's <UrlInput type="url"> handles client-
@@ -67,6 +83,17 @@ export default async function ClientsNewPage({
   // neither source has a payload, the auto-submit gracefully no-ops
   // (the user is left at the IdleScene with empty inputs).
   const autoSubmit = intent === "build";
+
+  // 2026-06-23 — Sanitize the SEO deploy params. Both are short, slug-shaped
+  // (lowercase, hyphenated) — clamp + restrict the charset so a hostile link
+  // can't smuggle anything into the SSE query string we build from them.
+  const slugish = (v: string | undefined): string | null => {
+    if (typeof v !== "string") return null;
+    const cleaned = v.trim().toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 64);
+    return cleaned.length > 0 ? cleaned : null;
+  };
+  const prefillAgent = slugish(agent);
+  const prefillVertical = slugish(vertical);
 
   // 2026-05-27 — Unified onboarding shell. Render the step-2 strip only
   // for users still mid-onboarding. Returning operators who already
@@ -114,6 +141,8 @@ export default async function ClientsNewPage({
           prefillUrl={prefillUrl}
           prefillBiz={prefillBiz}
           autoSubmit={autoSubmit}
+          prefillAgent={prefillAgent}
+          prefillVertical={prefillVertical}
         />
       </main>
     </div>
