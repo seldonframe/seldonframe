@@ -15,6 +15,8 @@ import {
   getJob,
   allJobVerticalPairs,
   composePageCopy,
+  deployHrefFor,
+  relatedJobsForVertical,
   type AgentJob,
 } from "./agent-pages";
 import { VERTICALS, getVertical } from "./verticals";
@@ -251,6 +253,33 @@ test("composition is well-formed for EVERY job × vertical (no empty/blank field
       assert.ok(!/\bundefined\b|\bnull\b/.test(t2.title), `${job.slug} × ${v.slug} title leaked`);
     }
   }
+});
+
+// ─── CTA wiring ───────────────────────────────────────────────────────────────
+
+test("deployHrefFor carries the canonical agent + build intent", () => {
+  const job = getJob("ai-receptionist");
+  const href = deployHrefFor(job);
+  assert.ok(href.startsWith("/clients/new?"), "deploy href targets the build flow");
+  assert.match(href, /agent=ai-phone-receptionist/, "carries the canonical agent slug");
+  assert.match(href, /intent=build/, "carries the build intent");
+  // Tier-2 adds the vertical hint.
+  const href2 = deployHrefFor(job, getVertical("plumbers"));
+  assert.match(href2, /vertical=plumbers/, "Tier-2 deploy href carries the vertical");
+});
+
+test("every job's deploy href uses a REAL canonical agent slug", () => {
+  for (const job of AGENT_JOBS) {
+    const href = deployHrefFor(job);
+    // The slug in the href must equal the canonical slug we validated above.
+    assert.match(href, new RegExp(`agent=${job.canonicalAgentSlug.replace(/[-]/g, "[-]")}`));
+  }
+});
+
+test("relatedJobsForVertical returns siblings (excludes self), capped", () => {
+  const related = relatedJobsForVertical("ai-receptionist", 5);
+  assert.ok(related.length > 0 && related.length <= 5);
+  assert.ok(!related.some((j) => j.slug === "ai-receptionist"), "must exclude the current job");
 });
 
 // Readability checks on the composed Tier-2 intro: correct article ("An AI…",

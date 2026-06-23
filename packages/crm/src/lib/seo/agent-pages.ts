@@ -517,6 +517,32 @@ export function getJob(slug: string): AgentJob {
   return found;
 }
 
+/**
+ * The Deploy-CTA href — routes into the magic first-run build flow CARRYING the
+ * canonical agent so the user lands with THAT agent instantiated. `intent=build`
+ * triggers the existing auto-submit; `agent` is the new param threaded through
+ * /clients/new (the page reads it, the build pipeline instantiates the starter
+ * via the starter-pack path post-build). Vertical, when present, is passed as a
+ * hint so the build can pre-seed the niche.
+ */
+export function deployHrefFor(job: AgentJob, vertical?: Vertical): string {
+  const params = new URLSearchParams({
+    agent: job.canonicalAgentSlug,
+    intent: "build",
+  });
+  if (vertical) params.set("vertical", vertical.slug);
+  return `/clients/new?${params.toString()}`;
+}
+
+/**
+ * The flywheel cross-links: OTHER jobs to surface on a job×vertical page, each
+ * deep-linked to the SAME vertical ("more agents for plumbers"). Returns the
+ * sibling jobs (excluding the current one), capped, so the page becomes a hub.
+ */
+export function relatedJobsForVertical(currentJobSlug: string, limit = 5): AgentJob[] {
+  return AGENT_JOBS.filter((j) => j.slug !== currentJobSlug).slice(0, limit);
+}
+
 /** Every (job, vertical) pair — the Tier-2 route param source. */
 export function allJobVerticalPairs(): { job: string; vertical: string }[] {
   const pairs: { job: string; vertical: string }[] = [];
