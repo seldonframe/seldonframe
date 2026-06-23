@@ -16,6 +16,7 @@ import type { Metadata } from "next";
 import { MarketplaceNav, MarketplaceFooter } from "@/components/marketplace/marketplace-chrome";
 import { MarketplaceStyles } from "@/components/marketplace/marketplace-styles";
 import { BrowseClient } from "@/components/marketplace/browse-client";
+import { MarketplaceIndustryDirectory } from "@/components/marketplace/marketplace-industry-directory";
 import { listMarketplaceAgentsFromDb } from "@/lib/marketplace/agent-listings";
 import { MARKETPLACE_SEED } from "@/components/marketplace/marketplace-seed";
 import {
@@ -105,6 +106,7 @@ export default async function MarketplaceBrowsePage({ searchParams }: BrowsePage
         initialCategory={initialCategory}
         initialQuery={initialQuery}
       />
+      <MarketplaceIndustryDirectory />
       <MarketplaceFooter />
     </div>
   );

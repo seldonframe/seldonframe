@@ -11,6 +11,29 @@ import Link from "next/link";
 import type { ReactElement } from "react";
 import { MarketplaceIcon } from "./marketplace-icons";
 import { MKT } from "./marketplace-data";
+import { AGENT_JOBS } from "@/lib/seo/agent-pages";
+
+/**
+ * Footer "Browse" links into the /ai-agents directory. Each label maps to a REAL
+ * AGENT_JOBS slug (resolved from the registry so it can't drift to a dead slug),
+ * plus a catch-all into the directory root. This is the human path from the
+ * marketplace chrome into the 171-page /ai-agents/* SEO tree.
+ */
+function browseFooterItems(): { label: string; href: string }[] {
+  const linkFor = (label: string, slug: string): { label: string; href: string } => {
+    // Resolve against the registry; throws at build if a slug ever goes stale.
+    const job = AGENT_JOBS.find((j) => j.slug === slug);
+    if (!job) throw new Error(`marketplace footer: no agent job for slug "${slug}"`);
+    return { label, href: `/ai-agents/${job.slug}` };
+  };
+  return [
+    linkFor("Receptionists", "ai-receptionist"),
+    linkFor("Reviews & reputation", "google-review-agent"),
+    linkFor("Reactivation", "win-back-agent"),
+    linkFor("Quoting", "quote-estimate-agent"),
+    { label: "All agents by industry →", href: "/ai-agents" },
+  ];
+}
 
 /**
  * The real SeldonFrame frame mark (from marketing-nav.tsx), parameterized by
@@ -99,6 +122,12 @@ export function MarketplaceNav({
             style={{ ...navPill, color: navColor("browse"), background: navBg("browse") }}
           >
             Browse
+          </Link>
+          <Link
+            href="/ai-agents"
+            style={{ ...navPill, color: "rgba(34,29,23,0.62)", background: "transparent" }}
+          >
+            By industry
           </Link>
           <Link
             href="/studio/agents"
@@ -210,7 +239,7 @@ export function MarketplaceFooter(): ReactElement {
             and following up 24/7.
           </p>
         </div>
-        <FooterCol title="Browse" items={["Receptionists", "Reviews & reputation", "Reactivation", "Quoting"]} />
+        <FooterCol title="Browse" items={browseFooterItems()} />
         <FooterCol
           title="Build"
           items={[
