@@ -4,6 +4,8 @@ Thanks for considering a contribution. SeldonFrame is built on one architectural
 
 This guide explains how to set up the repo, where the interesting parts of the codebase live, and six concrete recipes for high-leverage contributions.
 
+**Not here to send a PR?** The biggest opportunity isn't in this repo — it's *on* the platform: build an AI agent, list it on the marketplace, and keep 95%, with distribution (MCP, a coming ChatGPT app, and a free discovery page per listing) built in. Jump to **[Build & sell agents](#build--sell-agents-not-a-pr--a-business)**.
+
 ---
 
 ## Architecture orientation (read this first)
@@ -178,6 +180,13 @@ You don't touch this repo to do it. Build in the product:
 1. **Describe the agent in one sentence** at [`/marketplace/build`](https://app.seldonframe.com/marketplace/build) — SeldonFrame generates the bundle (skill, tools, guardrails, voice).
 2. **Tune it in the Studio** — edit the skill prose, bind MCP connectors, set surfaces (voice / chat / SMS / email), run the eval gate.
 3. **List it** — publish to the public marketplace. Buyers **install** it (it re-grounds on their Soul) or **rent it over MCP** (`/api/v1/agents/<slug>/mcp`), where the renter's own LLM drives and you get paid per use.
+
+**The distribution comes built in.** You're not listing into a void — every agent you publish is pushed out four ways, at no extra cost to you:
+
+- **MCP-native reach.** Your agent speaks the Model Context Protocol, so it's usable from Claude, Cursor, Cline, and any MCP client the day you list it — no separate integration. An external orchestrator rents your booking agent the same way Claude Code calls any other tool.
+- **A ChatGPT app is coming.** SeldonFrame's ChatGPT app is built on the Apps SDK (MCP under the hood), so your listed agent becomes reachable to ChatGPT's ~800M users from inside the conversation — distribution you'd never build alone.
+- **A free SEO / GEO / AEO page per listing.** Every agent you publish gets its own programmatic discovery page under `/ai-agents/*` — answer-engine-optimized with cited stats and schema.org markup, so it surfaces both in Google *and* in LLM answers (ChatGPT, Claude, Perplexity) when someone asks "best AI receptionist for plumbers." You write one agent; we generate the page that sells it.
+- **Agencies deploy once, everywhere.** An agency can push a single agent to all its client workspaces in one action — and each instance **re-grounds on that client's Soul**, so the same agent adapts to each client's hours, services, pricing, and edge cases automatically. Build the playbook once; it fits every client.
 
 **The deal, in writing:**
 
