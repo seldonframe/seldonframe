@@ -95,14 +95,18 @@ export function AgentPage({ job, vertical }: AgentPageProps): ReactElement {
   };
 
   return (
-    <div className="sf-mkt" style={{ minHeight: "100vh", background: MKT.paper, color: MKT.ink, fontFamily: MKT.fontSans }}>
+    <div
+      className="sf-mkt sf-agentpage"
+      style={{ minHeight: "100vh", background: MKT.paper, color: MKT.ink, fontFamily: MKT.fontSans, overflowX: "hidden" }}
+    >
       <MarketplaceStyles />
+      <AgentPageStyles />
       {/* GEO: structured data — SoftwareApplication + FAQPage. */}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqLd) }} />
       <MarketplaceNav active="browse" />
 
-      <main style={{ maxWidth: 920, margin: "0 auto", padding: "26px 32px 70px" }}>
+      <main className="sf-ap-main" style={{ maxWidth: 920, margin: "0 auto", padding: "26px 32px 70px", width: "100%" }}>
         {/* breadcrumb — Tier-2 links back to the Tier-1 job page (a real hub edge) */}
         <nav
           aria-label="Breadcrumb"
@@ -130,7 +134,7 @@ export function AgentPage({ job, vertical }: AgentPageProps): ReactElement {
           <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: MKT.green, marginBottom: 12 }}>
             {vertical ? `AI agent for ${vertical.plural}` : "Deploy a working agent in 60 seconds"}
           </div>
-          <h1 style={{ margin: 0, fontSize: 44, fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 1.05, maxWidth: 760 }}>
+          <h1 className="sf-ap-h1" style={{ margin: 0, fontSize: 44, fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 1.05, maxWidth: 760 }}>
             {copy.h1}
           </h1>
           <p style={{ margin: "16px 0 0", fontSize: 19, lineHeight: 1.5, color: "rgba(34,29,23,0.7)", maxWidth: 640 }}>
@@ -151,7 +155,7 @@ export function AgentPage({ job, vertical }: AgentPageProps): ReactElement {
               boxShadow: "0 1px 2px rgba(34,29,23,0.04)",
             }}
           >
-            <blockquote style={{ margin: 0, fontFamily: MKT.fontSerif, fontSize: 21, lineHeight: 1.4, fontWeight: 500, color: MKT.ink }}>
+            <blockquote className="sf-ap-stat" style={{ margin: 0, fontFamily: MKT.fontSerif, fontSize: 21, lineHeight: 1.4, fontWeight: 500, color: MKT.ink }}>
               “{job.painStat.text}”
             </blockquote>
             <figcaption style={{ marginTop: 12, fontSize: 13, color: "rgba(34,29,23,0.6)" }}>
@@ -325,7 +329,7 @@ export function AgentPage({ job, vertical }: AgentPageProps): ReactElement {
             <p style={{ margin: "0 0 18px", fontSize: 14.5, color: "rgba(34,29,23,0.55)" }}>
               Every one deploys a working agent into your own workspace in about a minute.
             </p>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div className="sf-ap-related">
               {related.map((r) => (
                 <Link
                   key={r.slug}
@@ -341,6 +345,7 @@ export function AgentPage({ job, vertical }: AgentPageProps): ReactElement {
                     display: "flex",
                     alignItems: "center",
                     gap: 12,
+                    minWidth: 0,
                     boxShadow: "0 1px 2px rgba(34,29,23,0.04)",
                   }}
                 >
@@ -391,6 +396,43 @@ export function AgentPage({ job, vertical }: AgentPageProps): ReactElement {
       <MarketplaceFooter />
     </div>
   );
+}
+
+// ─── responsive containment (the overflow fix) ───────────────────────────────
+//
+// The page is inline-styled RSC (no Tailwind on these nodes), so the responsive
+// behavior lives in one injected <style> block keyed off stable class names. It
+// does three jobs, all server-rendered (zero client JS):
+//   1. CONTAIN: the page root is `overflow-x:hidden` and `.sf-ap-main` is
+//      `max-width:100%` so nothing can paint past the viewport's right edge.
+//   2. The "More agents" grid (`.sf-ap-related`) uses `minmax(0,1fr)` tracks —
+//      the actual root cause of the old overflow: plain `1fr 1fr` tracks have a
+//      min-size of `auto`, so the cards' `white-space:nowrap` taglines forced
+//      each column wider than half the container and pushed the grid off-screen.
+//      `minmax(0,…)` lets the track shrink below content size; the tagline then
+//      truncates with its existing ellipsis instead of overflowing. It collapses
+//      to ONE column under 640px.
+//   3. A ≤640px mobile query tightens page padding and scales the big hero
+//      numbers down so the 44px h1 and the cited-stat pull-quote stay readable
+//      and on-canvas down to 320px.
+const AGENT_PAGE_CSS = `
+  .sf-agentpage,.sf-agentpage *{min-width:0}
+  .sf-ap-main{max-width:920px}
+  .sf-ap-related{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+  .sf-ap-howit{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+  .sf-ap-works{display:flex;flex-wrap:wrap;gap:10px}
+  .sf-ap-step-arrow{display:none}
+  @media (max-width:640px){
+    .sf-ap-main{padding:20px 18px 56px !important}
+    .sf-ap-h1{font-size:32px !important;line-height:1.08 !important}
+    .sf-ap-stat{font-size:18px !important}
+    .sf-ap-related{grid-template-columns:1fr}
+    .sf-ap-howit{grid-template-columns:1fr}
+  }
+`;
+
+function AgentPageStyles(): ReactElement {
+  return <style dangerouslySetInnerHTML={{ __html: AGENT_PAGE_CSS }} />;
 }
 
 // ─── shared style atoms (match the listing page's section rhythm) ─────────────
