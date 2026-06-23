@@ -13,6 +13,7 @@ import assert from "node:assert/strict";
 import {
   AGENT_JOBS,
   getJob,
+  jobForMarketplaceSlug,
   allJobVerticalPairs,
   composePageCopy,
   deployHrefFor,
@@ -22,6 +23,9 @@ import {
 import { VERTICALS, getVertical } from "./verticals";
 import { STARTER_TEMPLATES } from "@/lib/agent-templates/starter-pack";
 import { getArchetype } from "@/lib/agents/archetypes";
+import { MARKETPLACE_SEED } from "@/components/marketplace/marketplace-seed";
+
+const SEED_SLUGS = new Set(MARKETPLACE_SEED.map((a) => a.slug));
 
 const STARTER_IDS = new Set(STARTER_TEMPLATES.map((s) => s.id));
 
@@ -274,6 +278,21 @@ test("every job's deploy href uses a REAL canonical agent slug", () => {
     // The slug in the href must equal the canonical slug we validated above.
     assert.match(href, new RegExp(`agent=${job.canonicalAgentSlug.replace(/[-]/g, "[-]")}`));
   }
+});
+
+test("every job.marketplaceSlug (when set) resolves to a real listing + reverse lookup is symmetric", () => {
+  for (const job of AGENT_JOBS) {
+    if (!job.marketplaceSlug) continue;
+    assert.ok(
+      SEED_SLUGS.has(job.marketplaceSlug),
+      `${job.slug}: marketplaceSlug '${job.marketplaceSlug}' has no matching listing (would 404)`,
+    );
+    // Reverse lookup must round-trip to the same job.
+    const back = jobForMarketplaceSlug(job.marketplaceSlug);
+    assert.equal(back?.slug, job.slug, `${job.slug}: jobForMarketplaceSlug round-trip mismatch`);
+  }
+  // Unknown listing slug → undefined.
+  assert.equal(jobForMarketplaceSlug("not-a-listing"), undefined);
 });
 
 test("relatedJobsForVertical returns siblings (excludes self), capped", () => {

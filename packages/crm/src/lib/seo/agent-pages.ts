@@ -517,6 +517,12 @@ export function getJob(slug: string): AgentJob {
   return found;
 }
 
+/** Reverse lookup: the programmatic job whose marketplace listing is `slug`, if
+ *  any. Powers the marketplace→/agents flywheel back-link. Pure — no DB. */
+export function jobForMarketplaceSlug(slug: string): AgentJob | undefined {
+  return AGENT_JOBS.find((j) => j.marketplaceSlug === slug);
+}
+
 /**
  * The Deploy-CTA href — routes into the magic first-run build flow CARRYING the
  * canonical agent so the user lands with THAT agent instantiated. `intent=build`
