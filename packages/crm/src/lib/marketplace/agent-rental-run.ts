@@ -27,14 +27,16 @@
 // FOLLOW-ON (it needs the conversation persistence executeTurn has). Each call
 // is a fresh single-turn delegation today.
 
-import { eq, and } from "drizzle-orm";
+import { eq, and, gte, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { db } from "@/db";
 import { marketplaceListings, organizations } from "@/db/schema";
+import { seldonframeEvents } from "@/db/schema/seldonframe-events";
 import type { AgentBlueprint } from "@/db/schema/agents";
 import type { OrgSoul } from "@/lib/soul/types";
 import { getAIClient } from "@/lib/ai/client";
 import { runStatelessAgentTurn } from "@/lib/agents/stateless-turn";
+import { isPriceModel, isOutcomeType, type PriceModel, type OutcomeType } from "@/lib/marketplace/pricing-model";
 
 /** The resolved rental target: the listing's agent + its creator-org context. */
 export type RentalAgent = {
@@ -52,6 +54,13 @@ export type RentalAgent = {
   soul: OrgSoul | null;
   timezone: string;
   blueprint: AgentBlueprint;
+  // ── x402 metering inputs (the pricing-menu fields on marketplace_listings).
+  // The rail reads these to resolve the per-call charge across the three lanes
+  // (lib/marketplace/rental-pricing). Defaulted so legacy callers are unaffected.
+  priceModel?: PriceModel;
+  perCallPriceCents?: number | null;
+  perOutcomePriceCents?: number | null;
+  outcomeType?: OutcomeType | null;
 };
 
 /**
@@ -70,6 +79,10 @@ export async function resolveRentalAgent(slug: string): Promise<RentalAgent | nu
       agentBlueprint: marketplaceListings.agentBlueprint,
       isPublished: marketplaceListings.isPublished,
       creatorOrgId: marketplaceListings.creatorOrgId,
+      priceModel: marketplaceListings.priceModel,
+      perCallPriceCents: marketplaceListings.perCallPriceCents,
+      perOutcomePriceCents: marketplaceListings.perOutcomePriceCents,
+      outcomeType: marketplaceListings.outcomeType,
       orgName: organizations.name,
       orgSlug: organizations.slug,
       soul: organizations.soul,
@@ -94,6 +107,12 @@ export async function resolveRentalAgent(slug: string): Promise<RentalAgent | nu
     soul: (row.soul as OrgSoul | null) ?? null,
     timezone: row.timezone ?? "UTC",
     blueprint,
+    // Pricing-menu fields → the rail's three-lane charge resolver. Guard the
+    // free-text columns (priceModel/outcomeType) so a bad row falls back cleanly.
+    priceModel: isPriceModel(row.priceModel) ? row.priceModel : "onetime",
+    perCallPriceCents: row.perCallPriceCents,
+    perOutcomePriceCents: row.perOutcomePriceCents,
+    outcomeType: isOutcomeType(row.outcomeType) ? row.outcomeType : null,
   };
 }
 
@@ -143,4 +162,46 @@ export async function runAgentRentalTurn(input: {
     return { ok: false, reason: result.reason, message: result.message };
   }
   return { ok: true, reply: result.reply, conversationId };
+}
+
+/**
+ * Count the rental calls a renter has ALREADY made against one listing in the
+ * CURRENT calendar month — the meter behind the SeldonFrame free-allowance
+ * boundary (no migration: we count the `agent_rental_call` events the rail
+ * already logs). Events are attributed to the CREATOR org (orgId = creator) with
+ * properties.listing_id + properties.renter_org_id, so we filter on all three
+ * plus createdAt ≥ the first of the month (UTC).
+ *
+ * Defensive: any DB error returns NaN, NOT 0 — resolveRentalCharge fails CLOSED
+ * on a non-finite counter (charges the floor), so a metering outage can never
+ * silently hand out unlimited free first-party calls.
+ */
+export async function countRenterCallsThisMonth(input: {
+  renterOrgId: string;
+  listingId: string;
+  creatorOrgId: string;
+  now: Date;
+}): Promise<number> {
+  // First instant of the current month, in UTC.
+  const d = input.now;
+  const monthStart = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1, 0, 0, 0, 0));
+  try {
+    const [row] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(seldonframeEvents)
+      .where(
+        and(
+          eq(seldonframeEvents.event, "agent_rental_call"),
+          eq(seldonframeEvents.orgId, input.creatorOrgId),
+          eq(sql`${seldonframeEvents.properties} ->> 'listing_id'`, input.listingId),
+          eq(sql`${seldonframeEvents.properties} ->> 'renter_org_id'`, input.renterOrgId),
+          gte(seldonframeEvents.createdAt, monthStart),
+        ),
+      );
+    return Number(row?.n ?? 0) || 0;
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    console.error(`[agent-rental] count_calls_error listing=${input.listingId} renter=${input.renterOrgId} err=${detail}`);
+    return Number.NaN; // fail-closed: the resolver charges the floor on NaN.
+  }
 }
