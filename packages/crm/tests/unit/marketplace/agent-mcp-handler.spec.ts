@@ -46,10 +46,19 @@ const FAKE_AGENT: RentalAgent = {
   blueprint: { capabilities: ["look_up_availability", "book_appointment"] },
 };
 
+type LoggedUsage = {
+  slug: string;
+  renterOrgId: string;
+  creatorOrgId: string;
+  amountCents?: number;
+  feeCents?: number;
+  txRef?: string;
+};
+
 type Harness = {
   deps: AgentRentalRpcDeps;
   turns: Array<{ message: string; conversationId?: string }>;
-  usage: Array<{ slug: string; renterOrgId: string; creatorOrgId: string }>;
+  usage: LoggedUsage[];
 };
 
 function makeHarness(
@@ -58,6 +67,12 @@ function makeHarness(
     turn?: RentalTurnResult;
     getSecret?: () => string;
     runTurn?: (input: { agent: RentalAgent; message: string; conversationId?: string }) => Promise<RentalTurnResult>;
+    // ── x402 metering wiring (optional — absent ⇒ today's free behavior). ──
+    countRenterCallsThisMonth?: AgentRentalRpcDeps["countRenterCallsThisMonth"];
+    settlementVerifier?: AgentRentalRpcDeps["settlementVerifier"];
+    houseOrgId?: string;
+    payTo?: string;
+    resourceUrl?: AgentRentalRpcDeps["resourceUrl"];
   } = {},
 ): Harness {
   const turns: Harness["turns"] = [];
@@ -77,8 +92,21 @@ function makeHarness(
         return defaultTurn;
       }),
     getSecret: overrides.getSecret ?? (() => FAKE_SECRET),
-    logUsage: (entry) => usage.push({ slug: entry.slug, renterOrgId: entry.renterOrgId, creatorOrgId: entry.creatorOrgId }),
+    logUsage: (entry) =>
+      usage.push({
+        slug: entry.slug,
+        renterOrgId: entry.renterOrgId,
+        creatorOrgId: entry.creatorOrgId,
+        amountCents: entry.amountCents,
+        feeCents: entry.feeCents,
+        txRef: entry.txRef,
+      }),
     now: () => NOW,
+    countRenterCallsThisMonth: overrides.countRenterCallsThisMonth,
+    settlementVerifier: overrides.settlementVerifier,
+    houseOrgId: overrides.houseOrgId,
+    payTo: overrides.payTo,
+    resourceUrl: overrides.resourceUrl,
   };
   return { deps, turns, usage };
 }
@@ -413,5 +441,265 @@ describe("tools/call — deterministic tools run with ZERO owner compute", () =>
     // The agent-as-a-service path is unchanged — it ran and logged usage.
     assert.equal(h.turns.length, 1);
     assert.equal(h.usage.length, 1);
+  });
+});
+
+// ─── x402 metering (BUILD: x402-native rail) ─────────────────────────────────
+//
+// When the metering deps are injected, the rail enforces the three lanes:
+// discovery stays free; a billable tools/call returns HTTP 402 + the x402
+// payment-requirements when payment is due; a valid X-PAYMENT is verified
+// (DI'd verifier — dev stub moves NO money) before the tool runs; paid calls
+// accrue amount/fee/txRef onto the usage log (no migration). When the deps are
+// ABSENT the rail behaves exactly as the tests above (free — backward-compat).
+
+import { devStubVerifier, parseXPaymentHeader, type XPayment } from "../../../src/lib/marketplace/x402";
+
+const HOUSE_ORG = "sf-house-org";
+
+/** A builder's PER-CALL paid agent (per_usage, $2.00/call), creator ≠ house. */
+const BUILDER_PAID_AGENT: RentalAgent = {
+  ...RENTAL_AGENT,
+  creatorOrgId: "builder-org-9",
+  priceModel: "per_usage",
+  perCallPriceCents: 200,
+};
+
+/** A SeldonFrame FIRST-PARTY agent (creator === house org). Free model, but the
+ *  SF free/floor lane applies because it's first-party. */
+const FIRST_PARTY_AGENT: RentalAgent = {
+  ...RENTAL_AGENT,
+  creatorOrgId: HOUSE_ORG,
+  priceModel: "onetime",
+};
+
+/** Base64-encode a payment object as an X-PAYMENT header value would be. */
+function xPaymentHeader(baseUnits: string, over: Partial<XPayment> = {}): string {
+  const payment = {
+    x402Version: 1,
+    scheme: "exact",
+    network: "base",
+    payload: { authorization: { value: baseUnits } },
+    ...over,
+  };
+  return Buffer.from(JSON.stringify(payment), "utf8").toString("base64");
+}
+
+/** Metering deps preset: counter returns a fixed number, real dev-stub verifier. */
+function meteringOverrides(callsThisMonth: number, extra: Parameters<typeof makeHarness>[0] = {}) {
+  return {
+    houseOrgId: HOUSE_ORG,
+    payTo: "0xPayToAddr",
+    resourceUrl: (slug: string) => `https://app.seldonframe.com/api/v1/agents/${slug}/mcp`,
+    settlementVerifier: devStubVerifier,
+    countRenterCallsThisMonth: async () => callsThisMonth,
+    ...extra,
+  };
+}
+
+describe("x402 — discovery is NEVER billable", () => {
+  for (const method of ["initialize", "ping", "tools/list", "prompts/list"]) {
+    test(`${method} never returns 402 even with a paid agent`, async () => {
+      const h = makeHarness({ agent: BUILDER_PAID_AGENT, ...meteringOverrides(999) });
+      const out = await handleAgentRentalRpc(SLUG, req(method), validKey(), h.deps);
+      assert.notEqual(out.status, 402);
+    });
+  }
+
+  test("prompts/get is free to inspect (no 402, no usage)", async () => {
+    const h = makeHarness({ agent: BUILDER_PAID_AGENT, ...meteringOverrides(999) });
+    const out = await handleAgentRentalRpc(
+      SLUG,
+      req("prompts/get", { name: `act_as_${SLUG}` }),
+      validKey(),
+      h.deps,
+    );
+    assert.notEqual(out.status, 402);
+    assert.equal(h.usage.length, 0);
+  });
+});
+
+describe("x402 — builder paid agent: 402 then settle", () => {
+  test("a deterministic tools/call WITHOUT X-PAYMENT → HTTP 402 + x402 body, tool NOT run", async () => {
+    const h = makeHarness({ agent: BUILDER_PAID_AGENT, ...meteringOverrides(0) });
+    const out = await handleAgentRentalRpc(
+      SLUG,
+      req("tools/call", { name: "get_quote_range", arguments: { service: "furnace repair" } }),
+      validKey(),
+      h.deps,
+    );
+    assert.equal(out.status, 402);
+    const body = out.body as { error: { data: { x402Version: number; accepts: Array<{ maxAmountRequired: string; payTo: string; scheme: string }> } } };
+    // x402 payment-requirements are carried in the JSON-RPC error envelope's data.
+    assert.equal(body.error.data.x402Version, 1);
+    assert.equal(body.error.data.accepts[0].scheme, "exact");
+    // $2.00 → 2_000_000 USDC base units.
+    assert.equal(body.error.data.accepts[0].maxAmountRequired, "2000000");
+    assert.equal(body.error.data.accepts[0].payTo, "0xPayToAddr");
+    // Nothing was executed or accrued.
+    assert.equal(h.usage.length, 0);
+  });
+
+  test("ask WITHOUT X-PAYMENT → 402, the agent turn is NOT run", async () => {
+    const h = makeHarness({ agent: BUILDER_PAID_AGENT, ...meteringOverrides(0) });
+    const out = await handleAgentRentalRpc(
+      SLUG,
+      req("tools/call", { name: "ask", arguments: { message: "Got 2pm?" } }),
+      validKey(),
+      h.deps,
+    );
+    assert.equal(out.status, 402);
+    assert.equal(h.turns.length, 0);
+    assert.equal(h.usage.length, 0);
+  });
+
+  test("WITH a sufficient X-PAYMENT → tool runs + paid call accrues amount/fee/txRef", async () => {
+    const h = makeHarness({ agent: BUILDER_PAID_AGENT, ...meteringOverrides(0) });
+    const out = await handleAgentRentalRpc(
+      SLUG,
+      req("tools/call", { name: "ask", arguments: { message: "Got 2pm?" } }),
+      validKey(),
+      h.deps,
+      { "x-payment": xPaymentHeader("2000000") },
+    );
+    assert.equal(out.status, 200);
+    assert.equal(h.turns.length, 1);
+    // Accrual via event properties (NO migration): amount + 5% fee + dev txRef.
+    assert.equal(h.usage.length, 1);
+    assert.equal(h.usage[0].amountCents, 200);
+    assert.equal(h.usage[0].feeCents, 10); // 5% of $2.00
+    assert.match(String(h.usage[0].txRef), /^dev-/);
+  });
+
+  test("WITH an underpaying X-PAYMENT → 402 again, tool NOT run", async () => {
+    const h = makeHarness({ agent: BUILDER_PAID_AGENT, ...meteringOverrides(0) });
+    const out = await handleAgentRentalRpc(
+      SLUG,
+      req("tools/call", { name: "get_quote_range", arguments: { service: "furnace repair" } }),
+      validKey(),
+      h.deps,
+      { "x-payment": xPaymentHeader("1000000") }, // only $1.00, need $2.00
+    );
+    assert.equal(out.status, 402);
+    assert.equal(h.usage.length, 0);
+  });
+
+  test("a deterministic tools/call THAT IS PAID runs the deterministic lookup (not the agent loop)", async () => {
+    const h = makeHarness({ agent: BUILDER_PAID_AGENT, ...meteringOverrides(0) });
+    const out = await handleAgentRentalRpc(
+      SLUG,
+      req("tools/call", { name: "get_quote_range", arguments: { service: "furnace repair" } }),
+      validKey(),
+      h.deps,
+      { "x-payment": xPaymentHeader("2000000") },
+    );
+    assert.equal(out.status, 200);
+    const body = out.body as { result: { content: Array<{ text: string }> } };
+    assert.match(body.result.content[0].text, /150/);
+    // Deterministic path → no agent turn, but DID accrue (the renter paid).
+    assert.equal(h.turns.length, 0);
+    assert.equal(h.usage.length, 1);
+    assert.equal(h.usage[0].amountCents, 200);
+  });
+});
+
+describe("x402 — SeldonFrame first-party free/floor lane", () => {
+  test("under the free allowance → served free, no 402, accrues amount 0", async () => {
+    const h = makeHarness({ agent: FIRST_PARTY_AGENT, ...meteringOverrides(0) });
+    const out = await handleAgentRentalRpc(
+      SLUG,
+      req("tools/call", { name: "get_quote_range", arguments: { service: "furnace repair" } }),
+      validKey(),
+      h.deps,
+    );
+    assert.equal(out.status, 200);
+    assert.equal(h.usage.length, 1);
+    assert.equal(h.usage[0].amountCents, 0);
+  });
+
+  test("over the allowance → 402 for the SF floor (2c → 20000 base units)", async () => {
+    const h = makeHarness({ agent: FIRST_PARTY_AGENT, ...meteringOverrides(100) });
+    const out = await handleAgentRentalRpc(
+      SLUG,
+      req("tools/call", { name: "get_quote_range", arguments: { service: "furnace repair" } }),
+      validKey(),
+      h.deps,
+    );
+    assert.equal(out.status, 402);
+    const body = out.body as { error: { data: { accepts: Array<{ maxAmountRequired: string }> } } };
+    assert.equal(body.error.data.accepts[0].maxAmountRequired, "20000");
+  });
+
+  test("over the allowance + paid → floor accrues, SF keeps 100% (fee == amount)", async () => {
+    const h = makeHarness({ agent: FIRST_PARTY_AGENT, ...meteringOverrides(100) });
+    const out = await handleAgentRentalRpc(
+      SLUG,
+      req("tools/call", { name: "get_quote_range", arguments: { service: "furnace repair" } }),
+      validKey(),
+      h.deps,
+      { "x-payment": xPaymentHeader("20000") },
+    );
+    assert.equal(out.status, 200);
+    assert.equal(h.usage[0].amountCents, 2);
+    assert.equal(h.usage[0].feeCents, 2); // SF keeps the whole floor
+  });
+});
+
+describe("x402 — free builder agent (no metered price) stays free", () => {
+  test("an unpriced builder agent never 402s and accrues amount 0", async () => {
+    // RENTAL_AGENT default priceModel is undefined → free lane.
+    const h = makeHarness({ agent: RENTAL_AGENT, ...meteringOverrides(9999) });
+    const out = await handleAgentRentalRpc(
+      SLUG,
+      req("tools/call", { name: "ask", arguments: { message: "hi" } }),
+      validKey(),
+      h.deps,
+    );
+    assert.equal(out.status, 200);
+    assert.equal(h.turns.length, 1);
+    assert.equal(h.usage.length, 1);
+    assert.equal(h.usage[0].amountCents, 0);
+  });
+});
+
+describe("x402 — the counter is scoped to renter + listing", () => {
+  test("countRenterCallsThisMonth is called with the renter, listing, creator", async () => {
+    const seen: Array<{ renterOrgId: string; listingId: string; creatorOrgId: string }> = [];
+    const h = makeHarness({
+      agent: BUILDER_PAID_AGENT,
+      ...meteringOverrides(0, {
+        countRenterCallsThisMonth: async (input) => {
+          seen.push({ renterOrgId: input.renterOrgId, listingId: input.listingId, creatorOrgId: input.creatorOrgId });
+          return 0;
+        },
+      }),
+    });
+    await handleAgentRentalRpc(
+      SLUG,
+      req("tools/call", { name: "ask", arguments: { message: "hi" } }),
+      validKey(),
+      h.deps,
+      { "x-payment": xPaymentHeader("2000000") },
+    );
+    assert.equal(seen.length, 1);
+    assert.equal(seen[0].renterOrgId, RENTER_ORG);
+    assert.equal(seen[0].listingId, "listing-1");
+    assert.equal(seen[0].creatorOrgId, "builder-org-9");
+  });
+});
+
+describe("x402 — header parse is robust", () => {
+  test("a garbage X-PAYMENT header on a billable call → 402 (treated as unpaid)", async () => {
+    const h = makeHarness({ agent: BUILDER_PAID_AGENT, ...meteringOverrides(0) });
+    const out = await handleAgentRentalRpc(
+      SLUG,
+      req("tools/call", { name: "ask", arguments: { message: "hi" } }),
+      validKey(),
+      h.deps,
+      { "x-payment": "!!!notbase64!!!" },
+    );
+    assert.equal(out.status, 402);
+    // sanity: the same garbage parses to ok:false at the unit level.
+    assert.equal(parseXPaymentHeader("!!!notbase64!!!").ok, false);
   });
 });
