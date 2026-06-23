@@ -94,11 +94,11 @@ describe("handleCreate", () => {
     const { deps, store } = makeDeps();
     const res = await handleCreate({ items: [{ id: "review-responder", quantity: 2 }] }, null, deps);
     assert.equal(res.status, 201);
-    const body = res.body as { id: string; status: string; totals: { amount: number }[]; line_items: unknown[] };
+    const body = res.body as { id: string; status: string; totals: { type: string; amount: number }[]; line_items: unknown[] };
     assert.equal(body.status, "ready_for_payment");
     assert.equal(body.line_items.length, 1);
     // 2500 × 2 = 5000 total.
-    assert.equal(body.totals.find((t) => (t as { type: string }).type === "total")?.amount, 5000);
+    assert.equal(body.totals.find((t) => t.type === "total")?.amount, 5000);
     // Persisted with the recorded fee (5% of 5000 = 250) + seller org.
     const stored = store.get(body.id);
     assert.equal(stored?.feeCents, 250);
