@@ -24,14 +24,20 @@ import { StudioTabs } from "../studio-tabs";
 
 export const dynamic = "force-dynamic";
 
-/** Rental count per listing for this seller: agent_rental_call events are
- *  logged with orgId = the creator (seller) org and properties.listing_id
- *  identifying the listing (api/v1/agents/[slug]/mcp). Group + count. */
-async function rentalsByListing(orgId: string): Promise<Map<string, number>> {
+type RentalAgg = { count: number; revenueCents: number; feeCents: number };
+
+/** Per-listing rental aggregates for this seller: agent_rental_call events are
+ *  logged with orgId = the creator (seller) org + properties.listing_id, and
+ *  (x402) properties.amount_cents / fee_cents for SETTLED paid calls. Group +
+ *  sum: count = all rental calls (usage signal); revenue/fee = the settled
+ *  metered dollars (amount_cents 0 on free-lane calls contributes nothing). */
+async function rentalsByListing(orgId: string): Promise<Map<string, RentalAgg>> {
   const rows = await db
     .select({
       listingId: sql<string>`${seldonframeEvents.properties} ->> 'listing_id'`,
       n: sql<number>`count(*)::int`,
+      revenueCents: sql<number>`coalesce(sum((${seldonframeEvents.properties} ->> 'amount_cents')::int), 0)::int`,
+      feeCents: sql<number>`coalesce(sum((${seldonframeEvents.properties} ->> 'fee_cents')::int), 0)::int`,
     })
     .from(seldonframeEvents)
     .where(
@@ -42,9 +48,15 @@ async function rentalsByListing(orgId: string): Promise<Map<string, number>> {
     )
     .groupBy(sql`${seldonframeEvents.properties} ->> 'listing_id'`);
 
-  const map = new Map<string, number>();
+  const map = new Map<string, RentalAgg>();
   for (const row of rows) {
-    if (row.listingId) map.set(row.listingId, Number(row.n) || 0);
+    if (row.listingId) {
+      map.set(row.listingId, {
+        count: Number(row.n) || 0,
+        revenueCents: Number(row.revenueCents) || 0,
+        feeCents: Number(row.feeCents) || 0,
+      });
+    }
   }
   return map;
 }
@@ -87,13 +99,17 @@ export default async function StudioEarningsPage() {
   ]);
 
   const { listings: rows, summary } = computeListingEarnings(
-    listings.map((l) => ({
+    listings.map((l) => {
+      const rental = rentals.get(l.id);
+      return {
       id: l.id,
       slug: l.slug,
       name: l.name,
       priceCents: l.price ?? 0,
       installCount: l.installCount ?? 0,
-      rentalCount: rentals.get(l.id) ?? 0,
+      rentalCount: rental?.count ?? 0,
+      rentalRevenueCents: rental?.revenueCents ?? 0,
+      rentalFeeCents: rental?.feeCents ?? 0,
       isPublished: l.isPublished === true,
       // Pricing MODEL (display only) — the strings are validated by the guards
       // inside computeListingEarnings, which fall back to onetime for bad rows.
@@ -102,7 +118,8 @@ export default async function StudioEarningsPage() {
       perCallPriceCents: l.perCallPriceCents,
       perOutcomePriceCents: l.perOutcomePriceCents,
       outcomeType: (l.outcomeType ?? undefined) as never,
-    })),
+      };
+    }),
   );
 
   return (
@@ -140,6 +157,9 @@ export default async function StudioEarningsPage() {
           </span>
           <span>{summary.installCount.toLocaleString("en-US")} total installs</span>
           <span>{summary.rentalCount.toLocaleString("en-US")} total rental calls</span>
+          {summary.rentalRevenueCents > 0 && (
+            <span>{formatCentsUsd(summary.rentalRevenueCents)} from rentals</span>
+          )}
         </div>
       </div>
 

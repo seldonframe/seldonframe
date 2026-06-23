@@ -182,4 +182,79 @@ describe("computeListingEarnings", () => {
     assert.equal(row.feeCents, 750);
     assert.equal(row.netCents, 14250);
   });
+
+  // ── x402 metered RENTAL revenue (now that the rail settles paid calls). ──
+  test("paid rental revenue adds to gross/fee/net alongside installs", () => {
+    // $50 install × 2 = $100 install gross (fee $5). Plus metered rentals that
+    // settled to $12.00 gross with $0.60 fee accrued. Both roll into the totals.
+    const row = computeListingEarnings([
+      listing({
+        priceCents: 5000,
+        installCount: 2,
+        rentalCount: 40,
+        rentalRevenueCents: 1200,
+        rentalFeeCents: 60,
+      }),
+    ]).listings[0];
+    // Install side unchanged.
+    assert.equal(row.installGrossCents, 10000);
+    // Rental side surfaced.
+    assert.equal(row.rentalRevenueCents, 1200);
+    assert.equal(row.rentalFeeCents, 60);
+    // Combined gross = installs + rentals; fee + net follow.
+    assert.equal(row.grossCents, 11200);
+    assert.equal(row.feeCents, 560); // 500 install + 60 rental
+    assert.equal(row.netCents, 10640);
+    // Net + fee === gross still holds.
+    assert.equal(row.netCents + row.feeCents, row.grossCents);
+  });
+
+  test("rental revenue with zero installs still surfaces (per_usage agents)", () => {
+    const row = computeListingEarnings([
+      listing({
+        priceModel: "per_usage",
+        perCallPriceCents: 200,
+        priceCents: 0,
+        installCount: 0,
+        rentalCount: 6,
+        rentalRevenueCents: 1200, // 6 × $2.00
+        rentalFeeCents: 60,
+      }),
+    ]).listings[0];
+    assert.equal(row.installGrossCents, 0);
+    assert.equal(row.grossCents, 1200);
+    assert.equal(row.feeCents, 60);
+    assert.equal(row.netCents, 1140);
+    assert.equal(row.priceLabel, "$2 per call");
+  });
+
+  test("rental revenue is summed into the summary across listings", () => {
+    const { summary } = computeListingEarnings([
+      listing({ id: "a", slug: "a", priceCents: 0, rentalRevenueCents: 500, rentalFeeCents: 25 }),
+      listing({ id: "b", slug: "b", priceCents: 0, rentalRevenueCents: 300, rentalFeeCents: 15 }),
+    ]);
+    assert.equal(summary.rentalRevenueCents, 800);
+    assert.equal(summary.grossCents, 800);
+    assert.equal(summary.feeCents, 40);
+    assert.equal(summary.netCents, 760);
+  });
+
+  test("defensive: negative / non-finite rental amounts clamp to 0", () => {
+    const row = computeListingEarnings([
+      listing({ rentalRevenueCents: -100, rentalFeeCents: Number.NaN }),
+    ]).listings[0];
+    assert.equal(row.rentalRevenueCents, 0);
+    assert.equal(row.rentalFeeCents, 0);
+    assert.equal(row.grossCents, 0);
+  });
+
+  test("legacy rows without rental amounts default cleanly to 0 (no behavior change)", () => {
+    // The canonical paid case must be byte-for-byte unchanged when no rental
+    // fields are supplied.
+    const row = computeListingEarnings([listing({ priceCents: 5000, installCount: 3 })]).listings[0];
+    assert.equal(row.rentalRevenueCents, 0);
+    assert.equal(row.grossCents, 15000);
+    assert.equal(row.feeCents, 750);
+    assert.equal(row.netCents, 14250);
+  });
 });
