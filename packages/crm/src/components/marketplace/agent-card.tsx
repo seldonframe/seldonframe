@@ -18,6 +18,9 @@ import {
 } from "./marketplace-data";
 
 export function AgentCard({ agent, featured = false }: { agent: StorefrontAgent; featured?: boolean }): ReactElement {
+  // A non-one-time pricing model carries a pre-formatted label ("$29/mo",
+  // "$2 per call"); fall back to the one-time price derivation otherwise.
+  const priceText = agent.priceLabelOverride ?? priceLabel(agent.priceCents);
   return (
     <Link
       href={`/marketplace/${agent.slug}`}
@@ -92,7 +95,7 @@ export function AgentCard({ agent, featured = false }: { agent: StorefrontAgent;
               fontFamily: MKT.fontMono,
             }}
           >
-            {priceLabel(agent.priceCents)}
+            {priceText}
           </span>
         ) : null}
       </div>
@@ -174,7 +177,7 @@ export function AgentCard({ agent, featured = false }: { agent: StorefrontAgent;
         </span>
         {featured ? (
           <span style={{ fontWeight: 700, fontSize: 14.5, color: priceColor(agent.priceCents), fontFamily: MKT.fontMono }}>
-            {priceLabel(agent.priceCents)}
+            {priceText}
           </span>
         ) : (
           <span

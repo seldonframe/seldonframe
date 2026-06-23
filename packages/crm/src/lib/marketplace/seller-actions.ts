@@ -35,6 +35,14 @@ import {
   buildListingTags,
   splitListingTags,
 } from "@/lib/marketplace/listing-tags";
+import {
+  validateListingPricing,
+  normalizePricingForPersist,
+  isPriceModel,
+  isOutcomeType,
+  type PriceModel,
+  type OutcomeType,
+} from "@/lib/marketplace/pricing-model";
 
 // ─── types returned to the client ────────────────────────────────────────────
 
@@ -47,7 +55,14 @@ export type SellerListingView = {
   niche: string;
   /** User-facing tags only (the reserved tmpl:/surfaces:/builder: tags removed). */
   tags: string[];
+  /** The one-time install price in cents (the `price` column; 0 = free). */
   priceCents: number;
+  /** The seller's chosen pricing model (defaults to 'onetime' for legacy rows). */
+  priceModel: PriceModel;
+  monthlyPriceCents: number | null;
+  perCallPriceCents: number | null;
+  perOutcomePriceCents: number | null;
+  outcomeType: OutcomeType | null;
   isPublished: boolean;
   installCount: number;
 };
@@ -145,6 +160,13 @@ function toView(row: typeof marketplaceListings.$inferSelect): SellerListingView
     niche: row.niche,
     tags: userTags,
     priceCents: row.price ?? 0,
+    // Defaults keep legacy rows (and pre-migration DBs) reading as a plain
+    // one-time listing — backward compatible.
+    priceModel: isPriceModel(row.priceModel) ? row.priceModel : "onetime",
+    monthlyPriceCents: row.monthlyPriceCents ?? null,
+    perCallPriceCents: row.perCallPriceCents ?? null,
+    perOutcomePriceCents: row.perOutcomePriceCents ?? null,
+    outcomeType: isOutcomeType(row.outcomeType) ? row.outcomeType : null,
     isPublished: row.isPublished === true,
     installCount: row.installCount ?? 0,
   };
@@ -199,10 +221,19 @@ export async function getSellerListingContextAction(input: { templateId: string 
  */
 export async function publishOrUpdateAgentListingAction(input: {
   templateId: string;
+  /** The one-time install price in cents (used by the `onetime` model). */
   priceCents: number;
   niche: string;
   description?: string;
   tags?: string[];
+  // ── pricing MENU (BUILD #2) — optional, backward compatible ──
+  // Omitting all of these keeps the legacy one-time behaviour (priceModel
+  // defaults to 'onetime', which reads priceCents).
+  priceModel?: PriceModel;
+  monthlyPriceCents?: number;
+  perCallPriceCents?: number;
+  perOutcomePriceCents?: number;
+  outcomeType?: OutcomeType;
 }): Promise<PublishResult> {
   assertWritable();
 
@@ -220,16 +251,38 @@ export async function publishOrUpdateAgentListingAction(input: {
     .limit(1);
   if (!template) return { ok: false, error: "template_not_found" };
 
-  const priceCents = sanitizePriceCents(input.priceCents);
+  // Resolve + validate the pricing model. Default 'onetime' keeps the legacy
+  // path (priceCents) working byte-for-byte when callers omit priceModel.
+  const priceModel: PriceModel = isPriceModel(input.priceModel) ? input.priceModel : "onetime";
+  const pricingInput = {
+    priceModel,
+    priceCents: sanitizePriceCents(input.priceCents),
+    monthlyPriceCents: input.monthlyPriceCents,
+    perCallPriceCents: input.perCallPriceCents,
+    perOutcomePriceCents: input.perOutcomePriceCents,
+    outcomeType: isOutcomeType(input.outcomeType) ? input.outcomeType : null,
+  };
+  const validation = validateListingPricing(pricingInput);
+  if (!validation.ok) return { ok: false, error: "invalid" };
+
+  // Project onto the row columns, zeroing every non-selected model.
+  const pricing = normalizePricingForPersist(pricingInput);
+
   const niche = String(input.niche ?? "other").trim() || "other";
   const description = String(input.description ?? "").trim() || template.name;
   const tags = buildListingTags({ templateId, userTags: input.tags ?? [] });
 
-  // Connect gate: a paid listing needs an active Stripe Connect account to go
-  // live. We stamp the account id onto the listing so the buyer checkout path
-  // (installAgentListingAction) can build the destination charge.
+  // Connect gate: a listing that charges ANYTHING (any model with a positive
+  // amount) needs an active Stripe Connect account to go live. Free (onetime,
+  // price 0) needs no Connect. We stamp the account id onto the listing so the
+  // buyer checkout path (installAgentListingAction) can build the destination
+  // charge.
   const { status: connect, accountId } = await readConnectStatus(orgId);
-  const isPaid = priceCents > 0;
+  const isPaid =
+    pricing.price > 0 ||
+    (pricing.monthlyPriceCents ?? 0) > 0 ||
+    (pricing.perCallPriceCents ?? 0) > 0 ||
+    (pricing.perOutcomePriceCents ?? 0) > 0;
   const connectReady = connect.ready && Boolean(accountId);
   const isPublished = !isPaid || connectReady;
 
@@ -245,7 +298,12 @@ export async function publishOrUpdateAgentListingAction(input: {
         description,
         niche,
         tags,
-        price: priceCents,
+        price: pricing.price,
+        priceModel: pricing.priceModel,
+        monthlyPriceCents: pricing.monthlyPriceCents,
+        perCallPriceCents: pricing.perCallPriceCents,
+        perOutcomePriceCents: pricing.perOutcomePriceCents,
+        outcomeType: pricing.outcomeType,
         agentType: template.type,
         agentBlueprint: template.blueprint,
         stripeConnectAccountId: isPaid ? accountId : null,
@@ -263,7 +321,12 @@ export async function publishOrUpdateAgentListingAction(input: {
       description,
       niche,
       tags,
-      price: priceCents,
+      price: pricing.price,
+      priceModel: pricing.priceModel,
+      monthlyPriceCents: pricing.monthlyPriceCents,
+      perCallPriceCents: pricing.perCallPriceCents,
+      perOutcomePriceCents: pricing.perOutcomePriceCents,
+      outcomeType: pricing.outcomeType,
       agentType: template.type,
       agentBlueprint: template.blueprint,
       soulPackage: {},
@@ -328,7 +391,12 @@ export async function republishAgentListingAction(input: { templateId: string })
   const existing = templateId ? await findListingForTemplate(orgId, templateId) : null;
   if (!existing) return { ok: false, error: "not_found" };
 
-  const isPaid = (existing.price ?? 0) > 0;
+  // A listing that charges anything (any pricing model) needs Connect to relist.
+  const isPaid =
+    (existing.price ?? 0) > 0 ||
+    (existing.monthlyPriceCents ?? 0) > 0 ||
+    (existing.perCallPriceCents ?? 0) > 0 ||
+    (existing.perOutcomePriceCents ?? 0) > 0;
   const { status: connect, accountId } = await readConnectStatus(orgId);
   const connectReady = connect.ready && Boolean(accountId);
 

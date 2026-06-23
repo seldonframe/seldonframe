@@ -36,6 +36,12 @@ import {
   type SellerListingView,
   type SellerConnectStatus,
 } from "@/lib/marketplace/seller-actions";
+import {
+  OUTCOME_TYPES,
+  priceModelLabel,
+  type OutcomeType,
+  type PriceModel,
+} from "@/lib/marketplace/pricing-model";
 
 type Props = {
   templateId: string;
@@ -56,6 +62,79 @@ function nicheToCategoryKey(niche: string | null | undefined): CategoryKey {
 const APP_ORIGIN =
   process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || "https://app.seldonframe.com";
 
+// ── pricing-model selector (BUILD #2) ──
+// The visible selector has 5 modes. "free" and "onetime" both persist as the
+// `onetime` schema model (free = $0); the other three map 1:1 to their schema
+// model. Audience is guidance, not a gate — all five are always selectable.
+type PriceMode = "free" | "onetime" | "monthly" | "per_usage" | "per_outcome";
+const PRICE_MODES: PriceMode[] = ["free", "onetime", "monthly", "per_usage", "per_outcome"];
+const PRICE_MODE_LABEL: Record<PriceMode, string> = {
+  free: "Free",
+  onetime: "One-time",
+  monthly: "Monthly",
+  per_usage: "Per-usage",
+  per_outcome: "Per-outcome",
+};
+
+/** Derive the initial selector mode from the seller's existing listing. */
+function deriveInitialMode(listing: SellerListingView | null): PriceMode {
+  if (!listing) return "free";
+  switch (listing.priceModel) {
+    case "monthly":
+      return "monthly";
+    case "per_usage":
+      return "per_usage";
+    case "per_outcome":
+      return "per_outcome";
+    case "onetime":
+    default:
+      // onetime with a positive price reads as "One-time"; $0 reads as "Free".
+      return (listing.priceCents ?? 0) > 0 ? "onetime" : "free";
+  }
+}
+
+/** cents → whole-dollar input string ("" when unset/0). */
+function centsToDollarStr(cents: number | null | undefined): string {
+  const n = Number(cents);
+  return Number.isFinite(n) && n > 0 ? String(Math.round(n / 100)) : "";
+}
+
+/** whole-dollar input string → integer cents (0 when blank/invalid). */
+function dollarsToCents(dollars: string): number {
+  const n = Number(dollars);
+  return Number.isFinite(n) && n > 0 ? Math.round(n * 100) : 0;
+}
+
+/** A "$ [amount] suffix" inline money field. */
+function PriceField(props: {
+  amount: string;
+  onChange: (v: string) => void;
+  disabled?: boolean;
+  placeholder?: string;
+  suffix: string;
+  help?: string;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <span className="inline-flex items-center gap-1 rounded-md border bg-background px-2">
+        <span className="text-sm text-muted-foreground">$</span>
+        <input
+          type="number"
+          inputMode="decimal"
+          min={1}
+          value={props.amount}
+          onChange={(e) => props.onChange(e.target.value)}
+          disabled={props.disabled}
+          placeholder={props.placeholder}
+          className="h-9 w-20 bg-transparent text-sm focus:outline-none"
+        />
+        <span className="text-xs text-muted-foreground">{props.suffix}</span>
+      </span>
+      {props.help ? <p className="text-[11px] text-muted-foreground">{props.help}</p> : null}
+    </div>
+  );
+}
+
 export function ListOnMarketplace(props: Props) {
   const router = useRouter();
   const existing = props.initialListing;
@@ -64,10 +143,31 @@ export function ListOnMarketplace(props: Props) {
   const [category, setCategory] = useState<CategoryKey>(
     nicheToCategoryKey(existing?.niche),
   );
-  const [isPaid, setIsPaid] = useState<boolean>((existing?.priceCents ?? 0) > 0);
-  const [priceDollars, setPriceDollars] = useState<string>(
-    existing && existing.priceCents > 0 ? String(Math.round(existing.priceCents / 100)) : "",
+
+  // ── pricing model (BUILD #2) ──
+  // The visible selector has 5 options; "Free" and "One-time" both map to the
+  // `onetime` schema model (Free = $0, One-time = $X). Re-hydrate from the
+  // existing listing so editing shows the seller's current model.
+  const initialMode = deriveInitialMode(existing);
+  const [priceMode, setPriceMode] = useState<PriceMode>(initialMode);
+  // One dollar field per paid mode, kept independent so switching models doesn't
+  // clobber a previously-typed amount.
+  const [onetimeDollars, setOnetimeDollars] = useState<string>(
+    initialMode === "onetime" ? centsToDollarStr(existing?.priceCents) : "",
   );
+  const [monthlyDollars, setMonthlyDollars] = useState<string>(
+    centsToDollarStr(existing?.monthlyPriceCents),
+  );
+  const [perCallDollars, setPerCallDollars] = useState<string>(
+    centsToDollarStr(existing?.perCallPriceCents),
+  );
+  const [perOutcomeDollars, setPerOutcomeDollars] = useState<string>(
+    centsToDollarStr(existing?.perOutcomePriceCents),
+  );
+  const [outcomeType, setOutcomeType] = useState<OutcomeType>(
+    existing?.outcomeType ?? "booking",
+  );
+
   const [description, setDescription] = useState<string>(existing?.description ?? "");
   const [tagsInput, setTagsInput] = useState<string>((existing?.tags ?? []).join(", "));
 
@@ -80,11 +180,39 @@ export function ListOnMarketplace(props: Props) {
   );
   const [savedDraft, setSavedDraft] = useState(false);
 
-  const priceCents = useMemo(() => {
-    if (!isPaid) return 0;
-    const n = Number(priceDollars);
-    return Number.isFinite(n) && n > 0 ? Math.round(n * 100) : 0;
-  }, [isPaid, priceDollars]);
+  // Map the 5-way UI mode + the matching dollar field onto the schema's pricing
+  // model + cents. Free/One-time both resolve to the `onetime` model.
+  const pricing = useMemo(() => {
+    const onetimeCents = dollarsToCents(onetimeDollars);
+    const monthlyCents = dollarsToCents(monthlyDollars);
+    const perCallCents = dollarsToCents(perCallDollars);
+    const perOutcomeCents = dollarsToCents(perOutcomeDollars);
+    const priceModel: PriceModel = priceMode === "free" ? "onetime" : priceMode;
+    return {
+      priceModel,
+      // priceCents is the one-time price column; 0 for free + non-onetime models.
+      priceCents: priceMode === "onetime" ? onetimeCents : 0,
+      monthlyPriceCents: monthlyCents,
+      perCallPriceCents: perCallCents,
+      perOutcomePriceCents: perOutcomeCents,
+      outcomeType,
+    };
+  }, [priceMode, onetimeDollars, monthlyDollars, perCallDollars, perOutcomeDollars, outcomeType]);
+
+  // The human price label the live preview card shows ("$29/mo", "$2 per call",
+  // "$10 per booking", "Free", "$49 one-time"). Shared pure helper.
+  const priceText = useMemo(
+    () =>
+      priceModelLabel({
+        priceModel: pricing.priceModel,
+        priceCents: pricing.priceCents,
+        monthlyPriceCents: pricing.monthlyPriceCents,
+        perCallPriceCents: pricing.perCallPriceCents,
+        perOutcomePriceCents: pricing.perOutcomePriceCents,
+        outcomeType: pricing.outcomeType,
+      }),
+    [pricing],
+  );
 
   const tags = useMemo(
     () => tagsInput.split(",").map((t) => t.trim()).filter(Boolean),
@@ -95,14 +223,18 @@ export function ListOnMarketplace(props: Props) {
     () =>
       buildPreviewStorefrontAgent({
         name: props.templateName,
-        priceCents,
+        priceCents: pricing.priceCents,
+        // Always pass the model-aware label so the preview reads exactly what
+        // the seller chose: "Free", "$49 one-time", "$29/mo", "$2 per call",
+        // "$10 per booking".
+        priceLabel: priceText,
         niche: category,
         agentType: props.agentType,
         description,
         builder: props.builderName,
         installCount: existing?.installCount ?? 0,
       }),
-    [props.templateName, props.agentType, props.builderName, priceCents, category, description, existing?.installCount],
+    [props.templateName, props.agentType, props.builderName, pricing, priceText, category, description, existing?.installCount],
   );
 
   const isLive = Boolean(publishedSlug);
@@ -115,7 +247,12 @@ export function ListOnMarketplace(props: Props) {
     startSave(async () => {
       const result = await publishOrUpdateAgentListingAction({
         templateId: props.templateId,
-        priceCents,
+        priceCents: pricing.priceCents,
+        priceModel: pricing.priceModel,
+        monthlyPriceCents: pricing.monthlyPriceCents,
+        perCallPriceCents: pricing.perCallPriceCents,
+        perOutcomePriceCents: pricing.perOutcomePriceCents,
+        outcomeType: pricing.outcomeType,
         niche: category,
         description: description.trim() || undefined,
         tags,
@@ -315,51 +452,104 @@ export function ListOnMarketplace(props: Props) {
             />
           </div>
 
-          {/* Price */}
+          {/* Pricing model (BUILD #2) */}
           <div className="space-y-2">
-            <span className="text-xs font-medium text-foreground">Price</span>
-            <div className="flex flex-wrap items-center gap-3">
-              <label className="inline-flex cursor-pointer items-center gap-1.5 text-sm">
-                <input
-                  type="radio"
-                  name="mkt-price-mode"
-                  checked={!isPaid}
-                  onChange={() => setIsPaid(false)}
+            <span className="text-xs font-medium text-foreground">Pricing</span>
+            <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Pricing model">
+              {PRICE_MODES.map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  role="radio"
+                  aria-checked={priceMode === mode}
+                  onClick={() => setPriceMode(mode)}
                   disabled={isSaving}
-                />
-                Free
-              </label>
-              <label className="inline-flex cursor-pointer items-center gap-1.5 text-sm">
-                <input
-                  type="radio"
-                  name="mkt-price-mode"
-                  checked={isPaid}
-                  onChange={() => setIsPaid(true)}
-                  disabled={isSaving}
-                />
-                One-time price
-              </label>
-              {isPaid ? (
-                <span className="inline-flex items-center gap-1 rounded-md border bg-background px-2">
-                  <span className="text-sm text-muted-foreground">$</span>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    min={1}
-                    value={priceDollars}
-                    onChange={(e) => setPriceDollars(e.target.value)}
-                    disabled={isSaving}
-                    placeholder="49"
-                    className="h-9 w-20 bg-transparent text-sm focus:outline-none"
-                  />
-                  <span className="text-xs text-muted-foreground">per install</span>
-                </span>
-              ) : null}
+                  className={`inline-flex h-8 items-center rounded-full border px-3 text-xs font-medium transition disabled:opacity-60 ${
+                    priceMode === mode
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border bg-background text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {PRICE_MODE_LABEL[mode]}
+                </button>
+              ))}
             </div>
-            {isPaid ? (
+
+            {/* Audience guidance — NOT a gate. All models are available to anyone. */}
+            <p className="text-[11px] text-muted-foreground">
+              Selling to businesses? Flat or monthly. Selling to other agents/devs?
+              Per-usage or per-outcome — all are available.
+            </p>
+
+            {/* Conditional amount field per model */}
+            {priceMode === "free" ? (
               <p className="text-[11px] text-muted-foreground">
-                Buyers pay this once to install. Payouts go to your Stripe account.
+                Free to install. Anyone can add it to their workspace at no charge.
               </p>
+            ) : null}
+
+            {priceMode === "onetime" ? (
+              <PriceField
+                amount={onetimeDollars}
+                onChange={setOnetimeDollars}
+                disabled={isSaving}
+                placeholder="49"
+                suffix="per install"
+                help="Buyers pay this once to install. Payouts go to your Stripe account."
+              />
+            ) : null}
+
+            {priceMode === "monthly" ? (
+              <PriceField
+                amount={monthlyDollars}
+                onChange={setMonthlyDollars}
+                disabled={isSaving}
+                placeholder="29"
+                suffix="/mo"
+                help="Buyers are billed monthly. Recurring payouts go to your Stripe account."
+              />
+            ) : null}
+
+            {priceMode === "per_usage" ? (
+              <PriceField
+                amount={perCallDollars}
+                onChange={setPerCallDollars}
+                disabled={isSaving}
+                placeholder="2"
+                suffix="per call"
+                help="Metered per agent call — ideal when other agents/devs rent the skill via MCP."
+              />
+            ) : null}
+
+            {priceMode === "per_outcome" ? (
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <PriceField
+                    amount={perOutcomeDollars}
+                    onChange={setPerOutcomeDollars}
+                    disabled={isSaving}
+                    placeholder="10"
+                    suffix="per"
+                  />
+                  <select
+                    aria-label="Billable outcome"
+                    value={outcomeType}
+                    onChange={(e) => setOutcomeType(e.target.value as OutcomeType)}
+                    disabled={isSaving}
+                    className="h-9 rounded-md border bg-background px-2 text-sm focus:border-primary focus:outline-none disabled:opacity-60"
+                  >
+                    {OUTCOME_TYPES.map((o) => (
+                      <option key={o} value={o}>
+                        {o}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Pay only for results — you charge per {outcomeType}. 27% of SMBs
+                  now prefer outcome pricing.
+                </p>
+              </div>
             ) : null}
           </div>
 

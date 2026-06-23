@@ -124,6 +124,14 @@ export type StorefrontAgent = {
   reviewCount: number;
   /** Price in cents (0 → free). */
   priceCents: number;
+  /**
+   * Optional pre-formatted price label. When set, the card renders this verbatim
+   * instead of deriving "$X/mo" from priceCents — lets non-one-time pricing
+   * models ("$29/mo", "$2 per call", "$10 per booking") show their real label.
+   * Omitted for the live storefront today (it still shows the one-time price);
+   * set by the seller publish-preview. The metered settlement is a follow-on.
+   */
+  priceLabelOverride?: string;
   featured: boolean;
   builder: string;
   verified: boolean;
@@ -248,6 +256,12 @@ export type ListingPreviewInput = {
   builder: string;
   /** Lifetime installs, if the listing already exists (else 0 → "New"). */
   installCount?: number;
+  /**
+   * Pre-formatted price label for non-one-time pricing models ("$29/mo",
+   * "$2 per call", "$10 per booking"). When provided, the preview card shows it
+   * verbatim instead of deriving from priceCents. Omit for one-time/free.
+   */
+  priceLabel?: string;
 };
 
 /**
@@ -274,6 +288,7 @@ export function buildPreviewStorefrontAgent(input: ListingPreviewInput): Storefr
     rating: "5.0",
     reviewCount: 0,
     priceCents: Math.max(0, input.priceCents),
+    priceLabelOverride: input.priceLabel?.trim() || undefined,
     featured: false,
     builder: input.builder.trim() || "A SeldonFrame builder",
     verified: true,
