@@ -269,3 +269,76 @@ describe("unknown method", () => {
     assert.equal(body.error.code, JSONRPC_METHOD_NOT_FOUND);
   });
 });
+
+// ─── rental tools model (BUILD #1) — prompt + deterministic tools ─────────────
+
+const SKILL_MD = "# Sunset Receptionist playbook\nQuote ranges, never firm prices.";
+
+/** A richer agent whose blueprint carries the skill + deterministic data. */
+const RENTAL_AGENT: RentalAgent = {
+  ...FAKE_AGENT,
+  capabilities: ["look_up_availability", "book_appointment", "get_quote_range", "provide_faq_answer"],
+  blueprint: {
+    capabilities: ["look_up_availability", "book_appointment", "get_quote_range", "provide_faq_answer"],
+    customSkillMd: SKILL_MD,
+    quoteRanges: [{ service: "Furnace repair", low: 150, high: 600 }],
+    faq: [{ q: "What areas do you serve?", a: "All of the greater Phoenix metro." }],
+  },
+};
+
+describe("prompts/list — gated, advertises the act-as skill prompt", () => {
+  test("without a key → unauthorized", async () => {
+    const h = makeHarness({ agent: RENTAL_AGENT });
+    const out = await handleAgentRentalRpc(SLUG, req("prompts/list"), null, h.deps);
+    const body = out.body as { error: { code: number } };
+    assert.equal(body.error.code, JSONRPC_UNAUTHORIZED);
+  });
+
+  test("with a valid key → one act_as_<slug> prompt", async () => {
+    const h = makeHarness({ agent: RENTAL_AGENT });
+    const out = await handleAgentRentalRpc(SLUG, req("prompts/list"), validKey(), h.deps);
+    const body = out.body as { result: { prompts: Array<{ name: string }> } };
+    assert.equal(body.result.prompts.length, 1);
+    assert.equal(body.result.prompts[0].name, `act_as_${SLUG}`);
+  });
+});
+
+describe("prompts/get — returns the agent's skill (customSkillMd)", () => {
+  test("the known act_as_<slug> prompt returns the playbook as a message", async () => {
+    const h = makeHarness({ agent: RENTAL_AGENT });
+    const out = await handleAgentRentalRpc(
+      SLUG,
+      req("prompts/get", { name: `act_as_${SLUG}` }),
+      validKey(),
+      h.deps,
+    );
+    assert.equal(out.status, 200);
+    const body = out.body as { result: { messages: Array<{ content: { text: string } }> } };
+    assert.ok(body.result.messages[0].content.text.includes(SKILL_MD));
+    // No agent turn ran — loading a prompt costs the owner nothing.
+    assert.equal(h.turns.length, 0);
+    assert.equal(h.usage.length, 0);
+  });
+
+  test("an unknown prompt name → invalid-params", async () => {
+    const h = makeHarness({ agent: RENTAL_AGENT });
+    const out = await handleAgentRentalRpc(
+      SLUG,
+      req("prompts/get", { name: "act_as_someone_else" }),
+      validKey(),
+      h.deps,
+    );
+    const body = out.body as { error: { code: number } };
+    assert.equal(body.error.code, JSONRPC_INVALID_PARAMS);
+  });
+
+  test("without a key → unauthorized", async () => {
+    const h = makeHarness({ agent: RENTAL_AGENT });
+    const out = await handleAgentRentalRpc(SLUG, req("prompts/get", { name: `act_as_${SLUG}` }), null, h.deps);
+    const body = out.body as { error: { code: number } };
+    assert.equal(body.error.code, JSONRPC_UNAUTHORIZED);
+  });
+});
+
+// (Deterministic tools/call dispatch — get_quote_range / provide_faq_answer with
+// zero owner compute — lands with the deterministic-tools work; tested there.)

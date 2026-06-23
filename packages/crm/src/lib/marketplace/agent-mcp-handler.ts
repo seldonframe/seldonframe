@@ -17,11 +17,16 @@ import {
   parseJsonRpcRequest,
   buildInitializeResult,
   buildToolsListResult,
+  buildPromptsListResult,
+  buildPromptGetResult,
+  parsePromptsGetParams,
+  promptNameForSlug,
   extractAskArgs,
   jsonRpcResult,
   jsonRpcError,
   toolTextResult,
   JSONRPC_METHOD_NOT_FOUND,
+  JSONRPC_INVALID_PARAMS,
   JSONRPC_INTERNAL_ERROR,
   type JsonRpcId,
 } from "./agent-mcp-rpc";
@@ -105,6 +110,43 @@ export async function handleAgentRentalRpc(
         status: 200,
         body: jsonRpcResult(id, buildToolsListResult({ agentName: agent.agentName, capabilities: agent.capabilities })),
       };
+    }
+
+    // prompts/list + prompts/get (NET-NEW): the agent's SKILL as an MCP prompt.
+    // Loading a prompt runs NO agent turn — the renter's own model drives the
+    // deterministic tools afterward, so the owner spends zero compute.
+    case "prompts/list": {
+      const auth = authorize(bearer, slug, id, deps);
+      if (!auth.ok) return auth.outcome;
+      return {
+        status: 200,
+        body: jsonRpcResult(
+          id,
+          buildPromptsListResult({ slug, agentName: agent.agentName, capabilities: agent.capabilities }),
+        ),
+      };
+    }
+
+    case "prompts/get": {
+      const auth = authorize(bearer, slug, id, deps);
+      if (!auth.ok) return auth.outcome;
+
+      const parsed = parsePromptsGetParams(params);
+      if (!parsed.ok) {
+        return { status: 200, body: jsonRpcError(id, parsed.error.code, parsed.error.message) };
+      }
+      // The only prompt this agent exposes is its own act_as_<slug> skill.
+      if (parsed.name !== promptNameForSlug(slug)) {
+        return {
+          status: 200,
+          body: jsonRpcError(id, JSONRPC_INVALID_PARAMS, `Unknown prompt: ${parsed.name}. This agent exposes only "${promptNameForSlug(slug)}".`),
+        };
+      }
+      const prompt = buildPromptGetResult({ slug, agentName: agent.agentName, blueprint: agent.blueprint });
+      if (!prompt.ok) {
+        return { status: 200, body: jsonRpcError(id, prompt.error.code, prompt.error.message) };
+      }
+      return { status: 200, body: jsonRpcResult(id, prompt.result) };
     }
 
     case "tools/call": {

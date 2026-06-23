@@ -29,6 +29,11 @@ import {
   extractAskArgs,
   jsonRpcResult,
   jsonRpcError,
+  buildPromptsListResult,
+  buildPromptGetResult,
+  parsePromptsGetParams,
+  GET_QUOTE_RANGE_TOOL_NAME,
+  PROVIDE_FAQ_ANSWER_TOOL_NAME,
   JSONRPC_METHOD_NOT_FOUND,
   JSONRPC_INVALID_PARAMS,
   JSONRPC_PARSE_ERROR,
@@ -36,6 +41,7 @@ import {
   MCP_PROTOCOL_VERSION,
   ASK_TOOL_NAME,
 } from "../../../src/lib/marketplace/agent-mcp-rpc";
+import type { AgentBlueprint } from "../../../src/db/schema/agents";
 
 describe("parseJsonRpcRequest", () => {
   test("parses a well-formed request", () => {
@@ -208,3 +214,106 @@ describe("jsonRpcResult / jsonRpcError envelopes", () => {
     assert.equal(env.id, null);
   });
 });
+
+// ─── rental tools model (BUILD #1) ───────────────────────────────────────────
+//
+// The "renter brings the fuel" surface: the agent's SKILL becomes an MCP prompt
+// (prompts/list + prompts/get returning blueprint.customSkillMd) and its
+// DETERMINISTIC, blueprint-carried capabilities become tools (get_quote_range +
+// provide_faq_answer) the renter's OWN LLM drives — zero compute cost to the
+// agent owner. Workspace-stateful tools (book/CRM-write) are NOT exposed (they'd
+// write to the creator's workspace) — they stay install-only.
+
+const SKILL_MD = "# Sunset Receptionist playbook\nGreet warmly. Quote ranges, never firm prices. Book Mon–Fri.";
+
+const RENTAL_BLUEPRINT: AgentBlueprint = {
+  capabilities: ["look_up_availability", "book_appointment", "get_quote_range", "provide_faq_answer"],
+  customSkillMd: SKILL_MD,
+  quoteRanges: [
+    { service: "Furnace repair", low: 150, high: 600, note: "depends on the part" },
+    { service: "AC tune-up", low: 89, high: 129 },
+  ],
+  faq: [
+    { q: "Do you offer emergency service?", a: "Yes, 24/7 for existing customers." },
+    { q: "What areas do you serve?", a: "All of the greater Phoenix metro." },
+  ],
+};
+
+describe("buildPromptsListResult — the agent's skill as ONE MCP prompt", () => {
+  test("returns a single act_as_<slug> prompt with no required arguments", () => {
+    const result = buildPromptsListResult({
+      slug: "sunset-receptionist",
+      agentName: "Sunset Receptionist",
+      capabilities: RENTAL_BLUEPRINT.capabilities,
+    }) as { prompts: Array<{ name: string; description: string; arguments: unknown[] }> };
+    assert.equal(result.prompts.length, 1);
+    assert.equal(result.prompts[0].name, "act_as_sunset-receptionist");
+    // Names the agent + tells the renter what it can do.
+    assert.match(result.prompts[0].description, /Sunset Receptionist/);
+    assert.deepEqual(result.prompts[0].arguments, []);
+  });
+});
+
+describe("parsePromptsGetParams — extract + validate the requested prompt name", () => {
+  test("pulls a string name", () => {
+    const out = parsePromptsGetParams({ name: "act_as_sunset-receptionist" });
+    assert.equal(out.ok, true);
+    if (out.ok) assert.equal(out.name, "act_as_sunset-receptionist");
+  });
+
+  test("missing/blank/non-string name → invalid params (-32602)", () => {
+    const missing = parsePromptsGetParams({});
+    const blank = parsePromptsGetParams({ name: "  " });
+    const wrongType = parsePromptsGetParams({ name: 7 });
+    assert.equal(missing.ok, false);
+    assert.equal(blank.ok, false);
+    assert.equal(wrongType.ok, false);
+    if (!missing.ok) assert.equal(missing.error.code, JSONRPC_INVALID_PARAMS);
+    if (!blank.ok) assert.equal(blank.error.code, JSONRPC_INVALID_PARAMS);
+    if (!wrongType.ok) assert.equal(wrongType.error.code, JSONRPC_INVALID_PARAMS);
+  });
+});
+
+describe("buildPromptGetResult — the playbook (customSkillMd) as the prompt body", () => {
+  test("returns a single message whose text carries the customSkillMd + a framing line", () => {
+    const out = buildPromptGetResult({
+      slug: "sunset-receptionist",
+      agentName: "Sunset Receptionist",
+      blueprint: RENTAL_BLUEPRINT,
+    });
+    assert.ok(out.ok, "a known/derived name resolves");
+    if (!out.ok) return;
+    const result = out.result as {
+      description?: string;
+      messages: Array<{ role: string; content: { type: string; text: string } }>;
+    };
+    assert.equal(result.messages.length, 1);
+    const msg = result.messages[0];
+    // A user OR assistant role message (MCP allows both); text is the playbook.
+    assert.ok(msg.role === "user" || msg.role === "assistant");
+    assert.equal(msg.content.type, "text");
+    // The actual skill md is embedded verbatim.
+    assert.ok(msg.content.text.includes(SKILL_MD), "embeds the customSkillMd verbatim");
+    // The one-line framing names the agent + lists the deterministic tool names.
+    assert.match(msg.content.text, /You are Sunset Receptionist/);
+    assert.match(msg.content.text, /get_quote_range/);
+    assert.match(msg.content.text, /provide_faq_answer/);
+  });
+
+  test("falls back to a sensible skill body when customSkillMd is empty", () => {
+    const out = buildPromptGetResult({
+      slug: "helper",
+      agentName: "Helper",
+      blueprint: { capabilities: ["provide_faq_answer"] },
+    });
+    assert.ok(out.ok);
+    if (!out.ok) return;
+    const result = out.result as { messages: Array<{ content: { text: string } }> };
+    // Still a non-empty, agent-named instruction even with no playbook prose.
+    assert.match(result.messages[0].content.text, /Helper/);
+    assert.ok(result.messages[0].content.text.length > 20);
+  });
+});
+
+// (Deterministic quote/faq tool descriptors + executors + the ask relabel land
+// with the deterministic-tools work — tested there.)

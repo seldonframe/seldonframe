@@ -11,13 +11,14 @@
 // thin shell: parse → route → run the agent → shape the reply. Unit-tested in
 // agent-mcp-rpc.spec.ts.
 //
-// We deliberately expose ONE high-level delegating tool — `ask` — not the
-// agent's raw sub-tools. Renting an agent means "delegate a task to the whole
-// agent and get its reply", not "drive its internal booking API". The agent's
-// own capabilities (book_appointment, look_up_availability, …) run INSIDE the
-// turn; the renter just sends a message.
+// RENTAL MODEL — "the renter brings the fuel" (BUILD #1):
+//   The agent's SKILL is exposed as an MCP *prompt* (prompts/list + prompts/get
+//   → blueprint.customSkillMd, the playbook). The RENTER's OWN LLM loads the
+//   prompt and drives the agent — zero compute cost to the agent owner. The
+//   `ask` tool remains as the optional agent-as-a-service path (owner's compute).
 
 import type { McpToolDescriptor } from "@/lib/agents/mcp/client";
+import type { AgentBlueprint } from "@/db/schema/agents";
 
 /** Advertised MCP protocol version. Matches the client's PROTOCOL_VERSION so a
  *  SeldonFrame-to-SeldonFrame connection negotiates cleanly. Renters on other
@@ -26,6 +27,12 @@ export const MCP_PROTOCOL_VERSION = "2025-06-18";
 
 /** The single delegating tool name. */
 export const ASK_TOOL_NAME = "ask";
+
+/** Names of the deterministic, blueprint-carried tools a renter's own model
+ *  drives (their descriptors + executors land with the deterministic-tools
+ *  work). The skill prompt below lists them so the renter knows what to call. */
+export const GET_QUOTE_RANGE_TOOL_NAME = "get_quote_range";
+export const PROVIDE_FAQ_ANSWER_TOOL_NAME = "provide_faq_answer";
 
 // JSON-RPC 2.0 reserved error codes (subset we use).
 export const JSONRPC_PARSE_ERROR = -32700;
@@ -139,11 +146,12 @@ export function buildAskToolDescriptor(input: {
   };
 }
 
-/** The `initialize` result: protocol + server identity + capabilities. */
+/** The `initialize` result: protocol + server identity + capabilities. Now
+ *  advertises BOTH tools (ask + deterministic) and prompts (the skill prompt). */
 export function buildInitializeResult(input: { agentName: string }): Record<string, unknown> {
   return {
     protocolVersion: MCP_PROTOCOL_VERSION,
-    capabilities: { tools: {} },
+    capabilities: { tools: {}, prompts: {} },
     serverInfo: {
       name: input.agentName,
       version: "1.0.0",
@@ -190,6 +198,96 @@ export function extractAskArgs(params: Record<string, unknown>): AskArgs {
       ? args.conversation_id
       : undefined;
   return { ok: true, message: rawMessage.trim(), conversationId };
+}
+
+// ─── prompts (the agent's skill, BUILD #1) ───────────────────────────────────
+//
+// MCP prompts/list + prompts/get are NET-NEW on this router. We expose ONE
+// prompt — `act_as_<slug>` — whose body is the agent's blueprint.customSkillMd
+// (its playbook) plus a one-line framing. The renter's own LLM loads this and
+// then drives the deterministic tools below — zero owner compute.
+
+/** Stable prompt name for an agent's skill. One prompt per rented agent. */
+export function promptNameForSlug(slug: string): string {
+  return `act_as_${slug}`;
+}
+
+/** The `prompts/list` result: the single act-as skill prompt (no arguments). */
+export function buildPromptsListResult(input: {
+  slug: string;
+  agentName: string;
+  capabilities: string[] | undefined | null;
+}): Record<string, unknown> {
+  const summary = summarizeCapabilities(input.capabilities);
+  return {
+    prompts: [
+      {
+        name: promptNameForSlug(input.slug),
+        description: `Act as the ${input.agentName} agent — it can ${summary}. Loads the agent's skill (its playbook) so your own model can run it.`,
+        arguments: [],
+      },
+    ],
+  };
+}
+
+/** Validated `prompts/get` params. */
+export type PromptsGetParams =
+  | { ok: true; name: string }
+  | { ok: false; error: JsonRpcErrorShape };
+
+/** Extract + validate the `prompts/get` `name`. Blank/missing/non-string →
+ *  invalid-params (-32602). */
+export function parsePromptsGetParams(params: Record<string, unknown>): PromptsGetParams {
+  const raw = params.name;
+  if (typeof raw !== "string" || raw.trim().length === 0) {
+    return { ok: false, error: { code: JSONRPC_INVALID_PARAMS, message: "Invalid params: `name` (non-empty string) is required." } };
+  }
+  return { ok: true, name: raw.trim() };
+}
+
+/** The names of the deterministic, blueprint-carried tools a renter can drive. */
+function deterministicToolNames(): string[] {
+  return [GET_QUOTE_RANGE_TOOL_NAME, PROVIDE_FAQ_ANSWER_TOOL_NAME];
+}
+
+export type PromptGetOutcome =
+  | { ok: true; result: Record<string, unknown> }
+  | { ok: false; error: JsonRpcErrorShape };
+
+/**
+ * Build the `prompts/get` result for an agent: a single message whose text is
+ * the agent's playbook (blueprint.customSkillMd) framed by a one-liner that
+ * names the agent and lists the deterministic tools the renter's model can call.
+ * When the blueprint has no customSkillMd, we still return a usable instruction
+ * (name + capabilities) so the prompt is never empty.
+ *
+ * Pure: the caller is responsible for having resolved the agent + verified the
+ * requested prompt name matches (see handler). We accept the agent here and
+ * always succeed — an unknown NAME is rejected in the handler, not here.
+ */
+export function buildPromptGetResult(input: {
+  slug: string;
+  agentName: string;
+  blueprint: AgentBlueprint;
+}): PromptGetOutcome {
+  const toolNames = deterministicToolNames().join(", ");
+  const skill = (input.blueprint.customSkillMd ?? "").trim();
+  const framing =
+    `You are ${input.agentName}. Follow this skill exactly. ` +
+    `Tools available: ${toolNames}.`;
+  const body = skill ? `${framing}\n\n${skill}` : framing;
+  return {
+    ok: true,
+    result: {
+      description: `The ${input.agentName} agent's skill — load it, then drive the ${toolNames} tools with your own model.`,
+      messages: [
+        {
+          role: "user",
+          content: { type: "text", text: body },
+        },
+      ],
+    },
+  };
 }
 
 // ─── envelope builders ───────────────────────────────────────────────────────
