@@ -18,6 +18,7 @@ import {
   composePageCopy,
   deployHrefFor,
   relatedJobsForVertical,
+  resolveStarterIdForCanonicalAgent,
   type AgentJob,
 } from "./agent-pages";
 import { VERTICALS, getVertical } from "./verticals";
@@ -318,4 +319,65 @@ test("composed Tier-2 intro reads cleanly (articles + no redundancy)", () => {
       assert.ok(copy.intro.includes(ledeHead), `${job.slug}×${vSlug}: lede not woven in`);
     }
   }
+});
+
+// ─── Deploy-CTA → starter instantiation mapping ────────────────────────────────
+//
+// The pure mapper the build pipeline calls post-build: it turns the SEO page's
+// canonicalAgentSlug (which may name a starter OR an /automations archetype) into
+// a REAL starter-pack id to instantiate into the new workspace — or null when the
+// slug is unknown/junk (soft-fail: the build proceeds, no agent is forked). This
+// is the load-bearing logic for "click Deploy → land with that agent", so it's
+// covered exhaustively here (no DB; the orchestration wiring is integration-level).
+
+test("resolveStarterIdForCanonicalAgent maps a starter-kind slug to itself", () => {
+  // The 6 starter-kind canonical slugs ARE starter ids — identity passthrough.
+  for (const job of AGENT_JOBS) {
+    if (job.canonicalKind !== "starter") continue;
+    const starterId = resolveStarterIdForCanonicalAgent(job.canonicalAgentSlug);
+    assert.equal(
+      starterId,
+      job.canonicalAgentSlug,
+      `${job.slug}: starter-kind slug should map to itself`,
+    );
+  }
+});
+
+test("resolveStarterIdForCanonicalAgent maps EVERY job's canonical slug to a real starter id", () => {
+  // The whole point: no Deploy CTA on any /ai-agents page should be unmappable.
+  // Archetype-kind slugs fall back to their closest conversational starter.
+  for (const job of AGENT_JOBS) {
+    const starterId = resolveStarterIdForCanonicalAgent(job.canonicalAgentSlug);
+    assert.ok(
+      starterId !== null,
+      `${job.slug}: canonical slug '${job.canonicalAgentSlug}' resolved to null — Deploy would land no agent`,
+    );
+    assert.ok(
+      STARTER_IDS.has(starterId as string),
+      `${job.slug}: resolved '${starterId}' is not a real starter id`,
+    );
+  }
+});
+
+test("resolveStarterIdForCanonicalAgent maps the 4 archetype slugs to their closest starter", () => {
+  // Archetypes are event-triggered automations, not forkable conversational
+  // templates — so the Deploy CTA instantiates the closest conversational starter
+  // and the build proceeds (graceful handling, never a dangling deploy).
+  assert.equal(resolveStarterIdForCanonicalAgent("review-requester"), "website-support-chat");
+  assert.equal(resolveStarterIdForCanonicalAgent("missed-call-text-back"), "ai-phone-receptionist");
+  assert.equal(resolveStarterIdForCanonicalAgent("speed-to-lead"), "lead-qualifier-intake");
+  assert.equal(resolveStarterIdForCanonicalAgent("win-back"), "lead-qualifier-intake");
+});
+
+test("resolveStarterIdForCanonicalAgent returns null for unknown / junk / empty input (soft-fail)", () => {
+  assert.equal(resolveStarterIdForCanonicalAgent("not-a-real-agent"), null);
+  assert.equal(resolveStarterIdForCanonicalAgent(""), null);
+  assert.equal(resolveStarterIdForCanonicalAgent("   "), null);
+  // Defensive against hostile/garbage params smuggled onto the query string.
+  assert.equal(resolveStarterIdForCanonicalAgent("../../etc/passwd"), null);
+});
+
+test("resolveStarterIdForCanonicalAgent trims surrounding whitespace before resolving", () => {
+  assert.equal(resolveStarterIdForCanonicalAgent("  ai-phone-receptionist  "), "ai-phone-receptionist");
+  assert.equal(resolveStarterIdForCanonicalAgent(" speed-to-lead "), "lead-qualifier-intake");
 });

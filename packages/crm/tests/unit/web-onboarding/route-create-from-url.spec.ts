@@ -203,3 +203,94 @@ describe("runCreateFromUrl", () => {
     assert.match(text, /event: error\n.*"code":422.*extraction_failed/);
   });
 });
+
+// 2026-06-23 — Deploy-CTA → instantiate-the-clicked-agent wiring. The
+// orchestration contract (the route wires the real resolveStarterId →
+// instantiateStarter behind deps.instantiateStarterAgent; the pure mapping is
+// covered in seo/agent-pages.spec.ts):
+//   - when body.canonicalAgent is set, fork that agent into the NEW workspace
+//     (builderOrgId === the new workspace_id, the buyer's org)
+//   - when absent, NEVER call it (normal first-run is untouched)
+//   - when createFullWorkspace fails, NEVER call it (no workspace to fork into)
+//   - SOFT-FAIL: a throwing instantiation must NOT block/fail the build — the
+//     success sequence (…→ done) still completes.
+describe("runCreateFromUrl — SEO Deploy-CTA agent instantiation", () => {
+  test("instantiates the clicked agent into the NEW workspace's org when a slug is passed", async () => {
+    const calls: Array<{ builderOrgId: string; canonicalAgent: string }> = [];
+    const deps = {
+      ...baseDeps(),
+      instantiateStarterAgent: async (args: { builderOrgId: string; canonicalAgent: string }) => {
+        calls.push(args);
+        return { ok: true, id: "tmpl-7", starterId: "ai-phone-receptionist" };
+      },
+    };
+    const sse = await runCreateFromUrl({
+      deps,
+      body: { url: "https://acme.com", canonicalAgent: "ai-phone-receptionist" },
+      sessionUser: { id: "u1", primaryOrgId: "operator-org-99" },
+    });
+    const text = await readAll(sse.stream);
+    assert.deepEqual(
+      calls,
+      [{ builderOrgId: "org-1", canonicalAgent: "ai-phone-receptionist" }],
+      "must fork the clicked agent into the freshly-built workspace's org (org-1), NOT the operator's agency org",
+    );
+    // The build still completes normally.
+    assert.match(text, /event: done\n/);
+  });
+
+  test("does NOT instantiate any agent when no canonicalAgent slug was passed", async () => {
+    let called = false;
+    const deps = {
+      ...baseDeps(),
+      instantiateStarterAgent: async () => {
+        called = true;
+        return { ok: true };
+      },
+    };
+    const sse = await runCreateFromUrl({
+      deps,
+      body: { url: "https://acme.com" },
+      sessionUser: { id: "u1", primaryOrgId: "o1" },
+    });
+    await readAll(sse.stream);
+    assert.equal(called, false, "the magic first-run build must not fork an agent when none was requested");
+  });
+
+  test("does NOT instantiate the agent when createFullWorkspace fails", async () => {
+    let called = false;
+    const deps = {
+      ...baseDeps(),
+      createFullWorkspace: async () => ({ status: "error" as const, error: { step: "soul", message: "boom" } }),
+      instantiateStarterAgent: async () => {
+        called = true;
+        return { ok: true };
+      },
+    };
+    const sse = await runCreateFromUrl({
+      deps,
+      body: { url: "https://acme.com", canonicalAgent: "ai-phone-receptionist" },
+      sessionUser: { id: "u1", primaryOrgId: "o1" },
+    });
+    await readAll(sse.stream);
+    assert.equal(called, false, "no workspace was created, so there is nothing to fork into");
+  });
+
+  test("SOFT-FAIL: an instantiation that throws does NOT block or fail the build", async () => {
+    const deps = {
+      ...baseDeps(),
+      instantiateStarterAgent: async () => {
+        throw new Error("template store unavailable");
+      },
+    };
+    const sse = await runCreateFromUrl({
+      deps,
+      body: { url: "https://acme.com", canonicalAgent: "ai-phone-receptionist" },
+      sessionUser: { id: "u1", primaryOrgId: "o1" },
+    });
+    const text = await readAll(sse.stream);
+    // The build completes cleanly — done fires, no error event.
+    assert.match(text, /event: done\n.*"workspaceId":"org-1"/, "the build must still finish despite the fork failing");
+    assert.ok(!/event: error/.test(text), "a fork failure must not surface as a build error");
+  });
+});

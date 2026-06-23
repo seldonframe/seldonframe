@@ -112,12 +112,42 @@ export type RunDeps = {
    * etc.) so new workspaces ship with sane defaults. Idempotent.
    */
   seedDefaultOutboundTriggers: (orgId: string) => Promise<unknown>;
+  /**
+   * 2026-06-23 — Programmatic SEO/GEO Deploy-CTA fulfilment. When a visitor
+   * clicked "Deploy <agent> for <vertical>" on an /ai-agents/* page, the build
+   * carries a canonical agent slug (body.canonicalAgent). After the workspace +
+   * Soul exist, this dep instantiates THAT agent into the new workspace's org
+   * (builderOrgId === the new workspace_id) so the buyer lands in their Studio
+   * with the agent they asked for, grounded in the Soul just built.
+   *
+   * OPTIONAL + soft-fail by contract: omitted entirely on the paste path and
+   * the POST entry point; when present, the orchestrator only calls it if a
+   * slug was passed and wraps the call in try/catch so a fork failure NEVER
+   * blocks or fails the workspace build (the magic first-run is untouched). The
+   * route wires it to resolveStarterIdForCanonicalAgent → instantiateStarter;
+   * an unknown/unmappable slug resolves to a no-op { ok: false }.
+   */
+  instantiateStarterAgent?: (args: {
+    builderOrgId: string;
+    canonicalAgent: string;
+  }) => Promise<{ ok: boolean; id?: string; starterId?: string }>;
   workspaceBaseDomain: string;
 };
 
 export type RunInput = {
   deps: RunDeps;
-  body: { url: unknown; landingTemplate?: string; themeMode?: string };
+  body: {
+    url: unknown;
+    landingTemplate?: string;
+    themeMode?: string;
+    /**
+     * 2026-06-23 — the canonical agent slug from a programmatic-SEO Deploy CTA
+     * (/ai-agents/[job]/for/[vertical] → /clients/new?agent=…). When set + a
+     * valid starter resolves, the agent is instantiated into the new workspace
+     * post-build (see deps.instantiateStarterAgent). Absent on normal builds.
+     */
+    canonicalAgent?: string;
+  };
   sessionUser: { id: string; primaryOrgId: string | null } | null;
 };
 
@@ -261,6 +291,51 @@ export async function runCreateFromUrl(input: RunInput): Promise<RunResult> {
               detail: err instanceof Error ? err.message : String(err),
             }),
           );
+        }
+
+        // 7b-2. Programmatic SEO/GEO Deploy-CTA fulfilment. If this build came
+        //       from "Deploy <agent> for <vertical>" on an /ai-agents/* page,
+        //       body.canonicalAgent carries the agent the visitor clicked. Now
+        //       that the workspace + Soul exist (builderOrgId === the new
+        //       workspace_id, the buyer's org), instantiate THAT agent into it
+        //       so they land in their Studio with the agent they asked for —
+        //       Soul-grounded, since createFullWorkspace already built the Soul
+        //       on this exact org.
+        //
+        //       ADDITIVE + SOFT-FAIL: only fires when a slug was passed AND the
+        //       dep is wired (omitted on the paste/POST paths). The dep resolves
+        //       an unknown/unmappable slug to a no-op { ok:false }, and the whole
+        //       call is wrapped in try/catch so a fork failure NEVER blocks or
+        //       fails the workspace build — the magic first-run is untouched. The
+        //       anonymous-build path is handled identically: we instantiate
+        //       against the new workspace's orgId regardless of how it was owned.
+        if (input.deps.instantiateStarterAgent && input.body.canonicalAgent) {
+          try {
+            const forked = await input.deps.instantiateStarterAgent({
+              builderOrgId: result.workspace_id,
+              canonicalAgent: input.body.canonicalAgent,
+            });
+            console.info(
+              JSON.stringify({
+                event: forked.ok
+                  ? "seo_deploy_agent_instantiated"
+                  : "seo_deploy_agent_skipped",
+                workspace_id: result.workspace_id,
+                canonical_agent: input.body.canonicalAgent,
+                starter_id: forked.starterId ?? null,
+                template_id: forked.id ?? null,
+              }),
+            );
+          } catch (err) {
+            console.warn(
+              JSON.stringify({
+                event: "seo_deploy_agent_failed",
+                workspace_id: result.workspace_id,
+                canonical_agent: input.body.canonicalAgent,
+                detail: err instanceof Error ? err.message : String(err),
+              }),
+            );
+          }
         }
 
         // 7c1. Seed default outbound message triggers (messaging plan

@@ -524,6 +524,66 @@ export function jobForMarketplaceSlug(slug: string): AgentJob | undefined {
 }
 
 /**
+ * The 6 starter ids the starter-pack ships (lib/agent-templates/starter-pack.ts).
+ * Kept here as the mapper's allow-list so a starter-kind canonicalAgentSlug is
+ * only echoed back when it's a REAL starter — never a dangling fork id. Mirrored
+ * (not imported) so this module stays pure data + has zero server imports; the
+ * agent-pages.spec asserts every job's canonicalAgentSlug resolves, which would
+ * fire loudly if this list ever drifts from STARTER_TEMPLATES.
+ */
+const STARTER_IDS = new Set<string>([
+  "ai-phone-receptionist",
+  "website-support-chat",
+  "lead-qualifier-intake",
+  "booking-concierge",
+  "quote-estimate-assistant",
+  "social-content-assistant",
+]);
+
+/**
+ * The /automations archetypes (event-triggered automations: review-requester
+ * fires on booking.completed, speed-to-lead on form.submitted, etc.) are NOT
+ * forkable conversational agent_templates — there is no starter to instantiate
+ * for them directly. So the Deploy CTA on those pages instantiates the CLOSEST
+ * conversational starter instead, and the workspace still lands with a working,
+ * on-topic agent rather than nothing:
+ *   - review-requester    → website-support-chat  (general customer-facing chat)
+ *   - missed-call-text-back → ai-phone-receptionist (phone/call front desk)
+ *   - speed-to-lead       → lead-qualifier-intake  (replies to + qualifies leads)
+ *   - win-back            → lead-qualifier-intake  (sales re-engagement)
+ * The closest-starter choice is a soft, best-effort default — the buyer can swap
+ * or add the exact automation from /automations afterward.
+ */
+const ARCHETYPE_TO_CLOSEST_STARTER: Record<string, string> = {
+  "review-requester": "website-support-chat",
+  "missed-call-text-back": "ai-phone-receptionist",
+  "speed-to-lead": "lead-qualifier-intake",
+  "win-back": "lead-qualifier-intake",
+};
+
+/**
+ * Map a Deploy-CTA `canonicalAgentSlug` (a starter id OR an /automations
+ * archetype id) to the starter-pack id the build pipeline should instantiate
+ * into the freshly-built workspace — or `null` when the slug is unknown/blank/
+ * junk. Pure (no DB, no session) so it's unit-testable and importable from both
+ * the build route and the SEO pages.
+ *
+ * SOFT-FAIL CONTRACT: returns `null` (never throws) on anything unmappable so
+ * the caller can simply skip instantiation and let the magic first-run build
+ * proceed untouched. A starter-kind slug resolves to itself (validated against
+ * the real starter id set); an archetype-kind slug resolves to its closest
+ * conversational starter (see ARCHETYPE_TO_CLOSEST_STARTER).
+ */
+export function resolveStarterIdForCanonicalAgent(
+  canonicalAgentSlug: string | null | undefined,
+): string | null {
+  const slug = (canonicalAgentSlug ?? "").trim();
+  if (!slug) return null;
+  if (STARTER_IDS.has(slug)) return slug;
+  return ARCHETYPE_TO_CLOSEST_STARTER[slug] ?? null;
+}
+
+/**
  * The Deploy-CTA href — routes into the magic first-run build flow CARRYING the
  * canonical agent so the user lands with THAT agent instantiated. `intent=build`
  * triggers the existing auto-submit; `agent` is the new param threaded through

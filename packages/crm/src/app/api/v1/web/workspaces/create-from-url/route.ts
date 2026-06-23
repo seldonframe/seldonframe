@@ -65,6 +65,18 @@ import { seedDefaultOutboundTriggers } from "@/lib/messaging/seed-default-trigge
 // signature, same SSE events, same error codes. See markdown-extractor.ts
 // header for the why.
 import { extractBusinessFactsFromUrl } from "@/lib/web-onboarding/markdown-extractor";
+// 2026-06-23 — Programmatic SEO/GEO Deploy-CTA fulfilment. resolveStarterId…
+// maps the canonical agent slug (a starter id OR an /automations archetype id)
+// the visitor clicked on an /ai-agents/* page to the starter to fork; the
+// (pure, unit-tested) mapper soft-fails to null on anything unmappable.
+// instantiateStarter + buildDefaultInstantiateDeps are the SAME one-click fork
+// path the Studio's "Add starter" button uses (createTemplateFromStarterAction)
+// — additive reuse, no new write path. See lib/agent-templates/starter-pack.ts.
+import { resolveStarterIdForCanonicalAgent } from "@/lib/seo/agent-pages";
+import {
+  instantiateStarter,
+  buildDefaultInstantiateDeps,
+} from "@/lib/agent-templates/starter-pack";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -84,14 +96,16 @@ async function dispatchCreateFromUrl(
   landingTemplate?: unknown,
   themeMode?: unknown,
   // 2026-06-23 — Programmatic SEO/GEO deploy intent. `canonicalAgent` is the
-  // starter-pack id the visitor chose on a /agents/* page ("Deploy it for my
-  // business"); `niche` is the vertical hint. They arrive on the SSE query
-  // string from /clients/new. SEAM: once the orchestrator's RunDeps exposes the
-  // freshly-created workspace's builderOrgId, fork this starter post-build via
-  // instantiateStarter({ builderOrgId, starterId: canonicalAgent },
-  // buildDefaultInstantiateDeps()) so the operator lands with THAT agent. Until
-  // then we accept + log the intent so the param is preserved end-to-end and the
-  // wiring is a one-call change, not a re-thread. (lib/agent-templates/starter-pack.ts)
+  // canonical agent slug the visitor chose on an /ai-agents/* page ("Deploy it
+  // for my business") — a starter id OR an /automations archetype id; `niche` is
+  // the vertical hint. They arrive on the SSE query string from /clients/new.
+  // WIRED (seam closed): we thread canonicalAgent into the orchestrator's body,
+  // and deps.instantiateStarterAgent forks the resolved starter into the new
+  // workspace post-build (resolveStarterIdForCanonicalAgent → instantiateStarter
+  // → buildDefaultInstantiateDeps) so the operator lands with THAT agent,
+  // Soul-grounded. Additive + soft-fail: an absent/unknown/unmappable slug is a
+  // no-op and the build proceeds untouched. (lib/agent-templates/starter-pack.ts,
+  // lib/web-onboarding/run-create-from-url.ts §7b-2)
   canonicalAgent?: unknown,
   niche?: unknown,
 ): Promise<Response> {
@@ -175,12 +189,34 @@ async function dispatchCreateFromUrl(
       seedClientContactInAgencyCrm,
       seedSoulWikiSourceUrl,
       seedDefaultOutboundTriggers,
+      // 2026-06-23 — Deploy-CTA fulfilment seam, now wired (see header). The
+      // orchestrator calls this AFTER the workspace + Soul exist, only when a
+      // canonicalAgent slug arrived, inside its own try/catch. We resolve the
+      // slug to a real starter (pure mapper) and fork it into the NEW
+      // workspace's org via the same path the Studio's one-click "Add starter"
+      // uses. A null/unmappable slug returns { ok:false } → the orchestrator
+      // logs a skip and the build proceeds exactly as before.
+      instantiateStarterAgent: async ({ builderOrgId, canonicalAgent }) => {
+        const starterId = resolveStarterIdForCanonicalAgent(canonicalAgent);
+        if (!starterId) return { ok: false };
+        const forked = await instantiateStarter(
+          { builderOrgId, starterId },
+          buildDefaultInstantiateDeps(),
+        );
+        return forked.ok
+          ? { ok: true, id: forked.id, starterId }
+          : { ok: false, starterId };
+      },
       workspaceBaseDomain: process.env.WORKSPACE_BASE_DOMAIN ?? "app.seldonframe.com",
     },
     body: {
       url,
       landingTemplate: typeof landingTemplate === "string" ? landingTemplate : undefined,
       themeMode: typeof themeMode === "string" ? themeMode : undefined,
+      // The build-dispatch boundary already sanitized + logged this (the seam
+      // above). Pass the canonical agent slug through so the orchestrator can
+      // fulfil the Deploy CTA post-build.
+      canonicalAgent: canonicalAgentId ?? undefined,
     },
     sessionUser,
   });
