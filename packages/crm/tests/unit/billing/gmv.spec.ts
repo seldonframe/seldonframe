@@ -5,7 +5,9 @@ import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import {
   GMV_FEE_PERCENT,
+  MARKETPLACE_FEE_PERCENT,
   computeInvoiceApplicationFeeCents,
+  computeMarketplaceFeeCents,
 } from "@/lib/billing/gmv";
 
 describe("GMV fee helper", () => {
@@ -36,5 +38,41 @@ describe("GMV fee helper", () => {
 
   test("Infinity input -> 0 (defensive, non-finite)", () => {
     assert.equal(computeInvoiceApplicationFeeCents(Number.POSITIVE_INFINITY), 0);
+  });
+});
+
+describe("Marketplace fee helper", () => {
+  // SeldonFrame takes 5% when a builder sells/rents an agent/soul/block on the
+  // marketplace (it's OUR marketplace product) — distinct from the 2% GMV fee on
+  // an SMB's OWN service sales ("we don't tax your work"). Mirrors the GMV helper
+  // exactly except the percentage: round(cents * 5/100), 0 for non-positive /
+  // non-finite input.
+  test("MARKETPLACE_FEE_PERCENT is 5", () => {
+    assert.equal(MARKETPLACE_FEE_PERCENT, 5);
+  });
+
+  test("0 total -> 0 fee (Stripe rejects application_fee_amount: 0)", () => {
+    assert.equal(computeMarketplaceFeeCents(0), 0);
+  });
+
+  test("5% of $100.00 (10_000 cents) -> 500 cents", () => {
+    assert.equal(computeMarketplaceFeeCents(10_000), 500);
+  });
+
+  test("5% of $123.45 (12_345 cents) -> 617 cents (rounded)", () => {
+    // 12_345 * 5 / 100 = 617.25 -> rounds to 617
+    assert.equal(computeMarketplaceFeeCents(12_345), 617);
+  });
+
+  test("negative input -> 0 (defensive)", () => {
+    assert.equal(computeMarketplaceFeeCents(-5_000), 0);
+  });
+
+  test("NaN input -> 0 (defensive)", () => {
+    assert.equal(computeMarketplaceFeeCents(Number.NaN), 0);
+  });
+
+  test("Infinity input -> 0 (defensive, non-finite)", () => {
+    assert.equal(computeMarketplaceFeeCents(Number.POSITIVE_INFINITY), 0);
   });
 });

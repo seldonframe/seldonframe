@@ -1,13 +1,13 @@
 // Agent marketplace — seller EARNINGS math (pure, no DB).
 //
-// The earnings dashboard is the ONLY surface in the app that shows the 2%
-// platform fee to a user ("you keep 98%"). This math MUST be exact and reuse
-// the SAME GMV fee primitive the checkout path uses
-// (computeInvoiceApplicationFeeCents / GMV_FEE_PERCENT, lib/billing/gmv.ts) so
+// The earnings dashboard is the ONLY surface in the app that shows the 5%
+// marketplace fee to a user ("you keep 95%"). This math MUST be exact and reuse
+// the SAME marketplace fee primitive the checkout path uses
+// (computeMarketplaceFeeCents / MARKETPLACE_FEE_PERCENT, lib/billing/gmv.ts) so
 // the number a seller sees matches the number Stripe actually withholds.
 //
 // Revenue model: a paid agent listing is a ONE-TIME install price. Gross for a
-// listing = price (cents) × installCount. Net = gross − 2% fee. Free listings
+// listing = price (cents) × installCount. Net = gross − 5% fee. Free listings
 // (price 0) contribute 0 to both gross and fee but still report installs +
 // rentals. Rentals (agent_rental_call events) are a usage/engagement signal we
 // surface alongside installs; they do not themselves carry a dollar amount in
@@ -21,8 +21,8 @@ import {
   type SellerListingEarningsInput,
 } from "../../../src/lib/marketplace/earnings";
 import {
-  GMV_FEE_PERCENT,
-  computeInvoiceApplicationFeeCents,
+  MARKETPLACE_FEE_PERCENT,
+  computeMarketplaceFeeCents,
 } from "../../../src/lib/billing/gmv";
 
 function listing(over: Partial<SellerListingEarningsInput> = {}): SellerListingEarningsInput {
@@ -48,7 +48,7 @@ describe("computeListingEarnings", () => {
     assert.equal(result.summary.rentalCount, 0);
     assert.equal(result.summary.listingCount, 0);
     assert.equal(result.summary.publishedCount, 0);
-    assert.equal(result.summary.feePercent, GMV_FEE_PERCENT);
+    assert.equal(result.summary.feePercent, MARKETPLACE_FEE_PERCENT);
     assert.deepEqual(result.listings, []);
   });
 
@@ -68,27 +68,26 @@ describe("computeListingEarnings", () => {
     assert.equal(result.summary.rentalCount, 40);
   });
 
-  test("paid listing → gross = price × installs, net = gross − 2% fee (exact)", () => {
-    // $50.00 install × 3 = $150.00 gross. 2% fee = $3.00. Net = $147.00.
+  test("paid listing → gross = price × installs, net = gross − 5% fee (exact)", () => {
+    // $50.00 install × 3 = $150.00 gross. 5% fee = $7.50. Net = $142.50.
     const result = computeListingEarnings([
       listing({ priceCents: 5000, installCount: 3, rentalCount: 7 }),
     ]);
     const row = result.listings[0];
     assert.equal(row.grossCents, 15000);
-    // Fee computed off the SAME primitive as checkout — not a re-derived 2%.
-    assert.equal(row.feeCents, computeInvoiceApplicationFeeCents(15000));
-    assert.equal(row.feeCents, 300);
-    assert.equal(row.netCents, 14700);
-    // 98% identity holds: net + fee === gross.
+    // Fee computed off the SAME primitive as checkout — not a re-derived 5%.
+    assert.equal(row.feeCents, computeMarketplaceFeeCents(15000));
+    assert.equal(row.feeCents, 750);
+    assert.equal(row.netCents, 14250);
+    // 95% identity holds: net + fee === gross.
     assert.equal(row.netCents + row.feeCents, row.grossCents);
   });
 
   test("summary aggregates across listings; fee summed PER listing (no rounding drift)", () => {
-    // Two listings whose per-listing fee rounds differently than the combined
-    // gross would: 199c×1 = 199c (fee round(3.98)=4) and 199c×1 again (fee 4).
-    // Per-listing summation = 8; a naive fee-on-total would be round(398*0.02)=8
-    // here, but we assert the per-listing model explicitly so the seller's
-    // line items always add up to the summary.
+    // Two listings, per-listing fee summed (not fee-on-combined-total): 199c×1
+    // = 199c (fee round(199*0.05)=round(9.95)=10), twice → 20. We assert the
+    // per-listing model explicitly so the seller's line items always add up to
+    // the summary (no fee-on-total rounding drift).
     const result = computeListingEarnings([
       listing({ id: "a", slug: "a", priceCents: 199, installCount: 1 }),
       listing({ id: "b", slug: "b", priceCents: 199, installCount: 1 }),

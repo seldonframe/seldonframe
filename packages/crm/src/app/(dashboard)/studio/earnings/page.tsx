@@ -101,7 +101,7 @@ export default async function StudioEarningsPage() {
         <div>
           <h1 className="text-page-title">Earnings</h1>
           <p className="text-label text-[hsl(var(--color-text-secondary))]">
-            What your agents earn on the marketplace. You keep 98% — SeldonFrame
+            What your agents earn on the marketplace. You keep 95% — SeldonFrame
             takes a {summary.feePercent}% fee on sales.
           </p>
         </div>
@@ -119,7 +119,7 @@ export default async function StudioEarningsPage() {
             value={`− ${formatCentsUsd(summary.feeCents)}`}
             muted
           />
-          <Stat label="You keep (98%)" value={formatCentsUsd(summary.netCents)} emphasis />
+          <Stat label="You keep (95%)" value={formatCentsUsd(summary.netCents)} emphasis />
         </div>
         <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1 border-t pt-3 text-xs text-muted-foreground">
           <span>

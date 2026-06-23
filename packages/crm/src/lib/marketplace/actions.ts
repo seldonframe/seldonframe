@@ -6,7 +6,7 @@ import { db } from "@/db";
 import { blockPurchases, blockRatings, generatedBlocks, marketplaceBlocks, marketplaceListings, marketplaceReviews, organizations } from "@/db/schema";
 import { getCurrentUser, getOrgId } from "@/lib/auth/helpers";
 import { canInstallBlocks, canRateBlocks, canSubmitBlocks, resolvePlanFromPlanId } from "@/lib/billing/entitlements";
-import { computeInvoiceApplicationFeeCents } from "@/lib/billing/gmv";
+import { computeMarketplaceFeeCents } from "@/lib/billing/gmv";
 import { assertWritable } from "@/lib/demo/server";
 import { installSoulPackage } from "@/lib/marketplace/install-soul";
 import type { SoulPackage } from "@/lib/marketplace/soul-package";
@@ -567,8 +567,8 @@ export async function installAgentListingAction(input: { slug: string }) {
 
   // PAID → reuse the soul Stripe-checkout path. metadata.type "soul_purchase"
   // routes the webhook to finalizeSoulPurchaseFromWebhook, which now branches on
-  // kind:'agent' to clone the template. The 2% application fee is computed off
-  // the SAME computeInvoiceApplicationFeeCents(price) as a paid soul, so the
+  // kind:'agent' to clone the template. The 5% marketplace fee is computed off
+  // the SAME computeMarketplaceFeeCents(price) as a paid soul, so the
   // platform fee carries identically to the agent paid path.
   if (!listing.stripeConnectAccountId) {
     throw new Error("Seller payout account is not configured for this agent.");
@@ -598,10 +598,10 @@ export async function installAgentListingAction(input: { slug: string }) {
       },
     ],
     payment_intent_data: {
-      // SeldonFrame marketplace takes a 2% GMV fee on agent sales — the SAME
-      // computeInvoiceApplicationFeeCents off the same rounded cents value as a
+      // SeldonFrame marketplace takes a 5% fee on agent sales — the SAME
+      // computeMarketplaceFeeCents off the same rounded cents value as a
       // paid soul (Stripe Connect destination charge). `price` is already cents.
-      application_fee_amount: computeInvoiceApplicationFeeCents(Math.round(price)),
+      application_fee_amount: computeMarketplaceFeeCents(Math.round(price)),
       transfer_data: {
         destination: listing.stripeConnectAccountId,
       },
@@ -769,11 +769,11 @@ export async function purchaseSoulListingAction(formData: FormData) {
       },
     ],
     payment_intent_data: {
-      // SeldonFrame marketplace takes a 2% GMV fee on soul sales
+      // SeldonFrame marketplace takes a 5% GMV fee on agent/soul sales
       // (Stripe Connect destination charge). `price` is already in cents,
       // matching the `unit_amount` above, so we fee off the same rounded
-      // cents value. computeInvoiceApplicationFeeCents = round(cents * 2/100).
-      application_fee_amount: computeInvoiceApplicationFeeCents(Math.round(price)),
+      // cents value. computeMarketplaceFeeCents = round(cents * 5/100).
+      application_fee_amount: computeMarketplaceFeeCents(Math.round(price)),
       transfer_data: {
         destination: listing.stripeConnectAccountId,
       },
@@ -947,12 +947,12 @@ export async function purchaseMarketplaceBlockAction(formData: FormData) {
       },
     ],
     payment_intent_data: {
-      // SeldonFrame marketplace takes a 2% GMV fee on block sales
+      // SeldonFrame marketplace takes a 5% GMV fee on block sales
       // (Stripe Connect destination charge). `price` here is in DOLLARS
       // (multiplied by 100 for `unit_amount` above), so convert to the
       // same cents amount first, then fee off it.
-      // computeInvoiceApplicationFeeCents = round(cents * 2/100).
-      application_fee_amount: computeInvoiceApplicationFeeCents(Math.round(price * 100)),
+      // computeMarketplaceFeeCents = round(cents * 5/100).
+      application_fee_amount: computeMarketplaceFeeCents(Math.round(price * 100)),
       transfer_data: {
         destination: block.sellerStripeAccountId,
       },

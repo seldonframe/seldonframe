@@ -1,16 +1,31 @@
 // packages/crm/src/lib/billing/gmv.ts
-// 2026-06-22 — The platform GMV fee taken on payments processed THROUGH
-// SeldonFrame's Stripe Connect (the SMB's OWN sales: proposals
-// subscriptions, payments-provider invoices + subscriptions — all of
-// which pass `{ stripeAccount }`). Sell outside SF → no fee.
+// 2026-06-22 — Platform fees taken on payments processed THROUGH
+// SeldonFrame's Stripe Connect. Two distinct rates by WHAT is sold:
 //
-// IMPORTANT: this fee applies ONLY to connected-account / SMB-sales
-// charges. It must NEVER touch SF's own PLATFORM subscription that bills
-// the SMB their $29 (app/api/stripe/checkout + claim-and-checkout) — that
-// is SF charging the customer, not the SMB charging their customer.
+//   • GMV_FEE_PERCENT (2%) — the SMB's OWN service sales (proposals,
+//     payments-provider invoices + subscriptions — all of which pass
+//     `{ stripeAccount }`). "We don't tax your work." Sell outside SF → no fee.
+//   • MARKETPLACE_FEE_PERCENT (5%) — a builder selling/renting an agent, soul,
+//     or block on SF's marketplace. That's SF's OWN marketplace product, so it
+//     carries the higher cut.
+//
+// IMPORTANT: both fees apply ONLY to connected-account charges. They must
+// NEVER touch SF's own PLATFORM subscription that bills the SMB their $29
+// (app/api/stripe/checkout + claim-and-checkout) — that is SF charging the
+// customer, not the SMB charging their customer.
 
 /** Application-fee percentage SF takes on connected-account SMB sales. */
 export const GMV_FEE_PERCENT = 2;
+
+/**
+ * Application-fee percentage SF takes on MARKETPLACE listing sales — i.e. when
+ * a builder sells or rents an agent / soul / block on SeldonFrame's marketplace.
+ * That's SF's OWN marketplace product, so it carries a higher cut than the 2%
+ * `GMV_FEE_PERCENT` we charge on an SMB's own service sales ("we don't tax your
+ * work"). Used by the soul/agent/block purchase charge sites and the seller
+ * earnings dashboard.
+ */
+export const MARKETPLACE_FEE_PERCENT = 5;
 
 /**
  * Compute the Stripe `application_fee_amount` (in cents) for an invoice
@@ -21,4 +36,16 @@ export const GMV_FEE_PERCENT = 2;
 export function computeInvoiceApplicationFeeCents(totalCents: number): number {
   if (!Number.isFinite(totalCents) || totalCents <= 0) return 0;
   return Math.round((totalCents * GMV_FEE_PERCENT) / 100);
+}
+
+/**
+ * Compute the Stripe `application_fee_amount` (in cents) for a MARKETPLACE
+ * sale whose total is `totalCents` — the 5% cut SF takes on a soul / agent /
+ * block listing sale. Mirrors `computeInvoiceApplicationFeeCents` exactly
+ * (same rounding, same 0-for-non-positive/non-finite guard so callers can omit
+ * the field when 0) except for the percentage.
+ */
+export function computeMarketplaceFeeCents(totalCents: number): number {
+  if (!Number.isFinite(totalCents) || totalCents <= 0) return 0;
+  return Math.round((totalCents * MARKETPLACE_FEE_PERCENT) / 100);
 }
