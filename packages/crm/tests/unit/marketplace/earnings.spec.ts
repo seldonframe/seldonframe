@@ -134,4 +134,52 @@ describe("computeListingEarnings", () => {
     assert.equal(row.name, "Plumber Bot");
     assert.equal(row.priceCents, 2500);
   });
+
+  // ── pricing MODEL (BUILD #2) — display only; the 5% fee math is unchanged. ──
+  test("surfaces a price-model display label per listing (defaults to onetime)", () => {
+    // No model fields → legacy one-time listing reads "$25 one-time".
+    const a = computeListingEarnings([listing({ priceCents: 2500, installCount: 4 })]).listings[0];
+    assert.equal(a.priceModel, "onetime");
+    assert.equal(a.priceLabel, "$25 one-time");
+    // Free.
+    const b = computeListingEarnings([listing({ priceCents: 0 })]).listings[0];
+    assert.equal(b.priceLabel, "Free");
+  });
+
+  test("monthly / per_usage / per_outcome surface their own label; gross stays price×installs", () => {
+    const monthly = computeListingEarnings([
+      listing({ priceModel: "monthly", monthlyPriceCents: 2900, priceCents: 0, installCount: 5 }),
+    ]).listings[0];
+    assert.equal(monthly.priceLabel, "$29/mo");
+    // Non-onetime models carry price 0 today → gross/fee/net are 0 (metered
+    // settlement is the x402/AP2 follow-on; nothing is summed into revenue).
+    assert.equal(monthly.grossCents, 0);
+    assert.equal(monthly.feeCents, 0);
+
+    const perCall = computeListingEarnings([
+      listing({ priceModel: "per_usage", perCallPriceCents: 200, priceCents: 0 }),
+    ]).listings[0];
+    assert.equal(perCall.priceLabel, "$2 per call");
+
+    const perOutcome = computeListingEarnings([
+      listing({
+        priceModel: "per_outcome",
+        perOutcomePriceCents: 1000,
+        outcomeType: "booking",
+        priceCents: 0,
+      }),
+    ]).listings[0];
+    assert.equal(perOutcome.priceLabel, "$10 per booking");
+  });
+
+  test("the 5% fee is UNCHANGED for a one-time listing (model field is display-only)", () => {
+    // Identical to the canonical paid case above — proves adding the model
+    // fields did not perturb the money math for one-time listings.
+    const row = computeListingEarnings([
+      listing({ priceModel: "onetime", priceCents: 5000, installCount: 3 }),
+    ]).listings[0];
+    assert.equal(row.grossCents, 15000);
+    assert.equal(row.feeCents, 750);
+    assert.equal(row.netCents, 14250);
+  });
 });

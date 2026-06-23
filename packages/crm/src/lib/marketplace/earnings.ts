@@ -17,6 +17,12 @@
 // dollar amount, so rentals are NOT summed into revenue.
 
 import { MARKETPLACE_FEE_PERCENT, computeMarketplaceFeeCents } from "@/lib/billing/gmv";
+import {
+  isPriceModel,
+  priceModelLabel,
+  type OutcomeType,
+  type PriceModel,
+} from "@/lib/marketplace/pricing-model";
 
 /** One published/draft listing the seller owns, plus its lifetime counts. */
 export type SellerListingEarningsInput = {
@@ -30,6 +36,18 @@ export type SellerListingEarningsInput = {
   /** Lifetime agent_rental_call events attributed to this seller's org. */
   rentalCount: number;
   isPublished: boolean;
+  // ── pricing MODEL (BUILD #2) — DISPLAY ONLY. ──
+  // The seller's chosen model + its amounts, so the dashboard can show "$29/mo"
+  // / "$2 per call" / "$10 per booking" instead of assuming one-time. These do
+  // NOT change the money math: gross is still priceCents × installCount, and
+  // non-onetime models carry priceCents 0 today (their metered settlement is the
+  // x402/AP2 follow-on — nothing is summed into revenue here yet). Optional so
+  // legacy callers (and pre-migration rows) default cleanly to onetime.
+  priceModel?: PriceModel;
+  monthlyPriceCents?: number | null;
+  perCallPriceCents?: number | null;
+  perOutcomePriceCents?: number | null;
+  outcomeType?: OutcomeType | null;
 };
 
 /** A listing row with its money computed. Extends the input with cents fields. */
@@ -40,6 +58,10 @@ export type SellerListingEarnings = SellerListingEarningsInput & {
   feeCents: number;
   /** What the seller keeps: grossCents − feeCents. */
   netCents: number;
+  /** The resolved pricing model (defaults to 'onetime' for legacy rows). */
+  priceModel: PriceModel;
+  /** Human price label for display ("$29/mo", "$2 per call", "Free", …). */
+  priceLabel: string;
 };
 
 export type SellerEarningsSummary = {
@@ -78,9 +100,21 @@ export function computeListingEarnings(
     const priceCents = nonNegInt(row.priceCents);
     const installCount = nonNegInt(row.installCount);
     const rentalCount = nonNegInt(row.rentalCount);
+    // Money math UNCHANGED: gross = one-time price × installs, fee = the same
+    // checkout primitive. (Per-usage/per-outcome settlement is a follow-on.)
     const grossCents = priceCents * installCount;
     const feeCents = computeMarketplaceFeeCents(grossCents);
     const netCents = grossCents - feeCents;
+    // DISPLAY: resolve the model + its human label off the shared pure helper.
+    const priceModel: PriceModel = isPriceModel(row.priceModel) ? row.priceModel : "onetime";
+    const priceLabel = priceModelLabel({
+      priceModel,
+      priceCents,
+      monthlyPriceCents: row.monthlyPriceCents ?? null,
+      perCallPriceCents: row.perCallPriceCents ?? null,
+      perOutcomePriceCents: row.perOutcomePriceCents ?? null,
+      outcomeType: row.outcomeType ?? null,
+    });
     return {
       ...row,
       priceCents,
@@ -89,6 +123,8 @@ export function computeListingEarnings(
       grossCents,
       feeCents,
       netCents,
+      priceModel,
+      priceLabel,
     };
   });
 

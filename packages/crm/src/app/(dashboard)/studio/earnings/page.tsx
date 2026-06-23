@@ -68,6 +68,11 @@ export default async function StudioEarningsPage() {
         slug: marketplaceListings.slug,
         name: marketplaceListings.name,
         price: marketplaceListings.price,
+        priceModel: marketplaceListings.priceModel,
+        monthlyPriceCents: marketplaceListings.monthlyPriceCents,
+        perCallPriceCents: marketplaceListings.perCallPriceCents,
+        perOutcomePriceCents: marketplaceListings.perOutcomePriceCents,
+        outcomeType: marketplaceListings.outcomeType,
         installCount: marketplaceListings.installCount,
         isPublished: marketplaceListings.isPublished,
       })
@@ -90,6 +95,13 @@ export default async function StudioEarningsPage() {
       installCount: l.installCount ?? 0,
       rentalCount: rentals.get(l.id) ?? 0,
       isPublished: l.isPublished === true,
+      // Pricing MODEL (display only) — the strings are validated by the guards
+      // inside computeListingEarnings, which fall back to onetime for bad rows.
+      priceModel: (l.priceModel ?? undefined) as never,
+      monthlyPriceCents: l.monthlyPriceCents,
+      perCallPriceCents: l.perCallPriceCents,
+      perOutcomePriceCents: l.perOutcomePriceCents,
+      outcomeType: (l.outcomeType ?? undefined) as never,
     })),
   );
 
@@ -186,9 +198,7 @@ export default async function StudioEarningsPage() {
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    {row.priceCents > 0 ? `${formatCentsUsd(row.priceCents)} / install` : "Free"}
-                  </p>
+                  <p className="text-xs text-muted-foreground">{row.priceLabel}</p>
                 </div>
                 <Cell label="Installs" value={row.installCount.toLocaleString("en-US")} />
                 <Cell label="Rentals" value={row.rentalCount.toLocaleString("en-US")} />
